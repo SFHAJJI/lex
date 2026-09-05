@@ -268,9 +268,191 @@ public sealed class EuStageOneAcquisitionCanary
             }
         }
 
+        await WriteEvidenceIndexAsync(store, root, result, CancellationToken.None);
+
         Assert.IsNull(
             result.Refusal,
             $"the run must not refuse as a whole: code={result.Refusal?.Code} detail={result.Refusal?.Detail}");
+    }
+
+    /// <summary>
+    /// The run's own EVIDENCE INDEX: a manifest of what it retained, BY ROLE, written into custody
+    /// as a content-addressed artifact and beside the store as plain JSON.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A content-addressed store is files named by their own digests and nothing else, so a later
+    /// reader can verify any byte they can already name and cannot discover WHICH byte is which.
+    /// Filling an evidence event by pattern-matching a directory would be presenting a guess as a
+    /// digest. The index is therefore built BY THE RUN, which knows the roles, and never
+    /// reconstructed afterwards.
+    /// </para>
+    /// <para>
+    /// It records the run's own git sha and whether the tree was clean, because for the first
+    /// retained run that pair had to be reconstructed from file timestamps, and a reconstruction is
+    /// not evidence. A run that cannot say which source produced it has retained bytes without
+    /// retaining their provenance.
+    /// </para>
+    /// <para>
+    /// WHAT IT CANNOT YET REACH, recorded IN the index rather than quietly omitted. Two roles are
+    /// not on <see cref="EuQueryExecutionResult"/> at all: each family's pass A and pass B page
+    /// bodies with their cursor values, which live on the delivery receipt that
+    /// <see cref="EuFamilyEnumerationOutcome"/> does not carry, and the robots bootstrap artifact,
+    /// which the routed session writes inside the executor. D1-05f has to surface both before the
+    /// index can carry them, and the file says so where a reader will see it.
+    /// </para>
+    /// </remarks>
+    private static async Task WriteEvidenceIndexAsync(
+        FileSystemCustodyStore store,
+        string root,
+        EuQueryExecutionResult result,
+        CancellationToken cancellationToken)
+    {
+        var dirty = TryGit("status --porcelain");
+        var index = new System.Text.Json.Nodes.JsonObject
+        {
+            ["schema"] = "lex-eu-canary-evidence-index/1",
+            ["runGitSha"] = TryGit("rev-parse HEAD"),
+            ["runTreeClean"] = dirty is null ? null : dirty.Length == 0,
+            ["runTreeDirtyPaths"] = dirty,
+            ["custodyClassSegment"] = "nightly-floor-90d",
+            ["wholeRunRefusalCode"] = result.Refusal?.Code.ToString(),
+            ["wholeRunRefusalDetail"] = result.Refusal?.Detail,
+            ["completion"] = result.Completion?.ToString(),
+            ["observedObjectCount"] = result.ObservedObjectCount,
+            ["observedExpressionCount"] = result.ObservedExpressionCount,
+        };
+
+        var families = new System.Text.Json.Nodes.JsonArray();
+        foreach (var outcome in result.FamilyOutcomes)
+        {
+            var refusal = outcome.ExecutorRefusal;
+            families.Add(new System.Text.Json.Nodes.JsonObject
+            {
+                ["role"] = "family",
+                ["familyKey"] = outcome.FamilyKey,
+                ["kind"] = outcome.Kind.ToString(),
+                ["retainedFloor"] = outcome.RetainedFloor?.ToString(),
+                ["proofDeliveredRowCount"] = outcome.Proof?.DeliveredRowCount,
+                ["proofCanonicalKeyDigest"] = outcome.Proof?.CanonicalKeyDigest,
+                ["proofAcquisitionRunSha256"] = outcome.Proof?.AcquisitionRunRef.Sha256,
+                ["proofInterpretationProfileSha256"] = outcome.Proof?.InterpretationProfileRef.Sha256,
+                ["proofSourceProfileSha256"] = outcome.Proof?.SourceProfileRef.Sha256,
+                ["refusalKind"] = refusal?.Code.ToString(),
+                ["refusedBodySha256"] = refusal?.ResponseBodySha256,
+                ["refusedBodyTerminalStatus"] = refusal?.TerminalStatus,
+                ["refusedBodyObservedMediaType"] = refusal?.ObservedMediaType,
+                ["countAnswerItShouldHaveMatched"] = refusal?.ObservedCount,
+                ["offendingKey"] = refusal?.OffendingKey,
+                ["requestOrdinal"] = refusal?.RequestOrdinal,
+                ["proofRefusal"] = outcome.ProofRefusal?.ToString(),
+            });
+        }
+
+        index["families"] = families;
+
+        index["scopeManifest"] = new System.Text.Json.Nodes.JsonObject
+        {
+            ["role"] = "scopeManifest",
+            ["receiptContentSha256"] = result.ScopeManifestReceipt?.Reference.ContentSha256,
+            ["receiptByteLength"] = result.ScopeManifestReceipt?.Reference.ByteLength,
+            ["canonicalSha256"] = result.ScopeManifestCanonicalSha256,
+        };
+
+        index["corpusRecordSet"] = new System.Text.Json.Nodes.JsonObject
+        {
+            ["role"] = "corpusRecordSet",
+            ["setRefSha256"] = result.CorpusRecordSetRef?.Sha256,
+        };
+
+        var bodies = new System.Text.Json.Nodes.JsonArray();
+        var outcomes = result.DocumentAcquisitionOutcomesByOrdinal
+            ?? new Dictionary<int, CorpusAcquisitionOutcome>();
+        foreach (var entry in outcomes.OrderBy(static entry => entry.Key))
+        {
+            bodies.Add(new System.Text.Json.Nodes.JsonObject
+            {
+                ["role"] = "documentBody",
+                ["manifestRowOrdinal"] = entry.Key,
+                ["heldContentSha256"] = entry.Value.Receipt?.Reference.ContentSha256,
+                ["heldByteLength"] = entry.Value.Receipt?.Reference.ByteLength,
+                ["refusalReason"] = entry.Value.Refusal?.ToString(),
+            });
+        }
+
+        index["documentBodies"] = bodies;
+
+        index["rolesThisIndexCannotYetCarry"] = new System.Text.Json.Nodes.JsonArray
+        {
+            new System.Text.Json.Nodes.JsonObject
+            {
+                ["role"] = "familyPassBodiesAndCursors",
+                ["why"] = "EuFamilyEnumerationOutcome carries the proof but not the delivery receipt, "
+                    + "so pass A and pass B page bodies and their cursor values are not reachable "
+                    + "from EuQueryExecutionResult. D1-05f must surface the receipt to record them.",
+            },
+            new System.Text.Json.Nodes.JsonObject
+            {
+                ["role"] = "countAnswerBesideARefusedPage",
+                ["why"] = "countAnswerItShouldHaveMatched comes from EuEnumerationRefusalDetail"
+                    + ".ObservedCount, which this refusal path leaves null, so the count a refused "
+                    + "page should have matched is not stated beside it. Measured out of band by "
+                    + "direct probes of the four families: ObjectFacts 41, ExpressionFacts 166, "
+                    + "RootWatermark 2, ManifestationFacts 9. D1-05f should populate it on the "
+                    + "refusal so the index carries it rather than a reader importing it.",
+            },
+            new System.Text.Json.Nodes.JsonObject
+            {
+                ["role"] = "robotsBootstrapArtifact",
+                ["why"] = "The routed session writes robots inside the executor and the adapter's "
+                    + "result does not name it, so its digest cannot be stated by role from here.",
+            },
+        };
+
+        var bytes = System.Text.Encoding.UTF8.GetBytes(
+            index.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+
+        var receipt = await store.CreateAsync(bytes, CustodyClass.NightlyFloor90d, cancellationToken)
+            .ConfigureAwait(false);
+        var beside = Path.Combine(root, "evidence-index.json");
+        await File.WriteAllBytesAsync(beside, bytes, cancellationToken).ConfigureAwait(false);
+
+        Console.WriteLine(
+            $"CANARY|evidenceIndex|sha256={receipt.Reference.ContentSha256}|bytes={bytes.Length}"
+            + $"|beside={beside}");
+    }
+
+    /// <summary>
+    /// One git invocation, for the run's own sha and tree state. Returns null when git is not
+    /// reachable, because provenance recorded as unknown is honest and a fabricated one is not.
+    /// </summary>
+    private static string? TryGit(string arguments)
+    {
+        try
+        {
+            using var process = System.Diagnostics.Process.Start(
+                new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = "git",
+                    Arguments = arguments,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                });
+            if (process is null)
+            {
+                return null;
+            }
+
+            var output = process.StandardOutput.ReadToEnd();
+            process.WaitForExit(30_000);
+            return process.ExitCode == 0 ? output.Trim() : null;
+        }
+        catch (Exception exception)
+            when (exception is System.ComponentModel.Win32Exception or InvalidOperationException)
+        {
+            return null;
+        }
     }
 
     /// <summary>
