@@ -455,6 +455,68 @@ public sealed class LuxembourgDocumentGetTests
     }
 
     /// <summary>
+    /// The document GET's own catch arm, the SECOND place a CustodyRequiredException becomes
+    /// <see cref="LuxembourgDocumentGetAttemptRefusal.ObservationNotExecuted"/>, was driven by
+    /// nothing: dropping CustodyRequiredException from that filter left the whole suite green.
+    /// A store that refuses every write once the run has reached its product request puts the
+    /// failure inside that try, and the run answers with a typed refusal carrying the store's
+    /// own message rather than letting the exception escape.
+    /// </summary>
+    /// <remarks>
+    /// The message assertion is what separates this arm from the pre-header path in
+    /// <see cref="ADocumentGetThatNeverExecutesAnObservationRefusesAfterTheWholeRetryBudget"/>,
+    /// which produces the SAME attempt refusal from an OperationalReason and failure-class pair.
+    /// Asserting only the refusal name would have let either path satisfy both tests.
+    /// </remarks>
+    [TestMethod]
+    public async Task ACustodyRequiredFailureDuringTheDocumentGetIsATypedRefusalRatherThanAnEscape()
+    {
+        const string StoreMessage = "the store refused a write during the document get.";
+        // TWO INSTRUMENTS, as in the enumeration executor's own custody test. The HANDLER GATE
+        // SELECTS THE PHASE: armed turns true on the product request, so nothing can fire inside
+        // the robots bootstrap. THE COUNT SELECTS THE WRITE, and it has to, because the SESSION
+        // carries its own catch (CustodyRequiredException) that turns any of ITS writes into
+        // OperationalReason.CustodyUnavailable and never lets one reach the executor's catch.
+        // Passing its two writes through lands the failure on the EXECUTOR's own evidence write,
+        // inside the try this test is about.
+        //
+        // EXACT TO ONE WRITE IN BOTH DIRECTIONS, each measured rather than assumed: 0 and 1 give
+        // "code=ObservationNotExecuted detail=CustodyUnavailable/.", the session classifying its
+        // own write, which would have passed a test that only checked the refusal's name; 3 walks
+        // past the executor entirely onto the adapter's body hold and gives DocumentBodyNotHeld.
+        var body = LuxembourgDocumentFetchFixtures.XmlBody();
+        var store = new CustodyRequiredAfterProductRequestStore(new FlooringCustodyStore(), StoreMessage)
+        {
+            PassThroughArmedWrites = 2,
+        };
+        var handler = new RobotsThenDocumentHandler((request, _) =>
+        {
+            store.Armed = true;
+            return BinaryResponse(request, HttpStatusCode.OK, body);
+        });
+
+        var (outcomes, refusal, _, _, _) = await AcquireWithHandlerAsync(handler, Address(), store);
+
+        Assert.IsNotNull(refusal, "a custody failure is a typed refusal, never an escape.");
+        Assert.AreEqual(LuxembourgQueryExecutionRefusal.DocumentFetchSessionNotStarted, refusal!.Code);
+        StringAssert.Contains(
+            refusal.Detail,
+            nameof(LuxembourgDocumentGetAttemptRefusal.ObservationNotExecuted),
+            "the attempt refusal this catch arm produces.");
+        StringAssert.Contains(
+            refusal.Detail,
+            StoreMessage,
+            "and the store's own message, which is what proves the catch arm ran rather than "
+            + "the pre-header path that produces the same refusal name.");
+        Assert.IsEmpty(outcomes, "no object carries a cause the publisher never gave.");
+        Assert.AreEqual(
+            3,
+            store.ArmedWrites,
+            "the calibration self-checks: two session writes, then the executor's evidence write. "
+            + "If that shape drifts, this fails rather than arming silently in the wrong phase.");
+    }
+
+    /// <summary>
     /// A route outcome this route has no reviewed reading for refuses the whole run and names the
     /// real classified cause, rather than being mapped onto an unrelated corpus member. The
     /// Luxembourg profile admits no redirect at all, so a 303 leaves the route incomplete for a
@@ -1115,6 +1177,40 @@ public sealed class LuxembourgDocumentGetTests
     /// failure is armed only after the payload has been written once, which is exactly the
     /// adapter's own second write.
     /// </remarks>
+    /// <summary>
+    /// Refuses every write once the run has reached its product request, so the failure lands
+    /// inside the document GET's own try rather than in the robots bootstrap before it, where it
+    /// would be a true refusal about a different thing.
+    /// </summary>
+    private sealed class CustodyRequiredAfterProductRequestStore(ICustodyStore inner, string message)
+        : ICustodyStore
+    {
+        internal bool Armed;
+
+        internal int PassThroughArmedWrites;
+
+        internal int ArmedWrites;
+
+        public Task<DurableBlobWriteReceipt> CreateAsync(
+            ReadOnlyMemory<byte> bytes, CustodyClass custodyClass, CancellationToken cancellationToken)
+        {
+            if (Armed && ArmedWrites++ >= PassThroughArmedWrites)
+            {
+                throw new CustodyRequiredException(message);
+            }
+
+            return inner.CreateAsync(bytes, custodyClass, cancellationToken);
+        }
+
+        public Task<ReadOnlyMemory<byte>> ReadAsync(
+            DurableBlobRef reference, CancellationToken cancellationToken) =>
+            inner.ReadAsync(reference, cancellationToken);
+
+        public Task<ReadOnlyMemory<byte>> ReadByDigestAsync(
+            string contentSha256, CancellationToken cancellationToken) =>
+            inner.ReadByDigestAsync(contentSha256, cancellationToken);
+    }
+
     private sealed class HoldFailingCustodyStore(
         ICustodyStore inner, byte[] payload, bool failWrite) : ICustodyStore
     {

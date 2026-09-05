@@ -293,8 +293,11 @@ public sealed class LuxembourgEnumerationRefusalWireNameTests
                 .Name)
             .ToArray();
 
-        CollectionAssert.AreEqual(
-            new[]
+        // Joined rather than compared element-wise: CollectionAssert reports a count difference
+        // for two equal-length sequences that differ only in a name, which is the failure this
+        // pin exists to describe. A string diff names the wire name that moved.
+        Assert.AreEqual(
+            string.Join("\n", new[]
             {
                 "none",
                 "robots_bootstrap_refused",
@@ -310,8 +313,8 @@ public sealed class LuxembourgEnumerationRefusalWireNameTests
                 "custody_member_missing",
                 "delivery_proof_refused",
                 "page_body_malformed",
-            },
-            actual,
+            }),
+            string.Join("\n", actual),
             "a wire name changing is a contract change; a number changing is not.");
 
         // custody_floor_not_observed is gone and must stay gone: its only producer was the
