@@ -167,7 +167,18 @@ public sealed class EuObjectFactsDiscoveryPlanTests
             "GROUP BY ?object ?predicate ?value ?value_kind ?datatype_iri ?language_tag");
         StringAssert.Contains(page, "BIND(STR(?object) AS ?key_1)");
         StringAssert.Contains(page, "BIND(STR(?predicate) AS ?key_2)");
-        StringAssert.Contains(page, "BIND(IF(BOUND(?value), STR(?value), \"\") AS ?key_4)");
+        // COALESCE, not IF. The publisher's engine selects IF's branch correctly and evaluates its
+        // arguments EAGERLY, so STR on the unbound term raised, the erroring BIND left key_4
+        // unbound, and SPARQL JSON then omitted it from 8 of 41 bindings. Measured by a bounded
+        // three-query probe over the exact batch that produced that page, PROBE
+        // lex-event-20260905T015937388Z-8bc0d2893047464c91a6a1c54982b5e1, ruled at
+        // lex-event-20260905T020043766Z-cd0db29d887b4d86b5c44da66d82e2f7. COALESCE is specified to
+        // swallow an erroring argument, and the same probe confirmed the key became total while the
+        // row count stayed 41.
+        StringAssert.Contains(page, "BIND(COALESCE(STR(?value), \"\") AS ?key_4)");
+        Assert.IsFalse(
+            page.Contains("IF(BOUND(?value)", StringComparison.Ordinal),
+            "the eager-IF form must not come back: it refuses conformant pages under our own name.");
         StringAssert.Contains(page,
             "ORDER BY ?key_1 ?key_2 ?key_3 ?key_4 ?key_5 ?key_6\nLIMIT {page_limit:uint}");
         Assert.IsFalse(page.Contains("SELECT DISTINCT", StringComparison.OrdinalIgnoreCase));

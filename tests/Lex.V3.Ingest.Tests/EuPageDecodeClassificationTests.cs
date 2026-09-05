@@ -10,11 +10,26 @@ namespace Lex.V3.Ingest.Tests;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Every body here is a REAL RETAINED PUBLISHER RESPONSE from the EU canary's own custody store,
-/// carried in as a fixture with its digest pinned, so an edited fixture fails on the digest before
-/// it is ever decoded. They are the exact bytes the first two canary runs refused, and the four
-/// page bodies were identical across two runs forty minutes apart, which is what made the failure
-/// debuggable without touching the publisher again.
+/// Every body here is a REAL RETAINED PUBLISHER RESPONSE, carried in as a fixture with its digest
+/// pinned, so an edited fixture fails on the digest before it is ever decoded. The four page bodies
+/// were identical across two canary runs forty minutes apart and a third probe the next day, which
+/// is what made the failure debuggable without touching the publisher again.
+/// </para>
+/// <para>
+/// WHICH QUERY EACH IS EVIDENCE OF, because a fixture that silently describes a query nobody sends
+/// any more is the next reader's wrong assumption. FIVE OF THE SIX ARE PRE-FIX. They are the
+/// publisher's answers to the ObjectFacts page template as it stood at 25f4990d, whose value-derived
+/// cursor key read <c>BIND(IF(BOUND(?value), STR(?value), "") AS ?key_4)</c>. That form is GONE:
+/// D1-05f part two replaced it with <c>COALESCE(STR(?value), "")</c>, so those five are NOT BYTE
+/// CURRENT for the query this route now sends. They are kept exactly as retained because they are
+/// the evidence of the fault and of part one's classification, and part two's reader tests run
+/// against them for that reason.
+/// </para>
+/// <para>
+/// THE ONE POST-FIX BODY is <c>objectfacts-page-coalesce-total.bin</c>, the publisher's answer to
+/// the COALESCE form over the same batch, retained by the bounded probe that settled part two's
+/// shape. Any page shape these cannot represent becomes a new fixture from the final canary run,
+/// with its digest pinned there.
 /// </para>
 /// <para>
 /// THE RULE: the default arm must never name the publisher.
@@ -50,6 +65,7 @@ public sealed class EuPageDecodeClassificationTests
     [DataRow("expressionfacts-page.bin", "41a12ad8372e9a19065129c67c233e5cce5433d598fe191c2844946b064a4032", 1516)]
     [DataRow("rootwatermark-page.bin", "fb14660f2a0c881e48b06396611f1bfff8d632f7b18b7627458704ded30c248c", 1073)]
     [DataRow("manifestationfacts-page.bin", "2581d2c517b9405842ade20aef289f733556ba414a927983eb70862da7b9b6e9", 2625)]
+    [DataRow("objectfacts-page-coalesce-total.bin", "3ee1711425945b2ec789fdffe6d66c3a12ea6527c91a3ac58a531e1eb65afa80", 39866)]
     public void EveryRetainedPageFixtureIsTheExactBytesItsNameClaims(
         string fileName, string expectedSha256, int expectedLength)
     {
@@ -133,6 +149,99 @@ public sealed class EuPageDecodeClassificationTests
             ObjectFactsUnboundKey,
             "and the page body's own digest, so the exact bytes can be reopened from the refusal alone.");
         Assert.AreEqual(ObjectFactsUnboundKey, refusal.ResponseBodySha256);
+    }
+
+    /// <summary>
+    /// D1-05f part two's closure at the reader: EVERY PROJECTED CURSOR VARIABLE IS BOUND IN EVERY
+    /// BINDING of the post-fix page, and the page still carries all 41 rows.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The fixture is the publisher's own answer to the COALESCE form of the query, retained by the
+    /// bounded probe that settled part two's shape (PROBE
+    /// lex-event-20260905T015937388Z-8bc0d2893047464c91a6a1c54982b5e1). It is the SAME BATCH and the
+    /// same 41 rows as the pre-fix page beside it, differing only in that one BIND.
+    /// </para>
+    /// <para>
+    /// THE OTHER HALF OF THIS ASSERTION MATTERS AS MUCH AS THE FIRST. <c>?value</c> IS STILL ABSENT
+    /// on exactly the eight unbound rows, and must be: that absence IS the unbound fact, carried
+    /// with <c>value_kind</c> of <c>"unbound"</c>. Only the CURSOR is totalised. A change that had
+    /// totalised both would have destroyed the fact while appearing to succeed, and would have
+    /// passed a test that merely counted absences, which is why this one counts them BY VARIABLE.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void EveryCursorVariableIsBoundInEveryBindingOfThePostFixPage()
+    {
+        using var document = System.Text.Json.JsonDocument.Parse(
+            ReadFixture("objectfacts-page-coalesce-total.bin"));
+        var root = document.RootElement;
+        var variables = root.GetProperty("head").GetProperty("vars")
+            .EnumerateArray().Select(static value => value.GetString()!).ToArray();
+        var bindings = root.GetProperty("results").GetProperty("bindings").EnumerateArray().ToArray();
+
+        Assert.HasCount(41, bindings, "the COALESCE form must deliver the same rows, not fewer.");
+
+        var cursorVariables = variables.Where(static name => name.StartsWith("key_", StringComparison.Ordinal)).ToArray();
+        Assert.HasCount(6, cursorVariables);
+
+        foreach (var name in cursorVariables)
+        {
+            var absent = bindings.Count(binding => !binding.TryGetProperty(name, out _));
+            Assert.AreEqual(
+                0,
+                absent,
+                $"{name} is absent from {absent} bindings; a cursor variable must be total, and a "
+                + "page where one is not must refuse as PageDecodeFailed naming us.");
+        }
+
+        // And the unbound fact survives, in the two places that carry it.
+        Assert.AreEqual(
+            8,
+            bindings.Count(static binding => !binding.TryGetProperty("value", out _)),
+            "value must STILL be absent on the unbound rows: that absence is the fact itself.");
+        Assert.AreEqual(
+            8,
+            bindings.Count(static binding =>
+                binding.GetProperty("value_kind").GetProperty("value").GetString() == "unbound"),
+            "and value_kind must still say unbound on exactly those rows.");
+    }
+
+    /// <summary>
+    /// The pre-fix and post-fix pages are the same 41 rows and differ in exactly the one variable
+    /// the template change targeted, so the fix is not quietly changing what the query selects.
+    /// </summary>
+    [TestMethod]
+    public void TheFixChangedTheCursorKeyAndNothingElseAboutTheSelection()
+    {
+        var before = AbsenceCountsByVariable("objectfacts-page-unbound-key.bin");
+        var after = AbsenceCountsByVariable("objectfacts-page-coalesce-total.bin");
+
+        CollectionAssert.AreEquivalent(
+            before.Keys.ToArray(), after.Keys.ToArray(), "the projection must be unchanged.");
+        Assert.AreEqual(8, before["key_4"]);
+        Assert.AreEqual(0, after["key_4"], "the one variable the change targeted.");
+
+        foreach (var name in before.Keys.Where(static name => name != "key_4"))
+        {
+            Assert.AreEqual(
+                before[name],
+                after[name],
+                $"{name} must be untouched by a change aimed only at key_4.");
+        }
+    }
+
+    private static Dictionary<string, int> AbsenceCountsByVariable(string fileName)
+    {
+        using var document = System.Text.Json.JsonDocument.Parse(ReadFixture(fileName));
+        var root = document.RootElement;
+        var variables = root.GetProperty("head").GetProperty("vars")
+            .EnumerateArray().Select(static value => value.GetString()!).ToArray();
+        var bindings = root.GetProperty("results").GetProperty("bindings").EnumerateArray().ToArray();
+        return variables.ToDictionary(
+            static name => name,
+            name => bindings.Count(binding => !binding.TryGetProperty(name, out _)),
+            StringComparer.Ordinal);
     }
 
     /// <summary>
