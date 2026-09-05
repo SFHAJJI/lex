@@ -188,8 +188,37 @@ public enum EuCellarObjectDecodeRefusal
 /// </remarks>
 public static class EuCellarObjectDecode
 {
-    private const string ConsolidatedActResourceTypeIri =
-        "http://publications.europa.eu/resource/authority/resource-type/CONSOLID_ACT";
+    /// <summary>
+    /// The resource-type IRIs that mark an object as a CONSOLIDATED ACT rather than an original.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// CONS_TEXT IS THE ONE THE OFFICE ACTUALLY SENDS, and it was missing until D1-05g measured
+    /// it. This marker was only ever exercised against seed ROOTS, which are DIR and REG, so the
+    /// consolidated branch had never been reached with real bytes. The moment the run began asking
+    /// family P about the states its own census discovered, every one of them came back
+    /// <c>.../resource-type/CONS_TEXT</c>: six states across both canary seeds, four on
+    /// 32016R0679 and two on 32003L0088, with the two roots carrying DIR and REG as expected. That
+    /// is what <c>ContentClassClosurePositionMismatch</c> was reporting, correctly: a state whose
+    /// closure position is Consolidation was deriving a content class of OriginalLegalText,
+    /// because the marker it was matched against is not the token the publisher uses.
+    /// </para>
+    /// <para>
+    /// CONSOLID_ACT IS KEPT AND ITS STATUS IS STATED. It has NOT been observed on this route, and
+    /// it is retained rather than replaced because it was not disproven either: this pack contains
+    /// six consolidated states and nothing licenses a claim about object kinds outside it. What is
+    /// NOT done is inventing a third token or silently dropping one; both members are named, and
+    /// only one of them has bytes behind it today.
+    /// </para>
+    /// </remarks>
+    private static readonly string[] ConsolidatedActResourceTypeIris =
+    [
+        // Observed on all six consolidated states of both canary seeds, D1-05g acceptance run.
+        "http://publications.europa.eu/resource/authority/resource-type/CONS_TEXT",
+
+        // Not observed on this route. Retained because it was not disproven, not because it was seen.
+        "http://publications.europa.eu/resource/authority/resource-type/CONSOLID_ACT",
+    ];
     private const string EnglishLanguageAuthorityIri =
         "http://publications.europa.eu/resource/authority/language/ENG";
     private const string FrenchLanguageAuthorityIri =
@@ -609,7 +638,8 @@ public static class EuCellarObjectDecode
         var hasConsolidatedMarker = pRows.Any(row =>
             row.PredicateIri == EuObjectFactsDiscoveryPlan.CdmIri(EuCdmPredicate.WorkHasResourceType) &&
             row.ValueKind == "iri" &&
-            row.Value.Value == ConsolidatedActResourceTypeIri);
+            row.Value.Value is not null &&
+            Array.IndexOf(ConsolidatedActResourceTypeIris, row.Value.Value) >= 0);
         var derivedContentClass = hasConsolidatedMarker
             ? EuContentClass.Consolidation
             : EuContentClass.OriginalLegalText;

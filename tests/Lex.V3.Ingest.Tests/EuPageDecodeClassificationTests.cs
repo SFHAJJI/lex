@@ -86,6 +86,12 @@ public sealed class EuPageDecodeClassificationTests
     /// stopped hiding it.
     /// </para>
     /// </remarks>
+    /// <summary>
+    /// Every <c>work_has_resource-type</c> row of the D1-05g acceptance run, roots and states.
+    /// </summary>
+    private const string ConsolidatedMarker =
+        "f49afb0bf09c0e6da59f3466f169333689ce5b708544838e868938e037462772";
+
     private const string LangTagUnboundDatatype =
         "b5ca00b1f26b46987f515d92d1c1b19541c9baddbceeb959ff63431fb5918c6d";
 
@@ -97,6 +103,7 @@ public sealed class EuPageDecodeClassificationTests
     [DataRow("manifestationfacts-page.bin", "2581d2c517b9405842ade20aef289f733556ba414a927983eb70862da7b9b6e9", 2625)]
     [DataRow("objectfacts-page-coalesce-total.bin", "3ee1711425945b2ec789fdffe6d66c3a12ea6527c91a3ac58a531e1eb65afa80", 39866)]
     [DataRow("expressionfacts-langtag-unbound-datatype.bin", LangTagUnboundDatatype, 6593)]
+    [DataRow("objectfacts-consolidated-marker.bin", ConsolidatedMarker, 7494)]
     public void EveryRetainedPageFixtureIsTheExactBytesItsNameClaims(
         string fileName, string expectedSha256, int expectedLength)
     {
@@ -109,6 +116,68 @@ public sealed class EuPageDecodeClassificationTests
             $"{fileName} is not the retained publisher body its digest names.");
     }
 
+
+
+    /// <summary>
+    /// The consolidated states carry <c>CONS_TEXT</c>, not <c>CONSOLID_ACT</c>, and the roots carry
+    /// their own act forms.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// THE OBSTACLE THIS PINS. The decode's consolidated marker matched
+    /// <c>.../resource-type/CONSOLID_ACT</c>, and it had never been reached with real bytes,
+    /// because family P was only ever asked about seed ROOTS and those are DIR and REG. The moment
+    /// the run asked about the states its own census discovered, the marker failed to match and
+    /// the decode refused with <c>ContentClassClosurePositionMismatch</c>, which was correct: a
+    /// state whose closure position is Consolidation was deriving OriginalLegalText.
+    /// </para>
+    /// <para>
+    /// The assertion is over ALL EIGHT rows rather than one, so it also pins the shape of the
+    /// answer: two roots carrying act forms and six states carrying the consolidated marker. A
+    /// regression that made a state look like a root, or a root like a state, fails here.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void EveryConsolidatedStateCarriesConsTextAndEveryRootCarriesItsActForm()
+    {
+        using var document = System.Text.Json.JsonDocument.Parse(
+            ReadFixture("objectfacts-consolidated-marker.bin"));
+        var rows = document.RootElement.GetProperty("results").GetProperty("bindings")
+            .EnumerateArray()
+            .Select(row => (
+                Object: row.GetProperty("object").GetProperty("value").GetString()!,
+                Type: row.GetProperty("value").GetProperty("value").GetString()!))
+            .ToArray();
+
+        Assert.HasCount(8, rows, "two roots and six discovered states.");
+
+        var consolidated = rows
+            .Where(row => row.Type.EndsWith("/CONS_TEXT", StringComparison.Ordinal))
+            .ToArray();
+        Assert.HasCount(
+            6,
+            consolidated,
+            "all six consolidated states must carry CONS_TEXT, which is the token the office "
+                + "actually sends. Types were: "
+                + string.Join(", ", rows.Select(row => row.Type.Split('/')[^1])));
+
+        Assert.IsFalse(
+            rows.Any(row => row.Type.EndsWith("/CONSOLID_ACT", StringComparison.Ordinal)),
+            "CONSOLID_ACT is the token the decode used to match on and the office does not send it "
+                + "on this route. It is retained in the marker set as unobserved rather than "
+                + "observed, and this asserts that status rather than assuming it.");
+
+        var actForms = rows
+            .Where(row => !row.Type.EndsWith("/CONS_TEXT", StringComparison.Ordinal))
+            .Select(row => row.Type.Split('/')[^1])
+            .OrderBy(token => token, StringComparer.Ordinal)
+            .ToArray();
+        CollectionAssert.AreEqual(
+            new[] { "DIR", "REG" },
+            actForms,
+            "the two roots keep their own act forms; if a root ever reported CONS_TEXT the "
+                + "closure position and the content class would agree for the wrong reason.");
+    }
 
     /// <summary>
     /// The language-tagged row is VALID SPARQL JSON whose datatype and cursor key are both simply
