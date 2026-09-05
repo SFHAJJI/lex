@@ -596,9 +596,12 @@ public sealed class LuxembourgQueryExecutionAdapterTests
     }
 
     /// <summary>
-    /// Accepts every write, then refuses to reproduce the SECOND read of any digest. The manifest
-    /// path reads its bytes back once through the hold's own verification, which is the read this
-    /// corrupts; the first read of each digest is left alone so nothing earlier in the run breaks.
+    /// Accepts every write, then corrupts the FIRST read of each digest and passes every later one
+    /// through. An earlier version of this remark said the second, which is the inverse of the
+    /// code below. The caveat that made the inversion invisible, stated rather than left implicit:
+    /// this works only because the manifest hold's verification read IS the run's first read of
+    /// that digest, so first-read corruption and manifest-hold corruption coincide here. Move the
+    /// hold, or read the manifest digest earlier, and this store stops targeting what it names.
     /// </summary>
     private sealed class ManifestHoldFailingCustodyStore(ICustodyStore inner) : ICustodyStore
     {
