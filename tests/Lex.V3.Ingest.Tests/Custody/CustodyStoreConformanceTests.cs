@@ -59,10 +59,28 @@ public sealed class CustodyStoreConformanceTests
             + "inner store in order to fail the hold",
         "Lex.V3.Ingest.Tests.EuAcquisitionTestFixture+EuInMemoryCustodyStore: takes six "
             + "configuration delegates that decide what it holds and what it refuses",
+        "Lex.V3.Ingest.Tests.LuxembourgDocumentGetTests+BodyReopenFailingCustodyStore: decorates "
+            + "an inner store and takes the body whose reopen it corrupts at a chosen ordinal",
+        "Lex.V3.Ingest.Tests.LuxembourgDocumentGetTests+CustodyRequiredAfterProductRequestStore: "
+            + "decorates an inner store and takes the refusal message it raises once the run "
+            + "reaches its product request",
+        "Lex.V3.Ingest.Tests.LuxembourgDocumentGetTests+HoldFailingCustodyStore: decorates an "
+            + "inner store and takes the payload and the write flag that arm its failure only "
+            + "after the session has already held those bytes. A DISTINCT TYPE from the "
+            + "CorpusRecordSetWriterTests store of the same simple name, which is why every key "
+            + "here is a full name including the declaring type",
         "Lex.V3.Ingest.Tests.LuxembourgQueryExecutionAdapterTests+DigestSubstitutingCustodyStore: "
             + "decorates an inner store in order to substitute one digest",
         "Lex.V3.Ingest.Tests.LuxembourgQueryExecutionAdapterTests+EnforcingCustodyStore: "
             + "decorates an inner store",
+        "Lex.V3.Ingest.Tests.LuxembourgQueryExecutionAdapterTests+ManifestHoldFailingCustodyStore: "
+            + "decorates an inner store in order to corrupt the first read of a digest",
+        "Lex.V3.Ingest.Tests.LuxembourgQueryExecutionAdapterTests"
+            + "+ManifestReopenFailingCustodyStore: decorates an inner store in order to corrupt "
+            + "the second read of a digest",
+        "Lex.V3.Ingest.Tests.LuxembourgRepeatedEnumerationExecutorTests"
+            + "+CustodyRequiredAfterBootstrapStore: decorates an inner store and takes the flag "
+            + "that arms its refusal once the robots bootstrap completes",
         "Lex.V3.Ingest.Tests.LuxembourgRepeatedEnumerationExecutorTests+EnforcingCustodyStore: "
             + "decorates an inner store",
         "Lex.V3.Ingest.Tests.LuxembourgRepeatedEnumerationExecutorTests+EvictingCustodyStore: "
@@ -110,14 +128,14 @@ public sealed class CustodyStoreConformanceTests
     public void TheImplementationCountsAreExactlyThese()
     {
         var types = CustodyStoreConformance.ImplementationTypes(Scope);
-        Assert.AreEqual(14, types.Count, "implementations swept");
+        Assert.AreEqual(22, types.Count, "implementations swept");
         Assert.AreEqual(
-            7,
+            9,
             types.Count(static type =>
                 CustodyStoreConformance.IsDrivenByDefault(type)
                 || CustodyStoreConformance.HasRecipe(type)),
             "implementations driven");
-        Assert.AreEqual(7, Exempt.Length, "implementations exempt");
+        Assert.AreEqual(13, Exempt.Length, "implementations exempt");
     }
 
     [TestMethod]
@@ -150,16 +168,18 @@ public sealed class CustodyStoreConformanceTests
         CollectionAssert.AreEqual(
             new[]
             {
-                "Lex.V3.Ingest.Tests.CorpusRecordSetWriterTests+EnforcingInMemoryCustodyStore declines "
+                "Lex.V3.Ingest.Tests.CorpusRecordSetWriterTests+EnforcingInMemoryCustodyStore "
+                    + "declines LegalHoldEvidence: ArgumentException",
+                "Lex.V3.Ingest.Tests.LuxembourgDocumentFetchRobotsBootstrapTests+InMemoryCustodySto"
+                    + "re declines LegalHoldEvidence: ArgumentException",
+                "Lex.V3.Ingest.Tests.LuxembourgDocumentGetTests+FlooringCustodyStore declines "
                     + "LegalHoldEvidence: ArgumentException",
-                "Lex.V3.Ingest.Tests.LuxembourgDocumentFetchRobotsBootstrapTests+InMemoryCustodyStore declines "
-                    + "LegalHoldEvidence: ArgumentException",
-                "Lex.V3.Ingest.Tests.LuxembourgQueryExecutionAdapterTests+InMemoryCustodyStore declines "
-                    + "LegalHoldEvidence: ArgumentException",
-                "Lex.V3.Ingest.Tests.RoutedHttpAcquisitionSessionAuditTests+RecordingCustodyStore declines "
-                    + "LegalHoldEvidence: ArgumentException",
-                "Lex.V3.Ingest.Tests.RoutedHttpAcquisitionSessionTests+MultiObjectCustodyStore declines "
-                    + "LegalHoldEvidence: ArgumentException",
+                "Lex.V3.Ingest.Tests.LuxembourgQueryExecutionAdapterTests+InMemoryCustodyStore "
+                    + "declines LegalHoldEvidence: ArgumentException",
+                "Lex.V3.Ingest.Tests.RoutedHttpAcquisitionSessionAuditTests+RecordingCustodyStore "
+                    + "declines LegalHoldEvidence: ArgumentException",
+                "Lex.V3.Ingest.Tests.RoutedHttpAcquisitionSessionTests+MultiObjectCustodyStore "
+                    + "declines LegalHoldEvidence: ArgumentException",
                 "Lex.V3.Ingest.Tests.RoutedHttpRedirectCapabilityTests+TestCustodyStore declines "
                     + "LegalHoldEvidence: ArgumentException",
                 "Lex.V3.Ingest.Tests.RoutedHttpRequestPolicyAuditTests+MemoryCustodyStore declines "
@@ -190,20 +210,26 @@ public sealed class CustodyStoreConformanceTests
         CollectionAssert.AreEqual(
             new[]
             {
-                "Lex.V3.Ingest.Tests.CorpusRecordSetWriterTests+EnforcingInMemoryCustodyStore"
-                    + " under NightlyFloor90d: LockedTime",
-                "Lex.V3.Ingest.Tests.LuxembourgDocumentFetchRobotsBootstrapTests+InMemoryCustodyStore"
-                    + " under NightlyFloor90d: LockedTime",
-                "Lex.V3.Ingest.Tests.LuxembourgQueryExecutionAdapterTests+InMemoryCustodyStore"
-                    + " under NightlyFloor90d: LockedTime",
-                "Lex.V3.Ingest.Tests.RoutedHttpAcquisitionSessionAuditTests+RecordingCustodyStore"
-                    + " under NightlyFloor90d: LockedTime",
-                "Lex.V3.Ingest.Tests.RoutedHttpAcquisitionSessionTests+MultiObjectCustodyStore"
-                    + " under NightlyFloor90d: LockedTime",
-                "Lex.V3.Ingest.Tests.RoutedHttpRedirectCapabilityTests+TestCustodyStore"
-                    + " under NightlyFloor90d: LockedTime",
-                "Lex.V3.Ingest.Tests.RoutedHttpRequestPolicyAuditTests+MemoryCustodyStore"
-                    + " under NightlyFloor90d: LockedTime",
+                "Lex.V3.Ingest.Tests.CorpusRecordSetWriterTests+EnforcingInMemoryCustodyStore "
+                    + "under NightlyFloor90d: LockedTime",
+                "Lex.V3.Ingest.Tests.LuxembourgDocumentFetchRobotsBootstrapTests+InMemoryCustodySto"
+                    + "re under NightlyFloor90d: LockedTime",
+                "Lex.V3.Ingest.Tests.LuxembourgDocumentGetTests+FlooringCustodyStore under "
+                    + "NightlyFloor90d: LockedTime",
+                "Lex.V3.Ingest.Tests.LuxembourgDocumentGetTests+UnenforcedCustodyStore under "
+                    + "LegalHoldEvidence: NotEnforced",
+                "Lex.V3.Ingest.Tests.LuxembourgDocumentGetTests+UnenforcedCustodyStore under "
+                    + "NightlyFloor90d: NotEnforced",
+                "Lex.V3.Ingest.Tests.LuxembourgQueryExecutionAdapterTests+InMemoryCustodyStore "
+                    + "under NightlyFloor90d: LockedTime",
+                "Lex.V3.Ingest.Tests.RoutedHttpAcquisitionSessionAuditTests+RecordingCustodyStore "
+                    + "under NightlyFloor90d: LockedTime",
+                "Lex.V3.Ingest.Tests.RoutedHttpAcquisitionSessionTests+MultiObjectCustodyStore "
+                    + "under NightlyFloor90d: LockedTime",
+                "Lex.V3.Ingest.Tests.RoutedHttpRedirectCapabilityTests+TestCustodyStore under "
+                    + "NightlyFloor90d: LockedTime",
+                "Lex.V3.Ingest.Tests.RoutedHttpRequestPolicyAuditTests+MemoryCustodyStore under "
+                    + "NightlyFloor90d: LockedTime",
             },
             outcome.Declarations.ToArray(),
             "a store changed what protection it declares: " + Join(outcome.Declarations));
