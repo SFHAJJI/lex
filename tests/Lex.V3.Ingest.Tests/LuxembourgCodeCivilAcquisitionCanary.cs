@@ -345,6 +345,26 @@ public sealed class LuxembourgCodeCivilAcquisitionCanary
             },
             new System.Text.Json.Nodes.JsonObject
             {
+                ["role"] = "crossRunCorpusRecordSetIdentity",
+                ["why"] = "setRefSha256 above identifies THIS RUN'S record set and IS NOT COMPARABLE "
+                    + "ACROSS RUNS. CorpusRecordCanonicalWriter digests manifest_ref and run_identity "
+                    + "through ScopeManifestCanonicalWriter.WriteArtifact, which emits each ref's "
+                    + "resource_id, and this canary mints both of those resource_ids as a fresh "
+                    + "urn:uuid per run, so the set digest cannot be stable by construction. Two runs "
+                    + "of identical code against an identical tree produce different values, which "
+                    + "was OBSERVED rather than reasoned about: two clean-checkout runs at one sha "
+                    + "gave d127d91e.. and 1b2340e1.. with every held digest identical. It sits "
+                    + "beside heldContentSha256 values that ARE content addresses, so without this "
+                    + "note a reader diffing two runs sees a moved corpus where nothing moved, and, "
+                    + "worse, might take a match as evidence two runs produced the same corpus. "
+                    + "WHAT TO DIFF INSTEAD, all stable across runs: every expressions[] "
+                    + "heldContentSha256 and heldByteLength, scopeManifest.canonicalSha256 (the "
+                    + "manifest's own content address, which no resource_id enters), and the "
+                    + "acceptedFraction counts. custodyRoot is a fresh temp directory per run and is "
+                    + "not comparable either.",
+            },
+            new System.Text.Json.Nodes.JsonObject
+            {
                 ["role"] = "enumerationDeliveryProof",
                 ["why"] = "The closure this canary acquires is a fixed list checked in beside it, "
                     + "not a live enumeration, so no AbsenceFamilyEnumerationProof exists for it "
