@@ -240,7 +240,7 @@ public sealed class LuxembourgScopeResolverTests
     public void NonHttpAbsolutePublisherValueIsRetainedAndTypedQuarantined()
     {
         const string unknownLanguage = "urn:lex:language:unruled";
-        var profile = VerifiedLuxembourgSourceProfile.Open(new LuxembourgVocabularySnapshot(
+        var profile = LuxembourgProfiles.Opened(new LuxembourgVocabularySnapshot(
             ObservationRef,
             CompleteEnumerationRef,
             [
@@ -1003,7 +1003,7 @@ public sealed class LuxembourgScopeResolverTests
                 []));
 
     private static VerifiedLuxembourgSourceProfile Profile() =>
-        VerifiedLuxembourgSourceProfile.Open(new LuxembourgVocabularySnapshot(
+        LuxembourgProfiles.Opened(new LuxembourgVocabularySnapshot(
             ObservationRef,
             CompleteEnumerationRef,
             VerifiedLuxembourgSourceProfile.RequiredIriVocabulary,

@@ -941,6 +941,8 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgProfileResolution+Resolved::<Cl"
                     + "one>$",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgProfileResolutionFailure: "
+                    + "by-ref-method public static "
+                    + "Lex.V3.Contracts.Source.Luxembourg.VerifiedLuxembourgSourceProfile::TryOpen, "
                     + "constructor internal instance "
                     + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgProfileResolutionFailure::.ctor, "
                     + "constructor private instance "
@@ -1087,7 +1089,7 @@ public sealed class GuardedConstructionCensusTests
                     + "constructor private static "
                     + "Lex.V3.Contracts.Source.Luxembourg.VerifiedLuxembourgSourceProfile::.cctor, "
                     + "method public static "
-                    + "Lex.V3.Contracts.Source.Luxembourg.VerifiedLuxembourgSourceProfile::Open",
+                    + "Lex.V3.Contracts.Source.Luxembourg.VerifiedLuxembourgSourceProfile::TryOpen",
                 "Lex.V3.Contracts.Source.Quarantine.QuarantinePriorCoordinateReproduction: "
                     + "constructor private instance "
                     + "Lex.V3.Contracts.Source.Quarantine.QuarantinePriorCoordinateReproduction::.c"

@@ -1,6 +1,7 @@
 using System.Text.RegularExpressions;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Luxembourg;
+using Lex.V3.TestSupport;
 
 namespace Lex.V3.Tests.Contracts.Source.Luxembourg;
 
@@ -148,7 +149,7 @@ public sealed class LuxembourgWitnessIndependenceTests
             enumerationRef,
             VerifiedLuxembourgSourceProfile.RequiredIriVocabulary,
             []);
-        var profile = VerifiedLuxembourgSourceProfile.Open(snapshot);
+        var profile = LuxembourgProfiles.Opened(snapshot);
 
         var topology = LuxembourgSourceProfileTopology.Mint(profile);
 
@@ -169,9 +170,9 @@ public sealed class LuxembourgWitnessIndependenceTests
         Assert.AreEqual(profile.ScopeBinding.SourceProfileRef, topology.IdentityProfileRef);
 
         // Two profiles built from the same complete vocabulary share a source-profile identity
-        // (VerifiedLuxembourgSourceProfile.Open is a pure function of its snapshot), so minting
+        // (VerifiedLuxembourgSourceProfile.TryOpen is a pure function of its snapshot), so minting
         // twice must be stable, not merely equal by accident of a shared instance.
-        var second = LuxembourgSourceProfileTopology.Mint(VerifiedLuxembourgSourceProfile.Open(snapshot));
+        var second = LuxembourgSourceProfileTopology.Mint(LuxembourgProfiles.Opened(snapshot));
         Assert.AreEqual(topology.IdentityProfileRef, second.IdentityProfileRef);
         Assert.AreEqual(topology.Topology, second.Topology);
     }
