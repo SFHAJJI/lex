@@ -17,8 +17,10 @@ namespace Lex.V3.Tests.Census;
 /// A token is any string a reader sees, whatever member carries it. This pin once rendered only
 /// <c>const</c> fields, and the hole had a measured shape: a <c>public static readonly string</c>
 /// added to a schema-id table passed all of both suites, while the same token declared <c>const</c>
-/// failed at a named element. Constants, static readonly strings and static get-only string
-/// properties are all rendered now, each with the kind that carries it.
+/// failed at a named element. Constants, static readonly strings and readable static string
+/// properties are all rendered now, each with the kind that carries it. Readable means it has a
+/// getter; one that also has a setter is admitted, because that is mutable state and a registry
+/// reassignable at run time is the more interesting case rather than the less.
 /// </para>
 /// <para>
 /// Why it is a sweep. The selection is structural: a static class holding at least one static

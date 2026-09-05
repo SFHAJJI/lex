@@ -125,8 +125,8 @@ public static class ClosedSurfaceCensus
     /// <remarks>
     /// <para>
     /// A token is a string a reader sees, and the member carrying it may be <c>const</c>, or
-    /// <c>static readonly</c>, or a static get-only property. Which one is a storage decision, not
-    /// a contract decision. Rendering only <c>const</c> was a hole with a measured shape: a
+    /// <c>static readonly</c>, or a readable static property, meaning one with a getter whether or
+    /// not it also has a setter. Which one is a storage decision, not a contract decision. Rendering only <c>const</c> was a hole with a measured shape: a
     /// <c>public static readonly string</c> added to a schema-id table passed the whole suite,
     /// while the same token declared <c>const</c> failed it.
     /// </para>
@@ -261,7 +261,9 @@ public static class ClosedSurfaceCensus
             return false;
         }
 
-        return type.GetFields(Everything).Any(static field => field.IsLiteral || field.IsStatic)
+        // IsStatic alone. A literal field is always static, so an IsLiteral disjunct here would be
+        // dead, which is the same shape this file carried in ConstructionIsRestricted one cycle ago.
+        return type.GetFields(Everything).Any(static field => field.IsStatic)
             || type.GetProperties(Everything)
                 .Any(static property => (property.GetMethod ?? property.SetMethod)!.IsStatic);
     }
@@ -291,8 +293,11 @@ public static class ClosedSurfaceCensus
 
     /// <summary>
     /// The registry members of a type, with the reflection walked once. Collections are static
-    /// readonly fields and static get-only properties whose type is a non-string sequence; tokens
-    /// are string constants, static readonly strings and static get-only string properties.
+    /// readonly fields and readable static properties whose type is a non-string sequence; tokens
+    /// are string constants, static readonly strings and readable static string properties.
+    /// Readable means the property has a getter; one that also has a setter is still admitted,
+    /// because a settable static property is mutable state and a registry that can be reassigned at
+    /// run time is the more interesting case rather than the less.
     /// </summary>
     private static RegistryShapeOf RegistryShape(Type type)
     {
