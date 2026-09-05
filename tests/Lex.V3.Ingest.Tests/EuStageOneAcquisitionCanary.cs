@@ -73,8 +73,11 @@ namespace Lex.V3.Ingest.Tests;
 /// <see cref="CustodyMembership.RetainedUnenforced"/>. And, WHEN THE RUN REACHES THE MANIFEST, the
 /// reduced manifest's expression count against the census total. WHEN IT DOES NOT REACH THE
 /// MANIFEST IT CALLS <c>Assert.Fail</c> WITH THE REFUSAL IN WORDS. There is no path through this
-/// method that passes silently, and today it does not pass at all: the run stops at the
-/// object-facts families, which is D1-05f.
+/// method that passes silently, and today it does not pass at all. WHERE IT STOPS HAS MOVED and
+/// this sentence is dated deliberately: at D1-05f's head all six families PROVE against the live
+/// publisher and the run refuses later, at RecordFormNotResolved, because a seed's root carries no
+/// resource_legal_type this adapter maps to a closed EuActForm. That is D1-05g. Re-read the run's
+/// own wholeRunRefusalCode rather than this line, which is a summary and will age again.
 /// </para>
 /// <para>
 /// ONE COMPARISON THE CENSUS MAKES POSSIBLE IS NOT YET ASSERTABLE, and it is failed loudly rather
@@ -419,8 +422,10 @@ public sealed class EuStageOneAcquisitionCanary
     /// not on <see cref="EuQueryExecutionResult"/> at all: each family's pass A and pass B page
     /// bodies with their cursor values, which live on the delivery receipt that
     /// <see cref="EuFamilyEnumerationOutcome"/> does not carry, and the robots bootstrap artifact,
-    /// which the routed session writes inside the executor. D1-05f has to surface both before the
-    /// index can carry them, and the file says so where a reader will see it.
+    /// which the routed session writes inside the executor. D1-05g has to surface the receipt
+    /// before the index can carry the first, and the file says so where a reader will see it. The
+    /// same sentence named D1-05f until D1-05f was about to merge, which is how a gap starts
+    /// reading as done: the item it points at closes and nothing repoints it.
     /// </para>
     /// </remarks>
     /// <summary>
@@ -443,7 +448,7 @@ public sealed class EuStageOneAcquisitionCanary
                 ["role"] = "familyPassBodiesAndCursors",
                 ["why"] = "EuFamilyEnumerationOutcome carries the proof but not the delivery receipt, "
                     + "so pass A and pass B page bodies and their cursor values are not reachable "
-                    + "from EuQueryExecutionResult. D1-05f must surface the receipt to record them.",
+                    + "from EuQueryExecutionResult. D1-05g must surface the receipt to record them.",
             },
             new System.Text.Json.Nodes.JsonObject
             {
@@ -452,8 +457,9 @@ public sealed class EuStageOneAcquisitionCanary
                     + ".ObservedCount, which this refusal path leaves null, so the count a refused "
                     + "page should have matched is not stated beside it. Measured out of band by "
                     + "direct probes of the four families: ObjectFacts 41, ExpressionFacts 166, "
-                    + "RootWatermark 2, ManifestationFacts 9. D1-05f should populate it on the "
-                    + "refusal so the index carries it rather than a reader importing it.",
+                    + "RootWatermark 2, ManifestationFacts 9. Populating it on the refusal is a "
+                    + "prerequisite of R3, so the index carries the count rather than a "
+                    + "reader importing it from this note.",
             },
             new System.Text.Json.Nodes.JsonObject
             {

@@ -1285,6 +1285,7 @@ public sealed class EuQueryExecutionAdapter
     /// fact. When every candidate answers that 404, the object records PendingAcquisition with
     /// <see cref="CorpusAcquisitionRefusalReason.RequestedRepresentationNotServed"/>, and the tried
     /// types are named through this method's own returned ladder results.
+    /// </para>
     /// </remarks>
     /// <returns>
     /// The real per-ordinal outcomes this run's fetches produced together with each accepted row's

@@ -118,6 +118,65 @@ public sealed class EuCanaryEvidenceIndexWireFormTests
                 + "meaningful while it can see them both.");
     }
 
+    /// <summary>
+    /// The index's TOP LEVEL FIELD SET, pinned as a literal list so deleting one goes red.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// THE HOLE THIS FILLS, found by a probe rather than by reading. A probe deleted
+    /// <c>observedObjectCount</c> from the document and BOTH SUITES STAYED GREEN. Every other test
+    /// over this index reads fields BY NAME, so each one only holds the field it happens to ask
+    /// for, and nothing at all held the SHAPE. A consumer diffing two runs, or a later slice
+    /// reading the index as the run's record, would have found a field simply gone with no test
+    /// having an opinion about it.
+    /// </para>
+    /// <para>
+    /// WHY THE WHOLE SET AND NOT THE FIELDS SOMEBODY REMEMBERED. Asserting presence field by field
+    /// is the same shape as the census this repository already learned from: it can only ever
+    /// check the names in the list, so a field REMOVED from the list disappears from the document
+    /// and from the assertion together. Comparing the document's own key set against a literal
+    /// catches a deletion, an addition and a rename, and an addition failing is correct: a new
+    /// field in a schema-declaring document is a change a reader should have to declare.
+    /// </para>
+    /// <para>
+    /// The nested sections are pinned as names only. What is inside <c>families</c> is held by the
+    /// wire-form and gap tests beside this one, and duplicating that here would make one change
+    /// redden three tests for one reason.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void TheIndexCarriesExactlyItsDeclaredFieldSet()
+    {
+        var index = EuStageOneAcquisitionCanary.BuildEvidenceIndex(RefusedWith(
+            EuQueryExecutionRefusal.ScopeManifestNotRetained));
+
+        // Joined rather than compared element-wise so a diff names the field that moved.
+        Assert.AreEqual(
+            string.Join("\n", new[]
+            {
+                "completion",
+                "corpusRecordSet",
+                "custodyClassSegment",
+                "documentBodies",
+                "families",
+                "observedExpressionCount",
+                "observedObjectCount",
+                "rolesThisIndexCannotYetCarry",
+                "runGitSha",
+                "runTreeClean",
+                "runTreeDirtyPaths",
+                "schema",
+                "scopeManifest",
+                "wholeRunRefusalCode",
+                "wholeRunRefusalDetail",
+            }),
+            string.Join("\n", index.Select(static pair => pair.Key).OrderBy(
+                static key => key, StringComparer.Ordinal)),
+            "this index declares a schema, so its field set is a contract with whoever reads it. "
+                + "A field deleted here is a reader silently no longer told something; a field "
+                + "added is a change to declare, not to discover.");
+    }
+
     private static string WireTokenOf<T>(T value) where T : struct, Enum =>
         JsonNode.Parse(ContractJson.Serialize(value))!.GetValue<string>();
 

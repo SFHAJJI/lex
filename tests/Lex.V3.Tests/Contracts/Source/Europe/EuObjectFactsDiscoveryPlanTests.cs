@@ -138,6 +138,7 @@ public sealed class EuObjectFactsDiscoveryPlanTests
     /// reddens a named test instead of silently moving a digest nothing compares.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// The gap this closes was found while listing what D1-05f moved: this ArtifactRef DID move with
     /// the COALESCE and terminal-policy changes, and nothing pinned it. The only other assertion
     /// over a plan ArtifactRef is
@@ -147,8 +148,8 @@ public sealed class EuObjectFactsDiscoveryPlanTests
     /// <c>EuConsolidationDiscoveryTests.ClosedPlanSeparatesFamilyAndFactDeliveryWithoutErasingMultiplicity</c>,
     /// which already pinned the sibling plan. Re-derive by reading the value this test prints on
     /// failure rather than by computing one by hand.
-    /// </remarks>
-    /// <remarks>
+    /// </para>
+    /// <para>
     /// WHAT THIS CATCHES THAT NOTHING ELSE DOES, measured rather than argued. Three of the four
     /// families have a template pinned by exact text, so drift there reddens two tests. The
     /// MANIFESTATION family has no text assertion anywhere in either suite: the count-template loop
@@ -159,6 +160,7 @@ public sealed class EuObjectFactsDiscoveryPlanTests
     /// projection. Under both, this test was the ONLY failure in 2,179 contract tests and 295 ingest
     /// tests. That is the whole argument for a digest pin over more text assertions: it covers the
     /// template nobody remembered to cover.
+    /// </para>
     /// </remarks>
     [TestMethod]
     public void TheObjectFactsPlanIdentityIsPinnedSoTemplateDriftCannotPassSilently()

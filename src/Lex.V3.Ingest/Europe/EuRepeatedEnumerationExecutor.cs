@@ -100,6 +100,7 @@ public enum EuEnumerationRefusal
     /// digest, so the exact retained bytes can be reopened and read.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// The default arm of the page-parse classifier, and the reason it exists is that a default arm
     /// must never name someone else. The first condition it names was found by the canary: SPARQL
     /// 1.1's JSON results format OMITS AN UNBOUND VARIABLE FROM A BINDING ENTIRELY, and this
@@ -116,6 +117,7 @@ public enum EuEnumerationRefusal
     /// unbound anyway. D1-05f part two replaced the guard with COALESCE, which the same engine does
     /// honour. So this member's first condition was never a missing guard; it was a guard the engine
     /// ignored.
+    /// </para>
     /// </remarks>
     [JsonStringEnumMemberName("page_decode_failed_on_our_side")]
     PageDecodeFailedOnOurSide = 14,

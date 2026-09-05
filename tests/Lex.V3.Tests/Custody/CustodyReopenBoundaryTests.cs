@@ -22,11 +22,21 @@ namespace Lex.V3.Tests.Custody;
 /// path that trusts the store is that claim quietly not holding for those bytes.
 /// </para>
 /// <para>
-/// THE MEASUREMENT THIS MAKES PERMANENT. A sweep of every reopen site found 58 calls to the
-/// checked read and ZERO direct <c>ReadByDigestAsync</c> callers anywhere under <c>src</c>; all 28
-/// direct callers were in test code, where a double deliberately returns wrong bytes so a guard
-/// can be shown to bite. That was a good result, and a good result measured once is a fact about
-/// the day it was measured. This test is the difference between having swept and staying swept.
+/// THE MEASUREMENT THIS MAKES PERMANENT. A sweep of every reopen site found that the ONLY direct
+/// <c>ReadByDigestAsync</c> caller under <c>src</c> is <see cref="TheOnlyPermittedCaller"/>, which
+/// is the checked read's own implementation; every other direct caller was in test code, where a
+/// double deliberately returns wrong bytes so a guard can be shown to bite. A good result measured
+/// once is a fact about the day it was measured, and this test is the difference between having
+/// swept and staying swept.
+/// </para>
+/// <para>
+/// THIS PARAGRAPH DELIBERATELY CARRIES NO COUNTS, and the version before it is why. It said ZERO
+/// direct callers under <c>src</c> while this same file named one twelve lines below, so the
+/// sentence contradicted its own constant and nobody reading top to bottom would have got past
+/// both. It also carried two call counts that the next merge moves. This head's own argument
+/// applies to it: a doc fact true only until the next merge is worse than no fact, because a
+/// reader cannot tell a stale number from a measured one. What is durable is WHICH file is
+/// allowed, and the constant below states that where the test can enforce it.
 /// </para>
 /// <para>
 /// WHY A SOURCE SCAN RATHER THAN AN IL SCAN. An IL scan over call sites would be the stronger
