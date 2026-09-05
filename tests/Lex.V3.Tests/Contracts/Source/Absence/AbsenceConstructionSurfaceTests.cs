@@ -184,8 +184,11 @@ public sealed class AbsenceConstructionSurfaceTests
                 // family proof cannot reach them at all (RULING
                 // lex-event-20260904T204900861Z-6b737927d58a409dab05149aa28052e5), and it cannot
                 // manufacture a proof: the single checked door pinned above is still the only mint.
+                // The trailing ? is not decoration: this holder is nullable because
+                // NoFamilyDesignated() exists, and the sweep renders it. Transcribed from the
+                // sweep's own output at the rebase onto integration, not hand-adjusted.
                 "field private instance " + Lu + "LuxembourgProvenResourceObservations"
-                + "::<AssertionFamilyProof>k__BackingField -> " + N + "AbsenceFamilyEnumerationProof",
+                + "::<AssertionFamilyProof>k__BackingField -> " + N + "AbsenceFamilyEnumerationProof?",
 
                 // The publisher-neutral delivery receipt's bridge (queue item 19: moved and renamed
                 // from Lex.V3.Contracts.Source.Luxembourg.LuxembourgEnumerationDeliveryReceipt), and
@@ -206,7 +209,7 @@ public sealed class AbsenceConstructionSurfaceTests
                 "property public instance " + N + "AbsenceCut::EnumerationProofs() -> "
                 + "System.Collections.Generic.IReadOnlyList<" + N + "AbsenceFamilyEnumerationProof>",
                 "property public instance " + Lu + "LuxembourgProvenResourceObservations"
-                + "::AssertionFamilyProof() -> " + N + "AbsenceFamilyEnumerationProof",
+                + "::AssertionFamilyProof() -> " + N + "AbsenceFamilyEnumerationProof?",
             },
             ConstructionSurface.ProducersIn(
                 typeof(AbsenceCut).Assembly,
