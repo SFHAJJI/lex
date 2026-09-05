@@ -61,7 +61,11 @@ public sealed class VocabularyRegistryCensusTests
     public void EveryStaticTokenRegistryInTheSweptAssembliesIsPinnedAtItsCurrentSize()
     {
         CollectionAssert.AreEqual(
-            Array.Empty<string>(),
+            new[]
+            {
+                "Lex.V3.Ingest.Europe.EuObjectFactsBatchFactory: SetsOverObservedObjects=3, "
+                    + "SetsOverPackRootsOnly=1",
+            },
             ClosedSurfaceCensus.VocabularyRegistries(CensusScope.SweptHere).ToArray());
     }
 }

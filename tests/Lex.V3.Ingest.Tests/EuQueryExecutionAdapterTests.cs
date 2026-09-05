@@ -45,7 +45,7 @@ public sealed class EuQueryExecutionAdapterTests
         var pOutcomes = EuAcquisitionTestFixture.ObjectAuthorityPredicates
             .Select(predicate => (
                 PredicateIri: predicate,
-                ValueIri: predicate == EuAcquisitionTestFixture.ResourceLegalType
+                ValueIri: predicate == EuAcquisitionTestFixture.WorkHasResourceType
                     ? EuAcquisitionTestFixture.RegulationResourceType
                     : (string?)null))
             .Concat(EuAcquisitionTestFixture.RelationPredicates.Select(predicate => (predicate, (string?)null)))
@@ -116,12 +116,9 @@ public sealed class EuQueryExecutionAdapterTests
 
         var result = await adapter.RunAsync(
             [(censusRequest, EuAcquisitionTestFixture.SourceWitness())],
-            [
-                (pRequest, EuAcquisitionTestFixture.SourceWitness()),
-                (xRequest, EuAcquisitionTestFixture.SourceWitness()),
-                (wRequest, EuAcquisitionTestFixture.SourceWitness()),
-                (mRequest, EuAcquisitionTestFixture.SourceWitness()),
-            ],
+            new EuObjectFactsBatchPolicy(
+                pPlan, pPlanId, EuAcquisitionTestFixture.BuildRendererSource(2),
+                EuAcquisitionTestFixture.SourceWitness()),
             EuAcquisitionTestFixture.BuildRendererSource(9),
             EuAcquisitionTestFixture.SourceWitness(),
             EuAcquisitionTestFixture.BuildRendererSource(1009),
@@ -852,7 +849,7 @@ public sealed class EuQueryExecutionAdapterTests
         var pOutcomes = EuAcquisitionTestFixture.ObjectAuthorityPredicates
             .Select(predicate => (
                 PredicateIri: predicate,
-                ValueIri: predicate == EuAcquisitionTestFixture.ResourceLegalType
+                ValueIri: predicate == EuAcquisitionTestFixture.WorkHasResourceType
                     ? EuAcquisitionTestFixture.RegulationResourceType
                     : (string?)null))
             .Concat(EuAcquisitionTestFixture.RelationPredicates.Select(predicate => (predicate, (string?)null)))
@@ -907,12 +904,9 @@ public sealed class EuQueryExecutionAdapterTests
 
             return await adapter.RunAsync(
                 [(censusRequest, EuAcquisitionTestFixture.SourceWitness())],
-                [
-                    (pRequest, EuAcquisitionTestFixture.SourceWitness()),
-                    (xRequest, EuAcquisitionTestFixture.SourceWitness()),
-                    (wRequest, EuAcquisitionTestFixture.SourceWitness()),
-                    (mRequest, EuAcquisitionTestFixture.SourceWitness()),
-                ],
+                new EuObjectFactsBatchPolicy(
+                pPlan, pPlanId, EuAcquisitionTestFixture.BuildRendererSource(2),
+                EuAcquisitionTestFixture.SourceWitness()),
                 EuAcquisitionTestFixture.BuildRendererSource(945),
                 EuAcquisitionTestFixture.SourceWitness(),
                 EuAcquisitionTestFixture.BuildRendererSource(1945),
@@ -1272,7 +1266,7 @@ public sealed class EuQueryExecutionAdapterTests
         var pOutcomes = EuAcquisitionTestFixture.ObjectAuthorityPredicates
             .Select(predicate => (
                 PredicateIri: predicate,
-                ValueIri: predicate == EuAcquisitionTestFixture.ResourceLegalType
+                ValueIri: predicate == EuAcquisitionTestFixture.WorkHasResourceType
                     ? unmappableResourceType
                     : (string?)null))
             .Concat(EuAcquisitionTestFixture.RelationPredicates.Select(predicate => (predicate, (string?)null)))
@@ -1328,12 +1322,9 @@ public sealed class EuQueryExecutionAdapterTests
 
         var result = await adapter.RunAsync(
             [(censusRequest, EuAcquisitionTestFixture.SourceWitness())],
-            [
-                (pRequest, EuAcquisitionTestFixture.SourceWitness()),
-                (xRequest, EuAcquisitionTestFixture.SourceWitness()),
-                (wRequest, EuAcquisitionTestFixture.SourceWitness()),
-                (mRequest, EuAcquisitionTestFixture.SourceWitness()),
-            ],
+            new EuObjectFactsBatchPolicy(
+                pPlan, pPlanId, EuAcquisitionTestFixture.BuildRendererSource(2),
+                EuAcquisitionTestFixture.SourceWitness()),
             EuAcquisitionTestFixture.BuildRendererSource(80),
             EuAcquisitionTestFixture.SourceWitness(),
             EuAcquisitionTestFixture.BuildRendererSource(1080),
@@ -1380,7 +1371,7 @@ public sealed class EuQueryExecutionAdapterTests
         var rootOutcomes = EuAcquisitionTestFixture.ObjectAuthorityPredicates
             .Select(predicate => (
                 PredicateIri: predicate,
-                ValueIri: predicate == EuAcquisitionTestFixture.ResourceLegalType
+                ValueIri: predicate == EuAcquisitionTestFixture.WorkHasResourceType
                     ? EuAcquisitionTestFixture.RegulationResourceType
                     : (string?)null))
             .Concat(EuAcquisitionTestFixture.RelationPredicates.Select(predicate => (predicate, (string?)null)))
@@ -1467,12 +1458,9 @@ public sealed class EuQueryExecutionAdapterTests
 
         var result = await adapter.RunAsync(
             [(censusRequest, EuAcquisitionTestFixture.SourceWitness())],
-            [
-                (pRequest, EuAcquisitionTestFixture.SourceWitness()),
-                (xRequest, EuAcquisitionTestFixture.SourceWitness()),
-                (wRequest, EuAcquisitionTestFixture.SourceWitness()),
-                (mRequest, EuAcquisitionTestFixture.SourceWitness()),
-            ],
+            new EuObjectFactsBatchPolicy(
+                pPlan, pPlanId, EuAcquisitionTestFixture.BuildRendererSource(2),
+                EuAcquisitionTestFixture.SourceWitness()),
             EuAcquisitionTestFixture.BuildRendererSource(29),
             EuAcquisitionTestFixture.SourceWitness(),
             EuAcquisitionTestFixture.BuildRendererSource(1029),
@@ -1501,13 +1489,228 @@ public sealed class EuQueryExecutionAdapterTests
     }
 
     /// <summary>
-    /// Required fold-in 2 / defect 1's own driving test. Before the fix, <c>FilterByClosureColumn</c>
-    /// silently dropped this row (a P row naming an object outside the seed's closure) with a
-    /// <c>continue</c>, so the run delivered successfully with the row simply missing. After the fix
-    /// the row reaches <see cref="EuCellarObjectDecode.TryDecode"/>, which refuses it by name.
+    /// A consolidated state this run's own census discovered is ASKED ABOUT by family P and comes
+    /// back with its own record. This is D1-05g's driving test.
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// WHY THIS COULD NOT PASS BEFORE. The caller used to hand in the object lists and every caller
+    /// passed the seed ROOTS, so family P was asked about the roots alone while the decoder walked
+    /// root PLUS every state the census discovered. Lane A measured it against the retained bytes:
+    /// 41 rows over exactly two distinct objects. A subject with zero matching rows is MALFORMED by
+    /// explicit design in <c>TryBuildPredicateObservation</c>, so the state arrived undescribed.
+    /// </para>
+    /// <para>
+    /// AND THE TOLERANCE THAT LOOKS OBVIOUS DOES NOT WORK, which is why the fix is sequencing.
+    /// Decoding an undescribed state as <c>NotObserved</c> was tried and produced
+    /// <c>ContentClassClosurePositionMismatch</c> immediately, because the content class is derived
+    /// from those same family P rows. There is no reading of an absent row that yields a content
+    /// class, so the only correct move is to ask about the state in the first place.
+    /// </para>
+    /// <para>
+    /// WHAT MAKES THIS A REAL ASSERTION rather than a restatement of the fixture. The scripted P
+    /// response carries rows for the root AND both states. If the batch were still roots-only,
+    /// those state rows would be OUTSIDE the requested partition, the delivery proof would refuse,
+    /// and the family would not prove: the run would fail rather than quietly differ. So the run
+    /// reaching a record for the state is only possible if the state was in the batch.
+    /// </para>
+    /// </remarks>
     [TestMethod]
-    public async Task AnOutOfClosurePRowIsRefusedByNameRatherThanSilentlyDropped()
+    public async Task AStateTheCensusDiscoveredIsAskedAboutInThePBatchAndYieldsItsOwnRecord()
+    {
+        var seed = EuAppendixASeedMap.SeedsInCelexOrder[0];
+        var rootIri = EuPackRootCanonicalForm.TryCanonicalize(seed.WorkRoot, out _)!;
+        var state1Iri = rootIri + "/state-1";
+        var state2Iri = rootIri + "/state-2";
+        const string watermarkLexical = "2026-01-01T00:00:00.0000000+01:00";
+
+        var censusRows = new[]
+        {
+            EuAcquisitionTestFixture.CensusFamilyRow(seed.Celex, rootIri, state1Iri),
+            EuAcquisitionTestFixture.CensusFamilyRow(seed.Celex, rootIri, state2Iri),
+        };
+
+        var rootOutcomes = EuAcquisitionTestFixture.ObjectAuthorityPredicates
+            .Select(predicate => (
+                PredicateIri: predicate,
+                ValueIri: predicate == EuAcquisitionTestFixture.WorkHasResourceType
+                    ? EuAcquisitionTestFixture.RegulationResourceType
+                    : (string?)null))
+            .Concat(EuAcquisitionTestFixture.RelationPredicates.Select(predicate => (predicate, (string?)null)))
+            .ToArray();
+
+        // Every discovered state must derive EuContentClass.Consolidation from its own
+        // work_has_resource-type outcome, or EuCellarObjectDecode.TryDecode refuses
+        // ContentClassClosurePositionMismatch: a state's closure position requires it. Each state must
+        // also assert its own ConsolidatedBasedOn edge back to the root through family P, matching
+        // what the census family already established for it (state consolidated_based_on base), or
+        // decode refuses ConsolidatedBasedOnEdgeDisagreesWithFamily: two independently delivered
+        // families describing the same relation must agree.
+        var stateOutcomes = EuAcquisitionTestFixture.ObjectAuthorityPredicates
+            .Select(predicate => (
+                PredicateIri: predicate,
+                ValueIri: predicate == EuAcquisitionTestFixture.WorkHasResourceType
+                    ? ConsolidatedActResourceType
+                    : (string?)null))
+            .Concat(EuAcquisitionTestFixture.RelationPredicates.Select(predicate => (
+                predicate,
+                ValueIri: predicate == EuAcquisitionTestFixture.ConsolidatedBasedOnPredicate
+                    ? rootIri
+                    : (string?)null)))
+            .ToArray();
+
+        var pRows = EuAcquisitionTestFixture.SortedObjectFactRows(rootIri, rootOutcomes)
+            .Concat(EuAcquisitionTestFixture.SortedObjectFactRows(state1Iri, stateOutcomes))
+            .Concat(EuAcquisitionTestFixture.SortedObjectFactRows(state2Iri, stateOutcomes))
+            .ToArray();
+        Assert.AreEqual(39, pRows.Length, "13 predicate outcomes for each of 3 objects (root + 2 states).");
+
+        const string expressionIri = "http://publications.europa.eu/resource/cellar/00000000-0000-0000-0000-000000000003.0001.01/DOC_1";
+        var xRows = new[] { EuAcquisitionTestFixture.ExpressionFactRow(rootIri, expressionIri) };
+        var wRows = new[] { EuAcquisitionTestFixture.RootWatermarkRow(rootIri, watermarkLexical) };
+
+        var scripts = new Dictionary<string, EuAcquisitionTestFixture.FamilyScript>(StringComparer.Ordinal)
+        {
+            ["Census"] = EuAcquisitionTestFixture.ScriptFor(
+                "Census", censusRows.Length, censusRows, EuAcquisitionTestFixture.CensusFamilyProjection),
+            ["P"] = EuAcquisitionTestFixture.ScriptFor(
+                "P", pRows.Length, pRows, EuAcquisitionTestFixture.ObjectFactsProjection),
+            ["X"] = EuAcquisitionTestFixture.ScriptFor(
+                "X", xRows.Length, xRows, EuAcquisitionTestFixture.ExpressionFactsProjection),
+            ["W"] = EuAcquisitionTestFixture.ScriptFor(
+                "W", wRows.Length, wRows, EuAcquisitionTestFixture.RootWatermarkProjection),
+            // D1-05d: family M, the office's own manifestation listing for this run's root.
+            ["M"] = EuAcquisitionTestFixture.ManifestationScriptFor(rootIri),
+            ["Witness"] = new EuAcquisitionTestFixture.FamilyScript(
+                "Witness",
+                EuAcquisitionTestFixture.WitnessEmptyTraversalScript(
+                    rootIri, watermarkLexical)),
+        };
+
+        var handler = new EuAcquisitionTestFixture.ClassifyingHandler(scripts);
+        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
+        var executor = new EuRepeatedEnumerationExecutor(
+            store, new EuAcquisitionTestFixture.FixedTimeProvider(), handler);
+        var adapter = new EuQueryExecutionAdapter(store, executor);
+
+        var (censusPlan, censusPlanId) = EuAcquisitionTestFixture.BuildCensusPlan();
+        var censusRequest = new EuCensusPartitionRunRequest(
+            censusPlan, censusPlanId, seed.Celex, EuAcquisitionTestFixture.BuildRendererSource(21));
+
+        var closureObjects = new[] { rootIri, state1Iri, state2Iri };
+        var (pPlan, pPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
+        var pRequest = new EuObjectFactsPartitionRunRequest(
+            pPlan, pPlanId, EuObjectFactsQuerySet.ObjectFacts, closureObjects,
+            EuAcquisitionTestFixture.BuildRendererSource(22));
+
+        var (xPlan, xPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
+        var xRequest = new EuObjectFactsPartitionRunRequest(
+            xPlan, xPlanId, EuObjectFactsQuerySet.ExpressionFacts, closureObjects,
+            EuAcquisitionTestFixture.BuildRendererSource(23));
+
+        var (wPlan, wPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
+        var wRequest = new EuObjectFactsPartitionRunRequest(
+            wPlan, wPlanId, EuObjectFactsQuerySet.RootWatermark, [rootIri],
+            EuAcquisitionTestFixture.BuildRendererSource(24));
+
+        var (mPlan, mPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
+        var mRequest = new EuObjectFactsPartitionRunRequest(
+            mPlan, mPlanId, EuObjectFactsQuerySet.ManifestationFacts, [rootIri],
+            EuAcquisitionTestFixture.BuildRendererSource(124));
+
+        var result = await adapter.RunAsync(
+            [(censusRequest, EuAcquisitionTestFixture.SourceWitness())],
+            new EuObjectFactsBatchPolicy(
+                pPlan, pPlanId, EuAcquisitionTestFixture.BuildRendererSource(2),
+                EuAcquisitionTestFixture.SourceWitness()),
+            EuAcquisitionTestFixture.BuildRendererSource(29),
+            EuAcquisitionTestFixture.SourceWitness(),
+            EuAcquisitionTestFixture.BuildRendererSource(1029),
+            EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
+            new PermissiveEvidenceResolver(CompleteEnumerationRef),
+            CancellationToken.None);
+
+        Assert.IsNull(result.Refusal, $"code={result.Refusal?.Code} detail={result.Refusal?.Detail} " +
+            $"decode={result.DecodeRefusal} offendingIri={result.DecodeOffendingIri} snapshot={result.DecodeSnapshotRefusal}");
+        Assert.AreEqual(2, handler.OccurrenceCountFor("Witness"));
+
+        // This fixture delivered exactly 2 census rows (state-1 and state-2), 39 P rows, 1 X row and
+        // 1 W row and nothing else, so every one of these measured counts -- including the observed
+        // object count of 3 (root + those 2 states) below -- is this test's own arithmetic over its
+        // own delivered rows, never a value read back out of Appendix A.
+        var byRows = result.FamilyOutcomes
+            .Where(static outcome => outcome.Kind == EuFamilyEnumerationOutcomeKind.Proven)
+            .Select(static outcome => outcome.DeliveredRowCount!.Value)
+            .OrderBy(static value => value)
+            .ToArray();
+        // D1-05d adds family M's own six delivered rows (see the sibling full-run test).
+        CollectionAssert.AreEqual(new long[] { 1, 1, 2, 6, 39 }, byRows);
+        Assert.AreEqual(3, result.ObservedObjectCount, "root + the 2 states this fixture itself delivered.");
+        Assert.IsNotNull(result.RootBinding);
+        CollectionAssert.AreEqual(new[] { rootIri }, result.RootBinding!.DiscoveredRoots.ToArray());
+
+        // D1-05g's own assertion. ObservedObjectCount counts what the run actually described.
+        Assert.AreEqual(
+            3,
+            result.ObservedObjectCount,
+            "the root and BOTH discovered states must have been described, which is only possible "
+                + "if family P was asked about them.");
+
+        // And the state is not merely counted: it has its own record in this run's own record set.
+        Assert.IsNotNull(result.CorpusRecordSet, "the run must have reached its record set.");
+        var keys = result.CorpusRecordSet!.Set.Records
+            .Select(static record => record.ObjectRef.CanonicalKey)
+            .ToArray();
+        // The canonical key carries the CLOSURE POSITION as its prefix, so asserting the full key
+        // rather than the bare IRI also asserts that the state was described AS a state and not
+        // mistaken for a second root.
+        CollectionAssert.Contains(
+            keys,
+            "eu-consolidation-state:" + state1Iri,
+            "the first discovered state must carry its own record, keyed as a STATE. Records were: "
+                + string.Join(", ", keys));
+        CollectionAssert.Contains(
+            keys,
+            "eu-consolidation-state:" + state2Iri,
+            "the second discovered state must carry its own record, keyed as a STATE. Records were: "
+                + string.Join(", ", keys));
+        CollectionAssert.Contains(
+            keys,
+            "eu-consolidation-root:" + rootIri,
+            "and the root keeps its own root-keyed record beside them.");
+    }
+
+    /// <summary>
+    /// A family P row naming an object this run never asked about is REFUSED, never silently
+    /// dropped, and D1-05g moved WHERE that refusal happens.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// WHAT THIS TEST USED TO DO AND WHY IT COULD NOT SURVIVE UNCHANGED. It put the out-of-closure
+    /// IRI INTO THE BATCH, as <c>[rootIri, outOfClosureIri]</c>, so the family proved and the row
+    /// travelled as far as <c>EuCellarObjectDecode.TryDecode</c>, which refused it by name with
+    /// <c>ObjectFactRowNotInClosure</c>. D1-05g removes the caller's ability to choose the batch at
+    /// all: the objects are derived from this run's own proven census, which is the whole point of
+    /// the slice. A caller can no longer ask about an object outside the closure, so the old route
+    /// to this refusal no longer exists.
+    /// </para>
+    /// <para>
+    /// WHAT REPLACES IT IS STRICTLY EARLIER AND STRICTLY STRONGER. The only remaining way such a row
+    /// arrives is the PUBLISHER returning one unasked, and that is caught by the delivery proof's own
+    /// partition check before any decode runs: the row is outside the requested partition, the
+    /// family does not prove, and the run refuses with <c>ObjectFactsFamilyNotProven</c>. The row
+    /// never reaches the reduction, so the fact the original defect was about, a row vanishing with
+    /// a <c>continue</c>, is now impossible two layers earlier.
+    /// </para>
+    /// <para>
+    /// THE DECODE'S OWN BY-NAME REFUSAL IS NOT RETIRED and is still reachable, because one batch can
+    /// span several seeds' closures and each seed's decode is handed only its own. This test no
+    /// longer drives that path; it drives the earlier one, and says so rather than implying the
+    /// later guard went away.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public async Task AnOutOfClosurePRowIsRefusedRatherThanSilentlyDropped()
     {
         var seed = EuAppendixASeedMap.SeedsInCelexOrder[0];
         var rootIri = EuPackRootCanonicalForm.TryCanonicalize(seed.WorkRoot, out _)!;
@@ -1518,14 +1721,14 @@ public sealed class EuQueryExecutionAdapterTests
         var pOutcomes = EuAcquisitionTestFixture.ObjectAuthorityPredicates
             .Select(predicate => (
                 PredicateIri: predicate,
-                ValueIri: predicate == EuAcquisitionTestFixture.ResourceLegalType
+                ValueIri: predicate == EuAcquisitionTestFixture.WorkHasResourceType
                     ? EuAcquisitionTestFixture.RegulationResourceType
                     : (string?)null))
             .Concat(EuAcquisitionTestFixture.RelationPredicates.Select(predicate => (predicate, (string?)null)))
             .ToArray();
         var pRows = EuAcquisitionTestFixture.SortedObjectFactRows(rootIri, pOutcomes)
             .Append(EuAcquisitionTestFixture.ObjectFactRow(
-                outOfClosureIri, EuAcquisitionTestFixture.ResourceLegalType,
+                outOfClosureIri, EuAcquisitionTestFixture.WorkHasResourceType,
                 EuAcquisitionTestFixture.RegulationResourceType))
             .ToArray();
 
@@ -1578,12 +1781,9 @@ public sealed class EuQueryExecutionAdapterTests
 
         var result = await adapter.RunAsync(
             [(censusRequest, EuAcquisitionTestFixture.SourceWitness())],
-            [
-                (pRequest, EuAcquisitionTestFixture.SourceWitness()),
-                (xRequest, EuAcquisitionTestFixture.SourceWitness()),
-                (wRequest, EuAcquisitionTestFixture.SourceWitness()),
-                (mRequest, EuAcquisitionTestFixture.SourceWitness()),
-            ],
+            new EuObjectFactsBatchPolicy(
+                pPlan, pPlanId, EuAcquisitionTestFixture.BuildRendererSource(2),
+                EuAcquisitionTestFixture.SourceWitness()),
             EuAcquisitionTestFixture.BuildRendererSource(35),
             EuAcquisitionTestFixture.SourceWitness(),
             EuAcquisitionTestFixture.BuildRendererSource(1035),
@@ -1593,9 +1793,19 @@ public sealed class EuQueryExecutionAdapterTests
 
         Assert.IsNull(result.ScopeManifestReceipt);
         Assert.IsNotNull(result.Refusal);
-        Assert.AreEqual(EuQueryExecutionRefusal.ObjectDecodeRefused, result.Refusal!.Code);
-        Assert.AreEqual(EuCellarObjectDecodeRefusal.ObjectFactRowNotInClosure, result.DecodeRefusal);
-        Assert.AreEqual(outOfClosureIri, result.DecodeOffendingIri);
+        Assert.AreEqual(
+            EuQueryExecutionRefusal.ObjectFactsFamilyNotProven,
+            result.Refusal!.Code,
+            "a row for an object the run never asked about must stop the family proving, rather "
+                + "than travelling into the reduction to be caught there or, worse, dropped.");
+
+        // The run must not have reached the decode at all, which is the difference between this
+        // and the shape it replaces.
+        Assert.IsNull(result.DecodeRefusal, "the row must be refused before any decode runs.");
+        Assert.IsNull(result.DecodeOffendingIri);
+        Assert.IsFalse(
+            string.IsNullOrWhiteSpace(outOfClosureIri),
+            "the fixture's own out-of-closure IRI must exist for this test to mean anything.");
     }
 
     /// <summary>
@@ -1617,7 +1827,7 @@ public sealed class EuQueryExecutionAdapterTests
         var pOutcomes = EuAcquisitionTestFixture.ObjectAuthorityPredicates
             .Select(predicate => (
                 PredicateIri: predicate,
-                ValueIri: predicate == EuAcquisitionTestFixture.ResourceLegalType
+                ValueIri: predicate == EuAcquisitionTestFixture.WorkHasResourceType
                     ? EuAcquisitionTestFixture.RegulationResourceType
                     : (string?)null))
             .Concat(EuAcquisitionTestFixture.RelationPredicates.Select(predicate => (predicate, (string?)null)))
@@ -1689,12 +1899,9 @@ public sealed class EuQueryExecutionAdapterTests
 
         var result = await adapter.RunAsync(
             [(censusRequest, EuAcquisitionTestFixture.SourceWitness())],
-            [
-                (pRequest, EuAcquisitionTestFixture.SourceWitness()),
-                (xRequest, EuAcquisitionTestFixture.SourceWitness()),
-                (wRequest, EuAcquisitionTestFixture.SourceWitness()),
-                (mRequest, EuAcquisitionTestFixture.SourceWitness()),
-            ],
+            new EuObjectFactsBatchPolicy(
+                pPlan, pPlanId, EuAcquisitionTestFixture.BuildRendererSource(2),
+                EuAcquisitionTestFixture.SourceWitness()),
             EuAcquisitionTestFixture.BuildRendererSource(45),
             EuAcquisitionTestFixture.SourceWitness(),
             EuAcquisitionTestFixture.BuildRendererSource(1045),
@@ -1751,9 +1958,15 @@ public sealed class EuQueryExecutionAdapterTests
         var censusRequest = new EuCensusPartitionRunRequest(
             censusPlan, censusPlanId, seed.Celex, EuAcquisitionTestFixture.BuildRendererSource(51));
 
+        // The census refuses before any object-facts batch runs, so this policy is
+        // never exercised; it exists because the run derives its own batches now and
+        // the caller no longer supplies object lists at all.
+        var (pPlan, pPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var result = await adapter.RunAsync(
             [(censusRequest, EuAcquisitionTestFixture.SourceWitness())],
-            [],
+            new EuObjectFactsBatchPolicy(
+                pPlan, pPlanId, EuAcquisitionTestFixture.BuildRendererSource(2),
+                EuAcquisitionTestFixture.SourceWitness()),
             EuAcquisitionTestFixture.BuildRendererSource(52),
             EuAcquisitionTestFixture.SourceWitness(),
             EuAcquisitionTestFixture.BuildRendererSource(1052),
@@ -1796,9 +2009,15 @@ public sealed class EuQueryExecutionAdapterTests
         var censusRequest = new EuCensusPartitionRunRequest(
             censusPlan, censusPlanId, seed.Celex, EuAcquisitionTestFixture.BuildRendererSource(61));
 
+        // The census refuses before any object-facts batch runs, so this policy is
+        // never exercised; it exists because the run derives its own batches now and
+        // the caller no longer supplies object lists at all.
+        var (pPlan, pPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var result = await adapter.RunAsync(
             [(censusRequest, EuAcquisitionTestFixture.SourceWitness())],
-            [],
+            new EuObjectFactsBatchPolicy(
+                pPlan, pPlanId, EuAcquisitionTestFixture.BuildRendererSource(2),
+                EuAcquisitionTestFixture.SourceWitness()),
             EuAcquisitionTestFixture.BuildRendererSource(62),
             EuAcquisitionTestFixture.SourceWitness(),
             EuAcquisitionTestFixture.BuildRendererSource(1062),
@@ -1840,7 +2059,7 @@ public sealed class EuQueryExecutionAdapterTests
         var pOutcomes = EuAcquisitionTestFixture.ObjectAuthorityPredicates
             .Select(predicate => (
                 PredicateIri: predicate,
-                ValueIri: predicate == EuAcquisitionTestFixture.ResourceLegalType
+                ValueIri: predicate == EuAcquisitionTestFixture.WorkHasResourceType
                     ? EuAcquisitionTestFixture.RegulationResourceType
                     : (string?)null))
             .Concat(EuAcquisitionTestFixture.RelationPredicates.Select(predicate => (predicate, (string?)null)))
@@ -1897,12 +2116,9 @@ public sealed class EuQueryExecutionAdapterTests
 
         var result = await adapter.RunAsync(
             [(censusRequest, EuAcquisitionTestFixture.SourceWitness())],
-            [
-                (pRequest, EuAcquisitionTestFixture.SourceWitness()),
-                (xRequest, EuAcquisitionTestFixture.SourceWitness()),
-                (wRequest, EuAcquisitionTestFixture.SourceWitness()),
-                (mRequest, EuAcquisitionTestFixture.SourceWitness()),
-            ],
+            new EuObjectFactsBatchPolicy(
+                pPlan, pPlanId, EuAcquisitionTestFixture.BuildRendererSource(2),
+                EuAcquisitionTestFixture.SourceWitness()),
             EuAcquisitionTestFixture.BuildRendererSource(705),
             EuAcquisitionTestFixture.SourceWitness(),
             EuAcquisitionTestFixture.BuildRendererSource(1705),
@@ -1941,7 +2157,7 @@ public sealed class EuQueryExecutionAdapterTests
         var pOutcomes = EuAcquisitionTestFixture.ObjectAuthorityPredicates
             .Select(predicate => (
                 PredicateIri: predicate,
-                ValueIri: predicate == EuAcquisitionTestFixture.ResourceLegalType
+                ValueIri: predicate == EuAcquisitionTestFixture.WorkHasResourceType
                     ? EuAcquisitionTestFixture.RegulationResourceType
                     : (string?)null))
             .Concat(EuAcquisitionTestFixture.RelationPredicates.Select(predicate => (predicate, (string?)null)))
@@ -1997,12 +2213,9 @@ public sealed class EuQueryExecutionAdapterTests
 
         var result = await adapter.RunAsync(
             [(censusRequest, EuAcquisitionTestFixture.SourceWitness())],
-            [
-                (pRequest, EuAcquisitionTestFixture.SourceWitness()),
-                (xRequest, EuAcquisitionTestFixture.SourceWitness()),
-                (wRequest, EuAcquisitionTestFixture.SourceWitness()),
-                (mRequest, EuAcquisitionTestFixture.SourceWitness()),
-            ],
+            new EuObjectFactsBatchPolicy(
+                pPlan, pPlanId, EuAcquisitionTestFixture.BuildRendererSource(2),
+                EuAcquisitionTestFixture.SourceWitness()),
             EuAcquisitionTestFixture.BuildRendererSource(715),
             EuAcquisitionTestFixture.SourceWitness(),
             EuAcquisitionTestFixture.BuildRendererSource(1715),
@@ -2042,7 +2255,7 @@ public sealed class EuQueryExecutionAdapterTests
         var pOutcomes = EuAcquisitionTestFixture.ObjectAuthorityPredicates
             .Select(predicate => (
                 PredicateIri: predicate,
-                ValueIri: predicate == EuAcquisitionTestFixture.ResourceLegalType
+                ValueIri: predicate == EuAcquisitionTestFixture.WorkHasResourceType
                     ? EuAcquisitionTestFixture.RegulationResourceType
                     : (string?)null))
             .Concat(EuAcquisitionTestFixture.RelationPredicates.Select(predicate => (predicate, (string?)null)))
@@ -2096,12 +2309,9 @@ public sealed class EuQueryExecutionAdapterTests
 
         var result = await adapter.RunAsync(
             [(censusRequest, EuAcquisitionTestFixture.SourceWitness())],
-            [
-                (pRequest, EuAcquisitionTestFixture.SourceWitness()),
-                (xRequest, EuAcquisitionTestFixture.SourceWitness()),
-                (wRequest, EuAcquisitionTestFixture.SourceWitness()),
-                (mRequest, EuAcquisitionTestFixture.SourceWitness()),
-            ],
+            new EuObjectFactsBatchPolicy(
+                pPlan, pPlanId, EuAcquisitionTestFixture.BuildRendererSource(2),
+                EuAcquisitionTestFixture.SourceWitness()),
             EuAcquisitionTestFixture.BuildRendererSource(725),
             EuAcquisitionTestFixture.SourceWitness(),
             EuAcquisitionTestFixture.BuildRendererSource(1725),
@@ -2779,7 +2989,7 @@ public sealed class EuQueryExecutionAdapterTests
         var pOutcomes = EuAcquisitionTestFixture.ObjectAuthorityPredicates
             .Select(predicate => (
                 PredicateIri: predicate,
-                ValueIri: predicate == EuAcquisitionTestFixture.ResourceLegalType
+                ValueIri: predicate == EuAcquisitionTestFixture.WorkHasResourceType
                     ? EuAcquisitionTestFixture.DirectiveResourceType
                     : (string?)null))
             .Concat(EuAcquisitionTestFixture.RelationPredicates.Select(predicate => (predicate, (string?)null)))
@@ -2836,12 +3046,9 @@ public sealed class EuQueryExecutionAdapterTests
 
         var result = await adapter.RunAsync(
             [(censusRequest, EuAcquisitionTestFixture.SourceWitness())],
-            [
-                (pRequest, EuAcquisitionTestFixture.SourceWitness()),
-                (xRequest, EuAcquisitionTestFixture.SourceWitness()),
-                (wRequest, EuAcquisitionTestFixture.SourceWitness()),
-                (mRequest, EuAcquisitionTestFixture.SourceWitness()),
-            ],
+            new EuObjectFactsBatchPolicy(
+                pPlan, pPlanId, EuAcquisitionTestFixture.BuildRendererSource(2),
+                EuAcquisitionTestFixture.SourceWitness()),
             EuAcquisitionTestFixture.BuildRendererSource(1509),
             EuAcquisitionTestFixture.SourceWitness(),
             EuAcquisitionTestFixture.BuildRendererSource(2509),

@@ -184,22 +184,15 @@ public sealed class EuStageOneAcquisitionCanary
             })
             .ToArray();
 
-        var objectFactsRequests = new[]
-            {
-                EuObjectFactsQuerySet.ObjectFacts,
-                EuObjectFactsQuerySet.ExpressionFacts,
-                EuObjectFactsQuerySet.RootWatermark,
-                EuObjectFactsQuerySet.ManifestationFacts,
-            }
-            .Select(set =>
-            {
-                var (plan, planId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
-                return (
-                    Request: new EuObjectFactsPartitionRunRequest(
-                        plan, planId, set, roots, EuAcquisitionTestFixture.BuildRendererSource(6200)),
-                    Witness: EuAcquisitionTestFixture.SourceWitness());
-            })
-            .ToArray();
+        // D1-05g: the canary supplies the PLAN and the POLICY and never the object list. It used
+        // to build four requests over `roots`, which is why family P was only ever asked about the
+        // two seed roots while the decoder walked root plus every state the census discovered.
+        var (objectFactsPlan, objectFactsPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
+        var objectFactsPolicy = new EuObjectFactsBatchPolicy(
+            objectFactsPlan,
+            objectFactsPlanId,
+            EuAcquisitionTestFixture.BuildRendererSource(6200),
+            EuAcquisitionTestFixture.SourceWitness());
 
         var completeEnumerationRef = new SourceArtifactRef(
             $"urn:uuid:{Guid.NewGuid():D}",
@@ -209,7 +202,7 @@ public sealed class EuStageOneAcquisitionCanary
 
         var result = await adapter.RunAsync(
             censusRequests,
-            objectFactsRequests,
+            objectFactsPolicy,
             EuAcquisitionTestFixture.BuildRendererSource(6300),
             EuAcquisitionTestFixture.SourceWitness(),
             EuAcquisitionTestFixture.BuildRendererSource(6400),

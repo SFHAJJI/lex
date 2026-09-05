@@ -676,7 +676,7 @@ public sealed class EuQueryExecutionAdapter
     /// <param name="evidenceResolver">The evidence resolver the scope reduction requires.</param>
     public async Task<EuQueryExecutionResult> RunAsync(
         IReadOnlyList<(EuCensusPartitionRunRequest Request, BoundMachineRequest SourceWitness)> censusFamilies,
-        IReadOnlyList<(EuObjectFactsPartitionRunRequest Request, BoundMachineRequest SourceWitness)> objectFactsFamilies,
+        EuObjectFactsBatchPolicy objectFactsPolicy,
         MachineQueryRendererSource witnessRendererSource,
         BoundMachineRequest witnessSourceWitness,
         MachineQueryRendererSource documentFetchRendererSource,
@@ -685,7 +685,7 @@ public sealed class EuQueryExecutionAdapter
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(censusFamilies);
-        ArgumentNullException.ThrowIfNull(objectFactsFamilies);
+        ArgumentNullException.ThrowIfNull(objectFactsPolicy);
         ArgumentNullException.ThrowIfNull(witnessRendererSource);
         ArgumentNullException.ThrowIfNull(witnessSourceWitness);
         ArgumentNullException.ThrowIfNull(documentFetchRendererSource);
@@ -693,7 +693,7 @@ public sealed class EuQueryExecutionAdapter
         ArgumentNullException.ThrowIfNull(evidenceResolver);
 
         var topology = MintTopology();
-        var outcomes = new List<EuFamilyEnumerationOutcome>(censusFamilies.Count + objectFactsFamilies.Count);
+        var outcomes = new List<EuFamilyEnumerationOutcome>(censusFamilies.Count * 5);
 
         // ---- Run and prove every census-family seed. ----
         var censusByFamilyKey = new Dictionary<
@@ -714,30 +714,6 @@ public sealed class EuQueryExecutionAdapter
             }
         }
 
-        // ---- Run and prove every object-facts batch (P, X, W, M). ----
-        // Keyed by (Set, familyKey) rather than familyKey alone: EuObjectFactsDiscoveryPlan.PartitionKeyFor
-        // is a pure function of the batch's own object set, never of which query set (P, X, W or M)
-        // asked it, so two families sharing one batch of objects (the common case: P, X, W and M all
-        // cover the same discovered closure) mint the IDENTICAL partition key. A dictionary keyed on
-        // that key alone would silently collapse four proven families into one.
-        var objectFactsByKey = new Dictionary<
-            (EuObjectFactsQuerySet Set, string FamilyKey),
-            (AbsenceFamilyEnumerationProof Proof, RepeatedEnumerationDeliveryReceipt Receipt)>();
-        foreach (var (request, sourceWitness) in objectFactsFamilies)
-        {
-            var runResult = await _executor.RunObjectFactsPartitionAsync(request, sourceWitness, cancellationToken)
-                .ConfigureAwait(false);
-            if (!TryRecordOutcome(runResult, out var familyKey, out var proof, out var receipt, outcomes))
-            {
-                continue;
-            }
-
-            if (proof is not null && receipt is not null)
-            {
-                objectFactsByKey[(request.Set, familyKey)] = (proof, receipt);
-            }
-        }
-
         if (censusByFamilyKey.Count != censusFamilies.Count)
         {
             return EuQueryExecutionResult.Refused(
@@ -745,15 +721,6 @@ public sealed class EuQueryExecutionAdapter
                 new EuQueryExecutionRefusalDetail(
                     EuQueryExecutionRefusal.CensusFamilyNotProven,
                     "one or more requested census-family seeds did not prove this run's enumeration."));
-        }
-
-        if (objectFactsByKey.Count != objectFactsFamilies.Count)
-        {
-            return EuQueryExecutionResult.Refused(
-                topology, outcomes,
-                new EuQueryExecutionRefusalDetail(
-                    EuQueryExecutionRefusal.ObjectFactsFamilyNotProven,
-                    "one or more requested object-facts family batches did not prove this run's enumeration."));
         }
 
         // ---- Reopen and independently re-verify every proven family's own delivered rows. ----
@@ -775,6 +742,65 @@ public sealed class EuQueryExecutionAdapter
             }
 
             censusRowsBySeed[requestedCelex] = (rows, reopenedProfile);
+        }
+
+        // ---- D1-05g: derive O from THIS RUN'S OWN PROVEN CENSUS, then ask P, X, W and M. ----
+        // The order is the fix. Before D1-05g the caller handed in the object lists and every
+        // caller passed the seed ROOTS, so family P was asked about two objects while the decoder
+        // walked root plus every consolidated state the census had just discovered. Lane A proved
+        // it against the retained bytes: 41 rows over exactly two distinct objects, and
+        // TryBuildPredicateObservation treats zero matches for a subject as malformed BY EXPLICIT
+        // DESIGN, so the state arrived undescribed and the decode refused. A tolerance was tried
+        // and cannot work: the content class is derived from these same family P rows, so decoding
+        // an undescribed state as NotObserved produced ContentClassClosurePositionMismatch the
+        // moment it ran. There is no reading of an absent row that yields a content class.
+        var closuresByCelex = new Dictionary<string, (HashSet<string> Closure, string RootIri)>(StringComparer.Ordinal);
+        var allRequestedSeedsClosure = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var (requestedCelex, (familyRows, familyProfile)) in censusRowsBySeed)
+        {
+            var seedClosure = ExtractClosure(familyRows, familyProfile, requestedCelex, out var seedRootIri);
+            closuresByCelex[requestedCelex] = (seedClosure, seedRootIri);
+            allRequestedSeedsClosure.UnionWith(seedClosure);
+        }
+
+
+        var objectFactsRequests = EuObjectFactsBatchFactory.Build(
+            objectFactsPolicy,
+            allRequestedSeedsClosure,
+            closuresByCelex.Values.Select(static entry => entry.RootIri).ToArray());
+
+        // ---- Run and prove every object-facts batch (P, X, W, M). ----
+        // Keyed by (Set, familyKey) rather than familyKey alone: EuObjectFactsDiscoveryPlan.PartitionKeyFor
+        // is a pure function of the batch's own object set, never of which query set (P, X, W or M)
+        // asked it, so two families sharing one batch of objects (the common case: P, X, W and M all
+        // cover the same discovered closure) mint the IDENTICAL partition key. A dictionary keyed on
+        // that key alone would silently collapse four proven families into one.
+        var objectFactsByKey = new Dictionary<
+            (EuObjectFactsQuerySet Set, string FamilyKey),
+            (AbsenceFamilyEnumerationProof Proof, RepeatedEnumerationDeliveryReceipt Receipt)>();
+        foreach (var request in objectFactsRequests)
+        {
+            var runResult = await _executor.RunObjectFactsPartitionAsync(
+                    request, objectFactsPolicy.SourceWitness, cancellationToken)
+                .ConfigureAwait(false);
+            if (!TryRecordOutcome(runResult, out var familyKey, out var proof, out var receipt, outcomes))
+            {
+                continue;
+            }
+
+            if (proof is not null && receipt is not null)
+            {
+                objectFactsByKey[(request.Set, familyKey)] = (proof, receipt);
+            }
+        }
+
+        if (objectFactsByKey.Count != objectFactsRequests.Count)
+        {
+            return EuQueryExecutionResult.Refused(
+                topology, outcomes,
+                new EuQueryExecutionRefusalDetail(
+                    EuQueryExecutionRefusal.ObjectFactsFamilyNotProven,
+                    "one or more requested object-facts family batches did not prove this run's enumeration."));
         }
 
         var objectFactsRows = new Dictionary<EuObjectFactsQuerySet, List<(IReadOnlyList<RepeatedEnumerationRow> Rows, RepeatedEnumerationInterpretationProfile Profile, AbsenceFamilyEnumerationProof Proof)>>();
@@ -848,15 +874,6 @@ public sealed class EuQueryExecutionAdapter
         // seed before decode ever sees it) -- but a row belonging to NO requested seed at all must no
         // longer be silently dropped alongside a row that legitimately belongs to a sibling seed's
         // own closure.
-        var closuresByCelex = new Dictionary<string, (HashSet<string> Closure, string RootIri)>(StringComparer.Ordinal);
-        var allRequestedSeedsClosure = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var (requestedCelex, (familyRows, familyProfile)) in censusRowsBySeed)
-        {
-            var seedClosure = ExtractClosure(familyRows, familyProfile, requestedCelex, out var seedRootIri);
-            closuresByCelex[requestedCelex] = (seedClosure, seedRootIri);
-            allRequestedSeedsClosure.UnionWith(seedClosure);
-        }
-
         foreach (var (requestedCelex, (familyRows, familyProfile)) in censusRowsBySeed)
         {
             var (closure, rootIri) = closuresByCelex[requestedCelex];
@@ -875,7 +892,7 @@ public sealed class EuQueryExecutionAdapter
                     new EuQueryExecutionRefusalDetail(
                         EuQueryExecutionRefusal.RecordFormNotResolved,
                         $"seed '{requestedCelex}' (root '{rootIri}') carries no admitted " +
-                        "resource_legal_type value this adapter can map to a closed EuActForm."));
+                        "act-form value this adapter can map to a closed EuActForm."));
             }
 
             var snapshots = EuCellarObjectDecode.TryDecode(
@@ -1814,15 +1831,43 @@ public sealed class EuQueryExecutionAdapter
     /// it does not itself derive ("Not recoverable from these closures' rows; the caller supplies it
     /// from wherever it independently resolves resource_legal_type" -- <see cref="EuCellarObjectDecode.TryDecode"/>'s
     /// own doc comment). This reads it from the SAME family P rows this run already acquired for the
-    /// seed's own root: every <c>resource_legal_type</c> value P observed for the root, read by its
-    /// last IRI path segment against the EU Publications Office resource-type authority table's own
-    /// short-code convention (the same convention <see cref="EuCellarObjectDecode"/>'s own
-    /// <c>CONSOLID_ACT</c> marker and <see cref="EuScopeProfile.RecordFormToken"/>'s wire tokens both
-    /// already use). This is not a new Contracts-layer mapping invented for this slice: it is reading
-    /// a value already present in already-acquired publisher data, never a new query or a guess. A
-    /// root whose every observed <c>resource_legal_type</c> value fails to map refuses this seed's
-    /// decode rather than defaulting to any one closed member.
+    /// seed's own root, read by its last IRI path segment against the EU Publications Office
+    /// resource-type authority table's own short-code convention (the same convention
+    /// <see cref="EuCellarObjectDecode"/>'s own <c>CONSOLID_ACT</c> marker and
+    /// <see cref="EuScopeProfile.RecordFormToken"/>'s wire tokens both already use). This is not a
+    /// new Contracts-layer mapping invented for this slice: it is reading a value already present in
+    /// already-acquired publisher data, never a new query or a guess. A root whose every observed
+    /// value fails to map refuses this seed's decode rather than defaulting to any closed member.
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// D1-05g: THE PREDICATE IS <c>work_has_resource-type</c> AND IT USED TO BE THE WRONG ONE. This
+    /// guard asked for <c>resource_legal_type</c> AND required <c>value_kind</c> of <c>"iri"</c>.
+    /// Those two conditions are mutually exclusive against the publisher's own data:
+    /// <c>resource_legal_type</c> carries a one-letter STRING LITERAL, measured as <c>"L"</c> for
+    /// the directive root and <c>"R"</c> for the regulation root, so the loop skipped every row and
+    /// the switch below was never reached for any root. The switch speaks
+    /// <c>work_has_resource-type</c>'s vocabulary, whose values ARE authority IRIs ending DIR, REG
+    /// and TREATY, and both predicates were already being projected and retained side by side.
+    /// </para>
+    /// <para>
+    /// THE AUTHORITY FOR CHOOSING IT, cited by address rather than summarised:
+    /// <c>coordination/measurements/D1-EU-DIRECT-SEED-RESOURCE-TYPES-2026-09-01.md</c> line 32
+    /// joins through the <c>resource_legal_id_celex</c> and <c>work_has_resource-type</c> graph
+    /// pattern, over the 82-seed inventory at seed SHA-256
+    /// <c>ea1b4f276406a8bede5223459b92d7a94321de5b9a38de63397f2e22688d50c0</c>, and records the
+    /// complete observed direct-seed partition as TREATY 6, DIR 40, REG 36.
+    /// </para>
+    /// <para>
+    /// TWO CLAIMS THAT MUST NOT BE BLURRED. THE MEASUREMENT PROVES THE 82: every seed in the pack
+    /// carries one of three values and the switch below already maps all three, so no seed needs a
+    /// new <see cref="EuActForm"/> member and D1-05g is a wiring fix rather than a vocabulary
+    /// admission. THE RUN PROVES TWO: the canary reaches two roots and demonstrates DIR and REG on
+    /// those. Closure over today's pack is not closure over tomorrow's publisher, so any value
+    /// outside the switch stays a typed refusal naming the value VERBATIM rather than being mapped
+    /// to a nearest member or dropped.
+    /// </para>
+    /// </remarks>
     private static bool TryResolveRecordForm(
         IReadOnlyList<RepeatedEnumerationRow> pRows,
         RepeatedEnumerationInterpretationProfile pProfile,
@@ -1833,11 +1878,14 @@ public sealed class EuQueryExecutionAdapter
         var predicateIndex = IndexOf(pProfile, "predicate");
         var valueIndex = IndexOf(pProfile, "value");
         var valueKindIndex = IndexOf(pProfile, "value_kind");
-        // EuObjectFactsDiscoveryPlan.CdmIri is internal to Lex.V3.Contracts (this path claim does not
-        // extend there); this is the exact IRI its own switch produces for ResourceLegalType
-        // ("cdm:resource_legal_type", the fixed CDM namespace every EU predicate constant in this
-        // repository already uses), stated here as a plain literal rather than reached reflectively.
-        const string resourceLegalTypeIri = "http://publications.europa.eu/ontology/cdm#resource_legal_type";
+        // D1-05g: THE CONSTANT MOVED. It used to name cdm:resource_legal_type while the switch
+        // below speaks work_has_resource-type's vocabulary, and the two conditions could not both
+        // hold against the publisher's data, so this loop skipped every row and the switch was
+        // never reached for any root. Still a literal here: EuObjectFactsDiscoveryPlan.CdmIri is
+        // internal to Lex.V3.Contracts, and making it a public pinned door is D1-05g-guards' work,
+        // not the closing head's.
+        const string actFormPredicateIri =
+            "http://publications.europa.eu/ontology/cdm#work_has_resource-type";
 
         foreach (var row in pRows)
         {
@@ -1847,7 +1895,7 @@ public sealed class EuQueryExecutionAdapter
                 continue;
             }
 
-            if (row.Terms[predicateIndex].Value != resourceLegalTypeIri ||
+            if (row.Terms[predicateIndex].Value != actFormPredicateIri ||
                 row.Terms[valueKindIndex].Value != "iri")
             {
                 continue;
