@@ -224,7 +224,24 @@ public sealed class EuConsolidationDiscoveryPlan
             "pass_id",
             definition.CursorVariables.Select(static value => "last_" + value).ToArray(),
             "has_cursor",
-            RepeatedEnumerationTerminalPagePolicy.EmptySuccessorAfterShortPage);
+            // A WHOLE SET ON ONE PAGE COMPLETES RATHER THAN REFUSES. RULING
+            // lex-event-20260905T021827470Z-61309ecca6e8414db4150b451b181ebb. This declared
+            // EmptySuccessorAfterShortPage, which obliges a run to fetch one more page after a short
+            // one and requires that page to come back EMPTY. Every family here fits in a single page
+            // (the observed counts are 41, 166, 2 and 9 against limits of 997 and 613), so every run
+            // spent a request asking for nothing, and the publisher answered those requests with a
+            // TAIL SUBSET of rows already delivered rather than with nothing. The executor then
+            // correctly refused CursorDidNotAdvance, which is a true observation of a useless
+            // request. ORDER BY plus LIMIT already prove a short page has exhausted the result set,
+            // so the successor established nothing that the short page had not.
+            //
+            // THIS DOES NOT RETIRE THE COUNT CROSS CHECK, which remains the closure test for the
+            // enumeration. What the terminal policy settles is WHEN TO STOP ASKING; what the count
+            // settles is WHETHER WE GOT EVERYTHING. A page can be short because the set is exhausted
+            // or because the publisher truncated it, and only the independent count answered by the
+            // count query tells those apart. Dropping the successor removed a request that proved
+            // nothing; it did not remove the proof.
+            RepeatedEnumerationTerminalPagePolicy.ShortPageTerminal);
     }
 
     public EuConsolidationBoundQuery BindCount(
@@ -494,7 +511,7 @@ public sealed class EuConsolidationDiscoveryPlan
               BIND(STR(?state) AS ?key_1)
               BIND(STR(?predicate) AS ?key_2)
               BIND(?object_kind AS ?key_3)
-              BIND(IF(BOUND(?object), STR(?object), "") AS ?key_4)
+              BIND(COALESCE(STR(?object), "") AS ?key_4)
               BIND(?datatype_iri AS ?key_5)
               BIND(?language_tag AS ?key_6)
               VALUES (?has_cursor ?last_key_1 ?last_key_2 ?last_key_3 ?last_key_4 ?last_key_5 ?last_key_6) {

@@ -121,8 +121,117 @@ public sealed class EuPageDecodeClassificationTests
             refusal.CoreRefusalDetail,
             "not JSON at all",
             "the refusal must say what it observed rather than name a category.");
-        StringAssert.Contains(refusal.CoreRefusalDetail, "line", "and point at the offending position.");
+
+        // THE ACTUAL POSITION, not the word "line". Asserting the word alone would accept a refusal
+        // reading "line unknown byte unknown", so a change that stopped reporting a position at all
+        // would have stayed green. This body begins "<html>", so the parser fails on the very first
+        // byte of the first line.
+        StringAssert.Contains(
+            refusal.CoreRefusalDetail,
+            ExpectedNotJsonPosition,
+            "the refusal must carry the offending line and byte, not the word for them.");
     }
+
+    /// <summary>
+    /// The position the maintenance page actually produces. Read off the parser rather than chosen:
+    /// the body's first byte is "<c>&lt;</c>", which is invalid JSON at the start of the document.
+    /// </summary>
+    private const string ExpectedNotJsonPosition = "line 0 byte 0";
+
+    /// <summary>
+    /// A root that is not the results shape is DEMONSTRABLY not what the profile promised, so it
+    /// keeps <see cref="EuEnumerationRefusal.PageBodyMalformed"/> and the refusal names the root it
+    /// actually found.
+    /// </summary>
+    /// <remarks>
+    /// SYNTHETIC BODY, stated as such. Every other body in this file is a retained publisher
+    /// response; this one is not, because the publisher has never sent this shape and inventing a
+    /// plausible-looking fake retained body would be worse than a plainly synthetic one. What it
+    /// defends is real: without it, untagging this throw site left every test green.
+    /// </remarks>
+    [TestMethod]
+    public void APageBodyWhoseRootIsNotTheResultsShapeIsMalformedAndNamesTheRoot()
+    {
+        var refusal = ClassifyBody("[]");
+
+        Assert.AreEqual(EuEnumerationRefusal.PageBodyMalformed, refusal.Code);
+        StringAssert.Contains(
+            refusal.CoreRefusalDetail,
+            "root is Array",
+            "the refusal must name the root kind it found, or it points at nothing.");
+        StringAssert.Contains(refusal.CoreRefusalDetail, "no results/bindings array");
+    }
+
+    /// <summary>
+    /// A binding that is not an object is likewise demonstrable, and the refusal names its position.
+    /// </summary>
+    /// <remarks>
+    /// SYNTHETIC BODY, stated as such, for the same reason as the test above. The second binding is
+    /// the offender on purpose, so an implementation reporting a hardcoded position 0 fails here.
+    /// </remarks>
+    [TestMethod]
+    public void ABindingThatIsNotAnObjectIsMalformedAndNamesItsPosition()
+    {
+        // The FIRST binding is complete and valid, carrying every one of this family's six cursor
+        // variables, so the parser reaches the second one. An incomplete first binding would throw
+        // the missing-term FormatException instead and never exercise this arm at all.
+        var complete = "{" + string.Join(
+            ",",
+            Enumerable.Range(1, 6).Select(static ordinal =>
+                $"\"key_{ordinal}\":{{\"type\":\"literal\",\"value\":\"v{ordinal}\"}}"))
+            + "}";
+        var refusal = ClassifyBody(
+            "{\"head\":{\"vars\":[\"key_1\"]},\"results\":{\"bindings\":[" + complete + ",42]}}");
+
+        Assert.AreEqual(EuEnumerationRefusal.PageBodyMalformed, refusal.Code);
+        StringAssert.Contains(
+            refusal.CoreRefusalDetail,
+            "binding at position 1",
+            "the refusal must name WHICH binding offended, not merely that one did.");
+        StringAssert.Contains(refusal.CoreRefusalDetail, "is Number, not an object");
+    }
+
+    /// <summary>
+    /// DEFECT TWO's closure: the three bodies the canary refused with CursorDidNotAdvance DECODE
+    /// CLEANLY. Their fault is the pagination one and not a parse one, and nothing in the previous
+    /// commit proved that from inside the suite.
+    /// </summary>
+    /// <remarks>
+    /// Each is a real retained publisher response for its own family. The assertion is deliberately
+    /// two-sided: the JSON carries the binding count and every cursor variable, AND driving it
+    /// through the real executor produces no parse refusal. Either alone would leave the other half
+    /// assumed.
+    /// </remarks>
+    [TestMethod]
+    [DataRow("expressionfacts-page.bin", 1, 7)]
+    [DataRow("rootwatermark-page.bin", 1, 5)]
+    [DataRow("manifestationfacts-page.bin", 3, 5)]
+    public void EachCursorDidNotAdvanceBodyDecodesCleanlyWithEveryCursorVariablePresent(
+        string fileName, int expectedBindings, int expectedCursorVariables)
+    {
+        using var document = System.Text.Json.JsonDocument.Parse(ReadFixture(fileName));
+        var root = document.RootElement;
+        var variables = root.GetProperty("head").GetProperty("vars")
+            .EnumerateArray().Select(static value => value.GetString()!).ToArray();
+        var bindings = root.GetProperty("results").GetProperty("bindings").EnumerateArray().ToArray();
+
+        Assert.HasCount(expectedBindings, bindings);
+
+        var cursorVariables = variables
+            .Where(static name => name.StartsWith("key_", StringComparison.Ordinal)).ToArray();
+        Assert.HasCount(expectedCursorVariables, cursorVariables);
+
+        foreach (var name in cursorVariables)
+        {
+            Assert.AreEqual(
+                0,
+                bindings.Count(binding => !binding.TryGetProperty(name, out _)),
+                $"{name} is absent from a binding, which would make this a parse fault rather than "
+                + "the pagination fault it is.");
+        }
+    }
+
+
 
     /// <summary>
     /// The canary's own refused page: OUR decode could not read it, so the refusal names US.
@@ -161,6 +270,18 @@ public sealed class EuPageDecodeClassificationTests
     /// bounded probe that settled part two's shape (PROBE
     /// lex-event-20260905T015937388Z-8bc0d2893047464c91a6a1c54982b5e1). It is the SAME BATCH and the
     /// same 41 rows as the pre-fix page beside it, differing only in that one BIND.
+    /// </para>
+    /// <para>
+    /// THIS TEST IS EVIDENCE, NOT A GUARD, and must not be cited as one. It measures a property of
+    /// a RETAINED PUBLISHER RESPONSE, so no change to our code can alter what it reads: gutting its
+    /// own per-variable count leaves it green, which was watched and is why this paragraph exists.
+    /// What actually holds the property is elsewhere:
+    /// <c>EuObjectFactsDiscoveryPlanTests.TheObjectFactsPageTemplateIsPinnedByExactText</c> pins the
+    /// COALESCE form and asserts the eager form absent; <c>EuPlanTemplateGuardTests</c> scans every
+    /// template of both plans for the banned form; and
+    /// <c>TheCanarysRefusedPageNowNamesOurDecodeAndCarriesItsOwnDigest</c> drives the real executor
+    /// against the PRE-fix body. Over our own code the property is asserted by the final canary's
+    /// live pages, not here.
     /// </para>
     /// <para>
     /// THE OTHER HALF OF THIS ASSERTION MATTERS AS MUCH AS THE FIRST. <c>?value</c> IS STILL ABSENT
@@ -253,6 +374,15 @@ public sealed class EuPageDecodeClassificationTests
         var result = RunObjectFactsPageAsync(body).GetAwaiter().GetResult();
 
         Assert.IsNotNull(result.Refusal, $"{fileName} must refuse rather than deliver.");
+        return result.Refusal!;
+    }
+
+    /// <summary>The same, for a body stated inline rather than retained.</summary>
+    private static EuEnumerationRefusalDetail ClassifyBody(string body)
+    {
+        var result = RunObjectFactsPageAsync(body).GetAwaiter().GetResult();
+
+        Assert.IsNotNull(result.Refusal, "this body must refuse rather than deliver.");
         return result.Refusal!;
     }
 

@@ -119,6 +119,18 @@ public sealed record EuObjectFactsBoundQuery(
 /// key became total while the row count stayed 41.
 /// </para>
 /// <para>
+/// THE OTHER EIGHT BINDS ARE LEFT ALONE, AND THAT IS MEASURED RATHER THAN ASSUMED. Each family also
+/// feeds <c>datatype_iri</c> and <c>language_tag</c> through
+/// <c>IF(isLiteral(?value), STR(DATATYPE(?value)), "")</c> and
+/// <c>IF(isLiteral(?value), LANG(?value), "")</c>, which under the same eager argument evaluation
+/// could raise on an IRI-valued row and leave both unbound. The retained post-fix page answers it:
+/// of its 41 bindings, 23 ARE IRI-VALUED, and <c>key_5</c>, <c>key_6</c>, <c>datatype_iri</c> and
+/// <c>language_tag</c> are present in every one of them. So this engine does not raise inside
+/// DATATYPE or LANG on a bound IRI, and those eight sites need no change. The difference from the
+/// four that did: those dereference a possibly UNBOUND variable, where eager evaluation raises an
+/// unbound-variable error; these dereference a BOUND term of the wrong type, where it does not.
+/// </para>
+/// <para>
 /// WHAT IS DELIBERATELY NOT TOTALISED IS <c>?value</c> ITSELF. It stays absent on exactly those
 /// rows, because that absence IS the unbound fact, recorded alongside <c>value_kind</c> of
 /// <c>"unbound"</c>. Only the CURSOR becomes total. A change that had totalised both would have
@@ -398,7 +410,24 @@ public sealed class EuObjectFactsDiscoveryPlan
             "pass_id",
             definition.CursorVariables.Select(static value => "last_" + value).ToArray(),
             "has_cursor",
-            RepeatedEnumerationTerminalPagePolicy.EmptySuccessorAfterShortPage);
+            // A WHOLE SET ON ONE PAGE COMPLETES RATHER THAN REFUSES. RULING
+            // lex-event-20260905T021827470Z-61309ecca6e8414db4150b451b181ebb. This declared
+            // EmptySuccessorAfterShortPage, which obliges a run to fetch one more page after a short
+            // one and requires that page to come back EMPTY. Every family here fits in a single page
+            // (the observed counts are 41, 166, 2 and 9 against limits of 997 and 613), so every run
+            // spent a request asking for nothing, and the publisher answered those requests with a
+            // TAIL SUBSET of rows already delivered rather than with nothing. The executor then
+            // correctly refused CursorDidNotAdvance, which is a true observation of a useless
+            // request. ORDER BY plus LIMIT already prove a short page has exhausted the result set,
+            // so the successor established nothing that the short page had not.
+            //
+            // THIS DOES NOT RETIRE THE COUNT CROSS CHECK, which remains the closure test for the
+            // enumeration. What the terminal policy settles is WHEN TO STOP ASKING; what the count
+            // settles is WHETHER WE GOT EVERYTHING. A page can be short because the set is exhausted
+            // or because the publisher truncated it, and only the independent count answered by the
+            // count query tells those apart. Dropping the successor removed a request that proved
+            // nothing; it did not remove the proof.
+            RepeatedEnumerationTerminalPagePolicy.ShortPageTerminal);
     }
 
     public EuObjectFactsBoundQuery BindCount(

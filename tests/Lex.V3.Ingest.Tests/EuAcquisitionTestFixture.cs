@@ -489,9 +489,14 @@ internal static class EuAcquisitionTestFixture
 
     internal static FamilyScript ScriptFor(string familyTag, long selected, IReadOnlyList<string> firstPageRows, string[] projection)
     {
+        // ShortPageTerminal: a page shorter than the limit is the terminal page, so no successor is
+        // requested and none is scripted. These scripts used to carry a trailing empty page because
+        // the EU profiles declared EmptySuccessorAfterShortPage; D1-05f dropped that policy, and a
+        // script still offering the extra body would be describing a request the executor no longer
+        // makes.
         var pass = selected == 0
             ? new[] { EuCountJson(selected), EmptyRowsJson(projection) }
-            : new[] { EuCountJson(selected), RowsJson(projection, firstPageRows), EmptyRowsJson(projection) };
+            : new[] { EuCountJson(selected), RowsJson(projection, firstPageRows) };
         return new FamilyScript(familyTag, pass.Concat(pass).ToArray());
     }
 

@@ -70,8 +70,15 @@ public sealed class EuConsolidationDiscoveryTests
         StringAssert.Contains(facts.PageTemplate, "unsupported_blank_node");
         StringAssert.Contains(facts.PageTemplate,
             "?object ?object_kind ?datatype_iri ?language_tag ?multiplicity");
+        // MOVED BY D1-05f, and it is the one pinned DIGEST this slice touches. The census facts page
+        // totalised its own value-derived cursor key with COALESCE, for the same measured reason as
+        // the object-facts families: this engine evaluates IF's arguments eagerly, so the
+        // IF(BOUND(?object), STR(?object), "") guard it carried was ignored and the key could come
+        // back unbound. The plan's canonical bytes carry its templates, so its identity moves with
+        // them. Re-pinned from the value the run produced, was
+        // b2a91efac90315df6730ca8ab6d00edcf6278aa3e912e11c784f4907acaa016d.
         Assert.AreEqual(
-            "b2a91efac90315df6730ca8ab6d00edcf6278aa3e912e11c784f4907acaa016d",
+            "656fa0d9b47fb2760c325b06be2ae867000d1671ccf7f78a6cc9b19e3b8680e3",
             plan.ArtifactRef.Sha256);
     }
 
@@ -116,8 +123,10 @@ public sealed class EuConsolidationDiscoveryTests
         Assert.AreEqual(EnumerationDeliveryOutcome.EqualSelections, accepted.Outcome);
         Assert.AreEqual(4L, accepted.SelectedRowCountA);
         Assert.AreEqual(4L, accepted.DeliveredRowCountA);
-        Assert.AreEqual(2, accepted.PagesA.Pages.Count);
-        Assert.AreEqual(2, accepted.PagesB.Pages.Count);
+        // ONE page per pass, not two. Under ShortPageTerminal a page carrying fewer rows than the
+        // limit is the terminal page, so the second request this used to assert is no longer made.
+        Assert.AreEqual(1, accepted.PagesA.Pages.Count);
+        Assert.AreEqual(1, accepted.PagesB.Pages.Count);
 
         var wrongCount = new TemporalDeliveryFixture(
             TemporalDeliveryMutation.WrongCount).Create();
@@ -787,10 +796,22 @@ public sealed class EuConsolidationDiscoveryTests
                 Artifact(++_seed).ResourceId,
                 Artifact(++_seed).ResourceId,
                 _rendererSource);
-            var successor = nonemptySuccessor
-                ? FactsPayload(onlyLaterVersion: true)
-                : EmptyFactsPayload();
-            var successorRefs = Add(successorBound, successor, isPage: true);
+            // ONE PAGE on the normal path. This family declares ShortPageTerminal since D1-05f, so
+            // a page carrying fewer rows than the limit IS terminal and no successor is requested.
+            // The fixture used to bind and answer one, which is the protocol that produced the
+            // CursorDidNotAdvance fault live: the publisher answered that pointless request with
+            // rows it had already delivered.
+            if (!nonemptySuccessor && !wrongCursor)
+            {
+                return (countRefs, new[] { new RepeatedEnumerationPageRef(0, firstRefs) });
+            }
+
+            // The two successor-shaped mutations still bind one, and both are still refused. What
+            // they prove has CHANGED and is stated rather than left looking unaltered: under
+            // ShortPageTerminal a successor to a short page cannot be valid AT ALL, so each is now
+            // refused as an invalid continuation rather than for carrying rows or a wrong cursor.
+            // Both still bite, on a stronger rule than the one they were written for.
+            var successorRefs = Add(successorBound, FactsPayload(onlyLaterVersion: true), isPage: true);
             return (countRefs, new[]
             {
                 new RepeatedEnumerationPageRef(0, firstRefs),

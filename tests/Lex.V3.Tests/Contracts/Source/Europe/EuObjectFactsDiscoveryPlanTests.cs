@@ -123,7 +123,11 @@ public sealed class EuObjectFactsDiscoveryPlanTests
             var profile = plan.CreateDeliveryProfile(set);
             Assert.AreEqual(RepeatedEnumerationSparqlJsonDialect.EuropeanUnionVirtuoso, profile.Dialect);
             Assert.AreEqual(
-                RepeatedEnumerationTerminalPagePolicy.EmptySuccessorAfterShortPage, profile.TerminalPagePolicy);
+                RepeatedEnumerationTerminalPagePolicy.ShortPageTerminal,
+                profile.TerminalPagePolicy,
+                "a short page is the terminal page: ORDER BY plus LIMIT already prove the result "
+                + "set is exhausted, so the successor these families used to fetch established "
+                + "nothing and the publisher answered it with rows already delivered.");
             Assert.AreEqual("pass_id", profile.PassParameterName);
             Assert.AreEqual("has_cursor", profile.HasCursorParameterName);
         }
@@ -713,15 +717,13 @@ public sealed class EuObjectFactsDiscoveryPlanTests
                 _set, _batch, pass, null, _rows.Count, countRefs.HttpEvidenceRef,
                 Artifact(++_seed).ResourceId, Artifact(++_seed).ResourceId, _rendererSource);
             var firstRefs = Add(firstBound, RowsDocument(_rows), isPage: true);
-            var successorBound = _plan.BindPage(
-                _set, _batch, pass, _lastRowCursor, _rows.Count, countRefs.HttpEvidenceRef,
-                Artifact(++_seed).ResourceId, Artifact(++_seed).ResourceId, _rendererSource);
-            var successorRefs = Add(successorBound, RowsDocument([]), isPage: true);
-            return (countRefs, new[]
-            {
-                new RepeatedEnumerationPageRef(0, firstRefs),
-                new RepeatedEnumerationPageRef(1, successorRefs),
-            });
+
+            // ONE PAGE, and no successor. These families declare ShortPageTerminal since D1-05f, so
+            // a page carrying fewer rows than the limit IS the terminal page and no further request
+            // is made. The fixture used to bind a second page with _lastRowCursor and answer it
+            // empty, which is the protocol that produced the CursorDidNotAdvance fault against the
+            // live endpoint: the publisher answered that request with rows already delivered.
+            return (countRefs, new[] { new RepeatedEnumerationPageRef(0, firstRefs) });
         }
 
         private RepeatedEnumerationEvidenceRefs Add(
