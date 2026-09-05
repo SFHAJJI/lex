@@ -596,6 +596,94 @@ public sealed class LuxembourgQueryExecutionAdapterTests
     }
 
     /// <summary>
+    /// The manifest REOPEN had no catch at all, so a CustodyIntegrityException raised there
+    /// escaped RunAsync UNTYPED, past every typed refusal this adapter exists to produce and past
+    /// the principle the two tests either side of it assert by name. A store that accepts the
+    /// write, satisfies the hold's own verification read, and then cannot reproduce those bytes
+    /// on the NEXT read of the same digest drives exactly that path.
+    /// </summary>
+    /// <remarks>
+    /// The escape is asserted rather than left to the runner. An unhandled exception would fail
+    /// this test anyway, but not by NAME, and the whole point of the defect is that an untyped
+    /// escape is the checkability claim failing where it is least visible.
+    /// </remarks>
+    [TestMethod]
+    public async Task AScopeManifestThatFailsIntegrityOnTheReopenRefusesRatherThanEscaping()
+    {
+        var (profile, _, enumerationRef) = BuildProfile();
+        var root = Path.Combine(Path.GetTempPath(), "lex-lu-manifest-reopen-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var store = new ManifestReopenFailingCustodyStore(new FileSystemCustodyStore(root));
+            var adapter = new LuxembourgQueryExecutionAdapter(
+                store, NewExecutor(store, NoSendHandler()), profile);
+
+            LuxembourgQueryExecutionResult result;
+            try
+            {
+                result = await adapter.RunAsync(
+                    [], null, null, null, new PermissiveEvidenceResolver(enumerationRef),
+                    DocumentFetchRendererSource(), CancellationToken.None);
+            }
+            catch (CustodyIntegrityException exception)
+            {
+                Assert.Fail(
+                    "a custody integrity failure on the manifest reopen escaped RunAsync untyped: "
+                    + exception.Message);
+                throw;
+            }
+
+            Assert.IsNotNull(result.Refusal);
+            Assert.AreEqual(
+                LuxembourgQueryExecutionRefusal.ScopeManifestNotHeld,
+                result.Refusal!.Code,
+                "a manifest that does not reopen at its own digest is NOT held.");
+            StringAssert.Contains(
+                result.Refusal.Detail,
+                "could not be reopened at its own digest",
+                "and the refusal carries the store's own failure rather than a generic one.");
+            Assert.IsNull(
+                result.ScopeManifestReceipt,
+                "no receipt is reported for a manifest this run cannot reopen.");
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// Accepts every write and the FIRST read of each digest, then corrupts the SECOND. The
+    /// manifest hold's own verification read is the first, so the hold succeeds and the run
+    /// proceeds; the reopen that follows is the second, which is the read this corrupts. It is
+    /// the exact complement of <see cref="ManifestHoldFailingCustodyStore"/>, and the pair only
+    /// discriminate because those two reads are the first and second of that one digest.
+    /// </summary>
+    private sealed class ManifestReopenFailingCustodyStore(ICustodyStore inner) : ICustodyStore
+    {
+        private readonly Dictionary<string, int> _reads = new(StringComparer.Ordinal);
+
+        public Task<DurableBlobWriteReceipt> CreateAsync(
+            ReadOnlyMemory<byte> bytes, CustodyClass custodyClass, CancellationToken cancellationToken) =>
+            inner.CreateAsync(bytes, custodyClass, cancellationToken);
+
+        public Task<ReadOnlyMemory<byte>> ReadAsync(
+            DurableBlobRef reference, CancellationToken cancellationToken) =>
+            inner.ReadAsync(reference, cancellationToken);
+
+        public Task<ReadOnlyMemory<byte>> ReadByDigestAsync(
+            string contentSha256, CancellationToken cancellationToken)
+        {
+            _reads.TryGetValue(contentSha256, out var seen);
+            _reads[contentSha256] = seen + 1;
+            return seen == 1
+                ? Task.FromResult<ReadOnlyMemory<byte>>("not the bytes you stored"u8.ToArray())
+                : inner.ReadByDigestAsync(contentSha256, cancellationToken);
+        }
+    }
+
+    /// <summary>
     /// Accepts every write, then corrupts the FIRST read of each digest and passes every later one
     /// through. An earlier version of this remark said the second, which is the inverse of the
     /// code below. The caveat that made the inversion invisible, stated rather than left implicit:
