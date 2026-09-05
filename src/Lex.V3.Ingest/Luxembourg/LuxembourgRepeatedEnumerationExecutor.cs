@@ -80,6 +80,21 @@ public enum LuxembourgEnumerationRefusal
     [JsonStringEnumMemberName("page_body_malformed")]
     PageBodyMalformed = 13,
 
+    /// <summary>
+    /// OUR DECODE FAILED, and this member exists so the refusal says so instead of blaming the
+    /// office. SPARQL legitimately OMITS AN UNBOUND VARIABLE from a binding, and this parser
+    /// demands every projected variable in every row, so a page that is perfectly well formed
+    /// by the protocol was being reported under the publisher's name as a malformed page.
+    /// Established at the endpoint by lane B on its own executor
+    /// (lex-event-20260905T022432768Z-43d363d14f524f87b9f8063afe398de6): the engine selects the
+    /// conditional's branch correctly but evaluates both arms, the string conversion raises on
+    /// the absent term, the erroring BIND leaves the variable unbound, and the JSON format
+    /// omits it. Whether this lane's template also wants COALESCE at its value-derived key
+    /// positions is a SEPARATE question; this member is about the refusal telling the truth.
+    /// </summary>
+    [JsonStringEnumMemberName("page_decode_failed_on_our_side")]
+    PageDecodeFailedOnOurSide = 14,
+
 }
 
 public sealed class LuxembourgEnumerationRefusalDetail
@@ -1013,7 +1028,8 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
     /// <summary>
     /// Which typed refusal a page-parse failure is. Keyed on the tag <see cref="ParseStrictRows"/>
     /// attaches at each throw site rather than on the message text, so a reworded message cannot
-    /// silently reclassify a refusal.
+    /// silently reclassify a refusal. THE PUBLISHER-FACING NAME REQUIRES AN EXPLICIT TAG; the
+    /// default names us.
     /// </summary>
     private static LuxembourgEnumerationRefusal ClassifyPageParseFailure(Exception exception) =>
         exception.Data[PageParseFailureKey] switch
@@ -1021,9 +1037,24 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
             nameof(LuxembourgEnumerationRefusal.DeliveredKeyNotRepresentable) =>
                 LuxembourgEnumerationRefusal.DeliveredKeyNotRepresentable,
 
-            // Untagged: either a JsonException from JsonDocument.Parse, or a shape failure this
-            // parser raises about the document rather than about one delivered value.
-            _ => LuxembourgEnumerationRefusal.PageBodyMalformed,
+            // The positioned publisher-facing tag. It has to be matched explicitly now that
+            // the default no longer names the publisher, which is the point: saying it is the
+            // office's page is a claim a throw site has to make deliberately.
+            nameof(LuxembourgEnumerationRefusal.PageBodyMalformed) =>
+                LuxembourgEnumerationRefusal.PageBodyMalformed,
+
+            // A JsonException never comes from this parser at all: JsonDocument.Parse raises it
+            // when the bytes are not JSON, which IS a statement about what the office served,
+            // so it keeps the publisher-facing name. Classified by TYPE here rather than by a
+            // tag because there is no throw site of ours to tag.
+            null when exception is System.Text.Json.JsonException =>
+                LuxembourgEnumerationRefusal.PageBodyMalformed,
+
+            // EVERYTHING ELSE UNTAGGED IS OURS. The publisher-facing name now requires an
+            // explicit, positioned tag, because a DEFAULT that blames a third party makes the
+            // product state a falsehood about them on every case nobody thought about. The
+            // missing-variable throw is deliberately left untagged so it lands here.
+            _ => LuxembourgEnumerationRefusal.PageDecodeFailedOnOurSide,
         };
 
     private const string PageParseFailureKey = "lu.pageParseFailure";
@@ -1128,7 +1159,9 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
             !results.TryGetProperty("bindings", out var bindings) ||
             bindings.ValueKind != System.Text.Json.JsonValueKind.Array)
         {
-            throw new FormatException("The page response has no binding array.");
+            throw PageFailure(
+                "The page response has no binding array.",
+                LuxembourgEnumerationRefusal.PageBodyMalformed);
         }
 
         var rows = new List<LuxembourgQueryCursor>();
@@ -1142,19 +1175,32 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
             // entirely instead of becoming a typed refusal.
             if (binding.ValueKind != System.Text.Json.JsonValueKind.Object)
             {
-                throw new FormatException("The page response row is not an object.");
+                throw PageFailure(
+                    "The page response row is not an object.",
+                    LuxembourgEnumerationRefusal.PageBodyMalformed);
             }
 
             var parts = new string[6];
             for (var index = 0; index < 6; index++)
             {
                 var name = $"key_{index + 1}";
-                if (!binding.TryGetProperty(name, out var term) ||
-                    term.ValueKind != System.Text.Json.JsonValueKind.Object ||
+                // SPLIT, because one condition was answering two different questions. Only the
+                // ABSENT variable is ours: SPARQL omits an unbound variable and this loop
+                // demands all six. A term that is PRESENT but misshapen is a statement about
+                // what the office served, and keeps the publisher-facing name.
+                if (!binding.TryGetProperty(name, out var term))
+                {
+                    // DELIBERATELY UNTAGGED, so it falls to PageDecodeFailedOnOurSide.
+                    throw new FormatException($"The page response row is missing {name}.");
+                }
+
+                if (term.ValueKind != System.Text.Json.JsonValueKind.Object ||
                     !term.TryGetProperty("value", out var value) ||
                     value.ValueKind != System.Text.Json.JsonValueKind.String)
                 {
-                    throw new FormatException($"The page response row is missing {name}.");
+                    throw PageFailure(
+                        $"The page response row term {name} is not one string-valued term.",
+                        LuxembourgEnumerationRefusal.PageBodyMalformed);
                 }
 
                 parts[index] = value.GetString()!;

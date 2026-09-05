@@ -313,6 +313,7 @@ public sealed class LuxembourgEnumerationRefusalWireNameTests
                 "custody_member_missing",
                 "delivery_proof_refused",
                 "page_body_malformed",
+                "page_decode_failed_on_our_side",
             }),
             string.Join("\n", actual),
             "a wire name changing is a contract change; a number changing is not.");

@@ -223,8 +223,182 @@ public sealed class LuxembourgCodeCivilAcquisitionCanary
                 $"'{record.ObjectRef.PublisherUri}' must be Held in the REOPENED record set.");
         }
 
-        Console.WriteLine($"CANARY custody root: {root}");
-        Console.WriteLine($"CANARY record set ref: {written.SetRef!.Sha256}");
+        // THE EVIDENCE THE ACCEPTANCE RULING NEEDS IS RETAINED, NOT PRINTED. Everything reported
+        // above went through Console.WriteLine, which this runner never surfaces on a pass even at
+        // --output Detailed, so the accepted fraction this canary computes existed only for a
+        // reader who already had the numbers. The index is required now, and it follows the shape
+        // EuStageOneAcquisitionCanary already proved rather than inventing one.
+        await WriteEvidenceIndexAsync(
+            store, root, manifest, manifestRef, outcomes, written, CancellationToken.None);
+    }
+
+    /// <summary>
+    /// The run's own evidence index, retained under the same custody class as everything else this
+    /// canary holds and written beside the store as a file, in the shape
+    /// <see cref="EuStageOneAcquisitionCanary"/> already proved.
+    /// </summary>
+    /// <remarks>
+    /// THE DENOMINATOR IS NOT DERIVED HERE. It is the independent census measured outside this
+    /// lane, CORRECTION lex-event-20260904T223038388Z-6d7cc6d87c8e446e829c3f7db93dc0b4, copied in
+    /// as data rather than recomputed from the run, because a fraction whose denominator comes out
+    /// of the same run it measures proves nothing about that run.
+    /// </remarks>
+    private static async Task WriteEvidenceIndexAsync(
+        FileSystemCustodyStore store,
+        string root,
+        ScopeManifest manifest,
+        SourceArtifactRef manifestRef,
+        IReadOnlyDictionary<int, CorpusAcquisitionOutcome> outcomes,
+        CorpusRecordSetWriteResult written,
+        CancellationToken cancellationToken)
+    {
+        var dirty = TryGit("status --porcelain");
+        var held = outcomes.Count(pair => pair.Value.Receipt is not null);
+        var index = new System.Text.Json.Nodes.JsonObject
+        {
+            ["schema"] = "lex-lu-canary-evidence-index/1",
+            ["runGitSha"] = TryGit("rev-parse HEAD"),
+            ["runTreeClean"] = dirty is null ? null : dirty.Length == 0,
+            ["runTreeDirtyPaths"] = dirty,
+            ["custodyClassSegment"] = "nightly-floor-90d",
+            ["custodyRoot"] = root,
+        };
+
+        // THE ACCEPTED FRACTION, AS A NUMBER, beside the census it is a fraction OF.
+        index["acceptedFraction"] = new System.Text.Json.Nodes.JsonObject
+        {
+            ["heldExpressions"] = held,
+            ["manifestRowCount"] = manifest.Rows.Count,
+            ["fraction"] = manifest.Rows.Count == 0 ? null : (double)held / manifest.Rows.Count,
+            ["censusDenominator"] = new System.Text.Json.Nodes.JsonObject
+            {
+                ["source"] = "lex-event-20260904T223038388Z-6d7cc6d87c8e446e829c3f7db93dc0b4",
+                ["obtainedOutsideThisLane"] = true,
+                ["consolidations"] = 19,
+                ["expressions"] = 19,
+                ["manifestations"] = 76,
+                ["licences"] = 76,
+                ["manifestationsPerConsolidation"] = 4,
+                ["manifestationsWithoutLegalValue"] = 57,
+                ["note"] = "This run acquires the two canary consolidations of the 19, so "
+                    + "heldExpressions is a fraction of manifestRowCount and NOT of the 19. The "
+                    + "census is carried so a reader can see which denominator is which rather "
+                    + "than assuming.",
+            },
+        };
+
+        var expressions = new System.Text.Json.Nodes.JsonArray();
+        foreach (var entry in outcomes.OrderBy(static entry => entry.Key))
+        {
+            var receipt = entry.Value.Receipt;
+            expressions.Add(new System.Text.Json.Nodes.JsonObject
+            {
+                ["role"] = "expressionBody",
+                ["manifestRowOrdinal"] = entry.Key,
+                ["publisherUri"] = manifest.ObservedObjects[entry.Key].ObjectRef.PublisherUri,
+                ["heldContentSha256"] = receipt?.Reference.ContentSha256,
+                ["heldByteLength"] = receipt?.Reference.ByteLength,
+                ["custodyClass"] = receipt is null
+                    ? null
+                    : CustodyMembershipClassifier.Classify(receipt).ToString(),
+                ["custodyClassSegment"] = receipt?.Reference.CustodyClass.ToString(),
+                ["refusalReason"] = entry.Value.Refusal?.ToString(),
+            });
+        }
+
+        index["expressions"] = expressions;
+
+        index["scopeManifest"] = new System.Text.Json.Nodes.JsonObject
+        {
+            ["role"] = "scopeManifest",
+            ["canonicalSha256"] = manifestRef.Sha256,
+        };
+
+        index["corpusRecordSet"] = new System.Text.Json.Nodes.JsonObject
+        {
+            ["role"] = "corpusRecordSet",
+            ["setRefSha256"] = written.SetRef?.Sha256,
+            ["retainedFloor"] = written.RetainedFloor?.ToString(),
+            ["recordCount"] = written.VerifiedSet?.Set.Records.Count,
+            ["refusalKind"] = written.Refusal?.Kind.ToString(),
+        };
+
+        index["rolesThisIndexCannotYetCarry"] = new System.Text.Json.Nodes.JsonArray
+        {
+            new System.Text.Json.Nodes.JsonObject
+            {
+                ["role"] = "robotsBootstrapArtifact",
+                ["why"] = "The routed session writes robots.txt into custody inside the executor, "
+                    + "and RunDocumentAcquisitionAsync returns only the per-object outcomes and an "
+                    + "optional whole-run refusal, so its digest cannot be stated by role from "
+                    + "here. This is the same gap the EU index declares, unclosed for the same "
+                    + "reason, and it is named rather than omitted.",
+            },
+            new System.Text.Json.Nodes.JsonObject
+            {
+                ["role"] = "scopeManifestCustodyReceipt",
+                ["why"] = "This canary drives the document-acquisition phase directly and hands it "
+                    + "a manifest it built itself, so nothing in this run HOLDS that manifest: the "
+                    + "custody receipt exists only on the RunAsync path. The canonicalSha256 above "
+                    + "is the manifest's own content address, NOT a receipt, and the two must not "
+                    + "be read as one.",
+            },
+            new System.Text.Json.Nodes.JsonObject
+            {
+                ["role"] = "enumerationDeliveryProof",
+                ["why"] = "The closure this canary acquires is a fixed list checked in beside it, "
+                    + "not a live enumeration, so no AbsenceFamilyEnumerationProof exists for it "
+                    + "and completeness of the 19 is asserted by nothing here. The census above is "
+                    + "an independent reading, not this run's own proof.",
+            },
+        };
+
+        var bytes = System.Text.Encoding.UTF8.GetBytes(
+            index.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+
+        var indexReceipt = await store.CreateAsync(bytes, CustodyClass.NightlyFloor90d, cancellationToken)
+            .ConfigureAwait(false);
+        var beside = Path.Combine(root, "evidence-index.json");
+        await File.WriteAllBytesAsync(beside, bytes, cancellationToken).ConfigureAwait(false);
+
+        Console.WriteLine(
+            $"CANARY|evidenceIndex|sha256={indexReceipt.Reference.ContentSha256}|bytes={bytes.Length}"
+            + $"|beside={beside}");
+    }
+
+    /// <summary>
+    /// Declared here rather than shared with <see cref="EuStageOneAcquisitionCanary"/>, whose copy
+    /// is private to its own class, exactly as that canary declares its own resolver for the same
+    /// reason. Returns null rather than throwing when git is absent or answers non-zero, so a
+    /// canary run never fails on the provenance fields.
+    /// </summary>
+    private static string? TryGit(string arguments)
+    {
+        try
+        {
+            using var process = System.Diagnostics.Process.Start(
+                new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = "git",
+                    Arguments = arguments,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                });
+            if (process is null)
+            {
+                return null;
+            }
+
+            var output = process.StandardOutput.ReadToEnd();
+            process.WaitForExit(30_000);
+            return process.ExitCode == 0 ? output.Trim() : null;
+        }
+        catch (Exception exception)
+            when (exception is System.ComponentModel.Win32Exception or InvalidOperationException)
+        {
+            return null;
+        }
     }
 
     private static (ScopeManifest Manifest, SourceArtifactRef ManifestRef) BuildAcceptedBodyManifest(
