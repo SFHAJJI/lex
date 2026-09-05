@@ -16,6 +16,16 @@ namespace Lex.V3.Ingest.Tests;
 [TestClass]
 public sealed class LuxembourgEnumerationRefusalWireNameTests
 {
+    private static string[] WireNames<T>() where T : struct, Enum =>
+        Enum.GetValues<T>()
+            .Select(static value => typeof(T)
+                .GetField(value.ToString())!
+                .GetCustomAttributes(typeof(JsonStringEnumMemberNameAttribute), false)
+                .Cast<JsonStringEnumMemberNameAttribute>()
+                .Single()
+                .Name)
+            .ToArray();
+
     [TestMethod]
     public void TheRefusalVocabularyKeepsItsExactWireNames()
     {
@@ -57,5 +67,35 @@ public sealed class LuxembourgEnumerationRefusalWireNameTests
         // pre-emptive floor gate, and the genuine failures it once stood for now surface as
         // custody_member_missing.
         CollectionAssert.DoesNotContain(actual, "custody_floor_not_observed");
+    }
+    /// <summary>
+    /// The query-execution refusal vocabulary, every member. R4 declared a token on 10 of these
+    /// 12; before that the undeclared ones serialized as their CLR member names and nothing
+    /// pinned them.
+    /// </summary>
+    [TestMethod]
+    public void TheQueryExecutionRefusalVocabularyKeepsItsExactWireNames()
+    {
+        // Joined rather than compared element-wise: CollectionAssert reports a count difference for
+        // two equal-length sequences that differ only in a name, which is the failure this pin
+        // exists to describe. A string diff names the wire name that moved.
+        Assert.AreEqual(
+            string.Join("\n", new[]
+            {
+                "none",
+                "scope_resolution_failed",
+                "scope_manifest_not_retained",
+                "resource_observation_family_not_proven",
+                "resource_observation_rows_not_verified",
+                "observation_subject_not_in_delivered_census",
+                "assertion_row_object_kind_not_recognised",
+                "assertion_row_term_unbound",
+                "document_fetch_session_not_started",
+                "document_body_not_retained",
+                "acquisition_outcome_not_representable",
+                "record_set_not_retained",
+            }),
+            string.Join("\n", WireNames<LuxembourgQueryExecutionRefusal>()),
+            "a wire name changing is a contract change; a number changing is not.");
     }
 }
