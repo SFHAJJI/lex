@@ -133,26 +133,20 @@ public sealed class LuxembourgRepeatedEnumerationExecutorTests
             // TryProveFamilyEnumeration, and only the two ADAPTERS call that. Verified by reading
             // the call sites rather than by the name.
             //
-            // Where an unfloored run stops TODAY is the TUPLE BIND, EnumerationDeliveryComparison
-            // .Create in shared Source/Core, which still refuses any observation whose body receipt
-            // is not ImmutableObject1 and LockedTime. STATED WITH ITS EXPIRY DATE, because the
-            // ruling that ends it already exists: correction
-            // lex-event-20260904T230312457Z-5d1f7352c46b4ca0ac8c71ca6a4aa1fb drops the profile and protection
-            // halves from that bind and keeps only the anti-forgery digest comparison and the
-            // NightlyFloor90d class check, so once lane B lands it an unfloored run does not stop
-            // there at all. That gate takes the same answer as the
-            // others under RULING lex-event-20260904T213727510Z-671a8c2563684ab49048677997ceef1c,
-            // but Source/Core is shared and the gate ownership ruling puts shared hunks in the lane
-            // that merges first, so it is LANE B's.
-            //
-            // The assertion below is KEPT deliberately. It will go red when lane B lands, and the
-            // repair is to flip it to the receipt carrying RetainedUnenforced that this test's own
-            // name already promises.
-            Assert.AreEqual(
-                LuxembourgEnumerationRefusal.DeliveryProofRefused,
-                result.Refusal?.Code,
-                "the remaining refusal comes from the shared Core tuple bind, not this lane's "
-                + "custody gate.");
+            // THE EXPIRY DATE ARRIVED, AND THE FLIP IS THE ONE THAT WAS WRITTEN DOWN. An unfloored
+            // run used to stop at the TUPLE BIND, EnumerationDeliveryComparison.Create in shared
+            // Source/Core, which refused any observation whose body receipt was not
+            // ImmutableObject1 and LockedTime. Correction
+            // lex-event-20260904T230312457Z-5d1f7352c46b4ca0ac8c71ca6a4aa1fb dropped the profile
+            // and protection halves and kept the anti-forgery digest comparison and the
+            // NightlyFloor90d class check, and lane B has landed it, so nothing stops there now.
+            // The assertion below was kept in its old form precisely so this moment would be
+            // loud rather than silent, and it is flipped to the receipt carrying
+            // RetainedUnenforced that this test's own name has promised all along.
+            Assert.IsNull(
+                result.Refusal,
+                "a filesystem deployment refuses at no gate now: " + result.Refusal?.Code);
+            Assert.IsNotNull(result.Receipt, "and the run produces its delivery receipt.");
         }
         finally
         {
