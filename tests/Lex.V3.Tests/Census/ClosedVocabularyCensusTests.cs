@@ -372,7 +372,8 @@ public sealed class ClosedVocabularyCensusTests
                     + "EndpointNotTheOfficialCellarEndpoint, PredicateNotTheWatermarkPredicate, "
                     + "PageLimitBelowMinimum, PageLimitAboveSortedResultWindow, "
                     + "StartPositionShapeWithoutFrozenOrderSemantics, "
-                    + "PositionShapeWithoutFrozenOrderSemantics",
+                    + "PositionShapeWithoutFrozenOrderSemantics, BatchNamesNoObjects, "
+                    + "BatchAboveCapacity, BatchMemberNotCanonicalOrDuplicated",
                 "Lex.V3.Contracts.Source.Europe.EuWatermarkRefusal: None, DateOnlyCursor, "
                     + "WatermarkAbsent, BoundaryEntrySkipped, BoundaryEntryDuplicated, "
                     + "PageNotOrderedAfterCursor",

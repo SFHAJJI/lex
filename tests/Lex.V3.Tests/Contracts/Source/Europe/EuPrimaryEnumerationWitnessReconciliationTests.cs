@@ -13,6 +13,13 @@ namespace Lex.V3.Tests.Contracts.Source.Europe;
 [TestClass]
 public sealed class EuPrimaryEnumerationWitnessReconciliationTests
 {
+
+    /// <summary>
+    /// One real Appendix A pack root, so the fixture plan is frozen over a batch the plan
+    /// will actually canonicalize rather than a placeholder it would refuse.
+    /// </summary>
+    private const string PackObjectForTests =
+        "http://publications.europa.eu/resource/cellar/3e485e15-11bd-11e6-ba9a-01aa75ed71a1";
     private const string N = "Lex.V3.Contracts.Source.Europe.";
 
     private static string SeedA => EuAppendixASeedMap.PackRoots[0];
@@ -56,6 +63,7 @@ public sealed class EuPrimaryEnumerationWitnessReconciliationTests
             EuWatermarkWitnessPlan.WatermarkPredicateIri,
             2,
             EuWatermarkCursor.TryOpen("2026-09-03T12:00:00.000+02:00", "seed", out _)!,
+            [PackObjectForTests],
             out var planRefusal)
             ?? throw new InvalidOperationException($"the fixture plan refused as {planRefusal}");
 

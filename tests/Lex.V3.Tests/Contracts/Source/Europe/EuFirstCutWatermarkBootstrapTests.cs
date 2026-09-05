@@ -11,6 +11,13 @@ namespace Lex.V3.Tests.Contracts.Source.Europe;
 public sealed class EuFirstCutWatermarkBootstrapTests
 {
 
+    /// <summary>
+    /// One real Appendix A pack root, so the fixture plan is frozen over a batch the plan
+    /// will actually canonicalize rather than a placeholder it would refuse.
+    /// </summary>
+    private const string PackObjectForTests =
+        "http://publications.europa.eu/resource/cellar/3e485e15-11bd-11e6-ba9a-01aa75ed71a1";
+
     [TestMethod]
     public void AnEmptyCensusRefusesRatherThanInventingASentinel()
     {
@@ -131,6 +138,7 @@ public sealed class EuFirstCutWatermarkBootstrapTests
             EuWatermarkWitnessPlan.WatermarkPredicateIri,
             EuWatermarkWitnessPlan.MinimumPageLimit,
             start,
+            [PackObjectForTests],
             out var planRefusal);
 
         Assert.IsNotNull(plan);
