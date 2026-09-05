@@ -519,6 +519,49 @@ public sealed class LuxembourgDocumentGetTests
     }
 
     /// <summary>
+    /// THE SECOND MEMBER OF THE CLASS the manifest reopen belonged to: another
+    /// CustodyRestore.ReadByDigestCheckedAsync with no catch, so a store that could not
+    /// reproduce the body at its own digest threw straight out of RunAsync. Grepping the
+    /// checked reader against catch over the adapter found it in ONE PASS, which is the sweep
+    /// that should have run when the first one was typed rather than a cycle later.
+    /// </summary>
+    [TestMethod]
+    public async Task ABodyThatDoesNotReopenAtItsOwnDigestRefusesRatherThanEscaping()
+    {
+        var body = LuxembourgDocumentFetchFixtures.XmlBody();
+        var store = new BodyReopenFailingCustodyStore(new FlooringCustodyStore(), body);
+        var handler = new RobotsThenDocumentHandler((request, _) =>
+            BinaryResponse(request, HttpStatusCode.OK, body));
+
+        IReadOnlyDictionary<int, CorpusAcquisitionOutcome> outcomes;
+        LuxembourgQueryExecutionRefusalDetail? refusal;
+        try
+        {
+            (outcomes, refusal, _, _, _) = await AcquireWithHandlerAsync(handler, Address(), store);
+        }
+        catch (CustodyIntegrityException exception)
+        {
+            Assert.Fail(
+                "a custody integrity failure on the body reopen escaped RunAsync untyped: "
+                + exception.Message);
+            throw;
+        }
+
+        Assert.IsNotNull(refusal, "a body that will not reopen is a typed refusal, never an escape.");
+        Assert.AreEqual(LuxembourgQueryExecutionRefusal.DocumentBodyNotHeld, refusal!.Code);
+        StringAssert.Contains(
+            refusal.Detail,
+            "could not be reopened at its own digest",
+            "the refusal names what actually failed, not a generic body failure.");
+        Assert.IsEmpty(outcomes, "and no object is recorded as held from bytes we cannot reopen.");
+        Assert.AreEqual(
+            1,
+            store.BodyReads,
+            "the calibration self-checks: the adapter's reopen is the FIRST read of that digest "
+            + "through this interface, and the run stops there.");
+    }
+
+    /// <summary>
     /// A route outcome this route has no reviewed reading for refuses the whole run and names the
     /// real classified cause, rather than being mapped onto an unrelated corpus member. The
     /// Luxembourg profile admits no redirect at all, so a 303 leaves the route incomplete for a
@@ -1290,6 +1333,51 @@ public sealed class LuxembourgDocumentGetTests
         public Task<ReadOnlyMemory<byte>> ReadByDigestAsync(
             string contentSha256, CancellationToken cancellationToken) =>
             Task.FromResult<ReadOnlyMemory<byte>>(_byDigest[contentSha256]);
+    }
+
+    /// <summary>
+    /// Corrupts one read of the body's digest, chosen BY ORDINAL through this interface rather
+    /// than armed on a write, because the read it targets happens before the adapter's own hold
+    /// write and there is no write to arm on.
+    /// </summary>
+    /// <remarks>
+    /// MEASURED, AND NOT WHAT A FIRST ATTEMPT ASSUMED. The ordinals of this digest through
+    /// ReadByDigestAsync are: ONE, the adapter's checked reopen, which is the escape this
+    /// drives; TWO, CustodyHold's own write-then-readback verification, which reports a digest
+    /// mismatch as a hold failure carrying ITS message under the SAME DocumentBodyNotHeld code.
+    /// The session's retention readback never appears here at all, so the reopen is read one
+    /// and not read two. Because both ordinals answer with the same refusal code, the DETAIL is
+    /// what discriminates them, which is why the test asserts the message and not just the code.
+    /// </remarks>
+    private sealed class BodyReopenFailingCustodyStore(ICustodyStore inner, byte[] payload)
+        : ICustodyStore
+    {
+        private readonly string _bodyDigest = CustodyDigest.Of(payload);
+
+        internal int BodyReads;
+
+        internal int FailBodyReadOrdinal = 1;
+
+        public Task<DurableBlobWriteReceipt> CreateAsync(
+            ReadOnlyMemory<byte> bytes, CustodyClass custodyClass, CancellationToken cancellationToken) =>
+            inner.CreateAsync(bytes, custodyClass, cancellationToken);
+
+        public Task<ReadOnlyMemory<byte>> ReadAsync(
+            DurableBlobRef reference, CancellationToken cancellationToken) =>
+            inner.ReadAsync(reference, cancellationToken);
+
+        public Task<ReadOnlyMemory<byte>> ReadByDigestAsync(
+            string contentSha256, CancellationToken cancellationToken)
+        {
+            if (!string.Equals(contentSha256, _bodyDigest, StringComparison.Ordinal))
+            {
+                return inner.ReadByDigestAsync(contentSha256, cancellationToken);
+            }
+
+            return ++BodyReads == FailBodyReadOrdinal
+                ? Task.FromResult<ReadOnlyMemory<byte>>("not the bytes you stored"u8.ToArray())
+                : inner.ReadByDigestAsync(contentSha256, cancellationToken);
+        }
     }
 
     /// <summary>An in-memory store whose receipts always classify as Floored.</summary>

@@ -1625,9 +1625,28 @@ public sealed class LuxembourgQueryExecutionAdapter
                     evidence.Hops[^1].Status, attempt.RetryAllowanceSpent);
                 if (classified.Kind == LuxembourgDocumentGetOutcomeKind.Retrieved)
                 {
-                    var bodyBytes = await CustodyRestore.ReadByDigestCheckedAsync(
-                            _custodyStore, evidence.Hops[^1].Sha256, cancellationToken)
-                        .ConfigureAwait(false);
+                    // THE SECOND MEMBER OF THE SAME CLASS as the manifest reopen above. This
+                    // checked read also throws CustodyIntegrityException when the store cannot
+                    // reproduce the body at its own digest, and it too escaped RunAsync untyped.
+                    // Found by grepping ReadByDigestCheckedAsync against catch over this file,
+                    // which is the sweep that should have run when the first one was typed: two
+                    // checked reads, one catch clause in the whole file.
+                    ReadOnlyMemory<byte> bodyBytes;
+                    try
+                    {
+                        bodyBytes = await CustodyRestore.ReadByDigestCheckedAsync(
+                                _custodyStore, evidence.Hops[^1].Sha256, cancellationToken)
+                            .ConfigureAwait(false);
+                    }
+                    catch (CustodyIntegrityException exception)
+                    {
+                        return (null, new LuxembourgQueryExecutionRefusalDetail(
+                            LuxembourgQueryExecutionRefusal.DocumentBodyNotHeld,
+                            null,
+                            $"manifest row {rowOrdinal} ('{mintedObjectRef.CanonicalKey}'): the "
+                            + $"body could not be reopened at its own digest: {exception.Message}"));
+                    }
+
                     // This refused unless the receipt classified as Floored, which meant no body
                     // could be held outside Azure and stopped the acceptance canary at a wall that
                     // had nothing to do with the publisher or this route. RULING lex-event-20260904T212914634Z-f166f0b9e11b445795efd40c268bfbb8 interpreting Decision 71:
@@ -1635,8 +1654,11 @@ public sealed class LuxembourgQueryExecutionAdapter
                     // honestly declares NotEnforced did not fail. The membership class is recorded
                     // rather than gated on: CorpusBodyRecord.Held derives its own Floor from this
                     // receipt and serialises it, so the record says under which guarantee it holds.
-                    // A GENUINE failure, a write error or bytes that do not reopen at their own
-                    // digest, still refuses here and never softens into a weaker class.
+                    // A GENUINE failure still refuses and never softens into a weaker class, and
+                    // BOTH halves of that sentence are now true of the code they sit beside: a
+                    // write error refuses at the hold below, and bytes that do not reopen at
+                    // their own digest refuse at the checked read above. Until this cycle the
+                    // second half was true of the hold and FALSE of the read, which threw.
                     var (bodyReceipt, holdFailure) = await CustodyHold
                         .TryHoldAsync(_custodyStore, bodyBytes, cancellationToken)
                         .ConfigureAwait(false);
