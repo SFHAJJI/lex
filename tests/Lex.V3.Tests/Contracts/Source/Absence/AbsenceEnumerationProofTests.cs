@@ -2,6 +2,8 @@ using Lex.V3.Contracts.Source.Absence;
 using Lex.V3.Contracts.Source.Core;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
+using Lex.V3.Contracts.Custody;
+
 namespace Lex.V3.Tests.Contracts.Source.Absence;
 
 /// <summary>
@@ -31,7 +33,7 @@ public sealed class AbsenceEnumerationProofTests
             RepeatedEnumerationThresholdAssessment.BelowMaximum, delivery.ThresholdAssessment);
 
         var proof = AbsenceFamilyEnumerationProof.TryCreate(
-            "lu_root_family", delivery, out var refusal);
+            "lu_root_family", delivery, CustodyMembership.Floored, out var refusal);
 
         Assert.IsNotNull(proof);
         Assert.AreEqual(AbsenceFamilyEnumerationProofRefusal.None, refusal);
@@ -56,7 +58,7 @@ public sealed class AbsenceEnumerationProofTests
             "the fixture must fail only on the partition, or this proves nothing about the check");
 
         Assert.IsNull(AbsenceFamilyEnumerationProof.TryCreate(
-            "lu_root_family", delivery, out var refusal));
+            "lu_root_family", delivery, CustodyMembership.Floored, out var refusal));
         Assert.AreEqual(AbsenceFamilyEnumerationProofRefusal.PartitionIsNotThisFamily, refusal);
     }
 
@@ -80,7 +82,7 @@ public sealed class AbsenceEnumerationProofTests
             "the passes must differ only in row identity, not in how many rows they delivered");
 
         Assert.IsNull(AbsenceFamilyEnumerationProof.TryCreate(
-            "lu_root_family", delivery, out var refusal));
+            "lu_root_family", delivery, CustodyMembership.Floored, out var refusal));
         Assert.AreEqual(
             AbsenceFamilyEnumerationProofRefusal.PassesDeliveredDifferentSelections, refusal);
     }
@@ -104,7 +106,7 @@ public sealed class AbsenceEnumerationProofTests
             RepeatedEnumerationThresholdAssessment.PartitionRequired, delivery.ThresholdAssessment);
 
         Assert.IsNull(AbsenceFamilyEnumerationProof.TryCreate(
-            "lu_root_family", delivery, out var refusal));
+            "lu_root_family", delivery, CustodyMembership.Floored, out var refusal));
         Assert.AreEqual(AbsenceFamilyEnumerationProofRefusal.SelectionReachedTheRowCap, refusal);
     }
 
@@ -112,7 +114,7 @@ public sealed class AbsenceEnumerationProofTests
     public void AProofRefusesAnUnboundedFamilyIdentity()
     {
         Assert.IsNull(AbsenceFamilyEnumerationProof.TryCreate(
-            "  ", AbsenceEnumerationProofFixture.Delivery(), out var refusal));
+            "  ", AbsenceEnumerationProofFixture.Delivery(), CustodyMembership.Floored, out var refusal));
         Assert.AreEqual(AbsenceFamilyEnumerationProofRefusal.FamilyKeyInvalid, refusal);
     }
 

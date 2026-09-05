@@ -79,7 +79,7 @@ public sealed class VerifiedRepeatedEnumerationRowsTests
     {
         var fixture = new RepeatedEnumerationDeliveryProofTests.Fixture();
         var delivery = fixture.Create("a,b", "a,b");
-        var proof = AbsenceFamilyEnumerationProof.TryCreate("laws", delivery, out var proofRefusal);
+        var proof = AbsenceFamilyEnumerationProof.TryCreate("laws", delivery, CustodyMembership.Floored, out var proofRefusal);
         Assert.IsNotNull(proof, "the fixture must mint an admitting proof or this test proves nothing");
         Assert.AreEqual(AbsenceFamilyEnumerationProofRefusal.None, proofRefusal);
 
@@ -112,7 +112,7 @@ public sealed class VerifiedRepeatedEnumerationRowsTests
     {
         var fixture = new RepeatedEnumerationDeliveryProofTests.Fixture();
         var delivery = fixture.Create("a,b", "a,b");
-        var proof = AbsenceFamilyEnumerationProof.TryCreate("laws", delivery, out _);
+        var proof = AbsenceFamilyEnumerationProof.TryCreate("laws", delivery, CustodyMembership.Floored, out _);
         Assert.IsNotNull(proof);
 
         var page = fixture.Resolve(delivery.PagesA.Pages[0].Evidence);
@@ -159,7 +159,7 @@ public sealed class VerifiedRepeatedEnumerationRowsTests
     {
         var fixture = new RepeatedEnumerationDeliveryProofTests.Fixture();
         var delivery = fixture.Create("a,b", "a,b");
-        var proof = AbsenceFamilyEnumerationProof.TryCreate("laws", delivery, out _);
+        var proof = AbsenceFamilyEnumerationProof.TryCreate("laws", delivery, CustodyMembership.Floored, out _);
         Assert.IsNotNull(proof);
 
         var tampered = Tamper(fixture, delivery, NotJson);
@@ -183,7 +183,7 @@ public sealed class VerifiedRepeatedEnumerationRowsTests
     {
         var fixture = new RepeatedEnumerationDeliveryProofTests.Fixture();
         var delivery = fixture.Create("a,b", "a,b");
-        var proof = AbsenceFamilyEnumerationProof.TryCreate("laws", delivery, out _);
+        var proof = AbsenceFamilyEnumerationProof.TryCreate("laws", delivery, CustodyMembership.Floored, out _);
         Assert.IsNotNull(proof);
 
         var tampered = Tamper(fixture, delivery, ShapeViolation);
@@ -208,7 +208,7 @@ public sealed class VerifiedRepeatedEnumerationRowsTests
     {
         var fixture = new RepeatedEnumerationDeliveryProofTests.Fixture();
         var delivery = fixture.Create("a,b", "a,b");
-        var proof = AbsenceFamilyEnumerationProof.TryCreate("laws", delivery, out _);
+        var proof = AbsenceFamilyEnumerationProof.TryCreate("laws", delivery, CustodyMembership.Floored, out _);
         Assert.IsNotNull(proof);
         Assert.AreEqual(2, proof!.DeliveredRowCount);
 
@@ -232,7 +232,7 @@ public sealed class VerifiedRepeatedEnumerationRowsTests
     {
         var fixture = new RepeatedEnumerationDeliveryProofTests.Fixture();
         var delivery = fixture.Create("a,b", "a,b");
-        var proof = AbsenceFamilyEnumerationProof.TryCreate("laws", delivery, out _);
+        var proof = AbsenceFamilyEnumerationProof.TryCreate("laws", delivery, CustodyMembership.Floored, out _);
         Assert.IsNotNull(proof);
 
         var tampered = Tamper(fixture, delivery, TwoDifferentRowsBody);
@@ -257,7 +257,7 @@ public sealed class VerifiedRepeatedEnumerationRowsTests
     {
         var fixture = new RepeatedEnumerationDeliveryProofTests.Fixture();
         var delivery = fixture.Create("a,b", "a,b");
-        var proof = AbsenceFamilyEnumerationProof.TryCreate("laws", delivery, out _);
+        var proof = AbsenceFamilyEnumerationProof.TryCreate("laws", delivery, CustodyMembership.Floored, out _);
         Assert.IsNotNull(proof);
 
         var tampered = Tamper(fixture, delivery, NonKeyTermSubstitutedBody);
@@ -283,7 +283,7 @@ public sealed class VerifiedRepeatedEnumerationRowsTests
     {
         var fixture = new RepeatedEnumerationDeliveryProofTests.Fixture();
         var delivery = fixture.Create("a,b", "a,b");
-        var proof = AbsenceFamilyEnumerationProof.TryCreate("laws", delivery, out _);
+        var proof = AbsenceFamilyEnumerationProof.TryCreate("laws", delivery, CustodyMembership.Floored, out _);
         Assert.IsNotNull(proof);
 
         var tampered = Tamper(fixture, delivery, CursorSubstitutedBody);
@@ -307,7 +307,7 @@ public sealed class VerifiedRepeatedEnumerationRowsTests
     {
         var fixture = new RepeatedEnumerationDeliveryProofTests.Fixture();
         var delivery = fixture.Create("a,b", "a,b");
-        var proof = AbsenceFamilyEnumerationProof.TryCreate("laws", delivery, out _);
+        var proof = AbsenceFamilyEnumerationProof.TryCreate("laws", delivery, CustodyMembership.Floored, out _);
         Assert.IsNotNull(proof);
         var pages = ResolvePages(fixture, delivery);
 
@@ -331,7 +331,7 @@ public sealed class VerifiedRepeatedEnumerationRowsTests
     {
         var fixture = new RepeatedEnumerationDeliveryProofTests.Fixture();
         var delivery = fixture.Create("a,b", "a,b");
-        var proof = AbsenceFamilyEnumerationProof.TryCreate("laws", delivery, out _);
+        var proof = AbsenceFamilyEnumerationProof.TryCreate("laws", delivery, CustodyMembership.Floored, out _);
         Assert.IsNotNull(proof);
         var pages = ResolvePages(fixture, delivery);
 
@@ -353,7 +353,7 @@ public sealed class VerifiedRepeatedEnumerationRowsTests
     {
         var fixture = new RepeatedEnumerationDeliveryProofTests.Fixture();
         var delivery = fixture.Create("a,b", "a,b");
-        var proof = AbsenceFamilyEnumerationProof.TryCreate("laws", delivery, out _);
+        var proof = AbsenceFamilyEnumerationProof.TryCreate("laws", delivery, CustodyMembership.Floored, out _);
         Assert.IsNotNull(proof);
         var pages = ResolvePages(fixture, delivery);
 
@@ -377,7 +377,7 @@ public sealed class VerifiedRepeatedEnumerationRowsTests
     {
         var fixture = new RepeatedEnumerationDeliveryProofTests.Fixture();
         var delivery = fixture.Create("a,b", "a,b");
-        var proof = AbsenceFamilyEnumerationProof.TryCreate("laws", delivery, out _);
+        var proof = AbsenceFamilyEnumerationProof.TryCreate("laws", delivery, CustodyMembership.Floored, out _);
         Assert.IsNotNull(proof);
 
         var tampered = Tamper(fixture, delivery, NonStringHeadVarsBody);
@@ -403,7 +403,7 @@ public sealed class VerifiedRepeatedEnumerationRowsTests
     {
         var fixture = new RepeatedEnumerationDeliveryProofTests.Fixture();
         var delivery = fixture.Create("a,b", "a,b");
-        var proof = AbsenceFamilyEnumerationProof.TryCreate("laws", delivery, out _);
+        var proof = AbsenceFamilyEnumerationProof.TryCreate("laws", delivery, CustodyMembership.Floored, out _);
         Assert.IsNotNull(proof);
 
         var tampered = Tamper(fixture, delivery, NonObjectBindingBody);
@@ -421,7 +421,7 @@ public sealed class VerifiedRepeatedEnumerationRowsTests
     {
         var fixture = new RepeatedEnumerationDeliveryProofTests.Fixture();
         var delivery = fixture.Create("a,b", "a,b");
-        var proof = AbsenceFamilyEnumerationProof.TryCreate("laws", delivery, out _);
+        var proof = AbsenceFamilyEnumerationProof.TryCreate("laws", delivery, CustodyMembership.Floored, out _);
         Assert.IsNotNull(proof);
         var pages = ResolvePages(fixture, delivery);
 
@@ -450,7 +450,7 @@ public sealed class VerifiedRepeatedEnumerationRowsTests
     {
         var fixture = new RepeatedEnumerationDeliveryProofTests.Fixture();
         var delivery = fixture.Create("a,b", "a,b");
-        var proof = AbsenceFamilyEnumerationProof.TryCreate("laws", delivery, out _);
+        var proof = AbsenceFamilyEnumerationProof.TryCreate("laws", delivery, CustodyMembership.Floored, out _);
         Assert.IsNotNull(proof);
 
         Assert.ThrowsExactly<ArgumentException>(() => VerifiedRepeatedEnumerationRows.TryOpen(
@@ -468,7 +468,7 @@ public sealed class VerifiedRepeatedEnumerationRowsTests
     {
         var fixture = new RepeatedEnumerationDeliveryProofTests.Fixture();
         var delivery = fixture.Create("a,b", "a,b");
-        var proof = AbsenceFamilyEnumerationProof.TryCreate("laws", delivery, out _);
+        var proof = AbsenceFamilyEnumerationProof.TryCreate("laws", delivery, CustodyMembership.Floored, out _);
         Assert.IsNotNull(proof);
         var pages = ResolvePages(fixture, delivery);
 

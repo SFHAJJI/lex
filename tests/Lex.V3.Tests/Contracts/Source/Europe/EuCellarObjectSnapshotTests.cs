@@ -586,6 +586,45 @@ public sealed class EuCellarObjectSnapshotTests
             "the exact set of external producers of EuLanguageExpressionObservation across Lex.V3.Contracts.");
     }
 
+    /// <summary>
+    /// The closed language-expression state vocabulary, pinned member by member.
+    /// </summary>
+    /// <remarks>
+    /// Added by D1-05d, which REMOVED a public member from this enum
+    /// (<c>ExpressionObservedBodyHeld</c>, see
+    /// <see cref="EuExpressionObservationState.ExpressionObservedBodyCandidate"/>'s own remarks for
+    /// why removed rather than reserved) and found that no gate noticed, because this vocabulary had
+    /// no construction-surface pin at all. Every marker below is transcribed from
+    /// ConstructionSurface.Of's own printed output, never hand-derived. The retired member's absence
+    /// is what this pin exists to hold: re-adding a member that claims a body is held would fail
+    /// here first.
+    /// </remarks>
+    [TestMethod]
+    public void TheExpressionObservationStateVocabularyHasExactlyThreeMembersAndClaimsNoHeldBody()
+    {
+        const string T = N + "EuExpressionObservationState";
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "base-constructor protected instance System.Enum::.ctor() -> System.Enum",
+                "base-constructor protected instance System.ValueType::.ctor() -> System.ValueType",
+                "field public static " + T + "::ExpressionObservedBodyCandidate -> " + T,
+                "field public static " + T + "::ExpressionObservedBodyNotHeld -> " + T,
+                "field public static " + T + "::NotObserved -> " + T,
+            },
+            ConstructionSurface.Of(typeof(EuExpressionObservationState)).ToArray());
+
+        // Said as a property rather than only as a transcribed list, so the intent survives a future
+        // re-transcription: no member of this decode-time vocabulary may assert that a body is held.
+        // That fact has exactly one home, CorpusBodyRecordKind, decided after acquisition.
+        foreach (var name in Enum.GetNames<EuExpressionObservationState>())
+        {
+            Assert.IsFalse(
+                name.EndsWith("BodyHeld", StringComparison.Ordinal),
+                $"{name} claims a held body on a decode-time observation taken before any fetch.");
+        }
+    }
+
     [TestMethod]
     public void EuFormatObservationHasExactlyOneConstructionPath()
     {
@@ -596,7 +635,9 @@ public sealed class EuCellarObjectSnapshotTests
                     + "EuFormatObservation) -> " + N + "EuFormatObservation",
                 "constructor public instance " + N + "EuFormatObservation::.ctor(" + N
                     + "EuManifestationFormat, " + N + "EuFormatBodyAdmission, System.String, "
-                    + "Lex.V3.Contracts.Source.Core.SourceArtifactRef) -> " + N + "EuFormatObservation",
+                    + "Lex.V3.Contracts.Source.Core.SourceArtifactRef, "
+                    + "System.Collections.Generic.IReadOnlyList<" + N + "EuManifestationFormat>?) -> "
+                    + N + "EuFormatObservation",
                 "method public instance " + N + "EuFormatObservation::<Clone>$() -> " + N
                     + "EuFormatObservation",
             },
@@ -610,8 +651,40 @@ public sealed class EuCellarObjectSnapshotTests
         CollectionAssert.AreEqual(
             new[]
             {
+                // D1-05d: family M's listing decode is now a real external producer -- it is the
+                // one door that mints a format observation from the office's own listing.
                 "field private instance " + N + "EuCellarObjectSnapshot::<Format>k__BackingField -> " + N
                     + "EuFormatObservation?",
+                // The shared ladder-admitted arm both public doors return, extracted so the
+                // ordinary listing and the listing with an unknown token beside it cannot ladder
+                // one Work differently. Private, and listed because this sweep is deliberately
+                // includeNonPublic: a new holder must appear as a visible diff whatever its
+                // accessibility.
+                "method private static " + N + "EuManifestationListingDecode::TryObserveLadder("
+                    + "System.Collections.Generic.IReadOnlySet<" + N + "EuManifestationFormat>, "
+                    + "System.String, Lex.V3.Contracts.Source.Core.SourceArtifactRef) -> " + N
+                    + "EuFormatObservation?",
+                "method public static " + N + "EuManifestationListingDecode::Observe("
+                    + "System.Collections.Generic.IReadOnlyCollection<" + N + "EuManifestationFormat>, "
+                    + "Lex.V3.Contracts.Source.Core.SourceArtifactRef) -> " + N + "EuFormatObservation",
+                // The unadmitted-type door: a second real producer, added when an unadmitted
+                // manifestation type stopped refusing the whole decode. It was ObserveUnreadableListing
+                // until OWNER RULING lex-event-20260904T205636383Z-e92b888b62c24df29fe3f8c1be5016f0
+                // stopped the token quarantining its Work at all, which left the old name claiming
+                // more than the method does: the listing is read, and only the token it did not know
+                // is set aside. Re-transcribed from ConstructionSurface.ProducersIn's own output.
+                "method public static " + N + "EuManifestationListingDecode::ObserveWithUnadmittedType("
+                    + "System.Collections.Generic.IReadOnlyCollection<" + N + "EuManifestationFormat>, "
+                    + "System.String, Lex.V3.Contracts.Source.Core.SourceArtifactRef) -> " + N
+                    + "EuFormatObservation",
+                "method public static " + N + "EuManifestationListingDecode::TryDecode("
+                    + "System.Collections.Generic.IReadOnlySet<System.String>, "
+                    + "System.Collections.Generic.IReadOnlyList<Lex.V3.Contracts.Source.Core.RepeatedEnumerationRow>, "
+                    + "Lex.V3.Contracts.Source.Core.RepeatedEnumerationInterpretationProfile, "
+                    + "Lex.V3.Contracts.Source.Core.SourceArtifactRef, out " + N
+                    + "EuManifestationListingRefusal&, out System.String&?, out System.String&?) -> "
+                    + "System.Collections.Generic.IReadOnlyDictionary<System.String, " + N
+                    + "EuFormatObservation>?",
                 "property public instance " + N + "EuCellarObjectSnapshot::Format() -> " + N
                     + "EuFormatObservation?",
             },
@@ -684,14 +757,16 @@ public sealed class EuCellarObjectSnapshotTests
                     + "System.Boolean, System.String, "
                     + "System.Collections.Generic.IReadOnlyList<" + N + "EuCellarObjectDecode+ObjectFactRow>, "
                     + "System.Collections.Generic.IReadOnlyList<" + N + "EuCellarObjectDecode+ExpressionFactRow>, "
+                    + N + "EuFormatObservation?, "
                     + C + "EuActForm, Lex.V3.Contracts.Source.Core.SourceArtifactRef, out " + N
                     + "EuCellarObjectDecodeRefusal&, out System.String&?, out " + N
                     + "EuCellarObjectSnapshotRefusal&) -> " + N + "EuCellarObjectSnapshot?",
                 "method public static " + N + "EuCellarObjectDecode::TryDecode(System.String, "
-                    + RowList + RowList + RowList + C + "EuActForm, "
+                    + RowList + RowList + RowList + RowList
+                    + "Lex.V3.Contracts.Source.Core.SourceArtifactRef, " + C + "EuActForm, "
                     + "Lex.V3.Contracts.Source.Core.SourceArtifactRef, out " + N
                     + "EuCellarObjectDecodeRefusal&, out System.String&?, out " + N
-                    + "EuCellarObjectSnapshotRefusal&) -> "
+                    + "EuCellarObjectSnapshotRefusal&, out " + N + "EuManifestationListingRefusal&) -> "
                     + "System.Collections.Generic.IReadOnlyList<" + N + "EuCellarObjectSnapshot>?",
             },
             ConstructionSurface.ProducersIn(assembly, typeof(EuCellarObjectSnapshot), includeNonPublic: true)

@@ -196,22 +196,59 @@ public sealed record EuRelationFamilyObservation
 /// Which of R1's language-expression facts this object's one language of interest carries.
 /// </summary>
 /// <remarks>
+/// <para>
 /// Folds R1's "publisher expression absent" state and <see cref="EuLanguageBodyState"/> into one
 /// three-way fact, because the queue's own addition names exactly this: "D1-05's snapshot carries
 /// ExpressionObserved" as the fix for treating a missing Expression the same as one whose body this
 /// scope does not hold. <see cref="NotObserved"/> is R1's <c>publisher_expression_absent</c>
 /// (nothing to report a body policy about at all); the other two are an observed Expression whose
-/// body either is, or is not, held.
+/// body this scope's reviewed policy either does, or does not, take.
+/// </para>
+/// <para>
+/// Every member of this enum is a DECODE-TIME fact, read from family X's rows before any body has
+/// been fetched. Whether a body was actually obtained is a different question with its own separate
+/// home: <see cref="Lex.V3.Contracts.Source.Corpus.CorpusBodyRecordKind"/>, decided after
+/// acquisition and written on the corpus record. That separation is why no member here says a body
+/// is held; see <see cref="ExpressionObservedBodyCandidate"/>.
+/// </para>
 /// </remarks>
 public enum EuExpressionObservationState
 {
     /// <summary>No Expression assertion was found for this language at all.</summary>
     NotObserved = 1,
 
-    /// <summary>An Expression was observed and this scope holds its body.</summary>
-    ExpressionObservedBodyHeld = 2,
+    /// <summary>
+    /// An Expression was observed, and this scope's reviewed policy takes a body in its language.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// NO BODY IS CLAIMED FETCHED. This is a statement about policy plus observation, made before
+    /// any acquisition happens: family X observed an Expression, and that Expression's language is
+    /// one of <see cref="EuLanguageBodyDisposition.BodyCandidateLanguages"/>, the closed pair the
+    /// reviewed scope ever fetches a body for. It is exactly the input the body axis needs in order
+    /// to decide whether to ATTEMPT a fetch at all. Whether that attempt then produced bytes is
+    /// <see cref="Lex.V3.Contracts.Source.Corpus.CorpusBodyRecordKind"/>'s answer, not this one's.
+    /// </para>
+    /// <para>
+    /// D1-05d replaced a member named <c>ExpressionObservedBodyHeld</c> here, whose own doc said
+    /// "this scope holds its body". That name was emitted for this candidate state, so the type
+    /// asserted a fetch that had not happened; RULING
+    /// lex-event-20260904T185339315Z-87d1510eccdc42a5947c41d2d8580744 required a distinctly named
+    /// member saying plainly that no body is claimed. The retired member was REMOVED rather than
+    /// reserved for a genuinely held body, because nothing in this codebase produced it and because
+    /// a held body already has one home on <see cref="Lex.V3.Contracts.Source.Corpus.CorpusRecord"/>;
+    /// a second one here would be a competing answer to a question that is already decided
+    /// elsewhere. Its ordinal 2 is reused deliberately: this enum is named by no schema, is
+    /// serialized by nothing, and no instance of it is persisted anywhere, so there is no stored
+    /// value a reused ordinal could reinterpret.
+    /// </para>
+    /// </remarks>
+    ExpressionObservedBodyCandidate = 2,
 
-    /// <summary>An Expression was observed and this scope does not hold its body.</summary>
+    /// <summary>
+    /// An Expression was observed and this scope's reviewed policy does not take a body in its
+    /// language. A reviewed exclusion, distinct from <see cref="NotObserved"/>'s open question.
+    /// </summary>
     ExpressionObservedBodyNotHeld = 3,
 }
 
@@ -296,12 +333,15 @@ public sealed record EuFormatObservation
         EuManifestationFormat format,
         EuFormatBodyAdmission admission,
         string reasonCode,
-        SourceArtifactRef evidenceRef)
+        SourceArtifactRef evidenceRef,
+        IReadOnlyList<EuManifestationFormat>? orderedCandidates = null)
     {
         Format = ContractValidation.RequireDefined(format, nameof(format));
         Admission = ContractValidation.RequireDefined(admission, nameof(admission));
         ReasonCode = ContractValidation.RequireIdentifier(reasonCode, nameof(reasonCode));
         EvidenceRef = evidenceRef ?? throw new ArgumentNullException(nameof(evidenceRef));
+        OrderedCandidates = EuManifestationListingDecode.RequireCandidateLadder(
+            orderedCandidates, Format, nameof(orderedCandidates));
     }
 
     public EuManifestationFormat Format { get; }
@@ -311,6 +351,18 @@ public sealed record EuFormatObservation
     public string ReasonCode { get; }
 
     public SourceArtifactRef EvidenceRef { get; }
+
+    /// <summary>
+    /// Every format this object's own publisher listing offers that this route can address, in the
+    /// closed ladder's order, starting with <see cref="Format"/>. Empty when this observation was
+    /// not minted from a listing.
+    /// </summary>
+    /// <remarks>
+    /// Carried because a listed format is not a servable one (see
+    /// <see cref="EuManifestationListingDecode"/>): the acquisition step attempts these in order
+    /// within one run, and <see cref="Format"/> alone is the FIRST attempt, not the only one.
+    /// </remarks>
+    public IReadOnlyList<EuManifestationFormat> OrderedCandidates { get; }
 }
 
 /// <summary>One object's observed content class, for the rights axis.</summary>

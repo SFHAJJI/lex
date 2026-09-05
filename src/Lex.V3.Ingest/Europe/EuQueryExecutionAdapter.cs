@@ -54,6 +54,20 @@ public sealed class EuFamilyEnumerationOutcome
     public AbsenceFamilyEnumerationProofRefusal? ProofRefusal { get; }
 
     /// <summary>
+    /// The custody class of the run behind a proven family, read off the proof this outcome carries.
+    /// Null when no proof was minted.
+    /// </summary>
+    /// <remarks>
+    /// RULING lex-event-20260904T215906714Z-6dadaf27829d4a3aa3c355063754ccd6: the session says WHICH of the
+    /// three each member is, so a caller reading this run's outcomes can see that a family proved
+    /// over artifacts held without an enforced floor. Derived from
+    /// <see cref="AbsenceFamilyEnumerationProof.RetainedFloor"/> rather than stored beside it, so the
+    /// two can never disagree. <see cref="AbsenceCut.TryCreateComplete"/> is what refuses such a
+    /// proof at release; this is what makes the class visible before then.
+    /// </remarks>
+    public CustodyMembership? RetainedFloor => Proof?.RetainedFloor;
+
+    /// <summary>
     /// The measured delivered row count against the publisher delivery ceiling
     /// (<see cref="EuConsolidationDiscoveryPlan.PublisherDeliveryCeilingRows"/>, 1,000,000, Decision
     /// 23), when this family proved. D1-05c-2 precision six: a real measured number, never estimated.
@@ -90,7 +104,7 @@ public enum EuQueryExecutionRefusal
     /// <summary>A requested census-family (D1-05a's own <c>Family</c> set) partition did not prove.</summary>
     CensusFamilyNotProven = 1,
 
-    /// <summary>A requested object-facts family (P, X or W) batch did not prove.</summary>
+    /// <summary>A requested object-facts family (P, X, W or M) batch did not prove.</summary>
     ObjectFactsFamilyNotProven = 2,
 
     /// <summary>
@@ -121,8 +135,21 @@ public enum EuQueryExecutionRefusal
     /// </summary>
     ObjectDecodeRefused = 6,
 
-    [JsonStringEnumMemberName("scope_manifest_not_held")]
-    ScopeManifestNotHeld = 7,
+    /// <summary>
+    /// This run's scope manifest could not be retained at all: the custody write failed, or the
+    /// digest-checked reopen handed back bytes that are not the ones the write receipt names.
+    /// </summary>
+    /// <remarks>
+    /// Was <c>ScopeManifestNotHeld</c>, and fired for exactly one condition: the store published no
+    /// retention enforcement. RULING lex-event-20260904T213727510Z-671a8c2563684ab49048677997ceef1c
+    /// removed that condition, since an unenforced manifest is recorded with the class it observed
+    /// and the run continues. Re-conditioned rather than removed, per RULING
+    /// lex-event-20260904T215906714Z-6dadaf27829d4a3aa3c355063754ccd6, because a genuine custody failure
+    /// really can happen here and used to escape <c>RunAsync</c> as an exception. A refusal is a
+    /// statement, never a crash.
+    /// </remarks>
+    [JsonStringEnumMemberName("scope_manifest_not_retained")]
+    ScopeManifestNotRetained = 7,
 
     /// <summary>
     /// The written and reopened manifest did not admit as the Union's own through
@@ -187,14 +214,20 @@ public enum EuQueryExecutionRefusal
     DocumentFetchSessionNotStarted = 16,
 
     /// <summary>
-    /// A document body was fetched successfully (a real, classified 200) but the store enforced no
-    /// retention floor when this run tried to hold its bytes -- the identical floor-check pattern
-    /// <see cref="ScopeManifestNotHeld"/> already applies to the scope manifest's own custody write,
-    /// applied here to one row's own document body. A successful fetch whose receipt's own classified
-    /// floor is below what this run requires is refused, never silently accepted as held.
+    /// A document body was fetched successfully (a real, classified 200) but could not be retained
+    /// at all: the custody write failed, or the digest-checked read of the fetched bytes handed back
+    /// something the routed evidence's own terminal hop digest does not name.
     /// </summary>
-    [JsonStringEnumMemberName("document_body_not_held")]
-    DocumentBodyNotHeld = 17,
+    /// <remarks>
+    /// Was <c>DocumentBodyNotHeld</c>, and fired for exactly one condition: the store published no
+    /// retention enforcement, which refused the WHOLE RUN over one row's body. RULING
+    /// lex-event-20260904T213727510Z-671a8c2563684ab49048677997ceef1c removed that condition, since
+    /// <c>CorpusBodyRecord.Held</c> derives and records the class it observed. Re-conditioned rather
+    /// than removed, per RULING lex-event-20260904T215906714Z-6dadaf27829d4a3aa3c355063754ccd6: a body this
+    /// run cannot retain at all is a real failure, and it used to escape as an exception.
+    /// </remarks>
+    [JsonStringEnumMemberName("document_body_not_retained")]
+    DocumentBodyNotRetained = 17,
 
     /// <summary>
     /// A document-fetch GET completed for real, but its classified outcome has no faithful member in
@@ -226,13 +259,14 @@ public enum EuQueryExecutionRefusal
     /// <summary>
     /// D1-06c-EU fix two (SCOPE_RULING lex-event-20260904T141600712Z-0b823f7143154a608f01ec8f757f9e93
     /// item 2): this run's own corpus/6 record set (<see cref="Lex.V3.Ingest.CorpusRecordSetWriter.WriteAsync"/>,
-    /// called as this run's own last step) was written but the store enforced no retention floor on
-    /// it -- the identical floor-check pattern <see cref="ScopeManifestNotHeld"/> and
-    /// <see cref="DocumentBodyNotHeld"/> already apply to this run's other two custody writes, applied
-    /// here to the record set itself.
+    /// called as this run's own last step) could not be retained at all. Carries
+    /// <see cref="Lex.V3.Ingest.CorpusRecordSetWriteRefusalKind.RecordSetNotRetained"/>'s own detail:
+    /// the write failed, or the reopen handed back bytes the digest does not name. Renamed with that
+    /// writer under RULING lex-event-20260904T213727510Z-671a8c2563684ab49048677997ceef1c, and no longer
+    /// fires because a store published no enforcement.
     /// </summary>
-    [JsonStringEnumMemberName("record_set_not_held")]
-    RecordSetNotHeld = 19,
+    [JsonStringEnumMemberName("record_set_not_retained")]
+    RecordSetNotRetained = 19,
 }
 
 public sealed class EuQueryExecutionRefusalDetail
@@ -279,6 +313,31 @@ public enum EuQueryExecutionCompletion
 /// </summary>
 public sealed record EuObjectReductionExclusion(SourceObjectRef ObjectRef, EuRelationFamily Family, string Reason);
 
+/// <summary>
+/// D1-05d: what one accepted manifest row's own fetch ladder actually did. Which listed
+/// representations this run asked the office for, in the order it asked, and which one it served.
+/// </summary>
+/// <remarks>
+/// <para>
+/// The manifest row itself carries exactly ONE fetch address, the first candidate, and no schema
+/// bump adds a second (RULING lex-event-20260904T174138711Z-cdf5cbd17806423cbe05a6234cc4f262). That
+/// address is this run's FIRST ATTEMPT, not necessarily the representation it holds: when the
+/// office lists a type and then answers "does not hold a content datastream of the requested type",
+/// the run falls through to the next listed candidate. So the row's address alone cannot name the
+/// format actually held, and this value is where the run says it.
+/// </para>
+/// <para>
+/// <see cref="Served"/> is null when every attempt failed. <see cref="Attempted"/> is then the
+/// tried-types list the RULING requires alongside
+/// <see cref="CorpusAcquisitionRefusalReason.RequestedRepresentationNotServed"/>. Each attempt's own
+/// routed evidence is separately retained by the executor under Decision 78; this value names them
+/// rather than replacing them.
+/// </para>
+/// </remarks>
+public sealed record EuDocumentLadderResult(
+    IReadOnlyList<EuManifestationMediaType> Attempted,
+    EuManifestationMediaType? Served);
+
 /// <summary>Delivered or refused, never both and never neither.</summary>
 public sealed class EuQueryExecutionResult
 {
@@ -295,6 +354,7 @@ public sealed class EuQueryExecutionResult
         DurableBlobWriteReceipt? scopeManifestReceipt,
         string? scopeManifestCanonicalSha256,
         IReadOnlyDictionary<int, CorpusAcquisitionOutcome>? documentAcquisitionOutcomesByOrdinal,
+        IReadOnlyDictionary<int, EuDocumentLadderResult>? documentLadderResultsByOrdinal,
         SourceArtifactRef? corpusRecordSetRef,
         VerifiedCorpusRecordSet? corpusRecordSet,
         EuQueryExecutionCompletion? completion,
@@ -315,6 +375,7 @@ public sealed class EuQueryExecutionResult
         ScopeManifestReceipt = scopeManifestReceipt;
         ScopeManifestCanonicalSha256 = scopeManifestCanonicalSha256;
         DocumentAcquisitionOutcomesByOrdinal = documentAcquisitionOutcomesByOrdinal;
+        DocumentLadderResultsByOrdinal = documentLadderResultsByOrdinal;
         CorpusRecordSetRef = corpusRecordSetRef;
         CorpusRecordSet = corpusRecordSet;
         Completion = completion;
@@ -337,6 +398,7 @@ public sealed class EuQueryExecutionResult
         DurableBlobWriteReceipt scopeManifestReceipt,
         string scopeManifestCanonicalSha256,
         IReadOnlyDictionary<int, CorpusAcquisitionOutcome> documentAcquisitionOutcomesByOrdinal,
+        IReadOnlyDictionary<int, EuDocumentLadderResult> documentLadderResultsByOrdinal,
         SourceArtifactRef corpusRecordSetRef,
         VerifiedCorpusRecordSet corpusRecordSet)
     {
@@ -348,6 +410,7 @@ public sealed class EuQueryExecutionResult
         ArgumentNullException.ThrowIfNull(scopeManifestReceipt);
         ArgumentException.ThrowIfNullOrWhiteSpace(scopeManifestCanonicalSha256);
         ArgumentNullException.ThrowIfNull(documentAcquisitionOutcomesByOrdinal);
+        ArgumentNullException.ThrowIfNull(documentLadderResultsByOrdinal);
         ArgumentNullException.ThrowIfNull(corpusRecordSetRef);
         ArgumentNullException.ThrowIfNull(corpusRecordSet);
         var completion = familyOutcomes.All(static outcome => outcome.Kind == EuFamilyEnumerationOutcomeKind.Proven)
@@ -356,8 +419,8 @@ public sealed class EuQueryExecutionResult
         return new(
             topology, familyOutcomes, observedObjectCount, observedExpressionCount, reductionExclusions,
             watermarkWitnessPlan, rootBinding, witnessReconciliation, witnessTerminations, scopeManifestReceipt,
-            scopeManifestCanonicalSha256, documentAcquisitionOutcomesByOrdinal, corpusRecordSetRef, corpusRecordSet,
-            completion, null, null, null, null);
+            scopeManifestCanonicalSha256, documentAcquisitionOutcomesByOrdinal, documentLadderResultsByOrdinal,
+            corpusRecordSetRef, corpusRecordSet, completion, null, null, null, null);
     }
 
     public static EuQueryExecutionResult Refused(
@@ -371,8 +434,8 @@ public sealed class EuQueryExecutionResult
         ArgumentNullException.ThrowIfNull(topology);
         ArgumentNullException.ThrowIfNull(refusal);
         return new(
-            topology, familyOutcomes, 0, 0, [], null, null, null, null, null, null, null, null, null, null, refusal,
-            decodeRefusal, decodeOffendingIri, decodeSnapshotRefusal);
+            topology, familyOutcomes, 0, 0, [], null, null, null, null, null, null, null, null, null, null, null,
+            refusal, decodeRefusal, decodeOffendingIri, decodeSnapshotRefusal);
     }
 
     /// <summary>Always present: minting it cannot fail, and it is useful context on a refusal too.</summary>
@@ -444,7 +507,7 @@ public sealed class EuQueryExecutionResult
     /// door's own closed vocabulary can name. Present iff this result is delivered; a row present in
     /// the reopened manifest but absent from this dictionary was never Minted at all -- every Minted
     /// row's own outcome either lands here or refuses the whole run (see
-    /// <see cref="EuQueryExecutionRefusal.DocumentBodyNotHeld"/> and
+    /// <see cref="EuQueryExecutionRefusal.DocumentBodyNotRetained"/> and
     /// <see cref="EuQueryExecutionRefusal.DocumentFetchOutcomeNotRepresentable"/>'s own remarks for
     /// exactly which outcomes cannot be represented and so refuse the run instead of appearing here).
     /// D1-06c-EU fix two: this is exactly the <c>acquisitionOutcomesByOrdinal</c> this run itself
@@ -453,6 +516,21 @@ public sealed class EuQueryExecutionResult
     /// its own, not because a caller still needs to relay it anywhere.
     /// </summary>
     public IReadOnlyDictionary<int, CorpusAcquisitionOutcome>? DocumentAcquisitionOutcomesByOrdinal { get; }
+
+    /// <summary>
+    /// D1-05d: one <see cref="EuDocumentLadderResult"/> per row this run actually attempted a fetch
+    /// for, naming which listed representations it asked for and which one the office served.
+    /// Present iff this result is delivered, and keyed identically to
+    /// <see cref="DocumentAcquisitionOutcomesByOrdinal"/>.
+    /// </summary>
+    /// <remarks>
+    /// This is where a run says which format it HOLDS. The manifest row's own single fetch address
+    /// is the first attempt and no more: a listed manifestation type is not necessarily a servable
+    /// one, and when the first candidate answers the datastream-absent 404 the run falls through to
+    /// the next listed candidate, so reading the row's address back as the held format would
+    /// misreport every fall-through object.
+    /// </remarks>
+    public IReadOnlyDictionary<int, EuDocumentLadderResult>? DocumentLadderResultsByOrdinal { get; }
 
     /// <summary>
     /// D1-06c-EU fix two: this run's own written corpus/6 record set artifact reference. Present iff
@@ -480,7 +558,7 @@ public sealed class EuQueryExecutionResult
 /// <summary>
 /// D1-05c-2: the EU query-execution adapter. Mints the Union <see cref="SourceProfileTopology"/>,
 /// runs and proves every family (D1-05a's own census family <c>S</c>, reused unchanged, plus D1-05c-1's
-/// three object-facts families P, X, W), binds the observed object set to the closure proof by
+/// four object-facts families P, X, W and M), binds the observed object set to the closure proof by
 /// identity, decodes through <see cref="EuCellarObjectDecode"/>, reduces through
 /// <see cref="EuScopeSnapshotReduction"/> and <see cref="EuScopeProfile.BuildScopeInput"/> into
 /// <see cref="ScopeReducer.Reduce"/>, writes and holds the manifest, freezes the first-cut watermark
@@ -511,9 +589,11 @@ public sealed class EuQueryExecutionResult
 /// called it, so no corpus/6 record set was ever durably written by a real run. This run mints its
 /// own <c>RunIdentity</c> paired with real evidence (the manifest's own custody-write digest) and
 /// reuses the identical custody floor (<see cref="CustodyClass.NightlyFloor90d"/>) its own manifest
-/// and document-body writes already require; a floor failure on the record set itself refuses the
-/// whole run (<see cref="EuQueryExecutionRefusal.RecordSetNotHeld"/>), exactly as a floor failure on
-/// the manifest or a document body already does.
+/// and document-body writes already require. A record set the store cannot RETAIN at all refuses the
+/// whole run (<see cref="EuQueryExecutionRefusal.RecordSetNotRetained"/>), exactly as an unretainable
+/// manifest or document body does. An unenforced FLOOR is not that failure and no longer refuses
+/// anything here: the class is recorded and the run continues, per RULING
+/// lex-event-20260904T213727510Z-671a8c2563684ab49048677997ceef1c.
 /// </para>
 /// </remarks>
 public sealed class EuQueryExecutionAdapter
@@ -536,7 +616,7 @@ public sealed class EuQueryExecutionAdapter
     /// decodes and reduces the closure, and writes the resulting scope manifest as held evidence.
     /// </summary>
     /// <param name="censusFamilies">One D1-05a census-family partition (one admitted seed CELEX) and its bound source witness, per seed this run enumerates.</param>
-    /// <param name="objectFactsFamilies">One D1-05c-1 object-facts family batch (P, X or W) and its bound source witness, per batch this run enumerates. Every seed named in <paramref name="censusFamilies"/> must be covered by at least one P batch, one X batch and one W batch (W covering the roots only) for this run to decode anything.</param>
+    /// <param name="objectFactsFamilies">One object-facts family batch (P, X, W or M) and its bound source witness, per batch this run enumerates. Every seed named in <paramref name="censusFamilies"/> must be covered by at least one P batch, one X batch, one W batch (W covering the roots only) and one M batch for this run to decode anything; the run refuses otherwise.</param>
     /// <param name="witnessRendererSource">
     /// The renderer-source artifact naming <c>EuWatermarkWitnessSparqlRenderer</c>'s own code
     /// (SCOPE_RULING lex-event-20260904T092316893Z-6d969a2ba7934aa995907a55914bf3b6), held with its
@@ -607,12 +687,12 @@ public sealed class EuQueryExecutionAdapter
             }
         }
 
-        // ---- Run and prove every object-facts batch (P, X, W). ----
+        // ---- Run and prove every object-facts batch (P, X, W, M). ----
         // Keyed by (Set, familyKey) rather than familyKey alone: EuObjectFactsDiscoveryPlan.PartitionKeyFor
-        // is a pure function of the batch's own object set, never of which query set (P, X or W) asked
-        // it, so two families sharing one batch of objects (the common case: P, X and W all cover the
-        // same discovered closure) mint the IDENTICAL partition key. A dictionary keyed on that key
-        // alone would silently collapse three proven families into one.
+        // is a pure function of the batch's own object set, never of which query set (P, X, W or M)
+        // asked it, so two families sharing one batch of objects (the common case: P, X, W and M all
+        // cover the same discovered closure) mint the IDENTICAL partition key. A dictionary keyed on
+        // that key alone would silently collapse four proven families into one.
         var objectFactsByKey = new Dictionary<
             (EuObjectFactsQuerySet Set, string FamilyKey),
             (AbsenceFamilyEnumerationProof Proof, RepeatedEnumerationDeliveryReceipt Receipt)>();
@@ -697,13 +777,14 @@ public sealed class EuQueryExecutionAdapter
 
         if (!objectFactsRows.TryGetValue(EuObjectFactsQuerySet.ObjectFacts, out var pFamilies) || pFamilies.Count == 0 ||
             !objectFactsRows.TryGetValue(EuObjectFactsQuerySet.ExpressionFacts, out var xFamilies) || xFamilies.Count == 0 ||
-            !objectFactsRows.TryGetValue(EuObjectFactsQuerySet.RootWatermark, out var wFamilies) || wFamilies.Count == 0)
+            !objectFactsRows.TryGetValue(EuObjectFactsQuerySet.RootWatermark, out var wFamilies) || wFamilies.Count == 0 ||
+            !objectFactsRows.TryGetValue(EuObjectFactsQuerySet.ManifestationFacts, out var mFamilies) || mFamilies.Count == 0)
         {
             return EuQueryExecutionResult.Refused(
                 topology, outcomes,
                 new EuQueryExecutionRefusalDetail(
                     EuQueryExecutionRefusal.ObjectFactsFamilyNotProven,
-                    "this run must enumerate at least one proven batch of each of family P, X and W."));
+                    "this run must enumerate at least one proven batch of each of family P, X, W and M."));
         }
 
         var pProfile = pFamilies[0].Profile;
@@ -712,11 +793,20 @@ public sealed class EuQueryExecutionAdapter
         var allXRows = xFamilies.SelectMany(static entry => entry.Rows).ToArray();
         var allWRows = wFamilies.SelectMany(static entry => entry.Rows).ToArray();
         var wProfile = wFamilies[0].Profile;
+        var allMRows = mFamilies.SelectMany(static entry => entry.Rows).ToArray();
+        var mProfile = mFamilies[0].Profile;
 
         // D1-05c-2 precision two: the evidence every observation in every decoded snapshot rests on
         // is family P's own interpretation-profile identity -- a real artifact this run actually
         // acquired, never a fabricated stand-in.
         var evidenceRef = pFamilies[0].Proof.InterpretationProfileRef;
+
+        // D1-05d, REVIEW_RESULT lex-event-20260904T192428840Z-a6a8ebd26c58436aafd109a55303c12e
+        // defect one: family M's format observations rest on family M's OWN proof, not P's. Before
+        // this fix every format disposition was stamped with the ref above while this one went
+        // unused, so a disposition named a listing it had not been read from and
+        // EuManifestationListingDecode's own parameter doc was contradicted by its only real caller.
+        var manifestationEvidenceRef = mFamilies[0].Proof.InterpretationProfileRef;
 
         // ---- Per seed: derive the closure from the census family's own rows, filter P/X to it, decode. ----
         var allSnapshots = new List<EuCellarObjectSnapshot>();
@@ -747,6 +837,9 @@ public sealed class EuQueryExecutionAdapter
 
             var seedPRows = FilterByClosureColumn(allPRows, pProfile, "object", closure, allRequestedSeedsClosure);
             var seedXRows = FilterByClosureColumn(allXRows, xProfile, "parent", closure, allRequestedSeedsClosure);
+            // Family M is narrowed by its own ?parent column for the identical reason family X is:
+            // EuCellarObjectDecode.TryDecode refuses any row outside the ONE closure it is handed.
+            var seedMRows = FilterByClosureColumn(allMRows, mProfile, "parent", closure, allRequestedSeedsClosure);
 
             if (!TryResolveRecordForm(seedPRows, pProfile, rootIri, out var recordForm))
             {
@@ -766,18 +859,25 @@ public sealed class EuQueryExecutionAdapter
                 pProfile,
                 seedXRows,
                 xProfile,
+                seedMRows,
+                mProfile,
+                manifestationEvidenceRef,
                 recordForm,
                 evidenceRef,
                 out var decodeRefusal,
                 out var offendingIri,
-                out var snapshotRefusal);
+                out var snapshotRefusal,
+                out var listingRefusal);
             if (snapshots is null)
             {
                 return EuQueryExecutionResult.Refused(
                     topology, outcomes,
                     new EuQueryExecutionRefusalDetail(
                         EuQueryExecutionRefusal.ObjectDecodeRefused,
-                        $"seed '{requestedCelex}' decode refused: {decodeRefusal}."),
+                        $"seed '{requestedCelex}' decode refused: {decodeRefusal}" +
+                        (listingRefusal == EuManifestationListingRefusal.None
+                            ? "."
+                            : $" (manifestation listing: {listingRefusal}).")),
                     decodeRefusal,
                     offendingIri,
                     snapshotRefusal);
@@ -800,8 +900,33 @@ public sealed class EuQueryExecutionAdapter
 
         // ---- Reduce every non-excluded snapshot. Precision four: the reduction never throws. ----
         var scopeProfile = EuScopeProfile.BuildBinding();
-        var orderedEvidenceArtifacts = new[] { evidenceRef };
-        var evidenceOrdinals = new Dictionary<SourceArtifactRef, int> { [evidenceRef] = 0 };
+        // Family M's own proof joins the manifest's ordered evidence artifacts, because the format
+        // selector cites it and ScopeReducer resolves every selector's evidence through this list.
+        // Guarded against the two refs coinciding rather than assumed distinct: they are distinct
+        // for every real run (P and M are different query sets with different interpretation
+        // profiles), but a duplicate key here would refuse the whole run, which is a far worse
+        // failure than sharing one ordinal.
+        // ScopeManifest requires this list canonically sorted and unique (ScopeValidation's own
+        // CompareArtifact: resource id, then digest), so the two refs are sorted here and their
+        // ordinals read off the sorted order rather than assumed to be declaration order.
+        // Only artifacts something actually cites may appear: ScopeReducer requires the table to
+        // contain EXACTLY the referenced set, so family M's proof joins it if and only if at least
+        // one snapshot carries a format observation to cite it. A run where the office listed
+        // nothing for every object cites P's proof alone, and that is correct rather than a gap.
+        var anyFormatObserved = allSnapshots.Exists(static snapshot => snapshot.Format is not null);
+        var distinctEvidence = new List<SourceArtifactRef> { evidenceRef };
+        if (anyFormatObserved && CompareEvidenceArtifact(evidenceRef, manifestationEvidenceRef) != 0)
+        {
+            distinctEvidence.Add(manifestationEvidenceRef);
+        }
+
+        distinctEvidence.Sort(CompareEvidenceArtifact);
+        var orderedEvidenceArtifacts = distinctEvidence.ToArray();
+        var evidenceOrdinals = new Dictionary<SourceArtifactRef, int>();
+        for (var index = 0; index < orderedEvidenceArtifacts.Length; index++)
+        {
+            evidenceOrdinals[orderedEvidenceArtifacts[index]] = index;
+        }
         var observedObjects = new List<SourceObjectRef>();
         var reductionInputs = new List<ScopeObjectReductionInput>();
         var exclusions = new List<EuObjectReductionExclusion>();
@@ -810,7 +935,10 @@ public sealed class EuQueryExecutionAdapter
         // strings, not this route's own closed enums; see that type's own remarks), captured here so
         // the acquisition step below can actually send the GET for a Minted row without re-deriving
         // it from the publisher-neutral projection's own string fields.
-        var mintedAddressesByObjectRef = new Dictionary<SourceObjectRef, EuDocumentFetchAddress>();
+        // D1-05d: one ORDERED ladder per object, not one address. Its first entry is the address the
+        // manifest row carries; the rest are the fall-through attempts.
+        var mintedAddressesByObjectRef =
+            new Dictionary<SourceObjectRef, IReadOnlyList<EuDocumentFetchAddress>>();
 
         foreach (var snapshot in allSnapshots)
         {
@@ -823,14 +951,15 @@ public sealed class EuQueryExecutionAdapter
             try
             {
                 var dispositions = EuScopeSnapshotReduction.Reduce(snapshot);
-                var (fetchAddress, mintedAddress) = MintFetchAddress(dispositions.ObjectRef);
+                var (fetchAddress, mintedLadder) = MintFetchAddress(
+                    dispositions.ObjectRef, dispositions.FormatDisposition);
                 var input = EuScopeProfile.BuildScopeInput(
                     scopeProfile, dispositions, evidenceOrdinals, fetchAddress);
                 observedObjects.Add(snapshot.ObjectRef);
                 reductionInputs.Add(input);
-                if (mintedAddress is not null)
+                if (mintedLadder.Count > 0)
                 {
-                    mintedAddressesByObjectRef[dispositions.ObjectRef] = mintedAddress;
+                    mintedAddressesByObjectRef[dispositions.ObjectRef] = mintedLadder;
                 }
             }
             catch (Exception exception) when (exception is ArgumentException or InvalidOperationException
@@ -877,17 +1006,34 @@ public sealed class EuQueryExecutionAdapter
         var manifestCanonicalSha256 = ScopeManifestCanonicalWriter.Write(manifestStream, manifest);
         var manifestBytes = manifestStream.ToArray();
 
-        var writeReceipt = await _custodyStore.CreateAsync(manifestBytes, CustodyClass.NightlyFloor90d, cancellationToken)
+        // RULING lex-event-20260904T213727510Z-671a8c2563684ab49048677997ceef1c: the manifest's observed
+        // membership is recorded and this run continues. It used to refuse whenever the store
+        // published no enforcement, throwing away a manifest that had been written correctly. The
+        // membership is not asserted anywhere: this receipt travels out on
+        // EuQueryExecutionResult.ScopeManifestReceipt, and CustodyMembershipClassifier.Classify is
+        // the one rule that reads a class off it, exactly as CorpusBodyRecord.Held derives rather
+        // than accepts one.
+        //
+        // What still refuses is a GENUINE custody failure, and CustodyHold is the one place that
+        // decides it: it proves the hold by reopening the receipt's own digest through the checked
+        // reader rather than trusting the write, and returns no receipt at all when it cannot, so
+        // "stored under a weaker guarantee" and "failed to store" stay different facts. RULING
+        // lex-event-20260904T222140534Z-4141e26bfe9d4ce18649118d06c4dbd7 routes both publishers through
+        // that single definition rather than each lane writing its own.
+        var (writeReceipt, holdFailure) = await CustodyHold
+            .TryHoldAsync(_custodyStore, manifestBytes, cancellationToken)
             .ConfigureAwait(false);
-        if (CustodyMembershipClassifier.Classify(writeReceipt) != CustodyMembership.Floored)
+        if (writeReceipt is null)
         {
             return EuQueryExecutionResult.Refused(
                 topology, outcomes,
                 new EuQueryExecutionRefusalDetail(
-                    EuQueryExecutionRefusal.ScopeManifestNotHeld,
-                    "The scope manifest was written but the store enforced no retention floor on it."));
+                    EuQueryExecutionRefusal.ScopeManifestNotRetained, holdFailure));
         }
 
+        // Read for the BYTES, which the hold above deliberately discards. Not a second proof: the
+        // hold already established the store reproduces exactly these bytes at this digest, and the
+        // manifest binding below needs the reopened bytes themselves rather than that fact.
         var reopened = await CustodyRestore.ReadByDigestCheckedAsync(
                 _custodyStore, writeReceipt.Reference.ContentSha256, cancellationToken)
             .ConfigureAwait(false);
@@ -917,7 +1063,8 @@ public sealed class EuQueryExecutionAdapter
         // ordinal. Extracted into RunDocumentAcquisitionAsync -- see that method's own remarks for
         // exactly what lands here versus what refuses the whole run instead, and for why the gate
         // moved there. ----
-        var (documentAcquisitionOutcomesByOrdinal, acquisitionRefusal) = await RunDocumentAcquisitionAsync(
+        var (documentAcquisitionOutcomesByOrdinal, documentLadderResultsByOrdinal, acquisitionRefusal) =
+            await RunDocumentAcquisitionAsync(
                 reopenedManifest, mintedAddressesByObjectRef, documentFetchRendererSource,
                 documentFetchSourceWitness, cancellationToken)
             .ConfigureAwait(false);
@@ -1069,7 +1216,7 @@ public sealed class EuQueryExecutionAdapter
             return EuQueryExecutionResult.Refused(
                 topology, outcomes,
                 new EuQueryExecutionRefusalDetail(
-                    EuQueryExecutionRefusal.RecordSetNotHeld, recordSetResult.Refusal.Detail));
+                    EuQueryExecutionRefusal.RecordSetNotRetained, recordSetResult.Refusal.Detail));
         }
 
         return EuQueryExecutionResult.Delivered(
@@ -1085,6 +1232,7 @@ public sealed class EuQueryExecutionAdapter
             scopeManifestReceipt: writeReceipt,
             scopeManifestCanonicalSha256: manifestCanonicalSha256,
             documentAcquisitionOutcomesByOrdinal: documentAcquisitionOutcomesByOrdinal!,
+            documentLadderResultsByOrdinal: documentLadderResultsByOrdinal!,
             corpusRecordSetRef: recordSetResult.SetRef!,
             corpusRecordSet: recordSetResult.VerifiedSet!);
     }
@@ -1103,25 +1251,41 @@ public sealed class EuQueryExecutionAdapter
     /// test can drive this phase directly against a hand-built manifest.
     /// </summary>
     /// <remarks>
-    /// Nothing in this codebase yet derives a real <see cref="EuFormatDisposition"/> for a decoded
-    /// snapshot (<see cref="EuCellarObjectDecode"/> never references <c>Format</c> at all), so
-    /// <see cref="EuScopeSnapshotReduction.Reduce"/>'s own body-axis join can never reach
-    /// <see cref="ScopeDisposition.AcceptedSelected"/> through this codebase's real decode seam until
-    /// D1-05d lands: every real EU run today gates every Minted row shut here and records NotHeld for
-    /// every object. That gap is D1-05d's own scope, not this method's; this method's own job is only
-    /// that when a row's body axis genuinely is accepted, it is fetched, and when it is not, it is
-    /// not.
+    /// <para>
+    /// Before D1-05d nothing in this codebase derived a real <see cref="EuFormatDisposition"/> for a
+    /// decoded snapshot, so <see cref="EuScopeSnapshotReduction.Reduce"/>'s own body-axis join could
+    /// never reach <see cref="ScopeDisposition.AcceptedSelected"/> through this codebase's real
+    /// decode seam, and every real EU run gated every Minted row shut here and recorded NotHeld for
+    /// every object. D1-05d closes that: family M's listing now mints a real disposition, so this
+    /// gate lets a real object through for the first time.
+    /// </para>
+    /// <para>
+    /// D1-05d's own fall-through (RULING
+    /// lex-event-20260904T174138711Z-cdf5cbd17806423cbe05a6234cc4f262). A listed manifestation type
+    /// is not a servable one, so each accepted row carries an ORDERED ladder of addresses rather
+    /// than one address. This loop attempts them in order within this run; every attempt goes
+    /// through the same routed session and is retained exactly as a single attempt already was
+    /// (Decision 78). A 404 of the datastream shape -- the classified
+    /// <see cref="EuDocumentFetchRefusal.RequestedRepresentationNotServed"/>, which is decisively
+    /// not a bad token, since an invalid Accept answers 400 -- falls through to the next listed
+    /// candidate. Anything else, including a 400, stops that object's ladder at once and is recorded
+    /// as its own cause: falling through a bad token would hide a request defect behind a publisher
+    /// fact. When every candidate answers that 404, the object records PendingAcquisition with
+    /// <see cref="CorpusAcquisitionRefusalReason.RequestedRepresentationNotServed"/>, and the tried
+    /// types are named through this method's own returned ladder results.
     /// </remarks>
     /// <returns>
-    /// The real per-ordinal outcomes this run's fetches produced, or a whole-run refusal for a route-
-    /// level or classified shape this door's own closed <see cref="CorpusAcquisitionRefusalReason"/>
-    /// vocabulary cannot represent. Never both, never neither.
+    /// The real per-ordinal outcomes this run's fetches produced together with each accepted row's
+    /// own attempted-and-served formats, or a whole-run refusal for a route-level or classified
+    /// shape this door's own closed <see cref="CorpusAcquisitionRefusalReason"/> vocabulary cannot
+    /// represent. Never both, never neither.
     /// </returns>
     internal async Task<(
         IReadOnlyDictionary<int, CorpusAcquisitionOutcome>? Outcomes,
+        IReadOnlyDictionary<int, EuDocumentLadderResult>? LadderResults,
         EuQueryExecutionRefusalDetail? Refusal)> RunDocumentAcquisitionAsync(
         ScopeManifest reopenedManifest,
-        IReadOnlyDictionary<SourceObjectRef, EuDocumentFetchAddress> mintedAddressesByObjectRef,
+        IReadOnlyDictionary<SourceObjectRef, IReadOnlyList<EuDocumentFetchAddress>> mintedAddressesByObjectRef,
         MachineQueryRendererSource documentFetchRendererSource,
         BoundMachineRequest documentFetchSourceWitness,
         CancellationToken cancellationToken)
@@ -1148,6 +1312,7 @@ public sealed class EuQueryExecutionAdapter
         }
 
         var documentAcquisitionOutcomesByOrdinal = new Dictionary<int, CorpusAcquisitionOutcome>();
+        var ladderResultsByOrdinal = new Dictionary<int, EuDocumentLadderResult>();
         for (var rowOrdinal = 0; rowOrdinal < reopenedManifest.Rows.Count; rowOrdinal++)
         {
             var row = reopenedManifest.Rows[rowOrdinal];
@@ -1157,110 +1322,159 @@ public sealed class EuQueryExecutionAdapter
             }
 
             // Defect nine's own gate: no fetch attempt at all for a Minted row this manifest's own
-            // body axis already excludes. See this method's own remarks for why every real EU row
-            // takes this branch today.
+            // body axis already excludes.
             if (!bodyAcceptedOrdinals.Contains(rowOrdinal))
             {
                 continue;
             }
 
             var mintedObjectRef = reopenedManifest.ObservedObjects[rowOrdinal].ObjectRef;
-            if (!mintedAddressesByObjectRef.TryGetValue(mintedObjectRef, out var mintedAddress))
+            if (!mintedAddressesByObjectRef.TryGetValue(mintedObjectRef, out var ladder) || ladder.Count == 0)
             {
                 // Unreachable in practice: every Minted row's own object came from this exact run's
                 // own per-snapshot loop, the only path that ever mints one. Refusing the whole run
                 // here, rather than throwing, keeps this method's own "never throws past a typed
                 // refusal" discipline even for a defect this loop cannot itself introduce.
-                return (null, new EuQueryExecutionRefusalDetail(
+                return (null, null, new EuQueryExecutionRefusalDetail(
                     EuQueryExecutionRefusal.DocumentFetchOutcomeNotRepresentable,
                     $"manifest row {rowOrdinal} ('{mintedObjectRef.CanonicalKey}') carries a " +
                     "Minted fetch address this run never itself minted."));
             }
 
-            var plan = new EuDocumentFetchPlan(mintedAddress);
-            var bound = plan.Bind(
-                $"urn:uuid:{Guid.NewGuid():D}",
-                $"urn:uuid:{Guid.NewGuid():D}",
-                documentFetchRendererSource);
-            var attempt = await _executor.RunDocumentFetchAsync(
-                    bound.Request, documentFetchSourceWitness, cancellationToken)
-                .ConfigureAwait(false);
-            if (attempt.Evidence is null)
+            var attemptedMediaTypes = new List<EuManifestationMediaType>(ladder.Count);
+            CorpusAcquisitionOutcome? rowOutcome = null;
+            EuManifestationMediaType? servedMediaType = null;
+
+            foreach (var candidateAddress in ladder)
             {
-                if (attempt.Refusal == EuDocumentFetchAttemptRefusal.RobotsBootstrapRefused)
+                attemptedMediaTypes.Add(candidateAddress.MediaType);
+                var plan = new EuDocumentFetchPlan(candidateAddress);
+                var bound = plan.Bind(
+                    $"urn:uuid:{Guid.NewGuid():D}",
+                    $"urn:uuid:{Guid.NewGuid():D}",
+                    documentFetchRendererSource);
+                var attempt = await _executor.RunDocumentFetchAsync(
+                        bound.Request, documentFetchSourceWitness, cancellationToken)
+                    .ConfigureAwait(false);
+                if (attempt.Evidence is null)
                 {
-                    // Fold-in three (same REVIEW_RESULT as this method's own summary): a robots-
-                    // bootstrap refusal is this one object's own PendingAcquisition cause, not a
-                    // whole-run refusal -- the identical "a 1995-act-shaped 404 must never block a
-                    // 2026 act's own record" precision fix one already applies to a classified
-                    // business refusal.
-                    documentAcquisitionOutcomesByOrdinal[rowOrdinal] = CorpusAcquisitionOutcome.Refused(
-                        CorpusAcquisitionRefusalReason.RobotsDisallowed);
+                    if (attempt.Refusal == EuDocumentFetchAttemptRefusal.RobotsBootstrapRefused)
+                    {
+                        // Fold-in three (same REVIEW_RESULT as this method's own summary): a robots-
+                        // bootstrap refusal is this one object's own PendingAcquisition cause, not a
+                        // whole-run refusal. It ends this object's ladder rather than falling
+                        // through: robots is a fact about the route, not about this format, so the
+                        // next candidate on the same host would be refused identically.
+                        rowOutcome = CorpusAcquisitionOutcome.Refused(
+                            CorpusAcquisitionRefusalReason.RobotsDisallowed);
+                        break;
+                    }
+
+                    // Every other attempt-level refusal (today, only ObservationNotExecuted) stays a
+                    // whole-run refusal: this run's own document-fetch session never started at all,
+                    // which is not a fact about any one object's own document.
+                    return (null, null, new EuQueryExecutionRefusalDetail(
+                        EuQueryExecutionRefusal.DocumentFetchSessionNotStarted,
+                        $"manifest row {rowOrdinal} ('{mintedObjectRef.CanonicalKey}'): code=" +
+                        $"{attempt.Refusal} detail={attempt.Detail}."));
+                }
+
+                var evidence = attempt.Evidence;
+                var classified = EuDocumentFetchOutcome.Classify(evidence);
+                if (classified.Refusal is null && classified.ObservedStatus == 200)
+                {
+                    // RULING lex-event-20260904T213727510Z-671a8c2563684ab49048677997ceef1c: the body's observed
+                    // membership is recorded on the record this gate produces, and the run
+                    // continues. CorpusBodyRecord.Held(receipt) derives its own Floor through
+                    // CustodyMembershipClassifier, so a body held without an enforced floor is
+                    // recorded as RetainedUnenforced rather than costing the whole run a body the
+                    // office had already served and this run had already written.
+                    // Reading the FETCHED bytes back out of the acquisition session's own
+                    // custody, by the terminal hop's digest. This read is not the hold; it is how
+                    // this loop gets the bytes the route already retained.
+                    ReadOnlyMemory<byte> bodyBytes;
+                    try
+                    {
+                        bodyBytes = await CustodyRestore.ReadByDigestCheckedAsync(
+                                _custodyStore, evidence.Hops[^1].Sha256, cancellationToken)
+                            .ConfigureAwait(false);
+                    }
+                    catch (Exception exception)
+                        when (exception is CustodyIntegrityException or CustodyRequiredException)
+                    {
+                        return (null, null, new EuQueryExecutionRefusalDetail(
+                            EuQueryExecutionRefusal.DocumentBodyNotRetained,
+                            $"manifest row {rowOrdinal} ('{mintedObjectRef.CanonicalKey}'): the " +
+                            $"fetched body could not be reread: {exception.GetType().Name}: " +
+                            $"{exception.Message}"));
+                    }
+
+                    var (bodyReceipt, bodyHoldFailure) = await CustodyHold
+                        .TryHoldAsync(_custodyStore, bodyBytes, cancellationToken)
+                        .ConfigureAwait(false);
+                    if (bodyReceipt is null)
+                    {
+                        return (null, null, new EuQueryExecutionRefusalDetail(
+                            EuQueryExecutionRefusal.DocumentBodyNotRetained,
+                            $"manifest row {rowOrdinal} ('{mintedObjectRef.CanonicalKey}'): " +
+                            bodyHoldFailure));
+                    }
+
+                    rowOutcome = CorpusAcquisitionOutcome.Held(bodyReceipt);
+                    servedMediaType = candidateAddress.MediaType;
+                    break;
+                }
+
+                // D1-05d's fall-through, and the ONE condition that takes it. The office listed this
+                // type and answered "does not hold a content datastream of the requested type", so
+                // the next LISTED candidate is worth attempting. Every other outcome, a 400 "Illegal
+                // accept header" included, ends this object's ladder at its own recorded cause.
+                if (classified.Refusal == EuDocumentFetchRefusal.RequestedRepresentationNotServed)
+                {
                     continue;
                 }
 
-                // Every other attempt-level refusal (today, only ObservationNotExecuted) stays a
-                // whole-run refusal: this run's own document-fetch session never started at all,
-                // which is not a fact about any one object's own document.
-                return (null, new EuQueryExecutionRefusalDetail(
-                    EuQueryExecutionRefusal.DocumentFetchSessionNotStarted,
-                    $"manifest row {rowOrdinal} ('{mintedObjectRef.CanonicalKey}'): code=" +
-                    $"{attempt.Refusal} detail={attempt.Detail}."));
-            }
-
-            var evidence = attempt.Evidence;
-            var classified = EuDocumentFetchOutcome.Classify(evidence);
-            if (classified.Refusal is null && classified.ObservedStatus == 200)
-            {
-                var bodyBytes = await CustodyRestore.ReadByDigestCheckedAsync(
-                        _custodyStore, evidence.Hops[^1].Sha256, cancellationToken)
-                    .ConfigureAwait(false);
-                var bodyReceipt = await _custodyStore.CreateAsync(
-                        bodyBytes, CustodyClass.NightlyFloor90d, cancellationToken)
-                    .ConfigureAwait(false);
-                if (CustodyMembershipClassifier.Classify(bodyReceipt) != CustodyMembership.Floored)
+                if (TryMapDocumentFetchToCorpusAcquisitionRefusal(classified, evidence, out var representableRefusal))
                 {
-                    return (null, new EuQueryExecutionRefusalDetail(
-                        EuQueryExecutionRefusal.DocumentBodyNotHeld,
-                        $"manifest row {rowOrdinal} ('{mintedObjectRef.CanonicalKey}'): the " +
-                        "document body was fetched but the store enforced no retention floor " +
-                        "on it."));
+                    // D1-06c-EU fix one: this object's own document-fetch refusal becomes its own
+                    // PendingAcquisition cause. The outer loop continues to the next row: one
+                    // object's document being unavailable must never prevent every OTHER object in
+                    // the same run from getting its own record.
+                    rowOutcome = CorpusAcquisitionOutcome.Refused(representableRefusal);
+                    break;
                 }
 
-                documentAcquisitionOutcomesByOrdinal[rowOrdinal] = CorpusAcquisitionOutcome.Held(bodyReceipt);
-                continue;
+                // Neither a real 200, nor this route's own named shapes (fix one), nor a robots-
+                // bootstrap refusal (fold-in three), nor a terminal status this door can name (fold-in
+                // one), nor a transport-incomplete shape D1-06b's own CorpusAcquisitionRefusalReason
+                // vocabulary can name (see EuQueryExecutionRefusal.DocumentFetchOutcomeNotRepresentable's
+                // own remarks): a route-level refusal (robots-policy-unavailable, redirect refused, looped
+                // or limit-exceeded, or a stale profile) that vocabulary was never scoped to cover. The
+                // whole run refuses, naming the real classified cause, rather than mapping it to an
+                // unrelated existing member or silently accepting it as held.
+                var routeOutcomeDetail = evidence.Outcome is IncompleteHttpRouteOutcome incompleteOutcome
+                    ? $"{evidence.Outcome.GetType().Name}({incompleteOutcome.Reason})"
+                    : evidence.Outcome.GetType().Name;
+                return (null, null, new EuQueryExecutionRefusalDetail(
+                    EuQueryExecutionRefusal.DocumentFetchOutcomeNotRepresentable,
+                    $"manifest row {rowOrdinal} ('{mintedObjectRef.CanonicalKey}'): classified " +
+                    $"refusal={classified.Refusal} observedStatus={classified.ObservedStatus} " +
+                    $"routeOutcome={routeOutcomeDetail}."));
             }
 
-            if (TryMapDocumentFetchToCorpusAcquisitionRefusal(classified, evidence, out var representableRefusal))
-            {
-                // D1-06c-EU fix one: this object's own document-fetch refusal becomes its own
-                // PendingAcquisition cause. The loop continues to the next row: one object's document
-                // being unavailable in this format must never prevent every OTHER object in the same
-                // run from getting its own record.
-                documentAcquisitionOutcomesByOrdinal[rowOrdinal] =
-                    CorpusAcquisitionOutcome.Refused(representableRefusal);
-                continue;
-            }
+            // Every listed candidate answered the datastream-absent 404. RULING
+            // lex-event-20260904T174138711Z-cdf5cbd17806423cbe05a6234cc4f262 point three: the object
+            // records PendingAcquisition with RequestedRepresentationNotServed, and the tried types
+            // travel back in this row's own ladder result. No new vocabulary member.
+            rowOutcome ??= CorpusAcquisitionOutcome.Refused(
+                CorpusAcquisitionRefusalReason.RequestedRepresentationNotServed);
 
-            // Neither a real 200, nor this route's own three named shapes (fix one), nor a robots-
-            // bootstrap refusal (fold-in three), nor a terminal status this door can name (fold-in
-            // one), nor a transport-incomplete shape D1-06b's own CorpusAcquisitionRefusalReason
-            // vocabulary can name (see EuQueryExecutionRefusal.DocumentFetchOutcomeNotRepresentable's
-            // own remarks): a route-level refusal (robots-policy-unavailable, redirect refused, looped
-            // or limit-exceeded, or a stale profile) that vocabulary was never scoped to cover. The
-            // whole run refuses, naming the real classified cause, rather than mapping it to an
-            // unrelated existing member or silently accepting it as held.
-            var routeOutcomeDetail = evidence.Outcome is IncompleteHttpRouteOutcome incompleteOutcome
-                ? $"{evidence.Outcome.GetType().Name}({incompleteOutcome.Reason})"
-                : evidence.Outcome.GetType().Name;
-            return (null, new EuQueryExecutionRefusalDetail(
-                EuQueryExecutionRefusal.DocumentFetchOutcomeNotRepresentable,
-                $"manifest row {rowOrdinal} ('{mintedObjectRef.CanonicalKey}'): classified " +
-                $"refusal={classified.Refusal} observedStatus={classified.ObservedStatus} " +
-                $"routeOutcome={routeOutcomeDetail}."));
+            documentAcquisitionOutcomesByOrdinal[rowOrdinal] = rowOutcome;
+            ladderResultsByOrdinal[rowOrdinal] = new EuDocumentLadderResult(
+                Array.AsReadOnly(attemptedMediaTypes.ToArray()), servedMediaType);
         }
 
-        return (documentAcquisitionOutcomesByOrdinal, null);
+        return (documentAcquisitionOutcomesByOrdinal, ladderResultsByOrdinal, null);
     }
 
     /// <summary>
@@ -1766,10 +1980,16 @@ public sealed class EuQueryExecutionAdapter
     /// <see cref="EuQueryExecutionResult.DocumentAcquisitionOutcomesByOrdinal"/> and found it empty.
     /// </para>
     /// <para>
-    /// The manifestation media type and language are fixed to the one combination
-    /// <c>review/23-research-temporal.md</c> section 1.2 PROVES reaches a real 200 with actual
-    /// content (<c>Accept: application/xhtml+xml</c>, <c>Accept-Language: en</c>). Choosing a
-    /// different manifestation per object is a later slice's policy decision, not this one's.
+    /// D1-05d replaces this method's own former fixed <c>Accept: application/xhtml+xml</c> with the
+    /// object's own ladder: the ordered candidates family M's listing minted
+    /// (<see cref="EuFormatDisposition.OrderedCandidates"/>), each turned into its exact Accept
+    /// token by <see cref="EuDocumentFetchAddress.TryMediaTypeFor"/>. The first candidate is the one
+    /// address the manifest row carries, per RULING
+    /// lex-event-20260904T174138711Z-cdf5cbd17806423cbe05a6234cc4f262 ("the manifest row keeps one
+    /// fetch address, the first candidate, no schema bump"); the rest are the fall-through the
+    /// acquisition step attempts within the same run when a listed candidate answers 404. An object
+    /// whose disposition carries no candidates at all mints no address: its body axis is not
+    /// accepted, so nothing would fetch it anyway.
     /// </para>
     /// <para>
     /// Never throws: a row this route cannot yet address (wrong authority, a <c>PublisherUri</c> not
@@ -1786,26 +2006,55 @@ public sealed class EuQueryExecutionAdapter
     /// support.
     /// </para>
     /// </remarks>
-    private static (ScopeManifestFetchAddress Manifest, EuDocumentFetchAddress? Address) MintFetchAddress(
-        SourceObjectRef objectRef)
+    /// <summary>
+    /// The manifest's own canonical order for evidence artifacts: resource id, then digest, both
+    /// ordinal. Reproduced here rather than reused because <c>ScopeValidation.CompareArtifact</c> is
+    /// internal to Lex.V3.Contracts and this path claim does not extend there; the rule it encodes is
+    /// stated in that method and enforced by <c>ScopeManifest</c>, which refuses an unsorted list.
+    /// </summary>
+    private static int CompareEvidenceArtifact(SourceArtifactRef left, SourceArtifactRef right)
     {
+        var comparison = string.CompareOrdinal(left.ResourceId, right.ResourceId);
+        return comparison != 0 ? comparison : string.CompareOrdinal(left.Sha256, right.Sha256);
+    }
+
+    private static (ScopeManifestFetchAddress Manifest, IReadOnlyList<EuDocumentFetchAddress> Ladder)
+        MintFetchAddress(SourceObjectRef objectRef, EuFormatDisposition? formatDisposition)
+    {
+        var notMinted = (
+            ScopeManifestFetchAddress.NotMinted(ScopeManifestFetchAddressAbsenceReason.NoPublisherRouteYet),
+            (IReadOnlyList<EuDocumentFetchAddress>)Array.Empty<EuDocumentFetchAddress>());
+
         if (objectRef.Authority != SourceAuthority.Cellar ||
-            !TryExtractCellarKey(objectRef.PublisherUri, out var cellarKey))
+            !TryExtractCellarKey(objectRef.PublisherUri, out var cellarKey) ||
+            formatDisposition is null || formatDisposition.OrderedCandidates.Count == 0)
         {
-            return (
-                ScopeManifestFetchAddress.NotMinted(ScopeManifestFetchAddressAbsenceReason.NoPublisherRouteYet),
-                null);
+            return notMinted;
         }
 
-        var address = EuDocumentFetchAddress.TryCreate(
-            "cellar",
-            cellarKey,
-            EuManifestationMediaType.XhtmlXml,
-            EuDocumentLanguage.Eng,
-            out _);
-        return address is null
-            ? (ScopeManifestFetchAddress.NotMinted(ScopeManifestFetchAddressAbsenceReason.NoPublisherRouteYet), null)
-            : (address.ToManifestFetchAddress(), address);
+        var ladder = new List<EuDocumentFetchAddress>(formatDisposition.OrderedCandidates.Count);
+        foreach (var candidate in formatDisposition.OrderedCandidates)
+        {
+            // Unreachable while EuFormatDisposition's own guard keeps every candidate on
+            // EuManifestationListingDecode.FormatLadder, which is itself built only from formats
+            // TryMediaTypeFor answers for. Kept as a hard stop rather than a silent skip: a rung
+            // with no Accept token must never become a fetch this route cannot name.
+            if (!EuDocumentFetchAddress.TryMediaTypeFor(candidate, out var mediaType))
+            {
+                return notMinted;
+            }
+
+            var address = EuDocumentFetchAddress.TryCreate(
+                "cellar", cellarKey, mediaType, EuDocumentLanguage.Eng, out _);
+            if (address is null)
+            {
+                return notMinted;
+            }
+
+            ladder.Add(address);
+        }
+
+        return (ladder[0].ToManifestFetchAddress(), ladder);
     }
 
     /// <summary>

@@ -79,6 +79,53 @@ public enum EuManifestationFormat
     /// <summary>The print manifestation. Offered, never a body source for us.</summary>
     [JsonStringEnumMemberName("print")]
     Print = 9,
+
+    /// <summary>
+    /// The office listed manifestation types for a Work, and none of them is a wording format this
+    /// closed vocabulary knows. D1-05d, RULING
+    /// lex-event-20260904T201230364Z-8afe287d7c9b49509a410204e7ee729d, narrowed by OWNER RULING
+    /// lex-event-20260904T205636383Z-e92b888b62c24df29fe3f8c1be5016f0.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The one member that is not a publisher format. It exists because
+    /// <see cref="EuFormatObservation.Format"/> must always name something, and the honest answer
+    /// for a Work whose listing left this route no wording format to name is "none of what was
+    /// listed". Before this member that case named <see cref="Formex4"/>, which asserted a format
+    /// the office had never listed for that Work: unreachable in practice, and still a fact invented
+    /// by a field, which is exactly the defect this slice exists to remove.
+    /// </para>
+    /// <para>
+    /// EXACTLY ONE producer, and the condition is narrow. An unadmitted manifestation type no longer
+    /// quarantines its Work: the token is recorded and the decode proceeds on the types it does
+    /// know, so this member is reached only when the office named an unknown type AND everything
+    /// else it named for that Work was print or another unknown. Two shapes reach it through the
+    /// real decode, both driven by test: a listing of print plus an unknown token, and a listing of
+    /// unknown tokens alone. Print is stepped over rather than named because
+    /// <see cref="EuManifestationScope.FormatsThatCanNeverCarryABody"/> would turn it into
+    /// <c>never_ingest</c>, and an unread token licenses no permanent exclusion.
+    /// </para>
+    /// <para>
+    /// Named for what is true, and deliberately NOT "none listed". Whenever this member appears the
+    /// office DID list something; that is why there is an observation at all. A Work the office
+    /// lists nothing for carries no format observation whatsoever (see
+    /// <see cref="EuManifestationListingDecode.TryDecode"/>'s own returns note), and calling this
+    /// member "none listed" would name that other fact and blur the two apart precisely where this
+    /// slice works hardest to keep them distinct. What is true is that none of what was listed is
+    /// admitted here.
+    /// </para>
+    /// <para>
+    /// Four properties hold it in place, each asserted by test. It is never a publisher token, so no
+    /// listing can ever decode INTO it (<see cref="EuManifestationListingDecode.ListedTypeTokens"/>
+    /// excludes it by construction). It is never addressable, so it can mint no request
+    /// (<see cref="EuDocumentFetchAddress.TryMediaTypeFor"/>). It is never a rung of
+    /// <see cref="EuManifestationListingDecode.FormatLadder"/>. And it is deliberately NOT in
+    /// <see cref="EuManifestationScope.FormatsThatCanNeverCarryABody"/>: an unread listing is a typed
+    /// gap pending a reviewed profile, never the permanent exclusion print carries.
+    /// </para>
+    /// </remarks>
+    [JsonStringEnumMemberName("none_admitted")]
+    NoneAdmitted = 10,
 }
 
 /// <summary>
@@ -690,6 +737,15 @@ public sealed record EuManifestationScope
 /// <summary>
 /// One offered format and whether it may serve as a body source.
 /// </summary>
+/// <remarks>
+/// Two different things are expressed with this one type, and <see cref="OrderedCandidates"/> is
+/// what tells them apart. A CLASS-level row, one per member of the closed
+/// <see cref="EuManifestationFormat"/> vocabulary, is the reviewed profile's standing policy for
+/// that format and carries no candidates. An OBJECT-level row, minted by
+/// <see cref="EuManifestationListingDecode"/> from one Work's own family M listing, carries that
+/// Work's ordered fetch candidates; <see cref="EuFormatBodyAdmission.BodyAdmitted"/> on such a row
+/// means "the office lists a wording format we will attempt", never "this will succeed".
+/// </remarks>
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record EuFormatDisposition
 {
@@ -698,12 +754,15 @@ public sealed record EuFormatDisposition
         EuManifestationFormat format,
         EuFormatBodyAdmission admission,
         string reasonCode,
-        SourceArtifactRef evidenceRef)
+        SourceArtifactRef evidenceRef,
+        IReadOnlyList<EuManifestationFormat>? orderedCandidates = null)
     {
         Format = ContractValidation.RequireDefined(format, nameof(format));
         Admission = ContractValidation.RequireDefined(admission, nameof(admission));
         ReasonCode = ContractValidation.RequireIdentifier(reasonCode, nameof(reasonCode));
         EvidenceRef = evidenceRef ?? throw new ArgumentNullException(nameof(evidenceRef));
+        OrderedCandidates = EuManifestationListingDecode.RequireCandidateLadder(
+            orderedCandidates, Format, nameof(orderedCandidates));
     }
 
     public EuManifestationFormat Format { get; }
@@ -713,4 +772,10 @@ public sealed record EuFormatDisposition
     public string ReasonCode { get; }
 
     public SourceArtifactRef EvidenceRef { get; }
+
+    /// <summary>
+    /// This object's own listed fetch candidates in the closed ladder's order, starting with
+    /// <see cref="Format"/>. Empty on a class-level policy row; see this type's own remarks.
+    /// </summary>
+    public IReadOnlyList<EuManifestationFormat> OrderedCandidates { get; }
 }

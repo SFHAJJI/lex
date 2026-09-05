@@ -92,6 +92,13 @@ public enum EuCellarObjectDecodeRefusal
     /// it.
     /// </summary>
     ContentClassClosurePositionMismatch = 10,
+
+    /// <summary>
+    /// <see cref="EuManifestationListingDecode.TryDecode"/> itself refused family M's own
+    /// manifestation-listing rows. The exact inner reason is reported alongside this member through
+    /// <c>listingRefusal</c>, and its offending IRI or token through <c>offendingIri</c>.
+    /// </summary>
+    ManifestationListingRefused = 11,
 }
 
 /// <summary>
@@ -167,11 +174,13 @@ public enum EuCellarObjectDecodeRefusal
 /// fetches a body for: English if family X observes an English Expression for the object, French if
 /// it observes a French one and not an English one, and an explicit
 /// <see cref="EuExpressionObservationState.NotObserved"/> English observation when family X observes
-/// neither - never <c>ExpressionObservedBodyHeld</c>, since no body-acquisition machinery exists in
-/// this closure at all (format stays null; D1-05d's own manifestation slice is what could ever set
-/// body-held true). This is a judgement call the SCOPE_RULING text does not itself resolve (which of
-/// several observed languages counts as "the" one of interest); the reviewer can revisit it under
-/// D1-05d without this door's own row-reading logic changing.
+/// neither. D1-05d settles what an observed one carries: the reviewed scope's own closed policy,
+/// <see cref="EuLanguageBodyDisposition.BodyCandidateLanguages"/>, holds exactly English and French,
+/// so an observed Expression in either is
+/// <see cref="EuExpressionObservationState.ExpressionObservedBodyCandidate"/> -- the scope takes a
+/// body in this language, and NO body is claimed fetched by saying so. Which of several observed
+/// languages counts as "the" one of interest remains a judgement call the SCOPE_RULING text does not
+/// resolve; the reviewer can revisit it without this door's own row-reading logic changing.
 /// </para>
 /// <para>
 /// Contracts-only: nothing here calls a store, a publisher endpoint, or <c>Lex.V3.Ingest</c>.
@@ -205,6 +214,21 @@ public static class EuCellarObjectDecode
     /// is a real, complete, negative observation.
     /// </param>
     /// <param name="expressionFactProfile">The interpretation profile <paramref name="expressionFactRows"/> were verified under.</param>
+    /// <param name="manifestationRows">
+    /// Family M's rows (D1-05d): the office's own per-object manifestation-type listing. Already
+    /// reopened and re-verified. May be empty, and an object may carry only family M's explicit
+    /// absence row: both mean the office lists nothing for that object, and neither invents a format
+    /// observation. See <see cref="EuManifestationListingDecode"/>.
+    /// </param>
+    /// <param name="manifestationProfile">The interpretation profile <paramref name="manifestationRows"/> were verified under.</param>
+    /// <param name="manifestationEvidenceRef">
+    /// Family M's OWN delivery evidence, distinct from <paramref name="evidenceRef"/>. Every format
+    /// observation this decode mints names it, so a disposition points at the listing it was read
+    /// from rather than at a sibling family's proof. D1-05d's REVIEW_RESULT
+    /// lex-event-20260904T192428840Z-a6a8ebd26c58436aafd109a55303c12e found the adapter stamping
+    /// family P's ref on every format observation while M's own proof went unused, which is why this
+    /// is a separate parameter rather than a reuse of the one above.
+    /// </param>
     /// <param name="recordForm">
     /// Every object's own act form. Not recoverable from these closures' rows; the caller supplies it
     /// from wherever it independently resolves <c>resource_legal_type</c>. Applied uniformly to every
@@ -226,6 +250,11 @@ public static class EuCellarObjectDecode
     /// <see cref="EuCellarObjectDecodeRefusal.ObjectSnapshotRejected"/>; otherwise
     /// <see cref="EuCellarObjectSnapshotRefusal.None"/>.
     /// </param>
+    /// <param name="listingRefusal">
+    /// The inner reason, when <paramref name="refusal"/> is
+    /// <see cref="EuCellarObjectDecodeRefusal.ManifestationListingRefused"/>; otherwise
+    /// <see cref="EuManifestationListingRefusal.None"/>.
+    /// </param>
     /// <returns>
     /// One <see cref="EuCellarObjectSnapshot"/> per object in <c>O</c>, the root first then every
     /// discovered state in ascending ordinal order, or <c>null</c> when refused.
@@ -241,11 +270,15 @@ public static class EuCellarObjectDecode
         RepeatedEnumerationInterpretationProfile objectFactProfile,
         IReadOnlyList<RepeatedEnumerationRow> expressionFactRows,
         RepeatedEnumerationInterpretationProfile expressionFactProfile,
+        IReadOnlyList<RepeatedEnumerationRow> manifestationRows,
+        RepeatedEnumerationInterpretationProfile manifestationProfile,
+        SourceArtifactRef manifestationEvidenceRef,
         EuActForm recordForm,
         SourceArtifactRef evidenceRef,
         out EuCellarObjectDecodeRefusal refusal,
         out string? offendingIri,
-        out EuCellarObjectSnapshotRefusal snapshotRefusal)
+        out EuCellarObjectSnapshotRefusal snapshotRefusal,
+        out EuManifestationListingRefusal listingRefusal)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(requestedCelex);
         ArgumentNullException.ThrowIfNull(familyRows);
@@ -254,9 +287,13 @@ public static class EuCellarObjectDecode
         ArgumentNullException.ThrowIfNull(objectFactProfile);
         ArgumentNullException.ThrowIfNull(expressionFactRows);
         ArgumentNullException.ThrowIfNull(expressionFactProfile);
+        ArgumentNullException.ThrowIfNull(manifestationRows);
+        ArgumentNullException.ThrowIfNull(manifestationProfile);
+        ArgumentNullException.ThrowIfNull(manifestationEvidenceRef);
         ContractValidation.RequireDefined(recordForm, nameof(recordForm));
         ArgumentNullException.ThrowIfNull(evidenceRef);
         offendingIri = null;
+        listingRefusal = EuManifestationListingRefusal.None;
 
         if (Array.Exists(familyRows.ToArray(), static row => row is null))
         {
@@ -271,6 +308,11 @@ public static class EuCellarObjectDecode
         if (Array.Exists(expressionFactRows.ToArray(), static row => row is null))
         {
             throw new ArgumentException("An expression-fact row cannot be null.", nameof(expressionFactRows));
+        }
+
+        if (Array.Exists(manifestationRows.ToArray(), static row => row is null))
+        {
+            throw new ArgumentException("A manifestation row cannot be null.", nameof(manifestationRows));
         }
 
         var seedEntry = EuAppendixASeedMap.SeedsInCelexOrder.FirstOrDefault(
@@ -453,6 +495,20 @@ public static class EuCellarObjectDecode
             }
         }
 
+        // ---- Decode family M (manifestation listing), checked against the same closure. ----
+        // D1-05d. Family M's rows never grow or shrink O either: a row naming a parent outside this
+        // closure is refused, exactly as P's and X's own rows are.
+        var formatObservations = EuManifestationListingDecode.TryDecode(
+            closure, manifestationRows, manifestationProfile, manifestationEvidenceRef,
+            out listingRefusal, out var listingOffendingIri, out var listingOffendingToken);
+        if (formatObservations is null)
+        {
+            refusal = EuCellarObjectDecodeRefusal.ManifestationListingRefused;
+            offendingIri = listingOffendingIri ?? listingOffendingToken;
+            snapshotRefusal = EuCellarObjectSnapshotRefusal.None;
+            return null;
+        }
+
         // ---- Build one snapshot per object in O: the root, then every discovered state. ----
         var snapshots = new List<EuCellarObjectSnapshot>(1 + discoveredStates.Count);
         var objectsInOrder = new List<(string Iri, bool IsRoot)> { (rootIri, true) };
@@ -463,8 +519,13 @@ public static class EuCellarObjectDecode
             var pRows = objectFacts.Where(fact => fact.Object == objectIri).ToArray();
             var xRows = expressionFacts.Where(fact => fact.Parent == objectIri).ToArray();
 
+            // D1-05d: an object family M's listing says nothing about keeps a null format
+            // observation, which is exactly the typed absence - "the office lists nothing" - the
+            // body join already reads as typed_quarantine. Never a fabricated empty listing.
+            _ = formatObservations.TryGetValue(objectIri, out var formatObservation);
+
             var snapshot = BuildOneObject(
-                objectIri, isRoot, rootIri, pRows, xRows, recordForm, evidenceRef,
+                objectIri, isRoot, rootIri, pRows, xRows, formatObservation, recordForm, evidenceRef,
                 out refusal, out offendingIri, out snapshotRefusal);
             if (snapshot is null)
             {
@@ -485,6 +546,7 @@ public static class EuCellarObjectDecode
         string rootIri,
         IReadOnlyList<ObjectFactRow> pRows,
         IReadOnlyList<ExpressionFactRow> xRows,
+        EuFormatObservation? formatObservation,
         EuActForm recordForm,
         SourceArtifactRef evidenceRef,
         out EuCellarObjectDecodeRefusal refusal,
@@ -572,7 +634,7 @@ public static class EuCellarObjectDecode
             predicateObservations,
             channel,
             language,
-            null,
+            formatObservation,
             rights,
             relationObservations,
             evidenceRef,
@@ -698,13 +760,30 @@ public static class EuCellarObjectDecode
         bool HasLanguage(string authorityIri) => xRows.Any(row =>
             row.PredicateIri == usesLanguageIri && row.ValueKind == "iri" && row.Value.Value == authorityIri);
 
+        // D1-05d. Before this slice both branches below returned ExpressionObservedBodyNotHeld,
+        // because no body-acquisition machinery existed anywhere in this closure and claiming
+        // otherwise would have been a claim about a fetch nobody could perform. This door's own
+        // remarks named D1-05d as the slice that changes it, and it does: the reviewed scope's own
+        // closed policy, EuLanguageBodyDisposition.BodyCandidateLanguages, IS the answer to "does
+        // this scope take a body in this language", and it holds exactly English and French, which
+        // are the only two languages this method ever looks for. So an OBSERVED English or French
+        // Expression is a body candidate by that policy, and reporting it as body-not-held reported
+        // a reviewed inclusion as a reviewed exclusion.
+        //
+        // This is a statement about the scope's policy for the language, never a claim that any
+        // body has been fetched: the body axis it feeds is a decision taken BEFORE acquisition about
+        // whether to attempt one at all, and whether an attempt actually produced bytes is the
+        // corpus record's own Held/PendingAcquisition answer, decided later and separately. The
+        // axes stay independent, exactly as EuScopeProfile.ReduceBody's own remarks require: a work
+        // whose office lists no wording format still fails the FORMAT contribution and is never
+        // fetched, and nothing here reads the format observation.
         if (HasLanguage(EnglishLanguageAuthorityIri))
         {
             return new EuLanguageExpressionObservation(
                 EuOfficialLanguage.English,
-                EuExpressionObservationState.ExpressionObservedBodyNotHeld,
+                EuExpressionObservationState.ExpressionObservedBodyCandidate,
                 "eu_object_facts_decode.language",
-                "eu_cellar_object_decode.language_english_observed_body_not_held",
+                "eu_cellar_object_decode.language_english_observed_body_candidate",
                 evidenceRef);
         }
 
@@ -712,9 +791,9 @@ public static class EuCellarObjectDecode
         {
             return new EuLanguageExpressionObservation(
                 EuOfficialLanguage.French,
-                EuExpressionObservationState.ExpressionObservedBodyNotHeld,
+                EuExpressionObservationState.ExpressionObservedBodyCandidate,
                 "eu_object_facts_decode.language",
-                "eu_cellar_object_decode.language_french_observed_body_not_held",
+                "eu_cellar_object_decode.language_french_observed_body_candidate",
                 evidenceRef);
         }
 

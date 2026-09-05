@@ -10,6 +10,8 @@ using Lex.V3.Contracts.Source.Scope;
 using Lex.V3.Ingest.Europe;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
+using Lex.V3.Contracts.Custody;
+
 namespace Lex.V3.Ingest.Tests;
 
 /// <summary>
@@ -68,6 +70,8 @@ public sealed class EuQueryExecutionAdapterTests
             ["W"] = EuAcquisitionTestFixture.ScriptFor(
                 "W", wRows.Length, wRows,
                 EuAcquisitionTestFixture.RootWatermarkProjection),
+            // D1-05d: family M, the office's own manifestation listing for this run's root.
+            ["M"] = EuAcquisitionTestFixture.ManifestationScriptFor(rootIri),
             // Defect 3's own fix drives a real witness traversal from the census bound
             // (watermarkLexical, this same root) on every delivered run now, not just when a test is
             // specifically about the witness. Scripted here as a clean confirmed-empty traversal:
@@ -103,6 +107,11 @@ public sealed class EuQueryExecutionAdapterTests
             wPlan, wPlanId, EuObjectFactsQuerySet.RootWatermark, [rootIri],
             EuAcquisitionTestFixture.BuildRendererSource(4));
 
+        var (mPlan, mPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
+        var mRequest = new EuObjectFactsPartitionRunRequest(
+            mPlan, mPlanId, EuObjectFactsQuerySet.ManifestationFacts, [rootIri],
+            EuAcquisitionTestFixture.BuildRendererSource(104));
+
         var evidenceResolver = new PermissiveEvidenceResolver(CompleteEnumerationRef);
 
         var result = await adapter.RunAsync(
@@ -111,6 +120,7 @@ public sealed class EuQueryExecutionAdapterTests
                 (pRequest, EuAcquisitionTestFixture.SourceWitness()),
                 (xRequest, EuAcquisitionTestFixture.SourceWitness()),
                 (wRequest, EuAcquisitionTestFixture.SourceWitness()),
+                (mRequest, EuAcquisitionTestFixture.SourceWitness()),
             ],
             EuAcquisitionTestFixture.BuildRendererSource(9),
             EuAcquisitionTestFixture.SourceWitness(),
@@ -130,7 +140,8 @@ public sealed class EuQueryExecutionAdapterTests
         Assert.AreEqual(1, result.ObservedObjectCount, "O must be exactly the one root; no states were discovered.");
         Assert.AreEqual(1, result.ObservedExpressionCount, "the Expression set X discovered must be exactly one.");
         Assert.AreEqual(EuQueryExecutionCompletion.AllFamiliesProven, result.Completion);
-        Assert.AreEqual(4, result.FamilyOutcomes.Count, "one census seed plus one batch each of P, X and W.");
+        Assert.AreEqual(
+            5, result.FamilyOutcomes.Count, "one census seed plus one batch each of P, X, W and M.");
         foreach (var outcome in result.FamilyOutcomes)
         {
             Assert.AreEqual(EuFamilyEnumerationOutcomeKind.Proven, outcome.Kind, outcome.FamilyKey);
@@ -143,7 +154,9 @@ public sealed class EuQueryExecutionAdapterTests
 
         // The measured delivered-row counts per family, exactly as this run observed them.
         var byRows = result.FamilyOutcomes.Select(static o => o.DeliveredRowCount!.Value).OrderBy(static v => v).ToArray();
-        CollectionAssert.AreEqual(new long[] { 0, 1, 1, 13 }, byRows);
+        // D1-05d adds family M's own six delivered rows: the real six-token listing 32003L0088 and
+        // four other acts in the band return live.
+        CollectionAssert.AreEqual(new long[] { 0, 1, 1, 6, 13 }, byRows);
 
         // ---- Precision two: the closure is bound to Appendix A's own 82-seed pack by identity. ----
         Assert.IsNotNull(result.RootBinding);
@@ -173,14 +186,17 @@ public sealed class EuQueryExecutionAdapterTests
         // D1-06c-EU defect nine (REVIEW_RESULT
         // lex-event-20260904T153119262Z-e51c74bf8710495fbd972b2706509922): the one Minted row this
         // run produced (the seed's own root, the only object O contains here) gets no document-fetch
-        // attempt at all. Nothing in this codebase yet derives a real format disposition for a
-        // decoded snapshot (see EuQueryExecutionAdapter.RunDocumentAcquisitionAsync's own remarks), so
-        // this row's own body axis is TypedQuarantine and defect nine's own gate skips it -- before
-        // that fix this row was fetched anyway, one GET per Minted row regardless of body axis. This
-        // is the honest, corrected shape until D1-05d derives a real format disposition;
-        // AMixedRunWithOneRouteLevelRefusalAndOneHeldFetchCompletesAndWritesARecordSetNamingBoth
-        // proves the real Held/PendingAcquisition fetch behavior directly, against a manifest with a
-        // genuine accepted body axis.
+        // attempt at all, because its own body axis is not AcceptedSelected and defect nine's gate
+        // skips it -- before that fix this row was fetched anyway, one GET per Minted row regardless
+        // of body axis.
+        //
+        // D1-05d changes WHY this row is skipped, and the distinction matters. The format axis is no
+        // longer the blocker: family M's listing above is real, so this row's format contribution is
+        // now AcceptedSelected. What still caps it is this fixture's own family-X rows, which assert
+        // only expression_belongs_to_work and never expression_uses_language, so no language
+        // Expression is observed at all and the language contribution is TypedQuarantine
+        // (publisher_value_absent). ARealPre2004ActRecordsHeldThroughTextHtmlWhereItRecordedNotHeld
+        // is the run that supplies an observed English Expression and reaches a real fetch.
         Assert.IsNotNull(result.DocumentAcquisitionOutcomesByOrdinal);
         Assert.HasCount(0, result.DocumentAcquisitionOutcomesByOrdinal!);
     }
@@ -202,7 +218,7 @@ public sealed class EuQueryExecutionAdapterTests
     /// <see cref="EuQueryExecutionAdapter.RunAsync"/>.
     /// </remarks>
     [TestMethod]
-    public async Task ASuccessfulDocumentFetchWhoseBodyCustodyWriteIsUnenforcedRefusesTheWholeRunRatherThanHoldingIt()
+    public async Task ASuccessfulDocumentFetchWhoseBodyCustodyWriteIsUnenforcedIsHeldAndSaysSo()
     {
         var seed = EuAppendixASeedMap.SeedsInCelexOrder[0];
         var rootIri = EuPackRootCanonicalForm.TryCanonicalize(seed.WorkRoot, out _)
@@ -216,9 +232,9 @@ public sealed class EuQueryExecutionAdapterTests
             [input.ObjectRef],
             [input],
             new PermissiveEvidenceResolver(CompleteEnumerationRef)).Manifest;
-        var mintedAddressesByObjectRef = new Dictionary<SourceObjectRef, EuDocumentFetchAddress>
+        var mintedAddressesByObjectRef = new Dictionary<SourceObjectRef, IReadOnlyList<EuDocumentFetchAddress>>
         {
-            [input.ObjectRef] = address,
+            [input.ObjectRef] = new[] { address },
         };
 
         // The real GDPR xhtml canary body's own digest, the one ClassifyingHandler's own default
@@ -233,17 +249,151 @@ public sealed class EuQueryExecutionAdapterTests
             store, new EuAcquisitionTestFixture.FixedTimeProvider(), handler);
         var adapter = new EuQueryExecutionAdapter(store, executor);
 
-        var (outcomes, refusal) = await adapter.RunDocumentAcquisitionAsync(
+        var (outcomes, ladderResults, refusal) = await adapter.RunDocumentAcquisitionAsync(
             manifest,
             mintedAddressesByObjectRef,
             EuAcquisitionTestFixture.BuildRendererSource(801),
             EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
             CancellationToken.None);
 
-        Assert.IsNull(outcomes, "an unenforced document body must refuse, not deliver silently.");
+        // RULING lex-event-20260904T213727510Z-671a8c2563684ab49048677997ceef1c. This used to refuse the
+        // WHOLE RUN over one row's body, discarding a body the office had already served and this
+        // run had already written. The body is Held, and the record says under which guarantee.
+        Assert.IsNull(refusal, $"code={refusal?.Code} detail={refusal?.Detail}");
+        Assert.IsNotNull(outcomes);
+        var outcome = outcomes!.Values.Single();
+        Assert.IsNotNull(outcome.Receipt, "an unenforced store held these bytes and said so.");
+        Assert.AreEqual(
+            CustodyMembership.RetainedUnenforced,
+            CorpusBodyRecord.Held(outcome.Receipt!).Floor,
+            "the record derives the weaker class from this very receipt rather than asserting one.");
+        _ = ladderResults;
+    }
+
+    /// <summary>
+    /// The dangerous direction, at the body gate: a body this run CANNOT retain at all still refuses,
+    /// and never reappears as a body held under a weaker class.
+    /// </summary>
+    /// <remarks>
+    /// RULING lex-event-20260904T213727510Z-671a8c2563684ab49048677997ceef1c draws exactly this line.
+    /// "We stored it under a weaker guarantee" and "we failed to store it" are different facts, and
+    /// the second must never quietly become the first. <c>CustodyHold.TryHoldAsync</c> is the one
+    /// place that decides which, for both publishers, and it returns no receipt at all on a failure
+    /// rather than a receipt with a softer label. The store here refuses the write outright.
+    /// </remarks>
+    [TestMethod]
+    public async Task ADocumentBodyTheStoreCannotRetainAtAllStillRefusesRatherThanHolding()
+    {
+        var (outcomes, _, refusal) = await RunOneAcceptedBodyFetchAsync(
+            store: new EuAcquisitionTestFixture.EuInMemoryCustodyStore(
+                failWriteDigest: (digest, occurrence) =>
+                    occurrence == 2 && string.Equals(digest, CanaryBodyDigest, StringComparison.Ordinal)));
+
+        Assert.IsNull(outcomes, "a body that cannot be retained must not come back as an outcome.");
         Assert.IsNotNull(refusal);
-        Assert.AreEqual(EuQueryExecutionRefusal.DocumentBodyNotHeld, refusal!.Code);
-        StringAssert.Contains(refusal.Detail, "no retention floor");
+        Assert.AreEqual(EuQueryExecutionRefusal.DocumentBodyNotRetained, refusal!.Code);
+        StringAssert.Contains(refusal.Detail, "the custody write failed");
+    }
+
+    /// <summary>
+    /// A held record for a body NO CONSUMER CAN FIND BY DIGEST is the user finding no text, and the
+    /// per-hold reopen is what stops it becoming one.
+    /// </summary>
+    /// <remarks>
+    /// RULING lex-event-20260904T223559409Z-940e6f5dd5f540598920f6bf7849da47. The store here writes the
+    /// object and returns a real receipt, so <c>CreateAsync</c>'s own obligation is satisfied: its
+    /// readback goes through <c>ReadAsync(reference)</c>, one class-qualified path at the path the
+    /// write just used. What fails is the lookup BY CONTENT ADDRESS ALONE through
+    /// <c>CustodyRestore.ReadByDigestCheckedAsync</c>, which is the reader every downstream
+    /// consumer uses. The two readbacks prove different properties, which is why the write
+    /// obligation does not subsume the reopen and why the reopen stays. Remove it and this test is
+    /// the one that goes red.
+    /// </remarks>
+    [TestMethod]
+    public async Task ADocumentBodyNoConsumerCouldFindByDigestRefusesRatherThanHolding()
+    {
+        var (outcomes, _, refusal) = await RunOneAcceptedBodyFetchAsync(
+            store: new EuAcquisitionTestFixture.EuInMemoryCustodyStore(
+                loseBytesAfterWriteDigest: (digest, occurrence) =>
+                    occurrence == 2 && string.Equals(digest, CanaryBodyDigest, StringComparison.Ordinal)));
+
+        Assert.IsNull(outcomes, "a body nothing can resolve by digest must not be recorded as held.");
+        Assert.IsNotNull(refusal);
+        Assert.AreEqual(EuQueryExecutionRefusal.DocumentBodyNotRetained, refusal!.Code);
+        StringAssert.Contains(refusal.Detail, "could not reproduce those exact");
+    }
+
+    /// <summary>
+    /// The other half of the same line: the store cannot reproduce the bytes it just wrote. Under
+    /// <see cref="Lex.V3.Contracts.Custody.ICustodyStore.CreateAsync"/>'s own stated obligation that
+    /// is raised as <see cref="Lex.V3.Contracts.Custody.CustodyIntegrityException"/> from the write
+    /// itself, because a receipt exists only after the store has read the bytes back. So this is
+    /// caught where the write is caught, which is why <c>CustodyHold</c> no longer reopens.
+    /// </summary>
+    [TestMethod]
+    public async Task ADocumentBodyTheStoreCannotReproduceStillRefusesRatherThanHolding()
+    {
+        var (outcomes, _, refusal) = await RunOneAcceptedBodyFetchAsync(
+            store: new EuAcquisitionTestFixture.EuInMemoryCustodyStore(
+                raiseIntegrityOnWriteDigest: (digest, occurrence) =>
+                    occurrence == 2 && string.Equals(digest, CanaryBodyDigest, StringComparison.Ordinal)));
+
+        Assert.IsNull(outcomes);
+        Assert.IsNotNull(refusal);
+        Assert.AreEqual(EuQueryExecutionRefusal.DocumentBodyNotRetained, refusal!.Code);
+        StringAssert.Contains(refusal.Detail, "the custody write failed");
+        StringAssert.Contains(refusal.Detail, "CustodyIntegrityException");
+    }
+
+    /// <summary>
+    /// The real GDPR xhtml canary body's own digest, which
+    /// <see cref="EuAcquisitionTestFixture.ClassifyingHandler"/>'s default document-fetch response
+    /// actually serves. Observed live on 2026-09-04 and again on 2026-09-05 at 806,864 bytes.
+    /// </summary>
+    private const string CanaryBodyDigest =
+        "962539af03738bf552319ff4ce42d69e5f95a576307c4dfed7bf87e81b646b9d";
+
+    /// <summary>
+    /// One accepted-body document fetch through the real
+    /// <see cref="EuQueryExecutionAdapter.RunDocumentAcquisitionAsync"/>, against whichever store the
+    /// caller wants to script. Extracted so the three custody outcomes at this gate (held unenforced,
+    /// write refused, bytes irreproducible) are the same scenario differing only in the store.
+    /// </summary>
+    private static async Task<(
+        IReadOnlyDictionary<int, CorpusAcquisitionOutcome>? Outcomes,
+        IReadOnlyDictionary<int, EuDocumentLadderResult>? LadderResults,
+        EuQueryExecutionRefusalDetail? Refusal)>
+        RunOneAcceptedBodyFetchAsync(EuAcquisitionTestFixture.EuInMemoryCustodyStore store)
+    {
+        var seed = EuAppendixASeedMap.SeedsInCelexOrder[0];
+        var rootIri = EuPackRootCanonicalForm.TryCanonicalize(seed.WorkRoot, out _)
+            ?? throw new AssertFailedException("Appendix A's own seed root failed to canonicalize.");
+
+        var scopeProfile = EuScopeProfile.BuildBinding();
+        var (input, address) = BuildAcceptedBodyReductionInput(rootIri, scopeProfile);
+        var manifest = ScopeReducer.Reduce(
+            scopeProfile,
+            [CompleteEnumerationRef],
+            [input.ObjectRef],
+            [input],
+            new PermissiveEvidenceResolver(CompleteEnumerationRef)).Manifest;
+        var mintedAddressesByObjectRef = new Dictionary<SourceObjectRef, IReadOnlyList<EuDocumentFetchAddress>>
+        {
+            [input.ObjectRef] = new[] { address },
+        };
+
+        var handler = new EuAcquisitionTestFixture.ClassifyingHandler(
+            new Dictionary<string, EuAcquisitionTestFixture.FamilyScript>(StringComparer.Ordinal));
+        var executor = new EuRepeatedEnumerationExecutor(
+            store, new EuAcquisitionTestFixture.FixedTimeProvider(), handler);
+        var adapter = new EuQueryExecutionAdapter(store, executor);
+
+        return await adapter.RunDocumentAcquisitionAsync(
+            manifest,
+            mintedAddressesByObjectRef,
+            EuAcquisitionTestFixture.BuildRendererSource(801),
+            EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
+            CancellationToken.None);
     }
 
     /// <summary>
@@ -277,9 +427,9 @@ public sealed class EuQueryExecutionAdapterTests
             [input.ObjectRef],
             [input],
             new PermissiveEvidenceResolver(CompleteEnumerationRef)).Manifest;
-        var mintedAddressesByObjectRef = new Dictionary<SourceObjectRef, EuDocumentFetchAddress>
+        var mintedAddressesByObjectRef = new Dictionary<SourceObjectRef, IReadOnlyList<EuDocumentFetchAddress>>
         {
-            [input.ObjectRef] = address,
+            [input.ObjectRef] = new[] { address },
         };
 
         // The real 214-byte GDPR pdfa2a 404 body, the same retained canary
@@ -297,7 +447,7 @@ public sealed class EuQueryExecutionAdapterTests
             store, new EuAcquisitionTestFixture.FixedTimeProvider(), handler);
         var adapter = new EuQueryExecutionAdapter(store, executor);
 
-        var (outcomes, refusal) = await adapter.RunDocumentAcquisitionAsync(
+        var (outcomes, ladderResults, refusal) = await adapter.RunDocumentAcquisitionAsync(
             manifest,
             mintedAddressesByObjectRef,
             EuAcquisitionTestFixture.BuildRendererSource(901),
@@ -343,9 +493,9 @@ public sealed class EuQueryExecutionAdapterTests
             [input.ObjectRef],
             [input],
             new PermissiveEvidenceResolver(CompleteEnumerationRef)).Manifest;
-        var mintedAddressesByObjectRef = new Dictionary<SourceObjectRef, EuDocumentFetchAddress>
+        var mintedAddressesByObjectRef = new Dictionary<SourceObjectRef, IReadOnlyList<EuDocumentFetchAddress>>
         {
-            [input.ObjectRef] = address,
+            [input.ObjectRef] = new[] { address },
         };
 
         // The same synthetic off-origin target EuDocumentFetchReachabilityTests uses: the office
@@ -362,7 +512,7 @@ public sealed class EuQueryExecutionAdapterTests
             store, new EuAcquisitionTestFixture.FixedTimeProvider(), handler);
         var adapter = new EuQueryExecutionAdapter(store, executor);
 
-        var (outcomes, refusal) = await adapter.RunDocumentAcquisitionAsync(
+        var (outcomes, ladderResults, refusal) = await adapter.RunDocumentAcquisitionAsync(
             manifest,
             mintedAddressesByObjectRef,
             EuAcquisitionTestFixture.BuildRendererSource(911),
@@ -443,10 +593,10 @@ public sealed class EuQueryExecutionAdapterTests
             .ToArray();
         CollectionAssert.AreEquivalent(new[] { 0, 1 }, bodyAccepted);
 
-        var mintedAddressesByObjectRef = new Dictionary<SourceObjectRef, EuDocumentFetchAddress>
+        var mintedAddressesByObjectRef = new Dictionary<SourceObjectRef, IReadOnlyList<EuDocumentFetchAddress>>
         {
-            [rootInput.ObjectRef] = rootAddress,
-            [stateInput.ObjectRef] = stateAddress,
+            [rootInput.ObjectRef] = new[] { rootAddress },
+            [stateInput.ObjectRef] = new[] { stateAddress },
         };
 
         // The exact same two real retained canary bodies this file's own two single-object tests
@@ -469,7 +619,7 @@ public sealed class EuQueryExecutionAdapterTests
             store, new EuAcquisitionTestFixture.FixedTimeProvider(), handler);
         var adapter = new EuQueryExecutionAdapter(store, executor);
 
-        var (outcomes, acquisitionRefusal) = await adapter.RunDocumentAcquisitionAsync(
+        var (outcomes, ladderResults, acquisitionRefusal) = await adapter.RunDocumentAcquisitionAsync(
             manifest,
             mintedAddressesByObjectRef,
             EuAcquisitionTestFixture.BuildRendererSource(9001),
@@ -638,9 +788,9 @@ public sealed class EuQueryExecutionAdapterTests
             [input.ObjectRef],
             [input],
             new PermissiveEvidenceResolver(CompleteEnumerationRef)).Manifest;
-        var mintedAddressesByObjectRef = new Dictionary<SourceObjectRef, EuDocumentFetchAddress>
+        var mintedAddressesByObjectRef = new Dictionary<SourceObjectRef, IReadOnlyList<EuDocumentFetchAddress>>
         {
-            [input.ObjectRef] = address,
+            [input.ObjectRef] = new[] { address },
         };
 
         // hop 0 (the real minted address) redirects to a real, distinct, admitted-host detour path;
@@ -660,7 +810,7 @@ public sealed class EuQueryExecutionAdapterTests
             store, new EuAcquisitionTestFixture.FixedTimeProvider(), handler);
         var adapter = new EuQueryExecutionAdapter(store, executor);
 
-        var (outcomes, refusal) = await adapter.RunDocumentAcquisitionAsync(
+        var (outcomes, ladderResults, refusal) = await adapter.RunDocumentAcquisitionAsync(
             manifest,
             mintedAddressesByObjectRef,
             EuAcquisitionTestFixture.BuildRendererSource(9101),
@@ -674,12 +824,8 @@ public sealed class EuQueryExecutionAdapterTests
     }
 
     /// <summary>
-    /// D1-06c-EU defect nine's own fold-in five: no existing test forced
-    /// <see cref="CorpusRecordSetWriter.WriteAsync"/>'s own floor check to fail through the adapter, so
-    /// <see cref="EuQueryExecutionRefusal.RecordSetNotHeld"/> was never actually driven end to end
-    /// (<see cref="CorpusRecordSetWriterTests.WriteAsyncRefusesWhenTheStoreEnforcesNoFloor"/> already
-    /// drives the writer's own <see cref="CorpusRecordSetWriteRefusalKind.RecordSetNotHeld"/> in
-    /// isolation; this drives the adapter's own translation of that into its own refusal code).
+    /// A record set written under NO enforced floor is still written, and the class it observed is
+    /// recorded rather than costing the run its records.
     /// </summary>
     /// <remarks>
     /// A real single-seed run, identical to
@@ -695,7 +841,7 @@ public sealed class EuQueryExecutionAdapterTests
     /// total turns out to be.
     /// </remarks>
     [TestMethod]
-    public async Task ARecordSetWriteWhoseFloorIsUnenforcedRefusesTheWholeRunAsRecordSetNotHeld()
+    public async Task ARecordSetWriteWhoseFloorIsUnenforcedStillDeliversAndRecordsTheWeakerClass()
     {
         var seed = EuAppendixASeedMap.SeedsInCelexOrder[0];
         var rootIri = EuPackRootCanonicalForm.TryCanonicalize(seed.WorkRoot, out _)
@@ -725,6 +871,8 @@ public sealed class EuQueryExecutionAdapterTests
                 "X", xRows.Length, xRows, EuAcquisitionTestFixture.ExpressionFactsProjection),
             ["W"] = EuAcquisitionTestFixture.ScriptFor(
                 "W", wRows.Length, wRows, EuAcquisitionTestFixture.RootWatermarkProjection),
+            // D1-05d: family M, the office's own manifestation listing for this run's root.
+            ["M"] = EuAcquisitionTestFixture.ManifestationScriptFor(rootIri),
             ["Witness"] = new EuAcquisitionTestFixture.FamilyScript(
                 "Witness", EuAcquisitionTestFixture.WitnessEmptyTraversalScript(rootIri, watermarkLexical)),
         };
@@ -752,12 +900,18 @@ public sealed class EuQueryExecutionAdapterTests
                 wPlan, wPlanId, EuObjectFactsQuerySet.RootWatermark, [rootIri],
                 EuAcquisitionTestFixture.BuildRendererSource(944));
 
+            var (mPlan, mPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
+            var mRequest = new EuObjectFactsPartitionRunRequest(
+                mPlan, mPlanId, EuObjectFactsQuerySet.ManifestationFacts, [rootIri],
+                EuAcquisitionTestFixture.BuildRendererSource(1044));
+
             return await adapter.RunAsync(
                 [(censusRequest, EuAcquisitionTestFixture.SourceWitness())],
                 [
                     (pRequest, EuAcquisitionTestFixture.SourceWitness()),
                     (xRequest, EuAcquisitionTestFixture.SourceWitness()),
                     (wRequest, EuAcquisitionTestFixture.SourceWitness()),
+                    (mRequest, EuAcquisitionTestFixture.SourceWitness()),
                 ],
                 EuAcquisitionTestFixture.BuildRendererSource(945),
                 EuAcquisitionTestFixture.SourceWitness(),
@@ -782,9 +936,100 @@ public sealed class EuQueryExecutionAdapterTests
         var result = await RunOnceAsync(
             new EuAcquisitionTestFixture.EuInMemoryCustodyStore(unenforceCallOrdinal: totalCustodyWrites));
 
-        Assert.IsNotNull(result.Refusal, "an unenforced record-set write must refuse the whole run, not deliver silently.");
-        Assert.AreEqual(EuQueryExecutionRefusal.RecordSetNotHeld, result.Refusal!.Code);
-        StringAssert.Contains(result.Refusal.Detail, "no retention floor");
+        // RULING lex-event-20260904T213727510Z-671a8c2563684ab49048677997ceef1c. This used to refuse the
+        // whole run at its literal last step, so a store publishing no enforcement threw away every
+        // record the run had just built. The set is written and the class is recorded.
+        Assert.IsNull(result.Refusal, $"code={result.Refusal?.Code} detail={result.Refusal?.Detail}");
+        Assert.IsNotNull(result.CorpusRecordSet);
+        Assert.IsNotNull(result.CorpusRecordSetRef);
+
+        // GATE TWO, the scope manifest's own custody write.
+        //
+        // This test exists because the mutation that restores gate two's floor check SURVIVED the
+        // first sweep. Unenforcing a session artifact does not reach it and unenforcing the last
+        // write is the record set's, so nothing drove the manifest write specifically and its
+        // record-and-continue behaviour was asserted nowhere.
+        //
+        // Targeted by ORDINAL, discovered from pass one, because the manifest's own digest is not
+        // stable across runs: it embeds a fresh urn:uuid, so its bytes differ every time while its
+        // position in the write order does not. Discovering the ordinal by matching pass one's own
+        // manifest receipt against pass one's own write order keeps this a measurement rather than a
+        // guess. What proves the right write was hit is the class assertion below: the manifest's own
+        // receipt comes back RetainedUnenforced, which only the targeted write can produce.
+        var manifestOrdinal = discoveryStore.WrittenDigestsInOrder
+            .Select(static (digest, index) => (Digest: digest, Ordinal: index + 1))
+            .Single(entry => string.Equals(
+                entry.Digest,
+                firstResult.ScopeManifestReceipt!.Reference.ContentSha256,
+                StringComparison.Ordinal))
+            .Ordinal;
+        Assert.AreNotEqual(
+            totalCustodyWrites,
+            manifestOrdinal,
+            "the manifest must not be the last write, or this would be the record set's gate again.");
+
+        var manifestUnenforced = await RunOnceAsync(
+            new EuAcquisitionTestFixture.EuInMemoryCustodyStore(unenforceCallOrdinal: manifestOrdinal));
+
+        Assert.IsNull(
+            manifestUnenforced.Refusal,
+            "an unenforced scope manifest was written correctly and must not be thrown away: " +
+            $"code={manifestUnenforced.Refusal?.Code} detail={manifestUnenforced.Refusal?.Detail}");
+        Assert.IsNotNull(manifestUnenforced.ScopeManifestReceipt);
+        Assert.AreEqual(
+            CustodyMembership.RetainedUnenforced,
+            CustodyMembershipClassifier.Classify(manifestUnenforced.ScopeManifestReceipt!),
+            "the manifest's observed class must be recorded on the receipt the run carries out.");
+        Assert.IsNotNull(manifestUnenforced.CorpusRecordSet);
+
+        // GATE ONE, the executor's own bootstrap floor, driven through a real RunAsync. The FIRST
+        // custody write a run makes is a session bootstrap artifact, before any product request, and
+        // that is exactly the membership the executor used to refuse on: RULING
+        // lex-event-20260904T213727510Z-671a8c2563684ab49048677997ceef1c. Unenforcing it used to end
+        // the whole run at productRequestCount 0, so none of the later gates was even reachable.
+        //
+        // Only that one write is unenforced, deliberately. Unenforcing EVERY write changes the bytes
+        // of every retained delivery artifact, so the evidence refs this run binds against stop
+        // resolving and the run refuses for an unrelated fixture reason ("the retained SPARQL
+        // evidence tuple does not bind"). That is a property of the scripted resolver, not of the
+        // gates, and the store-wide condition is what the live canary on FileSystemCustodyStore
+        // exercises instead.
+        var everythingUnenforced = await RunOnceAsync(
+            new EuAcquisitionTestFixture.EuInMemoryCustodyStore(unenforceCallOrdinal: 1));
+
+        Assert.IsNull(
+            everythingUnenforced.Refusal,
+            "a store that enforces nothing must still deliver: " +
+            $"code={everythingUnenforced.Refusal?.Code} detail={everythingUnenforced.Refusal?.Detail} " +
+            "outcomes=[" + string.Join("; ", everythingUnenforced.FamilyOutcomes.Select(
+                o => $"{o.Kind}/{o.ExecutorRefusal?.Code}/{o.ExecutorRefusal?.CoreRefusalDetail}/{o.ProofRefusal}")) + "]");
+        Assert.AreEqual(EuQueryExecutionCompletion.AllFamiliesProven, everythingUnenforced.Completion);
+        Assert.IsNotNull(everythingUnenforced.CorpusRecordSet);
+        Assert.IsNotNull(everythingUnenforced.ScopeManifestReceipt);
+
+        // Every family proves, and each outcome RECORDS a class rather than leaving one unstated.
+        Assert.IsTrue(everythingUnenforced.FamilyOutcomes.Count > 0);
+        foreach (var outcome in everythingUnenforced.FamilyOutcomes)
+        {
+            Assert.AreEqual(
+                EuFamilyEnumerationOutcomeKind.Proven,
+                outcome.Kind,
+                $"family {outcome.FamilyKey} did not prove: {outcome.ExecutorRefusal?.Code} {outcome.ProofRefusal}");
+            Assert.IsNotNull(
+                outcome.RetainedFloor,
+                "a proven family must say which of the three its run was.");
+        }
+
+        // Floored, and that is the honest answer here rather than a weakness in the test: the one
+        // unenforced write is a SESSION BOOTSTRAP artifact, and a delivery receipt's floor is taken
+        // over the artifacts that delivery itself names. What this test proves is that the executor
+        // no longer refuses the run over that artifact. That an unenforced DELIVERY member lowers
+        // the proof's own class is held one layer down, where it is directly observable, by
+        // RepeatedEnumerationDeliveryReceiptTests
+        // .TheReceiptNamesEveryUnenforcedDigestAndStillMintsAProofCarryingThatClass.
+        Assert.AreEqual(
+            CustodyMembership.Floored,
+            everythingUnenforced.FamilyOutcomes[0].RetainedFloor);
         // No assertion on DocumentAcquisitionOutcomesByOrdinal here on purpose. A refused result
         // passes null for it unconditionally, so asserting null on this path cannot fail and would
         // be evidence of nothing (REVIEW_RESULT lex-event-20260904T165317709Z-8282f67ac5234a68a5fa108a76840dfe
@@ -819,9 +1064,9 @@ public sealed class EuQueryExecutionAdapterTests
             [input.ObjectRef],
             [input],
             new PermissiveEvidenceResolver(CompleteEnumerationRef)).Manifest;
-        var mintedAddressesByObjectRef = new Dictionary<SourceObjectRef, EuDocumentFetchAddress>
+        var mintedAddressesByObjectRef = new Dictionary<SourceObjectRef, IReadOnlyList<EuDocumentFetchAddress>>
         {
-            [input.ObjectRef] = address,
+            [input.ObjectRef] = new[] { address },
         };
 
         // The real retained GDPR wrong-token 400 canary
@@ -839,7 +1084,7 @@ public sealed class EuQueryExecutionAdapterTests
             store, new EuAcquisitionTestFixture.FixedTimeProvider(), handler);
         var adapter = new EuQueryExecutionAdapter(store, executor);
 
-        var (outcomes, refusal) = await adapter.RunDocumentAcquisitionAsync(
+        var (outcomes, ladderResults, refusal) = await adapter.RunDocumentAcquisitionAsync(
             manifest,
             mintedAddressesByObjectRef,
             EuAcquisitionTestFixture.BuildRendererSource(9201),
@@ -887,9 +1132,9 @@ public sealed class EuQueryExecutionAdapterTests
             [input.ObjectRef],
             [input],
             new PermissiveEvidenceResolver(CompleteEnumerationRef)).Manifest;
-        var mintedAddressesByObjectRef = new Dictionary<SourceObjectRef, EuDocumentFetchAddress>
+        var mintedAddressesByObjectRef = new Dictionary<SourceObjectRef, IReadOnlyList<EuDocumentFetchAddress>>
         {
-            [input.ObjectRef] = address,
+            [input.ObjectRef] = new[] { address },
         };
 
         var handler = new EuAcquisitionTestFixture.ClassifyingHandler(
@@ -901,7 +1146,7 @@ public sealed class EuQueryExecutionAdapterTests
             store, new EuAcquisitionTestFixture.FixedTimeProvider(), handler);
         var adapter = new EuQueryExecutionAdapter(store, executor);
 
-        var (outcomes, refusal) = await adapter.RunDocumentAcquisitionAsync(
+        var (outcomes, ladderResults, refusal) = await adapter.RunDocumentAcquisitionAsync(
             manifest,
             mintedAddressesByObjectRef,
             EuAcquisitionTestFixture.BuildRendererSource(9301),
@@ -939,9 +1184,9 @@ public sealed class EuQueryExecutionAdapterTests
             [input.ObjectRef],
             [input],
             new PermissiveEvidenceResolver(CompleteEnumerationRef)).Manifest;
-        var mintedAddressesByObjectRef = new Dictionary<SourceObjectRef, EuDocumentFetchAddress>
+        var mintedAddressesByObjectRef = new Dictionary<SourceObjectRef, IReadOnlyList<EuDocumentFetchAddress>>
         {
-            [input.ObjectRef] = address,
+            [input.ObjectRef] = new[] { address },
         };
 
         var handler = new DocumentFetchRobotsDenyingHandler();
@@ -950,7 +1195,7 @@ public sealed class EuQueryExecutionAdapterTests
             store, new EuAcquisitionTestFixture.FixedTimeProvider(), handler);
         var adapter = new EuQueryExecutionAdapter(store, executor);
 
-        var (outcomes, refusal) = await adapter.RunDocumentAcquisitionAsync(
+        var (outcomes, ladderResults, refusal) = await adapter.RunDocumentAcquisitionAsync(
             manifest,
             mintedAddressesByObjectRef,
             EuAcquisitionTestFixture.BuildRendererSource(9301),
@@ -1050,6 +1295,8 @@ public sealed class EuQueryExecutionAdapterTests
             ["W"] = EuAcquisitionTestFixture.ScriptFor(
                 "W", wRows.Length, wRows,
                 EuAcquisitionTestFixture.RootWatermarkProjection),
+            // D1-05d: family M, the office's own manifestation listing for this run's root.
+            ["M"] = EuAcquisitionTestFixture.ManifestationScriptFor(rootIri),
         };
 
         var handler = new EuAcquisitionTestFixture.ClassifyingHandler(scripts);
@@ -1074,12 +1321,18 @@ public sealed class EuQueryExecutionAdapterTests
             wPlan, wPlanId, EuObjectFactsQuerySet.RootWatermark, [rootIri],
             EuAcquisitionTestFixture.BuildRendererSource(8));
 
+        var (mPlan, mPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
+        var mRequest = new EuObjectFactsPartitionRunRequest(
+            mPlan, mPlanId, EuObjectFactsQuerySet.ManifestationFacts, [rootIri],
+            EuAcquisitionTestFixture.BuildRendererSource(108));
+
         var result = await adapter.RunAsync(
             [(censusRequest, EuAcquisitionTestFixture.SourceWitness())],
             [
                 (pRequest, EuAcquisitionTestFixture.SourceWitness()),
                 (xRequest, EuAcquisitionTestFixture.SourceWitness()),
                 (wRequest, EuAcquisitionTestFixture.SourceWitness()),
+                (mRequest, EuAcquisitionTestFixture.SourceWitness()),
             ],
             EuAcquisitionTestFixture.BuildRendererSource(80),
             EuAcquisitionTestFixture.SourceWitness(),
@@ -1173,6 +1426,8 @@ public sealed class EuQueryExecutionAdapterTests
                 "X", xRows.Length, xRows, EuAcquisitionTestFixture.ExpressionFactsProjection),
             ["W"] = EuAcquisitionTestFixture.ScriptFor(
                 "W", wRows.Length, wRows, EuAcquisitionTestFixture.RootWatermarkProjection),
+            // D1-05d: family M, the office's own manifestation listing for this run's root.
+            ["M"] = EuAcquisitionTestFixture.ManifestationScriptFor(rootIri),
             ["Witness"] = new EuAcquisitionTestFixture.FamilyScript(
                 "Witness",
                 EuAcquisitionTestFixture.WitnessEmptyTraversalScript(
@@ -1205,12 +1460,18 @@ public sealed class EuQueryExecutionAdapterTests
             wPlan, wPlanId, EuObjectFactsQuerySet.RootWatermark, [rootIri],
             EuAcquisitionTestFixture.BuildRendererSource(24));
 
+        var (mPlan, mPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
+        var mRequest = new EuObjectFactsPartitionRunRequest(
+            mPlan, mPlanId, EuObjectFactsQuerySet.ManifestationFacts, [rootIri],
+            EuAcquisitionTestFixture.BuildRendererSource(124));
+
         var result = await adapter.RunAsync(
             [(censusRequest, EuAcquisitionTestFixture.SourceWitness())],
             [
                 (pRequest, EuAcquisitionTestFixture.SourceWitness()),
                 (xRequest, EuAcquisitionTestFixture.SourceWitness()),
                 (wRequest, EuAcquisitionTestFixture.SourceWitness()),
+                (mRequest, EuAcquisitionTestFixture.SourceWitness()),
             ],
             EuAcquisitionTestFixture.BuildRendererSource(29),
             EuAcquisitionTestFixture.SourceWitness(),
@@ -1232,7 +1493,8 @@ public sealed class EuQueryExecutionAdapterTests
             .Select(static outcome => outcome.DeliveredRowCount!.Value)
             .OrderBy(static value => value)
             .ToArray();
-        CollectionAssert.AreEqual(new long[] { 1, 1, 2, 39 }, byRows);
+        // D1-05d adds family M's own six delivered rows (see the sibling full-run test).
+        CollectionAssert.AreEqual(new long[] { 1, 1, 2, 6, 39 }, byRows);
         Assert.AreEqual(3, result.ObservedObjectCount, "root + the 2 states this fixture itself delivered.");
         Assert.IsNotNull(result.RootBinding);
         CollectionAssert.AreEqual(new[] { rootIri }, result.RootBinding!.DiscoveredRoots.ToArray());
@@ -1280,6 +1542,8 @@ public sealed class EuQueryExecutionAdapterTests
                 "X", xRows.Length, xRows, EuAcquisitionTestFixture.ExpressionFactsProjection),
             ["W"] = EuAcquisitionTestFixture.ScriptFor(
                 "W", wRows.Length, wRows, EuAcquisitionTestFixture.RootWatermarkProjection),
+            // D1-05d: family M, the office's own manifestation listing for this run's root.
+            ["M"] = EuAcquisitionTestFixture.ManifestationScriptFor(rootIri),
         };
 
         var handler = new EuAcquisitionTestFixture.ClassifyingHandler(scripts);
@@ -1307,12 +1571,18 @@ public sealed class EuQueryExecutionAdapterTests
             wPlan, wPlanId, EuObjectFactsQuerySet.RootWatermark, [rootIri],
             EuAcquisitionTestFixture.BuildRendererSource(34));
 
+        var (mPlan, mPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
+        var mRequest = new EuObjectFactsPartitionRunRequest(
+            mPlan, mPlanId, EuObjectFactsQuerySet.ManifestationFacts, [rootIri],
+            EuAcquisitionTestFixture.BuildRendererSource(134));
+
         var result = await adapter.RunAsync(
             [(censusRequest, EuAcquisitionTestFixture.SourceWitness())],
             [
                 (pRequest, EuAcquisitionTestFixture.SourceWitness()),
                 (xRequest, EuAcquisitionTestFixture.SourceWitness()),
                 (wRequest, EuAcquisitionTestFixture.SourceWitness()),
+                (mRequest, EuAcquisitionTestFixture.SourceWitness()),
             ],
             EuAcquisitionTestFixture.BuildRendererSource(35),
             EuAcquisitionTestFixture.SourceWitness(),
@@ -1383,6 +1653,8 @@ public sealed class EuQueryExecutionAdapterTests
                 "X", xRows.Length, xRows, EuAcquisitionTestFixture.ExpressionFactsProjection),
             ["W"] = EuAcquisitionTestFixture.ScriptFor(
                 "W", wRows.Length, wRows, EuAcquisitionTestFixture.RootWatermarkProjection),
+            // D1-05d: family M, the office's own manifestation listing for this run's root.
+            ["M"] = EuAcquisitionTestFixture.ManifestationScriptFor(rootIri),
         };
 
         var handler = new EuAcquisitionTestFixture.ClassifyingHandler(scripts);
@@ -1410,12 +1682,18 @@ public sealed class EuQueryExecutionAdapterTests
             wPlan, wPlanId, EuObjectFactsQuerySet.RootWatermark, [rootIri, otherRootIri],
             EuAcquisitionTestFixture.BuildRendererSource(44));
 
+        var (mPlan, mPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
+        var mRequest = new EuObjectFactsPartitionRunRequest(
+            mPlan, mPlanId, EuObjectFactsQuerySet.ManifestationFacts, [rootIri, otherRootIri],
+            EuAcquisitionTestFixture.BuildRendererSource(144));
+
         var result = await adapter.RunAsync(
             [(censusRequest, EuAcquisitionTestFixture.SourceWitness())],
             [
                 (pRequest, EuAcquisitionTestFixture.SourceWitness()),
                 (xRequest, EuAcquisitionTestFixture.SourceWitness()),
                 (wRequest, EuAcquisitionTestFixture.SourceWitness()),
+                (mRequest, EuAcquisitionTestFixture.SourceWitness()),
             ],
             EuAcquisitionTestFixture.BuildRendererSource(45),
             EuAcquisitionTestFixture.SourceWitness(),
@@ -1583,6 +1861,8 @@ public sealed class EuQueryExecutionAdapterTests
                 "X", xRows.Length, xRows, EuAcquisitionTestFixture.ExpressionFactsProjection),
             ["W"] = EuAcquisitionTestFixture.ScriptFor(
                 "W", wRows.Length, wRows, EuAcquisitionTestFixture.RootWatermarkProjection),
+            // D1-05d: family M, the office's own manifestation listing for this run's root.
+            ["M"] = EuAcquisitionTestFixture.ManifestationScriptFor(rootIri),
             ["Witness"] = new EuAcquisitionTestFixture.FamilyScript(
                 "Witness",
                 EuAcquisitionTestFixture.WitnessEmptyTraversalScript(rootIri, watermarkLexical)),
@@ -1610,6 +1890,11 @@ public sealed class EuQueryExecutionAdapterTests
             wPlan, wPlanId, EuObjectFactsQuerySet.RootWatermark, [rootIri],
             EuAcquisitionTestFixture.BuildRendererSource(704));
 
+        var (mPlan, mPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
+        var mRequest = new EuObjectFactsPartitionRunRequest(
+            mPlan, mPlanId, EuObjectFactsQuerySet.ManifestationFacts, [rootIri],
+            EuAcquisitionTestFixture.BuildRendererSource(804));
+
         Assert.AreEqual(0, handler.OccurrenceCountFor("Witness"), "no witness request should have been sent before the run.");
 
         var result = await adapter.RunAsync(
@@ -1618,6 +1903,7 @@ public sealed class EuQueryExecutionAdapterTests
                 (pRequest, EuAcquisitionTestFixture.SourceWitness()),
                 (xRequest, EuAcquisitionTestFixture.SourceWitness()),
                 (wRequest, EuAcquisitionTestFixture.SourceWitness()),
+                (mRequest, EuAcquisitionTestFixture.SourceWitness()),
             ],
             EuAcquisitionTestFixture.BuildRendererSource(705),
             EuAcquisitionTestFixture.SourceWitness(),
@@ -1676,6 +1962,8 @@ public sealed class EuQueryExecutionAdapterTests
                 "X", xRows.Length, xRows, EuAcquisitionTestFixture.ExpressionFactsProjection),
             ["W"] = EuAcquisitionTestFixture.ScriptFor(
                 "W", wRows.Length, wRows, EuAcquisitionTestFixture.RootWatermarkProjection),
+            // D1-05d: family M, the office's own manifestation listing for this run's root.
+            ["M"] = EuAcquisitionTestFixture.ManifestationScriptFor(rootIri),
             ["Witness"] = new EuAcquisitionTestFixture.FamilyScript(
                 "Witness",
                 EuAcquisitionTestFixture.WitnessOneNewEntryTraversalScript(
@@ -1704,12 +1992,18 @@ public sealed class EuQueryExecutionAdapterTests
             wPlan, wPlanId, EuObjectFactsQuerySet.RootWatermark, [rootIri],
             EuAcquisitionTestFixture.BuildRendererSource(714));
 
+        var (mPlan, mPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
+        var mRequest = new EuObjectFactsPartitionRunRequest(
+            mPlan, mPlanId, EuObjectFactsQuerySet.ManifestationFacts, [rootIri],
+            EuAcquisitionTestFixture.BuildRendererSource(814));
+
         var result = await adapter.RunAsync(
             [(censusRequest, EuAcquisitionTestFixture.SourceWitness())],
             [
                 (pRequest, EuAcquisitionTestFixture.SourceWitness()),
                 (xRequest, EuAcquisitionTestFixture.SourceWitness()),
                 (wRequest, EuAcquisitionTestFixture.SourceWitness()),
+                (mRequest, EuAcquisitionTestFixture.SourceWitness()),
             ],
             EuAcquisitionTestFixture.BuildRendererSource(715),
             EuAcquisitionTestFixture.SourceWitness(),
@@ -1771,6 +2065,8 @@ public sealed class EuQueryExecutionAdapterTests
                 "X", xRows.Length, xRows, EuAcquisitionTestFixture.ExpressionFactsProjection),
             ["W"] = EuAcquisitionTestFixture.ScriptFor(
                 "W", wRows.Length, wRows, EuAcquisitionTestFixture.RootWatermarkProjection),
+            // D1-05d: family M, the office's own manifestation listing for this run's root.
+            ["M"] = EuAcquisitionTestFixture.ManifestationScriptFor(rootIri),
         };
 
         var handler = new EuAcquisitionTestFixture.ClassifyingHandler(scripts);
@@ -1795,12 +2091,18 @@ public sealed class EuQueryExecutionAdapterTests
             wPlan, wPlanId, EuObjectFactsQuerySet.RootWatermark, [rootIri],
             EuAcquisitionTestFixture.BuildRendererSource(724));
 
+        var (mPlan, mPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
+        var mRequest = new EuObjectFactsPartitionRunRequest(
+            mPlan, mPlanId, EuObjectFactsQuerySet.ManifestationFacts, [rootIri],
+            EuAcquisitionTestFixture.BuildRendererSource(824));
+
         var result = await adapter.RunAsync(
             [(censusRequest, EuAcquisitionTestFixture.SourceWitness())],
             [
                 (pRequest, EuAcquisitionTestFixture.SourceWitness()),
                 (xRequest, EuAcquisitionTestFixture.SourceWitness()),
                 (wRequest, EuAcquisitionTestFixture.SourceWitness()),
+                (mRequest, EuAcquisitionTestFixture.SourceWitness()),
             ],
             EuAcquisitionTestFixture.BuildRendererSource(725),
             EuAcquisitionTestFixture.SourceWitness(),
@@ -1816,6 +2118,717 @@ public sealed class EuQueryExecutionAdapterTests
         StringAssert.Contains(result.Refusal.Detail, "unbound");
         // This refusal fires before defect 3's witness traversal is ever reached.
         Assert.AreEqual(0, handler.OccurrenceCountFor("Witness"));
+    }
+
+
+    // ================================================================================================
+    // D1-05d: the format axis, end to end. RULING
+    // lex-event-20260904T174138711Z-cdf5cbd17806423cbe05a6234cc4f262.
+    //
+    // Every publisher fact these tests script was observed live on 2026-09-04 under User-Agent
+    // Lex/0.1 against publications.europa.eu, on allowed paths only. CELEX 32003L0088, the Working
+    // Time Directive, is an Appendix A seed. Its own family-M listing names six types (fmx4, html,
+    // pdf, pdfa1a, print, xhtml); of the two this route can address, the office answers 404 to
+    // Accept: application/xhtml+xml with the datastream-absent body and 200 to Accept: text/html at
+    // 37,616 bytes, digest 0d23ad4953be900de8a614fea4022aa46086e0bdc2fdfd6d0fde0cd84429e4b6. That is
+    // both the fall-through arm and the pre-2004 Held proof in one real object.
+    // ================================================================================================
+
+    /// <summary>
+    /// The exact 404 body the office returns for a listed-but-unservable type, reconstructed from the
+    /// one Cellar identifier it names. Checked against the retained digests by
+    /// <see cref="TheRetainedDatastreamAbsent404BodyIsReproducedByteExactly"/>, so this is a pinned
+    /// observation and not a paraphrase.
+    /// </summary>
+    private static byte[] DatastreamAbsent404Body(string cellarKey) => System.Text.Encoding.UTF8.GetBytes(
+        "None of the requests returned successfully a redirection. The following exception was " +
+        "thrown: [cellar identifier cellar:" + cellarKey +
+        " does not hold a content datastream of the requested type]");
+
+    [TestMethod]
+    public void TheRetainedDatastreamAbsent404BodyIsReproducedByteExactly()
+    {
+        // Three separate retained observations, each reconstructed from its own Cellar identifier and
+        // checked against the digest that observation actually carried. Two are this lane's own live
+        // probes; the third (32006L0112) is the digest of the file PROBE_RESULT
+        // lex-event-20260904T174922051Z-9b8f01162e384f1a90204a57ba7c6967 retained, so the
+        // reconstruction is checked against a body a different session wrote down.
+        foreach (var (cellarKey, digest) in new (string, string)[]
+                 {
+                     ("050dd964-4f94-4c61-ab50-89217a0d90e2",
+                      "af7411942c4affead28128a23643efc5bfae06a0ec665be85f6241a486a90dfd"),
+                     ("3db0a06f-cae9-433d-a229-dde3e68d6dc7",
+                      "110e6c443de6074c0b8ffa1209a2319d99009be220a182f7208ce9c9e4ffb394"),
+                     ("ded2ee9c-f30e-4ed1-ab74-b2b7d7a7a6b6",
+                      "c2a9aa144b7d652376be1a824c607aa32d919c45c15ccf73245c73555d3df3f8"),
+                 })
+        {
+            var body = DatastreamAbsent404Body(cellarKey);
+            Assert.HasCount(214, body, cellarKey);
+            Assert.AreEqual(
+                digest,
+                Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(body)),
+                cellarKey);
+        }
+    }
+
+    /// <summary>
+    /// The slice's whole point. A real pre-2004 Appendix A act whose office lists xhtml and html: the
+    /// ladder attempts xhtml first (the address the manifest row carries), the office answers the
+    /// datastream-absent 404, the run falls through to text/html within the same run, and the record
+    /// is Held. Before D1-05d this object recorded NotHeld, because no format disposition existed at
+    /// all and the body axis could never be accepted.
+    /// </summary>
+    [TestMethod]
+    public async Task ARealPre2004ActRecordsHeldThroughTextHtmlWhereItRecordedNotHeld()
+    {
+        var (result, handler, store) = await RunWorkingTimeDirectiveAsync(
+            EuAcquisitionTestFixture.RealBandListedTypes,
+            WorkingTimeLadderResponse);
+
+        Assert.IsNull(result.Refusal, $"code={result.Refusal?.Code} detail={result.Refusal?.Detail}");
+
+        // Two GETs, not one: the ladder really did fall through rather than stopping at its first
+        // candidate. Both attempts went through the same routed session and are retained.
+        Assert.AreEqual(2, handler.DocumentFetchCount, "the ladder must attempt xhtml, then html.");
+        CollectionAssert.AreEqual(
+            new[] { "application/xhtml+xml", "text/html" },
+            handler.DocumentFetchAcceptTokens.ToArray(),
+            "the attempts must be in the closed ladder order, one exact Accept token each.");
+
+        // The record is HELD, and it holds the bytes text/html served.
+        Assert.IsNotNull(result.DocumentAcquisitionOutcomesByOrdinal);
+        Assert.HasCount(1, result.DocumentAcquisitionOutcomesByOrdinal!);
+        var outcome = result.DocumentAcquisitionOutcomesByOrdinal!.Values.Single();
+        Assert.IsNotNull(outcome.Receipt, "the object must record Held, not PendingAcquisition.");
+        Assert.IsNull(outcome.Refusal);
+        Assert.AreEqual(
+            Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(WorkingTimeHtmlBody)),
+            outcome.Receipt!.Reference.ContentSha256,
+            "the held body must be the bytes text/html served, never the 404 body xhtml answered.");
+
+        // The run NAMES the format it actually holds, which the manifest row's own single address
+        // cannot: that address is still xhtml, the first attempt.
+        Assert.IsNotNull(result.DocumentLadderResultsByOrdinal);
+        var ladder = result.DocumentLadderResultsByOrdinal!.Values.Single();
+        CollectionAssert.AreEqual(
+            new[] { EuManifestationMediaType.XhtmlXml, EuManifestationMediaType.TextHtml },
+            ladder.Attempted.ToArray());
+        Assert.AreEqual(EuManifestationMediaType.TextHtml, ladder.Served);
+
+        // The RULING's "the manifest row keeps ONE fetch address, the first candidate, no schema
+        // bump": the row still says application/xhtml+xml, the FIRST ATTEMPT, even though this run
+        // holds text/html. Reading that address back as the held format would misreport every
+        // fall-through object, which is exactly why the ladder result exists beside it.
+        var rowAddress = await ReopenSingleRowFetchAddressAsync(result, store);
+        Assert.AreEqual(ScopeManifestFetchAddressStatus.Minted, rowAddress.Status);
+        Assert.AreEqual("application/xhtml+xml", rowAddress.AcceptMediaType);
+        Assert.AreEqual("eng", rowAddress.AcceptLanguage);
+
+        // The scope ruling asks for Held on the RECORD, not only on this run's own outcome map and
+        // manifest row, so the reopened corpus/6 record set is where this slice's central claim is
+        // finally checked: before D1-05d this object's record was NotHeld.
+        Assert.IsNotNull(result.CorpusRecordSet);
+        var record = result.CorpusRecordSet!.Set.Records.Single();
+        Assert.AreEqual(CorpusBodyRecordKind.Held, record.Body.Kind);
+    }
+
+    /// <summary>
+    /// Same act, same ladder, but the office serves neither listed candidate. The object records
+    /// PendingAcquisition with RequestedRepresentationNotServed and the tried types, and no new
+    /// vocabulary member was added to say it.
+    /// </summary>
+    [TestMethod]
+    public async Task WhenEveryListedCandidate404sTheObjectRecordsRequestedRepresentationNotServed()
+    {
+        var (result, handler, store) = await RunWorkingTimeDirectiveAsync(
+            EuAcquisitionTestFixture.RealBandListedTypes,
+            request => EuAcquisitionTestFixture.BinaryResponse(
+                request,
+                System.Net.HttpStatusCode.NotFound,
+                DatastreamAbsent404Body(WorkingTimeCellarKey)));
+
+        Assert.IsNull(result.Refusal, $"code={result.Refusal?.Code} detail={result.Refusal?.Detail}");
+        Assert.AreEqual(3, handler.DocumentFetchCount, "every listed candidate must be attempted.");
+
+        var outcome = result.DocumentAcquisitionOutcomesByOrdinal!.Values.Single();
+        Assert.IsNull(outcome.Receipt);
+        Assert.AreEqual(CorpusAcquisitionRefusalReason.RequestedRepresentationNotServed, outcome.Refusal);
+
+        // The tried types travel with the refusal: that is the RULING's "the tried types in evidence".
+        // Three of them, because this Work's real listing carries pdf as well, and the ruled ladder's
+        // fourth rung became addressable with RULING
+        // lex-event-20260904T185339315Z-87d1510eccdc42a5947c41d2d8580744.
+        var ladder = result.DocumentLadderResultsByOrdinal!.Values.Single();
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                EuManifestationMediaType.XhtmlXml, EuManifestationMediaType.TextHtml,
+                EuManifestationMediaType.ApplicationPdf,
+            },
+            ladder.Attempted.ToArray());
+        Assert.IsNull(ladder.Served, "nothing was served, so nothing may be named as served.");
+    }
+
+    /// <summary>
+    /// Typed absence keeps its one meaning: the office lists NOTHING. Family M returns its explicit
+    /// absence row, no format observation is minted, the body axis is a typed gap, and no GET is sent
+    /// at all. Deliberately NOT the same outcome as a ladder that ran out of candidates.
+    /// </summary>
+    [TestMethod]
+    public async Task AnOfficeThatListsNothingRecordsTypedAbsenceAndSendsNoDocumentFetch()
+    {
+        var (result, handler, store) = await RunWorkingTimeDirectiveAsync(
+            null,
+            request => EuAcquisitionTestFixture.BinaryResponse(
+                request, System.Net.HttpStatusCode.OK, [1, 2, 3]));
+
+        Assert.IsNull(result.Refusal, $"code={result.Refusal?.Code} detail={result.Refusal?.Detail}");
+        Assert.AreEqual(
+            0,
+            handler.DocumentFetchCount,
+            "an office that lists nothing must produce no fetch attempt at all.");
+        Assert.HasCount(0, result.DocumentAcquisitionOutcomesByOrdinal!);
+        Assert.HasCount(0, result.DocumentLadderResultsByOrdinal!);
+    }
+
+    /// <summary>
+    /// A listing whose only addressable wording format is print reaches never-ingest, so no fetch is
+    /// attempted either -- but for a different, permanent reason than the typed absence above.
+    /// </summary>
+    [TestMethod]
+    public async Task AListingOfferingOnlyPrintSendsNoDocumentFetchEither()
+    {
+        var (result, handler, store) = await RunWorkingTimeDirectiveAsync(
+            ["print"],
+            request => EuAcquisitionTestFixture.BinaryResponse(
+                request, System.Net.HttpStatusCode.OK, [1, 2, 3]));
+
+        Assert.IsNull(result.Refusal, $"code={result.Refusal?.Code} detail={result.Refusal?.Detail}");
+        Assert.AreEqual(0, handler.DocumentFetchCount, "no digital body can ever be read off paper.");
+        Assert.HasCount(0, result.DocumentAcquisitionOutcomesByOrdinal!);
+    }
+
+    /// <summary>
+    /// The first candidate serving stops the ladder: a run must never keep asking for
+    /// representations after it already holds one.
+    /// </summary>
+    [TestMethod]
+    public async Task WhenTheFirstCandidateServesTheLadderStopsThereAndNamesIt()
+    {
+        var (result, handler, store) = await RunWorkingTimeDirectiveAsync(
+            EuAcquisitionTestFixture.RealBandListedTypes,
+            request => EuAcquisitionTestFixture.BinaryResponse(
+                request,
+                System.Net.HttpStatusCode.OK,
+                WorkingTimeHtmlBody,
+                "application/xhtml+xml;charset=UTF-8"));
+
+        Assert.IsNull(result.Refusal, $"code={result.Refusal?.Code} detail={result.Refusal?.Detail}");
+        Assert.AreEqual(1, handler.DocumentFetchCount, "the second candidate must never be asked for.");
+        CollectionAssert.AreEqual(
+            new[] { "application/xhtml+xml" }, handler.DocumentFetchAcceptTokens.ToArray());
+
+        var ladder = result.DocumentLadderResultsByOrdinal!.Values.Single();
+        CollectionAssert.AreEqual(
+            new[] { EuManifestationMediaType.XhtmlXml }, ladder.Attempted.ToArray());
+        Assert.AreEqual(EuManifestationMediaType.XhtmlXml, ladder.Served);
+    }
+
+    /// <summary>
+    /// A 400 is not a 404, and the ladder must not treat it as one. An invalid Accept token answers
+    /// 400 "Illegal accept header" on this channel (retained probe
+    /// lex-event-20260904T130647372Z-1d98471443364a779feba8c3a524cf69), which is a defect in the
+    /// request rather than a fact about the publisher's holdings, so falling through would hide it
+    /// behind a second attempt that looks like a publisher answer.
+    /// </summary>
+    [TestMethod]
+    public async Task A400EndsTheLadderAtOnceRatherThanFallingThrough()
+    {
+        var (result, handler, store) = await RunWorkingTimeDirectiveAsync(
+            EuAcquisitionTestFixture.RealBandListedTypes,
+            request => EuAcquisitionTestFixture.BinaryResponse(
+                request,
+                System.Net.HttpStatusCode.BadRequest,
+                System.Text.Encoding.UTF8.GetBytes("Illegal accept header")));
+
+        Assert.IsNull(result.Refusal, $"code={result.Refusal?.Code} detail={result.Refusal?.Detail}");
+        Assert.AreEqual(
+            1, handler.DocumentFetchCount, "a 400 must stop this object's ladder, not fall through.");
+
+        var outcome = result.DocumentAcquisitionOutcomesByOrdinal!.Values.Single();
+        Assert.AreEqual(CorpusAcquisitionRefusalReason.WrongAcceptToken, outcome.Refusal);
+        Assert.IsNull(result.DocumentLadderResultsByOrdinal!.Values.Single().Served);
+    }
+
+    /// <summary>
+    /// The ruled ladder's FOURTH rung, driven end to end. RULING
+    /// lex-event-20260904T185339315Z-87d1510eccdc42a5947c41d2d8580744 admitted application/pdf as
+    /// this route's tenth media type, so a Work whose listed wording formats are all unservable now
+    /// falls all the way through to PDF and records Held rather than PendingAcquisition.
+    /// </summary>
+    /// <remarks>
+    /// What is observed and what is constructed, stated separately. Every individual response shape
+    /// here was observed live on 2026-09-04: the datastream-absent 404 for a listed-but-unservable
+    /// type (byte-exact, see TheRetainedDatastreamAbsent404BodyIsReproducedByteExactly), and a 200
+    /// to a bare Accept: application/pdf, seen on four separate works of which the largest,
+    /// 32006L0112, is retained at 486,142 bytes with digest
+    /// f73bd86fde543c4d36677b971890c30bf6750fe2f9c4dab166fb75176ec5be8a and the %PDF-1.4 magic. The
+    /// COMBINATION is constructed: no act probed answers 404 to both xhtml and html while serving
+    /// pdf, because in all five an earlier rung served. So this drives the rung with real response
+    /// shapes rather than replaying one real object, and says so rather than implying otherwise.
+    /// </remarks>
+    [TestMethod]
+    public async Task WhenBothWordingRungsAreUnservableTheLadderFallsAllTheWayThroughToPdf()
+    {
+        var (result, handler, _) = await RunWorkingTimeDirectiveAsync(
+            EuAcquisitionTestFixture.RealBandListedTypes,
+            request => request.Headers.Accept.ToString() == "application/pdf"
+                ? EuAcquisitionTestFixture.BinaryResponse(
+                    request, System.Net.HttpStatusCode.OK, PdfBody, "application/pdf;charset=UTF-8")
+                : EuAcquisitionTestFixture.BinaryResponse(
+                    request,
+                    System.Net.HttpStatusCode.NotFound,
+                    DatastreamAbsent404Body(WorkingTimeCellarKey)));
+
+        Assert.IsNull(result.Refusal, $"code={result.Refusal?.Code} detail={result.Refusal?.Detail}");
+        Assert.AreEqual(3, handler.DocumentFetchCount, "all three addressable rungs must be tried.");
+        CollectionAssert.AreEqual(
+            new[] { "application/xhtml+xml", "text/html", "application/pdf" },
+            handler.DocumentFetchAcceptTokens.ToArray(),
+            "the attempts must follow the ruled order XHTML, html, PDF/A, PDF.");
+
+        var outcome = result.DocumentAcquisitionOutcomesByOrdinal!.Values.Single();
+        Assert.IsNotNull(outcome.Receipt, "the fourth rung serving must record Held.");
+        Assert.AreEqual(
+            Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(PdfBody)),
+            outcome.Receipt!.Reference.ContentSha256);
+
+        var ladder = result.DocumentLadderResultsByOrdinal!.Values.Single();
+        Assert.AreEqual(EuManifestationMediaType.ApplicationPdf, ladder.Served);
+    }
+
+    /// <summary>
+    /// Stand-in bytes for a served PDF body, carrying the real %PDF-1.4 header the retained
+    /// observation begins with. Deliberately not the real 486,142 bytes: this repository does not
+    /// commit publisher bodies as fixtures, and what this proves is which representation was fetched
+    /// and held. The real 200's own observed facts are pinned in
+    /// <see cref="EuManifestationMediaType.ApplicationPdf"/>'s own remarks.
+    /// </summary>
+    private static readonly byte[] PdfBody =
+        System.Text.Encoding.UTF8.GetBytes("%PDF-1.4\n% served-through-application-pdf\n");
+
+    /// <summary>
+    /// Fix one for REVIEW_RESULT lex-event-20260904T192428840Z-a6a8ebd26c58436aafd109a55303c12e
+    /// defect one: a minted format disposition names family M's OWN delivery evidence, and not
+    /// family P's.
+    /// </summary>
+    /// <remarks>
+    /// This is asserted here rather than in the contracts test because only the adapter chooses
+    /// which family's proof to hand the listing decode, and it used to hand it P's while M's own
+    /// proof went unused. What this test checks, exactly: the format selector and the language
+    /// selector of the same row cite DIFFERENT delivery evidence. That is the discriminating fact,
+    /// because under the defect both cited family P's one ref and were equal. It does not separately
+    /// name family M's ref, which the adapter does not publish anywhere a test can read; the
+    /// contracts-level
+    /// <c>EuCellarObjectDecodeTests.TheDecodeMintsAFormatObservationFromFamilyMsRowsAndNamesFamilyMsOwnEvidence</c>
+    /// holds that half, against two refs built from deliberately different labels.
+    /// </remarks>
+    [TestMethod]
+    public async Task AMintedFormatDispositionNamesFamilyMsOwnDeliveryEvidenceAndNotFamilyPs()
+    {
+        var (result, _, store) = await RunWorkingTimeDirectiveAsync(
+            EuAcquisitionTestFixture.RealBandListedTypes,
+            WorkingTimeLadderResponse);
+
+        Assert.IsNull(result.Refusal, $"code={result.Refusal?.Code} detail={result.Refusal?.Detail}");
+
+        // The manifest publishes each selector's evidence as an ordinal into its own ordered
+        // artifact list, so both refs are read back out of the written manifest rather than assumed.
+        var manifest = await ReopenManifestAsync(result, store);
+        var selectors = manifest.Rows.Single().Selectors;
+
+        SourceArtifactRef EvidenceFor(string canonicalValue)
+        {
+            var selector = selectors.Single(
+                candidate => candidate.CanonicalValues.Count == 1 &&
+                    candidate.CanonicalValues[0] == canonicalValue);
+            Assert.IsNotNull(
+                selector.EvidenceArtifactOrdinal, $"the '{canonicalValue}' selector cites no evidence.");
+            return manifest.OrderedEvidenceArtifacts[selector.EvidenceArtifactOrdinal!.Value];
+        }
+
+        // "xhtml" is the format selector's value for this Work, "eng" the language selector's. The
+        // language axis is read from families P and X, the format axis from family M, so the two
+        // must cite DIFFERENT delivery evidence. Before this fix the adapter stamped family P's ref
+        // on the format observation too, and these two were the same artifact.
+        var formatEvidence = EvidenceFor("xhtml");
+        var languageEvidence = EvidenceFor("ENG");
+
+        Assert.AreNotEqual(
+            languageEvidence,
+            formatEvidence,
+            "the format axis must name family M's own delivery evidence, not the sibling families'.");
+
+        // Every OTHER selector on the row cites the sibling families' one artifact, so the format
+        // selector is alone in citing family M's. This is what makes the inequality above a fact
+        // about which proof the adapter passed, rather than about which two selectors were picked.
+        foreach (var other in selectors.Where(
+            candidate => candidate.EvidenceArtifactOrdinal is not null &&
+                !(candidate.CanonicalValues.Count == 1 && candidate.CanonicalValues[0] == "xhtml")))
+        {
+            Assert.AreEqual(
+                languageEvidence,
+                manifest.OrderedEvidenceArtifacts[other.EvidenceArtifactOrdinal!.Value],
+                $"selector [{string.Join(',', other.CanonicalValues)}] should rest on the sibling " +
+                "families' proof.");
+        }
+
+        // The manifest really did carry two distinct artifacts, so nothing above is an artefact of
+        // one of them being absent.
+        Assert.HasCount(2, manifest.OrderedEvidenceArtifacts);
+        CollectionAssert.Contains(manifest.OrderedEvidenceArtifacts.ToArray(), formatEvidence);
+        CollectionAssert.Contains(manifest.OrderedEvidenceArtifacts.ToArray(), languageEvidence);
+    }
+
+    /// <summary>
+    /// A Work listing xhtml PLUS a manifestation type this vocabulary does not know is HELD, end to
+    /// end, through the real decode.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// OWNER RULING lex-event-20260904T205636383Z-e92b888b62c24df29fe3f8c1be5016f0: if a law can be
+    /// legitimately ingested, it is ingested, and unknown is recorded and never a reason. This
+    /// condition has shed two illegitimate refusals. It refused the whole seed's RUN until
+    /// REVIEW_RESULT lex-event-20260904T192428840Z-a6a8ebd26c58436aafd109a55303c12e, so the day the
+    /// office listed a new manifestation type anywhere in its catalogue every EU run would have
+    /// refused; it then quarantined the one WORK, so this exact listing recorded NotHeld with no
+    /// fetch attempted at all, while the office was serving the body over text/html the whole time.
+    /// One odd token in a listing must not cost us a law we can serve.
+    /// </para>
+    /// <para>
+    /// The listing is the real six-token band listing with one invented extra token standing in for
+    /// that future type, so what changes between this test and
+    /// <see cref="ARealPre2004ActRecordsHeldThroughTextHtmlWhereItRecordedNotHeld"/> is exactly the
+    /// unknown token and nothing else. Both must end Held, on the same two attempts, with the same
+    /// held bytes.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public async Task AWorkListingXhtmlPlusAnUnknownTypeIsStillHeld()
+    {
+        var withFutureType = EuAcquisitionTestFixture.RealBandListedTypes
+            .Concat(["epub3"])
+            .ToArray();
+
+        var (result, handler, store) = await RunWorkingTimeDirectiveAsync(
+            withFutureType, WorkingTimeLadderResponse);
+
+        Assert.IsNull(
+            result.Refusal,
+            "one unknown publisher token must never refuse the run: " +
+            $"code={result.Refusal?.Code} detail={result.Refusal?.Detail}");
+        Assert.AreEqual(EuQueryExecutionCompletion.AllFamiliesProven, result.Completion);
+
+        // The known types still earn their ladder: the unknown token is ignored for it, not fatal
+        // to it. Before the ruling this count was zero.
+        Assert.AreEqual(2, handler.DocumentFetchCount, "the ladder must attempt xhtml, then html.");
+        CollectionAssert.AreEqual(
+            new[] { "application/xhtml+xml", "text/html" },
+            handler.DocumentFetchAcceptTokens.ToArray(),
+            "the attempts must be in the closed ladder order, one exact Accept token each.");
+
+        // The body is HELD, with a real receipt over the bytes text/html served.
+        Assert.HasCount(1, result.DocumentAcquisitionOutcomesByOrdinal!);
+        var outcome = result.DocumentAcquisitionOutcomesByOrdinal!.Values.Single();
+        Assert.IsNotNull(outcome.Receipt, "the Work must record Held, not PendingAcquisition.");
+        Assert.IsNull(outcome.Refusal);
+        Assert.AreEqual(
+            Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(WorkingTimeHtmlBody)),
+            outcome.Receipt!.Reference.ContentSha256);
+
+        var record = result.CorpusRecordSet!.Set.Records.Single();
+        Assert.AreEqual(CorpusBodyRecordKind.Held, record.Body.Kind);
+
+        // And the row carries the first candidate's address, exactly as a listing with no unknown
+        // token does. Before the ruling it was NotMinted.
+        var rowAddress = await ReopenSingleRowFetchAddressAsync(result, store);
+        Assert.AreEqual(ScopeManifestFetchAddressStatus.Minted, rowAddress.Status);
+        Assert.AreEqual("application/xhtml+xml", rowAddress.AcceptMediaType);
+    }
+
+    /// <summary>
+    /// GATE TWO's genuine failure: a scope manifest the store accepts and then cannot reproduce at
+    /// its own digest is NOT retained, and the run refuses saying so.
+    /// </summary>
+    /// <remarks>
+    /// The inverse mutation the design ruling requires for a re-conditioned gate, and it was missing:
+    /// <see cref="EuQueryExecutionRefusal.ScopeManifestNotRetained"/> had ZERO test references, so an
+    /// edit turning this genuine hold failure into a continue would have passed green. The store
+    /// accepts the write and drops the bytes, which is what CustodyHold's own reopen exists to catch:
+    /// "we stored it under a weaker guarantee" and "we failed to store it" must stay different facts,
+    /// and only the second refuses. Targeted BY ORDINAL because the manifest embeds a fresh urn:uuid
+    /// and its digest is not stable across runs.
+    /// </remarks>
+    [TestMethod]
+    public async Task AScopeManifestTheStoreCannotReproduceRefusesAsNotRetained()
+    {
+        var (result, manifestOrdinal) = await RunSingleSeedLosingWriteAsync(
+            static (store, firstResult) => OrdinalOf(store, firstResult.ScopeManifestReceipt!.Reference.ContentSha256));
+
+        Assert.IsNotNull(result.Refusal, $"ordinal {manifestOrdinal} must refuse, not deliver.");
+        Assert.AreEqual(EuQueryExecutionRefusal.ScopeManifestNotRetained, result.Refusal!.Code);
+        StringAssert.Contains(
+            result.Refusal.Detail,
+            "could not reproduce those exact",
+            "the refusal must carry the hold's own failure detail, not a restatement.");
+        Assert.IsNull(
+            result.ScopeManifestReceipt,
+            "and no receipt is reported for a manifest this run could not retain.");
+    }
+
+    /// <summary>
+    /// GATE THREE's genuine failure: a corpus record set the store accepts and then cannot reproduce
+    /// is NOT retained, and the adapter refuses with its own code carrying the writer's detail.
+    /// </summary>
+    /// <remarks>
+    /// The second missing inverse mutation.
+    /// <see cref="EuQueryExecutionRefusal.RecordSetNotRetained"/> also had zero test references, and
+    /// the doc on <see cref="ARecordSetWriteWhoseFloorIsUnenforcedStillDeliversAndRecordsTheWeakerClass"/>
+    /// claimed a named test drove it, which was false. The record set is this run's LITERAL LAST
+    /// custody write, which is what makes the ordinal discoverable without guessing.
+    /// </remarks>
+    [TestMethod]
+    public async Task ARecordSetTheStoreCannotReproduceRefusesAsNotRetained()
+    {
+        var (result, _) = await RunSingleSeedLosingWriteAsync(
+            static (store, _) => store.CreateCallCount);
+
+        Assert.IsNotNull(result.Refusal, "a record set that cannot be retained must refuse the run.");
+        Assert.AreEqual(EuQueryExecutionRefusal.RecordSetNotRetained, result.Refusal!.Code);
+        StringAssert.Contains(result.Refusal.Detail, "could not reproduce those exact");
+        Assert.IsNull(result.CorpusRecordSet, "and no set is reported for one this run could not retain.");
+        Assert.IsNull(result.CorpusRecordSetRef);
+    }
+
+    /// <summary>
+    /// The write ordinal of a digest, from a fully enforcing discovery pass's own write order.
+    /// </summary>
+    private static int OrdinalOf(EuAcquisitionTestFixture.EuInMemoryCustodyStore store, string digest) =>
+        store.WrittenDigestsInOrder
+            .Select(static (written, index) => (Digest: written, Ordinal: index + 1))
+            .Single(entry => string.Equals(entry.Digest, digest, StringComparison.Ordinal))
+            .Ordinal;
+
+    /// <summary>
+    /// One single-seed run twice: once fully enforcing to discover which write ordinal the caller
+    /// wants, then again with that one write's bytes dropped after a successful create. Extracted so
+    /// the manifest and record-set hold failures are the same scenario differing only in the ordinal.
+    /// </summary>
+    private static async Task<(EuQueryExecutionResult Result, int Ordinal)> RunSingleSeedLosingWriteAsync(
+        Func<EuAcquisitionTestFixture.EuInMemoryCustodyStore, EuQueryExecutionResult, int> chooseOrdinal)
+    {
+        var discoveryStore = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
+        var (first, _, _) = await RunWorkingTimeDirectiveAsync(
+            EuAcquisitionTestFixture.RealBandListedTypes, WorkingTimeLadderResponse, discoveryStore);
+        Assert.IsNull(first.Refusal, $"code={first.Refusal?.Code} detail={first.Refusal?.Detail}");
+
+        var ordinal = chooseOrdinal(discoveryStore, first);
+        Assert.IsTrue(ordinal > 0);
+
+        var (result, _, _) = await RunWorkingTimeDirectiveAsync(
+            EuAcquisitionTestFixture.RealBandListedTypes,
+            WorkingTimeLadderResponse,
+            new EuAcquisitionTestFixture.EuInMemoryCustodyStore(
+                loseBytesAfterWriteCallOrdinal: ordinal));
+        return (result, ordinal);
+    }
+
+    /// <summary>
+    /// The narrowed floor at the adapter level: a listing of print plus an unknown type still fetches
+    /// nothing, and still does not reach never-ingest.
+    /// </summary>
+    /// <remarks>
+    /// This is the other side of the ruling, and it is why the amendment is a narrowing rather than a
+    /// removal. There is genuinely nothing to fetch here: the only type the office named that this
+    /// vocabulary knows is paper. Naming print would assert a PERMANENT exclusion, which an unread
+    /// token does not license, so the observation names
+    /// <c>EuManifestationFormat.NoneAdmitted</c> and the body axis is a typed gap pending a reviewed
+    /// profile. Compare <see cref="AListingOfferingOnlyPrintSendsNoDocumentFetchEither"/>, which
+    /// fetches nothing for the permanent reason.
+    /// </remarks>
+    [TestMethod]
+    public async Task AListingOfPrintPlusAnUnknownTypeFetchesNothingWithoutClaimingNeverIngest()
+    {
+        var (result, handler, _) = await RunWorkingTimeDirectiveAsync(
+            ["print", "epub3"],
+            request => EuAcquisitionTestFixture.BinaryResponse(
+                request, System.Net.HttpStatusCode.OK, [1, 2, 3]));
+
+        Assert.IsNull(result.Refusal, $"code={result.Refusal?.Code} detail={result.Refusal?.Detail}");
+        Assert.AreEqual(EuQueryExecutionCompletion.AllFamiliesProven, result.Completion);
+        Assert.AreEqual(
+            0, handler.DocumentFetchCount, "there is no candidate to address, so nothing is asked for.");
+        Assert.HasCount(0, result.DocumentAcquisitionOutcomesByOrdinal!);
+
+        var record = result.CorpusRecordSet!.Set.Records.Single();
+        Assert.AreEqual(CorpusBodyRecordKind.NotHeld, record.Body.Kind);
+    }
+
+    private const string WorkingTimeCelex = "32003L0088";
+    private const string CellarResourceOrigin = "http://publications.europa.eu/resource/cellar/";
+
+    private static string WorkingTimeCellarKey =>
+        EuAppendixASeedMap.SeedsInCelexOrder.Single(seed => seed.Celex == WorkingTimeCelex)
+            .WorkRoot[CellarResourceOrigin.Length..];
+
+    /// <summary>
+    /// The office's own ladder answers for 32003L0088, keyed on the exact Accept token: 404 with the
+    /// real datastream-absent body for <c>application/xhtml+xml</c>, 200 for <c>text/html</c>.
+    /// </summary>
+    private static HttpResponseMessage WorkingTimeLadderResponse(HttpRequestMessage request) =>
+        request.Headers.Accept.ToString() == "text/html"
+            ? EuAcquisitionTestFixture.BinaryResponse(
+                request, System.Net.HttpStatusCode.OK, WorkingTimeHtmlBody, "text/html;charset=UTF-8")
+            : EuAcquisitionTestFixture.BinaryResponse(
+                request, System.Net.HttpStatusCode.NotFound, DatastreamAbsent404Body(WorkingTimeCellarKey));
+
+    /// <summary>
+    /// Stand-in bytes for the served HTML body. Deliberately NOT the real 37,616 bytes of law text:
+    /// this repository does not commit publisher body text as a test fixture, and what these tests
+    /// prove is which representation was fetched and held, not what the act says. The real 200's own
+    /// observed facts (status, content type, 37,616 bytes, digest
+    /// 0d23ad4953be900de8a614fea4022aa46086e0bdc2fdfd6d0fde0cd84429e4b6) are recorded in
+    /// <see cref="EuManifestationMediaType.TextHtml"/>'s own remarks instead.
+    /// </summary>
+    private static readonly byte[] WorkingTimeHtmlBody =
+        System.Text.Encoding.UTF8.GetBytes("<html><body>served-through-text-html</body></html>");
+
+    /// <summary>
+    /// One full <see cref="EuQueryExecutionAdapter.RunAsync"/> over the Working Time Directive seed,
+    /// with a real observed English Expression (so the language axis is a body candidate) and a
+    /// family-M listing the caller chooses. A null <paramref name="listedTypes"/> scripts family M's
+    /// own explicit absence row instead.
+    /// </summary>
+    private static async Task<(
+        EuQueryExecutionResult Result,
+        EuAcquisitionTestFixture.ClassifyingHandler Handler,
+        EuAcquisitionTestFixture.EuInMemoryCustodyStore Store)>
+        RunWorkingTimeDirectiveAsync(
+            IReadOnlyList<string>? listedTypes,
+            Func<HttpRequestMessage, HttpResponseMessage> documentFetchResponse,
+            EuAcquisitionTestFixture.EuInMemoryCustodyStore? custodyStore = null)
+    {
+        var seed = EuAppendixASeedMap.SeedsInCelexOrder.Single(entry => entry.Celex == WorkingTimeCelex);
+        var rootIri = EuPackRootCanonicalForm.TryCanonicalize(seed.WorkRoot, out _)
+            ?? throw new AssertFailedException("Appendix A's own seed root failed to canonicalize.");
+        var expressionIri = seed.WorkRoot + ".0001.01/DOC_1";
+        const string watermarkLexical = "2026-01-01T00:00:00.0000000+01:00";
+
+        var pOutcomes = EuAcquisitionTestFixture.ObjectAuthorityPredicates
+            .Select(predicate => (
+                PredicateIri: predicate,
+                ValueIri: predicate == EuAcquisitionTestFixture.ResourceLegalType
+                    ? EuAcquisitionTestFixture.DirectiveResourceType
+                    : (string?)null))
+            .Concat(EuAcquisitionTestFixture.RelationPredicates.Select(predicate => (predicate, (string?)null)))
+            .ToArray();
+        var pRows = EuAcquisitionTestFixture.SortedObjectFactRows(rootIri, pOutcomes);
+        var xRows = EuAcquisitionTestFixture.EnglishExpressionFactRows(rootIri, expressionIri);
+        var wRows = new[] { EuAcquisitionTestFixture.RootWatermarkRow(rootIri, watermarkLexical) };
+
+        var scripts = new Dictionary<string, EuAcquisitionTestFixture.FamilyScript>(StringComparer.Ordinal)
+        {
+            ["Census"] = EuAcquisitionTestFixture.ScriptFor(
+                "Census", 0, [], EuAcquisitionTestFixture.CensusFamilyProjection),
+            ["P"] = EuAcquisitionTestFixture.ScriptFor(
+                "P", pRows.Count, pRows, EuAcquisitionTestFixture.ObjectFactsProjection),
+            ["X"] = EuAcquisitionTestFixture.ScriptFor(
+                "X", xRows.Count, xRows, EuAcquisitionTestFixture.ExpressionFactsProjection),
+            ["W"] = EuAcquisitionTestFixture.ScriptFor(
+                "W", wRows.Length, wRows, EuAcquisitionTestFixture.RootWatermarkProjection),
+            ["M"] = listedTypes is null
+                ? EuAcquisitionTestFixture.ManifestationAbsenceScriptFor(rootIri)
+                : EuAcquisitionTestFixture.ManifestationScriptFor(rootIri, listedTypes),
+            ["Witness"] = new EuAcquisitionTestFixture.FamilyScript(
+                "Witness",
+                EuAcquisitionTestFixture.WitnessEmptyTraversalScript(rootIri, watermarkLexical)),
+        };
+
+        var handler = new EuAcquisitionTestFixture.ClassifyingHandler(scripts, documentFetchResponse);
+        var store = custodyStore ?? new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
+        var executor = new EuRepeatedEnumerationExecutor(
+            store, new EuAcquisitionTestFixture.FixedTimeProvider(), handler);
+        var adapter = new EuQueryExecutionAdapter(store, executor);
+
+        var (censusPlan, censusPlanId) = EuAcquisitionTestFixture.BuildCensusPlan();
+        var censusRequest = new EuCensusPartitionRunRequest(
+            censusPlan, censusPlanId, seed.Celex, EuAcquisitionTestFixture.BuildRendererSource(1501));
+
+        var (pPlan, pPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
+        var pRequest = new EuObjectFactsPartitionRunRequest(
+            pPlan, pPlanId, EuObjectFactsQuerySet.ObjectFacts, [rootIri],
+            EuAcquisitionTestFixture.BuildRendererSource(1502));
+        var (xPlan, xPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
+        var xRequest = new EuObjectFactsPartitionRunRequest(
+            xPlan, xPlanId, EuObjectFactsQuerySet.ExpressionFacts, [rootIri],
+            EuAcquisitionTestFixture.BuildRendererSource(1503));
+        var (wPlan, wPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
+        var wRequest = new EuObjectFactsPartitionRunRequest(
+            wPlan, wPlanId, EuObjectFactsQuerySet.RootWatermark, [rootIri],
+            EuAcquisitionTestFixture.BuildRendererSource(1504));
+        var (mPlan, mPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
+        var mRequest = new EuObjectFactsPartitionRunRequest(
+            mPlan, mPlanId, EuObjectFactsQuerySet.ManifestationFacts, [rootIri],
+            EuAcquisitionTestFixture.BuildRendererSource(1505));
+
+        var result = await adapter.RunAsync(
+            [(censusRequest, EuAcquisitionTestFixture.SourceWitness())],
+            [
+                (pRequest, EuAcquisitionTestFixture.SourceWitness()),
+                (xRequest, EuAcquisitionTestFixture.SourceWitness()),
+                (wRequest, EuAcquisitionTestFixture.SourceWitness()),
+                (mRequest, EuAcquisitionTestFixture.SourceWitness()),
+            ],
+            EuAcquisitionTestFixture.BuildRendererSource(1509),
+            EuAcquisitionTestFixture.SourceWitness(),
+            EuAcquisitionTestFixture.BuildRendererSource(2509),
+            EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
+            new PermissiveEvidenceResolver(CompleteEnumerationRef),
+            CancellationToken.None);
+
+        return (result, handler, store);
+    }
+
+    /// <summary>
+    /// Reopens the manifest this run actually wrote and hands back its one row's own fetch address,
+    /// so a test can check what the ROW carries rather than only what the ladder attempted. The two
+    /// are deliberately different facts once a ladder falls through.
+    /// </summary>
+    private static async Task<ScopeManifest> ReopenManifestAsync(
+        EuQueryExecutionResult result, EuAcquisitionTestFixture.EuInMemoryCustodyStore store)
+    {
+        var bytes = await Lex.V3.Contracts.Custody.CustodyRestore.ReadByDigestCheckedAsync(
+            store, result.ScopeManifestReceipt!.Reference.ContentSha256, CancellationToken.None);
+        var manifestRef = new SourceArtifactRef(
+            $"urn:uuid:{Guid.NewGuid():D}", result.ScopeManifestCanonicalSha256!);
+        var manifest = EuScopeManifestBindingProof.TryOpenAsEuManifest(
+            manifestRef, bytes.Span, new PermissiveEvidenceResolver(CompleteEnumerationRef), out var refusal);
+        Assert.IsNotNull(manifest, $"the written manifest did not reopen: {refusal}.");
+        return manifest!;
+    }
+
+    private static async Task<ScopeManifestFetchAddress> ReopenSingleRowFetchAddressAsync(
+        EuQueryExecutionResult result, EuAcquisitionTestFixture.EuInMemoryCustodyStore store)
+    {
+        var bytes = await Lex.V3.Contracts.Custody.CustodyRestore.ReadByDigestCheckedAsync(
+            store, result.ScopeManifestReceipt!.Reference.ContentSha256, CancellationToken.None);
+        var manifestRef = new SourceArtifactRef(
+            $"urn:uuid:{Guid.NewGuid():D}", result.ScopeManifestCanonicalSha256!);
+        var manifest = EuScopeManifestBindingProof.TryOpenAsEuManifest(
+            manifestRef, bytes.Span, new PermissiveEvidenceResolver(CompleteEnumerationRef), out var refusal);
+        Assert.IsNotNull(manifest, $"the written manifest did not reopen: {refusal}.");
+        return manifest!.Rows.Single().FetchAddress;
     }
 
     /// <summary>
@@ -1854,22 +2867,52 @@ public sealed class EuQueryExecutionAdapterTests
             evidenceRef,
             null);
 
-        // Defect 4's own fix: MintFetchAddress now returns the real EuDocumentFetchAddress alongside
-        // its manifest projection (a ValueTuple, since it stays private and this door is reflection
-        // only), so the caller can actually drive this route's own GET for a Minted row.
-        var mintedResult = (System.Runtime.CompilerServices.ITuple)method.Invoke(null, [cellarObject])!;
+        // D1-05d: MintFetchAddress now returns the object's own ORDERED ladder alongside the manifest
+        // projection, and takes the format disposition family M minted, because the candidate set
+        // and its order are that listing's answer rather than this method's own constant. The
+        // listing below is the real six-token one 32003L0088 returns live; the ladder it produces is
+        // xhtml, html, pdf, in the ruled order, and the manifest row carries the FIRST of them.
+        var listingRef = new SourceArtifactRef(
+            "urn:uuid:00000000-0000-4000-8000-0000000000f2", new string('c', 64));
+        var listedDisposition = EuManifestationListingDecode.Observe(
+            [
+                EuManifestationFormat.Formex4, EuManifestationFormat.Html, EuManifestationFormat.Pdf,
+                EuManifestationFormat.PdfA1a, EuManifestationFormat.Print, EuManifestationFormat.Xhtml,
+            ],
+            listingRef);
+        var disposition = new EuFormatDisposition(
+            listedDisposition.Format, listedDisposition.Admission, listedDisposition.ReasonCode,
+            listedDisposition.EvidenceRef, listedDisposition.OrderedCandidates);
+
+        var mintedResult = (System.Runtime.CompilerServices.ITuple)method.Invoke(
+            null, [cellarObject, disposition])!;
         var mintedFetchAddress = (ScopeManifestFetchAddress)mintedResult[0]!;
-        var mintedAddress = (EuDocumentFetchAddress?)mintedResult[1];
+        var mintedLadder = (IReadOnlyList<EuDocumentFetchAddress>)mintedResult[1]!;
         Assert.AreEqual(ScopeManifestFetchAddressStatus.Minted, mintedFetchAddress.Status);
         Assert.AreEqual(EuDocumentFetchAddress.AdmittedHost, mintedFetchAddress.Host);
         Assert.AreEqual("cellar/" + canonicalKey, mintedFetchAddress.ResourcePath);
         Assert.AreEqual("application/xhtml+xml", mintedFetchAddress.AcceptMediaType);
         Assert.AreEqual("eng", mintedFetchAddress.AcceptLanguage);
-        Assert.IsNotNull(mintedAddress);
-        Assert.AreEqual("cellar", mintedAddress!.PsName);
-        Assert.AreEqual(canonicalKey, mintedAddress.PsId);
-        Assert.AreEqual(EuManifestationMediaType.XhtmlXml, mintedAddress.MediaType);
-        Assert.AreEqual(EuDocumentLanguage.Eng, mintedAddress.Language);
+        Assert.HasCount(3, mintedLadder);
+        Assert.AreEqual("cellar", mintedLadder[0].PsName);
+        Assert.AreEqual(canonicalKey, mintedLadder[0].PsId);
+        Assert.AreEqual(EuManifestationMediaType.XhtmlXml, mintedLadder[0].MediaType);
+        Assert.AreEqual(EuDocumentLanguage.Eng, mintedLadder[0].Language);
+        Assert.AreEqual(EuManifestationMediaType.TextHtml, mintedLadder[1].MediaType);
+        Assert.AreEqual("text/html", mintedLadder[1].Accept);
+        Assert.AreEqual(EuManifestationMediaType.ApplicationPdf, mintedLadder[2].MediaType);
+        Assert.AreEqual("application/pdf", mintedLadder[2].Accept);
+        Assert.AreEqual(mintedFetchAddress.AcceptMediaType, mintedLadder[0].Accept,
+            "the manifest row's single address must be the ladder's FIRST candidate, not any other.");
+
+        // An object with no listing at all mints nothing: no listed wording format means no fetch
+        // this route could name, and a fabricated default address would claim otherwise.
+        var noListingResult = (System.Runtime.CompilerServices.ITuple)method.Invoke(
+            null, [cellarObject, null])!;
+        Assert.AreEqual(
+            ScopeManifestFetchAddressStatus.NotMinted,
+            ((ScopeManifestFetchAddress)noListingResult[0]!).Status);
+        Assert.HasCount(0, (IReadOnlyList<EuDocumentFetchAddress>)noListingResult[1]!);
 
         var joluxKey = "jolux:id:legal-instrument:123";
         var joluxKeySha256 = Convert.ToHexStringLower(
@@ -1884,13 +2927,14 @@ public sealed class EuQueryExecutionAdapterTests
             joluxKeySha256,
             evidenceRef,
             null);
-        var notMintedResult = (System.Runtime.CompilerServices.ITuple)method.Invoke(null, [nonCellarObject])!;
+        var notMintedResult = (System.Runtime.CompilerServices.ITuple)method.Invoke(
+            null, [nonCellarObject, disposition])!;
         var notMinted = (ScopeManifestFetchAddress)notMintedResult[0]!;
         Assert.AreEqual(ScopeManifestFetchAddressStatus.NotMinted, notMinted.Status);
         Assert.AreEqual(
             ScopeManifestFetchAddressAbsenceReason.NoPublisherRouteYet,
             notMinted.NotMintedReason);
-        Assert.IsNull(notMintedResult[1]);
+        Assert.HasCount(0, (IReadOnlyList<EuDocumentFetchAddress>)notMintedResult[1]!);
     }
 
     /// <summary>

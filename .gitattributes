@@ -1,5 +1,17 @@
 * text=auto eol=lf
 *.ps1 text eol=lf
+# Retained publisher bodies are EXACT BYTES. Their digests are asserted in tests and one is even
+# its own filename, so a single rewritten line ending makes a fixture that is not the bytes it
+# names, and every digest assertion against it silently wrong. The "* text=auto eol=lf" default
+# above is wrong for them: git resolves .bin as "text: auto", so it applies its own content
+# heuristic per file rather than any declaration here. Of the twelve tracked .bin files, eight are
+# NUL-free and so are seen as TEXT with the eol filter running over them, surviving only because
+# they happen to contain no CRLF at all; the other four are seen as binary only because they
+# contain NUL, and one of those carries 288 CRLF that would be rewritten without it. Safety was
+# therefore a property of each file's bytes rather than of any rule. Declaring it makes the next
+# NUL-free XHTML or XML body safe by construction. Adding this changes no stored blob: all twelve
+# already round trip identically, so it is prevention, not repair.
+*.bin binary
 *.png binary
 *.jpg binary
 *.jpeg binary

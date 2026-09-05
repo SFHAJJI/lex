@@ -66,6 +66,8 @@ public sealed class EuCellarObjectDecodeTests
         EuObjectFactsDiscoveryPlan.Create().CreateDeliveryProfile(EuObjectFactsQuerySet.ObjectFacts);
     private static readonly RepeatedEnumerationInterpretationProfile ExpressionFactsProfile =
         EuObjectFactsDiscoveryPlan.Create().CreateDeliveryProfile(EuObjectFactsQuerySet.ExpressionFacts);
+    private static readonly RepeatedEnumerationInterpretationProfile ManifestationFactsProfile =
+        EuObjectFactsDiscoveryPlan.Create().CreateDeliveryProfile(EuObjectFactsQuerySet.ManifestationFacts);
 
     private static SourceArtifactRef Evidence(string label) =>
         new($"urn:uuid:{DeterministicGuid(label)}", Digest("evidence:" + label));
@@ -278,10 +280,20 @@ public sealed class EuCellarObjectDecodeTests
         out EuCellarObjectDecodeRefusal refusal,
         out string? offendingIri,
         out EuCellarObjectSnapshotRefusal snapshotRefusal,
-        string evidenceLabel = "ev") =>
+        string evidenceLabel = "ev",
+        IReadOnlyList<RepeatedEnumerationRow>? mRows = null) =>
         EuCellarObjectDecode.TryDecode(
             celex, familyRows, FamilyProfile, pRows, ObjectFactsProfile, xRows, ExpressionFactsProfile,
-            EuActForm.Regulation, Ev(evidenceLabel), out refusal, out offendingIri, out snapshotRefusal);
+            mRows ?? [], ManifestationFactsProfile, Ev(ManifestationEvidenceLabel),
+            EuActForm.Regulation, Ev(evidenceLabel), out refusal, out offendingIri, out snapshotRefusal, out _);
+
+    /// <summary>
+    /// The label whose evidence ref stands in for family M's own delivery evidence in these
+    /// fixtures. Deliberately different from the sibling families' label, so a decode that stamped
+    /// P's evidence on a format observation would be visible here rather than hidden by both refs
+    /// happening to be the same object.
+    /// </summary>
+    private const string ManifestationEvidenceLabel = "m-ev";
 
     // ---- Happy path: root only, no discovered states. ----
 
@@ -436,8 +448,16 @@ public sealed class EuCellarObjectDecodeTests
     // ---- Language, filled from family X. ----
 
     [TestMethod]
-    public void AnEnglishExpressionIsObservedAsBodyNotHeld()
+    public void AnObservedEnglishExpressionIsABodyCandidate()
     {
+        // D1-05d changes this answer, and the change is deliberate. Before this slice the decode
+        // reported every observed Expression as ExpressionObservedBodyNotHeld, because no body
+        // acquisition existed anywhere and claiming otherwise would have described a fetch nobody
+        // could perform. The reviewed scope's own closed policy,
+        // EuLanguageBodyDisposition.BodyCandidateLanguages, holds exactly English and French, so an
+        // OBSERVED English Expression IS a body candidate under it; reporting it as body-not-held
+        // reported a reviewed inclusion as a reviewed exclusion, and capped the body axis at point
+        // for every EU object regardless of what the office offered.
         var pRows = RootObjectRows(GdprRoot, GdprCelex);
         var xRows = ExpressionRows(GdprRoot, ExprA, EnglishLanguageAuthorityIri);
 
@@ -447,7 +467,9 @@ public sealed class EuCellarObjectDecodeTests
         var language = snapshots!.Single().Language;
         Assert.IsNotNull(language);
         Assert.AreEqual(EuOfficialLanguage.English, language!.Language);
-        Assert.AreEqual(EuExpressionObservationState.ExpressionObservedBodyNotHeld, language.State);
+        Assert.AreEqual(EuExpressionObservationState.ExpressionObservedBodyCandidate, language.State);
+        Assert.AreEqual(
+            "eu_cellar_object_decode.language_english_observed_body_candidate", language.RuleId);
     }
 
     [TestMethod]
@@ -462,7 +484,10 @@ public sealed class EuCellarObjectDecodeTests
         var language = snapshots!.Single().Language;
         Assert.IsNotNull(language);
         Assert.AreEqual(EuOfficialLanguage.French, language!.Language);
-        Assert.AreEqual(EuExpressionObservationState.ExpressionObservedBodyNotHeld, language.State);
+        // See AnObservedEnglishExpressionIsABodyCandidate for why this is body-candidate from D1-05d.
+        Assert.AreEqual(EuExpressionObservationState.ExpressionObservedBodyCandidate, language.State);
+        Assert.AreEqual(
+            "eu_cellar_object_decode.language_french_observed_body_candidate", language.RuleId);
     }
 
     [TestMethod]
@@ -742,76 +767,246 @@ public sealed class EuCellarObjectDecodeTests
 
     // ---- Caller-contract guards. ----
 
+    // ---- Family M at the contracts level (D1-05d REVIEW_RESULT fold-in). ----
+
+    /// <summary>
+    /// The decode really reads family M's rows and mints a format observation on the snapshot from
+    /// them, naming family M's OWN evidence rather than the sibling families' evidence.
+    /// </summary>
+    /// <remarks>
+    /// Every other call site in this file passes the empty default, so before this test nothing at
+    /// the contracts level proved the M parameter was wired to anything at all.
+    /// </remarks>
+    [TestMethod]
+    public void TheDecodeMintsAFormatObservationFromFamilyMsRowsAndNamesFamilyMsOwnEvidence()
+    {
+        var pRows = RootObjectRows(GdprRoot, GdprCelex);
+        var xRows = ExpressionRows(GdprRoot, ExprA, EnglishLanguageAuthorityIri);
+        var mRows = new[]
+        {
+            ManifestationRow(GdprRoot, "print"),
+            ManifestationRow(GdprRoot, "xhtml"),
+        };
+
+        var snapshots = Decode(
+            GdprCelex, [], pRows, xRows, out var refusal, out _, out _, "ev", mRows);
+
+        Assert.AreEqual(EuCellarObjectDecodeRefusal.None, refusal);
+        var format = snapshots!.Single().Format;
+        Assert.IsNotNull(format);
+        Assert.AreEqual(EuManifestationFormat.Xhtml, format!.Format);
+        Assert.AreEqual(EuFormatBodyAdmission.BodyAdmitted, format.Admission);
+        CollectionAssert.AreEqual(
+            new[] { EuManifestationFormat.Xhtml }, format.OrderedCandidates.ToArray());
+
+        // The two refs are built from different labels, so this fails if the decode ever stamps the
+        // sibling families' evidence on a format observation again.
+        Assert.AreEqual(Ev(ManifestationEvidenceLabel), format.EvidenceRef);
+        Assert.AreNotEqual(Ev("ev"), format.EvidenceRef);
+    }
+
+    /// <summary>
+    /// An object family M says nothing about keeps a null format observation: the typed absence.
+    /// </summary>
+    [TestMethod]
+    public void AnObjectFamilyMSaysNothingAboutKeepsNoFormatObservation()
+    {
+        var pRows = RootObjectRows(GdprRoot, GdprCelex);
+        var xRows = ExpressionRows(GdprRoot, ExprA, EnglishLanguageAuthorityIri);
+
+        var snapshots = Decode(GdprCelex, [], pRows, xRows, out var refusal, out _, out _);
+
+        Assert.AreEqual(EuCellarObjectDecodeRefusal.None, refusal);
+        Assert.IsNull(snapshots!.Single().Format);
+    }
+
+    /// <summary>
+    /// At the decode level: an unadmitted manifestation type is recorded on THAT WORK's own format
+    /// observation and the Work is still laddered on the types the office named that this route
+    /// knows.
+    /// </summary>
+    /// <remarks>
+    /// OWNER RULING lex-event-20260904T205636383Z-e92b888b62c24df29fe3f8c1be5016f0. The GDPR's own
+    /// listing plus one invented future token: before the ruling this snapshot carried
+    /// BodyNotAdmitted and no candidates, so the whole object was lost to one token, which is the
+    /// illegitimate refusal the ruling removes. The token is still recorded, and it is still the
+    /// only thing that differs from an ordinary observation.
+    /// </remarks>
+    [TestMethod]
+    public void AnUnadmittedManifestationTypeIsRecordedWithoutCostingTheWorkItsLadder()
+    {
+        var pRows = RootObjectRows(GdprRoot, GdprCelex);
+        var xRows = ExpressionRows(GdprRoot, ExprA, EnglishLanguageAuthorityIri);
+        var mRows = new[]
+        {
+            ManifestationRow(GdprRoot, "epub3"),
+            ManifestationRow(GdprRoot, "xhtml"),
+        };
+
+        var snapshots = Decode(
+            GdprCelex, [], pRows, xRows, out var refusal, out _, out _, "ev", mRows);
+
+        Assert.AreEqual(
+            EuCellarObjectDecodeRefusal.None,
+            refusal,
+            "an unknown publisher token must never refuse the whole decode.");
+        Assert.IsNotNull(snapshots);
+        var format = snapshots!.Single().Format;
+        Assert.IsNotNull(format);
+        Assert.AreEqual(EuFormatBodyAdmission.BodyAdmitted, format!.Admission);
+        Assert.AreEqual("listing_type_not_admitted:epub3", format.ReasonCode);
+        CollectionAssert.AreEqual(
+            new[] { EuManifestationFormat.Xhtml }, format.OrderedCandidates.ToArray());
+        Assert.AreEqual(EuManifestationFormat.Xhtml, format.Format);
+    }
+
+    /// <summary>
+    /// The one condition family M still refuses the WHOLE decode for: a row naming a parent outside
+    /// this call's own closure. Driven through the real decode rather than by constructing the enum,
+    /// so the member is proven reachable.
+    /// </summary>
+    /// <remarks>
+    /// This is a violation of what the call was asked to decode, unlike an unadmitted publisher
+    /// token, which is a fact about the office's vocabulary and now costs its Work nothing at all.
+    /// </remarks>
+    [TestMethod]
+    public void AManifestationRowOutsideTheClosureRefusesTheWholeDecodeByName()
+    {
+        var pRows = RootObjectRows(GdprRoot, GdprCelex);
+        var xRows = ExpressionRows(GdprRoot, ExprA, EnglishLanguageAuthorityIri);
+        var mRows = new[] { ManifestationRow(CitedRoot, "xhtml") };
+
+        var snapshots = EuCellarObjectDecode.TryDecode(
+            GdprCelex, [], FamilyProfile, pRows, ObjectFactsProfile, xRows, ExpressionFactsProfile,
+            mRows, ManifestationFactsProfile, Ev(ManifestationEvidenceLabel),
+            EuActForm.Regulation, Ev("ev"),
+            out var refusal, out var offendingIri, out _, out var listingRefusal);
+
+        Assert.IsNull(snapshots);
+        Assert.AreEqual(EuCellarObjectDecodeRefusal.ManifestationListingRefused, refusal);
+        Assert.AreEqual(EuManifestationListingRefusal.ListingParentNotInClosure, listingRefusal);
+        Assert.AreEqual(CitedRoot, offendingIri, "the refusal must name the offending parent.");
+    }
+
+    [TestMethod]
+    public void ANullManifestationRowsThrows()
+    {
+        Assert.ThrowsExactly<ArgumentNullException>(() => EuCellarObjectDecode.TryDecode(
+            GdprCelex, [], FamilyProfile, [], ObjectFactsProfile, [], ExpressionFactsProfile,
+            null!, ManifestationFactsProfile, Ev(ManifestationEvidenceLabel),
+            EuActForm.Regulation, Ev("null-m-rows"), out _, out _, out _, out _));
+    }
+
+    [TestMethod]
+    public void ANullManifestationProfileThrows()
+    {
+        Assert.ThrowsExactly<ArgumentNullException>(() => EuCellarObjectDecode.TryDecode(
+            GdprCelex, [], FamilyProfile, [], ObjectFactsProfile, [], ExpressionFactsProfile,
+            [], null!, Ev(ManifestationEvidenceLabel),
+            EuActForm.Regulation, Ev("null-m-profile"), out _, out _, out _, out _));
+    }
+
+    [TestMethod]
+    public void ANullManifestationEvidenceRefThrows()
+    {
+        Assert.ThrowsExactly<ArgumentNullException>(() => EuCellarObjectDecode.TryDecode(
+            GdprCelex, [], FamilyProfile, [], ObjectFactsProfile, [], ExpressionFactsProfile,
+            [], ManifestationFactsProfile, null!,
+            EuActForm.Regulation, Ev("null-m-evidence"), out _, out _, out _, out _));
+    }
+
+    /// <summary>One family-M row: one Work's own listed manifestation type, as a plain xsd:string.</summary>
+    private static RepeatedEnumerationRow ManifestationRow(string parentIri, string listedType)
+    {
+        var terms = new[]
+        {
+            RepeatedEnumerationRdfTerm.Iri(parentIri),
+            RepeatedEnumerationRdfTerm.Literal(listedType, XsdString, null),
+            RepeatedEnumerationRdfTerm.Literal("literal", null, null),
+            RepeatedEnumerationRdfTerm.Literal(XsdString, null, null),
+            RepeatedEnumerationRdfTerm.Literal("", null, null),
+            RepeatedEnumerationRdfTerm.Literal(parentIri, null, null),
+            RepeatedEnumerationRdfTerm.Literal("literal", null, null),
+            RepeatedEnumerationRdfTerm.Literal(listedType, null, null),
+            RepeatedEnumerationRdfTerm.Literal(XsdString, null, null),
+            RepeatedEnumerationRdfTerm.Literal("", null, null),
+        };
+        return new RepeatedEnumerationRow(
+            Array.AsReadOnly(terms),
+            Array.AsReadOnly(new[] { terms[0], terms[1] }),
+            Array.AsReadOnly(terms[5..10]));
+    }
+
     [TestMethod]
     public void ARequestedCelexOutsideAppendixARefusesAsACallerContractViolation()
     {
         Assert.ThrowsExactly<ArgumentException>(() => EuCellarObjectDecode.TryDecode(
-            "31995L0046", [], FamilyProfile, [], ObjectFactsProfile, [], ExpressionFactsProfile,
-            EuActForm.Regulation, Ev("not-a-seed"), out _, out _, out _));
+            "31995L0046", [], FamilyProfile, [], ObjectFactsProfile, [], ExpressionFactsProfile, [], ManifestationFactsProfile, Ev(ManifestationEvidenceLabel),
+            EuActForm.Regulation, Ev("not-a-seed"), out _, out _, out _, out _));
     }
 
     [TestMethod]
     public void ABlankRequestedCelexThrows()
     {
         Assert.ThrowsExactly<ArgumentException>(() => EuCellarObjectDecode.TryDecode(
-            "   ", [], FamilyProfile, [], ObjectFactsProfile, [], ExpressionFactsProfile,
-            EuActForm.Regulation, Ev("blank"), out _, out _, out _));
+            "   ", [], FamilyProfile, [], ObjectFactsProfile, [], ExpressionFactsProfile, [], ManifestationFactsProfile, Ev(ManifestationEvidenceLabel),
+            EuActForm.Regulation, Ev("blank"), out _, out _, out _, out _));
     }
 
     [TestMethod]
     public void ANullFamilyRowsThrows()
     {
         Assert.ThrowsExactly<ArgumentNullException>(() => EuCellarObjectDecode.TryDecode(
-            GdprCelex, null!, FamilyProfile, [], ObjectFactsProfile, [], ExpressionFactsProfile,
-            EuActForm.Regulation, Ev("null-rows"), out _, out _, out _));
+            GdprCelex, null!, FamilyProfile, [], ObjectFactsProfile, [], ExpressionFactsProfile, [], ManifestationFactsProfile, Ev(ManifestationEvidenceLabel),
+            EuActForm.Regulation, Ev("null-rows"), out _, out _, out _, out _));
     }
 
     [TestMethod]
     public void ANullObjectFactRowsThrows()
     {
         Assert.ThrowsExactly<ArgumentNullException>(() => EuCellarObjectDecode.TryDecode(
-            GdprCelex, [], FamilyProfile, null!, ObjectFactsProfile, [], ExpressionFactsProfile,
-            EuActForm.Regulation, Ev("null-p-rows"), out _, out _, out _));
+            GdprCelex, [], FamilyProfile, null!, ObjectFactsProfile, [], ExpressionFactsProfile, [], ManifestationFactsProfile, Ev(ManifestationEvidenceLabel),
+            EuActForm.Regulation, Ev("null-p-rows"), out _, out _, out _, out _));
     }
 
     [TestMethod]
     public void ANullExpressionFactRowsThrows()
     {
         Assert.ThrowsExactly<ArgumentNullException>(() => EuCellarObjectDecode.TryDecode(
-            GdprCelex, [], FamilyProfile, [], ObjectFactsProfile, null!, ExpressionFactsProfile,
-            EuActForm.Regulation, Ev("null-x-rows"), out _, out _, out _));
+            GdprCelex, [], FamilyProfile, [], ObjectFactsProfile, null!, ExpressionFactsProfile, [], ManifestationFactsProfile, Ev(ManifestationEvidenceLabel),
+            EuActForm.Regulation, Ev("null-x-rows"), out _, out _, out _, out _));
     }
 
     [TestMethod]
     public void ANullObjectFactProfileThrows()
     {
         Assert.ThrowsExactly<ArgumentNullException>(() => EuCellarObjectDecode.TryDecode(
-            GdprCelex, [], FamilyProfile, [], null!, [], ExpressionFactsProfile,
-            EuActForm.Regulation, Ev("null-p-profile"), out _, out _, out _));
+            GdprCelex, [], FamilyProfile, [], null!, [], ExpressionFactsProfile, [], ManifestationFactsProfile, Ev(ManifestationEvidenceLabel),
+            EuActForm.Regulation, Ev("null-p-profile"), out _, out _, out _, out _));
     }
 
     [TestMethod]
     public void ANullExpressionFactProfileThrows()
     {
         Assert.ThrowsExactly<ArgumentNullException>(() => EuCellarObjectDecode.TryDecode(
-            GdprCelex, [], FamilyProfile, [], ObjectFactsProfile, [], null!,
-            EuActForm.Regulation, Ev("null-x-profile"), out _, out _, out _));
+            GdprCelex, [], FamilyProfile, [], ObjectFactsProfile, [], null!, [], ManifestationFactsProfile, Ev(ManifestationEvidenceLabel),
+            EuActForm.Regulation, Ev("null-x-profile"), out _, out _, out _, out _));
     }
 
     [TestMethod]
     public void ANullEvidenceRefThrows()
     {
         Assert.ThrowsExactly<ArgumentNullException>(() => EuCellarObjectDecode.TryDecode(
-            GdprCelex, [], FamilyProfile, [], ObjectFactsProfile, [], ExpressionFactsProfile,
-            EuActForm.Regulation, null!, out _, out _, out _));
+            GdprCelex, [], FamilyProfile, [], ObjectFactsProfile, [], ExpressionFactsProfile, [], ManifestationFactsProfile, Ev(ManifestationEvidenceLabel),
+            EuActForm.Regulation, null!, out _, out _, out _, out _));
     }
 
     [TestMethod]
     public void AnUndefinedRecordFormThrows()
     {
         Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => EuCellarObjectDecode.TryDecode(
-            GdprCelex, [], FamilyProfile, [], ObjectFactsProfile, [], ExpressionFactsProfile,
-            (EuActForm)999, Ev("bad-form"), out _, out _, out _));
+            GdprCelex, [], FamilyProfile, [], ObjectFactsProfile, [], ExpressionFactsProfile, [], ManifestationFactsProfile, Ev(ManifestationEvidenceLabel),
+            (EuActForm)999, Ev("bad-form"), out _, out _, out _, out _));
     }
 
     // ---- Construction surface. ----
@@ -829,7 +1024,7 @@ public sealed class EuCellarObjectDecodeTests
     }
 
     [TestMethod]
-    public void TheRefusalEnumHasExactlyElevenMembersAndTwoHandOutPaths()
+    public void TheRefusalEnumHasExactlyTwelveMembersAndTwoHandOutPaths()
     {
         const string N = "Lex.V3.Contracts.Source.Europe.";
         const string Refusal = N + "EuCellarObjectDecodeRefusal";
@@ -846,6 +1041,7 @@ public sealed class EuCellarObjectDecodeTests
                 "field public static " + Refusal + "::ExpressionParentNotInClosure -> " + Refusal,
                 "field public static " + Refusal + "::ExpressionSubjectNotSelfClosed -> " + Refusal,
                 "field public static " + Refusal + "::FamilyRowTermKindMismatch -> " + Refusal,
+                "field public static " + Refusal + "::ManifestationListingRefused -> " + Refusal,
                 "field public static " + Refusal + "::None -> " + Refusal,
                 "field public static " + Refusal + "::ObjectFactRowNotInClosure -> " + Refusal,
                 "field public static " + Refusal + "::ObjectFactRowTermKindMismatch -> " + Refusal,
@@ -867,14 +1063,16 @@ public sealed class EuCellarObjectDecodeTests
                 + "System.Boolean, System.String, "
                 + "System.Collections.Generic.IReadOnlyList<" + N + "EuCellarObjectDecode+ObjectFactRow>, "
                 + "System.Collections.Generic.IReadOnlyList<" + N + "EuCellarObjectDecode+ExpressionFactRow>, "
+                + N + "EuFormatObservation?, "
                 + C + "EuActForm, Lex.V3.Contracts.Source.Core.SourceArtifactRef, out " + Refusal
                 + "&, out System.String&?, out " + N + "EuCellarObjectSnapshotRefusal&) -> "
                 + N + "EuCellarObjectSnapshot?",
                 "by-ref-method public static " + N + "EuCellarObjectDecode::TryDecode(System.String, "
-                + RowList + RowList + RowList + C + "EuActForm, "
+                + RowList + RowList + RowList + RowList
+                + "Lex.V3.Contracts.Source.Core.SourceArtifactRef, " + C + "EuActForm, "
                 + "Lex.V3.Contracts.Source.Core.SourceArtifactRef, out " + Refusal + "&, out "
                 + "System.String&?, out " + N
-                + "EuCellarObjectSnapshotRefusal&) -> "
+                + "EuCellarObjectSnapshotRefusal&, out " + N + "EuManifestationListingRefusal&) -> "
                 + "System.Collections.Generic.IReadOnlyList<" + N + "EuCellarObjectSnapshot>?",
             },
             ConstructionSurface.ProducersIn(

@@ -39,6 +39,60 @@ public enum EuManifestationMediaType
 
     [JsonStringEnumMemberName("xml_notice_identifier")]
     XmlNoticeIdentifier = 8,
+
+    /// <summary>
+    /// The plain HTML wording manifestation, D1-05d's ninth member, per RULING
+    /// lex-event-20260904T174138711Z-cdf5cbd17806423cbe05a6234cc4f262.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The Accept token is the bare <c>text/html</c>, observed serving live on 2026-09-04 under
+    /// User-Agent Lex/0.1 against three separate Cellar works: 32003L0088 (200, 37,616 bytes,
+    /// digest 0d23ad4953be900de8a614fea4022aa46086e0bdc2fdfd6d0fde0cd84429e4b6), 31995L0046 (200,
+    /// 84,500 bytes, digest a86b2053b2f354b26afa4a6fbcaaab1b879f70cfb2be033a231814feebec2a98, the
+    /// identical digest the earlier retained canary observed) and 32004R0139 (200, 99,132 bytes).
+    /// The bare single token is what this member freezes, not the multi-value
+    /// <c>application/xhtml+xml, text/html</c> preference list v2 sent: this enum's own summary is
+    /// explicit that every member is one exact Accept header value and that there is no
+    /// preference-list member, and refusing that preference list is exactly D1-05d's stated IMPROVE
+    /// over v2 (see <see cref="EuManifestationListingDecode"/>).
+    /// </para>
+    /// <para>
+    /// Not a synonym for <see cref="XhtmlXml"/>. On 2026-09-04 the two tokens selected genuinely
+    /// different outcomes on the same object in both directions: 32003L0088 answered 404 to
+    /// <c>application/xhtml+xml</c> and 200 to <c>text/html</c>, while 32008R0593 answered 200 to
+    /// <c>application/xhtml+xml</c> and 404 to <c>text/html</c>. Collapsing them would make one of
+    /// those two objects unfetchable.
+    /// </para>
+    /// </remarks>
+    [JsonStringEnumMemberName("text_html")]
+    TextHtml = 9,
+
+    /// <summary>
+    /// The PDF wording manifestation, D1-05d's tenth member, admitted by RULING
+    /// lex-event-20260904T185339315Z-87d1510eccdc42a5947c41d2d8580744, which widened this slice's
+    /// one-new-media-type wording to two so the ruled ladder's fourth rung is real rather than
+    /// decorative.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The Accept token is the bare <c>application/pdf</c>, observed answering 200 live on
+    /// 2026-09-04 under User-Agent Lex/0.1 on four separate Cellar works: 32008R0593 (107,100
+    /// bytes), 32003L0088 (118,061 bytes), 32005L0029 (142,386 bytes) and 32006L0112 (486,142
+    /// bytes, digest f73bd86fde543c4d36677b971890c30bf6750fe2f9c4dab166fb75176ec5be8a, whose
+    /// retained body begins with the <c>%PDF-1.4</c> magic and matches the file PROBE_RESULT
+    /// lex-event-20260904T174922051Z-9b8f01162e384f1a90204a57ba7c6967 retained).
+    /// </para>
+    /// <para>
+    /// Distinct from <see cref="PdfTypePdfa2a"/>, and this route deliberately never substitutes one
+    /// for the other. <c>application/pdf;type=pdfa1a</c> answered 404 on every one of the seven acts
+    /// it was probed on, spanning 2003 to 2008, despite all seven LISTING pdfa1a, so a PDF profile
+    /// selects a genuinely narrower thing than the bare token does; asking for one profile because
+    /// the office listed another would request a representation it never said it had.
+    /// </para>
+    /// </remarks>
+    [JsonStringEnumMemberName("application_pdf")]
+    ApplicationPdf = 10,
 }
 
 /// <summary>
@@ -280,8 +334,73 @@ public sealed class EuDocumentFetchAddress
         EuManifestationMediaType.XmlNoticeBranch => "application/xml;notice=branch",
         EuManifestationMediaType.XmlNoticeObject => "application/xml;notice=object",
         EuManifestationMediaType.XmlNoticeIdentifier => "application/xml;notice=identifier",
+        EuManifestationMediaType.TextHtml => "text/html",
+        EuManifestationMediaType.ApplicationPdf => "application/pdf",
         _ => throw new ArgumentOutOfRangeException(nameof(mediaType)),
     };
+
+    /// <summary>
+    /// The Accept token this route sends for one listed manifestation format, when it has one.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The bridge between the office's own listing vocabulary
+    /// (<see cref="EuManifestationFormat"/>, what a Work offers) and this route's own closed
+    /// Accept vocabulary (<see cref="EuManifestationMediaType"/>, what this route is allowed to
+    /// ask for). It is deliberately partial, and the partiality is the point:
+    /// <see cref="EuManifestationListingDecode.FormatLadder"/> admits a listed format as a fetch
+    /// candidate only when this method answers, so no ladder rung can ever mint an address for an
+    /// Accept token nobody has observed.
+    /// </para>
+    /// <para>
+    /// It answers for every rung of the ruled ladder. RULING
+    /// lex-event-20260904T185339315Z-87d1510eccdc42a5947c41d2d8580744 admitted
+    /// <see cref="EuManifestationMediaType.ApplicationPdf"/> as this route's tenth media type on the
+    /// strength of four observed 200s, so XHTML, html, PDF/A and PDF are all addressable and the
+    /// ladder is the one the format ruling named rather than a truncated version of it.
+    /// </para>
+    /// <para>
+    /// Five formats still have no admitted token, each for its own reason, and none of them is a
+    /// ladder rung. <see cref="EuManifestationFormat.Print"/> is the physical manifestation and is
+    /// excluded by <see cref="EuManifestationScope.FormatsThatCanNeverCarryABody"/>, one level above
+    /// this. <see cref="EuManifestationFormat.Formex4"/> has a token
+    /// (<see cref="EuManifestationMediaType.ZipMtypeFmx4"/>) and is deliberately still off the
+    /// ladder: Formex as a body address is deferred to a later slice by the D1-05d scope check, and
+    /// a Formex response is a ZIP whose bytes are not reproducible across fetches (PROBE_RESULT
+    /// lex-event-20260904T174922051Z-9b8f01162e384f1a90204a57ba7c6967, independently reconfirmed on
+    /// 2026-09-04 by a third fetch of both acts that matched neither earlier digest), so admitting
+    /// it here would put a per-fetch-varying body on the mainline path.
+    /// <see cref="EuManifestationFormat.Xhtml5"/> is the summary format, outside the act ladder.
+    /// <see cref="EuManifestationFormat.PdfA1a"/> and <see cref="EuManifestationFormat.PdfA1b"/>
+    /// have no token because neither has ever been observed serving. On 2026-09-04
+    /// <c>application/pdf;type=pdfa1a</c> answered 404 on all seven acts it was probed on
+    /// (32003L0087, 32003L0088, 32003R0001, 32004R0139, 32005L0029, 32006L0112, 32008R0593), every
+    /// one of which LISTS pdfa1a; pdfa1b was never probed at all, and is unaddressed for that reason
+    /// rather than on evidence. Minting a token for a profile nobody has seen served would be
+    /// exactly the unproven guess this route refuses.
+    /// </para>
+    /// </remarks>
+    public static bool TryMediaTypeFor(EuManifestationFormat format, out EuManifestationMediaType mediaType)
+    {
+        switch (format)
+        {
+            case EuManifestationFormat.Xhtml:
+                mediaType = EuManifestationMediaType.XhtmlXml;
+                return true;
+            case EuManifestationFormat.Html:
+                mediaType = EuManifestationMediaType.TextHtml;
+                return true;
+            case EuManifestationFormat.PdfA2a:
+                mediaType = EuManifestationMediaType.PdfTypePdfa2a;
+                return true;
+            case EuManifestationFormat.Pdf:
+                mediaType = EuManifestationMediaType.ApplicationPdf;
+                return true;
+            default:
+                mediaType = default;
+                return false;
+        }
+    }
 
     private static string LanguageToken(EuDocumentLanguage language) => language switch
     {

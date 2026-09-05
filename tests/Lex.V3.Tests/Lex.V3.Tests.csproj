@@ -7,6 +7,9 @@
     <Compile Include="../Lex.V3.TestSupport/ConstructionSurface.cs" Link="TestSupport/ConstructionSurface.cs" />
   </ItemGroup>
   <ItemGroup>
+    <Content Include="Fixtures/EuManifestationListing/*.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup>
     <PackageReference Include="JsonSchema.Net" Version="9.4.0" PrivateAssets="all" />
     <ProjectReference Include="../../src/Lex.V3.Api/Lex.V3.Api.csproj" />
     <ProjectReference Include="../../src/Lex.V3.Artifacts/Lex.V3.Artifacts.csproj" />

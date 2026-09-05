@@ -61,6 +61,14 @@ public sealed class DurableBlobReceiptFamilyIngestSurfaceTests
                 "field private instance " + QueryExecutionResult + "::<ScopeManifestReceipt>k__BackingField -> " + Receipt + "?",
                 "field private instance " + Session + "+HeldBodyReceipt::<Receipt>k__BackingField -> " + Receipt,
                 "field private instance " + Session + "+ResolvedHeldBody::<Receipt>k__BackingField -> " + Receipt,
+                // The one place that decides what "held" means, for both publishers' acquisition
+                // paths. It HOLDS a receipt and never constructs one: the receipt comes only from
+                // ICustodyStore.CreateAsync, exactly as every other holder pinned here. Carried into
+                // this lane from the LU lane so one definition of held exists rather than two.
+                "method internal static Lex.V3.Ingest.CustodyHold::TryHoldAsync("
+                + "Lex.V3.Contracts.Custody.ICustodyStore, System.ReadOnlyMemory<System.Byte>, "
+                + "System.Threading.CancellationToken) -> System.Threading.Tasks.Task<"
+                + "System.ValueTuple<" + Receipt + ", System.String>>",
                 "method private instance " + Session + "::BuildHopWriteReceipts(System.UInt64, System.UInt64, "
                 + "System.Collections.Generic.IReadOnlyList<Lex.V3.Contracts.Source.Http.RoutedHttpHop>) "
                 + "-> System.Collections.Generic.Dictionary<System.String, " + Receipt + ">",
