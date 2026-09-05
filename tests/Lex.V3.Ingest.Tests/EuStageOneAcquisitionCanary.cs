@@ -364,6 +364,41 @@ public sealed class EuStageOneAcquisitionCanary
     /// retaining their provenance.
     /// </para>
     /// <para>
+    /// THE PER-FIELD CROSS-RUN AUDIT, MEASURED. Two clean checkouts at one sha, built and run
+    /// separately and sequentially so neither doubled the publisher traffic of the other, each
+    /// with its own custody root. Both indexes reported runTreeClean true and the same runGitSha,
+    /// which is the check that they really were the same source. 126 leaf fields compared.
+    /// </para>
+    /// <para>
+    /// SIX FIELDS DIFFERED and they were the SAME field in each of the six families,
+    /// proofAcquisitionRunSha256. Nothing else moved. That settles it as a property of the run
+    /// identity rather than a suspicion about the corpus, and the cause is in
+    /// <c>RoutedHttpAcquisitionSession.CreateRunIdentity</c>, which hashes a fresh urn:uuid AND
+    /// the start instant to 100 nanoseconds; either term alone would be enough.
+    /// </para>
+    /// <para>
+    /// WHAT THE OTHER 120 ACTUALLY PROVE, stated in the shape that stops a reader over-reading
+    /// them. 46 were stable AND non-trivial: every family's familyKey, kind,
+    /// proofDeliveredRowCount, proofCanonicalKeyDigest, proofInterpretationProfileSha256,
+    /// proofSourceProfileSha256 and retainedFloor, plus runGitSha, runTreeClean and the whole-run
+    /// refusal code and detail. 18 were static text this file writes on every run. 3 were zero or
+    /// empty in both. And 53 WERE NULL IN BOTH AND PROVE NOTHING: both runs refused at
+    /// RecordFormNotResolved, before a manifest or a record set existed, so scopeManifest's three
+    /// fields, corpusRecordSet.setRefSha256 and every documentBodies entry were absent rather than
+    /// stable. A null equal to a null is not a measurement, and counting it as one is how an audit
+    /// reports coverage it does not have.
+    /// </para>
+    /// <para>
+    /// AND THE RUN ITSELF MOVED. All six families PROVED, with delivered row counts 2, 4, 41, 166,
+    /// 2 and 9. The four object-facts counts are exactly the out-of-band probe totals recorded in
+    /// the countAnswerBesideARefusedPage gap below (ObjectFacts 41, ExpressionFacts 166,
+    /// RootWatermark 2, ManifestationFacts 9), measured independently and months apart from this
+    /// run, so D1-05f's COALESCE and short-page-terminal fixes are confirmed against the live
+    /// publisher rather than against fixtures. The whole run now refuses LATER, at
+    /// RecordFormNotResolved: seed 32003L0088's root carries no admitted resource_legal_type this
+    /// adapter maps to a closed EuActForm. Identical detail in both runs.
+    /// </para>
+    /// <para>
     /// WHAT IT CANNOT YET REACH, recorded IN the index rather than quietly omitted. Two roles are
     /// not on <see cref="EuQueryExecutionResult"/> at all: each family's pass A and pass B page
     /// bodies with their cursor values, which live on the delivery receipt that
@@ -422,8 +457,11 @@ public sealed class EuStageOneAcquisitionCanary
                     + "manifest's custody-write digest), so the set digest cannot be stable by "
                     + "construction. Stated here FROM THE CODE PATH rather than by analogy with "
                     + "Luxembourg, whose canary mints the same two resource_ids in the canary "
-                    + "itself; the EU-side observation of two runs is the per-field cross-run "
-                    + "audit's job and is NOT claimed here. It sits beside heldContentSha256 "
+                    + "itself. THE PER-FIELD AUDIT HAS NOW RUN AND COULD NOT CONFIRM THIS ONE: "
+                    + "both clean-checkout runs refused at RecordFormNotResolved before any "
+                    + "record set existed, so setRefSha256 was null in both and being equal "
+                    + "proves nothing about it. This claim therefore rests on the code path alone "
+                    + "until a run reaches the record set. It sits beside heldContentSha256 "
                     + "values that ARE content addresses, so without this note a reader diffing "
                     + "two runs sees a moved corpus where nothing moved, and, worse, might take a "
                     + "match as evidence two runs produced the same corpus. WHAT TO DIFF INSTEAD, "
@@ -435,6 +473,26 @@ public sealed class EuStageOneAcquisitionCanary
                     + "on the CANARY|custodyRoot line rather than carried in this index. Every "
                     + "one of those is a claim the per-field audit must MEASURE, not inherit from "
                     + "this note.",
+            },
+            new System.Text.Json.Nodes.JsonObject
+            {
+                ["role"] = "crossRunAcquisitionRunIdentity",
+                ["why"] = "proofAcquisitionRunSha256 above identifies THIS RUN and IS NOT "
+                    + "COMPARABLE ACROSS RUNS, and unlike the other gaps here this one is "
+                    + "MEASURED rather than reasoned. "
+                    + "RoutedHttpAcquisitionSession.CreateRunIdentity hashes a canonical block "
+                    + "carrying a fresh urn:uuid resource id AND the run's start instant to 100 "
+                    + "nanoseconds, so TWO independent terms make it unrepeatable; a run identity "
+                    + "that DID repeat across two runs would be the defect. Observed: two "
+                    + "clean-checkout runs at one sha, both reporting runTreeClean true, gave six "
+                    + "different values, one per family, while every other family field held: "
+                    + "familyKey, kind, proofDeliveredRowCount, proofCanonicalKeyDigest, "
+                    + "proofInterpretationProfileSha256, proofSourceProfileSha256 and "
+                    + "retainedFloor were identical in all six. It sits beside those stable "
+                    + "digests, so a reader diffing two runs sees six moved values and can read a "
+                    + "stable corpus as a changed one. WHAT TO DIFF INSTEAD for a family: "
+                    + "proofCanonicalKeyDigest, which is the content address of the delivered "
+                    + "keys, and proofDeliveredRowCount beside it.",
             },
         };
 

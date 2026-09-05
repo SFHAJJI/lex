@@ -7,6 +7,9 @@ namespace Lex.V3.Ingest.Tests;
 
 /// <summary>
 /// The EU canary evidence index's declared gaps, pinned by ROLE so one cannot be dropped silently.
+/// The count is deliberately NOT in the test name: it was four when this was written and five
+/// once the cross-run audit measured a fifth, and a name carrying the number would have had to
+/// be edited for an ordinary addition.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -39,7 +42,7 @@ namespace Lex.V3.Ingest.Tests;
 public sealed class EuCanaryEvidenceIndexGapTests
 {
     [TestMethod]
-    public void TheIndexDeclaresExactlyTheFourGapsItCannotYetCarry()
+    public void TheIndexDeclaresExactlyTheGapsItCannotYetCarry()
     {
         var roles = EuStageOneAcquisitionCanary.RolesThisIndexCannotYetCarry()
             .Select(static entry => entry!["role"]!.GetValue<string>())
@@ -53,6 +56,7 @@ public sealed class EuCanaryEvidenceIndexGapTests
                 "countAnswerBesideARefusedPage",
                 "robotsBootstrapArtifact",
                 "crossRunCorpusRecordSetIdentity",
+                "crossRunAcquisitionRunIdentity",
             }),
             string.Join("\n", roles),
             "a gap dropped from this index is a reader silently no longer told that a value is "
