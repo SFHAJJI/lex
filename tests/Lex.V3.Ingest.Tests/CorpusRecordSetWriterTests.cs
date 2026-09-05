@@ -558,12 +558,6 @@ public sealed class CorpusRecordSetWriterTests
     }
 
     /// <summary>
-    /// A real in-memory content-addressed store publishing enforced (<see cref="CustodyProtection.LockedTime"/>)
-    /// protection for every write, mirroring <c>LuxembourgQueryExecutionAdapterTests.InMemoryCustodyStore</c>
-    /// exactly: a real store this writer's own retention floor check passes against, never a bare
-    /// unenforced double.
-    /// </summary>
-    /// <summary>
     /// GATE FIVE's genuine failure, at the writer itself: a record set the store accepts and then
     /// cannot reproduce at its own digest is NOT retained, and the writer refuses saying so.
     /// </summary>
@@ -616,6 +610,12 @@ public sealed class CorpusRecordSetWriterTests
             Task.FromResult<ReadOnlyMemory<byte>>("not the bytes you stored"u8.ToArray());
     }
 
+    /// <summary>
+    /// A real in-memory content-addressed store publishing enforced (<see cref="CustodyProtection.LockedTime"/>)
+    /// protection for every write, mirroring <c>LuxembourgQueryExecutionAdapterTests.InMemoryCustodyStore</c>
+    /// exactly: a real store this writer's own retention floor check passes against, never a bare
+    /// unenforced double.
+    /// </summary>
     private sealed class EnforcingInMemoryCustodyStore : ICustodyStore
     {
         private readonly Dictionary<string, byte[]> _byDigest = new(StringComparer.Ordinal);

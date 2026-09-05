@@ -943,16 +943,13 @@ public sealed class EuQueryExecutionAdapterTests
         Assert.IsNotNull(result.CorpusRecordSet);
         Assert.IsNotNull(result.CorpusRecordSetRef);
 
-        // GATE TWO, the scope manifest's own custody write, targeted BY ITS OWN DIGEST. Pass one
-        // above ran fully enforcing, so it hands back the exact manifest this scenario writes; that
-        // digest is then the one write unenforced here. Discovered rather than guessed, for the same
-        // reason the ordinal above is discovered: a hardcoded digest would rot the moment the
-        // manifest's canonical bytes changed for any unrelated reason.
+        // GATE TWO, the scope manifest's own custody write.
         //
         // This test exists because the mutation that restores gate two's floor check SURVIVED the
         // first sweep. Unenforcing a session artifact does not reach it and unenforcing the last
         // write is the record set's, so nothing drove the manifest write specifically and its
         // record-and-continue behaviour was asserted nowhere.
+        //
         // Targeted by ORDINAL, discovered from pass one, because the manifest's own digest is not
         // stable across runs: it embeds a fresh urn:uuid, so its bytes differ every time while its
         // position in the write order does not. Discovering the ordinal by matching pass one's own

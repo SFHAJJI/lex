@@ -101,14 +101,8 @@ internal static class AbsenceFixtures
     }
 
     /// <summary>
-    /// A real proof that one family's enumeration was delivered whole, built from a verified
-    /// delivery comparison rather than stubbed. Memoized because assembling one costs four
-    /// canonicalized evidence tuples and the ledger tests build many cuts; the objects are
-    /// immutable, so sharing one across cuts changes nothing a test can observe.
-    /// </summary>
-    /// <summary>
-    /// The same real proof, minted for a run whose artifacts are held without an enforced retention
-    /// floor. Not memoized: one caller, and the point is the class it carries.
+    /// The same real proof as <see cref="Proof"/>, minted for a run whose artifacts are held without
+    /// an enforced retention floor. Not memoized: one caller, and the point is the class it carries.
     /// </summary>
     public static AbsenceFamilyEnumerationProof UnflooredProof(
         string familyKey = "lu_root_family", int runSeed = 930)
@@ -126,6 +120,12 @@ internal static class AbsenceFixtures
         return proof;
     }
 
+    /// <summary>
+    /// A real proof that one family's enumeration was delivered whole, built from a verified
+    /// delivery comparison rather than stubbed. Memoized because assembling one costs four
+    /// canonicalized evidence tuples and the ledger tests build many cuts; the objects are
+    /// immutable, so sharing one across cuts changes nothing a test can observe.
+    /// </summary>
     public static AbsenceFamilyEnumerationProof Proof(
         string familyKey = "lu_root_family", int runSeed = 930) =>
         Proofs.GetOrAdd((familyKey, runSeed), static key =>

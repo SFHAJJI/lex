@@ -119,7 +119,7 @@ public sealed class EuStageOneAcquisitionCanary
     ];
 
     [TestMethod]
-    public async Task BothCanarySeedsAreHeldOrRefusedForALegitimateReason()
+    public async Task TheCensusFamiliesProveAndTheRunEitherReachesTheManifestOrFailsNamingWhy()
     {
         if (Environment.GetEnvironmentVariable(EnableVariable) != "1")
         {
@@ -290,23 +290,29 @@ public sealed class EuStageOneAcquisitionCanary
 
         await WriteEvidenceIndexAsync(store, root, result, CancellationToken.None);
 
-        // CONDITION TWO, first half, reachable today and asserted unconditionally: both census
-        // families proved, and each says which of the three custody classes its run was.
-        var censusProofs = result.FamilyOutcomes
+        // CONDITION TWO, first half, reachable today and asserted unconditionally: EACH CENSUS
+        // SEED's OWN family proved, BY KEY, and says which of the three custody classes its run was.
+        //
+        // By key rather than by count. An arity check passes when the right number of families prove
+        // whether or not they are these two, and it FAILS the moment a third family proves, which is
+        // precisely what D1-05f is meant to achieve. This assertion grows correct instead.
+        var proven = result.FamilyOutcomes
             .Where(static outcome => outcome.Kind == EuFamilyEnumerationOutcomeKind.Proven)
-            .ToArray();
-        Assert.HasCount(
-            Census.Length,
-            censusProofs,
-            "one proved census family per seed is the least this run must establish; got "
-            + string.Join(", ", result.FamilyOutcomes.Select(
-                static outcome => $"{outcome.Kind}/{outcome.ExecutorRefusal?.Code}")));
-        foreach (var proven in censusProofs)
+            .ToDictionary(static outcome => outcome.FamilyKey, StringComparer.Ordinal);
+        var everyOutcome = string.Join("; ", result.FamilyOutcomes.Select(
+            static outcome => $"{outcome.FamilyKey} {outcome.Kind} {outcome.ExecutorRefusal?.Code}"));
+
+        foreach (var row in Census)
         {
+            var familyKey = CensusFamilyKey(row.Celex);
+            Assert.IsTrue(
+                proven.TryGetValue(familyKey, out var outcome),
+                $"{row.Celex}'s own census family {familyKey} must be among the proved families. "
+                + $"Outcomes were: {everyOutcome}");
             Assert.AreEqual(
                 CustodyMembership.RetainedUnenforced,
-                proven.RetainedFloor,
-                $"family {proven.FamilyKey} ran over a filesystem store and must say so.");
+                outcome!.RetainedFloor,
+                $"{row.Celex}'s family ran over a filesystem store and must say so.");
         }
 
         // Either the run reached the manifest and the census comparison happens, or it did not and
@@ -485,6 +491,23 @@ public sealed class EuStageOneAcquisitionCanary
             $"CANARY|evidenceIndex|sha256={receipt.Reference.ContentSha256}|bytes={bytes.Length}"
             + $"|beside={beside}");
     }
+
+    /// <summary>
+    /// One census seed's own family key, as <c>EuConsolidationDiscoveryPlan</c> mints it: the literal
+    /// "celex-" and the first 24 characters of the lowercase SHA-256 of the CELEX in UTF-8.
+    /// </summary>
+    /// <remarks>
+    /// A re-derivation, because that plan's own <c>PartitionKey</c> is private, and re-derivations
+    /// are how a hand-copied rule silently drifts. Two things keep this one honest. It was checked
+    /// against the keys two live runs actually produced, celex-af915dcd9a57798f9c4bc881 for
+    /// 32003L0088 and celex-c78e22eabda236f00b3a0548 for 32016R0679, before being relied on. And if
+    /// the plan's rule ever changes, the assertion above fails loudly naming every key the run did
+    /// produce, rather than passing on a coincidence.
+    /// </remarks>
+    private static string CensusFamilyKey(string celex) =>
+        "celex-" + System.Convert.ToHexStringLower(
+            System.Security.Cryptography.SHA256.HashData(
+                System.Text.Encoding.UTF8.GetBytes(celex)))[..24];
 
     /// <summary>
     /// One git invocation, for the run's own sha and tree state. Returns null when git is not
