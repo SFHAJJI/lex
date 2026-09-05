@@ -133,10 +133,14 @@ public sealed class LuxembourgRepeatedEnumerationExecutorTests
             // TryProveFamilyEnumeration, and only the two ADAPTERS call that. Verified by reading
             // the call sites rather than by the name.
             //
-            // Where an unfloored run actually stops is the TUPLE BIND, EnumerationDeliveryComparison
-            // .Create in shared Source/Core, which refuses any observation whose body receipt is not
-            // ImmutableObject1 and LockedTime; this executor's own remark beside its
-            // DeliveryProofRefused site already said so. That gate takes the same answer as the
+            // Where an unfloored run stops TODAY is the TUPLE BIND, EnumerationDeliveryComparison
+            // .Create in shared Source/Core, which still refuses any observation whose body receipt
+            // is not ImmutableObject1 and LockedTime. STATED WITH ITS EXPIRY DATE, because the
+            // ruling that ends it already exists: correction
+            // lex-event-20260904T230312457Z-5d1f7352c46b4ca0ac8c71ca6a4aa1fb drops the profile and protection
+            // halves from that bind and keeps only the anti-forgery digest comparison and the
+            // NightlyFloor90d class check, so once lane B lands it an unfloored run does not stop
+            // there at all. That gate takes the same answer as the
             // others under RULING lex-event-20260904T213727510Z-671a8c2563684ab49048677997ceef1c,
             // but Source/Core is shared and the gate ownership ruling puts shared hunks in the lane
             // that merges first, so it is LANE B's.
@@ -1473,9 +1477,13 @@ public sealed class LuxembourgRepeatedEnumerationExecutorTests
         // the class and continues; the test is now
         // AFilesystemDeploymentRunsAndItsReceiptCarriesRetainedUnenforced and proves the opposite,
         // that the run reaches its product requests. A bare FileSystemCustodyStore still cannot
-        // reach Delivered, but for a different reason and one owned by another lane: the shared
+        // reach Delivered TODAY, for a different reason and one owned by another lane: the shared
         // Source/Core tuple bind refuses an observation whose body receipt is not ImmutableObject1
-        // and LockedTime.
+        // and LockedTime. THAT REASON EXPIRES. Correction
+        // lex-event-20260904T230312457Z-5d1f7352c46b4ca0ac8c71ca6a4aa1fb drops profile and protection from
+        // that bind, keeping the anti-forgery digest comparison and the NightlyFloor90d class
+        // check, so once lane B lands it a bare FileSystemCustodyStore does reach Delivered. That
+        // is the point of the ruling, not a regression.
         //
         // RESIDUE, stated rather than papered over: the only store in this repository that
         // genuinely publishes enforcement is AzureBlobCustodyStore, which no unit test can reach.
@@ -1625,13 +1633,6 @@ public sealed class LuxembourgRepeatedEnumerationExecutorTests
     }
 
     /// <summary>
-    /// Builds the executor with the test-only handler-injection constructor (internal, same shape
-    /// as production's public constructor plus one nullable parameter) and runs it. Together with
-    /// <see cref="RunCover"/>, these are the only two places in this file that construct an
-    /// executor, so every test drives one of the two production entry points, RunPartitionAsync or
-    /// RunCoverAsync, with a fake transport substituted underneath it.
-    /// </summary>
-    /// <summary>
     /// A CustodyRequiredException raised during the run becomes the typed
     /// <see cref="LuxembourgEnumerationRefusal.CustodyMemberMissing"/> rather than escaping.
     /// </summary>
@@ -1647,18 +1648,18 @@ public sealed class LuxembourgRepeatedEnumerationExecutorTests
         var (request, witness) = BuildRequest();
         var root = Path.Combine(Path.GetTempPath(), "lex-lu-custody-required-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(root);
-        // The failure is armed by the HANDLER, on the first product request, rather than by a write
-        // count. A count was tried and is the wrong instrument: the robots bootstrap's own write
-        // volume is an implementation detail, so any threshold either fires inside the bootstrap
-        // (giving RobotsBootstrapRefused, a true refusal about the wrong thing) or drifts silently
-        // when that volume changes.
+        // TWO INSTRUMENTS, NOT ONE, because neither alone lands the fault where this test needs it.
+        // The HANDLER GATE SELECTS THE PHASE: armed turns true on the first product request, so no
+        // threshold can fire inside the robots bootstrap, whose own write volume is an
+        // implementation detail that would otherwise give RobotsBootstrapRefused, a true refusal
+        // about the wrong thing. THE COUNT SELECTS THE WRITE: calibrated to this fixture's clean
+        // run of exactly 50 custody writes, arming after 49 puts the failure in the LAST one,
+        // during delivery-evidence materialisation, inside the outer try this test is about.
+        // Arming earlier lands in the send path and is caught as ObservationNotExecuted instead.
+        // Both neighbours were measured, not assumed: 48 and 44 give ObservationNotExecuted, 60
+        // gives DeliveryProofRefused, and arming from the first write gives RobotsBootstrapRefused.
+        // If that write count ever drifts, this test fails rather than silently arming elsewhere.
         var armed = new StrongBox<bool>(false);
-        // Calibrated to this fixture's own clean run, which performs exactly 50 custody writes:
-        // arming after 49 puts the failure in the LAST one, which happens during delivery-evidence
-        // materialisation, inside the outer try this test is about. Arming earlier lands in the
-        // send path and is caught as ObservationNotExecuted instead, and arming on the bootstrap
-        // gives RobotsBootstrapRefused; both are true refusals about a different thing. If that
-        // write count ever drifts, this test fails rather than silently arming in the wrong phase.
         var store = new CustodyRequiredAfterBootstrapStore(new FileSystemCustodyStore(root), armed)
         {
             ArmAfter = 49,
@@ -1671,11 +1672,17 @@ public sealed class LuxembourgRepeatedEnumerationExecutorTests
                 : JsonResponse(req, LuxembourgAcquisitionTestFixture.EmptyRowsJson());
         });
 
-        var result = await Run(store, request, witness, handler);
-        Assert.IsNotNull(result.Refusal, "a custody failure is a typed refusal, never an escape.");
-        Assert.AreEqual(LuxembourgEnumerationRefusal.CustodyMemberMissing, result.Refusal!.Code);
-        Assert.IsNull(result.Receipt);
-        Directory.Delete(root, recursive: true);
+        try
+        {
+            var result = await Run(store, request, witness, handler);
+            Assert.IsNotNull(result.Refusal, "a custody failure is a typed refusal, never an escape.");
+            Assert.AreEqual(LuxembourgEnumerationRefusal.CustodyMemberMissing, result.Refusal!.Code);
+            Assert.IsNull(result.Receipt);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
     }
 
     /// <summary>
@@ -1710,6 +1717,13 @@ public sealed class LuxembourgRepeatedEnumerationExecutorTests
             inner.ReadByDigestAsync(contentSha256, cancellationToken);
     }
 
+    /// <summary>
+    /// Builds the executor with the test-only handler-injection constructor (internal, same shape
+    /// as production's public constructor plus one nullable parameter) and runs it. Together with
+    /// <see cref="RunCover"/>, these are the only two places in this file that construct an
+    /// executor, so every test drives one of the two production entry points, RunPartitionAsync or
+    /// RunCoverAsync, with a fake transport substituted underneath it.
+    /// </summary>
     private static Task<LuxembourgEnumerationRunResult> Run(
         ICustodyStore store,
         LuxembourgPartitionRunRequest request,
