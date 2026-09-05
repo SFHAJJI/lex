@@ -874,6 +874,40 @@ public sealed class EuQueryExecutionAdapter
         // seed before decode ever sees it) -- but a row belonging to NO requested seed at all must no
         // longer be silently dropped alongside a row that legitimately belongs to a sibling seed's
         // own closure.
+        // ---- D1-05g: resolve EVERY seed's act form before decoding ANY of them. ----
+        // The old shape returned on the first seed that failed, inside the decode loop. Both roots
+        // of the canary fail identically when the mapping is wrong, and the message named only the
+        // one reached first, which is how the defect read as a directive-specific problem for as
+        // long as it did. A refusal that names one of two failures actively misdirects.
+        var recordFormByCelex = new Dictionary<string, EuActForm>(StringComparer.Ordinal);
+        var recordFormFailures = new List<string>();
+        foreach (var (requestedCelex, _) in censusRowsBySeed)
+        {
+            var (closure, rootIri) = closuresByCelex[requestedCelex];
+            var seedPRows = FilterByClosureColumn(
+                allPRows, pProfile, "object", closure, allRequestedSeedsClosure);
+            if (TryResolveRecordForm(seedPRows, pProfile, rootIri, out var resolvedForm))
+            {
+                recordFormByCelex[requestedCelex] = resolvedForm;
+                continue;
+            }
+
+            recordFormFailures.Add(
+                $"seed '{requestedCelex}' (root '{rootIri}') observed "
+                + DescribeRowsForRoot(seedPRows, pProfile, rootIri));
+        }
+
+        if (recordFormFailures.Count != 0)
+        {
+            return EuQueryExecutionResult.Refused(
+                topology, outcomes,
+                new EuQueryExecutionRefusalDetail(
+                    EuQueryExecutionRefusal.RecordFormNotResolved,
+                    $"{recordFormFailures.Count} of {censusRowsBySeed.Count} root(s) carry no "
+                    + "act-form value this adapter can map to a closed EuActForm. "
+                    + string.Join(" ", recordFormFailures)));
+        }
+
         foreach (var (requestedCelex, (familyRows, familyProfile)) in censusRowsBySeed)
         {
             var (closure, rootIri) = closuresByCelex[requestedCelex];
@@ -885,15 +919,7 @@ public sealed class EuQueryExecutionAdapter
             // EuCellarObjectDecode.TryDecode refuses any row outside the ONE closure it is handed.
             var seedMRows = FilterByClosureColumn(allMRows, mProfile, "parent", closure, allRequestedSeedsClosure);
 
-            if (!TryResolveRecordForm(seedPRows, pProfile, rootIri, out var recordForm))
-            {
-                return EuQueryExecutionResult.Refused(
-                    topology, outcomes,
-                    new EuQueryExecutionRefusalDetail(
-                        EuQueryExecutionRefusal.RecordFormNotResolved,
-                        $"seed '{requestedCelex}' (root '{rootIri}') carries no admitted " +
-                        "act-form value this adapter can map to a closed EuActForm."));
-            }
+            var recordForm = recordFormByCelex[requestedCelex];
 
             var snapshots = EuCellarObjectDecode.TryDecode(
                 requestedCelex,
@@ -1827,6 +1853,50 @@ public sealed class EuQueryExecutionAdapter
     }
 
     /// <summary>
+    /// Every family P row this run observed for one root, as predicate, value_kind and value
+    /// VERBATIM, for a refusal that has to be actionable without a second run.
+    /// </summary>
+    /// <remarks>
+    /// A refusal saying a value could not be mapped WITHOUT saying what the value was names
+    /// nothing: the reader cannot tell an unadmitted form from an absent predicate from a
+    /// projection that never selected it, and those are three different defects with three
+    /// different fixes. Only the bytes distinguish them, so the bytes travel with the refusal.
+    /// The absent case is stated in words rather than as an empty list, because an empty list
+    /// reads as a rendering bug.
+    /// </remarks>
+    private static string DescribeRowsForRoot(
+        IReadOnlyList<RepeatedEnumerationRow> pRows,
+        RepeatedEnumerationInterpretationProfile pProfile,
+        string rootIri)
+    {
+        var objectIndex = IndexOf(pProfile, "object");
+        var predicateIndex = IndexOf(pProfile, "predicate");
+        var valueIndex = IndexOf(pProfile, "value");
+        var valueKindIndex = IndexOf(pProfile, "value_kind");
+
+        var described = pRows
+            .Where(row =>
+            {
+                var objectValue = row.Terms[objectIndex].Value;
+                return objectValue is not null
+                    && EuPackRootCanonicalForm.TryCanonicalize(objectValue, out _) == rootIri;
+            })
+            .Select(row =>
+            {
+                var predicate = row.Terms[predicateIndex].Value ?? "(unbound)";
+                var valueKind = row.Terms[valueKindIndex].Value ?? "(unbound)";
+                var value = row.Terms[valueIndex].Value ?? "(unbound)";
+                return $"[predicate={predicate} value_kind={valueKind} value={value}]";
+            })
+            .OrderBy(static entry => entry, StringComparer.Ordinal)
+            .ToArray();
+
+        return described.Length == 0
+            ? "NO family P row at all, so the predicate was not delivered for this root."
+            : $"{described.Length} family P row(s): {string.Join(" ", described)}";
+    }
+
+    /// <summary>
     /// D1-05c-1's own decode contract requires a caller-resolved <see cref="EuActForm"/> as an input
     /// it does not itself derive ("Not recoverable from these closures' rows; the caller supplies it
     /// from wherever it independently resolves resource_legal_type" -- <see cref="EuCellarObjectDecode.TryDecode"/>'s
@@ -1878,14 +1948,11 @@ public sealed class EuQueryExecutionAdapter
         var predicateIndex = IndexOf(pProfile, "predicate");
         var valueIndex = IndexOf(pProfile, "value");
         var valueKindIndex = IndexOf(pProfile, "value_kind");
-        // D1-05g: THE CONSTANT MOVED. It used to name cdm:resource_legal_type while the switch
-        // below speaks work_has_resource-type's vocabulary, and the two conditions could not both
-        // hold against the publisher's data, so this loop skipped every row and the switch was
-        // never reached for any root. Still a literal here: EuObjectFactsDiscoveryPlan.CdmIri is
-        // internal to Lex.V3.Contracts, and making it a public pinned door is D1-05g-guards' work,
-        // not the closing head's.
-        const string actFormPredicateIri =
-            "http://publications.europa.eu/ontology/cdm#work_has_resource-type";
+        // D1-05g. Reached through the typed accessor like every other guard in this reduction,
+        // now that Decision 80 has made it a pinned public door. The literal that used to sit here
+        // named a DIFFERENT predicate from the one the switch below speaks, and a string literal is
+        // checked against nothing, which is how the two drifted apart unnoticed.
+        var actFormPredicateIri = EuObjectFactsDiscoveryPlan.CdmIri(EuCdmPredicate.WorkHasResourceType);
 
         foreach (var row in pRows)
         {
