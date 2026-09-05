@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using System.Text.Json.Serialization;
 using System.Text;
 
 namespace Lex.V3.TestSupport;
@@ -228,6 +229,71 @@ public static class ClosedSurfaceCensus
         }
 
         return text.ToString();
+    }
+
+    /// <summary>
+    /// How the enums in <paramref name="assemblies"/> declare wire tokens: the half-declared ones
+    /// by name, and counts for the rest.
+    /// </summary>
+    /// <param name="HalfDeclared">
+    /// Vocabularies declaring a token on some members but not all, as
+    /// <c>full name: n of m declared, missing A, B</c>, ordered by full name. Empty is healthy.
+    /// </param>
+    /// <param name="FullyDeclared">Vocabularies declaring a token on every member.</param>
+    /// <param name="DeclaringNothing">Vocabularies declaring no token at all.</param>
+    /// <param name="Total">Every enum the scope holds.</param>
+    public readonly record struct VocabularyDeclarationCensus(
+        IReadOnlyList<string> HalfDeclared,
+        int FullyDeclared,
+        int DeclaringNothing,
+        int Total);
+
+    /// <summary>
+    /// Counts the declaration state of every enum in <paramref name="assemblies"/>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A half declared vocabulary is a surface a reader cannot judge: some names are contract and
+    /// the rest fall through to default serialization, which for this codebase is the exact CLR
+    /// member name, and nothing says which is which. Two such enums were found by a lane looking at
+    /// one of them; this closes the class rather than the instances.
+    /// </para>
+    /// <para>
+    /// An enum declaring NOTHING is deliberately outside the rule. Most enums here are internal
+    /// state that never reaches a wire, and requiring tokens on them would be a rule about
+    /// paperwork rather than about contract. The criterion is that a vocabulary which has begun
+    /// declaring tokens has to finish, because that is the point at which a reader starts to infer
+    /// meaning from their presence.
+    /// </para>
+    /// </remarks>
+    public static VocabularyDeclarationCensus DeclarationCensus(params string[] assemblies)
+    {
+        var found = Load(assemblies)
+            .SelectMany(AllTypes)
+            .Where(static type => type.IsEnum)
+            .Select(static type =>
+            {
+                var names = Enum.GetNames(type);
+                var missing = names
+                    .Where(name => type.GetField(name, BindingFlags.Public | BindingFlags.Static)!
+                        .GetCustomAttribute<JsonStringEnumMemberNameAttribute>() is null)
+                    .ToArray();
+                return (Type: type, Declared: names.Length - missing.Length, names.Length, Missing: missing);
+            })
+            .ToArray();
+
+        var half = found
+            .Where(static one => one.Declared > 0 && one.Missing.Length > 0)
+            .OrderBy(static one => one.Type.FullName, StringComparer.Ordinal)
+            .Select(static one => one.Type.FullName + ": " + one.Declared + " of "
+                + one.Length + " declared, missing " + string.Join(", ", one.Missing))
+            .ToArray();
+
+        return new(
+            half,
+            found.Count(static one => one.Missing.Length == 0),
+            found.Count(static one => one.Declared == 0),
+            found.Length);
     }
 
     private static IEnumerable<Assembly> Load(string[] assemblies)

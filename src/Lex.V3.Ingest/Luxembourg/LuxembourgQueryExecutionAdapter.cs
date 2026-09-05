@@ -334,9 +334,11 @@ public sealed class LuxembourgFamilyEnumerationOutcome
 
 public enum LuxembourgQueryExecutionRefusal
 {
+    [JsonStringEnumMemberName("none")]
     None = 0,
 
     /// <summary>The merged R5.1 pipeline's <c>Resolve</c> step refused (see <see cref="LuxembourgQueryExecutionRefusalDetail.ResolutionFailure"/>).</summary>
+    [JsonStringEnumMemberName("scope_resolution_failed")]
     ScopeResolutionFailed = 1,
 
     /// <summary>
@@ -366,6 +368,7 @@ public enum LuxembourgQueryExecutionRefusal
     /// rows behind a proof that exists, so an unproven or unmatched designation refuses here rather
     /// than silently deriving zero observations from a family this run never actually censused.
     /// </summary>
+    [JsonStringEnumMemberName("resource_observation_family_not_proven")]
     ResourceObservationFamilyNotProven = 3,
 
     /// <summary>
@@ -375,6 +378,7 @@ public enum LuxembourgQueryExecutionRefusal
     /// from custody: see <see cref="LuxembourgQueryExecutionRefusalDetail.Detail"/> for the exact
     /// <see cref="Lex.V3.Contracts.Source.Core.RepeatedEnumerationRowsOpenRefusal"/> reason.
     /// </summary>
+    [JsonStringEnumMemberName("resource_observation_rows_not_verified")]
     ResourceObservationRowsNotVerified = 4,
 
     /// <summary>
@@ -385,6 +389,7 @@ public enum LuxembourgQueryExecutionRefusal
     /// exist is a genuine data-integrity problem this adapter reports rather than silently drops.
     /// See <see cref="LuxembourgQueryExecutionRefusalDetail.Detail"/> for the exact subject.
     /// </summary>
+    [JsonStringEnumMemberName("observation_subject_not_in_delivered_census")]
     ObservationSubjectNotInDeliveredCensus = 5,
 
     /// <summary>
@@ -395,6 +400,7 @@ public enum LuxembourgQueryExecutionRefusal
     /// it refuses here rather than throwing. See <see cref="LuxembourgQueryExecutionRefusalDetail.Detail"/>
     /// for the exact subject and value.
     /// </summary>
+    [JsonStringEnumMemberName("assertion_row_object_kind_not_recognised")]
     AssertionRowObjectKindNotRecognised = 6,
 
     /// <summary>
@@ -419,6 +425,7 @@ public enum LuxembourgQueryExecutionRefusal
     /// canonical-key coverage ever narrows to something less than the full projection.
     /// </para>
     /// </summary>
+    [JsonStringEnumMemberName("assertion_row_term_unbound")]
     AssertionRowTermUnbound = 7,
 
     /// <summary>
@@ -430,14 +437,27 @@ public enum LuxembourgQueryExecutionRefusal
     /// <see cref="Lex.V3.Contracts.Source.Corpus.CorpusAcquisitionRefusalReason.RobotsDisallowed"/>
     /// record, because it is the publisher speaking about that document.
     /// </summary>
+    [JsonStringEnumMemberName("document_fetch_session_not_started")]
     DocumentFetchSessionNotStarted = 8,
 
     /// <summary>
-    /// A document body was fetched for real, but the store enforced no retention floor on it, so
-    /// this run cannot claim it as held (never bypass the Decision 71 floor). Refuses the whole run
-    /// rather than recording an object as held on bytes nothing protects.
+    /// A document body was fetched for real and this run could not retain it at all. TWO PRODUCERS,
+    /// both in RunDocumentGetAsync: the digest-checked reopen raised
+    /// <see cref="Lex.V3.Contracts.Custody.CustodyIntegrityException"/> because the bytes did not
+    /// come back at their own digest, or the hold itself failed. Refuses the whole run rather than
+    /// recording an object as held on bytes this run cannot reproduce.
     /// </summary>
-    DocumentBodyNotHeld = 9,
+    /// <remarks>
+    /// WAS <c>DocumentBodyNotHeld</c>, and its summary said it fired when the store enforced no
+    /// retention floor. It never did after the Decision 71 interpretation removed that gate: a
+    /// store that wrote the bytes, can reproduce them at their own digest and honestly declares
+    /// NotEnforced did not fail, and the membership class is recorded rather than gated on. So the
+    /// name and the summary both described a condition that could not produce this member, which is
+    /// the misattribution class ruled at b0edd672. EU renamed its equivalent under that ruling and
+    /// this one was left behind; ONE CONDITION CARRIES ONE NAME ACROSS BOTH PUBLISHERS.
+    /// </remarks>
+    [JsonStringEnumMemberName("document_body_not_retained")]
+    DocumentBodyNotRetained = 9,
 
     /// <summary>
     /// A document GET completed or failed in a shape this route has no reviewed reading for and
@@ -445,7 +465,8 @@ public enum LuxembourgQueryExecutionRefusal
     /// vocabulary cannot name faithfully. The whole run refuses, naming the real classified cause,
     /// rather than mapping it onto an unrelated existing member or accepting it as held.
     /// </summary>
-    DocumentGetOutcomeNotRepresentable = 10,
+    [JsonStringEnumMemberName("acquisition_outcome_not_representable")]
+    AcquisitionOutcomeNotRepresentable = 10,
 
     /// <summary>
     /// A GENUINE CUSTODY FAILURE on this run's own corpus/6 record set, forwarded verbatim from
@@ -1606,7 +1627,7 @@ public sealed class LuxembourgQueryExecutionAdapter
                 // here rather than throwing keeps this method's "never throws past a typed refusal"
                 // discipline even for a defect this loop cannot itself introduce.
                 return (null, new LuxembourgQueryExecutionRefusalDetail(
-                    LuxembourgQueryExecutionRefusal.DocumentGetOutcomeNotRepresentable,
+                    LuxembourgQueryExecutionRefusal.AcquisitionOutcomeNotRepresentable,
                     null,
                     $"manifest row {rowOrdinal} ('{mintedObjectRef.CanonicalKey}') carries a Minted " +
                     "fetch address this run never itself minted."));
@@ -1661,7 +1682,7 @@ public sealed class LuxembourgQueryExecutionAdapter
                     catch (CustodyIntegrityException exception)
                     {
                         return (null, new LuxembourgQueryExecutionRefusalDetail(
-                            LuxembourgQueryExecutionRefusal.DocumentBodyNotHeld,
+                            LuxembourgQueryExecutionRefusal.DocumentBodyNotRetained,
                             null,
                             $"manifest row {rowOrdinal} ('{mintedObjectRef.CanonicalKey}'): the "
                             + $"body could not be reopened at its own digest: {exception.Message}"));
@@ -1685,7 +1706,7 @@ public sealed class LuxembourgQueryExecutionAdapter
                     if (bodyReceipt is null)
                     {
                         return (null, new LuxembourgQueryExecutionRefusalDetail(
-                            LuxembourgQueryExecutionRefusal.DocumentBodyNotHeld,
+                            LuxembourgQueryExecutionRefusal.DocumentBodyNotRetained,
                             null,
                             $"manifest row {rowOrdinal} ('{mintedObjectRef.CanonicalKey}'): {holdFailure}"));
                     }
@@ -1709,7 +1730,7 @@ public sealed class LuxembourgQueryExecutionAdapter
                 ? $"{evidence.Outcome.GetType().Name}({incompleteOutcome.Reason})"
                 : evidence.Outcome.GetType().Name;
             return (null, new LuxembourgQueryExecutionRefusalDetail(
-                LuxembourgQueryExecutionRefusal.DocumentGetOutcomeNotRepresentable,
+                LuxembourgQueryExecutionRefusal.AcquisitionOutcomeNotRepresentable,
                 null,
                 $"manifest row {rowOrdinal} ('{mintedObjectRef.CanonicalKey}'): " +
                 $"routeOutcome={routeOutcomeDetail}."));

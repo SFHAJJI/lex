@@ -8,7 +8,7 @@ namespace Lex.V3.Ingest.Tests;
 
 /// <summary>
 /// The EU refusal vocabularies' exact WIRE NAMES, pinned member by member. The mirror of
-/// <c>LuxembourgEnumerationRefusalWireNameTests</c>, which existed for LU while EU's equivalent
+/// <c>LuxembourgRefusalWireNameTests</c>, which existed for LU while EU's equivalent
 /// vocabulary had no wire-name pin of any kind.
 /// </summary>
 /// <remarks>
@@ -114,6 +114,44 @@ public sealed class EuRefusalWireNameTests
                 "page_decode_failed_on_our_side",
             }),
             string.Join("\n", WireNames<EuWitnessTraversalRefusal>()),
+            "a wire name changing is a contract change; a number changing is not.");
+    }
+    /// <summary>
+    /// The query-execution refusal vocabulary, every member. R4 declared a token on 15 of these
+    /// 20; before that the undeclared ones serialized as their CLR member names and nothing
+    /// pinned them.
+    /// </summary>
+    [TestMethod]
+    public void TheQueryExecutionRefusalVocabularyKeepsItsExactWireNames()
+    {
+        // Joined rather than compared element-wise: CollectionAssert reports a count difference for
+        // two equal-length sequences that differ only in a name, which is the failure this pin
+        // exists to describe. A string diff names the wire name that moved.
+        Assert.AreEqual(
+            string.Join("\n", new[]
+            {
+                "none",
+                "census_family_not_proven",
+                "object_facts_family_not_proven",
+                "family_rows_not_verified",
+                "root_binding_refused",
+                "record_form_not_resolved",
+                "object_decode_refused",
+                "scope_manifest_not_retained",
+                "manifest_binding_refused",
+                "watermark_bootstrap_refused",
+                "watermark_plan_refused",
+                "root_watermark_binding_refused",
+                "witness_binding_refused",
+                "witness_reconciliation_refused",
+                "scope_reduction_refused",
+                "witness_traversal_refused",
+                "document_fetch_session_not_started",
+                "document_body_not_retained",
+                "acquisition_outcome_not_representable",
+                "record_set_not_retained",
+            }),
+            string.Join("\n", WireNames<EuQueryExecutionRefusal>()),
             "a wire name changing is a contract change; a number changing is not.");
     }
 }

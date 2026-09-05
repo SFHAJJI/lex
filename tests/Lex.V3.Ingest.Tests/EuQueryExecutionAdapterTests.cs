@@ -774,7 +774,7 @@ public sealed class EuQueryExecutionAdapterTests
     /// <see cref="HttpRouteIncompleteReason.RedirectLoop"/>.
     /// </summary>
     [TestMethod]
-    public async Task ARedirectLoopDocumentFetchRefusesTheWholeRunAsDocumentFetchOutcomeNotRepresentable()
+    public async Task ARedirectLoopDocumentFetchRefusesTheWholeRunAsAcquisitionOutcomeNotRepresentable()
     {
         var seed = EuAppendixASeedMap.SeedsInCelexOrder[0];
         var rootIri = EuPackRootCanonicalForm.TryCanonicalize(seed.WorkRoot, out _)
@@ -819,7 +819,7 @@ public sealed class EuQueryExecutionAdapterTests
 
         Assert.IsNull(outcomes);
         Assert.IsNotNull(refusal);
-        Assert.AreEqual(EuQueryExecutionRefusal.DocumentFetchOutcomeNotRepresentable, refusal!.Code);
+        Assert.AreEqual(EuQueryExecutionRefusal.AcquisitionOutcomeNotRepresentable, refusal!.Code);
         StringAssert.Contains(refusal.Detail, "RedirectLoop");
     }
 

@@ -144,8 +144,8 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
     [TestMethod]
     public void QueryExecutionRefusalIsATwelveMemberEnumIncludingNone()
     {
-        // D1-06c-LU-2 added four: DocumentFetchSessionNotStarted, DocumentBodyNotHeld,
-        // DocumentGetOutcomeNotRepresentable and RecordSetNotHeld, one per whole-run failure the
+        // D1-06c-LU-2 added four: DocumentFetchSessionNotStarted, DocumentBodyNotRetained,
+        // AcquisitionOutcomeNotRepresentable and RecordSetNotHeld, one per whole-run failure the
         // document-acquisition phase and the corpus record-set write can produce. Every other
         // document-GET failure is a PER OBJECT refusal and appears nowhere here, which is the
         // distinction this pin makes visible.
@@ -155,20 +155,20 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
                 "base-constructor protected instance System.Enum::.ctor() -> System.Enum",
                 "base-constructor protected instance System.ValueType::.ctor() -> System.ValueType",
                 "field public static " + N
+                + "LuxembourgQueryExecutionRefusal::AcquisitionOutcomeNotRepresentable -> "
+                + N + "LuxembourgQueryExecutionRefusal",
+                "field public static " + N
                 + "LuxembourgQueryExecutionRefusal::AssertionRowObjectKindNotRecognised -> "
                 + N + "LuxembourgQueryExecutionRefusal",
                 "field public static " + N
                 + "LuxembourgQueryExecutionRefusal::AssertionRowTermUnbound -> " + N
                 + "LuxembourgQueryExecutionRefusal",
                 "field public static " + N
-                + "LuxembourgQueryExecutionRefusal::DocumentBodyNotHeld -> " + N
+                + "LuxembourgQueryExecutionRefusal::DocumentBodyNotRetained -> " + N
                 + "LuxembourgQueryExecutionRefusal",
                 "field public static " + N
                 + "LuxembourgQueryExecutionRefusal::DocumentFetchSessionNotStarted -> " + N
                 + "LuxembourgQueryExecutionRefusal",
-                "field public static " + N
-                + "LuxembourgQueryExecutionRefusal::DocumentGetOutcomeNotRepresentable -> "
-                + N + "LuxembourgQueryExecutionRefusal",
                 "field public static " + N + "LuxembourgQueryExecutionRefusal::None -> "
                 + N + "LuxembourgQueryExecutionRefusal",
                 "field public static " + N

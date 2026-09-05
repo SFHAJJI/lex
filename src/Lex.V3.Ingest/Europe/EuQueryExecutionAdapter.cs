@@ -111,24 +111,29 @@ public sealed class EuFamilyEnumerationOutcome
 
 public enum EuQueryExecutionRefusal
 {
+    [JsonStringEnumMemberName("none")]
     None = 0,
 
     /// <summary>A requested census-family (D1-05a's own <c>Family</c> set) partition did not prove.</summary>
+    [JsonStringEnumMemberName("census_family_not_proven")]
     CensusFamilyNotProven = 1,
 
     /// <summary>A requested object-facts family (P, X, W or M) batch did not prove.</summary>
+    [JsonStringEnumMemberName("object_facts_family_not_proven")]
     ObjectFactsFamilyNotProven = 2,
 
     /// <summary>
     /// A proven family's delivered rows did not independently re-verify when reopened from custody
     /// through <see cref="VerifiedRepeatedEnumerationRows.TryOpen"/>.
     /// </summary>
+    [JsonStringEnumMemberName("family_rows_not_verified")]
     FamilyRowsNotVerified = 3,
 
     /// <summary>
     /// D1-05c-2 precision two: the observed root set is bound to Appendix A's own 82-seed pack by
     /// identity through <see cref="EuPrimaryEnumerationRootBinding.TryBind"/>, which refused.
     /// </summary>
+    [JsonStringEnumMemberName("root_binding_refused")]
     RootBindingRefused = 4,
 
     /// <summary>
@@ -138,6 +143,7 @@ public enum EuQueryExecutionRefusal
     /// remarks on <see cref="EuQueryExecutionAdapter.TryResolveRecordForm"/> for exactly how it is read
     /// and why a value this reader cannot map refuses rather than guesses.
     /// </summary>
+    [JsonStringEnumMemberName("record_form_not_resolved")]
     RecordFormNotResolved = 5,
 
     /// <summary>
@@ -145,6 +151,7 @@ public enum EuQueryExecutionRefusal
     /// <see cref="EuQueryExecutionResult.DecodeRefusal"/>, <see cref="EuQueryExecutionResult.DecodeOffendingIri"/>
     /// and <see cref="EuQueryExecutionResult.DecodeSnapshotRefusal"/> for the exact reason.
     /// </summary>
+    [JsonStringEnumMemberName("object_decode_refused")]
     ObjectDecodeRefused = 6,
 
     /// <summary>
@@ -167,12 +174,15 @@ public enum EuQueryExecutionRefusal
     /// The written and reopened manifest did not admit as the Union's own through
     /// <see cref="EuScopeManifestBindingProof.TryOpenAsEuManifest"/>.
     /// </summary>
+    [JsonStringEnumMemberName("manifest_binding_refused")]
     ManifestBindingRefused = 8,
 
     /// <summary>D1-05c-2 precision three: no valid first-cut watermark start position could be computed.</summary>
+    [JsonStringEnumMemberName("watermark_bootstrap_refused")]
     WatermarkBootstrapRefused = 9,
 
     /// <summary>The frozen watermark witness plan itself refused.</summary>
+    [JsonStringEnumMemberName("watermark_plan_refused")]
     WatermarkPlanRefused = 10,
 
     /// <summary>
@@ -182,6 +192,7 @@ public enum EuQueryExecutionRefusal
     /// cannot be tied to a root this run actually discovered is refused naming the offending value,
     /// never silently excluded from the first-cut bootstrap.
     /// </summary>
+    [JsonStringEnumMemberName("root_watermark_binding_refused")]
     RootWatermarkBindingRefused = 11,
 
     /// <summary>
@@ -189,6 +200,7 @@ public enum EuQueryExecutionRefusal
     /// this run could ever reconcile the frozen watermark witness against its own primary
     /// enumeration.
     /// </summary>
+    [JsonStringEnumMemberName("witness_binding_refused")]
     WitnessBindingRefused = 12,
 
     /// <summary>
@@ -199,6 +211,7 @@ public enum EuQueryExecutionRefusal
     /// own remarks -- but a termination naming an in-pack root this run's primary enumeration never
     /// discovered still refuses here, exactly as it would for any other cut.
     /// </summary>
+    [JsonStringEnumMemberName("witness_reconciliation_refused")]
     WitnessReconciliationRefused = 13,
 
     /// <summary>
@@ -207,6 +220,7 @@ public enum EuQueryExecutionRefusal
     /// together, so a failure here cannot be attributed to one offending object and is reported as a
     /// whole-run refusal instead.
     /// </summary>
+    [JsonStringEnumMemberName("scope_reduction_refused")]
     ScopeReductionRefused = 14,
 
     /// <summary>
@@ -215,6 +229,7 @@ public enum EuQueryExecutionRefusal
     /// termination. Replaces the assumed-empty-result shortcut this refusal code did not previously
     /// need to exist for.
     /// </summary>
+    [JsonStringEnumMemberName("witness_traversal_refused")]
     WitnessTraversalRefused = 15,
 
     /// <summary>
@@ -265,8 +280,8 @@ public enum EuQueryExecutionRefusal
     /// the whole run, naming the real classified cause, rather than mapping it to an unrelated
     /// existing member or silently treating it as held.
     /// </remarks>
-    [JsonStringEnumMemberName("document_fetch_outcome_not_representable")]
-    DocumentFetchOutcomeNotRepresentable = 18,
+    [JsonStringEnumMemberName("acquisition_outcome_not_representable")]
+    AcquisitionOutcomeNotRepresentable = 18,
 
     /// <summary>
     /// D1-06c-EU fix two (SCOPE_RULING lex-event-20260904T141600712Z-0b823f7143154a608f01ec8f757f9e93
@@ -520,7 +535,7 @@ public sealed class EuQueryExecutionResult
     /// the reopened manifest but absent from this dictionary was never Minted at all -- every Minted
     /// row's own outcome either lands here or refuses the whole run (see
     /// <see cref="EuQueryExecutionRefusal.DocumentBodyNotRetained"/> and
-    /// <see cref="EuQueryExecutionRefusal.DocumentFetchOutcomeNotRepresentable"/>'s own remarks for
+    /// <see cref="EuQueryExecutionRefusal.AcquisitionOutcomeNotRepresentable"/>'s own remarks for
     /// exactly which outcomes cannot be represented and so refuse the run instead of appearing here).
     /// D1-06c-EU fix two: this is exactly the <c>acquisitionOutcomesByOrdinal</c> this run itself
     /// hands to <c>CorpusRecordSetWriter.WriteAsync</c> as its own last step (see this file's own
@@ -1349,7 +1364,7 @@ public sealed class EuQueryExecutionAdapter
                 // here, rather than throwing, keeps this method's own "never throws past a typed
                 // refusal" discipline even for a defect this loop cannot itself introduce.
                 return (null, null, new EuQueryExecutionRefusalDetail(
-                    EuQueryExecutionRefusal.DocumentFetchOutcomeNotRepresentable,
+                    EuQueryExecutionRefusal.AcquisitionOutcomeNotRepresentable,
                     $"manifest row {rowOrdinal} ('{mintedObjectRef.CanonicalKey}') carries a " +
                     "Minted fetch address this run never itself minted."));
             }
@@ -1460,7 +1475,7 @@ public sealed class EuQueryExecutionAdapter
                 // Neither a real 200, nor this route's own named shapes (fix one), nor a robots-
                 // bootstrap refusal (fold-in three), nor a terminal status this door can name (fold-in
                 // one), nor a transport-incomplete shape D1-06b's own CorpusAcquisitionRefusalReason
-                // vocabulary can name (see EuQueryExecutionRefusal.DocumentFetchOutcomeNotRepresentable's
+                // vocabulary can name (see EuQueryExecutionRefusal.AcquisitionOutcomeNotRepresentable's
                 // own remarks): a route-level refusal (robots-policy-unavailable, redirect refused, looped
                 // or limit-exceeded, or a stale profile) that vocabulary was never scoped to cover. The
                 // whole run refuses, naming the real classified cause, rather than mapping it to an
@@ -1469,7 +1484,7 @@ public sealed class EuQueryExecutionAdapter
                     ? $"{evidence.Outcome.GetType().Name}({incompleteOutcome.Reason})"
                     : evidence.Outcome.GetType().Name;
                 return (null, null, new EuQueryExecutionRefusalDetail(
-                    EuQueryExecutionRefusal.DocumentFetchOutcomeNotRepresentable,
+                    EuQueryExecutionRefusal.AcquisitionOutcomeNotRepresentable,
                     $"manifest row {rowOrdinal} ('{mintedObjectRef.CanonicalKey}'): classified " +
                     $"refusal={classified.Refusal} observedStatus={classified.ObservedStatus} " +
                     $"routeOutcome={routeOutcomeDetail}."));

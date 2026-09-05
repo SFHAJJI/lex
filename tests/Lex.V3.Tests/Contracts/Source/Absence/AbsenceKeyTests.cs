@@ -1,3 +1,4 @@
+using Lex.V3.Contracts;
 using System.Reflection;
 using System.Text.Json.Serialization;
 using Lex.V3.Contracts.Source.Absence;
@@ -108,7 +109,7 @@ public sealed class AbsenceKeyTests
 
         foreach (var member in Enum.GetValues<AbsenceComparisonPolicyMember>())
         {
-            mutations.Add((AbsenceWire.NameOf(member),
+            mutations.Add((ContractWire.NameOf(member),
                 AbsenceKey.Projection(
                     subject, Generation(subject), AbsenceFixtures.Policy('b', member))));
         }
