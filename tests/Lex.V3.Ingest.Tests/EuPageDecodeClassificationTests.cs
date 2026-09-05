@@ -36,7 +36,7 @@ namespace Lex.V3.Ingest.Tests;
 /// <see cref="EuEnumerationRefusal.PageBodyMalformed"/> may only be produced for bytes that are
 /// DEMONSTRABLY NOT what the interpretation profile promised, and the refusal must point at the
 /// offending position. Everything else is
-/// <see cref="EuEnumerationRefusal.PageDecodeFailed"/>, which names this executor.
+/// <see cref="EuEnumerationRefusal.PageDecodeFailedOnOurSide"/>, which names this executor.
 /// </para>
 /// </remarks>
 [TestClass]
@@ -248,7 +248,7 @@ public sealed class EuPageDecodeClassificationTests
         var refusal = ClassifyPage("objectfacts-page-unbound-key.bin");
 
         Assert.AreEqual(
-            EuEnumerationRefusal.PageDecodeFailed,
+            EuEnumerationRefusal.PageDecodeFailedOnOurSide,
             refusal.Code,
             "valid SPARQL JSON this executor cannot read is OUR failure, never the publisher's.");
         StringAssert.Contains(refusal.CoreRefusalDetail, "FormatException", "the exception type travels with it.");
@@ -313,7 +313,7 @@ public sealed class EuPageDecodeClassificationTests
                 0,
                 absent,
                 $"{name} is absent from {absent} bindings; a cursor variable must be total, and a "
-                + "page where one is not must refuse as PageDecodeFailed naming us.");
+                + "page where one is not must refuse as PageDecodeFailedOnOurSide naming us.");
         }
 
         // And the unbound fact survives, in the two places that carry it.

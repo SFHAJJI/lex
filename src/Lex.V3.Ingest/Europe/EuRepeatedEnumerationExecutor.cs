@@ -89,7 +89,7 @@ public enum EuEnumerationRefusal
     /// refused a body of 39,498 bytes carrying 41 bindings against a count query that answered 41,
     /// valid and complete SPARQL JSON, under this member. Every remaining producer is an explicit
     /// throw that can point at the exact byte or term it rejected;
-    /// <see cref="PageDecodeFailed"/> now carries everything else.
+    /// <see cref="PageDecodeFailedOnOurSide"/> now carries everything else.
     /// </remarks>
     [JsonStringEnumMemberName("page_body_malformed")]
     PageBodyMalformed = 13,
@@ -117,8 +117,8 @@ public enum EuEnumerationRefusal
     /// honour. So this member's first condition was never a missing guard; it was a guard the engine
     /// ignored.
     /// </remarks>
-    [JsonStringEnumMemberName("page_decode_failed")]
-    PageDecodeFailed = 14,
+    [JsonStringEnumMemberName("page_decode_failed_on_our_side")]
+    PageDecodeFailedOnOurSide = 14,
 
     // WHEN A REFUSAL LOOKS WRONG, GO TO THE RETAINED BYTES, NOT THE CODE THAT PRODUCED THE MESSAGE.
     //
@@ -290,7 +290,7 @@ public enum EuWitnessTraversalRefusal
     /// failure in the witness traversal, including the two that are OURS: a projected variable
     /// absent from a binding, which is SPARQL 1.1's own encoding of unbound, and a row this reader
     /// could not turn into a tie-safe cursor. Both were reported under the publisher's name with no
-    /// position and no digest. <see cref="PageDecodeFailed"/> carries them now.
+    /// position and no digest. <see cref="PageDecodeFailedOnOurSide"/> carries them now.
     /// </remarks>
     [JsonStringEnumMemberName("page_body_malformed")]
     PageBodyMalformed = 6,
@@ -300,12 +300,12 @@ public enum EuWitnessTraversalRefusal
     /// The detail carries the exception type, its message and the page body's own digest.
     /// </summary>
     /// <remarks>
-    /// The witness counterpart of <see cref="EuEnumerationRefusal.PageDecodeFailed"/>, added when
+    /// The witness counterpart of <see cref="EuEnumerationRefusal.PageDecodeFailedOnOurSide"/>, added when
     /// the same misattribution was found one traversal over: the page path had been narrowed while
     /// this one still blamed the office for an unbound term or a cursor this reader would not mint.
     /// </remarks>
-    [JsonStringEnumMemberName("page_decode_failed")]
-    PageDecodeFailed = 11,
+    [JsonStringEnumMemberName("page_decode_failed_on_our_side")]
+    PageDecodeFailedOnOurSide = 11,
 
     /// <summary><see cref="EuBoundaryCrossing.TryCross"/> itself refused.</summary>
     [JsonStringEnumMemberName("crossing_refused")]
@@ -944,7 +944,7 @@ public sealed class EuRepeatedEnumerationExecutor
         {
             nameof(EuWitnessTraversalRefusal.PageBodyMalformed) =>
                 EuWitnessTraversalRefusal.PageBodyMalformed,
-            _ => EuWitnessTraversalRefusal.PageDecodeFailed,
+            _ => EuWitnessTraversalRefusal.PageDecodeFailedOnOurSide,
         };
 
     /// <summary>Tags a witness page failure with the refusal its classifier should read back out.</summary>
@@ -1467,7 +1467,7 @@ public sealed class EuRepeatedEnumerationExecutor
                 EuEnumerationRefusal.DeliveredKeyNotRepresentable,
             nameof(EuEnumerationRefusal.PageBodyMalformed) =>
                 EuEnumerationRefusal.PageBodyMalformed,
-            _ => EuEnumerationRefusal.PageDecodeFailed,
+            _ => EuEnumerationRefusal.PageDecodeFailedOnOurSide,
         };
 
     /// <summary>
@@ -1577,7 +1577,7 @@ public sealed class EuRepeatedEnumerationExecutor
     {
         // Every throw below that can POINT AT the offending byte or term tags itself
         // PageBodyMalformed, which is the only thing that member may now mean. Anything else falls
-        // through untagged to PageDecodeFailed, which names this executor rather than the office.
+        // through untagged to PageDecodeFailedOnOurSide, which names this executor rather than the office.
         System.Text.Json.JsonDocument document;
         try
         {
@@ -1626,7 +1626,7 @@ public sealed class EuRepeatedEnumerationExecutor
                     // Deliberately NOT tagged. A projected variable absent from a binding is
                     // SPARQL 1.1 JSON's own way of saying unbound, so refusing it is this reader's
                     // limitation and not a shape the publisher broke. It falls through to
-                    // PageDecodeFailed until the cursor extraction learns to read an unbound term.
+                    // PageDecodeFailedOnOurSide until the cursor extraction learns to read an unbound term.
                     if (!binding.TryGetProperty(name, out var term) ||
                         term.ValueKind != System.Text.Json.JsonValueKind.Object ||
                         !term.TryGetProperty("value", out var value) ||

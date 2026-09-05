@@ -2718,7 +2718,7 @@ public sealed class EuQueryExecutionAdapterTests
         Assert.AreEqual(EuQueryExecutionRefusal.WitnessTraversalRefused, result.Refusal!.Code);
         StringAssert.Contains(
             result.Refusal.Detail,
-            "code=PageDecodeFailed",
+            "code=PageDecodeFailedOnOurSide",
             "a projected term the publisher legitimately omitted must never be reported as the "
             + "publisher sending a malformed body.");
         StringAssert.Contains(result.Refusal.Detail, "FormatException");
