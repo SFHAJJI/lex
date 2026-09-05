@@ -133,6 +133,41 @@ public sealed class EuObjectFactsDiscoveryPlanTests
         }
     }
 
+    /// <summary>
+    /// This plan's own identity, pinned as a literal so a change to any of its EIGHT templates
+    /// reddens a named test instead of silently moving a digest nothing compares.
+    /// </summary>
+    /// <remarks>
+    /// The gap this closes was found while listing what D1-05f moved: this ArtifactRef DID move with
+    /// the COALESCE and terminal-policy changes, and nothing pinned it. The only other assertion
+    /// over a plan ArtifactRef is
+    /// <c>MachineQueryPlanContractTests</c>'s self-consistency check, which recomputes the digest
+    /// from the same canonical bytes, so it catches a CORRUPTED ref and cannot catch DRIFT: change a
+    /// template and both sides of that equality move together. Same shape as
+    /// <c>EuConsolidationDiscoveryTests.ClosedPlanSeparatesFamilyAndFactDeliveryWithoutErasingMultiplicity</c>,
+    /// which already pinned the sibling plan. Re-derive by reading the value this test prints on
+    /// failure rather than by computing one by hand.
+    /// </remarks>
+    /// <remarks>
+    /// WHAT THIS CATCHES THAT NOTHING ELSE DOES, measured rather than argued. Three of the four
+    /// families have a template pinned by exact text, so drift there reddens two tests. The
+    /// MANIFESTATION family has no text assertion anywhere in either suite: the count-template loop
+    /// in this file deliberately omits it, and every other reference names the enum member, not the
+    /// query. Two mutations confined to that one page template were each watched red:
+    /// dropping <c>?key_5</c> from its keyset ORDER BY, which is a REAL pagination defect because a
+    /// partial sort makes the cursor predicate skip rows, and a whitespace-only edit to its
+    /// projection. Under both, this test was the ONLY failure in 2,179 contract tests and 295 ingest
+    /// tests. That is the whole argument for a digest pin over more text assertions: it covers the
+    /// template nobody remembered to cover.
+    /// </remarks>
+    [TestMethod]
+    public void TheObjectFactsPlanIdentityIsPinnedSoTemplateDriftCannotPassSilently()
+    {
+        Assert.AreEqual(
+            "45d7304e5c06e89b5c7a3efee488786d236ce6078b45aede5d88f08b005b6efe",
+            EuObjectFactsDiscoveryPlan.Create().ArtifactRef.Sha256);
+    }
+
     // ---- The three SELECT templates, pinned by their exact literal SPARQL text. ----
 
     [TestMethod]
