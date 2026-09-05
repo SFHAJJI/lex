@@ -456,6 +456,22 @@ public sealed class EuStageOneAcquisitionCanary
                 Assert.IsTrue(
                     outcome.Receipt.Reference.ByteLength > 0,
                     $"{accounting.CanonicalKey} is held and must carry its byte length.");
+
+                // AND WHAT THE HOLD MEANS, which the digest and the length do not say. Asserted on
+                // the receipt because that is what the index row is built from, so a row that
+                // stopped carrying either field would have to stop carrying it here first.
+                Assert.AreEqual(
+                    CustodyClass.NightlyFloor90d,
+                    outcome.Receipt.Reference.CustodyClass,
+                    $"{accounting.CanonicalKey} is held and must state the storage class it was "
+                        + "written under, which is the field the Luxembourg index carries per "
+                        + "expression and the one that makes the two indexes comparable.");
+                Assert.AreEqual(
+                    CustodyMembership.RetainedUnenforced,
+                    CustodyMembershipClassifier.Classify(outcome.Receipt),
+                    $"{accounting.CanonicalKey} ran over a filesystem store, so Decision 71's own "
+                        + "distinction must read retained_unenforced rather than floored. A held "
+                        + "row that cannot say which is the silence this field exists to remove.");
             }
         }
 
@@ -860,6 +876,32 @@ public sealed class EuStageOneAcquisitionCanary
                 ["selectedByBodyAxis"] = entry.Value.SelectedByBodyAxis,
                 ["heldContentSha256"] = outcome?.Receipt?.Reference.ContentSha256,
                 ["heldByteLength"] = outcome?.Receipt?.Reference.ByteLength,
+
+                // WHAT A HOLD MEANS, on the row that claims the hold. A digest and a length say
+                // the bytes exist and say nothing about the custody they exist under, which is the
+                // same silence this run removed from the witness terminals and from the missing
+                // body rows. Both come from the receipt the run already holds, so neither costs a
+                // call.
+                //
+                // TWO FIELDS BECAUSE THEY ARE TWO FACTS, and one would not have closed the gap.
+                // custodyClass is the STORAGE CLASS the object was written under, which is the
+                // field the Luxembourg index carries per expression, so this is the one that makes
+                // the two publishers' indexes agree. custodyMembership is DECISION 71's OWN
+                // DISTINCTION, floored against retained_unenforced, which the storage class does
+                // not express: an object can be written under a floor class and still be held by a
+                // store that enforces nothing. Carrying only the class would have matched LU while
+                // leaving the question Decision 71 actually asks unanswered.
+                //
+                // A row that holds nothing carries NEITHER, and keeps its typed reason. Inventing a
+                // class for bytes that were never written is the fabrication these fields exist to
+                // prevent.
+                ["custodyClass"] = outcome?.Receipt is null
+                    ? null
+                    : WireToken<CustodyClass>(outcome.Receipt.Reference.CustodyClass),
+                ["custodyMembership"] = outcome?.Receipt is null
+                    ? null
+                    : WireToken<CustodyMembership>(
+                        CustodyMembershipClassifier.Classify(outcome.Receipt)),
                 ["refusalReason"] = outcome?.Refusal?.ToString()
                     ?? (entry.Value.SelectedByBodyAxis
                         ? null
