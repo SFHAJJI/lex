@@ -296,22 +296,38 @@ public sealed class EuStageOneAcquisitionCanary
         // By key rather than by count. An arity check passes when the right number of families prove
         // whether or not they are these two, and it FAILS the moment a third family proves, which is
         // precisely what D1-05f is meant to achieve. This assertion grows correct instead.
+        // A LOOKUP RATHER THAN A DICTIONARY, and the reason is a real crash this canary hit the
+        // moment D1-05f started working. FamilyKey is a BATCH PARTITION key, not a query-set key,
+        // so all four object-facts sets report the SAME key with different row counts and different
+        // canonical key digests. While those sets were refusing, only the two census families
+        // proved and the keys happened to be unique; once they proved, ToDictionary threw
+        // ArgumentException on the duplicate. That broke this file's own promise, which is that
+        // every path through it either proves something or FAILS IN WORDS: it failed in a LINQ
+        // stack trace instead, above every assertion below and telling a reader nothing about the
+        // run. The lookup keeps the by-key assertion the comment above argues for.
         var proven = result.FamilyOutcomes
             .Where(static outcome => outcome.Kind == EuFamilyEnumerationOutcomeKind.Proven)
-            .ToDictionary(static outcome => outcome.FamilyKey, StringComparer.Ordinal);
+            .ToLookup(static outcome => outcome.FamilyKey, StringComparer.Ordinal);
         var everyOutcome = string.Join("; ", result.FamilyOutcomes.Select(
             static outcome => $"{outcome.FamilyKey} {outcome.Kind} {outcome.ExecutorRefusal?.Code}"));
 
         foreach (var row in Census)
         {
             var familyKey = CensusFamilyKey(row.Celex);
-            Assert.IsTrue(
-                proven.TryGetValue(familyKey, out var outcome),
-                $"{row.Celex}'s own census family {familyKey} must be among the proved families. "
-                + $"Outcomes were: {everyOutcome}");
+            var matches = proven[familyKey].ToArray();
+
+            // Exactly one, asserted rather than assumed. A census key is minted per CELEX, so a
+            // second outcome under one census key would mean two runs of one seed's own family
+            // collapsed into one answer, which is worth a named failure rather than a Single()
+            // throwing out of LINQ the way the dictionary did.
+            Assert.HasCount(
+                1,
+                matches,
+                $"{row.Celex}'s own census family {familyKey} must be among the proved families "
+                + $"exactly once. Outcomes were: {everyOutcome}");
             Assert.AreEqual(
                 CustodyMembership.RetainedUnenforced,
-                outcome!.RetainedFloor,
+                matches[0].RetainedFloor,
                 $"{row.Celex}'s family ran over a filesystem store and must say so.");
         }
 
@@ -496,11 +512,46 @@ public sealed class EuStageOneAcquisitionCanary
             },
         };
 
-    private static async Task WriteEvidenceIndexAsync(
-        FileSystemCustodyStore store,
-        string root,
-        EuQueryExecutionResult result,
-        CancellationToken cancellationToken)
+    /// <summary>
+    /// One enum value as the token a WIRE CONSUMER would see, never as its C# member name.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// THE DEFECT THIS REPLACES, which was live and is not hypothetical. Both call sites used
+    /// <c>ToString()</c>, which returns the C# member name and BYPASSES <c>ContractJson</c>
+    /// entirely. This index declares a schema, <c>lex-eu-canary-evidence-index/1</c>, so it is a
+    /// MACHINE READ document, and a machine reading it has to see the same token a wire consumer
+    /// sees. It did not: the acceptance run at the head that found this recorded
+    /// <c>RecordFormNotResolved</c> where the wire says <c>record_form_not_resolved</c>.
+    /// </para>
+    /// <para>
+    /// HOW WIDE IT WAS, exactly. <c>ExactStringEnumConverter</c> resolves a member's wire name as
+    /// its <c>JsonStringEnumMemberName</c> attribute FALLING BACK to the member name, so today the
+    /// index disagreed with the wire only for the members that carry an attribute, and agreed for
+    /// the rest by both being PascalCase. That agreement is not a comfort: the members without an
+    /// attribute are the separate defect queued as R4, and giving them attributes would widen this
+    /// disagreement from a few members to every one of them. Fixing the conversion first means R4
+    /// can proceed without dragging this along.
+    /// </para>
+    /// </remarks>
+    private static System.Text.Json.Nodes.JsonNode? WireToken<T>(T? value)
+        where T : struct, Enum =>
+        value is { } present
+            ? System.Text.Json.Nodes.JsonNode.Parse(Lex.V3.Contracts.ContractJson.Serialize(present))
+            : null;
+
+    /// <summary>
+    /// The evidence index this run would write, built as data so a synthetic result can be
+    /// asserted against it without a store, a custody root or a byte of publisher traffic.
+    /// </summary>
+    /// <remarks>
+    /// Split from the write for the same reason the gap array was: the fields it produces were
+    /// only ever exercised behind LEX_EU_CANARY=1, so a field could disagree with the wire, as
+    /// two of them did, and every test would still pass. The write stays in
+    /// <see cref="WriteEvidenceIndexAsync"/>; only the document construction moved.
+    /// </remarks>
+    internal static System.Text.Json.Nodes.JsonObject BuildEvidenceIndex(
+        EuQueryExecutionResult result)
     {
         var dirty = TryGit("status --porcelain");
         var index = new System.Text.Json.Nodes.JsonObject
@@ -510,9 +561,9 @@ public sealed class EuStageOneAcquisitionCanary
             ["runTreeClean"] = dirty is null ? null : dirty.Length == 0,
             ["runTreeDirtyPaths"] = dirty,
             ["custodyClassSegment"] = "nightly-floor-90d",
-            ["wholeRunRefusalCode"] = result.Refusal?.Code.ToString(),
+            ["wholeRunRefusalCode"] = WireToken(result.Refusal?.Code),
             ["wholeRunRefusalDetail"] = result.Refusal?.Detail,
-            ["completion"] = result.Completion?.ToString(),
+            ["completion"] = WireToken(result.Completion),
             ["observedObjectCount"] = result.ObservedObjectCount,
             ["observedExpressionCount"] = result.ObservedExpressionCount,
         };
@@ -578,6 +629,16 @@ public sealed class EuStageOneAcquisitionCanary
 
         index["rolesThisIndexCannotYetCarry"] = RolesThisIndexCannotYetCarry();
 
+        return index;
+    }
+
+    private static async Task WriteEvidenceIndexAsync(
+        FileSystemCustodyStore store,
+        string root,
+        EuQueryExecutionResult result,
+        CancellationToken cancellationToken)
+    {
+        var index = BuildEvidenceIndex(result);
         var bytes = System.Text.Encoding.UTF8.GetBytes(
             index.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
 
