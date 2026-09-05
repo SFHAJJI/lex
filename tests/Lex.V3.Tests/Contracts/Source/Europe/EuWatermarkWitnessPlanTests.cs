@@ -21,6 +21,13 @@ namespace Lex.V3.Tests.Contracts.Source.Europe;
 [TestClass]
 public sealed class EuWatermarkWitnessPlanTests
 {
+
+    /// <summary>
+    /// One real Appendix A pack root, so the fixture plan is frozen over a batch the plan
+    /// will actually canonicalize rather than a placeholder it would refuse.
+    /// </summary>
+    private const string PackObjectForTests =
+        "http://publications.europa.eu/resource/cellar/3e485e15-11bd-11e6-ba9a-01aa75ed71a1";
     // Watermarks in the publisher's own lexical forms, all of them measured shapes.
     private const string Earlier = "2026-09-03T12:09:18.036+02:00";
     private const string Boundary = "2026-09-03T12:10:17.601+02:00";
@@ -54,8 +61,18 @@ public sealed class EuWatermarkWitnessPlanTests
     [TestMethod]
     public void AFrozenPlanRendersTheExactWitnessQuery()
     {
-        const string ExpectedQuery =
+        // THE VALUES BLOCK IS BUILT FROM THE CAPACITY SYMBOL, never from a literal count, so this
+        // pin follows EuObjectFactsDiscoveryPlan.BatchCapacity if D1-05g moves it rather than going
+        // red for a reason that is not a defect. The one fixture object repeated to capacity is the
+        // padding doing its job: a fixed-shape query whatever the batch holds.
+        var expectedValues = string.Concat(Enumerable.Repeat(
+            "    <" + PackObjectForTests + ">\n",
+            EuWatermarkWitnessPlan.BatchCapacity));
+        var ExpectedQuery =
             "SELECT ?entry ?entry_key ?watermark WHERE {\n" +
+            "  VALUES ?entry {\n" +
+            expectedValues +
+            "  }\n" +
             "  ?entry <http://publications.europa.eu/ontology/cdm/cmr#lastModificationDate> " +
             "?watermark_value .\n" +
             "  FILTER(isIRI(?entry))\n" +
@@ -126,6 +143,7 @@ public sealed class EuWatermarkWitnessPlanTests
             EuWatermarkWitnessPlan.WatermarkPredicateIri,
             3,
             At(Boundary, KeyA),
+            [PackObjectForTests],
             out var refusal);
 
         Assert.IsNull(plan);
@@ -142,6 +160,7 @@ public sealed class EuWatermarkWitnessPlanTests
             "http://publications.europa.eu/ontology/cdm#work_date_document",
             3,
             At(Boundary, KeyA),
+            [PackObjectForTests],
             out var refusal);
 
         Assert.IsNull(plan);
@@ -184,6 +203,7 @@ public sealed class EuWatermarkWitnessPlanTests
                 EuWatermarkWitnessPlan.WatermarkPredicateIri,
                 3,
                 At(lexical, KeyA),
+            [PackObjectForTests],
                 out var refusal);
 
             Assert.IsNotNull(plan, $"{lexical} refused as {refusal}");
@@ -229,6 +249,7 @@ public sealed class EuWatermarkWitnessPlanTests
                 EuWatermarkWitnessPlan.WatermarkPredicateIri,
                 3,
                 At(lexical, KeyA),
+            [PackObjectForTests],
                 out var refusal);
 
             Assert.IsNull(plan, lexical);
@@ -264,8 +285,13 @@ public sealed class EuWatermarkWitnessPlanTests
         // The literal is computed outside this assembly, by hashing the identity block byte for
         // byte, so a silent change to how that block is built fails here rather than agreeing with
         // itself. Everything below it compares two digests from the same producer and would not.
+        // RECOMPUTED INDEPENDENTLY when the plan gained its VALUES restriction, by rebuilding the
+        // identity block in another language from the source's own structure and hashing it there,
+        // never by copying what the code emitted. It moved because SchemaId is /2, the template
+        // carries the VALUES block, and a batch_capacity line joined the block: three intended
+        // changes, and this pin is what makes them announce themselves.
         const string ExpectedForLimitFour =
-            "a2c8f0652e56f6b4784a4d5fa9d1fc4b6f9574c67c760cab82a8678f79abb544";
+            "f52ffe5614dbb50709c8978f273aae1cdd176a290b523ddb08929ee4815b7c17";
 
         Assert.AreEqual(ExpectedForLimitFour, Plan(4).QueryPlanIdentityDigest);
 
@@ -275,6 +301,7 @@ public sealed class EuWatermarkWitnessPlanTests
             EuWatermarkWitnessPlan.WatermarkPredicateIri,
             3,
             At(Second, KeyX),
+            [PackObjectForTests],
             out _);
 
         Assert.IsNotNull(fromAnotherShape);
@@ -758,15 +785,16 @@ public sealed class EuWatermarkWitnessPlanTests
         CollectionAssert.AreEqual(
             new[]
             {
-                "constructor private instance " + N + "EuWatermarkWitnessPlan::.ctor(System.String"
-                + ", System.String, System.Int32, " + N + "EuWatermarkCursor, " + N
-                + "EuWatermarkLexicalShape, System.String, System.String, System.Byte[]) -> " + N
-                + "EuWatermarkWitnessPlan",
-                "constructor private static " + N + "EuWatermarkWitnessPlan::.cctor() -> " + N
-                + "EuWatermarkWitnessPlan",
-                "method public static " + N + "EuWatermarkWitnessPlan::TryFreeze(System.String, "
-                + "System.String, System.Int32, " + N + "EuWatermarkCursor, out " + N
-                + "EuWatermarkPlanRefusal&) -> " + N + "EuWatermarkWitnessPlan?",
+                "constructor private instance Lex.V3.Contracts.Source.Europe.EuWatermarkWitnessPlan::.ctor(System.String, "
+                + "System.String, System.Int32, Lex.V3.Contracts.Source.Europe.EuWatermarkCursor, "
+                + "Lex.V3.Contracts.Source.Europe.EuWatermarkLexicalShape, System.String, System.String, "
+                + "System.Byte[], System.String[], "
+                + "System.String) -> Lex.V3.Contracts.Source.Europe.EuWatermarkWitnessPlan",
+                "constructor private static Lex.V3.Contracts.Source.Europe.EuWatermarkWitnessPlan::.cctor() -> Lex.V3.Contracts.Source.Europe.EuWatermarkWitnessPlan",
+                "method public static Lex.V3.Contracts.Source.Europe.EuWatermarkWitnessPlan::TryFreeze(System.String, "
+                + "System.String, System.Int32, Lex.V3.Contracts.Source.Europe.EuWatermarkCursor, "
+                + "System.Collections.Generic.IReadOnlyList<System.String>, "
+                + "out Lex.V3.Contracts.Source.Europe.EuWatermarkPlanRefusal&) -> Lex.V3.Contracts.Source.Europe.EuWatermarkWitnessPlan?",
             },
             ConstructionSurface.Of(typeof(EuWatermarkWitnessPlan)).ToArray());
     }
@@ -816,6 +844,9 @@ public sealed class EuWatermarkWitnessPlanTests
                 "\"page_limit_above_sorted_result_window\"",
                 "\"start_position_shape_without_frozen_order_semantics\"",
                 "\"position_shape_without_frozen_order_semantics\"",
+                "\"batch_names_no_objects\"",
+                "\"batch_above_capacity\"",
+                "\"batch_member_not_canonical_or_duplicated\"",
             },
             Enum.GetValues<EuWatermarkPlanRefusal>()
                 .Select(value => ContractJson.Serialize(value)).ToArray());
@@ -955,6 +986,7 @@ public sealed class EuWatermarkWitnessPlanTests
             EuWatermarkWitnessPlan.WatermarkPredicateIri,
             pageLimit,
             At(Boundary, KeyA),
+            [PackObjectForTests],
             out refusal);
 
     private static EuWatermarkCursor At(string watermarkLexical, string canonicalEntryKey) =>

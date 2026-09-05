@@ -1108,12 +1108,45 @@ public sealed class EuQueryExecutionAdapter
                     EuQueryExecutionRefusal.WatermarkBootstrapRefused, watermarkBootstrapRefusal.ToString()));
         }
 
-        var witnessPlan = EuWatermarkWitnessPlan.TryFreeze(
-            EuWatermarkWitnessPlan.OfficialCellarSparqlEndpoint,
-            EuWatermarkWitnessPlan.WatermarkPredicateIri,
-            EuWatermarkWitnessPlan.SortedResultWindowRows,
-            startPosition,
-            out var watermarkPlanRefusal);
+        // DESIGN A: the witness is restricted to THIS PACK'S OWN OBJECTS, in batches, rather than
+        // scanning the whole lastModificationDate graph. Measured rather than assumed: the
+        // unrestricted query needs 66.9 seconds to first byte against a 60 second RequestTimeout,
+        // because it sorts the whole feed; restricted to the pack it answers in 168 milliseconds
+        // with ORDER BY intact. The alternative of keeping the whole feed and dropping the deep sort
+        // was refuted by counting it: 17,230,321 rows after the bound, four orders of magnitude past
+        // any page a run could hold.
+        //
+        // The capacity is family P's SYMBOL and never a literal, so a change there moves this too.
+        var packObjects = allSnapshots
+            .Select(static snapshot => snapshot.ObjectRef.PublisherUri)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(static iri => iri, StringComparer.Ordinal)
+            .ToArray();
+        var witnessBatches = new List<EuWatermarkWitnessPlan>();
+        EuWatermarkPlanRefusal watermarkPlanRefusal = EuWatermarkPlanRefusal.None;
+        for (var offset = 0; offset < packObjects.Length; offset += EuWatermarkWitnessPlan.BatchCapacity)
+        {
+            var batch = packObjects
+                .Skip(offset)
+                .Take(EuWatermarkWitnessPlan.BatchCapacity)
+                .ToArray();
+            var batchPlan = EuWatermarkWitnessPlan.TryFreeze(
+                EuWatermarkWitnessPlan.OfficialCellarSparqlEndpoint,
+                EuWatermarkWitnessPlan.WatermarkPredicateIri,
+                EuWatermarkWitnessPlan.SortedResultWindowRows,
+                startPosition,
+                batch,
+                out watermarkPlanRefusal);
+            if (batchPlan is null)
+            {
+                witnessBatches.Clear();
+                break;
+            }
+
+            witnessBatches.Add(batchPlan);
+        }
+
+        var witnessPlan = witnessBatches.Count == 0 ? null : witnessBatches[0];
         if (witnessPlan is null)
         {
             return EuQueryExecutionResult.Refused(
@@ -1131,7 +1164,7 @@ public sealed class EuQueryExecutionAdapter
         // startPosition from -- still has to run the witness's own traversal from that bound; it is
         // simply likely, not guaranteed, to observe few or zero rows beyond it.
         var traversal = await _executor.RunWitnessTraversalAsync(
-                witnessPlan, witnessRendererSource, witnessSourceWitness, cancellationToken)
+                witnessBatches, witnessRendererSource, witnessSourceWitness, cancellationToken)
             .ConfigureAwait(false);
         if (traversal.Entries is null)
         {

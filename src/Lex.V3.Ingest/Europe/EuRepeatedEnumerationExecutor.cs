@@ -364,12 +364,22 @@ public sealed class EuWitnessTraversalResult
     }
 
     public static EuWitnessTraversalResult Delivered(
-        EuFeedWatermarkEntrySet entries, string deliveryEvidenceSha256, int productRequestCount)
+        EuFeedWatermarkEntrySet entries,
+        string deliveryEvidenceSha256,
+        int productRequestCount,
+        TimeSpan elapsed)
     {
         ArgumentNullException.ThrowIfNull(entries);
         ArgumentException.ThrowIfNullOrEmpty(deliveryEvidenceSha256);
-        return new(entries, deliveryEvidenceSha256, productRequestCount, null);
+        return new(entries, deliveryEvidenceSha256, productRequestCount, null) { Elapsed = elapsed };
     }
+
+    /// <summary>
+    /// Wall time the whole witness spent, across every batch. Reported under the spec's explicit
+    /// bounds beside <see cref="ProductRequestCount"/>, so a run that stayed inside its budget by
+    /// taking a very long time cannot look identical to one that was quick.
+    /// </summary>
+    public TimeSpan Elapsed { get; private init; }
 
     public static EuWitnessTraversalResult Refused(EuWitnessTraversalRefusalDetail refusal, int productRequestCount)
     {
@@ -613,15 +623,34 @@ public sealed class EuRepeatedEnumerationExecutor
     /// with its bytes exactly as every other Europe bind already requires.
     /// </param>
     /// <param name="sourceWitness">The bound robots-negotiation witness this session starts from.</param>
+    /// <remarks>
+    /// DESIGN A: the witness is restricted to the pack's own objects in batches, so this takes the
+    /// batch plans rather than one plan. <see cref="MaximumWitnessPageRequests"/> bounds EACH
+    /// BATCH's own traversal rather than the run, because a budget written for one batch would
+    /// silently truncate a pack that needs several. The run's total product requests and elapsed
+    /// time are carried out on the result so the receipt and the index can state them.
+    /// <para>
+    /// Every batch plan shares one <c>QueryPlanIdentityDigest</c>, because the digest covers the
+    /// query's SHAPE and the batch's contents travel as bound parameters. That is what lets one
+    /// <see cref="EuFeedWatermarkEntrySet.TryClose"/> close over every batch's steps together: its
+    /// one-plan invariant is satisfied by construction rather than by an exemption.
+    /// </para>
+    /// </remarks>
     public async Task<EuWitnessTraversalResult> RunWitnessTraversalAsync(
-        EuWatermarkWitnessPlan plan,
+        IReadOnlyList<EuWatermarkWitnessPlan> batchPlans,
         MachineQueryRendererSource rendererSource,
         BoundMachineRequest sourceWitness,
         CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(plan);
+        ArgumentNullException.ThrowIfNull(batchPlans);
         ArgumentNullException.ThrowIfNull(rendererSource);
         ArgumentNullException.ThrowIfNull(sourceWitness);
+        if (batchPlans.Count == 0)
+        {
+            return EuWitnessTraversalResult.Refused(
+                new EuWitnessTraversalRefusalDetail(EuWitnessTraversalRefusal.EntrySetRefused, "no witness batch"),
+                productRequestCount: 0);
+        }
 
         var session = await StartSessionAsync(sourceWitness, cancellationToken).ConfigureAwait(false);
         if (session is null)
@@ -632,19 +661,23 @@ public sealed class EuRepeatedEnumerationExecutor
         }
 
         var productRequestCount = 0;
+        var witnessStarted = _timeProvider.GetTimestamp();
         try
         {
             var executorWrittenMembership = new Dictionary<string, CustodyMembership>(StringComparer.Ordinal);
             var evidenceBytesInOrder = new List<byte[]>();
+            var steps = new List<EuWatermarkTraversalStep>();
 
+            foreach (var plan in batchPlans)
+            {
+            var batchRequestCount = 0;
             var position = plan.StartPosition;
             IReadOnlyList<string> retainedTieSet = new[] { position.CanonicalEntryKey };
-            var steps = new List<EuWatermarkTraversalStep>();
             var consecutiveTerminalObservations = 0;
 
             while (true)
             {
-                if (productRequestCount >= MaximumWitnessPageRequests)
+                if (batchRequestCount >= MaximumWitnessPageRequests)
                 {
                     return EuWitnessTraversalResult.Refused(
                         new EuWitnessTraversalRefusalDetail(EuWitnessTraversalRefusal.PageBudgetExhausted, null),
@@ -661,7 +694,13 @@ public sealed class EuRepeatedEnumerationExecutor
 
                 var outcome = await _reopenGlue.ObserveAsync(
                         session, bound.Request, EuWatermarkWitnessPlan.ResponseMediaType, executorWrittenMembership,
-                        () => productRequestCount, count => productRequestCount = count, cancellationToken)
+                        () => productRequestCount,
+                        count =>
+                        {
+                            batchRequestCount += count - productRequestCount;
+                            productRequestCount = count;
+                        },
+                        cancellationToken)
                     .ConfigureAwait(false);
                 if (outcome.Failure is { } failure)
                 {
@@ -752,6 +791,8 @@ public sealed class EuRepeatedEnumerationExecutor
                     .ToArray();
             }
 
+            }
+
             var entrySet = EuFeedWatermarkEntrySet.TryClose(steps, out var entrySetRefusal);
             if (entrySet is null)
             {
@@ -761,7 +802,10 @@ public sealed class EuRepeatedEnumerationExecutor
             }
 
             return EuWitnessTraversalResult.Delivered(
-                entrySet, CombinedSha256(evidenceBytesInOrder), productRequestCount);
+                entrySet,
+                CombinedSha256(evidenceBytesInOrder),
+                productRequestCount,
+                _timeProvider.GetElapsedTime(witnessStarted));
         }
         catch (Exception exception) when (exception is CustodyIntegrityException or CustodyRequiredException)
         {
