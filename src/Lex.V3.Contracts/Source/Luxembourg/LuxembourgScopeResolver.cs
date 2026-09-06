@@ -1411,13 +1411,42 @@ internal static class LuxembourgScopeResolver
                 ["body_join_sha256:" + BodyJoinDigest(wemiTopology, bodyJoin)],
                 observation.ObservationRef,
                 evidenceOrdinals),
+            // THE ENUMERATION DIGEST IS EVIDENCE, NOT A PUBLISHER VALUE, AND IT USED TO BE BOTH.
+            // Both rights selectors prepended $"enumeration:{...Sha256}" to their value set. The
+            // canonicaliser drops only empty strings, so that element always survived, and
+            // Selector answers PublisherValueAbsent only on an empty set: the absent state was
+            // unreachable for rights by construction. A manifestation whose publisher declared no
+            // licence therefore published PublisherValuePresent over a one-element set whose only
+            // member was our own enumeration digest -- a gap rendered as a present value (S2-A03),
+            // and our artifact rendered as the publisher's assertion (S2-A01), while the dimension
+            // beside it said lu_rights_observed_empty_channel.
+            //
+            // Nothing is lost by dropping it. The enumeration is already the selector's own
+            // evidenceRef on the line below, so which enumeration answered is still recorded,
+            // through the evidence ordinal rather than smuggled in beside the licences. Nothing
+            // read the sentinel: its only two occurrences in the tree were these two constructions.
+            // The >= 2 distinct-value assertion for a conflict rule is untouched, because every
+            // rights rule id is lu_rights_* and none ends in _selector_conflict -- and where it did
+            // apply, a sentinel counting as the second distinct value would have satisfied it
+            // without a second licence.
+            //
+            // AND THE ROWS ARE BOUND TO THIS OBJECT, WHICH THE FIRST VERSION OF THIS REPAIR MISSED.
+            // A channel's Observations carry every manifestation the connected assertion graph
+            // reached, not only the one being resolved, so an unfiltered SelectMany published a
+            // SIBLING's licence as this manifestation's own value. Removing the sentinel alone left
+            // that half of the same S2-A01/S2-A03 claim false: an object observed empty while a
+            // sibling carried CC BY still reported PublisherValuePresent, and the empty-only guard
+            // passed straight over it. The reviewer found this and proved it with a two-row case.
+            // ResolveRights already binds the DIMENSION to this object through
+            // LuxembourgRightsChannels.Resolve(resourceIri, ...); only the selector was unbound, so
+            // the wire and the resolution disagreed about which manifestation was being described.
             Selector(
                 profile,
                 ScopeAxis.Body,
                 dimensions.Rights,
                 [
-                    $"enumeration:{observation.SparqlRightsObservations.EnumerationRef.Sha256}",
                     .. observation.SparqlRightsObservations.Observations
+                        .Where(row => row.ManifestationIri == observation.ObjectRef.PublisherUri)
                         .SelectMany(static row => row.LicenceIris),
                 ],
                 observation.SparqlRightsObservations.EnumerationRef,
@@ -1427,8 +1456,8 @@ internal static class LuxembourgScopeResolver
                 ScopeAxis.Body,
                 dimensions.Rights,
                 [
-                    $"enumeration:{observation.InFileRightsObservations.EnumerationRef.Sha256}",
                     .. observation.InFileRightsObservations.Observations
+                        .Where(row => row.ManifestationIri == observation.ObjectRef.PublisherUri)
                         .SelectMany(static row => row.LicenceIris),
                 ],
                 observation.InFileRightsObservations.EnumerationRef,
