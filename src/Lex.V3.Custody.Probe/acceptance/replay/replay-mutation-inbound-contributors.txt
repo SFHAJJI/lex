@@ -1,0 +1,21 @@
+Exécuter des tests à partir de C:\lex-v3\worktrees\codex-stage1-custody-runner\tests\Lex.V3.Tests\bin\Debug\net10.0\Lex.V3.Tests.dll (net10.0|x64)
+échec InboundViewRequiresEveryContributorAndItsScopeBytes (161ms)
+  à partir de C:\lex-v3\worktrees\codex-stage1-custody-runner\tests\Lex.V3.Tests\bin\Debug\net10.0\Lex.V3.Tests.dll (net10.0|x64)
+  Assertion failed. Les valeurs attendues doivent être égales.
+  
+  expected: 2
+  actual:   1
+  
+  Assert.AreEqual(2, result.RootElement.GetProperty("facts")[0].GetProperty("provenance").GetArrayLength())
+    sur Lex.V3.Tests.Custody.FactCustodyReplayTests.InboundViewRequiresEveryContributorAndItsScopeBytes() dans C:\lex-v3\worktrees\codex-stage1-custody-runner\tests\Lex.V3.Tests\Custody\FactCustodyReplayTests.cs:146
+    sur Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter.Execution.TestMethodInfo.ExecuteInternalAsync(Object[] arguments, CancellationTokenSource timeoutTokenSource)
+C:\lex-v3\worktrees\codex-stage1-custody-runner\tests\Lex.V3.Tests\bin\Debug\net10.0\Lex.V3.Tests.dll (net10.0|x64) a échoué avec 1 erreur(s) (983ms)
+Code de sortie: 2
+
+Résumé de série de tests : Échec!
+  total : 1
+  échec : 1
+  réussie : 0
+  ignoré : 0
+  durée : 1s 194ms
+L’exécution de tests s’est terminée avec un code de sortie non réussi : 2 (voir : https://aka.ms/testingplatform/exitcodes)

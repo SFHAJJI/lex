@@ -1,0 +1,50 @@
+[
+  {
+    "name": "receipt-canonical",
+    "filter": "IndependentlyHeldReceiptMustAgreeWithHop",
+    "exit": 2,
+    "log_sha256": "474f134ed8bbd9c2b84d873d9c40a25cf9f1006386013e34f14f28022f9e258e"
+  },
+  {
+    "name": "receipt-body-digest",
+    "filter": "IndependentlyHeldReceiptMustAgreeWithHop",
+    "exit": 2,
+    "log_sha256": "f95c9c81550eee7078a04b46f89425ab13c3e1b8ebe14a22e09e5b23e27b3f25"
+  },
+  {
+    "name": "receipt-body-length",
+    "filter": "IndependentlyHeldReceiptMustAgreeWithHop",
+    "exit": 2,
+    "log_sha256": "826ec75780e49a8cb590be8face1906bd4e2e3317e2fb0a5e35226cfd08c1430"
+  },
+  {
+    "name": "derivation-refusal",
+    "filter": "ReplayRefusesBrokenPopulationLinks",
+    "exit": 2,
+    "log_sha256": "d299bdfd92f55a5f7ccd2359ecbbfef8117f0302afa10096dda0a81c888b22d8"
+  },
+  {
+    "name": "inverse-ontology",
+    "filter": "InverseRequiresBothForwardAndOntologyObservations",
+    "exit": 2,
+    "log_sha256": "41ad34ded0b8040ee85e0e99966246371869f6e0b41fe04dcd0770abca15f37d"
+  },
+  {
+    "name": "inbound-contributors",
+    "filter": "InboundViewRequiresEveryContributorAndItsScopeBytes",
+    "exit": 2,
+    "log_sha256": "65c4398db4c6a0a181abab6a1ca8add36b79c0a2f0e67cc38be71ed8e5efa213"
+  },
+  {
+    "name": "scope-reopen",
+    "filter": "InboundViewRequiresEveryContributorAndItsScopeBytes",
+    "exit": 2,
+    "log_sha256": "55c2ddeaf2754e86b6959dfedcde772acfcc6baf0f2b89471e51aba78b283ecf"
+  },
+  {
+    "name": "empty-population",
+    "filter": "ReplayRefusesBrokenPopulationLinks",
+    "exit": 2,
+    "log_sha256": "cf54ca42c1b4eaf2fa81fa36f3fce273894dd324ccf8f292d5992c07a3f48c16"
+  }
+]

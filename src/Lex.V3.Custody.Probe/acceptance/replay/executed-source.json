@@ -1,0 +1,45 @@
+{
+  "base": "e305791e66f82fef17dfed2da2185d68a3607385",
+  "preparation_head": "010eab6bf141d82a958bfff7f7b9766cb3595bbd",
+  "execution": "precommit dirty source; hashes bind changed C# and executed Release assemblies",
+  "sources": [
+    {
+      "path": "src/Lex.V3.Custody.Probe/FactCustodyReplay.cs",
+      "sha256": "63748116b47451e7b1d6d9100ae2ccdfd6f3702308abd8689c4c743190e08151"
+    },
+    {
+      "path": "src/Lex.V3.Custody.Probe/Program.cs",
+      "sha256": "7b44de5711fa545f0db922db734cfd811c6427fad910dfe8bac4338af9ee206d"
+    },
+    {
+      "path": "tests/Lex.V3.Tests/Custody/FactCustodyReplayTests.cs",
+      "sha256": "448d9cbaf13dc43bcdeba68e9e08174342eff9039b0bb0bc212a0671b7dbe1db"
+    },
+    {
+      "path": "tests/Lex.V3.Tests/Custody/CustodyStoreConformanceTests.cs",
+      "sha256": "7312a4c516e6be086f7b16bc3ffac87d3f6a2d7e2a8884b78569a2b00bc87631"
+    },
+    {
+      "path": "tests/Lex.V3.Tests/Census/CensusPartitionTests.cs",
+      "sha256": "47b4d9a8c7a30912e21361c5ae06893a7bcfaed8449301910720d1802a9bd753"
+    },
+    {
+      "path": "tests/Lex.V3.Tests/Census/ClosedVocabularyCensusTests.cs",
+      "sha256": "95b8b3b00c66e3f9789efdeff472c4e3fba61ee8b87c398bf953152acb033629"
+    }
+  ],
+  "assemblies": [
+    {
+      "path": "src/Lex.V3.Custody.Probe/bin/Release/net10.0/Lex.V3.Custody.Probe.dll",
+      "sha256": "dbe163395d05c8cdb35bd54037533b65815419b60ccafff690dc8a7f57a63dfd"
+    },
+    {
+      "path": "tests/Lex.V3.Tests/bin/Release/net10.0/Lex.V3.Tests.dll",
+      "sha256": "5ddee4759eca17f0c1656176fdc3ea363e58f54a5c11b5f9340a70d19236b98e"
+    },
+    {
+      "path": "tests/Lex.V3.Ingest.Tests/bin/Release/net10.0/Lex.V3.Ingest.Tests.dll",
+      "sha256": "494f6f9fb1c3d379910eb9f5c09e9ba630e671ccef0a118275058d51a302d565"
+    }
+  ]
+}
