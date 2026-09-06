@@ -1,0 +1,289 @@
+TAP version 13
+# Subtest: every citation form this build declares actually parses
+ok 1 - every citation form this build declares actually parses
+  ---
+  duration_ms: 2.361
+  type: 'test'
+  ...
+# Subtest: a permalink off the canonical host does not parse, userinfo included
+ok 2 - a permalink off the canonical host does not parse, userinfo included
+  ---
+  duration_ms: 0.1943
+  type: 'test'
+  ...
+# Subtest: a citation embedded in prose is not extracted as if it had been cited alone
+ok 3 - a citation embedded in prose is not extracted as if it had been cited alone
+  ---
+  duration_ms: 0.1086
+  type: 'test'
+  ...
+# Subtest: a CELEX cited the publisher way folds to the held key, and keeps the reader spelling
+ok 4 - a CELEX cited the publisher way folds to the held key, and keeps the reader spelling
+  ---
+  duration_ms: 0.1298
+  type: 'test'
+  ...
+# Subtest: a consolidated CELEX names a date and its parts, and invents no base act
+ok 5 - a consolidated CELEX names a date and its parts, and invents no base act
+  ---
+  duration_ms: 0.1011
+  type: 'test'
+  ...
+# Subtest: a CELEX sector is one digit, so the whole identifier parses into its four parts
+ok 6 - a CELEX sector is one digit, so the whole identifier parses into its four parts
+  ---
+  duration_ms: 0.0935
+  type: 'test'
+  ...
+# Subtest: a dated LU ELI carries its applicability date
+ok 7 - a dated LU ELI carries its applicability date
+  ---
+  duration_ms: 0.1293
+  type: 'test'
+  ...
+# Subtest: leg and adm produce one work key and two identifiers, which is the collision
+ok 8 - leg and adm produce one work key and two identifiers, which is the collision
+  ---
+  duration_ms: 0.0983
+  type: 'test'
+  ...
+# Subtest: a candidate from the other branch is refused, not rendered
+ok 9 - a candidate from the other branch is refused, not rendered
+  ---
+  duration_ms: 0.5957
+  type: 'test'
+  ...
+# Subtest: unrecognised and out-of-corpus are different answers
+ok 10 - unrecognised and out-of-corpus are different answers
+  ---
+  duration_ms: 0.7863
+  type: 'test'
+  ...
+# Subtest: a recognised citation we hold nothing for is out of corpus, not unrecognised
+ok 11 - a recognised citation we hold nothing for is out of corpus, not unrecognised
+  ---
+  duration_ms: 0.1455
+  type: 'test'
+  ...
+# Subtest: more than one candidate lists every one and preselects none
+ok 12 - more than one candidate lists every one and preselects none
+  ---
+  duration_ms: 0.7215
+  type: 'test'
+  ...
+# Subtest: one candidate resolves and names its state
+ok 13 - one candidate resolves and names its state
+  ---
+  duration_ms: 0.1278
+  type: 'test'
+  ...
+# Subtest: every verdict this module can return is in the closed list
+ok 14 - every verdict this module can return is in the closed list
+  ---
+  duration_ms: 0.1895
+  type: 'test'
+  ...
+# Subtest: a stale permalink refuses substitution and retains the requested pin
+not ok 15 - a stale permalink refuses substitution and retains the requested pin
+  ---
+  duration_ms: 0.9462
+  type: 'test'
+  location: 'C:\\lex-v3\\worktrees\\codex-pinned-permalink\\web\\test\\citation-checker.test.mjs:194:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+
+    + 'out_of_corpus'
+    - 'pinned_state_unavailable'
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'pinned_state_unavailable'
+  actual: 'out_of_corpus'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///C:/lex-v3/worktrees/codex-pinned-permalink/web/test/citation-checker.test.mjs:197:12)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: a permalink selects its exact state hash before considering ambiguity
+not ok 16 - a permalink selects its exact state hash before considering ambiguity
+  ---
+  duration_ms: 0.2035
+  type: 'test'
+  location: 'C:\\lex-v3\\worktrees\\codex-pinned-permalink\\web\\test\\citation-checker.test.mjs:208:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+
+    + 'ambiguous'
+    - 'resolved'
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'resolved'
+  actual: 'ambiguous'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///C:/lex-v3/worktrees/codex-pinned-permalink/web/test/citation-checker.test.mjs:213:12)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: record and provision digests cannot stand in for the permalink state hash
+not ok 17 - record and provision digests cannot stand in for the permalink state hash
+  ---
+  duration_ms: 0.1472
+  type: 'test'
+  location: 'C:\\lex-v3\\worktrees\\codex-pinned-permalink\\web\\test\\citation-checker.test.mjs:222:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+
+    + 'resolved'
+    - 'pinned_state_unavailable'
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'pinned_state_unavailable'
+  actual: 'resolved'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///C:/lex-v3/worktrees/codex-pinned-permalink/web/test/citation-checker.test.mjs:226:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: permalink candidates require a canonical state hash even beside an exact match
+not ok 18 - permalink candidates require a canonical state hash even beside an exact match
+  ---
+  duration_ms: 0.1442
+  type: 'test'
+  location: 'C:\\lex-v3\\worktrees\\codex-pinned-permalink\\web\\test\\citation-checker.test.mjs:229:1'
+  failureType: 'testCodeFailure'
+  error: 'Missing expected exception.'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  operator: 'throws'
+  stack: |-
+    TestContext.<anonymous> (file:///C:/lex-v3/worktrees/codex-pinned-permalink/web/test/citation-checker.test.mjs:231:12)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: a matching hash does not excuse a foreign permalink coordinate
+not ok 19 - a matching hash does not excuse a foreign permalink coordinate
+  ---
+  duration_ms: 0.1253
+  type: 'test'
+  location: 'C:\\lex-v3\\worktrees\\codex-pinned-permalink\\web\\test\\citation-checker.test.mjs:237:1'
+  failureType: 'testCodeFailure'
+  error: 'Missing expected exception.'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  operator: 'throws'
+  stack: |-
+    TestContext.<anonymous> (file:///C:/lex-v3/worktrees/codex-pinned-permalink/web/test/citation-checker.test.mjs:243:12)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: a permalink with an impossible calendar date does not parse
+not ok 20 - a permalink with an impossible calendar date does not parse
+  ---
+  duration_ms: 0.5177
+  type: 'test'
+  location: 'C:\\lex-v3\\worktrees\\codex-pinned-permalink\\web\\test\\citation-checker.test.mjs:249:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+
+    + {
+    +   at: '2025-02-29',
+    +   digest: '7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f',
+    +   form: 'permalink',
+    +   key: 'loi-1993-04-05-n1',
+    +   publisher: 'lu-legilux'
+    + }
+    - null
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: ~
+  actual:
+    form: 'permalink'
+    publisher: 'lu-legilux'
+    key: 'loi-1993-04-05-n1'
+    at: '2025-02-29'
+    digest: '7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///C:/lex-v3/worktrees/codex-pinned-permalink/web/test/citation-checker.test.mjs:250:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: a candidate a reader cannot identify is refused
+ok 21 - a candidate a reader cannot identify is refused
+  ---
+  duration_ms: 0.1528
+  type: 'test'
+  ...
+# Subtest: a quote that matches is identical, and one that does not names where
+ok 22 - a quote that matches is identical, and one that does not names where
+  ---
+  duration_ms: 0.1619
+  type: 'test'
+  ...
+# Subtest: a quote comparison against nothing is refused rather than reported identical
+ok 23 - a quote comparison against nothing is refused rather than reported identical
+  ---
+  duration_ms: 0.2044
+  type: 'test'
+  ...
+# Subtest: the verdict card escapes a hostile citation rather than emitting it
+ok 24 - the verdict card escapes a hostile citation rather than emitting it
+  ---
+  duration_ms: 0.0823
+  type: 'test'
+  ...
+# Subtest: an out-of-corpus body is recognised case-insensitively but not over-eagerly
+ok 25 - an out-of-corpus body is recognised case-insensitively but not over-eagerly
+  ---
+  duration_ms: 0.0506
+  type: 'test'
+  ...
+1..25
+# tests 25
+# suites 0
+# pass 19
+# fail 6
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 108.6376

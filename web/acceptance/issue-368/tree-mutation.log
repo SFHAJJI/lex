@@ -1,0 +1,5 @@
+Exception: C:\lex-v3\worktrees\codex-pinned-permalink\eng\verify-v3-tree.ps1:179
+Line |
+ 179 |      throw 'A legacy path mutation escaped the V3 structural allowlist …
+     |      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | A legacy path mutation escaped the V3 structural allowlist.
