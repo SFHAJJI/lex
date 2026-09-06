@@ -54,6 +54,13 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
     private readonly DateTimeOffset _runCreatedAt;
     private readonly bool _usesPinnedHandler;
     private readonly BoundMachineRequestIdentity _sourceWitnessIdentity;
+    /// <summary>
+    /// The robots bytes this session's own bootstrap admitted, kept so a redirect TARGET can be
+    /// evaluated against the same policy the start position was (Decision 83, S1-A10). Assigned
+    /// once, on the only path that reaches a started session.
+    /// </summary>
+    private byte[]? _admittedRobotsPolicy;
+
     private readonly ActiveGenerationState _activeGeneration;
     private readonly object _generationToken = new();
     private readonly object _generationLock = new();
@@ -367,6 +374,11 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
                     OfficialMachineQueryLocalSafetyReason.ApplicableRobotsGroupUninterpretable,
                     evidence);
             }
+
+            // Retained for the redirect-target evaluation below. This is the exact byte span the
+            // verdict above was computed from, so a later hop is judged by the same policy the
+            // first request was and never by a re-fetch that could have moved underneath it.
+            _admittedRobotsPolicy = terminalBody.Bytes.ToArray();
 
             EnsureGenerationCurrent();
             return StartResult.Started(this, evidence);
@@ -3373,6 +3385,34 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
 
     private sealed class RobotsPolicyExpiredException : Exception;
 
+    /// <summary>
+    /// This session's own admitted robots policy, evaluated against one absolute URL's path.
+    /// </summary>
+    /// <remarks>
+    /// Returns <see cref="RobotsPolicyEvaluationResult.UnsafeToInterpret"/> rather than allowing
+    /// when no policy was retained or the URL cannot be parsed. A session that reached a product
+    /// request always has one, so the null case is unreachable today; allowing on it would make the
+    /// absence of a policy into a permission, which is exactly what Decision 83 says it is not.
+    /// </remarks>
+    private RobotsPolicyEvaluationResult EvaluateAdmittedRobots(string absoluteUri)
+    {
+        if (_admittedRobotsPolicy is not { } policy ||
+            !Uri.TryCreate(absoluteUri, UriKind.Absolute, out var parsed))
+        {
+            return RobotsPolicyEvaluationResult.UnsafeToInterpret;
+        }
+
+        try
+        {
+            return RobotsExclusionPolicy.Evaluate(
+                policy, _profile.RobotsProductToken, parsed.PathAndQuery);
+        }
+        catch (ArgumentException)
+        {
+            return RobotsPolicyEvaluationResult.UnsafeToInterpret;
+        }
+    }
+
     private async Task<RouteExecution> ExecuteRouteAsync(
         HttpLogicalRequest request,
         ReadOnlyMemory<byte> requestBody,
@@ -3734,6 +3774,37 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
                             hops,
                             new IncompleteHttpRouteOutcome(
                                 HttpRouteIncompleteReason.RedirectTargetOriginNotAdmitted),
+                            BuildHopWriteReceipts(requestOrdinal, attemptOrdinal, hops)),
+                        custodyKey,
+                        null,
+                        null);
+                }
+
+                // DECISION 83, S1-A10: the redirect TARGET is a URL this run is about to request,
+                // so the publisher's own policy is evaluated against it, literally and on its own
+                // path. Same origin is not the same question: the origin check asks whether the
+                // publisher is still the one we started with, and this asks what that publisher
+                // permits at the path it just sent us to. Before this, a route could be redirected
+                // onto a disallowed path and fetch it, having evaluated only the path it started
+                // from -- the transfer prohibition read backwards, with the start position's
+                // permission carried onto a path the publisher never permitted.
+                //
+                // This adds no permission. It can only turn a fetch that would have happened into a
+                // typed refusal; it repairs no path and consults no path but the one about to be
+                // requested.
+                var redirectVerdict = EvaluateAdmittedRobots(nextUri);
+                if (redirectVerdict != RobotsPolicyEvaluationResult.Allowed)
+                {
+                    return new RouteExecution(
+                        RoutedHttpEvidence.Create(
+                            _runIdentity,
+                            requestOrdinal,
+                            attemptOrdinal,
+                            hops,
+                            new IncompleteHttpRouteOutcome(
+                                redirectVerdict == RobotsPolicyEvaluationResult.Denied
+                                    ? HttpRouteIncompleteReason.RedirectTargetRobotsDenied
+                                    : HttpRouteIncompleteReason.RobotsPolicyUnavailable),
                             BuildHopWriteReceipts(requestOrdinal, attemptOrdinal, hops)),
                         custodyKey,
                         null,
