@@ -152,6 +152,7 @@ public sealed class EuStageOnePopulationRun
         var faults = new List<string>();
         var violations = new List<string>();
         var reaching = new List<string>();
+        var secondAttempts = new List<string>();
         var refused = new List<(string Celex, EuQueryExecutionRefusal Refusal)>();
 
         var populationStopwatch = Stopwatch.StartNew();
@@ -161,10 +162,41 @@ public sealed class EuStageOnePopulationRun
             JsonObject index;
             EuQueryExecutionResult? result = null;
             string? fault = null;
+            var attempts = 1;
+            JsonObject? firstAttemptIndex = null;
             try
             {
                 result = await RunOneSeedAsync(seed.Celex, Path.Combine(root, "custody", FileNameFor(seed.Celex)))
                     .ConfigureAwait(false);
+
+                // ONE SECOND ATTEMPT, AND ONLY FOR THE PUBLISHER BEING UNAVAILABLE. Decision 67
+                // names a complete 5xx a publisher server failure, which is a fact about the
+                // publisher rather than a defect in this route, and the first complete run met one:
+                // seed 32006L0112 refused object_facts_family_not_proven on a terminal 503 at
+                // request ordinal 3, then reached its manifest and record set unchanged on a
+                // re-run. A population gate that stayed red for that would report the publisher's
+                // availability as this product's failure.
+                //
+                // WHAT KEEPS THIS FROM BEING A LOOPHOLE. It fires ONLY when every refused family
+                // carries a 5xx (IsPublisherUnavailable), so no Lex-attributable refusal is ever
+                // retried; it is capped at exactly one extra attempt; and the first attempt's whole
+                // evidence index is RETAINED beside the second in the report, so a reader sees that
+                // the seed needed two and why, rather than a quiet pass. The count of seeds needing
+                // a second attempt is reported as its own number for the same reason: if it were
+                // ever large, that is a finding about our own traffic and must be visible.
+                if (result.Refusal is not null && IsPublisherUnavailable(result))
+                {
+                    firstAttemptIndex = EuStageOneAcquisitionCanary.BuildEvidenceIndex(result);
+                    attempts = 2;
+                    Console.WriteLine(
+                        $"POPULATION|secondAttempt|{seed.Celex}|firstRefusal={result.Refusal.Code}"
+                        + $"|status={PublisherStatuses(result)}");
+                    result = await RunOneSeedAsync(
+                            seed.Celex,
+                            Path.Combine(root, "custody", FileNameFor(seed.Celex) + "-attempt-2"))
+                        .ConfigureAwait(false);
+                }
+
                 index = EuStageOneAcquisitionCanary.BuildEvidenceIndex(result);
             }
             catch (Exception exception)
@@ -179,6 +211,11 @@ public sealed class EuStageOnePopulationRun
             }
 
             stopwatch.Stop();
+
+            if (attempts > 1)
+            {
+                secondAttempts.Add(seed.Celex);
+            }
 
             var reachedManifest = result is not null
                 && result.Refusal is null
@@ -206,8 +243,10 @@ public sealed class EuStageOnePopulationRun
                 ["ordinal"] = ordinal,
                 ["elapsedMs"] = stopwatch.ElapsedMilliseconds,
                 ["reachedManifestAndRecordSet"] = reachedManifest,
+                ["attempts"] = attempts,
                 ["harnessFault"] = fault,
                 ["index"] = index,
+                ["firstAttemptIndex"] = firstAttemptIndex,
             };
             seedReports.Add(seedReport);
 
@@ -238,6 +277,10 @@ public sealed class EuStageOnePopulationRun
             ["seedsReachingManifestAndRecordSet"] = reaching.Count,
             ["seedsRefused"] = refused.Count,
             ["seedsFaulted"] = faults.Count,
+            ["seedsNeedingASecondAttempt"] = secondAttempts.Count,
+            ["seedsNeedingASecondAttemptByCelex"] = new JsonArray(
+                secondAttempts.OrderBy(static celex => celex, StringComparer.Ordinal)
+                    .Select(static celex => (JsonNode)JsonValue.Create(celex)!).ToArray()),
             ["elapsedMs"] = populationStopwatch.ElapsedMilliseconds,
             ["limitations"] = PopulationLimitations(),
             ["seeds"] = seedReports,
@@ -251,6 +294,7 @@ public sealed class EuStageOnePopulationRun
         Console.WriteLine(
             $"POPULATION|summary|attempted={seeds.Length}|reached={reaching.Count}"
             + $"|refused={refused.Count}|faulted={faults.Count}"
+            + $"|secondAttempts={secondAttempts.Count}"
             + $"|ms={populationStopwatch.ElapsedMilliseconds}");
         foreach (var (celex, refusal) in refused.OrderBy(static entry => entry.Celex, StringComparer.Ordinal))
         {
@@ -561,6 +605,32 @@ public sealed class EuStageOnePopulationRun
                     + "must satisfy and does not check the counts against an outside observation.",
             },
         };
+
+    /// <summary>
+    /// Every refused family on this run carries a publisher 5xx, so the publisher was unavailable
+    /// rather than this route being wrong.
+    /// </summary>
+    /// <remarks>
+    /// Requires at least one refused family AND that EVERY refused family carries a 5xx. A run
+    /// mixing a 5xx with any other cause is NOT publisher unavailability and is never retried: the
+    /// other cause is exactly what this population exists to find, and letting one 503 launder it
+    /// into a second attempt is the loophole this shape is written to exclude.
+    /// </remarks>
+    internal static bool IsPublisherUnavailable(EuQueryExecutionResult result)
+    {
+        var refusedFamilies = result.FamilyOutcomes
+            .Where(static outcome => outcome.ExecutorRefusal is not null)
+            .ToArray();
+        return refusedFamilies.Length > 0
+            && refusedFamilies.All(static outcome =>
+                outcome.ExecutorRefusal!.TerminalStatus is >= 500 and <= 599);
+    }
+
+    private static string PublisherStatuses(EuQueryExecutionResult result) =>
+        string.Join(",", result.FamilyOutcomes
+            .Select(static outcome => outcome.ExecutorRefusal?.TerminalStatus)
+            .Where(static status => status is not null)
+            .Select(static status => status!.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)));
 
     /// <summary>
     /// One seed's own path-safe file name. Six of Appendix A's 82 are treaty seeds whose CELEX
