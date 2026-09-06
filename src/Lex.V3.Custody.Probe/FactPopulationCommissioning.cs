@@ -13,8 +13,6 @@ internal static class FactPopulationCommissioning
 {
     internal const string ProposalSha256 =
         "2e134d982964af2592aac5002e0b2672b775e87288a80faa054ece0c4388f835";
-    private const string SourcePopulationReportSha256 =
-        "57b3f619b5806d140ccfcfa2e7e63c5012694377c3a1d0c4d14372c22025df96";
     private const string SourceRouteSha256 =
         "717145e555f51dbb5611275e3431ccdf07c3e084321dbbf70d8f0b25c9d79bac";
     private const string SourceBodySha256 =
@@ -101,7 +99,6 @@ internal static class FactPopulationCommissioning
         {
             Schema = "lex-v3-custody-fact-population-commissioning/1",
             ProposalSha256,
-            SourcePopulationReportSha256,
             SourceBodySha256,
             SourceRouteSha256,
             SourceObservationId,

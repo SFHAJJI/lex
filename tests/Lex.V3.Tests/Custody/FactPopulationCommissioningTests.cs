@@ -29,6 +29,21 @@ public sealed class FactPopulationCommissioningTests
         var root = receipt.RootElement;
         Assert.AreEqual("lex-v3-custody-fact-population-commissioning/1",
             root.GetProperty("schema").GetString());
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "schema",
+                "proposal_sha256",
+                "source_body_sha256",
+                "source_route_sha256",
+                "source_observation_id",
+                "body_write_receipt_sha256",
+                "commissioned_route_sha256",
+                "fact_sha256s",
+                "replay_input_sha256",
+            },
+            root.EnumerateObject().Select(static property => property.Name).ToArray(),
+            "The evidence record must contain only claims established by this execution.");
         Assert.AreEqual(ProposalSha256, root.GetProperty("proposal_sha256").GetString());
         Assert.AreEqual(5, root.GetProperty("fact_sha256s").GetArrayLength());
         Assert.AreEqual(9, store.CreateCalls);
