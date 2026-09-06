@@ -1,0 +1,9 @@
+Exécuter des tests à partir de C:\lex-v3\worktrees\codex-custody-replay-image\tests\Lex.V3.Tests\bin\Release\net10.0\Lex.V3.Tests.dll (net10.0|x64)
+C:\lex-v3\worktrees\codex-custody-replay-image\tests\Lex.V3.Tests\bin\Release\net10.0\Lex.V3.Tests.dll (net10.0|x64) réussite (3s 346ms)
+
+Résumé de série de tests : Réussite!
+  total : 44
+  échec : 0
+  réussie : 44
+  ignoré : 0
+  durée : 4s 352ms

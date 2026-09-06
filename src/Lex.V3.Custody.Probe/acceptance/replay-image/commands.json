@@ -1,0 +1,50 @@
+[
+  {
+    "command": "dotnet --version",
+    "exitCode": 0,
+    "result": "10.0.400"
+  },
+  {
+    "command": "dotnet restore Lex.V3.slnx --locked-mode",
+    "exitCode": 0,
+    "log": "restore.log"
+  },
+  {
+    "command": "dotnet publish src/Lex.V3.Custody.Probe/Lex.V3.Custody.Probe.csproj --configuration Release --no-restore --runtime linux-x64 --self-contained false /t:PublishContainer -p:EnableSdkContainerSupport=true -p:ContainerBaseImage=mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled@sha256:0839314d08bb65da369135389a5d8291f75ace587fbb0488f469eb92c62eef68 -p:ContainerRepository=lex-v3-custody-replay -p:ContainerImageTag=aeac066baa0e52640d723836d13281f2704683d2 -p:ContainerImageFormat=OCI -p:ContainerGenerateLabelsImageCreated=false -p:ContainerUser=1654 -p:ContainerArchiveOutputPath=C:/lex-v3/worktrees/codex-custody-replay-image/artifacts/replay-image/custody-replay.tar",
+    "exitCode": 0,
+    "log": "publish.log"
+  },
+  {
+    "command": "dotnet test --project tests/Lex.V3.Tests/Lex.V3.Tests.csproj --configuration Release --no-restore --filter 'FullyQualifiedName~FactCustodyReplayTests|FullyQualifiedName~AzureCustodyProbeContractTests' --minimum-expected-tests 1",
+    "exitCode": 0,
+    "log": "focused.log",
+    "passed": 44,
+    "failed": 0,
+    "skipped": 0
+  },
+  {
+    "command": "python src/Lex.V3.Custody.Probe/acceptance/replay-image/inspect_image.py artifacts/replay-image/custody-replay.tar src/Lex.V3.Custody.Probe/bin/Release/net10.0/linux-x64/publish src/Lex.V3.Custody.Probe/acceptance/replay-image/inspection.json",
+    "exitCode": 0,
+    "output": "inspection.json"
+  },
+  {
+    "command": "python src/Lex.V3.Custody.Probe/acceptance/replay-image/probe_inspection.py artifacts/replay-image/custody-replay.tar src/Lex.V3.Custody.Probe/bin/Release/net10.0/linux-x64/publish artifacts/replay-image/counterfactuals src/Lex.V3.Custody.Probe/acceptance/replay-image/counterfactuals.json",
+    "exitCode": 0,
+    "output": "counterfactuals.json",
+    "caught": 9
+  },
+  {
+    "command": "C:/lex-v3/worktrees/codex-stage1-custody-runner/artifacts/issue-459-runner/oras/oras.exe manifest fetch --oci-layout artifacts/replay-image/custody-replay.tar:aeac066baa0e52640d723836d13281f2704683d2 --descriptor",
+    "exitCode": 0,
+    "output": "oras-descriptor.json"
+  },
+  {
+    "command": "dotnet test --solution Lex.V3.slnx --configuration Release --no-restore --minimum-expected-tests 1",
+    "exitCode": 0,
+    "log": "full-test.log",
+    "passed": 2708,
+    "failed": 0,
+    "skipped": 6,
+    "duration": "1m04.625s"
+  }
+]

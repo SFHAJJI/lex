@@ -1,0 +1,1042 @@
+{
+  "schema": "lex-custody-replay-image-inspection/1",
+  "sourceHead": "aeac066baa0e52640d723836d13281f2704683d2",
+  "archiveSha256": "7a02e38fd7290376accad8a1d09a02eed2814e08afe0f35ab3fa9ff50fb17b29",
+  "archiveBytes": 57585152,
+  "manifestDigest": "sha256:710b0d3a128dbc37aa4a58f7942b2586e645e3d847f552deb11b71257e210281",
+  "config": {
+    "config": {
+      "ExposedPorts": {
+        "8080/tcp": {}
+      },
+      "Labels": {
+        "org.opencontainers.image.authors": "Lex.V3.Custody.Probe",
+        "org.opencontainers.image.version": "1.0.0",
+        "org.opencontainers.image.base.name": "mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled@sha256:0839314d08bb65da369135389a5d8291f75ace587fbb0488f469eb92c62eef68",
+        "net.dot.runtime.majorminor": "10.0",
+        "net.dot.sdk.version": "10.0.400",
+        "org.opencontainers.image.base.digest": "sha256:edec6ea65a92f432083a8f75fc3c18addd004015bbd4d523ce1d13e23b347008"
+      },
+      "Env": [
+        "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+        "APP_UID=1654",
+        "ASPNETCORE_HTTP_PORTS=8080",
+        "DOTNET_RUNNING_IN_CONTAINER=true",
+        "DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=true",
+        "DOTNET_VERSION=10.0.11",
+        "ASPNET_VERSION=10.0.11"
+      ],
+      "WorkingDir": "/app/",
+      "Entrypoint": [
+        "dotnet",
+        "/app/Lex.V3.Custody.Probe.dll"
+      ],
+      "User": "1654"
+    },
+    "created": "2026-09-06T15:22:28.3295039Z",
+    "rootfs": {
+      "type": "layers",
+      "diff_ids": [
+        "sha256:beb0a8a07e852d2f638dbb2ddf182fb8d49fda6b938cdf47f1586dcd6ff5eea6",
+        "sha256:b3c10b7026ea267be501f60acaea4f03746c6904c4df9488bf504e8c42d5e7af",
+        "sha256:febad9145033261aa71367c5fef993b223384a5e5dfff5b91d8b1e49c672c346",
+        "sha256:484f5d2f24015f3c86c4fe316cb3804b6a0b6ecf646c698122bd71aa658ac132",
+        "sha256:45443660a7c14402a31c042373b64fbf61a5a8c4bb8d1508c53d287564e53eb8",
+        "sha256:4aaef66c9186525a3c40085e0ce69046d4761c5506ab83416a5c61927b353061"
+      ]
+    },
+    "architecture": "amd64",
+    "os": "linux",
+    "history": [
+      {
+        "comment": "buildkit.dockerfile.v0",
+        "created": "2026-08-10T17:00:19.7245470Z",
+        "created_by": "COPY /rootfs / # buildkit"
+      },
+      {
+        "comment": "buildkit.dockerfile.v0",
+        "created": "2026-08-10T17:00:20.0765513Z",
+        "created_by": "ENV APP_UID=1654 ASPNETCORE_HTTP_PORTS=8080 DOTNET_RUNNING_IN_CONTAINER=true DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=true",
+        "empty_layer": true
+      },
+      {
+        "comment": "buildkit.dockerfile.v0",
+        "created": "2026-08-10T17:00:20.0765513Z",
+        "created_by": "COPY /rootfs/home/app /home/app # buildkit"
+      },
+      {
+        "comment": "buildkit.dockerfile.v0",
+        "created": "2026-08-10T17:00:20.0765513Z",
+        "created_by": "USER 1654",
+        "empty_layer": true
+      },
+      {
+        "comment": "buildkit.dockerfile.v0",
+        "created": "2026-08-10T17:01:04.6048198Z",
+        "created_by": "ENV DOTNET_VERSION=10.0.11",
+        "empty_layer": true
+      },
+      {
+        "comment": "buildkit.dockerfile.v0",
+        "created": "2026-08-10T17:01:04.6048198Z",
+        "created_by": "COPY /usr/share/dotnet /usr/share/dotnet # buildkit"
+      },
+      {
+        "comment": "buildkit.dockerfile.v0",
+        "created": "2026-08-10T17:01:04.8432791Z",
+        "created_by": "COPY /dotnet-symlink /usr/bin # buildkit"
+      },
+      {
+        "comment": "buildkit.dockerfile.v0",
+        "created": "2026-08-10T17:01:04.8432791Z",
+        "created_by": "ENTRYPOINT [\"/usr/bin/dotnet\"]",
+        "empty_layer": true
+      },
+      {
+        "comment": "buildkit.dockerfile.v0",
+        "created": "2026-08-10T17:01:04.8432791Z",
+        "created_by": "CMD [\"--info\"]",
+        "empty_layer": true
+      },
+      {
+        "comment": "buildkit.dockerfile.v0",
+        "created": "2026-08-10T17:01:17.9907477Z",
+        "created_by": "ENV ASPNET_VERSION=10.0.11",
+        "empty_layer": true
+      },
+      {
+        "comment": "buildkit.dockerfile.v0",
+        "created": "2026-08-10T17:01:17.9907477Z",
+        "created_by": "COPY /dotnet /usr/share/dotnet # buildkit"
+      },
+      {
+        "author": ".NET SDK",
+        "created": "2026-09-06T15:22:28.3294937Z",
+        "created_by": ".NET SDK Container Tooling, version 10.0.400-servicing.26379.115+14fbf8d5271c98133561eb55185fdb05b286f578"
+      }
+    ]
+  },
+  "members": [
+    {
+      "path": "blobs/sha256/def854da5956476bcadf65ed422b8c05557e1a7b517822950c2c0faacc90e9b7",
+      "sha256": "def854da5956476bcadf65ed422b8c05557e1a7b517822950c2c0faacc90e9b7",
+      "bytes": 5804045
+    },
+    {
+      "path": "blobs/sha256/12ef4e442d47820e93ebe5c9f236f0b112033d4590a73f661169df351419b2c0",
+      "sha256": "12ef4e442d47820e93ebe5c9f236f0b112033d4590a73f661169df351419b2c0",
+      "bytes": 119
+    },
+    {
+      "path": "blobs/sha256/6db3a30f546a6a202c782031f663c61ec37067e45244b248939cb659c4d5a835",
+      "sha256": "6db3a30f546a6a202c782031f663c61ec37067e45244b248939cb659c4d5a835",
+      "bytes": 36601728
+    },
+    {
+      "path": "blobs/sha256/f619da09acfd4e1ef72749d405b458c5c2e92c5c86b8ab3d9156b4554da573de",
+      "sha256": "f619da09acfd4e1ef72749d405b458c5c2e92c5c86b8ab3d9156b4554da573de",
+      "bytes": 151
+    },
+    {
+      "path": "blobs/sha256/843cba457a118410168c2546fd9a5a5d9d3bf0be6c06831265e862750a89852f",
+      "sha256": "843cba457a118410168c2546fd9a5a5d9d3bf0be6c06831265e862750a89852f",
+      "bytes": 12731712
+    },
+    {
+      "path": "blobs/sha256/34c89bb97195068a222792ad7defcba0d4617eaf6b4798bde71a59199de768fd",
+      "sha256": "34c89bb97195068a222792ad7defcba0d4617eaf6b4798bde71a59199de768fd",
+      "bytes": 2423286
+    },
+    {
+      "path": "blobs/sha256/01ffbce39088f3ba0a0b8370c81a95ecfb801f2ca60eb27db7524b2ac5df5a54",
+      "sha256": "01ffbce39088f3ba0a0b8370c81a95ecfb801f2ca60eb27db7524b2ac5df5a54",
+      "bytes": 3194
+    },
+    {
+      "path": "blobs/sha256/710b0d3a128dbc37aa4a58f7942b2586e645e3d847f552deb11b71257e210281",
+      "sha256": "710b0d3a128dbc37aa4a58f7942b2586e645e3d847f552deb11b71257e210281",
+      "bytes": 1235
+    },
+    {
+      "path": "index.json",
+      "sha256": "4b0ec9121d3d16e1cdfa1cffe1c93e6b8a452bd846f8216d4d1155c247f023e9",
+      "bytes": 460
+    },
+    {
+      "path": "oci-layout",
+      "sha256": "0cdedc0869d60bb59e3dde736f996025e70318180587e049cfa22f80d67aa8e5",
+      "bytes": 31
+    }
+  ],
+  "publishedFiles": [
+    {
+      "path": "app/Azure.Core.dll",
+      "sha256": "62f2ca72236d5b278eef85beada6f0d711944b128664f4cded9e570dbd586052",
+      "bytes": 881976
+    },
+    {
+      "path": "app/Azure.Identity.dll",
+      "sha256": "31574a3d35ffeb0e25a00ebb317937222fe5283b91af608613f2e3bf0f26c50a",
+      "bytes": 17952
+    },
+    {
+      "path": "app/Azure.Storage.Blobs.dll",
+      "sha256": "6e20e51b1164ae982828251466c57f0fcc08478a792b184bcc909530c506b15b",
+      "bytes": 1428280
+    },
+    {
+      "path": "app/Azure.Storage.Common.dll",
+      "sha256": "678d23c3df79e6c6b76c3bd46691dc55224e6d7f2acfe86232a42c9beec54353",
+      "bytes": 250688
+    },
+    {
+      "path": "app/Lex.V3.Contracts.dll",
+      "sha256": "b2ef4ee997a6b7fdcb8f5e84c6702f291e46a1e7c1343be36094480a73816e31",
+      "bytes": 1417728
+    },
+    {
+      "path": "app/Lex.V3.Contracts.pdb",
+      "sha256": "1b02b01576294bed59762c506734aca8fa111fa9a1276f2d6b8583f72ba8c77e",
+      "bytes": 260308
+    },
+    {
+      "path": "app/Lex.V3.Custody.Azure.dll",
+      "sha256": "e892fca0aa453906703d4c9aeea93132f0a0463315962796fe2ea4fd135363ef",
+      "bytes": 87040
+    },
+    {
+      "path": "app/Lex.V3.Custody.Azure.pdb",
+      "sha256": "42490682bfcf91703a716eadc22b58ae96c2a06d86a5a339bb0af6b7b6dc0dd8",
+      "bytes": 25912
+    },
+    {
+      "path": "app/Lex.V3.Custody.Probe",
+      "sha256": "91ea2d7045d0798605e88172bd9fd56927e109b70e3d8c271a4987bceb06f826",
+      "bytes": 78256
+    },
+    {
+      "path": "app/Lex.V3.Custody.Probe.deps.json",
+      "sha256": "cc5349bd17b1a53d5e2deeecc3cb9e5296cdf42772808a5c09639c2cf855a31f",
+      "bytes": 16122
+    },
+    {
+      "path": "app/Lex.V3.Custody.Probe.dll",
+      "sha256": "9c925461a28dd620f1ef43a28b1a646af8ed1f1359d5bb221e65d50cdcc9755b",
+      "bytes": 47104
+    },
+    {
+      "path": "app/Lex.V3.Custody.Probe.pdb",
+      "sha256": "bb9701040420391c2404b44431389bdb4cb6beba5d762dd1a4e5bba5c029af20",
+      "bytes": 18964
+    },
+    {
+      "path": "app/Lex.V3.Custody.Probe.runtimeconfig.json",
+      "sha256": "c230a317a54dd960bcbeb5f347f52e18dc665a26f7efda2159fced9a5ac7e097",
+      "bytes": 342
+    },
+    {
+      "path": "app/Microsoft.Bcl.AsyncInterfaces.dll",
+      "sha256": "f1e1d6e1a2990071b450bdf6c9618408ac0e3f24a3c7a3bef1f50508ba732ca5",
+      "bytes": 20280
+    },
+    {
+      "path": "app/Microsoft.Extensions.Configuration.Abstractions.dll",
+      "sha256": "da2203cd85e701598210999e6714e4cc83d20b833b4afa923e3b84196d6f72aa",
+      "bytes": 28936
+    },
+    {
+      "path": "app/Microsoft.Extensions.DependencyInjection.Abstractions.dll",
+      "sha256": "5fd164a8313b3255fe51a74e5d30ff41c5d6bff8eb3aff5155d2f036d7c66df4",
+      "bytes": 66360
+    },
+    {
+      "path": "app/Microsoft.Extensions.Diagnostics.Abstractions.dll",
+      "sha256": "4d20c015406a7bf1a6478f1b6af567d972fa2ba4727de6134ff2c641f90ab36c",
+      "bytes": 31504
+    },
+    {
+      "path": "app/Microsoft.Extensions.FileProviders.Abstractions.dll",
+      "sha256": "39e7fcd41d10abeffcf2b224237bed64ae98f99d94e329bd19f447451eda3abc",
+      "bytes": 23864
+    },
+    {
+      "path": "app/Microsoft.Extensions.Hosting.Abstractions.dll",
+      "sha256": "fb21feb2c6aafe2607a8b1d500c2b86535cd1b48b67ef878139dc7818c70ce4d",
+      "bytes": 54584
+    },
+    {
+      "path": "app/Microsoft.Extensions.Logging.Abstractions.dll",
+      "sha256": "691c9db1f9603c09b16c3ea8cd4d7756ff3489b3209d16203584426dd62e7829",
+      "bytes": 67336
+    },
+    {
+      "path": "app/Microsoft.Extensions.Options.dll",
+      "sha256": "1cf29273a44b434ea207206cb217cad896c48cbf4bbe947383785536ee89418b",
+      "bytes": 65848
+    },
+    {
+      "path": "app/Microsoft.Extensions.Primitives.dll",
+      "sha256": "302d1f1cc4586a0f96016352595ed5ffeeeb18e99ea63bf54a8d5fe044c9642e",
+      "bytes": 45320
+    },
+    {
+      "path": "app/Microsoft.Identity.Client.Extensions.Msal.dll",
+      "sha256": "07109a2f30df782300077a567ade47cbd0a0502c75cd7c8a62192f7d64bb004e",
+      "bytes": 66592
+    },
+    {
+      "path": "app/Microsoft.Identity.Client.dll",
+      "sha256": "5795027e9ae95eececb310a4fed3c502bb368039d186ab0884f64b7792b84717",
+      "bytes": 1168416
+    },
+    {
+      "path": "app/Microsoft.IdentityModel.Abstractions.dll",
+      "sha256": "24e97b54b6b5c234a124a336757e3116617ac6c30b655cdae74517dc2ecb5746",
+      "bytes": 19504
+    },
+    {
+      "path": "app/System.ClientModel.dll",
+      "sha256": "cc5438113ef00af6731cc6d336efdaabd83378121b725794e5eb0a18733fbb90",
+      "bytes": 264040
+    },
+    {
+      "path": "app/System.IO.Hashing.dll",
+      "sha256": "ea0be3bcef840a9da018e801f64aeaed01c22cd3b74c0273b4e874b098ee61f6",
+      "bytes": 56624
+    },
+    {
+      "path": "app/System.Memory.Data.dll",
+      "sha256": "2c1035b0106dbb2de7913d151e06071ed617bb58bbb3d6cd46a2dd0f6a03617b",
+      "bytes": 33544
+    },
+    {
+      "path": "app/System.Security.Cryptography.ProtectedData.dll",
+      "sha256": "80566f0839ece5946e66bf9f00d723e59e371ba1341a18e00c7c7a7c49298e1d",
+      "bytes": 25232
+    }
+  ],
+  "sourceInputs": [
+    {
+      "path": "Directory.Build.props",
+      "sha256": "90aae7f4b271959219702d8439dd3179b75cb9fed944b799b03c4a3ead2bcc17",
+      "bytes": 373
+    },
+    {
+      "path": "global.json",
+      "sha256": "c48726ffb10a31e50395529e134bd0ab4d82d14febbda7863ab49d00a9fddcb4",
+      "bytes": 169
+    },
+    {
+      "path": "src/Lex.V3.Contracts/AssemblyInfo.cs",
+      "sha256": "f1f0c2f386598dc48111d4e024e108480e90d1ae0bf8e20d2143dc01efa5e072",
+      "bytes": 141
+    },
+    {
+      "path": "src/Lex.V3.Contracts/ContractCanonicalizer.cs",
+      "sha256": "6e29157663f5c89a8b40595182d186d1fa00ce4171a44fb819c3bca10d738ab4",
+      "bytes": 7131
+    },
+    {
+      "path": "src/Lex.V3.Contracts/ContractJson.cs",
+      "sha256": "001c93bcebedab334b6809ef6778c4c3225baa7b1d9eb561165270440a7da40e",
+      "bytes": 7205
+    },
+    {
+      "path": "src/Lex.V3.Contracts/ContractLine.cs",
+      "sha256": "1e9174d38bd36610eedf493b552f7a0dbdf315ff72d1d3aa3bdc03546d8bbacc",
+      "bytes": 127
+    },
+    {
+      "path": "src/Lex.V3.Contracts/ContractWire.cs",
+      "sha256": "f60d7faad376b00c35fb559f4d675158a1ec7eb8955adb1f708cc833f43c47ed",
+      "bytes": 1399
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Custody/CustodyPolicyEvidence.cs",
+      "sha256": "4e7ba5d970f351cbe1fc3fb50cbad34b94173881114f411e3a9badb15c7ef1c5",
+      "bytes": 5689
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Custody/CustodyStore.cs",
+      "sha256": "866df35233383ad175ab629f5cb3893b8577c45149b40134166aad3653d969eb",
+      "bytes": 16604
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Custody/CustodyVocabulary.cs",
+      "sha256": "ad0e4d981576bdae2920cf9eb833dcba51fa3fcffd6d59b16160fbba017ac627",
+      "bytes": 5420
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Custody/DurableBlobRef.cs",
+      "sha256": "540568c886d2cf61f0641d83a3fa50a274d5b3d18fa17ce7e21c669e06a04ece",
+      "bytes": 4288
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Custody/DurableBlobWriteReceiptDigest.cs",
+      "sha256": "6d7723d1e6233c3726b92f35490bc5c89939a1301d895211c80d1abfadb522a5",
+      "bytes": 1969
+    },
+    {
+      "path": "src/Lex.V3.Contracts/EuScopeDimensions.cs",
+      "sha256": "5eab24940fab0cc11e6e619fd96dfcf7dbcbd7986b68bbaa2bb89cc64518077a",
+      "bytes": 29937
+    },
+    {
+      "path": "src/Lex.V3.Contracts/EuSeedResolutionPlan.cs",
+      "sha256": "6a305620c55c917969cbfc9b831ab807bb2ad43f604f9f16de6c3a2983a28522",
+      "bytes": 8438
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Facts/DerivedInverseRelation.cs",
+      "sha256": "f26825eaccce4a466c4a69955c111e3c2ab10110a6ac077b051fda11f4dedf0f",
+      "bytes": 7687
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Facts/FactsCommon.cs",
+      "sha256": "799b02155a4266317b5cf086bac47e45fb1b7e5fc8ca9e19e2e5717d1330eb8a",
+      "bytes": 38537
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Facts/FactsSchemaExporter.cs",
+      "sha256": "9cee8067e72048ea318ed3a020cfd303949c0c042fab212a440ff5ea6be0dc33",
+      "bytes": 38245
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Facts/FactsVocabulary.cs",
+      "sha256": "7a71899c0dbc3e481574a6be334d66478b60b582d6905bc12fe7c157edbe74f2",
+      "bytes": 14399
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Facts/LocalInboundView.cs",
+      "sha256": "d558bb547b2c0b3823c653c77b6537ae673746c262f06064e9fbf010a62bdde8",
+      "bytes": 4047
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Facts/PublisherDate.cs",
+      "sha256": "b8c1edf89af687e3c7fb19766a812753b6d7fa6673adfc6d98c759c9e37e69d3",
+      "bytes": 10420
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Facts/PublisherDateFact.cs",
+      "sha256": "cead79301e865d34b27b106b839a1a4a388fb23a849e7c1e0b346905ff5bfad8",
+      "bytes": 6302
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Facts/PublisherRelation.cs",
+      "sha256": "4ee9c366d3340c58589ea8bf185c74d6bc64157eb5c977501ad96b5399e81d45",
+      "bytes": 2478
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Facts/RelationFact.cs",
+      "sha256": "8cd87161ad5118b49e33974842fd5a1f82c705c564d8962988add5443c8d7f09",
+      "bytes": 6231
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Facts/VocabularyDrift.cs",
+      "sha256": "0fb4ef299b6533b74f67ff33e7349a282cecedf95be6ec4da7fc118d87d5a97f",
+      "bytes": 6704
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Lex.V3.Contracts.csproj",
+      "sha256": "ebeb7d60a11ae5a40668e072fe239025cddf25942c4ba00a3ceb9ebd97747d1c",
+      "bytes": 239
+    },
+    {
+      "path": "src/Lex.V3.Contracts/LuScopeDimensions.cs",
+      "sha256": "3070c41b2f117cef0951716ffa2a1bade252a9c005d591d456d91399761eed8b",
+      "bytes": 5434
+    },
+    {
+      "path": "src/Lex.V3.Contracts/PreviewArtifactManifest.cs",
+      "sha256": "c8b392b57c228712f6f434aab0449924c8a565aed22de7f177c9c6ec3c326377",
+      "bytes": 10415
+    },
+    {
+      "path": "src/Lex.V3.Contracts/PreviewCatalog.cs",
+      "sha256": "25228aaf82b7320f6adf56a50298eb064786a9bd708295b5191ed14a7b4777b5",
+      "bytes": 5048
+    },
+    {
+      "path": "src/Lex.V3.Contracts/PreviewDocumentCanonicalizer.cs",
+      "sha256": "6abed4b814a572015e5e9380b8fa6782c92faa28417735771e957ee071cfaf16",
+      "bytes": 865
+    },
+    {
+      "path": "src/Lex.V3.Contracts/PreviewEnvelope.cs",
+      "sha256": "cd676abe9e7e985a40ff7f52020cc0c86fa2ebdd2cda2cc2f2b358f7184ba4ce",
+      "bytes": 12211
+    },
+    {
+      "path": "src/Lex.V3.Contracts/PreviewPayload.cs",
+      "sha256": "7dcd6c7feb4248d9fb1af8ba1f7995b1e9abcdcc360ea04edbb72cef022cc053",
+      "bytes": 16868
+    },
+    {
+      "path": "src/Lex.V3.Contracts/PreviewRefusals.cs",
+      "sha256": "a1d8036d399777b965f42e3e932c5ef28b6a6635053a8f6ace08c542a5bde0eb",
+      "bytes": 8831
+    },
+    {
+      "path": "src/Lex.V3.Contracts/PreviewSchemaExporter.cs",
+      "sha256": "3ca3f4aa333c6151b18ab76d9f5ecfac3192c07b8ae0389c30167aa6a9f54a54",
+      "bytes": 34711
+    },
+    {
+      "path": "src/Lex.V3.Contracts/PublisherContext.cs",
+      "sha256": "ca63d18433c4c2c618121754033f8717203dff707409d3343f07b7201c33d541",
+      "bytes": 10222
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Absence/AbsenceCut.cs",
+      "sha256": "ca93c902b2bb48b8bc8f24db7f694eebaeeb4b8aff29b1b2091c5982716d2aa2",
+      "bytes": 26851
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Absence/AbsenceEnumerationProof.cs",
+      "sha256": "ec54c7d733f9c2c8d92f42bde1e6dc7f6ceba8628b6041c04c079bb9ea135151",
+      "bytes": 11345
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Absence/AbsenceHistoryLedger.cs",
+      "sha256": "7ca4c9972ed7b57f23faead9af0c61efeeba15d749f1e50573a2698183677665",
+      "bytes": 25043
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Absence/AbsenceKey.cs",
+      "sha256": "f7dfe4b1e6f4f17c8ef318b77327d097793619e8bdcb6fb003a9d11d0f04b98e",
+      "bytes": 16636
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Absence/AbsenceReplacement.cs",
+      "sha256": "44bb365f655a83caf45cc423dbbe9974f1be075b7e520ed0a70b82aa0fe39ef9",
+      "bytes": 14778
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Absence/AbsenceVocabulary.cs",
+      "sha256": "381ced2e6660ea598a07dbf985b92cbd4da6fbcf1808f888d91f2ea2ff82af2e",
+      "bytes": 10062
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Core/ContentDerivedIdentity.cs",
+      "sha256": "2958853b196f33a0adc10ba0db6449809c2c7c00af1ae6bd4c78861ac80a0494",
+      "bytes": 3778
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Core/CutReleaseGate.cs",
+      "sha256": "b7053cc609a12aa22132730b82d270b0c41a86cb4522e51fc596d1347c62830c",
+      "bytes": 22005
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Core/GlobalBlockerRegistry.cs",
+      "sha256": "df1103d45e868fd64ab96dac2af48c4ac29a19472ce501def70cb918eeaf8e52",
+      "bytes": 12775
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Core/MachineQueryPlan.cs",
+      "sha256": "42c1b9cd46ac57d9cbd267900c113bacfebb0dc823e3d5c873c8f0f743c5d242",
+      "bytes": 67459
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Core/MachineQueryRendererSource.cs",
+      "sha256": "740d9c518d58ac8b0551ff3c1b028e0c5bb6998a6710e6800855cefd764346eb",
+      "bytes": 2597
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Core/RepeatedEnumerationDeliveryProof.cs",
+      "sha256": "7e42f0f6397422289f72a4347da4c5d40378f316242baab51100d2602be36f21",
+      "bytes": 55245
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Core/RepeatedEnumerationDeliveryReceipt.cs",
+      "sha256": "9555b31eae2ec848524236603349e9a199b2778f4e0438f353dd3d36f2c0198c",
+      "bytes": 20016
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Core/RobotsExclusionPolicy.cs",
+      "sha256": "47baf95ec8ccabf19ad11355ca23d4445bc5c611fa62392185777dd02f200c9d",
+      "bytes": 16880
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Core/SourceCoreSchemaExporter.cs",
+      "sha256": "24c5785a7d51602251e29e16158fab47777af8db45e94f979c9813aa546c4185",
+      "bytes": 15459
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Core/SourceObjectRef.cs",
+      "sha256": "6c93473cc19d4c133204492f9eda1d9e1ca8e999da0acdef76f01f8a06f51b66",
+      "bytes": 3643
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Core/SourceObjectRefReaderOnlyInvariants.cs",
+      "sha256": "50943e80d921aa6e5f928caa1835797b807b40a3e5f2af26f14e0c68108c6834",
+      "bytes": 722
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Core/SourceWirePrimitives.cs",
+      "sha256": "e43055d38de259edb90200f4074dd91f4cf51c5562e0c78e3a4187334519427a",
+      "bytes": 8708
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Core/VerifiedRepeatedEnumerationRows.cs",
+      "sha256": "447feb6c7ece3b6700420b519b2a4df4ab22d58c1e2d0fd9dd8a6faf0937d9ee",
+      "bytes": 20446
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Corpus/CorpusRecord.cs",
+      "sha256": "d4cb2e270dc3acc57b65704fe3fb49671edfd4b63e2fec02a71519d53a0be854",
+      "bytes": 57751
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Europe/EuAcquisitionProfile.cs",
+      "sha256": "be0939d643883f27e703ce5e4a140f4b21cf33e4a0f7086b7798aa683b639a18",
+      "bytes": 8882
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Europe/EuAmendmentRelationVocabulary.cs",
+      "sha256": "a1fd10a195817103b155335e5e92ded749e77a042fd2cb771cf84c733ab0a4f4",
+      "bytes": 17450
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Europe/EuAppendixASeedMap.cs",
+      "sha256": "9e36e05e32828818cf68bd00cf42180a98bbd418e29cffcc0d9daabc171c69e9",
+      "bytes": 22693
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Europe/EuCaseLawLink.cs",
+      "sha256": "9625e5112e32ae1002ddac50b6b1b0159bda7f3c8d8bdf9f284f4612b19bbf82",
+      "bytes": 27096
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Europe/EuCellarObjectDecode.cs",
+      "sha256": "dcab6b6dd6787c76637314bd0783633f1bc11f6ceb855ebe6902427fe251c1f0",
+      "bytes": 48615
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Europe/EuCellarObjectSnapshot.cs",
+      "sha256": "ee034d3d8d767c5ca76a008e30a1e3ce9192240bab35b12ca4dc6812bb6fc017",
+      "bytes": 29267
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Europe/EuConsolidationDiscovery.cs",
+      "sha256": "99fbb456e2eea6aafcf9604f6f548f3c8927359e9fb0651000ae8c203ed503af",
+      "bytes": 46548
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Europe/EuConstituentClosure.cs",
+      "sha256": "629d47cae6b5d035abd545dad21097941c43974857012415b1985ca873c83ca2",
+      "bytes": 14439
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Europe/EuDateAxiom.cs",
+      "sha256": "e405b022cfff826a13022e8244bcbd1952777aa834bf29c49bed07a6bd34a40a",
+      "bytes": 28034
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Europe/EuDerivedAmendmentInverse.cs",
+      "sha256": "f24da74b84a9ddba37c98d080de0c924be6fc405e38b6542a2ce0c00a1830e58",
+      "bytes": 6146
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Europe/EuDocumentFetchAddress.cs",
+      "sha256": "65f1d16697e26a5242a5f0b886ec37c8fecc0b64ad733ef47cab729f6587fa3e",
+      "bytes": 19222
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Europe/EuDocumentFetchOutcome.cs",
+      "sha256": "bc1790de2629e1aaf669ee8db57d339e39bd4bb930b005fa9ec77c85f418ce6d",
+      "bytes": 3424
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Europe/EuDocumentFetchPlan.cs",
+      "sha256": "8fe4c975c05584f4e43c9060dda633ff3cce1dd8e0318e999adc0816692ee07f",
+      "bytes": 9611
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Europe/EuFactsEvidenceCarrier.cs",
+      "sha256": "ec945e6871c56c564da5bdb18b48e5302e6f75462ea9245791e020077691ec99",
+      "bytes": 1773
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Europe/EuFeedRootIntersection.cs",
+      "sha256": "2f6c1f9b0da74f2a56552f504947e81dbe9f7f20f245c0be312587c8d3b8524a",
+      "bytes": 66367
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Europe/EuFirstCutWatermarkBootstrap.cs",
+      "sha256": "ee3fee47e8ce0873acb263c3b373fae66fbe7bf6c11abc36fd536072631cf291",
+      "bytes": 4688
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Europe/EuFormexItemRole.cs",
+      "sha256": "c4cf9d460dac32caefd87333ae87ce230ee3fcbe61c415700b1d9b9b910f9b43",
+      "bytes": 15927
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Europe/EuFormexPackage.cs",
+      "sha256": "cd7f838002e72170bdef0f102a2f8984b120a9abfad10152b6fbc4b3d0e490f0",
+      "bytes": 8190
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Europe/EuLegalNoticeEvidence.cs",
+      "sha256": "736aad099b8dedfe9a8c9706cabadcece5704cb6a9f25252a3adf5a9b43deb60",
+      "bytes": 30946
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Europe/EuLegislationSummary.cs",
+      "sha256": "e97e7c7b03fa7946928279908498c37beb3b9910b63228526a34e85d90358f8a",
+      "bytes": 21591
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Europe/EuLocatedAmendmentAxiom.cs",
+      "sha256": "09cc3494c0b672eeec1e627fa1b561aa5e7a306fb35d8b4483a0ca0933c96e45",
+      "bytes": 9048
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Europe/EuManifestationListing.cs",
+      "sha256": "79cbb744d2452beba5f26356d69780e66fb41d4045728510c1874a64aa40bf3f",
+      "bytes": 39707
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Europe/EuManifestationScope.cs",
+      "sha256": "dfbaf979bb27e65e0fca72b176fa2c84b8d3febcdad7ae1e0b7365e85329543d",
+      "bytes": 38500
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Europe/EuObjectFactsDiscoveryPlan.cs",
+      "sha256": "854b6c89145a7d93997d697ee29d3a21fa3d582fa0dffc249469c2e43dfe7536",
+      "bytes": 58918
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Europe/EuPeriodAndExclusion.cs",
+      "sha256": "de841fdff39663d4634f01edc74e1407c598815d89cc4ce4ae6cbc00a5689f9d",
+      "bytes": 19572
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Europe/EuPrimaryEnumerationRootBinding.cs",
+      "sha256": "2a0496aed9e23884790626bbc70bf1de4a27eb63c793c704e268983b697332f4",
+      "bytes": 8822
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Europe/EuPrimaryEnumerationWitnessReconciliation.cs",
+      "sha256": "bb8977fb572e8345d8a754cf37df7602ca002e89e67d6e5b5ac2cbbfd84b2172",
+      "bytes": 6514
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Europe/EuRelationEdgeBinding.cs",
+      "sha256": "f1bc648447be8152472464751e59ecc4733b5fbc28b3b778845cf6052161f8ef",
+      "bytes": 7203
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Europe/EuRepealEdge.cs",
+      "sha256": "68bfaf2b0e659469aac06b70791706d447d2fffe232105ccb10ff4d2d4f2e36f",
+      "bytes": 5734
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Europe/EuRightsMatrix.cs",
+      "sha256": "39d51ef58a77b07dfbef1a704a41483f530ef96ef4060f11e9e45fb6ef75e188",
+      "bytes": 7101
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Europe/EuScopeManifestBindingProof.cs",
+      "sha256": "3a4079baf1b6a4e0cec1eb91db5532735499de8156b271458e99cd8e3286356d",
+      "bytes": 7203
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Europe/EuScopeProfile.cs",
+      "sha256": "0a4c8b4cbb268d2fb910d35e7c2933d4a9e0f88bf0e56b040c5bde3e748138d3",
+      "bytes": 47933
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Europe/EuScopeSnapshotReduction.cs",
+      "sha256": "4bda0973b9bc61283f66891c14d22286d9d9512a6bc6a5f03b9afb4b430499b8",
+      "bytes": 7126
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Europe/EuStructuralLocation.cs",
+      "sha256": "9d6266d85d730e1e20de25033b9bb73a138311669fa6bbc23cff3ed8889eb6dd",
+      "bytes": 11861
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Europe/EuValidityDate.cs",
+      "sha256": "9148b67d2b14fcfadc885f4329752105149af038ed30bffc63d6c9ca4c57c7e8",
+      "bytes": 7672
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Europe/EuWatermarkCursor.cs",
+      "sha256": "2db5982551010e26915b01a6a8a3a93d3841488231aa7d5a8c4f9feb39e230d4",
+      "bytes": 8928
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Europe/EuWatermarkWitnessPlan.cs",
+      "sha256": "8fada50ff8cc09f566bae3508ae981c1ea6cec2c70df9639d63a120d16207066",
+      "bytes": 63312
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Europe/EuWemiIdentity.cs",
+      "sha256": "cfa6506d304b364b60744ad5067669cd74453c9243b01d921f2ec25577f65edc",
+      "bytes": 12932
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Http/DocumentFetchParameterContract.cs",
+      "sha256": "c5797f551cc0f62f3c0b2171ecade5c5c4a0579f57ca324af0187727163197fc",
+      "bytes": 5968
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Http/HttpAcquisitionReasonRegistry.cs",
+      "sha256": "ebd737316f85fea2f7ad8708818490f434e8e4a9304532cb0296cb6108ea4cb2",
+      "bytes": 8219
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Http/HttpObservationVocabulary.cs",
+      "sha256": "2358875bc0da5942ebc578dc0c0520b90a12e971631a59158d37f9781e3fd5ec",
+      "bytes": 2327
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Http/LuxembourgDocumentFetchAddress.cs",
+      "sha256": "8ee585044ad6f3d5942dfd27a0c8929a480134f68b8a51cc1d64a4b85b9044f0",
+      "bytes": 15662
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Http/LuxembourgDocumentGetOutcome.cs",
+      "sha256": "26a0325b6bd9bc43e64c470a5d4e7740c1608d600697ff18afef8e5c7e24b7f7",
+      "bytes": 7546
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Http/LuxembourgManifestationSelection.cs",
+      "sha256": "82fb3c35bebb1cb282cad3bb950d2734f0ff595e8f07ed5ec0fcea47886b7d50",
+      "bytes": 13339
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Http/OfficialMachineQuerySourceProfile.cs",
+      "sha256": "f9584e006d6f19a3e17e1c6502f5d331ea149eeaa9171797913921fdb798e21b",
+      "bytes": 29460
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Http/RepresentationChain.cs",
+      "sha256": "0cc04b5ed0d5c3e48d2f4ee3aed317977b48b5a15884ab947f2c761f46e75366",
+      "bytes": 20120
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Http/RoutedHttpEvidence.cs",
+      "sha256": "1a21118efcff901d802ddb8effc614970c12271e5e7aadfcdd91c1b1ceb5136a",
+      "bytes": 25225
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Http/RoutedHttpEvidenceDocument.cs",
+      "sha256": "d7aa7906191acdf38b9a00bba8b13a0a0af6079be21c6072bae13a44f3d189b4",
+      "bytes": 84589
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Luxembourg/LuxembourgAssertionVocabulary.cs",
+      "sha256": "607129d63e4c270364e88e2763386f120eaf9cc6a48db98ef338bedc1f2ef7dd",
+      "bytes": 23566
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Luxembourg/LuxembourgBodyJoin.cs",
+      "sha256": "eca38f1f5833feb33e5449ef8c2cbaf801fbc952514a46a2c63f56fd33410f92",
+      "bytes": 13644
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Luxembourg/LuxembourgDeliveryEvidence.cs",
+      "sha256": "f62a7258f7bc08d46157d02164fda0f16be169bd2a1a4e10d34b254a51ea8e44",
+      "bytes": 28086
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Luxembourg/LuxembourgDocumentFetchPlan.cs",
+      "sha256": "08b5f0bfdb2b030530bd5827955d5c737747e55ab0fba4e7838efef5667af5b1",
+      "bytes": 8311
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Luxembourg/LuxembourgLiteralCanonicalizer.cs",
+      "sha256": "9a5cfbd281d73dd195191d49bd638ad677ac831a69179b2c1715cddfd46342c6",
+      "bytes": 18439
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Luxembourg/LuxembourgPartitionCover.cs",
+      "sha256": "35aff3bc51d21d9742d14917df933aa26fe5d9bdc2a36bba31610772effefc2f",
+      "bytes": 12223
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Luxembourg/LuxembourgProvenResourceObservations.cs",
+      "sha256": "cefee58094e21a944dd45f8c6ebe7186d686c361d15e324c690b2b5757c33b61",
+      "bytes": 5289
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Luxembourg/LuxembourgQueryPlan.cs",
+      "sha256": "3080553ac16dda797aea94580de392a21e883d550016d881c5fbd1d1cb1d6418",
+      "bytes": 59996
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Luxembourg/LuxembourgQueryPlanSchemaExporter.cs",
+      "sha256": "01bea1d56ca0125b8603ce968deec6a5cd809f55b997fe1b5d0076683f32f795",
+      "bytes": 4149
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Luxembourg/LuxembourgRelationVocabulary.cs",
+      "sha256": "38f2196a5fe432abc31abd88403b85fa4e6b8016a82acf56a20ac063452f0f77",
+      "bytes": 17329
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Luxembourg/LuxembourgRightsChannels.cs",
+      "sha256": "dc5fa2511a7bbd81b389d2f6a4c546c7c2563277bf1d9d27513f0c5d3fcd1aa7",
+      "bytes": 15898
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Luxembourg/LuxembourgScopeResolution.cs",
+      "sha256": "eb12a24a497f34cf197d30d90f6bd2f178a423d749e57f562af3984bbea68483",
+      "bytes": 40328
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Luxembourg/LuxembourgScopeResolver.cs",
+      "sha256": "33ef96518be6368bbc27a6033e8325afc419e27027a379572b1fa4ca917794ac",
+      "bytes": 86119
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Luxembourg/LuxembourgSourceProfile.cs",
+      "sha256": "d59fa6c39c9e93d2c6ca0062d7f00a89a24f72162210e5ca6b35e52de8be22a7",
+      "bytes": 28217
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Luxembourg/LuxembourgSourceProfileTopology.cs",
+      "sha256": "5b61a586d14971b8f2216a3f979c08f321c684d4dafd95dbf061523d7fbfca4f",
+      "bytes": 4788
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Luxembourg/LuxembourgWemiTopology.cs",
+      "sha256": "1797e0b6c9113fae18fa254550267d198f909c4cb79af4620df69b6369c73471",
+      "bytes": 28885
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Quarantine/PriorPublicCoordinate.cs",
+      "sha256": "d5c2b0e6e1271c5c92b67a6b932ca753c4c6e99061abeddc452852946c8d6d70",
+      "bytes": 8319
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Quarantine/QuarantineInventoryCanonicalizer.cs",
+      "sha256": "9d17b67de273e3e550e0baf6336a89d9c80af94518c355672dd9435f8ea48ff7",
+      "bytes": 14179
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Quarantine/QuarantinePriorCoordinateReproduction.cs",
+      "sha256": "41c45d6324e3ea68d72b205f86f69647c1841fa66fe81a3a828f923f4734b815",
+      "bytes": 5651
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Quarantine/QuarantinedPriorCoordinateInventory.cs",
+      "sha256": "a709ca1ba7de710d6bee71e8e4d1bdea64733e861d6ce9d266ef85dbc92da61d",
+      "bytes": 17300
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Scope/ScopeManifest.cs",
+      "sha256": "3e7761b00136456a175bfef007344b9aceb8f47243cf875572d639438e209abe",
+      "bytes": 99585
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Scope/ScopeReducer.cs",
+      "sha256": "f1076d5baf32c5700c0c8b6a2399af67935c479bdba5ed035a8922b684edefcb",
+      "bytes": 33626
+    },
+    {
+      "path": "src/Lex.V3.Contracts/Source/Scope/ScopeSchemaExporter.cs",
+      "sha256": "f4dc5d81704ed2d0c91b3a858d519d878040140436d3237210016e905b9f4ae6",
+      "bytes": 12999
+    },
+    {
+      "path": "src/Lex.V3.Contracts/SyntheticResolveEnvelope.cs",
+      "sha256": "4d81a5ee3a2b793e25061c6d6bfa5904a32708a8656736c5e21f0035e9323fa1",
+      "bytes": 14378
+    },
+    {
+      "path": "src/Lex.V3.Contracts/SyntheticSliceArtifact.cs",
+      "sha256": "bc3a1644ca4dd3c41440be0bf8a9e208d0597c46650504fccfb7cd6182d6a505",
+      "bytes": 4156
+    },
+    {
+      "path": "src/Lex.V3.Contracts/SyntheticSliceContract.cs",
+      "sha256": "0b38d6e75b41bb0129156675703d0954d7f27c44425adcc1ce72851749e37139",
+      "bytes": 5440
+    },
+    {
+      "path": "src/Lex.V3.Contracts/SyntheticSliceControl.cs",
+      "sha256": "6682bdbcaa255c1a35ec5ee6a5f62bbae0fece6b6de069716ce04f7a1b6af75a",
+      "bytes": 16222
+    },
+    {
+      "path": "src/Lex.V3.Contracts/SyntheticSliceSchemaExporter.cs",
+      "sha256": "0251a85b39ddc02fbdec2ab9fcc139ed15c225984206a6a39b7e2257d2d42a3b",
+      "bytes": 24648
+    },
+    {
+      "path": "src/Lex.V3.Contracts/V3ContractVocabulary.cs",
+      "sha256": "ff43e6bb41b41e5cf55d6737fa8243e4b3f3de6195d7ee6a20c2b82f08c8ef2e",
+      "bytes": 5997
+    },
+    {
+      "path": "src/Lex.V3.Contracts/packages.lock.json",
+      "sha256": "5807264a99d1717d9b7d8333eaec0f71766609882d23559cab3be46aaa47f05c",
+      "bytes": 90
+    },
+    {
+      "path": "src/Lex.V3.Custody.Azure/AssemblyInfo.cs",
+      "sha256": "7a052124c9be66c48e062b0f36ffc66004a042543f5a237ce5a0f6cdde889796",
+      "bytes": 87
+    },
+    {
+      "path": "src/Lex.V3.Custody.Azure/AzureArmCustodyPolicyReader.cs",
+      "sha256": "acf787d70710dd58d144924200082dc4c0522cbebe1ce3f3ae2cff5fbdf632dc",
+      "bytes": 21507
+    },
+    {
+      "path": "src/Lex.V3.Custody.Azure/AzureBlobCustodyConfigurationReceiptJournal.cs",
+      "sha256": "daffdc52496f64d12b327b4e0d1a1c00524a2d1fc2c7f34693148dc80954eee8",
+      "bytes": 14855
+    },
+    {
+      "path": "src/Lex.V3.Custody.Azure/AzureBlobCustodyOptions.cs",
+      "sha256": "eb7756b88022e4d3e391bc486eb1ae2892c1bd21f51eb6d035f925143a2748e0",
+      "bytes": 5936
+    },
+    {
+      "path": "src/Lex.V3.Custody.Azure/AzureBlobCustodyStore.cs",
+      "sha256": "193cfa2497a1f52e3de83b57e49e1966f5592e768cd9359802c85f272a61a482",
+      "bytes": 30347
+    },
+    {
+      "path": "src/Lex.V3.Custody.Azure/AzureCustodyConfigurationReceipt.cs",
+      "sha256": "18a9506d4bbdbc9c68c59c866f00081c4ee0a8bc2f83093228fb1d2bd92e8cd7",
+      "bytes": 6944
+    },
+    {
+      "path": "src/Lex.V3.Custody.Azure/Lex.V3.Custody.Azure.csproj",
+      "sha256": "26a2d68b3f933d9ea449b356802359481d8aac6bc19e49980901390f1e2c472c",
+      "bytes": 670
+    },
+    {
+      "path": "src/Lex.V3.Custody.Azure/packages.lock.json",
+      "sha256": "bbf01648b3742e29afe52957dff2ffeb3b5631d3b89bebf297a241b1ee31ed33",
+      "bytes": 7244
+    },
+    {
+      "path": "src/Lex.V3.Custody.Probe/FactCustodyReplay.cs",
+      "sha256": "63748116b47451e7b1d6d9100ae2ccdfd6f3702308abd8689c4c743190e08151",
+      "bytes": 10615
+    },
+    {
+      "path": "src/Lex.V3.Custody.Probe/Lex.V3.Custody.Probe.csproj",
+      "sha256": "37550bc33c78f45cd032818e5b36a9c73b12847b81618fce97d1c96beeb82752",
+      "bytes": 621
+    },
+    {
+      "path": "src/Lex.V3.Custody.Probe/Program.cs",
+      "sha256": "7b44de5711fa545f0db922db734cfd811c6427fad910dfe8bac4338af9ee206d",
+      "bytes": 16018
+    },
+    {
+      "path": "src/Lex.V3.Custody.Probe/packages.lock.json",
+      "sha256": "7f2d33d24bc68528db84aaa557f4a47230cd3e8533b3c88e6f96dc6478d648e1",
+      "bytes": 7417
+    }
+  ],
+  "linuxExecutionEstablished": false,
+  "productionAcceptanceEstablished": false
+}
