@@ -1,0 +1,179 @@
+{
+  "schema": "lex-lu-probe-archive/1",
+  "archive": "2026-09-06-document-route-probe.zip",
+  "sha256": "d1bdab8b1f2de9c54c0b8a6d3f065b273dc0cb69cc0b7782b20cc097e80e47bc",
+  "byteLength": 963194,
+  "members": [
+    {
+      "path": "two-expressions/evidence-index.json",
+      "sha256": "7546721160fc266fe44fc2cd024c6c48d09056bb6ea6ed2ba37aa1d71486be76",
+      "byteLength": 4846
+    },
+    {
+      "path": "two-expressions/nightly-floor-90d/0010bf4a1ab5b75e0596da21e02f3c75269e79b2c89b2017a4886a5e9d90aed1",
+      "sha256": "0010bf4a1ab5b75e0596da21e02f3c75269e79b2c89b2017a4886a5e9d90aed1",
+      "byteLength": 1199
+    },
+    {
+      "path": "two-expressions/nightly-floor-90d/0b384befa832b0a46ce9d1abc0be2732344b4cb973874af170122830491fc9ae",
+      "sha256": "0b384befa832b0a46ce9d1abc0be2732344b4cb973874af170122830491fc9ae",
+      "byteLength": 1214
+    },
+    {
+      "path": "two-expressions/nightly-floor-90d/0b8b50652ea31f1cad7dcae09b7eda33b19a038dd88af9f67bfcc0bb992c073f",
+      "sha256": "0b8b50652ea31f1cad7dcae09b7eda33b19a038dd88af9f67bfcc0bb992c073f",
+      "byteLength": 5413721
+    },
+    {
+      "path": "two-expressions/nightly-floor-90d/24d659227200ac669b384ff16288289d2cc687ccd8cc54643d4b131bebe6f9aa",
+      "sha256": "24d659227200ac669b384ff16288289d2cc687ccd8cc54643d4b131bebe6f9aa",
+      "byteLength": 625
+    },
+    {
+      "path": "two-expressions/nightly-floor-90d/347075e703b954cc8d6fa2bf75d59b68f89983f5345157b52cefd158b7d5eb31",
+      "sha256": "347075e703b954cc8d6fa2bf75d59b68f89983f5345157b52cefd158b7d5eb31",
+      "byteLength": 253
+    },
+    {
+      "path": "two-expressions/nightly-floor-90d/465640adc6866ad74972cddd9d388fbd49badf40de807055b1df7584367747c1",
+      "sha256": "465640adc6866ad74972cddd9d388fbd49badf40de807055b1df7584367747c1",
+      "byteLength": 660
+    },
+    {
+      "path": "two-expressions/nightly-floor-90d/4f2c75557aae074432d725656f4ab4d26b5c7918b1843ba3146f3537a793029d",
+      "sha256": "4f2c75557aae074432d725656f4ab4d26b5c7918b1843ba3146f3537a793029d",
+      "byteLength": 773
+    },
+    {
+      "path": "two-expressions/nightly-floor-90d/55deda3aa58a91576199715bd8ee5a14a1ca2154120e720750737e89255df7d3",
+      "sha256": "55deda3aa58a91576199715bd8ee5a14a1ca2154120e720750737e89255df7d3",
+      "byteLength": 323
+    },
+    {
+      "path": "two-expressions/nightly-floor-90d/5ba954ed7f35eec40873bb799e0046ed907c7318c1c165906a8dbdbbdba555c5",
+      "sha256": "5ba954ed7f35eec40873bb799e0046ed907c7318c1c165906a8dbdbbdba555c5",
+      "byteLength": 666
+    },
+    {
+      "path": "two-expressions/nightly-floor-90d/5e4d530ba95038bfd1a256e1b29630edbd71d1394eae30d9bb11f458ff0e3514",
+      "sha256": "5e4d530ba95038bfd1a256e1b29630edbd71d1394eae30d9bb11f458ff0e3514",
+      "byteLength": 393
+    },
+    {
+      "path": "two-expressions/nightly-floor-90d/6145afeb3a9f4351abc5fef406f13cae1cc67abc8eb406e47ac7a116c6c96c70",
+      "sha256": "6145afeb3a9f4351abc5fef406f13cae1cc67abc8eb406e47ac7a116c6c96c70",
+      "byteLength": 1049
+    },
+    {
+      "path": "two-expressions/nightly-floor-90d/674d5b2edcfa63095dd33c7b7f1064b9fd653960e5f0dad8f75c63f07ec15bf4",
+      "sha256": "674d5b2edcfa63095dd33c7b7f1064b9fd653960e5f0dad8f75c63f07ec15bf4",
+      "byteLength": 4435
+    },
+    {
+      "path": "two-expressions/nightly-floor-90d/6b65c577b312201aeb74fcebe3cfa763b0d0b0153240f766d4810337d895dfa8",
+      "sha256": "6b65c577b312201aeb74fcebe3cfa763b0d0b0153240f766d4810337d895dfa8",
+      "byteLength": 182
+    },
+    {
+      "path": "two-expressions/nightly-floor-90d/7546721160fc266fe44fc2cd024c6c48d09056bb6ea6ed2ba37aa1d71486be76",
+      "sha256": "7546721160fc266fe44fc2cd024c6c48d09056bb6ea6ed2ba37aa1d71486be76",
+      "byteLength": 4846
+    },
+    {
+      "path": "two-expressions/nightly-floor-90d/7ae3302243f487efa99e6950b9056bb766be7ad3904c835fbb82f27295df575e",
+      "sha256": "7ae3302243f487efa99e6950b9056bb766be7ad3904c835fbb82f27295df575e",
+      "byteLength": 542
+    },
+    {
+      "path": "two-expressions/nightly-floor-90d/803ed00fc952d30e66984c21e045dc79dd39c2d555f81df159b7045e32dbbc89",
+      "sha256": "803ed00fc952d30e66984c21e045dc79dd39c2d555f81df159b7045e32dbbc89",
+      "byteLength": 1112
+    },
+    {
+      "path": "two-expressions/nightly-floor-90d/82a0e86324c3855bc0c2f256cb48a50cee77cb1c548877b296e1dd04b2bc4439",
+      "sha256": "82a0e86324c3855bc0c2f256cb48a50cee77cb1c548877b296e1dd04b2bc4439",
+      "byteLength": 276
+    },
+    {
+      "path": "two-expressions/nightly-floor-90d/8ab0dfaa59ccf60964c89fb8013b52b104107228a5543778ab57d10d78e6a7ae",
+      "sha256": "8ab0dfaa59ccf60964c89fb8013b52b104107228a5543778ab57d10d78e6a7ae",
+      "byteLength": 1844
+    },
+    {
+      "path": "two-expressions/nightly-floor-90d/8d5d97a3188789b3e113fa146483ca837462d226b936c1d728583a618fe6616d",
+      "sha256": "8d5d97a3188789b3e113fa146483ca837462d226b936c1d728583a618fe6616d",
+      "byteLength": 2575
+    },
+    {
+      "path": "two-expressions/nightly-floor-90d/97a865f145037420c7959d6bd24fb20e32113e39d6c3def34fbf24880eb900f6",
+      "sha256": "97a865f145037420c7959d6bd24fb20e32113e39d6c3def34fbf24880eb900f6",
+      "byteLength": 393
+    },
+    {
+      "path": "two-expressions/nightly-floor-90d/9cbb51ebd91d009b1c88153d02b2b91c1e1a81f0b33495a4e17fadd1720a079b",
+      "sha256": "9cbb51ebd91d009b1c88153d02b2b91c1e1a81f0b33495a4e17fadd1720a079b",
+      "byteLength": 1049
+    },
+    {
+      "path": "two-expressions/nightly-floor-90d/a448c0f9e61300ce917f07a930eaa6c5d77150452123bc4145ddda910844e11f",
+      "sha256": "a448c0f9e61300ce917f07a930eaa6c5d77150452123bc4145ddda910844e11f",
+      "byteLength": 1108
+    },
+    {
+      "path": "two-expressions/nightly-floor-90d/a4fb5e8f0f9181a6fa2d70afde473066c6230564e5ee9d8f6efd4f0451fe1125",
+      "sha256": "a4fb5e8f0f9181a6fa2d70afde473066c6230564e5ee9d8f6efd4f0451fe1125",
+      "byteLength": 31
+    },
+    {
+      "path": "two-expressions/nightly-floor-90d/a695f7640849acc1db1775fdbf455977acab85ce86ba403d8328eb7006b22b2d",
+      "sha256": "a695f7640849acc1db1775fdbf455977acab85ce86ba403d8328eb7006b22b2d",
+      "byteLength": 625
+    },
+    {
+      "path": "two-expressions/nightly-floor-90d/adbd584d17822c7b84f4f1e8140d6f1a987e8e33ac7c48d4463a7fdfcfc2b3b9",
+      "sha256": "adbd584d17822c7b84f4f1e8140d6f1a987e8e33ac7c48d4463a7fdfcfc2b3b9",
+      "byteLength": 2575
+    },
+    {
+      "path": "two-expressions/nightly-floor-90d/b4a6898a187896e69aeddc1234672e82b8319d90d4b9fe6eb84f8e91ef35815c",
+      "sha256": "b4a6898a187896e69aeddc1234672e82b8319d90d4b9fe6eb84f8e91ef35815c",
+      "byteLength": 1597
+    },
+    {
+      "path": "two-expressions/nightly-floor-90d/b5c92ecc733e4bfc20b92c14526c61d998edab3c5dad9ceab3450921480275ae",
+      "sha256": "b5c92ecc733e4bfc20b92c14526c61d998edab3c5dad9ceab3450921480275ae",
+      "byteLength": 773
+    },
+    {
+      "path": "two-expressions/nightly-floor-90d/c2a66a988209a26657daa4f3f531ffddd7256dfc6e0a9ee3de1204192fbbf4d5",
+      "sha256": "c2a66a988209a26657daa4f3f531ffddd7256dfc6e0a9ee3de1204192fbbf4d5",
+      "byteLength": 5528052
+    },
+    {
+      "path": "two-expressions/nightly-floor-90d/dcc47593b80c5e0b4ad4e1a2504f6274b653a12f317c3690d386d84bea15545b",
+      "sha256": "dcc47593b80c5e0b4ad4e1a2504f6274b653a12f317c3690d386d84bea15545b",
+      "byteLength": 323
+    },
+    {
+      "path": "two-expressions/nightly-floor-90d/e0d99afa0dbddf1f506e26eb6a8c20e50b39245a055ba41754b6d2ef0b87c298",
+      "sha256": "e0d99afa0dbddf1f506e26eb6a8c20e50b39245a055ba41754b6d2ef0b87c298",
+      "byteLength": 1844
+    },
+    {
+      "path": "two-expressions/nightly-floor-90d/e1e2899fdc4ea082cbe41cd16199af8a525eccd118d1a5183e715cb21a751256",
+      "sha256": "e1e2899fdc4ea082cbe41cd16199af8a525eccd118d1a5183e715cb21a751256",
+      "byteLength": 1597
+    },
+    {
+      "path": "two-expressions/nightly-floor-90d/e5f94ea34b6cf246c57c67b9c0f7bc53bb3c3392a080cc237d12913a569beba5",
+      "sha256": "e5f94ea34b6cf246c57c67b9c0f7bc53bb3c3392a080cc237d12913a569beba5",
+      "byteLength": 665
+    },
+    {
+      "path": "two-expressions/nightly-floor-90d/e6d52f45cdd4848d6026e08639b92cc61762b044fa8ca3ec3ac0bfd5c3a14f1b",
+      "sha256": "e6d52f45cdd4848d6026e08639b92cc61762b044fa8ca3ec3ac0bfd5c3a14f1b",
+      "byteLength": 660
+    }
+  ],
+  "limitations": "Development enumeration probes, not release lineage or production retention. Each run index records its own measured scope and outcome."
+}

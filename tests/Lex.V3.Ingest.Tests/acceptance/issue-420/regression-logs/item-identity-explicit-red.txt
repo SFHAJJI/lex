@@ -1,0 +1,33 @@
+Exécuter des tests à partir de C:\lex-v3\worktrees\codex-stage1-luxembourg\tests\Lex.V3.Ingest.Tests\bin\Debug\net10.0\Lex.V3.Ingest.Tests.dll (net10.0|x64)
+échec AWorkAcquiresItsBodyFromTheDeliveredMultiSubjectWemiGraph ("http://creativecommons.org/licenses/by/4.0/","unicode_item") (713ms)
+  à partir de C:\lex-v3\worktrees\codex-stage1-luxembourg\tests\Lex.V3.Ingest.Tests\bin\Debug\net10.0\Lex.V3.Ingest.Tests.dll (net10.0|x64)
+  Assertion failed. La collection attendue doit contenir un nombre spécifique d’éléments.
+  The held body must retain the selected publisher item's rights reading.
+  
+  expected count: 1
+  actual count:   0
+  
+  Assert.HasCount(1, readings)
+    sur Lex.V3.Ingest.Tests.LuxembourgProductionTopologyTests.AWorkAcquiresItsBodyFromTheDeliveredMultiSubjectWemiGraph(String licenceIri, String inFileCase) dans C:\lex-v3\worktrees\codex-stage1-luxembourg\tests\Lex.V3.Ingest.Tests\LuxembourgProductionTopologyTests.cs:166
+    sur Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter.Execution.TestMethodInfo.ExecuteInternalAsync(Object[] arguments, CancellationTokenSource timeoutTokenSource)
+échec AWorkAcquiresItsBodyFromTheDeliveredMultiSubjectWemiGraph ("http://creativecommons.org/licenses/by/4.0/","escaped_item") (521ms)
+  à partir de C:\lex-v3\worktrees\codex-stage1-luxembourg\tests\Lex.V3.Ingest.Tests\bin\Debug\net10.0\Lex.V3.Ingest.Tests.dll (net10.0|x64)
+  Assertion failed. La collection attendue doit contenir un nombre spécifique d’éléments.
+  The held body must retain the selected publisher item's rights reading.
+  
+  expected count: 1
+  actual count:   0
+  
+  Assert.HasCount(1, readings)
+    sur Lex.V3.Ingest.Tests.LuxembourgProductionTopologyTests.AWorkAcquiresItsBodyFromTheDeliveredMultiSubjectWemiGraph(String licenceIri, String inFileCase) dans C:\lex-v3\worktrees\codex-stage1-luxembourg\tests\Lex.V3.Ingest.Tests\LuxembourgProductionTopologyTests.cs:166
+    sur Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter.Execution.TestMethodInfo.ExecuteInternalAsync(Object[] arguments, CancellationTokenSource timeoutTokenSource)
+C:\lex-v3\worktrees\codex-stage1-luxembourg\tests\Lex.V3.Ingest.Tests\bin\Debug\net10.0\Lex.V3.Ingest.Tests.dll (net10.0|x64) a échoué avec 2 erreur(s) (6s 576ms)
+Code de sortie: 2
+
+Résumé de série de tests : Échec!
+  total : 8
+  échec : 2
+  réussie : 6
+  ignoré : 0
+  durée : 7s 293ms
+L’exécution de tests s’est terminée avec un code de sortie non réussi : 2 (voir : https://aka.ms/testingplatform/exitcodes)

@@ -1,0 +1,12 @@
+Exécuter des tests à partir de C:\lex-v3\worktrees\codex-stage1-luxembourg\tests\Lex.V3.Ingest.Tests\bin\Debug\net10.0\Lex.V3.Ingest.Tests.dll (net10.0|x64)
+ignoré TheCensusFamiliesProveAndTheRunEitherReachesTheManifestOrFailsNamingWhy
+  Assert.Inconclusive. Live publisher canary. Set LEX_EU_CANARY=1 to run it; it is skipped by default so the suite does not depend on a third party's uptime or send unasked traffic.
+  à partir de C:\lex-v3\worktrees\codex-stage1-luxembourg\tests\Lex.V3.Ingest.Tests\bin\Debug\net10.0\Lex.V3.Ingest.Tests.dll (net10.0|x64)
+C:\lex-v3\worktrees\codex-stage1-luxembourg\tests\Lex.V3.Ingest.Tests\bin\Debug\net10.0\Lex.V3.Ingest.Tests.dll (net10.0|x64) réussite (21s 462ms)
+
+Résumé de série de tests : Réussite!
+  total : 26
+  échec : 0
+  réussie : 25
+  ignoré : 1
+  durée : 22s 237ms

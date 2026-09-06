@@ -1,0 +1,26 @@
+Exécuter des tests à partir de C:\lex-v3\worktrees\codex-stage1-luxembourg\tests\Lex.V3.Ingest.Tests\bin\Release\net10.0\Lex.V3.Ingest.Tests.dll (net10.0|x64)
+échec CodeCivilRunsThroughThePublicAdapterWithObservedVocabularyAndSameRunRights (8m 38s 527ms)
+  à partir de C:\lex-v3\worktrees\codex-stage1-luxembourg\tests\Lex.V3.Ingest.Tests\bin\Release\net10.0\Lex.V3.Ingest.Tests.dll (net10.0|x64)
+  Assertion failed. Condition attendue pour être true.
+  The bounded work must have an actually held corpus body.
+  
+  actual: false
+  
+  Assert.IsTrue(result.CorpusRecordSet.Set.Records.Any(record => record.Body.Kind == CorpusBodyRecordKind.Held))
+    sur Lex.V3.Ingest.Tests.LuxembourgLiveAdapterCanary.CodeCivilRunsThroughThePublicAdapterWithObservedVocabularyAndSameRunRights() dans C:\lex-v3\worktrees\codex-stage1-luxembourg\tests\Lex.V3.Ingest.Tests\LuxembourgLiveAdapterCanary.cs:135
+    sur Lex.V3.Ingest.Tests.LuxembourgLiveAdapterCanary.CodeCivilRunsThroughThePublicAdapterWithObservedVocabularyAndSameRunRights()
+    sur Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter.Execution.TestMethodInfo.ExecuteInternalAsync(Object[] arguments, CancellationTokenSource timeoutTokenSource)
+  Sortie standard
+    LU adapter evidence: C:\lex-v3\worktrees\codex-stage1-luxembourg\artifacts\lu-adapter-cce596bddbfe4a99980837686ce289b9\evidence-index.json; sha256=173c6a1653af08926ba7638629798b345e24ffe5263e8cc30f08b6e8e1540e4f; bytes=1866773; status=failed
+    
+  Sortie d’erreur
+C:\lex-v3\worktrees\codex-stage1-luxembourg\tests\Lex.V3.Ingest.Tests\bin\Release\net10.0\Lex.V3.Ingest.Tests.dll (net10.0|x64) a échoué avec 1 erreur(s) (8m 39s 291ms)
+Code de sortie: 2
+
+Résumé de série de tests : Échec!
+  total : 1
+  échec : 1
+  réussie : 0
+  ignoré : 0
+  durée : 8m 39s 817ms
+L’exécution de tests s’est terminée avec un code de sortie non réussi : 2 (voir : https://aka.ms/testingplatform/exitcodes)

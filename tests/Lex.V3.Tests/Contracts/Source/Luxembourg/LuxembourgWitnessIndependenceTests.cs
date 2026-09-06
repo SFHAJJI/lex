@@ -51,6 +51,16 @@ public sealed class LuxembourgWitnessIndependenceTests
         {
             var page = Normalize(template.Utf8QueryTemplate);
             var count = Normalize(template.Utf8CountTemplate);
+            if (template.TemplateId == "assertion-rows")
+            {
+                // The same physical join-order hint precedes both SELECTs; it changes no
+                // selected rows and cannot count as a second witness.
+                const string Hint = "DEFINE sql:select-option \"order\" ";
+                Assert.IsTrue(page.StartsWith(Hint, StringComparison.Ordinal));
+                Assert.IsTrue(count.StartsWith(Hint, StringComparison.Ordinal));
+                page = page[Hint.Length..];
+                count = count[Hint.Length..];
+            }
 
             // The count is exactly a COUNT wrapper around an inner SELECT.
             const string Wrapper = "SELECT (COUNT(*) AS ?count) WHERE { { ";

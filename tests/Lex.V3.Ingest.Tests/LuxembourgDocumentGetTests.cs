@@ -224,17 +224,13 @@ public sealed class LuxembourgDocumentGetTests
             "one robots request plus the four product attempts this profile allows.");
     }
 
-    /// <summary>
-    /// The publisher's own robots.txt refusing THIS document is this one object's cause, never a
-    /// whole-run refusal: an act the publisher withholds must not stop every other act in the same
-    /// run from getting a record. The act driven here is loi 2007/01/15/n2, individually disallowed
-    /// by the real robots.txt.
-    /// </summary>
     [TestMethod]
-    public async Task ARobotsDisallowedDocumentBecomesThisObjectsOwnRefusalRatherThanRefusingTheRun()
+    public async Task ADisallowedActPageDoesNotTransferItsProhibitionThroughTheBoundFetchPlan()
     {
-        var (outcomes, refusal, _, _, _) = await AcquireAsync(
-            (request, _) => BinaryResponse(request, HttpStatusCode.OK, "<akomaNtoso/>"u8.ToArray()),
+        var handler = new RobotsThenDocumentHandler((request, _) =>
+            BinaryResponse(request, HttpStatusCode.OK, "<akomaNtoso/>"u8.ToArray()));
+        var (outcomes, refusal, _, _, _) = await AcquireWithHandlerAsync(
+            handler,
             Address(
                 storeUri:
                     "http://data.legilux.public.lu/filestore/eli/etat/leg/loi/2007/01/15/n2/jo/fr/"
@@ -242,10 +238,27 @@ public sealed class LuxembourgDocumentGetTests
                 actPagePath: "/eli/etat/leg/loi/2007/01/15/n2/jo"));
 
         Assert.IsNull(refusal, refusal?.Detail);
-        Assert.IsNotNull(outcomes);
-        Assert.HasCount(1, outcomes!);
+        Assert.HasCount(1, outcomes);
+        Assert.IsNotNull(outcomes[0].Receipt);
+        Assert.IsNull(outcomes[0].Refusal);
+        Assert.AreEqual(2, handler.SendCount);
+    }
+
+    [TestMethod]
+    public async Task ARobotsDisallowedDocumentBecomesThisObjectsOwnRefusalRatherThanRefusingTheRun()
+    {
+        var handler = new RobotsThenDocumentHandler((request, _) =>
+            throw new AssertFailedException("A disallowed product URL must never be requested."))
+        {
+            RobotsText = "User-agent: *\nDisallow: /filestore/\n",
+        };
+        var (outcomes, refusal, _, _, _) = await AcquireWithHandlerAsync(handler, Address());
+
+        Assert.IsNull(refusal, refusal?.Detail);
+        Assert.HasCount(1, outcomes);
         Assert.IsNull(outcomes[0].Receipt);
         Assert.AreEqual(CorpusAcquisitionRefusalReason.RobotsDisallowed, outcomes[0].Refusal);
+        Assert.AreEqual(1, handler.SendCount);
     }
 
     /// <summary>
@@ -945,7 +958,7 @@ public sealed class LuxembourgDocumentGetTests
             $"urn:uuid:{Guid.NewGuid():D}",
             LuxembourgAcquisitionTestFixture.DocumentFetchRendererSource(3001));
         return await executor.RunDocumentGetAsync(
-            bound.Request, [address.ActEliPagePath], cancellationToken);
+            bound.Request, cancellationToken);
     }
 
     private static Task<(
@@ -1180,6 +1193,7 @@ public sealed class LuxembourgDocumentGetTests
 
         /// <summary>Lets a test make the robots bootstrap itself fail rather than deny a path.</summary>
         internal HttpStatusCode RobotsStatus { get; init; } = HttpStatusCode.OK;
+        internal string RobotsText { get; init; } = LuxembourgDocumentFetchRobotsBootstrapTests.RealRobotsTxt;
 
         protected override Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request, CancellationToken cancellationToken)
@@ -1198,7 +1212,7 @@ public sealed class LuxembourgDocumentGetTests
                     });
                 }
 
-                var bytes = Encoding.UTF8.GetBytes(LuxembourgDocumentFetchRobotsBootstrapTests.RealRobotsTxt);
+                var bytes = Encoding.UTF8.GetBytes(RobotsText);
                 var content = new ByteArrayContent(bytes);
                 content.Headers.TryAddWithoutValidation(
                     "Content-Length", bytes.Length.ToString(System.Globalization.CultureInfo.InvariantCulture));

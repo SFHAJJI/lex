@@ -316,9 +316,9 @@ public sealed class LuxembourgQueryPlanTests
         {
             var plan = Plan();
             var first = LuxembourgQueryPlanIdentity.GetCanonicalBytes(plan);
-            Assert.AreEqual(78_973, first.Length);
+            Assert.AreEqual(79_971, first.Length);
             Assert.AreEqual(
-                "8537234c5be8db84c3c040318167eefe3991046a7d4132c1e751c9d520af5b98",
+                "b1aa9f1df23d6654f207005d20c612384977bd7f644e835ffe003d4f8555a979",
                 Sha256(first));
             Assert.IsFalse(first.Contains((byte)'\r'));
             CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("ar-SA");

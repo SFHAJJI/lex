@@ -1246,14 +1246,34 @@ public sealed record LuxembourgQueryPlan
             throw new ArgumentException("The measured LU plan is default-graph only.", nameof(graph));
         }
 
-        var rangeSelection = $$"""
-              VALUES ?lex_pass_id { {pass_id:uint} }
+        var partitionBindings = """
               VALUES (?partition_start_1 ?partition_start_2 ?partition_start_3 ?partition_start_4 ?partition_start_5 ?partition_start_6
                       ?partition_end_1 ?partition_end_2 ?partition_end_3 ?partition_end_4 ?partition_end_5 ?partition_end_6) {
                 ({partition_start_1:sparql_string} {partition_start_2:sparql_string} {partition_start_3:sparql_string} {partition_start_4:sparql_string} {partition_start_5:sparql_string} {partition_start_6:sparql_string}
                  {partition_end_1:sparql_string} {partition_end_2:sparql_string} {partition_end_3:sparql_string} {partition_end_4:sparql_string} {partition_end_5:sparql_string} {partition_end_6:sparql_string})
               }
-            {{Indent(traversal)}}
+            """;
+        // The first component is a necessary inclusive bound of the full half-open tuple
+        // range below. Materialize subjects before joining admitted predicates, so a tiny
+        // assertion partition need not classify every assertion in the publisher's graph.
+        // Project the VALUES bindings: SPARQL subqueries do not inherit outer variables.
+        // Keep non-IRI subjects with their original empty key; the final six-key filter and
+        // typed observation accounting still decide their disposition.
+        var boundTraversal = templateId == "assertion-rows" ? $$"""
+            { SELECT DISTINCT ?subject
+                ?partition_start_1 ?partition_start_2 ?partition_start_3 ?partition_start_4 ?partition_start_5 ?partition_start_6
+                ?partition_end_1 ?partition_end_2 ?partition_end_3 ?partition_end_4 ?partition_end_5 ?partition_end_6 WHERE {
+              {{partitionBindings}}
+              ?subject ?scan_predicate ?scan_object .
+              BIND(IF(isIRI(?subject), STR(?subject), "") AS ?subject_key)
+              FILTER(?subject_key >= ?partition_start_1 && ?subject_key <= ?partition_end_1)
+            } }
+            {{traversal}}
+            """ : partitionBindings + "\n" + Indent(traversal);
+
+        var rangeSelection = $$"""
+              VALUES ?lex_pass_id { {pass_id:uint} }
+            {{boundTraversal}}
               FILTER(
                 ?key_1 > ?partition_start_1 ||
                 (?key_1 = ?partition_start_1 && ?key_2 > ?partition_start_2) ||
@@ -1298,7 +1318,13 @@ public sealed record LuxembourgQueryPlan
               }
             }
             """.Replace("\r\n", "\n", StringComparison.Ordinal);
-        return new LuxembourgQueryTemplate(templateId, query, count);
+        // Virtuoso otherwise reorders the join back into the full assertion scan. This
+        // physical hint applies equally to count and page; it changes no selection terms.
+        // https://docs.openlinksw.com/virtuoso/rdfperfcost/
+        const string subjectFirst = "DEFINE sql:select-option \"order\"\n";
+        return templateId == "assertion-rows"
+            ? new LuxembourgQueryTemplate(templateId, subjectFirst + query, subjectFirst + count)
+            : new LuxembourgQueryTemplate(templateId, query, count);
     }
 
     private static string Indent(string value) =>

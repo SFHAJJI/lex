@@ -91,6 +91,9 @@ public sealed class ClosedVocabularyCensusTests
                     + "DeliveryProofRefused, PageBodyMalformed, PageDecodeFailedOnOurSide",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgFamilyEnumerationOutcomeKind: Proven, "
                     + "ExecutorRefused, ProofRefused, CoverProven, CoverRefused",
+                "Lex.V3.Ingest.Luxembourg.LuxembourgInFileRightsReadStatus: Observed, "
+                    + "UnsupportedRepresentation, MalformedXml, ManifestationIdentityMismatch, "
+                    + "InvalidLicenceIri",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgPartitionCoverReconciliationRefusal: "
                     + "LeafExecutorRefused, LeafProofRefused, CoverReconciliationRefused",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionAdapter+ResourceObservationBuildO"

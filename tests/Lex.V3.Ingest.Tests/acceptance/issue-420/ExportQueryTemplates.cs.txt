@@ -1,0 +1,15 @@
+using System.Text.Json;
+using Lex.V3.Contracts.Source.Core;
+using Lex.V3.Contracts.Source.Http;
+using Lex.V3.Contracts.Source.Luxembourg;
+var profile = new SourceArtifactRef("urn:uuid:911499a3-087c-42ec-9dca-5c9131ccec47", new string('b', 64));
+var scope = new SourceArtifactRef("urn:uuid:72fdaf8b-e367-43c5-8b34-e22a99bfdbe7", new string('a', 64));
+var plan = LuxembourgQueryPlan.CreateDefaultGraph(profile, scope);
+await File.WriteAllTextAsync(args[0], JsonSerializer.Serialize(plan.QueryTemplates, new JsonSerializerOptions { WriteIndented = true }));
+Console.WriteLine($"Exported {plan.QueryTemplates.Count} actual product templates to {args[0]}");
+
+var fixturePlan = LuxembourgQueryPlan.CreateDefaultGraph(
+    new SourceArtifactRef("urn:uuid:33333333-3333-4333-8333-333333333333", new string('3',64)),
+    new SourceArtifactRef("urn:uuid:44444444-4444-4444-8444-444444444444", new string('4',64)));
+var fixtureBytes = LuxembourgQueryPlanIdentity.GetCanonicalBytes(fixturePlan);
+Console.WriteLine($"Canonical fixture: {fixtureBytes.Length} bytes; SHA256 {Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(fixtureBytes))}");

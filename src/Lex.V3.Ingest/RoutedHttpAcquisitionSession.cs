@@ -54,7 +54,6 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
     private readonly DateTimeOffset _runCreatedAt;
     private readonly bool _usesPinnedHandler;
     private readonly BoundMachineRequestIdentity _sourceWitnessIdentity;
-    private readonly string[] _additionalRobotsPaths;
     private readonly ActiveGenerationState _activeGeneration;
     private readonly object _generationToken = new();
     private readonly object _generationLock = new();
@@ -81,23 +80,12 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
         ICustodyStore custodyStore,
         HttpMessageHandler handler,
         TimeProvider timeProvider,
-        bool usesPinnedHandler,
-        IReadOnlyList<string> additionalRobotsPaths)
+        bool usesPinnedHandler)
     {
         ArgumentNullException.ThrowIfNull(sourceWitness);
         ArgumentNullException.ThrowIfNull(custodyStore);
         ArgumentNullException.ThrowIfNull(handler);
         ArgumentNullException.ThrowIfNull(timeProvider);
-        ArgumentNullException.ThrowIfNull(additionalRobotsPaths);
-
-        _additionalRobotsPaths = additionalRobotsPaths.ToArray();
-        if (_additionalRobotsPaths.Any(static path => string.IsNullOrEmpty(path) || path[0] != '/'))
-        {
-            throw new ArgumentException(
-                "An additional robots path is one absolute path this run supplies from the store.",
-                nameof(additionalRobotsPaths));
-        }
-
         _sourceWitnessIdentity = MachineQueryBinder.OpenIdentity(sourceWitness);
         _profile = OfficialMachineQuerySourceProfiles.ResolveFor(_sourceWitnessIdentity);
         _nextRequestOrdinal = _profile.FirstProductRequestOrdinal;
@@ -145,32 +133,11 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
     internal static Task<StartResult> StartAsync(
         BoundMachineRequest sourceWitness,
         ICustodyStore custodyStore,
-        CancellationToken cancellationToken) =>
-        StartAsync(sourceWitness, custodyStore, [], cancellationToken);
-
-    /// <summary>
-    /// Starts a run whose robots verdict must also consider paths this run learned from the
-    /// publisher's own store rather than from the request target. RULING
-    /// lex-event-20260904T180444431Z-13c6f8f86ddf4f02857cf4001c202143: every Luxembourg
-    /// manifestation is evaluated against three paths, the fetch path, the page path derived from
-    /// the filestore path, and the act's own ELI page path, refusing when ANY is disallowed. The
-    /// third cannot be derived from the fetch path at all (the loi 2007/01/15/n2 PDF and the rgd
-    /// 1977/11/16/n3 PDF both live under a memorial path outside their own act), so the caller
-    /// supplies it. This can only ever fetch strictly less, never more.
-    /// </summary>
-    internal static Task<StartResult> StartAsync(
-        BoundMachineRequest sourceWitness,
-        ICustodyStore custodyStore,
-        IReadOnlyList<string> additionalRobotsPaths,
         CancellationToken cancellationToken)
     {
         var session = new RoutedHttpAcquisitionSession(
-            sourceWitness,
-            custodyStore,
-            CreatePinnedHandler(),
-            TimeProvider.System,
-            usesPinnedHandler: true,
-            additionalRobotsPaths);
+            sourceWitness, custodyStore, CreatePinnedHandler(), TimeProvider.System,
+            usesPinnedHandler: true);
         return session.BootstrapRobotsAsync(cancellationToken);
     }
 
@@ -197,29 +164,10 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
         ICustodyStore custodyStore,
         HttpMessageHandler handler,
         TimeProvider timeProvider,
-        CancellationToken cancellationToken) =>
-        StartWithTestTransportAsync(
-            sourceWitness, custodyStore, handler, timeProvider, [], cancellationToken);
-
-    /// <summary>
-    /// The same door, for a run that also supplies store-derived robots paths. See the matching
-    /// <see cref="StartAsync(BoundMachineRequest, ICustodyStore, IReadOnlyList{string}, CancellationToken)"/>.
-    /// </summary>
-    internal static Task<StartResult> StartWithTestTransportAsync(
-        BoundMachineRequest sourceWitness,
-        ICustodyStore custodyStore,
-        HttpMessageHandler handler,
-        TimeProvider timeProvider,
-        IReadOnlyList<string> additionalRobotsPaths,
         CancellationToken cancellationToken)
     {
         var session = new RoutedHttpAcquisitionSession(
-            sourceWitness,
-            custodyStore,
-            handler,
-            timeProvider,
-            usesPinnedHandler: false,
-            additionalRobotsPaths);
+            sourceWitness, custodyStore, handler, timeProvider, usesPinnedHandler: false);
         return session.BootstrapRobotsAsync(cancellationToken);
     }
 
@@ -389,58 +337,14 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
                     evidence);
             }
 
-            // Design ruling (D1-06c-LU review, event
-            // lex-event-20260904T125234593Z-594a479b1c774e23bc5e9dc920a7dfd5): the Legilux
-            // robots.txt disallows page paths under /eli/, but this profile fetches
-            // document bytes under /filestore/, a prefix those /eli/ rules never match. A
-            // filestore path's own structure embeds its expression's exact /eli/ page path once
-            // the /filestore/ prefix and the trailing filename segment are stripped (see
-            // TryDeriveLuxembourgFilestoreEliPagePath), so both the actual fetch path and that
-            // derived page path are evaluated here, refusing when either is disallowed. Every
-            // other profile derives no second path and is evaluated exactly as before.
-            //
-            // RULING lex-event-20260904T180444431Z-13c6f8f86ddf4f02857cf4001c202143 adds the third
-            // path, and it is not derivable here: the publisher's own robots.txt groups four lines
-            // around loi 2007/01/15/n2 but writes that act's PDF line as
-            // /eli/etat/leg/memorial/2007/8/fr/pdf while the file lives under memorial/2007/a8, so
-            // a literal evaluation of the two derivable paths permits a fetch the publisher plainly
-            // meant to withhold. We do not repair a publisher's file toward intent and we keep no
-            // name list in code. Instead the caller supplies the act's own ELI page path, which it
-            // got from the store (manifestation to expression to work), and that act's /jo page is
-            // disallowed by prefix, so the PDF is refused for the publisher's own stated reason.
-            // The refusal names whichever path matched. This can only ever fetch strictly less.
+            // Decision 83: match only the requested URL. Related ELI page paths do not
+            // transfer their prohibitions to a permitted filestore endpoint.
             var primaryPath = new Uri(_sourceWitnessIdentity.RequestedUri, UriKind.Absolute).PathAndQuery;
-            var derivedEliPagePath = TryDeriveLuxembourgFilestoreEliPagePath(_profile.Id, primaryPath);
-            var candidatePaths = new List<string>(2 + _additionalRobotsPaths.Length) { primaryPath };
-            if (derivedEliPagePath is not null)
-            {
-                candidatePaths.Add(derivedEliPagePath);
-            }
-
-            candidatePaths.AddRange(_additionalRobotsPaths);
-
-            string? deniedPath = null;
-            var sawUnsafeToInterpret = false;
+            RobotsPolicyEvaluationResult verdict;
             try
             {
-                foreach (var candidatePath in candidatePaths)
-                {
-                    var verdict = RobotsExclusionPolicy.Evaluate(
-                        terminalBody.Bytes.Span,
-                        _profile.RobotsProductToken,
-                        candidatePath);
-                    if (verdict == RobotsPolicyEvaluationResult.Denied)
-                    {
-                        deniedPath = candidatePath;
-                        break;
-                    }
-
-                    if (verdict == RobotsPolicyEvaluationResult.UnsafeToInterpret)
-                    {
-                        sawUnsafeToInterpret = true;
-                        break;
-                    }
-                }
+                verdict = RobotsExclusionPolicy.Evaluate(
+                    terminalBody.Bytes.Span, _profile.RobotsProductToken, primaryPath);
             }
             catch (ArgumentException)
             {
@@ -450,13 +354,13 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
                     evidence);
             }
 
-            if (deniedPath is not null)
+            if (verdict == RobotsPolicyEvaluationResult.Denied)
             {
                 Dispose();
-                return StartResult.PublisherDenied(evidence, deniedPath);
+                return StartResult.PublisherDenied(evidence, primaryPath);
             }
 
-            if (sawUnsafeToInterpret)
+            if (verdict == RobotsPolicyEvaluationResult.UnsafeToInterpret)
             {
                 Dispose();
                 return StartResult.Refused(
@@ -496,32 +400,6 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
             Dispose();
             throw;
         }
-    }
-
-    /// <summary>
-    /// Structural derivation only, never a hardcoded document list: legilux.public.lu's own
-    /// filestore path for one manifestation is
-    /// <c>/filestore/eli/etat/leg/loi/{date}/{id}/jo/{lang}/{format}/eli-etat-leg-loi-...-
-    /// {format}.{ext}</c>, and that expression's own page path is the same segments with the
-    /// <c>/filestore/</c> prefix and the trailing filename segment removed:
-    /// <c>/eli/etat/leg/loi/{date}/{id}/jo/{lang}/{format}</c>. Returns null for every other
-    /// profile and for any path not under <c>/filestore/</c> with a segment to strip, so the
-    /// caller falls back to evaluating the one actual fetch path exactly as before.
-    /// </summary>
-    private static string? TryDeriveLuxembourgFilestoreEliPagePath(
-        OfficialMachineQuerySourceProfileId profileId,
-        string requestPathAndQuery)
-    {
-        const string filestorePrefix = "/filestore/";
-        if (profileId != OfficialMachineQuerySourceProfileId.LuxembourgDocumentFetch ||
-            !requestPathAndQuery.StartsWith(filestorePrefix, StringComparison.Ordinal))
-        {
-            return null;
-        }
-
-        var afterPrefix = requestPathAndQuery[filestorePrefix.Length..];
-        var lastSegmentStart = afterPrefix.LastIndexOf('/');
-        return lastSegmentStart > 0 ? "/" + afterPrefix[..lastSegmentStart] : null;
     }
 
     private async Task<RouteExecution> ExecuteMachineAttemptAsync(

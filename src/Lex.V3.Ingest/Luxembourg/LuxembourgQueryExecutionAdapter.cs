@@ -1186,7 +1186,37 @@ public sealed class LuxembourgQueryExecutionAdapter
                     new LuxembourgQueryExecutionRefusalDetail(refusalCode, null, detail));
             }
 
-            observations = buildResult.Observations!;
+            // Bind channel one's declarations to this run's actual delivery closure. The
+            // vocabulary snapshot is profile evidence, not evidence of a SPARQL response.
+            var assertionIndexBytes = JsonSerializer.SerializeToUtf8Bytes(new
+            {
+                schema = "lex-lu-sparql-rights-evidence/1",
+                deliveries = assertionLegs.Select(static leg => leg.Receipt.Delivery),
+                observations = buildResult.Observations!.Select(static observation => new
+                {
+                    observation.ObjectRef,
+                    observation.Assertions,
+                }),
+            });
+            var (assertionIndexReceipt, assertionIndexFailure) = await CustodyHold.TryHoldAsync(
+                _custodyStore, assertionIndexBytes, cancellationToken).ConfigureAwait(false);
+            if (assertionIndexReceipt is null)
+            {
+                return LuxembourgQueryExecutionResult.Refused(topology, outcomes, relationAcquisitions,
+                    new LuxembourgQueryExecutionRefusalDetail(
+                        LuxembourgQueryExecutionRefusal.ResourceObservationRowsNotVerified, null,
+                        $"SPARQL rights evidence could not be retained: {assertionIndexFailure}"));
+            }
+            var assertionIndexRef = new SourceArtifactRef(
+                ContentDerivedIdentity.DeriveUuidUrn("lex-lu-sparql-rights-evidence/1", assertionIndexBytes),
+                assertionIndexReceipt.Reference.ContentSha256);
+            observations = buildResult.Observations!.Select(observation => new LuxembourgResourceObservation(
+                observation.ObjectRef, observation.ObservationRef, observation.Assertions, observation.Relations,
+                new LuxembourgSparqlRightsChannelObservations(observation.ObservationRef, assertionIndexRef,
+                    observation.SparqlRightsObservations.Observations.Select(row =>
+                        new LuxembourgRightsChannelObservation(row.ManifestationIri, row.RunIdentity,
+                            assertionIndexRef, row.LicenceIris)).ToArray()),
+                observation.InFileRightsObservations)).ToArray();
             // The proof this run actually holds for the assertion family these observations were
             // derived from: FindProvenOutcome above refused the run without it, and
             // ReopenAndVerifyFamilyRowsUnionAsync refused it again unless the delivered rows
@@ -1255,97 +1285,23 @@ public sealed class LuxembourgQueryExecutionAdapter
                 static entry => entry.Key,
                 static entry => entry.Value.ToScopeManifestFetchAddress()));
 
-        // ScopeManifestCanonicalWriter.Write returns the manifest's OWN canonical identity: a
-        // domain-separated hash (SHA256("lex-v3-source-scope-manifest/1\n" + bytes)), never written
-        // to the stream itself. It is a different, independent identifier from the custody store's
-        // own content address (plain SHA256(bytes)) and the two are never expected to be equal;
-        // both are retained below rather than one silently standing in for the other.
-        using var manifestStream = new MemoryStream();
-        var manifestCanonicalSha256 = ScopeManifestCanonicalWriter.Write(manifestStream, manifest);
-        var manifestBytes = manifestStream.ToArray();
-
-        // RULING lex-event-20260904T212914634Z-f166f0b9e11b445795efd40c268bfbb8 interpreting Decision 71: held under an enforced floor and held
-        // under a weaker one are both HELD; only a write that errored or bytes that cannot be
-        // reproduced at their own digest are a custody failure.
-        var (manifestReceipt, manifestHoldFailure) = await CustodyHold
-            .TryHoldAsync(_custodyStore, manifestBytes, cancellationToken)
-            .ConfigureAwait(false);
-        if (manifestReceipt is null)
+        var (reopenedManifest, writeReceipt, manifestArtifactRef, manifestCanonicalSha256, manifestFailure) =
+            await HoldManifestAsync(manifest, resolver, cancellationToken).ConfigureAwait(false);
+        if (manifestFailure is not null)
         {
-            return LuxembourgQueryExecutionResult.Refused(
-                topology,
-                outcomes,
-                relationAcquisitions,
-                new LuxembourgQueryExecutionRefusalDetail(
-                    LuxembourgQueryExecutionRefusal.ScopeManifestNotRetained,
-                    null,
-                    $"The scope manifest could not be held: {manifestHoldFailure}"));
+            return LuxembourgQueryExecutionResult.Refused(topology, outcomes, relationAcquisitions, manifestFailure);
         }
-
-        var writeReceipt = manifestReceipt;
-
-        // Re-verified by reopening the exact digest from the store, not trusted from the write call
-        // alone: a receipt names bytes, a reopen proves the store actually holds them.
-        // ReadByDigestCheckedAsync itself already throws CustodyIntegrityException unless the
-        // returned bytes hash to writeReceipt.Reference.ContentSha256, which the store computed
-        // from manifestBytes at CreateAsync above; a follow-on SequenceEqual against manifestBytes
-        // here would only be re-deriving what that digest check already establishes (fold-in seven
-        // of the D1-04 refreeze -- the executor's own delivery proof removed the same redundant
-        // check after a checked read for the same reason).
-        // THIS REOPEN HAD NO CATCH. ReadByDigestCheckedAsync throws CustodyIntegrityException
-        // when the store cannot reproduce the bytes at their own digest, and that exception
-        // escaped RunAsync untyped, past every typed refusal this method exists to produce and
-        // past the principle its own neighbouring tests assert by name. A store can accept the
-        // write, satisfy the hold's verification read, and still fail a later read; that is a
-        // custody failure on our side, one of the four legitimate reasons a law goes unheld, and
-        // it is reported as one rather than thrown at the caller.
-        ReadOnlyMemory<byte> reopened;
-        try
-        {
-            reopened = await CustodyRestore.ReadByDigestCheckedAsync(
-                    _custodyStore, writeReceipt.Reference.ContentSha256, cancellationToken)
-                .ConfigureAwait(false);
-        }
-        catch (CustodyIntegrityException exception)
-        {
-            return LuxembourgQueryExecutionResult.Refused(
-                topology,
-                outcomes,
-                relationAcquisitions,
-                new LuxembourgQueryExecutionRefusalDetail(
-                    LuxembourgQueryExecutionRefusal.ScopeManifestNotRetained,
-                    null,
-                    "The scope manifest could not be reopened at its own digest: "
-                    + exception.Message));
-        }
-
-        // Decision 75's rule, applied to this adapter's own artifact: re-verification re-derives
-        // the comparison from custody rather than trusting the in-memory object this run already
-        // held. VerifiedScopeManifest.ParseAndVerify (the item 14 reader door) independently
-        // deserializes the reopened bytes, re-runs every one of the fourteen
-        // ScopeManifestReaderOnlyInvariant checks against the same evidence resolver, and requires
-        // canonical re-serialization to reproduce the exact bytes -- proving the durably held copy
-        // is a genuinely self-consistent scope manifest, not merely byte-identical to what this run
-        // computed. The artifact-ref resourceId here is a fresh, unretained local identifier: it
-        // never enters any retained canonical form or leaves this method, so it carries none of
-        // Decision 77's per-bind-random-identifier concern (that ruling is about an identifier
-        // baked into a *retained* policy's own canonical bytes).
-        var manifestArtifactRef = new SourceArtifactRef(
-            $"urn:uuid:{Guid.NewGuid():D}", manifestCanonicalSha256);
-        var reopenedManifest = VerifiedScopeManifest
-            .ParseAndVerify(manifestArtifactRef, reopened.Span, resolver)
-            .Manifest;
 
         // This run's own identity for the corpus/6 record set it writes as its last step, paired
         // with real evidence -- this exact run's own manifest custody-write digest, distinct from
         // manifestArtifactRef's own canonical digest above -- rather than an inert placeholder,
         // mirroring EuQueryExecutionAdapter's own runIdentityRef exactly.
         var runIdentityRef = new SourceArtifactRef(
-            $"urn:uuid:{Guid.NewGuid():D}", writeReceipt.Reference.ContentSha256);
+            $"urn:uuid:{Guid.NewGuid():D}", writeReceipt!.Reference.ContentSha256);
 
         var (documentAcquisitionOutcomesByOrdinal, acquisitionRefusal) =
             await RunDocumentAcquisitionAsync(
-                    reopenedManifest, mintedAddressesByObjectRef, documentFetchRendererSource,
+                    reopenedManifest!, mintedAddressesByObjectRef, documentFetchRendererSource,
                     cancellationToken)
                 .ConfigureAwait(false);
         if (acquisitionRefusal is not null)
@@ -1354,17 +1310,51 @@ public sealed class LuxembourgQueryExecutionAdapter
                 topology, outcomes, relationAcquisitions, acquisitionRefusal);
         }
 
-        // D1-06c-LU-2 item 5: this run's whole corpus/6 record set, written as the LITERAL last
-        // step, after the manifest above and after every document GET this run attempted. Reuses
-        // this run's own scope-manifest custody floor (CustodyClass.NightlyFloor90d), the exact
-        // constant CorpusRecordSetWriter itself already requires. The outcomes are handed over
-        // unfiltered and need no second filter: RunDocumentAcquisitionAsync's own gate already means
-        // every key in the dictionary names an accepted-body ordinal. An object with no outcome
-        // still gets a real record -- CorpusRecordBuilder's default path makes it NotHeld, naming
-        // the manifest's own disposition as the reason.
+        // Finalize channel two from the bodies just acquired. The first manifest remains
+        // retained as the acquisition plan; corpus records bind the final reverified manifest.
+        if (observations.Count != 0)
+        {
+            var (withInFileRights, rightsFailure) = await ReadInFileRightsAsync(
+                observations, resolved, reopenedManifest!, mintedAddressesByObjectRef,
+                documentAcquisitionOutcomesByOrdinal!, manifestArtifactRef!, writeReceipt!.Reference.ContentSha256,
+                cancellationToken).ConfigureAwait(false);
+            if (rightsFailure is not null)
+            {
+                return LuxembourgQueryExecutionResult.Refused(topology, outcomes, relationAcquisitions, rightsFailure);
+            }
+            resolution = _sourceProfile.Resolve(LuxembourgProvenResourceObservations.RequireProven(
+                assertionFamilyProof!, withInFileRights!));
+            if (resolution is LuxembourgProfileResolution.Failed finalFailure)
+            {
+                return LuxembourgQueryExecutionResult.Refused(topology, outcomes, relationAcquisitions,
+                    new LuxembourgQueryExecutionRefusalDetail(
+                        LuxembourgQueryExecutionRefusal.ScopeResolutionFailed, finalFailure.Failure, null));
+            }
+            resolved = (LuxembourgProfileResolution.Resolved)resolution;
+            resolver = evidenceResolver ?? await LuxembourgProductionScopeReductionEvidenceResolver.CreateAsync(
+                _custodyStore, _sourceProfile.Snapshot.CompleteEnumerationRef, withInFileRights!,
+                resolved.OrderedEvidenceArtifacts, cancellationToken).ConfigureAwait(false);
+            manifest = _sourceProfile.ReduceScope(resolved, resolver,
+                mintedAddressesByObjectRef.ToDictionary(static pair => pair.Key,
+                    static pair => pair.Value.ToScopeManifestFetchAddress()));
+            (reopenedManifest, writeReceipt, manifestArtifactRef, manifestCanonicalSha256, manifestFailure) =
+                await HoldManifestAsync(manifest, resolver, cancellationToken).ConfigureAwait(false);
+            if (manifestFailure is not null)
+            {
+                return LuxembourgQueryExecutionResult.Refused(topology, outcomes, relationAcquisitions, manifestFailure);
+            }
+            // A final exclusion keeps the fetched bytes in the rights evidence, but must not
+            // mislabel them as an admitted corpus body. Object order comes from the same census.
+            var accepted = reopenedManifest!.Accounting.Single(set =>
+                set.Axis == ScopeAxis.Body && set.Disposition == ScopeDisposition.AcceptedSelected).ObjectOrdinals;
+            documentAcquisitionOutcomesByOrdinal = documentAcquisitionOutcomesByOrdinal!
+                .Where(pair => accepted.Contains(pair.Key)).ToDictionary();
+        }
+
+        // The record set is still the last artifact, after the final rights-bearing manifest.
         var recordSetWriter = new CorpusRecordSetWriter(_custodyStore);
         var recordSetResult = await recordSetWriter.WriteAsync(
-                reopenedManifest, manifestArtifactRef, runIdentityRef,
+                reopenedManifest!, manifestArtifactRef!, runIdentityRef,
                 documentAcquisitionOutcomesByOrdinal, cancellationToken)
             .ConfigureAwait(false);
         if (recordSetResult.Refusal is not null)
@@ -1379,41 +1369,132 @@ public sealed class LuxembourgQueryExecutionAdapter
 
         return LuxembourgQueryExecutionResult.Delivered(
             topology, outcomes, relationAcquisitions, resourceObservationSubjects,
-            resourceObservationExclusions, writeReceipt, manifestCanonicalSha256,
+            resourceObservationExclusions, writeReceipt!, manifestCanonicalSha256!,
             documentAcquisitionOutcomesByOrdinal!, recordSetResult.SetRef!,
             recordSetResult.VerifiedSet!);
     }
 
-    /// <summary>
-    /// D1-06c-LU-2 items 1 and 2: every object this run can address, and the ONE manifestation the
-    /// selection ladder picks for it. Pure over this run's own already-resolved data: no second
-    /// query, no network.
-    /// </summary>
-    /// <remarks>
-    /// Each candidate comes from the object's own resolved WEMI topology, which walked
-    /// isRealizedBy/isEmbodiedBy/isExemplifiedBy across that observation's own assertions. Only
-    /// structurally consistent candidates are offered, which is what makes the file URI safe: that
-    /// disposition already requires <c>LuxembourgItemUriFamily.IsCurrent</c> (http, host
-    /// data.legilux.public.lu, path strictly under /filestore/) and every candidate IRI already
-    /// passed <c>RequireExactResourceIri</c> (no userinfo, query or fragment, default port), which
-    /// together are exactly <see cref="LuxembourgFileUri.RequireValid"/>'s own conditions. So the
-    /// validator cannot refuse a candidate that reaches it; it is still called, because validating
-    /// once at the door is what stops an unvalidated string reaching selection at all.
-    /// <para>
-    /// The act's own ELI page path is the object IRI's own path. The WEMI walk starts at that IRI
-    /// and reaches the manifestation through the work-to-expression-to-manifestation chain, so
-    /// "the act's page path obtained from the store via the manifestation to expression to work
-    /// relation" (RULING lex-event-20260904T180444431Z-13c6f8f86ddf4f02857cf4001c202143) is that
-    /// walk read backwards, and needs no extra query.
-    /// </para>
-    /// <para>
-    /// LIMIT, stated rather than hidden: a manifest row carries exactly one fetch address, so this
-    /// mints one document per object even when the object offers manifestations in several
-    /// languages. The tie-break is total (legal value, token, then the store URI's ordinal order),
-    /// so the choice is deterministic rather than arbitrary, but multi-language acquisition is not
-    /// in this slice and is not pretended to be.
-    /// </para>
-    /// </remarks>
+    // Retain and independently reopen both the acquisition plan and the final rights-bearing
+    // scope through the same canonical reader and custody checks.
+    private async Task<(ScopeManifest? Manifest, DurableBlobWriteReceipt? Receipt,
+        SourceArtifactRef? ArtifactRef, string? CanonicalSha256, LuxembourgQueryExecutionRefusalDetail? Refusal)>
+        HoldManifestAsync(VerifiedScopeManifest manifest, IScopeReductionEvidenceResolver resolver,
+            CancellationToken cancellationToken)
+    {
+        using var stream = new MemoryStream();
+        var canonicalSha256 = ScopeManifestCanonicalWriter.Write(stream, manifest);
+        var (receipt, failure) = await CustodyHold.TryHoldAsync(
+            _custodyStore, stream.ToArray(), cancellationToken).ConfigureAwait(false);
+        if (receipt is null)
+        {
+            return (null, null, null, null, new LuxembourgQueryExecutionRefusalDetail(
+                LuxembourgQueryExecutionRefusal.ScopeManifestNotRetained, null,
+                $"The scope manifest could not be held: {failure}"));
+        }
+        try
+        {
+            var bytes = await CustodyRestore.ReadByDigestCheckedAsync(
+                _custodyStore, receipt.Reference.ContentSha256, cancellationToken).ConfigureAwait(false);
+            // Canonical identity is domain separated; custody identity is the plain byte digest.
+            var artifactRef = new SourceArtifactRef(
+                ContentDerivedIdentity.DeriveUuidUrn("lex-lu-scope-manifest/1", bytes.Span), canonicalSha256);
+            var reopened = VerifiedScopeManifest.ParseAndVerify(artifactRef, bytes.Span, resolver).Manifest;
+            return (reopened, receipt, artifactRef, canonicalSha256, null);
+        }
+        catch (CustodyIntegrityException exception)
+        {
+            return (null, null, null, null, new LuxembourgQueryExecutionRefusalDetail(
+                LuxembourgQueryExecutionRefusal.ScopeManifestNotRetained, null,
+                "The scope manifest could not be reopened at its own digest: " + exception.Message));
+        }
+    }
+
+    private async Task<(IReadOnlyList<LuxembourgResourceObservation>? Observations,
+        LuxembourgQueryExecutionRefusalDetail? Refusal)> ReadInFileRightsAsync(
+        IReadOnlyList<LuxembourgResourceObservation> observations,
+        LuxembourgProfileResolution.Resolved resolved,
+        ScopeManifest acquisitionManifest,
+        IReadOnlyDictionary<SourceObjectRef, LuxembourgDocumentFetchAddress> addresses,
+        IReadOnlyDictionary<int, CorpusAcquisitionOutcome> acquisitions,
+        SourceArtifactRef acquisitionManifestRef,
+        string acquisitionManifestContentSha256,
+        CancellationToken cancellationToken)
+    {
+        var readings = new List<LuxembourgInFileRightsReading>();
+        var seen = new HashSet<(string Manifestation, string BodySha256, LuxembourgUserFormatToken Format)>();
+        var resourcesByObject = resolved.Resources.ToDictionary(static resource => resource.ObjectRef);
+        foreach (var (ordinal, acquisition) in acquisitions.OrderBy(static pair => pair.Key))
+        {
+            if (acquisition.Receipt is not { } receipt)
+            {
+                continue;
+            }
+            var objectRef = acquisitionManifest.ObservedObjects[ordinal].ObjectRef;
+            var address = addresses[objectRef];
+            var resource = resourcesByObject[objectRef];
+            // Match the selected item to the actual proven WEMI graph. Never derive a
+            // manifestation identity from a URL spelling or assign a licence to its neighbours.
+            foreach (var candidate in resource.WemiTopology.Candidates.Where(candidate =>
+                candidate.Disposition == LuxembourgWemiCandidateDisposition.StructurallyConsistent &&
+                candidate.ItemIri == address.StoreFileUri.Value.OriginalString &&
+                LuxembourgAuthorityIri.TryParseUserFormat(candidate.FormatIri) == address.UserFormatToken))
+            {
+                if (!seen.Add((candidate.ManifestationIri, receipt.Reference.ContentSha256, address.UserFormatToken)))
+                {
+                    continue;
+                }
+                var bodyRef = new SourceArtifactRef(ContentDerivedIdentity.DeriveUuidUrn(
+                    "lex-lu-in-file-body-digest/1", Encoding.UTF8.GetBytes(receipt.Reference.ContentSha256)),
+                    receipt.Reference.ContentSha256);
+                try
+                {
+                    readings.Add(await LuxembourgInFileRightsReader.ReadAsync(_custodyStore, bodyRef,
+                        candidate.ManifestationIri, _sourceProfile.Snapshot.ObservationRef,
+                        address.UserFormatToken, cancellationToken).ConfigureAwait(false));
+                }
+                catch (CustodyIntegrityException exception)
+                {
+                    return (null, new LuxembourgQueryExecutionRefusalDetail(
+                        LuxembourgQueryExecutionRefusal.DocumentBodyNotRetained, null,
+                        "In-file rights evidence could not be reopened: " + exception.Message));
+                }
+            }
+        }
+        var indexBytes = JsonSerializer.SerializeToUtf8Bytes(new
+        {
+            schema = "lex-lu-in-file-rights-evidence/1",
+            runIdentity = _sourceProfile.Snapshot.ObservationRef,
+            acquisitionManifestRef,
+            acquisitionManifestContentSha256,
+            readings,
+        });
+        var (indexReceipt, failure) = await CustodyHold.TryHoldAsync(
+            _custodyStore, indexBytes, cancellationToken).ConfigureAwait(false);
+        if (indexReceipt is null)
+        {
+            return (null, new LuxembourgQueryExecutionRefusalDetail(
+                LuxembourgQueryExecutionRefusal.DocumentBodyNotRetained, null,
+                $"In-file rights reading evidence could not be retained: {failure}"));
+        }
+        var indexRef = new SourceArtifactRef(ContentDerivedIdentity.DeriveUuidUrn(
+                "lex-lu-in-file-rights-evidence/1", indexBytes),
+            indexReceipt.Reference.ContentSha256);
+        // Multiple retained representations of one manifestation do not become one chosen
+        // declaration. The index preserves all readings; an ambiguous group stays unproven.
+        var rows = readings.GroupBy(static reading => reading.ManifestationIri, StringComparer.Ordinal)
+            .Where(static group => group.Count() == 1 && group.Single().Status == LuxembourgInFileRightsReadStatus.Observed)
+            .Select(group => new LuxembourgRightsChannelObservation(group.Key,
+                _sourceProfile.Snapshot.ObservationRef, group.Single().BodyRef, group.Single().LicenceIris))
+            .ToDictionary(static row => row.ManifestationIri, StringComparer.Ordinal);
+        return (observations.Select(observation => new LuxembourgResourceObservation(
+            observation.ObjectRef, observation.ObservationRef, observation.Assertions, observation.Relations,
+            observation.SparqlRightsObservations,
+            new LuxembourgInFileRightsChannelObservations(observation.ObservationRef, indexRef,
+                observation.Assertions.Select(static assertion => assertion.SubjectIri).Distinct(StringComparer.Ordinal)
+                    .Where(rows.ContainsKey).Select(subject => rows[subject]).ToArray(),
+                acquisitionCompleted: true))).ToArray(), null);
+    }
+
     internal static IReadOnlyDictionary<SourceObjectRef, LuxembourgDocumentFetchAddress>
         MintDocumentFetchAddresses(LuxembourgProfileResolution.Resolved resolution)
     {
@@ -1421,9 +1502,11 @@ public sealed class LuxembourgQueryExecutionAdapter
         var minted = new Dictionary<SourceObjectRef, LuxembourgDocumentFetchAddress>();
         foreach (var resource in resolution.Resources)
         {
-            var address = MintDocumentFetchAddress(
+            var address = SelectDocumentFetchAddress(
                 resource.ObjectRef,
-                resource.WemiTopology,
+                resource.BodyJoin.Candidates
+                    .Where(static candidate => candidate.Disposition == LuxembourgBodyCandidateDisposition.AcceptedCandidate)
+                    .Select(static candidate => candidate.WemiCandidate),
                 resource.Assertions.Select(static resolved => resolved.Assertion).ToArray());
             if (address is not null)
             {
@@ -1449,9 +1532,17 @@ public sealed class LuxembourgQueryExecutionAdapter
         ArgumentNullException.ThrowIfNull(wemiTopology);
         ArgumentNullException.ThrowIfNull(assertions);
 
+        return SelectDocumentFetchAddress(objectRef, wemiTopology.Candidates, assertions);
+    }
+
+    private static LuxembourgDocumentFetchAddress? SelectDocumentFetchAddress(
+        SourceObjectRef objectRef, IEnumerable<LuxembourgWemiCandidate> wemiCandidates,
+        IReadOnlyList<LuxembourgObservedAssertion> assertions)
+    {
+
         var actEliPagePath = new Uri(objectRef.PublisherUri, UriKind.Absolute).AbsolutePath;
         var candidates = new List<LuxembourgManifestationCandidate>();
-        foreach (var wemi in wemiTopology.Candidates)
+        foreach (var wemi in wemiCandidates)
         {
             if (wemi.Disposition != LuxembourgWemiCandidateDisposition.StructurallyConsistent)
             {
@@ -1638,14 +1729,14 @@ public sealed class LuxembourgQueryExecutionAdapter
                 $"urn:uuid:{Guid.NewGuid():D}",
                 documentFetchRendererSource);
             var attempt = await _executor.RunDocumentGetAsync(
-                    bound.Request, [address.ActEliPagePath], cancellationToken)
+                    bound.Request, cancellationToken)
                 .ConfigureAwait(false);
             if (attempt.Evidence is null)
             {
                 if (attempt.Refusal == LuxembourgDocumentGetAttemptRefusal.RobotsDisallowed)
                 {
-                    // The publisher's own robots.txt refused THIS document, on one of the three
-                    // paths the ruling evaluates. That is this one object's own cause, never a
+                    // The publisher's own robots.txt refused this requested document URL.
+                    // That is this one object's own cause, never a
                     // whole-run refusal: one withheld act must not block every other act's record.
                     outcomesByOrdinal[rowOrdinal] = CorpusAcquisitionOutcome.Refused(
                         CorpusAcquisitionRefusalReason.RobotsDisallowed);
@@ -2228,9 +2319,51 @@ public sealed class LuxembourgQueryExecutionAdapter
         var observations = new List<LuxembourgResourceObservation>(censusOrder.Count);
         foreach (var subject in censusOrder)
         {
-            IReadOnlyList<LuxembourgObservedAssertion> assertions = assertionsBySubject.TryGetValue(subject, out var list)
-                ? list
-                : [];
+            // WEMI consumes a connected graph. Keep each census resource as its own row, but
+            // supply its forward descendants from this run's proven assertion family as evidence.
+            // Unrelated resources and arbitrary relation targets never enter this graph.
+            var assertions = new List<LuxembourgObservedAssertion>();
+            var visited = new HashSet<string>(StringComparer.Ordinal);
+            var pending = new Queue<string>();
+            pending.Enqueue(subject);
+            while (pending.TryDequeue(out var resource))
+            {
+                if (!visited.Add(resource) || !assertionsBySubject.TryGetValue(resource, out var resourceAssertions))
+                {
+                    continue;
+                }
+                assertions.AddRange(resourceAssertions);
+                foreach (var assertion in resourceAssertions)
+                {
+                    if (assertion.ObjectKind == LuxembourgAssertionObjectKind.Iri &&
+                        assertion.PredicateIri is
+                            "http://data.legilux.public.lu/resource/ontology/jolux#isRealizedBy" or
+                            "http://data.legilux.public.lu/resource/ontology/jolux#isEmbodiedBy" or
+                            "http://data.legilux.public.lu/resource/ontology/jolux#isExemplifiedBy")
+                    {
+                        pending.Enqueue(assertion.ObjectIriOrLexical);
+                    }
+                }
+            }
+            // Consolidation qualification consumes the original Act's own assertions too.
+            // This is only a lookup in the already-proven census, never an inferred assertion
+            // or a fetch address. The resolver still checks the exact Act class, type and parent.
+            if (assertionsBySubject.TryGetValue(subject, out var rootAssertions) &&
+                rootAssertions.Any(assertion => assertion.PredicateIri ==
+                    "http://www.w3.org/1999/02/22-rdf-syntax-ns#type" &&
+                    assertion.ObjectKind == LuxembourgAssertionObjectKind.Iri &&
+                    assertion.ObjectIriOrLexical == "http://data.legilux.public.lu/resource/ontology/jolux#Consolidation"))
+            {
+                var parents = rootAssertions.Where(assertion => assertion.PredicateIri ==
+                        "http://data.legilux.public.lu/resource/ontology/jolux#isMemberOf" &&
+                        assertion.ObjectKind == LuxembourgAssertionObjectKind.Iri)
+                    .Select(assertion => assertion.ObjectIriOrLexical).Distinct(StringComparer.Ordinal).ToArray();
+                if (parents.Length == 1 && assertionsBySubject.TryGetValue(parents[0] + "/jo", out var originalAssertions) &&
+                    visited.Add(parents[0] + "/jo"))
+                {
+                    assertions.AddRange(originalAssertions);
+                }
+            }
             observations.Add(BuildResourceObservation(
                 subject, assertions, observationRef, _sourceProfile.ScopeBinding.SourceProfileRef));
         }
@@ -2283,33 +2416,29 @@ public sealed class LuxembourgQueryExecutionAdapter
             // blocker for want of a channel nobody had asked for.
             new LuxembourgSparqlRightsChannelObservations(
                 observationRef, observationRef, BuildSparqlRightsRows(assertions, observationRef)),
-            // Channel two stays genuinely empty. Decision 21's in-file declaration is read out of
-            // the document and cannot precede acquisition, so it resolves to the typed
-            // SecondChannelPending state (D1-04f owns it). Nothing here fabricates a second
-            // evidence ref to manufacture agreement: that is exactly what the channels'
-            // disjointness rule exists to catch.
+            // This is the pre-acquisition state. ReadInFileRightsAsync replaces it only with
+            // declarations read from this run's independently retained document bytes.
             new LuxembourgInFileRightsChannelObservations(observationRef, observationRef, []));
     }
 
     /// <summary>
-    /// This object's own <c>jolux:license</c> declarations, one row per manifestation that carries
-    /// one, read from the assertions the proven assertion family delivered.
+    /// Exact licence declarations from proven assertions, including observed-empty values for
+    /// typed manifestations. Unruled IRIs remain evidence; they are never filtered into absence.
     /// </summary>
-    /// <remarks>
-    /// Only licence IRIs the profile's own vocabulary rules are carried, and the reason is a real
-    /// hazard rather than tidiness: <c>LuxembourgScopeResolver.ValidateObservation</c> refuses the
-    /// WHOLE RUN with UnknownVocabularyDrift for any licence IRI on a rights channel that the
-    /// profile does not know, so carrying an unruled one would let a single odd licence anywhere in
-    /// the store kill every run. A manifestation whose licence is unruled therefore gets no channel
-    /// row, which leaves its rights ChannelEnumerationUnproven and its body unselected, the
-    /// conservative answer. Recording an unruled licence as its own typed quarantine with its own
-    /// accounting is D1-04f's, beside the in-file channel; it is named residue, not a silent drop.
-    /// </remarks>
     internal static IReadOnlyList<LuxembourgRightsChannelObservation> BuildSparqlRightsRows(
         IReadOnlyList<LuxembourgObservedAssertion> assertions,
         SourceArtifactRef observationRef)
     {
         var licencesByManifestation = new Dictionary<string, SortedSet<string>>(StringComparer.Ordinal);
+        // The proven assertion family observed these manifestations even when license was
+        // absent. Preserve that distinction from a manifestation this channel never observed.
+        foreach (var assertion in assertions.Where(static assertion =>
+            assertion.PredicateIri == "http://www.w3.org/1999/02/22-rdf-syntax-ns#type" &&
+            assertion.ObjectKind == LuxembourgAssertionObjectKind.Iri &&
+            assertion.ObjectIriOrLexical == "http://data.legilux.public.lu/resource/ontology/jolux#Manifestation"))
+        {
+            licencesByManifestation.TryAdd(assertion.SubjectIri, new SortedSet<string>(StringComparer.Ordinal));
+        }
         foreach (var assertion in assertions)
         {
             if (!string.Equals(assertion.PredicateIri, JoluxLicense, StringComparison.Ordinal) ||
