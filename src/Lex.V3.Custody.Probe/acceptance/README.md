@@ -45,11 +45,27 @@ Full-suite skips: `ALaneSymbolicLinkCannotRedirectCustodyOutsideItsLane`
 `TheCodeCivilsTwoCanaryExpressionsAreHeldWithRealReceipts`
 (opt-in LU live canary). No skipped outcome counts as a pass.
 
-The six new cases prove the diagnostic assertion fails against the previous
-implementation. They also assert that response content, synthetic bearer token
-and the account host do not enter the exception text. Existing tests retain
-the no-receipt outcomes for missing authoritative retention and protection
-below ninety days. No new admission guard or relaxation was introduced.
+The six status cases failed against the previous implementation. Claude's review
+of `8e46f5dd859c0170c3a7a0f94c14fb1c881eb27f` found that the three no-leak
+assertions reversed MSTest's `substring, value` argument order. Those assertions
+were vacuous at that head; the status guard was effective. This repair swaps
+only those arguments and leaves production behavior unchanged.
+
+I personally proved each corrected no-leak guard independently using temporary
+mutations of the inner `HttpRequestException` message. The focused command above
+ran separately for each mutation:
+
+| Temporary message expression | Observed result |
+|---|---|
+| `await response.Content.ReadAsStringAsync(timeout.Token)` | 6 failures at the response-content assertion; 0 passed. |
+| `token.Token` | 6 failures at the synthetic-token assertion; 0 passed. |
+| `_options.ServiceUri.Host` | 6 failures at the account-host assertion; 0 passed. |
+| Original fixed message restored | 6 passed, 0 failed. |
+
+All mutations were removed before freezing; the production reader is byte-identical
+to the reviewed head. Existing tests retain the no-receipt outcomes for missing
+authoritative retention and protection below ninety days. No new admission guard
+or relaxation was introduced.
 
 ## Openable control-plane evidence and external blocker
 

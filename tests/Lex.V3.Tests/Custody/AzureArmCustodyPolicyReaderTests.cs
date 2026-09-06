@@ -465,9 +465,9 @@ public sealed class AzureArmCustodyPolicyReaderTests
         var cause = refusal.InnerException as HttpRequestException;
         Assert.IsNotNull(cause);
         Assert.AreEqual(statusCode, cause.StatusCode);
-        Assert.DoesNotContain(refusal.ToString(), "private ARM response");
-        Assert.DoesNotContain(refusal.ToString(), "synthetic-arm-token");
-        Assert.DoesNotContain(refusal.ToString(), Options().ServiceUri.Host);
+        Assert.DoesNotContain("private ARM response", refusal.ToString());
+        Assert.DoesNotContain("synthetic-arm-token", refusal.ToString());
+        Assert.DoesNotContain(Options().ServiceUri.Host, refusal.ToString());
         Assert.AreEqual(1, fixture.Handler.CallCount);
     }
 
