@@ -1,0 +1,2 @@
+*.txt -text -whitespace
+*.json -text -whitespace

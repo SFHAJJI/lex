@@ -1,0 +1,9 @@
+Exécuter des tests à partir de C:\lex-v3\worktrees\codex-stage1-custody-runner\tests\Lex.V3.Tests\bin\Debug\net10.0\Lex.V3.Tests.dll (net10.0|x64)
+C:\lex-v3\worktrees\codex-stage1-custody-runner\tests\Lex.V3.Tests\bin\Debug\net10.0\Lex.V3.Tests.dll (net10.0|x64) réussite (809ms)
+
+Résumé de série de tests : Réussite!
+  total : 27
+  échec : 0
+  réussie : 27
+  ignoré : 0
+  durée : 1s 790ms
