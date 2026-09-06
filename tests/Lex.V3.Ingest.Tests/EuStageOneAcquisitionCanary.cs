@@ -875,6 +875,19 @@ public sealed class EuStageOneAcquisitionCanary
                 ["offendingKey"] = refusal?.OffendingKey,
                 ["requestOrdinal"] = refusal?.RequestOrdinal,
                 ["proofRefusal"] = WireToken(outcome.ProofRefusal),
+
+                // THE ONE FIELD THAT SAYS WHY, and it was missing. Every other field on a refused
+                // family is a typed coordinate: which key, which status, which media type, which
+                // ordinal. The refusal's own message is the only place a cause that none of those
+                // vocabularies covers can be stated, and the executor puts real text there --
+                // EuDeliveryEvidenceSet.LastCoreRefusalMessage carries the ArgumentException
+                // EnumerationDeliveryComparison.Create threw. The canary printed it on a console
+                // line that nothing retains; the INDEX, which is the durable artifact a reader
+                // opens afterwards, dropped it. The 82-seed population run hit a family refusing
+                // delivery_proof_refused with every other field null, and the retained index named
+                // no cause at all. That is the silent absence this index exists to remove, in the
+                // index itself.
+                ["coreRefusalDetail"] = refusal?.CoreRefusalDetail,
             });
         }
 

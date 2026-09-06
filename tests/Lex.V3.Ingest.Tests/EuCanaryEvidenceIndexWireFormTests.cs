@@ -182,6 +182,69 @@ public sealed class EuCanaryEvidenceIndexWireFormTests
                 + "added is a change to declare, not to discover.");
     }
 
+    /// <summary>
+    /// A refused family carries the executor's own refusal message, not only its typed coordinates.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// FOUND BY THE 82-SEED POPULATION RUN, and it cost a diagnosis. Three seeds refused
+    /// <c>object_facts_family_not_proven</c>, and the refused family's row in the retained index
+    /// read: refusalKind <c>delivery_proof_refused</c> and EVERY OTHER FIELD NULL. No offending
+    /// key, no status, no media type, no count, no body digest, because none of those typed
+    /// vocabularies covers this cause. The cause was in the one field the index did not carry.
+    /// </para>
+    /// <para>
+    /// The executor puts real text there: <c>EuDeliveryEvidenceSet.LastCoreRefusalMessage</c> is
+    /// the <see cref="ArgumentException"/> message <c>EnumerationDeliveryComparison.Create</c>
+    /// threw. The canary printed it on a console line, which nothing retains. The INDEX is the
+    /// durable artifact a reader opens afterwards, and it dropped it. A refusal that names no cause
+    /// is the silent absence this index exists to remove, occurring in the index itself.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void ARefusedFamilyCarriesTheExecutorsOwnRefusalMessage()
+    {
+        const string detail = "the delivered row count did not match the count answer.";
+        var index = EuStageOneAcquisitionCanary.BuildEvidenceIndex(
+            EuQueryExecutionResult.Refused(
+                Topology(),
+                [
+                    EuFamilyEnumerationOutcome.ExecutorRefused(
+                        "eu-object-facts-batch-fixture",
+                        new EuEnumerationRefusalDetail(
+                            EuEnumerationRefusal.DeliveryProofRefused,
+                            null, null, null, null, null, null, null, detail)),
+                ],
+                new EuQueryExecutionRefusalDetail(
+                    EuQueryExecutionRefusal.ObjectFactsFamilyNotProven,
+                    "a synthetic refusal for the wire form test.")));
+
+        var family = index["families"]!.AsArray()[0]!.AsObject();
+
+        // The precondition, asserted rather than assumed: if any typed coordinate were populated
+        // this fixture would not be the shape the population run actually met, and the test would
+        // pass while covering an easier case.
+        foreach (var typedCoordinate in new[]
+                 {
+                     "offendingKey", "refusedBodySha256", "refusedBodyTerminalStatus",
+                     "refusedBodyObservedMediaType", "countAnswerItShouldHaveMatched",
+                     "requestOrdinal", "proofRefusal",
+                 })
+        {
+            Assert.IsNull(
+                family[typedCoordinate],
+                typedCoordinate + " is populated, so this fixture is not the all-null shape the "
+                    + "population run met and this test is covering an easier case than the defect.");
+        }
+
+        Assert.AreEqual(
+            detail,
+            family["coreRefusalDetail"]?.GetValue<string>(),
+            "the refused family names no cause at all. Every typed coordinate is null for this "
+                + "refusal, so the executor's own message is the only thing that says why, and a "
+                + "reader opening the retained index would be told nothing.");
+    }
+
     private static string WireTokenOf<T>(T value) where T : struct, Enum =>
         JsonNode.Parse(ContractJson.Serialize(value))!.GetValue<string>();
 
