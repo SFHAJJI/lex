@@ -73,6 +73,8 @@ public sealed class CustodyStoreConformanceTests
             + "decorates an inner store in order to substitute one digest",
         "Lex.V3.Ingest.Tests.LuxembourgQueryExecutionAdapterTests+EnforcingCustodyStore: "
             + "decorates an inner store",
+        "Lex.V3.Ingest.Tests.LuxembourgQueryExecutionAdapterTests+LaterCorruptingCustodyStore: "
+            + "decorates an inner store and corrupts one selected digest only after both relation proofs exist",
         "Lex.V3.Ingest.Tests.LuxembourgQueryExecutionAdapterTests+ManifestHoldFailingCustodyStore: "
             + "decorates an inner store in order to corrupt the first read of a digest",
         "Lex.V3.Ingest.Tests.LuxembourgQueryExecutionAdapterTests"
@@ -128,14 +130,14 @@ public sealed class CustodyStoreConformanceTests
     public void TheImplementationCountsAreExactlyThese()
     {
         var types = CustodyStoreConformance.ImplementationTypes(Scope);
-        Assert.AreEqual(22, types.Count, "implementations swept");
+        Assert.AreEqual(23, types.Count, "implementations swept");
         Assert.AreEqual(
             9,
             types.Count(static type =>
                 CustodyStoreConformance.IsDrivenByDefault(type)
                 || CustodyStoreConformance.HasRecipe(type)),
             "implementations driven");
-        Assert.AreEqual(13, Exempt.Length, "implementations exempt");
+        Assert.AreEqual(14, Exempt.Length, "implementations exempt");
     }
 
     [TestMethod]

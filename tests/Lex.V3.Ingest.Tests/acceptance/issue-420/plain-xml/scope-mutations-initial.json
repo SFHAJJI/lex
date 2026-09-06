@@ -1,0 +1,24 @@
+{
+  "results": [
+    {
+      "mutant": "scope-count",
+      "command": [
+        "dotnet",
+        "test",
+        "tests/Lex.V3.Ingest.Tests/Lex.V3.Ingest.Tests.csproj",
+        "-c",
+        "Release",
+        "--no-restore",
+        "--filter",
+        "FullyQualifiedName~ADeclaredScopeMustHaveAlignedDistinctMembersBeforeAnyTraffic"
+      ],
+      "exitCode": 0,
+      "caughtByExecutedTest": false
+    }
+  ],
+  "restored": {
+    "src/Lex.V3.Ingest/Luxembourg/LuxembourgScopePartitionFamilies.cs": "f34a9a4a96b897c7cccfa2d74bb76da8c426a02d106302affad6896e861a6eb9",
+    "src/Lex.V3.Ingest/Luxembourg/LuxembourgQueryExecutionAdapter.cs": "b59e821996088d370146ef147161c8ec17f6176b60d31c51c5c96cc9ab70b80b",
+    "src/Lex.V3.Contracts/Source/Luxembourg/LuxembourgProvenResourceObservations.cs": "cefee58094e21a944dd45f8c6ebe7186d686c361d15e324c690b2b5757c33b61"
+  }
+}

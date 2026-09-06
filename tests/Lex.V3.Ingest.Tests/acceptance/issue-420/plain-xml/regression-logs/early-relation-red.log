@@ -1,0 +1,31 @@
+Exécuter des tests à partir de C:\lex-v3\worktrees\codex-stage1-lu-xml-proof\tests\Lex.V3.Ingest.Tests\bin\Release\net10.0\Lex.V3.Ingest.Tests.dll (net10.0|x64)
+échec ARefusedDeclaredScopeMemberCannotLeaveACompleteSubset ("second-s") (1s 264ms)
+  à partir de C:\lex-v3\worktrees\codex-stage1-lu-xml-proof\tests\Lex.V3.Ingest.Tests\bin\Release\net10.0\Lex.V3.Ingest.Tests.dll (net10.0|x64)
+  Assertion failed. Condition attendue pour être true.
+  An early scoped refusal must not publish a relation union that was never reopened.
+  
+  actual: false
+  
+  Assert.IsTrue(<condition>)
+    sur Lex.V3.Ingest.Tests.LuxembourgQueryExecutionAdapterTests.ARefusedDeclaredScopeMemberCannotLeaveACompleteSubset(String refusedId) dans C:\lex-v3\worktrees\codex-stage1-lu-xml-proof\tests\Lex.V3.Ingest.Tests\LuxembourgScopedQueryExecutionTests.cs:67
+    sur Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter.Execution.TestMethodInfo.ExecuteInternalAsync(Object[] arguments, CancellationTokenSource timeoutTokenSource)
+échec ARefusedDeclaredScopeMemberCannotLeaveACompleteSubset ("second-a") (1s 061ms)
+  à partir de C:\lex-v3\worktrees\codex-stage1-lu-xml-proof\tests\Lex.V3.Ingest.Tests\bin\Release\net10.0\Lex.V3.Ingest.Tests.dll (net10.0|x64)
+  Assertion failed. Condition attendue pour être true.
+  An early scoped refusal must not publish a relation union that was never reopened.
+  
+  actual: false
+  
+  Assert.IsTrue(<condition>)
+    sur Lex.V3.Ingest.Tests.LuxembourgQueryExecutionAdapterTests.ARefusedDeclaredScopeMemberCannotLeaveACompleteSubset(String refusedId) dans C:\lex-v3\worktrees\codex-stage1-lu-xml-proof\tests\Lex.V3.Ingest.Tests\LuxembourgScopedQueryExecutionTests.cs:67
+    sur Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter.Execution.TestMethodInfo.ExecuteInternalAsync(Object[] arguments, CancellationTokenSource timeoutTokenSource)
+C:\lex-v3\worktrees\codex-stage1-lu-xml-proof\tests\Lex.V3.Ingest.Tests\bin\Release\net10.0\Lex.V3.Ingest.Tests.dll (net10.0|x64) a échoué avec 2 erreur(s) (7s 113ms)
+Code de sortie: 2
+
+Résumé de série de tests : Échec!
+  total : 3
+  échec : 2
+  réussie : 1
+  ignoré : 0
+  durée : 7s 817ms
+L’exécution de tests s’est terminée avec un code de sortie non réussi : 2 (voir : https://aka.ms/testingplatform/exitcodes)

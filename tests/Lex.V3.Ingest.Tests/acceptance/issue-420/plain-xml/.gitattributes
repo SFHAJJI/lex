@@ -1,0 +1,3 @@
+# Retained command logs and publisher archives keep their exact bytes and recorded digests.
+regression-logs/*.log binary
+*.zip binary

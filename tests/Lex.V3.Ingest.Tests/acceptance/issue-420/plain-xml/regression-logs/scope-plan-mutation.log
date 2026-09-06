@@ -1,0 +1,53 @@
+Exécuter des tests à partir de C:\lex-v3\worktrees\codex-stage1-lu-xml-proof\tests\Lex.V3.Ingest.Tests\bin\Release\net10.0\Lex.V3.Ingest.Tests.dll (net10.0|x64)
+échec ADeclaredScopeMustHaveAlignedDistinctMembersBeforeAnyTraffic ("foreign-plan") (174ms)
+  à partir de C:\lex-v3\worktrees\codex-stage1-lu-xml-proof\tests\Lex.V3.Ingest.Tests\bin\Release\net10.0\Lex.V3.Ingest.Tests.dll (net10.0|x64)
+  Assertion failed. Expected exception of exact type ArgumentException but caught InvalidOperationException.
+  
+  expected type:    System.ArgumentException
+  actual exception: System.InvalidOperationException: No HTTP send should happen when no family enumeration is requested.
+                       at Lex.V3.Ingest.Tests.LuxembourgQueryExecutionAdapterTests.<>c.<NoSendHandler>b__57_0(Int32 _, HttpRequestMessage _) in C:\lex-v3\worktrees\codex-stage1-lu-xml-proof\tests\Lex.V3.Ingest.Tests\LuxembourgQueryExecutionAdapterTests.cs:line 1614
+                       at Lex.V3.Ingest.Tests.LuxembourgAcquisitionTestFixture.SequencedHandler.SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) in C:\lex-v3\worktrees\codex-stage1-lu-xml-proof\tests\Lex.V3.Ingest.Tests\LuxembourgAcquisitionTestFixture.cs:line 327
+                       at System.Net.Http.HttpClient.<SendAsync>g__Core|83_0(HttpRequestMessage request, HttpCompletionOption completionOption, CancellationTokenSource cts, Boolean disposeCts, CancellationTokenSource pendingRequestsCts, CancellationToken originalCancellationToken)
+                       at Lex.V3.Ingest.RoutedHttpAcquisitionSession.SendLease.ConsumeAndSendCoreAsync(RetainedSendArtifacts retained, CancellationToken cancellationToken) in C:\lex-v3\worktrees\codex-stage1-lu-xml-proof\src\Lex.V3.Ingest\RoutedHttpAcquisitionSession.cs:line 3188
+                       at Lex.V3.Ingest.RoutedHttpAcquisitionSession.SendLease.RetainAndSendAsync(CancellationToken cancellationToken) in C:\lex-v3\worktrees\codex-stage1-lu-xml-proof\src\Lex.V3.Ingest\RoutedHttpAcquisitionSession.cs:line 3052
+                       at Lex.V3.Ingest.RoutedHttpAcquisitionSession.ExecuteRouteAsync(HttpLogicalRequest request, ReadOnlyMemory`1 requestBody, UInt64 requestOrdinal, UInt64 attemptOrdinal, RobotsPolicyRoute robotsRoute, Boolean enforceGenerationAge, CancellationToken cancellationToken) in C:\lex-v3\worktrees\codex-stage1-lu-xml-proof\src\Lex.V3.Ingest\RoutedHttpAcquisitionSession.cs:line 3408
+                       at Lex.V3.Ingest.RoutedHttpAcquisitionSession.BootstrapRobotsAsync(CancellationToken cancellationToken) in C:\lex-v3\worktrees\codex-stage1-lu-xml-proof\src\Lex.V3.Ingest\RoutedHttpAcquisitionSession.cs:line 257
+                       at Lex.V3.Ingest.Luxembourg.LuxembourgRepeatedEnumerationExecutor.RunPartitionAsync(LuxembourgPartitionRunRequest request, BoundMachineRequest sourceWitness, CancellationToken cancellationToken) in C:\lex-v3\worktrees\codex-stage1-lu-xml-proof\src\Lex.V3.Ingest\Luxembourg\LuxembourgRepeatedEnumerationExecutor.cs:line 427
+                       at Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionAdapter.RunCoreAsync(IReadOnlyList`1 families, IReadOnlyList`1 relationFamilyKeys, IReadOnlyList`1 censusFamilyKeys, IReadOnlyList`1 assertionFamilyKeys, IScopeReductionEvidenceResolver evidenceResolver, MachineQueryRendererSource documentFetchRendererSource, Boolean scoped, CancellationToken cancellationToken) in C:\lex-v3\worktrees\codex-stage1-lu-xml-proof\src\Lex.V3.Ingest\Luxembourg\LuxembourgQueryExecutionAdapter.cs:line 1074
+                       at Microsoft.VisualStudio.TestTools.UnitTesting.Assert.IsThrowsAsyncFailingAsync[TException](Func`1 action, Boolean isStrictType)
+  
+  Assert.ThrowsExactlyAsync<ArgumentException>(<action>)
+    sur Microsoft.VisualStudio.TestTools.UnitTesting.Assert.ThrowsExceptionAsync[TException](Func`1 action, Boolean isStrictType, String message, String actionExpression, String assertMethodName)
+    sur Lex.V3.Ingest.Tests.LuxembourgQueryExecutionAdapterTests.ADeclaredScopeMustHaveAlignedDistinctMembersBeforeAnyTraffic(String defect) dans C:\lex-v3\worktrees\codex-stage1-lu-xml-proof\tests\Lex.V3.Ingest.Tests\LuxembourgScopedQueryExecutionTests.cs:130
+    sur Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter.Execution.TestMethodInfo.ExecuteInternalAsync(Object[] arguments, CancellationTokenSource timeoutTokenSource)
+échec ADeclaredScopeMustHaveAlignedDistinctMembersBeforeAnyTraffic ("foreign-plan-content") (121ms)
+  à partir de C:\lex-v3\worktrees\codex-stage1-lu-xml-proof\tests\Lex.V3.Ingest.Tests\bin\Release\net10.0\Lex.V3.Ingest.Tests.dll (net10.0|x64)
+  Assertion failed. Expected exception of exact type ArgumentException but caught InvalidOperationException.
+  
+  expected type:    System.ArgumentException
+  actual exception: System.InvalidOperationException: No HTTP send should happen when no family enumeration is requested.
+                       at Lex.V3.Ingest.Tests.LuxembourgQueryExecutionAdapterTests.<>c.<NoSendHandler>b__57_0(Int32 _, HttpRequestMessage _) in C:\lex-v3\worktrees\codex-stage1-lu-xml-proof\tests\Lex.V3.Ingest.Tests\LuxembourgQueryExecutionAdapterTests.cs:line 1614
+                       at Lex.V3.Ingest.Tests.LuxembourgAcquisitionTestFixture.SequencedHandler.SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) in C:\lex-v3\worktrees\codex-stage1-lu-xml-proof\tests\Lex.V3.Ingest.Tests\LuxembourgAcquisitionTestFixture.cs:line 327
+                       at System.Net.Http.HttpClient.<SendAsync>g__Core|83_0(HttpRequestMessage request, HttpCompletionOption completionOption, CancellationTokenSource cts, Boolean disposeCts, CancellationTokenSource pendingRequestsCts, CancellationToken originalCancellationToken)
+                       at Lex.V3.Ingest.RoutedHttpAcquisitionSession.SendLease.ConsumeAndSendCoreAsync(RetainedSendArtifacts retained, CancellationToken cancellationToken) in C:\lex-v3\worktrees\codex-stage1-lu-xml-proof\src\Lex.V3.Ingest\RoutedHttpAcquisitionSession.cs:line 3188
+                       at Lex.V3.Ingest.RoutedHttpAcquisitionSession.SendLease.RetainAndSendAsync(CancellationToken cancellationToken) in C:\lex-v3\worktrees\codex-stage1-lu-xml-proof\src\Lex.V3.Ingest\RoutedHttpAcquisitionSession.cs:line 3052
+                       at Lex.V3.Ingest.RoutedHttpAcquisitionSession.ExecuteRouteAsync(HttpLogicalRequest request, ReadOnlyMemory`1 requestBody, UInt64 requestOrdinal, UInt64 attemptOrdinal, RobotsPolicyRoute robotsRoute, Boolean enforceGenerationAge, CancellationToken cancellationToken) in C:\lex-v3\worktrees\codex-stage1-lu-xml-proof\src\Lex.V3.Ingest\RoutedHttpAcquisitionSession.cs:line 3408
+                       at Lex.V3.Ingest.RoutedHttpAcquisitionSession.BootstrapRobotsAsync(CancellationToken cancellationToken) in C:\lex-v3\worktrees\codex-stage1-lu-xml-proof\src\Lex.V3.Ingest\RoutedHttpAcquisitionSession.cs:line 257
+                       at Lex.V3.Ingest.Luxembourg.LuxembourgRepeatedEnumerationExecutor.RunPartitionAsync(LuxembourgPartitionRunRequest request, BoundMachineRequest sourceWitness, CancellationToken cancellationToken) in C:\lex-v3\worktrees\codex-stage1-lu-xml-proof\src\Lex.V3.Ingest\Luxembourg\LuxembourgRepeatedEnumerationExecutor.cs:line 427
+                       at Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionAdapter.RunCoreAsync(IReadOnlyList`1 families, IReadOnlyList`1 relationFamilyKeys, IReadOnlyList`1 censusFamilyKeys, IReadOnlyList`1 assertionFamilyKeys, IScopeReductionEvidenceResolver evidenceResolver, MachineQueryRendererSource documentFetchRendererSource, Boolean scoped, CancellationToken cancellationToken) in C:\lex-v3\worktrees\codex-stage1-lu-xml-proof\src\Lex.V3.Ingest\Luxembourg\LuxembourgQueryExecutionAdapter.cs:line 1074
+                       at Microsoft.VisualStudio.TestTools.UnitTesting.Assert.IsThrowsAsyncFailingAsync[TException](Func`1 action, Boolean isStrictType)
+  
+  Assert.ThrowsExactlyAsync<ArgumentException>(<action>)
+    sur Microsoft.VisualStudio.TestTools.UnitTesting.Assert.ThrowsExceptionAsync[TException](Func`1 action, Boolean isStrictType, String message, String actionExpression, String assertMethodName)
+    sur Lex.V3.Ingest.Tests.LuxembourgQueryExecutionAdapterTests.ADeclaredScopeMustHaveAlignedDistinctMembersBeforeAnyTraffic(String defect) dans C:\lex-v3\worktrees\codex-stage1-lu-xml-proof\tests\Lex.V3.Ingest.Tests\LuxembourgScopedQueryExecutionTests.cs:130
+    sur Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter.Execution.TestMethodInfo.ExecuteInternalAsync(Object[] arguments, CancellationTokenSource timeoutTokenSource)
+C:\lex-v3\worktrees\codex-stage1-lu-xml-proof\tests\Lex.V3.Ingest.Tests\bin\Release\net10.0\Lex.V3.Ingest.Tests.dll (net10.0|x64) a échoué avec 2 erreur(s) (2s 396ms)
+Code de sortie: 2
+
+Résumé de série de tests : Échec!
+  total : 13
+  échec : 2
+  réussie : 11
+  ignoré : 0
+  durée : 2s 615ms
+L’exécution de tests s’est terminée avec un code de sortie non réussi : 2 (voir : https://aka.ms/testingplatform/exitcodes)

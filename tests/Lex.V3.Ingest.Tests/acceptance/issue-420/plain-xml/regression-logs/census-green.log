@@ -1,0 +1,14 @@
+Exécuter des tests à partir de C:\lex-v3\worktrees\codex-stage1-lu-xml-proof\tests\Lex.V3.Ingest.Tests\bin\Release\net10.0\Lex.V3.Ingest.Tests.dll (net10.0|x64)
+Exécuter des tests à partir de C:\lex-v3\worktrees\codex-stage1-lu-xml-proof\tests\Lex.V3.Tests\bin\Release\net10.0\Lex.V3.Tests.dll (net10.0|x64)
+C:\lex-v3\worktrees\codex-stage1-lu-xml-proof\tests\Lex.V3.Ingest.Tests\bin\Release\net10.0\Lex.V3.Ingest.Tests.dll (net10.0|x64) réussite (1s 328ms)
+C:\lex-v3\worktrees\codex-stage1-lu-xml-proof\tests\Lex.V3.Tests\bin\Release\net10.0\Lex.V3.Tests.dll (net10.0|x64) réussite (4s 438ms)
+
+Résumé de série de tests : Réussite!
+  C:\lex-v3\worktrees\codex-stage1-lu-xml-proof\tests\Lex.V3.Tests\bin\Release\net10.0\Lex.V3.Tests.dll (net10.0|x64) réussite (4s 438ms)
+  C:\lex-v3\worktrees\codex-stage1-lu-xml-proof\tests\Lex.V3.Ingest.Tests\bin\Release\net10.0\Lex.V3.Ingest.Tests.dll (net10.0|x64) réussite (1s 328ms)
+
+  total : 107
+  échec : 0
+  réussie : 107
+  ignoré : 0
+  durée : 5s 413ms

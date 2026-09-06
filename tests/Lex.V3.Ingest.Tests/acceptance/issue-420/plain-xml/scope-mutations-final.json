@@ -1,0 +1,181 @@
+{
+  "results": [
+    {
+      "mutant": "scope-count",
+      "command": [
+        "dotnet",
+        "test",
+        "tests/Lex.V3.Ingest.Tests/Lex.V3.Ingest.Tests.csproj",
+        "-c",
+        "Release",
+        "--no-restore",
+        "--filter",
+        "FullyQualifiedName~ADeclaredScopeMustHaveAlignedDistinctMembersBeforeAnyTraffic"
+      ],
+      "exitCode": 2,
+      "caughtByExecutedTest": true,
+      "logSha256": "b89e914548cf958775e99c6ff17aad67dcb004482a366c5df8e1faa898ac883c"
+    },
+    {
+      "mutant": "scope-set",
+      "command": [
+        "dotnet",
+        "test",
+        "tests/Lex.V3.Ingest.Tests/Lex.V3.Ingest.Tests.csproj",
+        "-c",
+        "Release",
+        "--no-restore",
+        "--filter",
+        "FullyQualifiedName~ADeclaredScopeMustHaveAlignedDistinctMembersBeforeAnyTraffic"
+      ],
+      "exitCode": 2,
+      "caughtByExecutedTest": true,
+      "logSha256": "b8af79d1f8fb170d54654d78f1c05d4ed6c0371b4e6c328eeb3b15be433e8bff"
+    },
+    {
+      "mutant": "scope-plan",
+      "command": [
+        "dotnet",
+        "test",
+        "tests/Lex.V3.Ingest.Tests/Lex.V3.Ingest.Tests.csproj",
+        "-c",
+        "Release",
+        "--no-restore",
+        "--filter",
+        "FullyQualifiedName~ADeclaredScopeMustHaveAlignedDistinctMembersBeforeAnyTraffic"
+      ],
+      "exitCode": 2,
+      "caughtByExecutedTest": true,
+      "logSha256": "0a8ccb3a6a92a3cb856e9f5c2af61212b7070bd2339508dd7762f1e5f2e09d14"
+    },
+    {
+      "mutant": "scope-alignment",
+      "command": [
+        "dotnet",
+        "test",
+        "tests/Lex.V3.Ingest.Tests/Lex.V3.Ingest.Tests.csproj",
+        "-c",
+        "Release",
+        "--no-restore",
+        "--filter",
+        "FullyQualifiedName~ADeclaredScopeMustHaveAlignedDistinctMembersBeforeAnyTraffic"
+      ],
+      "exitCode": 2,
+      "caughtByExecutedTest": true,
+      "logSha256": "b0eaa434ef1a5e5a956d31b4f10b36a618a23a857397e60f6e6a5d8d116444ad"
+    },
+    {
+      "mutant": "scope-overlap",
+      "command": [
+        "dotnet",
+        "test",
+        "tests/Lex.V3.Ingest.Tests/Lex.V3.Ingest.Tests.csproj",
+        "-c",
+        "Release",
+        "--no-restore",
+        "--filter",
+        "FullyQualifiedName~ADeclaredScopeMustHaveAlignedDistinctMembersBeforeAnyTraffic"
+      ],
+      "exitCode": 2,
+      "caughtByExecutedTest": true,
+      "logSha256": "ffb617c5ce253a4f084ef220784b4e7899ca876b870b15f55b7fcda9e0951805"
+    },
+    {
+      "mutant": "scope-whole-subject",
+      "command": [
+        "dotnet",
+        "test",
+        "tests/Lex.V3.Ingest.Tests/Lex.V3.Ingest.Tests.csproj",
+        "-c",
+        "Release",
+        "--no-restore",
+        "--filter",
+        "FullyQualifiedName~ADeclaredScopeMustHaveAlignedDistinctMembersBeforeAnyTraffic"
+      ],
+      "exitCode": 2,
+      "caughtByExecutedTest": true,
+      "logSha256": "c1c308ec19979b6b218f51741342ec22d4a670a66ad2c4245a337f59537aa202"
+    },
+    {
+      "mutant": "scope-cover-root",
+      "command": [
+        "dotnet",
+        "test",
+        "tests/Lex.V3.Ingest.Tests/Lex.V3.Ingest.Tests.csproj",
+        "-c",
+        "Release",
+        "--no-restore",
+        "--filter",
+        "FullyQualifiedName~ADeclaredScopeMustHaveAlignedDistinctMembersBeforeAnyTraffic"
+      ],
+      "exitCode": 2,
+      "caughtByExecutedTest": true,
+      "logSha256": "f390a715b89badc9d732c06e92ec725d24dc1b3c642a1cbb2d269062cd260176"
+    },
+    {
+      "mutant": "scope-cover-key",
+      "command": [
+        "dotnet",
+        "test",
+        "tests/Lex.V3.Ingest.Tests/Lex.V3.Ingest.Tests.csproj",
+        "-c",
+        "Release",
+        "--no-restore",
+        "--filter",
+        "FullyQualifiedName~ADeclaredScopeMustHaveAlignedDistinctMembersBeforeAnyTraffic"
+      ],
+      "exitCode": 2,
+      "caughtByExecutedTest": true,
+      "logSha256": "7207b615a2d9b614a957e8e545170ec9dbe928d31e4d89bd6baae23ace5bf18c"
+    },
+    {
+      "mutant": "assertion-profile",
+      "command": [
+        "dotnet",
+        "test",
+        "tests/Lex.V3.Ingest.Tests/Lex.V3.Ingest.Tests.csproj",
+        "-c",
+        "Release",
+        "--no-restore",
+        "--filter",
+        "FullyQualifiedName~TwoDisjointDeclaredScopesContributeTheirOwnRowsAndAllRelationProofs"
+      ],
+      "exitCode": 2,
+      "caughtByExecutedTest": true,
+      "logSha256": "d9567e81392177e5e4812db28d5f96e3845a51065e8380b7197993d0cafb50b1"
+    },
+    {
+      "mutant": "relation-profile",
+      "command": [
+        "dotnet",
+        "test",
+        "tests/Lex.V3.Ingest.Tests/Lex.V3.Ingest.Tests.csproj",
+        "-c",
+        "Release",
+        "--no-restore",
+        "--filter",
+        "FullyQualifiedName~TwoDisjointDeclaredScopesContributeTheirOwnRowsAndAllRelationProofs"
+      ],
+      "exitCode": 2,
+      "caughtByExecutedTest": true,
+      "logSha256": "112599a9b86d8ee606367a3a18fca3b9a691bf59d270036118a883b1dfc01685"
+    },
+    {
+      "mutant": "relation-reopen",
+      "command": [
+        "dotnet",
+        "test",
+        "tests/Lex.V3.Ingest.Tests/Lex.V3.Ingest.Tests.csproj",
+        "-c",
+        "Release",
+        "--no-restore",
+        "--filter",
+        "FullyQualifiedName~ProvenRelationMembersWhoseCustodyFailsReopeningCannotRemainComplete"
+      ],
+      "exitCode": 2,
+      "caughtByExecutedTest": true,
+      "logSha256": "0d4beaf580fa73ce479ea0ff852be539c4d0a760748774c0a8a420fc17976d6c"
+    }
+  ],
+  "limitations": "Initial scope-count mutant survived before empty/unassigned-scope cases; initial relation-reopen mutation failed compilation and is excluded. Selected final rerun replaces it."
+}

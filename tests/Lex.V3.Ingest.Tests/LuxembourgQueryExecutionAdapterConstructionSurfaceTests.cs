@@ -62,25 +62,40 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
     }
 
     /// <summary>
-    /// One private constructor behind two factories: <c>Complete</c> is the only door onto
+    /// One private constructor behind three factories: <c>Complete</c> and <c>CompleteAll</c> lead to
     /// <c>AcquiredComplete</c>, and it requires the completion evidence -- exactly the invariant
     /// <c>Complete</c>'s own doc comment claims.
     /// </summary>
     [TestMethod]
-    public void RelationFamilyAcquisitionHasExactlyTwoFactoriesOverOnePrivateConstructor()
+    public void RelationFamilyAcquisitionHasExactlyThreeFactoriesOverOnePrivateConstructor()
     {
         CollectionAssert.AreEqual(
             new[]
             {
-                "constructor private instance " + N + "LuxembourgRelationFamilyAcquisition::.ctor("
-                + "System.String, " + N + "LuxembourgRelationFamilyAcquisitionState, "
-                + Absence + "AbsenceFamilyEnumerationProof?, System.String?) -> "
-                + N + "LuxembourgRelationFamilyAcquisition",
-                "method public static " + N + "LuxembourgRelationFamilyAcquisition::Complete(System.String, "
-                + Absence + "AbsenceFamilyEnumerationProof) -> " + N + "LuxembourgRelationFamilyAcquisition",
-                "method public static " + N + "LuxembourgRelationFamilyAcquisition::NotComplete(System.String, "
-                + N + "LuxembourgRelationFamilyAcquisitionState, System.String) -> "
-                + N + "LuxembourgRelationFamilyAcquisition",
+                "constructor private instance "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgRelationFamilyAcquisition::.ctor(System.S"
+                    + "tring, Lex.V3.Ingest.Luxembourg.LuxembourgRelationFamilyAcquisitionState, "
+                    + "System.Collections.Generic.IReadOnlyList<Lex.V3.Contracts.Source.Absence.Abs"
+                    + "enceFamilyEnumerationProof>, "
+                    + "System.String?) -> "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgRelationFamilyAcquisition",
+                "method public static "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgRelationFamilyAcquisition::Complete(Syste"
+                    + "m.String, "
+                    + "Lex.V3.Contracts.Source.Absence.AbsenceFamilyEnumerationProof) -> "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgRelationFamilyAcquisition",
+                "method public static "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgRelationFamilyAcquisition::CompleteAll(Sy"
+                    + "stem.String, "
+                    + "System.Collections.Generic.IReadOnlyList<Lex.V3.Contracts.Source.Absence.Abs"
+                    + "enceFamilyEnumerationProof>) -> "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgRelationFamilyAcquisition",
+                "method public static "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgRelationFamilyAcquisition::NotComplete(Sy"
+                    + "stem.String, "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgRelationFamilyAcquisitionState, "
+                    + "System.String) -> "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgRelationFamilyAcquisition",
             },
             ConstructionSurface.Of(typeof(LuxembourgRelationFamilyAcquisition)).ToArray());
     }
@@ -329,10 +344,10 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
     /// does not catch a change to <c>RunAsync</c>'s own signature or return construction, since that
     /// method lives on <see cref="LuxembourgQueryExecutionAdapter"/>, not on the result type itself.
     /// This sweeps the whole assembly for every door onto <see cref="LuxembourgQueryExecutionResult"/>
-    /// outside its own hierarchy: today that is exactly <c>RunAsync</c>, and nothing else.
+    /// outside its own hierarchy: the two public run entrypoints and their private/internal implementations.
     /// </summary>
     [TestMethod]
-    public void OnlyRunAsyncProducesAQueryExecutionResultFromOutsideItsOwnHierarchy()
+    public void OnlyThePinnedRunEntrypointsProduceAQueryExecutionResultFromOutsideItsOwnHierarchy()
     {
         // D1-04c item 2: RunAsync is now two overloads, not one. The public five-parameter door is
         // the only one production code can reach; it never accepts a caller-supplied evidence
@@ -345,38 +360,67 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
             new[]
             {
                 "method internal instance "
-                + N
-                + "LuxembourgQueryExecutionAdapter::RunAsync("
-                + "System.Collections.Generic.IReadOnlyList<System.ValueTuple<"
-                + N
-                + "LuxembourgPartitionRunRequest, "
-                + Core
-                + "BoundMachineRequest, "
-                + Contracts
-                + "LuxembourgPartitionChain>>, System.String?, System.String?, "
-                + "System.String?, "
-                + "Lex.V3.Contracts.Source.Scope.IScopeReductionEvidenceResolver?, "
-                + Core
-                + "MachineQueryRendererSource, "
-                + "System.Threading.CancellationToken) -> System.Threading.Tasks.Task<"
-                + N
-                + "LuxembourgQueryExecutionResult>",
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionAdapter::RunAsync(System.Co"
+                    + "llections.Generic.IReadOnlyList<System.ValueTuple<Lex.V3.Ingest.Luxembourg.L"
+                    + "uxembourgPartitionRunRequest, "
+                    + "Lex.V3.Contracts.Source.Core.BoundMachineRequest, "
+                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgPartitionChain>>, "
+                    + "System.String?, System.String?, System.String?, "
+                    + "Lex.V3.Contracts.Source.Scope.IScopeReductionEvidenceResolver?, "
+                    + "Lex.V3.Contracts.Source.Core.MachineQueryRendererSource, "
+                    + "System.Threading.CancellationToken) -> "
+                    + "System.Threading.Tasks.Task<Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutio"
+                    + "nResult>",
+                "method internal instance "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionAdapter::RunScopedAsync(Sys"
+                    + "tem.Collections.Generic.IReadOnlyList<System.ValueTuple<Lex.V3.Ingest.Luxemb"
+                    + "ourg.LuxembourgPartitionRunRequest, "
+                    + "Lex.V3.Contracts.Source.Core.BoundMachineRequest, "
+                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgPartitionChain>>, "
+                    + "System.Collections.Generic.IReadOnlyList<Lex.V3.Ingest.Luxembourg.Luxembourg"
+                    + "ScopePartitionFamilies>, "
+                    + "Lex.V3.Contracts.Source.Scope.IScopeReductionEvidenceResolver?, "
+                    + "Lex.V3.Contracts.Source.Core.MachineQueryRendererSource, "
+                    + "System.Threading.CancellationToken) -> "
+                    + "System.Threading.Tasks.Task<Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutio"
+                    + "nResult>",
+                "method private instance "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionAdapter::RunCoreAsync(Syste"
+                    + "m.Collections.Generic.IReadOnlyList<System.ValueTuple<Lex.V3.Ingest.Luxembou"
+                    + "rg.LuxembourgPartitionRunRequest, "
+                    + "Lex.V3.Contracts.Source.Core.BoundMachineRequest, "
+                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgPartitionChain>>, "
+                    + "System.Collections.Generic.IReadOnlyList<System.String>, "
+                    + "System.Collections.Generic.IReadOnlyList<System.String>, "
+                    + "System.Collections.Generic.IReadOnlyList<System.String>, "
+                    + "Lex.V3.Contracts.Source.Scope.IScopeReductionEvidenceResolver?, "
+                    + "Lex.V3.Contracts.Source.Core.MachineQueryRendererSource, System.Boolean, "
+                    + "System.Threading.CancellationToken) -> "
+                    + "System.Threading.Tasks.Task<Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutio"
+                    + "nResult>",
                 "method public instance "
-                + N
-                + "LuxembourgQueryExecutionAdapter::RunAsync("
-                + "System.Collections.Generic.IReadOnlyList<System.ValueTuple<"
-                + N
-                + "LuxembourgPartitionRunRequest, "
-                + Core
-                + "BoundMachineRequest, "
-                + Contracts
-                + "LuxembourgPartitionChain>>, System.String?, System.String?, "
-                + "System.String?, "
-                + Core
-                + "MachineQueryRendererSource, "
-                + "System.Threading.CancellationToken) -> System.Threading.Tasks.Task<"
-                + N
-                + "LuxembourgQueryExecutionResult>",
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionAdapter::RunAsync(System.Co"
+                    + "llections.Generic.IReadOnlyList<System.ValueTuple<Lex.V3.Ingest.Luxembourg.L"
+                    + "uxembourgPartitionRunRequest, "
+                    + "Lex.V3.Contracts.Source.Core.BoundMachineRequest, "
+                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgPartitionChain>>, "
+                    + "System.String?, System.String?, System.String?, "
+                    + "Lex.V3.Contracts.Source.Core.MachineQueryRendererSource, "
+                    + "System.Threading.CancellationToken) -> "
+                    + "System.Threading.Tasks.Task<Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutio"
+                    + "nResult>",
+                "method public instance "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionAdapter::RunScopedAsync(Sys"
+                    + "tem.Collections.Generic.IReadOnlyList<System.ValueTuple<Lex.V3.Ingest.Luxemb"
+                    + "ourg.LuxembourgPartitionRunRequest, "
+                    + "Lex.V3.Contracts.Source.Core.BoundMachineRequest, "
+                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgPartitionChain>>, "
+                    + "System.Collections.Generic.IReadOnlyList<Lex.V3.Ingest.Luxembourg.Luxembourg"
+                    + "ScopePartitionFamilies>, "
+                    + "Lex.V3.Contracts.Source.Core.MachineQueryRendererSource, "
+                    + "System.Threading.CancellationToken) -> "
+                    + "System.Threading.Tasks.Task<Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutio"
+                    + "nResult>",
             },
             ConstructionSurface.ProducersIn(
                 typeof(LuxembourgQueryExecutionResult).Assembly,

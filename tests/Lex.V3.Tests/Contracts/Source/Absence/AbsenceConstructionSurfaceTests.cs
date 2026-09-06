@@ -189,6 +189,10 @@ public sealed class AbsenceConstructionSurfaceTests
                 // sweep's own output at the rebase onto integration, not hand-adjusted.
                 "field private instance " + Lu + "LuxembourgProvenResourceObservations"
                 + "::<AssertionFamilyProof>k__BackingField -> " + N + "AbsenceFamilyEnumerationProof?",
+                // A scoped LU run holds all contributing proofs; it still cannot mint any.
+                "field private instance " + Lu + "LuxembourgProvenResourceObservations"
+                + "::<AssertionFamilyProofs>k__BackingField -> System.Collections.Generic.IReadOnlyList<"
+                + N + "AbsenceFamilyEnumerationProof>",
 
                 // The publisher-neutral delivery receipt's bridge (queue item 19: moved and renamed
                 // from Lex.V3.Contracts.Source.Luxembourg.LuxembourgEnumerationDeliveryReceipt), and
@@ -210,6 +214,9 @@ public sealed class AbsenceConstructionSurfaceTests
                 + "System.Collections.Generic.IReadOnlyList<" + N + "AbsenceFamilyEnumerationProof>",
                 "property public instance " + Lu + "LuxembourgProvenResourceObservations"
                 + "::AssertionFamilyProof() -> " + N + "AbsenceFamilyEnumerationProof?",
+                "property public instance " + Lu + "LuxembourgProvenResourceObservations"
+                + "::AssertionFamilyProofs() -> System.Collections.Generic.IReadOnlyList<"
+                + N + "AbsenceFamilyEnumerationProof>",
             },
             ConstructionSurface.ProducersIn(
                 typeof(AbsenceCut).Assembly,

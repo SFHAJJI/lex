@@ -28,20 +28,21 @@ namespace Lex.V3.Contracts.Source.Luxembourg;
 public sealed class LuxembourgProvenResourceObservations
 {
     private LuxembourgProvenResourceObservations(
-        AbsenceFamilyEnumerationProof? assertionFamilyProof,
+        IReadOnlyList<AbsenceFamilyEnumerationProof> assertionFamilyProofs,
         IReadOnlyList<LuxembourgResourceObservation> observations)
     {
-        AssertionFamilyProof = assertionFamilyProof;
+        AssertionFamilyProofs = assertionFamilyProofs;
+        AssertionFamilyProof = assertionFamilyProofs.Count == 1 ? assertionFamilyProofs[0] : null;
         Observations = observations;
     }
 
     /// <summary>
-    /// The proven, receipted enumeration of the assertion family every observation here was derived
-    /// from. Carried, not merely checked and discarded, so a later reader can name the evidence.
-    /// Null exactly when this run designated no resource family at all, which is the empty run and
-    /// is the only shape with no observations to prove.
+    /// The proof for a single-partition observation set. Null for no family or multiple members;
+    /// <see cref="AssertionFamilyProofs"/> retains the entire proof set in every case.
     /// </summary>
     public AbsenceFamilyEnumerationProof? AssertionFamilyProof { get; }
+
+    public IReadOnlyList<AbsenceFamilyEnumerationProof> AssertionFamilyProofs { get; }
 
     public IReadOnlyList<LuxembourgResourceObservation> Observations { get; }
 
@@ -54,10 +55,29 @@ public sealed class LuxembourgProvenResourceObservations
         IReadOnlyList<LuxembourgResourceObservation> observations)
     {
         ArgumentNullException.ThrowIfNull(assertionFamilyProof);
+        return RequireAllProven([assertionFamilyProof], observations);
+    }
+
+    /// <summary>
+    /// Retains every independently proven assertion partition contributing to the observations.
+    /// The adapter must reopen all rows and verify the declared scope before calling this door.
+    /// These are separate partition acquisitions, not a fabricated single acquisition run.
+    /// </summary>
+    public static LuxembourgProvenResourceObservations RequireAllProven(
+        IReadOnlyList<AbsenceFamilyEnumerationProof> assertionFamilyProofs,
+        IReadOnlyList<LuxembourgResourceObservation> observations)
+    {
+        ArgumentNullException.ThrowIfNull(assertionFamilyProofs);
         ArgumentNullException.ThrowIfNull(observations);
-        return new LuxembourgProvenResourceObservations(
-            assertionFamilyProof,
-            LuxembourgSourceValidation.Copy(observations, nameof(observations)));
+        var proofs = LuxembourgSourceValidation.Copy(assertionFamilyProofs, nameof(assertionFamilyProofs));
+        if (proofs.Count == 0 || proofs.Select(static proof => proof.FamilyKey).Distinct(StringComparer.Ordinal).Count() != proofs.Count)
+            throw new ArgumentException("Assertion proofs must name a non-empty set of distinct partition members.", nameof(assertionFamilyProofs));
+        // Independent acquisitions mint distinct profile resource IDs for identical profile bytes.
+        // Retain those IDs in each proof; compatibility depends on the checked content digest.
+        if (proofs.Any(proof => proof.SourceProfileRef.Sha256 != proofs[0].SourceProfileRef.Sha256 ||
+            proof.InterpretationProfileRef.Sha256 != proofs[0].InterpretationProfileRef.Sha256))
+            throw new ArgumentException("Assertion proofs must use one source and interpretation profile.", nameof(assertionFamilyProofs));
+        return new(proofs, LuxembourgSourceValidation.Copy(observations, nameof(observations)));
     }
 
     /// <summary>
@@ -67,5 +87,5 @@ public sealed class LuxembourgProvenResourceObservations
     /// wanting an observation still needs <see cref="RequireProven"/> and therefore still needs a
     /// real proof.
     /// </summary>
-    public static LuxembourgProvenResourceObservations NoFamilyDesignated() => new(null, []);
+    public static LuxembourgProvenResourceObservations NoFamilyDesignated() => new([], []);
 }

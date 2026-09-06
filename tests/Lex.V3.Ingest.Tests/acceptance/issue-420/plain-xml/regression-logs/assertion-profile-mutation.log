@@ -1,0 +1,18 @@
+Exécuter des tests à partir de C:\lex-v3\worktrees\codex-stage1-lu-xml-proof\tests\Lex.V3.Ingest.Tests\bin\Release\net10.0\Lex.V3.Ingest.Tests.dll (net10.0|x64)
+échec TwoDisjointDeclaredScopesContributeTheirOwnRowsAndAllRelationProofs (2s 905ms)
+  à partir de C:\lex-v3\worktrees\codex-stage1-lu-xml-proof\tests\Lex.V3.Ingest.Tests\bin\Release\net10.0\Lex.V3.Ingest.Tests.dll (net10.0|x64)
+  Assertion failed. Expected exception of exact type ArgumentException but no exception was thrown.
+  
+  Assert.ThrowsExactly<ArgumentException>(() => LuxembourgProvenResourceObservations.RequireAllProven(bad, []))
+    sur Lex.V3.Ingest.Tests.LuxembourgQueryExecutionAdapterTests.TwoDisjointDeclaredScopesContributeTheirOwnRowsAndAllRelationProofs() dans C:\lex-v3\worktrees\codex-stage1-lu-xml-proof\tests\Lex.V3.Ingest.Tests\LuxembourgScopedQueryExecutionTests.cs:46
+    sur Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter.Execution.TestMethodInfo.ExecuteInternalAsync(Object[] arguments, CancellationTokenSource timeoutTokenSource)
+C:\lex-v3\worktrees\codex-stage1-lu-xml-proof\tests\Lex.V3.Ingest.Tests\bin\Release\net10.0\Lex.V3.Ingest.Tests.dll (net10.0|x64) a échoué avec 1 erreur(s) (4s 773ms)
+Code de sortie: 2
+
+Résumé de série de tests : Échec!
+  total : 1
+  échec : 1
+  réussie : 0
+  ignoré : 0
+  durée : 5s 505ms
+L’exécution de tests s’est terminée avec un code de sortie non réussi : 2 (voir : https://aka.ms/testingplatform/exitcodes)

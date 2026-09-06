@@ -51,12 +51,13 @@ public sealed class LuxembourgRelationFamilyAcquisition
     private LuxembourgRelationFamilyAcquisition(
         string predicateIri,
         LuxembourgRelationFamilyAcquisitionState state,
-        AbsenceFamilyEnumerationProof? completionEvidence,
+        IReadOnlyList<AbsenceFamilyEnumerationProof> completionProofs,
         string? reason)
     {
         PredicateIri = predicateIri;
         State = state;
-        CompletionEvidence = completionEvidence;
+        CompletionProofs = completionProofs;
+        CompletionEvidence = completionProofs.Count == 1 ? completionProofs[0] : null;
         Reason = reason;
     }
 
@@ -64,8 +65,11 @@ public sealed class LuxembourgRelationFamilyAcquisition
 
     public LuxembourgRelationFamilyAcquisitionState State { get; }
 
-    /// <summary>Present if and only if <see cref="State"/> is <see cref="LuxembourgRelationFamilyAcquisitionState.AcquiredComplete"/>.</summary>
+    /// <summary>The single-member proof; null for incomplete or multiple-member scopes.</summary>
     public AbsenceFamilyEnumerationProof? CompletionEvidence { get; }
+
+    /// <summary>Every contributing proof; non-empty exactly when acquired complete.</summary>
+    public IReadOnlyList<AbsenceFamilyEnumerationProof> CompletionProofs { get; }
 
     /// <summary>Present if and only if <see cref="State"/> is not <see cref="LuxembourgRelationFamilyAcquisitionState.AcquiredComplete"/>.</summary>
     public string? Reason { get; }
@@ -80,8 +84,22 @@ public sealed class LuxembourgRelationFamilyAcquisition
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(predicateIri);
         ArgumentNullException.ThrowIfNull(completionEvidence);
-        return new(
-            predicateIri, LuxembourgRelationFamilyAcquisitionState.AcquiredComplete, completionEvidence, null);
+        return CompleteAll(predicateIri, [completionEvidence]);
+    }
+
+    public static LuxembourgRelationFamilyAcquisition CompleteAll(
+        string predicateIri, IReadOnlyList<AbsenceFamilyEnumerationProof> completionProofs)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(predicateIri);
+        ArgumentNullException.ThrowIfNull(completionProofs);
+        var copy = completionProofs.ToArray();
+        if (copy.Length == 0 || copy.Any(static proof => proof is null) ||
+            copy.Select(static proof => proof.FamilyKey).Distinct(StringComparer.Ordinal).Count() != copy.Length)
+            throw new ArgumentException("Completion needs a non-empty set of distinct proven members.", nameof(completionProofs));
+        if (copy.Any(proof => proof.SourceProfileRef.Sha256 != copy[0].SourceProfileRef.Sha256 ||
+            proof.InterpretationProfileRef.Sha256 != copy[0].InterpretationProfileRef.Sha256))
+            throw new ArgumentException("Completion proofs must share source and interpretation profiles.", nameof(completionProofs));
+        return new(predicateIri, LuxembourgRelationFamilyAcquisitionState.AcquiredComplete, Array.AsReadOnly(copy), null);
     }
 
     /// <summary>
@@ -106,7 +124,7 @@ public sealed class LuxembourgRelationFamilyAcquisition
                 nameof(state));
         }
 
-        return new(predicateIri, state, null, reason);
+        return new(predicateIri, state, [], reason);
     }
 }
 
@@ -954,7 +972,7 @@ public sealed class LuxembourgQueryExecutionAdapter
     /// <param name="evidenceResolver">
     /// Test-only. Null in every production call (the five-parameter overload always passes null).
     /// </param>
-    internal async Task<LuxembourgQueryExecutionResult> RunAsync(
+    internal Task<LuxembourgQueryExecutionResult> RunAsync(
         IReadOnlyList<(
             LuxembourgPartitionRunRequest PartitionRequest,
             BoundMachineRequest SourceWitness,
@@ -964,10 +982,67 @@ public sealed class LuxembourgQueryExecutionAdapter
         string? resourceAssertionsFamilyKey,
         IScopeReductionEvidenceResolver? evidenceResolver,
         MachineQueryRendererSource documentFetchRendererSource,
+        CancellationToken cancellationToken) => RunCoreAsync(families,
+            relationAssertionsFamilyKey is null ? [] : [relationAssertionsFamilyKey],
+            resourceObservationFamilyKey is null ? [] : [resourceObservationFamilyKey],
+            resourceAssertionsFamilyKey is null ? [] : [resourceAssertionsFamilyKey],
+            evidenceResolver, documentFetchRendererSource, scoped: false, cancellationToken);
+
+    /// <summary>
+    /// Executes a declared union of disjoint whole-subject ranges. Every member names aligned
+    /// census, assertion and relation families. Every member must prove and reopen before reduction.
+    /// </summary>
+    public Task<LuxembourgQueryExecutionResult> RunScopedAsync(
+        IReadOnlyList<(LuxembourgPartitionRunRequest PartitionRequest, BoundMachineRequest SourceWitness,
+            LuxembourgPartitionChain? Cover)> families,
+        IReadOnlyList<LuxembourgScopePartitionFamilies> scopeMembers,
+        MachineQueryRendererSource documentFetchRendererSource,
+        CancellationToken cancellationToken) => RunScopedAsync(
+            families, scopeMembers, null, documentFetchRendererSource, cancellationToken);
+
+    internal Task<LuxembourgQueryExecutionResult> RunScopedAsync(
+        IReadOnlyList<(LuxembourgPartitionRunRequest PartitionRequest, BoundMachineRequest SourceWitness,
+            LuxembourgPartitionChain? Cover)> families,
+        IReadOnlyList<LuxembourgScopePartitionFamilies> scopeMembers,
+        IScopeReductionEvidenceResolver? evidenceResolver,
+        MachineQueryRendererSource documentFetchRendererSource,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(families);
+        ArgumentNullException.ThrowIfNull(scopeMembers);
+        families = families.ToArray();
+        scopeMembers = scopeMembers.ToArray();
+        LuxembourgScopePartitionFamilies.Validate(families, scopeMembers);
+        return RunCoreAsync(families,
+            scopeMembers.Select(static member => member.RelationFamilyKey).ToArray(),
+            scopeMembers.Select(static member => member.CensusFamilyKey).ToArray(),
+            scopeMembers.Select(static member => member.AssertionFamilyKey).ToArray(),
+            evidenceResolver, documentFetchRendererSource, scoped: true, cancellationToken);
+    }
+
+    private async Task<LuxembourgQueryExecutionResult> RunCoreAsync(
+        IReadOnlyList<(LuxembourgPartitionRunRequest PartitionRequest, BoundMachineRequest SourceWitness,
+            LuxembourgPartitionChain? Cover)> families,
+        IReadOnlyList<string> relationFamilyKeys,
+        IReadOnlyList<string> censusFamilyKeys,
+        IReadOnlyList<string> assertionFamilyKeys,
+        IScopeReductionEvidenceResolver? evidenceResolver,
+        MachineQueryRendererSource documentFetchRendererSource,
+        bool scoped,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(families);
+        families = families.ToArray();
+        foreach (var family in families) ArgumentNullException.ThrowIfNull(family.PartitionRequest);
+        if (families.Select(static family => family.PartitionRequest.Partition.PartitionId)
+            .Distinct(StringComparer.Ordinal).Count() != families.Count)
+        {
+            throw new ArgumentException("Every requested family must have a unique partition identity.", nameof(families));
+        }
         ArgumentNullException.ThrowIfNull(documentFetchRendererSource);
+        var relationAssertionsFamilyKey = relationFamilyKeys.Count == 0 ? null : string.Join(",", relationFamilyKeys);
+        var resourceObservationFamilyKey = censusFamilyKeys.Count == 0 ? null : string.Join(",", censusFamilyKeys);
+        var resourceAssertionsFamilyKey = assertionFamilyKeys.Count == 0 ? null : string.Join(",", assertionFamilyKeys);
         if ((resourceObservationFamilyKey is null) != (resourceAssertionsFamilyKey is null))
         {
             throw new ArgumentException(
@@ -986,17 +1061,15 @@ public sealed class LuxembourgQueryExecutionAdapter
         var sawRelationFamily = false;
         var censusLegs = new List<FamilyRowsLeg>();
         var assertionLegs = new List<FamilyRowsLeg>();
+        var relationLegs = new List<FamilyRowsLeg>();
 
         foreach (var (partitionRequest, sourceWitness, cover) in families)
         {
             ArgumentNullException.ThrowIfNull(partitionRequest);
             var familyKey = partitionRequest.Partition.PartitionId;
-            var isRelationFamily = string.Equals(
-                familyKey, relationAssertionsFamilyKey, StringComparison.Ordinal);
-            var isCensusFamily = string.Equals(
-                familyKey, resourceObservationFamilyKey, StringComparison.Ordinal);
-            var isAssertionFamily = string.Equals(
-                familyKey, resourceAssertionsFamilyKey, StringComparison.Ordinal);
+            var isRelationFamily = relationFamilyKeys.Contains(familyKey, StringComparer.Ordinal);
+            var isCensusFamily = censusFamilyKeys.Contains(familyKey, StringComparer.Ordinal);
+            var isAssertionFamily = assertionFamilyKeys.Contains(familyKey, StringComparer.Ordinal);
 
             var runResult = await _executor.RunPartitionAsync(
                     partitionRequest, sourceWitness, cancellationToken)
@@ -1012,6 +1085,7 @@ public sealed class LuxembourgQueryExecutionAdapter
                     {
                         sawRelationFamily = true;
                         relationProof = proof;
+                        relationLegs.Add(new FamilyRowsLeg(proof, receipt, partitionRequest));
                     }
 
                     if (isCensusFamily)
@@ -1072,15 +1146,39 @@ public sealed class LuxembourgQueryExecutionAdapter
             }
         }
 
-        var relationAcquisitions = BuildRelationFamilyAcquisitions(
-            relationAssertionsFamilyKey, sawRelationFamily, relationProof, relationIncompleteReason);
+        var relationAcquisitions = scoped
+            ? _sourceProfile.RelationRules.Select(rule => LuxembourgRelationFamilyAcquisition.NotComplete(
+                rule.PredicateIri, LuxembourgRelationFamilyAcquisitionState.Incomplete,
+                "The declared scope has not been independently reverified.")).ToArray()
+            : BuildRelationFamilyAcquisitions(
+                relationAssertionsFamilyKey, sawRelationFamily, relationProof, relationIncompleteReason);
+        if (scoped)
+        {
+            var missing = families.FirstOrDefault(family => FindProvenOutcome(outcomes, family.PartitionRequest.Partition.PartitionId) is null);
+            if (missing.PartitionRequest is not null)
+                return LuxembourgQueryExecutionResult.Refused(topology, outcomes, relationAcquisitions,
+                    new(LuxembourgQueryExecutionRefusal.ResourceObservationFamilyNotProven, null,
+                        $"Declared scope member '{missing.PartitionRequest.Partition.PartitionId}' was not proven."));
+            var (relationRows, _, relationRowsRefusal) = await ReopenAndVerifyFamilyRowsUnionAsync(
+                relationLegs, cancellationToken).ConfigureAwait(false);
+            if (relationRows is null)
+                return LuxembourgQueryExecutionResult.Refused(topology, outcomes,
+                    _sourceProfile.RelationRules.Select(rule => LuxembourgRelationFamilyAcquisition.NotComplete(
+                        rule.PredicateIri, LuxembourgRelationFamilyAcquisitionState.Incomplete,
+                        $"Declared relation scope did not reverify: {relationRowsRefusal}.")).ToArray(),
+                    new(LuxembourgQueryExecutionRefusal.ResourceObservationRowsNotVerified, null,
+                        $"Declared relation scope did not reverify: {relationRowsRefusal}."));
+            relationAcquisitions = _sourceProfile.RelationRules.Select(rule =>
+                LuxembourgRelationFamilyAcquisition.CompleteAll(rule.PredicateIri,
+                    relationLegs.Select(static leg => leg.Proof).ToArray())).ToArray();
+        }
 
         // D1-04b: derive this run's own observations from the two designated families' own proven,
         // independently re-verified rows, rather than trusting a caller-supplied list. Refuses
         // before Resolve/ReduceScope ever sees anything, so an unproven or unverified family never
         // reaches the scope manifest at all.
         IReadOnlyList<LuxembourgResourceObservation> observations;
-        AbsenceFamilyEnumerationProof? assertionFamilyProof = null;
+        IReadOnlyList<AbsenceFamilyEnumerationProof> assertionFamilyProofs = [];
         IReadOnlyList<string> resourceObservationSubjects = [];
         IReadOnlyList<LuxembourgResourceObservationExclusionAccounting> resourceObservationExclusions = [];
         if (resourceObservationFamilyKey is null)
@@ -1092,8 +1190,7 @@ public sealed class LuxembourgQueryExecutionAdapter
         }
         else
         {
-            var censusOutcome = FindProvenOutcome(outcomes, resourceObservationFamilyKey);
-            if (censusOutcome is null || censusLegs.Count == 0)
+            if (censusFamilyKeys.Any(key => FindProvenOutcome(outcomes, key) is null) || censusLegs.Count == 0)
             {
                 return LuxembourgQueryExecutionResult.Refused(
                     topology,
@@ -1106,8 +1203,7 @@ public sealed class LuxembourgQueryExecutionAdapter
                         "was not proven by this run's enumeration."));
             }
 
-            var assertionOutcome = FindProvenOutcome(outcomes, resourceAssertionsFamilyKey!);
-            if (assertionOutcome is null || assertionLegs.Count == 0)
+            if (assertionFamilyKeys.Any(key => FindProvenOutcome(outcomes, key) is null) || assertionLegs.Count == 0)
             {
                 return LuxembourgQueryExecutionResult.Refused(
                     topology,
@@ -1217,12 +1313,9 @@ public sealed class LuxembourgQueryExecutionAdapter
                         new LuxembourgRightsChannelObservation(row.ManifestationIri, row.RunIdentity,
                             assertionIndexRef, row.LicenceIris)).ToArray()),
                 observation.InFileRightsObservations)).ToArray();
-            // The proof this run actually holds for the assertion family these observations were
-            // derived from: FindProvenOutcome above refused the run without it, and
-            // ReopenAndVerifyFamilyRowsUnionAsync refused it again unless the delivered rows
-            // re-verified from custody. A cover chain proves the same family through its leaves, so
-            // either shape supplies it.
-            assertionFamilyProof = assertionOutcome.Proof ?? assertionOutcome.CoverLeafProofs?[0];
+            // Preserve every contributing assertion proof, including cover leaves. Every declared
+            // member was proven above and every leg's rows independently reopened from custody.
+            assertionFamilyProofs = assertionLegs.Select(static leg => leg.Proof).ToArray();
             resourceObservationSubjects = observations.Select(static o => o.ObjectRef.PublisherUri).ToArray();
             resourceObservationExclusions = buildResult.Exclusions!;
         }
@@ -1231,7 +1324,7 @@ public sealed class LuxembourgQueryExecutionAdapter
         // carried by a proof object, so nothing downstream has to check (or be named after) the
         // fact that this family was proven. An empty run designates no family and so has no proof
         // and no observations; RequireProven is reached only on the designated path.
-        if (observations.Count != 0 && assertionFamilyProof is null)
+        if (observations.Count != 0 && assertionFamilyProofs.Count == 0)
         {
             // Unreachable: observations exist only on the designated branch, which refuses the run
             // above unless the family is proven. Typed rather than thrown, for the same reason the
@@ -1247,9 +1340,9 @@ public sealed class LuxembourgQueryExecutionAdapter
                     "own enumeration proof."));
         }
 
-        var resolution = _sourceProfile.Resolve(assertionFamilyProof is null
+        var resolution = _sourceProfile.Resolve(assertionFamilyProofs.Count == 0
             ? LuxembourgProvenResourceObservations.NoFamilyDesignated()
-            : LuxembourgProvenResourceObservations.RequireProven(assertionFamilyProof, observations));
+            : LuxembourgProvenResourceObservations.RequireAllProven(assertionFamilyProofs, observations));
         if (resolution is LuxembourgProfileResolution.Failed failed)
         {
             return LuxembourgQueryExecutionResult.Refused(
@@ -1322,8 +1415,8 @@ public sealed class LuxembourgQueryExecutionAdapter
             {
                 return LuxembourgQueryExecutionResult.Refused(topology, outcomes, relationAcquisitions, rightsFailure);
             }
-            resolution = _sourceProfile.Resolve(LuxembourgProvenResourceObservations.RequireProven(
-                assertionFamilyProof!, withInFileRights!));
+            resolution = _sourceProfile.Resolve(LuxembourgProvenResourceObservations.RequireAllProven(
+                assertionFamilyProofs, withInFileRights!));
             if (resolution is LuxembourgProfileResolution.Failed finalFailure)
             {
                 return LuxembourgQueryExecutionResult.Refused(topology, outcomes, relationAcquisitions,
@@ -2024,18 +2117,23 @@ public sealed class LuxembourgQueryExecutionAdapter
         RepeatedEnumerationInterpretationProfile? profile = null;
         foreach (var leg in legs)
         {
-            var (rows, legProfile, refusal) = await ReopenAndVerifyFamilyRowsAsync(
-                    leg.Proof, leg.Receipt, leg.PartitionRequest, cancellationToken)
-                .ConfigureAwait(false);
-            if (rows is null)
+            try
             {
-                return (
-                    null, null,
-                    $"leaf '{leg.PartitionRequest.Partition.PartitionId}' did not reverify: {refusal}");
-            }
+                var (rows, legProfile, refusal) = await ReopenAndVerifyFamilyRowsAsync(
+                        leg.Proof, leg.Receipt, leg.PartitionRequest, cancellationToken)
+                    .ConfigureAwait(false);
+                if (rows is null)
+                    return (null, null,
+                        $"leaf '{leg.PartitionRequest.Partition.PartitionId}' did not reverify: {refusal}");
 
-            profile ??= legProfile;
-            allRows.AddRange(rows);
+                profile ??= legProfile;
+                allRows.AddRange(rows);
+            }
+            catch (CustodyIntegrityException exception)
+            {
+                return (null, null,
+                    $"leaf '{leg.PartitionRequest.Partition.PartitionId}' custody integrity failed: {exception.Message}");
+            }
         }
 
         return (allRows, profile, null);
