@@ -653,7 +653,14 @@ public sealed class EuRepeatedEnumerationExecutor
     /// The renderer-source artifact naming <c>EuWatermarkWitnessSparqlRenderer</c>'s own code, held
     /// with its bytes exactly as every other Europe bind already requires.
     /// </param>
-    /// <param name="sourceWitness">The bound robots-negotiation witness this session starts from.</param>
+    /// <param name="sourceWitness">
+    /// RETAINED BUT NO LONGER THE SESSION'S START POSITION, and this is disclosed rather than
+    /// quietly left in place. Since S1-A10 the session starts from <paramref name="boundRequest"/>,
+    /// so this witness selects nothing and is only null-checked. It stays for now because removing
+    /// it reaches the adapter's own public RunAsync and from there the population harness whose
+    /// 82-seed evidence is tied to the current signature; dropping it is a follow-up whose only
+    /// content is that removal.
+    /// </param>
     /// <remarks>
     /// DESIGN A: the witness is restricted to the pack's own objects in batches, so this takes the
     /// batch plans rather than one plan. <see cref="MaximumWitnessPageRequests"/> bounds EACH
@@ -931,7 +938,18 @@ public sealed class EuRepeatedEnumerationExecutor
         ArgumentNullException.ThrowIfNull(boundRequest);
         ArgumentNullException.ThrowIfNull(sourceWitness);
 
-        var session = await StartSessionAsync(sourceWitness, cancellationToken).ConfigureAwait(false);
+        // S1-A10, Decision 83: THE SESSION STARTS FROM THE REQUEST IT IS ABOUT TO SEND, not from the
+        // shared witness. Robots is evaluated once, at session start, against the URL the session
+        // started from -- so starting from a shared witness evaluated a PLACEHOLDER path
+        // (celex/00000000) and never the document URL this call actually requests. A publisher can
+        // distinguish two admitted /resource/{ps-name}/{ps-id} paths, and profile shape admission is
+        // not publisher permission, so the real path has to be the one asked about.
+        //
+        // This costs no extra request: a document fetch already opens its own session per call, and
+        // the robots URL is derived from the profile origin rather than the path, so the same robots
+        // document is negotiated either way. Only the path the verdict is computed against changes.
+        // It matches what Luxembourg's own document-get route already does.
+        var session = await StartSessionAsync(boundRequest, cancellationToken).ConfigureAwait(false);
         if (session is null)
         {
             return EuDocumentFetchAttemptResult.Refused(
