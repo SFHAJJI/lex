@@ -108,6 +108,17 @@ public enum HttpRouteIncompleteReason
     /// before this distinction could matter.
     /// </summary>
     RedirectTargetOriginNotAdmitted = 9,
+
+    /// <summary>
+    /// Decision 83, S1-A10: robots exclusion is evaluated "literally, against every URL Lex
+    /// actually requests, and only those". A redirect target is a URL Lex requests, so the route's
+    /// own retained policy is evaluated against it before the successor is sent. Distinct from
+    /// <see cref="RedirectTargetOriginNotAdmitted"/>, which is about the target's ORIGIN and says
+    /// nothing about what the publisher permits at that path, and distinct from
+    /// <see cref="RobotsPolicyUnavailable"/>, which is Lex's own local refusal when no policy could
+    /// be read at all. This member is the publisher's own answer about the path actually requested.
+    /// </summary>
+    RedirectTargetRobotsDenied = 10,
 }
 
 public abstract class RoutedHttpRouteOutcome
@@ -706,6 +717,27 @@ public sealed class RoutedHttpEvidence
                 {
                     throw new ArgumentException(
                         "A redirect-limit outcome requires six observed hops and one further admissible transition.",
+                        nameof(outcome));
+                }
+
+                return;
+            case HttpRouteIncompleteReason.RedirectTargetRobotsDenied:
+                // The mirror of the origin case below, and the mirror is the point: this reason is
+                // only ever produced for a target whose origin DOES match, because an off-origin
+                // target is refused before robots is consulted at all. So the evidence must retain
+                // a terminal redirect to a well-formed admitted target on this route's own origin.
+                // Requiring that here is what stops the reason being attachable to a route whose
+                // hops do not actually show a redirect the publisher then denied.
+                if (!finalIsRedirect ||
+                    !TryGetAdmittedRedirectTarget(terminal, hops[0].RequestUri, out var deniedTarget) ||
+                    !string.Equals(
+                        new Uri(deniedTarget, UriKind.Absolute).GetLeftPart(UriPartial.Authority),
+                        new Uri(hops[0].RequestUri, UriKind.Absolute).GetLeftPart(UriPartial.Authority),
+                        StringComparison.Ordinal))
+                {
+                    throw new ArgumentException(
+                        "A robots-denied redirect outcome requires a well-formed redirect target on "
+                        + "this route's own origin.",
                         nameof(outcome));
                 }
 
@@ -1722,6 +1754,7 @@ internal static partial class RoutedHttpValidation
         HttpRouteIncompleteReason.RobotsPolicyUnavailable => "robots_policy_unavailable",
         HttpRouteIncompleteReason.PublisherServerFailure => "publisher_server_failure",
         HttpRouteIncompleteReason.RedirectTargetOriginNotAdmitted => "redirect_target_origin_not_admitted",
+        HttpRouteIncompleteReason.RedirectTargetRobotsDenied => "redirect_target_robots_denied",
         _ => throw new ArgumentOutOfRangeException(nameof(value)),
     };
 
@@ -1737,6 +1770,7 @@ internal static partial class RoutedHttpValidation
             "robots_policy_unavailable" => HttpRouteIncompleteReason.RobotsPolicyUnavailable,
             "publisher_server_failure" => HttpRouteIncompleteReason.PublisherServerFailure,
             "redirect_target_origin_not_admitted" => HttpRouteIncompleteReason.RedirectTargetOriginNotAdmitted,
+            "redirect_target_robots_denied" => HttpRouteIncompleteReason.RedirectTargetRobotsDenied,
             _ => throw new ArgumentException("The HTTP route reason is not closed.", parameterName),
         };
 
