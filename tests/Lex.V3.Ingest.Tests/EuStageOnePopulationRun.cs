@@ -155,116 +155,74 @@ public sealed class EuStageOnePopulationRun
         var secondAttempts = new List<string>();
         var refused = new List<(string Celex, EuQueryExecutionRefusal Refusal)>();
 
+        // ---- Pass one: every seed once, in Appendix A's own order. ----
         var populationStopwatch = Stopwatch.StartNew();
+        var records = new List<SeedRecord>(seeds.Length);
         foreach (var (seed, ordinal) in seeds.Select(static (seed, ordinal) => (seed, ordinal)))
         {
-            var stopwatch = Stopwatch.StartNew();
-            JsonObject index;
-            EuQueryExecutionResult? result = null;
-            string? fault = null;
-            var attempts = 1;
-            JsonObject? firstAttemptIndex = null;
-            try
-            {
-                result = await RunOneSeedAsync(seed.Celex, Path.Combine(root, "custody", FileNameFor(seed.Celex)))
-                    .ConfigureAwait(false);
+            records.Add(await RunSeedAsync(seed, ordinal, seeds.Length, 1, null, root, seedDirectory, faults)
+                .ConfigureAwait(false));
+        }
 
-                // ONE SECOND ATTEMPT, AND ONLY FOR THE PUBLISHER BEING UNAVAILABLE. Decision 67
-                // names a complete 5xx a publisher server failure, which is a fact about the
-                // publisher rather than a defect in this route, and the first complete run met one:
-                // seed 32006L0112 refused object_facts_family_not_proven on a terminal 503 at
-                // request ordinal 3, then reached its manifest and record set unchanged on a
-                // re-run. A population gate that stayed red for that would report the publisher's
-                // availability as this product's failure.
-                //
-                // WHAT KEEPS THIS FROM BEING A LOOPHOLE. It fires ONLY when every refused family
-                // carries a 5xx (IsPublisherUnavailable), so no Lex-attributable refusal is ever
-                // retried; it is capped at exactly one extra attempt; and the first attempt's whole
-                // evidence index is RETAINED beside the second in the report, so a reader sees that
-                // the seed needed two and why, rather than a quiet pass. The count of seeds needing
-                // a second attempt is reported as its own number for the same reason: if it were
-                // ever large, that is a finding about our own traffic and must be visible.
-                if (result.Refusal is not null && IsPublisherUnavailable(result))
-                {
-                    firstAttemptIndex = EuStageOneAcquisitionCanary.BuildEvidenceIndex(result);
-                    attempts = 2;
-                    Console.WriteLine(
-                        $"POPULATION|secondAttempt|{seed.Celex}|firstRefusal={result.Refusal.Code}"
-                        + $"|status={PublisherStatuses(result)}");
-                    result = await RunOneSeedAsync(
-                            seed.Celex,
-                            Path.Combine(root, "custody", FileNameFor(seed.Celex) + "-attempt-2"))
-                        .ConfigureAwait(false);
-                }
-
-                index = EuStageOneAcquisitionCanary.BuildEvidenceIndex(result);
-            }
-            catch (Exception exception)
-            {
-                // A THROW IS A RESULT, recorded per seed rather than ending the population. An
-                // escaped exception means this seed produced NO typed disposition at all, which is
-                // the silent-absence failure this run exists to make impossible; it is collected
-                // and failed by name at the end so the other 81 are still measured.
-                fault = $"{exception.GetType().FullName}: {exception.Message}";
-                faults.Add($"{seed.Celex}: {fault}");
-                index = new JsonObject { ["harnessFault"] = fault };
-            }
-
-            stopwatch.Stop();
-
-            if (attempts > 1)
-            {
-                secondAttempts.Add(seed.Celex);
-            }
-
-            var reachedManifest = result is not null
-                && result.Refusal is null
-                && result.ScopeManifestReceipt is not null
-                && result.CorpusRecordSet is not null
-                && result.CorpusRecordSetRef is not null;
-
-            if (result is not null && fault is null)
-            {
-                CheckOneSeedsRunTruth(seed.Celex, result, reachedManifest, violations);
-                if (reachedManifest)
-                {
-                    reaching.Add(seed.Celex);
-                }
-                else if (result.Refusal is { } refusal)
-                {
-                    refused.Add((seed.Celex, refusal.Code));
-                }
-            }
-
-            var seedReport = new JsonObject
-            {
-                ["celex"] = seed.Celex,
-                ["workRoot"] = seed.WorkRoot,
-                ["ordinal"] = ordinal,
-                ["elapsedMs"] = stopwatch.ElapsedMilliseconds,
-                ["reachedManifestAndRecordSet"] = reachedManifest,
-                ["attempts"] = attempts,
-                ["harnessFault"] = fault,
-                ["index"] = index,
-                ["firstAttemptIndex"] = firstAttemptIndex,
-            };
-            seedReports.Add(seedReport);
-
-            // Written per seed, as the run goes, so a population that dies at seed sixty still
-            // leaves fifty-nine measured results on disk rather than nothing.
-            await File.WriteAllBytesAsync(
-                Path.Combine(seedDirectory, FileNameFor(seed.Celex) + ".json"),
-                Encoding.UTF8.GetBytes(seedReport.ToJsonString(new JsonSerializerOptions { WriteIndented = true })))
-                .ConfigureAwait(false);
-
+        // ---- Pass two: the deferred second attempt, for publisher unavailability only. ----
+        //
+        // THE SECOND ATTEMPT IS DEFERRED TO THE END OF THE RUN RATHER THAN TAKEN INLINE, and that
+        // is the whole point of it being a second pass. It was inline first, and the complete run
+        // that measured it showed why that is worth almost nothing: seeds 32019L2121 and
+        // 32019R1111 each refused on a terminal 502, retried immediately, and met 502 AGAIN. A
+        // publisher's bad minute is not independent of itself, so an immediate retry re-samples
+        // the same outage and a run loses seeds to a window it could simply have waited out. Every
+        // other seed in the population now runs between the two attempts, which costs no extra
+        // request and makes the second observation actually independent of the first.
+        //
+        // WHAT KEEPS THIS FROM BEING A LOOPHOLE, unchanged by the deferral. It fires ONLY when
+        // every refused family, or the witness, carries a 5xx (IsPublisherUnavailable), so no
+        // Lex-attributable refusal is ever retried. It is capped at exactly one extra attempt.
+        // The first attempt's whole evidence index is retained beside the second, and the count of
+        // seeds needing a second attempt is its own reported field, because if that number were
+        // ever large it would be a finding about our own traffic rather than the publisher's.
+        var deferred = records
+            .Where(static record => record.Result is not null
+                && record.Result.Refusal is not null
+                && IsPublisherUnavailable(record.Result))
+            .ToArray();
+        foreach (var record in deferred)
+        {
             Console.WriteLine(
-                $"POPULATION|seed|{ordinal + 1}/{seeds.Length}|{seed.Celex}|reached={reachedManifest}"
-                + $"|refusal={result?.Refusal?.Code}|objects={result?.ObservedObjectCount}"
-                + $"|expressions={result?.ObservedExpressionCount}|ms={stopwatch.ElapsedMilliseconds}"
-                + $"|fault={fault}");
+                $"POPULATION|deferredSecondAttempt|{record.Seed.Celex}"
+                + $"|firstRefusal={record.Result!.Refusal!.Code}|status={PublisherStatuses(record.Result)}");
+            records[records.IndexOf(record)] = await RunSeedAsync(
+                    record.Seed, record.Ordinal, seeds.Length, 2, record.Index,
+                    root, seedDirectory, faults)
+                .ConfigureAwait(false);
         }
 
         populationStopwatch.Stop();
+
+        // ---- The accounting, over each seed's FINAL record. ----
+        foreach (var record in records)
+        {
+            if (record.Fault is null && record.Result is { } result)
+            {
+                CheckOneSeedsRunTruth(record.Seed.Celex, result, record.Reached, violations);
+                if (record.Reached)
+                {
+                    reaching.Add(record.Seed.Celex);
+                }
+                else if (result.Refusal is { } refusal)
+                {
+                    refused.Add((record.Seed.Celex, refusal.Code));
+                }
+            }
+
+            if (record.Attempts > 1)
+            {
+                secondAttempts.Add(record.Seed.Celex);
+            }
+
+            seedReports.Add(record.Report);
+        }
+
 
         var report = new JsonObject
         {
@@ -605,6 +563,90 @@ public sealed class EuStageOnePopulationRun
                     + "must satisfy and does not check the counts against an outside observation.",
             },
         };
+
+    /// <summary>One seed's own final state within this population run.</summary>
+    private sealed record SeedRecord(
+        (string Celex, string WorkRoot) Seed,
+        int Ordinal,
+        int Attempts,
+        bool Reached,
+        string? Fault,
+        EuQueryExecutionResult? Result,
+        JsonObject Index,
+        JsonObject Report);
+
+    /// <summary>
+    /// Runs one seed once and records it, whichever pass asked. Extracted so the deferred second
+    /// attempt goes through the identical path as the first rather than a near-copy of it.
+    /// </summary>
+    private static async Task<SeedRecord> RunSeedAsync(
+        (string Celex, string WorkRoot) seed,
+        int ordinal,
+        int seedCount,
+        int attempt,
+        JsonObject? firstAttemptIndex,
+        string root,
+        string seedDirectory,
+        List<string> faults)
+    {
+        var stopwatch = Stopwatch.StartNew();
+        JsonObject index;
+        EuQueryExecutionResult? result = null;
+        string? fault = null;
+        var custodyRoot = Path.Combine(
+            root, "custody", FileNameFor(seed.Celex) + (attempt == 1 ? string.Empty : $"-attempt-{attempt}"));
+        try
+        {
+            result = await RunOneSeedAsync(seed.Celex, custodyRoot).ConfigureAwait(false);
+            index = EuStageOneAcquisitionCanary.BuildEvidenceIndex(result);
+        }
+        catch (Exception exception)
+        {
+            // A THROW IS A RESULT, recorded per seed rather than ending the population. An escaped
+            // exception means this seed produced NO typed disposition at all, which is the silent
+            // absence this run exists to make impossible; it is collected and failed by name at the
+            // end so every other seed is still measured.
+            fault = $"{exception.GetType().FullName}: {exception.Message}";
+            faults.Add($"{seed.Celex}: {fault}");
+            index = new JsonObject { ["harnessFault"] = fault };
+        }
+
+        stopwatch.Stop();
+
+        var reached = result is not null
+            && result.Refusal is null
+            && result.ScopeManifestReceipt is not null
+            && result.CorpusRecordSet is not null
+            && result.CorpusRecordSetRef is not null;
+
+        var report = new JsonObject
+        {
+            ["celex"] = seed.Celex,
+            ["workRoot"] = seed.WorkRoot,
+            ["ordinal"] = ordinal,
+            ["elapsedMs"] = stopwatch.ElapsedMilliseconds,
+            ["reachedManifestAndRecordSet"] = reached,
+            ["attempts"] = attempt,
+            ["harnessFault"] = fault,
+            ["index"] = index,
+            ["firstAttemptIndex"] = firstAttemptIndex,
+        };
+
+        // Written per seed, as the run goes, so a population that dies at seed sixty still leaves
+        // fifty-nine measured results on disk rather than nothing.
+        await File.WriteAllBytesAsync(
+            Path.Combine(seedDirectory, FileNameFor(seed.Celex) + ".json"),
+            Encoding.UTF8.GetBytes(report.ToJsonString(new JsonSerializerOptions { WriteIndented = true })))
+            .ConfigureAwait(false);
+
+        Console.WriteLine(
+            $"POPULATION|seed|{ordinal + 1}/{seedCount}|{seed.Celex}|attempt={attempt}|reached={reached}"
+            + $"|refusal={result?.Refusal?.Code}|objects={result?.ObservedObjectCount}"
+            + $"|expressions={result?.ObservedExpressionCount}|ms={stopwatch.ElapsedMilliseconds}"
+            + $"|fault={fault}");
+
+        return new SeedRecord(seed, ordinal, attempt, reached, fault, result, index, report);
+    }
 
     /// <summary>
     /// Every refused family on this run carries a publisher 5xx, so the publisher was unavailable
