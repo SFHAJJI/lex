@@ -425,8 +425,10 @@ public sealed class EuQueryExecutionResult
         EuQueryExecutionRefusalDetail? refusal,
         EuCellarObjectDecodeRefusal? decodeRefusal,
         string? decodeOffendingIri,
-        EuCellarObjectSnapshotRefusal? decodeSnapshotRefusal)
+        EuCellarObjectSnapshotRefusal? decodeSnapshotRefusal,
+        EuWitnessTraversalRefusalDetail? witnessTraversalRefusal = null)
     {
+        WitnessTraversalRefusal = witnessTraversalRefusal;
         Topology = topology;
         FamilyOutcomes = familyOutcomes;
         ObservedObjectCount = observedObjectCount;
@@ -503,13 +505,15 @@ public sealed class EuQueryExecutionResult
         EuQueryExecutionRefusalDetail refusal,
         EuCellarObjectDecodeRefusal? decodeRefusal = null,
         string? decodeOffendingIri = null,
-        EuCellarObjectSnapshotRefusal? decodeSnapshotRefusal = null)
+        EuCellarObjectSnapshotRefusal? decodeSnapshotRefusal = null,
+        EuWitnessTraversalRefusalDetail? witnessTraversalRefusal = null)
     {
         ArgumentNullException.ThrowIfNull(topology);
         ArgumentNullException.ThrowIfNull(refusal);
         return new(
             topology, familyOutcomes, 0, 0, [], null, null, null, null, null, null, null, null, null, null, null,
-            null, null, null, refusal, decodeRefusal, decodeOffendingIri, decodeSnapshotRefusal);
+            null, null, null, refusal, decodeRefusal, decodeOffendingIri, decodeSnapshotRefusal,
+            witnessTraversalRefusal);
     }
 
     /// <summary>Always present: minting it cannot fail, and it is useful context on a refusal too.</summary>
@@ -688,6 +692,14 @@ public sealed class EuQueryExecutionResult
     public VerifiedCorpusRecordSet? CorpusRecordSet { get; }
 
     public EuQueryExecutionRefusalDetail? Refusal { get; }
+
+    /// <summary>
+    /// The witness traversal's own refusal, when <see cref="Refusal"/> is
+    /// <see cref="EuQueryExecutionRefusal.WitnessTraversalRefused"/>. Carried structurally rather
+    /// than only stringified into that refusal's detail, so a caller can read the publisher's own
+    /// status instead of parsing prose.
+    /// </summary>
+    public EuWitnessTraversalRefusalDetail? WitnessTraversalRefusal { get; }
 
     public EuCellarObjectDecodeRefusal? DecodeRefusal { get; }
 
@@ -1361,7 +1373,9 @@ public sealed class EuQueryExecutionAdapter
                 topology, outcomes,
                 new EuQueryExecutionRefusalDetail(
                     EuQueryExecutionRefusal.WitnessTraversalRefused,
-                    $"code={traversal.Refusal!.Code} detail={traversal.Refusal.Detail}"));
+                    $"code={traversal.Refusal!.Code} status={traversal.Refusal.TerminalStatus} " +
+                    $"detail={traversal.Refusal.Detail}"),
+                witnessTraversalRefusal: traversal.Refusal);
         }
 
         var witnessClosureMatrixRef = new SourceArtifactRef(
