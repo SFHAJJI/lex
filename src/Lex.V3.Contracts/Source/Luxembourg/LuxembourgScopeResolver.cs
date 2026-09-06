@@ -1411,12 +1411,29 @@ internal static class LuxembourgScopeResolver
                 ["body_join_sha256:" + BodyJoinDigest(wemiTopology, bodyJoin)],
                 observation.ObservationRef,
                 evidenceOrdinals),
+            // THE ENUMERATION DIGEST IS EVIDENCE, NOT A PUBLISHER VALUE, AND IT USED TO BE BOTH.
+            // Both rights selectors prepended $"enumeration:{...Sha256}" to their value set. The
+            // canonicaliser drops only empty strings, so that element always survived, and
+            // Selector answers PublisherValueAbsent only on an empty set: the absent state was
+            // unreachable for rights by construction. A manifestation whose publisher declared no
+            // licence therefore published PublisherValuePresent over a one-element set whose only
+            // member was our own enumeration digest -- a gap rendered as a present value (S2-A03),
+            // and our artifact rendered as the publisher's assertion (S2-A01), while the dimension
+            // beside it said lu_rights_observed_empty_channel.
+            //
+            // Nothing is lost by dropping it. The enumeration is already the selector's own
+            // evidenceRef on the line below, so which enumeration answered is still recorded,
+            // through the evidence ordinal rather than smuggled in beside the licences. Nothing
+            // read the sentinel: its only two occurrences in the tree were these two constructions.
+            // The >= 2 distinct-value assertion for a conflict rule is untouched, because every
+            // rights rule id is lu_rights_* and none ends in _selector_conflict -- and where it did
+            // apply, a sentinel counting as the second distinct value would have satisfied it
+            // without a second licence.
             Selector(
                 profile,
                 ScopeAxis.Body,
                 dimensions.Rights,
                 [
-                    $"enumeration:{observation.SparqlRightsObservations.EnumerationRef.Sha256}",
                     .. observation.SparqlRightsObservations.Observations
                         .SelectMany(static row => row.LicenceIris),
                 ],
@@ -1427,7 +1444,6 @@ internal static class LuxembourgScopeResolver
                 ScopeAxis.Body,
                 dimensions.Rights,
                 [
-                    $"enumeration:{observation.InFileRightsObservations.EnumerationRef.Sha256}",
                     .. observation.InFileRightsObservations.Observations
                         .SelectMany(static row => row.LicenceIris),
                 ],

@@ -190,6 +190,88 @@ public sealed class LuxembourgScopeResolverTests
             resolved.OrderedEvidenceArtifacts.ToArray());
     }
 
+    /// <summary>
+    /// E0(b) on #409, clauses S2-A03 and S2-A01: a manifestation whose publisher declared no licence
+    /// publishes an absent rights selector, not a present one holding our own enumeration digest.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// WHAT THIS USED TO PUBLISH. Both rights selectors prepended
+    /// <c>$"enumeration:{...EnumerationRef.Sha256}"</c> to their value set. The canonicaliser drops
+    /// only empty strings, so that element always survived, and <c>Selector</c> answers
+    /// <see cref="ScopeSelectorState.PublisherValueAbsent"/> only on an empty set - so for rights
+    /// the absent state was unreachable by construction. Publisher silence published as
+    /// <see cref="ScopeSelectorState.PublisherValuePresent"/> over a one-element set whose only
+    /// member was a digest we computed ourselves, while the dimension beside it correctly said
+    /// <c>lu_rights_observed_empty_channel</c>. A gap rendered as a present value, and our own
+    /// artifact rendered as the publisher's own assertion.
+    /// </para>
+    /// <para>
+    /// The two halves are asserted together on purpose. Checking the selector alone would let the
+    /// dimension drift away from it again; the wire and the resolution have to agree that this
+    /// channel was enumerated and found nothing, which is a different statement from both "never
+    /// enumerated" and "found a value".
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void AManifestationWithNoDeclaredLicencePublishesAnAbsentRightsSelector()
+    {
+        var observation = new LuxembourgResourceObservation(
+            ObjectRef(ManifestationIri),
+            ObservationRef,
+            [Iri(ManifestationIri, RdfType, Jolux + "Manifestation")],
+            [],
+            // Each channel carries a row FOR this manifestation whose licence list is empty. That
+            // is the "observed and found nothing" case, and it is deliberately not the same as
+            // handing the channel no row at all: an unseeded manifestation is
+            // ChannelEnumerationUnproven, because the channel never looked at it. Both are honest,
+            // and keeping them apart is the point of the dimension.
+            new LuxembourgSparqlRightsChannelObservations(
+                ObservationRef,
+                SparqlEnumerationRef,
+                [new LuxembourgRightsChannelObservation(
+                    ManifestationIri, ObservationRef, SparqlEnumerationRef, [])]),
+            new LuxembourgInFileRightsChannelObservations(
+                ObservationRef,
+                InFileEnumerationRef,
+                [new LuxembourgRightsChannelObservation(
+                    ManifestationIri, ObservationRef, InFileEnumerationRef, [])]));
+        var resolved = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(
+            Profile().Resolve(Proven([observation])));
+
+        // The resolution's own account of the same fact, so the wire cannot drift away from it.
+        var rights = resolved.Resources.Single().Dimensions.Rights;
+        Assert.AreEqual(LuScopeTerminalState.MissingPublisherValue, rights.State);
+        Assert.AreEqual("missing_rights_value", rights.ReasonCode);
+
+        var artifacts = resolved.OrderedEvidenceArtifacts.ToArray();
+        var selectors = resolved.ScopeInputs.Single().Selectors;
+        foreach (var enumerationRef in new[] { SparqlEnumerationRef, InFileEnumerationRef })
+        {
+            var ordinal = Array.IndexOf(artifacts, enumerationRef);
+            Assert.IsTrue(ordinal >= 0, "the enumeration must still be carried as evidence.");
+            var selector = selectors.Single(candidate =>
+                candidate.EvidenceArtifactOrdinal == ordinal);
+
+            Assert.AreEqual(
+                ScopeSelectorState.PublisherValueAbsent,
+                selector.State,
+                "a publisher that declared no licence must publish as absent.");
+            Assert.AreEqual(
+                ScopeSelectorEvidenceKind.CompleteObservationAbsence,
+                selector.EvidenceKind);
+            Assert.AreEqual(
+                0,
+                selector.CanonicalValues.Count,
+                "an absent selector carries no values at all.");
+            Assert.IsFalse(
+                selector.CanonicalValues.Any(value =>
+                    value.StartsWith("enumeration:", StringComparison.Ordinal)),
+                "our own enumeration digest is evidence, and must never be published as though the "
+                    + "publisher had asserted it.");
+        }
+    }
+
     [TestMethod]
     public void ManifestationAuthenticityRemainsOnItsExactSubjectWithoutSiblingOrRootLift()
     {
