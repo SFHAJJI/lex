@@ -139,9 +139,85 @@ public sealed class ProbeFailureDiagnosticTests
         return document;
     }
 
+    [TestMethod]
+    public void VersionTwoDoesNotAttributeExternalOrLookalikeExceptions()
+    {
+        var own = ProbeFailureDiagnostic.ConfigurationFailure(
+            ProbeConfigurationGuard.MissingSetting, Secret, "IDENTITY_HEADER");
+        foreach (var error in new Exception[]
+                 { new InvalidOperationException(Secret), new SecretNamedException(), new SecretInvalidOperationException(),
+                     new RequestFailedException(403, Secret) })
+        {
+            if (error is not SecretNamedException and not SecretInvalidOperationException)
+            {
+                error.Data["configuration_guard"] = own;
+            }
+            var json = ProbeFailureDiagnostic.Serialize(error, includeConfiguration: true);
+            Assert.IsFalse(json.Contains(Secret, StringComparison.Ordinal));
+            using var document = JsonDocument.Parse(json);
+            Assert.AreEqual(JsonValueKind.Null,
+                document.RootElement.GetProperty("causes")[0].GetProperty("configuration_guard").ValueKind);
+        }
+    }
+
+    [TestMethod]
+    public void VersionTwoAttributionIsAllowlistedBoundedAndPreservesCausePosition()
+    {
+        var unknown = ProbeFailureDiagnostic.ConfigurationFailure(
+            (ProbeConfigurationGuard)int.MaxValue, Secret, Secret);
+        using var unknownDocument = JsonDocument.Parse(
+            ProbeFailureDiagnostic.Serialize(unknown, includeConfiguration: true));
+        var unknownGuard = unknownDocument.RootElement.GetProperty("causes")[0].GetProperty("configuration_guard");
+        Assert.AreEqual("unknown", unknownGuard.GetProperty("kind").GetString());
+        Assert.AreEqual(JsonValueKind.Null, unknownGuard.GetProperty("setting").ValueKind);
+
+        Exception error = ProbeFailureDiagnostic.ConfigurationFailure(
+            ProbeConfigurationGuard.MissingSetting, Secret, "IDENTITY_HEADER");
+        for (var depth = 1; depth <= 9; depth++)
+        {
+            var json = ProbeFailureDiagnostic.Serialize(error, includeConfiguration: true);
+            Assert.IsFalse(json.Contains(Secret, StringComparison.Ordinal));
+            Assert.IsTrue(Encoding.UTF8.GetByteCount(json) <= 4096);
+            using var document = JsonDocument.Parse(json);
+            var root = document.RootElement;
+            CollectionAssert.AreEquivalent(new[] { "schema", "event", "causes", "truncated" },
+                root.EnumerateObject().Select(property => property.Name).ToArray());
+            Assert.AreEqual("lex-v3-custody-probe-diagnostic/2", root.GetProperty("schema").GetString());
+            Assert.AreEqual("custody_probe_failed", root.GetProperty("event").GetString());
+            Assert.AreEqual(depth > 8, root.GetProperty("truncated").GetBoolean());
+            var causes = root.GetProperty("causes");
+            Assert.AreEqual(Math.Min(depth, 8), causes.GetArrayLength());
+            for (var index = 0; index < causes.GetArrayLength(); index++)
+            {
+                var cause = causes[index];
+                CollectionAssert.AreEquivalent(new[] { "kind", "http_status", "configuration_guard" },
+                    cause.EnumerateObject().Select(property => property.Name).ToArray());
+                if (index == depth - 1)
+                {
+                    Assert.AreEqual("IDENTITY_HEADER",
+                        cause.GetProperty("configuration_guard").GetProperty("setting").GetString());
+                }
+                else
+                {
+                    Assert.AreEqual(JsonValueKind.Null, cause.GetProperty("configuration_guard").ValueKind);
+                    Assert.AreEqual(403, cause.GetProperty("http_status").GetInt32());
+                }
+            }
+            error = new HttpRequestException(Secret, error, HttpStatusCode.Forbidden);
+        }
+    }
+
     private sealed class SecretNamedException : Exception
     {
+        public override System.Collections.IDictionary Data =>
+            throw new InvalidOperationException("Do not read arbitrary Data.");
         public override string Message => throw new InvalidOperationException("Do not read Message.");
         public override string ToString() => throw new InvalidOperationException("Do not read ToString.");
+    }
+
+    private sealed class SecretInvalidOperationException : InvalidOperationException
+    {
+        public override System.Collections.IDictionary Data =>
+            throw new InvalidOperationException("Do not read subtype Data.");
     }
 }

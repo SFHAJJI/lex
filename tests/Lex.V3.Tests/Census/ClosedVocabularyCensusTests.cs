@@ -572,6 +572,8 @@ public sealed class ClosedVocabularyCensusTests
                     + "NewOfficialObservation, ExpandedOfficialScope",
                 "Lex.V3.Custody.Probe.CustodyProbeApplication+ProbeMode: Write, Read, ReadReceipt, "
                     + "Replay",
+                "Lex.V3.Custody.Probe.ProbeConfigurationGuard: SecretCredential, "
+                    + "AlternateIdentitySource, MissingSetting, InvalidIdentitySource, InvalidGuid",
                 "Lex.V3.Preview.SyntheticBuildFailpoint: SourcePartialWritten, SourceFlushed, "
                     + "SourceRenamed, BeforeDecode, RejectedReceiptFlushed, RejectedReceiptRenamed, "
                     + "DerivedFlushed, DerivedRenamed",
