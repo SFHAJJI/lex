@@ -52,17 +52,23 @@ function Test-V3TrackedPath {
 function Test-InstructionPointer {
     param(
         [Parameter(Mandatory)][AllowEmptyString()][string]$Text,
-        [Parameter(Mandatory)][string]$ExpectedDigest,
+        [Parameter(Mandatory)][string]$ExpectedGovernanceHead,
         [Parameter(Mandatory)][ValidateSet('Codex', 'Claude')][string]$Agent
     )
 
+    $forbidden = @(
+        '12C302017CE9B48750115FB638A217B4D562581216AB0E3B5557A6E659C4EF0F',
+        'out-of-repository authority bundle',
+        'pass its quiz'
+    )
+
     return (
-        $Text.Contains('/V3-INSTRUCTIONS.md', [StringComparison]::Ordinal) -and
-        $Text.Contains($ExpectedDigest, [StringComparison]::OrdinalIgnoreCase) -and
-        $Text.Contains('fresh or compacted session', [StringComparison]::OrdinalIgnoreCase) -and
-        $Text.Contains('boot sequence', [StringComparison]::OrdinalIgnoreCase) -and
-        $Text.Contains('quiz', [StringComparison]::OrdinalIgnoreCase) -and
-        $Text.Contains($Agent, [StringComparison]::Ordinal)
+        $Text.Contains('https://github.com/SFHAJJI/lex-governance', [StringComparison]::Ordinal) -and
+        $Text.Contains('BOOT.md', [StringComparison]::Ordinal) -and
+        $Text.Contains('v3/integration', [StringComparison]::Ordinal) -and
+        $Text.Contains($ExpectedGovernanceHead, [StringComparison]::OrdinalIgnoreCase) -and
+        $Text.Contains($Agent, [StringComparison]::Ordinal) -and
+        -not $forbidden.Where({ $Text.Contains($_, [StringComparison]::OrdinalIgnoreCase) })
     )
 }
 
@@ -70,16 +76,19 @@ function Test-CanonicalInstruction {
     param([Parameter(Mandatory)][string]$Text)
 
     $required = @(
-        '12C302017CE9B48750115FB638A217B4D562581216AB0E3B5557A6E659C4EF0F',
-        'd43366e73d22b80f2ad2b9c08767806778354b5362f895bfc77068e298326020',
-        'Decision 55',
-        '9AC4F7787C55D7B7E8104DB754A728F8C9979EDC98A886CD3A8CC7965D714A5F',
-        'V3 product, source, integration, and release repository',
-        'no accepted production data manifest exists',
-        'one accountable writer',
-        'Decision 43'
+        'SFHAJJI/lex-governance/BOOT.md',
+        'v3/integration',
+        'legacy/operations line',
+        'implemented and accepted',
+        'implemented but unaccepted',
+        'incorrect',
+        'missing',
+        'REVIEW REQUEST'
     )
     $forbidden = @(
+        '12C302017CE9B48750115FB638A217B4D562581216AB0E3B5557A6E659C4EF0F',
+        'd43366e73d22b80f2ad2b9c08767806778354b5362f895bfc77068e298326020',
+        '9AC4F7787C55D7B7E8104DB754A728F8C9979EDC98A886CD3A8CC7965D714A5F',
         'deploy/indexes',
         'lex-index/2',
         'corpus/5',
@@ -161,26 +170,29 @@ if ($pathMutations.Where({ Test-V3TrackedPath -Path $_ })) {
 
 $instructionPath = Join-Path $repositoryRoot 'V3-INSTRUCTIONS.md'
 $instructionText = Get-Content -LiteralPath $instructionPath -Raw
-$instructionDigest = (Get-FileHash -LiteralPath $instructionPath -Algorithm SHA256).Hash
 $agentsText = Get-Content -LiteralPath (Join-Path $repositoryRoot 'AGENTS.md') -Raw
 $claudeText = Get-Content -LiteralPath (Join-Path $repositoryRoot 'CLAUDE.md') -Raw
+$governanceHead = '6c216fa5a435f35696279e370910ce825d011e09'
 
 if (-not (Test-CanonicalInstruction -Text $instructionText)) {
     throw 'The canonical V3 instruction is missing an authority binding or contains a stale authority.'
 }
-if (-not (Test-InstructionPointer -Text $agentsText -ExpectedDigest $instructionDigest -Agent Codex)) {
-    throw 'AGENTS.md does not bind the canonical V3 instruction and Codex boot action.'
+if (-not (Test-InstructionPointer -Text $agentsText -ExpectedGovernanceHead $governanceHead -Agent Codex)) {
+    throw 'AGENTS.md does not bind the governance boot router and Codex boot action.'
 }
-if (-not (Test-InstructionPointer -Text $claudeText -ExpectedDigest $instructionDigest -Agent Claude)) {
-    throw 'CLAUDE.md does not bind the canonical V3 instruction and Claude boot action.'
+if (-not (Test-InstructionPointer -Text $claudeText -ExpectedGovernanceHead $governanceHead -Agent Claude)) {
+    throw 'CLAUDE.md does not bind the governance boot router and Claude boot action.'
 }
 
 $wrongDigest = '0' * 64
-if (Test-InstructionPointer -Text $agentsText -ExpectedDigest $wrongDigest -Agent Codex) {
-    throw 'The wrong-digest mutation did not fail.'
+if (Test-InstructionPointer -Text $agentsText -ExpectedGovernanceHead $wrongDigest -Agent Codex) {
+    throw 'The wrong-governance-head mutation did not fail.'
 }
-if (Test-InstructionPointer -Text '' -ExpectedDigest $instructionDigest -Agent Codex) {
+if (Test-InstructionPointer -Text '' -ExpectedGovernanceHead $governanceHead -Agent Codex) {
     throw 'The missing-pointer mutation did not fail.'
+}
+if (Test-InstructionPointer -Text ($agentsText + "`n12C302017CE9B48750115FB638A217B4D562581216AB0E3B5557A6E659C4EF0F") -ExpectedGovernanceHead $governanceHead -Agent Codex) {
+    throw 'The stale-authority-pointer mutation did not fail.'
 }
 if (Test-CanonicalInstruction -Text ($instructionText + "`ndeploy/indexes")) {
     throw 'The stale-path mutation did not fail.'
