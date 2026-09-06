@@ -194,8 +194,6 @@ public sealed class AzureCustodyProbeContractTests
             ("blank header", environment => environment["IDENTITY_HEADER"] = "  "),
             ("external endpoint", environment =>
                 environment["IDENTITY_ENDPOINT"] = "http://identity.example.invalid/token"),
-            ("legacy endpoint", environment => environment["MSI_ENDPOINT"] = "http://127.0.0.1/token"),
-            ("legacy secret", environment => environment["MSI_SECRET"] = "platform-secret"),
             ("arc selector", environment => environment["IMDS_ENDPOINT"] = "http://127.0.0.1/token"),
             ("service fabric selector", environment =>
                 environment["IDENTITY_SERVER_THUMBPRINT"] = "00"),
@@ -276,6 +274,99 @@ public sealed class AzureCustodyProbeContractTests
     }
 
     [TestMethod]
+    public async Task ContainerAppsCompatibilityAliasesAreAdmittedWithValidatedModernIdentitySource()
+    {
+        foreach (var (name, value) in new[]
+                 {
+                     ("MSI_ENDPOINT", "http://identity-compatibility.invalid/token"),
+                     ("MSI_SECRET", "caller-supplied-value-must-remain-unused"),
+                 })
+        {
+            var environment = ValidEnvironment();
+            environment[name] = value;
+            var store = new ProbeStore();
+
+            await CustodyProbeApplication.RunAsync(
+                ["write", "nightly_floor_90d"],
+                TextReader.Null,
+                TextWriter.Null,
+                environment,
+                _ => store,
+                CancellationToken.None);
+
+            Assert.AreEqual(1, store.CreateCalls, name);
+        }
+    }
+
+    [TestMethod]
+    public async Task CompatibilityAliasesCannotReplaceTheRequiredModernManagedIdentitySource()
+    {
+        foreach (var missing in new[] { "IDENTITY_ENDPOINT", "IDENTITY_HEADER" })
+        {
+            var environment = ValidEnvironment();
+            environment.Remove(missing);
+            environment["MSI_ENDPOINT"] = "http://identity-compatibility.invalid/token";
+            environment["MSI_SECRET"] = "caller-supplied-value-must-remain-unused";
+            var storeCreated = false;
+
+            var error = await Assert.ThrowsExactlyAsync<InvalidOperationException>(() =>
+                CustodyProbeApplication.RunAsync(
+                    ["write", "nightly_floor_90d"], TextReader.Null, TextWriter.Null,
+                    environment, _ => { storeCreated = true; return new ProbeStore(); },
+                    CancellationToken.None));
+
+            Assert.IsFalse(storeCreated, missing);
+            using var document = JsonDocument.Parse(
+                ProbeFailureDiagnostic.Serialize(error, includeConfiguration: true));
+            var guard = document.RootElement.GetProperty("causes")[0]
+                .GetProperty("configuration_guard");
+            Assert.AreEqual("missing_setting", guard.GetProperty("kind").GetString());
+            Assert.AreEqual(missing, guard.GetProperty("setting").GetString());
+        }
+    }
+
+    [TestMethod]
+    [DoNotParallelize]
+    public void PinnedSdkChoosesModernManagedIdentitySourceWhenCompatibilityAliasesCoexist()
+    {
+        var variables = new Dictionary<string, string?>
+        {
+            ["IDENTITY_ENDPOINT"] = "http://127.0.0.1:42356/msi/token",
+            ["IDENTITY_HEADER"] = "platform-rotated-header",
+            ["MSI_ENDPOINT"] = "http://identity-compatibility.invalid/token",
+            ["MSI_SECRET"] = "caller-supplied-value-must-remain-unused",
+            ["IMDS_ENDPOINT"] = null,
+            ["IDENTITY_SERVER_THUMBPRINT"] = null,
+        };
+        var previous = variables.Keys.ToDictionary(
+            static name => name,
+            Environment.GetEnvironmentVariable,
+            StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            foreach (var (name, value) in variables)
+            {
+                Environment.SetEnvironmentVariable(name, value);
+            }
+
+#pragma warning disable CS0618 // Pin the source-selection contract of MSAL 4.83.1.
+            var source = Microsoft.Identity.Client.ManagedIdentityApplication
+                .GetManagedIdentitySource();
+#pragma warning restore CS0618
+            Assert.AreEqual(
+                Microsoft.Identity.Client.ManagedIdentity.ManagedIdentitySource.AppService,
+                source);
+        }
+        finally
+        {
+            foreach (var (name, value) in previous)
+            {
+                Environment.SetEnvironmentVariable(name, value);
+            }
+        }
+    }
+
+    [TestMethod]
     [DataRow("azure_client_secret", "private-value", "secret_credential")]
     [DataRow("AZURE_STORAGE_ACCOUNT_KEY", "", "secret_credential")]
     [DataRow("AZURE_STORAGE_CONNECTION_STRING", "private-value", "secret_credential")]
@@ -283,8 +374,6 @@ public sealed class AzureCustodyProbeContractTests
     [DataRow("LEX_V3_CUSTODY_ACCOUNT_KEY", "private-value", "secret_credential")]
     [DataRow("LEX_V3_CUSTODY_CLIENT_SECRET", "private-value", "secret_credential")]
     [DataRow("LEX_V3_CUSTODY_CONNECTION_STRING", "private-value", "secret_credential")]
-    [DataRow("MSI_ENDPOINT", "private-value", "alternate_identity_source")]
-    [DataRow("MSI_SECRET", "", "alternate_identity_source")]
     [DataRow("IMDS_ENDPOINT", "private-value", "alternate_identity_source")]
     [DataRow("IDENTITY_SERVER_THUMBPRINT", "private-value", "alternate_identity_source")]
     [DataRow("AZURE_FEDERATED_TOKEN_FILE", "private-value", "alternate_identity_source")]

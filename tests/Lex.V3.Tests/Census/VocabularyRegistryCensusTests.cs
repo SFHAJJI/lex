@@ -218,7 +218,7 @@ public sealed class VocabularyRegistryCensusTests
                     + "const PreviewRefusalRegistry, const SyntheticResolveEnvelope, "
                     + "const SyntheticSliceArtifact, const SyntheticSliceControl",
                 "Lex.V3.Custody.Probe.CustodyProbeApplication: "
-                    + "AlternateManagedIdentitySourceVariables=5, ForbiddenCredentialVariables=7",
+                    + "AlternateManagedIdentitySourceVariables=3, ForbiddenCredentialVariables=7",
                 "Lex.V3.Preview.SyntheticPreviewBuildContract: const CandidateCoordinate, "
                     + "const CandidateEvidenceBasis, const CanonicalSourceText, const Publisher, "
                     + "const UpstreamHealth, static property HeldCoordinate, "
