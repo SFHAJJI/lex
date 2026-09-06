@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Ingest.Europe;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -84,6 +85,39 @@ public sealed class EuPopulationRetryPolicyTests
             WitnessRefused(null),
             "a witness refusal naming no status states no publisher failure, which is exactly the "
                 + "shape that was unreadable before the status was carried.");
+    }
+
+    [TestMethod]
+    public void ADeferredAttemptsReportCarriesTheFirstAttemptsIndexWithoutStealingItsParent()
+    {
+        // THE BUG THIS STANDS AGAINST COST A COMPLETE 82-SEED RUN. A JsonNode may have one parent.
+        // The first attempt's index is already a child of the first attempt's own report, so
+        // attaching it to the second attempt's report throws InvalidOperationException. That threw
+        // out of the deferred pass, past the catch that only covered the RUN, and the population
+        // wrote all 82 measured seed files and then produced no report at all.
+        //
+        // Driven through the real builder, with a first report actually built first, because the
+        // node only acquires a parent by being put into one. A test that passed a fresh index would
+        // pass under the defect.
+        var seed = ("32014R0600", "http://publications.europa.eu/resource/cellar/fixture");
+        var firstIndex = new JsonObject { ["wholeRunRefusalCode"] = "object_facts_family_not_proven" };
+        var firstReport = EuStageOnePopulationRun.BuildSeedReport(
+            seed, 0, 1000, false, 1, null, firstIndex, null);
+        Assert.IsNotNull(firstReport["index"], "the first report must own its own index.");
+
+        var secondIndex = new JsonObject { ["wholeRunRefusalCode"] = null };
+        var secondReport = EuStageOnePopulationRun.BuildSeedReport(
+            seed, 0, 2000, true, 2, null, secondIndex, firstIndex);
+
+        Assert.AreEqual(
+            "object_facts_family_not_proven",
+            secondReport["firstAttemptIndex"]?["wholeRunRefusalCode"]?.GetValue<string>(),
+            "the second attempt's report must carry the first attempt's own refusal.");
+        Assert.IsNotNull(
+            firstReport["index"],
+            "carrying the first attempt's index forward must not detach it from the first report, "
+                + "which is what a move rather than a clone would do.");
+        Assert.AreEqual(2, secondReport["attempts"]!.GetValue<int>());
     }
 
     private static bool WitnessRefused(int? terminalStatus) =>
