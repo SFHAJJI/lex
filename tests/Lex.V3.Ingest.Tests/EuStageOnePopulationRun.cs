@@ -564,6 +564,41 @@ public sealed class EuStageOnePopulationRun
             },
         };
 
+    /// <summary>
+    /// One seed's own report object. Extracted so a test can drive the case that broke a complete
+    /// run, without a publisher.
+    /// </summary>
+    /// <remarks>
+    /// THE DEEP CLONE, AND THE RUN THAT TAUGHT ME WHY IT IS NEEDED. A <c>JsonNode</c> may have one
+    /// parent, and a deferred second attempt is handed the FIRST attempt's index, which is already
+    /// a child of the first attempt's own report. Attaching it directly throws
+    /// <see cref="InvalidOperationException"/>. That threw out of the deferred pass, past the catch
+    /// that only ever covered the RUN, so a complete 82-seed population wrote all 82 measured seed
+    /// files and then produced no report at all: the one step that was not fault-tolerant was the
+    /// recording of a result rather than the getting of it.
+    /// </remarks>
+    internal static JsonObject BuildSeedReport(
+        (string Celex, string WorkRoot) seed,
+        int ordinal,
+        long elapsedMs,
+        bool reached,
+        int attempt,
+        string? fault,
+        JsonObject index,
+        JsonObject? firstAttemptIndex) =>
+        new()
+        {
+            ["celex"] = seed.Celex,
+            ["workRoot"] = seed.WorkRoot,
+            ["ordinal"] = ordinal,
+            ["elapsedMs"] = elapsedMs,
+            ["reachedManifestAndRecordSet"] = reached,
+            ["attempts"] = attempt,
+            ["harnessFault"] = fault,
+            ["index"] = index,
+            ["firstAttemptIndex"] = firstAttemptIndex?.DeepClone(),
+        };
+
     /// <summary>One seed's own final state within this population run.</summary>
     private sealed record SeedRecord(
         (string Celex, string WorkRoot) Seed,
@@ -601,6 +636,7 @@ public sealed class EuStageOnePopulationRun
             index = EuStageOneAcquisitionCanary.BuildEvidenceIndex(result);
         }
         catch (Exception exception)
+            when (exception is not OperationCanceledException)
         {
             // A THROW IS A RESULT, recorded per seed rather than ending the population. An escaped
             // exception means this seed produced NO typed disposition at all, which is the silent
@@ -619,25 +655,28 @@ public sealed class EuStageOnePopulationRun
             && result.CorpusRecordSet is not null
             && result.CorpusRecordSetRef is not null;
 
-        var report = new JsonObject
-        {
-            ["celex"] = seed.Celex,
-            ["workRoot"] = seed.WorkRoot,
-            ["ordinal"] = ordinal,
-            ["elapsedMs"] = stopwatch.ElapsedMilliseconds,
-            ["reachedManifestAndRecordSet"] = reached,
-            ["attempts"] = attempt,
-            ["harnessFault"] = fault,
-            ["index"] = index,
-            ["firstAttemptIndex"] = firstAttemptIndex,
-        };
+        var report = BuildSeedReport(
+            seed, ordinal, stopwatch.ElapsedMilliseconds, reached, attempt, fault, index, firstAttemptIndex);
 
         // Written per seed, as the run goes, so a population that dies at seed sixty still leaves
         // fifty-nine measured results on disk rather than nothing.
-        await File.WriteAllBytesAsync(
-            Path.Combine(seedDirectory, FileNameFor(seed.Celex) + ".json"),
-            Encoding.UTF8.GetBytes(report.ToJsonString(new JsonSerializerOptions { WriteIndented = true })))
-            .ConfigureAwait(false);
+        //
+        // AND RECORDING A RESULT CANNOT ITSELF END THE POPULATION. Everything from here down is a
+        // fault of this harness rather than an observation of the publisher, so it is recorded the
+        // same way a run's own throw is: named against its seed, collected, and failed at the end.
+        try
+        {
+            await File.WriteAllBytesAsync(
+                Path.Combine(seedDirectory, FileNameFor(seed.Celex) + ".json"),
+                Encoding.UTF8.GetBytes(report.ToJsonString(new JsonSerializerOptions { WriteIndented = true })))
+                .ConfigureAwait(false);
+        }
+        catch (Exception exception)
+            when (exception is not OperationCanceledException)
+        {
+            fault = $"recording {seed.Celex}: {exception.GetType().FullName}: {exception.Message}";
+            faults.Add(fault);
+        }
 
         Console.WriteLine(
             $"POPULATION|seed|{ordinal + 1}/{seedCount}|{seed.Celex}|attempt={attempt}|reached={reached}"
