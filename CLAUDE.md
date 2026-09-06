@@ -1,7 +1,16 @@
 # Claude boot
 
-Canonical instruction: [/V3-INSTRUCTIONS.md](V3-INSTRUCTIONS.md)
+Lex V3 authority and execution state live in the private repository
+`https://github.com/SFHAJJI/lex-governance`.
 
-Expected SHA256: `21F59612C1BB632E5A2FBDC7B13F18EE91F085D349C3F8E56D6511B896031992`
+Before changing this repository:
 
-Before any change, Claude must verify that digest and follow the canonical instruction. In a fresh or compacted session, Claude must load the out-of-repository authority bundle with manifest SHA256 `12C302017CE9B48750115FB638A217B4D562581216AB0E3B5557A6E659C4EF0F`, complete its boot sequence, pass its quiz, and then reread the canonical instruction.
+1. fetch `lex-governance/main` and read its `BOOT.md` completely;
+2. follow its reading order and report the exact governance and product heads;
+3. start product work from this repository's `v3/integration` branch;
+4. reconcile the assigned issue as keep, verify, repair or missing before writing code.
+
+The governance head that introduced this router was
+`6c216fa5a435f35696279e370910ce825d011e09`. If `main` moved, use the current reviewed successor and
+report the delta. Do not load the old out-of-repository clean-room bundle, local inbox, handbook or
+quiz as authority.

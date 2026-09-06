@@ -1,24 +1,42 @@
-# Lex V3 working rules
+# Lex V3 repository instructions
 
-## Authority binding
+This repository contains product code. It does not define its own product authority.
 
-This is the V3 product, source, integration, and release repository. Its execution contract is the accepted six-member clean-room bundle with manifest SHA256 `12C302017CE9B48750115FB638A217B4D562581216AB0E3B5557A6E659C4EF0F` and bundle-set SHA256 `d43366e73d22b80f2ad2b9c08767806778354b5362f895bfc77068e298326020`, activated by Decision 55 in the Decisions register whose post-append SHA256 is `9AC4F7787C55D7B7E8104DB754A728F8C9979EDC98A886CD3A8CC7965D714A5F`.
+## Authority
 
-The architect specification and settled Decisions remain the quality floor. If this file conflicts with either, the specification or later settled Decision wins. At this activation checkpoint, no accepted production data manifest exists. A local database, directory, image, generated artifact, or mutable path is never data authority. Data becomes authoritative only through an exact signed V3 artifact manifest accepted at its required gate.
+The canonical entry point is `SFHAJJI/lex-governance/BOOT.md`. The immutable architect pack,
+numbered Decisions, requirement ledger, stage acceptance contracts, artifact registry and kickoff
+packet live there. If this file conflicts with them, this file is stale.
 
-## Product and reuse boundary
+`v3/integration` is the sole V3 implementation baseline. `main` is the legacy/operations line and
+must not be used as a V3 template or merged merely to make branch history tidy.
 
-1. Build only the V3 product and the infrastructure V3 needs on its own merits.
-2. Earlier implementation is an opt-in parts bin, never a foundation or compatibility constraint. Reuse requires a named V3 reason, a recorded ledger entry, and an independent check.
-3. The activation commit reuses only repository identity, Git history, and the existing `LICENSE`. It reuses no product implementation.
-4. Keep legal facts, evidence, deterministic operations, refusals, exports, and supported journeys available without a model.
-5. Never commit private coordination locations, credentials, publisher payloads, legal text, or generated release artifacts.
-6. A preview artifact is synthetic and must remain incapable of entering a production corpus, index, or release path.
+## Existing implementation
 
-## Work and review boundary
+Merged code is evidence of implementation, not automatic acceptance and not disposable scaffolding.
+For every assigned requirement, inspect `v3/integration` first and classify it:
 
-1. Every active item has one accountable writer, declared paths, a checkpoint, and a non-writer reviewer.
-2. Add behavior in small, reviewed vertical slices. Tests describe V3 behavior only.
-3. A moved candidate head invalidates review and checks affected by the move. Integration is serialized and records the reviewed head and resulting tree.
-4. Claude receives major milestone reviews. Decision 43 requires Claude's personal independent READY before accepting or publishing the full release corpus and index, publishing aliases, or promoting production.
-5. The only required continuous-integration checks are `dotnet`, `web`, and `canon-windows`. Golden and snapshot diffs are review evidence, never merge gates.
+1. implemented and accepted: retain it and link its evidence;
+2. implemented but unaccepted: execute the stage contract;
+3. incorrect: repair the failing clause only;
+4. missing: implement the smallest complete slice.
+
+This protects the substantial Stage 1 work and partial Stage 2 and Stage 5 work from both false
+closure and needless rebuilding.
+
+## Work and review
+
+- One writer owns a slice; the other seat reviews its pushed exact commit.
+- Use the shared GitHub issue as the durable mailbox and the `REVIEW REQUEST` format in governance
+  `BOOT.md`. The owner is not a courier.
+- State only evidence and numbers personally produced, with exact ref and scope.
+- An unopenable artifact is unverified. Unobserved, observed-absent and zero are different facts.
+- A repair is a later commit, never a rewrite of a reviewed head.
+- Integrate serially into `v3/integration`; do not promote partial contracts or evidence.
+
+## Product boundary
+
+Legal facts, deterministic operations, refusals, exports and supported journeys remain useful
+without a model. V2 compatibility is not imported into V3. Synthetic previews remain incapable of
+entering production lineage. Public or legal claims never exceed retained evidence and the active
+stage contract.
