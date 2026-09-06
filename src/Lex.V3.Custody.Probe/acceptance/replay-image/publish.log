@@ -1,0 +1,6 @@
+  Lex.V3.Contracts -> C:\lex-v3\worktrees\codex-custody-replay-image\src\Lex.V3.Contracts\bin\Release\net10.0\linux-x64\Lex.V3.Contracts.dll
+  Lex.V3.Custody.Azure -> C:\lex-v3\worktrees\codex-custody-replay-image\src\Lex.V3.Custody.Azure\bin\Release\net10.0\linux-x64\Lex.V3.Custody.Azure.dll
+  Lex.V3.Custody.Probe -> C:\lex-v3\worktrees\codex-custody-replay-image\src\Lex.V3.Custody.Probe\bin\Release\net10.0\linux-x64\Lex.V3.Custody.Probe.dll
+  Lex.V3.Custody.Probe -> C:\lex-v3\worktrees\codex-custody-replay-image\src\Lex.V3.Custody.Probe\bin\Release\net10.0\linux-x64\publish\
+  Génération de l’image «lex-v3-custody-replay» avec des balises «aeac066baa0e52640d723836d13281f2704683d2» au-dessus de l’image de base «mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled@sha256:0839314d08bb65da369135389a5d8291f75ace587fbb0488f469eb92c62eef68».
+  L’image 'lex-v3-custody-replay:aeac066baa0e52640d723836d13281f2704683d2' a été envoyée à archive locale à «C:\lex-v3\worktrees\codex-custody-replay-image\artifacts\replay-image\custody-replay.tar».

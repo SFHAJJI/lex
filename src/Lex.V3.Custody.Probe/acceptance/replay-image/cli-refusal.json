@@ -1,0 +1,13 @@
+{
+  "command": [
+    "dotnet",
+    "src/Lex.V3.Custody.Probe/bin/Release/net10.0/linux-x64/publish/Lex.V3.Custody.Probe.dll",
+    "replay",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  ],
+  "exitCode": 1,
+  "stdoutBytes": 0,
+  "stderr": "custody_probe_failed\r\n",
+  "environment": "Azure/custody/identity variables removed in child process only",
+  "scope": "Published managed assembly on Windows; no Linux container or Azure execution"
+}

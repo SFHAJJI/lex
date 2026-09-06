@@ -1,0 +1,119 @@
+[
+  {
+    "case": "blob-bytes",
+    "command": [
+      "C:\\Program Files\\Python313\\python.exe",
+      "C:\\lex-v3\\worktrees\\codex-custody-replay-image\\src\\Lex.V3.Custody.Probe\\acceptance\\replay-image\\inspect_image.py",
+      "artifacts\\replay-image\\counterfactuals\\mutant.tar",
+      "src\\Lex.V3.Custody.Probe\\bin\\Release\\net10.0\\linux-x64\\publish",
+      "artifacts\\replay-image\\counterfactuals\\rejected.json"
+    ],
+    "exitCode": 1,
+    "caught": true,
+    "diagnostic": "ValueError: blob digest: blobs/sha256/01ffbce39088f3ba0a0b8370c81a95ecfb801f2ca60eb27db7524b2ac5df5a54"
+  },
+  {
+    "case": "descriptor-size",
+    "command": [
+      "C:\\Program Files\\Python313\\python.exe",
+      "C:\\lex-v3\\worktrees\\codex-custody-replay-image\\src\\Lex.V3.Custody.Probe\\acceptance\\replay-image\\inspect_image.py",
+      "artifacts\\replay-image\\counterfactuals\\mutant.tar",
+      "src\\Lex.V3.Custody.Probe\\bin\\Release\\net10.0\\linux-x64\\publish",
+      "artifacts\\replay-image\\counterfactuals\\rejected.json"
+    ],
+    "exitCode": 1,
+    "caught": true,
+    "diagnostic": "ValueError: descriptor size"
+  },
+  {
+    "case": "platform",
+    "command": [
+      "C:\\Program Files\\Python313\\python.exe",
+      "C:\\lex-v3\\worktrees\\codex-custody-replay-image\\src\\Lex.V3.Custody.Probe\\acceptance\\replay-image\\inspect_image.py",
+      "artifacts\\replay-image\\counterfactuals\\mutant.tar",
+      "src\\Lex.V3.Custody.Probe\\bin\\Release\\net10.0\\linux-x64\\publish",
+      "artifacts\\replay-image\\counterfactuals\\rejected.json"
+    ],
+    "exitCode": 1,
+    "caught": true,
+    "diagnostic": "ValueError: image platform"
+  },
+  {
+    "case": "root-user",
+    "command": [
+      "C:\\Program Files\\Python313\\python.exe",
+      "C:\\lex-v3\\worktrees\\codex-custody-replay-image\\src\\Lex.V3.Custody.Probe\\acceptance\\replay-image\\inspect_image.py",
+      "artifacts\\replay-image\\counterfactuals\\mutant.tar",
+      "src\\Lex.V3.Custody.Probe\\bin\\Release\\net10.0\\linux-x64\\publish",
+      "artifacts\\replay-image\\counterfactuals\\rejected.json"
+    ],
+    "exitCode": 1,
+    "caught": true,
+    "diagnostic": "ValueError: non-root user"
+  },
+  {
+    "case": "entrypoint",
+    "command": [
+      "C:\\Program Files\\Python313\\python.exe",
+      "C:\\lex-v3\\worktrees\\codex-custody-replay-image\\src\\Lex.V3.Custody.Probe\\acceptance\\replay-image\\inspect_image.py",
+      "artifacts\\replay-image\\counterfactuals\\mutant.tar",
+      "src\\Lex.V3.Custody.Probe\\bin\\Release\\net10.0\\linux-x64\\publish",
+      "artifacts\\replay-image\\counterfactuals\\rejected.json"
+    ],
+    "exitCode": 1,
+    "caught": true,
+    "diagnostic": "ValueError: entrypoint"
+  },
+  {
+    "case": "base-layers",
+    "command": [
+      "C:\\Program Files\\Python313\\python.exe",
+      "C:\\lex-v3\\worktrees\\codex-custody-replay-image\\src\\Lex.V3.Custody.Probe\\acceptance\\replay-image\\inspect_image.py",
+      "artifacts\\replay-image\\counterfactuals\\mutant.tar",
+      "src\\Lex.V3.Custody.Probe\\bin\\Release\\net10.0\\linux-x64\\publish",
+      "artifacts\\replay-image\\counterfactuals\\rejected.json"
+    ],
+    "exitCode": 1,
+    "caught": true,
+    "diagnostic": "ValueError: pinned base layers"
+  },
+  {
+    "case": "diff-id",
+    "command": [
+      "C:\\Program Files\\Python313\\python.exe",
+      "C:\\lex-v3\\worktrees\\codex-custody-replay-image\\src\\Lex.V3.Custody.Probe\\acceptance\\replay-image\\inspect_image.py",
+      "artifacts\\replay-image\\counterfactuals\\mutant.tar",
+      "src\\Lex.V3.Custody.Probe\\bin\\Release\\net10.0\\linux-x64\\publish",
+      "artifacts\\replay-image\\counterfactuals\\rejected.json"
+    ],
+    "exitCode": 1,
+    "caught": true,
+    "diagnostic": "ValueError: layer diff digest"
+  },
+  {
+    "case": "missing-published",
+    "command": [
+      "C:\\Program Files\\Python313\\python.exe",
+      "C:\\lex-v3\\worktrees\\codex-custody-replay-image\\src\\Lex.V3.Custody.Probe\\acceptance\\replay-image\\inspect_image.py",
+      "artifacts\\replay-image\\counterfactuals\\mutant.tar",
+      "artifacts\\replay-image\\counterfactuals\\empty-publish",
+      "artifacts\\replay-image\\counterfactuals\\rejected.json"
+    ],
+    "exitCode": 1,
+    "caught": true,
+    "diagnostic": "ValueError: published files differ from image"
+  },
+  {
+    "case": "duplicate-member",
+    "command": [
+      "C:\\Program Files\\Python313\\python.exe",
+      "C:\\lex-v3\\worktrees\\codex-custody-replay-image\\src\\Lex.V3.Custody.Probe\\acceptance\\replay-image\\inspect_image.py",
+      "artifacts\\replay-image\\counterfactuals\\mutant.tar",
+      "src\\Lex.V3.Custody.Probe\\bin\\Release\\net10.0\\linux-x64\\publish",
+      "artifacts\\replay-image\\counterfactuals\\rejected.json"
+    ],
+    "exitCode": 1,
+    "caught": true,
+    "diagnostic": "ValueError: duplicate archive member"
+  }
+]
