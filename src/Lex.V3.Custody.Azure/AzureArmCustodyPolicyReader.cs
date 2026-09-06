@@ -130,7 +130,11 @@ internal sealed class AzureArmCustodyPolicyReader : IAzureCustodyPolicyReader
         if (response.StatusCode != HttpStatusCode.OK)
         {
             throw new CustodyRequiredException(
-                "Azure did not return the configured custody policy.");
+                "Azure did not return the configured custody policy.",
+                new HttpRequestException(
+                    "Azure custody policy request failed.",
+                    inner: null,
+                    statusCode: response.StatusCode));
         }
 
         if (response.Headers.Date is null)

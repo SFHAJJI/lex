@@ -446,15 +446,29 @@ public sealed class AzureArmCustodyPolicyReaderTests
     }
 
     [TestMethod]
-    public async Task NonSuccessStatusIsCustodyUnavailability()
+    [DataRow(HttpStatusCode.Unauthorized)]
+    [DataRow(HttpStatusCode.Forbidden)]
+    [DataRow(HttpStatusCode.NotFound)]
+    [DataRow(HttpStatusCode.TooManyRequests)]
+    [DataRow(HttpStatusCode.InternalServerError)]
+    [DataRow(HttpStatusCode.ServiceUnavailable)]
+    public async Task NonSuccessStatusPreservesTheCauseWithoutResponseContent(HttpStatusCode statusCode)
     {
         using var fixture = Fixture.For(
-            NightlyPayload(),
-            statusCode: HttpStatusCode.Forbidden);
+            "private ARM response must not enter diagnostics",
+            statusCode: statusCode);
 
-        await Assert.ThrowsExactlyAsync<CustodyRequiredException>(() => fixture.Reader.ReadAsync(
+        var refusal = await Assert.ThrowsExactlyAsync<CustodyRequiredException>(() => fixture.Reader.ReadAsync(
             CustodyClass.NightlyFloor90d,
             CancellationToken.None));
+
+        var cause = refusal.InnerException as HttpRequestException;
+        Assert.IsNotNull(cause);
+        Assert.AreEqual(statusCode, cause.StatusCode);
+        Assert.DoesNotContain(refusal.ToString(), "private ARM response");
+        Assert.DoesNotContain(refusal.ToString(), "synthetic-arm-token");
+        Assert.DoesNotContain(refusal.ToString(), Options().ServiceUri.Host);
+        Assert.AreEqual(1, fixture.Handler.CallCount);
     }
 
     [TestMethod]
