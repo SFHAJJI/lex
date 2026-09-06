@@ -30,7 +30,7 @@ namespace Lex.V3.Ingest.Tests;
 /// </para>
 /// </summary>
 [TestClass]
-public sealed class LuxembourgQueryExecutionAdapterTests
+public sealed partial class LuxembourgQueryExecutionAdapterTests
 {
     private const string RelationSetId = "G";
     private const string RelationFamilyKey = "relation-assertions";
@@ -267,6 +267,39 @@ public sealed class LuxembourgQueryExecutionAdapterTests
         Assert.IsNotNull(result.ScopeManifestReceipt);
         Assert.IsNull(result.Refusal);
         Assert.AreEqual(LuxembourgQueryExecutionCompletion.AllFamiliesProven, result.Completion);
+    }
+
+    [TestMethod]
+    public async Task DuplicateFamilyIdsCannotHideALaterRefusedPartitionBehindAnEarlierProof()
+    {
+        var (profile, _, enumerationRef) = BuildProfile();
+        var store = new InMemoryCustodyStore();
+        var sends = 0;
+        var handler = new LuxembourgAcquisitionTestFixture.SequencedHandler((ordinal, request) =>
+        {
+            sends++;
+            return ordinal switch
+            {
+                0 => TextResponse(request, "User-agent: *\nAllow: /\n"),
+                1 or 4 => LuxembourgAcquisitionTestFixture.JsonResponse(request, LuxembourgAcquisitionTestFixture.CountJson(2)),
+                2 or 5 => LuxembourgAcquisitionTestFixture.JsonResponse(request, RelationAssertionsRowsJson("a", "b")),
+                3 or 6 => LuxembourgAcquisitionTestFixture.JsonResponse(request, RelationAssertionsRowsJson()),
+                7 => TextResponse(request, "User-agent: *\nDisallow: /\n"),
+                _ => throw new AssertFailedException("Unexpected extra publisher request."),
+            };
+        });
+        var adapter = new LuxembourgQueryExecutionAdapter(store, NewExecutor(store, handler), profile);
+        var (partition, witness) = BuildPartitionRequest(RelationSetId, RelationFamilyKey);
+        await Assert.ThrowsExactlyAsync<ArgumentException>(async () =>
+        {
+            var result = await adapter.RunAsync([(partition, witness, null), (partition, witness, null)],
+                RelationFamilyKey, null, null, new PermissiveEvidenceResolver(enumerationRef),
+                DocumentFetchRendererSource(), CancellationToken.None);
+            Console.WriteLine($"Duplicate-id result: completion={result.Completion}; " +
+                $"outcomes={string.Join(',', result.FamilyOutcomes.Select(value => value.Kind))}; " +
+                $"relations={string.Join(',', result.RelationFamilyAcquisitions.Select(value => value.State).Distinct())}");
+        });
+        Assert.AreEqual(0, sends, "Duplicate family identities must be rejected before publisher traffic.");
     }
 
     [TestMethod]

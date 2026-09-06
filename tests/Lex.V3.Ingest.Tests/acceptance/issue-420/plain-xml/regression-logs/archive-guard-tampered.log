@@ -1,0 +1,5 @@
+Traceback (most recent call last):
+  File "C:\lex-v3\worktrees\codex-stage1-lu-xml-proof\tests\Lex.V3.Ingest.Tests\acceptance\issue-420\plain-xml\archive_run.py", line 27, in <module>
+    assert path.name == digest, relative
+           ^^^^^^^^^^^^^^^^^^^
+AssertionError: nightly-floor-90d/3e022858e3f30637f25a5c0369c05b479ca4a49f3a84897096a7bb718bca5ddb

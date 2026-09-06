@@ -972,6 +972,9 @@ public sealed class GuardedConstructionCensusTests
                     + "amilyDesignated, "
                     + "method public static "
                     + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgProvenResourceObservations::Req"
+                    + "uireAllProven, "
+                    + "method public static "
+                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgProvenResourceObservations::Req"
                     + "uireProven",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgQueryPlan: constructor private "
                     + "instance Lex.V3.Contracts.Source.Luxembourg.LuxembourgQueryPlan::.ctor, "

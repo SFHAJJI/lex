@@ -1,0 +1,15 @@
+Exécuter des tests à partir de C:\lex-v3\worktrees\codex-stage1-lu-xml-proof\tests\Lex.V3.Ingest.Tests\bin\Release\net10.0\Lex.V3.Ingest.Tests.dll (net10.0|x64)
+réussite PlainXmlCodeCivilAndItsOriginalRunThroughThePublicAdapterWithSameRunRights (13m 39s 382ms)
+  à partir de C:\lex-v3\worktrees\codex-stage1-lu-xml-proof\tests\Lex.V3.Ingest.Tests\bin\Release\net10.0\Lex.V3.Ingest.Tests.dll (net10.0|x64)
+  Sortie standard
+    LU adapter evidence: C:\lex-v3\worktrees\codex-stage1-lu-xml-proof\artifacts\lu-adapter-63229f7e0841429795491f128079da74\evidence-index.json; sha256=4b569b59b01c8ae6371eee6df06d6d335912c46fac41cd9dd09472954b08e538; bytes=1919964; status=passed_bounded_adapter_canary
+    
+  Sortie d’erreur
+C:\lex-v3\worktrees\codex-stage1-lu-xml-proof\tests\Lex.V3.Ingest.Tests\bin\Release\net10.0\Lex.V3.Ingest.Tests.dll (net10.0|x64) réussite (13m 40s 110ms)
+
+Résumé de série de tests : Réussite!
+  total : 1
+  échec : 0
+  réussie : 1
+  ignoré : 0
+  durée : 13m 40s 344ms

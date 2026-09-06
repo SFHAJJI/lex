@@ -20,6 +20,8 @@ public sealed class LuxembourgLiveAdapterCanary
 {
     private const string Start = "http://data.legilux.public.lu/eli/etat/leg/loi/2017/03/14/a439/jo";
     private const string End = "http://data.legilux.public.lu/eli/etat/leg/loi/2017/03/14/a439/jp";
+    private const string CivilState = "http://data.legilux.public.lu/eli/etat/leg/code/civil/20251226";
+    private const string CivilOriginal = "http://data.legilux.public.lu/eli/etat/leg/loi/1804/03/21/n1/jo";
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
 
     [TestMethod]
@@ -27,6 +29,25 @@ public sealed class LuxembourgLiveAdapterCanary
     {
         if (Environment.GetEnvironmentVariable("LEX_LU_ADAPTER_CANARY") != "1")
             Assert.Inconclusive("Set LEX_LU_ADAPTER_CANARY=1 for publisher vocabulary and public-adapter acceptance.");
+
+        await RunCanaryAsync(false);
+    }
+
+    [TestMethod]
+    public async Task PlainXmlCodeCivilAndItsOriginalRunThroughThePublicAdapterWithSameRunRights()
+    {
+        if (Environment.GetEnvironmentVariable("LEX_LU_XML_ADAPTER_CANARY") != "1")
+            Assert.Inconclusive("Set LEX_LU_XML_ADAPTER_CANARY=1 for the declared Code Civil and original-Act scope.");
+
+        await RunCanaryAsync(true);
+    }
+
+    private static async Task RunCanaryAsync(bool plainXml)
+    {
+        var declaredRanges = plainXml
+            ? new[] { (Name: "civil-state", Start: CivilState, End: "http://data.legilux.public.lu/eli/etat/leg/code/civil/20251227"),
+                (Name: "civil-original", Start: CivilOriginal, End: CivilOriginal + "!") }
+            : [(Name: "act-2017", Start, End)];
 
         var checkout = CheckoutRoot();
         var root = Path.Combine(checkout, "artifacts", "lu-adapter-" + Guid.NewGuid().ToString("N"));
@@ -58,8 +79,12 @@ public sealed class LuxembourgLiveAdapterCanary
                     .Distinct().Select(assembly => FileIdentity(checkout, assembly.Location)).ToArray(),
             };
             await HoldAsync(store, JsonSerializer.SerializeToUtf8Bytes(provenance, JsonOptions));
-            var scope = await HoldAsync(store, Encoding.UTF8.GetBytes(
-                $"Bounded 2017 Act public adapter canary\nstart={Start}\nend={End}\nVocabulary P/T/C whole range; O CC-BY range.\n"));
+            var scope = await HoldAsync(store, JsonSerializer.SerializeToUtf8Bytes(new
+            {
+                schema = "lex-lu-declared-canary-scope/1",
+                ranges = declaredRanges.Select(range => new { range.Name, range.Start, range.End }).ToArray(),
+                vocabulary = "P/T/C whole range; O CC-BY range",
+            }, JsonOptions));
             var plan = LuxembourgQueryPlan.CreateDefaultGraph(
                 OfficialMachineQuerySourceProfiles.Resolve(OfficialMachineQuerySourceProfileId.LuxembourgSparql).ArtifactRef, scope);
             var planId = NewUrn();
@@ -115,16 +140,21 @@ public sealed class LuxembourgLiveAdapterCanary
             Assert.IsNotNull(profile, $"Observed vocabulary refused: {profileFailure?.Code} {profileFailure?.Subject}");
 
             var families = new List<(LuxembourgPartitionRunRequest, BoundMachineRequest, LuxembourgPartitionChain?)>();
+            foreach (var declared in declaredRanges)
             foreach (var family in new[] { "S", "A", "G" })
             {
-                var range = Range("act-2017-" + family.ToLowerInvariant(), Start, End);
+                var range = Range(declared.Name + "-" + family.ToLowerInvariant(), declared.Start, declared.End);
                 var request = new LuxembourgPartitionRunRequest(plan, planId, family, range, queryRenderer);
                 var witness = plan.BindCount(planId, NewUrn(), NewUrn(), family, LuxembourgQueryPass.Pass1, range, queryRenderer);
                 families.Add((request, witness.Request, null));
             }
             var adapter = new LuxembourgQueryExecutionAdapter(store, executor, profile);
-            var result = await adapter.RunAsync(families, "act-2017-g", "act-2017-s", "act-2017-a",
-                documentRenderer, CancellationToken.None);
+            var result = plainXml
+                ? await adapter.RunScopedAsync(families, declaredRanges.Select(range =>
+                    new LuxembourgScopePartitionFamilies(range.Name + "-s", range.Name + "-a", range.Name + "-g")).ToArray(),
+                    documentRenderer, CancellationToken.None)
+                : await adapter.RunAsync(families, "act-2017-g", "act-2017-s", "act-2017-a",
+                    documentRenderer, CancellationToken.None);
             finalResult = new { result.Refusal, result.Completion, result.FamilyOutcomes,
                 result.ResourceObservationSubjects, result.ResourceObservationExclusions,
                 result.ScopeManifestReceipt, result.ScopeManifestCanonicalSha256, result.CorpusRecordSetRef,
@@ -134,7 +164,8 @@ public sealed class LuxembourgLiveAdapterCanary
             Assert.IsNotNull(result.CorpusRecordSet);
             Assert.IsTrue(result.CorpusRecordSet.Set.Records.Any(record => record.Body.Kind == CorpusBodyRecordKind.Held),
                 "The bounded work must have an actually held corpus body.");
-            await ReplayRightsAndManifestAsync(store, profile, result);
+            await ReplayRightsAndManifestAsync(store, profile, result,
+                declaredRanges.Select(range => range.Name + "-a").ToArray(), plainXml ? CivilState + "/fr/xml" : null);
             status = "passed_bounded_adapter_canary";
         }
         catch (Exception exception)
@@ -163,7 +194,8 @@ public sealed class LuxembourgLiveAdapterCanary
             var index = JsonSerializer.SerializeToUtf8Bytes(new
             {
                 schema = "lex-lu-live-adapter-canary-evidence/1", status, failure, provenance, measured, observed, missing,
-                finalResult, root, start = Start, end = End, completedUtc = DateTimeOffset.UtcNow, members,
+                finalResult, root, declaredRanges = declaredRanges.Select(range => new { range.Name, range.Start, range.End }).ToArray(),
+                completedUtc = DateTimeOffset.UtcNow, members,
                 limitations = "Bounded prerequisite only; not whole Luxembourg scope, Stage 1 acceptance, or production retention. FileSystemCustodyStore reports unenforced retention.",
             }, JsonOptions);
             var pathToIndex = Path.Combine(root, "evidence-index.json");
@@ -204,7 +236,8 @@ public sealed class LuxembourgLiveAdapterCanary
     }
 
     private static async Task ReplayRightsAndManifestAsync(ICustodyStore store,
-        VerifiedLuxembourgSourceProfile profile, LuxembourgQueryExecutionResult result)
+        VerifiedLuxembourgSourceProfile profile, LuxembourgQueryExecutionResult result,
+        IReadOnlyList<string> assertionFamilyKeys, string? expectedManifestation)
     {
         Assert.IsNotNull(result.ScopeManifestReceipt);
         var finalBytes = await CustodyRestore.ReadByDigestCheckedAsync(store,
@@ -253,10 +286,21 @@ public sealed class LuxembourgLiveAdapterCanary
                 new LuxembourgInFileRightsChannelObservations(run, inFile.Ref,
                     channelTwo.Where(value => assertions.Any(assertion => assertion.SubjectIri == value.ManifestationIri)).ToArray(), true));
         }).ToArray();
-        var proof = result.FamilyOutcomes.Single(outcome => outcome.FamilyKey == "act-2017-a").Proof;
-        Assert.IsNotNull(proof);
+        var proofs = assertionFamilyKeys.Select(key => result.FamilyOutcomes.Single(outcome => outcome.FamilyKey == key).Proof).ToArray();
+        Assert.IsTrue(proofs.All(proof => proof is not null));
         var replay = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(profile.Resolve(
-            LuxembourgProvenResourceObservations.RequireProven(proof, observations)));
+            LuxembourgProvenResourceObservations.RequireAllProven(proofs.Select(proof => proof!).ToArray(), observations)));
+        if (expectedManifestation is not null)
+        {
+            Assert.IsTrue(channelTwo.Any(channel => channel.ManifestationIri == expectedManifestation),
+                "The selected plain XML manifestation must have an actually held body and same-run in-file reading.");
+            Assert.IsTrue(observations.SelectMany(observation => observation.Assertions).Any(assertion =>
+                assertion.SubjectIri == expectedManifestation &&
+                assertion.PredicateIri == "http://data.legilux.public.lu/resource/ontology/jolux#userFormat" &&
+                assertion.ObjectKind == LuxembourgAssertionObjectKind.Iri &&
+                assertion.ObjectIriOrLexical == "http://data.legilux.public.lu/resource/authority/user-format/xml"),
+                "Plain XML must come from this run's proven publisher assertions, not its URL suffix.");
+        }
         foreach (var channel in channelTwo)
         {
             var rights = replay.Resources.SelectMany(resource => resource.BodyJoin.Candidates)

@@ -1,0 +1,87 @@
+Exécuter des tests à partir de C:\lex-v3\worktrees\codex-stage1-lu-xml-proof\tests\Lex.V3.Tests\bin\Release\net10.0\Lex.V3.Tests.dll (net10.0|x64)
+Exécuter des tests à partir de C:\lex-v3\worktrees\codex-stage1-lu-xml-proof\tests\Lex.V3.Ingest.Tests\bin\Release\net10.0\Lex.V3.Ingest.Tests.dll (net10.0|x64)
+ignoré TheCensusFamiliesProveAndTheRunEitherReachesTheManifestOrFailsNamingWhy
+  Assert.Inconclusive. Live publisher canary. Set LEX_EU_CANARY=1 to run it; it is skipped by default so the suite does not depend on a third party's uptime or send unasked traffic.
+  à partir de C:\lex-v3\worktrees\codex-stage1-lu-xml-proof\tests\Lex.V3.Ingest.Tests\bin\Release\net10.0\Lex.V3.Ingest.Tests.dll (net10.0|x64)
+ignoré TheCodeCivilsTwoCanaryExpressionsAreHeldWithRealReceipts
+  Assert.Inconclusive. Live publisher canary. Set LEX_LU_CANARY=1 to run it; it is skipped by default so the suite does not depend on a third party's uptime or send unasked traffic.
+  à partir de C:\lex-v3\worktrees\codex-stage1-lu-xml-proof\tests\Lex.V3.Ingest.Tests\bin\Release\net10.0\Lex.V3.Ingest.Tests.dll (net10.0|x64)
+ignoré AnActRunsThroughThePublicAdapterWithObservedVocabularyAndSameRunRights
+  Assert.Inconclusive. Set LEX_LU_ADAPTER_CANARY=1 for publisher vocabulary and public-adapter acceptance.
+  à partir de C:\lex-v3\worktrees\codex-stage1-lu-xml-proof\tests\Lex.V3.Ingest.Tests\bin\Release\net10.0\Lex.V3.Ingest.Tests.dll (net10.0|x64)
+ignoré PlainXmlCodeCivilAndItsOriginalRunThroughThePublicAdapterWithSameRunRights
+  Assert.Inconclusive. Set LEX_LU_XML_ADAPTER_CANARY=1 for the declared Code Civil and original-Act scope.
+  à partir de C:\lex-v3\worktrees\codex-stage1-lu-xml-proof\tests\Lex.V3.Ingest.Tests\bin\Release\net10.0\Lex.V3.Ingest.Tests.dll (net10.0|x64)
+ignoré CodeCivilFamiliesAreEnumeratedTwiceThroughThePublisherRoute
+  Assert.Inconclusive. Set LEX_LU_ENUMERATION_CANARY=1 for the live bounded enumeration proof.
+  à partir de C:\lex-v3\worktrees\codex-stage1-lu-xml-proof\tests\Lex.V3.Ingest.Tests\bin\Release\net10.0\Lex.V3.Ingest.Tests.dll (net10.0|x64)
+échec RelationFamilyAcquisitionHasExactlyTwoFactoriesOverOnePrivateConstructor (10ms)
+  à partir de C:\lex-v3\worktrees\codex-stage1-lu-xml-proof\tests\Lex.V3.Ingest.Tests\bin\Release\net10.0\Lex.V3.Ingest.Tests.dll (net10.0|x64)
+  Échec de CollectionAssert.AreEqual. Nombre d'éléments différent.
+    sur Lex.V3.Ingest.Tests.LuxembourgQueryExecutionAdapterConstructionSurfaceTests.RelationFamilyAcquisitionHasExactlyTwoFactoriesOverOnePrivateConstructor() dans C:\lex-v3\worktrees\codex-stage1-lu-xml-proof\tests\Lex.V3.Ingest.Tests\LuxembourgQueryExecutionAdapterConstructionSurfaceTests.cs:72
+    sur System.RuntimeMethodHandle.InvokeMethod(ObjectHandleOnStack target, Void** arguments, ObjectHandleOnStack sig, BOOL isConstructor, ObjectHandleOnStack result)
+    sur System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+    sur System.Reflection.RuntimeMethodInfo.Invoke(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+échec OnlyRunAsyncProducesAQueryExecutionResultFromOutsideItsOwnHierarchy (3ms)
+  à partir de C:\lex-v3\worktrees\codex-stage1-lu-xml-proof\tests\Lex.V3.Ingest.Tests\bin\Release\net10.0\Lex.V3.Ingest.Tests.dll (net10.0|x64)
+  Échec de CollectionAssert.AreEqual. a query execution result reached a new holder in Lex.V3.Ingest. Nombre d'éléments différent.
+    sur Lex.V3.Ingest.Tests.LuxembourgQueryExecutionAdapterConstructionSurfaceTests.OnlyRunAsyncProducesAQueryExecutionResultFromOutsideItsOwnHierarchy() dans C:\lex-v3\worktrees\codex-stage1-lu-xml-proof\tests\Lex.V3.Ingest.Tests\LuxembourgQueryExecutionAdapterConstructionSurfaceTests.cs:344
+    sur System.RuntimeMethodHandle.InvokeMethod(ObjectHandleOnStack target, Void** arguments, ObjectHandleOnStack sig, BOOL isConstructor, ObjectHandleOnStack result)
+    sur System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+    sur System.Reflection.RuntimeMethodInfo.Invoke(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+ignoré ALaneSymbolicLinkCannotRedirectCustodyOutsideItsLane
+  Assert.Inconclusive. This Windows host does not grant symbolic-link creation; Linux CI runs this proof.
+  à partir de C:\lex-v3\worktrees\codex-stage1-lu-xml-proof\tests\Lex.V3.Tests\bin\Release\net10.0\Lex.V3.Tests.dll (net10.0|x64)
+échec EveryImplementationIsDrivenOrExemptWithAReason (10ms)
+  à partir de C:\lex-v3\worktrees\codex-stage1-lu-xml-proof\tests\Lex.V3.Ingest.Tests\bin\Release\net10.0\Lex.V3.Ingest.Tests.dll (net10.0|x64)
+  Échec de CollectionAssert.AreEqual. a custody store is neither driven nor declared exempt, so nothing records whether it meets the contract. Swept but unaccounted: Lex.V3.Ingest.Tests.LuxembourgQueryExecutionAdapterTests+LaterCorruptingCustodyStore. Accounted but not swept: none. Nombre d'éléments différent.
+    sur Lex.V3.Ingest.Tests.Custody.CustodyStoreConformanceTests.EveryImplementationIsDrivenOrExemptWithAReason() dans C:\lex-v3\worktrees\codex-stage1-lu-xml-proof\tests\Lex.V3.Ingest.Tests\Custody\CustodyStoreConformanceTests.cs:108
+    sur System.RuntimeMethodHandle.InvokeMethod(ObjectHandleOnStack target, Void** arguments, ObjectHandleOnStack sig, BOOL isConstructor, ObjectHandleOnStack result)
+    sur System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+    sur System.Reflection.RuntimeMethodInfo.Invoke(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+échec TheImplementationCountsAreExactlyThese (15ms)
+  à partir de C:\lex-v3\worktrees\codex-stage1-lu-xml-proof\tests\Lex.V3.Ingest.Tests\bin\Release\net10.0\Lex.V3.Ingest.Tests.dll (net10.0|x64)
+  Assertion failed. Les valeurs attendues doivent être égales.
+  implementations swept
+  
+  expected: 22
+  actual:   23
+  
+  Assert.AreEqual(22, types.Count)
+    sur Lex.V3.Ingest.Tests.Custody.CustodyStoreConformanceTests.TheImplementationCountsAreExactlyThese() dans C:\lex-v3\worktrees\codex-stage1-lu-xml-proof\tests\Lex.V3.Ingest.Tests\Custody\CustodyStoreConformanceTests.cs:131
+    sur System.RuntimeMethodHandle.InvokeMethod(ObjectHandleOnStack target, Void** arguments, ObjectHandleOnStack sig, BOOL isConstructor, ObjectHandleOnStack result)
+    sur System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+    sur System.Reflection.RuntimeMethodInfo.Invoke(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+échec EveryConstructionRestrictedTypeInTheSweptAssembliesHasExactlyTheseDoors (90ms)
+  à partir de C:\lex-v3\worktrees\codex-stage1-lu-xml-proof\tests\Lex.V3.Ingest.Tests\bin\Release\net10.0\Lex.V3.Ingest.Tests.dll (net10.0|x64)
+  Échec de CollectionAssert.AreEqual. L’élément au 451 d’index ne correspond pas.
+  Attendu : N
+  Réel : C
+    sur Lex.V3.Ingest.Tests.Census.GuardedConstructionCensusTests.EveryConstructionRestrictedTypeInTheSweptAssembliesHasExactlyTheseDoors() dans C:\lex-v3\worktrees\codex-stage1-lu-xml-proof\tests\Lex.V3.Ingest.Tests\Census\GuardedConstructionCensusTests.cs:61
+    sur System.RuntimeMethodHandle.InvokeMethod(ObjectHandleOnStack target, Void** arguments, ObjectHandleOnStack sig, BOOL isConstructor, ObjectHandleOnStack result)
+    sur System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+    sur System.Reflection.RuntimeMethodInfo.Invoke(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+C:\lex-v3\worktrees\codex-stage1-lu-xml-proof\tests\Lex.V3.Ingest.Tests\bin\Release\net10.0\Lex.V3.Ingest.Tests.dll (net10.0|x64) a échoué avec 5 erreur(s) (1m 07s 655ms)
+Code de sortie: 2
+échec EveryConstructionRestrictedTypeInTheSweptAssembliesHasExactlyTheseDoors (2s 616ms)
+  à partir de C:\lex-v3\worktrees\codex-stage1-lu-xml-proof\tests\Lex.V3.Tests\bin\Release\net10.0\Lex.V3.Tests.dll (net10.0|x64)
+  Échec de CollectionAssert.AreEqual. L’élément au 397 d’index ne correspond pas.
+  Attendu : P
+  Réel : A
+    sur Lex.V3.Tests.Census.GuardedConstructionCensusTests.EveryConstructionRestrictedTypeInTheSweptAssembliesHasExactlyTheseDoors() dans C:\lex-v3\worktrees\codex-stage1-lu-xml-proof\tests\Lex.V3.Tests\Census\GuardedConstructionCensusTests.cs:61
+    sur System.RuntimeMethodHandle.InvokeMethod(ObjectHandleOnStack target, Void** arguments, ObjectHandleOnStack sig, BOOL isConstructor, ObjectHandleOnStack result)
+    sur System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+    sur System.Reflection.RuntimeMethodInfo.Invoke(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+C:\lex-v3\worktrees\codex-stage1-lu-xml-proof\tests\Lex.V3.Tests\bin\Release\net10.0\Lex.V3.Tests.dll (net10.0|x64) a échoué avec 1 erreur(s) (1m 49s 787ms)
+Code de sortie: 2
+
+Résumé de série de tests : Échec!
+  C:\lex-v3\worktrees\codex-stage1-lu-xml-proof\tests\Lex.V3.Ingest.Tests\bin\Release\net10.0\Lex.V3.Ingest.Tests.dll (net10.0|x64) a échoué avec 5 erreur(s) (1m 07s 655ms)
+  C:\lex-v3\worktrees\codex-stage1-lu-xml-proof\tests\Lex.V3.Tests\bin\Release\net10.0\Lex.V3.Tests.dll (net10.0|x64) a échoué avec 1 erreur(s) (1m 49s 787ms)
+
+  total : 2714
+  échec : 6
+  réussie : 2702
+  ignoré : 6
+  durée : 1m 50s 055ms
+L’exécution de tests s’est terminée avec un code de sortie non réussi : 2 (voir : https://aka.ms/testingplatform/exitcodes)

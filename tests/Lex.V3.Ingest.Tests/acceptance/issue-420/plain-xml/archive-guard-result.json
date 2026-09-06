@@ -1,0 +1,22 @@
+[
+  {
+    "case": "valid",
+    "command": [
+      "python",
+      "tests/Lex.V3.Ingest.Tests/acceptance/issue-420/plain-xml/archive_run.py",
+      "artifacts\\issue-420-xml\\archive-guard\\synthetic-run",
+      "artifacts\\issue-420-xml\\archive-guard\\valid"
+    ],
+    "exitCode": 0
+  },
+  {
+    "case": "tampered",
+    "command": [
+      "python",
+      "tests/Lex.V3.Ingest.Tests/acceptance/issue-420/plain-xml/archive_run.py",
+      "artifacts\\issue-420-xml\\archive-guard\\synthetic-run",
+      "artifacts\\issue-420-xml\\archive-guard\\tampered"
+    ],
+    "exitCode": 1
+  }
+]

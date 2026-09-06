@@ -1,0 +1,20 @@
+Exécuter des tests à partir de C:\lex-v3\worktrees\codex-stage1-lu-xml-proof\tests\Lex.V3.Ingest.Tests\bin\Release\net10.0\Lex.V3.Ingest.Tests.dll (net10.0|x64)
+échec ProvenRelationMembersWhoseCustodyFailsReopeningCannotRemainComplete (1s 694ms)
+  à partir de C:\lex-v3\worktrees\codex-stage1-lu-xml-proof\tests\Lex.V3.Ingest.Tests\bin\Release\net10.0\Lex.V3.Ingest.Tests.dll (net10.0|x64)
+  Assertion failed. La valeur attendue ne doit pas être null.
+  
+  actual: null
+  
+  Assert.IsNotNull(result.Refusal)
+    sur Lex.V3.Ingest.Tests.LuxembourgQueryExecutionAdapterTests.ProvenRelationMembersWhoseCustodyFailsReopeningCannotRemainComplete() dans C:\lex-v3\worktrees\codex-stage1-lu-xml-proof\tests\Lex.V3.Ingest.Tests\LuxembourgScopedQueryExecutionTests.cs:148
+    sur Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter.Execution.TestMethodInfo.ExecuteInternalAsync(Object[] arguments, CancellationTokenSource timeoutTokenSource)
+C:\lex-v3\worktrees\codex-stage1-lu-xml-proof\tests\Lex.V3.Ingest.Tests\bin\Release\net10.0\Lex.V3.Ingest.Tests.dll (net10.0|x64) a échoué avec 1 erreur(s) (2s 650ms)
+Code de sortie: 2
+
+Résumé de série de tests : Échec!
+  total : 1
+  échec : 1
+  réussie : 0
+  ignoré : 0
+  durée : 3s 336ms
+L’exécution de tests s’est terminée avec un code de sortie non réussi : 2 (voir : https://aka.ms/testingplatform/exitcodes)
