@@ -1429,12 +1429,24 @@ internal static class LuxembourgScopeResolver
             // rights rule id is lu_rights_* and none ends in _selector_conflict -- and where it did
             // apply, a sentinel counting as the second distinct value would have satisfied it
             // without a second licence.
+            //
+            // AND THE ROWS ARE BOUND TO THIS OBJECT, WHICH THE FIRST VERSION OF THIS REPAIR MISSED.
+            // A channel's Observations carry every manifestation the connected assertion graph
+            // reached, not only the one being resolved, so an unfiltered SelectMany published a
+            // SIBLING's licence as this manifestation's own value. Removing the sentinel alone left
+            // that half of the same S2-A01/S2-A03 claim false: an object observed empty while a
+            // sibling carried CC BY still reported PublisherValuePresent, and the empty-only guard
+            // passed straight over it. The reviewer found this and proved it with a two-row case.
+            // ResolveRights already binds the DIMENSION to this object through
+            // LuxembourgRightsChannels.Resolve(resourceIri, ...); only the selector was unbound, so
+            // the wire and the resolution disagreed about which manifestation was being described.
             Selector(
                 profile,
                 ScopeAxis.Body,
                 dimensions.Rights,
                 [
                     .. observation.SparqlRightsObservations.Observations
+                        .Where(row => row.ManifestationIri == observation.ObjectRef.PublisherUri)
                         .SelectMany(static row => row.LicenceIris),
                 ],
                 observation.SparqlRightsObservations.EnumerationRef,
@@ -1445,6 +1457,7 @@ internal static class LuxembourgScopeResolver
                 dimensions.Rights,
                 [
                     .. observation.InFileRightsObservations.Observations
+                        .Where(row => row.ManifestationIri == observation.ObjectRef.PublisherUri)
                         .SelectMany(static row => row.LicenceIris),
                 ],
                 observation.InFileRightsObservations.EnumerationRef,

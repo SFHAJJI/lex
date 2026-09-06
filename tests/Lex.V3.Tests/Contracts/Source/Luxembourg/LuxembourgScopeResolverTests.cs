@@ -272,6 +272,81 @@ public sealed class LuxembourgScopeResolverTests
         }
     }
 
+    /// <summary>
+    /// The rights selectors describe the manifestation being resolved, not whatever else the
+    /// channel happened to enumerate: a sibling's licence is never published as this object's own.
+    /// </summary>
+    /// <remarks>
+    /// THE HALF THE FIRST REPAIR MISSED, AND THE REVIEWER FOUND. Removing the enumeration sentinel
+    /// made the absent state reachable, but both selectors still flattened
+    /// <c>Observations.SelectMany(row =&gt; row.LicenceIris)</c> over every row in the channel. A
+    /// channel's rows cover every manifestation the connected assertion graph reached, so an object
+    /// the publisher said nothing about still published <c>PublisherValuePresent</c> carrying a
+    /// sibling's CC BY. The empty-only guard above passes straight over that, because in its
+    /// fixture there is no sibling to borrow from - which is exactly why this case is separate and
+    /// why one guard was not enough. <c>ResolveRights</c> had always bound the dimension to this
+    /// object through <c>LuxembourgRightsChannels.Resolve(resourceIri, ...)</c>; only the selector
+    /// was unbound, so the wire disagreed with the resolution about whose licence it was.
+    /// </remarks>
+    [TestMethod]
+    public void ARightsSelectorNeverPublishesASiblingManifestationsLicence()
+    {
+        const string admittingLicence = "http://creativecommons.org/licenses/by/4.0/";
+        const string siblingIri = ExpressionIri + "/sibling";
+        var observation = new LuxembourgResourceObservation(
+            ObjectRef(ManifestationIri),
+            ObservationRef,
+            [Iri(ManifestationIri, RdfType, Jolux + "Manifestation")],
+            [],
+            // The selected manifestation is observed empty; the sibling carries the admitting
+            // licence. Both rows live in the same channel collection, which is the real shape.
+            new LuxembourgSparqlRightsChannelObservations(
+                ObservationRef,
+                SparqlEnumerationRef,
+                [
+                    new LuxembourgRightsChannelObservation(
+                        ManifestationIri, ObservationRef, SparqlEnumerationRef, []),
+                    new LuxembourgRightsChannelObservation(
+                        siblingIri, ObservationRef, SparqlEnumerationRef, [admittingLicence]),
+                ]),
+            new LuxembourgInFileRightsChannelObservations(
+                ObservationRef,
+                InFileEnumerationRef,
+                [
+                    new LuxembourgRightsChannelObservation(
+                        ManifestationIri, ObservationRef, InFileEnumerationRef, []),
+                    new LuxembourgRightsChannelObservation(
+                        siblingIri, ObservationRef, InFileEnumerationRef, [admittingLicence]),
+                ]));
+        var resolved = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(
+            Profile().Resolve(Proven([observation])));
+
+        var rights = resolved.Resources.Single().Dimensions.Rights;
+        Assert.AreEqual(
+            LuScopeTerminalState.MissingPublisherValue,
+            rights.State,
+            "the dimension has always been bound to the selected manifestation.");
+
+        var artifacts = resolved.OrderedEvidenceArtifacts.ToArray();
+        var selectors = resolved.ScopeInputs.Single().Selectors;
+        foreach (var enumerationRef in new[] { SparqlEnumerationRef, InFileEnumerationRef })
+        {
+            var selector = selectors.Single(candidate =>
+                candidate.EvidenceArtifactOrdinal == Array.IndexOf(artifacts, enumerationRef));
+
+            Assert.IsFalse(
+                selector.CanonicalValues.Contains(admittingLicence),
+                "a licence the publisher asserted about a different manifestation must never be "
+                    + "published as this one's value.");
+            Assert.AreEqual(
+                ScopeSelectorState.PublisherValueAbsent,
+                selector.State,
+                "this manifestation was observed and carried no licence, so it publishes absent "
+                    + "even though a sibling in the same channel carried one.");
+            Assert.AreEqual(0, selector.CanonicalValues.Count);
+        }
+    }
+
     [TestMethod]
     public void ManifestationAuthenticityRemainsOnItsExactSubjectWithoutSiblingOrRootLift()
     {
