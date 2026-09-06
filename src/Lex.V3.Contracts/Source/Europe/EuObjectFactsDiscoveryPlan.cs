@@ -677,6 +677,39 @@ public sealed class EuObjectFactsDiscoveryPlan
         string RootWatermarkCount, string RootWatermarkPage,
         string ManifestationFactsCount, string ManifestationFactsPage) BuildTemplates()
     {
+        // ---- THE SECOND FILTER ON EVERY PAGE TEMPLATE, AND WHY IT IS NOT REDUNDANT. ----
+        //
+        // Each page carries the ordinary keyset disjunction, which admits a row strictly after the
+        // cursor, and then a second FILTER excluding a row equal to the cursor in EVERY key. On
+        // paper the second cannot change the result: a row equal in every key satisfies no strict
+        // disjunct, so the first filter already excludes it. THE ENDPOINT DISAGREES, and this was
+        // measured rather than suspected.
+        //
+        // The 82-seed population run of S1-A09 refused twelve seeds at
+        // object_facts_family_not_proven, whose cause reads "Keys must be unique and cursors
+        // strictly increase". Against the retained bytes of one of them, seed 32003L0087: family X
+        // page one ended at cursor T, the continuation bound exactly T's seven keys, and the
+        // endpoint returned T again as its first row. The two pages overlapped in exactly that one
+        // row. Both pages were internally strictly ascending, so only their concatenation violated
+        // the rule, which is why no per-page check caught it.
+        //
+        // Then the disjunction itself was measured, by replaying the retained continuation with the
+        // filter expression PROJECTED rather than applied: for that row it evaluates to 0. The
+        // endpoint returns a row its own answer to the filter excludes, and does so
+        // deterministically on replay. Effectively it honours the boundary as >= where the query
+        // says >.
+        //
+        // So the repair is a separate narrowing rather than a rewrite of the disjunction. It was
+        // measured to work on the same retained query: with it, the page starts at the next row
+        // (expression_title rather than expression_belongs_to_work) and still fills its 997-row
+        // limit. It is safe by construction, which matters more than the measurement: the only row
+        // it can ever remove is one identical to the cursor in every key, and the protocol already
+        // forbids delivering that row a second time. It cannot hide a page that failed to advance
+        // either, because a page emptied by it still refuses for not advancing.
+        //
+        // It is applied to every keyset continuation of this shape, not only the two families
+        // observed refusing, because the construct is the same in each and a family only escapes it
+        // by being small enough never to page.
         var slots = BatchParameterNames();
         var valuesBlock = string.Join('\n', slots.Select(static name => "    {" + name + ":iri}"));
 
@@ -733,6 +766,8 @@ public sealed class EuObjectFactsDiscoveryPlan
                 (?key_1 = ?last_key_1 && ?key_2 = ?last_key_2 && ?key_3 = ?last_key_3 && ?key_4 = ?last_key_4 && ?key_5 > ?last_key_5) ||
                 (?key_1 = ?last_key_1 && ?key_2 = ?last_key_2 && ?key_3 = ?last_key_3 && ?key_4 = ?last_key_4 && ?key_5 = ?last_key_5 && ?key_6 > ?last_key_6)
               )
+              FILTER(?has_cursor = 0 || !(
+                ?key_1 = ?last_key_1 && ?key_2 = ?last_key_2 && ?key_3 = ?last_key_3 && ?key_4 = ?last_key_4 && ?key_5 = ?last_key_5 && ?key_6 = ?last_key_6))
             }
             ORDER BY ?key_1 ?key_2 ?key_3 ?key_4 ?key_5 ?key_6
             LIMIT {page_limit:uint}
@@ -791,6 +826,8 @@ public sealed class EuObjectFactsDiscoveryPlan
                 (?key_1 = ?last_key_1 && ?key_2 = ?last_key_2 && ?key_3 = ?last_key_3 && ?key_4 = ?last_key_4 && ?key_5 = ?last_key_5 && ?key_6 > ?last_key_6) ||
                 (?key_1 = ?last_key_1 && ?key_2 = ?last_key_2 && ?key_3 = ?last_key_3 && ?key_4 = ?last_key_4 && ?key_5 = ?last_key_5 && ?key_6 = ?last_key_6 && ?key_7 > ?last_key_7)
               )
+              FILTER(?has_cursor = 0 || !(
+                ?key_1 = ?last_key_1 && ?key_2 = ?last_key_2 && ?key_3 = ?last_key_3 && ?key_4 = ?last_key_4 && ?key_5 = ?last_key_5 && ?key_6 = ?last_key_6 && ?key_7 = ?last_key_7))
             }
             ORDER BY ?key_1 ?key_2 ?key_3 ?key_4 ?key_5 ?key_6 ?key_7
             LIMIT {page_limit:uint}
@@ -839,6 +876,8 @@ public sealed class EuObjectFactsDiscoveryPlan
                 (?key_1 = ?last_key_1 && ?key_2 = ?last_key_2 && ?key_3 = ?last_key_3 && ?key_4 > ?last_key_4) ||
                 (?key_1 = ?last_key_1 && ?key_2 = ?last_key_2 && ?key_3 = ?last_key_3 && ?key_4 = ?last_key_4 && ?key_5 > ?last_key_5)
               )
+              FILTER(?has_cursor = 0 || !(
+                ?key_1 = ?last_key_1 && ?key_2 = ?last_key_2 && ?key_3 = ?last_key_3 && ?key_4 = ?last_key_4 && ?key_5 = ?last_key_5))
             }
             ORDER BY ?key_1 ?key_2 ?key_3 ?key_4 ?key_5
             LIMIT {page_limit:uint}
@@ -898,6 +937,8 @@ public sealed class EuObjectFactsDiscoveryPlan
                 (?key_1 = ?last_key_1 && ?key_2 = ?last_key_2 && ?key_3 = ?last_key_3 && ?key_4 > ?last_key_4) ||
                 (?key_1 = ?last_key_1 && ?key_2 = ?last_key_2 && ?key_3 = ?last_key_3 && ?key_4 = ?last_key_4 && ?key_5 > ?last_key_5)
               )
+              FILTER(?has_cursor = 0 || !(
+                ?key_1 = ?last_key_1 && ?key_2 = ?last_key_2 && ?key_3 = ?last_key_3 && ?key_4 = ?last_key_4 && ?key_5 = ?last_key_5))
             }
             ORDER BY ?key_1 ?key_2 ?key_3 ?key_4 ?key_5
             LIMIT {page_limit:uint}

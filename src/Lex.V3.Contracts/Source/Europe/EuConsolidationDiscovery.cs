@@ -467,6 +467,7 @@ public sealed class EuConsolidationDiscoveryPlan
                 ({has_cursor:uint} {last_state_key:sparql_string})
               }
               FILTER(?has_cursor = 0 || ?state_key > ?last_state_key)
+              FILTER(?has_cursor = 0 || !(?state_key = ?last_state_key))
             }
             ORDER BY ?state_key
             LIMIT {page_limit:uint}
@@ -525,6 +526,8 @@ public sealed class EuConsolidationDiscoveryPlan
                 (?key_1 = ?last_key_1 && ?key_2 = ?last_key_2 && ?key_3 = ?last_key_3 && ?key_4 = ?last_key_4 && ?key_5 > ?last_key_5) ||
                 (?key_1 = ?last_key_1 && ?key_2 = ?last_key_2 && ?key_3 = ?last_key_3 && ?key_4 = ?last_key_4 && ?key_5 = ?last_key_5 && ?key_6 > ?last_key_6)
               )
+              FILTER(?has_cursor = 0 || !(
+                ?key_1 = ?last_key_1 && ?key_2 = ?last_key_2 && ?key_3 = ?last_key_3 && ?key_4 = ?last_key_4 && ?key_5 = ?last_key_5 && ?key_6 = ?last_key_6))
             }
             ORDER BY ?key_1 ?key_2 ?key_3 ?key_4 ?key_5 ?key_6
             LIMIT {page_limit:uint}
