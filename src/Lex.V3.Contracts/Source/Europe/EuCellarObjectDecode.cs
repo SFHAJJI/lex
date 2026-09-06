@@ -99,6 +99,36 @@ public enum EuCellarObjectDecodeRefusal
     /// <c>listingRefusal</c>, and its offending IRI or token through <c>offendingIri</c>.
     /// </summary>
     ManifestationListingRefused = 11,
+
+    /// <summary>
+    /// An object-facts (family P) row carried a predicate outside
+    /// <see cref="EuObjectFactsDiscoveryPlan.ObjectFactAuthorityPredicateIris"/> - the exact set
+    /// this run's own <c>VALUES ?predicate</c> block asked for. The offending predicate IRI is
+    /// reported through <c>offendingIri</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// THE ROW THAT USED TO VANISH. The enum's own contract above says no member here drops a row
+    /// silently, yet until this member existed a family P row whose predicate was outside the
+    /// inventory was neither folded into a snapshot nor refused. Both consumers select by exact
+    /// predicate IRI - <c>pRows.Where(row =&gt; row.PredicateIri == iri)</c> over the object
+    /// authority, then again over the read relation families - so a row matching neither simply
+    /// matched nothing and disappeared between the parse and the snapshot. That is the "silently
+    /// disappears" half of S2-A05, inside a door that had already promised it does not happen.
+    /// </para>
+    /// <para>
+    /// Reachability, stated honestly rather than oversold. The template binds
+    /// <c>VALUES ?predicate</c>, so a compliant endpoint cannot answer with a predicate outside the
+    /// set, and this member should never fire against Cellar behaving as observed. It is the guard
+    /// for the cases where that assumption is what breaks: an endpoint that widens a VALUES join, a
+    /// future open-enumeration probe, or a projection edited to ask a wider question without the
+    /// consumers being widened with it. Distinguishing "asked and unbound" - family P answers those
+    /// as explicit <c>unbound</c> rows - from "never asked for" is exactly the distinction this
+    /// member keeps, and refusing loudly costs a run that would otherwise have quietly held less
+    /// than it read.
+    /// </para>
+    /// </remarks>
+    ObjectFactRowPredicateNotOnTheAuthority = 12,
 }
 
 /// <summary>
@@ -456,6 +486,18 @@ public static class EuCellarObjectDecode
             {
                 refusal = EuCellarObjectDecodeRefusal.ObjectFactRowNotInClosure;
                 offendingIri = canonicalObject;
+                snapshotRefusal = EuCellarObjectSnapshotRefusal.None;
+                return null;
+            }
+
+            // The object is checked against the closure one line up; the predicate was checked
+            // against nothing. Both consumers below select rows by exact predicate IRI, so a row
+            // outside the authority this run asked for matched neither and was dropped between here
+            // and the snapshot. Refuse it by name instead, and name the predicate.
+            if (!EuObjectFactsDiscoveryPlan.ObjectFactAuthorityPredicateIris.Contains(predicateTerm.Value))
+            {
+                refusal = EuCellarObjectDecodeRefusal.ObjectFactRowPredicateNotOnTheAuthority;
+                offendingIri = predicateTerm.Value;
                 snapshotRefusal = EuCellarObjectSnapshotRefusal.None;
                 return null;
             }

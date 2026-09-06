@@ -747,6 +747,69 @@ public sealed class EuCellarObjectDecodeTests
         Assert.AreEqual(outsideObject, offendingIri);
     }
 
+    /// <summary>
+    /// S2-A05, E0(c): a family P row whose predicate is outside the authority this run asked for is
+    /// refused by name rather than dropped.
+    /// </summary>
+    /// <remarks>
+    /// WHAT THIS ROW USED TO DO: nothing at all, which was the defect. Both consumers select by
+    /// exact predicate IRI, so a row matching neither the object authority nor a relation family
+    /// was silently discarded between the parse loop and the snapshot - while the refusal enum's
+    /// own contract promised that no row this door reads is ever dropped. The predicate below is a
+    /// real, live CDM predicate (1,902 triples measured against the Cellar endpoint on 2026-09-07),
+    /// not an invented IRI: the point is that being real upstream is not the same as being asked
+    /// for here, and a genuine publisher term is exactly what a widened join would deliver.
+    /// </remarks>
+    [TestMethod]
+    public void AFamilyPRowCarryingAPredicateOutsideTheAuthorityRefusesNamingThePredicate()
+    {
+        const string offAuthority = "http://publications.europa.eu/ontology/cdm#"
+            + "case-law_requests_annulment_of_resource_legal";
+        var pRows = RootObjectRows(GdprRoot, GdprCelex)
+            .Append(PBoundRow(GdprRoot, offAuthority, new PValue(CitedRoot)))
+            .ToArray();
+
+        var snapshots = Decode(GdprCelex, [], pRows, [], out var refusal, out var offendingIri, out _);
+        Assert.IsNull(snapshots);
+        Assert.AreEqual(
+            EuCellarObjectDecodeRefusal.ObjectFactRowPredicateNotOnTheAuthority,
+            refusal,
+            "a predicate this run never asked for must refuse, not disappear.");
+        Assert.AreEqual(
+            offAuthority,
+            offendingIri,
+            "the refusal must name the predicate, or the operator cannot tell which term drifted.");
+    }
+
+    /// <summary>
+    /// The partition boundary is part of the authority: family X's own predicates are no more asked
+    /// for on a family P row than a foreign IRI is.
+    /// </summary>
+    /// <remarks>
+    /// This is the case a set built from <c>EuScopeVocabulary.CdmPredicates</c> would wave through.
+    /// The thirteen-member vocabulary is partitioned into nine object predicates and four
+    /// expression predicates, and only the nine are bound by this family's own
+    /// <c>VALUES ?predicate</c> block, so an expression predicate arriving here is drift even
+    /// though it is a member in good standing of the closed vocabulary next door.
+    /// </remarks>
+    [TestMethod]
+    public void AFamilyPRowCarryingAFamilyXPredicateIsRefusedForTheSameReason()
+    {
+        var expressionPredicate = EuObjectFactsDiscoveryPlan.CdmIri(EuCdmPredicate.ExpressionTitle);
+        var pRows = RootObjectRows(GdprRoot, GdprCelex)
+            .Append(PBoundRow(
+                GdprRoot,
+                expressionPredicate,
+                new PValue("General Data Protection Regulation", IsIri: false, Datatype: XsdString)))
+            .ToArray();
+
+        var snapshots = Decode(GdprCelex, [], pRows, [], out var refusal, out var offendingIri, out _);
+        Assert.IsNull(snapshots);
+        Assert.AreEqual(
+            EuCellarObjectDecodeRefusal.ObjectFactRowPredicateNotOnTheAuthority, refusal);
+        Assert.AreEqual(expressionPredicate, offendingIri);
+    }
+
     [TestMethod]
     public void AFamilyPRowMissingAnOutcomeForAClosedPredicateRefusesAsTermKindMismatch()
     {
@@ -1179,7 +1242,7 @@ public sealed class EuCellarObjectDecodeTests
     }
 
     [TestMethod]
-    public void TheRefusalEnumHasExactlyTwelveMembersAndTwoHandOutPaths()
+    public void TheRefusalEnumHasExactlyThirteenMembersAndTwoHandOutPaths()
     {
         const string N = "Lex.V3.Contracts.Source.Europe.";
         const string Refusal = N + "EuCellarObjectDecodeRefusal";
@@ -1199,6 +1262,8 @@ public sealed class EuCellarObjectDecodeTests
                 "field public static " + Refusal + "::ManifestationListingRefused -> " + Refusal,
                 "field public static " + Refusal + "::None -> " + Refusal,
                 "field public static " + Refusal + "::ObjectFactRowNotInClosure -> " + Refusal,
+                "field public static " + Refusal + "::ObjectFactRowPredicateNotOnTheAuthority -> "
+                    + Refusal,
                 "field public static " + Refusal + "::ObjectFactRowTermKindMismatch -> " + Refusal,
                 "field public static " + Refusal + "::ObjectSnapshotRejected -> " + Refusal,
             },
