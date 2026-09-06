@@ -1,0 +1,5 @@
+
+> lex-v3-web@0.0.0 build
+> node scripts/build.mjs
+
+generated 32 state pages

@@ -1,9 +1,4 @@
-// The citation checker, shown on the four verdicts at once.
-//
-// Every other preview in this build shows a screen working. This one shows it refusing three times
-// out of four, because that is the honest distribution for a checker and because the three
-// refusals are the part that has to be right. A reader arrives here holding a citation somebody
-// else wrote, often to find out whether to trust it.
+// The citation checker, shown on resolved, ambiguous and refused citations.
 //
 // Every value is synthetic and none of it is law.
 
@@ -45,6 +40,16 @@ const AMBIGUOUS = checkCitation({
 
 const OUT_OF_CORPUS = checkCitation({ raw: 'CSSF 20/747' });
 const UNRECOGNISED = checkCitation({ raw: 'see the blue book, page 12' });
+const PINNED_STATE_UNAVAILABLE = checkCitation({
+  raw: `https://law.soufien.lu/lu-legilux/loi-1993-04-05-n1/2025-01-01--${'7f'.repeat(32)}`,
+  candidates: [{
+    lex_id: 'lu-legilux:loi-1993-04-05-n1:2025-01-01',
+    identifier: ELI,
+    valid_from: '2025-01-01',
+    valid_to: null,
+    hash: '31'.repeat(32),
+  }],
+});
 
 // A quote that differs by one character, which is the case the screen exists for. The offset is
 // reported and the difference is never characterised, because saying a change is immaterial would
@@ -65,13 +70,17 @@ export function renderCitationCheckerPreview({ locale = 'en' } = {}) {
     main:
       '      <p class="eyebrow">Workbench</p>\n' +
       '      <h1>Citation checker</h1>\n' +
-      '      <p>Paste a citation and find out whether it resolves. Three of the four verdicts ' +
-      'below are refusals, which is the honest distribution for a checker and the part that has ' +
-      'to be right.</p>\n' +
+      '      <p>These examples show how the checker resolves a citation, lists ambiguous ' +
+      'answers, or explains why it cannot resolve one.</p>\n' +
       '      <p>Every value on this page is synthetic and none of it is law.</p>\n' +
       '      <section class="check-case"><h2>Resolved</h2>' +
       '<p class="check-case-note">A dated ELI names one state, and one held record answers it.</p>' +
       renderVerdict(RESOLVED) +
+      '</section>\n' +
+      '      <section class="check-case"><h2>Pinned state unavailable</h2>' +
+      '<p class="check-case-note">The lookup returned a different state hash at the same ' +
+      'publisher, work and date. It cannot answer this pinned permalink.</p>' +
+      renderVerdict(PINNED_STATE_UNAVAILABLE) +
       '</section>\n' +
       '      <section class="check-case"><h2>More than one answer</h2>' +
       '<p class="check-case-note">An undated citation of a work with several held states. Every ' +
