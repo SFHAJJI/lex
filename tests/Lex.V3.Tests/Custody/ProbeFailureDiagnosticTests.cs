@@ -207,6 +207,78 @@ public sealed class ProbeFailureDiagnosticTests
         }
     }
 
+    [TestMethod]
+    [DataRow(
+        "The final Azure policy reread was refused.",
+        "final_policy_reread")]
+    [DataRow(
+        "The final Azure object did not prove the protection required by its custody lane.",
+        "final_object_protection")]
+    public void VersionThreeDistinguishesTheTwoPostCopyPolicyFailureSites(
+        string message,
+        string expectedGuard)
+    {
+        var json = ProbeFailureDiagnostic.Serialize(
+            new CustodyPolicyException(message),
+            includeConfiguration: true,
+            includeCustody: true);
+
+        using var document = JsonDocument.Parse(json);
+        var root = document.RootElement;
+        Assert.AreEqual("lex-v3-custody-probe-diagnostic/3",
+            root.GetProperty("schema").GetString());
+        var cause = root.GetProperty("causes")[0];
+        CollectionAssert.AreEquivalent(
+            new[] { "kind", "http_status", "configuration_guard", "custody_guard" },
+            cause.EnumerateObject().Select(property => property.Name).ToArray());
+        Assert.AreEqual("custody_policy", cause.GetProperty("kind").GetString());
+        Assert.AreEqual(expectedGuard, cause.GetProperty("custody_guard").GetString());
+    }
+
+    [TestMethod]
+    public void VersionThreeDoesNotPublishOrAttributeAnUnknownPolicyMessage()
+    {
+        foreach (var error in new Exception[]
+                 {
+                     new CustodyPolicyException(Secret),
+                     new Exception("The final Azure policy reread was refused."),
+                 })
+        {
+            var json = ProbeFailureDiagnostic.Serialize(
+                error,
+                includeConfiguration: true,
+                includeCustody: true);
+
+            Assert.IsFalse(json.Contains(Secret, StringComparison.Ordinal));
+            using var document = JsonDocument.Parse(json);
+            Assert.AreEqual(JsonValueKind.Null,
+                document.RootElement.GetProperty("causes")[0]
+                    .GetProperty("custody_guard").ValueKind);
+        }
+    }
+
+    [TestMethod]
+    public void VersionThreeDoesNotPublishTheWrappedProviderPolicyMessage()
+    {
+        var error = new CustodyPolicyException(
+            "The final Azure policy reread was refused.",
+            new CustodyPolicyException(Secret));
+
+        var json = ProbeFailureDiagnostic.Serialize(
+            error,
+            includeConfiguration: true,
+            includeCustody: true);
+
+        Assert.IsFalse(json.Contains(Secret, StringComparison.Ordinal));
+        using var document = JsonDocument.Parse(json);
+        var causes = document.RootElement.GetProperty("causes");
+        Assert.AreEqual(2, causes.GetArrayLength());
+        Assert.AreEqual("final_policy_reread",
+            causes[0].GetProperty("custody_guard").GetString());
+        Assert.AreEqual(JsonValueKind.Null,
+            causes[1].GetProperty("custody_guard").ValueKind);
+    }
+
     private sealed class SecretNamedException : Exception
     {
         public override System.Collections.IDictionary Data =>

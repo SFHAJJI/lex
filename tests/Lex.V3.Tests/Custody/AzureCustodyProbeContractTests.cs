@@ -502,6 +502,7 @@ public sealed class AzureCustodyProbeContractTests
     [DataRow(null, false)]
     [DataRow("1", true)]
     [DataRow("2", true)]
+    [DataRow("3", true)]
     [DataRow("2 ", false)]
     [DataRow("true", false)]
     [DataRow("1 ", false)]

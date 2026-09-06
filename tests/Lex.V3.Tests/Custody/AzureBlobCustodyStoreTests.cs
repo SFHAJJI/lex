@@ -562,6 +562,24 @@ public sealed class AzureBlobCustodyStoreTests
     }
 
     [TestMethod]
+    public async Task FinalPolicyRereadFailureIsDistinguishedAfterTheDurableCopy()
+    {
+        var harness = new Harness();
+        harness.Policy.AfterRead = _ => harness.Policy.Exception ??=
+            new CustodyPolicyException("Provider-specific private detail.");
+
+        var error = await Assert.ThrowsExactlyAsync<CustodyPolicyException>(() =>
+            harness.Store.CreateAsync(
+                Body, CustodyClass.NightlyFloor90d, CancellationToken.None));
+
+        Assert.AreEqual("The final Azure policy reread was refused.", error.Message);
+        Assert.IsInstanceOfType<CustodyPolicyException>(error.InnerException);
+        Assert.AreEqual(1, harness.Nightly.Blobs.Count);
+        Assert.IsTrue(harness.Events.Contains("nightly.copy", StringComparer.Ordinal));
+        Assert.IsTrue(harness.Events.Contains("staging.delete", StringComparer.Ordinal));
+    }
+
+    [TestMethod]
     public async Task PolicyObservationForAnotherLaneCannotIssueAReceipt()
     {
         var harness = new Harness();

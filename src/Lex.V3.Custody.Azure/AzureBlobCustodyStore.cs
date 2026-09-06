@@ -334,8 +334,17 @@ public sealed class AzureBlobCustodyStore : ICustodyStore
             var finalObservation = await ReadExactAsync(
                     generation, reference, finalETag, retainBytes: false, cancellationToken)
                 .ConfigureAwait(false);
-            var finalPolicy = await _policyReader.ReadAsync(custodyClass, cancellationToken)
-                .ConfigureAwait(false);
+            AzureContainerPolicyObservation finalPolicy;
+            try
+            {
+                finalPolicy = await _policyReader.ReadAsync(custodyClass, cancellationToken)
+                    .ConfigureAwait(false);
+            }
+            catch (CustodyPolicyException exception)
+            {
+                throw new CustodyPolicyException(
+                    "The final Azure policy reread was refused.", exception);
+            }
             await RevalidateExactGenerationAsync(
                     finalObservation, cancellationToken)
                 .ConfigureAwait(false);
