@@ -63,11 +63,21 @@ public sealed class EuWatermarkWitnessPlanTests
     {
         // THE VALUES BLOCK IS BUILT FROM THE CAPACITY SYMBOL, never from a literal count, so this
         // pin follows EuObjectFactsDiscoveryPlan.BatchCapacity if D1-05g moves it rather than going
-        // red for a reason that is not a defect. The one fixture object repeated to capacity is the
-        // padding doing its job: a fixed-shape query whatever the batch holds.
-        var expectedValues = string.Concat(Enumerable.Repeat(
-            "    <" + PackObjectForTests + ">\n",
-            EuWatermarkWitnessPlan.BatchCapacity));
+        // red for a reason that is not a defect.
+        //
+        // THE FIXTURE OBJECT APPEARS ONCE AND THE REST ARE THE SENTINEL. This block used to repeat
+        // the one fixture object to capacity, and the comment here called that the padding doing
+        // its job. It was the defect: SPARQL treats VALUES as a multiset and this endpoint honours
+        // that, so a repeated subject multiplied its own rows. The 82-seed population run measured
+        // it: the six treaty seeds have single-object batches, and the endpoint returned their one
+        // row fifty times, which the traversal refused as PageNotStrictlyAscending. A fixed-shape
+        // query is still the requirement; binding the unused slots to a subject the endpoint has
+        // no triple for is how it is met.
+        var expectedValues =
+            "    <" + PackObjectForTests + ">\n" +
+            string.Concat(Enumerable.Repeat(
+                "    <" + EuWatermarkWitnessPlan.BatchPaddingEntryIri + ">\n",
+                EuWatermarkWitnessPlan.BatchCapacity - 1));
         var ExpectedQuery =
             "SELECT ?entry ?entry_key ?watermark WHERE {\n" +
             "  VALUES ?entry {\n" +

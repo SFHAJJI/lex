@@ -78,7 +78,7 @@ public sealed class EuConsolidationDiscoveryTests
         // them. Re-pinned from the value the run produced, was
         // b2a91efac90315df6730ca8ab6d00edcf6278aa3e912e11c784f4907acaa016d.
         Assert.AreEqual(
-            "656fa0d9b47fb2760c325b06be2ae867000d1671ccf7f78a6cc9b19e3b8680e3",
+            "58f16048a1d3ea767159e8f5ad07cf91a0633dbc0207687309fcc6220dd145c3",
             plan.ArtifactRef.Sha256);
     }
 

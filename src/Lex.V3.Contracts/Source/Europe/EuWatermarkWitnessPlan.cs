@@ -188,6 +188,33 @@ public sealed class EuWatermarkWitnessPlan
         "http://publications.europa.eu/ontology/cdm/cmr#lastModificationDate";
 
     /// <summary>
+    /// The IRI every unused VALUES slot is bound to, so a short batch asks about its own members
+    /// and nothing else.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The padding has to be a subject the endpoint provably knows nothing about, not merely one
+    /// this repository believes is unused, so a real-looking Cellar IRI would have been the wrong
+    /// choice. Measured against the live endpoint on 2026-09-06: a one-member batch padded with
+    /// this subject returns that member's single row, where padding by repetition returned it 50
+    /// times.
+    /// </para>
+    /// <para>
+    /// A <c>urn:</c> RATHER THAN AN <c>https://</c> SENTINEL, and the difference is not cosmetic.
+    /// <see cref="EuPackRootCanonicalForm.TryCanonicalize"/> is a general http/https shape reducer:
+    /// it accepts ANY well-formed http or https URI without query, fragment or double slash, and
+    /// downgrades the scheme. An <c>https://lex.invalid/...</c> sentinel was tried first and
+    /// canonicalizes cleanly, so anything downstream that canonicalizes a string it was handed
+    /// could take it for a publisher Work root. This scheme is refused outright as
+    /// <see cref="EuPackRootCanonicalFormRefusal.RootSchemeNotHttpOrHttps"/>, so the sentinel cannot
+    /// be mistaken for a pack root by the one function whose job is deciding that. The guard in
+    /// <c>EuWitnessBatchPaddingTests</c> is what found this, by failing on the first spelling.
+    /// </para>
+    /// </remarks>
+    public const string BatchPaddingEntryIri =
+        "urn:lex:v3:eu-watermark-witness-batch-padding";
+
+    /// <summary>
     /// Below this no page can advance. Every page re-reads the boundary position itself, so a one
     /// row page is spent on a row already delivered. This is a property of the boundary rule and
     /// holds for every corpus; it is not a claim that two rows are enough.
@@ -638,21 +665,43 @@ public sealed class EuWatermarkWitnessPlan
 
     /// <summary>
     /// Canonicalizes, refuses and sorts a batch exactly as family P's own <c>CanonicalizeBatch</c>
-    /// does, then pads to <see cref="BatchCapacity"/> by repeating the greatest member, so the
-    /// rendered query has a fixed shape whatever the batch holds.
+    /// does, then pads to <see cref="BatchCapacity"/> with <see cref="BatchPaddingEntryIri"/>, so
+    /// the rendered query has a fixed shape whatever the batch holds.
     /// </summary>
     /// <remarks>
     /// The padding is not decoration. It is what lets the TEMPLATE be fixed and therefore lets the
     /// plan digest cover the query's shape while the batch's CONTENTS travel as parameters. Without
     /// it the digest would move every batch and stop being a plan identity at all.
     /// <para>
-    /// THE DUPLICATE-SOLUTION QUESTION, ANSWERED RATHER THAN ASSUMED, because SPARQL defines VALUES
-    /// as a multiset and a repeated row would in principle multiply every match. Family P pads the
-    /// identical way with no DISTINCT, and its padded query has been observed against this exact
-    /// endpoint returning one row set rather than a multiplied one, so this endpoint treats the
-    /// block as a set. The witness inherits that proven behaviour by using the same mechanism, and
-    /// if it ever changed the traversal's own strictly-ascending page check would refuse loudly
-    /// rather than quietly counting a row twice.
+    /// THE DUPLICATE-SOLUTION QUESTION, NOW ANSWERED BY MEASUREMENT RATHER THAN BY INHERITANCE.
+    /// This method used to pad by repeating the greatest member, on the reasoning that family P
+    /// pads the identical way and had been observed returning one row set rather than a multiplied
+    /// one, so the endpoint must treat the block as a set. THAT INFERENCE WAS WRONG, and the
+    /// 82-seed population run measured it. Family P is not protected by endpoint set semantics: its
+    /// rows query ends <c>GROUP BY ?object ?predicate ?value ?value_kind ?datatype_iri
+    /// ?language_tag</c>, and families X, W and M all group likewise, so each collapses its own
+    /// padding before the caller ever sees it. The witness template groups nothing and carries no
+    /// DISTINCT, so it inherited the mechanism without the protection.
+    /// </para>
+    /// <para>
+    /// WHAT THAT COST, measured against the live endpoint on 2026-09-06. Appendix A's six treaty
+    /// seeds have no consolidated states, so their witness batch holds exactly ONE object; that
+    /// object is therefore both the greatest member, repeated into all 49 unused slots, and the
+    /// object the bootstrap bound sits on, so the boundary filter admitted every copy. The endpoint
+    /// returned the same row 50 times, <see cref="EuWatermarkTraversalStep.TryOpenBatch"/> refused
+    /// <see cref="EuWatermarkStepRefusal.PageNotStrictlyAscending"/> on the first adjacent pair, and
+    /// the whole run refused. The old remark predicted exactly this ("the traversal's own strictly
+    /// ascending page check would refuse loudly"), which is what it did; what the remark got wrong
+    /// was believing the condition could not arise.
+    /// </para>
+    /// <para>
+    /// WHY A SENTINEL RATHER THAN A GROUP BY. Grouping the witness rows would also collapse a
+    /// duplicate the PUBLISHER sent, and telling those two apart is the strictly-ascending check's
+    /// job. Binding the unused slots to a subject the endpoint has no triple for removes the
+    /// duplication THIS CODE INJECTED without blunting the guard against duplication anyone else
+    /// injects. The template text is untouched, so
+    /// <see cref="QueryPlanIdentityDigest"/> does not move; only <see cref="BatchDigest"/> does,
+    /// which is correct, because what the batch asked about really did change.
     /// </para>
     /// </remarks>
     private static string[]? TryCanonicalizeAndPad(
@@ -698,10 +747,9 @@ public sealed class EuWatermarkWitnessPlan
 
         Array.Sort(canonical, StringComparer.Ordinal);
         var padded = new string[BatchCapacity];
-        var last = canonical[^1];
         for (var index = 0; index < BatchCapacity; index++)
         {
-            padded[index] = index < canonical.Length ? canonical[index] : last;
+            padded[index] = index < canonical.Length ? canonical[index] : BatchPaddingEntryIri;
         }
 
         refusal = EuWatermarkPlanRefusal.None;
