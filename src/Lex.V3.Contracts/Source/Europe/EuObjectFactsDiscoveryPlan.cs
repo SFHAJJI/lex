@@ -237,6 +237,32 @@ public sealed class EuObjectFactsDiscoveryPlan
             EuCdmPredicate.ExpressionTitleShort,
         });
 
+    /// <summary>
+    /// Exactly the predicate IRIs family P's own <c>VALUES ?predicate</c> block binds, so a row
+    /// carrying anything else is a term this run never asked the publisher for.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// DERIVED FROM THE QUERY, NOT RESTATED BESIDE IT. The two sequences joined below are the same
+    /// two the object-facts template joins into its <c>VALUES ?predicate</c> block, so this set and
+    /// the question actually asked cannot drift apart: adding a predicate to either authority
+    /// changes the query and this set in one edit. A hand-written second list of the same thing is
+    /// a failure this repository has already paid for, and it is why the census tests refuse to
+    /// build their expected side out of the code they check.
+    /// </para>
+    /// <para>
+    /// Family X's four expression predicates are deliberately absent. They are the other half of
+    /// the partition the constructor enforces, they are bound by the expression template rather
+    /// than this one, and <see cref="EuCellarObjectDecode"/> answers them from family X rows. A
+    /// family P row carrying one of them was therefore no more asked for than a foreign IRI.
+    /// </para>
+    /// </remarks>
+    internal static readonly IReadOnlySet<string> ObjectFactAuthorityPredicateIris =
+        ObjectAuthorityPredicates
+            .Select(CdmIri)
+            .Concat(EuScopeVocabulary.ReadRelationFamilies.Select(RelationIri))
+            .ToHashSet(StringComparer.Ordinal);
+
     private readonly IReadOnlyDictionary<EuObjectFactsQuerySet, EuObjectFactsQueryDefinition> _definitions;
     private readonly byte[] _canonicalIdentityBytes;
 

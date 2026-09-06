@@ -262,7 +262,8 @@ public sealed class ClosedVocabularyCensusTests
                     + "ObjectFactRowNotInClosure, ExpressionFactRowTermKindMismatch, "
                     + "ExpressionParentNotInClosure, ExpressionSubjectNotSelfClosed, "
                     + "ConsolidatedBasedOnEdgeDisagreesWithFamily, "
-                    + "ContentClassClosurePositionMismatch, ManifestationListingRefused",
+                    + "ContentClassClosurePositionMismatch, ManifestationListingRefused, "
+                    + "ObjectFactRowPredicateNotOnTheAuthority",
                 "Lex.V3.Contracts.Source.Europe.EuCellarObjectSnapshotRefusal: None, "
                     + "WorkRootNotCanonical, WorkRootOutsideAppendixAPack, "
                     + "PredicateObservationMissing, PredicateObservationRepeated, "
