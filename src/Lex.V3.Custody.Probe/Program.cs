@@ -117,10 +117,12 @@ internal static class CustodyProbeApplication
         {
             await Console.Error.WriteLineAsync("custody_probe_failed").ConfigureAwait(false);
             var diagnosticVersion = Environment.GetEnvironmentVariable("LEX_V3_CUSTODY_DIAGNOSTICS");
-            if (diagnosticVersion is "1" or "2")
+            if (diagnosticVersion is "1" or "2" or "3")
             {
                 await Console.Error.WriteLineAsync(ProbeFailureDiagnostic.Serialize(
-                        exception, includeConfiguration: diagnosticVersion == "2"))
+                        exception,
+                        includeConfiguration: diagnosticVersion is "2" or "3",
+                        includeCustody: diagnosticVersion == "3"))
                     .ConfigureAwait(false);
             }
 

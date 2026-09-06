@@ -24,8 +24,12 @@ internal static class ProbeFailureDiagnostic
         return exception;
     }
 
-    internal static string Serialize(Exception exception, bool includeConfiguration = false)
+    internal static string Serialize(
+        Exception exception,
+        bool includeConfiguration = false,
+        bool includeCustody = false)
     {
+        includeConfiguration |= includeCustody;
         var causes = new List<object>();
         Exception? current = exception;
         while (current is not null && causes.Count < 8)
@@ -53,7 +57,19 @@ internal static class ProbeFailureDiagnostic
                 _ => null,
             };
             var boundedStatus = status is >= 100 and <= 599 ? status : null;
-            if (includeConfiguration)
+            if (includeCustody)
+            {
+                var guard = current.GetType() == typeof(InvalidOperationException)
+                    ? current.Data[ConfigurationGuardKey] as ConfigurationGuard : null;
+                causes.Add(new
+                {
+                    kind,
+                    http_status = boundedStatus,
+                    configuration_guard = guard?.ToDiagnostic(),
+                    custody_guard = CustodyGuard(current),
+                });
+            }
+            else if (includeConfiguration)
             {
                 var guard = current.GetType() == typeof(InvalidOperationException)
                     ? current.Data[ConfigurationGuardKey] as ConfigurationGuard : null;
@@ -73,12 +89,34 @@ internal static class ProbeFailureDiagnostic
 
         return JsonSerializer.Serialize(new
         {
-            schema = includeConfiguration
-                ? "lex-v3-custody-probe-diagnostic/2" : "lex-v3-custody-probe-diagnostic/1",
+            schema = includeCustody
+                ? "lex-v3-custody-probe-diagnostic/3"
+                : includeConfiguration
+                    ? "lex-v3-custody-probe-diagnostic/2"
+                    : "lex-v3-custody-probe-diagnostic/1",
             @event = "custody_probe_failed",
             causes,
             truncated = current is not null,
         });
+    }
+
+    private static string? CustodyGuard(Exception exception)
+    {
+        // CustodyPolicyException is sealed. Read its message only after the exact-type check,
+        // admit two product-owned literals, and publish only the fixed token. Provider text,
+        // arbitrary exception messages and lookalikes remain outside the diagnostic boundary.
+        if (exception.GetType() != typeof(CustodyPolicyException))
+        {
+            return null;
+        }
+
+        return exception.Message switch
+        {
+            "The final Azure policy reread was refused." => "final_policy_reread",
+            "The final Azure object did not prove the protection required by its custody lane."
+                => "final_object_protection",
+            _ => null,
+        };
     }
 
     private sealed record ConfigurationGuard(ProbeConfigurationGuard Guard, string? Setting)
