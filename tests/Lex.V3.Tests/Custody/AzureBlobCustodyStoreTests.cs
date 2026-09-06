@@ -287,8 +287,15 @@ public sealed class AzureBlobCustodyStoreTests
         harness.Nightly.ConfigureNewBlob = blob =>
             blob.CreatedOn = ObservedAt.AddTicks(-1);
 
-        await Assert.ThrowsExactlyAsync<CustodyPolicyException>(() =>
+        var error = await Assert.ThrowsExactlyAsync<CustodyPolicyException>(() =>
             harness.Store.CreateAsync(Body, CustodyClass.NightlyFloor90d, CancellationToken.None));
+
+        Assert.AreEqual(
+            "The final Azure object did not prove the protection required by its custody lane.",
+            error.Message);
+        Assert.AreEqual(1, harness.Nightly.Blobs.Count);
+        Assert.IsTrue(harness.Events.Contains("nightly.copy", StringComparer.Ordinal));
+        Assert.IsTrue(harness.Events.Contains("staging.delete", StringComparer.Ordinal));
     }
 
     [TestMethod]
