@@ -77,8 +77,8 @@ internal static class CustodyProbeApplication
 
     private static readonly string[] AlternateManagedIdentitySourceVariables =
     [
-        "MSI_ENDPOINT",
-        "MSI_SECRET",
+        // Container Apps can expose legacy MSI aliases beside its modern identity pair.
+        // The pinned SDK prefers that validated modern pair; the contract test holds the precedence.
         "IMDS_ENDPOINT",
         "IDENTITY_SERVER_THUMBPRINT",
         "AZURE_FEDERATED_TOKEN_FILE",
