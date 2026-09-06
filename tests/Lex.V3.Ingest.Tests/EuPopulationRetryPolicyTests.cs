@@ -70,6 +70,33 @@ public sealed class EuPopulationRetryPolicyTests
                 + "would be re-running a cause this predicate never examined.");
     }
 
+    [TestMethod]
+    public void AWitnessRefusalIsClassifiedFromItsOwnStatus()
+    {
+        // The gap the first gated run found: seed 12016E/TXT refused witness_traversal_refused
+        // with every family proved, so the family clause had nothing to inspect and the seed was
+        // not retried. The witness carries its own status now, and it is read rather than parsed
+        // out of the whole-run refusal's prose.
+        Assert.IsTrue(WitnessRefused(503), "a witness 503 is the publisher being unavailable.");
+        Assert.IsTrue(WitnessRefused(500), "the bottom of the range counts.");
+        Assert.IsFalse(WitnessRefused(404), "a witness 404 is not unavailability.");
+        Assert.IsFalse(
+            WitnessRefused(null),
+            "a witness refusal naming no status states no publisher failure, which is exactly the "
+                + "shape that was unreadable before the status was carried.");
+    }
+
+    private static bool WitnessRefused(int? terminalStatus) =>
+        EuStageOnePopulationRun.IsPublisherUnavailable(
+            EuQueryExecutionResult.Refused(
+                Topology(),
+                [],
+                new EuQueryExecutionRefusalDetail(
+                    EuQueryExecutionRefusal.WitnessTraversalRefused,
+                    "a synthetic witness refusal for the retry policy test."),
+                witnessTraversalRefusal: new EuWitnessTraversalRefusalDetail(
+                    EuWitnessTraversalRefusal.StatusNotAdmitted, null, terminalStatus)));
+
     private static bool Refused(int?[] terminalStatuses) =>
         EuStageOnePopulationRun.IsPublisherUnavailable(
             EuQueryExecutionResult.Refused(

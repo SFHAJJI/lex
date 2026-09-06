@@ -332,7 +332,13 @@ public enum EuWitnessTraversalRefusal
 
 public sealed class EuWitnessTraversalRefusalDetail
 {
-    internal EuWitnessTraversalRefusalDetail(EuWitnessTraversalRefusal code, string? detail)
+    internal EuWitnessTraversalRefusalDetail(
+        EuWitnessTraversalRefusal code,
+        string? detail,
+        int? terminalStatus = null,
+        ulong? attemptOrdinalReached = null,
+        string? responseBodySha256 = null,
+        string? observedMediaType = null)
     {
         if (code == EuWitnessTraversalRefusal.None)
         {
@@ -341,11 +347,36 @@ public sealed class EuWitnessTraversalRefusalDetail
 
         Code = code;
         Detail = detail;
+        TerminalStatus = terminalStatus;
+        AttemptOrdinalReached = attemptOrdinalReached;
+        ResponseBodySha256 = responseBodySha256;
+        ObservedMediaType = observedMediaType;
     }
 
     public EuWitnessTraversalRefusal Code { get; }
 
     public string? Detail { get; }
+
+    /// <summary>
+    /// The publisher's own status, when the traversal refused because of one.
+    /// </summary>
+    /// <remarks>
+    /// THE FAMILY PATH ALREADY CARRIED THIS AND THIS PATH DROPPED IT, from the identical
+    /// <c>ObservationAttemptFailure</c>: <c>ToObserveOutcome</c> passes
+    /// <c>failure.TerminalStatus</c> into <see cref="EuEnumerationRefusalDetail"/> while the
+    /// witness passed only <c>OperationalDetail</c>, which is empty for a status refusal. The
+    /// complete 82-seed population run measured the consequence: seed 12016E/TXT refused
+    /// <c>witness_traversal_refused</c> reading <c>code=StatusNotAdmitted detail=</c>, naming no
+    /// status at all, so nothing could tell a publisher 5xx from a 4xx -- a distinction Decision
+    /// 67 makes load bearing, since one is a publisher server failure and the other is not.
+    /// </remarks>
+    public int? TerminalStatus { get; }
+
+    public ulong? AttemptOrdinalReached { get; }
+
+    public string? ResponseBodySha256 { get; }
+
+    public string? ObservedMediaType { get; }
 }
 
 /// <summary>Delivered or refused, never both and never neither.</summary>
@@ -729,7 +760,13 @@ public sealed class EuRepeatedEnumerationExecutor
                             $"Unreachable: an unhandled {nameof(ObservationAttemptFailureKind)} '{failure.Kind}'."),
                     };
                     return EuWitnessTraversalResult.Refused(
-                        new EuWitnessTraversalRefusalDetail(code, failure.OperationalDetail),
+                        new EuWitnessTraversalRefusalDetail(
+                            code,
+                            failure.OperationalDetail,
+                            failure.TerminalStatus,
+                            failure.AttemptOrdinalReached,
+                            failure.ResponseBodySha256,
+                            failure.ObservedMediaType),
                         productRequestCount);
                 }
 

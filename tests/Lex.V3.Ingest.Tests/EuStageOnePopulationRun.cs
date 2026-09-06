@@ -618,6 +618,16 @@ public sealed class EuStageOnePopulationRun
     /// </remarks>
     internal static bool IsPublisherUnavailable(EuQueryExecutionResult result)
     {
+        // THE WITNESS IS THE OTHER PHASE THAT TALKS TO THE PUBLISHER, and the first gated run found
+        // it: seed 12016E/TXT refused witness_traversal_refused on a StatusNotAdmitted while every
+        // family proved, so there was no refused family for the clause below to inspect and the
+        // seed was not retried. The witness refusal is read structurally here rather than parsed
+        // out of the whole-run refusal's prose.
+        if (result.WitnessTraversalRefusal is { } witness)
+        {
+            return witness.TerminalStatus is >= 500 and <= 599;
+        }
+
         var refusedFamilies = result.FamilyOutcomes
             .Where(static outcome => outcome.ExecutorRefusal is not null)
             .ToArray();
