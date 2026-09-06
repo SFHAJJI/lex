@@ -113,9 +113,15 @@ internal static class CustodyProbeApplication
         {
             throw;
         }
-        catch
+        catch (Exception exception)
         {
             await Console.Error.WriteLineAsync("custody_probe_failed").ConfigureAwait(false);
+            if (Environment.GetEnvironmentVariable("LEX_V3_CUSTODY_DIAGNOSTICS") == "1")
+            {
+                await Console.Error.WriteLineAsync(ProbeFailureDiagnostic.Serialize(exception))
+                    .ConfigureAwait(false);
+            }
+
             return 1;
         }
     }

@@ -351,7 +351,13 @@ public sealed class AzureCustodyProbeContractTests
     }
 
     [TestMethod]
-    public async Task ConsoleBoundaryReturnsOnlyTheFixedFailureSignal()
+    [DataRow(null, false)]
+    [DataRow("1", true)]
+    [DataRow("true", false)]
+    [DataRow("1 ", false)]
+    public async Task ConsoleBoundaryAddsDiagnosticsOnlyWhenExplicitlyEnabled(
+        string? diagnostics,
+        bool enabled)
     {
         var assembly = Path.Combine(AppContext.BaseDirectory, "Lex.V3.Custody.Probe.dll");
         Assert.IsTrue(File.Exists(assembly), assembly);
@@ -370,6 +376,11 @@ public sealed class AzureCustodyProbeContractTests
         };
         startInfo.ArgumentList.Add(assembly);
         startInfo.ArgumentList.Add("invalid-mode");
+        startInfo.Environment.Remove("LEX_V3_CUSTODY_DIAGNOSTICS");
+        if (diagnostics is not null)
+        {
+            startInfo.Environment["LEX_V3_CUSTODY_DIAGNOSTICS"] = diagnostics;
+        }
 
         using var process = new Process { StartInfo = startInfo };
         Assert.IsTrue(process.Start());
@@ -389,7 +400,22 @@ public sealed class AzureCustodyProbeContractTests
         }
 
         Assert.AreEqual(string.Empty, await stdoutTask);
-        Assert.AreEqual($"custody_probe_failed{Environment.NewLine}", await stderrTask);
+        var stderr = await stderrTask;
+        if (enabled)
+        {
+            var lines = stderr.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries);
+            Assert.HasCount(2, lines);
+            Assert.AreEqual("custody_probe_failed", lines[0]);
+            using var diagnostic = JsonDocument.Parse(lines[1]);
+            Assert.AreEqual("lex-v3-custody-probe-diagnostic/1",
+                diagnostic.RootElement.GetProperty("schema").GetString());
+            Assert.AreEqual("invalid_argument",
+                diagnostic.RootElement.GetProperty("causes")[0].GetProperty("kind").GetString());
+        }
+        else
+        {
+            Assert.AreEqual($"custody_probe_failed{Environment.NewLine}", stderr);
+        }
         Assert.AreEqual(1, process.ExitCode);
     }
 
