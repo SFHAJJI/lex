@@ -40,6 +40,7 @@ function Test-V3TrackedPath {
         $normalized -cmatch '^src/Lex\.V3\.[A-Za-z0-9.]+/.+$' -or
         $normalized -cmatch '^tests/Lex\.V3\.[A-Za-z0-9.]+/.+$' -or
         $normalized -ceq 'web/.gitignore' -or
+        $normalized -cmatch '^web/acceptance/issue-368/(?:README\.md|sources\.sha256|[a-z0-9-]+\.(?:log|mjs))$' -or
         $normalized -cmatch '^web/app/[A-Za-z0-9.-]+\.(?:jsx|mjs)$' -or
         $normalized -cmatch '^web/package(?:-lock)?\.json$' -or
         $normalized -cmatch '^web/scripts/[a-z0-9.-]+\.mjs$' -or
@@ -128,6 +129,10 @@ $requiredV3Paths = @(
     'schemas/v3-source/core/source-profile-topology.schema.json',
     'schemas/v3-source/http/http-acquisition-reason-registry.json',
     'web/.gitignore',
+    'web/acceptance/issue-368/README.md',
+    'web/acceptance/issue-368/sources.sha256',
+    'web/acceptance/issue-368/mutations.mjs',
+    'web/acceptance/issue-368/red.log',
     'web/app/index.jsx',
     'web/app/render-document.mjs',
     'web/src/fonts/inter-400-latin.woff2'
@@ -159,6 +164,12 @@ $pathMutations = @(
     'schemas/v3-source/http/http-acquisition-reason-registry.yaml',
     'web/src/App.tsx',
     'web/.env',
+    'web/acceptance/issue-368/.env',
+    'web/acceptance/issue-368/nested/red.log',
+    'web/acceptance/issue-369/red.log',
+    'web/acceptance/issue-368/red.log.bak',
+    'web/acceptance/issue-368/app.jsx',
+    'web/acceptance/issue-368/../red.log',
     'web/app/App.tsx',
     'web/app/nested/App.jsx',
     'web/src/fonts/font.ttf',

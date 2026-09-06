@@ -27,10 +27,14 @@
 // keyed on the work key would answer an administrative citation with a legislative act, and the
 // reader would have no way to see it happen.
 
-/** What a citation turned out to be. Closed, and ordered from most to least resolved. */
+import { identityOf } from './record-identity.mjs';
+import { isCalendarDate } from './temporal.mjs';
+
+/** What a citation turned out to be. Closed. */
 export const VERDICTS = Object.freeze([
   'resolved',
   'ambiguous',
+  'pinned_state_unavailable',
   'out_of_corpus',
   'unrecognised',
 ]);
@@ -58,6 +62,10 @@ export const OUT_OF_CORPUS_NOTE =
 export const AMBIGUOUS_NOTE =
   'More than one held record answers this citation. All of them are listed and none is chosen ' +
   'for you.';
+
+export const PINNED_STATE_UNAVAILABLE_NOTE =
+  'The exact state named by this permalink was not returned by the lookup. ' +
+  'No different state has been substituted.';
 
 /** Bodies this checker recognises and deliberately does not hold, with where to go instead. */
 const OUT_OF_CORPUS_BODIES = Object.freeze(
@@ -178,6 +186,7 @@ export function parseCitation(raw) {
     }
     if (form === 'permalink') {
       const [, publisher, work, at, digest] = match;
+      if (!isCalendarDate(at)) return null;
       return { form, publisher, key: work, at, digest };
     }
     const [, publisher, work, at] = match;
@@ -221,7 +230,8 @@ function requireCandidate(candidate, index) {
  *
  * @param {object} input
  * @param {string} input.raw          the citation as pasted
- * @param {Array}  [input.candidates] held records the caller found, each `{lex_id, identifier, valid_from, valid_to}`
+ * @param {Array}  [input.candidates] held records the caller found, each `{lex_id, identifier, valid_from, valid_to}`;
+ *   permalink candidates also require `hash`, the state hash used by readingUrl (not record_sha256 or text_sha256)
  */
 export function checkCitation({ raw, candidates = [] }) {
   const parsed = parseCitation(raw);
@@ -249,6 +259,25 @@ export function checkCitation({ raw, candidates = [] }) {
           'the Luxembourg work key drops the etat/leg and etat/adm segments, so a lookup keyed ' +
           'on it can answer an administrative citation with a legislative act',
       );
+    }
+  }
+
+  if (parsed.form === 'permalink') {
+    for (const [index, candidate] of candidates.entries()) {
+      const identity = identityOf(candidate.lex_id, `candidate ${index + 1}`);
+      if (identity.publisher !== parsed.publisher || identity.work !== parsed.key ||
+          candidate.valid_from !== parsed.at) {
+        throw new Error(`candidate ${index + 1} does not match the permalink coordinate`);
+      }
+      if (typeof candidate.hash !== 'string' || !/^[0-9a-f]{64}$/.test(candidate.hash)) {
+        throw new Error(`candidate ${index + 1} carries no canonical state hash`);
+      }
+    }
+    // A lookup may retain several rebuilds at this coordinate. Only the requested state hash
+    // can answer this citation; neither a newer state nor another kind of digest can replace it.
+    candidates = candidates.filter((candidate) => candidate.hash === parsed.digest);
+    if (candidates.length === 0) {
+      return { verdict: 'pinned_state_unavailable', raw, parsed, note: PINNED_STATE_UNAVAILABLE_NOTE };
     }
   }
 
@@ -311,7 +340,7 @@ export function renderVerdict(result) {
     `<article class="check-card check-${escapeHtml(result.verdict)}">` +
     `<p class="check-raw"><code>${escapeHtml(result.raw)}</code></p>`;
 
-  if (result.verdict === 'unrecognised') {
+  if (result.verdict === 'unrecognised' || result.verdict === 'pinned_state_unavailable') {
     return `${head}<p class="check-note">${escapeHtml(result.note)}</p></article>`;
   }
   if (result.verdict === 'out_of_corpus') {

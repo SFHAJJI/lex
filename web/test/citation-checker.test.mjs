@@ -15,6 +15,8 @@ import {
 } from '../scripts/citation-checker.mjs';
 
 const ELI = 'http://data.legilux.public.lu/eli/etat/leg/loi/1993/04/05/n1';
+const PIN = '7f'.repeat(32);
+const PERMALINK = `https://law.soufien.lu/lu-legilux/loi-1993-04-05-n1/2025-01-01--${PIN}`;
 
 function state(overrides = {}) {
   return {
@@ -176,6 +178,7 @@ test('one candidate resolves and names its state', () => {
 
 test('every verdict this module can return is in the closed list', () => {
   const produced = [
+    checkCitation({ raw: PERMALINK }).verdict,
     checkCitation({ raw: 'nonsense here' }).verdict,
     checkCitation({ raw: 'CSSF 20/747' }).verdict,
     checkCitation({ raw: ELI, candidates: [] }).verdict,
@@ -185,7 +188,67 @@ test('every verdict this module can return is in the closed list', () => {
   for (const verdict of produced) {
     assert.ok(VERDICTS.includes(verdict), `${verdict} is not a declared verdict`);
   }
-  assert.equal(new Set(produced).size, 4, 'the five cases were expected to span four verdicts');
+  assert.deepEqual([...new Set(produced)].sort(), [...VERDICTS].sort());
+});
+
+test('a stale permalink refuses substitution and retains the requested pin', () => {
+  for (const candidates of [[], [state({ hash: '31'.repeat(32) })]]) {
+    const result = checkCitation({ raw: PERMALINK, candidates });
+    assert.equal(result.verdict, 'pinned_state_unavailable');
+    assert.equal(result.parsed.digest, PIN);
+    assert.equal(result.state, undefined);
+    assert.equal(result.candidates, undefined);
+    const html = renderVerdict(result);
+    assert.ok(html.includes(PIN));
+    assert.ok(html.includes('No different state has been substituted'));
+    assert.ok(!html.includes('Resolved to'));
+  }
+});
+
+test('a permalink selects its exact state hash before considering ambiguity', () => {
+  const exact = state({ hash: PIN });
+  const other = state({ hash: '31'.repeat(32) });
+  for (const candidates of [[exact], [other, exact], [exact, other]]) {
+    const result = checkCitation({ raw: PERMALINK, candidates });
+    assert.equal(result.verdict, 'resolved');
+    assert.equal(result.state, exact);
+  }
+  const result = checkCitation({ raw: PERMALINK, candidates: [exact, { ...exact }, other] });
+  assert.equal(result.verdict, 'ambiguous');
+  assert.equal(result.candidates.length, 2);
+  assert.equal(result.state, undefined);
+});
+
+test('record and provision digests cannot stand in for the permalink state hash', () => {
+  const result = checkCitation({ raw: PERMALINK, candidates: [state({
+    hash: '31'.repeat(32), record_sha256: PIN, text_sha256: PIN,
+  })] });
+  assert.equal(result.verdict, 'pinned_state_unavailable');
+});
+
+test('permalink candidates require a canonical state hash even beside an exact match', () => {
+  for (const hash of [undefined, '', PIN.toUpperCase(), 'a'.repeat(63), 42]) {
+    assert.throws(() => checkCitation({ raw: PERMALINK, candidates: [
+      state({ hash: PIN }), state({ hash, record_sha256: PIN, text_sha256: PIN }),
+    ] }), /state hash/);
+  }
+});
+
+test('a matching hash does not excuse a foreign permalink coordinate', () => {
+  for (const overrides of [
+    { lex_id: 'eu-eurlex:loi-1993-04-05-n1:2025-01-01' },
+    { lex_id: 'lu-legilux:loi-1915-08-10-n1:2025-01-01' },
+    { valid_from: '2026-01-01' },
+  ]) {
+    assert.throws(() => checkCitation({ raw: PERMALINK, candidates: [
+      state({ hash: PIN }), state({ hash: PIN, ...overrides }),
+    ] }), /permalink coordinate/);
+  }
+});
+
+test('a permalink with an impossible calendar date does not parse', () => {
+  assert.equal(parseCitation(PERMALINK.replace('2025-01-01', '2025-02-29')), null);
+  assert.equal(parseCitation(PERMALINK.replace('2025-01-01', '2024-02-29')).at, '2024-02-29');
 });
 
 test('a candidate a reader cannot identify is refused', () => {

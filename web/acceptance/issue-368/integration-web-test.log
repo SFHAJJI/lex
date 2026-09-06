@@ -1,0 +1,4264 @@
+
+> lex-v3-web@0.0.0 pretest
+> node scripts/react-bundle.mjs
+
+compiled app/index.jsx -> C:\lex-v3\worktrees\codex-pinned-permalink\web\.react-build\app.mjs
+
+> lex-v3-web@0.0.0 test
+> node --test test/*.test.mjs
+
+TAP version 13
+# Subtest: the dialog is an alertdialog and names both candidates in full
+ok 1 - the dialog is an alertdialog and names both candidates in full
+  ---
+  duration_ms: 12.0064
+  type: 'test'
+  ...
+# Subtest: nothing is preselected
+ok 2 - nothing is preselected
+  ---
+  duration_ms: 0.8745
+  type: 'test'
+  ...
+# Subtest: the dialog says the service will not choose
+ok 3 - the dialog says the service will not choose
+  ---
+  duration_ms: 1.9417
+  type: 'test'
+  ...
+# Subtest: a candidate is described in its own publisher terms
+ok 4 - a candidate is described in its own publisher terms
+  ---
+  duration_ms: 2.9736
+  type: 'test'
+  ...
+# Subtest: fewer than two candidates is not an ambiguity
+ok 5 - fewer than two candidates is not an ambiguity
+  ---
+  duration_ms: 2.7494
+  type: 'test'
+  ...
+# Subtest: closing without choosing is offered explicitly, not only by Escape
+ok 6 - closing without choosing is offered explicitly, not only by Escape
+  ---
+  duration_ms: 0.8248
+  type: 'test'
+  ...
+# Subtest: every supported CI platform declares real browser candidates
+ok 7 - every supported CI platform declares real browser candidates
+  ---
+  duration_ms: 53.1931
+  type: 'test'
+  ...
+# Subtest: linux discovery names a real Chromium executable, not a Windows path
+ok 8 - linux discovery names a real Chromium executable, not a Windows path
+  ---
+  duration_ms: 0.5175
+  type: 'test'
+  ...
+# Subtest: an unsupported platform fails with a reason rather than an empty search
+ok 9 - an unsupported platform fails with a reason rather than an empty search
+  ---
+  duration_ms: 1.0521
+  type: 'test'
+  ...
+# Subtest: no allocator can return a port Fetch blocks, over the whole range
+ok 10 - no allocator can return a port Fetch blocks, over the whole range
+  ---
+  duration_ms: 10.0506
+  type: 'test'
+  ...
+# Subtest: 10080 is the port that caused the incident and is excluded
+ok 11 - 10080 is the port that caused the incident and is excluded
+  ---
+  duration_ms: 4.2627
+  type: 'test'
+  ...
+# Subtest: a range consisting only of blocked ports fails loudly
+ok 12 - a range consisting only of blocked ports fails loudly
+  ---
+  duration_ms: 0.4693
+  type: 'test'
+  ...
+# Subtest: there are captured envelopes, and loading one is not trivial
+ok 13 - there are captured envelopes, and loading one is not trivial
+  ---
+  duration_ms: 2.5107
+  type: 'test'
+  ...
+# Subtest: a capture whose bytes changed is refused, not loaded
+ok 14 - a capture whose bytes changed is refused, not loaded
+  ---
+  duration_ms: 1.1318
+  type: 'test'
+  ...
+# Subtest: an envelope nobody captured is refused rather than returned empty
+ok 15 - an envelope nobody captured is refused rather than returned empty
+  ---
+  duration_ms: 0.3332
+  type: 'test'
+  ...
+# Subtest: every citation form this build declares actually parses
+ok 16 - every citation form this build declares actually parses
+  ---
+  duration_ms: 4.2094
+  type: 'test'
+  ...
+# Subtest: a permalink off the canonical host does not parse, userinfo included
+ok 17 - a permalink off the canonical host does not parse, userinfo included
+  ---
+  duration_ms: 0.3371
+  type: 'test'
+  ...
+# Subtest: a citation embedded in prose is not extracted as if it had been cited alone
+ok 18 - a citation embedded in prose is not extracted as if it had been cited alone
+  ---
+  duration_ms: 0.198
+  type: 'test'
+  ...
+# Subtest: a CELEX cited the publisher way folds to the held key, and keeps the reader spelling
+ok 19 - a CELEX cited the publisher way folds to the held key, and keeps the reader spelling
+  ---
+  duration_ms: 0.2187
+  type: 'test'
+  ...
+# Subtest: a consolidated CELEX names a date and its parts, and invents no base act
+ok 20 - a consolidated CELEX names a date and its parts, and invents no base act
+  ---
+  duration_ms: 0.1502
+  type: 'test'
+  ...
+# Subtest: a CELEX sector is one digit, so the whole identifier parses into its four parts
+ok 21 - a CELEX sector is one digit, so the whole identifier parses into its four parts
+  ---
+  duration_ms: 0.1442
+  type: 'test'
+  ...
+# Subtest: a dated LU ELI carries its applicability date
+ok 22 - a dated LU ELI carries its applicability date
+  ---
+  duration_ms: 0.2568
+  type: 'test'
+  ...
+# Subtest: leg and adm produce one work key and two identifiers, which is the collision
+ok 23 - leg and adm produce one work key and two identifiers, which is the collision
+  ---
+  duration_ms: 0.2458
+  type: 'test'
+  ...
+# Subtest: a candidate from the other branch is refused, not rendered
+ok 24 - a candidate from the other branch is refused, not rendered
+  ---
+  duration_ms: 2.1678
+  type: 'test'
+  ...
+# Subtest: unrecognised and out-of-corpus are different answers
+ok 25 - unrecognised and out-of-corpus are different answers
+  ---
+  duration_ms: 0.9417
+  type: 'test'
+  ...
+# Subtest: a recognised citation we hold nothing for is out of corpus, not unrecognised
+ok 26 - a recognised citation we hold nothing for is out of corpus, not unrecognised
+  ---
+  duration_ms: 0.2759
+  type: 'test'
+  ...
+# Subtest: more than one candidate lists every one and preselects none
+ok 27 - more than one candidate lists every one and preselects none
+  ---
+  duration_ms: 0.3566
+  type: 'test'
+  ...
+# Subtest: one candidate resolves and names its state
+ok 28 - one candidate resolves and names its state
+  ---
+  duration_ms: 0.1392
+  type: 'test'
+  ...
+# Subtest: every verdict this module can return is in the closed list
+ok 29 - every verdict this module can return is in the closed list
+  ---
+  duration_ms: 0.3506
+  type: 'test'
+  ...
+# Subtest: a stale permalink refuses substitution and retains the requested pin
+ok 30 - a stale permalink refuses substitution and retains the requested pin
+  ---
+  duration_ms: 0.5269
+  type: 'test'
+  ...
+# Subtest: a permalink selects its exact state hash before considering ambiguity
+ok 31 - a permalink selects its exact state hash before considering ambiguity
+  ---
+  duration_ms: 0.364
+  type: 'test'
+  ...
+# Subtest: record and provision digests cannot stand in for the permalink state hash
+ok 32 - record and provision digests cannot stand in for the permalink state hash
+  ---
+  duration_ms: 0.2118
+  type: 'test'
+  ...
+# Subtest: permalink candidates require a canonical state hash even beside an exact match
+ok 33 - permalink candidates require a canonical state hash even beside an exact match
+  ---
+  duration_ms: 0.375
+  type: 'test'
+  ...
+# Subtest: a matching hash does not excuse a foreign permalink coordinate
+ok 34 - a matching hash does not excuse a foreign permalink coordinate
+  ---
+  duration_ms: 0.4536
+  type: 'test'
+  ...
+# Subtest: a permalink with an impossible calendar date does not parse
+ok 35 - a permalink with an impossible calendar date does not parse
+  ---
+  duration_ms: 0.1354
+  type: 'test'
+  ...
+# Subtest: a candidate a reader cannot identify is refused
+ok 36 - a candidate a reader cannot identify is refused
+  ---
+  duration_ms: 0.2885
+  type: 'test'
+  ...
+# Subtest: a quote that matches is identical, and one that does not names where
+ok 37 - a quote that matches is identical, and one that does not names where
+  ---
+  duration_ms: 0.5074
+  type: 'test'
+  ...
+# Subtest: a quote comparison against nothing is refused rather than reported identical
+ok 38 - a quote comparison against nothing is refused rather than reported identical
+  ---
+  duration_ms: 0.3887
+  type: 'test'
+  ...
+# Subtest: the verdict card escapes a hostile citation rather than emitting it
+ok 39 - the verdict card escapes a hostile citation rather than emitting it
+  ---
+  duration_ms: 0.1486
+  type: 'test'
+  ...
+# Subtest: an out-of-corpus body is recognised case-insensitively but not over-eagerly
+ok 40 - an out-of-corpus body is recognised case-insensitively but not over-eagerly
+  ---
+  duration_ms: 0.1064
+  type: 'test'
+  ...
+# Subtest: the browser shell identifies the V3 product line
+ok 41 - the browser shell identifies the V3 product line
+  ---
+  duration_ms: 5.6886
+  type: 'test'
+  ...
+# Subtest: two states of one work arm the control
+ok 42 - two states of one work arm the control
+  ---
+  duration_ms: 12.5145
+  type: 'test'
+  ...
+# Subtest: two different works cannot arm, and the reason is the one compare gives
+ok 43 - two different works cannot arm, and the reason is the one compare gives
+  ---
+  duration_ms: 2.1093
+  type: 'test'
+  ...
+# Subtest: fewer or more than two says what is needed, and does not arm
+ok 44 - fewer or more than two says what is needed, and does not arm
+  ---
+  duration_ms: 8.4143
+  type: 'test'
+  ...
+# Subtest: a row that does not name a work cannot arm
+ok 45 - a row that does not name a work cannot arm
+  ---
+  duration_ms: 4.8157
+  type: 'test'
+  ...
+# Subtest: the selection state is announced
+ok 46 - the selection state is announced
+  ---
+  duration_ms: 1.3524
+  type: 'test'
+  ...
+# Subtest: an unavailable Compare stays reachable by keyboard and says why
+ok 47 - an unavailable Compare stays reachable by keyboard and says why
+  ---
+  duration_ms: 2.2804
+  type: 'test'
+  ...
+# Subtest: a selection that cannot arm refuses the action, not only the attribute
+ok 48 - a selection that cannot arm refuses the action, not only the attribute
+  ---
+  duration_ms: 0.4559
+  type: 'test'
+  ...
+# Subtest: what the markup says is unavailable is exactly what the rule refuses
+ok 49 - what the markup says is unavailable is exactly what the rule refuses
+  ---
+  duration_ms: 1.8579
+  type: 'test'
+  ...
+# Subtest: the resolution header renders before the panes and carries both clocks
+ok 50 - the resolution header renders before the panes and carries both clocks
+  ---
+  duration_ms: 3.9545
+  type: 'test'
+  ...
+# Subtest: a side that cannot be fully resolved is not compared
+ok 51 - a side that cannot be fully resolved is not compared
+  ---
+  duration_ms: 1.2367
+  type: 'test'
+  ...
+# Subtest: two profiles that differ replace the panes and cannot be overridden
+ok 52 - two profiles that differ replace the panes and cannot be overridden
+  ---
+  duration_ms: 1.6481
+  type: 'test'
+  ...
+# Subtest: profiles_differ needs both profiles known, not one
+ok 53 - profiles_differ needs both profiles known, not one
+  ---
+  duration_ms: 0.4667
+  type: 'test'
+  ...
+# Subtest: a temporal comparison cannot cross languages
+ok 54 - a temporal comparison cannot cross languages
+  ---
+  duration_ms: 0.2829
+  type: 'test'
+  ...
+# Subtest: a language comparison must be two languages of one state
+ok 55 - a language comparison must be two languages of one state
+  ---
+  duration_ms: 0.7885
+  type: 'test'
+  ...
+# Subtest: a comparison must declare its axis
+ok 56 - a comparison must declare its axis
+  ---
+  duration_ms: 1.1455
+  type: 'test'
+  ...
+# Subtest: an unchanged result renders the publisher note verbatim and builds no panes
+ok 57 - an unchanged result renders the publisher note verbatim and builds no panes
+  ---
+  duration_ms: 0.3377
+  type: 'test'
+  ...
+# Subtest: the digest decides whether anything changed, not the identifier
+ok 58 - the digest decides whether anything changed, not the identifier
+  ---
+  duration_ms: 0.7357
+  type: 'test'
+  ...
+# Subtest: an extraction profile is a string or it is absent
+ok 59 - an extraction profile is a string or it is absent
+  ---
+  duration_ms: 1.7443
+  type: 'test'
+  ...
+# Subtest: a change block carries text or nothing, never a shape
+ok 60 - a change block carries text or nothing, never a shape
+  ---
+  duration_ms: 1.581
+  type: 'test'
+  ...
+# Subtest: a renumber row names two anchors and neither is blank
+ok 61 - a renumber row names two anchors and neither is blank
+  ---
+  duration_ms: 0.8598
+  type: 'test'
+  ...
+# Subtest: a result with no verdict, or a changed result with no changes, is refused
+ok 62 - a result with no verdict, or a changed result with no changes, is refused
+  ---
+  duration_ms: 0.815
+  type: 'test'
+  ...
+# Subtest: renumbering says whose it is, and does not certify how it was found
+ok 63 - renumbering says whose it is, and does not certify how it was found
+  ---
+  duration_ms: 0.4205
+  type: 'test'
+  ...
+# Subtest: a change block reads linearly and does not rely on colour
+ok 64 - a change block reads linearly and does not rely on colour
+  ---
+  duration_ms: 0.2201
+  type: 'test'
+  ...
+# Subtest: one side refusing keeps the other and renders no comparison
+ok 65 - one side refusing keeps the other and renders no comparison
+  ---
+  duration_ms: 1.7934
+  type: 'test'
+  ...
+# Subtest: values are escaped rather than trusted
+ok 66 - values are escaped rather than trusted
+  ---
+  duration_ms: 0.2345
+  type: 'test'
+  ...
+# Subtest: aligned blocks need the service to say the states can be aligned
+ok 67 - aligned blocks need the service to say the states can be aligned
+  ---
+  duration_ms: 0.4014
+  type: 'test'
+  ...
+# Subtest: both axes compare one work, not one instrument against another
+ok 68 - both axes compare one work, not one instrument against another
+  ---
+  duration_ms: 0.2004
+  type: 'test'
+  ...
+# Subtest: the legal-time sentence names the dates the card is about
+ok 69 - the legal-time sentence names the dates the card is about
+  ---
+  duration_ms: 0.2513
+  type: 'test'
+  ...
+# Subtest: identical text on both sides of a block is not a change
+ok 70 - identical text on both sides of a block is not a change
+  ---
+  duration_ms: 0.2157
+  type: 'test'
+  ...
+# Subtest: a work is a work the URL space can address, not any two strings that match
+ok 71 - a work is a work the URL space can address, not any two strings that match
+  ---
+  duration_ms: 0.5181
+  type: 'test'
+  ...
+# Subtest: both renderers draw the same coverage page, finished and unfinished
+ok 72 - both renderers draw the same coverage page, finished and unfinished
+  ---
+  duration_ms: 24.7219
+  type: 'test'
+  ...
+# Subtest: language rows may sum past the headline, because a state exists in each language
+ok 73 - language rows may sum past the headline, because a state exists in each language
+  ---
+  duration_ms: 2.7853
+  type: 'test'
+  ...
+# Subtest: no language row may count more than the whole it is drawn from
+ok 74 - no language row may count more than the whole it is drawn from
+  ---
+  duration_ms: 4.5906
+  type: 'test'
+  ...
+# Subtest: a complete document type table must account for every state exactly once
+ok 75 - a complete document type table must account for every state exactly once
+  ---
+  duration_ms: 0.6275
+  type: 'test'
+  ...
+# Subtest: a truncated type table need not sum, and still may not exceed
+ok 76 - a truncated type table need not sum, and still may not exceed
+  ---
+  duration_ms: 2.7953
+  type: 'test'
+  ...
+# Subtest: a facet row proves itself a row before any arithmetic is done about it
+ok 77 - a facet row proves itself a row before any arithmetic is done about it
+  ---
+  duration_ms: 1.1557
+  type: 'test'
+  ...
+# Subtest: a row the publisher gave no code for is labelled, never blank and never dropped
+ok 78 - a row the publisher gave no code for is labelled, never blank and never dropped
+  ---
+  duration_ms: 4.0055
+  type: 'test'
+  ...
+# Subtest: a build that did not finish shows no counts at all
+ok 79 - a build that did not finish shows no counts at all
+  ---
+  duration_ms: 0.5919
+  type: 'test'
+  ...
+# Subtest: every guard refuses the same input in both renderers
+ok 80 - every guard refuses the same input in both renderers
+  ---
+  duration_ms: 2.8048
+  type: 'test'
+  ...
+# Subtest: every facet table scrolls in its own box, and each box says which table it is
+ok 81 - every facet table scrolls in its own box, and each box says which table it is
+  ---
+  duration_ms: 1.2534
+  type: 'test'
+  ...
+# Subtest: the counts carry their denominators and their date
+ok 82 - the counts carry their denominators and their date
+  ---
+  duration_ms: 0.82
+  type: 'test'
+  ...
+# Subtest: values are escaped rather than trusted, in the React port too
+ok 83 - values are escaped rather than trusted, in the React port too
+  ---
+  duration_ms: 0.8864
+  type: 'test'
+  ...
+# Subtest: both renderers refuse a truncated table that serves more rows than its total
+ok 84 - both renderers refuse a truncated table that serves more rows than its total
+  ---
+  duration_ms: 0.336
+  type: 'test'
+  ...
+# Subtest: both renderers refuse a repeated facet key
+ok 85 - both renderers refuse a repeated facet key
+  ---
+  duration_ms: 0.291
+  type: 'test'
+  ...
+# Subtest: both renderers treat two untyped rows as a repeat
+ok 86 - both renderers treat two untyped rows as a repeat
+  ---
+  duration_ms: 0.2389
+  type: 'test'
+  ...
+# Subtest: both renderers refuse a repeated language row
+ok 87 - both renderers refuse a repeated language row
+  ---
+  duration_ms: 0.3791
+  type: 'test'
+  ...
+# Subtest: a versions count cannot be rendered without its text partner
+ok 88 - a versions count cannot be rendered without its text partner
+  ---
+  duration_ms: 4.0526
+  type: 'test'
+  ...
+# Subtest: the row the publisher gave no type for is a row, not a gap in the table
+ok 89 - the row the publisher gave no type for is a row, not a gap in the table
+  ---
+  duration_ms: 0.5554
+  type: 'test'
+  ...
+# Subtest: every figure comes from the payload and the renderer has no defaults
+ok 90 - every figure comes from the payload and the renderer has no defaults
+  ---
+  duration_ms: 0.8084
+  type: 'test'
+  ...
+# Subtest: a total that disagrees with its own parts is refused
+ok 91 - a total that disagrees with its own parts is refused
+  ---
+  duration_ms: 0.3844
+  type: 'test'
+  ...
+# Subtest: every count carries the build that measured it
+ok 92 - every count carries the build that measured it
+  ---
+  duration_ms: 0.8207
+  type: 'test'
+  ...
+# Subtest: the gap strings are reproduced rather than tidied
+ok 93 - the gap strings are reproduced rather than tidied
+  ---
+  duration_ms: 0.556
+  type: 'test'
+  ...
+# Subtest: an incomplete build shows no counts at all
+ok 94 - an incomplete build shows no counts at all
+  ---
+  duration_ms: 0.4125
+  type: 'test'
+  ...
+# Subtest: a build that reports itself complete and holds the wrong number is refused
+ok 95 - a build that reports itself complete and holds the wrong number is refused
+  ---
+  duration_ms: 0.2981
+  type: 'test'
+  ...
+# Subtest: a truncated type table says so
+ok 96 - a truncated type table says so
+  ---
+  duration_ms: 0.7994
+  type: 'test'
+  ...
+# Subtest: the retention sentence is the frozen wording
+ok 97 - the retention sentence is the frozen wording
+  ---
+  duration_ms: 1.8365
+  type: 'test'
+  ...
+# Subtest: the future horizon is named as scheduled rather than current
+ok 98 - the future horizon is named as scheduled rather than current
+  ---
+  duration_ms: 0.5776
+  type: 'test'
+  ...
+# Subtest: values are escaped rather than trusted
+ok 99 - values are escaped rather than trusted
+  ---
+  duration_ms: 0.2207
+  type: 'test'
+  ...
+# Subtest: O4: a facet cannot be larger than the whole it is drawn from
+ok 100 - O4: a facet cannot be larger than the whole it is drawn from
+  ---
+  duration_ms: 0.3465
+  type: 'test'
+  ...
+# Subtest: O4: a complete document-type breakdown adds up, and an overlapping one need not
+ok 101 - O4: a complete document-type breakdown adds up, and an overlapping one need not
+  ---
+  duration_ms: 0.2673
+  type: 'test'
+  ...
+# Subtest: O4: earliest and latest are the ends of one interval, not two dates
+ok 102 - O4: earliest and latest are the ends of one interval, not two dates
+  ---
+  duration_ms: 0.1409
+  type: 'test'
+  ...
+# Subtest: O4: a document-type total is a count, and a missing language code is labelled
+ok 103 - O4: a document-type total is a count, and a missing language code is labelled
+  ---
+  duration_ms: 0.2744
+  type: 'test'
+  ...
+# Subtest: an absent language list is a payload that did not say, not a corpus with no language
+ok 104 - an absent language list is a payload that did not say, not a corpus with no language
+  ---
+  duration_ms: 0.3654
+  type: 'test'
+  ...
+# Subtest: a truncated table may not serve more rows than the total it names
+ok 105 - a truncated table may not serve more rows than the total it names
+  ---
+  duration_ms: 0.1916
+  type: 'test'
+  ...
+# Subtest: two rows for one facet key are refused even when every figure reconciles
+ok 106 - two rows for one facet key are refused even when every figure reconciles
+  ---
+  duration_ms: 0.1798
+  type: 'test'
+  ...
+# Subtest: the untyped row is one row, so two null codes are also a repeat
+ok 107 - the untyped row is one row, so two null codes are also a repeat
+  ---
+  duration_ms: 0.1666
+  type: 'test'
+  ...
+# Subtest: a repeated language row is refused too
+ok 108 - a repeated language row is refused too
+  ---
+  duration_ms: 0.1552
+  type: 'test'
+  ...
+# Subtest: a date is read the way a reader wrote it, or refused rather than guessed
+ok 109 - a date is read the way a reader wrote it, or refused rather than guessed
+  ---
+  duration_ms: 1.8038
+  type: 'test'
+  ...
+# Subtest: the resolution sentence is the publisher own words, derived from the record
+ok 110 - the resolution sentence is the publisher own words, derived from the record
+  ---
+  duration_ms: 2.6266
+  type: 'test'
+  ...
+# Subtest: the default is shown before it is used, and can be removed
+ok 111 - the default is shown before it is used, and can be removed
+  ---
+  duration_ms: 7.0871
+  type: 'test'
+  ...
+# Subtest: the field is told what today is rather than reading a clock
+ok 112 - the field is told what today is rather than reading a clock
+  ---
+  duration_ms: 5.7914
+  type: 'test'
+  ...
+# Subtest: the resolution is announced, and says nothing before there is one
+ok 113 - the resolution is announced, and says nothing before there is one
+  ---
+  duration_ms: 5.9139
+  type: 'test'
+  ...
+# Subtest: every token carries an icon and a text label, so colour is never the only channel
+ok 114 - every token carries an icon and a text label, so colour is never the only channel
+  ---
+  duration_ms: 2.3496
+  type: 'test'
+  ...
+# Subtest: every token meets WCAG 2.2 AA for normal text on both grounds
+ok 115 - every token meets WCAG 2.2 AA for normal text on both grounds
+  ---
+  duration_ms: 1.3262
+  type: 'test'
+  ...
+# Subtest: the contrast helper itself detects a known failure
+ok 116 - the contrast helper itself detects a known failure
+  ---
+  duration_ms: 0.1851
+  type: 'test'
+  ...
+# Subtest: both schemes define every token
+ok 117 - both schemes define every token
+  ---
+  duration_ms: 0.4896
+  type: 'test'
+  ...
+# Subtest: mark always emits the icon and the label beside the text
+ok 118 - mark always emits the icon and the label beside the text
+  ---
+  duration_ms: 0.5346
+  type: 'test'
+  ...
+# Subtest: there is no way to apply a token colour without its icon and label
+ok 119 - there is no way to apply a token colour without its icon and label
+  ---
+  duration_ms: 0.4758
+  type: 'test'
+  ...
+# Subtest: the token colour arrives by class, never by an inline style a CSP will drop
+ok 120 - the token colour arrives by class, never by an inline style a CSP will drop
+  ---
+  duration_ms: 0.5998
+  type: 'test'
+  ...
+# Subtest: an unknown token is refused rather than rendered blank
+ok 121 - an unknown token is refused rather than rendered blank
+  ---
+  duration_ms: 0.801
+  type: 'test'
+  ...
+# Subtest: mark escapes content rather than trusting it
+ok 122 - mark escapes content rather than trusting it
+  ---
+  duration_ms: 0.5107
+  type: 'test'
+  ...
+# Subtest: the tokens are defined in one place only
+ok 123 - the tokens are defined in one place only
+  ---
+  duration_ms: 14.7552
+  type: 'test'
+  ...
+# Subtest: the built stylesheet carries every token in both schemes
+ok 124 - the built stylesheet carries every token in both schemes
+  ---
+  duration_ms: 2.5623
+  type: 'test'
+  ...
+# Subtest: the synthetic marker is the literal the DOM is searched for
+ok 125 - the synthetic marker is the literal the DOM is searched for
+  ---
+  duration_ms: 1.2394
+  type: 'test'
+  ...
+# Subtest: a rendered page is a whole document, doctype first
+ok 126 - a rendered page is a whole document, doctype first
+  ---
+  duration_ms: 6.479
+  type: 'test'
+  ...
+# Subtest: the shell carries the banner, the preview state and the body
+ok 127 - the shell carries the banner, the preview state and the body
+  ---
+  duration_ms: 0.7936
+  type: 'test'
+  ...
+# Subtest: the state and title rendered are the ones passed, not defaults
+ok 128 - the state and title rendered are the ones passed, not defaults
+  ---
+  duration_ms: 0.589
+  type: 'test'
+  ...
+# Subtest: every asset reference is root-absolute
+ok 129 - every asset reference is root-absolute
+  ---
+  duration_ms: 0.8195
+  type: 'test'
+  ...
+# Subtest: the language tag is the page locale, and the copy locale must agree
+ok 130 - the language tag is the page locale, and the copy locale must agree
+  ---
+  duration_ms: 2.9649
+  type: 'test'
+  ...
+# Subtest: an unreviewed locale is refused on either axis, and says which
+ok 131 - an unreviewed locale is refused on either axis, and says which
+  ---
+  duration_ms: 0.5345
+  type: 'test'
+  ...
+# Subtest: a page with no state or no title is refused
+ok 132 - a page with no state or no title is refused
+  ---
+  duration_ms: 3.6596
+  type: 'test'
+  ...
+# Subtest: shell attributes appear only when a shell is named
+ok 133 - shell attributes appear only when a shell is named
+  ---
+  duration_ms: 2.5901
+  type: 'test'
+  ...
+# Subtest: a fragment is refused, because the shell carries the trust marks
+ok 134 - a fragment is refused, because the shell carries the trust marks
+  ---
+  duration_ms: 2.0015
+  type: 'test'
+  ...
+# Subtest: the title is escaped by the shell, so callers pass plain text
+ok 135 - the title is escaped by the shell, so callers pass plain text
+  ---
+  duration_ms: 0.9033
+  type: 'test'
+  ...
+# Subtest: both renderers pin the same caption literal
+ok 136 - both renderers pin the same caption literal
+  ---
+  duration_ms: 9.1923
+  type: 'test'
+  ...
+# Subtest: the flag never appears without its caption, in either renderer
+ok 137 - the flag never appears without its caption, in either renderer
+  ---
+  duration_ms: 0.9879
+  type: 'test'
+  ...
+# Subtest: a derived value is refused as a publisher flag by both renderers
+ok 138 - a derived value is refused as a publisher flag by both renderers
+  ---
+  duration_ms: 6.9401
+  type: 'test'
+  ...
+# Subtest: zero states held is not a work without gaps, in either renderer
+ok 139 - zero states held is not a work without gaps, in either renderer
+  ---
+  duration_ms: 1.1712
+  type: 'test'
+  ...
+# Subtest: the record clock keeps its instant and the legal clock gains no time of day
+ok 140 - the record clock keeps its instant and the legal clock gains no time of day
+  ---
+  duration_ms: 1.9724
+  type: 'test'
+  ...
+# Subtest: an absent date says what it waits for, and an unfilled slot says where to look
+ok 141 - an absent date says what it waits for, and an unfilled slot says where to look
+  ---
+  duration_ms: 3.0773
+  type: 'test'
+  ...
+# Subtest: a reversed or empty coverage hole is refused by both renderers
+ok 142 - a reversed or empty coverage hole is refused by both renderers
+  ---
+  duration_ms: 1.6776
+  type: 'test'
+  ...
+# Subtest: the title carries its own language, not the chrome around it
+ok 143 - the title carries its own language, not the chrome around it
+  ---
+  duration_ms: 0.965
+  type: 'test'
+  ...
+# Subtest: the validator is the single source both renderers consult
+ok 144 - the validator is the single source both renderers consult
+  ---
+  duration_ms: 1.7185
+  type: 'test'
+  ...
+# Subtest: the publisher status flag appears here, and never without its caption
+ok 145 - the publisher status flag appears here, and never without its caption
+  ---
+  duration_ms: 3.5422
+  type: 'test'
+  ...
+# Subtest: an absent date is declared with what it is waiting for, never omitted
+ok 146 - an absent date is declared with what it is waiting for, never omitted
+  ---
+  duration_ms: 0.6612
+  type: 'test'
+  ...
+# Subtest: every date says where it came from and which role it plays
+ok 147 - every date says where it came from and which role it plays
+  ---
+  duration_ms: 1.5422
+  type: 'test'
+  ...
+# Subtest: the coverage strip pairs its counts and declares its gaps
+ok 148 - the coverage strip pairs its counts and declares its gaps
+  ---
+  duration_ms: 1.9628
+  type: 'test'
+  ...
+# Subtest: a slot this corpus cannot fill says what it is and where the publisher keeps it
+ok 149 - a slot this corpus cannot fill says what it is and where the publisher keeps it
+  ---
+  duration_ms: 0.8702
+  type: 'test'
+  ...
+# Subtest: the published title keeps its own language and its own words
+ok 150 - the published title keeps its own language and its own words
+  ---
+  duration_ms: 0.3641
+  type: 'test'
+  ...
+# Subtest: the work identifier is a name in the publisher namespace, not a link
+ok 151 - the work identifier is a name in the publisher namespace, not a link
+  ---
+  duration_ms: 0.3566
+  type: 'test'
+  ...
+# Subtest: a work this corpus holds no state of is not reported as complete
+ok 152 - a work this corpus holds no state of is not reported as complete
+  ---
+  duration_ms: 0.1275
+  type: 'test'
+  ...
+# Subtest: a coverage gap runs forwards, or it is not a gap
+ok 153 - a coverage gap runs forwards, or it is not a gap
+  ---
+  duration_ms: 0.6158
+  type: 'test'
+  ...
+# Subtest: each date role carries the clock it belongs to
+ok 154 - each date role carries the clock it belongs to
+  ---
+  duration_ms: 0.7237
+  type: 'test'
+  ...
+# Subtest: the publisher flag is the publisher word, not one this service derived
+ok 155 - the publisher flag is the publisher word, not one this service derived
+  ---
+  duration_ms: 0.5031
+  type: 'test'
+  ...
+# Subtest: values are escaped rather than trusted
+ok 156 - values are escaped rather than trusted
+  ---
+  duration_ms: 0.2018
+  type: 'test'
+  ...
+# Subtest: the captured refusal envelope is clean before any mutation
+ok 157 - the captured refusal envelope is clean before any mutation
+  ---
+  duration_ms: 7.264
+  type: 'test'
+  ...
+# Subtest: refused: remove context.operation.operation_id
+ok 158 - refused: remove context.operation.operation_id
+  ---
+  duration_ms: 1.1534
+  type: 'test'
+  ...
+# Subtest: refused: replace context.operation.catalog_sha256 with a non-hex value
+ok 159 - refused: replace context.operation.catalog_sha256 with a non-hex value
+  ---
+  duration_ms: 0.8925
+  type: 'test'
+  ...
+# Subtest: refused: add context.operation.smuggled
+ok 160 - refused: add context.operation.smuggled
+  ---
+  duration_ms: 0.6741
+  type: 'test'
+  ...
+# Subtest: refused: replace publisher_contexts_checked with an undeclared publisher
+ok 161 - refused: replace publisher_contexts_checked with an undeclared publisher
+  ---
+  duration_ms: 1.4584
+  type: 'test'
+  ...
+# Subtest: a local $ref resolves to the node it points at
+ok 162 - a local $ref resolves to the node it points at
+  ---
+  duration_ms: 0.3714
+  type: 'test'
+  ...
+# Subtest: an unresolvable, external or cyclic $ref refuses rather than passing
+ok 163 - an unresolvable, external or cyclic $ref refuses rather than passing
+  ---
+  duration_ms: 0.4395
+  type: 'test'
+  ...
+# Subtest: a JSON pointer escape is decoded
+ok 164 - a JSON pointer escape is decoded
+  ---
+  duration_ms: 0.2335
+  type: 'test'
+  ...
+# Subtest: an implemented composition keyword is applied rather than refused
+ok 165 - an implemented composition keyword is applied rather than refused
+  ---
+  duration_ms: 0.7079
+  type: 'test'
+  ...
+# Subtest: a conditional subschema selects the branch it names
+ok 166 - a conditional subschema selects the branch it names
+  ---
+  duration_ms: 1.1064
+  type: 'test'
+  ...
+# Subtest: a schema keyword this reader does not implement refuses the position
+ok 167 - a schema keyword this reader does not implement refuses the position
+  ---
+  duration_ms: 0.4488
+  type: 'test'
+  ...
+# Subtest: a closed tuple refuses an extra position and a wrong const
+ok 168 - a closed tuple refuses an extra position and a wrong const
+  ---
+  duration_ms: 0.4299
+  type: 'test'
+  ...
+# Subtest: an assertion written beside a $ref is applied, not skipped
+ok 169 - an assertion written beside a $ref is applied, not skipped
+  ---
+  duration_ms: 0.3703
+  type: 'test'
+  ...
+# Subtest: refused inside a nested anyOf: an invalid work_id pattern
+ok 170 - refused inside a nested anyOf: an invalid work_id pattern
+  ---
+  duration_ms: 1.8149
+  type: 'test'
+  ...
+# Subtest: refused inside a nested anyOf: an unknown member
+ok 171 - refused inside a nested anyOf: an unknown member
+  ---
+  duration_ms: 0.7462
+  type: 'test'
+  ...
+# Subtest: refused inside a nested anyOf: a removed required member
+ok 172 - refused inside a nested anyOf: a removed required member
+  ---
+  duration_ms: 0.7281
+  type: 'test'
+  ...
+# Subtest: refused inside a nested anyOf: an out-of-range vocabulary index
+ok 173 - refused inside a nested anyOf: an out-of-range vocabulary index
+  ---
+  duration_ms: 1.5093
+  type: 'test'
+  ...
+# Subtest: refused inside a nested anyOf: a corrupted digest
+ok 174 - refused inside a nested anyOf: a corrupted digest
+  ---
+  duration_ms: 0.6829
+  type: 'test'
+  ...
+# Subtest: a declared member name is accepted where its index would be, and an undeclared one is not
+ok 175 - a declared member name is accepted where its index would be, and an undeclared one is not
+  ---
+  duration_ms: 1.1626
+  type: 'test'
+  ...
+# Subtest: the captured success envelope is clean before any mutation
+ok 176 - the captured success envelope is clean before any mutation
+  ---
+  duration_ms: 0.3668
+  type: 'test'
+  ...
+# Subtest: a nested anyOf matching no arm or several arms is refused
+ok 177 - a nested anyOf matching no arm or several arms is refused
+  ---
+  duration_ms: 0.1814
+  type: 'test'
+  ...
+# Subtest: the five renderable states are the closed set
+ok 178 - the five renderable states are the closed set
+  ---
+  duration_ms: 2.3351
+  type: 'test'
+  ...
+# Subtest: an envelope derived from the schema's own constraints validates
+ok 179 - an envelope derived from the schema's own constraints validates
+  ---
+  duration_ms: 2.1252
+  type: 'test'
+  ...
+# Subtest: a non-object is rejected rather than coerced
+ok 180 - a non-object is rejected rather than coerced
+  ---
+  duration_ms: 0.2555
+  type: 'test'
+  ...
+# Subtest: an unknown branch is rejected, naming the branches that exist
+ok 181 - an unknown branch is rejected, naming the branches that exist
+  ---
+  duration_ms: 0.3131
+  type: 'test'
+  ...
+# Subtest: a missing branch member is rejected
+ok 182 - a missing branch member is rejected
+  ---
+  duration_ms: 0.1822
+  type: 'test'
+  ...
+# Subtest: a missing required member is reported by name
+ok 183 - a missing required member is reported by name
+  ---
+  duration_ms: 0.369
+  type: 'test'
+  ...
+# Subtest: a wrong const value is rejected, not tolerated
+ok 184 - a wrong const value is rejected, not tolerated
+  ---
+  duration_ms: 1.1011
+  type: 'test'
+  ...
+# Subtest: a refusal status on the success arm is rejected
+ok 185 - a refusal status on the success arm is rejected
+  ---
+  duration_ms: 0.2125
+  type: 'test'
+  ...
+# Subtest: an unexpected member is rejected where the schema closes the object
+ok 186 - an unexpected member is rejected where the schema closes the object
+  ---
+  duration_ms: 0.3816
+  type: 'test'
+  ...
+# Subtest: a malformed sha256 is rejected by the published pattern
+ok 187 - a malformed sha256 is rejected by the published pattern
+  ---
+  duration_ms: 0.42
+  type: 'test'
+  ...
+# Subtest: every problem is reported, not only the first
+ok 188 - every problem is reported, not only the first
+  ---
+  duration_ms: 0.2318
+  type: 'test'
+  ...
+# Subtest: a derived or unofficial item cannot enter a bundle
+ok 189 - a derived or unofficial item cannot enter a bundle
+  ---
+  duration_ms: 4.7229
+  type: 'test'
+  ...
+# Subtest: rights are applied at compose time, not left to the caller
+ok 190 - rights are applied at compose time, not left to the caller
+  ---
+  duration_ms: 3.843
+  type: 'test'
+  ...
+# Subtest: D38 decides whether a body travels, not the caller-supplied licence label
+ok 191 - D38 decides whether a body travels, not the caller-supplied licence label
+  ---
+  duration_ms: 0.8235
+  type: 'test'
+  ...
+# Subtest: an item is labelled in its own publisher terms, and a bundle may span publishers
+ok 192 - an item is labelled in its own publisher terms, and a bundle may span publishers
+  ---
+  duration_ms: 0.5849
+  type: 'test'
+  ...
+# Subtest: the declared publisher and the identifier must name one publisher
+ok 193 - the declared publisher and the identifier must name one publisher
+  ---
+  duration_ms: 0.6186
+  type: 'test'
+  ...
+# Subtest: every item carries the three dates and its digest
+ok 194 - every item carries the three dates and its digest
+  ---
+  duration_ms: 0.4336
+  type: 'test'
+  ...
+# Subtest: the register refuses the three columns that turn a record into an opinion
+ok 195 - the register refuses the three columns that turn a record into an opinion
+  ---
+  duration_ms: 0.2524
+  type: 'test'
+  ...
+# Subtest: the register column set is closed
+ok 196 - the register column set is closed
+  ---
+  duration_ms: 0.3625
+  type: 'test'
+  ...
+# Subtest: the verification annex is mandatory and complete
+ok 197 - the verification annex is mandatory and complete
+  ---
+  duration_ms: 0.6763
+  type: 'test'
+  ...
+# Subtest: the watermark is the component words, on every bundle
+ok 198 - the watermark is the component words, on every bundle
+  ---
+  duration_ms: 0.5568
+  type: 'test'
+  ...
+# Subtest: an official link goes through the one route policy
+ok 199 - an official link goes through the one route policy
+  ---
+  duration_ms: 0.4487
+  type: 'test'
+  ...
+# Subtest: an empty bundle is refused rather than rendered as a cover sheet
+ok 200 - an empty bundle is refused rather than rendered as a cover sheet
+  ---
+  duration_ms: 0.2152
+  type: 'test'
+  ...
+# Subtest: values are escaped rather than trusted
+ok 201 - values are escaped rather than trusted
+  ---
+  duration_ms: 0.3024
+  type: 'test'
+  ...
+# Subtest: an exported period runs forwards, and the open sentinel is not a date
+ok 202 - an exported period runs forwards, and the open sentinel is not a date
+  ---
+  duration_ms: 0.5305
+  type: 'test'
+  ...
+# Subtest: an item whose text may travel and carries none is refused
+ok 203 - an item whose text may travel and carries none is refused
+  ---
+  duration_ms: 0.5385
+  type: 'test'
+  ...
+# Subtest: both surfaces draw the same composer, in every shape that makes one lie
+ok 204 - both surfaces draw the same composer, in every shape that makes one lie
+  ---
+  duration_ms: 13.8428
+  type: 'test'
+  ...
+# Subtest: every guard refuses the same input in both surfaces
+ok 205 - every guard refuses the same input in both surfaces
+  ---
+  duration_ms: 3.4835
+  type: 'test'
+  ...
+# Subtest: the rendered page is not trivially small, so parity is not parity between two blanks
+ok 206 - the rendered page is not trivially small, so parity is not parity between two blanks
+  ---
+  duration_ms: 0.5218
+  type: 'test'
+  ...
+# Subtest: a cc-by item whose rights are established travels with its text
+ok 207 - a cc-by item whose rights are established travels with its text
+  ---
+  duration_ms: 2.9376
+  type: 'test'
+  ...
+# Subtest: a licence that does not embed text is named as a licence limit
+ok 208 - a licence that does not embed text is named as a licence limit
+  ---
+  duration_ms: 0.3123
+  type: 'test'
+  ...
+# Subtest: rights are asked before the licence, so a closed gate is never reported as a licence limit
+ok 209 - rights are asked before the licence, so a closed gate is never reported as a licence limit
+  ---
+  duration_ms: 0.2363
+  type: 'test'
+  ...
+# Subtest: an absent text_public is refused, never read as false
+ok 210 - an absent text_public is refused, never read as false
+  ---
+  duration_ms: 0.7244
+  type: 'test'
+  ...
+# Subtest: an unknown licence is refused rather than treated as non-embedding
+ok 211 - an unknown licence is refused rather than treated as non-embedding
+  ---
+  duration_ms: 0.3709
+  type: 'test'
+  ...
+# Subtest: the composer derives disposition and refuses a caller who declares it
+ok 212 - the composer derives disposition and refuses a caller who declares it
+  ---
+  duration_ms: 3.6615
+  type: 'test'
+  ...
+# Subtest: derived and unofficial items are refused from the cart, not silently dropped
+ok 213 - derived and unofficial items are refused from the cart, not silently dropped
+  ---
+  duration_ms: 0.7843
+  type: 'test'
+  ...
+# Subtest: a matter reference and an author are required, because no record carries them
+ok 214 - a matter reference and an author are required, because no record carries them
+  ---
+  duration_ms: 0.4148
+  type: 'test'
+  ...
+# Subtest: text that would travel without an attribution is refused
+ok 215 - text that would travel without an attribution is refused
+  ---
+  duration_ms: 0.8895
+  type: 'test'
+  ...
+# Subtest: an item withheld by licence needs no attribution to compose
+ok 216 - an item withheld by licence needs no attribution to compose
+  ---
+  duration_ms: 0.9073
+  type: 'test'
+  ...
+# Subtest: counts cover every disposition and sum to the cart
+ok 217 - counts cover every disposition and sum to the cart
+  ---
+  duration_ms: 2.3457
+  type: 'test'
+  ...
+# Subtest: the withheld sentence gives both numbers, never a bare count
+ok 218 - the withheld sentence gives both numbers, never a bare count
+  ---
+  duration_ms: 0.7475
+  type: 'test'
+  ...
+# Subtest: a cart that is entirely exportable says nothing about withholding
+ok 219 - a cart that is entirely exportable says nothing about withholding
+  ---
+  duration_ms: 0.6299
+  type: 'test'
+  ...
+# Subtest: one withheld item is singular
+ok 220 - one withheld item is singular
+  ---
+  duration_ms: 0.2055
+  type: 'test'
+  ...
+# Subtest: an empty cart renders its own sentence rather than an empty list
+ok 221 - an empty cart renders its own sentence rather than an empty list
+  ---
+  duration_ms: 0.1904
+  type: 'test'
+  ...
+# Subtest: the composed page states the compose-time rule and the watermark before export
+ok 222 - the composed page states the compose-time rule and the watermark before export
+  ---
+  duration_ms: 0.2127
+  type: 'test'
+  ...
+# Subtest: each row carries a sentence, so meaning never rests on a badge beside a licence name
+ok 223 - each row carries a sentence, so meaning never rests on a badge beside a licence name
+  ---
+  duration_ms: 0.2022
+  type: 'test'
+  ...
+# Subtest: the composer applies the interval and digest rules, not only the field shapes
+ok 224 - the composer applies the interval and digest rules, not only the field shapes
+  ---
+  duration_ms: 0.5358
+  type: 'test'
+  ...
+# Subtest: an item missing its hash, interval or official source cannot be listed
+ok 225 - an item missing its hash, interval or official source cannot be listed
+  ---
+  duration_ms: 0.2984
+  type: 'test'
+  ...
+# Subtest: an unparseable identity is refused while the cart is still editable
+ok 226 - an unparseable identity is refused while the cart is still editable
+  ---
+  duration_ms: 0.2381
+  type: 'test'
+  ...
+# Subtest: the register columns are the closed set and carry no assessment column
+ok 227 - the register columns are the closed set and carry no assessment column
+  ---
+  duration_ms: 0.2118
+  type: 'test'
+  ...
+# Subtest: output escapes a hostile identifier rather than emitting it raw
+ok 228 - output escapes a hostile identifier rather than emitting it raw
+  ---
+  duration_ms: 0.2276
+  type: 'test'
+  ...
+# Subtest: a described profile returns its own note
+ok 229 - a described profile returns its own note
+  ---
+  duration_ms: 3.0454
+  type: 'test'
+  ...
+# Subtest: two profiles do not share a note
+ok 230 - two profiles do not share a note
+  ---
+  duration_ms: 0.2742
+  type: 'test'
+  ...
+# Subtest: an undescribed profile states the absence and is flagged, never silently blank
+ok 231 - an undescribed profile states the absence and is flagged, never silently blank
+  ---
+  duration_ms: 0.3605
+  type: 'test'
+  ...
+# Subtest: an inherited property is not a profile
+ok 232 - an inherited property is not a profile
+  ---
+  duration_ms: 0.3228
+  type: 'test'
+  ...
+# Subtest: a missing or empty profile is undescribed rather than throwing
+ok 233 - a missing or empty profile is undescribed rather than throwing
+  ---
+  duration_ms: 0.2287
+  type: 'test'
+  ...
+# Subtest: the described set is non-trivial and sorted
+ok 234 - the described set is non-trivial and sorted
+  ---
+  duration_ms: 1.7851
+  type: 'test'
+  ...
+# Subtest: every profile a V3 surface renders as provenance is one this table describes
+ok 235 - every profile a V3 surface renders as provenance is one this table describes
+  ---
+  duration_ms: 26.2052
+  type: 'test'
+  ...
+# Subtest: every chip states whether it is on
+ok 236 - every chip states whether it is on
+  ---
+  duration_ms: 8.342
+  type: 'test'
+  ...
+# Subtest: the page says how many rows the filters are hiding, not only how many remain
+ok 237 - the page says how many rows the filters are hiding, not only how many remain
+  ---
+  duration_ms: 0.5642
+  type: 'test'
+  ...
+# Subtest: an unfiltered page says so rather than staying silent
+ok 238 - an unfiltered page says so rather than staying silent
+  ---
+  duration_ms: 0.3626
+  type: 'test'
+  ...
+# Subtest: a count that cannot be true is refused
+ok 239 - a count that cannot be true is refused
+  ---
+  duration_ms: 2.1153
+  type: 'test'
+  ...
+# Subtest: an empty filter group is refused
+ok 240 - an empty filter group is refused
+  ---
+  duration_ms: 0.1697
+  type: 'test'
+  ...
+# Subtest: exactly one control artifact exists in the preview graph
+ok 241 - exactly one control artifact exists in the preview graph
+  ---
+  duration_ms: 1.4156
+  type: 'test'
+  ...
+# Subtest: fixture identities are read from the graph, not written by hand
+ok 242 - fixture identities are read from the graph, not written by hand
+  ---
+  duration_ms: 0.6189
+  type: 'test'
+  ...
+# Subtest: two success fixtures differ in content, so derivation can be proven
+ok 243 - two success fixtures differ in content, so derivation can be proven
+  ---
+  duration_ms: 0.2223
+  type: 'test'
+  ...
+# Subtest: refusal codes come from the real registry
+ok 244 - refusal codes come from the real registry
+  ---
+  duration_ms: 0.1931
+  type: 'test'
+  ...
+# Subtest: the derived fixture is still incomplete, and the validator says exactly why
+ok 245 - the derived fixture is still incomplete, and the validator says exactly why
+  ---
+  duration_ms: 8.1033
+  type: 'test'
+  ...
+# Subtest: the generator refuses to guess a digest it cannot compute
+ok 246 - the generator refuses to guess a digest it cannot compute
+  ---
+  duration_ms: 0.8538
+  type: 'test'
+  ...
+# Subtest: a build with no verified counter says so, and offers no fixture
+ok 247 - a build with no verified counter says so, and offers no fixture
+  ---
+  duration_ms: 1.9332
+  type: 'test'
+  ...
+# Subtest: the boundary is stated, because it is why this page exists
+ok 248 - the boundary is stated, because it is why this page exists
+  ---
+  duration_ms: 0.4958
+  type: 'test'
+  ...
+# Subtest: the overclaim canary can actually fail
+ok 249 - the overclaim canary can actually fail
+  ---
+  duration_ms: 0.5867
+  type: 'test'
+  ...
+# Subtest: a verified counter is listed, and an unverifiable one is refused rather than dropped
+ok 250 - a verified counter is listed, and an unverifiable one is refused rather than dropped
+  ---
+  duration_ms: 1.2678
+  type: 'test'
+  ...
+# Subtest: the page refuses to render with no publisher routes
+ok 251 - the page refuses to render with no publisher routes
+  ---
+  duration_ms: 0.3859
+  type: 'test'
+  ...
+#   good fixture   : 3 stops, in order, all with a visible focus ring
+#   no-ring fixture: 3 stops, none with a visible focus ring, correctly detected
+# keyboard checker proven: it passes a good page and fails a bad one
+# Subtest: test\\keyboard-walk.test.mjs
+ok 24 - test\\keyboard-walk.test.mjs
+  ---
+  duration_ms: 1636.1335
+  type: 'test'
+  ...
+# Subtest: the live record still looks like the record this file was captured from
+ok 253 - the live record still looks like the record this file was captured from
+  ---
+  duration_ms: 1.0301
+  type: 'test'
+  ...
+# Subtest: a real timeline takes its vocabulary from the work, and shows both clocks
+ok 254 - a real timeline takes its vocabulary from the work, and shows both clocks
+  ---
+  duration_ms: 2.4715
+  type: 'test'
+  ...
+# Subtest: a real search row is described in its own publisher terms, under a real permalink
+ok 255 - a real search row is described in its own publisher terms, under a real permalink
+  ---
+  duration_ms: 2.3875
+  type: 'test'
+  ...
+# Subtest: both live coverage payloads render, which is what makes the two facet rules right
+ok 256 - both live coverage payloads render, which is what makes the two facet rules right
+  ---
+  duration_ms: 1.413
+  type: 'test'
+  ...
+# Subtest: the unavailable page is itself in a language it is honestly labelled with
+ok 257 - the unavailable page is itself in a language it is honestly labelled with
+  ---
+  duration_ms: 1.5963
+  type: 'test'
+  ...
+# Subtest: it names the code, the locale asked for, and what is actually reviewed
+ok 258 - it names the code, the locale asked for, and what is actually reviewed
+  ---
+  duration_ms: 0.2935
+  type: 'test'
+  ...
+# Subtest: it separates the interface language from the language of the law
+ok 259 - it separates the interface language from the language of the law
+  ---
+  duration_ms: 0.1867
+  type: 'test'
+  ...
+# Subtest: a reviewed locale is not refused, and a locale outside the four is not offered
+ok 260 - a reviewed locale is not refused, and a locale outside the four is not offered
+  ---
+  duration_ms: 0.6133
+  type: 'test'
+  ...
+# Subtest: the reviewed set is honest about how little has been reviewed
+ok 261 - the reviewed set is honest about how little has been reviewed
+  ---
+  duration_ms: 0.9857
+  type: 'test'
+  ...
+# Subtest: values are escaped rather than trusted
+ok 262 - values are escaped rather than trusted
+  ---
+  duration_ms: 0.2309
+  type: 'test'
+  ...
+# Subtest: the chrome locales are the four, and PT joins only the refusal templates
+ok 263 - the chrome locales are the four, and PT joins only the refusal templates
+  ---
+  duration_ms: 2.291
+  type: 'test'
+  ...
+# Subtest: localization_unavailable is not slipped into the closed refusal registry
+ok 264 - localization_unavailable is not slipped into the closed refusal registry
+  ---
+  duration_ms: 1.0352
+  type: 'test'
+  ...
+# Subtest: a source master is served as a source master, never as a human review
+ok 265 - a source master is served as a source master, never as a human review
+  ---
+  duration_ms: 0.6829
+  type: 'test'
+  ...
+# Subtest: a human review needs a reviewer and a date that is a date
+ok 266 - a human review needs a reviewer and a date that is a date
+  ---
+  duration_ms: 0.568
+  type: 'test'
+  ...
+# Subtest: an entry claiming both provenances is refused rather than resolved
+ok 267 - an entry claiming both provenances is refused rather than resolved
+  ---
+  duration_ms: 0.2317
+  type: 'test'
+  ...
+# Subtest: a missing locale is refused, and no other locale is substituted
+ok 268 - a missing locale is refused, and no other locale is substituted
+  ---
+  duration_ms: 0.9307
+  type: 'test'
+  ...
+# Subtest: an unservable entry is absent, whatever text it carries
+ok 269 - an unservable entry is absent, whatever text it carries
+  ---
+  duration_ms: 0.2942
+  type: 'test'
+  ...
+# Subtest: the string bundle is closed against the prototype
+ok 270 - the string bundle is closed against the prototype
+  ---
+  duration_ms: 0.1959
+  type: 'test'
+  ...
+# Subtest: a stored choice wins, then Accept-Language, then French
+ok 271 - a stored choice wins, then Accept-Language, then French
+  ---
+  duration_ms: 1.2092
+  type: 'test'
+  ...
+# Subtest: storage that throws does not take the page down
+ok 272 - storage that throws does not take the page down
+  ---
+  duration_ms: 1.158
+  type: 'test'
+  ...
+# Subtest: quoting law without authenticity evidence fails closed
+ok 273 - quoting law without authenticity evidence fails closed
+  ---
+  duration_ms: 0.6852
+  type: 'test'
+  ...
+# Subtest: authenticity evidence is checked, not taken
+ok 274 - authenticity evidence is checked, not taken
+  ---
+  duration_ms: 1.4411
+  type: 'test'
+  ...
+# Subtest: the note follows the resource evidence, not a publisher key
+ok 275 - the note follows the resource evidence, not a publisher key
+  ---
+  duration_ms: 0.7263
+  type: 'test'
+  ...
+# Subtest: a language outside the resource authentic set is not quoted as law
+ok 276 - a language outside the resource authentic set is not quoted as law
+  ---
+  duration_ms: 0.2713
+  type: 'test'
+  ...
+# Subtest: a quoted span without its own language is refused
+ok 277 - a quoted span without its own language is refused
+  ---
+  duration_ms: 0.6439
+  type: 'test'
+  ...
+# Subtest: the chrome switcher has no channel to quoted law
+ok 278 - the chrome switcher has no channel to quoted law
+  ---
+  duration_ms: 0.5321
+  type: 'test'
+  ...
+# Subtest: the note refuses rather than substituting when its locale is missing
+ok 279 - the note refuses rather than substituting when its locale is missing
+  ---
+  duration_ms: 0.4401
+  type: 'test'
+  ...
+# Subtest: the page carries the chrome language, and only a reviewed one
+ok 280 - the page carries the chrome language, and only a reviewed one
+  ---
+  duration_ms: 5.4734
+  type: 'test'
+  ...
+# Subtest: values are escaped rather than trusted
+ok 281 - values are escaped rather than trusted
+  ---
+  duration_ms: 0.4721
+  type: 'test'
+  ...
+# Subtest: evidence for one resource says nothing about another
+ok 282 - evidence for one resource says nothing about another
+  ---
+  duration_ms: 0.436
+  type: 'test'
+  ...
+# Subtest: provenance evidence must be the entry own, not its prototype
+ok 283 - provenance evidence must be the entry own, not its prototype
+  ---
+  duration_ms: 0.2199
+  type: 'test'
+  ...
+# Subtest: a body that is not authentic has somewhere to live, labelled
+ok 284 - a body that is not authentic has somewhere to live, labelled
+  ---
+  duration_ms: 0.5382
+  type: 'test'
+  ...
+# Subtest: the authentic text cannot be relabelled as unofficial
+ok 285 - the authentic text cannot be relabelled as unofficial
+  ---
+  duration_ms: 1.2742
+  type: 'test'
+  ...
+# Subtest: an unofficial rendering routes to the publisher, through the one policy
+ok 286 - an unofficial rendering routes to the publisher, through the one policy
+  ---
+  duration_ms: 0.769
+  type: 'test'
+  ...
+# Subtest: a no-hit card cannot be rendered without saying what ran
+ok 287 - a no-hit card cannot be rendered without saying what ran
+  ---
+  duration_ms: 1.779
+  type: 'test'
+  ...
+# Subtest: every layer names its outcome and its language
+ok 288 - every layer names its outcome and its language
+  ---
+  duration_ms: 0.6268
+  type: 'test'
+  ...
+# Subtest: a layer that did not run is reported, not omitted
+ok 289 - a layer that did not run is reported, not omitted
+  ---
+  duration_ms: 2.714
+  type: 'test'
+  ...
+# Subtest: the population says what is not searchable, not only what is
+ok 290 - the population says what is not searchable, not only what is
+  ---
+  duration_ms: 0.812
+  type: 'test'
+  ...
+# Subtest: a population count is a whole number, not an impression
+ok 291 - a population count is a whole number, not an impression
+  ---
+  duration_ms: 1.2068
+  type: 'test'
+  ...
+# Subtest: a count carries the date it was counted, so it can be checked against the index
+ok 292 - a count carries the date it was counted, so it can be checked against the index
+  ---
+  duration_ms: 1.1556
+  type: 'test'
+  ...
+# Subtest: an expansion the search applied is shown verbatim
+ok 293 - an expansion the search applied is shown verbatim
+  ---
+  duration_ms: 1.5725
+  type: 'test'
+  ...
+# Subtest: a publisher route goes through the one route policy
+ok 294 - a publisher route goes through the one route policy
+  ---
+  duration_ms: 0.417
+  type: 'test'
+  ...
+# Subtest: the card says the absence is about the corpus, not about the law
+ok 295 - the card says the absence is about the corpus, not about the law
+  ---
+  duration_ms: 0.8185
+  type: 'test'
+  ...
+# Subtest: values are escaped rather than trusted
+ok 296 - values are escaped rather than trusted
+  ---
+  duration_ms: 0.8938
+  type: 'test'
+  ...
+# Subtest: a card whose layers all failed to run makes no claim about the corpus
+ok 297 - a card whose layers all failed to run makes no claim about the corpus
+  ---
+  duration_ms: 0.6667
+  type: 'test'
+  ...
+# Subtest: a card whose layers partly ran scopes its sentence to what ran
+ok 298 - a card whose layers partly ran scopes its sentence to what ran
+  ---
+  duration_ms: 0.3703
+  type: 'test'
+  ...
+# Subtest: one layer that ran is not a complete execution account
+ok 299 - one layer that ran is not a complete execution account
+  ---
+  duration_ms: 0.2494
+  type: 'test'
+  ...
+# Subtest: an omitted applicable layer is refused, one at a time
+ok 300 - an omitted applicable layer is refused, one at a time
+  ---
+  duration_ms: 0.4013
+  type: 'test'
+  ...
+# Subtest: a complete plan may use whole-corpus wording even when a layer does not apply
+ok 301 - a complete plan may use whole-corpus wording even when a layer does not apply
+  ---
+  duration_ms: 0.2652
+  type: 'test'
+  ...
+# Subtest: the captured payloads are the live ones, and none of them is trivial
+ok 302 - the captured payloads are the live ones, and none of them is trivial
+  ---
+  duration_ms: 2.9156
+  type: 'test'
+  ...
+# Subtest: an edited capture is refused rather than rendered as evidence
+ok 303 - an edited capture is refused rather than rendered as evidence
+  ---
+  duration_ms: 0.8784
+  type: 'test'
+  ...
+# Subtest: three different Luxembourg records carry one identical stamp signature
+ok 304 - three different Luxembourg records carry one identical stamp signature
+  ---
+  duration_ms: 0.6049
+  type: 'test'
+  ...
+# Subtest: a real Luxembourg record and a real Union record each render in their own vocabulary
+ok 305 - a real Luxembourg record and a real Union record each render in their own vocabulary
+  ---
+  duration_ms: 6.8021
+  type: 'test'
+  ...
+# Subtest: an envelope that renames the publisher clock is refused, not preferred
+ok 306 - an envelope that renames the publisher clock is refused, not preferred
+  ---
+  duration_ms: 1.0085
+  type: 'test'
+  ...
+# Subtest: the publisher title carries the record language, never the chrome one
+ok 307 - the publisher title carries the record language, never the chrome one
+  ---
+  duration_ms: 1.5356
+  type: 'test'
+  ...
+# Subtest: the page never presents the stamp as evidence about the record
+ok 308 - the page never presents the stamp as evidence about the record
+  ---
+  duration_ms: 0.8135
+  type: 'test'
+  ...
+# Subtest: two verdicts about one signature refuse the page rather than picking one
+ok 309 - two verdicts about one signature refuse the page rather than picking one
+  ---
+  duration_ms: 0.711
+  type: 'test'
+  ...
+# Subtest: a page addressed to one record and answered about another is refused
+ok 310 - a page addressed to one record and answered about another is refused
+  ---
+  duration_ms: 0.6885
+  type: 'test'
+  ...
+# Subtest: a permalink naming a different record, or a different origin, is refused
+ok 311 - a permalink naming a different record, or a different origin, is refused
+  ---
+  duration_ms: 0.97
+  type: 'test'
+  ...
+# Subtest: a record whose parts name different works is refused
+ok 312 - a record whose parts name different works is refused
+  ---
+  duration_ms: 0.8286
+  type: 'test'
+  ...
+# Subtest: the language a caller asked for is declared, never assumed
+ok 313 - the language a caller asked for is declared, never assumed
+  ---
+  duration_ms: 0.374
+  type: 'test'
+  ...
+# Subtest: a narrowed observation list says so, and is not read as the whole history
+ok 314 - a narrowed observation list says so, and is not read as the whole history
+  ---
+  duration_ms: 0.7777
+  type: 'test'
+  ...
+# Subtest: a list that is not the one that was asked for is refused
+ok 315 - a list that is not the one that was asked for is refused
+  ---
+  duration_ms: 0.6154
+  type: 'test'
+  ...
+# Subtest: a zero wide observation window is held, and an inverted one is refused
+ok 316 - a zero wide observation window is held, and an inverted one is refused
+  ---
+  duration_ms: 0.8796
+  type: 'test'
+  ...
+# Subtest: two currently held bodies for one expression are refused
+ok 317 - two currently held bodies for one expression are refused
+  ---
+  duration_ms: 0.3658
+  type: 'test'
+  ...
+# Subtest: a record that holds no body may not have an open observation in its own language
+ok 318 - a record that holds no body may not have an open observation in its own language
+  ---
+  duration_ms: 0.3383
+  type: 'test'
+  ...
+# Subtest: a body digest no open observation holds is refused
+ok 319 - a body digest no open observation holds is refused
+  ---
+  duration_ms: 0.3153
+  type: 'test'
+  ...
+# Subtest: an observation older than the record itself is refused
+ok 320 - an observation older than the record itself is refused
+  ---
+  duration_ms: 0.3021
+  type: 'test'
+  ...
+# Subtest: the one observation that is the record body is the one that says so
+ok 321 - the one observation that is the record body is the one that says so
+  ---
+  duration_ms: 1.6016
+  type: 'test'
+  ...
+# Subtest: a record this corpus holds no text for says so, and says whose gap it is
+ok 322 - a record this corpus holds no text for says so, and says whose gap it is
+  ---
+  duration_ms: 1.3378
+  type: 'test'
+  ...
+# Subtest: a record that holds no text may not carry a body digest
+ok 323 - a record that holds no text may not carry a body digest
+  ---
+  duration_ms: 0.5359
+  type: 'test'
+  ...
+# Subtest: every count on the page is the length of a payload array
+ok 324 - every count on the page is the length of a payload array
+  ---
+  duration_ms: 1.2821
+  type: 'test'
+  ...
+# Subtest: a truncated payload states its counts as a floor, never as a total
+ok 325 - a truncated payload states its counts as a floor, never as a total
+  ---
+  duration_ms: 1.7802
+  type: 'test'
+  ...
+# Subtest: a complete chain has to begin where the record says it was first seen
+ok 326 - a complete chain has to begin where the record says it was first seen
+  ---
+  duration_ms: 0.7654
+  type: 'test'
+  ...
+# Subtest: an event chain that runs backwards is refused
+ok 327 - an event chain that runs backwards is refused
+  ---
+  duration_ms: 0.5867
+  type: 'test'
+  ...
+# Subtest: two events at the same instant are a real chain, not a collision
+ok 328 - two events at the same instant are a real chain, not a collision
+  ---
+  duration_ms: 22.3471
+  type: 'test'
+  ...
+# Subtest: the live refusal status is translated, and it is not in the client registry
+ok 329 - the live refusal status is translated, and it is not in the client registry
+  ---
+  duration_ms: 1.206
+  type: 'test'
+  ...
+# Subtest: the refusal does not say the work is unknown, because the status cannot know
+ok 330 - the refusal does not say the work is unknown, because the status cannot know
+  ---
+  duration_ms: 2.0416
+  type: 'test'
+  ...
+# Subtest: the refusal discloses the size of what was searched, in the census figures
+ok 331 - the refusal discloses the size of what was searched, in the census figures
+  ---
+  duration_ms: 1.153
+  type: 'test'
+  ...
+# Subtest: a refusal about a different identifier than the one asked for is refused
+ok 332 - a refusal about a different identifier than the one asked for is refused
+  ---
+  duration_ms: 0.3658
+  type: 'test'
+  ...
+# Subtest: a refusal status this client cannot name is refused, not shown as an error
+ok 333 - a refusal status this client cannot name is refused, not shown as an error
+  ---
+  duration_ms: 0.3462
+  type: 'test'
+  ...
+# Subtest: a payload that is neither an answer nor a refusal is refused
+ok 334 - a payload that is neither an answer nor a refusal is refused
+  ---
+  duration_ms: 0.5051
+  type: 'test'
+  ...
+# Subtest: the census is required, closed, and has to count this record publisher
+ok 335 - the census is required, closed, and has to count this record publisher
+  ---
+  duration_ms: 0.6012
+  type: 'test'
+  ...
+# Subtest: the success page says what this corpus holds, not what the publisher holds
+ok 336 - the success page says what this corpus holds, not what the publisher holds
+  ---
+  duration_ms: 0.5927
+  type: 'test'
+  ...
+# Subtest: a date this service derived is marked as derived, and an unknown source is refused
+ok 337 - a date this service derived is marked as derived, and an unknown source is refused
+  ---
+  duration_ms: 3.2646
+  type: 'test'
+  ...
+# Subtest: React applies the same rules and shows the same sentences as the string renderer
+ok 338 - React applies the same rules and shows the same sentences as the string renderer
+  ---
+  duration_ms: 10.9123
+  type: 'test'
+  ...
+# Subtest: React refuses everything the string renderer refuses
+ok 339 - React refuses everything the string renderer refuses
+  ---
+  duration_ms: 5.0931
+  type: 'test'
+  ...
+# Subtest: the React refusal carries the population disclosure the contract requires
+ok 340 - the React refusal carries the population disclosure the contract requires
+  ---
+  duration_ms: 3.6797
+  type: 'test'
+  ...
+# Subtest: every provenance link the preview renders has a page built for it
+ok 341 - every provenance link the preview renders has a page built for it
+  ---
+  duration_ms: 24.2474
+  type: 'test'
+  ...
+# Subtest: the harness routes a provenance URL to the page the build wrote for that record
+ok 342 - the harness routes a provenance URL to the page the build wrote for that record
+  ---
+  duration_ms: 0.4747
+  type: 'test'
+  ...
+# Subtest: the built preview pages are whole documents and describe different records
+ok 343 - the built preview pages are whole documents and describe different records
+  ---
+  duration_ms: 5.6661
+  type: 'test'
+  ...
+# Subtest: an official-source link is validated against the publisher own hosts, not escaped
+ok 344 - an official-source link is validated against the publisher own hosts, not escaped
+  ---
+  duration_ms: 1.0532
+  type: 'test'
+  ...
+# Subtest: the publisher name for the work is a name, and is never offered as a link
+ok 345 - the publisher name for the work is a name, and is never offered as a link
+  ---
+  duration_ms: 0.7269
+  type: 'test'
+  ...
+# Subtest: the provenance page never becomes a reading view
+ok 346 - the provenance page never becomes a reading view
+  ---
+  duration_ms: 3.9289
+  type: 'test'
+  ...
+# Subtest: the publisher current-state flag never reaches this page
+ok 347 - the publisher current-state flag never reaches this page
+  ---
+  duration_ms: 6.2232
+  type: 'test'
+  ...
+# Subtest: the React title carries the record language, not the chrome one
+ok 348 - the React title carries the record language, not the chrome one
+  ---
+  duration_ms: 2.8298
+  type: 'test'
+  ...
+# Subtest: both surfaces draw the same provision history, in every shape that makes one lie
+ok 349 - both surfaces draw the same provision history, in every shape that makes one lie
+  ---
+  duration_ms: 9.1129
+  type: 'test'
+  ...
+# Subtest: both surfaces draw the same get-help page, empty and populated
+ok 350 - both surfaces draw the same get-help page, empty and populated
+  ---
+  duration_ms: 2.2349
+  type: 'test'
+  ...
+# Subtest: every guard refuses the same input in both surfaces
+ok 351 - every guard refuses the same input in both surfaces
+  ---
+  duration_ms: 2.6643
+  type: 'test'
+  ...
+# Subtest: the rows are distinct wordings, and the screen says so
+ok 352 - the rows are distinct wordings, and the screen says so
+  ---
+  duration_ms: 2.9723
+  type: 'test'
+  ...
+# Subtest: a validity conflict shows both publisher dates, and only where there is one
+ok 353 - a validity conflict shows both publisher dates, and only where there is one
+  ---
+  duration_ms: 0.4426
+  type: 'test'
+  ...
+# Subtest: the conflict is derived from the dates, not believed from the flag
+ok 354 - the conflict is derived from the dates, not believed from the flag
+  ---
+  duration_ms: 0.7868
+  type: 'test'
+  ...
+# Subtest: an empty history is a statement about this corpus
+ok 355 - an empty history is a statement about this corpus
+  ---
+  duration_ms: 0.2868
+  type: 'test'
+  ...
+# Subtest: the counts must agree unless the history says it was cut
+ok 356 - the counts must agree unless the history says it was cut
+  ---
+  duration_ms: 0.7056
+  type: 'test'
+  ...
+# Subtest: every row needs its text digest and a canonical permalink
+ok 357 - every row needs its text digest and a canonical permalink
+  ---
+  duration_ms: 0.4821
+  type: 'test'
+  ...
+# Subtest: the vocabulary comes from the work publisher, and an unclassified one fails closed
+ok 358 - the vocabulary comes from the work publisher, and an unclassified one fails closed
+  ---
+  duration_ms: 0.9725
+  type: 'test'
+  ...
+# Subtest: lifecycle events are a closed set, and renumbering names no method
+ok 359 - lifecycle events are a closed set, and renumbering names no method
+  ---
+  duration_ms: 1.5377
+  type: 'test'
+  ...
+# Subtest: both renderers produce the same page, in every shape this screen has
+ok 360 - both renderers produce the same page, in every shape this screen has
+  ---
+  duration_ms: 32.9043
+  type: 'test'
+  ...
+# Subtest: the comparison would notice a page that lost a claim
+ok 361 - the comparison would notice a page that lost a claim
+  ---
+  duration_ms: 2.8015
+  type: 'test'
+  ...
+# Subtest: a fact the record answers is refused from the caller in both renderers
+ok 362 - a fact the record answers is refused from the caller in both renderers
+  ---
+  duration_ms: 3.9915
+  type: 'test'
+  ...
+# Subtest: the date this page was read on is the reader own, stated and never defaulted
+ok 363 - the date this page was read on is the reader own, stated and never defaulted
+  ---
+  duration_ms: 2.3017
+  type: 'test'
+  ...
+# Subtest: the publisher status flag is refused on a state row by both renderers
+ok 364 - the publisher status flag is refused on a state row by both renderers
+  ---
+  duration_ms: 1.7341
+  type: 'test'
+  ...
+# Subtest: the work and the vocabulary are the record's in the React runtime too
+ok 365 - the work and the vocabulary are the record's in the React runtime too
+  ---
+  duration_ms: 2.564
+  type: 'test'
+  ...
+# Subtest: the quotation carries the expression language, never the chrome locale
+ok 366 - the quotation carries the expression language, never the chrome locale
+  ---
+  duration_ms: 3.6027
+  type: 'test'
+  ...
+# Subtest: every provision carries the hash-carrying permalink, and never a caller-built one
+ok 367 - every provision carries the hash-carrying permalink, and never a caller-built one
+  ---
+  duration_ms: 3.3766
+  type: 'test'
+  ...
+# Subtest: the no-legal-effect sentence sits beside every block of text, not once at the top
+ok 368 - the no-legal-effect sentence sits beside every block of text, not once at the top
+  ---
+  duration_ms: 2.3739
+  type: 'test'
+  ...
+# Subtest: a withdrawn state discloses the live one, and is never read as current
+ok 369 - a withdrawn state discloses the live one, and is never read as current
+  ---
+  duration_ms: 1.784
+  type: 'test'
+  ...
+# Subtest: an absence is answered rather than left blank, and asserts nothing about the law
+ok 370 - an absence is answered rather than left blank, and asserts nothing about the law
+  ---
+  duration_ms: 1.2788
+  type: 'test'
+  ...
+# Subtest: an anchor this version does not contain refuses with the anchors it does
+ok 371 - an anchor this version does not contain refuses with the anchors it does
+  ---
+  duration_ms: 1.1836
+  type: 'test'
+  ...
+# Subtest: the reading view ships inert markup from React too
+ok 372 - the reading view ships inert markup from React too
+  ---
+  duration_ms: 2.5695
+  type: 'test'
+  ...
+# Subtest: the copy this screen ships is fixed and says what it means
+ok 373 - the copy this screen ships is fixed and says what it means
+  ---
+  duration_ms: 2.8068
+  type: 'test'
+  ...
+# Subtest: publisher text is quoted in the expression language, never the chrome locale
+ok 374 - publisher text is quoted in the expression language, never the chrome locale
+  ---
+  duration_ms: 3.7759
+  type: 'test'
+  ...
+# Subtest: an expression that does not carry its own language cannot be quoted
+ok 375 - an expression that does not carry its own language cannot be quoted
+  ---
+  duration_ms: 0.6565
+  type: 'test'
+  ...
+# Subtest: the state shows its own two clocks and no row says in force
+ok 376 - the state shows its own two clocks and no row says in force
+  ---
+  duration_ms: 1.08
+  type: 'test'
+  ...
+# Subtest: a vocabulary stated beside the record is refused when the record contradicts it
+ok 377 - a vocabulary stated beside the record is refused when the record contradicts it
+  ---
+  duration_ms: 0.8308
+  type: 'test'
+  ...
+# Subtest: a state row carrying the publisher status flag is refused, not merely ignored
+ok 378 - a state row carrying the publisher status flag is refused, not merely ignored
+  ---
+  duration_ms: 0.3559
+  type: 'test'
+  ...
+# Subtest: every provision carries the hash-carrying permalink built from the state
+ok 379 - every provision carries the hash-carrying permalink built from the state
+  ---
+  duration_ms: 3.3795
+  type: 'test'
+  ...
+# Subtest: the work a page mints permalinks for is the work its own state names
+ok 380 - the work a page mints permalinks for is the work its own state names
+  ---
+  duration_ms: 0.4716
+  type: 'test'
+  ...
+# Subtest: a permalink the caller brought is refused rather than preferred
+ok 381 - a permalink the caller brought is refused rather than preferred
+  ---
+  duration_ms: 0.7342
+  type: 'test'
+  ...
+# Subtest: a provision with no publisher anchor has no address, so it is refused
+ok 382 - a provision with no publisher anchor has no address, so it is refused
+  ---
+  duration_ms: 0.8535
+  type: 'test'
+  ...
+# Subtest: two provisions at one anchor make one permalink resolve to two texts
+ok 383 - two provisions at one anchor make one permalink resolve to two texts
+  ---
+  duration_ms: 0.3678
+  type: 'test'
+  ...
+# Subtest: a provision that cannot be cited by number is refused
+ok 384 - a provision that cannot be cited by number is refused
+  ---
+  duration_ms: 0.2295
+  type: 'test'
+  ...
+# Subtest: a wording date differing from the state renders both dates and resolves neither
+ok 385 - a wording date differing from the state renders both dates and resolves neither
+  ---
+  duration_ms: 0.9078
+  type: 'test'
+  ...
+# Subtest: a wording date is required, because defaulting it reconciles the conflict silently
+ok 386 - a wording date is required, because defaulting it reconciles the conflict silently
+  ---
+  duration_ms: 0.4416
+  type: 'test'
+  ...
+# Subtest: a date derived from the two publisher dates is refused
+ok 387 - a date derived from the two publisher dates is refused
+  ---
+  duration_ms: 0.3043
+  type: 'test'
+  ...
+# Subtest: a conflict flag that disagrees with the dates it summarises is refused
+ok 388 - a conflict flag that disagrees with the dates it summarises is refused
+  ---
+  duration_ms: 0.5261
+  type: 'test'
+  ...
+# Subtest: text withheld by licence renders its digest and the official link, never the text
+ok 389 - text withheld by licence renders its digest and the official link, never the text
+  ---
+  duration_ms: 0.3978
+  type: 'test'
+  ...
+# Subtest: a withheld provision carrying its text is refused, licence or not
+ok 390 - a withheld provision carrying its text is refused, licence or not
+  ---
+  duration_ms: 0.2914
+  type: 'test'
+  ...
+# Subtest: a withheld provision names the licence and dates its digest
+ok 391 - a withheld provision names the licence and dates its digest
+  ---
+  duration_ms: 0.4688
+  type: 'test'
+  ...
+# Subtest: a provision with no held text says so, with the official file and the gazette chain
+ok 392 - a provision with no held text says so, with the official file and the gazette chain
+  ---
+  duration_ms: 0.4581
+  type: 'test'
+  ...
+# Subtest: a cause of missing text that nobody named is refused
+ok 393 - a cause of missing text that nobody named is refused
+  ---
+  duration_ms: 0.359
+  type: 'test'
+  ...
+# Subtest: an anchor the version does not have is a refusal offering the anchors it does
+ok 394 - an anchor the version does not have is a refusal offering the anchors it does
+  ---
+  duration_ms: 0.6075
+  type: 'test'
+  ...
+# Subtest: an anchor the version does have selects exactly that provision
+ok 395 - an anchor the version does have selects exactly that provision
+  ---
+  duration_ms: 0.3691
+  type: 'test'
+  ...
+# Subtest: a version with no provisions is refused rather than rendered as an empty page
+ok 396 - a version with no provisions is refused rather than rendered as an empty page
+  ---
+  duration_ms: 0.3304
+  type: 'test'
+  ...
+# Subtest: a consolidation carries the no-legal-effect sentence beside every text it renders
+ok 397 - a consolidation carries the no-legal-effect sentence beside every text it renders
+  ---
+  duration_ms: 1.324
+  type: 'test'
+  ...
+# Subtest: the publisher own original expression does not carry a sentence about consolidations
+ok 398 - the publisher own original expression does not carry a sentence about consolidations
+  ---
+  duration_ms: 0.2726
+  type: 'test'
+  ...
+# Subtest: a consolidation status nobody named cannot be read either way
+ok 399 - a consolidation status nobody named cannot be read either way
+  ---
+  duration_ms: 0.3081
+  type: 'test'
+  ...
+# Subtest: a caller may not assert what a record on this page answers
+ok 400 - a caller may not assert what a record on this page answers
+  ---
+  duration_ms: 0.4512
+  type: 'test'
+  ...
+# Subtest: a future state is provisional because of its dates, not because of a flag
+ok 401 - a future state is provisional because of its dates, not because of a flag
+  ---
+  duration_ms: 0.4836
+  type: 'test'
+  ...
+# Subtest: an unofficial rendering takes its official route from the evidence, not the caller
+ok 402 - an unofficial rendering takes its official route from the evidence, not the caller
+  ---
+  duration_ms: 0.5199
+  type: 'test'
+  ...
+# Subtest: the date this page was read on is stated and never defaulted
+ok 403 - the date this page was read on is stated and never defaulted
+  ---
+  duration_ms: 0.5613
+  type: 'test'
+  ...
+# Subtest: the gaps around this state are declared, even when there are none
+ok 404 - the gaps around this state are declared, even when there are none
+  ---
+  duration_ms: 0.6601
+  type: 'test'
+  ...
+# Subtest: a withdrawn state discloses the live state that replaced it
+ok 405 - a withdrawn state discloses the live state that replaced it
+  ---
+  duration_ms: 1.2074
+  type: 'test'
+  ...
+# Subtest: a state that does not say whether it was withdrawn cannot be read as live
+ok 406 - a state that does not say whether it was withdrawn cannot be read as live
+  ---
+  duration_ms: 0.5567
+  type: 'test'
+  ...
+# Subtest: the state and each held provision carry the digest that answers their own question
+ok 407 - the state and each held provision carry the digest that answers their own question
+  ---
+  duration_ms: 0.6627
+  type: 'test'
+  ...
+# Subtest: an official source that is not the publisher own host is refused
+ok 408 - an official source that is not the publisher own host is refused
+  ---
+  duration_ms: 0.697
+  type: 'test'
+  ...
+# Subtest: the reading view ships inert HTML, with no script and no event handler
+ok 409 - the reading view ships inert HTML, with no script and no event handler
+  ---
+  duration_ms: 0.921
+  type: 'test'
+  ...
+# Subtest: the React card applies the same closed registry as the string renderer
+ok 410 - the React card applies the same closed registry as the string renderer
+  ---
+  duration_ms: 6.1312
+  type: 'test'
+  ...
+# Subtest: the React card refuses a sterile refusal, exactly as the string renderer does
+ok 411 - the React card refuses a sterile refusal, exactly as the string renderer does
+  ---
+  duration_ms: 1.8522
+  type: 'test'
+  ...
+# Subtest: the React card carries the code, the sentence and the retry line verbatim
+ok 412 - the React card carries the code, the sentence and the retry line verbatim
+  ---
+  duration_ms: 6.4956
+  type: 'test'
+  ...
+# Subtest: a non-retryable refusal shows no retry line in either renderer
+ok 413 - a non-retryable refusal shows no retry line in either renderer
+  ---
+  duration_ms: 1.3215
+  type: 'test'
+  ...
+# Subtest: a refusal is an answer, never an alert, in the React runtime too
+ok 414 - a refusal is an answer, never an alert, in the React runtime too
+  ---
+  duration_ms: 0.7338
+  type: 'test'
+  ...
+# Subtest: a hostile handoff refuses the card in both renderers, rather than being dropped
+ok 415 - a hostile handoff refuses the card in both renderers, rather than being dropped
+  ---
+  duration_ms: 0.7987
+  type: 'test'
+  ...
+# Subtest: the validator is the single source both renderers consult
+ok 416 - the validator is the single source both renderers consult
+  ---
+  duration_ms: 0.9014
+  type: 'test'
+  ...
+# Subtest: the registry is closed at the nineteen product-spec codes
+ok 417 - the registry is closed at the nineteen product-spec codes
+  ---
+  duration_ms: 2.19
+  type: 'test'
+  ...
+# Subtest: an unknown code is refused rather than rendered as a generic error
+ok 418 - an unknown code is refused rather than rendered as a generic error
+  ---
+  duration_ms: 2.0037
+  type: 'test'
+  ...
+# Subtest: a sterile refusal cannot be constructed
+ok 419 - a sterile refusal cannot be constructed
+  ---
+  duration_ms: 1.226
+  type: 'test'
+  ...
+# Subtest: every code in the closed registry has a worked example, and every example renders
+ok 420 - every code in the closed registry has a worked example, and every example renders
+  ---
+  duration_ms: 5.2717
+  type: 'test'
+  ...
+# Subtest: each spec-named payload requirement is enforced, one key at a time
+ok 421 - each spec-named payload requirement is enforced, one key at a time
+  ---
+  duration_ms: 1.5972
+  type: 'test'
+  ...
+# Subtest: a payload that only echoes the question does not satisfy the requirement
+ok 422 - a payload that only echoes the question does not satisfy the requirement
+  ---
+  duration_ms: 0.2804
+  type: 'test'
+  ...
+# Subtest: an absent nearest state must be stated, not omitted
+ok 423 - an absent nearest state must be stated, not omitted
+  ---
+  duration_ms: 1.6032
+  type: 'test'
+  ...
+# Subtest: the ambiguous_version interstitial never defaults and never mislabels a candidate
+ok 424 - the ambiguous_version interstitial never defaults and never mislabels a candidate
+  ---
+  duration_ms: 1.3165
+  type: 'test'
+  ...
+# Subtest: profiles_differ names both profiles and says it cannot be overridden
+ok 425 - profiles_differ names both profiles and says it cannot be overridden
+  ---
+  duration_ms: 0.917
+  type: 'test'
+  ...
+# Subtest: anchor_not_in_version shows nearest anchors and rules out the fallback
+ok 426 - anchor_not_in_version shows nearest anchors and rules out the fallback
+  ---
+  duration_ms: 0.7448
+  type: 'test'
+  ...
+# Subtest: the mandated notes come from the component, not from the caller
+ok 427 - the mandated notes come from the component, not from the caller
+  ---
+  duration_ms: 0.5794
+  type: 'test'
+  ...
+# Subtest: advice_boundary co-delivers the governing provisions and a reachable counter
+ok 428 - advice_boundary co-delivers the governing provisions and a reachable counter
+  ---
+  duration_ms: 0.5369
+  type: 'test'
+  ...
+# Subtest: a refusal is not announced as an error
+ok 429 - a refusal is not announced as an error
+  ---
+  duration_ms: 0.1792
+  type: 'test'
+  ...
+# Subtest: the machine code is rendered as code, and the sentence carries the token
+ok 430 - the machine code is rendered as code, and the sentence carries the token
+  ---
+  duration_ms: 0.1348
+  type: 'test'
+  ...
+# Subtest: retryable refusals say so, and the rest do not
+ok 431 - retryable refusals say so, and the rest do not
+  ---
+  duration_ms: 0.2238
+  type: 'test'
+  ...
+# Subtest: quoted text carries the expression language, not a hardcoded French
+ok 432 - quoted text carries the expression language, not a hardcoded French
+  ---
+  duration_ms: 0.5107
+  type: 'test'
+  ...
+# Subtest: a handoff link is validated, not merely escaped
+ok 433 - a handoff link is validated, not merely escaped
+  ---
+  duration_ms: 0.8286
+  type: 'test'
+  ...
+# Subtest: a payload shape nobody typed is refused rather than stringified
+ok 434 - a payload shape nobody typed is refused rather than stringified
+  ---
+  duration_ms: 0.4513
+  type: 'test'
+  ...
+# Subtest: payload values are escaped rather than trusted
+ok 435 - payload values are escaped rather than trusted
+  ---
+  duration_ms: 0.1824
+  type: 'test'
+  ...
+# Subtest: a card without a human sentence is refused
+ok 436 - a card without a human sentence is refused
+  ---
+  duration_ms: 0.1389
+  type: 'test'
+  ...
+# Subtest: the payload contract covers the registry, with no code left undeclared
+ok 437 - the payload contract covers the registry, with no code left undeclared
+  ---
+  duration_ms: 0.4659
+  type: 'test'
+  ...
+# Subtest: a candidate link is bound to the whole coordinate, not to a date and a hash
+ok 438 - a candidate link is bound to the whole coordinate, not to a date and a hash
+  ---
+  duration_ms: 0.485
+  type: 'test'
+  ...
+# Subtest: one counter is not the referral list Decision 41 settles
+ok 439 - one counter is not the referral list Decision 41 settles
+  ---
+  duration_ms: 0.4989
+  type: 'test'
+  ...
+# Subtest: co-delivered text must declare what it is before it is headed
+ok 440 - co-delivered text must declare what it is before it is headed
+  ---
+  duration_ms: 1.1523
+  type: 'test'
+  ...
+# Subtest: a candidate date that is not a date is refused
+ok 441 - a candidate date that is not a date is refused
+  ---
+  duration_ms: 0.6286
+  type: 'test'
+  ...
+# Subtest: a profile identifier must be a value, not a shape
+ok 442 - a profile identifier must be a value, not a shape
+  ---
+  duration_ms: 0.5421
+  type: 'test'
+  ...
+# Subtest: a structured shape belongs to one code, not to a spelling
+ok 443 - a structured shape belongs to one code, not to a spelling
+  ---
+  duration_ms: 0.2173
+  type: 'test'
+  ...
+# Subtest: the module says it is a preview contract rather than the final one
+ok 444 - the module says it is a preview contract rather than the final one
+  ---
+  duration_ms: 0.149
+  type: 'test'
+  ...
+# Subtest: a withdrawn-superseded pair is not a live ambiguity
+ok 445 - a withdrawn-superseded pair is not a live ambiguity
+  ---
+  duration_ms: 0.3928
+  type: 'test'
+  ...
+# Subtest: the superseded pair discloses the sibling instead of asking for a choice
+ok 446 - the superseded pair discloses the sibling instead of asking for a choice
+  ---
+  duration_ms: 0.881
+  type: 'test'
+  ...
+# Subtest: an absence must say what would answer it, from the closed contract vocabulary
+ok 447 - an absence must say what would answer it, from the closed contract vocabulary
+  ---
+  duration_ms: 0.8947
+  type: 'test'
+  ...
+# Subtest: an absence can never assert that the law does not exist
+ok 448 - an absence can never assert that the law does not exist
+  ---
+  duration_ms: 0.6231
+  type: 'test'
+  ...
+# Subtest: a code that is not an absence is not made to carry absence evidence
+ok 449 - a code that is not an absence is not made to carry absence evidence
+  ---
+  duration_ms: 0.214
+  type: 'test'
+  ...
+# Subtest: a candidate link carries no anchor, because the choice is between states
+ok 450 - a candidate link carries no anchor, because the choice is between states
+  ---
+  duration_ms: 0.3756
+  type: 'test'
+  ...
+# Subtest: a declared payload contract is an allowlist, not a minimum
+ok 451 - a declared payload contract is an allowlist, not a minimum
+  ---
+  duration_ms: 0.5204
+  type: 'test'
+  ...
+# Subtest: every candidate in the interstitial is live, not merely two of them
+ok 452 - every candidate in the interstitial is live, not merely two of them
+  ---
+  duration_ms: 0.3726
+  type: 'test'
+  ...
+# Subtest: the superseded renderer checks the whole coordinate too
+ok 453 - the superseded renderer checks the whole coordinate too
+  ---
+  duration_ms: 0.6466
+  type: 'test'
+  ...
+# Subtest: a nearest state that does not exist is declared, not omitted and not invented
+ok 454 - a nearest state that does not exist is declared, not omitted and not invented
+  ---
+  duration_ms: 0.4877
+  type: 'test'
+  ...
+# Subtest: the absence fields cannot be inherited either
+ok 455 - the absence fields cannot be inherited either
+  ---
+  duration_ms: 0.3914
+  type: 'test'
+  ...
+# Subtest: a nearest state lies on the side its name claims
+ok 456 - a nearest state lies on the side its name claims
+  ---
+  duration_ms: 0.3769
+  type: 'test'
+  ...
+# Subtest: an ambiguity offers a choice, not one state listed twice
+ok 457 - an ambiguity offers a choice, not one state listed twice
+  ---
+  duration_ms: 0.2718
+  type: 'test'
+  ...
+# Subtest: the catalog covers the closed registry exactly
+ok 458 - the catalog covers the closed registry exactly
+  ---
+  duration_ms: 1.6204
+  type: 'test'
+  ...
+# Subtest: every code appears on the page with its contract state and a rendered example
+ok 459 - every code appears on the page with its contract state and a rendered example
+  ---
+  duration_ms: 6.8007
+  type: 'test'
+  ...
+# Subtest: the page says which payloads are settled and which are not
+ok 460 - the page says which payloads are settled and which are not
+  ---
+  duration_ms: 1.3102
+  type: 'test'
+  ...
+# Subtest: each entry states its required keys and cites where they come from
+ok 461 - each entry states its required keys and cites where they come from
+  ---
+  duration_ms: 2.3148
+  type: 'test'
+  ...
+# Subtest: retryable is stated per code rather than left to be inferred
+ok 462 - retryable is stated per code rather than left to be inferred
+  ---
+  duration_ms: 0.7857
+  type: 'test'
+  ...
+# Subtest: the catalog is served in the Gateway shell
+ok 463 - the catalog is served in the Gateway shell
+  ---
+  duration_ms: 0.7326
+  type: 'test'
+  ...
+# Subtest: nothing on the catalog is a real coordinate
+ok 464 - nothing on the catalog is a real coordinate
+  ---
+  duration_ms: 0.7833
+  type: 'test'
+  ...
+# Subtest: a code added to the registry without an example fails here
+ok 465 - a code added to the registry without an example fails here
+  ---
+  duration_ms: 0.3151
+  type: 'test'
+  ...
+# Subtest: all three relaxations must be declared, because silence is not "off"
+ok 466 - all three relaxations must be declared, because silence is not "off"
+  ---
+  duration_ms: 2.2087
+  type: 'test'
+  ...
+# Subtest: a relaxation this interface cannot disclose is refused, not ignored
+ok 467 - a relaxation this interface cannot disclose is refused, not ignored
+  ---
+  duration_ms: 0.2727
+  type: 'test'
+  ...
+# Subtest: fuzzy shows the expansions verbatim
+ok 468 - fuzzy shows the expansions verbatim
+  ---
+  duration_ms: 0.9059
+  type: 'test'
+  ...
+# Subtest: the crosswalk says it is editorial and not official, in the component words
+ok 469 - the crosswalk says it is editorial and not official, in the component words
+  ---
+  duration_ms: 1.0579
+  type: 'test'
+  ...
+# Subtest: semantic ranking names the encoder and the benchmark that gates it
+ok 470 - semantic ranking names the encoder and the benchmark that gates it
+  ---
+  duration_ms: 0.6054
+  type: 'test'
+  ...
+# Subtest: three applied relaxations are three blocks, not one merged banner
+ok 471 - three applied relaxations are three blocks, not one merged banner
+  ---
+  duration_ms: 0.4436
+  type: 'test'
+  ...
+# Subtest: each revert turns off exactly its own relaxation and leaves the rest alone
+ok 472 - each revert turns off exactly its own relaxation and leaves the rest alone
+  ---
+  duration_ms: 0.7326
+  type: 'test'
+  ...
+# Subtest: a revert needs a real search path and a real relaxation
+ok 473 - a revert needs a real search path and a real relaxation
+  ---
+  duration_ms: 0.6609
+  type: 'test'
+  ...
+# Subtest: values are escaped rather than trusted
+ok 474 - values are escaped rather than trusted
+  ---
+  duration_ms: 0.6443
+  type: 'test'
+  ...
+# Subtest: the account is a contract a caller can check without rendering anything
+ok 475 - the account is a contract a caller can check without rendering anything
+  ---
+  duration_ms: 0.9982
+  type: 'test'
+  ...
+# Subtest: every generated page carries the machine-readable synthetic marker
+ok 476 - every generated page carries the machine-readable synthetic marker
+  ---
+  duration_ms: 2.2683
+  type: 'test'
+  ...
+# Subtest: every generated page states it is not law
+ok 477 - every generated page states it is not law
+  ---
+  duration_ms: 0.4324
+  type: 'test'
+  ...
+# Subtest: each page declares its own state in the markup
+ok 478 - each page declares its own state in the markup
+  ---
+  duration_ms: 0.3073
+  type: 'test'
+  ...
+# Subtest: a transport failure never implies the record is absent
+ok 479 - a transport failure never implies the record is absent
+  ---
+  duration_ms: 0.3341
+  type: 'test'
+  ...
+# Subtest: an invalid envelope renders its problems and no legal content
+ok 480 - an invalid envelope renders its problems and no legal content
+  ---
+  duration_ms: 0.208
+  type: 'test'
+  ...
+# Subtest: a loading page shows no result-shaped content
+ok 481 - a loading page shows no result-shaped content
+  ---
+  duration_ms: 0.2567
+  type: 'test'
+  ...
+# Subtest: hostile text in a reason cannot break out of the document
+ok 482 - hostile text in a reason cannot break out of the document
+  ---
+  duration_ms: 0.1865
+  type: 'test'
+  ...
+# Subtest: hostile text in a validator problem cannot break out either
+ok 483 - hostile text in a validator problem cannot break out either
+  ---
+  duration_ms: 0.2162
+  type: 'test'
+  ...
+# Subtest: escaping covers every character that can change meaning
+ok 484 - escaping covers every character that can change meaning
+  ---
+  duration_ms: 0.5852
+  type: 'test'
+  ...
+# Subtest: the reason is rendered from the argument, not from a template literal
+ok 485 - the reason is rendered from the argument, not from a template literal
+  ---
+  duration_ms: 0.7107
+  type: 'test'
+  ...
+# Subtest: problems are rendered from the argument, not from a template literal
+ok 486 - problems are rendered from the argument, not from a template literal
+  ---
+  duration_ms: 0.3267
+  type: 'test'
+  ...
+# Subtest: every HTML-significant character is escaped independently
+ok 487 - every HTML-significant character is escaped independently
+  ---
+  duration_ms: 0.2073
+  type: 'test'
+  ...
+# Subtest: no element renders a bare integer, so no vocabulary index leaks
+ok 488 - no element renders a bare integer, so no vocabulary index leaks
+  ---
+  duration_ms: 20.5072
+  type: 'test'
+  ...
+# Subtest: a prefixItems tuple decodes through its declared vocabulary
+ok 489 - a prefixItems tuple decodes through its declared vocabulary
+  ---
+  duration_ms: 2.1219
+  type: 'test'
+  ...
+# Subtest: a closed tail refuses a member no schema describes
+ok 490 - a closed tail refuses a member no schema describes
+  ---
+  duration_ms: 0.583
+  type: 'test'
+  ...
+# Subtest: vocabulary indices are resolved to their declared members
+ok 491 - vocabulary indices are resolved to their declared members
+  ---
+  duration_ms: 3.1682
+  type: 'test'
+  ...
+# Subtest: a refusal is rendered as an answer, never as an error
+ok 492 - a refusal is rendered as an answer, never as an error
+  ---
+  duration_ms: 1.1611
+  type: 'test'
+  ...
+# Subtest: a refusal that asserts no absence says so explicitly
+ok 493 - a refusal that asserts no absence says so explicitly
+  ---
+  duration_ms: 2.136
+  type: 'test'
+  ...
+# Subtest: empty payload lists are omitted rather than rendered empty
+ok 494 - empty payload lists are omitted rather than rendered empty
+  ---
+  duration_ms: 1.7482
+  type: 'test'
+  ...
+# Subtest: a route is linked only when its host belongs to the named publisher
+ok 495 - a route is linked only when its host belongs to the named publisher
+  ---
+  duration_ms: 31.4901
+  type: 'test'
+  ...
+# Subtest: a route whose written authority is not a host is refused, never repaired
+ok 496 - a route whose written authority is not a host is refused, never repaired
+  ---
+  duration_ms: 25.7038
+  type: 'test'
+  ...
+# Subtest: the success page renders the object body and invents no legal time
+ok 497 - the success page renders the object body and invents no legal time
+  ---
+  duration_ms: 1.5942
+  type: 'test'
+  ...
+# Subtest: a provenance row absent from the envelope is omitted, never defaulted
+ok 498 - a provenance row absent from the envelope is omitted, never defaulted
+  ---
+  duration_ms: 2.8153
+  type: 'test'
+  ...
+# Subtest: a vocabulary index outside its declared members is refused
+ok 499 - a vocabulary index outside its declared members is refused
+  ---
+  duration_ms: 2.8005
+  type: 'test'
+  ...
+# Subtest: asset references do not depend on how deep the page is served
+ok 500 - asset references do not depend on how deep the page is served
+  ---
+  duration_ms: 3.9195
+  type: 'test'
+  ...
+# Subtest: the interpretation announcement comes before the results in the document
+ok 501 - the interpretation announcement comes before the results in the document
+  ---
+  duration_ms: 29.5614
+  type: 'test'
+  ...
+# Subtest: the announcement speaks even when nothing was relaxed
+ok 502 - the announcement speaks even when nothing was relaxed
+  ---
+  duration_ms: 2.7418
+  type: 'test'
+  ...
+# Subtest: exactly one thing in the list is reachable by Tab
+ok 503 - exactly one thing in the list is reachable by Tab
+  ---
+  duration_ms: 0.7378
+  type: 'test'
+  ...
+# Subtest: focus is not selection
+ok 504 - focus is not selection
+  ---
+  duration_ms: 4.3995
+  type: 'test'
+  ...
+# Subtest: each row is described in its own publisher terms
+ok 505 - each row is described in its own publisher terms
+  ---
+  duration_ms: 0.6947
+  type: 'test'
+  ...
+# Subtest: every match badge carries a text label the row itself decided
+ok 506 - every match badge carries a text label the row itself decided
+  ---
+  duration_ms: 5.621
+  type: 'test'
+  ...
+# Subtest: a row that will not say why it matched is refused
+ok 507 - a row that will not say why it matched is refused
+  ---
+  duration_ms: 5.5492
+  type: 'test'
+  ...
+# Subtest: an empty list is not this component
+ok 508 - an empty list is not this component
+  ---
+  duration_ms: 0.2785
+  type: 'test'
+  ...
+# Subtest: a publisher source must be on that publisher own host set
+ok 509 - a publisher source must be on that publisher own host set
+  ---
+  duration_ms: 2.6103
+  type: 'test'
+  ...
+# Subtest: a link is not official because the label above it says so
+ok 510 - a link is not official because the label above it says so
+  ---
+  duration_ms: 0.6835
+  type: 'test'
+  ...
+# Subtest: a spelling that dodges a prefix check is refused before parsing
+ok 511 - a spelling that dodges a prefix check is refused before parsing
+  ---
+  duration_ms: 0.2739
+  type: 'test'
+  ...
+# Subtest: userinfo is refused even when the host is the publisher
+ok 512 - userinfo is refused even when the host is the publisher
+  ---
+  duration_ms: 0.2393
+  type: 'test'
+  ...
+# Subtest: the publisher set is closed against the prototype
+ok 513 - the publisher set is closed against the prototype
+  ---
+  duration_ms: 0.2941
+  type: 'test'
+  ...
+# Subtest: a handoff has its own closed policy, and today it is synthetic only
+ok 514 - a handoff has its own closed policy, and today it is synthetic only
+  ---
+  duration_ms: 1.1139
+  type: 'test'
+  ...
+# Subtest: a publisher host set is never empty and never shared by accident
+ok 515 - a publisher host set is never empty and never shared by accident
+  ---
+  duration_ms: 0.4122
+  type: 'test'
+  ...
+# Subtest: the raw authority is validated before the parser erases the evidence
+ok 516 - the raw authority is validated before the parser erases the evidence
+  ---
+  duration_ms: 0.3431
+  type: 'test'
+  ...
+# Subtest: there is one route policy, and it knows every host the other one knew
+ok 517 - there is one route policy, and it knows every host the other one knew
+  ---
+  duration_ms: 66.8694
+  type: 'test'
+  ...
+# Subtest: the non-throwing form refuses rather than raising, for captured data
+ok 518 - the non-throwing form refuses rather than raising, for captured data
+  ---
+  duration_ms: 0.834
+  type: 'test'
+  ...
+# Subtest: a minted permalink is the one the policy accepts, and it round-trips
+ok 519 - a minted permalink is the one the policy accepts, and it round-trips
+  ---
+  duration_ms: 2.1012
+  type: 'test'
+  ...
+# Subtest: a permalink that is not this product own state URL is refused
+ok 520 - a permalink that is not this product own state URL is refused
+  ---
+  duration_ms: 0.8862
+  type: 'test'
+  ...
+# Subtest: the canonical host is one value, not a literal spelled out per call site
+ok 521 - the canonical host is one value, not a literal spelled out per call site
+  ---
+  duration_ms: 1.0748
+  type: 'test'
+  ...
+# Subtest: an omitted relaxation account refuses the screen rather than disclosing nothing
+ok 522 - an omitted relaxation account refuses the screen rather than disclosing nothing
+  ---
+  duration_ms: 8.3303
+  type: 'test'
+  ...
+# Subtest: the account is closed: every relaxation declares itself, and nothing else may
+ok 523 - the account is closed: every relaxation declares itself, and nothing else may
+  ---
+  duration_ms: 2.0171
+  type: 'test'
+  ...
+# Subtest: the zero-hit path requires the account too, which is where it matters most
+ok 524 - the zero-hit path requires the account too, which is where it matters most
+  ---
+  duration_ms: 1.1294
+  type: 'test'
+  ...
+# Subtest: a badge that evidences a relaxation the account denies refuses the screen
+ok 525 - a badge that evidences a relaxation the account denies refuses the screen
+  ---
+  duration_ms: 52.4025
+  type: 'test'
+  ...
+# Subtest: the badge label is derived from the row, not handed to it
+ok 526 - the badge label is derived from the row, not handed to it
+  ---
+  duration_ms: 63.5794
+  type: 'test'
+  ...
+# Subtest: the interpretation banner comes before the results in DOM order, not just above them
+ok 527 - the interpretation banner comes before the results in DOM order, not just above them
+  ---
+  duration_ms: 2.288
+  type: 'test'
+  ...
+# Subtest: the banner speaks when nothing was relaxed, and reads the account rather than a prop
+ok 528 - the banner speaks when nothing was relaxed, and reads the account rather than a prop
+  ---
+  duration_ms: 2.155
+  type: 'test'
+  ...
+# Subtest: the banner still speaks when every row is hidden by a filter the reader turned on
+ok 529 - the banner still speaks when every row is hidden by a filter the reader turned on
+  ---
+  duration_ms: 0.3288
+  type: 'test'
+  ...
+# Subtest: the screen shows today as a removable chip before any query is scoped to it
+ok 530 - the screen shows today as a removable chip before any query is scoped to it
+  ---
+  duration_ms: 1.9192
+  type: 'test'
+  ...
+# Subtest: the resolution is announced through a live region, with the interval named
+ok 531 - the resolution is announced through a live region, with the interval named
+  ---
+  duration_ms: 30.7224
+  type: 'test'
+  ...
+# Subtest: a cut list names both numbers, in the words the string renderer uses
+ok 532 - a cut list names both numbers, in the words the string renderer uses
+  ---
+  duration_ms: 1.7276
+  type: 'test'
+  ...
+# Subtest: a complete list names both numbers too, where the string renderer stays silent
+ok 533 - a complete list names both numbers too, where the string renderer stays silent
+  ---
+  duration_ms: 2.9625
+  type: 'test'
+  ...
+# Subtest: the returned count is derived from the rows, so it cannot disagree with them
+ok 534 - the returned count is derived from the rows, so it cannot disagree with them
+  ---
+  duration_ms: 1.6339
+  type: 'test'
+  ...
+# Subtest: an empty page of a nonempty result set is refused, never published as a corpus miss
+ok 535 - an empty page of a nonempty result set is refused, never published as a corpus miss
+  ---
+  duration_ms: 0.2903
+  type: 'test'
+  ...
+# Subtest: the filter chips describe the page while the row set describes the corpus
+ok 536 - the filter chips describe the page while the row set describes the corpus
+  ---
+  duration_ms: 2.8952
+  type: 'test'
+  ...
+# Subtest: the heading is the publisher vocabulary of the rows, not a parameter
+ok 537 - the heading is the publisher vocabulary of the rows, not a parameter
+  ---
+  duration_ms: 2.2483
+  type: 'test'
+  ...
+# Subtest: a date-scoped heading is only available when every row covers that date
+ok 538 - a date-scoped heading is only available when every row covers that date
+  ---
+  duration_ms: 1.0326
+  type: 'test'
+  ...
+# Subtest: the whole result list is one tab stop, however many rows it has
+ok 539 - the whole result list is one tab stop, however many rows it has
+  ---
+  duration_ms: 4.435
+  type: 'test'
+  ...
+# Subtest: focus is not selection, and selection is stated
+ok 540 - focus is not selection, and selection is stated
+  ---
+  duration_ms: 1.3568
+  type: 'test'
+  ...
+# Subtest: a row this list cannot place is refused rather than rendered
+ok 541 - a row this list cannot place is refused rather than rendered
+  ---
+  duration_ms: 0.7061
+  type: 'test'
+  ...
+# Subtest: a title with no stated language is refused rather than read in the wrong voice
+ok 542 - a title with no stated language is refused rather than read in the wrong voice
+  ---
+  duration_ms: 3.3307
+  type: 'test'
+  ...
+# Subtest: every applied relaxation gets its own block and its own revert
+ok 543 - every applied relaxation gets its own block and its own revert
+  ---
+  duration_ms: 2.805
+  type: 'test'
+  ...
+# Subtest: a crosswalk with no review date is refused in both renderers
+ok 544 - a crosswalk with no review date is refused in both renderers
+  ---
+  duration_ms: 5.7299
+  type: 'test'
+  ...
+# Subtest: a revert that leaves this origin is not a revert
+ok 545 - a revert that leaves this origin is not a revert
+  ---
+  duration_ms: 1.5967
+  type: 'test'
+  ...
+# Subtest: the two zero-hit cards make the same claim about what ran
+ok 546 - the two zero-hit cards make the same claim about what ran
+  ---
+  duration_ms: 45.1471
+  type: 'test'
+  ...
+# Subtest: the zero-hit card names every layer, its outcome and its language
+ok 547 - the zero-hit card names every layer, its outcome and its language
+  ---
+  duration_ms: 1.6755
+  type: 'test'
+  ...
+# Subtest: every refusal the string card makes, the React card makes
+ok 548 - every refusal the string card makes, the React card makes
+  ---
+  duration_ms: 1.1266
+  type: 'test'
+  ...
+# Subtest: the zero-hit card shows the substitutions, read off the account rather than beside it
+ok 549 - the zero-hit card shows the substitutions, read off the account rather than beside it
+  ---
+  duration_ms: 4.2063
+  type: 'test'
+  ...
+# Subtest: a zero-hit screen says which date found nothing, and whether the words were the readers
+ok 550 - a zero-hit screen says which date found nothing, and whether the words were the readers
+  ---
+  duration_ms: 1.2462
+  type: 'test'
+  ...
+# Subtest: a zero-hit screen with no execution plan is refused, not given an empty one
+ok 551 - a zero-hit screen with no execution plan is refused, not given an empty one
+  ---
+  duration_ms: 1.632
+  type: 'test'
+  ...
+# Subtest: a route off the publisher own host is shown and not linked, in both cards
+ok 552 - a route off the publisher own host is shown and not linked, in both cards
+  ---
+  duration_ms: 2.6304
+  type: 'test'
+  ...
+# Subtest: requireRelaxationAccount returns the account it accepted
+ok 553 - requireRelaxationAccount returns the account it accepted
+  ---
+  duration_ms: 0.1616
+  type: 'test'
+  ...
+# Subtest: a hit list discloses the same population an empty one does
+ok 554 - a hit list discloses the same population an empty one does
+  ---
+  duration_ms: 1.306
+  type: 'test'
+  ...
+# Subtest: a filter that cannot decide which rows it keeps is refused
+ok 555 - a filter that cannot decide which rows it keeps is refused
+  ---
+  duration_ms: 0.541
+  type: 'test'
+  ...
+# Subtest: filters that hide every row say so, and do not become a corpus miss
+ok 556 - filters that hide every row say so, and do not become a corpus miss
+  ---
+  duration_ms: 2.1156
+  type: 'test'
+  ...
+# Subtest: the compare control is on the screen, disarmed, and says what is needed
+ok 557 - the compare control is on the screen, disarmed, and says what is needed
+  ---
+  duration_ms: 1.6517
+  type: 'test'
+  ...
+# Subtest: the screen composes into a whole document, twice, without colliding with itself
+ok 558 - the screen composes into a whole document, twice, without colliding with itself
+  ---
+  duration_ms: 5.8631
+  type: 'test'
+  ...
+# Subtest: the account contract refuses, by itself, what the disclosures refuse
+ok 559 - the account contract refuses, by itself, what the disclosures refuse
+  ---
+  duration_ms: 0.6068
+  type: 'test'
+  ...
+# Subtest: the results list applies the account by itself, without the screen around it
+ok 560 - the results list applies the account by itself, without the screen around it
+  ---
+  duration_ms: 0.4638
+  type: 'test'
+  ...
+# Subtest: the results list places a row by itself, through the one strict reading of a lex_id
+ok 561 - the results list places a row by itself, through the one strict reading of a lex_id
+  ---
+  duration_ms: 1.1427
+  type: 'test'
+  ...
+# Subtest: every match reason the service returns has a badge, and nothing else does
+ok 562 - every match reason the service returns has a badge, and nothing else does
+  ---
+  duration_ms: 0.5018
+  type: 'test'
+  ...
+# Subtest: a filter the reader arrives with already on hides rows, and the screen says so
+ok 563 - a filter the reader arrives with already on hides rows, and the screen says so
+  ---
+  duration_ms: 9.7372
+  type: 'test'
+  ...
+# Subtest: results are scoped to an explicit date in the publisher vocabulary
+ok 564 - results are scoped to an explicit date in the publisher vocabulary
+  ---
+  duration_ms: 6.1798
+  type: 'test'
+  ...
+# Subtest: a mixed list gets neutral wording rather than one publisher words
+ok 565 - a mixed list gets neutral wording rather than one publisher words
+  ---
+  duration_ms: 16.7092
+  type: 'test'
+  ...
+# Subtest: a publisher this interface has not classified is refused rather than given words
+ok 566 - a publisher this interface has not classified is refused rather than given words
+  ---
+  duration_ms: 1.1005
+  type: 'test'
+  ...
+# Subtest: a hit list carries the same population disclosure an empty one does
+ok 567 - a hit list carries the same population disclosure an empty one does
+  ---
+  duration_ms: 2.1993
+  type: 'test'
+  ...
+# Subtest: a list that was cut names its total
+ok 568 - a list that was cut names its total
+  ---
+  duration_ms: 1.6093
+  type: 'test'
+  ...
+# Subtest: every row says why it matched, from the closed set
+ok 569 - every row says why it matched, from the closed set
+  ---
+  duration_ms: 1.9297
+  type: 'test'
+  ...
+# Subtest: a relaxation that ran cannot be silent
+ok 570 - a relaxation that ran cannot be silent
+  ---
+  duration_ms: 3.368
+  type: 'test'
+  ...
+# Subtest: there is at most one governing instrument and it says why
+ok 571 - there is at most one governing instrument and it says why
+  ---
+  duration_ms: 1.1089
+  type: 'test'
+  ...
+# Subtest: zero hits is a card that names what ran, never an empty list
+ok 572 - zero hits is a card that names what ran, never an empty list
+  ---
+  duration_ms: 1.8625
+  type: 'test'
+  ...
+# Subtest: the words in force never reach a hit row
+ok 573 - the words in force never reach a hit row
+  ---
+  duration_ms: 11.3895
+  type: 'test'
+  ...
+# Subtest: a row carries its hash-carrying permalink and whether its text is held
+ok 574 - a row carries its hash-carrying permalink and whether its text is held
+  ---
+  duration_ms: 3.8129
+  type: 'test'
+  ...
+# Subtest: a permalink is a canonical same-origin state URL, bound to the row it sits on
+ok 575 - a permalink is a canonical same-origin state URL, bound to the row it sits on
+  ---
+  duration_ms: 4.2136
+  type: 'test'
+  ...
+# Subtest: a row title carries the language it is written in
+ok 576 - a row title carries the language it is written in
+  ---
+  duration_ms: 4.3368
+  type: 'test'
+  ...
+# Subtest: a row that cannot be placed is refused rather than listed
+ok 577 - a row that cannot be placed is refused rather than listed
+  ---
+  duration_ms: 1.6533
+  type: 'test'
+  ...
+# Subtest: results echo the query they answer
+ok 578 - results echo the query they answer
+  ---
+  duration_ms: 0.574
+  type: 'test'
+  ...
+# Subtest: values are escaped rather than trusted
+ok 579 - values are escaped rather than trusted
+  ---
+  duration_ms: 0.362
+  type: 'test'
+  ...
+# Subtest: an empty page of a nonempty result set is not a corpus miss
+ok 580 - an empty page of a nonempty result set is not a corpus miss
+  ---
+  duration_ms: 0.3694
+  type: 'test'
+  ...
+# Subtest: a hits value that is not a list is a transport fact, not an absence of law
+ok 581 - a hits value that is not a list is a transport fact, not an absence of law
+  ---
+  duration_ms: 0.4133
+  type: 'test'
+  ...
+# Subtest: the row set is validated even when no rows came back
+ok 582 - the row set is validated even when no rows came back
+  ---
+  duration_ms: 0.8285
+  type: 'test'
+  ...
+# Subtest: a row under a date-scoped heading must actually cover that date
+ok 583 - a row under a date-scoped heading must actually cover that date
+  ---
+  duration_ms: 0.7021
+  type: 'test'
+  ...
+# Subtest: results say whether they were narrowed to a date at all
+ok 584 - results say whether they were narrowed to a date at all
+  ---
+  duration_ms: 0.6355
+  type: 'test'
+  ...
+# Subtest: a row cannot claim a layer this screen says did not run
+ok 585 - a row cannot claim a layer this screen says did not run
+  ---
+  duration_ms: 1.1246
+  type: 'test'
+  ...
+# Subtest: an absent relaxation set is a caller who did not say, not none applied
+ok 586 - an absent relaxation set is a caller who did not say, not none applied
+  ---
+  duration_ms: 1.3975
+  type: 'test'
+  ...
+# Subtest: a file inside the root is still served, so the guard is not just refusing everything
+ok 587 - a file inside the root is still served, so the guard is not just refusing everything
+  ---
+  duration_ms: 276.4193
+  type: 'test'
+  ...
+# Subtest: encoded traversal never reaches a file outside the distribution root
+ok 588 - encoded traversal never reaches a file outside the distribution root
+  ---
+  duration_ms: 44.059
+  type: 'test'
+  ...
+# Subtest: a NUL byte in the path is refused rather than truncating it
+ok 589 - a NUL byte in the path is refused rather than truncating it
+  ---
+  duration_ms: 14.9963
+  type: 'test'
+  ...
+# Subtest: containment accepts the root itself and refuses its siblings
+ok 590 - containment accepts the root itself and refuses its siblings
+  ---
+  duration_ms: 0.5754
+  type: 'test'
+  ...
+# Subtest: a directory junction inside the root cannot serve a file outside it
+ok 591 - a directory junction inside the root cannot serve a file outside it
+  ---
+  duration_ms: 33.288
+  type: 'test'
+  ...
+# Subtest: every shell has a skin and no skin exists outside the three
+ok 592 - every shell has a skin and no skin exists outside the three
+  ---
+  duration_ms: 2.1035
+  type: 'test'
+  ...
+# Subtest: a fourth shell is a fork, not a skin
+ok 593 - a fourth shell is a fork, not a skin
+  ---
+  duration_ms: 1.7629
+  type: 'test'
+  ...
+# Subtest: the same content reads identically under all three shells
+ok 594 - the same content reads identically under all three shells
+  ---
+  duration_ms: 1.0674
+  type: 'test'
+  ...
+# Subtest: the shell rides on the root element and nowhere else
+ok 595 - the shell rides on the root element and nowhere else
+  ---
+  duration_ms: 0.416
+  type: 'test'
+  ...
+# Subtest: a page with no shell carries no shell attributes at all
+ok 596 - a page with no shell carries no shell attributes at all
+  ---
+  duration_ms: 0.5146
+  type: 'test'
+  ...
+# Subtest: an entry screen links to the other shells and to no shell-prefixed object URL
+ok 597 - an entry screen links to the other shells and to no shell-prefixed object URL
+  ---
+  duration_ms: 0.9209
+  type: 'test'
+  ...
+# Subtest: the neutrality promise is on the page, in words, not only in the code
+ok 598 - the neutrality promise is on the page, in words, not only in the code
+  ---
+  duration_ms: 28.1059
+  type: 'test'
+  ...
+# Subtest: legal-time phrasing comes from the publisher vocabulary, not from the renderer
+ok 599 - legal-time phrasing comes from the publisher vocabulary, not from the renderer
+  ---
+  duration_ms: 8.3599
+  type: 'test'
+  ...
+# Subtest: the words "in force" never appear on a state row of either corpus
+ok 600 - the words "in force" never appear on a state row of either corpus
+  ---
+  duration_ms: 1.5769
+  type: 'test'
+  ...
+# Subtest: an unknown or missing timeline_semantics is refused rather than defaulted
+ok 601 - an unknown or missing timeline_semantics is refused rather than defaulted
+  ---
+  duration_ms: 0.8839
+  type: 'test'
+  ...
+# Subtest: the open-ended sentinel is not rendered as an end date
+ok 602 - the open-ended sentinel is not rendered as an end date
+  ---
+  duration_ms: 0.4139
+  type: 'test'
+  ...
+# Subtest: a null valid_to reads the same as the sentinel, because they mean the same thing
+ok 603 - a null valid_to reads the same as the sentinel, because they mean the same thing
+  ---
+  duration_ms: 27.3305
+  type: 'test'
+  ...
+# Subtest: the observation timestamp is rendered verbatim
+ok 604 - the observation timestamp is rendered verbatim
+  ---
+  duration_ms: 0.361
+  type: 'test'
+  ...
+# Subtest: both clocks are present and both carry an icon and a label
+ok 605 - both clocks are present and both carry an icon and a label
+  ---
+  duration_ms: 7.4591
+  type: 'test'
+  ...
+# Subtest: a missing publication date is stated, not silently omitted
+ok 606 - a missing publication date is stated, not silently omitted
+  ---
+  duration_ms: 0.2945
+  type: 'test'
+  ...
+# Subtest: a state without valid_from or observed_from is refused
+ok 607 - a state without valid_from or observed_from is refused
+  ---
+  duration_ms: 0.5528
+  type: 'test'
+  ...
+# Subtest: the publisher status flag always carries its caption
+ok 608 - the publisher status flag always carries its caption
+  ---
+  duration_ms: 0.5901
+  type: 'test'
+  ...
+# Subtest: the timeline vocabulary is closed against the object prototype
+ok 609 - the timeline vocabulary is closed against the object prototype
+  ---
+  duration_ms: 0.3817
+  type: 'test'
+  ...
+# Subtest: legal time is checked before it is printed
+ok 610 - legal time is checked before it is printed
+  ---
+  duration_ms: 0.4712
+  type: 'test'
+  ...
+# Subtest: an inverted interval is refused rather than printed backwards
+ok 611 - an inverted interval is refused rather than printed backwards
+  ---
+  duration_ms: 0.1443
+  type: 'test'
+  ...
+# Subtest: a validity conflict shows both publisher dates and resolves neither
+ok 612 - a validity conflict shows both publisher dates and resolves neither
+  ---
+  duration_ms: 6.6708
+  type: 'test'
+  ...
+# Subtest: a conflict badge on agreeing dates is refused
+ok 613 - a conflict badge on agreeing dates is refused
+  ---
+  duration_ms: 0.7081
+  type: 'test'
+  ...
+# Subtest: a conflict needs two dates that are dates
+ok 614 - a conflict needs two dates that are dates
+  ---
+  duration_ms: 1.6353
+  type: 'test'
+  ...
+# Subtest: provisional is decided against the reader date, not a machine clock
+ok 615 - provisional is decided against the reader date, not a machine clock
+  ---
+  duration_ms: 1.1978
+  type: 'test'
+  ...
+# Subtest: the two kinds of hole are different claims and the caption says which
+ok 616 - the two kinds of hole are different claims and the caption says which
+  ---
+  duration_ms: 3.8508
+  type: 'test'
+  ...
+# Subtest: a hole kind cannot be chosen after the fact
+ok 617 - a hole kind cannot be chosen after the fact
+  ---
+  duration_ms: 2.0575
+  type: 'test'
+  ...
+# Subtest: a hole with no duration is a boundary, not a gap
+ok 618 - a hole with no duration is a boundary, not a gap
+  ---
+  duration_ms: 0.3396
+  type: 'test'
+  ...
+# Subtest: values are escaped rather than trusted
+ok 619 - values are escaped rather than trusted
+  ---
+  duration_ms: 0.1997
+  type: 'test'
+  ...
+# Subtest: both renderers draw the same timeline, in every shape that makes one lie
+ok 620 - both renderers draw the same timeline, in every shape that makes one lie
+  ---
+  duration_ms: 33.9358
+  type: 'test'
+  ...
+# Subtest: a timeline is the history of one work, and two works are refused rather than compared
+ok 621 - a timeline is the history of one work, and two works are refused rather than compared
+  ---
+  duration_ms: 4.7593
+  type: 'test'
+  ...
+# Subtest: a row that does not name a publisher, a work and a state cannot be placed
+ok 622 - a row that does not name a publisher, a work and a state cannot be placed
+  ---
+  duration_ms: 0.4763
+  type: 'test'
+  ...
+# Subtest: the date vocabulary is the publisher own and is never a parameter
+ok 623 - the date vocabulary is the publisher own and is never a parameter
+  ---
+  duration_ms: 1.9884
+  type: 'test'
+  ...
+# Subtest: the legend is the one divergence from the string renderer, and it is the string renderer that is wrong
+ok 624 - the legend is the one divergence from the string renderer, and it is the string renderer that is wrong
+  ---
+  duration_ms: 1.1418
+  type: 'test'
+  ...
+# Subtest: a publisher nobody classified fails closed rather than borrowing a neighbour vocabulary
+ok 625 - a publisher nobody classified fails closed rather than borrowing a neighbour vocabulary
+  ---
+  duration_ms: 1.4275
+  type: 'test'
+  ...
+# Subtest: the gaps drawn are exactly the ones the shared function derives, not a second reading
+ok 626 - the gaps drawn are exactly the ones the shared function derives, not a second reading
+  ---
+  duration_ms: 1.2343
+  type: 'test'
+  ...
+# Subtest: a state nested inside another produces no gap, and one record listed twice no overlap
+ok 627 - a state nested inside another produces no gap, and one record listed twice no overlap
+  ---
+  duration_ms: 1.4551
+  type: 'test'
+  ...
+# Subtest: overlapping states are listed as the shared function pairs them, and neither is preselected
+ok 628 - overlapping states are listed as the shared function pairs them, and neither is preselected
+  ---
+  duration_ms: 1.8695
+  type: 'test'
+  ...
+# Subtest: a truncated list cannot say what lies between the states it did not list
+ok 629 - a truncated list cannot say what lies between the states it did not list
+  ---
+  duration_ms: 2.7484
+  type: 'test'
+  ...
+# Subtest: truncation is a fact about the records and a declaration that disagrees is refused
+ok 630 - truncation is a fact about the records and a declaration that disagrees is refused
+  ---
+  duration_ms: 2.2672
+  type: 'test'
+  ...
+# Subtest: provisional is measured against the supplied date and not a clock
+ok 631 - provisional is measured against the supplied date and not a clock
+  ---
+  duration_ms: 5.8389
+  type: 'test'
+  ...
+# Subtest: a title never moves a row, and the dates read out of it say who read them
+ok 632 - a title never moves a row, and the dates read out of it say who read them
+  ---
+  duration_ms: 3.5371
+  type: 'test'
+  ...
+# Subtest: a title carries the language it is written in, with no constant default
+ok 633 - a title carries the language it is written in, with no constant default
+  ---
+  duration_ms: 1.7636
+  type: 'test'
+  ...
+# Subtest: every guard refuses the same input in both renderers
+ok 634 - every guard refuses the same input in both renderers
+  ---
+  duration_ms: 1.7664
+  type: 'test'
+  ...
+# Subtest: the words in force never reach a state row
+ok 635 - the words in force never reach a state row
+  ---
+  duration_ms: 3.5535
+  type: 'test'
+  ...
+# Subtest: the chart is decoration and the table is the structure
+ok 636 - the chart is decoration and the table is the structure
+  ---
+  duration_ms: 0.8286
+  type: 'test'
+  ...
+# Subtest: the wide table scrolls in its own box, and the box says what it is
+ok 637 - the wide table scrolls in its own box, and the box says what it is
+  ---
+  duration_ms: 0.9137
+  type: 'test'
+  ...
+# Subtest: values are escaped rather than trusted, in the React port too
+ok 638 - values are escaped rather than trusted, in the React port too
+  ---
+  duration_ms: 0.4733
+  type: 'test'
+  ...
+# Subtest: the legal-time vocabulary is derived from the work, not handed to the screen
+ok 639 - the legal-time vocabulary is derived from the work, not handed to the screen
+  ---
+  duration_ms: 5.7275
+  type: 'test'
+  ...
+# Subtest: a timeline is one work, so two works are refused rather than compared
+ok 640 - a timeline is one work, so two works are refused rather than compared
+  ---
+  duration_ms: 1.0552
+  type: 'test'
+  ...
+# Subtest: a publisher this interface has not classified is refused, not given a neighbour words
+ok 641 - a publisher this interface has not classified is refused, not given a neighbour words
+  ---
+  duration_ms: 0.8138
+  type: 'test'
+  ...
+# Subtest: the words in force never reach a state row
+ok 642 - the words in force never reach a state row
+  ---
+  duration_ms: 0.603
+  type: 'test'
+  ...
+# Subtest: a gap is the space the held records do not cover
+ok 643 - a gap is the space the held records do not cover
+  ---
+  duration_ms: 0.5928
+  type: 'test'
+  ...
+# Subtest: a gap is rendered where the gap is, in full, and says it is derived
+ok 644 - a gap is rendered where the gap is, in full, and says it is derived
+  ---
+  duration_ms: 0.6322
+  type: 'test'
+  ...
+# Subtest: a state that covers no day at all is refused
+ok 645 - a state that covers no day at all is refused
+  ---
+  duration_ms: 0.3377
+  type: 'test'
+  ...
+# Subtest: overlapping states are stacked, labelled derived, and never preselected
+ok 646 - overlapping states are stacked, labelled derived, and never preselected
+  ---
+  duration_ms: 0.5486
+  type: 'test'
+  ...
+# Subtest: a future state is provisional against a supplied date, not the machine clock
+ok 647 - a future state is provisional against a supplied date, not the machine clock
+  ---
+  duration_ms: 2.4322
+  type: 'test'
+  ...
+# Subtest: an open state ends in null and is never closed with today
+ok 648 - an open state ends in null and is never closed with today
+  ---
+  duration_ms: 1.4493
+  type: 'test'
+  ...
+# Subtest: a date read out of a title is bounded, deduplicated and labelled derived
+ok 649 - a date read out of a title is bounded, deduplicated and labelled derived
+  ---
+  duration_ms: 10.0706
+  type: 'test'
+  ...
+# Subtest: a title carries the language it is written in, with no default
+ok 650 - a title carries the language it is written in, with no default
+  ---
+  duration_ms: 1.1196
+  type: 'test'
+  ...
+# Subtest: placement is by the record, and is the same whatever order the records arrive in
+ok 651 - placement is by the record, and is the same whatever order the records arrive in
+  ---
+  duration_ms: 1.7724
+  type: 'test'
+  ...
+# Subtest: a withdrawn state is struck on its interval and says when
+ok 652 - a withdrawn state is struck on its interval and says when
+  ---
+  duration_ms: 1.1155
+  type: 'test'
+  ...
+# Subtest: every row says whether its text is held and which profile made it
+ok 653 - every row says whether its text is held and which profile made it
+  ---
+  duration_ms: 0.4792
+  type: 'test'
+  ...
+# Subtest: the digest chip is the first eight characters of the record digest
+ok 654 - the digest chip is the first eight characters of the record digest
+  ---
+  duration_ms: 0.2788
+  type: 'test'
+  ...
+# Subtest: the total is a fact about the records, not a flag the caller sets
+ok 655 - the total is a fact about the records, not a flag the caller sets
+  ---
+  duration_ms: 1.1271
+  type: 'test'
+  ...
+# Subtest: a single held state says so rather than drawing one segment
+ok 656 - a single held state says so rather than drawing one segment
+  ---
+  duration_ms: 0.2234
+  type: 'test'
+  ...
+# Subtest: the population is stated and an empty timeline is refused
+ok 657 - the population is stated and an empty timeline is refused
+  ---
+  duration_ms: 0.3309
+  type: 'test'
+  ...
+# Subtest: the legend is the component words and the chart is decoration
+ok 658 - the legend is the component words and the chart is decoration
+  ---
+  duration_ms: 0.6514
+  type: 'test'
+  ...
+# Subtest: a state that cannot be placed is refused rather than placed anyway
+ok 659 - a state that cannot be placed is refused rather than placed anyway
+  ---
+  duration_ms: 0.4652
+  type: 'test'
+  ...
+# Subtest: the record time carries the UTC instant verbatim
+ok 660 - the record time carries the UTC instant verbatim
+  ---
+  duration_ms: 0.2312
+  type: 'test'
+  ...
+# Subtest: values are escaped rather than trusted
+ok 661 - values are escaped rather than trusted
+  ---
+  duration_ms: 0.3229
+  type: 'test'
+  ...
+# Subtest: a truncated history cannot say what lies between the states it did not list
+ok 662 - a truncated history cannot say what lies between the states it did not list
+  ---
+  duration_ms: 0.3939
+  type: 'test'
+  ...
+# Subtest: one record listed twice is a duplicate, not a publisher contradiction
+ok 663 - one record listed twice is a duplicate, not a publisher contradiction
+  ---
+  duration_ms: 0.443
+  type: 'test'
+  ...
+# Subtest: the page banner is true: nothing on it is a real coordinate
+ok 664 - the page banner is true: nothing on it is a real coordinate
+  ---
+  duration_ms: 44.808
+  type: 'test'
+  ...
+# Subtest: the quoted text says of itself that it is not law
+ok 665 - the quoted text says of itself that it is not law
+  ---
+  duration_ms: 4.1776
+  type: 'test'
+  ...
+# Subtest: the page does not claim that a publisher key selects authenticity
+ok 666 - the page does not claim that a publisher key selects authenticity
+  ---
+  duration_ms: 3.1304
+  type: 'test'
+  ...
+# Subtest: the page still exercises every component it claims to
+ok 667 - the page still exercises every component it claims to
+  ---
+  duration_ms: 2.0828
+  type: 'test'
+  ...
+# Subtest: the reading URL reproduces the live permalink shape exactly
+ok 668 - the reading URL reproduces the live permalink shape exactly
+  ---
+  duration_ms: 1.9353
+  type: 'test'
+  ...
+# Subtest: a reading URL without the state hash is refused
+ok 669 - a reading URL without the state hash is refused
+  ---
+  duration_ms: 0.8435
+  type: 'test'
+  ...
+# Subtest: the publisher anchor is used verbatim
+ok 670 - the publisher anchor is used verbatim
+  ---
+  duration_ms: 3.838
+  type: 'test'
+  ...
+# Subtest: an object URL can never carry a shell prefix
+ok 671 - an object URL can never carry a shell prefix
+  ---
+  duration_ms: 1.2936
+  type: 'test'
+  ...
+# Subtest: shells apply to entry paths, not to object paths
+ok 672 - shells apply to entry paths, not to object paths
+  ---
+  duration_ms: 0.4329
+  type: 'test'
+  ...
+# Subtest: every built URL parses back to what built it
+ok 673 - every built URL parses back to what built it
+  ---
+  duration_ms: 1.0777
+  type: 'test'
+  ...
+# Subtest: a malformed version key does not resolve to a guess
+ok 674 - a malformed version key does not resolve to a guess
+  ---
+  duration_ms: 0.3721
+  type: 'test'
+  ...
+# Subtest: a path traversal or separator in a segment is refused
+ok 675 - a path traversal or separator in a segment is refused
+  ---
+  duration_ms: 1.0908
+  type: 'test'
+  ...
+# Subtest: an anchor containing a separator is refused rather than encoded away
+ok 676 - an anchor containing a separator is refused rather than encoded away
+  ---
+  duration_ms: 0.8617
+  type: 'test'
+  ...
+# Subtest: the parser refuses every coordinate the builders refuse
+ok 677 - the parser refuses every coordinate the builders refuse
+  ---
+  duration_ms: 0.9397
+  type: 'test'
+  ...
+# Subtest: an impossible calendar date is not a state a link may name
+ok 678 - an impossible calendar date is not a state a link may name
+  ---
+  duration_ms: 0.492
+  type: 'test'
+  ...
+# Subtest: a shell path cannot walk out of its own shell
+ok 679 - a shell path cannot walk out of its own shell
+  ---
+  duration_ms: 0.2861
+  type: 'test'
+  ...
+# Subtest: the parser accepts one canonical grammar and normalises nothing
+ok 680 - the parser accepts one canonical grammar and normalises nothing
+  ---
+  duration_ms: 0.1584
+  type: 'test'
+  ...
+# Subtest: an anchor on a dossier is refused rather than silently discarded
+ok 681 - an anchor on a dossier is refused rather than silently discarded
+  ---
+  duration_ms: 0.111
+  type: 'test'
+  ...
+# Subtest: a shell cannot be nested inside a shell
+ok 682 - a shell cannot be nested inside a shell
+  ---
+  duration_ms: 0.1935
+  type: 'test'
+  ...
+# Subtest: a shell path uses the same canonical grammar as an object path
+ok 683 - a shell path uses the same canonical grammar as an object path
+  ---
+  duration_ms: 1.1748
+  type: 'test'
+  ...
+# Subtest: a shell entry URL carries no fragment
+ok 684 - a shell entry URL carries no fragment
+  ---
+  duration_ms: 0.2832
+  type: 'test'
+  ...
+# Subtest: both renderers produce the same cluster, byte for byte
+ok 685 - both renderers produce the same cluster, byte for byte
+  ---
+  duration_ms: 11.3137
+  type: 'test'
+  ...
+# Subtest: the whole digest is present, emphasised at the front, in the React runtime too
+ok 686 - the whole digest is present, emphasised at the front, in the React runtime too
+  ---
+  duration_ms: 0.904
+  type: 'test'
+  ...
+# Subtest: the digest says which digest it is, in both renderers
+ok 687 - the digest says which digest it is, in both renderers
+  ---
+  duration_ms: 4.5306
+  type: 'test'
+  ...
+# Subtest: a digest that is not 64 lowercase hex is refused by both renderers
+ok 688 - a digest that is not 64 lowercase hex is refused by both renderers
+  ---
+  duration_ms: 1.0093
+  type: 'test'
+  ...
+# Subtest: an official-source link is validated against the publisher, not merely escaped
+ok 689 - an official-source link is validated against the publisher, not merely escaped
+  ---
+  duration_ms: 1.9386
+  type: 'test'
+  ...
+# Subtest: a provenance link is never built from an identifier that names no record
+ok 690 - a provenance link is never built from an identifier that names no record
+  ---
+  duration_ms: 1.8719
+  type: 'test'
+  ...
+# Subtest: the React cluster has no publisher to be told, so the two links cannot disagree
+ok 691 - the React cluster has no publisher to be told, so the two links cannot disagree
+  ---
+  duration_ms: 1.5574
+  type: 'test'
+  ...
+# Subtest: the whole digest is on the page, and no control promises what it cannot do
+ok 692 - the whole digest is on the page, and no control promises what it cannot do
+  ---
+  duration_ms: 2.3313
+  type: 'test'
+  ...
+# Subtest: a chip must name which digest it shows
+ok 693 - a chip must name which digest it shows
+  ---
+  duration_ms: 1.4241
+  type: 'test'
+  ...
+# Subtest: a digest that is not 64 lowercase hex is refused
+ok 694 - a digest that is not 64 lowercase hex is refused
+  ---
+  duration_ms: 0.7215
+  type: 'test'
+  ...
+# Subtest: the official source anchor points at the publisher
+ok 695 - the official source anchor points at the publisher
+  ---
+  duration_ms: 0.3436
+  type: 'test'
+  ...
+# Subtest: an invalid stamp is not rendered like a valid one, and not as a date conflict
+ok 696 - an invalid stamp is not rendered like a valid one, and not as a date conflict
+  ---
+  duration_ms: 1.0914
+  type: 'test'
+  ...
+# Subtest: an official-source link is validated against the publisher, not merely escaped
+ok 697 - an official-source link is validated against the publisher, not merely escaped
+  ---
+  duration_ms: 0.5531
+  type: 'test'
+  ...
+# Subtest: a publisher outside the closed set has no host to be checked against
+ok 698 - a publisher outside the closed set has no host to be checked against
+  ---
+  duration_ms: 0.3344
+  type: 'test'
+  ...
+# Subtest: an absent signature verdict is refused rather than shown as valid
+ok 699 - an absent signature verdict is refused rather than shown as valid
+  ---
+  duration_ms: 0.2087
+  type: 'test'
+  ...
+# Subtest: the strip names both source commits and the ones it lacks
+ok 700 - the strip names both source commits and the ones it lacks
+  ---
+  duration_ms: 1.5464
+  type: 'test'
+  ...
+# Subtest: the strip refuses a timeline vocabulary it does not know
+ok 701 - the strip refuses a timeline vocabulary it does not know
+  ---
+  duration_ms: 0.6902
+  type: 'test'
+  ...
+# Subtest: the strip refuses a build instant that is not one
+ok 702 - the strip refuses a build instant that is not one
+  ---
+  duration_ms: 0.4744
+  type: 'test'
+  ...
+# Subtest: a missing build time is stated rather than omitted
+ok 703 - a missing build time is stated rather than omitted
+  ---
+  duration_ms: 0.1707
+  type: 'test'
+  ...
+# Subtest: values are escaped rather than trusted
+ok 704 - values are escaped rather than trusted
+  ---
+  duration_ms: 0.1532
+  type: 'test'
+  ...
+# Subtest: a legacy code_commit is not rendered under a V3 provenance name
+ok 705 - a legacy code_commit is not rendered under a V3 provenance name
+  ---
+  duration_ms: 0.1604
+  type: 'test'
+  ...
+# Subtest: a provenance link is never built from a missing identifier
+ok 706 - a provenance link is never built from a missing identifier
+  ---
+  duration_ms: 1.1679
+  type: 'test'
+  ...
+# Subtest: the envelope strip names the party it is about
+ok 707 - the envelope strip names the party it is about
+  ---
+  duration_ms: 0.3693
+  type: 'test'
+  ...
+1..707
+# tests 707
+# suites 0
+# pass 707
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1966.6584

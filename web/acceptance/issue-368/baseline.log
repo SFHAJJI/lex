@@ -1,0 +1,124 @@
+TAP version 13
+# Subtest: every citation form this build declares actually parses
+ok 1 - every citation form this build declares actually parses
+  ---
+  duration_ms: 3.8297
+  type: 'test'
+  ...
+# Subtest: a permalink off the canonical host does not parse, userinfo included
+ok 2 - a permalink off the canonical host does not parse, userinfo included
+  ---
+  duration_ms: 0.24
+  type: 'test'
+  ...
+# Subtest: a citation embedded in prose is not extracted as if it had been cited alone
+ok 3 - a citation embedded in prose is not extracted as if it had been cited alone
+  ---
+  duration_ms: 0.1287
+  type: 'test'
+  ...
+# Subtest: a CELEX cited the publisher way folds to the held key, and keeps the reader spelling
+ok 4 - a CELEX cited the publisher way folds to the held key, and keeps the reader spelling
+  ---
+  duration_ms: 0.1453
+  type: 'test'
+  ...
+# Subtest: a consolidated CELEX names a date and its parts, and invents no base act
+ok 5 - a consolidated CELEX names a date and its parts, and invents no base act
+  ---
+  duration_ms: 0.1074
+  type: 'test'
+  ...
+# Subtest: a CELEX sector is one digit, so the whole identifier parses into its four parts
+ok 6 - a CELEX sector is one digit, so the whole identifier parses into its four parts
+  ---
+  duration_ms: 0.1203
+  type: 'test'
+  ...
+# Subtest: a dated LU ELI carries its applicability date
+ok 7 - a dated LU ELI carries its applicability date
+  ---
+  duration_ms: 0.1457
+  type: 'test'
+  ...
+# Subtest: leg and adm produce one work key and two identifiers, which is the collision
+ok 8 - leg and adm produce one work key and two identifiers, which is the collision
+  ---
+  duration_ms: 0.1475
+  type: 'test'
+  ...
+# Subtest: a candidate from the other branch is refused, not rendered
+ok 9 - a candidate from the other branch is refused, not rendered
+  ---
+  duration_ms: 0.8658
+  type: 'test'
+  ...
+# Subtest: unrecognised and out-of-corpus are different answers
+ok 10 - unrecognised and out-of-corpus are different answers
+  ---
+  duration_ms: 0.5465
+  type: 'test'
+  ...
+# Subtest: a recognised citation we hold nothing for is out of corpus, not unrecognised
+ok 11 - a recognised citation we hold nothing for is out of corpus, not unrecognised
+  ---
+  duration_ms: 0.2307
+  type: 'test'
+  ...
+# Subtest: more than one candidate lists every one and preselects none
+ok 12 - more than one candidate lists every one and preselects none
+  ---
+  duration_ms: 0.3669
+  type: 'test'
+  ...
+# Subtest: one candidate resolves and names its state
+ok 13 - one candidate resolves and names its state
+  ---
+  duration_ms: 0.1307
+  type: 'test'
+  ...
+# Subtest: every verdict this module can return is in the closed list
+ok 14 - every verdict this module can return is in the closed list
+  ---
+  duration_ms: 0.2655
+  type: 'test'
+  ...
+# Subtest: a candidate a reader cannot identify is refused
+ok 15 - a candidate a reader cannot identify is refused
+  ---
+  duration_ms: 1.0714
+  type: 'test'
+  ...
+# Subtest: a quote that matches is identical, and one that does not names where
+ok 16 - a quote that matches is identical, and one that does not names where
+  ---
+  duration_ms: 0.4484
+  type: 'test'
+  ...
+# Subtest: a quote comparison against nothing is refused rather than reported identical
+ok 17 - a quote comparison against nothing is refused rather than reported identical
+  ---
+  duration_ms: 0.2771
+  type: 'test'
+  ...
+# Subtest: the verdict card escapes a hostile citation rather than emitting it
+ok 18 - the verdict card escapes a hostile citation rather than emitting it
+  ---
+  duration_ms: 0.1179
+  type: 'test'
+  ...
+# Subtest: an out-of-corpus body is recognised case-insensitively but not over-eagerly
+ok 19 - an out-of-corpus body is recognised case-insensitively but not over-eagerly
+  ---
+  duration_ms: 0.0743
+  type: 'test'
+  ...
+1..19
+# tests 19
+# suites 0
+# pass 19
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 126.092
