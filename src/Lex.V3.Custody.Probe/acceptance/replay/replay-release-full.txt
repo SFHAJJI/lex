@@ -1,0 +1,23 @@
+Exécuter des tests à partir de C:\lex-v3\worktrees\codex-stage1-custody-runner\tests\Lex.V3.Tests\bin\Release\net10.0\Lex.V3.Tests.dll (net10.0|x64)
+Exécuter des tests à partir de C:\lex-v3\worktrees\codex-stage1-custody-runner\tests\Lex.V3.Ingest.Tests\bin\Release\net10.0\Lex.V3.Ingest.Tests.dll (net10.0|x64)
+ignoré TheCensusFamiliesProveAndTheRunEitherReachesTheManifestOrFailsNamingWhy
+  Assert.Inconclusive. Live publisher canary. Set LEX_EU_CANARY=1 to run it; it is skipped by default so the suite does not depend on a third party's uptime or send unasked traffic.
+  à partir de C:\lex-v3\worktrees\codex-stage1-custody-runner\tests\Lex.V3.Ingest.Tests\bin\Release\net10.0\Lex.V3.Ingest.Tests.dll (net10.0|x64)
+ignoré TheCodeCivilsTwoCanaryExpressionsAreHeldWithRealReceipts
+  Assert.Inconclusive. Live publisher canary. Set LEX_LU_CANARY=1 to run it; it is skipped by default so the suite does not depend on a third party's uptime or send unasked traffic.
+  à partir de C:\lex-v3\worktrees\codex-stage1-custody-runner\tests\Lex.V3.Ingest.Tests\bin\Release\net10.0\Lex.V3.Ingest.Tests.dll (net10.0|x64)
+ignoré ALaneSymbolicLinkCannotRedirectCustodyOutsideItsLane
+  Assert.Inconclusive. This Windows host does not grant symbolic-link creation; Linux CI runs this proof.
+  à partir de C:\lex-v3\worktrees\codex-stage1-custody-runner\tests\Lex.V3.Tests\bin\Release\net10.0\Lex.V3.Tests.dll (net10.0|x64)
+C:\lex-v3\worktrees\codex-stage1-custody-runner\tests\Lex.V3.Ingest.Tests\bin\Release\net10.0\Lex.V3.Ingest.Tests.dll (net10.0|x64) réussite (54s 674ms)
+C:\lex-v3\worktrees\codex-stage1-custody-runner\tests\Lex.V3.Tests\bin\Release\net10.0\Lex.V3.Tests.dll (net10.0|x64) réussite (1m 04s 843ms)
+
+Résumé de série de tests : Réussite!
+  C:\lex-v3\worktrees\codex-stage1-custody-runner\tests\Lex.V3.Tests\bin\Release\net10.0\Lex.V3.Tests.dll (net10.0|x64) réussite (1m 04s 843ms)
+  C:\lex-v3\worktrees\codex-stage1-custody-runner\tests\Lex.V3.Ingest.Tests\bin\Release\net10.0\Lex.V3.Ingest.Tests.dll (net10.0|x64) réussite (54s 674ms)
+
+  total : 2659
+  échec : 0
+  réussie : 2656
+  ignoré : 3
+  durée : 1m 05s 960ms

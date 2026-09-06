@@ -1,0 +1,328 @@
+{
+  "error": null,
+  "id": "/subscriptions/7c1e98f3-ef6e-45a0-b61b-a51d436bf093/resourceGroups/rg-lex-v3-custody/providers/Microsoft.Resources/deployments/lex-v3-custody-probe-review",
+  "name": "lex-v3-custody-probe-review",
+  "properties": {
+    "correlationId": "a8977d97-0804-40c3-a30d-b9b6a5402ebd",
+    "debugSetting": null,
+    "dependencies": [
+      {
+        "dependsOn": [
+          {
+            "id": "/subscriptions/7c1e98f3-ef6e-45a0-b61b-a51d436bf093/resourceGroups/rg-lex-v3-custody/providers/Microsoft.ManagedIdentity/userAssignedIdentities/uami-lex-v3-custody-probe",
+            "resourceGroup": "rg-lex-v3-custody",
+            "resourceName": "uami-lex-v3-custody-probe",
+            "resourceType": "Microsoft.ManagedIdentity/userAssignedIdentities"
+          },
+          {
+            "apiVersion": "2023-01-31",
+            "id": "/subscriptions/7c1e98f3-ef6e-45a0-b61b-a51d436bf093/resourceGroups/rg-lex-v3-custody/providers/Microsoft.ManagedIdentity/userAssignedIdentities/uami-lex-v3-custody-probe",
+            "resourceGroup": "rg-lex-v3-custody",
+            "resourceName": "uami-lex-v3-custody-probe",
+            "resourceType": "Microsoft.ManagedIdentity/userAssignedIdentities"
+          }
+        ],
+        "id": "/subscriptions/7c1e98f3-ef6e-45a0-b61b-a51d436bf093/resourceGroups/rg-soufien-portfolio/providers/Microsoft.Resources/deployments/lex-v3-custody-probe-pull",
+        "resourceGroup": "rg-soufien-portfolio",
+        "resourceName": "lex-v3-custody-probe-pull",
+        "resourceType": "Microsoft.Resources/deployments"
+      },
+      {
+        "dependsOn": [
+          {
+            "id": "/subscriptions/7c1e98f3-ef6e-45a0-b61b-a51d436bf093/resourceGroups/rg-lex-v3-custody/providers/Microsoft.Storage/storageAccounts/stlexv3custody/blobServices/default/containers/staging/providers/Microsoft.Authorization/roleAssignments/3222e531-d873-5e46-8e44-d5367b3cc922",
+            "resourceGroup": "rg-lex-v3-custody",
+            "resourceName": "3222e531-d873-5e46-8e44-d5367b3cc922",
+            "resourceType": "Microsoft.Authorization/roleAssignments"
+          },
+          {
+            "id": "/subscriptions/7c1e98f3-ef6e-45a0-b61b-a51d436bf093/resourceGroups/rg-lex-v3-custody/providers/Microsoft.Storage/storageAccounts/stlexv3custody/blobServices/default/containers/nightly/providers/Microsoft.Authorization/roleAssignments/dea34854-f564-59c5-a27a-7bc3507e558a",
+            "resourceGroup": "rg-lex-v3-custody",
+            "resourceName": "dea34854-f564-59c5-a27a-7bc3507e558a",
+            "resourceType": "Microsoft.Authorization/roleAssignments"
+          },
+          {
+            "id": "/subscriptions/7c1e98f3-ef6e-45a0-b61b-a51d436bf093/resourceGroups/rg-lex-v3-custody/providers/Microsoft.Storage/storageAccounts/stlexv3custody/blobServices/default/containers/legal-hold/providers/Microsoft.Authorization/roleAssignments/2ada6008-abeb-554e-880f-8f46799256e6",
+            "resourceGroup": "rg-lex-v3-custody",
+            "resourceName": "2ada6008-abeb-554e-880f-8f46799256e6",
+            "resourceType": "Microsoft.Authorization/roleAssignments"
+          },
+          {
+            "id": "/subscriptions/7c1e98f3-ef6e-45a0-b61b-a51d436bf093/resourceGroups/rg-lex-v3-custody/providers/Microsoft.ManagedIdentity/userAssignedIdentities/uami-lex-v3-custody-probe",
+            "resourceGroup": "rg-lex-v3-custody",
+            "resourceName": "uami-lex-v3-custody-probe",
+            "resourceType": "Microsoft.ManagedIdentity/userAssignedIdentities"
+          },
+          {
+            "id": "/subscriptions/7c1e98f3-ef6e-45a0-b61b-a51d436bf093/resourceGroups/rg-soufien-portfolio/providers/Microsoft.Resources/deployments/lex-v3-custody-probe-pull",
+            "resourceGroup": "rg-soufien-portfolio",
+            "resourceName": "lex-v3-custody-probe-pull",
+            "resourceType": "Microsoft.Resources/deployments"
+          },
+          {
+            "apiVersion": "2023-01-31",
+            "id": "/subscriptions/7c1e98f3-ef6e-45a0-b61b-a51d436bf093/resourceGroups/rg-lex-v3-custody/providers/Microsoft.ManagedIdentity/userAssignedIdentities/uami-lex-v3-custody-probe",
+            "resourceGroup": "rg-lex-v3-custody",
+            "resourceName": "uami-lex-v3-custody-probe",
+            "resourceType": "Microsoft.ManagedIdentity/userAssignedIdentities"
+          }
+        ],
+        "id": "/subscriptions/7c1e98f3-ef6e-45a0-b61b-a51d436bf093/resourceGroups/rg-platform/providers/Microsoft.Resources/deployments/lex-v3-custody-probe-job",
+        "resourceGroup": "rg-platform",
+        "resourceName": "lex-v3-custody-probe-job",
+        "resourceType": "Microsoft.Resources/deployments"
+      },
+      {
+        "dependsOn": [
+          {
+            "id": "/subscriptions/7c1e98f3-ef6e-45a0-b61b-a51d436bf093/resourceGroups/rg-lex-v3-custody/providers/Microsoft.ManagedIdentity/userAssignedIdentities/uami-lex-v3-custody-probe",
+            "resourceGroup": "rg-lex-v3-custody",
+            "resourceName": "uami-lex-v3-custody-probe",
+            "resourceType": "Microsoft.ManagedIdentity/userAssignedIdentities"
+          },
+          {
+            "id": "/subscriptions/7c1e98f3-ef6e-45a0-b61b-a51d436bf093/resourceGroups/rg-lex-v3-custody/providers/Microsoft.Authorization/roleDefinitions/af807130-0ea2-5421-bd1e-b6c6911bd6d9",
+            "resourceGroup": "rg-lex-v3-custody",
+            "resourceName": "af807130-0ea2-5421-bd1e-b6c6911bd6d9",
+            "resourceType": "Microsoft.Authorization/roleDefinitions"
+          },
+          {
+            "apiVersion": "2023-01-31",
+            "id": "/subscriptions/7c1e98f3-ef6e-45a0-b61b-a51d436bf093/resourceGroups/rg-lex-v3-custody/providers/Microsoft.ManagedIdentity/userAssignedIdentities/uami-lex-v3-custody-probe",
+            "resourceGroup": "rg-lex-v3-custody",
+            "resourceName": "uami-lex-v3-custody-probe",
+            "resourceType": "Microsoft.ManagedIdentity/userAssignedIdentities"
+          }
+        ],
+        "id": "/subscriptions/7c1e98f3-ef6e-45a0-b61b-a51d436bf093/resourceGroups/rg-lex-v3-custody/providers/Microsoft.Storage/storageAccounts/stlexv3custody/blobServices/default/containers/staging/providers/Microsoft.Authorization/roleAssignments/3222e531-d873-5e46-8e44-d5367b3cc922",
+        "resourceGroup": "rg-lex-v3-custody",
+        "resourceName": "3222e531-d873-5e46-8e44-d5367b3cc922",
+        "resourceType": "Microsoft.Authorization/roleAssignments"
+      },
+      {
+        "dependsOn": [
+          {
+            "id": "/subscriptions/7c1e98f3-ef6e-45a0-b61b-a51d436bf093/resourceGroups/rg-lex-v3-custody/providers/Microsoft.ManagedIdentity/userAssignedIdentities/uami-lex-v3-custody-probe",
+            "resourceGroup": "rg-lex-v3-custody",
+            "resourceName": "uami-lex-v3-custody-probe",
+            "resourceType": "Microsoft.ManagedIdentity/userAssignedIdentities"
+          },
+          {
+            "id": "/subscriptions/7c1e98f3-ef6e-45a0-b61b-a51d436bf093/resourceGroups/rg-lex-v3-custody/providers/Microsoft.Authorization/roleDefinitions/a4545297-afa6-5a16-bf9b-5f8f20a34126",
+            "resourceGroup": "rg-lex-v3-custody",
+            "resourceName": "a4545297-afa6-5a16-bf9b-5f8f20a34126",
+            "resourceType": "Microsoft.Authorization/roleDefinitions"
+          },
+          {
+            "apiVersion": "2023-01-31",
+            "id": "/subscriptions/7c1e98f3-ef6e-45a0-b61b-a51d436bf093/resourceGroups/rg-lex-v3-custody/providers/Microsoft.ManagedIdentity/userAssignedIdentities/uami-lex-v3-custody-probe",
+            "resourceGroup": "rg-lex-v3-custody",
+            "resourceName": "uami-lex-v3-custody-probe",
+            "resourceType": "Microsoft.ManagedIdentity/userAssignedIdentities"
+          }
+        ],
+        "id": "/subscriptions/7c1e98f3-ef6e-45a0-b61b-a51d436bf093/resourceGroups/rg-lex-v3-custody/providers/Microsoft.Storage/storageAccounts/stlexv3custody/blobServices/default/containers/nightly/providers/Microsoft.Authorization/roleAssignments/dea34854-f564-59c5-a27a-7bc3507e558a",
+        "resourceGroup": "rg-lex-v3-custody",
+        "resourceName": "dea34854-f564-59c5-a27a-7bc3507e558a",
+        "resourceType": "Microsoft.Authorization/roleAssignments"
+      },
+      {
+        "dependsOn": [
+          {
+            "id": "/subscriptions/7c1e98f3-ef6e-45a0-b61b-a51d436bf093/resourceGroups/rg-lex-v3-custody/providers/Microsoft.ManagedIdentity/userAssignedIdentities/uami-lex-v3-custody-probe",
+            "resourceGroup": "rg-lex-v3-custody",
+            "resourceName": "uami-lex-v3-custody-probe",
+            "resourceType": "Microsoft.ManagedIdentity/userAssignedIdentities"
+          },
+          {
+            "id": "/subscriptions/7c1e98f3-ef6e-45a0-b61b-a51d436bf093/resourceGroups/rg-lex-v3-custody/providers/Microsoft.Authorization/roleDefinitions/a4545297-afa6-5a16-bf9b-5f8f20a34126",
+            "resourceGroup": "rg-lex-v3-custody",
+            "resourceName": "a4545297-afa6-5a16-bf9b-5f8f20a34126",
+            "resourceType": "Microsoft.Authorization/roleDefinitions"
+          },
+          {
+            "apiVersion": "2023-01-31",
+            "id": "/subscriptions/7c1e98f3-ef6e-45a0-b61b-a51d436bf093/resourceGroups/rg-lex-v3-custody/providers/Microsoft.ManagedIdentity/userAssignedIdentities/uami-lex-v3-custody-probe",
+            "resourceGroup": "rg-lex-v3-custody",
+            "resourceName": "uami-lex-v3-custody-probe",
+            "resourceType": "Microsoft.ManagedIdentity/userAssignedIdentities"
+          }
+        ],
+        "id": "/subscriptions/7c1e98f3-ef6e-45a0-b61b-a51d436bf093/resourceGroups/rg-lex-v3-custody/providers/Microsoft.Storage/storageAccounts/stlexv3custody/blobServices/default/containers/legal-hold/providers/Microsoft.Authorization/roleAssignments/2ada6008-abeb-554e-880f-8f46799256e6",
+        "resourceGroup": "rg-lex-v3-custody",
+        "resourceName": "2ada6008-abeb-554e-880f-8f46799256e6",
+        "resourceType": "Microsoft.Authorization/roleAssignments"
+      }
+    ],
+    "duration": "PT0S",
+    "error": null,
+    "mode": "Incremental",
+    "onErrorDeployment": null,
+    "outputResources": null,
+    "outputs": null,
+    "parameters": {
+      "environmentName": {
+        "type": "String",
+        "value": "cae-platform-law"
+      },
+      "identityName": {
+        "type": "String",
+        "value": "uami-lex-v3-custody-probe"
+      },
+      "image": {
+        "type": "String",
+        "value": "crsoufien3orem.azurecr.io/lex-v3-custody-probe@sha256:c3289ea3396620150b9cd1a64b20b985cfb649303e01c2450afafbec747ec78b"
+      },
+      "jobName": {
+        "type": "String",
+        "value": "caj-lex-v3-custody-probe"
+      },
+      "location": {
+        "type": "String",
+        "value": "francecentral"
+      },
+      "platformResourceGroup": {
+        "type": "String",
+        "value": "rg-platform"
+      },
+      "registryName": {
+        "type": "String",
+        "value": "crsoufien3orem"
+      },
+      "registryResourceGroup": {
+        "type": "String",
+        "value": "rg-soufien-portfolio"
+      },
+      "storageAccountName": {
+        "type": "String",
+        "value": "stlexv3custody"
+      }
+    },
+    "parametersLink": null,
+    "providers": [
+      {
+        "id": null,
+        "namespace": "Microsoft.ManagedIdentity",
+        "providerAuthorizationConsentState": null,
+        "registrationPolicy": null,
+        "registrationState": null,
+        "resourceTypes": [
+          {
+            "aliases": null,
+            "apiProfiles": null,
+            "apiVersions": null,
+            "capabilities": null,
+            "defaultApiVersion": null,
+            "locationMappings": null,
+            "locations": [
+              "francecentral"
+            ],
+            "properties": null,
+            "resourceType": "userAssignedIdentities",
+            "zoneMappings": null
+          }
+        ]
+      },
+      {
+        "id": null,
+        "namespace": "Microsoft.Resources",
+        "providerAuthorizationConsentState": null,
+        "registrationPolicy": null,
+        "registrationState": null,
+        "resourceTypes": [
+          {
+            "aliases": null,
+            "apiProfiles": null,
+            "apiVersions": null,
+            "capabilities": null,
+            "defaultApiVersion": null,
+            "locationMappings": null,
+            "locations": [
+              null
+            ],
+            "properties": null,
+            "resourceType": "deployments",
+            "zoneMappings": null
+          }
+        ]
+      },
+      {
+        "id": null,
+        "namespace": "Microsoft.Authorization",
+        "providerAuthorizationConsentState": null,
+        "registrationPolicy": null,
+        "registrationState": null,
+        "resourceTypes": [
+          {
+            "aliases": null,
+            "apiProfiles": null,
+            "apiVersions": null,
+            "capabilities": null,
+            "defaultApiVersion": null,
+            "locationMappings": null,
+            "locations": [
+              null
+            ],
+            "properties": null,
+            "resourceType": "roleDefinitions",
+            "zoneMappings": null
+          },
+          {
+            "aliases": null,
+            "apiProfiles": null,
+            "apiVersions": null,
+            "capabilities": null,
+            "defaultApiVersion": null,
+            "locationMappings": null,
+            "locations": [
+              null
+            ],
+            "properties": null,
+            "resourceType": "roleAssignments",
+            "zoneMappings": null
+          }
+        ]
+      }
+    ],
+    "provisioningState": "Succeeded",
+    "templateHash": "11151450528447906306",
+    "templateLink": null,
+    "timestamp": "2026-09-06T10:41:36.957635+00:00",
+    "validatedResources": [
+      {
+        "id": "/subscriptions/7c1e98f3-ef6e-45a0-b61b-a51d436bf093/resourceGroups/rg-lex-v3-custody/providers/Microsoft.ManagedIdentity/userAssignedIdentities/uami-lex-v3-custody-probe",
+        "resourceGroup": "rg-lex-v3-custody"
+      },
+      {
+        "id": "/subscriptions/7c1e98f3-ef6e-45a0-b61b-a51d436bf093/resourceGroups/rg-soufien-portfolio/providers/Microsoft.Resources/deployments/lex-v3-custody-probe-pull",
+        "resourceGroup": "rg-soufien-portfolio"
+      },
+      {
+        "id": "/subscriptions/7c1e98f3-ef6e-45a0-b61b-a51d436bf093/resourceGroups/rg-platform/providers/Microsoft.Resources/deployments/lex-v3-custody-probe-job",
+        "resourceGroup": "rg-platform"
+      },
+      {
+        "id": "/subscriptions/7c1e98f3-ef6e-45a0-b61b-a51d436bf093/resourceGroups/rg-lex-v3-custody/providers/Microsoft.Authorization/roleDefinitions/a4545297-afa6-5a16-bf9b-5f8f20a34126",
+        "resourceGroup": "rg-lex-v3-custody"
+      },
+      {
+        "id": "/subscriptions/7c1e98f3-ef6e-45a0-b61b-a51d436bf093/resourceGroups/rg-lex-v3-custody/providers/Microsoft.Authorization/roleDefinitions/af807130-0ea2-5421-bd1e-b6c6911bd6d9",
+        "resourceGroup": "rg-lex-v3-custody"
+      },
+      {
+        "id": "/subscriptions/7c1e98f3-ef6e-45a0-b61b-a51d436bf093/resourceGroups/rg-lex-v3-custody/providers/Microsoft.Storage/storageAccounts/stlexv3custody/blobServices/default/containers/staging/providers/Microsoft.Authorization/roleAssignments/3222e531-d873-5e46-8e44-d5367b3cc922",
+        "resourceGroup": "rg-lex-v3-custody"
+      },
+      {
+        "id": "/subscriptions/7c1e98f3-ef6e-45a0-b61b-a51d436bf093/resourceGroups/rg-lex-v3-custody/providers/Microsoft.Storage/storageAccounts/stlexv3custody/blobServices/default/containers/nightly/providers/Microsoft.Authorization/roleAssignments/dea34854-f564-59c5-a27a-7bc3507e558a",
+        "resourceGroup": "rg-lex-v3-custody"
+      },
+      {
+        "id": "/subscriptions/7c1e98f3-ef6e-45a0-b61b-a51d436bf093/resourceGroups/rg-lex-v3-custody/providers/Microsoft.Storage/storageAccounts/stlexv3custody/blobServices/default/containers/legal-hold/providers/Microsoft.Authorization/roleAssignments/2ada6008-abeb-554e-880f-8f46799256e6",
+        "resourceGroup": "rg-lex-v3-custody"
+      }
+    ]
+  },
+  "resourceGroup": "rg-lex-v3-custody",
+  "type": "Microsoft.Resources/deployments"
+}

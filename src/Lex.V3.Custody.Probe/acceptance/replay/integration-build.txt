@@ -1,0 +1,16 @@
+  Lex.V3.Contracts -> C:\lex-v3\worktrees\codex-stage1-custody-runner\src\Lex.V3.Contracts\bin\Release\net10.0\Lex.V3.Contracts.dll
+  Lex.V3.Artifacts -> C:\lex-v3\worktrees\codex-stage1-custody-runner\src\Lex.V3.Artifacts\bin\Release\net10.0\Lex.V3.Artifacts.dll
+  Lex.V3.ContractTool -> C:\lex-v3\worktrees\codex-stage1-custody-runner\src\Lex.V3.ContractTool\bin\Release\net10.0\Lex.V3.ContractTool.dll
+  Lex.V3.Custody.Azure -> C:\lex-v3\worktrees\codex-stage1-custody-runner\src\Lex.V3.Custody.Azure\bin\Release\net10.0\Lex.V3.Custody.Azure.dll
+  Lex.V3.Ingest -> C:\lex-v3\worktrees\codex-stage1-custody-runner\src\Lex.V3.Ingest\bin\Release\net10.0\Lex.V3.Ingest.dll
+  Lex.V3.Custody.Probe -> C:\lex-v3\worktrees\codex-stage1-custody-runner\src\Lex.V3.Custody.Probe\bin\Release\net10.0\Lex.V3.Custody.Probe.dll
+  Lex.V3.Preview -> C:\lex-v3\worktrees\codex-stage1-custody-runner\src\Lex.V3.Preview\bin\Release\net10.0\Lex.V3.Preview.dll
+  Lex.V3.Api -> C:\lex-v3\worktrees\codex-stage1-custody-runner\src\Lex.V3.Api\bin\Release\net10.0\Lex.V3.Api.dll
+  Lex.V3.Ingest.Tests -> C:\lex-v3\worktrees\codex-stage1-custody-runner\tests\Lex.V3.Ingest.Tests\bin\Release\net10.0\Lex.V3.Ingest.Tests.dll
+  Lex.V3.Tests -> C:\lex-v3\worktrees\codex-stage1-custody-runner\tests\Lex.V3.Tests\bin\Release\net10.0\Lex.V3.Tests.dll
+
+La génération a réussi.
+    0 Avertissement(s)
+    0 Erreur(s)
+
+Temps écoulé 00:00:14.52

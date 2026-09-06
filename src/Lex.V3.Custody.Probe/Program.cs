@@ -151,6 +151,14 @@ internal static class CustodyProbeApplication
         var store = storeFactory(options)
             ?? throw new InvalidOperationException("The custody store factory returned no store.");
 
+        if (command.Mode == ProbeMode.Replay)
+        {
+            var result = await FactCustodyReplay.RunAsync(store, command.ReceiptArgument!, cancellationToken)
+                .ConfigureAwait(false);
+            await output.WriteAsync(result).ConfigureAwait(false);
+            return;
+        }
+
         if (command.Mode == ProbeMode.Write)
         {
             var synthetic = RandomNumberGenerator.GetBytes(SyntheticByteCount);
@@ -185,6 +193,12 @@ internal static class CustodyProbeApplication
 
     private static ProbeCommand ParseCommand(string[] arguments)
     {
+        if (arguments.Length == 2 && string.Equals(arguments[0], "replay", StringComparison.Ordinal)
+            && CustodyDigest.IsLowercaseSha256(arguments[1]))
+        {
+            return new ProbeCommand(ProbeMode.Replay, null, arguments[1]);
+        }
+
         if (arguments.Length == 1 && string.Equals(arguments[0], "read", StringComparison.Ordinal))
         {
             return new ProbeCommand(ProbeMode.Read, null, null);
@@ -209,7 +223,7 @@ internal static class CustodyProbeApplication
         }
 
         throw new ArgumentException(
-            "Expected read, read-receipt or write with one exact custody lane.",
+            "Expected read, read-receipt, replay with a digest, or write with one exact custody lane.",
             nameof(arguments));
     }
 
@@ -429,6 +443,7 @@ internal static class CustodyProbeApplication
         Write,
         Read,
         ReadReceipt,
+        Replay,
     }
 
     private sealed record ProbeCommand(

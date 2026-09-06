@@ -1,0 +1,4 @@
+  Identification des projets à restaurer...
+  Restauration effectuée de C:\lex-v3\worktrees\codex-stage1-custody-runner\src\Lex.V3.Contracts\Lex.V3.Contracts.csproj (en 419 ms).
+  Restauration effectuée de C:\lex-v3\worktrees\codex-stage1-custody-runner\src\Lex.V3.Custody.Azure\Lex.V3.Custody.Azure.csproj (en 519 ms).
+  Restauration effectuée de C:\lex-v3\worktrees\codex-stage1-custody-runner\src\Lex.V3.Custody.Probe\Lex.V3.Custody.Probe.csproj (en 519 ms).

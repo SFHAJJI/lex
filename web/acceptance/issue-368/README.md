@@ -4,6 +4,23 @@ Governance: `37b6f5763c1b15778522e16296194efd27799cc2`.
 Product base: `65bb24cc154581fc876b6ffa6c693fcff97a6f0c`.
 Writer: Codex. Reviewer: Claude. This is implementation evidence, not issue or Stage acceptance.
 
+## Integration follow-up
+
+The preparation checkpoint was frozen at `1008d3bacb3e24d0519c10e06f5e56c1749b8081`, tree
+`578ae67e98eaba3f77974f781c1d713f79c964be`, on the base above. Its PR464 required CI run
+`34034464727` was personally queried complete with all three required jobs successful.
+Claude then returned exact-head READY on #459; PR463 integrated its implementation/preparation
+at `28271c22be2f63caf05dd0d5ca95cb1abd535114`. That accepted integration is merged as a later
+commit here, with no conflicts and no change to this packet's executing web/eng source.
+
+The review base is now `28271c22be2f63caf05dd0d5ca95cb1abd535114`. Codex personally compared
+staged `src`, `tests`, `schemas` and `.github` to that base: no differences. Staged `web`/`eng`
+were likewise unchanged from the preparation checkpoint before this evidence update.
+From `web`, `npm test` on the combined source passed **707 tests**, zero failures/skips,
+1966.6584ms (`integration-web-test.log`). The previously retained browser/mutation evidence
+applies to the unchanged executing web source. New-head CI is a separate gate; the earlier
+CI result is not substituted for it. #459's production/owner-operation limitations remain open.
+
 ## Acceptance reconciliation
 
 | Obligation | Observed implementation and disposition |

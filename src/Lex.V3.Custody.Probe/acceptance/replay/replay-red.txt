@@ -1,0 +1,151 @@
+Exécuter des tests à partir de C:\lex-v3\worktrees\codex-stage1-custody-runner\tests\Lex.V3.Tests\bin\Debug\net10.0\Lex.V3.Tests.dll (net10.0|x64)
+échec ReplayReopensPinnedFactsAndExactTransportBytesWithoutAcceptanceClaims (137ms)
+  à partir de C:\lex-v3\worktrees\codex-stage1-custody-runner\tests\Lex.V3.Tests\bin\Debug\net10.0\Lex.V3.Tests.dll (net10.0|x64)
+  La méthode de test Lex.V3.Tests.Custody.FactCustodyReplayTests.ReplayReopensPinnedFactsAndExactTransportBytesWithoutAcceptanceClaims a levé une exception : 
+  System.ArgumentException: Expected read, read-receipt or write with one exact custody lane. (Parameter 'arguments')
+    sur Lex.V3.Custody.Probe.CustodyProbeApplication.ParseCommand(String[] arguments) dans C:\lex-v3\worktrees\codex-stage1-custody-runner\src\Lex.V3.Custody.Probe\Program.cs:211
+    sur Lex.V3.Custody.Probe.CustodyProbeApplication.RunAsync(String[] arguments, TextReader input, TextWriter output, IReadOnlyDictionary`2 environment, Func`2 storeFactory, CancellationToken cancellationToken) dans C:\lex-v3\worktrees\codex-stage1-custody-runner\src\Lex.V3.Custody.Probe\Program.cs:137
+    sur Lex.V3.Tests.Custody.FactCustodyReplayTests.Fixture.Run(String[] facts, String[] routes) dans C:\lex-v3\worktrees\codex-stage1-custody-runner\tests\Lex.V3.Tests\Custody\FactCustodyReplayTests.cs:140
+    sur Lex.V3.Tests.Custody.FactCustodyReplayTests.ReplayReopensPinnedFactsAndExactTransportBytesWithoutAcceptanceClaims() dans C:\lex-v3\worktrees\codex-stage1-custody-runner\tests\Lex.V3.Tests\Custody\FactCustodyReplayTests.cs:27
+    sur Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter.Execution.TestMethodInfo.ExecuteInternalAsync(Object[] arguments, CancellationTokenSource timeoutTokenSource)
+    
+échec ReplayRefusesBrokenPopulationLinks ("missing_observation") (8ms)
+  à partir de C:\lex-v3\worktrees\codex-stage1-custody-runner\tests\Lex.V3.Tests\bin\Debug\net10.0\Lex.V3.Tests.dll (net10.0|x64)
+  Assertion failed. Expected exception of exact type CustodyIntegrityException but caught ArgumentException.
+  
+  expected type:    Lex.V3.Contracts.Custody.CustodyIntegrityException
+  actual exception: System.ArgumentException: Expected read, read-receipt or write with one exact custody lane. (Parameter 'arguments')
+                       at Lex.V3.Custody.Probe.CustodyProbeApplication.ParseCommand(String[] arguments) in C:\lex-v3\worktrees\codex-stage1-custody-runner\src\Lex.V3.Custody.Probe\Program.cs:line 211
+                       at Lex.V3.Custody.Probe.CustodyProbeApplication.RunAsync(String[] arguments, TextReader input, TextWriter output, IReadOnlyDictionary`2 environment, Func`2 storeFactory, CancellationToken cancellationToken) in C:\lex-v3\worktrees\codex-stage1-custody-runner\src\Lex.V3.Custody.Probe\Program.cs:line 137
+                       at Lex.V3.Tests.Custody.FactCustodyReplayTests.Fixture.Run(String[] facts, String[] routes) in C:\lex-v3\worktrees\codex-stage1-custody-runner\tests\Lex.V3.Tests\Custody\FactCustodyReplayTests.cs:line 140
+                       at Microsoft.VisualStudio.TestTools.UnitTesting.Assert.IsThrowsAsyncFailingAsync[TException](Func`1 action, Boolean isStrictType)
+  
+  Assert.ThrowsExactlyAsync<CustodyIntegrityException>(<action>)
+    sur Microsoft.VisualStudio.TestTools.UnitTesting.Assert.ThrowsExceptionAsync[TException](Func`1 action, Boolean isStrictType, String message, String actionExpression, String assertMethodName)
+    sur Lex.V3.Tests.Custody.FactCustodyReplayTests.ReplayRefusesBrokenPopulationLinks(String defect) dans C:\lex-v3\worktrees\codex-stage1-custody-runner\tests\Lex.V3.Tests\Custody\FactCustodyReplayTests.cs:58
+    sur Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter.Execution.TestMethodInfo.ExecuteInternalAsync(Object[] arguments, CancellationTokenSource timeoutTokenSource)
+échec ReplayRefusesBrokenPopulationLinks ("duplicate_observation") (0ms)
+  à partir de C:\lex-v3\worktrees\codex-stage1-custody-runner\tests\Lex.V3.Tests\bin\Debug\net10.0\Lex.V3.Tests.dll (net10.0|x64)
+  Assertion failed. Expected exception of exact type CustodyIntegrityException but caught ArgumentException.
+  
+  expected type:    Lex.V3.Contracts.Custody.CustodyIntegrityException
+  actual exception: System.ArgumentException: Expected read, read-receipt or write with one exact custody lane. (Parameter 'arguments')
+                       at Lex.V3.Custody.Probe.CustodyProbeApplication.ParseCommand(String[] arguments) in C:\lex-v3\worktrees\codex-stage1-custody-runner\src\Lex.V3.Custody.Probe\Program.cs:line 211
+                       at Lex.V3.Custody.Probe.CustodyProbeApplication.RunAsync(String[] arguments, TextReader input, TextWriter output, IReadOnlyDictionary`2 environment, Func`2 storeFactory, CancellationToken cancellationToken) in C:\lex-v3\worktrees\codex-stage1-custody-runner\src\Lex.V3.Custody.Probe\Program.cs:line 137
+                       at Lex.V3.Tests.Custody.FactCustodyReplayTests.Fixture.Run(String[] facts, String[] routes) in C:\lex-v3\worktrees\codex-stage1-custody-runner\tests\Lex.V3.Tests\Custody\FactCustodyReplayTests.cs:line 140
+                       at Microsoft.VisualStudio.TestTools.UnitTesting.Assert.IsThrowsAsyncFailingAsync[TException](Func`1 action, Boolean isStrictType)
+  
+  Assert.ThrowsExactlyAsync<CustodyIntegrityException>(<action>)
+    sur Microsoft.VisualStudio.TestTools.UnitTesting.Assert.ThrowsExceptionAsync[TException](Func`1 action, Boolean isStrictType, String message, String actionExpression, String assertMethodName)
+    sur Lex.V3.Tests.Custody.FactCustodyReplayTests.ReplayRefusesBrokenPopulationLinks(String defect) dans C:\lex-v3\worktrees\codex-stage1-custody-runner\tests\Lex.V3.Tests\Custody\FactCustodyReplayTests.cs:58
+    sur Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter.Execution.TestMethodInfo.ExecuteInternalAsync(Object[] arguments, CancellationTokenSource timeoutTokenSource)
+échec ReplayRefusesBrokenPopulationLinks ("missing_body") (0ms)
+  à partir de C:\lex-v3\worktrees\codex-stage1-custody-runner\tests\Lex.V3.Tests\bin\Debug\net10.0\Lex.V3.Tests.dll (net10.0|x64)
+  Assertion failed. Expected exception of exact type CustodyIntegrityException but caught ArgumentException.
+  
+  expected type:    Lex.V3.Contracts.Custody.CustodyIntegrityException
+  actual exception: System.ArgumentException: Expected read, read-receipt or write with one exact custody lane. (Parameter 'arguments')
+                       at Lex.V3.Custody.Probe.CustodyProbeApplication.ParseCommand(String[] arguments) in C:\lex-v3\worktrees\codex-stage1-custody-runner\src\Lex.V3.Custody.Probe\Program.cs:line 211
+                       at Lex.V3.Custody.Probe.CustodyProbeApplication.RunAsync(String[] arguments, TextReader input, TextWriter output, IReadOnlyDictionary`2 environment, Func`2 storeFactory, CancellationToken cancellationToken) in C:\lex-v3\worktrees\codex-stage1-custody-runner\src\Lex.V3.Custody.Probe\Program.cs:line 137
+                       at Lex.V3.Tests.Custody.FactCustodyReplayTests.Fixture.Run(String[] facts, String[] routes) in C:\lex-v3\worktrees\codex-stage1-custody-runner\tests\Lex.V3.Tests\Custody\FactCustodyReplayTests.cs:line 140
+                       at Microsoft.VisualStudio.TestTools.UnitTesting.Assert.IsThrowsAsyncFailingAsync[TException](Func`1 action, Boolean isStrictType)
+  
+  Assert.ThrowsExactlyAsync<CustodyIntegrityException>(<action>)
+    sur Microsoft.VisualStudio.TestTools.UnitTesting.Assert.ThrowsExceptionAsync[TException](Func`1 action, Boolean isStrictType, String message, String actionExpression, String assertMethodName)
+    sur Lex.V3.Tests.Custody.FactCustodyReplayTests.ReplayRefusesBrokenPopulationLinks(String defect) dans C:\lex-v3\worktrees\codex-stage1-custody-runner\tests\Lex.V3.Tests\Custody\FactCustodyReplayTests.cs:58
+    sur Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter.Execution.TestMethodInfo.ExecuteInternalAsync(Object[] arguments, CancellationTokenSource timeoutTokenSource)
+échec ReplayRefusesBrokenPopulationLinks ("corrupt_body") (0ms)
+  à partir de C:\lex-v3\worktrees\codex-stage1-custody-runner\tests\Lex.V3.Tests\bin\Debug\net10.0\Lex.V3.Tests.dll (net10.0|x64)
+  Assertion failed. Expected exception of exact type CustodyIntegrityException but caught ArgumentException.
+  
+  expected type:    Lex.V3.Contracts.Custody.CustodyIntegrityException
+  actual exception: System.ArgumentException: Expected read, read-receipt or write with one exact custody lane. (Parameter 'arguments')
+                       at Lex.V3.Custody.Probe.CustodyProbeApplication.ParseCommand(String[] arguments) in C:\lex-v3\worktrees\codex-stage1-custody-runner\src\Lex.V3.Custody.Probe\Program.cs:line 211
+                       at Lex.V3.Custody.Probe.CustodyProbeApplication.RunAsync(String[] arguments, TextReader input, TextWriter output, IReadOnlyDictionary`2 environment, Func`2 storeFactory, CancellationToken cancellationToken) in C:\lex-v3\worktrees\codex-stage1-custody-runner\src\Lex.V3.Custody.Probe\Program.cs:line 137
+                       at Lex.V3.Tests.Custody.FactCustodyReplayTests.Fixture.Run(String[] facts, String[] routes) in C:\lex-v3\worktrees\codex-stage1-custody-runner\tests\Lex.V3.Tests\Custody\FactCustodyReplayTests.cs:line 140
+                       at Microsoft.VisualStudio.TestTools.UnitTesting.Assert.IsThrowsAsyncFailingAsync[TException](Func`1 action, Boolean isStrictType)
+  
+  Assert.ThrowsExactlyAsync<CustodyIntegrityException>(<action>)
+    sur Microsoft.VisualStudio.TestTools.UnitTesting.Assert.ThrowsExceptionAsync[TException](Func`1 action, Boolean isStrictType, String message, String actionExpression, String assertMethodName)
+    sur Lex.V3.Tests.Custody.FactCustodyReplayTests.ReplayRefusesBrokenPopulationLinks(String defect) dans C:\lex-v3\worktrees\codex-stage1-custody-runner\tests\Lex.V3.Tests\Custody\FactCustodyReplayTests.cs:58
+    sur Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter.Execution.TestMethodInfo.ExecuteInternalAsync(Object[] arguments, CancellationTokenSource timeoutTokenSource)
+échec ReplayRefusesBrokenPopulationLinks ("substituted_receipt") (0ms)
+  à partir de C:\lex-v3\worktrees\codex-stage1-custody-runner\tests\Lex.V3.Tests\bin\Debug\net10.0\Lex.V3.Tests.dll (net10.0|x64)
+  Assertion failed. Expected exception of exact type CustodyIntegrityException but caught ArgumentException.
+  
+  expected type:    Lex.V3.Contracts.Custody.CustodyIntegrityException
+  actual exception: System.ArgumentException: Expected read, read-receipt or write with one exact custody lane. (Parameter 'arguments')
+                       at Lex.V3.Custody.Probe.CustodyProbeApplication.ParseCommand(String[] arguments) in C:\lex-v3\worktrees\codex-stage1-custody-runner\src\Lex.V3.Custody.Probe\Program.cs:line 211
+                       at Lex.V3.Custody.Probe.CustodyProbeApplication.RunAsync(String[] arguments, TextReader input, TextWriter output, IReadOnlyDictionary`2 environment, Func`2 storeFactory, CancellationToken cancellationToken) in C:\lex-v3\worktrees\codex-stage1-custody-runner\src\Lex.V3.Custody.Probe\Program.cs:line 137
+                       at Lex.V3.Tests.Custody.FactCustodyReplayTests.Fixture.Run(String[] facts, String[] routes) in C:\lex-v3\worktrees\codex-stage1-custody-runner\tests\Lex.V3.Tests\Custody\FactCustodyReplayTests.cs:line 140
+                       at Microsoft.VisualStudio.TestTools.UnitTesting.Assert.IsThrowsAsyncFailingAsync[TException](Func`1 action, Boolean isStrictType)
+  
+  Assert.ThrowsExactlyAsync<CustodyIntegrityException>(<action>)
+    sur Microsoft.VisualStudio.TestTools.UnitTesting.Assert.ThrowsExceptionAsync[TException](Func`1 action, Boolean isStrictType, String message, String actionExpression, String assertMethodName)
+    sur Lex.V3.Tests.Custody.FactCustodyReplayTests.ReplayRefusesBrokenPopulationLinks(String defect) dans C:\lex-v3\worktrees\codex-stage1-custody-runner\tests\Lex.V3.Tests\Custody\FactCustodyReplayTests.cs:58
+    sur Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter.Execution.TestMethodInfo.ExecuteInternalAsync(Object[] arguments, CancellationTokenSource timeoutTokenSource)
+échec ReplayRefusesBrokenPopulationLinks ("rejected_observation") (0ms)
+  à partir de C:\lex-v3\worktrees\codex-stage1-custody-runner\tests\Lex.V3.Tests\bin\Debug\net10.0\Lex.V3.Tests.dll (net10.0|x64)
+  Assertion failed. Expected exception of exact type CustodyIntegrityException but caught ArgumentException.
+  
+  expected type:    Lex.V3.Contracts.Custody.CustodyIntegrityException
+  actual exception: System.ArgumentException: Expected read, read-receipt or write with one exact custody lane. (Parameter 'arguments')
+                       at Lex.V3.Custody.Probe.CustodyProbeApplication.ParseCommand(String[] arguments) in C:\lex-v3\worktrees\codex-stage1-custody-runner\src\Lex.V3.Custody.Probe\Program.cs:line 211
+                       at Lex.V3.Custody.Probe.CustodyProbeApplication.RunAsync(String[] arguments, TextReader input, TextWriter output, IReadOnlyDictionary`2 environment, Func`2 storeFactory, CancellationToken cancellationToken) in C:\lex-v3\worktrees\codex-stage1-custody-runner\src\Lex.V3.Custody.Probe\Program.cs:line 137
+                       at Lex.V3.Tests.Custody.FactCustodyReplayTests.Fixture.Run(String[] facts, String[] routes) in C:\lex-v3\worktrees\codex-stage1-custody-runner\tests\Lex.V3.Tests\Custody\FactCustodyReplayTests.cs:line 140
+                       at Microsoft.VisualStudio.TestTools.UnitTesting.Assert.IsThrowsAsyncFailingAsync[TException](Func`1 action, Boolean isStrictType)
+  
+  Assert.ThrowsExactlyAsync<CustodyIntegrityException>(<action>)
+    sur Microsoft.VisualStudio.TestTools.UnitTesting.Assert.ThrowsExceptionAsync[TException](Func`1 action, Boolean isStrictType, String message, String actionExpression, String assertMethodName)
+    sur Lex.V3.Tests.Custody.FactCustodyReplayTests.ReplayRefusesBrokenPopulationLinks(String defect) dans C:\lex-v3\worktrees\codex-stage1-custody-runner\tests\Lex.V3.Tests\Custody\FactCustodyReplayTests.cs:58
+    sur Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter.Execution.TestMethodInfo.ExecuteInternalAsync(Object[] arguments, CancellationTokenSource timeoutTokenSource)
+échec ReplayRefusesBrokenPopulationLinks ("empty_population") (0ms)
+  à partir de C:\lex-v3\worktrees\codex-stage1-custody-runner\tests\Lex.V3.Tests\bin\Debug\net10.0\Lex.V3.Tests.dll (net10.0|x64)
+  Assertion failed. Expected exception of exact type CustodyIntegrityException but caught ArgumentException.
+  
+  expected type:    Lex.V3.Contracts.Custody.CustodyIntegrityException
+  actual exception: System.ArgumentException: Expected read, read-receipt or write with one exact custody lane. (Parameter 'arguments')
+                       at Lex.V3.Custody.Probe.CustodyProbeApplication.ParseCommand(String[] arguments) in C:\lex-v3\worktrees\codex-stage1-custody-runner\src\Lex.V3.Custody.Probe\Program.cs:line 211
+                       at Lex.V3.Custody.Probe.CustodyProbeApplication.RunAsync(String[] arguments, TextReader input, TextWriter output, IReadOnlyDictionary`2 environment, Func`2 storeFactory, CancellationToken cancellationToken) in C:\lex-v3\worktrees\codex-stage1-custody-runner\src\Lex.V3.Custody.Probe\Program.cs:line 137
+                       at Lex.V3.Tests.Custody.FactCustodyReplayTests.Fixture.Run(String[] facts, String[] routes) in C:\lex-v3\worktrees\codex-stage1-custody-runner\tests\Lex.V3.Tests\Custody\FactCustodyReplayTests.cs:line 140
+                       at Microsoft.VisualStudio.TestTools.UnitTesting.Assert.IsThrowsAsyncFailingAsync[TException](Func`1 action, Boolean isStrictType)
+  
+  Assert.ThrowsExactlyAsync<CustodyIntegrityException>(<action>)
+    sur Microsoft.VisualStudio.TestTools.UnitTesting.Assert.ThrowsExceptionAsync[TException](Func`1 action, Boolean isStrictType, String message, String actionExpression, String assertMethodName)
+    sur Lex.V3.Tests.Custody.FactCustodyReplayTests.ReplayRefusesBrokenPopulationLinks(String defect) dans C:\lex-v3\worktrees\codex-stage1-custody-runner\tests\Lex.V3.Tests\Custody\FactCustodyReplayTests.cs:58
+    sur Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter.Execution.TestMethodInfo.ExecuteInternalAsync(Object[] arguments, CancellationTokenSource timeoutTokenSource)
+échec InverseRequiresBothForwardAndOntologyObservations (3ms)
+  à partir de C:\lex-v3\worktrees\codex-stage1-custody-runner\tests\Lex.V3.Tests\bin\Debug\net10.0\Lex.V3.Tests.dll (net10.0|x64)
+  Assertion failed. Expected exception of exact type CustodyIntegrityException but caught ArgumentException.
+  
+  expected type:    Lex.V3.Contracts.Custody.CustodyIntegrityException
+  actual exception: System.ArgumentException: Expected read, read-receipt or write with one exact custody lane. (Parameter 'arguments')
+                       at Lex.V3.Custody.Probe.CustodyProbeApplication.ParseCommand(String[] arguments) in C:\lex-v3\worktrees\codex-stage1-custody-runner\src\Lex.V3.Custody.Probe\Program.cs:line 211
+                       at Lex.V3.Custody.Probe.CustodyProbeApplication.RunAsync(String[] arguments, TextReader input, TextWriter output, IReadOnlyDictionary`2 environment, Func`2 storeFactory, CancellationToken cancellationToken) in C:\lex-v3\worktrees\codex-stage1-custody-runner\src\Lex.V3.Custody.Probe\Program.cs:line 137
+                       at Lex.V3.Tests.Custody.FactCustodyReplayTests.Fixture.Run(String[] facts, String[] routes) in C:\lex-v3\worktrees\codex-stage1-custody-runner\tests\Lex.V3.Tests\Custody\FactCustodyReplayTests.cs:line 140
+                       at Microsoft.VisualStudio.TestTools.UnitTesting.Assert.IsThrowsAsyncFailingAsync[TException](Func`1 action, Boolean isStrictType)
+  
+  Assert.ThrowsExactlyAsync<CustodyIntegrityException>(() => fixture.Run([fact], [route]))
+    sur Microsoft.VisualStudio.TestTools.UnitTesting.Assert.ThrowsExceptionAsync[TException](Func`1 action, Boolean isStrictType, String message, String actionExpression, String assertMethodName)
+    sur Lex.V3.Tests.Custody.FactCustodyReplayTests.InverseRequiresBothForwardAndOntologyObservations() dans C:\lex-v3\worktrees\codex-stage1-custody-runner\tests\Lex.V3.Tests\Custody\FactCustodyReplayTests.cs:74
+    sur Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter.Execution.TestMethodInfo.ExecuteInternalAsync(Object[] arguments, CancellationTokenSource timeoutTokenSource)
+échec InboundViewRequiresEveryContributorAndItsScopeBytes (2ms)
+  à partir de C:\lex-v3\worktrees\codex-stage1-custody-runner\tests\Lex.V3.Tests\bin\Debug\net10.0\Lex.V3.Tests.dll (net10.0|x64)
+  La méthode de test Lex.V3.Tests.Custody.FactCustodyReplayTests.InboundViewRequiresEveryContributorAndItsScopeBytes a levé une exception : 
+  System.ArgumentException: Expected read, read-receipt or write with one exact custody lane. (Parameter 'arguments')
+    sur Lex.V3.Custody.Probe.CustodyProbeApplication.ParseCommand(String[] arguments) dans C:\lex-v3\worktrees\codex-stage1-custody-runner\src\Lex.V3.Custody.Probe\Program.cs:211
+    sur Lex.V3.Custody.Probe.CustodyProbeApplication.RunAsync(String[] arguments, TextReader input, TextWriter output, IReadOnlyDictionary`2 environment, Func`2 storeFactory, CancellationToken cancellationToken) dans C:\lex-v3\worktrees\codex-stage1-custody-runner\src\Lex.V3.Custody.Probe\Program.cs:137
+    sur Lex.V3.Tests.Custody.FactCustodyReplayTests.Fixture.Run(String[] facts, String[] routes) dans C:\lex-v3\worktrees\codex-stage1-custody-runner\tests\Lex.V3.Tests\Custody\FactCustodyReplayTests.cs:140
+    sur Lex.V3.Tests.Custody.FactCustodyReplayTests.InboundViewRequiresEveryContributorAndItsScopeBytes() dans C:\lex-v3\worktrees\codex-stage1-custody-runner\tests\Lex.V3.Tests\Custody\FactCustodyReplayTests.cs:90
+    sur Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter.Execution.TestMethodInfo.ExecuteInternalAsync(Object[] arguments, CancellationTokenSource timeoutTokenSource)
+    
+C:\lex-v3\worktrees\codex-stage1-custody-runner\tests\Lex.V3.Tests\bin\Debug\net10.0\Lex.V3.Tests.dll (net10.0|x64) a échoué avec 10 erreur(s) (3s 566ms)
+Code de sortie: 2
+
+Résumé de série de tests : Échec!
+  total : 10
+  échec : 10
+  réussie : 0
+  ignoré : 0
+  durée : 4s 392ms
+L’exécution de tests s’est terminée avec un code de sortie non réussi : 2 (voir : https://aka.ms/testingplatform/exitcodes)

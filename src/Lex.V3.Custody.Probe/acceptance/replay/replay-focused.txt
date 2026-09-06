@@ -1,0 +1,53 @@
+Exécuter des tests à partir de C:\lex-v3\worktrees\codex-stage1-custody-runner\tests\Lex.V3.Tests\bin\Debug\net10.0\Lex.V3.Tests.dll (net10.0|x64)
+échec EveryImplementationIsDrivenOrExemptWithAReason (33ms)
+  à partir de C:\lex-v3\worktrees\codex-stage1-custody-runner\tests\Lex.V3.Tests\bin\Debug\net10.0\Lex.V3.Tests.dll (net10.0|x64)
+  Échec de CollectionAssert.AreEqual. a custody store is neither driven nor declared exempt, so nothing records whether it meets the contract. Swept but unaccounted: Lex.V3.Tests.Custody.FactCustodyReplayTests+ReplayStore. Accounted but not swept: none. Nombre d'éléments différent.
+    sur Lex.V3.Tests.Custody.CustodyStoreConformanceTests.EveryImplementationIsDrivenOrExemptWithAReason() dans C:\lex-v3\worktrees\codex-stage1-custody-runner\tests\Lex.V3.Tests\Custody\CustodyStoreConformanceTests.cs:102
+    sur System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+    sur System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+échec TheImplementationCountsAreExactlyThese (8ms)
+  à partir de C:\lex-v3\worktrees\codex-stage1-custody-runner\tests\Lex.V3.Tests\bin\Debug\net10.0\Lex.V3.Tests.dll (net10.0|x64)
+  Assertion failed. Les valeurs attendues doivent être égales.
+  implementations swept
+  
+  expected: 7
+  actual:   8
+  
+  Assert.AreEqual(7, types.Count)
+    sur Lex.V3.Tests.Custody.CustodyStoreConformanceTests.TheImplementationCountsAreExactlyThese() dans C:\lex-v3\worktrees\codex-stage1-custody-runner\tests\Lex.V3.Tests\Custody\CustodyStoreConformanceTests.cs:125
+    sur System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+    sur System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+échec EveryCensusCandidateIsPinnedOrDeclinedWithAReason (1s 181ms)
+  à partir de C:\lex-v3\worktrees\codex-stage1-custody-runner\tests\Lex.V3.Tests\bin\Debug\net10.0\Lex.V3.Tests.dll (net10.0|x64)
+  Échec de CollectionAssert.AreEqual. a swept type is in no pin and on no declined list, so nothing records what it is. Nombre d'éléments différent.
+    sur Lex.V3.Tests.Census.CensusPartitionTests.EveryCensusCandidateIsPinnedOrDeclinedWithAReason() dans C:\lex-v3\worktrees\codex-stage1-custody-runner\tests\Lex.V3.Tests\Census\CensusPartitionTests.cs:101
+    sur System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+    sur System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+échec ThePartitionTotalsAreExactlyThese (1ms)
+  à partir de C:\lex-v3\worktrees\codex-stage1-custody-runner\tests\Lex.V3.Tests\bin\Debug\net10.0\Lex.V3.Tests.dll (net10.0|x64)
+  Assertion failed. Les valeurs attendues doivent être égales.
+  candidates
+  
+  expected: 458
+  actual:   459
+  
+  Assert.AreEqual(458, ClosedSurfaceCensus.Candidates(CensusScope.SweptHere).Count)
+    sur Lex.V3.Tests.Census.CensusPartitionTests.ThePartitionTotalsAreExactlyThese() dans C:\lex-v3\worktrees\codex-stage1-custody-runner\tests\Lex.V3.Tests\Census\CensusPartitionTests.cs:114
+    sur System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+    sur System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+échec EveryClosedVocabularyInTheSweptAssembliesIsPinnedMemberByMember (1ms)
+  à partir de C:\lex-v3\worktrees\codex-stage1-custody-runner\tests\Lex.V3.Tests\bin\Debug\net10.0\Lex.V3.Tests.dll (net10.0|x64)
+  Échec de CollectionAssert.AreEqual. Nombre d'éléments différent.
+    sur Lex.V3.Tests.Census.ClosedVocabularyCensusTests.EveryClosedVocabularyInTheSweptAssembliesIsPinnedMemberByMember() dans C:\lex-v3\worktrees\codex-stage1-custody-runner\tests\Lex.V3.Tests\Census\ClosedVocabularyCensusTests.cs:54
+    sur System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+    sur System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+C:\lex-v3\worktrees\codex-stage1-custody-runner\tests\Lex.V3.Tests\bin\Debug\net10.0\Lex.V3.Tests.dll (net10.0|x64) a échoué avec 5 erreur(s) (3s 623ms)
+Code de sortie: 2
+
+Résumé de série de tests : Échec!
+  total : 61
+  échec : 5
+  réussie : 56
+  ignoré : 0
+  durée : 4s 621ms
+L’exécution de tests s’est terminée avec un code de sortie non réussi : 2 (voir : https://aka.ms/testingplatform/exitcodes)

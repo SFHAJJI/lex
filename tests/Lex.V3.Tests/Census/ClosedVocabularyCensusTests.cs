@@ -570,7 +570,8 @@ public sealed class ClosedVocabularyCensusTests
                     + "OfficialConsolidationState",
                 "Lex.V3.Contracts.WhatWouldAnswerAction: CorrectedIdentifier, "
                     + "NewOfficialObservation, ExpandedOfficialScope",
-                "Lex.V3.Custody.Probe.CustodyProbeApplication+ProbeMode: Write, Read, ReadReceipt",
+                "Lex.V3.Custody.Probe.CustodyProbeApplication+ProbeMode: Write, Read, ReadReceipt, "
+                    + "Replay",
                 "Lex.V3.Preview.SyntheticBuildFailpoint: SourcePartialWritten, SourceFlushed, "
                     + "SourceRenamed, BeforeDecode, RejectedReceiptFlushed, RejectedReceiptRenamed, "
                     + "DerivedFlushed, DerivedRenamed",

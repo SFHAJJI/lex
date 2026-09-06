@@ -81,6 +81,8 @@ public sealed class CustodyStoreConformanceTests
             + "exception, that it exists to return",
         "Lex.V3.Tests.Custody.CustodyTests+RecordingStore: takes the fault and the callback it "
             + "records",
+        "Lex.V3.Tests.Custody.FactCustodyReplayTests+ReplayStore: takes mutable retained fixtures "
+            + "to inject missing, substituted and corrupt bytes; deliberately cannot create receipts",
     ];
 
     [TestMethod]
@@ -122,14 +124,14 @@ public sealed class CustodyStoreConformanceTests
     public void TheImplementationCountsAreExactlyThese()
     {
         var types = CustodyStoreConformance.ImplementationTypes(Scope);
-        Assert.AreEqual(7, types.Count, "implementations swept");
+        Assert.AreEqual(8, types.Count, "implementations swept");
         Assert.AreEqual(
             1,
             types.Count(static type =>
                 CustodyStoreConformance.IsDrivenByDefault(type)
                 || CustodyStoreConformance.HasRecipe(type)),
             "implementations driven");
-        Assert.AreEqual(6, Exempt.Length, "implementations exempt");
+        Assert.AreEqual(7, Exempt.Length, "implementations exempt");
     }
 
     [TestMethod]
