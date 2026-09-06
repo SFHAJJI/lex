@@ -1,5 +1,8 @@
 # Opt-in custody failure diagnostics — issue 459
 
+This receipt records version 1. The separately selected version 2 is documented
+in [configuration diagnostics](../configuration-diagnostics/README.md).
+
 The first approved Azure probe ended with exit 1 and only `custody_probe_failed`.
 Its console and existing system telemetry could not distinguish the intended
 missing-retention refusal from another failure. The operator stopped before

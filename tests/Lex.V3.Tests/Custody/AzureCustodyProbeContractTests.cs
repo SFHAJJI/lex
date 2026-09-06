@@ -276,6 +276,65 @@ public sealed class AzureCustodyProbeContractTests
     }
 
     [TestMethod]
+    [DataRow("azure_client_secret", "private-value", "secret_credential")]
+    [DataRow("AZURE_STORAGE_ACCOUNT_KEY", "", "secret_credential")]
+    [DataRow("AZURE_STORAGE_CONNECTION_STRING", "private-value", "secret_credential")]
+    [DataRow("AZURE_STORAGE_KEY", "private-value", "secret_credential")]
+    [DataRow("LEX_V3_CUSTODY_ACCOUNT_KEY", "private-value", "secret_credential")]
+    [DataRow("LEX_V3_CUSTODY_CLIENT_SECRET", "private-value", "secret_credential")]
+    [DataRow("LEX_V3_CUSTODY_CONNECTION_STRING", "private-value", "secret_credential")]
+    [DataRow("MSI_ENDPOINT", "private-value", "alternate_identity_source")]
+    [DataRow("MSI_SECRET", "", "alternate_identity_source")]
+    [DataRow("IMDS_ENDPOINT", "private-value", "alternate_identity_source")]
+    [DataRow("IDENTITY_SERVER_THUMBPRINT", "private-value", "alternate_identity_source")]
+    [DataRow("AZURE_FEDERATED_TOKEN_FILE", "private-value", "alternate_identity_source")]
+    [DataRow("IDENTITY_ENDPOINT", null, "missing_setting")]
+    [DataRow("IDENTITY_HEADER", "", "missing_setting")]
+    [DataRow("IDENTITY_HEADER", "  ", "invalid_identity_source")]
+    [DataRow("IDENTITY_ENDPOINT", "http://private-value.invalid/token", "invalid_identity_source")]
+    [DataRow("LEX_V3_CUSTODY_MANAGED_IDENTITY_CLIENT_ID", "private-value", "invalid_guid")]
+    [DataRow("LEX_V3_CUSTODY_NIGHTLY_POLICY_KEY", "00000000-0000-0000-0000-000000000000", "invalid_guid")]
+    [DataRow("LEX_V3_CUSTODY_LEGAL_HOLD_POLICY_KEY", "private-value", "invalid_guid")]
+    [DataRow("LEX_V3_CUSTODY_SUBSCRIPTION_ID", "private-value", "invalid_guid")]
+    public async Task ConfigurationGuardsRemainFailClosedAndHaveBoundedAttribution(
+        string setting, string? value, string expectedGuard)
+    {
+        var environment = ValidEnvironment();
+        environment[setting] = value;
+        var storeCreated = false;
+        var error = await Assert.ThrowsExactlyAsync<InvalidOperationException>(() =>
+            CustodyProbeApplication.RunAsync(
+                ["write", "nightly_floor_90d"], TextReader.Null, TextWriter.Null,
+                environment, _ => { storeCreated = true; return new ProbeStore(); },
+                CancellationToken.None));
+        Assert.IsFalse(storeCreated);
+        Assert.AreEqual(
+            "{\"schema\":\"lex-v3-custody-probe-diagnostic/1\",\"event\":\"custody_probe_failed\",\"causes\":[{\"kind\":\"invalid_operation\",\"http_status\":null}],\"truncated\":false}",
+            ProbeFailureDiagnostic.Serialize(error));
+        var json = ProbeFailureDiagnostic.Serialize(error, includeConfiguration: true);
+        Assert.IsFalse(json.Contains("private-value", StringComparison.Ordinal));
+        using var document = JsonDocument.Parse(json);
+        var cause = document.RootElement.GetProperty("causes")[0];
+        Assert.AreEqual("invalid_operation", cause.GetProperty("kind").GetString());
+        var guard = cause.GetProperty("configuration_guard");
+        CollectionAssert.AreEquivalent(new[] { "kind", "setting" },
+            guard.EnumerateObject().Select(property => property.Name).ToArray());
+        Assert.AreEqual(expectedGuard, guard.GetProperty("kind").GetString());
+        Assert.AreEqual(expectedGuard == "invalid_identity_source" ? null : setting.ToUpperInvariant(),
+            guard.GetProperty("setting").GetString());
+    }
+
+    [TestMethod]
+    public async Task EveryRequiredSettingCanBeAttributedWithoutPublishingItsValue()
+    {
+        foreach (var setting in ValidEnvironment().Keys)
+        {
+            await ConfigurationGuardsRemainFailClosedAndHaveBoundedAttribution(
+                setting, null, "missing_setting");
+        }
+    }
+
+    [TestMethod]
     public async Task ReadAcceptsOnlyTheExactSyntheticProbeByteCount()
     {
         foreach (var byteCount in new[] { 31, 33 })
@@ -353,6 +412,8 @@ public sealed class AzureCustodyProbeContractTests
     [TestMethod]
     [DataRow(null, false)]
     [DataRow("1", true)]
+    [DataRow("2", true)]
+    [DataRow("2 ", false)]
     [DataRow("true", false)]
     [DataRow("1 ", false)]
     public async Task ConsoleBoundaryAddsDiagnosticsOnlyWhenExplicitlyEnabled(
@@ -407,7 +468,7 @@ public sealed class AzureCustodyProbeContractTests
             Assert.HasCount(2, lines);
             Assert.AreEqual("custody_probe_failed", lines[0]);
             using var diagnostic = JsonDocument.Parse(lines[1]);
-            Assert.AreEqual("lex-v3-custody-probe-diagnostic/1",
+            Assert.AreEqual($"lex-v3-custody-probe-diagnostic/{diagnostics}",
                 diagnostic.RootElement.GetProperty("schema").GetString());
             Assert.AreEqual("invalid_argument",
                 diagnostic.RootElement.GetProperty("causes")[0].GetProperty("kind").GetString());

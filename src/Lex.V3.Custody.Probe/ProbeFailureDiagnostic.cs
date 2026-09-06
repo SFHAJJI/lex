@@ -7,11 +7,24 @@ namespace Lex.V3.Custody.Probe;
 
 /// <summary>
 /// Operator-only failure evidence. A policy exception is not proof of a particular retention
-/// condition. Only fixed type categories and bounded HTTP statuses leave this boundary.
+/// condition. Only fixed categories, bounded HTTP statuses and, in version 2, allowlisted
+/// configuration-guard attribution leave this boundary.
 /// </summary>
 internal static class ProbeFailureDiagnostic
 {
-    internal static string Serialize(Exception exception)
+    // A private key tags only our exact InvalidOperationException instances. Never enumerate
+    // metadata or read Data on an external subtype; it may override that property.
+    private static readonly object ConfigurationGuardKey = new();
+
+    internal static InvalidOperationException ConfigurationFailure(
+        ProbeConfigurationGuard guard, string message, string? setting = null)
+    {
+        var exception = new InvalidOperationException(message);
+        exception.Data[ConfigurationGuardKey] = new ConfigurationGuard(guard, setting);
+        return exception;
+    }
+
+    internal static string Serialize(Exception exception, bool includeConfiguration = false)
     {
         var causes = new List<object>();
         Exception? current = exception;
@@ -39,16 +52,73 @@ internal static class ProbeFailureDiagnostic
                 HttpRequestException request => (int?)request.StatusCode,
                 _ => null,
             };
-            causes.Add(new { kind, http_status = status is >= 100 and <= 599 ? status : null });
+            var boundedStatus = status is >= 100 and <= 599 ? status : null;
+            if (includeConfiguration)
+            {
+                var guard = current.GetType() == typeof(InvalidOperationException)
+                    ? current.Data[ConfigurationGuardKey] as ConfigurationGuard : null;
+                causes.Add(new
+                {
+                    kind,
+                    http_status = boundedStatus,
+                    configuration_guard = guard?.ToDiagnostic(),
+                });
+            }
+            else
+            {
+                causes.Add(new { kind, http_status = boundedStatus });
+            }
             current = current.InnerException;
         }
 
         return JsonSerializer.Serialize(new
         {
-            schema = "lex-v3-custody-probe-diagnostic/1",
+            schema = includeConfiguration
+                ? "lex-v3-custody-probe-diagnostic/2" : "lex-v3-custody-probe-diagnostic/1",
             @event = "custody_probe_failed",
             causes,
             truncated = current is not null,
         });
     }
+
+    private sealed record ConfigurationGuard(ProbeConfigurationGuard Guard, string? Setting)
+    {
+        internal object ToDiagnostic() => new
+        {
+            kind = Guard switch
+            {
+                ProbeConfigurationGuard.SecretCredential => "secret_credential",
+                ProbeConfigurationGuard.AlternateIdentitySource => "alternate_identity_source",
+                ProbeConfigurationGuard.MissingSetting => "missing_setting",
+                ProbeConfigurationGuard.InvalidIdentitySource => "invalid_identity_source",
+                ProbeConfigurationGuard.InvalidGuid => "invalid_guid",
+                _ => "unknown",
+            },
+            setting = Setting?.ToUpperInvariant() switch
+            {
+                "AZURE_CLIENT_SECRET" or "AZURE_STORAGE_ACCOUNT_KEY"
+                    or "AZURE_STORAGE_CONNECTION_STRING" or "AZURE_STORAGE_KEY"
+                    or "LEX_V3_CUSTODY_ACCOUNT_KEY" or "LEX_V3_CUSTODY_CLIENT_SECRET"
+                    or "LEX_V3_CUSTODY_CONNECTION_STRING"
+                    or "MSI_ENDPOINT" or "MSI_SECRET" or "IMDS_ENDPOINT"
+                    or "IDENTITY_SERVER_THUMBPRINT" or "AZURE_FEDERATED_TOKEN_FILE"
+                    or "IDENTITY_ENDPOINT" or "IDENTITY_HEADER"
+                    or "LEX_V3_CUSTODY_SERVICE_URI" or "LEX_V3_CUSTODY_STAGING_CONTAINER"
+                    or "LEX_V3_CUSTODY_NIGHTLY_CONTAINER" or "LEX_V3_CUSTODY_LEGAL_HOLD_CONTAINER"
+                    or "LEX_V3_CUSTODY_MANAGED_IDENTITY_CLIENT_ID" or "LEX_V3_CUSTODY_NIGHTLY_POLICY_KEY"
+                    or "LEX_V3_CUSTODY_LEGAL_HOLD_POLICY_KEY" or "LEX_V3_CUSTODY_SUBSCRIPTION_ID"
+                    or "LEX_V3_CUSTODY_RESOURCE_GROUP" => Setting.ToUpperInvariant(),
+                _ => null,
+            },
+        };
+    }
+}
+
+internal enum ProbeConfigurationGuard
+{
+    SecretCredential,
+    AlternateIdentitySource,
+    MissingSetting,
+    InvalidIdentitySource,
+    InvalidGuid,
 }

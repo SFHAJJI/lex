@@ -116,9 +116,11 @@ internal static class CustodyProbeApplication
         catch (Exception exception)
         {
             await Console.Error.WriteLineAsync("custody_probe_failed").ConfigureAwait(false);
-            if (Environment.GetEnvironmentVariable("LEX_V3_CUSTODY_DIAGNOSTICS") == "1")
+            var diagnosticVersion = Environment.GetEnvironmentVariable("LEX_V3_CUSTODY_DIAGNOSTICS");
+            if (diagnosticVersion is "1" or "2")
             {
-                await Console.Error.WriteLineAsync(ProbeFailureDiagnostic.Serialize(exception))
+                await Console.Error.WriteLineAsync(ProbeFailureDiagnostic.Serialize(
+                        exception, includeConfiguration: diagnosticVersion == "2"))
                     .ConfigureAwait(false);
             }
 
@@ -300,8 +302,9 @@ internal static class CustodyProbeApplication
                     entry.Key,
                     StringComparer.OrdinalIgnoreCase))
             {
-                throw new InvalidOperationException(
-                    $"Secret-bearing credential variable {entry.Key} is forbidden.");
+                throw ProbeFailureDiagnostic.ConfigurationFailure(
+                    ProbeConfigurationGuard.SecretCredential,
+                    $"Secret-bearing credential variable {entry.Key} is forbidden.", entry.Key);
             }
         }
 
@@ -352,8 +355,9 @@ internal static class CustodyProbeApplication
         {
             if (environment.TryGetValue(name, out var value) && value is not null)
             {
-                throw new InvalidOperationException(
-                    $"Managed identity source selector {name} is forbidden.");
+                throw ProbeFailureDiagnostic.ConfigurationFailure(
+                    ProbeConfigurationGuard.AlternateIdentitySource,
+                    $"Managed identity source selector {name} is forbidden.", name);
             }
         }
 
@@ -367,7 +371,8 @@ internal static class CustodyProbeApplication
             || !IsLocalIdentityHost(endpoint)
             || string.IsNullOrWhiteSpace(identityHeader))
         {
-            throw new InvalidOperationException(
+            throw ProbeFailureDiagnostic.ConfigurationFailure(
+                ProbeConfigurationGuard.InvalidIdentitySource,
                 "IDENTITY_ENDPOINT is not an admitted Azure-host local endpoint.");
         }
     }
@@ -399,7 +404,9 @@ internal static class CustodyProbeApplication
     {
         if (!environment.TryGetValue(name, out var value) || string.IsNullOrEmpty(value))
         {
-            throw new InvalidOperationException($"Required environment variable {name} is missing.");
+            throw ProbeFailureDiagnostic.ConfigurationFailure(
+                ProbeConfigurationGuard.MissingSetting,
+                $"Required environment variable {name} is missing.", name);
         }
 
         return value;
@@ -412,7 +419,9 @@ internal static class CustodyProbeApplication
         var value = Required(environment, name);
         if (!Guid.TryParseExact(value, "D", out var parsed) || parsed == Guid.Empty)
         {
-            throw new InvalidOperationException($"Environment variable {name} is not a nonempty D-format GUID.");
+            throw ProbeFailureDiagnostic.ConfigurationFailure(
+                ProbeConfigurationGuard.InvalidGuid,
+                $"Environment variable {name} is not a nonempty D-format GUID.", name);
         }
 
         return parsed;
