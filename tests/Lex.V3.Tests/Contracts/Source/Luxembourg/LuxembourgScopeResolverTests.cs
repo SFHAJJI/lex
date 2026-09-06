@@ -661,6 +661,66 @@ public sealed class LuxembourgScopeResolverTests
             resolved.Resources.Single().Dimensions.PublicationFamily.State);
     }
 
+    /// <summary>
+    /// E0(d), #409, clause S2-A05: four different findings that all quarantine keep four different
+    /// reasons, so drift is distinguishable from a structural exclusion and from a missing gate.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// WHAT THIS USED TO PUBLISH. Every one of these cases resolved to
+    /// <c>typed_quarantine_role_not_admitted</c>. The record said the type filled no admitted role
+    /// — true of the last case and misleading about the other three. In particular a publisher
+    /// value this profile has not settled, which is exactly the drift S2-A05 says must fail closed
+    /// INTO TYPED EVIDENCE, failed closed into evidence that named a different finding.
+    /// </para>
+    /// <para>
+    /// The four are asserted in one test on purpose. Individually each is a string comparison; the
+    /// property that matters is that the four are DISTINCT, and that only shows when they are read
+    /// together. The final assertion states it directly rather than leaving it to the reader to
+    /// notice, so collapsing any two of them again fails here even if each arm still passes.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void EachQuarantiningFindingKeepsItsOwnReason()
+    {
+        // DIV is structurally excluded; NOT_A_SETTLED_TYPE is a value this profile never settled;
+        // RCSF is a real regulator role whose qualifying evidence this observation does not carry;
+        // LOI is a real ordinary candidate with neither consolidation nor as-published evidence.
+        var cases = new (string Type, string ExpectedReason)[]
+        {
+            ("DIV", "typed_quarantine_structurally_excluded_type"),
+            ("NOT_A_SETTLED_TYPE", "typed_quarantine_unsettled_type_vocabulary"),
+            ("RCSF", "typed_quarantine_regulator_evidence_absent"),
+            ("LOI", "typed_quarantine_ordinary_evidence_absent"),
+        };
+
+        var observed = new List<string>();
+        foreach (var (type, expectedReason) in cases)
+        {
+            var resolved = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(
+                Profile().Resolve(Proven([TypedRoleObservation(type)])));
+            var family = resolved.Resources.Single().Dimensions.PublicationFamily;
+
+            Assert.AreEqual(
+                LuScopeTerminalState.TypedQuarantine,
+                family.State,
+                $"{type} must still quarantine; this slice changes the reason, never the state.");
+            Assert.AreEqual(
+                expectedReason,
+                family.ReasonCode,
+                $"{type} must publish the finding that actually applies to it.");
+            observed.Add(family.ReasonCode);
+        }
+
+        Assert.AreEqual(
+            cases.Length,
+            observed.Distinct(StringComparer.Ordinal).Count(),
+            "four different findings must not share a reason code. This is the assertion the old "
+                + "shared catchall would fail: every one of these cases published "
+                + "typed_quarantine_role_not_admitted, so a reader could not tell publisher drift "
+                + "from a rule we apply on purpose.");
+    }
+
     [TestMethod]
     public void ATcActCarriesItsOwnCoordinatedTextRoleSeparatelyFromBucketMembership()
     {

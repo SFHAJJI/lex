@@ -425,37 +425,9 @@ internal static class LuxembourgScopeResolver
 
         if (types.Count == 1)
         {
-            var type = types[0];
-            var state = NeverTypes.Contains(type)
-                ? LuScopeTerminalState.NeverIngest
-                : QuarantinedTypes.Contains(type) ||
-                  !profile.IsSettledVocabulary(LuxembourgVocabularyKind.TypeDocument, type)
-                    ? LuScopeTerminalState.TypedQuarantine
-                    : PointTypes.Contains(type)
-                        ? LuScopeTerminalState.Point
-                        : PriorityCandidateTypes.Contains(type) &&
-                          IsActClass(classes)
-                            ? LuScopeTerminalState.AcceptedCandidate
-                            : RegulatorTypes.Contains(type)
-                                ? IsRegulatorQualified(observation, type)
-                                    ? LuScopeTerminalState.AcceptedCandidate
-                                    : LuScopeTerminalState.TypedQuarantine
-                                : OrdinaryCandidateTypes.Contains(type) &&
-                                  (IsConsolidationQualified(observation, type) ||
-                                   IsAsPublishedOriginalQualified(observation, type))
-                                    ? LuScopeTerminalState.AcceptedCandidate
-                                    : LuScopeTerminalState.TypedQuarantine;
-            return Disposition(
-                state,
-                state switch
-                {
-                    LuScopeTerminalState.AcceptedCandidate => "accepted_exact_family",
-                    LuScopeTerminalState.Point => "point_exact_family",
-                    LuScopeTerminalState.NeverIngest => "never_ingest_exact_family",
-                    _ => "typed_quarantine_role_not_admitted",
-                },
-                "lu_family_exact_type",
-                evidence);
+            var (state, reasonCode) = ClassifyExactPublicationFamily(
+                profile, observation, classes, types[0]);
+            return Disposition(state, reasonCode, "lu_family_exact_type", evidence);
         }
 
         // types is empty here (both branches above already ruled out zero and multiple), so an
@@ -686,6 +658,106 @@ internal static class LuxembourgScopeResolver
                 "lu_authenticity_selector_conflict",
                 evidence),
         };
+    }
+
+    /// <summary>
+    /// One exact <c>jolux:typeDocument</c> value's terminal state together with the reason it
+    /// reached that state, decided once so the two can never disagree.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// E0(d), #409, clause S2-A05. Five different findings used to arrive at
+    /// <see cref="LuScopeTerminalState.TypedQuarantine"/> and all five published the single reason
+    /// code <c>typed_quarantine_role_not_admitted</c>: a structurally excluded type, a type whose
+    /// vocabulary this profile has not settled, a regulator type whose qualifying evidence is
+    /// absent, an ordinary candidate whose consolidation or as-published evidence is absent, and a
+    /// settled admitted-vocabulary type that simply fills no role. The drift case is the one the
+    /// clause names -- source vocabulary drift must fail closed INTO TYPED EVIDENCE -- and it
+    /// failed closed while its evidence said only "not admitted", which is what every other
+    /// quarantine here also said.
+    /// </para>
+    /// <para>
+    /// The cost was already recorded in this repository before I touched it.
+    /// <c>LuxembourgDocumentGetTests</c> carries a comment from an author who hit this exact code
+    /// and had to reason out which of the causes it was -- "an ordinary type such as LOI needs
+    /// consolidation or as-published qualification" -- because the reason code would not say. A
+    /// reader of a quarantined record in production has strictly less context than that author had.
+    /// </para>
+    /// <para>
+    /// The state is decided by exactly the predicates, in exactly the order, the nested conditional
+    /// here used before: never, then structural quarantine or unsettled vocabulary, then point,
+    /// then priority candidate with an Act class, then regulator, then ordinary candidate, then the
+    /// remainder. Only the reason is new. Returning the pair from one place is the point: a reason
+    /// re-derived beside the state is a second copy of the same decision, and the two drift.
+    /// </para>
+    /// <para>
+    /// The precedent for splitting rather than collapsing is immediately above, where the empty
+    /// case was moved off a shared catchall because <c>unknown_publication_family</c> "claims a
+    /// value was observed and not admitted -- false when no typeDocument assertion exists at all".
+    /// This is the same correction applied to the arm that still collapsed.
+    /// </para>
+    /// </remarks>
+    private static (LuScopeTerminalState State, string ReasonCode) ClassifyExactPublicationFamily(
+        VerifiedLuxembourgSourceProfile profile,
+        LuxembourgResourceObservation observation,
+        IReadOnlyList<string> classes,
+        string type)
+    {
+        if (NeverTypes.Contains(type))
+        {
+            return (LuScopeTerminalState.NeverIngest, "never_ingest_exact_family");
+        }
+
+        // Decision 58's structural exclusions and an unsettled vocabulary value both quarantine,
+        // and they are not the same finding: the first is a rule this profile applies on purpose,
+        // the second is the publisher having said something this profile does not recognise.
+        if (QuarantinedTypes.Contains(type))
+        {
+            return (
+                LuScopeTerminalState.TypedQuarantine,
+                "typed_quarantine_structurally_excluded_type");
+        }
+
+        if (!profile.IsSettledVocabulary(LuxembourgVocabularyKind.TypeDocument, type))
+        {
+            return (
+                LuScopeTerminalState.TypedQuarantine,
+                "typed_quarantine_unsettled_type_vocabulary");
+        }
+
+        if (PointTypes.Contains(type))
+        {
+            return (LuScopeTerminalState.Point, "point_exact_family");
+        }
+
+        if (PriorityCandidateTypes.Contains(type) && IsActClass(classes))
+        {
+            return (LuScopeTerminalState.AcceptedCandidate, "accepted_exact_family");
+        }
+
+        // A known role whose qualifying evidence is absent is a gap in what the publisher asserted,
+        // not a statement that the role itself is inadmissible. Naming the gate that was not met is
+        // the difference between "we do not carry this" and "we could not tell yet".
+        if (RegulatorTypes.Contains(type))
+        {
+            return IsRegulatorQualified(observation, type)
+                ? (LuScopeTerminalState.AcceptedCandidate, "accepted_exact_family")
+                : (LuScopeTerminalState.TypedQuarantine,
+                    "typed_quarantine_regulator_evidence_absent");
+        }
+
+        if (OrdinaryCandidateTypes.Contains(type))
+        {
+            return IsConsolidationQualified(observation, type) ||
+                   IsAsPublishedOriginalQualified(observation, type)
+                ? (LuScopeTerminalState.AcceptedCandidate, "accepted_exact_family")
+                : (LuScopeTerminalState.TypedQuarantine,
+                    "typed_quarantine_ordinary_evidence_absent");
+        }
+
+        // Settled, recognised, structurally admitted, and filling no role this profile accepts.
+        // This is the only finding the old shared code actually described.
+        return (LuScopeTerminalState.TypedQuarantine, "typed_quarantine_role_not_admitted");
     }
 
     private static LuScopeDimensionDisposition ResolveRights(
