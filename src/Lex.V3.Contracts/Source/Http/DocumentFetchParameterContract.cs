@@ -13,8 +13,8 @@ namespace Lex.V3.Contracts.Source.Http;
 /// <param name="HeaderName">
 /// The lowercase outbound header this parameter's text value becomes, or null when the parameter
 /// is carried for a reason other than a request header. The Luxembourg route's own single
-/// parameter is the second kind: it carries the act's ELI page path, which is a robots-evaluation
-/// input and never a header, because that route negotiates nothing.
+/// parameter is the second kind: it retains the act's ELI page path as publisher provenance.
+/// Decision 83 excludes it from robots evaluation unless that URL is actually requested.
 /// </param>
 public sealed record DocumentFetchParameter(string ParameterName, string? HeaderName);
 
@@ -62,11 +62,8 @@ public sealed class DocumentFetchParameterContract
     /// <summary>
     /// The Legilux filestore route: no negotiation at all. It fetches one exact filestore URI and
     /// the format is decided by which file that URI names, so this route declares no header
-    /// parameter. Its one declared parameter is the act's own ELI page path, which RULING
-    /// lex-event-20260904T180444431Z-13c6f8f86ddf4f02857cf4001c202143 makes a required third robots
-    /// path for every Luxembourg manifestation; it is store-derived (manifestation to expression to
-    /// work), cannot be derived from the filestore path, and is carried here so it travels inside
-    /// the bound request's own retained canonical bytes rather than only as a call argument.
+    /// parameter. Its act ELI page path is retained as publisher provenance in the bound input.
+    /// Decision 83 supersedes its former use as an additional robots target.
     /// </summary>
     public static DocumentFetchParameterContract LuxembourgDocumentFetch { get; } = new(
     [

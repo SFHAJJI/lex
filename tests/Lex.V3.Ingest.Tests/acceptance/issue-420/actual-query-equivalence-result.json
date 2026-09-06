@@ -1,0 +1,89 @@
+{
+  "scope": "actual exported product templates over synthetic RDF; no publisher/performance claim",
+  "rdflib": "7.1.4",
+  "graph_triples": 31,
+  "baseline_export_sha256": "f5eb4fa6a458fe3840cd73bd6864511ba16f0f8c3d041bdd0548aca6a4c4322d",
+  "current_export_sha256": "7dd7a26299aec6005f9b7aa9e78c18766ff42abe404c2bb3605f8388e9c7b9f8",
+  "ordered_export_sha256": "f7658c2155f72e998bfaf75ca800dab65c876d843e16dccb97881b6c219d6e4b",
+  "physical_directive_checked_separately": "DEFINE sql:select-option \"order\"",
+  "other_templates_byte_identical": [
+    "controlled-concepts",
+    "iri-objects",
+    "predicates",
+    "relation-assertions",
+    "relation-endpoints",
+    "subjects",
+    "typed-resources",
+    "types"
+  ],
+  "equivalence_comparisons": 34,
+  "query_executions": 84,
+  "cases": [
+    {
+      "case": "whole_graph",
+      "rows": 25
+    },
+    {
+      "case": "bounded_iris",
+      "rows": 10
+    },
+    {
+      "case": "equal_first_component_end_tail",
+      "rows": 2
+    },
+    {
+      "case": "same_subject_tail_slice",
+      "rows": 1
+    },
+    {
+      "case": "blank_subject_only",
+      "rows": 2
+    },
+    {
+      "case": "blank_subject_lower_tail",
+      "rows": 3
+    },
+    {
+      "case": "unicode_subject",
+      "rows": 5
+    },
+    {
+      "case": "unsupported_object_slice",
+      "rows": 1
+    },
+    {
+      "case": "no_matching_subject",
+      "rows": 0
+    }
+  ],
+  "mutations_killed_in_page_and_count": [
+    {
+      "mutation": "exclusive_first_component_end",
+      "expected_rows": 2,
+      "mutant_rows": 0,
+      "expected_count": 2,
+      "mutant_count": 0
+    },
+    {
+      "mutation": "discard_blank_subjects",
+      "expected_rows": 2,
+      "mutant_rows": 0,
+      "expected_count": 2,
+      "mutant_count": 0
+    },
+    {
+      "mutation": "omit_projected_bounds",
+      "expected_rows": 10,
+      "mutant_rows": 0,
+      "expected_count": 10,
+      "mutant_count": 0
+    },
+    {
+      "mutation": "outer_values_only",
+      "expected_rows": 10,
+      "mutant_rows": 0,
+      "expected_count": 10,
+      "mutant_count": 0
+    }
+  ]
+}

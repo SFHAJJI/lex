@@ -116,7 +116,8 @@ public sealed record LuxembourgInFileRightsChannelObservations
     public LuxembourgInFileRightsChannelObservations(
         SourceArtifactRef runIdentity,
         SourceArtifactRef enumerationRef,
-        IReadOnlyList<LuxembourgRightsChannelObservation> observations)
+        IReadOnlyList<LuxembourgRightsChannelObservation> observations,
+        bool acquisitionCompleted = false)
     {
         RunIdentity = runIdentity ?? throw new ArgumentNullException(nameof(runIdentity));
         EnumerationRef = enumerationRef
@@ -125,6 +126,7 @@ public sealed record LuxembourgInFileRightsChannelObservations
             RunIdentity,
             observations,
             nameof(observations));
+        AcquisitionCompleted = acquisitionCompleted;
     }
 
     public SourceArtifactRef RunIdentity { get; }
@@ -132,6 +134,12 @@ public sealed record LuxembourgInFileRightsChannelObservations
     public SourceArtifactRef EnumerationRef { get; }
 
     public IReadOnlyList<LuxembourgRightsChannelObservation> Observations { get; }
+
+    /// <summary>
+    /// This run has finished its acquisition attempts. A missing declaration is then unproven,
+    /// not a promise that channel two will run later. Failed readings remain in EnumerationRef.
+    /// </summary>
+    public bool AcquisitionCompleted { get; }
 
     internal LuxembourgRightsChannelObservation? Find(string manifestationIri) =>
         Observations.SingleOrDefault(row =>
@@ -293,10 +301,11 @@ public static class LuxembourgRightsChannels
 
         if (inFile is null)
         {
-            // Channel one resolved and channel two has not run. Read channel one on its own terms,
-            // with exactly the same tail the two-channel path applies, and stop at the typed
-            // pending state instead of claiming an agreement one channel cannot make.
-            return ClassifySingleChannel(sparql);
+            var singleChannel = ClassifySingleChannel(sparql);
+            return singleChannel == LuxembourgRightsChannelDisposition.SecondChannelPending &&
+                inFileObservations.AcquisitionCompleted
+                    ? LuxembourgRightsChannelDisposition.ChannelEnumerationUnproven
+                    : singleChannel;
         }
 
         if (sparql.LicenceIris.Count == 0 || inFile.LicenceIris.Count == 0)

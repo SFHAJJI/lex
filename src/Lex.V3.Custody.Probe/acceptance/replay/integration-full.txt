@@ -1,0 +1,29 @@
+Exécuter des tests à partir de C:\lex-v3\worktrees\codex-stage1-custody-runner\tests\Lex.V3.Ingest.Tests\bin\Release\net10.0\Lex.V3.Ingest.Tests.dll (net10.0|x64)
+Exécuter des tests à partir de C:\lex-v3\worktrees\codex-stage1-custody-runner\tests\Lex.V3.Tests\bin\Release\net10.0\Lex.V3.Tests.dll (net10.0|x64)
+ignoré TheCensusFamiliesProveAndTheRunEitherReachesTheManifestOrFailsNamingWhy
+  Assert.Inconclusive. Live publisher canary. Set LEX_EU_CANARY=1 to run it; it is skipped by default so the suite does not depend on a third party's uptime or send unasked traffic.
+  à partir de C:\lex-v3\worktrees\codex-stage1-custody-runner\tests\Lex.V3.Ingest.Tests\bin\Release\net10.0\Lex.V3.Ingest.Tests.dll (net10.0|x64)
+ignoré TheCodeCivilsTwoCanaryExpressionsAreHeldWithRealReceipts
+  Assert.Inconclusive. Live publisher canary. Set LEX_LU_CANARY=1 to run it; it is skipped by default so the suite does not depend on a third party's uptime or send unasked traffic.
+  à partir de C:\lex-v3\worktrees\codex-stage1-custody-runner\tests\Lex.V3.Ingest.Tests\bin\Release\net10.0\Lex.V3.Ingest.Tests.dll (net10.0|x64)
+ignoré AnActRunsThroughThePublicAdapterWithObservedVocabularyAndSameRunRights
+  Assert.Inconclusive. Set LEX_LU_ADAPTER_CANARY=1 for publisher vocabulary and public-adapter acceptance.
+  à partir de C:\lex-v3\worktrees\codex-stage1-custody-runner\tests\Lex.V3.Ingest.Tests\bin\Release\net10.0\Lex.V3.Ingest.Tests.dll (net10.0|x64)
+ignoré CodeCivilFamiliesAreEnumeratedTwiceThroughThePublisherRoute
+  Assert.Inconclusive. Set LEX_LU_ENUMERATION_CANARY=1 for the live bounded enumeration proof.
+  à partir de C:\lex-v3\worktrees\codex-stage1-custody-runner\tests\Lex.V3.Ingest.Tests\bin\Release\net10.0\Lex.V3.Ingest.Tests.dll (net10.0|x64)
+ignoré ALaneSymbolicLinkCannotRedirectCustodyOutsideItsLane
+  Assert.Inconclusive. This Windows host does not grant symbolic-link creation; Linux CI runs this proof.
+  à partir de C:\lex-v3\worktrees\codex-stage1-custody-runner\tests\Lex.V3.Tests\bin\Release\net10.0\Lex.V3.Tests.dll (net10.0|x64)
+C:\lex-v3\worktrees\codex-stage1-custody-runner\tests\Lex.V3.Ingest.Tests\bin\Release\net10.0\Lex.V3.Ingest.Tests.dll (net10.0|x64) réussite (56s 540ms)
+C:\lex-v3\worktrees\codex-stage1-custody-runner\tests\Lex.V3.Tests\bin\Release\net10.0\Lex.V3.Tests.dll (net10.0|x64) réussite (1m 04s 981ms)
+
+Résumé de série de tests : Réussite!
+  C:\lex-v3\worktrees\codex-stage1-custody-runner\tests\Lex.V3.Tests\bin\Release\net10.0\Lex.V3.Tests.dll (net10.0|x64) réussite (1m 04s 981ms)
+  C:\lex-v3\worktrees\codex-stage1-custody-runner\tests\Lex.V3.Ingest.Tests\bin\Release\net10.0\Lex.V3.Ingest.Tests.dll (net10.0|x64) réussite (56s 540ms)
+
+  total : 2694
+  échec : 0
+  réussie : 2689
+  ignoré : 5
+  durée : 1m 06s 010ms

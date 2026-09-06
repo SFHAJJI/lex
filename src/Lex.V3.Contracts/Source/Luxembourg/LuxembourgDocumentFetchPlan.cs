@@ -18,13 +18,9 @@ namespace Lex.V3.Contracts.Source.Luxembourg;
 /// names, which is why <see cref="DocumentFetchParameterContract.LuxembourgDocumentFetch"/> declares
 /// no header parameter and the ruling refused a second parallel LU branch in the session.
 /// <para>
-/// It does declare one non-header parameter, the act's own ELI page path. That is not negotiation:
-/// RULING lex-event-20260904T180444431Z-13c6f8f86ddf4f02857cf4001c202143 makes it a required third
-/// robots path for every manifestation, it is store-derived (manifestation to expression to work)
-/// and cannot be recovered from the filestore path, and carrying it here puts it inside the bound
-/// request's own retained canonical bytes so the path robots was evaluated against is part of the
-/// evidence rather than only a call argument. <see cref="MachineQueryInputArtifact.Create"/> also
-/// requires at least one ordered parameter, so a literally empty declaration was never bindable.
+/// The non-header act ELI page path remains bound as publisher provenance. Decision 83 supersedes
+/// its former use as an additional robots target: it never transfers a page prohibition to this
+/// request. Keeping it in the retained address and input preserves their canonical identities.
 /// </para>
 /// </remarks>
 public sealed class LuxembourgDocumentFetchPlan

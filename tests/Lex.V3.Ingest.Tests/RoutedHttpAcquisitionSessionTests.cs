@@ -65,14 +65,9 @@ public sealed class RoutedHttpAcquisitionSessionTests
                 // compile error rather than a run-time surprise. Internal is narrower than public
                 // in exactly the way that matters: nothing outside this assembly can reach it, and
                 // inside it the one caller is the LU executor's own test-handler seam.
-                // Two entries per overload, and there are now two overloads: D1-06c-LU-2 added one
-                // that also takes the store-derived robots paths the three-path ruling requires
-                // (lex-event-20260904T180444431Z-13c6f8f86ddf4f02857cf4001c202143). The new
-                // overload widens no transport surface -- the added parameter is a list of paths,
-                // not a transport fact -- and the shorter overload now simply forwards to it.
+                // Decision 83 removes the overload accepting additional unrequested paths.
+                // The single test seam still exposes exactly these two transport parameters.
                 "RoutedHttpAcquisitionSession::StartWithTestTransportAsync(HttpMessageHandler handler)",
-                "RoutedHttpAcquisitionSession::StartWithTestTransportAsync(HttpMessageHandler handler)",
-                "RoutedHttpAcquisitionSession::StartWithTestTransportAsync(TimeProvider timeProvider)",
                 "RoutedHttpAcquisitionSession::StartWithTestTransportAsync(TimeProvider timeProvider)",
                 "StartResult::Integrity(RoutedHttpEvidence evidence)",
                 "StartResult::Operational(RoutedHttpEvidence evidence)",
@@ -250,7 +245,7 @@ public sealed class RoutedHttpAcquisitionSessionTests
             "+1",
             " 1",
             "1 ",
-            "١",
+            "Ù¡",
             "18446744073709551616",
         };
         foreach (var spelling in refused)
@@ -781,7 +776,7 @@ public sealed class RoutedHttpAcquisitionSessionTests
         var constructor = typeof(RoutedHttpAcquisitionSession).GetConstructors(
             BindingFlags.Instance | BindingFlags.NonPublic).Single();
         return (RoutedHttpAcquisitionSession)constructor.Invoke(
-            [request, custody, handler, timeProvider, usesPinnedHandler, Array.Empty<string>()]);
+            [request, custody, handler, timeProvider, usesPinnedHandler]);
     }
 
     private static Task<RoutedHttpAcquisitionSession.StartResult> BootstrapAsync(

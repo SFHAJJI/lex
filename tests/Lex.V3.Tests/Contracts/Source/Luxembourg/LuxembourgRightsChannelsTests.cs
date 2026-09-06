@@ -17,6 +17,20 @@ public sealed class LuxembourgRightsChannelsTests
     private const string UnruledLicence = "https://example.invalid/licence/future";
 
     [TestMethod]
+    [DataRow(CcBy40, LuxembourgRightsChannelDisposition.ChannelEnumerationUnproven)]
+    [DataRow(LicenceScl, LuxembourgRightsChannelDisposition.NonAdmittingLicenceScl)]
+    public void ACompletedAcquisitionCannotLeaveAnUnreadChannelPendingOrEraseAnExclusion(
+        string sparqlLicence, LuxembourgRightsChannelDisposition expected)
+    {
+        var result = LuxembourgRightsChannels.Resolve(SelectedManifestation, Run,
+            new LuxembourgSparqlRightsChannelObservations(Run, SparqlEnumerationRef,
+                [Observation(SelectedManifestation, Run, SparqlEvidence, [sparqlLicence])]),
+            new LuxembourgInFileRightsChannelObservations(Run, InFileEnumerationRef, [], acquisitionCompleted: true));
+        Assert.AreEqual(expected, result.Disposition);
+        Assert.IsFalse(result.ChannelsAgreeOnAdmittingLicence);
+    }
+
+    [TestMethod]
     public void EqualCurrentCcByChannelsAreTheOnlyAdmittedResult()
     {
         var result = Resolve(

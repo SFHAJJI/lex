@@ -1,0 +1,4 @@
+# Preserve exact executed query exports and command output, including their whitespace.
+*.zip binary
+query-templates-*.json -text -whitespace
+regression-logs/*.txt -text -whitespace

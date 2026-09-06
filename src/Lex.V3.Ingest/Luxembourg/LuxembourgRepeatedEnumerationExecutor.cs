@@ -633,34 +633,22 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
             sourceWitness, _custodyStore, _testHandlerOverride!, _timeProvider, cancellationToken);
 
     /// <summary>
-    /// D1-06c-LU-2 item 3: sends one real Luxembourg document GET through the routed session and
-    /// hands back its retained evidence, or one typed refusal. One session per document, and the
-    /// session's own source witness IS this document's own bound request, so the robots verdict is
-    /// evaluated against this document's own paths rather than against one representative request
-    /// for the whole run. That is required, not stylistic: RULING
-    /// lex-event-20260904T180444431Z-13c6f8f86ddf4f02857cf4001c202143 evaluates three paths PER
-    /// MANIFESTATION, which a per-run witness could not do.
+    /// Sends one document GET through its own routed session, with robots evaluated against
+    /// the requested URL under Decision 83 and every received body retained.
     /// </summary>
-    /// <param name="boundRequest">The bound GET, from <c>LuxembourgDocumentFetchPlan.Bind</c>.</param>
-    /// <param name="additionalRobotsPaths">
-    /// Store-derived paths the robots verdict must also consider, today exactly the act's own ELI
-    /// page path. Not derivable from the fetch path; see the session's own remarks.
-    /// </param>
     public async Task<LuxembourgDocumentGetAttemptResult> RunDocumentGetAsync(
         BoundMachineRequest boundRequest,
-        IReadOnlyList<string> additionalRobotsPaths,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(boundRequest);
-        ArgumentNullException.ThrowIfNull(additionalRobotsPaths);
 
         var start = _testHandlerOverride is null
             ? await RoutedHttpAcquisitionSession.StartAsync(
-                    boundRequest, _custodyStore, additionalRobotsPaths, cancellationToken)
+                    boundRequest, _custodyStore, cancellationToken)
                 .ConfigureAwait(false)
             : await RoutedHttpAcquisitionSession.StartWithTestTransportAsync(
                     boundRequest, _custodyStore, _testHandlerOverride, _timeProvider,
-                    additionalRobotsPaths, cancellationToken)
+                    cancellationToken)
                 .ConfigureAwait(false);
         if (start.Kind != OfficialHttpAcquisitionOutcomeKind.ExecutedObservation || start.Session is null)
         {

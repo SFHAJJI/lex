@@ -240,16 +240,8 @@ public static class LuxembourgAuthorityIri
 /// and the act's own ELI page path.
 /// </summary>
 /// <remarks>
-/// The act ELI page path is here, rather than being derived at send time, because it cannot be
-/// derived at all from the filestore path. RULING
-/// lex-event-20260904T180444431Z-13c6f8f86ddf4f02857cf4001c202143 makes robots evaluate three paths
-/// for every manifestation, the fetch path, the page path derived from the filestore path, and the
-/// act's own ELI page path from the store's manifestation to expression to work relation, and the
-/// third is what catches a manifestation whose filestore path lands outside its own act. The two
-/// live examples that forced it: the loi 2007/01/15/n2 PDF, whose robots line names
-/// <c>/eli/etat/leg/memorial/2007/8/fr/pdf</c> while the file lives under
-/// <c>memorial/2007/a8</c> so a literal match misses it, and the rgd 1977/11/16/n3 PDF, whose file
-/// lives under <c>memorial/1977/a67</c> rather than under the act's own ELI path at all.
+/// The act ELI page path is retained as publisher provenance in the canonical address. Under
+/// Decision 83 it is not an additional robots target; only the actual requested URL is evaluated.
 /// </remarks>
 public sealed class LuxembourgDocumentFetchAddress
 {
@@ -302,7 +294,7 @@ public sealed class LuxembourgDocumentFetchAddress
     public LuxembourgLegalValue LegalValue { get; }
 
     /// <summary>
-    /// The act's own ELI page path, the publisher's grouping key for robots purposes. Absolute
+    /// The act's own ELI page path, retained as publisher provenance. Absolute
     /// path text only, for example <c>/eli/etat/leg/loi/2007/01/15/n2/jo</c>.
     /// </summary>
     public string ActEliPagePath { get; }

@@ -10,6 +10,26 @@
     "sha256": "f73a8ad70db0a94b14c14e04145ba400681065a03bbbad60b8eb954a9f180c93"
   },
   {
+    "path": "integration-build.txt",
+    "bytes": 1432,
+    "sha256": "99122a9ec6daa09aff56c13be79fd4c673e81c2c2d6f7123543a419856f3016d"
+  },
+  {
+    "path": "integration-full.txt",
+    "bytes": 2817,
+    "sha256": "8bbe593ebb018718412603ac65fc70cb7c04c5dd57b2311e51f0fd92430d25c3"
+  },
+  {
+    "path": "integration-restore.txt",
+    "bytes": 101,
+    "sha256": "3d06bd783f9c297b61ffcbe73805ffd11143108d430372f599fb2e072508129f"
+  },
+  {
+    "path": "INTEGRATION.md",
+    "bytes": 1441,
+    "sha256": "08c852af62c86f7a9341ac6e4ebdf44cb0adc0cbbfcc874413eabfcda1e13350"
+  },
+  {
     "path": "README.md",
     "bytes": 5892,
     "sha256": "84e24cb1c1fd56f9dcf80864b79574359797b33388085ada47018886ea59d5e2"
