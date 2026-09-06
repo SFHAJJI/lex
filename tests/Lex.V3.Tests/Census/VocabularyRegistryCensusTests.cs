@@ -219,6 +219,10 @@ public sealed class VocabularyRegistryCensusTests
                     + "const SyntheticSliceArtifact, const SyntheticSliceControl",
                 "Lex.V3.Custody.Probe.CustodyProbeApplication: "
                     + "AlternateManagedIdentitySourceVariables=3, ForbiddenCredentialVariables=7",
+                "Lex.V3.Custody.Probe.FactPopulationCommissioning: FactSha256s=5, "
+                    + "const ProposalSha256, const SourceBodySha256, const SourceObservationId, "
+                    + "const SourcePopulationReportSha256, const SourceRequestUri, "
+                    + "const SourceRouteSha256",
                 "Lex.V3.Preview.SyntheticPreviewBuildContract: const CandidateCoordinate, "
                     + "const CandidateEvidenceBasis, const CanonicalSourceText, const Publisher, "
                     + "const UpstreamHealth, static property HeldCoordinate, "

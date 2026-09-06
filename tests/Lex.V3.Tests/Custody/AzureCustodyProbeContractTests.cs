@@ -803,8 +803,10 @@ public sealed class AzureCustodyProbeContractTests
             body.LongLength,
             custodyClass);
 
-    private sealed class ProbeStore(ReadOnlyMemory<byte>? restored = null) : ICustodyStore
+    internal sealed class ProbeStore(ReadOnlyMemory<byte>? restored = null) : ICustodyStore
     {
+        private readonly Dictionary<string, byte[]> objects = new(StringComparer.Ordinal);
+
         public byte[] CreatedBytes { get; private set; } = [];
 
         public int CreateCalls { get; private set; }
@@ -820,6 +822,7 @@ public sealed class AzureCustodyProbeContractTests
         {
             CreateCalls++;
             CreatedBytes = bytes.ToArray();
+            objects[CustodyDigest.Of(CreatedBytes)] = CreatedBytes;
             return Task.FromResult(ReceiptFor(bytes.ToArray(), custodyClass));
         }
 
@@ -829,13 +832,20 @@ public sealed class AzureCustodyProbeContractTests
         {
             ReadCalls++;
             LastReadReference = reference;
-            return Task.FromResult(restored ?? ReadOnlyMemory<byte>.Empty);
+            return restored is { } value
+                ? Task.FromResult(value)
+                : ReadByDigestAsync(reference.ContentSha256, cancellationToken);
         }
 
         public Task<ReadOnlyMemory<byte>> ReadByDigestAsync(
             string contentSha256,
-            CancellationToken cancellationToken) =>
-            throw new NotSupportedException();
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult<ReadOnlyMemory<byte>>(objects.TryGetValue(contentSha256, out var bytes)
+                ? bytes
+                : throw new FileNotFoundException());
+        }
     }
 
     private enum WriteReceiptMismatch

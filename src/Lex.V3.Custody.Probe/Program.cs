@@ -154,7 +154,7 @@ internal static class CustodyProbeApplication
                 ? await ReadBoundedAsync(input, cancellationToken).ConfigureAwait(false)
                 : DecodeReceiptArgument(command.ReceiptArgument!);
             inputReceipt = ContractJson.Deserialize<DurableBlobWriteReceipt>(json);
-            ValidateConfiguredReceipt(inputReceipt, options);
+            ValidateConfiguredReceipt(inputReceipt, options, SyntheticByteCount);
         }
 
         cancellationToken.ThrowIfCancellationRequested();
@@ -164,6 +164,14 @@ internal static class CustodyProbeApplication
         if (command.Mode == ProbeMode.Replay)
         {
             var result = await FactCustodyReplay.RunAsync(store, command.ReceiptArgument!, cancellationToken)
+                .ConfigureAwait(false);
+            await output.WriteAsync(result).ConfigureAwait(false);
+            return;
+        }
+
+        if (command.Mode == ProbeMode.CommissionReplay)
+        {
+            var result = await FactPopulationCommissioning.RunAsync(store, options, cancellationToken)
                 .ConfigureAwait(false);
             await output.WriteAsync(result).ConfigureAwait(false);
             return;
@@ -189,7 +197,7 @@ internal static class CustodyProbeApplication
                     "The custody store returned a receipt for different synthetic bytes.");
             }
 
-            ValidateConfiguredReceipt(receipt, options);
+            ValidateConfiguredReceipt(receipt, options, SyntheticByteCount);
             await output.WriteAsync(ContractJson.Serialize(receipt)).ConfigureAwait(false);
             return;
         }
@@ -203,6 +211,19 @@ internal static class CustodyProbeApplication
 
     private static ProbeCommand ParseCommand(string[] arguments)
     {
+        if (arguments.Length == 2
+            && string.Equals(arguments[0], "commission-replay", StringComparison.Ordinal))
+        {
+            if (!string.Equals(
+                    arguments[1],
+                    FactPopulationCommissioning.ProposalSha256,
+                    StringComparison.Ordinal))
+            {
+                throw new ArgumentException("The Fact population proposal is not the reviewed digest.", nameof(arguments));
+            }
+            return new ProbeCommand(ProbeMode.CommissionReplay, null, arguments[1]);
+        }
+
         if (arguments.Length == 2 && string.Equals(arguments[0], "replay", StringComparison.Ordinal)
             && CustodyDigest.IsLowercaseSha256(arguments[1]))
         {
@@ -233,7 +254,7 @@ internal static class CustodyProbeApplication
         }
 
         throw new ArgumentException(
-            "Expected read, read-receipt, replay with a digest, or write with one exact custody lane.",
+            "Expected commission-replay or replay with a digest, read, read-receipt, or write with one exact custody lane.",
             nameof(arguments));
     }
 
@@ -324,14 +345,15 @@ internal static class CustodyProbeApplication
             Required(environment, "LEX_V3_CUSTODY_RESOURCE_GROUP"));
     }
 
-    private static void ValidateConfiguredReceipt(
+    internal static void ValidateConfiguredReceipt(
         DurableBlobWriteReceipt receipt,
-        AzureBlobCustodyOptions options)
+        AzureBlobCustodyOptions options,
+        long expectedByteLength)
     {
-        if (receipt.Reference.ByteLength != SyntheticByteCount)
+        if (receipt.Reference.ByteLength != expectedByteLength)
         {
             throw new InvalidOperationException(
-                "The custody receipt is not for the exact synthetic probe size.");
+                "The custody receipt is not for the exact expected byte length.");
         }
 
         var expectedPolicyKey = receipt.Reference.CustodyClass switch
@@ -461,6 +483,7 @@ internal static class CustodyProbeApplication
         Read,
         ReadReceipt,
         Replay,
+        CommissionReplay,
     }
 
     private sealed record ProbeCommand(
