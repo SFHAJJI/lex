@@ -1,0 +1,282 @@
+{
+  "schema": "lex-v3-custody-runner-proposal-observations/1",
+  "base": "e305791e66f82fef17dfed2da2185d68a3607385",
+  "actor": "Azure CLI operator, not managed identity provider evidence",
+  "limitations": "Parsed CLI responses, not raw HTTP evidence. No deployment, policy write or job execution.",
+  "reads": [
+    {
+      "startedUtc": "2026-09-06T10:39:24.1571727+00:00",
+      "command": [
+        "az",
+        "containerapp",
+        "env",
+        "show",
+        "-g",
+        "rg-platform",
+        "-n",
+        "cae-platform-law",
+        "--query",
+        "{id:id,location:location,provisioningState:properties.provisioningState,workloadProfiles:properties.workloadProfiles,logsDestination:properties.appLogsConfiguration.destination}",
+        "--output",
+        "json"
+      ],
+      "parsedResponse": {
+        "id": "/subscriptions/7c1e98f3-ef6e-45a0-b61b-a51d436bf093/resourceGroups/rg-platform/providers/Microsoft.App/managedEnvironments/cae-platform-law",
+        "location": "France Central",
+        "logsDestination": "log-analytics",
+        "provisioningState": "Succeeded",
+        "workloadProfiles": null
+      }
+    },
+    {
+      "startedUtc": "2026-09-06T10:39:27.2146296+00:00",
+      "command": [
+        "az",
+        "containerapp",
+        "job",
+        "list",
+        "-g",
+        "rg-platform",
+        "--query",
+        "[].{name:name,id:id}",
+        "--output",
+        "json"
+      ],
+      "parsedResponse": null
+    },
+    {
+      "startedUtc": "2026-09-06T10:39:30.0122347+00:00",
+      "command": [
+        "az",
+        "identity",
+        "show",
+        "-g",
+        "rg-platform",
+        "-n",
+        "uami-lex-publisher",
+        "--query",
+        "{id:id,clientId:clientId,principalId:principalId}",
+        "--output",
+        "json"
+      ],
+      "parsedResponse": {
+        "clientId": "80857a7b-99ed-45f3-ba11-cbfc86b05f68",
+        "id": "/subscriptions/7c1e98f3-ef6e-45a0-b61b-a51d436bf093/resourcegroups/rg-platform/providers/Microsoft.ManagedIdentity/userAssignedIdentities/uami-lex-publisher",
+        "principalId": "a98c0d13-0f31-4635-8a01-3fdb95bfdb5b"
+      }
+    },
+    {
+      "startedUtc": "2026-09-06T10:39:31.5176288+00:00",
+      "command": [
+        "az",
+        "role",
+        "assignment",
+        "list",
+        "--assignee",
+        "a98c0d13-0f31-4635-8a01-3fdb95bfdb5b",
+        "--all",
+        "--query",
+        "[].{role:roleDefinitionName,scope:scope}",
+        "--output",
+        "json"
+      ],
+      "parsedResponse": [
+        {
+          "role": "Storage Blob Data Contributor",
+          "scope": "/subscriptions/7c1e98f3-ef6e-45a0-b61b-a51d436bf093/resourceGroups/rg-platform/providers/Microsoft.Storage/storageAccounts/stlexindexes/blobServices/default/containers/lex"
+        },
+        {
+          "role": "Reader",
+          "scope": "/subscriptions/7c1e98f3-ef6e-45a0-b61b-a51d436bf093/resourceGroups/rg-soufien-portfolio/providers/Microsoft.CognitiveServices/accounts/oai-soufien-dev"
+        },
+        {
+          "role": "Reader",
+          "scope": "/subscriptions/7c1e98f3-ef6e-45a0-b61b-a51d436bf093/resourceGroups/rg-enercop-dev/providers/Microsoft.CognitiveServices/accounts/aoai-enercop-dev"
+        },
+        {
+          "role": "Reader",
+          "scope": "/subscriptions/7c1e98f3-ef6e-45a0-b61b-a51d436bf093/resourceGroups/rg-platform/providers/Microsoft.App/containerApps/ca-lex-web"
+        },
+        {
+          "role": "Lex Evaluation Candidate Revision Lifecycle",
+          "scope": "/subscriptions/7c1e98f3-ef6e-45a0-b61b-a51d436bf093/resourceGroups/rg-platform/providers/Microsoft.App/containerApps/ca-lex-web"
+        }
+      ]
+    },
+    {
+      "startedUtc": "2026-09-06T10:39:33.8211115+00:00",
+      "command": [
+        "az",
+        "acr",
+        "show",
+        "-n",
+        "crsoufien3orem",
+        "--query",
+        "{id:id,loginServer:loginServer,roleAssignmentMode:roleAssignmentMode,adminUserEnabled:adminUserEnabled,sku:sku.name}",
+        "--output",
+        "json"
+      ],
+      "parsedResponse": {
+        "adminUserEnabled": true,
+        "id": "/subscriptions/7c1e98f3-ef6e-45a0-b61b-a51d436bf093/resourceGroups/rg-soufien-portfolio/providers/Microsoft.ContainerRegistry/registries/crsoufien3orem",
+        "loginServer": "crsoufien3orem.azurecr.io",
+        "roleAssignmentMode": null,
+        "sku": "Basic"
+      }
+    },
+    {
+      "startedUtc": "2026-09-06T10:39:35.9571668+00:00",
+      "command": [
+        "az",
+        "rest",
+        "--method",
+        "get",
+        "--url",
+        "https://management.azure.com/subscriptions/7c1e98f3-ef6e-45a0-b61b-a51d436bf093/resourceGroups/rg-lex-v3-custody/providers/Microsoft.Storage/storageAccounts/stlexv3custody?api-version=2025-06-01",
+        "--query",
+        "{location:location,publicNetworkAccess:properties.publicNetworkAccess,networkAcls:properties.networkAcls,allowSharedKeyAccess:properties.allowSharedKeyAccess}",
+        "--output",
+        "json"
+      ],
+      "parsedResponse": {
+        "allowSharedKeyAccess": false,
+        "location": "francecentral",
+        "networkAcls": {
+          "bypass": "AzureServices",
+          "defaultAction": "Allow",
+          "ipRules": [],
+          "ipv6Rules": [],
+          "virtualNetworkRules": []
+        },
+        "publicNetworkAccess": "Enabled"
+      }
+    },
+    {
+      "startedUtc": "2026-09-06T10:39:37.4457165+00:00",
+      "command": [
+        "az",
+        "rest",
+        "--method",
+        "get",
+        "--url",
+        "https://management.azure.com/subscriptions/7c1e98f3-ef6e-45a0-b61b-a51d436bf093/resourceGroups/rg-lex-v3-custody/providers/Microsoft.Storage/storageAccounts/stlexv3custody/blobServices/default/containers/staging?api-version=2025-06-01",
+        "--output",
+        "json"
+      ],
+      "parsedResponse": {
+        "etag": "\"0x8DF07AA7865CC00\"",
+        "id": "/subscriptions/7c1e98f3-ef6e-45a0-b61b-a51d436bf093/resourceGroups/rg-lex-v3-custody/providers/Microsoft.Storage/storageAccounts/stlexv3custody/blobServices/default/containers/staging",
+        "name": "staging",
+        "properties": {
+          "defaultEncryptionScope": "$account-encryption-key",
+          "deleted": false,
+          "denyEncryptionScopeOverride": false,
+          "hasImmutabilityPolicy": false,
+          "hasLegalHold": false,
+          "immutableStorageWithVersioning": {
+            "enabled": false
+          },
+          "lastModifiedTime": "2026-08-31T21:54:45Z",
+          "leaseState": "Available",
+          "leaseStatus": "Unlocked",
+          "legalHold": {
+            "hasLegalHold": false,
+            "tags": []
+          },
+          "publicAccess": "None",
+          "remainingRetentionDays": 0
+        },
+        "type": "Microsoft.Storage/storageAccounts/blobServices/containers"
+      }
+    },
+    {
+      "startedUtc": "2026-09-06T10:39:38.5894134+00:00",
+      "command": [
+        "az",
+        "rest",
+        "--method",
+        "get",
+        "--url",
+        "https://management.azure.com/subscriptions/7c1e98f3-ef6e-45a0-b61b-a51d436bf093/resourceGroups/rg-lex-v3-custody/providers/Microsoft.Storage/storageAccounts/stlexv3custody/blobServices/default/containers/nightly?api-version=2025-06-01",
+        "--output",
+        "json"
+      ],
+      "parsedResponse": {
+        "etag": "\"0x8DF07AA79A1C8D3\"",
+        "id": "/subscriptions/7c1e98f3-ef6e-45a0-b61b-a51d436bf093/resourceGroups/rg-lex-v3-custody/providers/Microsoft.Storage/storageAccounts/stlexv3custody/blobServices/default/containers/nightly",
+        "name": "nightly",
+        "properties": {
+          "defaultEncryptionScope": "$account-encryption-key",
+          "deleted": false,
+          "denyEncryptionScopeOverride": false,
+          "hasImmutabilityPolicy": false,
+          "hasLegalHold": false,
+          "immutableStorageWithVersioning": {
+            "enabled": false
+          },
+          "lastModifiedTime": "2026-08-31T21:54:47Z",
+          "leaseState": "Available",
+          "leaseStatus": "Unlocked",
+          "legalHold": {
+            "hasLegalHold": false,
+            "tags": []
+          },
+          "publicAccess": "None",
+          "remainingRetentionDays": 0
+        },
+        "type": "Microsoft.Storage/storageAccounts/blobServices/containers"
+      }
+    },
+    {
+      "startedUtc": "2026-09-06T10:39:39.9846037+00:00",
+      "command": [
+        "az",
+        "rest",
+        "--method",
+        "get",
+        "--url",
+        "https://management.azure.com/subscriptions/7c1e98f3-ef6e-45a0-b61b-a51d436bf093/resourceGroups/rg-lex-v3-custody/providers/Microsoft.Storage/storageAccounts/stlexv3custody/blobServices/default/containers/legal-hold?api-version=2025-06-01",
+        "--output",
+        "json"
+      ],
+      "parsedResponse": {
+        "etag": "\"0x8DF07AC9EDA02BC\"",
+        "id": "/subscriptions/7c1e98f3-ef6e-45a0-b61b-a51d436bf093/resourceGroups/rg-lex-v3-custody/providers/Microsoft.Storage/storageAccounts/stlexv3custody/blobServices/default/containers/legal-hold",
+        "name": "legal-hold",
+        "properties": {
+          "defaultEncryptionScope": "$account-encryption-key",
+          "deleted": false,
+          "denyEncryptionScopeOverride": false,
+          "hasImmutabilityPolicy": false,
+          "hasLegalHold": true,
+          "immutableStorageWithVersioning": {
+            "enabled": false
+          },
+          "lastModifiedTime": "2026-08-31T22:10:09Z",
+          "leaseState": "Available",
+          "leaseStatus": "Unlocked",
+          "legalHold": {
+            "hasLegalHold": true,
+            "protectedAppendWritesHistory": {
+              "allowProtectedAppendWritesAll": false,
+              "objectIdentifier": "184503e6-e07d-49ac-8c78-0a66c017118c",
+              "tenantId": "962f876b-0de2-4bd3-8bca-7e4aceae6942",
+              "timestamp": "2026-08-31T22:10:09.1757681Z"
+            },
+            "tags": [
+              {
+                "objectIdentifier": "184503e6-e07d-49ac-8c78-0a66c017118c",
+                "tag": "v3custodyproof",
+                "tenantId": "962f876b-0de2-4bd3-8bca-7e4aceae6942",
+                "timestamp": "2026-08-31T22:02:39.3450611Z"
+              }
+            ]
+          },
+          "publicAccess": "None",
+          "remainingRetentionDays": 0
+        },
+        "type": "Microsoft.Storage/storageAccounts/blobServices/containers"
+      }
+    }
+  ]
+}

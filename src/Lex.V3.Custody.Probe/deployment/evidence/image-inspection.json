@@ -1,0 +1,106 @@
+{
+  "schema": "lex-v3-custody-probe-image-inspection/1",
+  "sourceHead": "e305791e66f82fef17dfed2da2185d68a3607385",
+  "archive": "custody-probe.tar",
+  "archiveSha256": "bac8df7f280bcf61ac54fdf01bc4244fb16682136ab1a4e8ab82862e94023af4",
+  "archiveByteLength": 57573888,
+  "manifestDigest": "sha256:c3289ea3396620150b9cd1a64b20b985cfb649303e01c2450afafbec747ec78b",
+  "config": {
+    "ExposedPorts": {
+      "8080/tcp": {}
+    },
+    "Labels": {
+      "org.opencontainers.image.authors": "Lex.V3.Custody.Probe",
+      "org.opencontainers.image.version": "1.0.0",
+      "org.opencontainers.image.base.name": "mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled@sha256:0839314d08bb65da369135389a5d8291f75ace587fbb0488f469eb92c62eef68",
+      "net.dot.runtime.majorminor": "10.0",
+      "net.dot.sdk.version": "10.0.400",
+      "org.opencontainers.image.base.digest": "sha256:edec6ea65a92f432083a8f75fc3c18addd004015bbd4d523ce1d13e23b347008"
+    },
+    "Env": [
+      "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+      "APP_UID=1654",
+      "ASPNETCORE_HTTP_PORTS=8080",
+      "DOTNET_RUNNING_IN_CONTAINER=true",
+      "DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=true",
+      "DOTNET_VERSION=10.0.11",
+      "ASPNET_VERSION=10.0.11"
+    ],
+    "WorkingDir": "/app/",
+    "Entrypoint": [
+      "dotnet",
+      "/app/Lex.V3.Custody.Probe.dll"
+    ],
+    "User": "1654"
+  },
+  "members": [
+    {
+      "path": "blobs/sha256/def854da5956476bcadf65ed422b8c05557e1a7b517822950c2c0faacc90e9b7",
+      "byteLength": 5804045,
+      "sha256": "def854da5956476bcadf65ed422b8c05557e1a7b517822950c2c0faacc90e9b7"
+    },
+    {
+      "path": "blobs/sha256/12ef4e442d47820e93ebe5c9f236f0b112033d4590a73f661169df351419b2c0",
+      "byteLength": 119,
+      "sha256": "12ef4e442d47820e93ebe5c9f236f0b112033d4590a73f661169df351419b2c0"
+    },
+    {
+      "path": "blobs/sha256/6db3a30f546a6a202c782031f663c61ec37067e45244b248939cb659c4d5a835",
+      "byteLength": 36601728,
+      "sha256": "6db3a30f546a6a202c782031f663c61ec37067e45244b248939cb659c4d5a835"
+    },
+    {
+      "path": "blobs/sha256/f619da09acfd4e1ef72749d405b458c5c2e92c5c86b8ab3d9156b4554da573de",
+      "byteLength": 151,
+      "sha256": "f619da09acfd4e1ef72749d405b458c5c2e92c5c86b8ab3d9156b4554da573de"
+    },
+    {
+      "path": "blobs/sha256/843cba457a118410168c2546fd9a5a5d9d3bf0be6c06831265e862750a89852f",
+      "byteLength": 12731712,
+      "sha256": "843cba457a118410168c2546fd9a5a5d9d3bf0be6c06831265e862750a89852f"
+    },
+    {
+      "path": "blobs/sha256/d8f80a8bff385557c8d58e1d3f50f5057ed0a5eb51bf61285a15cda7c410b08e",
+      "byteLength": 2411651,
+      "sha256": "d8f80a8bff385557c8d58e1d3f50f5057ed0a5eb51bf61285a15cda7c410b08e"
+    },
+    {
+      "path": "blobs/sha256/7bc2cd32d721b3868671bcacf369dd6606d894fdd4fb579f53872be19f1c3d0b",
+      "byteLength": 3194,
+      "sha256": "7bc2cd32d721b3868671bcacf369dd6606d894fdd4fb579f53872be19f1c3d0b"
+    },
+    {
+      "path": "blobs/sha256/c3289ea3396620150b9cd1a64b20b985cfb649303e01c2450afafbec747ec78b",
+      "byteLength": 1235,
+      "sha256": "c3289ea3396620150b9cd1a64b20b985cfb649303e01c2450afafbec747ec78b"
+    },
+    {
+      "path": "index.json",
+      "byteLength": 459,
+      "sha256": "e1c43e9ef099383999f1bc513a91cca02b38d663bbbaec4149e2d729936f6b7e"
+    },
+    {
+      "path": "oci-layout",
+      "byteLength": 31,
+      "sha256": "0cdedc0869d60bb59e3dde736f996025e70318180587e049cfa22f80d67aa8e5"
+    }
+  ],
+  "publishedAssemblies": [
+    {
+      "path": "app/Lex.V3.Contracts.dll",
+      "sha256": "a3e368d4f146d1b62f5bfb721baae5d5a1bff925cd7d2fa04edeeefd85cf9adb",
+      "byteLength": 1415168
+    },
+    {
+      "path": "app/Lex.V3.Custody.Azure.dll",
+      "sha256": "488b12220b69aef136ea91c0299138e9b44bc9be871e485e1008a3e785efbd64",
+      "byteLength": 87040
+    },
+    {
+      "path": "app/Lex.V3.Custody.Probe.dll",
+      "sha256": "01eee5a651ce794bae2ece204945c1468d3cf3e633c6c5cf3ebbdc2026a6c640",
+      "byteLength": 24576
+    }
+  ],
+  "limitations": "Locally built and inspected development OCI image; not pushed, not executed in Linux or Azure, not production acceptance or V3 promotion. Managed published assembly refused missing identity on Windows."
+}

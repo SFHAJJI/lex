@@ -1,0 +1,48 @@
+{
+  "schema": "lex-v3-arm-header-probe/1",
+  "actor": "Azure CLI operator token, not managed identity",
+  "observations": [
+    {
+      "lane": "staging",
+      "observedUtc": "2026-09-06T10:40:49.7038963+00:00",
+      "method": "GET",
+      "url": "https://management.azure.com/subscriptions/7c1e98f3-ef6e-45a0-b61b-a51d436bf093/resourceGroups/rg-lex-v3-custody/providers/Microsoft.Storage/storageAccounts/stlexv3custody/blobServices/default/containers/staging?api-version=2025-06-01",
+      "status": 200,
+      "etag": "\"0x8DF07AA7865CC00\"",
+      "date": "09/06/2026 10:40:49 +00:00",
+      "requestId": "d518abaa-078c-43cb-8bc4-69e9b9c3ed52",
+      "contentType": "application/json",
+      "contentLength": 721,
+      "bodySha256": "bb9617895d4f154377401b9f0231ac92c1e850c92e7be8cd3a1a5bb2ba1fb96b",
+      "bodyByteLength": 721
+    },
+    {
+      "lane": "nightly",
+      "observedUtc": "2026-09-06T10:40:50.2204798+00:00",
+      "method": "GET",
+      "url": "https://management.azure.com/subscriptions/7c1e98f3-ef6e-45a0-b61b-a51d436bf093/resourceGroups/rg-lex-v3-custody/providers/Microsoft.Storage/storageAccounts/stlexv3custody/blobServices/default/containers/nightly?api-version=2025-06-01",
+      "status": 200,
+      "etag": "\"0x8DF07AA79A1C8D3\"",
+      "date": "09/06/2026 10:40:50 +00:00",
+      "requestId": "b295dc56-a1b4-4dcc-b026-d412ab1d15b4",
+      "contentType": "application/json",
+      "contentLength": 721,
+      "bodySha256": "670a3a64593012281bc640cd19ccc7bb8510c752890414c527c8ee8e78cf4717",
+      "bodyByteLength": 721
+    },
+    {
+      "lane": "legal-hold",
+      "observedUtc": "2026-09-06T10:40:50.3152627+00:00",
+      "method": "GET",
+      "url": "https://management.azure.com/subscriptions/7c1e98f3-ef6e-45a0-b61b-a51d436bf093/resourceGroups/rg-lex-v3-custody/providers/Microsoft.Storage/storageAccounts/stlexv3custody/blobServices/default/containers/legal-hold?api-version=2025-06-01",
+      "status": 200,
+      "etag": "\"0x8DF07AC9EDA02BC\"",
+      "date": "09/06/2026 10:40:50 +00:00",
+      "requestId": "9a0dd7e6-24a9-4031-9672-171b362e099b",
+      "contentType": "application/json",
+      "contentLength": 1122,
+      "bodySha256": "16b2aa0b3a6fabc12ef0b4371707b2a3ac82e20725c54e24eee7cfeb81de93c0",
+      "bodyByteLength": 1122
+    }
+  ]
+}

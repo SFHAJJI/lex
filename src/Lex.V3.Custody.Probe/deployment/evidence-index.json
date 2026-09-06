@@ -1,0 +1,96 @@
+{
+  "schema": "lex-v3-custody-runner-proposal-files/1",
+  "base": "e305791e66f82fef17dfed2da2185d68a3607385",
+  "files": [
+    {
+      "path": ".gitattributes",
+      "sha256": "3b853945e6e9d2113ff77cf9e13e36abf3f51ea0855af8261a0604e0af667e6d",
+      "byteLength": 86
+    },
+    {
+      "path": "evidence/arm-headers.json",
+      "sha256": "e7e0c8609967bc3f76f55d03dec584d3c754e8c26c4f8106ef5bb203224ebeaf",
+      "byteLength": 2339
+    },
+    {
+      "path": "evidence/arm-legal-hold-16b2aa0b3a6fabc12ef0b4371707b2a3ac82e20725c54e24eee7cfeb81de93c0.json",
+      "sha256": "16b2aa0b3a6fabc12ef0b4371707b2a3ac82e20725c54e24eee7cfeb81de93c0",
+      "byteLength": 1122
+    },
+    {
+      "path": "evidence/arm-nightly-670a3a64593012281bc640cd19ccc7bb8510c752890414c527c8ee8e78cf4717.json",
+      "sha256": "670a3a64593012281bc640cd19ccc7bb8510c752890414c527c8ee8e78cf4717",
+      "byteLength": 721
+    },
+    {
+      "path": "evidence/arm-staging-bb9617895d4f154377401b9f0231ac92c1e850c92e7be8cd3a1a5bb2ba1fb96b.json",
+      "sha256": "bb9617895d4f154377401b9f0231ac92c1e850c92e7be8cd3a1a5bb2ba1fb96b",
+      "byteLength": 721
+    },
+    {
+      "path": "evidence/azure-observations.json",
+      "sha256": "cf8b1189cc585e06ad87c6d491258ce6db6bc51f9dd1ef9038b00ab08e60ea2d",
+      "byteLength": 10658
+    },
+    {
+      "path": "evidence/azure-validate.json",
+      "sha256": "b4fd691e23b3d3707e7ff79e5e21f0e28694d50c3004895448147cd299df9221",
+      "byteLength": 16418
+    },
+    {
+      "path": "evidence/azure-what-if.json",
+      "sha256": "1ecddb452e1f2d6aecd36def60abe66813fae317e5bc2d7e542fd274f6dabd72",
+      "byteLength": 7238
+    },
+    {
+      "path": "evidence/commands.json",
+      "sha256": "499c9af39e584be45cb81abd1e9c92ee75006bdaa41408ccecb40266295489fc",
+      "byteLength": 3387
+    },
+    {
+      "path": "evidence/image-inspection.json",
+      "sha256": "88420f872457289126f3454450db9187faa6b05ae2cdfbcb8c22ba17e829cda1",
+      "byteLength": 4317
+    },
+    {
+      "path": "evidence/no-identity-stderr.txt",
+      "sha256": "ad4796db669333beea85034557c4a9aee000df150e7f5978cc0447ea8d0ac9b6",
+      "byteLength": 22
+    },
+    {
+      "path": "evidence/publish.txt",
+      "sha256": "5441dc22d66f05de4f42f7ba47269bb708660faf3880e88aab87952b7bde0630",
+      "byteLength": 1084
+    },
+    {
+      "path": "evidence/restore.txt",
+      "sha256": "ed4fef5f7e18194321d951723cfab292c35d5ee6cf3fa7743433ea95b6e8ede5",
+      "byteLength": 470
+    },
+    {
+      "path": "evidence/wrong-image-stderr.txt",
+      "sha256": "a43df9634296d1023158a4eea38b608c21f3a358b7873e9aed709694492540dc",
+      "byteLength": 546
+    },
+    {
+      "path": "job.bicep",
+      "sha256": "88f3120aaf3dd6d37aaf07f15e7cc25e6f48449cc46f1a731e6df72bfb31e54c",
+      "byteLength": 1960
+    },
+    {
+      "path": "main.bicep",
+      "sha256": "b5bdc863bf1aa3d4f742042749f1c21bb6ac03b65fbb0b3eaff0f44e43432fb8",
+      "byteLength": 4069
+    },
+    {
+      "path": "README.md",
+      "sha256": "fc9b9ca2633b7178d70e4e15b6bd2e4bbd9ac7bdf440a4cbec523c6abba5fe8c",
+      "byteLength": 12269
+    },
+    {
+      "path": "registry-pull.bicep",
+      "sha256": "014c165b61eb018b700410d65bae69fb56087f3ec67aa477a45c4bd043519e3a",
+      "byteLength": 554
+    }
+  ]
+}

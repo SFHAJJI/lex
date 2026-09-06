@@ -1,0 +1,58 @@
+{
+  "schema": "lex-v3-custody-runner-preparation-commands/1",
+  "worktree": "C:/lex-v3/worktrees/codex-stage1-custody-runner",
+  "base": "e305791e66f82fef17dfed2da2185d68a3607385",
+  "commands": [
+    {
+      "command": "dotnet restore src/Lex.V3.Custody.Probe/Lex.V3.Custody.Probe.csproj --locked-mode",
+      "exitCode": 0,
+      "output": "restore.txt"
+    },
+    {
+      "command": "dotnet publish src/Lex.V3.Custody.Probe/Lex.V3.Custody.Probe.csproj --configuration Release --no-restore --runtime linux-x64 --self-contained false /t:PublishContainer -p:EnableSdkContainerSupport=true -p:ContainerBaseImage=mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled@sha256:0839314d08bb65da369135389a5d8291f75ace587fbb0488f469eb92c62eef68 -p:ContainerRepository=lex-v3-custody-probe -p:ContainerImageTag=e305791e66f82fef17dfed2da2185d68a3607385 -p:ContainerImageFormat=OCI -p:ContainerGenerateLabelsImageCreated=false -p:ContainerUser=1654 -p:ContainerArchiveOutputPath=C:/lex-v3/worktrees/codex-stage1-custody-runner/artifacts/issue-459-runner/custody-probe.tar.gz",
+      "exitCode": 0,
+      "output": "publish.txt",
+      "note": "Uncompressed archive renamed to custody-probe.tar without changing bytes."
+    },
+    {
+      "command": "dotnet src/Lex.V3.Custody.Probe/bin/Release/net10.0/linux-x64/publish/Lex.V3.Custody.Probe.dll write nightly_floor_90d",
+      "exitCode": 1,
+      "stdoutBytes": 0,
+      "output": "no-identity-stderr.txt",
+      "note": "Missing identity on Windows; not Linux/container or Azure execution."
+    },
+    {
+      "command": "az bicep build --file src/Lex.V3.Custody.Probe/deployment/main.bicep --outfile artifacts/issue-459-runner/main.json",
+      "exitCode": 0,
+      "warnings": 0
+    },
+    {
+      "command": "az deployment group validate --resource-group rg-lex-v3-custody --name lex-v3-custody-probe-review --template-file src/Lex.V3.Custody.Probe/deployment/main.bicep --output json",
+      "exitCode": 0,
+      "output": "azure-validate.json",
+      "note": "Custom-role draft before changing only the registry assignment name from principalId to identityResourceId."
+    },
+    {
+      "command": "az deployment group validate --resource-group rg-lex-v3-custody --name lex-v3-custody-probe-wrong-image --template-file src/Lex.V3.Custody.Probe/deployment/main.bicep --parameters image=crsoufien3orem.azurecr.io/lex-v3-custody-probe:latest --output json",
+      "exitCode": 1,
+      "output": "wrong-image-stderr.txt"
+    },
+    {
+      "command": "az deployment group what-if --resource-group rg-lex-v3-custody --name lex-v3-custody-probe-review --template-file src/Lex.V3.Custody.Probe/deployment/main.bicep --no-pretty-print --result-format ResourceIdOnly",
+      "exitCode": 0,
+      "output": "azure-what-if.json",
+      "note": "Final template; eight Create, all other changes Ignore."
+    },
+    {
+      "command": "artifacts/issue-459-runner/oras/oras.exe manifest fetch --oci-layout artifacts/issue-459-runner/custody-probe.tar:e305791e66f82fef17dfed2da2185d68a3607385 --descriptor",
+      "exitCode": 0,
+      "digest": "sha256:c3289ea3396620150b9cd1a64b20b985cfb649303e01c2450afafbec747ec78b"
+    },
+    {
+      "command": "pwsh -NoLogo -NoProfile -File eng/verify-v3-tree.ps1",
+      "exitCode": 0,
+      "trackedPaths": 652,
+      "note": "Before adding this command record; count is not a claim about later staging."
+    }
+  ]
+}

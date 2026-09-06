@@ -1,0 +1,174 @@
+{
+  "changes": [
+    {
+      "after": null,
+      "before": null,
+      "changeType": "Create",
+      "delta": null,
+      "resourceId": "/subscriptions/7c1e98f3-ef6e-45a0-b61b-a51d436bf093/resourceGroups/rg-lex-v3-custody/providers/Microsoft.Authorization/roleDefinitions/a4545297-afa6-5a16-bf9b-5f8f20a34126",
+      "unsupportedReason": null
+    },
+    {
+      "after": null,
+      "before": null,
+      "changeType": "Create",
+      "delta": null,
+      "resourceId": "/subscriptions/7c1e98f3-ef6e-45a0-b61b-a51d436bf093/resourceGroups/rg-lex-v3-custody/providers/Microsoft.Authorization/roleDefinitions/af807130-0ea2-5421-bd1e-b6c6911bd6d9",
+      "unsupportedReason": null
+    },
+    {
+      "after": null,
+      "before": null,
+      "changeType": "Create",
+      "delta": null,
+      "resourceId": "/subscriptions/7c1e98f3-ef6e-45a0-b61b-a51d436bf093/resourceGroups/rg-lex-v3-custody/providers/Microsoft.ManagedIdentity/userAssignedIdentities/uami-lex-v3-custody-probe",
+      "unsupportedReason": null
+    },
+    {
+      "after": null,
+      "before": null,
+      "changeType": "Ignore",
+      "delta": null,
+      "resourceId": "/subscriptions/7c1e98f3-ef6e-45a0-b61b-a51d436bf093/resourceGroups/rg-lex-v3-custody/providers/Microsoft.Storage/storageAccounts/stlexv3custody",
+      "unsupportedReason": null
+    },
+    {
+      "after": null,
+      "before": null,
+      "changeType": "Create",
+      "delta": null,
+      "resourceId": "/subscriptions/7c1e98f3-ef6e-45a0-b61b-a51d436bf093/resourceGroups/rg-lex-v3-custody/providers/Microsoft.Storage/storageAccounts/stlexv3custody/blobServices/default/containers/legal-hold/providers/Microsoft.Authorization/roleAssignments/2ada6008-abeb-554e-880f-8f46799256e6",
+      "unsupportedReason": null
+    },
+    {
+      "after": null,
+      "before": null,
+      "changeType": "Create",
+      "delta": null,
+      "resourceId": "/subscriptions/7c1e98f3-ef6e-45a0-b61b-a51d436bf093/resourceGroups/rg-lex-v3-custody/providers/Microsoft.Storage/storageAccounts/stlexv3custody/blobServices/default/containers/nightly/providers/Microsoft.Authorization/roleAssignments/dea34854-f564-59c5-a27a-7bc3507e558a",
+      "unsupportedReason": null
+    },
+    {
+      "after": null,
+      "before": null,
+      "changeType": "Create",
+      "delta": null,
+      "resourceId": "/subscriptions/7c1e98f3-ef6e-45a0-b61b-a51d436bf093/resourceGroups/rg-lex-v3-custody/providers/Microsoft.Storage/storageAccounts/stlexv3custody/blobServices/default/containers/staging/providers/Microsoft.Authorization/roleAssignments/3222e531-d873-5e46-8e44-d5367b3cc922",
+      "unsupportedReason": null
+    },
+    {
+      "after": null,
+      "before": null,
+      "changeType": "Ignore",
+      "delta": null,
+      "resourceId": "/subscriptions/7c1e98f3-ef6e-45a0-b61b-a51d436bf093/resourceGroups/rg-platform/providers/Microsoft.App/containerApps/ca-lex-web",
+      "unsupportedReason": null
+    },
+    {
+      "after": null,
+      "before": null,
+      "changeType": "Create",
+      "delta": null,
+      "resourceId": "/subscriptions/7c1e98f3-ef6e-45a0-b61b-a51d436bf093/resourceGroups/rg-platform/providers/Microsoft.App/jobs/caj-lex-v3-custody-probe",
+      "unsupportedReason": null
+    },
+    {
+      "after": null,
+      "before": null,
+      "changeType": "Ignore",
+      "delta": null,
+      "resourceId": "/subscriptions/7c1e98f3-ef6e-45a0-b61b-a51d436bf093/resourceGroups/rg-platform/providers/Microsoft.App/managedEnvironments/cae-platform-law",
+      "unsupportedReason": null
+    },
+    {
+      "after": null,
+      "before": null,
+      "changeType": "Ignore",
+      "delta": null,
+      "resourceId": "/subscriptions/7c1e98f3-ef6e-45a0-b61b-a51d436bf093/resourceGroups/rg-platform/providers/Microsoft.App/managedEnvironments/cae-platform-law/managedCertificates/mc-cae-platform-l-law-soufien-lu-5041",
+      "unsupportedReason": null
+    },
+    {
+      "after": null,
+      "before": null,
+      "changeType": "Ignore",
+      "delta": null,
+      "resourceId": "/subscriptions/7c1e98f3-ef6e-45a0-b61b-a51d436bf093/resourceGroups/rg-platform/providers/Microsoft.Insights/components/ai-lex-web",
+      "unsupportedReason": null
+    },
+    {
+      "after": null,
+      "before": null,
+      "changeType": "Ignore",
+      "delta": null,
+      "resourceId": "/subscriptions/7c1e98f3-ef6e-45a0-b61b-a51d436bf093/resourceGroups/rg-platform/providers/Microsoft.KeyVault/vaults/kv-lex-eval-review",
+      "unsupportedReason": null
+    },
+    {
+      "after": null,
+      "before": null,
+      "changeType": "Ignore",
+      "delta": null,
+      "resourceId": "/subscriptions/7c1e98f3-ef6e-45a0-b61b-a51d436bf093/resourceGroups/rg-platform/providers/Microsoft.KeyVault/vaults/kv-lex-soufien",
+      "unsupportedReason": null
+    },
+    {
+      "after": null,
+      "before": null,
+      "changeType": "Ignore",
+      "delta": null,
+      "resourceId": "/subscriptions/7c1e98f3-ef6e-45a0-b61b-a51d436bf093/resourceGroups/rg-platform/providers/Microsoft.ManagedIdentity/userAssignedIdentities/uami-lex-deploy",
+      "unsupportedReason": null
+    },
+    {
+      "after": null,
+      "before": null,
+      "changeType": "Ignore",
+      "delta": null,
+      "resourceId": "/subscriptions/7c1e98f3-ef6e-45a0-b61b-a51d436bf093/resourceGroups/rg-platform/providers/Microsoft.ManagedIdentity/userAssignedIdentities/uami-lex-publisher",
+      "unsupportedReason": null
+    },
+    {
+      "after": null,
+      "before": null,
+      "changeType": "Ignore",
+      "delta": null,
+      "resourceId": "/subscriptions/7c1e98f3-ef6e-45a0-b61b-a51d436bf093/resourceGroups/rg-platform/providers/Microsoft.ManagedIdentity/userAssignedIdentities/uami-lex-runtime",
+      "unsupportedReason": null
+    },
+    {
+      "after": null,
+      "before": null,
+      "changeType": "Ignore",
+      "delta": null,
+      "resourceId": "/subscriptions/7c1e98f3-ef6e-45a0-b61b-a51d436bf093/resourceGroups/rg-platform/providers/Microsoft.ManagedIdentity/userAssignedIdentities/uami-lex-v3-preview-pull",
+      "unsupportedReason": null
+    },
+    {
+      "after": null,
+      "before": null,
+      "changeType": "Ignore",
+      "delta": null,
+      "resourceId": "/subscriptions/7c1e98f3-ef6e-45a0-b61b-a51d436bf093/resourceGroups/rg-platform/providers/Microsoft.Network/dnszones/soufien.lu",
+      "unsupportedReason": null
+    },
+    {
+      "after": null,
+      "before": null,
+      "changeType": "Ignore",
+      "delta": null,
+      "resourceId": "/subscriptions/7c1e98f3-ef6e-45a0-b61b-a51d436bf093/resourceGroups/rg-platform/providers/Microsoft.Storage/storageAccounts/stlexindexes",
+      "unsupportedReason": null
+    },
+    {
+      "after": null,
+      "before": null,
+      "changeType": "Create",
+      "delta": null,
+      "resourceId": "/subscriptions/7c1e98f3-ef6e-45a0-b61b-a51d436bf093/resourceGroups/rg-soufien-portfolio/providers/Microsoft.ContainerRegistry/registries/crsoufien3orem/providers/Microsoft.Authorization/roleAssignments/aa25cfa2-b4d2-50fa-b571-d09077d152f3",
+      "unsupportedReason": null
+    }
+  ],
+  "error": null,
+  "status": "Succeeded"
+}
