@@ -1,0 +1,71 @@
+Exécuter des tests à partir de C:\lex-v3\worktrees\codex-stage1-luxembourg\tests\Lex.V3.Ingest.Tests\bin\Debug\net10.0\Lex.V3.Ingest.Tests.dll (net10.0|x64)
+échec AWorkAcquiresItsBodyFromTheDeliveredMultiSubjectWemiGraph (null,"agreed") (1s 664ms)
+  à partir de C:\lex-v3\worktrees\codex-stage1-luxembourg\tests\Lex.V3.Ingest.Tests\bin\Debug\net10.0\Lex.V3.Ingest.Tests.dll (net10.0|x64)
+  Assertion failed. Condition attendue pour être true.
+  The rights index must locate the retained acquisition plan without scanning the custody store.
+  
+  actual: false
+  
+  Assert.IsTrue(inFileIndex.Value.TryGetProperty("acquisitionManifestContentSha256", out var acquisitionDigest))
+    sur Lex.V3.Ingest.Tests.LuxembourgProductionTopologyTests.AWorkAcquiresItsBodyFromTheDeliveredMultiSubjectWemiGraph(String licenceIri, String inFileCase) dans C:\lex-v3\worktrees\codex-stage1-luxembourg\tests\Lex.V3.Ingest.Tests\LuxembourgProductionTopologyTests.cs:150
+    sur Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter.Execution.TestMethodInfo.ExecuteInternalAsync(Object[] arguments, CancellationTokenSource timeoutTokenSource)
+échec AWorkAcquiresItsBodyFromTheDeliveredMultiSubjectWemiGraph ("http://creativecommons.org/licenses/by/4.0/","agreed") (1s 043ms)
+  à partir de C:\lex-v3\worktrees\codex-stage1-luxembourg\tests\Lex.V3.Ingest.Tests\bin\Debug\net10.0\Lex.V3.Ingest.Tests.dll (net10.0|x64)
+  Assertion failed. Condition attendue pour être true.
+  The rights index must locate the retained acquisition plan without scanning the custody store.
+  
+  actual: false
+  
+  Assert.IsTrue(inFileIndex.Value.TryGetProperty("acquisitionManifestContentSha256", out var acquisitionDigest))
+    sur Lex.V3.Ingest.Tests.LuxembourgProductionTopologyTests.AWorkAcquiresItsBodyFromTheDeliveredMultiSubjectWemiGraph(String licenceIri, String inFileCase) dans C:\lex-v3\worktrees\codex-stage1-luxembourg\tests\Lex.V3.Ingest.Tests\LuxembourgProductionTopologyTests.cs:150
+    sur Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter.Execution.TestMethodInfo.ExecuteInternalAsync(Object[] arguments, CancellationTokenSource timeoutTokenSource)
+échec AWorkAcquiresItsBodyFromTheDeliveredMultiSubjectWemiGraph ("http://creativecommons.org/licenses/by/4.0/","conflict") (2s 209ms)
+  à partir de C:\lex-v3\worktrees\codex-stage1-luxembourg\tests\Lex.V3.Ingest.Tests\bin\Debug\net10.0\Lex.V3.Ingest.Tests.dll (net10.0|x64)
+  Assertion failed. Condition attendue pour être true.
+  The rights index must locate the retained acquisition plan without scanning the custody store.
+  
+  actual: false
+  
+  Assert.IsTrue(inFileIndex.Value.TryGetProperty("acquisitionManifestContentSha256", out var acquisitionDigest))
+    sur Lex.V3.Ingest.Tests.LuxembourgProductionTopologyTests.AWorkAcquiresItsBodyFromTheDeliveredMultiSubjectWemiGraph(String licenceIri, String inFileCase) dans C:\lex-v3\worktrees\codex-stage1-luxembourg\tests\Lex.V3.Ingest.Tests\LuxembourgProductionTopologyTests.cs:150
+    sur Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter.Execution.TestMethodInfo.ExecuteInternalAsync(Object[] arguments, CancellationTokenSource timeoutTokenSource)
+échec AWorkAcquiresItsBodyFromTheDeliveredMultiSubjectWemiGraph ("http://creativecommons.org/licenses/by/4.0/","missing") (2s 540ms)
+  à partir de C:\lex-v3\worktrees\codex-stage1-luxembourg\tests\Lex.V3.Ingest.Tests\bin\Debug\net10.0\Lex.V3.Ingest.Tests.dll (net10.0|x64)
+  Assertion failed. Condition attendue pour être true.
+  The rights index must locate the retained acquisition plan without scanning the custody store.
+  
+  actual: false
+  
+  Assert.IsTrue(inFileIndex.Value.TryGetProperty("acquisitionManifestContentSha256", out var acquisitionDigest))
+    sur Lex.V3.Ingest.Tests.LuxembourgProductionTopologyTests.AWorkAcquiresItsBodyFromTheDeliveredMultiSubjectWemiGraph(String licenceIri, String inFileCase) dans C:\lex-v3\worktrees\codex-stage1-luxembourg\tests\Lex.V3.Ingest.Tests\LuxembourgProductionTopologyTests.cs:150
+    sur Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter.Execution.TestMethodInfo.ExecuteInternalAsync(Object[] arguments, CancellationTokenSource timeoutTokenSource)
+échec AWorkAcquiresItsBodyFromTheDeliveredMultiSubjectWemiGraph ("http://creativecommons.org/licenses/by/4.0/","malformed") (1s 668ms)
+  à partir de C:\lex-v3\worktrees\codex-stage1-luxembourg\tests\Lex.V3.Ingest.Tests\bin\Debug\net10.0\Lex.V3.Ingest.Tests.dll (net10.0|x64)
+  Assertion failed. Condition attendue pour être true.
+  The rights index must locate the retained acquisition plan without scanning the custody store.
+  
+  actual: false
+  
+  Assert.IsTrue(inFileIndex.Value.TryGetProperty("acquisitionManifestContentSha256", out var acquisitionDigest))
+    sur Lex.V3.Ingest.Tests.LuxembourgProductionTopologyTests.AWorkAcquiresItsBodyFromTheDeliveredMultiSubjectWemiGraph(String licenceIri, String inFileCase) dans C:\lex-v3\worktrees\codex-stage1-luxembourg\tests\Lex.V3.Ingest.Tests\LuxembourgProductionTopologyTests.cs:150
+    sur Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter.Execution.TestMethodInfo.ExecuteInternalAsync(Object[] arguments, CancellationTokenSource timeoutTokenSource)
+échec AWorkAcquiresItsBodyFromTheDeliveredMultiSubjectWemiGraph ("http://creativecommons.org/licenses/by/4.0/","mismatched") (1s 243ms)
+  à partir de C:\lex-v3\worktrees\codex-stage1-luxembourg\tests\Lex.V3.Ingest.Tests\bin\Debug\net10.0\Lex.V3.Ingest.Tests.dll (net10.0|x64)
+  Assertion failed. Condition attendue pour être true.
+  The rights index must locate the retained acquisition plan without scanning the custody store.
+  
+  actual: false
+  
+  Assert.IsTrue(inFileIndex.Value.TryGetProperty("acquisitionManifestContentSha256", out var acquisitionDigest))
+    sur Lex.V3.Ingest.Tests.LuxembourgProductionTopologyTests.AWorkAcquiresItsBodyFromTheDeliveredMultiSubjectWemiGraph(String licenceIri, String inFileCase) dans C:\lex-v3\worktrees\codex-stage1-luxembourg\tests\Lex.V3.Ingest.Tests\LuxembourgProductionTopologyTests.cs:150
+    sur Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter.Execution.TestMethodInfo.ExecuteInternalAsync(Object[] arguments, CancellationTokenSource timeoutTokenSource)
+C:\lex-v3\worktrees\codex-stage1-luxembourg\tests\Lex.V3.Ingest.Tests\bin\Debug\net10.0\Lex.V3.Ingest.Tests.dll (net10.0|x64) a échoué avec 6 erreur(s) (11s 055ms)
+Code de sortie: 2
+
+Résumé de série de tests : Échec!
+  total : 6
+  échec : 6
+  réussie : 0
+  ignoré : 0
+  durée : 11s 885ms
+L’exécution de tests s’est terminée avec un code de sortie non réussi : 2 (voir : https://aka.ms/testingplatform/exitcodes)

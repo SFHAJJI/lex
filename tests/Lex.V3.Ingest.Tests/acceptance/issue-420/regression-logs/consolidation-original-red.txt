@@ -1,0 +1,22 @@
+Exécuter des tests à partir de C:\lex-v3\worktrees\codex-stage1-luxembourg\tests\Lex.V3.Ingest.Tests\bin\Debug\net10.0\Lex.V3.Ingest.Tests.dll (net10.0|x64)
+échec AConsolidationUsesOnlyItsExactOriginalFromTheSameProvenFamilies (True) (1s 191ms)
+  à partir de C:\lex-v3\worktrees\codex-stage1-luxembourg\tests\Lex.V3.Ingest.Tests\bin\Debug\net10.0\Lex.V3.Ingest.Tests.dll (net10.0|x64)
+  Assertion failed. Les valeurs attendues doivent être égales.
+  Delivered original-act evidence must reach consolidation qualification; another Act cannot replace it.
+  
+  expected: Held
+  actual:   NotHeld
+  
+  Assert.AreEqual(includeExactOriginal ? CorpusBodyRecordKind.Held : CorpusBodyRecordKind.NotHeld, workRecord.Body.Kind)
+    sur Lex.V3.Ingest.Tests.LuxembourgProductionTopologyTests.AConsolidationUsesOnlyItsExactOriginalFromTheSameProvenFamilies(Boolean includeExactOriginal) dans C:\lex-v3\worktrees\codex-stage1-luxembourg\tests\Lex.V3.Ingest.Tests\LuxembourgProductionTopologyTests.cs:290
+    sur Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter.Execution.TestMethodInfo.ExecuteInternalAsync(Object[] arguments, CancellationTokenSource timeoutTokenSource)
+C:\lex-v3\worktrees\codex-stage1-luxembourg\tests\Lex.V3.Ingest.Tests\bin\Debug\net10.0\Lex.V3.Ingest.Tests.dll (net10.0|x64) a échoué avec 1 erreur(s) (2s 595ms)
+Code de sortie: 2
+
+Résumé de série de tests : Échec!
+  total : 2
+  échec : 1
+  réussie : 1
+  ignoré : 0
+  durée : 2s 822ms
+L’exécution de tests s’est terminée avec un code de sortie non réussi : 2 (voir : https://aka.ms/testingplatform/exitcodes)

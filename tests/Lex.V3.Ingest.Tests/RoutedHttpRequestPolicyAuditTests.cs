@@ -417,7 +417,7 @@ public sealed class RoutedHttpRequestPolicyAuditTests
     /// binds of one request agree exactly and there is nothing left to normalise away.
     /// </summary>
     private const string PinnedLuxembourgCountPolicySha256 =
-        "f74d443c54efca057f310df7b8392ac7d87802547ae8f469303456ad3688db7e";
+        "7a494b3bea961deb9ed7dbfbef67f4de1ca0df28bb7a89beb0f2ca97ab77e5a0";
 
     [TestMethod]
     public async Task LuxembourgCountSendsAgainstAFreshRealStoreHoldingNothing()
@@ -912,7 +912,7 @@ public sealed class RoutedHttpRequestPolicyAuditTests
         var constructor = typeof(RoutedHttpAcquisitionSession).GetConstructors(
             BindingFlags.Instance | BindingFlags.NonPublic).Single();
         return (RoutedHttpAcquisitionSession)constructor.Invoke(
-            [request, custodyStore, handler, new AdvancingTimeProvider(), false, Array.Empty<string>()]);
+            [request, custodyStore, handler, new AdvancingTimeProvider(), false]);
     }
 
     private static HttpLogicalRequest RobotsRequest(RoutedHttpAcquisitionSession session) =>

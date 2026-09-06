@@ -293,7 +293,7 @@ public sealed class LuxembourgSourceProfileTests
     }
 
     [TestMethod]
-    public void AssertionOutsideBoundVocabularyIsTypedScopeDrift()
+    public void AssertionOutsideBoundVocabularyIsThisResourcesTypedQuarantine()
     {
         var profile = LuxembourgProfiles.Opened(CompleteSnapshot());
         var objectRef = ObjectRef(
@@ -307,12 +307,14 @@ public sealed class LuxembourgSourceProfileTests
             string.Empty,
             ObservationRef);
 
-        var failure = Assert.IsInstanceOfType<LuxembourgProfileResolution.Failed>(
+        var resolved = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(
             profile.Resolve(Proven([Observation(objectRef, assertions: [assertion])])));
 
-        Assert.AreEqual(
-            LuxembourgProfileResolutionFailureCode.UnknownVocabularyDrift,
-            failure.Failure.Code);
+        Assert.AreEqual(LuScopeTerminalState.TypedQuarantine,
+            resolved.Resources.Single().Dimensions.PublicationFamily.State);
+        Assert.AreEqual(assertion, resolved.Resources.Single().Assertions.Single().Assertion);
+        Assert.AreEqual(LuxembourgAssertionDisposition.TypedQuarantine,
+            resolved.Resources.Single().Assertions.Single().Disposition);
     }
 
     /// <summary>

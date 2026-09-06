@@ -69,6 +69,13 @@ public sealed class DurableBlobReceiptFamilyIngestSurfaceTests
                 + "Lex.V3.Contracts.Custody.ICustodyStore, System.ReadOnlyMemory<System.Byte>, "
                 + "System.Threading.CancellationToken) -> System.Threading.Tasks.Task<"
                 + "System.ValueTuple<" + Receipt + ", System.String>>",
+                // Both scope writes use the same private hold/reopen helper. It returns the
+                // custody store's receipt; it constructs no receipt or policy evidence.
+                "method private instance Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionAdapter::HoldManifestAsync("
+                + "Lex.V3.Contracts.Source.Scope.VerifiedScopeManifest, Lex.V3.Contracts.Source.Scope.IScopeReductionEvidenceResolver, "
+                + "System.Threading.CancellationToken) -> System.Threading.Tasks.Task<System.ValueTuple<"
+                + "Lex.V3.Contracts.Source.Scope.ScopeManifest, " + Receipt + ", Lex.V3.Contracts.Source.Core.SourceArtifactRef, "
+                + "System.String, Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionRefusalDetail>>",
                 "method private instance " + Session + "::BuildHopWriteReceipts(System.UInt64, System.UInt64, "
                 + "System.Collections.Generic.IReadOnlyList<Lex.V3.Contracts.Source.Http.RoutedHttpHop>) "
                 + "-> System.Collections.Generic.Dictionary<System.String, " + Receipt + ">",

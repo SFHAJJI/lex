@@ -483,7 +483,7 @@ public sealed class RoutedHttpRedirectCapabilityTests
         var constructor = typeof(RoutedHttpAcquisitionSession).GetConstructors(
             BindingFlags.Instance | BindingFlags.NonPublic).Single();
         return (RoutedHttpAcquisitionSession)constructor.Invoke(
-            [request, custody, handler, timeProvider, false, Array.Empty<string>()]);
+            [request, custody, handler, timeProvider, false]);
     }
 
     private static Task<RoutedHttpAcquisitionSession.StartResult> BootstrapAsync(

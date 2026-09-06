@@ -1,0 +1,15 @@
+Exécuter des tests à partir de C:\lex-v3\worktrees\codex-stage1-luxembourg\tests\Lex.V3.Ingest.Tests\bin\Release\net10.0\Lex.V3.Ingest.Tests.dll (net10.0|x64)
+réussite AnActRunsThroughThePublicAdapterWithObservedVocabularyAndSameRunRights (8m 46s 057ms)
+  à partir de C:\lex-v3\worktrees\codex-stage1-luxembourg\tests\Lex.V3.Ingest.Tests\bin\Release\net10.0\Lex.V3.Ingest.Tests.dll (net10.0|x64)
+  Sortie standard
+    LU adapter evidence: C:\lex-v3\worktrees\codex-stage1-luxembourg\artifacts\lu-adapter-6b4cd4540985436da7f08743ec0f9077\evidence-index.json; sha256=0a30c30382eeb44f0a722ca2f8091fc9ab4bfb2f80df8e2e312b078abb47d3a3; bytes=1877665; status=passed_bounded_adapter_canary
+    
+  Sortie d’erreur
+C:\lex-v3\worktrees\codex-stage1-luxembourg\tests\Lex.V3.Ingest.Tests\bin\Release\net10.0\Lex.V3.Ingest.Tests.dll (net10.0|x64) réussite (8m 47s 023ms)
+
+Résumé de série de tests : Réussite!
+  total : 1
+  échec : 0
+  réussie : 1
+  ignoré : 0
+  durée : 8m 47s 790ms

@@ -1,0 +1,9 @@
+Exécuter des tests à partir de C:\lex-v3\worktrees\codex-stage1-luxembourg\tests\Lex.V3.Ingest.Tests\bin\Debug\net10.0\Lex.V3.Ingest.Tests.dll (net10.0|x64)
+C:\lex-v3\worktrees\codex-stage1-luxembourg\tests\Lex.V3.Ingest.Tests\bin\Debug\net10.0\Lex.V3.Ingest.Tests.dll (net10.0|x64) réussite (9s 068ms)
+
+Résumé de série de tests : Réussite!
+  total : 28
+  échec : 0
+  réussie : 28
+  ignoré : 0
+  durée : 9s 300ms

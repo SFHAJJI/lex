@@ -280,16 +280,6 @@ internal static class LuxembourgScopeResolver
                     assertion.PredicateIri);
             }
 
-            LuxembourgVocabularyKind? vocabularyKind = assertion.PredicateIri switch
-            {
-                VerifiedLuxembourgSourceProfile.RdfType =>
-                    LuxembourgVocabularyKind.ResourceClass,
-                TypeDocument => LuxembourgVocabularyKind.TypeDocument,
-                UserFormat => LuxembourgVocabularyKind.UserFormat,
-                Language => LuxembourgVocabularyKind.Language,
-                LegalValue => LuxembourgVocabularyKind.LegalValue,
-                _ => null,
-            };
             if (assertion.ObjectKind == LuxembourgAssertionObjectKind.Iri)
             {
                 if (!LuxembourgSourceValidation.IsExactIriTerm(assertion))
@@ -297,13 +287,9 @@ internal static class LuxembourgScopeResolver
                     continue;
                 }
 
-                if (vocabularyKind is { } kind &&
-                    !profile.ContainsVocabulary(kind, assertion.ObjectIriOrLexical))
-                {
-                    return NewFailure(
-                        LuxembourgProfileResolutionFailureCode.UnknownVocabularyDrift,
-                        assertion.ObjectIriOrLexical);
-                }
+                // An admitted selector's new value belongs to this resource's typed
+                // disposition. Keep the exact assertion for the downstream rules; it cannot
+                // turn unrelated works into a failed enumeration (E0 per-work quarantine).
             }
             else
             {
@@ -735,6 +721,11 @@ internal static class LuxembourgScopeResolver
                 LuScopeTerminalState.AcceptedMetadata,
                 "accepted_observed_dual_channel_licence_agreement",
                 "lu_rights_observed_channel_agreement",
+                evidence),
+            LuxembourgRightsChannelDisposition.SecondChannelPending => Disposition(
+                LuScopeTerminalState.TypedQuarantine,
+                "typed_quarantine_second_channel_pending",
+                "lu_rights_enumeration_unproven",
                 evidence),
             LuxembourgRightsChannelDisposition.ChannelEnumerationUnproven => Disposition(
                 LuScopeTerminalState.TypedQuarantine,

@@ -1,0 +1,71 @@
+Exécuter des tests à partir de C:\lex-v3\worktrees\codex-stage1-luxembourg\tests\Lex.V3.Ingest.Tests\bin\Debug\net10.0\Lex.V3.Ingest.Tests.dll (net10.0|x64)
+échec AWorkAcquiresItsBodyFromTheDeliveredMultiSubjectWemiGraph (null,"agreed") (1s 549ms)
+  à partir de C:\lex-v3\worktrees\codex-stage1-luxembourg\tests\Lex.V3.Ingest.Tests\bin\Debug\net10.0\Lex.V3.Ingest.Tests.dll (net10.0|x64)
+  Assertion failed. La valeur attendue ne doit pas être null.
+  The final manifest must cite this run's retained in-file evidence index.
+  
+  actual: null
+  
+  Assert.IsNotNull(inFileIndex)
+    sur Lex.V3.Ingest.Tests.LuxembourgProductionTopologyTests.AWorkAcquiresItsBodyFromTheDeliveredMultiSubjectWemiGraph(String licenceIri, String inFileCase) dans C:\lex-v3\worktrees\codex-stage1-luxembourg\tests\Lex.V3.Ingest.Tests\LuxembourgProductionTopologyTests.cs:149
+    sur Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter.Execution.TestMethodInfo.ExecuteInternalAsync(Object[] arguments, CancellationTokenSource timeoutTokenSource)
+échec AWorkAcquiresItsBodyFromTheDeliveredMultiSubjectWemiGraph ("http://creativecommons.org/licenses/by/4.0/","agreed") (755ms)
+  à partir de C:\lex-v3\worktrees\codex-stage1-luxembourg\tests\Lex.V3.Ingest.Tests\bin\Debug\net10.0\Lex.V3.Ingest.Tests.dll (net10.0|x64)
+  Assertion failed. La valeur attendue ne doit pas être null.
+  The final manifest must cite this run's retained in-file evidence index.
+  
+  actual: null
+  
+  Assert.IsNotNull(inFileIndex)
+    sur Lex.V3.Ingest.Tests.LuxembourgProductionTopologyTests.AWorkAcquiresItsBodyFromTheDeliveredMultiSubjectWemiGraph(String licenceIri, String inFileCase) dans C:\lex-v3\worktrees\codex-stage1-luxembourg\tests\Lex.V3.Ingest.Tests\LuxembourgProductionTopologyTests.cs:149
+    sur Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter.Execution.TestMethodInfo.ExecuteInternalAsync(Object[] arguments, CancellationTokenSource timeoutTokenSource)
+échec AWorkAcquiresItsBodyFromTheDeliveredMultiSubjectWemiGraph ("http://creativecommons.org/licenses/by/4.0/","conflict") (2s 407ms)
+  à partir de C:\lex-v3\worktrees\codex-stage1-luxembourg\tests\Lex.V3.Ingest.Tests\bin\Debug\net10.0\Lex.V3.Ingest.Tests.dll (net10.0|x64)
+  Assertion failed. La valeur attendue ne doit pas être null.
+  The final manifest must cite this run's retained in-file evidence index.
+  
+  actual: null
+  
+  Assert.IsNotNull(inFileIndex)
+    sur Lex.V3.Ingest.Tests.LuxembourgProductionTopologyTests.AWorkAcquiresItsBodyFromTheDeliveredMultiSubjectWemiGraph(String licenceIri, String inFileCase) dans C:\lex-v3\worktrees\codex-stage1-luxembourg\tests\Lex.V3.Ingest.Tests\LuxembourgProductionTopologyTests.cs:149
+    sur Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter.Execution.TestMethodInfo.ExecuteInternalAsync(Object[] arguments, CancellationTokenSource timeoutTokenSource)
+échec AWorkAcquiresItsBodyFromTheDeliveredMultiSubjectWemiGraph ("http://creativecommons.org/licenses/by/4.0/","missing") (2s 608ms)
+  à partir de C:\lex-v3\worktrees\codex-stage1-luxembourg\tests\Lex.V3.Ingest.Tests\bin\Debug\net10.0\Lex.V3.Ingest.Tests.dll (net10.0|x64)
+  Assertion failed. La valeur attendue ne doit pas être null.
+  The final manifest must cite this run's retained in-file evidence index.
+  
+  actual: null
+  
+  Assert.IsNotNull(inFileIndex)
+    sur Lex.V3.Ingest.Tests.LuxembourgProductionTopologyTests.AWorkAcquiresItsBodyFromTheDeliveredMultiSubjectWemiGraph(String licenceIri, String inFileCase) dans C:\lex-v3\worktrees\codex-stage1-luxembourg\tests\Lex.V3.Ingest.Tests\LuxembourgProductionTopologyTests.cs:149
+    sur Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter.Execution.TestMethodInfo.ExecuteInternalAsync(Object[] arguments, CancellationTokenSource timeoutTokenSource)
+échec AWorkAcquiresItsBodyFromTheDeliveredMultiSubjectWemiGraph ("http://creativecommons.org/licenses/by/4.0/","malformed") (1s 866ms)
+  à partir de C:\lex-v3\worktrees\codex-stage1-luxembourg\tests\Lex.V3.Ingest.Tests\bin\Debug\net10.0\Lex.V3.Ingest.Tests.dll (net10.0|x64)
+  Assertion failed. La valeur attendue ne doit pas être null.
+  The final manifest must cite this run's retained in-file evidence index.
+  
+  actual: null
+  
+  Assert.IsNotNull(inFileIndex)
+    sur Lex.V3.Ingest.Tests.LuxembourgProductionTopologyTests.AWorkAcquiresItsBodyFromTheDeliveredMultiSubjectWemiGraph(String licenceIri, String inFileCase) dans C:\lex-v3\worktrees\codex-stage1-luxembourg\tests\Lex.V3.Ingest.Tests\LuxembourgProductionTopologyTests.cs:149
+    sur Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter.Execution.TestMethodInfo.ExecuteInternalAsync(Object[] arguments, CancellationTokenSource timeoutTokenSource)
+échec AWorkAcquiresItsBodyFromTheDeliveredMultiSubjectWemiGraph ("http://creativecommons.org/licenses/by/4.0/","mismatched") (1s 758ms)
+  à partir de C:\lex-v3\worktrees\codex-stage1-luxembourg\tests\Lex.V3.Ingest.Tests\bin\Debug\net10.0\Lex.V3.Ingest.Tests.dll (net10.0|x64)
+  Assertion failed. La valeur attendue ne doit pas être null.
+  The final manifest must cite this run's retained in-file evidence index.
+  
+  actual: null
+  
+  Assert.IsNotNull(inFileIndex)
+    sur Lex.V3.Ingest.Tests.LuxembourgProductionTopologyTests.AWorkAcquiresItsBodyFromTheDeliveredMultiSubjectWemiGraph(String licenceIri, String inFileCase) dans C:\lex-v3\worktrees\codex-stage1-luxembourg\tests\Lex.V3.Ingest.Tests\LuxembourgProductionTopologyTests.cs:149
+    sur Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter.Execution.TestMethodInfo.ExecuteInternalAsync(Object[] arguments, CancellationTokenSource timeoutTokenSource)
+C:\lex-v3\worktrees\codex-stage1-luxembourg\tests\Lex.V3.Ingest.Tests\bin\Debug\net10.0\Lex.V3.Ingest.Tests.dll (net10.0|x64) a échoué avec 6 erreur(s) (12s 038ms)
+Code de sortie: 2
+
+Résumé de série de tests : Échec!
+  total : 6
+  échec : 6
+  réussie : 0
+  ignoré : 0
+  durée : 12s 264ms
+L’exécution de tests s’est terminée avec un code de sortie non réussi : 2 (voir : https://aka.ms/testingplatform/exitcodes)
