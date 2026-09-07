@@ -9,6 +9,7 @@ using Azure.Storage.Blobs.Specialized;
 using Lex.V3.Contracts;
 using Lex.V3.Contracts.Custody;
 using Lex.V3.Custody.Azure;
+using Lex.V3.Custody.Probe;
 
 namespace Lex.V3.Tests.Custody;
 
@@ -209,9 +210,10 @@ public sealed class AzureBlobCustodyStoreTests
         harness.Policy.ConfigurationPolicyKeyOverride =
             Guid.Parse("6822ca9c-5bc4-4532-8318-6474cf0e4552");
 
-        await Assert.ThrowsExactlyAsync<CustodyPolicyException>(() =>
+        var error = await Assert.ThrowsExactlyAsync<CustodyPolicyException>(() =>
             harness.Store.CreateAsync(Body, CustodyClass.NightlyFloor90d, CancellationToken.None));
 
+        AssertReceiptGuard(error, "receipt_policy_key");
         Assert.AreEqual(0, harness.Journal.Receipts.Count);
     }
 
@@ -221,9 +223,10 @@ public sealed class AzureBlobCustodyStoreTests
         var harness = new Harness();
         harness.Policy.ConfigurationObservedAtOverride = ObservedAt.AddTicks(-1);
 
-        await Assert.ThrowsExactlyAsync<CustodyPolicyException>(() =>
+        var error = await Assert.ThrowsExactlyAsync<CustodyPolicyException>(() =>
             harness.Store.CreateAsync(Body, CustodyClass.NightlyFloor90d, CancellationToken.None));
 
+        AssertReceiptGuard(error, "receipt_configuration_consistency");
         Assert.AreEqual(0, harness.Journal.Receipts.Count);
     }
 
@@ -296,6 +299,7 @@ public sealed class AzureBlobCustodyStoreTests
         Assert.AreEqual(
             "The final Azure object did not prove the protection required by its custody lane.",
             error.Message);
+        AssertReceiptGuard(error, "receipt_protection_window");
         Assert.AreEqual(1, harness.Nightly.Blobs.Count);
         Assert.IsTrue(harness.Events.Contains("nightly.copy", StringComparer.Ordinal));
         Assert.IsTrue(harness.Events.Contains("staging.delete", StringComparer.Ordinal));
@@ -359,6 +363,19 @@ public sealed class AzureBlobCustodyStoreTests
     }
 
     [TestMethod]
+    public async Task FinalBlobWithoutCreationTimeProducesTheExactBoundedDiagnostic()
+    {
+        var harness = new Harness();
+        harness.Nightly.ConfigureNewBlob = blob => blob.CreatedOn = default;
+
+        var error = await Assert.ThrowsExactlyAsync<CustodyPolicyException>(() =>
+            harness.Store.CreateAsync(
+                Body, CustodyClass.NightlyFloor90d, CancellationToken.None));
+
+        AssertReceiptGuard(error, "receipt_creation_time_missing");
+    }
+
+    [TestMethod]
     public async Task NewBlobCreatedInLaterAuthoritativeDateSecondIsRefused()
     {
         var harness = new Harness();
@@ -372,6 +389,7 @@ public sealed class AzureBlobCustodyStoreTests
         Assert.AreEqual(
             "The final Azure object did not prove the protection required by its custody lane.",
             error.Message);
+        AssertReceiptGuard(error, "receipt_created_after_observation");
         Assert.AreEqual(0, harness.Journal.Receipts.Count);
     }
 
@@ -843,6 +861,26 @@ public sealed class AzureBlobCustodyStoreTests
             expected.Length,
             next,
             $"Expected ordered subsequence: {string.Join(", ", expected)}. Actual: {string.Join(", ", actual)}.");
+    }
+
+    private static void AssertReceiptGuard(
+        CustodyPolicyException error,
+        string expectedGuard)
+    {
+        Assert.AreEqual(
+            "The final Azure object did not prove the protection required by its custody lane.",
+            error.Message);
+        Assert.AreEqual(typeof(CustodyPolicyException), error.InnerException?.GetType());
+        using var diagnostic = JsonDocument.Parse(ProbeFailureDiagnostic.Serialize(
+            error,
+            includeConfiguration: true,
+            includeCustody: true));
+        var causes = diagnostic.RootElement.GetProperty("causes");
+        Assert.AreEqual(2, causes.GetArrayLength());
+        Assert.AreEqual("final_object_protection",
+            causes[0].GetProperty("custody_guard").GetString());
+        Assert.AreEqual(expectedGuard,
+            causes[1].GetProperty("custody_guard").GetString());
     }
 
     private sealed class Harness

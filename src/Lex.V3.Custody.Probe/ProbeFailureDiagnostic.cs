@@ -118,6 +118,12 @@ internal static class ProbeFailureDiagnostic
             return journalOperation;
         }
 
+        var receiptGuard = AzureBlobCustodyStore.GetReceiptDiagnostic(exception);
+        if (receiptGuard is not null)
+        {
+            return receiptGuard;
+        }
+
         // These custody exceptions are sealed. Read their message only after an exact-type check,
         // admit product-owned literals, and publish only fixed tokens. Provider text, arbitrary
         // exception messages and lookalikes remain outside the diagnostic boundary.
