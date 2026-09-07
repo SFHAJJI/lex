@@ -47,6 +47,39 @@ public enum LuxembourgRightsChannelDisposition
     /// </remarks>
     [JsonStringEnumMemberName("second_channel_pending")]
     SecondChannelPending = 10,
+
+    /// <summary>
+    /// This channel read at least one <c>jolux:license</c> assertion for the manifestation whose
+    /// object term it could not represent, and holds no licence IRI for it. The channel was
+    /// therefore not observed empty: it was observed saying something this reader cannot carry.
+    /// </summary>
+    /// <remarks>
+    /// Distinct from <see cref="MissingValue"/> on purpose, and that distinction is the whole point
+    /// of the member. <see cref="MissingValue"/> states that the publisher's channel was read and
+    /// declared no licence, which downstream may treat as a settled negative fact. This states that
+    /// the reading is incomplete, which is a gap and never a negative fact. Distinct from
+    /// <see cref="TypedQuarantineUnruledLicence"/> too: there the publisher named a licence this
+    /// profile has no rule for, and the IRI is on the record; here there is no IRI to record.
+    /// </remarks>
+    [JsonStringEnumMemberName("typed_quarantine_unrepresentable_licence_shape")]
+    TypedQuarantineUnrepresentableLicenceShape = 11,
+
+    /// <summary>
+    /// The in-file channel read this manifestation's retained representation and rejected it for a
+    /// reason its reader named, so the channel holds no row for it.
+    /// </summary>
+    /// <remarks>
+    /// Distinct from <see cref="ChannelEnumerationUnproven"/>, and that is the entire point.
+    /// "Unproven" says this channel never established anything about the manifestation. This says
+    /// it looked, and refused what it found. Collapsing the two — which is what happened while the
+    /// fold discarded every reading whose status was not <c>Observed</c> — loses the typed evidence
+    /// the reader had already produced, and reports a channel that ran as one that did not.
+    /// The reader's specific status (unsupported representation, malformed XML, manifestation
+    /// identity mismatch, invalid licence IRI) stays recoverable from the retained index the
+    /// enumeration reference addresses, which preserves every reading including the refused ones.
+    /// </remarks>
+    [JsonStringEnumMemberName("typed_quarantine_in_file_reading_rejected")]
+    TypedQuarantineInFileReadingRejected = 12,
 }
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
@@ -57,7 +90,8 @@ public sealed record LuxembourgRightsChannelObservation
         string manifestationIri,
         SourceArtifactRef runIdentity,
         SourceArtifactRef evidenceRef,
-        IReadOnlyList<string> licenceIris)
+        IReadOnlyList<string> licenceIris,
+        int unrepresentableLicenceAssertions = 0)
     {
         ManifestationIri = LuxembourgSourceValidation.RequireExactResourceIri(
             manifestationIri,
@@ -69,6 +103,10 @@ public sealed record LuxembourgRightsChannelObservation
         {
             LuxembourgSourceValidation.RequireExactAbsoluteIri(licenceIri, nameof(licenceIris));
         }
+
+        ArgumentOutOfRangeException.ThrowIfNegative(
+            unrepresentableLicenceAssertions, nameof(unrepresentableLicenceAssertions));
+        UnrepresentableLicenceAssertions = unrepresentableLicenceAssertions;
     }
 
     public string ManifestationIri { get; }
@@ -78,6 +116,40 @@ public sealed record LuxembourgRightsChannelObservation
     public SourceArtifactRef EvidenceRef { get; }
 
     public IReadOnlyList<string> LicenceIris { get; }
+
+    /// <summary>
+    /// How many <c>jolux:license</c> assertions this channel read for this manifestation and could
+    /// not represent, because the publisher's object term was not an IRI.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// E0(b), #409, clauses S2-A05 then S2-A03. These assertions used to be skipped with no typed
+    /// evidence and no accounting, and the manifestation then resolved through
+    /// <see cref="LuxembourgRightsChannelDisposition.MissingValue"/> to
+    /// <c>missing_rights_value</c> / <c>lu_rights_observed_empty_channel</c> — a positive claim
+    /// that this channel was observed and carried nothing. "We could not represent what the
+    /// publisher said" is not "the publisher said nothing", and publishing the second for the first
+    /// is exactly the false absence the clauses forbid.
+    /// </para>
+    /// <para>
+    /// The skip was never careless: the comment beside it reasons at length that a dropped row is
+    /// unacceptable because "a dropped row means the IRI vanishes from the record entirely". That
+    /// argument was made about an unruled IRI and the non-IRI object fell through the guard above
+    /// it, so the one shape nobody had a rule for was the one silently discarded.
+    /// </para>
+    /// <para>
+    /// A count rather than the terms themselves, deliberately. What the resolution needs to know is
+    /// that this channel's reading is incomplete and must not be reported as an observed emptiness.
+    /// Carrying unparsed lexical forms here would put publisher text of unknown shape onto a record
+    /// whose every other field is a validated IRI; the exact terms stay recoverable from the
+    /// retained assertion evidence this channel was built from.
+    /// </para>
+    /// <para>
+    /// Zero is the ordinary case and the default, so a caller that never saw such an assertion says
+    /// so by construction rather than by omission.
+    /// </para>
+    /// </remarks>
+    public int UnrepresentableLicenceAssertions { get; }
 }
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
@@ -117,7 +189,8 @@ public sealed record LuxembourgInFileRightsChannelObservations
         SourceArtifactRef runIdentity,
         SourceArtifactRef enumerationRef,
         IReadOnlyList<LuxembourgRightsChannelObservation> observations,
-        bool acquisitionCompleted = false)
+        bool acquisitionCompleted = false,
+        IReadOnlyList<string>? rejectedManifestationIris = null)
     {
         RunIdentity = runIdentity ?? throw new ArgumentNullException(nameof(runIdentity));
         EnumerationRef = enumerationRef
@@ -127,6 +200,8 @@ public sealed record LuxembourgInFileRightsChannelObservations
             observations,
             nameof(observations));
         AcquisitionCompleted = acquisitionCompleted;
+        RejectedManifestationIris = LuxembourgSourceValidation.CopyStrings(
+            rejectedManifestationIris ?? [], nameof(rejectedManifestationIris));
     }
 
     public SourceArtifactRef RunIdentity { get; }
@@ -140,6 +215,19 @@ public sealed record LuxembourgInFileRightsChannelObservations
     /// not a promise that channel two will run later. Failed readings remain in EnumerationRef.
     /// </summary>
     public bool AcquisitionCompleted { get; }
+
+    /// <summary>
+    /// Manifestations this channel read and refused, each for a reason its reader named.
+    /// </summary>
+    /// <remarks>
+    /// The fold that builds this channel keeps only readings whose status is <c>Observed</c>, which
+    /// is right — a refused reading has no licence to carry. What was wrong is that it discarded
+    /// the refusal too, so a manifestation the reader had examined and rejected became
+    /// indistinguishable from one the channel never reached. Naming them here lets the resolution
+    /// say "read and refused" instead of "never enumerated", without inventing a row that would
+    /// claim a licence reading it does not have.
+    /// </remarks>
+    public IReadOnlyList<string> RejectedManifestationIris { get; }
 
     internal LuxembourgRightsChannelObservation? Find(string manifestationIri) =>
         Observations.SingleOrDefault(row =>
@@ -211,6 +299,10 @@ public sealed record LuxembourgRightsChannelResolution
             "rights_typed_quarantine_unruled_licence",
         LuxembourgRightsChannelDisposition.SecondChannelPending =>
             "rights_sparql_channel_admits_second_channel_pending",
+        LuxembourgRightsChannelDisposition.TypedQuarantineUnrepresentableLicenceShape =>
+            "rights_typed_quarantine_unrepresentable_licence_shape",
+        LuxembourgRightsChannelDisposition.TypedQuarantineInFileReadingRejected =>
+            "rights_typed_quarantine_in_file_reading_rejected",
         _ => throw new InvalidOperationException("Unknown rights-channel disposition."),
     };
 }
@@ -233,6 +325,7 @@ public static class LuxembourgRightsChannels
         var sparql = sparqlObservations.Find(selectedManifestationIri);
         var inFile = inFileObservations.Find(selectedManifestationIri);
         var disposition = ResolveDisposition(
+            selectedManifestationIri,
             boundRunIdentity,
             sparqlObservations,
             inFileObservations,
@@ -260,6 +353,8 @@ public static class LuxembourgRightsChannels
     {
         if (sparql.LicenceIris.Count == 0)
         {
+            // Only reachable once the dominant unrepresentable-shape gate in ResolveDisposition
+            // has declined, so an empty set here is a real observed emptiness.
             return LuxembourgRightsChannelDisposition.MissingValue;
         }
 
@@ -282,6 +377,7 @@ public static class LuxembourgRightsChannels
     }
 
     private static LuxembourgRightsChannelDisposition ResolveDisposition(
+        string manifestationIri,
         SourceArtifactRef boundRunIdentity,
         LuxembourgSparqlRightsChannelObservations sparqlObservations,
         LuxembourgInFileRightsChannelObservations inFileObservations,
@@ -299,6 +395,33 @@ public static class LuxembourgRightsChannels
             return LuxembourgRightsChannelDisposition.ChannelEnumerationUnproven;
         }
 
+        // The in-file channel read this manifestation and refused it. That is a finding, and it
+        // outranks anything the SPARQL channel carries: a rights answer assembled while one
+        // channel's reading was rejected is not a completed dual-channel answer. Before this, the
+        // refusal produced no row and the resolution reported ChannelEnumerationUnproven -- a
+        // channel that ran reported as one that never did.
+        if (inFileObservations.RejectedManifestationIris.Contains(manifestationIri, StringComparer.Ordinal))
+        {
+            return LuxembourgRightsChannelDisposition.TypedQuarantineInFileReadingRejected;
+        }
+
+        // S2-A05: DRIFT FAILS CLOSED BEFORE ANY READABLE VALUE IS CLASSIFIED, and this gate is
+        // where both paths meet so the rule cannot hold on only one of them. A channel that could
+        // not represent one of the publisher's licence assertions has an incomplete reading, and an
+        // incomplete reading must not resolve as though the values it did carry were the whole
+        // answer. That includes the mixed case: a readable CC BY sitting beside an assertion we
+        // dropped is still an incomplete reading, and my first version let it resolve on the
+        // readable value alone because the count was consulted only when the set was empty.
+        //
+        // Placed after the stale and enumeration gates deliberately. A stale run, or a channel that
+        // never enumerated this manifestation, is a prior and more basic finding than what that
+        // channel turned out to contain.
+        if (sparql.UnrepresentableLicenceAssertions > 0 ||
+            inFile?.UnrepresentableLicenceAssertions > 0)
+        {
+            return LuxembourgRightsChannelDisposition.TypedQuarantineUnrepresentableLicenceShape;
+        }
+
         if (inFile is null)
         {
             var singleChannel = ClassifySingleChannel(sparql);
@@ -310,6 +433,9 @@ public static class LuxembourgRightsChannels
 
         if (sparql.LicenceIris.Count == 0 || inFile.LicenceIris.Count == 0)
         {
+            // Reaching here means neither channel dropped anything: the dominant gate above
+            // already returned for that case, on both routes, so an empty set here really is an
+            // observed emptiness.
             return LuxembourgRightsChannelDisposition.MissingValue;
         }
 

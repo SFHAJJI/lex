@@ -347,6 +347,54 @@ public sealed class LuxembourgScopeResolverTests
         }
     }
 
+    /// <summary>
+    /// E0(b), #409, clauses S2-A05 then S2-A03: a licence the channel could not represent
+    /// quarantines, and is never reported as an observed empty channel.
+    /// </summary>
+    /// <remarks>
+    /// The two states this separates are easy to conflate and mean opposite things.
+    /// <c>missing_rights_value</c> / <c>lu_rights_observed_empty_channel</c> asserts that the
+    /// publisher's channel was read and declared no licence — a settled negative fact a later stage
+    /// may rely on. This case is a gap in our own reading: the publisher said something and we
+    /// could not carry it. Before the count existed, the second published as the first.
+    /// </remarks>
+    [TestMethod]
+    public void ALicenceTheChannelCouldNotRepresentQuarantinesRatherThanReadingAsEmpty()
+    {
+        var observation = new LuxembourgResourceObservation(
+            ObjectRef(ManifestationIri),
+            ObservationRef,
+            [Iri(ManifestationIri, RdfType, Jolux + "Manifestation")],
+            [],
+            new LuxembourgSparqlRightsChannelObservations(
+                ObservationRef,
+                SparqlEnumerationRef,
+                [new LuxembourgRightsChannelObservation(
+                    ManifestationIri, ObservationRef, SparqlEnumerationRef, [],
+                    unrepresentableLicenceAssertions: 1)]),
+            new LuxembourgInFileRightsChannelObservations(
+                ObservationRef,
+                InFileEnumerationRef,
+                [new LuxembourgRightsChannelObservation(
+                    ManifestationIri, ObservationRef, InFileEnumerationRef, [],
+                    unrepresentableLicenceAssertions: 1)]));
+        var resolved = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(
+            Profile().Resolve(Proven([observation])));
+
+        var rights = resolved.Resources.Single().Dimensions.Rights;
+        Assert.AreEqual(
+            LuScopeTerminalState.TypedQuarantine,
+            rights.State,
+            "an unreadable licence is a gap in our reading, never a publisher value we can call "
+                + "missing.");
+        Assert.AreEqual("typed_quarantine_unrepresentable_licence_shape", rights.ReasonCode);
+        Assert.AreNotEqual(
+            "missing_rights_value",
+            rights.ReasonCode,
+            "this is the exact code the defect published, and publishing it here would assert the "
+                + "channel was observed empty when it was observed and not understood.");
+    }
+
     [TestMethod]
     public void ManifestationAuthenticityRemainsOnItsExactSubjectWithoutSiblingOrRootLift()
     {
