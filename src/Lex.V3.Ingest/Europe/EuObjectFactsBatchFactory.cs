@@ -82,6 +82,7 @@ internal static class EuObjectFactsBatchFactory
         EuObjectFactsQuerySet.ObjectFacts,
         EuObjectFactsQuerySet.ExpressionFacts,
         EuObjectFactsQuerySet.ManifestationFacts,
+        EuObjectFactsQuerySet.ReifiedAxiomFacts,
     ];
 
     /// <summary>

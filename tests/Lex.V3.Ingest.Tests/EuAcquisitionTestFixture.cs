@@ -78,6 +78,15 @@ internal static class EuAcquisitionTestFixture
         ["parent", "value", "value_kind", "datatype_iri", "language_tag",
             "key_1", "key_2", "key_3", "key_4", "key_5"];
 
+    /// <summary>
+    /// Family A's row shape. The annotated property is not a column: it arrives as an ordinary
+    /// (predicate, value) row, because owl#annotatedProperty is one of the ten properties the
+    /// family asks for.
+    /// </summary>
+    internal static readonly string[] ReifiedAxiomFactsProjection =
+        ["parent", "axiom", "predicate", "value", "value_kind", "datatype_iri", "language_tag",
+            "key_1", "key_2", "key_3", "key_4", "key_5", "key_6", "key_7"];
+
     internal static readonly string[] CensusFamilyProjection =
         ["base_celex", "base", "state", "family_multiplicity", "state_key"];
 
@@ -334,6 +343,44 @@ internal static class EuAcquisitionTestFixture
         return Row(fields);
     }
 
+    /// <summary>
+    /// Family A's own explicit absence row for a work the publisher reifies no E1 date axiom for:
+    /// exactly what the page template's <c>FILTER NOT EXISTS</c> branch emits, with ?axiom,
+    /// ?predicate and ?value all unbound and their cursor keys totalised to the empty string.
+    /// </summary>
+    internal static string ReifiedAxiomFactsUnboundRow(string parentIri)
+    {
+        var fields = new List<(string Var, string Term)>
+        {
+            ("parent", Iri(parentIri)),
+            ("value_kind", PlainLiteral("unbound")),
+            ("datatype_iri", PlainLiteral("")),
+            ("language_tag", PlainLiteral("")),
+            ("key_1", PlainLiteral(parentIri)),
+            ("key_2", PlainLiteral("")),
+            ("key_3", PlainLiteral("")),
+            ("key_4", PlainLiteral("unbound")),
+            ("key_5", PlainLiteral("")),
+            ("key_6", PlainLiteral("")),
+            ("key_7", PlainLiteral("")),
+        };
+        return Row(fields);
+    }
+
+    /// <summary>
+    /// Family A's scripted sequence for works the publisher reifies nothing for. A typed absence
+    /// row per parent, never a fabricated empty delivery -- the same distinction
+    /// <see cref="ManifestationAbsenceScriptFor"/> draws for family M.
+    /// </summary>
+    internal static FamilyScript AxiomAbsenceScriptFor(params string[] parentIris)
+    {
+        var rows = parentIris
+            .OrderBy(static parent => parent, StringComparer.Ordinal)
+            .Select(ReifiedAxiomFactsUnboundRow)
+            .ToArray();
+        return ScriptFor("A", rows.Length, rows, ReifiedAxiomFactsProjection);
+    }
+
     internal static string ManifestationFactsRowsJson(IReadOnlyList<string> rows) =>
         RowsJson(ManifestationFactsProjection, rows);
 
@@ -515,6 +562,15 @@ internal static class EuAcquisitionTestFixture
         if (body.Contains("isIRI(?entry)", StringComparison.Ordinal))
         {
             return "Witness";
+        }
+
+        // Family A is the only family that walks owl#annotatedSource. It is classified here rather
+        // than left to the fallthrough deliberately: an unclassified body is answered with the
+        // CENSUS script, which consumes that script's response budget, so the failure would surface
+        // as an unrelated census shortfall instead of as family A having no script of its own.
+        if (body.Contains("owl#annotatedSource", StringComparison.Ordinal))
+        {
+            return "A";
         }
 
         // Family M must be checked BEFORE family X: M's own two-hop path walks

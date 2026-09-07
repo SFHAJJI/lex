@@ -97,7 +97,7 @@ public sealed class EuPlanTemplateGuardTests
                 }))
             .ToArray();
 
-        Assert.HasCount(12, templates, "four object-facts sets and two census sets, count and page each.");
+        Assert.HasCount(14, templates, "five object-facts sets and two census sets, count and page each.");
         foreach (var template in templates)
         {
             StringAssert.Contains(template, "SELECT", "a scanned template must be query text.");
@@ -105,15 +105,90 @@ public sealed class EuPlanTemplateGuardTests
 
         // And the replacement form really is present where the banned one used to be, so the scan
         // is not passing because the BINDs vanished.
-        // FIVE, not six, and the missing one is a fact rather than an omission: the census FAMILY
+        // SIX, not seven, and the missing one is a fact rather than an omission: the census FAMILY
         // page carries a single BIND, STR(?state), with no UNION and no FILTER NOT EXISTS, so it has
-        // no absence branch and no possibly-unbound variable to totalise. The other five pages each
-        // derive one cursor key from a variable their own absence branch leaves unbound, and each
-        // totalises it with COALESCE.
+        // no absence branch and no possibly-unbound variable to totalise. The other six pages each
+        // derive at least one cursor key from a variable their own absence branch leaves unbound,
+        // and each totalises it with COALESCE. Family A joined them: its absence branch leaves
+        // ?axiom, ?predicate and ?value unbound together, so it totalises three.
         Assert.AreEqual(
-            5,
+            6,
             templates.Count(static template =>
                 template.Contains("BIND(COALESCE(STR(", StringComparison.Ordinal)),
             "every page template with an absence branch totalises its value-derived cursor key.");
+    }
+
+    /// <summary>
+    /// Family A acquires every property of an admitted axiom, and does not choose which ones.
+    /// </summary>
+    /// <remarks>
+    /// The first version of this family pinned the ten properties the probe measured in a
+    /// <c>VALUES ?predicate</c> block. That reintroduced at the query the exact false absence the
+    /// family exists to avoid: an eleventh or renamed publisher annotation -- including a renamed
+    /// <c>quality_issue</c> or <c>error_message</c>, the publisher's own doubt about the date --
+    /// would have been dropped before it could become evidence, while the family still enumerated
+    /// as complete. S2-A05 requires drift to fail closed into typed evidence, and evidence that was
+    /// never acquired cannot fail closed at all. This pins the repair rather than the count:
+    /// appending an eleventh constant would have satisfied a "ten properties" assertion while
+    /// preserving the defect, so what is asserted here is that the family constrains nothing.
+    /// </remarks>
+    [TestMethod]
+    public void FamilyADoesNotChooseWhichAxiomPropertiesItAcquires()
+    {
+        var definition = EuObjectFactsDiscoveryPlan.Create()
+            .Definition(EuObjectFactsQuerySet.ReifiedAxiomFacts);
+
+        foreach (var template in new[] { definition.CountTemplate, definition.PageTemplate })
+        {
+            StringAssert.Contains(
+                template,
+                "?axiom ?predicate ?value",
+                "family A must ask for the axiom's properties without naming them.");
+            Assert.IsFalse(
+                template.Contains("VALUES ?predicate", StringComparison.Ordinal),
+                "family A must not constrain which properties of an admitted axiom it acquires: a "
+                    + "property the publisher adds or renames would vanish at the query while the "
+                    + "family still reported complete.");
+        }
+    }
+
+    /// <summary>
+    /// Family A's positive and absence branches agree on what makes an axiom exist.
+    /// </summary>
+    /// <remarks>
+    /// They did not. The positive branch additionally required <c>rdf:type owl:Axiom</c> while the
+    /// FILTER NOT EXISTS branch required only the two annotations, so a node carrying
+    /// <c>annotatedSource</c> and an admitted <c>annotatedProperty</c> but missing or misstating
+    /// its type matched neither: the positive branch emitted nothing, and the absence branch was
+    /// suppressed by the very node it had failed to describe. That parent got no positive row and
+    /// no typed absence row -- a silent zero from a publisher shape that was not empty. Whatever
+    /// the two branches require, they must require the same thing, or the disagreement is a hole.
+    /// </remarks>
+    [TestMethod]
+    public void FamilyAsPositiveAndAbsenceBranchesRequireTheSameTriples()
+    {
+        var rows = EuObjectFactsDiscoveryPlan.Create()
+            .Definition(EuObjectFactsQuerySet.ReifiedAxiomFacts).CountTemplate;
+        var absenceStart = rows.IndexOf("FILTER NOT EXISTS", StringComparison.Ordinal);
+        Assert.IsGreaterThan(0, absenceStart, "family A must keep its typed absence branch.");
+
+        var positive = rows[..absenceStart];
+        var absence = rows[absenceStart..];
+
+        foreach (var required in new[]
+        {
+            EuObjectFactsDiscoveryPlan.AnnotatedSourcePredicateIri,
+            EuObjectFactsDiscoveryPlan.AnnotatedPropertyPredicateIri,
+        })
+        {
+            StringAssert.Contains(positive, required, "the positive branch must require this.");
+            StringAssert.Contains(absence, required, "so must the absence branch, or they disagree.");
+        }
+
+        Assert.AreEqual(
+            positive.Contains(EuObjectFactsDiscoveryPlan.OwlAxiomClassIri, StringComparison.Ordinal),
+            absence.Contains(EuObjectFactsDiscoveryPlan.OwlAxiomClassIri, StringComparison.Ordinal),
+            "one branch requires the axiom's declared type and the other does not, so a node with "
+                + "both annotations and no type satisfies neither and disappears without a row.");
     }
 }

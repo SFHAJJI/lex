@@ -1457,6 +1457,9 @@ public sealed class EuRepeatedEnumerationExecutor
             // Family M's selection term is its own ?parent, which its five-part cursor carries at
             // key_1 -- unlike family X, whose key_1 is the discovered Expression.
             EuObjectFactsQuerySet.ManifestationFacts => "key_1",
+            // Family A binds ?parent exactly as family M does, and its seven-part cursor carries
+            // that parent at key_1; ?axiom, the row's own discovered subject, is key_2.
+            EuObjectFactsQuerySet.ReifiedAxiomFacts => "key_1",
             _ => throw new ArgumentOutOfRangeException(nameof(set)),
         };
 

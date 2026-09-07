@@ -137,8 +137,9 @@ public sealed class VocabularyRegistryCensusTests
                     + "const EnglishLanguageAuthorityIri, const FrenchLanguageAuthorityIri",
                 "Lex.V3.Contracts.Source.Europe.EuConsolidationTerm: const RdfLangStringDatatypeIri, "
                     + "const XsdDateDatatypeIri",
-                "Lex.V3.Contracts.Source.Europe.EuDateQualifierVocabulary: PinnedQualifiers=3, "
-                    + "const DeadlinePredicateUri, const EndOfValidityPredicateUri, "
+                "Lex.V3.Contracts.Source.Europe.EuDateQualifierVocabulary: DatePredicateUris=4, "
+                    + "PinnedQualifiers=3, const DeadlinePredicateUri, "
+                    + "const EndOfValidityPredicateUri, "
                     + "const EntryIntoForceAndApplicationPredicateUri, "
                     + "const SignatureDatePredicateUri",
                 "Lex.V3.Contracts.Source.Europe.EuDoNotIndexTerm: const DatatypeIri, const Lexical",
@@ -173,8 +174,8 @@ public sealed class VocabularyRegistryCensusTests
                     + "const XsdString",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgQueryPlanSchemaExporter: const "
                     + "FileName, const ResourceId",
-                "Lex.V3.Contracts.Source.Luxembourg.LuxembourgRelationVocabulary: "
-                    + "Authorities=2, Predicates=18",
+                "Lex.V3.Contracts.Source.Luxembourg.LuxembourgRelationVocabulary: Authorities=2, "
+                    + "Predicates=18",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgScopeResolver: AccTypes=1, "
                     + "AdmittedNonShelfTypes=23, MetadataSupportClasses=10, NeverFormats=3, "
                     + "NeverTypes=2, OrdinaryCandidateTypes=17, PointFormats=3, "

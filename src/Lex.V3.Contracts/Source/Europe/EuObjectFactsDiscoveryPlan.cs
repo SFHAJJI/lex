@@ -33,6 +33,12 @@ public enum EuObjectFactsQuerySet
     ExpressionFacts = 2,
     RootWatermark = 3,
     ManifestationFacts = 4,
+
+    /// <summary>
+    /// Family A: the <c>owl:Axiom</c> reifications of this work's E1 date assertions, whose
+    /// annotated property is one of <see cref="EuDateQualifierVocabulary.DatePredicateUris"/>.
+    /// </summary>
+    ReifiedAxiomFacts = 5,
 }
 
 /// <summary>Same two-pass shape as <see cref="EuConsolidationDiscoveryPlan"/>'s own pass enum.</summary>
@@ -202,11 +208,39 @@ public sealed class EuObjectFactsDiscoveryPlan
     /// <summary>The one predicate family M reads. See <see cref="ManifestsExpressionPredicateIri"/>.</summary>
     internal const string ManifestationTypePredicateIri = Cdm + "manifestation_type";
 
+    /// <summary>
+    /// Family A's own reification predicates, declared here rather than as
+    /// <see cref="EuCdmPredicate"/> members for the same reason
+    /// <see cref="ManifestsExpressionPredicateIri"/> is: this type's constructor asserts that
+    /// families P and X partition the closed thirteen-member CDM vocabulary exactly once each.
+    /// </summary>
+    /// <remarks>
+    /// These are the OWL and publisher-annotation IRIs measured live on the endpoint, not inferred
+    /// from a specification. The <c>annotation#</c> namespace in particular was carried by
+    /// <see cref="EuAmendmentRelationVocabulary.AnnotationNamespace"/> with its own remark that it
+    /// "has not been verified against the wire"; the axiom-shape probe returned
+    /// <c>http://publications.europa.eu/ontology/annotation#type_of_date</c> in full, which
+    /// confirms it. Reused from there rather than respelled, so one namespace has one home.
+    /// </remarks>
+    internal const string Owl = "http://www.w3.org/2002/07/owl#";
+
+    internal const string OwlAxiomClassIri = Owl + "Axiom";
+
+    internal const string AnnotatedSourcePredicateIri = Owl + "annotatedSource";
+
+    internal const string AnnotatedPropertyPredicateIri = Owl + "annotatedProperty";
+
+    internal const string AnnotatedTargetPredicateIri = Owl + "annotatedTarget";
+
+    internal const string RdfTypePredicateIri = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
+
+
     private const string ResourceId = "urn:uuid:6f3f0a1e-6b8b-4e6a-8f36-6a7f2c9d5b41";
     private const string ObjectFactsMemberPrefix = "eu-object-facts";
     private const string ExpressionFactsMemberPrefix = "eu-expression-facts";
     private const string RootWatermarkMemberPrefix = "eu-root-watermark";
     private const string ManifestationFactsMemberPrefix = "eu-manifestation-facts";
+    private const string ReifiedAxiomFactsMemberPrefix = "eu-axiom-facts";
     private const string ResponseMediaType = "application/sparql-results+json";
     private const string ThresholdDetectorIdentity = "enumeration-row-threshold/1";
 
@@ -307,6 +341,16 @@ public sealed class EuObjectFactsDiscoveryPlan
             "parent", "value", "value_kind", "datatype_iri", "language_tag",
             "key_1", "key_2", "key_3", "key_4", "key_5",
         };
+        // Family A's row shape. ?annotated_property is deliberately NOT a column of its own: the
+        // annotated property arrives as an ordinary (predicate, value) row, because owl#annotatedProperty
+        // is one of the ten properties the family asks for. Projecting it twice would add an eighth
+        // cursor key for a value the row set already carries, and the cursor must cover the row's own
+        // grouped identity exactly rather than more than it.
+        var reifiedAxiomFactsProjection = new[]
+        {
+            "parent", "axiom", "predicate", "value", "value_kind", "datatype_iri", "language_tag",
+            "key_1", "key_2", "key_3", "key_4", "key_5", "key_6", "key_7",
+        };
         var sixKeyCursor = new[] { "key_1", "key_2", "key_3", "key_4", "key_5", "key_6" };
 
         // Family X's own SELECT groups by ?parent ?object ?predicate ?value ?value_kind
@@ -360,6 +404,10 @@ public sealed class EuObjectFactsDiscoveryPlan
             "root_watermark_page_member=" + RootWatermarkMemberPrefix + ".page",
             "manifestation_facts_count_member=" + ManifestationFactsMemberPrefix + ".count",
             "manifestation_facts_page_member=" + ManifestationFactsMemberPrefix + ".page",
+            "reified_axiom_facts_projection=" + string.Join(',', reifiedAxiomFactsProjection),
+            "reified_axiom_facts_cursor=" + string.Join(',', sevenKeyCursor),
+            "reified_axiom_facts_count_member=" + ReifiedAxiomFactsMemberPrefix + ".count",
+            "reified_axiom_facts_page_member=" + ReifiedAxiomFactsMemberPrefix + ".page",
             templates.ObjectFactsCount,
             templates.ObjectFactsPage,
             templates.ExpressionFactsCount,
@@ -368,6 +416,8 @@ public sealed class EuObjectFactsDiscoveryPlan
             templates.RootWatermarkPage,
             templates.ManifestationFactsCount,
             templates.ManifestationFactsPage,
+            templates.ReifiedAxiomFactsCount,
+            templates.ReifiedAxiomFactsPage,
         }));
         ArtifactRef = new SourceArtifactRef(ResourceId, Sha256(identityBytes));
         _canonicalIdentityBytes = identityBytes;
@@ -402,6 +452,13 @@ public sealed class EuObjectFactsDiscoveryPlan
                 templates.ManifestationFactsPage,
                 manifestationFactsProjection,
                 fiveKeyCursor),
+            [EuObjectFactsQuerySet.ReifiedAxiomFacts] = Definition(
+                EuObjectFactsQuerySet.ReifiedAxiomFacts,
+                ReifiedAxiomFactsMemberPrefix,
+                templates.ReifiedAxiomFactsCount,
+                templates.ReifiedAxiomFactsPage,
+                reifiedAxiomFactsProjection,
+                sevenKeyCursor),
         };
     }
 
@@ -701,7 +758,8 @@ public sealed class EuObjectFactsDiscoveryPlan
         string ObjectFactsCount, string ObjectFactsPage,
         string ExpressionFactsCount, string ExpressionFactsPage,
         string RootWatermarkCount, string RootWatermarkPage,
-        string ManifestationFactsCount, string ManifestationFactsPage) BuildTemplates()
+        string ManifestationFactsCount, string ManifestationFactsPage,
+        string ReifiedAxiomFactsCount, string ReifiedAxiomFactsPage) BuildTemplates()
     {
         // ---- THE SECOND FILTER ON EVERY PAGE TEMPLATE, AND WHY IT IS NOT REDUNDANT. ----
         //
@@ -970,11 +1028,104 @@ public sealed class EuObjectFactsDiscoveryPlan
             LIMIT {page_limit:uint}
             """;
 
+        // Family A. The reified E1 date axioms, whose shape was measured live before this was
+        // written rather than inferred: an owl:Axiom node with annotatedSource on the work,
+        // annotatedProperty on a CDM date predicate, annotatedTarget carrying the literal and its
+        // datatype, and the fd_335 carrier arriving as an ordinary annotation literal. The axiom
+        // node is a skolemised IRI (.../.well-known/genid/<work>/<axiom>), not a blank node, which
+        // is what lets it travel a batch path at all.
+        //
+        // IT ASKS ?axiom ?predicate ?value UNCONSTRAINED, AND THAT IS THE POINT. The probe read
+        // each sampled axiom whole and found ten properties, four of which the E1 contract does not
+        // model -- among them quality_issue and error_message, the publisher's own doubt about the
+        // date being ingested. An earlier version of this family pinned exactly those ten in a
+        // VALUES ?predicate block, which reintroduced at the query the false absence that reasoning
+        // was written to refuse: an eleventh or renamed property would have been dropped before it
+        // could become evidence, while the family still enumerated as complete. S2-A05 requires
+        // drift to fail closed into typed evidence, and evidence never acquired cannot fail closed
+        // at all. Appending an eleventh constant would have preserved the defect, not repaired it.
+        //
+        // BOTH BRANCHES AGREE ON WHAT MAKES AN AXIOM EXIST: annotatedSource on this parent plus an
+        // admitted annotatedProperty. The positive branch additionally required rdf:type owl:Axiom
+        // while the absence branch did not, so a node carrying the two annotations but missing or
+        // misstating its type matched neither -- the positive branch emitted nothing, and the
+        // FILTER NOT EXISTS was suppressed by the very node it had failed to describe, leaving that
+        // parent with no positive row and no typed absence row. A silent zero from a publisher
+        // shape that was not empty. The type is now acquired as an ordinary property and is the
+        // decoder's to refuse on, which is where a wrong type belongs.
+        var datePredicateValues = string.Join('\n', EuDateQualifierVocabulary.DatePredicateUris
+            .Select(static predicate => "    <" + predicate + ">"));
+        var reifiedAxiomFactsRows = $$"""
+            SELECT ?parent ?axiom ?predicate ?value ?value_kind ?datatype_iri ?language_tag WHERE {
+              VALUES ?lex_pass_id { {pass_id:uint} }
+              VALUES ?parent {
+            {{valuesBlock}}
+              }
+              {
+                ?axiom <{{AnnotatedSourcePredicateIri}}> ?parent .
+                ?axiom <{{AnnotatedPropertyPredicateIri}}> ?annotated_property .
+                VALUES ?annotated_property {
+            {{datePredicateValues}}
+                }
+                ?axiom ?predicate ?value .
+                BIND(IF(isIRI(?value), "iri", IF(isLiteral(?value), "literal", "unsupported_blank_node")) AS ?value_kind)
+                BIND(IF(isLiteral(?value), STR(DATATYPE(?value)), "") AS ?datatype_iri)
+                BIND(IF(isLiteral(?value), LANG(?value), "") AS ?language_tag)
+              }
+              UNION
+              {
+                FILTER NOT EXISTS {
+                  ?absent_axiom <{{AnnotatedSourcePredicateIri}}> ?parent .
+                  ?absent_axiom <{{AnnotatedPropertyPredicateIri}}> ?absent_annotated_property .
+                  VALUES ?absent_annotated_property {
+            {{datePredicateValues}}
+                  }
+                }
+                BIND("unbound" AS ?value_kind)
+                BIND("" AS ?datatype_iri)
+                BIND("" AS ?language_tag)
+              }
+            }
+            GROUP BY ?parent ?axiom ?predicate ?value ?value_kind ?datatype_iri ?language_tag
+            """;
+        var reifiedAxiomFactsCount = Wrap(reifiedAxiomFactsRows);
+        var reifiedAxiomFactsPage = $$"""
+            SELECT ?parent ?axiom ?predicate ?value ?value_kind ?datatype_iri ?language_tag ?key_1 ?key_2 ?key_3 ?key_4 ?key_5 ?key_6 ?key_7 WHERE {
+              {
+            {{Indent(Indent(reifiedAxiomFactsRows))}}
+              }
+              BIND(STR(?parent) AS ?key_1)
+              BIND(COALESCE(STR(?axiom), "") AS ?key_2)
+              BIND(COALESCE(STR(?predicate), "") AS ?key_3)
+              BIND(?value_kind AS ?key_4)
+              BIND(COALESCE(STR(?value), "") AS ?key_5)
+              BIND(COALESCE(?datatype_iri, "") AS ?key_6)
+              BIND(COALESCE(?language_tag, "") AS ?key_7)
+              VALUES (?has_cursor ?last_key_1 ?last_key_2 ?last_key_3 ?last_key_4 ?last_key_5 ?last_key_6 ?last_key_7) {
+                ({has_cursor:uint} {last_key_1:sparql_string} {last_key_2:sparql_string} {last_key_3:sparql_string} {last_key_4:sparql_string} {last_key_5:sparql_string} {last_key_6:sparql_string} {last_key_7:sparql_string})
+              }
+              FILTER(
+                ?has_cursor = 0 || ?key_1 > ?last_key_1 ||
+                (?key_1 = ?last_key_1 && ?key_2 > ?last_key_2) ||
+                (?key_1 = ?last_key_1 && ?key_2 = ?last_key_2 && ?key_3 > ?last_key_3) ||
+                (?key_1 = ?last_key_1 && ?key_2 = ?last_key_2 && ?key_3 = ?last_key_3 && ?key_4 > ?last_key_4) ||
+                (?key_1 = ?last_key_1 && ?key_2 = ?last_key_2 && ?key_3 = ?last_key_3 && ?key_4 = ?last_key_4 && ?key_5 > ?last_key_5) ||
+                (?key_1 = ?last_key_1 && ?key_2 = ?last_key_2 && ?key_3 = ?last_key_3 && ?key_4 = ?last_key_4 && ?key_5 = ?last_key_5 && ?key_6 > ?last_key_6) ||
+                (?key_1 = ?last_key_1 && ?key_2 = ?last_key_2 && ?key_3 = ?last_key_3 && ?key_4 = ?last_key_4 && ?key_5 = ?last_key_5 && ?key_6 = ?last_key_6 && ?key_7 > ?last_key_7)
+              )
+              FILTER(?has_cursor = 0 || !(
+                ?key_1 = ?last_key_1 && ?key_2 = ?last_key_2 && ?key_3 = ?last_key_3 && ?key_4 = ?last_key_4 && ?key_5 = ?last_key_5 && ?key_6 = ?last_key_6 && ?key_7 = ?last_key_7))
+            }
+            ORDER BY ?key_1 ?key_2 ?key_3 ?key_4 ?key_5 ?key_6 ?key_7
+            LIMIT {page_limit:uint}
+            """;
+
         return (
             Normalize(objectFactsCount), Normalize(objectFactsPage),
             Normalize(expressionFactsCount), Normalize(expressionFactsPage),
             Normalize(rootWatermarkCount), Normalize(rootWatermarkPage),
-            Normalize(manifestationFactsCount), Normalize(manifestationFactsPage));
+            Normalize(manifestationFactsCount), Normalize(manifestationFactsPage),
+            Normalize(reifiedAxiomFactsCount), Normalize(reifiedAxiomFactsPage));
     }
 
     private static string Wrap(string rows) => $$"""
