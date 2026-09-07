@@ -350,7 +350,7 @@ public sealed class AzureBlobCustodyStoreTests
     }
 
     [TestMethod]
-    public async Task NewBlobCreatedWithinAuthoritativeDateSecondIsAccepted()
+    public async Task NewBlobCreatedWithinStorageResponseDateSecondIsAccepted()
     {
         var harness = new Harness();
         var createdOn = ObservedAt.AddMilliseconds(500);
@@ -376,9 +376,10 @@ public sealed class AzureBlobCustodyStoreTests
     }
 
     [TestMethod]
-    public async Task NewBlobCreatedInLaterAuthoritativeDateSecondIsRefused()
+    public async Task NewBlobCreatedInLaterStorageResponseDateSecondIsRefused()
     {
         var harness = new Harness();
+        harness.Policy.PolicyObservedAt = ObservedAt.AddSeconds(5);
         harness.Nightly.ConfigureNewBlob = blob =>
             blob.CreatedOn = ObservedAt.AddSeconds(1);
 
@@ -390,6 +391,37 @@ public sealed class AzureBlobCustodyStoreTests
             "The final Azure object did not prove the protection required by its custody lane.",
             error.Message);
         AssertReceiptGuard(error, "receipt_created_after_observation");
+        Assert.AreEqual(0, harness.Journal.Receipts.Count);
+    }
+
+    [TestMethod]
+    public async Task BlobAndPolicyReceiptsDoNotCompareIndependentServiceClocks()
+    {
+        var harness = new Harness();
+        harness.Policy.PolicyObservedAt = ObservedAt.AddSeconds(-2);
+
+        var receipt = await harness.Store.CreateAsync(
+            Body, CustodyClass.NightlyFloor90d, CancellationToken.None);
+
+        Assert.AreEqual(harness.Policy.PolicyObservedAt, receipt.VerifiedAt());
+        Assert.AreEqual(ObservedAt, harness.Nightly.SingleBlob.CreatedOn);
+        Assert.AreEqual(ObservedAt, harness.Nightly.SingleBlob.ServerDate);
+        Assert.AreEqual(2, harness.Nightly.SingleBlob.PropertiesConditions.Count);
+    }
+
+    [TestMethod]
+    public async Task BlobObservationWithoutAuthoritativeResponseDateIsRefused()
+    {
+        var harness = new Harness();
+        harness.Nightly.ConfigureNewBlob = blob => blob.ServerDate = null;
+
+        var error = await Assert.ThrowsExactlyAsync<CustodyIntegrityException>(() =>
+            harness.Store.CreateAsync(
+                Body, CustodyClass.NightlyFloor90d, CancellationToken.None));
+
+        Assert.AreEqual(
+            "The Azure custody object observation carried no authoritative response date.",
+            error.Message);
         Assert.AreEqual(0, harness.Journal.Receipts.Count);
     }
 

@@ -430,6 +430,8 @@ public sealed class AzureBlobCustodyStore : ICustodyStore
             var propertyResponse = await blob.GetPropertiesAsync(
                     propertyConditions, cancellationToken)
                 .ConfigureAwait(false);
+            var blobObservedAt = RequireBlobObservationDate(
+                propertyResponse.GetRawResponse());
             var properties = propertyResponse.Value;
             if (properties.BlobType != BlobType.Block
                 || !string.IsNullOrEmpty(properties.VersionId))
@@ -473,7 +475,8 @@ public sealed class AzureBlobCustodyStore : ICustodyStore
             return new RemoteObservation(
                 blob,
                 exact,
-                properties);
+                properties,
+                blobObservedAt);
         }
         catch (RequestFailedException exception) when (exception.Status == 404)
         {
@@ -641,8 +644,9 @@ public sealed class AzureBlobCustodyStore : ICustodyStore
 
         var observedAt = policy.ObservedAt.ToUniversalTime();
         var createdOn = observation.Properties.CreatedOn.ToUniversalTime();
-        // ARM's authoritative HTTP Date has whole-second precision; Blob CreatedOn retains fractions.
-        if (createdOn.ToUnixTimeSeconds() > observedAt.ToUnixTimeSeconds())
+        // Compare values returned by the same Storage response. ARM and Storage clocks are
+        // independent; program order is instead protected by the post-policy ETag revalidation.
+        if (createdOn.ToUnixTimeSeconds() > observation.ObservedAt.ToUnixTimeSeconds())
         {
             return "receipt_created_after_observation";
         }
@@ -824,6 +828,22 @@ public sealed class AzureBlobCustodyStore : ICustodyStore
         return value;
     }
 
+    private static DateTimeOffset RequireBlobObservationDate(Response response)
+    {
+        if (!response.Headers.TryGetValue("Date", out var value)
+            || !DateTimeOffset.TryParse(
+                value,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AllowWhiteSpaces | DateTimeStyles.AssumeUniversal,
+                out var parsed))
+        {
+            throw new CustodyIntegrityException(
+                "The Azure custody object observation carried no authoritative response date.");
+        }
+
+        return parsed.ToUniversalTime();
+    }
+
     private static bool IsGenerationName(string? name, string digest)
     {
         var prefix = $"{digest}/g/";
@@ -848,5 +868,6 @@ public sealed class AzureBlobCustodyStore : ICustodyStore
     private sealed record RemoteObservation(
         BlockBlobClient Blob,
         ReadOnlyMemory<byte> Bytes,
-        BlobProperties Properties);
+        BlobProperties Properties,
+        DateTimeOffset ObservedAt);
 }
