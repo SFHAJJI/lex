@@ -279,7 +279,17 @@ public sealed class EuTranspositionBridgeTests
         StringAssert.Contains(neither.Message, "neither side");
     }
 
-    /// <summary>A not-transposable work carries no join either.</summary>
+    /// <summary>
+    /// A not-transposable work carries no join, and is refused for the reason that is actually
+    /// true of it.
+    /// </summary>
+    /// <remarks>
+    /// I first wrote a separate arm refusing a join on a not-transposable work, and a test for it.
+    /// Disabling that arm left the whole suite green: a not-transposable work is already forbidden
+    /// a side, so it arrives here with both sides null and the two-source rule refuses it first.
+    /// The arm was unreachable and the test passed for the wrong reason. Both are corrected — the
+    /// arm is gone, and this asserts the refusal that can actually happen.
+    /// </remarks>
     [TestMethod]
     public void ANotTransposableWorkCarriesNoNormalisedEliJoin()
     {
@@ -289,5 +299,7 @@ public sealed class EuTranspositionBridgeTests
             ProvenAbsent(EuTranspositionAssertedBy.Nim),
             new EuNormalisedEliJoin(LuMeasure, Ev("07"))));
         Assert.AreEqual("normalisedEliJoin", error.ParamName);
+        StringAssert.Contains(error.Message, "neither side",
+            "the refusal must name the true reason: a regulation has no sides to join.");
     }
 }

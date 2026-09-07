@@ -274,14 +274,12 @@ public sealed record EuTranspositionBridge
         // derivation from evidence that does not exist.
         if (normalisedEliJoin is not null)
         {
-            if (transposability != EuTransposability.Transposable)
-            {
-                throw new ArgumentException(
-                    "a not-transposable work carries no normalised ELI join; the join lines up two " +
-                    "publishers' spellings of a transposition this work cannot have.",
-                    nameof(normalisedEliJoin));
-            }
-
+            // A not-transposable work needs no arm of its own here, and must not have one. It is
+            // already forbidden a side above, so it reaches this point with both sides null and the
+            // check below refuses it for the true reason. I wrote that separate arm first; the
+            // mutation that disables it leaves the suite green, because nothing can reach it. An
+            // unreachable guard is the shape I have reported twice in other people's code this
+            // session, so it is gone rather than kept for symmetry.
             if (legilux.Side is null || nim.Side is null)
             {
                 throw new ArgumentException(
