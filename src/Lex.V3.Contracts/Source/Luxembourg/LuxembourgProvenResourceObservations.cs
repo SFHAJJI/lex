@@ -5,9 +5,8 @@ namespace Lex.V3.Contracts.Source.Luxembourg;
 /// <summary>
 /// The resource observations a scope resolution may read, and the evidence that they came from a
 /// proven enumeration. Decision 80's shape: holding an instance IS the proof, because the only door
-/// onto this type requires the run's own
-/// <see cref="AbsenceFamilyEnumerationProof"/> for the assertion family the observations were
-/// derived from.
+/// onto this type requires the run's own <see cref="AbsenceFamilyEnumerationProof"/> for the
+/// assertion or relation family the observations were derived from.
 /// </summary>
 /// <remarks>
 /// This type exists because of a defect worth remembering rather than a preference. The body join
@@ -29,10 +28,13 @@ public sealed class LuxembourgProvenResourceObservations
 {
     private LuxembourgProvenResourceObservations(
         IReadOnlyList<AbsenceFamilyEnumerationProof> assertionFamilyProofs,
+        IReadOnlyList<AbsenceFamilyEnumerationProof> relationFamilyProofs,
         IReadOnlyList<LuxembourgResourceObservation> observations)
     {
         AssertionFamilyProofs = assertionFamilyProofs;
         AssertionFamilyProof = assertionFamilyProofs.Count == 1 ? assertionFamilyProofs[0] : null;
+        RelationFamilyProofs = relationFamilyProofs;
+        RelationFamilyProof = relationFamilyProofs.Count == 1 ? relationFamilyProofs[0] : null;
         Observations = observations;
     }
 
@@ -43,6 +45,14 @@ public sealed class LuxembourgProvenResourceObservations
     public AbsenceFamilyEnumerationProof? AssertionFamilyProof { get; }
 
     public IReadOnlyList<AbsenceFamilyEnumerationProof> AssertionFamilyProofs { get; }
+
+    /// <summary>
+    /// The proof for a single-partition relation-only observation set. Null unless the observations
+    /// were derived from exactly one relation partition.
+    /// </summary>
+    public AbsenceFamilyEnumerationProof? RelationFamilyProof { get; }
+
+    public IReadOnlyList<AbsenceFamilyEnumerationProof> RelationFamilyProofs { get; }
 
     public IReadOnlyList<LuxembourgResourceObservation> Observations { get; }
 
@@ -70,14 +80,23 @@ public sealed class LuxembourgProvenResourceObservations
         ArgumentNullException.ThrowIfNull(assertionFamilyProofs);
         ArgumentNullException.ThrowIfNull(observations);
         var proofs = LuxembourgSourceValidation.Copy(assertionFamilyProofs, nameof(assertionFamilyProofs));
-        if (proofs.Count == 0 || proofs.Select(static proof => proof.FamilyKey).Distinct(StringComparer.Ordinal).Count() != proofs.Count)
-            throw new ArgumentException("Assertion proofs must name a non-empty set of distinct partition members.", nameof(assertionFamilyProofs));
-        // Independent acquisitions mint distinct profile resource IDs for identical profile bytes.
-        // Retain those IDs in each proof; compatibility depends on the checked content digest.
-        if (proofs.Any(proof => proof.SourceProfileRef.Sha256 != proofs[0].SourceProfileRef.Sha256 ||
-            proof.InterpretationProfileRef.Sha256 != proofs[0].InterpretationProfileRef.Sha256))
-            throw new ArgumentException("Assertion proofs must use one source and interpretation profile.", nameof(assertionFamilyProofs));
-        return new(proofs, LuxembourgSourceValidation.Copy(observations, nameof(observations)));
+        ValidateCompatibleProofs(proofs, nameof(assertionFamilyProofs), "Assertion");
+        return new(proofs, [], LuxembourgSourceValidation.Copy(observations, nameof(observations)));
+    }
+
+    /// <summary>
+    /// Retains every independently proven relation partition when set-G rows themselves define the
+    /// observed subjects. This door does not recast relation evidence as assertion evidence.
+    /// </summary>
+    public static LuxembourgProvenResourceObservations RequireRelationsProven(
+        IReadOnlyList<AbsenceFamilyEnumerationProof> relationFamilyProofs,
+        IReadOnlyList<LuxembourgResourceObservation> observations)
+    {
+        ArgumentNullException.ThrowIfNull(relationFamilyProofs);
+        ArgumentNullException.ThrowIfNull(observations);
+        var proofs = LuxembourgSourceValidation.Copy(relationFamilyProofs, nameof(relationFamilyProofs));
+        ValidateCompatibleProofs(proofs, nameof(relationFamilyProofs), "Relation");
+        return new([], proofs, LuxembourgSourceValidation.Copy(observations, nameof(observations)));
     }
 
     /// <summary>
@@ -87,5 +106,29 @@ public sealed class LuxembourgProvenResourceObservations
     /// wanting an observation still needs <see cref="RequireProven"/> and therefore still needs a
     /// real proof.
     /// </summary>
-    public static LuxembourgProvenResourceObservations NoFamilyDesignated() => new([], []);
+    public static LuxembourgProvenResourceObservations NoFamilyDesignated() => new([], [], []);
+
+    private static void ValidateCompatibleProofs(
+        IReadOnlyList<AbsenceFamilyEnumerationProof> familyProofs,
+        string parameterName,
+        string familyKind)
+    {
+        if (familyProofs.Count == 0 ||
+            familyProofs.Select(static proof => proof.FamilyKey).Distinct(StringComparer.Ordinal).Count() != familyProofs.Count)
+        {
+            throw new ArgumentException(
+                $"{familyKind} proofs must name a non-empty set of distinct partition members.",
+                parameterName);
+        }
+
+        // Independent acquisitions mint distinct profile resource IDs for identical profile bytes.
+        // Retain those IDs in each proof; compatibility depends on the checked content digest.
+        if (familyProofs.Any(proof => proof.SourceProfileRef.Sha256 != familyProofs[0].SourceProfileRef.Sha256 ||
+            proof.InterpretationProfileRef.Sha256 != familyProofs[0].InterpretationProfileRef.Sha256))
+        {
+            throw new ArgumentException(
+                $"{familyKind} proofs must use one source and interpretation profile.",
+                parameterName);
+        }
+    }
 }

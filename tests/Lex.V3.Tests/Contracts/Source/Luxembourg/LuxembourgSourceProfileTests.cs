@@ -250,7 +250,7 @@ public sealed class LuxembourgSourceProfileTests
     }
 
     [TestMethod]
-    public void CitesPreservesPublisherDirectionWithoutInventingInterpretation()
+    public void CitesPreservesPublisherDirectionAndAddsOnlyAMarkedLocalInboundView()
     {
         var profile = LuxembourgProfiles.Opened(CompleteSnapshot());
         var source = ObjectRef(
@@ -260,17 +260,29 @@ public sealed class LuxembourgSourceProfileTests
             source.PublisherUri,
             Jolux + "cites",
             target,
-            ObservationRef);
+            ObservationRef,
+            LuxembourgRelationAuthority.PublisherAsserted);
+        Assert.AreEqual(LuxembourgRelationAuthority.PublisherAsserted, relation.Authority);
 
         var resolved = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(
             profile.Resolve(Proven([Observation(source, relations: [relation])])));
         var resource = resolved.Resources.Single();
         var retained = resource.Relations.Single();
+        var inbound = resolved.LocalInboundRelations.Single();
 
         Assert.AreEqual(source.PublisherUri, retained.SubjectIri);
         Assert.AreEqual(Jolux + "cites", retained.PredicateIri);
         Assert.AreEqual(target, retained.ObjectIri);
+        Assert.AreEqual(ObservationRef, retained.ObservationRef);
         Assert.AreEqual(LuxembourgRelationSemantic.AssertedCitation, retained.Semantic);
+        Assert.AreEqual(LuxembourgRelationAuthority.PublisherAsserted, retained.Authority);
+
+        Assert.AreEqual(target, inbound.SubjectIri);
+        Assert.AreEqual(source.PublisherUri, inbound.ObjectIri);
+        Assert.AreEqual(ObservationRef, inbound.ObservationRef);
+        Assert.AreEqual(LuxembourgRelationAuthority.LocalInboundView, inbound.Authority);
+        Assert.AreEqual(LuxembourgRelationPredicate.Cites, inbound.LocalInboundView.DerivedFrom);
+        Assert.AreEqual("cited_by", inbound.LocalInboundView.InverseLabel);
         Assert.AreEqual(LuScopeTerminalState.AcceptedMetadata, resource.Dimensions.Relation.State);
         Assert.IsFalse(retained.Semantic.ToString().Contains("Interpret", StringComparison.Ordinal));
     }

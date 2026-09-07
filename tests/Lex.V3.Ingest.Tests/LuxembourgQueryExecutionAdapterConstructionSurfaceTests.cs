@@ -1,6 +1,8 @@
 using Lex.V3.Contracts.Source.Luxembourg;
 using Lex.V3.Ingest.Luxembourg;
 using Lex.V3.TestSupport;
+using System.Reflection;
+using System.Reflection.Emit;
 
 namespace Lex.V3.Ingest.Tests;
 
@@ -23,6 +25,55 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
     private const string Absence = "Lex.V3.Contracts.Source.Absence.";
     private const string Core = "Lex.V3.Contracts.Source.Core.";
     private const string Custody = "Lex.V3.Contracts.Custody.";
+
+    [TestMethod]
+    public void ResourceObservationProofBindingCallsEachEvidenceSpecificDoorExactlyOnce()
+    {
+        var binding = typeof(LuxembourgQueryExecutionAdapter).GetMethod(
+            "BindResourceObservationProofs", BindingFlags.NonPublic | BindingFlags.Static)!;
+        var holder = typeof(LuxembourgProvenResourceObservations);
+        var assertionDoor = holder.GetMethod(
+            nameof(LuxembourgProvenResourceObservations.RequireAllProven),
+            BindingFlags.Public | BindingFlags.Static)!;
+        var relationDoor = holder.GetMethod(
+            nameof(LuxembourgProvenResourceObservations.RequireRelationsProven),
+            BindingFlags.Public | BindingFlags.Static)!;
+        var emptyDoor = holder.GetMethod(
+            nameof(LuxembourgProvenResourceObservations.NoFamilyDesignated),
+            BindingFlags.Public | BindingFlags.Static)!;
+
+        Assert.AreEqual(1, CountDirectCalls(binding, assertionDoor));
+        Assert.AreEqual(1, CountDirectCalls(binding, relationDoor));
+        Assert.AreEqual(1, CountDirectCalls(binding, emptyDoor));
+    }
+
+    private static int CountDirectCalls(MethodInfo caller, MethodInfo callee)
+    {
+        var bytes = caller.GetMethodBody()!.GetILAsByteArray()!;
+        var count = 0;
+        for (var index = 0; index <= bytes.Length - sizeof(int) - 1; index++)
+        {
+            if (bytes[index] != (byte)OpCodes.Call.Value)
+            {
+                continue;
+            }
+
+            try
+            {
+                var called = caller.Module.ResolveMethod(BitConverter.ToInt32(bytes, index + 1));
+                if (called?.Module == callee.Module && called.MetadataToken == callee.MetadataToken)
+                {
+                    count++;
+                }
+            }
+            catch (ArgumentException)
+            {
+                // A 0x28 byte inside another instruction's operand is not a call token.
+            }
+        }
+
+        return count;
+    }
 
     /// <summary>
     /// A static class whose only member with any construction shape at all is the compiler-emitted
@@ -157,7 +208,7 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
     }
 
     [TestMethod]
-    public void QueryExecutionRefusalIsATwelveMemberEnumIncludingNone()
+    public void QueryExecutionRefusalIsAFifteenMemberEnumIncludingNone()
     {
         // D1-06c-LU-2 added four: DocumentFetchSessionNotStarted, DocumentBodyNotRetained,
         // AcquisitionOutcomeNotRepresentable and RecordSetNotHeld, one per whole-run failure the
@@ -191,6 +242,15 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
                 + N + "LuxembourgQueryExecutionRefusal",
                 "field public static " + N
                 + "LuxembourgQueryExecutionRefusal::RecordSetNotRetained -> " + N
+                + "LuxembourgQueryExecutionRefusal",
+                "field public static " + N
+                + "LuxembourgQueryExecutionRefusal::RelationRowPredicateNotAdmitted -> " + N
+                + "LuxembourgQueryExecutionRefusal",
+                "field public static " + N
+                + "LuxembourgQueryExecutionRefusal::RelationRowSubjectNotInCensus -> " + N
+                + "LuxembourgQueryExecutionRefusal",
+                "field public static " + N
+                + "LuxembourgQueryExecutionRefusal::RelationRowTermNotIri -> " + N
                 + "LuxembourgQueryExecutionRefusal",
                 "field public static " + N
                 + "LuxembourgQueryExecutionRefusal::ResourceObservationFamilyNotProven -> "
@@ -282,6 +342,12 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
                 + "System.Collections.Generic.IReadOnlyList<"
                 + N
                 + "LuxembourgRelationFamilyAcquisition>, "
+                + "System.Collections.Generic.IReadOnlyList<"
+                + Contracts
+                + "LuxembourgResolvedRelation>, "
+                + "System.Collections.Generic.IReadOnlyList<"
+                + Contracts
+                + "LuxembourgResolvedLocalInboundRelation>, "
                 + "System.Collections.Generic.IReadOnlyList<System.String>, "
                 + "System.Collections.Generic.IReadOnlyList<"
                 + N
@@ -309,6 +375,12 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
                 + "System.Collections.Generic.IReadOnlyList<"
                 + N
                 + "LuxembourgRelationFamilyAcquisition>, "
+                + "System.Collections.Generic.IReadOnlyList<"
+                + Contracts
+                + "LuxembourgResolvedRelation>, "
+                + "System.Collections.Generic.IReadOnlyList<"
+                + Contracts
+                + "LuxembourgResolvedLocalInboundRelation>, "
                 + "System.Collections.Generic.IReadOnlyList<System.String>, "
                 + "System.Collections.Generic.IReadOnlyList<"
                 + N

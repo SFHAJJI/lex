@@ -1,6 +1,5 @@
 using System.Text.Json;
 using Lex.V3.Contracts;
-using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Luxembourg;
 using Lex.V3.TestSupport;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -8,8 +7,8 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 namespace Lex.V3.Tests.Contracts.Source.Luxembourg;
 
 /// <summary>
-/// The Luxembourg relation-predicate vocabulary: Decision 65's closed eighteen, with Decision 64
-/// per-family acquisition state and the Candidate 5 R4 rule that an inverse is derived only from a
+/// The Luxembourg relation-predicate vocabulary: Decision 65's closed eighteen and the Candidate
+/// 5 R4 rule that an inverse is derived only from a
 /// pinned ontology mapping, otherwise it is a generic locally derived inbound view.
 ///
 /// Every cardinality and token below is transcribed from Decision 65's text and from the
@@ -27,14 +26,12 @@ namespace Lex.V3.Tests.Contracts.Source.Luxembourg;
 public sealed class LuxembourgRelationVocabularyTests
 {
     private const string N = "Lex.V3.Contracts.Source.Luxembourg.";
-    private const string Core = "Lex.V3.Contracts.Source.Core.";
 
     [TestMethod]
     public void TheRelationVocabularyHasExactlyEighteenMembers()
     {
         Assert.AreEqual(18, LuxembourgRelationVocabulary.Predicates.Count);
         Assert.AreEqual(2, LuxembourgRelationVocabulary.Authorities.Count);
-        Assert.AreEqual(4, LuxembourgRelationVocabulary.AcquisitionStates.Count);
     }
 
     [TestMethod]
@@ -50,8 +47,6 @@ public sealed class LuxembourgRelationVocabularyTests
             "impactConsolidatedBy", "impactConsolidatedByExpression", "basicAct", "consolidates",
             "cites");
         AssertTokens<LuxembourgRelationAuthority>("publisher_asserted", "local_inbound_view");
-        AssertTokens<LuxembourgRelationAcquisitionState>(
-            "unacquired", "incomplete", "uncertain", "complete");
     }
 
     [TestMethod]
@@ -59,7 +54,6 @@ public sealed class LuxembourgRelationVocabularyTests
     {
         AssertRoundTrip<LuxembourgRelationPredicate>();
         AssertRoundTrip<LuxembourgRelationAuthority>();
-        AssertRoundTrip<LuxembourgRelationAcquisitionState>();
     }
 
     [TestMethod]
@@ -68,59 +62,10 @@ public sealed class LuxembourgRelationVocabularyTests
         // A plausible neighbour of a real token, not obvious nonsense.
         AssertScopeDrift<LuxembourgRelationPredicate>("modifiedBy");
         AssertScopeDrift<LuxembourgRelationAuthority>("ontology_authorized_inverse");
-        AssertScopeDrift<LuxembourgRelationAcquisitionState>("partial");
     }
 
     [TestMethod]
-    public void EveryRelationPredicateHasACensusEntryDrivenThroughConstruction()
-    {
-        // The census requirement, for this file's eighteen: every predicate must be usable to
-        // build a real disposition, not merely be a name in an enum nobody constructs.
-        foreach (var family in LuxembourgRelationVocabulary.Predicates)
-        {
-            var unacquired = new LuxembourgRelationFamilyDisposition(
-                family,
-                LuxembourgRelationAuthority.PublisherAsserted,
-                LuxembourgRelationAcquisitionState.Unacquired,
-                completionEvidenceRef: null,
-                inboundView: null);
-            Assert.AreEqual(family, unacquired.Family);
-
-            var complete = new LuxembourgRelationFamilyDisposition(
-                family,
-                LuxembourgRelationAuthority.PublisherAsserted,
-                LuxembourgRelationAcquisitionState.Complete,
-                Evidence("01"),
-                inboundView: null);
-            Assert.AreEqual(LuxembourgRelationAcquisitionState.Complete, complete.Acquisition);
-        }
-    }
-
-    [TestMethod]
-    public void IncompleteAndUncertainAcquisitionStatesConstructSuccessfully()
-    {
-        // Fold-in: every acquisition state must be driven through a successful, real
-        // construction, not merely exist as an enum member. Unacquired and Complete are already
-        // exercised above; this is Incomplete and Uncertain.
-        var incomplete = new LuxembourgRelationFamilyDisposition(
-            LuxembourgRelationPredicate.Repeals,
-            LuxembourgRelationAuthority.PublisherAsserted,
-            LuxembourgRelationAcquisitionState.Incomplete,
-            completionEvidenceRef: null,
-            inboundView: null);
-        Assert.AreEqual(LuxembourgRelationAcquisitionState.Incomplete, incomplete.Acquisition);
-
-        var uncertain = new LuxembourgRelationFamilyDisposition(
-            LuxembourgRelationPredicate.Repeals,
-            LuxembourgRelationAuthority.PublisherAsserted,
-            LuxembourgRelationAcquisitionState.Uncertain,
-            completionEvidenceRef: null,
-            inboundView: null);
-        Assert.AreEqual(LuxembourgRelationAcquisitionState.Uncertain, uncertain.Acquisition);
-    }
-
-    [TestMethod]
-    public void CitesCanCarryALocallyComputedInboundViewNamingCitedBy()
+    public void CitesCanNameALocallyComputedInboundViewAsCitedBy()
     {
         // Objection 1's resolution: a grep of the entire coordination pack found no accepted text
         // that pins a JOLux inverse for cites. The only pinned inverse pair anywhere in the pack is
@@ -134,168 +79,6 @@ public sealed class LuxembourgRelationVocabularyTests
         var inbound = new LuxembourgLocalInboundView(LuxembourgRelationPredicate.Cites, "cited_by");
         Assert.AreEqual(LuxembourgRelationPredicate.Cites, inbound.DerivedFrom);
         Assert.AreEqual("cited_by", inbound.InverseLabel);
-
-        var disposition = new LuxembourgRelationFamilyDisposition(
-            LuxembourgRelationPredicate.Cites,
-            LuxembourgRelationAuthority.LocalInboundView,
-            LuxembourgRelationAcquisitionState.Unacquired,
-            completionEvidenceRef: null,
-            inbound);
-        Assert.AreEqual("cited_by", disposition.InboundView!.InverseLabel);
-        Assert.AreEqual(LuxembourgRelationPredicate.Cites, disposition.InboundView!.DerivedFrom);
-    }
-
-    [TestMethod]
-    public void AnyOtherFamilyCanAlsoCarryALocallyComputedInboundViewWithNoLabelRequired()
-    {
-        // "Like every other family": an inbound view is optional, and no family other than Cites
-        // has a dossier-named label, so LocalInboundView authority constructs successfully with no
-        // view attached at all.
-        var disposition = new LuxembourgRelationFamilyDisposition(
-            LuxembourgRelationPredicate.Modifies,
-            LuxembourgRelationAuthority.LocalInboundView,
-            LuxembourgRelationAcquisitionState.Unacquired,
-            completionEvidenceRef: null,
-            inboundView: null);
-        Assert.IsNull(disposition.InboundView);
-    }
-
-    [TestMethod]
-    public void AMismatchedInboundViewDerivedFromIsRefused()
-    {
-        // R4: "each derived inverse is exactly one transpose with a derived_from edge." An inbound
-        // view built for Cites cannot be attached to a disposition describing a different family.
-        var citesView = new LuxembourgLocalInboundView(LuxembourgRelationPredicate.Cites, "cited_by");
-        foreach (var family in LuxembourgRelationVocabulary.Predicates)
-        {
-            if (family == LuxembourgRelationPredicate.Cites)
-            {
-                continue;
-            }
-
-            var thrown = Assert.ThrowsExactly<ArgumentException>(
-                () => new LuxembourgRelationFamilyDisposition(
-                    family,
-                    LuxembourgRelationAuthority.LocalInboundView,
-                    LuxembourgRelationAcquisitionState.Unacquired,
-                    completionEvidenceRef: null,
-                    citesView),
-                $"{family} accepted an inbound view derived from a different family");
-            StringAssert.Contains(thrown.Message, "does not match");
-        }
-    }
-
-    [TestMethod]
-    public void AMismatchedInboundViewDerivedFromIsRefusedOnTheWireToo()
-    {
-        // The constructor guard must hold on the wire path too.
-        var thrown = Assert.ThrowsExactly<JsonException>(
-            () => ContractJson.Deserialize<LuxembourgRelationFamilyDisposition>(
-                """
-                {"family":"modifies","authority":"local_inbound_view","acquisition":"unacquired","completion_evidence_ref":null,"inbound_view":{"derived_from":"cites","inverse_label":"cited_by"}}
-                """));
-        Assert.IsInstanceOfType<ArgumentException>(thrown.InnerException);
-        StringAssert.Contains(thrown.InnerException!.Message, "does not match");
-    }
-
-    [TestMethod]
-    public void AnInboundViewCannotBeAttachedToPublisherAssertedAuthority()
-    {
-        var citesView = new LuxembourgLocalInboundView(LuxembourgRelationPredicate.Cites, "cited_by");
-        var thrown = Assert.ThrowsExactly<ArgumentException>(
-            () => new LuxembourgRelationFamilyDisposition(
-                LuxembourgRelationPredicate.Cites,
-                LuxembourgRelationAuthority.PublisherAsserted,
-                LuxembourgRelationAcquisitionState.Unacquired,
-                completionEvidenceRef: null,
-                citesView));
-        StringAssert.Contains(thrown.Message, "Only a locally computed inbound view authority");
-    }
-
-    [TestMethod]
-    public void ACompletedFamilyWithoutEvidenceCannotBeConstructed()
-    {
-        Assert.ThrowsExactly<ArgumentNullException>(
-            () => new LuxembourgRelationFamilyDisposition(
-                LuxembourgRelationPredicate.Repeals,
-                LuxembourgRelationAuthority.PublisherAsserted,
-                LuxembourgRelationAcquisitionState.Complete,
-                completionEvidenceRef: null,
-                inboundView: null));
-    }
-
-    [TestMethod]
-    public void EvidenceCannotBeAttachedToAnUnfinishedAcquisition()
-    {
-        foreach (var state in new[]
-                 {
-                     LuxembourgRelationAcquisitionState.Unacquired,
-                     LuxembourgRelationAcquisitionState.Incomplete,
-                     LuxembourgRelationAcquisitionState.Uncertain,
-                 })
-        {
-            Assert.ThrowsExactly<ArgumentException>(
-                () => new LuxembourgRelationFamilyDisposition(
-                    LuxembourgRelationPredicate.Repeals,
-                    LuxembourgRelationAuthority.PublisherAsserted,
-                    state,
-                    Evidence("02"),
-                    inboundView: null),
-                $"{state} accepted completion evidence");
-        }
-    }
-
-    [TestMethod]
-    public void ALocallyComputedInboundViewIsNeverACompletedPublisherObservation()
-    {
-        Assert.ThrowsExactly<ArgumentException>(
-            () => new LuxembourgRelationFamilyDisposition(
-                LuxembourgRelationPredicate.Modifies,
-                LuxembourgRelationAuthority.LocalInboundView,
-                LuxembourgRelationAcquisitionState.Complete,
-                Evidence("03"),
-                inboundView: null));
-    }
-
-    [TestMethod]
-    public void ADispositionRoundTripsAndRefusesAnUnknownFamily()
-    {
-        var original = new LuxembourgRelationFamilyDisposition(
-            LuxembourgRelationPredicate.BasedOn,
-            LuxembourgRelationAuthority.PublisherAsserted,
-            LuxembourgRelationAcquisitionState.Unacquired,
-            completionEvidenceRef: null,
-            inboundView: null);
-
-        var json = ContractJson.Serialize(original);
-        StringAssert.Contains(json, "basedOn");
-        StringAssert.Contains(json, "publisher_asserted");
-        StringAssert.Contains(json, "unacquired");
-
-        var restored = ContractJson.Deserialize<LuxembourgRelationFamilyDisposition>(json);
-        Assert.AreEqual(original, restored);
-
-        Assert.ThrowsExactly<JsonException>(
-            () => ContractJson.Deserialize<LuxembourgRelationFamilyDisposition>(
-                """
-                {"family":"modifiedBy","authority":"publisher_asserted","acquisition":"unacquired","completion_evidence_ref":null,"inbound_view":null}
-                """));
-    }
-
-    [TestMethod]
-    public void ATypedInvariantSurvivesDeserialisation()
-    {
-        Assert.ThrowsExactly<JsonException>(
-            () => ContractJson.Deserialize<LuxembourgRelationFamilyDisposition>(
-                """
-                {"family":"repeals","authority":"publisher_asserted","acquisition":"complete","completion_evidence_ref":null,"inbound_view":null}
-                """));
-
-        Assert.ThrowsExactly<JsonException>(
-            () => ContractJson.Deserialize<LuxembourgRelationFamilyDisposition>(
-                """
-                {"family":"modifies","authority":"local_inbound_view","acquisition":"complete","completion_evidence_ref":null,"inbound_view":null}
-                """));
     }
 
     [TestMethod]
@@ -400,59 +183,28 @@ public sealed class LuxembourgRelationVocabularyTests
             },
             ConstructionSurface.Of(typeof(LuxembourgLocalInboundView)).ToArray());
 
-        // Fold-in, paired the way the sibling Luxembourg pin file
-        // (LuxembourgConstructionSurfaceTests.cs) pairs every ConstructionSurface.Of pin with a
-        // ProducersIn assertion: the disposition's own InboundView property (and its compiler-
-        // generated backing field) is the one place elsewhere in Contracts that hands out an
-        // already-constructed view, and it only ever re-exposes a view this type's own constructor
-        // already checked.
+        // The dedicated local relation is the single production carrier. Pin both reflected exposure
+        // paths so another Contracts surface cannot silently start handing out local views.
         CollectionAssert.AreEqual(
             new[]
             {
-                "field private instance " + N + "LuxembourgRelationFamilyDisposition::<InboundView>k__BackingField -> "
-                + N + "LuxembourgLocalInboundView?",
-                "property public instance " + N + "LuxembourgRelationFamilyDisposition::InboundView() -> "
-                + N + "LuxembourgLocalInboundView?",
+                "field private instance " + N
+                + "LuxembourgResolvedLocalInboundRelation::<LocalInboundView>k__BackingField -> " + N
+                + "LuxembourgLocalInboundView",
+                "property public instance " + N
+                + "LuxembourgResolvedLocalInboundRelation::LocalInboundView() -> " + N
+                + "LuxembourgLocalInboundView",
             },
             ConstructionSurface.ProducersIn(
                 typeof(LuxembourgLocalInboundView).Assembly,
                 typeof(LuxembourgLocalInboundView),
                 true).ToArray(),
-            "something other than the disposition that already validated a view now hands one out");
+            "a new Contracts producer now hands out a local inbound view");
+        Assert.IsNull(
+            typeof(LuxembourgResolvedLocalInboundRelation).GetProperty("PredicateIri"),
+            "a local inbound edge must identify its publisher family only through derived_from, "
+                + "never through a predicate slot that could relabel the reverse as publisher asserted");
     }
-
-    [TestMethod]
-    public void ARelationFamilyDispositionHasExactlyOneCheckedDoor()
-    {
-        CollectionAssert.AreEqual(
-            new[]
-            {
-                "constructor private instance " + N + "LuxembourgRelationFamilyDisposition::.ctor("
-                + N + "LuxembourgRelationFamilyDisposition) -> " + N + "LuxembourgRelationFamilyDisposition",
-                "constructor public instance " + N + "LuxembourgRelationFamilyDisposition::.ctor("
-                + N + "LuxembourgRelationPredicate, " + N + "LuxembourgRelationAuthority, "
-                + N + "LuxembourgRelationAcquisitionState, " + Core + "SourceArtifactRef?, "
-                + N + "LuxembourgLocalInboundView?) -> " + N + "LuxembourgRelationFamilyDisposition",
-                "method public instance " + N + "LuxembourgRelationFamilyDisposition::<Clone>$() -> "
-                + N + "LuxembourgRelationFamilyDisposition",
-            },
-            ConstructionSurface.Of(typeof(LuxembourgRelationFamilyDisposition)).ToArray());
-
-        // Fold-in: paired the way the sibling Luxembourg pin file pairs every Of pin with a
-        // ProducersIn assertion. Nothing else in Contracts hands out a disposition.
-        CollectionAssert.AreEqual(
-            Array.Empty<string>(),
-            ConstructionSurface.ProducersIn(
-                typeof(LuxembourgRelationFamilyDisposition).Assembly,
-                typeof(LuxembourgRelationFamilyDisposition),
-                true).ToArray(),
-            "something in Contracts now hands out a disposition it did not have to construct");
-    }
-
-    private static SourceArtifactRef Evidence(string digitPair) =>
-        new(
-            "urn:uuid:00000000-0000-4000-8000-0000000000" + digitPair,
-            new string(digitPair[0], 64));
 
     private static void AssertTokens<TEnum>(params string[] expected)
         where TEnum : struct, Enum
