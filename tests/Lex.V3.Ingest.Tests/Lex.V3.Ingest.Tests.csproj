@@ -6,6 +6,7 @@
   <ItemGroup>
     <Compile Include="../Lex.V3.TestSupport/ConstructionSurface.cs" Link="TestSupport/ConstructionSurface.cs" />
     <Compile Include="../Lex.V3.TestSupport/ClosedSurfaceCensus.cs" Link="TestSupport/ClosedSurfaceCensus.cs" />
+    <Compile Include="../Lex.V3.TestSupport/V2CompatibilitySurface.cs" Link="TestSupport/V2CompatibilitySurface.cs" />
     <!-- D1-06c-LU-2: scope resolution now goes through a proof door, so this project needs the
          same REAL AbsenceFamilyEnumerationProof builder the contract tests use rather than a
          second, weaker one of its own. Linked, exactly as ConstructionSurface.cs already is, so
