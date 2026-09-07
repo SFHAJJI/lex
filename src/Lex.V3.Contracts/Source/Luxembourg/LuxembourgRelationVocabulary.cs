@@ -1,5 +1,4 @@
 using System.Text.Json.Serialization;
-using Lex.V3.Contracts.Source.Core;
 
 namespace Lex.V3.Contracts.Source.Luxembourg;
 
@@ -109,8 +108,8 @@ public enum LuxembourgRelationPredicate
     /// 65's "Cited-by" requirement is met the second way: <c>cited_by</c> is a
     /// <see cref="LuxembourgRelationAuthority.LocalInboundView"/>, exactly like the other seventeen
     /// families, carrying no publisher-predicate label and no ontology-authorized-inverse claim.
-    /// <see cref="LuxembourgLocalInboundView"/> is the optional derived_from record a disposition
-    /// may attach to name which exact family a local view transposes.
+    /// <see cref="LuxembourgLocalInboundView"/> is the optional derived_from record a downstream
+    /// representation may attach to name which exact family a local view transposes.
     /// </remarks>
     [JsonStringEnumMemberName("cites")]
     Cites = 18,
@@ -139,41 +138,13 @@ public enum LuxembourgRelationAuthority
     /// <summary>
     /// Computed locally from held edges. Permanently unlabelled with any publisher predicate and
     /// excluded from evidence export. R4: "Otherwise V3 may expose a generic locally derived
-    /// inbound view that is never labeled with a publisher predicate." A disposition carrying this
+    /// inbound view that is never labeled with a publisher predicate." A caller using this
     /// authority may optionally attach a <see cref="LuxembourgLocalInboundView"/> naming the exact
     /// family it transposes (R4: "each derived inverse is exactly one transpose with a
     /// derived_from edge").
     /// </summary>
     [JsonStringEnumMemberName("local_inbound_view")]
     LocalInboundView = 2,
-}
-
-/// <summary>
-/// How far acquisition of one Luxembourg relation family has actually got. Decision 64, applied to
-/// LU exactly as it already governs EU's <c>EuRelationAcquisitionState</c>: an empty edge list and
-/// "we never asked" are indistinguishable to a consumer, so absence is a claim that belongs to one
-/// exact family and only a completed bounded observation of that family can support it.
-/// </summary>
-public enum LuxembourgRelationAcquisitionState
-{
-    /// <summary>Never asked for. Cannot support any absence claim.</summary>
-    [JsonStringEnumMemberName("unacquired")]
-    Unacquired = 1,
-
-    /// <summary>Asked for, and the bounded observation did not complete.</summary>
-    [JsonStringEnumMemberName("incomplete")]
-    Incomplete = 2,
-
-    /// <summary>Observed, and the completion proof did not hold.</summary>
-    [JsonStringEnumMemberName("uncertain")]
-    Uncertain = 3,
-
-    /// <summary>
-    /// A complete bounded observation of this exact family. The only state that can support an
-    /// absence claim.
-    /// </summary>
-    [JsonStringEnumMemberName("complete")]
-    Complete = 4,
 }
 
 /// <summary>
@@ -250,94 +221,6 @@ public sealed record LuxembourgLocalInboundView
     }
 }
 
-/// <summary>
-/// One relation family's disposition: whose claim it is, how far acquisition got, and (only for a
-/// locally computed inbound view) the exact family it was transposed from. Mirrors
-/// <c>EuRelationFamilyDisposition</c> field for field except the ontology-authorized-inverse slot,
-/// which this vocabulary has no pinned basis for (see <see cref="LuxembourgRelationAuthority"/>'s
-/// remarks). This type records acquisition state and does not decide whether an empty edge list
-/// may be read as an absence claim. That decision needs the shared delivery proof plus an
-/// independently different witness (Decision 64 and the amendment on issue 343), so only the later
-/// LU source-completion validator may mint it.
-/// </summary>
-[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public sealed record LuxembourgRelationFamilyDisposition
-{
-    [JsonConstructor]
-    public LuxembourgRelationFamilyDisposition(
-        LuxembourgRelationPredicate family,
-        LuxembourgRelationAuthority authority,
-        LuxembourgRelationAcquisitionState acquisition,
-        SourceArtifactRef? completionEvidenceRef,
-        LuxembourgLocalInboundView? inboundView)
-    {
-        Family = ContractValidation.RequireDefined(family, nameof(family));
-        Authority = ContractValidation.RequireDefined(authority, nameof(authority));
-        Acquisition = ContractValidation.RequireDefined(acquisition, nameof(acquisition));
-
-        // Authority first, same ordering EU's disposition uses and for the same reason: with the
-        // evidence rules first, a view claiming completion with no evidence would be refused for
-        // the wrong reason and this guard would never be reached on that input.
-        if (authority == LuxembourgRelationAuthority.LocalInboundView)
-        {
-            if (inboundView is not null && inboundView.DerivedFrom != Family)
-            {
-                throw new ArgumentException(
-                    $"{inboundView.DerivedFrom} does not match {Family}; a locally computed " +
-                    "inbound view's derived_from link must name this exact family's own " +
-                    "predicate, not a different one.",
-                    nameof(inboundView));
-            }
-
-            InboundView = inboundView;
-        }
-        else if (inboundView is not null)
-        {
-            throw new ArgumentException(
-                "Only a locally computed inbound view authority carries a derived_from link.",
-                nameof(inboundView));
-        }
-
-        if (authority == LuxembourgRelationAuthority.LocalInboundView &&
-            acquisition == LuxembourgRelationAcquisitionState.Complete)
-        {
-            throw new ArgumentException(
-                "A locally computed inbound view cannot be a completed publisher observation.",
-                nameof(authority));
-        }
-
-        if (acquisition == LuxembourgRelationAcquisitionState.Complete)
-        {
-            CompletionEvidenceRef = completionEvidenceRef
-                ?? throw new ArgumentNullException(
-                    nameof(completionEvidenceRef),
-                    "A complete acquisition must name the observation that completed it.");
-        }
-        else if (completionEvidenceRef is not null)
-        {
-            throw new ArgumentException(
-                "Completion evidence belongs only to a complete acquisition.",
-                nameof(completionEvidenceRef));
-        }
-    }
-
-    public LuxembourgRelationPredicate Family { get; }
-
-    public LuxembourgRelationAuthority Authority { get; }
-
-    public LuxembourgRelationAcquisitionState Acquisition { get; }
-
-    /// <summary>The observation that completed this family's acquisition, when one did.</summary>
-    public SourceArtifactRef? CompletionEvidenceRef { get; }
-
-    /// <summary>
-    /// The exact family this locally computed inbound view transposes, when this disposition
-    /// names one. Optional even under <see cref="LuxembourgRelationAuthority.LocalInboundView"/>
-    /// authority: most families have no dossier requirement to name a transpose at all.
-    /// </summary>
-    public LuxembourgLocalInboundView? InboundView { get; }
-}
-
 /// <summary>The closed Luxembourg relation vocabularies, enumerable rather than hand-counted.</summary>
 public static class LuxembourgRelationVocabulary
 {
@@ -348,8 +231,4 @@ public static class LuxembourgRelationVocabulary
     /// <summary>Every relation authority. Two.</summary>
     public static IReadOnlyList<LuxembourgRelationAuthority> Authorities { get; } =
         Array.AsReadOnly(Enum.GetValues<LuxembourgRelationAuthority>());
-
-    /// <summary>Every acquisition state. Four.</summary>
-    public static IReadOnlyList<LuxembourgRelationAcquisitionState> AcquisitionStates { get; } =
-        Array.AsReadOnly(Enum.GetValues<LuxembourgRelationAcquisitionState>());
 }
