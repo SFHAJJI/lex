@@ -232,7 +232,7 @@ public sealed class CustodyRestoreTests
     }
 
     [TestMethod]
-    public void RetiredReceiptFieldsCannotEnterTheV2Schema()
+    public void RetiredReceiptFieldsCannotEnterTheCurrentSchema()
     {
         var observed = new DateTimeOffset(2026, 8, 31, 20, 0, 0, TimeSpan.Zero);
         var reference = ReferenceFor(Body, CustodyClass.NightlyFloor90d);
