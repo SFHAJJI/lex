@@ -181,21 +181,38 @@ public sealed class EuStageOnePopulationRun
         // The first attempt's whole evidence index is retained beside the second, and the count of
         // seeds needing a second attempt is its own reported field, because if that number were
         // ever large it would be a finding about our own traffic rather than the publisher's.
+        //
+        // THE REPLACED SLOT IS ADDRESSED BY INDEX RATHER THAN SEARCHED FOR BY VALUE. This read
+        // records[records.IndexOf(record)], which asks a List<SeedRecord> to locate the record by
+        // EQUALITY: SeedRecord is a record type, so IndexOf compares its eight members instead of
+        // identity. Run 8 is what that cost. Its custody root holds 87 directories -- 82 first
+        // attempts and five -attempt-2 -- so five second attempts ran, and its report named three.
+        // 12012E/TXT and 32022L2523 kept attempts=1 in the aggregate while their own per-seed
+        // files held attempts=2 and the retained first-attempt refusal, so two replacements never
+        // reached the slot they were for and the count of retries came out low. Nothing failed.
+        // Carrying the slot removes the search entirely, and the check below refuses to let a
+        // replacement go missing quietly again whatever the cause turns out to be, because a
+        // number that is wrong low is exactly the one nobody goes looking for.
         var deferred = records
-            .Where(static record => record.Result is not null
-                && record.Result.Refusal is not null
-                && IsPublisherUnavailable(record.Result))
+            .Select(static (record, slot) => (Record: record, Slot: slot))
+            .Where(static entry => entry.Record.Result is not null
+                && entry.Record.Result.Refusal is not null
+                && IsPublisherUnavailable(entry.Record.Result))
             .ToArray();
-        foreach (var record in deferred)
+        foreach (var (record, slot) in deferred)
         {
             Console.WriteLine(
                 $"POPULATION|deferredSecondAttempt|{record.Seed.Celex}"
                 + $"|firstRefusal={record.Result!.Refusal!.Code}|status={PublisherStatuses(record.Result)}");
-            records[records.IndexOf(record)] = await RunSeedAsync(
+            records[slot] = await RunSeedAsync(
                     record.Seed, record.Ordinal, seeds.Length, 2, record.Index,
                     root, seedDirectory, faults)
                 .ConfigureAwait(false);
         }
+
+        violations.AddRange(DeferredSecondAttemptViolations(
+            records.Select(static record => (record.Seed.Celex, record.Attempts)).ToArray(),
+            deferred.Select(static entry => (entry.Slot, entry.Record.Seed.Celex)).ToArray()));
 
         populationStopwatch.Stop();
 
@@ -685,6 +702,68 @@ public sealed class EuStageOnePopulationRun
             + $"|fault={fault}");
 
         return new SeedRecord(seed, ordinal, attempt, reached, fault, result, index, report);
+    }
+
+    /// <summary>
+    /// Every deferred second attempt must be readable in its own seed's final record.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// WHAT THIS EXISTS TO CATCH, from the run that produced it. A population run reports
+    /// <c>seedsNeedingASecondAttempt</c> as its own field precisely because a large number there
+    /// would be a finding about our own traffic rather than the publisher's. Run 8 ran five second
+    /// attempts and reported three. The retries themselves happened -- the custody root holds a
+    /// <c>-attempt-2</c> directory for each of the five -- but two of them were not readable in the
+    /// accounting afterwards, so the field understated the run's own traffic and the two seeds'
+    /// first-attempt refusals were dropped from the aggregate while their per-seed files kept them.
+    /// </para>
+    /// <para>
+    /// WHY IT IS A SEPARATE CHECK RATHER THAN TRUST IN THE ASSIGNMENT ABOVE. The bug was silent in
+    /// every direction that a run watches: no seed threw, no seed was lost, the report held 82
+    /// distinct seeds with 82 distinct ordinals, and the population passed. An accounting defect
+    /// that removes evidence and lowers a number is not visible as a failure anywhere unless
+    /// something compares the accounting against what actually ran, which is what this does.
+    /// </para>
+    /// </remarks>
+    internal static IReadOnlyList<string> DeferredSecondAttemptViolations(
+        IReadOnlyList<(string Celex, int Attempts)> finalRecords,
+        IReadOnlyList<(int Slot, string Celex)> deferred)
+    {
+        var violations = new List<string>();
+        foreach (var (slot, celex) in deferred)
+        {
+            if (slot < 0 || slot >= finalRecords.Count)
+            {
+                violations.Add(
+                    $"{celex} ran a second attempt addressed to slot {slot}, which is outside the "
+                        + $"{finalRecords.Count} seeds this run holds.");
+                continue;
+            }
+
+            var landed = finalRecords[slot];
+            if (!string.Equals(landed.Celex, celex, StringComparison.Ordinal))
+            {
+                violations.Add(
+                    $"{celex}'s second attempt was written into {landed.Celex}'s slot {slot}.");
+            }
+            else if (landed.Attempts < 2)
+            {
+                violations.Add(
+                    $"{celex} ran a second attempt and its final record still reports "
+                        + $"attempts={landed.Attempts}, so the report undercounts its own retries "
+                        + "and loses that seed's first-attempt evidence.");
+            }
+        }
+
+        var recorded = finalRecords.Count(static record => record.Attempts > 1);
+        if (recorded != deferred.Count)
+        {
+            violations.Add(
+                $"{deferred.Count} second attempts ran and {recorded} are readable in the final "
+                    + "records; seedsNeedingASecondAttempt would be reported wrong.");
+        }
+
+        return violations;
     }
 
     /// <summary>
