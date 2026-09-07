@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Text;
+using System.Text.Json;
 using Azure;
 using Azure.Core;
 using Azure.Storage;
@@ -9,6 +10,7 @@ using Azure.Storage.Blobs.Specialized;
 using Lex.V3.Contracts;
 using Lex.V3.Contracts.Custody;
 using Lex.V3.Custody.Azure;
+using Lex.V3.Custody.Probe;
 
 namespace Lex.V3.Tests.Custody;
 
@@ -621,6 +623,8 @@ public sealed class AzureBlobCustodyConfigurationJournalTests
             Assert.AreEqual(
                 "Azure custody configuration evidence was unavailable.",
                 thrown.Message);
+            Assert.AreSame(hostile, thrown.InnerException,
+                $"status {hostile.Status} was hidden behind a new journal-operation wrapper");
             // And specifically not an integrity verdict. Treating a create that never happened
             // as a collision makes the journal read a blob that is not there, receive a 404,
             // and report that custody evidence is corrupt. The alarming answer and the less
@@ -628,6 +632,63 @@ public sealed class AzureBlobCustodyConfigurationJournalTests
             Assert.IsNotInstanceOfType<CustodyIntegrityException>(
                 thrown,
                 $"status {hostile.Status} became an integrity failure about evidence never written");
+        }
+    }
+
+    [TestMethod]
+    [DataRow("anchor", "configuration_anchor_create")]
+    [DataRow("request", "configuration_request_create")]
+    public async Task UnclassifiedCreateFailuresRetainTheirExactJournalOperation(
+        string failingObject,
+        string expectedDiagnostic)
+    {
+        var harness = new Harness();
+        harness.Nightly.ConfigureNewBlob = blob =>
+        {
+            var isRequest = blob.Name.Contains("/requests/", StringComparison.Ordinal);
+            if ((failingObject == "request") == isRequest)
+            {
+                blob.UploadFailure = new NotSupportedException("private provider detail");
+            }
+        };
+        var receipt = Receipt(CustodyClass.NightlyFloor90d, FirstRequestId);
+
+        var thrown = await Assert.ThrowsExactlyAsync<CustodyRequiredException>(() =>
+            harness.Journal.AppendAsync(receipt, CancellationToken.None));
+
+        Assert.AreEqual("Azure custody configuration evidence was unavailable.", thrown.Message);
+        var operation = Assert.IsInstanceOfType<InvalidOperationException>(thrown.InnerException);
+        Assert.AreEqual(expectedDiagnostic,
+            AzureBlobCustodyConfigurationReceiptJournal.GetOperationDiagnostic(operation));
+        Assert.IsInstanceOfType<NotSupportedException>(operation.InnerException);
+
+        var versionThree = ProbeFailureDiagnostic.Serialize(
+            thrown,
+            includeConfiguration: true,
+            includeCustody: true);
+        Assert.IsFalse(versionThree.Contains("private provider detail", StringComparison.Ordinal));
+        using (var document = JsonDocument.Parse(versionThree))
+        {
+            var causes = document.RootElement.GetProperty("causes");
+            Assert.AreEqual(3, causes.GetArrayLength());
+            Assert.AreEqual("invalid_operation", causes[1].GetProperty("kind").GetString());
+            Assert.AreEqual(expectedDiagnostic,
+                causes[1].GetProperty("custody_guard").GetString());
+            Assert.AreEqual("unknown", causes[2].GetProperty("kind").GetString());
+        }
+
+        foreach (var earlier in new[]
+                 {
+                     ProbeFailureDiagnostic.Serialize(thrown),
+                     ProbeFailureDiagnostic.Serialize(thrown, includeConfiguration: true),
+                 })
+        {
+            Assert.IsFalse(earlier.Contains(expectedDiagnostic, StringComparison.Ordinal));
+            Assert.IsFalse(earlier.Contains("private provider detail", StringComparison.Ordinal));
+            using var document = JsonDocument.Parse(earlier);
+            var causes = document.RootElement.GetProperty("causes");
+            Assert.AreEqual(2, causes.GetArrayLength());
+            Assert.AreEqual("unknown", causes[1].GetProperty("kind").GetString());
         }
     }
 
@@ -726,7 +787,7 @@ public sealed class AzureBlobCustodyConfigurationJournalTests
         /// reached. Without it the only reachable failure is the 412 the fake raises itself,
         /// which is one of the four statuses that matter.
         /// </summary>
-        public RequestFailedException? UploadFailure { get; set; }
+        public Exception? UploadFailure { get; set; }
 
         public void Seed(byte[] bytes)
         {
