@@ -157,7 +157,7 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
     }
 
     [TestMethod]
-    public void QueryExecutionRefusalIsATwelveMemberEnumIncludingNone()
+    public void QueryExecutionRefusalIsAFifteenMemberEnumIncludingNone()
     {
         // D1-06c-LU-2 added four: DocumentFetchSessionNotStarted, DocumentBodyNotRetained,
         // AcquisitionOutcomeNotRepresentable and RecordSetNotHeld, one per whole-run failure the
@@ -191,6 +191,15 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
                 + N + "LuxembourgQueryExecutionRefusal",
                 "field public static " + N
                 + "LuxembourgQueryExecutionRefusal::RecordSetNotRetained -> " + N
+                + "LuxembourgQueryExecutionRefusal",
+                "field public static " + N
+                + "LuxembourgQueryExecutionRefusal::RelationRowPredicateNotAdmitted -> " + N
+                + "LuxembourgQueryExecutionRefusal",
+                "field public static " + N
+                + "LuxembourgQueryExecutionRefusal::RelationRowSubjectNotInCensus -> " + N
+                + "LuxembourgQueryExecutionRefusal",
+                "field public static " + N
+                + "LuxembourgQueryExecutionRefusal::RelationRowTermNotIri -> " + N
                 + "LuxembourgQueryExecutionRefusal",
                 "field public static " + N
                 + "LuxembourgQueryExecutionRefusal::ResourceObservationFamilyNotProven -> "
@@ -282,6 +291,12 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
                 + "System.Collections.Generic.IReadOnlyList<"
                 + N
                 + "LuxembourgRelationFamilyAcquisition>, "
+                + "System.Collections.Generic.IReadOnlyList<"
+                + Contracts
+                + "LuxembourgResolvedRelation>, "
+                + "System.Collections.Generic.IReadOnlyList<"
+                + Contracts
+                + "LuxembourgResolvedLocalInboundRelation>, "
                 + "System.Collections.Generic.IReadOnlyList<System.String>, "
                 + "System.Collections.Generic.IReadOnlyList<"
                 + N
@@ -309,6 +324,12 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
                 + "System.Collections.Generic.IReadOnlyList<"
                 + N
                 + "LuxembourgRelationFamilyAcquisition>, "
+                + "System.Collections.Generic.IReadOnlyList<"
+                + Contracts
+                + "LuxembourgResolvedRelation>, "
+                + "System.Collections.Generic.IReadOnlyList<"
+                + Contracts
+                + "LuxembourgResolvedLocalInboundRelation>, "
                 + "System.Collections.Generic.IReadOnlyList<System.String>, "
                 + "System.Collections.Generic.IReadOnlyList<"
                 + N

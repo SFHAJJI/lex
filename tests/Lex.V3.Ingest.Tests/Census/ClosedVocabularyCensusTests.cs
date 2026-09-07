@@ -97,7 +97,9 @@ public sealed class ClosedVocabularyCensusTests
                 "Lex.V3.Ingest.Luxembourg.LuxembourgPartitionCoverReconciliationRefusal: "
                     + "LeafExecutorRefused, LeafProofRefused, CoverReconciliationRefused",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionAdapter+ResourceObservationBuildO"
-                    + "utcomeKind: Built, SubjectNotInCensus, ObjectKindNotRecognised, TermUnbound",
+                    + "utcomeKind: Built, SubjectNotInCensus, ObjectKindNotRecognised, TermUnbound, "
+                    + "RelationTermUnbound, RelationTermNotIri, RelationPredicateNotAdmitted, "
+                    + "RelationSubjectNotInCensus",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionCompletion: AllFamiliesProven, "
                     + "PartialFamilyRefused",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionRefusal: None, "
@@ -106,7 +108,8 @@ public sealed class ClosedVocabularyCensusTests
                     + "ObservationSubjectNotInDeliveredCensus, AssertionRowObjectKindNotRecognised, "
                     + "AssertionRowTermUnbound, DocumentFetchSessionNotStarted, "
                     + "DocumentBodyNotRetained, AcquisitionOutcomeNotRepresentable, "
-                    + "RecordSetNotRetained",
+                    + "RecordSetNotRetained, RelationRowTermNotIri, "
+                    + "RelationRowPredicateNotAdmitted, RelationRowSubjectNotInCensus",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgRelationFamilyAcquisitionState: "
                     + "AcquiredComplete, Unacquired, Incomplete, Uncertain",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgResourceObservationExclusionCause: "

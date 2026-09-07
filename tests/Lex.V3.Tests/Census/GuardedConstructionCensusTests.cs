@@ -1011,6 +1011,17 @@ public sealed class GuardedConstructionCensusTests
                     + "method public instance "
                     + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgResolvedAssertion::<Clone>$, "
                     + "2 compiler-generated",
+                "Lex.V3.Contracts.Source.Luxembourg.LuxembourgResolvedLocalInboundRelation: "
+                    + "constructor internal instance "
+                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgResolvedLocalInboundRelation::.ctor, "
+                    + "constructor private instance "
+                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgResolvedLocalInboundRelation::.ctor, "
+                    + "method private static "
+                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgScopeResolver::BuildLocalInboun"
+                    + "dRelations, "
+                    + "method public instance "
+                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgResolvedLocalInboundRelation::<Clone>$, "
+                    + "1 compiler-generated",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgResolvedRelation: constructor "
                     + "internal instance "
                     + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgResolvedRelation::.ctor, "
@@ -1020,7 +1031,7 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgScopeResolver::ResolveRelations, "
                     + "method public instance "
                     + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgResolvedRelation::<Clone>$, "
-                    + "2 compiler-generated",
+                    + "3 compiler-generated",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgResourceResolution: constructor "
                     + "internal instance "
                     + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgResourceResolution::.ctor, "
