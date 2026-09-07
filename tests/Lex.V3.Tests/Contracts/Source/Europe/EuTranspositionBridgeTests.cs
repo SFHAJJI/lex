@@ -334,6 +334,12 @@ public sealed class EuTranspositionBridgeTests
         var omitted = Assert.ThrowsExactly<ArgumentException>(() => new EuTranspositionSide(
             EuTranspositionAssertedBy.Nim, LuMeasure, Ev("10"), null, null));
         Assert.AreEqual("memberStateDisclaimer", omitted.ParamName);
+
+        // Omission and substitution are different failures and say so. Asserting only the parameter
+        // name could not tell them apart: with the omission arm removed, a null disclaimer still
+        // fails the verbatim check and the test stayed green. The message is what binds this arm.
+        StringAssert.Contains(omitted.Message, "vouched for it",
+            "an omitted disclaimer must be refused for being absent, not as a paraphrase.");
     }
 
     /// <summary>A paraphrased disclaimer is refused as firmly as an omitted one.</summary>
@@ -353,6 +359,7 @@ public sealed class EuTranspositionBridgeTests
             var error = Assert.ThrowsExactly<ArgumentException>(() => new EuTranspositionSide(
                 EuTranspositionAssertedBy.Nim, LuMeasure, Ev("11"), text, source));
             Assert.AreEqual("memberStateDisclaimer", error.ParamName, why);
+            StringAssert.Contains(error.Message, "verbatim", why);
         }
     }
 
