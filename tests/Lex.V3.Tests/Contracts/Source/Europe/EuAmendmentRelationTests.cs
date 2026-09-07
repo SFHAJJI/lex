@@ -618,6 +618,41 @@ public sealed class EuAmendmentRelationTests
         StringAssert.Contains(error.Message, "bare code");
     }
 
+    /// <summary>
+    /// The located-amendment door validates its own link-target type, rather than inheriting the
+    /// repeal door's guarantee.
+    /// </summary>
+    /// <remarks>
+    /// THE REVIEWER'S FINDING, and my judgement call that was wrong. I guarded the shape rule at
+    /// the repeal door and argued that duplicating six rows at this door would be noise rather than
+    /// evidence. The rule is one shared method, so pinning it once looked sufficient. It is not:
+    /// the reviewer replaced THIS door's call to <c>RequireLinkTargetType</c> with a direct
+    /// assignment and every repeal-door row stayed green, because those rows exercise the validator
+    /// through the other door entirely. A shared validator being well pinned says nothing about
+    /// whether a given call site still calls it.
+    /// <para>
+    /// One case is enough and duplicating the six is still unnecessary — what was missing was not
+    /// coverage of the rule but coverage of this door's wiring to it.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void TheLocatedDoorValidatesItsOwnLinkTargetType()
+    {
+        var error = Assert.ThrowsExactly<ArgumentException>(() => EuLocatedAmendmentAxiom.Create(
+            Work("00034b8a-6af2-4207-bc76-d24a10b5125c"),
+            Work("62212f0d-011f-471e-a033-bf56990d4329"),
+            TargetBodyScope.BodyInScopeNotHeld,
+            "{AN|" + Fd370 + "/AN} 1",
+            "{R|" + Fd375 + "/R}",
+            "2000-02-09",
+            rawEndOfValidity: null,
+            "M|S",
+            "axiom:invented-link-type",
+            "obs:invented-link-type"));
+
+        Assert.AreEqual("typeOfLinkTarget", error.ParamName);
+    }
+
     // --- The repeal edge ------------------------------------------------------------------------
 
     /// <summary>
