@@ -11,4 +11,10 @@
     <ProjectReference Include="../Lex.V3.Contracts/Lex.V3.Contracts.csproj" />
     <ProjectReference Include="../Lex.V3.Custody.Azure/Lex.V3.Custody.Azure.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="acceptance/fact-population/proposal.bin" LogicalName="Lex.V3.Custody.Probe.FactPopulation.proposal.bin" />
+    <EmbeddedResource Include="acceptance/fact-population/source-route.bin" LogicalName="Lex.V3.Custody.Probe.FactPopulation.source-route.bin" />
+    <EmbeddedResource Include="acceptance/fact-population/source-body.bin" LogicalName="Lex.V3.Custody.Probe.FactPopulation.source-body.bin" />
+    <EmbeddedResource Include="acceptance/fact-population/facts/*.bin" LogicalName="Lex.V3.Custody.Probe.FactPopulation.facts.%(Filename).bin" />
+  </ItemGroup>
 </Project>

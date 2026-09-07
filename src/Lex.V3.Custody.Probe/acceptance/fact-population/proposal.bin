@@ -1,0 +1,36 @@
+{
+  "schema": "lex-v3-custody-fact-population-proposal/1",
+  "sourceIssue": 421,
+  "sourcePopulationReportSha256": "57b3f619b5806d140ccfcfa2e7e63c5012694377c3a1d0c4d14372c22025df96",
+  "sourceSeed": "32004L0048",
+  "sourceRouteSha256": "717145e555f51dbb5611275e3431ccdf07c3e084321dbbf70d8f0b25c9d79bac",
+  "sourceBodySha256": "18841181f2cdb0ec6ae55e666286ae57f4561cb81b08235c8b35dcf8aa9d5411",
+  "sourceBodyBytes": 54084,
+  "sourceObservationId": "urn:uuid:f791f5f7-bb2f-4065-a711-0df7490cc099",
+  "predicatePopulation": [
+    "http://publications.europa.eu/ontology/cdm#act_consolidated_based_on_resource_legal",
+    "http://publications.europa.eu/ontology/cdm#resource_legal_amends_resource_legal",
+    "http://publications.europa.eu/ontology/cdm#resource_legal_based_on_resource_legal",
+    "http://publications.europa.eu/ontology/cdm#resource_legal_corrects_resource_legal"
+  ],
+  "factPopulationRule": "all distinct IRI-to-IRI rows in this complete family-P page whose predicate is one of the four accepted relation-family predicates",
+  "factCount": 5,
+  "facts": [
+    "bf9559bb52f0048a09b99f9e9d2c1eadba3aa5d0d54f58027cf8ca13429443a3",
+    "fe697aefe109e7549c5229a36becb5faf7d05534f7979f3f5b5aafdfa2d2e210",
+    "1226f821ad7a7e5c7eb44543f2921fa4637421f503e2dbaffcc8e62d47cca5dc",
+    "29a41dedf9c0f608b808a271fe130780ca18dc9f8ae9f88bf91b8d919ac1fe7e",
+    "fce1b84a8c70811fd1f37c4799321280e03caf33153785451ac39d660b183bfb"
+  ],
+  "commissioning": {
+    "productionMutationAuthorized": false,
+    "steps": [
+      "retain exact source body through the managed-identity nightly lane",
+      "retain its exact Azure write receipt as content-addressed metadata",
+      "replace only the source route hop receipt digest with the new receipt digest and retain the canonical route",
+      "retain all five exact PublisherRelation documents",
+      "retain a replay input naming all five facts and the commissioned route"
+    ],
+    "requiredFreshProcess": "replay the returned input digest in one later job execution"
+  }
+}
