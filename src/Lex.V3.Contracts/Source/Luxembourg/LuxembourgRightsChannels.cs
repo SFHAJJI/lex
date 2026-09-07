@@ -47,6 +47,22 @@ public enum LuxembourgRightsChannelDisposition
     /// </remarks>
     [JsonStringEnumMemberName("second_channel_pending")]
     SecondChannelPending = 10,
+
+    /// <summary>
+    /// This channel read at least one <c>jolux:license</c> assertion for the manifestation whose
+    /// object term it could not represent, and holds no licence IRI for it. The channel was
+    /// therefore not observed empty: it was observed saying something this reader cannot carry.
+    /// </summary>
+    /// <remarks>
+    /// Distinct from <see cref="MissingValue"/> on purpose, and that distinction is the whole point
+    /// of the member. <see cref="MissingValue"/> states that the publisher's channel was read and
+    /// declared no licence, which downstream may treat as a settled negative fact. This states that
+    /// the reading is incomplete, which is a gap and never a negative fact. Distinct from
+    /// <see cref="TypedQuarantineUnruledLicence"/> too: there the publisher named a licence this
+    /// profile has no rule for, and the IRI is on the record; here there is no IRI to record.
+    /// </remarks>
+    [JsonStringEnumMemberName("typed_quarantine_unrepresentable_licence_shape")]
+    TypedQuarantineUnrepresentableLicenceShape = 11,
 }
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
@@ -57,7 +73,8 @@ public sealed record LuxembourgRightsChannelObservation
         string manifestationIri,
         SourceArtifactRef runIdentity,
         SourceArtifactRef evidenceRef,
-        IReadOnlyList<string> licenceIris)
+        IReadOnlyList<string> licenceIris,
+        int unrepresentableLicenceAssertions = 0)
     {
         ManifestationIri = LuxembourgSourceValidation.RequireExactResourceIri(
             manifestationIri,
@@ -69,6 +86,10 @@ public sealed record LuxembourgRightsChannelObservation
         {
             LuxembourgSourceValidation.RequireExactAbsoluteIri(licenceIri, nameof(licenceIris));
         }
+
+        ArgumentOutOfRangeException.ThrowIfNegative(
+            unrepresentableLicenceAssertions, nameof(unrepresentableLicenceAssertions));
+        UnrepresentableLicenceAssertions = unrepresentableLicenceAssertions;
     }
 
     public string ManifestationIri { get; }
@@ -78,6 +99,40 @@ public sealed record LuxembourgRightsChannelObservation
     public SourceArtifactRef EvidenceRef { get; }
 
     public IReadOnlyList<string> LicenceIris { get; }
+
+    /// <summary>
+    /// How many <c>jolux:license</c> assertions this channel read for this manifestation and could
+    /// not represent, because the publisher's object term was not an IRI.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// E0(b), #409, clauses S2-A05 then S2-A03. These assertions used to be skipped with no typed
+    /// evidence and no accounting, and the manifestation then resolved through
+    /// <see cref="LuxembourgRightsChannelDisposition.MissingValue"/> to
+    /// <c>missing_rights_value</c> / <c>lu_rights_observed_empty_channel</c> — a positive claim
+    /// that this channel was observed and carried nothing. "We could not represent what the
+    /// publisher said" is not "the publisher said nothing", and publishing the second for the first
+    /// is exactly the false absence the clauses forbid.
+    /// </para>
+    /// <para>
+    /// The skip was never careless: the comment beside it reasons at length that a dropped row is
+    /// unacceptable because "a dropped row means the IRI vanishes from the record entirely". That
+    /// argument was made about an unruled IRI and the non-IRI object fell through the guard above
+    /// it, so the one shape nobody had a rule for was the one silently discarded.
+    /// </para>
+    /// <para>
+    /// A count rather than the terms themselves, deliberately. What the resolution needs to know is
+    /// that this channel's reading is incomplete and must not be reported as an observed emptiness.
+    /// Carrying unparsed lexical forms here would put publisher text of unknown shape onto a record
+    /// whose every other field is a validated IRI; the exact terms stay recoverable from the
+    /// retained assertion evidence this channel was built from.
+    /// </para>
+    /// <para>
+    /// Zero is the ordinary case and the default, so a caller that never saw such an assertion says
+    /// so by construction rather than by omission.
+    /// </para>
+    /// </remarks>
+    public int UnrepresentableLicenceAssertions { get; }
 }
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
@@ -260,7 +315,12 @@ public static class LuxembourgRightsChannels
     {
         if (sparql.LicenceIris.Count == 0)
         {
-            return LuxembourgRightsChannelDisposition.MissingValue;
+            // An empty licence set is only an observed emptiness when the channel had nothing it
+            // could not read. If it dropped a licence assertion for its shape, the honest answer is
+            // that this reading is incomplete, not that the publisher declared nothing.
+            return sparql.UnrepresentableLicenceAssertions > 0
+                ? LuxembourgRightsChannelDisposition.TypedQuarantineUnrepresentableLicenceShape
+                : LuxembourgRightsChannelDisposition.MissingValue;
         }
 
         if (sparql.LicenceIris.Count > 1)
@@ -310,7 +370,14 @@ public static class LuxembourgRightsChannels
 
         if (sparql.LicenceIris.Count == 0 || inFile.LicenceIris.Count == 0)
         {
-            return LuxembourgRightsChannelDisposition.MissingValue;
+            // The dual-channel path reaches this on its own, without ClassifySingleChannel, so the
+            // same distinction has to be made twice or it holds on only one of the two routes. An
+            // empty set is an observed emptiness only when NEITHER channel dropped something it
+            // could not read; if either did, the combined reading is incomplete.
+            return sparql.UnrepresentableLicenceAssertions > 0 ||
+                   inFile.UnrepresentableLicenceAssertions > 0
+                ? LuxembourgRightsChannelDisposition.TypedQuarantineUnrepresentableLicenceShape
+                : LuxembourgRightsChannelDisposition.MissingValue;
         }
 
         var sparqlEvidence = new[]

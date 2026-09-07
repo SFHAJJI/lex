@@ -84,6 +84,59 @@ public sealed class LuxembourgSparqlRightsChannelTests
     }
 
     /// <summary>
+    /// E0(b), #409: a licence assertion whose object is a literal is counted, and the manifestation
+    /// still reaches the resolution, so the channel is never reported as observed empty for it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// WHAT USED TO HAPPEN. The builder's guard skipped any non-IRI object outright, so this
+    /// assertion vanished and the manifestation carried an empty licence set — which resolves
+    /// through <c>MissingValue</c> to <c>lu_rights_observed_empty_channel</c>, a positive claim
+    /// that the publisher's channel was read and declared nothing. "We could not represent what the
+    /// publisher said" was published as "the publisher said nothing".
+    /// </para>
+    /// <para>
+    /// <c>ObjectKind</c> is the publisher's own SPARQL term type, so a literal-valued licence is a
+    /// real publisher shape rather than an internal impossibility, which is why this is a defect
+    /// and not a defensive branch.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void ALicenceAssertionWhoseObjectIsNotAnIriIsCountedRatherThanDropped()
+    {
+        var rows = LuxembourgQueryExecutionAdapter.BuildSparqlRightsRows(
+            [
+                Literal(Manifestation, LuxembourgQueryExecutionAdapter.JoluxLicense, "CC BY 4.0"),
+                Iri(OtherManifestation, LuxembourgQueryExecutionAdapter.JoluxLicense, CcBy),
+            ],
+            ObservationRef);
+
+        Assert.HasCount(
+            2,
+            rows,
+            "the manifestation whose only licence assertion was unrepresentable must still reach "
+                + "the resolution; with no row at all it reads as never observed, which is a third "
+                + "and equally wrong answer.");
+        var unreadable = rows.Single(row => row.ManifestationIri == Manifestation);
+        Assert.AreEqual(
+            1,
+            unreadable.UnrepresentableLicenceAssertions,
+            "the assertion the channel could not carry must be counted, not discarded.");
+        Assert.HasCount(
+            0,
+            unreadable.LicenceIris,
+            "nothing is invented for it either: there is no IRI to record.");
+
+        var readable = rows.Single(row => row.ManifestationIri == OtherManifestation);
+        Assert.AreEqual(
+            0,
+            readable.UnrepresentableLicenceAssertions,
+            "a manifestation whose licence was readable reports zero, so the ordinary case says so "
+                + "by construction rather than by omission.");
+        CollectionAssert.AreEqual(new[] { CcBy }, readable.LicenceIris.ToArray());
+    }
+
+    /// <summary>
     /// An unruled licence IRI is CARRIED, with the IRI recorded, and it withholds nothing.
     /// </summary>
     /// <remarks>
@@ -220,6 +273,10 @@ public sealed class LuxembourgSparqlRightsChannelTests
 
     private static LuxembourgObservedAssertion Iri(string subject, string predicate, string value) =>
         new(subject, predicate, LuxembourgAssertionObjectKind.Iri, value, string.Empty, string.Empty, ObservationRef);
+
+    /// <summary>A literal-object assertion: the shape this channel cannot represent as a licence.</summary>
+    private static LuxembourgObservedAssertion Literal(string subject, string predicate, string lexical) =>
+        new(subject, predicate, LuxembourgAssertionObjectKind.Literal, lexical, string.Empty, string.Empty, ObservationRef);
 }
 
 /// <summary>

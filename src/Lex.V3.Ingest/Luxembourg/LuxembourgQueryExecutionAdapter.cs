@@ -2537,12 +2537,33 @@ public sealed class LuxembourgQueryExecutionAdapter
         {
             licencesByManifestation.TryAdd(assertion.SubjectIri, new SortedSet<string>(StringComparer.Ordinal));
         }
+        // A licence assertion this channel cannot represent is COUNTED, never discarded. Until this
+        // counter existed the skip below was silent, and the manifestation then resolved through
+        // MissingValue to lu_rights_observed_empty_channel -- a positive claim that the channel was
+        // read and declared nothing. The comment further down already argues a dropped row is
+        // unacceptable because "a dropped row means the IRI vanishes from the record entirely";
+        // that argument was made about an unruled IRI, and the non-IRI object fell through the
+        // guard ABOVE it, so the one shape with no rule was the one silently lost. ObjectKind is
+        // the publisher's own SPARQL term type, so this is a real publisher shape rather than an
+        // internal impossibility.
+        var unrepresentableByManifestation = new Dictionary<string, int>(StringComparer.Ordinal);
         foreach (var assertion in assertions)
         {
             if (!string.Equals(assertion.PredicateIri, JoluxLicense, StringComparison.Ordinal) ||
-                assertion.ObjectKind != LuxembourgAssertionObjectKind.Iri ||
                 !Uri.TryCreate(assertion.SubjectIri, UriKind.Absolute, out _))
             {
+                continue;
+            }
+
+            if (assertion.ObjectKind != LuxembourgAssertionObjectKind.Iri)
+            {
+                unrepresentableByManifestation.TryGetValue(assertion.SubjectIri, out var seen);
+                unrepresentableByManifestation[assertion.SubjectIri] = seen + 1;
+                // Seed the manifestation so it reaches the resolution at all. Without this a
+                // subject whose ONLY licence assertion was unrepresentable would produce no row,
+                // and the channel would report it as never observed rather than as read-and-unread.
+                licencesByManifestation.TryAdd(
+                    assertion.SubjectIri, new SortedSet<string>(StringComparer.Ordinal));
                 continue;
             }
 
@@ -2567,7 +2588,11 @@ public sealed class LuxembourgQueryExecutionAdapter
         return licencesByManifestation
             .OrderBy(static pair => pair.Key, StringComparer.Ordinal)
             .Select(pair => new LuxembourgRightsChannelObservation(
-                pair.Key, observationRef, observationRef, pair.Value.ToArray()))
+                pair.Key,
+                observationRef,
+                observationRef,
+                pair.Value.ToArray(),
+                unrepresentableByManifestation.GetValueOrDefault(pair.Key)))
             .ToArray();
     }
 
