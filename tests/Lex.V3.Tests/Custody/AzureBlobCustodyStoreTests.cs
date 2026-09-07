@@ -343,6 +343,36 @@ public sealed class AzureBlobCustodyStoreTests
     }
 
     [TestMethod]
+    public async Task NewBlobCreatedWithinAuthoritativeDateSecondIsAccepted()
+    {
+        var harness = new Harness();
+        var createdOn = ObservedAt.AddMilliseconds(500);
+        harness.Nightly.ConfigureNewBlob = blob => blob.CreatedOn = createdOn;
+
+        var receipt = await harness.Store.CreateAsync(
+            Body, CustodyClass.NightlyFloor90d, CancellationToken.None);
+
+        Assert.AreEqual(createdOn.AddDays(91), receipt.PolicyEvidence.ProtectedUntil);
+    }
+
+    [TestMethod]
+    public async Task NewBlobCreatedInLaterAuthoritativeDateSecondIsRefused()
+    {
+        var harness = new Harness();
+        harness.Nightly.ConfigureNewBlob = blob =>
+            blob.CreatedOn = ObservedAt.AddSeconds(1);
+
+        var error = await Assert.ThrowsExactlyAsync<CustodyPolicyException>(() =>
+            harness.Store.CreateAsync(
+                Body, CustodyClass.NightlyFloor90d, CancellationToken.None));
+
+        Assert.AreEqual(
+            "The final Azure object did not prove the protection required by its custody lane.",
+            error.Message);
+        Assert.AreEqual(0, harness.Journal.Receipts.Count);
+    }
+
+    [TestMethod]
     public async Task LegalHoldLaneRequiresAnActiveContainerHold()
     {
         var harness = new Harness();
