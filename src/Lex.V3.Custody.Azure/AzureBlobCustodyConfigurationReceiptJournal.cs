@@ -20,7 +20,10 @@ public sealed class AzureBlobCustodyConfigurationReceiptJournal
     : IAzureCustodyConfigurationReceiptJournal
 {
     private const int MaxReceiptBytes = 16 * 1024;
+    private const string AnchorCreateDiagnostic = "configuration_anchor_create";
+    private const string RequestCreateDiagnostic = "configuration_request_create";
     private static readonly UTF8Encoding StrictUtf8 = new(false, true);
+    private static readonly object OperationDiagnosticKey = new();
 
     private readonly AzureBlobCustodyOptions _options;
     private readonly BlobContainerClient _nightly;
@@ -106,7 +109,12 @@ public sealed class AzureBlobCustodyConfigurationReceiptJournal
         byte[] bytes,
         CancellationToken cancellationToken)
     {
-        var createdETag = await TryCreateAsync(blob, bytes, cancellationToken).ConfigureAwait(false);
+        var createdETag = await TryCreateAtOperationAsync(
+                blob,
+                bytes,
+                AnchorCreateDiagnostic,
+                cancellationToken)
+            .ConfigureAwait(false);
         if (createdETag is not null)
         {
             await VerifyExactAsync(blob, createdETag.Value, bytes, cancellationToken)
@@ -141,7 +149,12 @@ public sealed class AzureBlobCustodyConfigurationReceiptJournal
         byte[] bytes,
         CancellationToken cancellationToken)
     {
-        var createdETag = await TryCreateAsync(blob, bytes, cancellationToken).ConfigureAwait(false);
+        var createdETag = await TryCreateAtOperationAsync(
+                blob,
+                bytes,
+                RequestCreateDiagnostic,
+                cancellationToken)
+            .ConfigureAwait(false);
         if (createdETag is not null)
         {
             await VerifyExactAsync(blob, createdETag.Value, bytes, cancellationToken)
@@ -184,6 +197,52 @@ public sealed class AzureBlobCustodyConfigurationReceiptJournal
         {
             return null;
         }
+    }
+
+    private static async Task<ETag?> TryCreateAtOperationAsync(
+        BlockBlobClient blob,
+        byte[] bytes,
+        string operationDiagnostic,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await TryCreateAsync(blob, bytes, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception exception)
+            when (exception is not (ArgumentException
+                or AuthenticationFailedException
+                or CredentialUnavailableException
+                or CustodyIntegrityException
+                or CustodyPolicyException
+                or CustodyRequiredException
+                or HttpRequestException
+                or InvalidOperationException
+                or OperationCanceledException
+                or RequestFailedException
+                or System.Text.Json.JsonException
+                or TimeoutException))
+        {
+            var wrapped = new InvalidOperationException(
+                "An Azure custody configuration journal create operation failed.", exception);
+            wrapped.Data[OperationDiagnosticKey] = operationDiagnostic;
+            throw wrapped;
+        }
+    }
+
+    internal static string? GetOperationDiagnostic(Exception exception)
+    {
+        if (exception.GetType() != typeof(InvalidOperationException))
+        {
+            return null;
+        }
+
+        return (exception.Data[OperationDiagnosticKey] as string) switch
+        {
+            AnchorCreateDiagnostic => AnchorCreateDiagnostic,
+            RequestCreateDiagnostic => RequestCreateDiagnostic,
+            _ => null,
+        };
     }
 
     private static async Task VerifyExactAsync(

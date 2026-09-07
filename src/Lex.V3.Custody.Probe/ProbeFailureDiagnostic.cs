@@ -2,6 +2,7 @@ using System.Text.Json;
 using Azure;
 using Azure.Identity;
 using Lex.V3.Contracts.Custody;
+using Lex.V3.Custody.Azure;
 
 namespace Lex.V3.Custody.Probe;
 
@@ -34,6 +35,14 @@ internal static class ProbeFailureDiagnostic
         Exception? current = exception;
         while (current is not null && causes.Count < 8)
         {
+            var journalOperation =
+                AzureBlobCustodyConfigurationReceiptJournal.GetOperationDiagnostic(current);
+            if (!includeCustody && journalOperation is not null)
+            {
+                current = current.InnerException;
+                continue;
+            }
+
             var kind = current switch
             {
                 CustodyPolicyException => "custody_policy",
@@ -102,6 +111,13 @@ internal static class ProbeFailureDiagnostic
 
     private static string? CustodyGuard(Exception exception)
     {
+        var journalOperation =
+            AzureBlobCustodyConfigurationReceiptJournal.GetOperationDiagnostic(exception);
+        if (journalOperation is not null)
+        {
+            return journalOperation;
+        }
+
         // These custody exceptions are sealed. Read their message only after an exact-type check,
         // admit product-owned literals, and publish only fixed tokens. Provider text, arbitrary
         // exception messages and lookalikes remain outside the diagnostic boundary.
