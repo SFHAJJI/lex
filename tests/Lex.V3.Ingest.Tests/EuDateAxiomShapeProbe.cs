@@ -72,6 +72,17 @@ public sealed class EuDateAxiomShapeProbe
     /// <summary>How many axiom nodes are read whole. Bounded because this is a shape question.</summary>
     private const int SampledAxiomCeiling = 3;
 
+    /// <summary>
+    /// The publisher queries one run sends: the ASK, the aggregate property SELECT and the row
+    /// SELECT.
+    /// </summary>
+    /// <remarks>
+    /// Three, not four, because the fd_335 carrier is a literal at this endpoint and there is no
+    /// node to follow for a label. A URI carrier would add the fourth, which is why the live probe
+    /// counts what it actually sent rather than asserting this number.
+    /// </remarks>
+    internal const int PublisherQueriesPerRun = 3;
+
     [TestMethod]
     public async Task TheReifiedShapeBehindAnE1DateIsReadFromThePublisherRatherThanAssumed()
     {
@@ -84,18 +95,17 @@ public sealed class EuDateAxiomShapeProbe
         var profile = OfficialMachineQuerySourceProfiles.Resolve(
             OfficialMachineQuerySourceProfileId.EuropeanUnionSparql);
         var pacer = new EuPredicateExistenceCensus.OriginPacer(profile.MinimumRequestInterval, TimeProvider.System, Task.Delay);
-        using var handler = new HttpClientHandler { AllowAutoRedirect = false };
+        using var inner = new HttpClientHandler { AllowAutoRedirect = false };
+
+        // Every request this probe sends is tallied here, per origin, by the transport itself. See
+        // CountingHandler's remarks: counting beside the call sites is what produced the wrong
+        // number, because the robots route sends one GET per step and the call site saw one helper.
+        using var handler = new CountingHandler(inner);
         using var http = new HttpClient(handler) { Timeout = TimeSpan.FromMinutes(3) };
         http.DefaultRequestHeaders.TryAddWithoutValidation("user-agent", profile.CrawlerUserAgent);
 
-        // Tallied as the requests are sent rather than inferred from which branches ran, because
-        // the probe no longer sends a fixed number of them. The robots read shares the origin and
-        // takes a slot of its own, so it is counted here.
-        var requests = new RequestCount();
-
         var started = Stopwatch.StartNew();
         var policy = await EuPredicateExistenceCensus.ReadDeclaredRobotsPolicyAsync(http, profile, pacer);
-        requests.Value++;
         var endpoint = new Uri(profile.RequestTarget, UriKind.Absolute);
         Assert.AreEqual(
             RobotsPolicyEvaluationResult.Allowed,
@@ -107,7 +117,6 @@ public sealed class EuDateAxiomShapeProbe
             http,
             profile,
             pacer,
-            requests,
             $"ASK {{ ?axiom a <{OwlAxiom}> ; <{OwlAnnotatedProperty}> <{EntryIntoForce}> }}");
         Console.WriteLine($"AXIOM|reified|{EntryIntoForce}|{reified}");
 
@@ -117,7 +126,6 @@ public sealed class EuDateAxiomShapeProbe
                 http,
                 profile,
                 pacer,
-                requests,
                 $"SELECT DISTINCT ?p WHERE {{ ?axiom a <{OwlAxiom}> ; "
                     + $"<{OwlAnnotatedProperty}> <{EntryIntoForce}> ; ?p ?value }} LIMIT 40",
                 "p")
@@ -135,7 +143,6 @@ public sealed class EuDateAxiomShapeProbe
                 http,
                 profile,
                 pacer,
-                requests,
                 $"SELECT ?axiom ?p ?o WHERE {{ {{ SELECT DISTINCT ?axiom WHERE {{ "
                     + $"?axiom a <{OwlAxiom}> ; <{OwlAnnotatedProperty}> <{EntryIntoForce}> }} "
                     + $"LIMIT {SampledAxiomCeiling} }} ?axiom ?p ?o }}")
@@ -177,7 +184,6 @@ public sealed class EuDateAxiomShapeProbe
                 http,
                 profile,
                 pacer,
-                requests,
                 $"SELECT ?p ?o WHERE {{ <{qualifierTerm.Value}> ?p ?o }} LIMIT 40");
         }
 
@@ -232,7 +238,16 @@ public sealed class EuDateAxiomShapeProbe
                             .Where(static row => row.ContainsKey("p") && row.ContainsKey("o"))
                             .Select(static row => (JsonNode)Describe(row["p"].Value, row["o"]))]),
                     },
-                ["requestCount"] = requests.Value,
+                // COUNTED AT THE TRANSPORT, and reported beside the waits rather than as one
+                // number, because they are not the same quantity: the robots route's two steps sit
+                // on two different origins, so the second takes no wait.
+                ["requestCount"] = handler.Total,
+                ["sameOriginWaits"] = SameOriginWaits(handler.ByOrigin),
+                ["requestsByOrigin"] = new JsonObject(
+                    [.. handler.ByOrigin
+                        .OrderBy(static origin => origin.Key, StringComparer.Ordinal)
+                        .Select(static origin =>
+                            new KeyValuePair<string, JsonNode?>(origin.Key, JsonValue.Create(origin.Value)))]),
             };
             await File.WriteAllTextAsync(
                 Path.Combine(root, "axiom-shape.json"),
@@ -242,13 +257,71 @@ public sealed class EuDateAxiomShapeProbe
         started.Stop();
 
         // Said from the wall clock, because the pacer's own guard proves it asks for the right
-        // waits and only this proves the run actually took them. Every request above shares one
-        // origin, including the robots read, so the floor covers all of them.
-        var floor = profile.MinimumRequestInterval * (requests.Value - 1);
+        // waits and only this proves the run actually took them.
+        //
+        // THE FLOOR IS THE WAITS, NOT THE REQUESTS. Deriving it as requestCount - 1 asserted a wait
+        // between the robots redirect and its target that the pacer never takes, and only came out
+        // right because the miscount and the cross-origin hop cancelled. Both quantities are now
+        // computed from what the transport saw, and they are allowed to differ.
+        var sameOriginWaits = SameOriginWaits(handler.ByOrigin);
+        var floor = profile.MinimumRequestInterval * sameOriginWaits;
         Assert.IsTrue(
             started.Elapsed >= floor,
-            $"the probe sent {requests.Value} requests in {started.Elapsed}, which is under the "
-                + $"{floor} this publisher's declared pacing requires for the shared origin.");
+            $"the probe sent {handler.Total} requests across {handler.ByOrigin.Count} origins in "
+                + $"{started.Elapsed}, which is under the {floor} this publisher's declared pacing "
+                + $"requires for the {sameOriginWaits} same-origin waits among them.");
+    }
+
+    /// <summary>
+    /// The pinned robots route plus this probe's own queries are five requests and three
+    /// same-origin waits, derived offline from the profile rather than from a live run.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// WHY THIS IS NOT LEFT TO THE LIVE PROBE. The live probe reported four requests for a run that
+    /// sent five, and it could not catch that itself: it is opt-in, so an ordinary suite never runs
+    /// it and the wrong number shipped green through a review. A counting defect needs a guard that
+    /// runs when nobody asked for the network.
+    /// </para>
+    /// <para>
+    /// The quantities are derived from <c>profile.RobotsRoute.Steps</c> and
+    /// <see cref="PublisherQueriesPerRun"/> rather than written down, so a route that gains a step
+    /// or an endpoint that moves host fails here instead of silently changing what the pacing floor
+    /// means.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void ThePinnedRouteAndQueriesAreFiveRequestsAndThreeSameOriginWaits()
+    {
+        var profile = OfficialMachineQuerySourceProfiles.Resolve(
+            OfficialMachineQuerySourceProfileId.EuropeanUnionSparql);
+
+        var tally = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (var step in profile.RobotsRoute.Steps)
+        {
+            var origin = OriginKeyOf(new Uri(step.RequestedUri, UriKind.Absolute));
+            tally[origin] = tally.GetValueOrDefault(origin) + 1;
+        }
+
+        var endpointOrigin = OriginKeyOf(new Uri(profile.RequestTarget, UriKind.Absolute));
+        tally[endpointOrigin] = tally.GetValueOrDefault(endpointOrigin) + PublisherQueriesPerRun;
+
+        Assert.AreEqual(
+            2,
+            profile.RobotsRoute.Steps.Count,
+            "the EU robots route is two steps -- publications.europa.eu 301 to op.europa.eu 200 -- "
+                + "and the reader issues one GET per step. Treating that read as a single request "
+                + "is the defect this pins.");
+        Assert.AreEqual(
+            5,
+            tally.Values.Sum(),
+            "two robots GETs plus the ASK, the aggregate property SELECT and the row SELECT.");
+        Assert.AreEqual(
+            3,
+            SameOriginWaits(tally),
+            "the SPARQL endpoint shares publications.europa.eu with the first robots step, so that "
+                + "origin carries four requests and three waits, while op.europa.eu carries one "
+                + "request and waits for nothing. Five requests are not five waits.");
     }
 
     /// <summary>One RDF term exactly as the endpoint returned it, kind included.</summary>
@@ -259,11 +332,56 @@ public sealed class EuDateAxiomShapeProbe
     /// </remarks>
     private sealed record Term(string Kind, string Value, string? Datatype, string? Language);
 
-    /// <summary>How many requests this probe has actually sent to the shared origin.</summary>
-    private sealed class RequestCount
+    /// <summary>
+    /// Counts every HTTP request this probe actually sends, per origin, at the transport.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// WHY AT THE TRANSPORT RATHER THAN AT THE CALL SITES. The previous version incremented a
+    /// counter beside each helper call, and it was wrong: the robots route has TWO steps and
+    /// <see cref="EuPredicateExistenceCensus.ReadDeclaredRobotsPolicyAsync"/> issues one GET per
+    /// step, so a run that sent five requests reported four. The floor happened to stay correct
+    /// because the five span two origins and three of the waits are same-origin, which is exactly
+    /// the kind of coincidence that keeps a false number alive. A handler cannot drift from the
+    /// code paths, because it only sees what actually went out.
+    /// </para>
+    /// <para>
+    /// Per origin rather than in total, because <see cref="EuPredicateExistenceCensus.OriginPacer"/>
+    /// paces per origin: a request to a different host waits for nothing. Deriving the floor from a
+    /// bare count would assert a wait between the robots redirect and its target that the pacer
+    /// never takes.
+    /// </para>
+    /// </remarks>
+    private sealed class CountingHandler(HttpMessageHandler inner) : DelegatingHandler(inner)
     {
-        public int Value { get; set; }
+        private readonly Dictionary<string, int> byOrigin = new(StringComparer.Ordinal);
+
+        public IReadOnlyDictionary<string, int> ByOrigin => byOrigin;
+
+        public int Total => byOrigin.Values.Sum();
+
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            if (request.RequestUri is { } uri)
+            {
+                var origin = OriginKeyOf(uri);
+                byOrigin[origin] = byOrigin.GetValueOrDefault(origin) + 1;
+            }
+
+            return base.SendAsync(request, cancellationToken);
+        }
     }
+
+    /// <summary>The pacer's own origin key: scheme, host and port.</summary>
+    internal static string OriginKeyOf(Uri uri) => $"{uri.Scheme}://{uri.Host}:{uri.Port}";
+
+    /// <summary>
+    /// How many pacing waits a tally of requests implies: one before every request after the first
+    /// <b>to the same origin</b>, and none at all across origins.
+    /// </summary>
+    internal static int SameOriginWaits(IReadOnlyDictionary<string, int> requestsByOrigin) =>
+        requestsByOrigin.Values.Sum(static count => Math.Max(0, count - 1));
 
     private static JsonObject Describe(string predicate, Term term) => new()
     {
@@ -278,10 +396,9 @@ public sealed class EuDateAxiomShapeProbe
         HttpClient http,
         OfficialMachineQuerySourceProfile profile,
         EuPredicateExistenceCensus.OriginPacer pacer,
-        RequestCount requests,
         string query)
     {
-        using var document = await ExecuteAsync(http, profile, pacer, requests, query);
+        using var document = await ExecuteAsync(http, profile, pacer, query);
         return document.RootElement.GetProperty("boolean").GetBoolean();
     }
 
@@ -289,11 +406,10 @@ public sealed class EuDateAxiomShapeProbe
         HttpClient http,
         OfficialMachineQuerySourceProfile profile,
         EuPredicateExistenceCensus.OriginPacer pacer,
-        RequestCount requests,
         string query,
         string column)
     {
-        using var document = await ExecuteAsync(http, profile, pacer, requests, query);
+        using var document = await ExecuteAsync(http, profile, pacer, query);
         var values = new List<string>();
         foreach (var row in document.RootElement.GetProperty("results").GetProperty("bindings").EnumerateArray())
         {
@@ -322,10 +438,9 @@ public sealed class EuDateAxiomShapeProbe
         HttpClient http,
         OfficialMachineQuerySourceProfile profile,
         EuPredicateExistenceCensus.OriginPacer pacer,
-        RequestCount requests,
         string query)
     {
-        using var document = await ExecuteAsync(http, profile, pacer, requests, query);
+        using var document = await ExecuteAsync(http, profile, pacer, query);
         var rows = new List<IReadOnlyDictionary<string, Term>>();
         foreach (var row in document.RootElement.GetProperty("results").GetProperty("bindings").EnumerateArray())
         {
@@ -349,10 +464,8 @@ public sealed class EuDateAxiomShapeProbe
         HttpClient http,
         OfficialMachineQuerySourceProfile profile,
         EuPredicateExistenceCensus.OriginPacer pacer,
-        RequestCount requests,
         string query)
     {
-        requests.Value++;
         using var content = new StringContent(query, Encoding.UTF8, "application/sparql-query");
         using var request = new HttpRequestMessage(HttpMethod.Post, profile.RequestTarget)
         {
