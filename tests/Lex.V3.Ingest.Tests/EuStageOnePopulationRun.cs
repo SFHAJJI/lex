@@ -181,21 +181,37 @@ public sealed class EuStageOnePopulationRun
         // The first attempt's whole evidence index is retained beside the second, and the count of
         // seeds needing a second attempt is its own reported field, because if that number were
         // ever large it would be a finding about our own traffic rather than the publisher's.
+        // BY POSITION, NEVER BY VALUE SEARCH. This selected records and then wrote each result
+        // back with `records[records.IndexOf(record)]`. SeedRecord is a `record`, so IndexOf is an
+        // equality search rather than an identity one, and the count of seeds that took a second
+        // attempt came out lower than the number of second attempts actually run: run 8 wrote five
+        // seed files carrying attempts=2 while the report claimed three. The population outcome was
+        // unaffected -- every seed still reached -- but the retry counter is the one field that
+        // exists so an inflated retry rate would be visible as a finding about our own traffic, and
+        // a counter that undercounts is worse than no counter. Carrying the index removes the
+        // search entirely.
         var deferred = records
-            .Where(static record => record.Result is not null
-                && record.Result.Refusal is not null
-                && IsPublisherUnavailable(record.Result))
+            .Select(static (record, index) => (Record: record, Index: index))
+            .Where(static entry => entry.Record.Result is not null
+                && entry.Record.Result.Refusal is not null
+                && IsPublisherUnavailable(entry.Record.Result))
             .ToArray();
-        foreach (var record in deferred)
+        foreach (var (record, index) in deferred)
         {
             Console.WriteLine(
                 $"POPULATION|deferredSecondAttempt|{record.Seed.Celex}"
                 + $"|firstRefusal={record.Result!.Refusal!.Code}|status={PublisherStatuses(record.Result)}");
-            records[records.IndexOf(record)] = await RunSeedAsync(
+            records[index] = await RunSeedAsync(
                     record.Seed, record.Ordinal, seeds.Length, 2, record.Index,
                     root, seedDirectory, faults)
                 .ConfigureAwait(false);
         }
+
+        // AND THE COUNTER CHECKS ITSELF, because the defect above was invisible in a green run and
+        // was found only by comparing the report against the seed files it was built from. Exactly
+        // the deferred seeds may carry a second attempt, and every one of them must: any other
+        // number means the write-back missed a seed or touched one it should not have.
+        AssertDeferredAccounting(records, deferred.Select(static entry => entry.Index).ToArray());
 
         populationStopwatch.Stop();
 
@@ -577,6 +593,34 @@ public sealed class EuStageOnePopulationRun
     /// files and then produced no report at all: the one step that was not fault-tolerant was the
     /// recording of a result rather than the getting of it.
     /// </remarks>
+    /// <summary>
+    /// Every deferred seed, and only a deferred seed, carries a second attempt once the write-back
+    /// has run.
+    /// </summary>
+    /// <remarks>
+    /// This exists because the retry counter was wrong in a run that passed. The population
+    /// assertions all held -- every seed reached -- so nothing failed, and the undercount surfaced
+    /// only when the report was reconciled by hand against the per-seed files. A number nobody can
+    /// check is not evidence, and this is the check.
+    /// </remarks>
+    internal static void AssertDeferredAccounting(
+        IReadOnlyList<SeedRecord> records, IReadOnlyList<int> deferredIndices)
+    {
+        var expected = deferredIndices.OrderBy(static index => index).ToArray();
+        var actual = records
+            .Select(static (record, index) => (record, index))
+            .Where(static entry => entry.record.Attempts > 1)
+            .Select(static entry => entry.index)
+            .OrderBy(static index => index)
+            .ToArray();
+        if (!expected.SequenceEqual(actual))
+        {
+            throw new InvalidOperationException(
+                "Deferred second-attempt accounting disagrees with the records it wrote back: "
+                + $"deferred [{string.Join(',', expected)}] but attempts>1 at [{string.Join(',', actual)}].");
+        }
+    }
+
     internal static JsonObject BuildSeedReport(
         (string Celex, string WorkRoot) seed,
         int ordinal,
@@ -600,7 +644,7 @@ public sealed class EuStageOnePopulationRun
         };
 
     /// <summary>One seed's own final state within this population run.</summary>
-    private sealed record SeedRecord(
+    internal sealed record SeedRecord(
         (string Celex, string WorkRoot) Seed,
         int Ordinal,
         int Attempts,
