@@ -451,7 +451,8 @@ public sealed record LuxembourgObservedRelation
         string subjectIri,
         string predicateIri,
         string objectIri,
-        SourceArtifactRef observationRef)
+        SourceArtifactRef observationRef,
+        LuxembourgRelationAuthority authority)
     {
         SubjectIri = LuxembourgSourceValidation.RequireScalarString(subjectIri, nameof(subjectIri));
         PredicateIri = LuxembourgSourceValidation.RequireScalarString(
@@ -459,6 +460,13 @@ public sealed record LuxembourgObservedRelation
             nameof(predicateIri));
         ObjectIri = LuxembourgSourceValidation.RequireScalarString(objectIri, nameof(objectIri));
         ObservationRef = observationRef ?? throw new ArgumentNullException(nameof(observationRef));
+        Authority = LuxembourgSourceValidation.RequireDefined(authority, nameof(authority));
+        if (Authority != LuxembourgRelationAuthority.PublisherAsserted)
+        {
+            throw new ArgumentException(
+                "A publisher observation may carry only publisher-asserted authority.",
+                nameof(authority));
+        }
     }
 
     public string SubjectIri { get; }
@@ -468,6 +476,12 @@ public sealed record LuxembourgObservedRelation
     public string ObjectIri { get; }
 
     public SourceArtifactRef ObservationRef { get; }
+
+    /// <summary>
+    /// An observed JOLux triple is always the publisher's assertion in its delivered direction.
+    /// Locally computed transposes exist only after resolution and carry their own authority.
+    /// </summary>
+    public LuxembourgRelationAuthority Authority { get; }
 }
 
 public sealed record LuxembourgResourceObservation
@@ -613,11 +627,18 @@ public sealed record LuxembourgResolvedRelation
         SourceArtifactRef observationRef,
         LuxembourgRelationSemantic semantic,
         LuxembourgRelationDisposition disposition,
-        LuxembourgConsolidatesShape? consolidatesShape)
+        LuxembourgConsolidatesShape? consolidatesShape,
+        LuxembourgRelationAuthority authority)
     {
-        SubjectIri = LuxembourgSourceValidation.RequireExactResourceIri(
-            subjectIri,
-            nameof(subjectIri));
+        Authority = LuxembourgSourceValidation.RequireDefined(authority, nameof(authority));
+        if (Authority != LuxembourgRelationAuthority.PublisherAsserted)
+        {
+            throw new ArgumentException(
+                "A resolved publisher relation may carry only publisher-asserted authority.",
+                nameof(authority));
+        }
+
+        SubjectIri = LuxembourgSourceValidation.RequireExactResourceIri(subjectIri, nameof(subjectIri));
         PredicateIri = LuxembourgSourceValidation.RequireExactAbsoluteIri(
             predicateIri,
             nameof(predicateIri));
@@ -652,6 +673,48 @@ public sealed record LuxembourgResolvedRelation
     public LuxembourgRelationDisposition Disposition { get; }
 
     public LuxembourgConsolidatesShape? ConsolidatesShape { get; }
+
+    /// <summary>This edge is the publisher's claim in its delivered direction.</summary>
+    public LuxembourgRelationAuthority Authority { get; }
+}
+
+/// <summary>
+/// One locally computed inbound edge. Its label and exact publisher family live only in
+/// <see cref="LocalInboundView"/>; it has no publisher-predicate slot that could relabel the
+/// reversed edge as a publisher assertion.
+/// </summary>
+public sealed record LuxembourgResolvedLocalInboundRelation
+{
+    internal LuxembourgResolvedLocalInboundRelation(
+        string subjectIri,
+        string objectIri,
+        SourceArtifactRef observationRef,
+        LuxembourgRelationAuthority authority,
+        LuxembourgLocalInboundView localInboundView)
+    {
+        SubjectIri = LuxembourgSourceValidation.RequireExactAbsoluteIri(subjectIri, nameof(subjectIri));
+        ObjectIri = LuxembourgSourceValidation.RequireExactAbsoluteIri(objectIri, nameof(objectIri));
+        ObservationRef = observationRef ?? throw new ArgumentNullException(nameof(observationRef));
+        Authority = LuxembourgSourceValidation.RequireDefined(authority, nameof(authority));
+        if (Authority != LuxembourgRelationAuthority.LocalInboundView)
+        {
+            throw new ArgumentException(
+                "A local inbound relation may carry only local-inbound-view authority.",
+                nameof(authority));
+        }
+
+        LocalInboundView = localInboundView ?? throw new ArgumentNullException(nameof(localInboundView));
+    }
+
+    public string SubjectIri { get; }
+
+    public string ObjectIri { get; }
+
+    public SourceArtifactRef ObservationRef { get; }
+
+    public LuxembourgRelationAuthority Authority { get; }
+
+    public LuxembourgLocalInboundView LocalInboundView { get; }
 }
 
 public sealed record LuxembourgResolvedAssertion
@@ -777,6 +840,7 @@ public abstract record LuxembourgProfileResolution
             IReadOnlyList<SourceArtifactRef> orderedEvidenceArtifacts,
             IReadOnlyList<ScopeObjectReductionInput> scopeInputs,
             IReadOnlyList<LuxembourgResourceResolution> resources,
+            IReadOnlyList<LuxembourgResolvedLocalInboundRelation> localInboundRelations,
             IReadOnlyList<LuxembourgDimensionAccounting> accounting)
         {
             SourceProfileRef = sourceProfileRef
@@ -788,6 +852,9 @@ public abstract record LuxembourgProfileResolution
                 nameof(orderedEvidenceArtifacts));
             ScopeInputs = LuxembourgSourceValidation.Copy(scopeInputs, nameof(scopeInputs));
             Resources = LuxembourgSourceValidation.Copy(resources, nameof(resources));
+            LocalInboundRelations = LuxembourgSourceValidation.Copy(
+                localInboundRelations,
+                nameof(localInboundRelations));
             Accounting = LuxembourgSourceValidation.Copy(accounting, nameof(accounting));
         }
 
@@ -800,6 +867,13 @@ public abstract record LuxembourgProfileResolution
         public IReadOnlyList<ScopeObjectReductionInput> ScopeInputs { get; }
 
         public IReadOnlyList<LuxembourgResourceResolution> Resources { get; }
+
+        /// <summary>
+        /// Locally computed transposes over the resolved publisher assertions. These are held at
+        /// profile scope because their subjects are the publisher assertions' targets, which need
+        /// not be the resource that contributed the source edge.
+        /// </summary>
+        public IReadOnlyList<LuxembourgResolvedLocalInboundRelation> LocalInboundRelations { get; }
 
         public IReadOnlyList<LuxembourgDimensionAccounting> Accounting { get; }
     }

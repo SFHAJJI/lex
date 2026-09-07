@@ -641,7 +641,8 @@ public sealed class LuxembourgScopeResolverTests
                     ActIri,
                     Jolux + "cites",
                     externalTarget,
-                    ObservationRef),
+                    ObservationRef,
+                    LuxembourgRelationAuthority.PublisherAsserted),
             ],
             new LuxembourgSparqlRightsChannelObservations(
                 ObservationRef,
@@ -655,8 +656,13 @@ public sealed class LuxembourgScopeResolverTests
         var resolved = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(
             Profile().Resolve(Proven([observation])));
         var relation = resolved.Resources.Single().Relations.Single();
+        var inbound = resolved.LocalInboundRelations.Single();
         Assert.AreEqual(externalTarget, relation.ObjectIri);
         Assert.AreEqual(LuxembourgRelationDisposition.Accepted, relation.Disposition);
+        Assert.AreEqual(externalTarget, inbound.SubjectIri);
+        Assert.AreEqual(ActIri, inbound.ObjectIri);
+        Assert.AreEqual(LuxembourgRelationAuthority.LocalInboundView, inbound.Authority);
+        Assert.AreEqual(LuxembourgRelationPredicate.Cites, inbound.LocalInboundView.DerivedFrom);
         Assert.AreEqual(
             LuScopeTerminalState.AcceptedMetadata,
             resolved.Resources.Single().Dimensions.Relation.State);
@@ -681,7 +687,8 @@ public sealed class LuxembourgScopeResolverTests
                     ActIri,
                     Jolux + "consolidates",
                     externalTarget,
-                    ObservationRef),
+                    ObservationRef,
+                    LuxembourgRelationAuthority.PublisherAsserted),
             ],
             new LuxembourgSparqlRightsChannelObservations(
                 ObservationRef,

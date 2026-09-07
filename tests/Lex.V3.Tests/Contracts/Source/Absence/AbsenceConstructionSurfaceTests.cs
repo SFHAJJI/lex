@@ -193,6 +193,11 @@ public sealed class AbsenceConstructionSurfaceTests
                 "field private instance " + Lu + "LuxembourgProvenResourceObservations"
                 + "::<AssertionFamilyProofs>k__BackingField -> System.Collections.Generic.IReadOnlyList<"
                 + N + "AbsenceFamilyEnumerationProof>",
+                "field private instance " + Lu + "LuxembourgProvenResourceObservations"
+                + "::<RelationFamilyProof>k__BackingField -> " + N + "AbsenceFamilyEnumerationProof?",
+                "field private instance " + Lu + "LuxembourgProvenResourceObservations"
+                + "::<RelationFamilyProofs>k__BackingField -> System.Collections.Generic.IReadOnlyList<"
+                + N + "AbsenceFamilyEnumerationProof>",
 
                 // The publisher-neutral delivery receipt's bridge (queue item 19: moved and renamed
                 // from Lex.V3.Contracts.Source.Luxembourg.LuxembourgEnumerationDeliveryReceipt), and
@@ -216,6 +221,11 @@ public sealed class AbsenceConstructionSurfaceTests
                 + "::AssertionFamilyProof() -> " + N + "AbsenceFamilyEnumerationProof?",
                 "property public instance " + Lu + "LuxembourgProvenResourceObservations"
                 + "::AssertionFamilyProofs() -> System.Collections.Generic.IReadOnlyList<"
+                + N + "AbsenceFamilyEnumerationProof>",
+                "property public instance " + Lu + "LuxembourgProvenResourceObservations"
+                + "::RelationFamilyProof() -> " + N + "AbsenceFamilyEnumerationProof?",
+                "property public instance " + Lu + "LuxembourgProvenResourceObservations"
+                + "::RelationFamilyProofs() -> System.Collections.Generic.IReadOnlyList<"
                 + N + "AbsenceFamilyEnumerationProof>",
             },
             ConstructionSurface.ProducersIn(

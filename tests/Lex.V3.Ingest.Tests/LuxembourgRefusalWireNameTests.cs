@@ -69,7 +69,7 @@ public sealed class LuxembourgRefusalWireNameTests
 
     /// <summary>
     /// The query-execution refusal vocabulary, every member. R4 declared a token on 10 of these
-    /// 12; before that the undeclared ones serialized as their CLR member names and nothing
+    /// 15; before that the undeclared ones serialized as their CLR member names and nothing
     /// pinned them.
     /// </summary>
     [TestMethod]
@@ -93,6 +93,9 @@ public sealed class LuxembourgRefusalWireNameTests
                 "document_body_not_retained",
                 "acquisition_outcome_not_representable",
                 "record_set_not_retained",
+                "relation_row_term_not_iri",
+                "relation_row_predicate_not_admitted",
+                "relation_row_subject_not_in_census",
             }),
             string.Join("\n", WireNames<LuxembourgQueryExecutionRefusal>()),
             "a wire name changing is a contract change; a number changing is not.");

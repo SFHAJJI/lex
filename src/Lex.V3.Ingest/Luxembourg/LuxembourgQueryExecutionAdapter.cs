@@ -499,6 +499,18 @@ public enum LuxembourgQueryExecutionRefusal
     /// </remarks>
     [JsonStringEnumMemberName("record_set_not_retained")]
     RecordSetNotRetained = 11,
+
+    /// <summary>A relation row term the set-G query requires to be an IRI had another RDF kind.</summary>
+    [JsonStringEnumMemberName("relation_row_term_not_iri")]
+    RelationRowTermNotIri = 12,
+
+    /// <summary>A verified relation row named a predicate outside the closed 18-family plan.</summary>
+    [JsonStringEnumMemberName("relation_row_predicate_not_admitted")]
+    RelationRowPredicateNotAdmitted = 13,
+
+    /// <summary>A relation row subject was not a member of this run's delivered resource census.</summary>
+    [JsonStringEnumMemberName("relation_row_subject_not_in_census")]
+    RelationRowSubjectNotInCensus = 14,
 }
 
 /// <summary>
@@ -610,6 +622,8 @@ public sealed class LuxembourgQueryExecutionResult
         SourceProfileTopology topology,
         IReadOnlyList<LuxembourgFamilyEnumerationOutcome> familyOutcomes,
         IReadOnlyList<LuxembourgRelationFamilyAcquisition> relationFamilyAcquisitions,
+        IReadOnlyList<LuxembourgResolvedRelation> resolvedRelations,
+        IReadOnlyList<LuxembourgResolvedLocalInboundRelation> localInboundRelations,
         IReadOnlyList<string> resourceObservationSubjects,
         IReadOnlyList<LuxembourgResourceObservationExclusionAccounting> resourceObservationExclusions,
         DurableBlobWriteReceipt? scopeManifestReceipt,
@@ -623,6 +637,8 @@ public sealed class LuxembourgQueryExecutionResult
         Topology = topology;
         FamilyOutcomes = familyOutcomes;
         RelationFamilyAcquisitions = relationFamilyAcquisitions;
+        ResolvedRelations = resolvedRelations;
+        LocalInboundRelations = localInboundRelations;
         ResourceObservationSubjects = resourceObservationSubjects;
         ResourceObservationExclusions = resourceObservationExclusions;
         ScopeManifestReceipt = scopeManifestReceipt;
@@ -638,6 +654,8 @@ public sealed class LuxembourgQueryExecutionResult
         SourceProfileTopology topology,
         IReadOnlyList<LuxembourgFamilyEnumerationOutcome> familyOutcomes,
         IReadOnlyList<LuxembourgRelationFamilyAcquisition> relationFamilyAcquisitions,
+        IReadOnlyList<LuxembourgResolvedRelation> resolvedRelations,
+        IReadOnlyList<LuxembourgResolvedLocalInboundRelation> localInboundRelations,
         IReadOnlyList<string> resourceObservationSubjects,
         IReadOnlyList<LuxembourgResourceObservationExclusionAccounting> resourceObservationExclusions,
         DurableBlobWriteReceipt scopeManifestReceipt,
@@ -647,6 +665,8 @@ public sealed class LuxembourgQueryExecutionResult
         VerifiedCorpusRecordSet corpusRecordSet)
     {
         ArgumentNullException.ThrowIfNull(topology);
+        ArgumentNullException.ThrowIfNull(resolvedRelations);
+        ArgumentNullException.ThrowIfNull(localInboundRelations);
         ArgumentNullException.ThrowIfNull(resourceObservationSubjects);
         ArgumentNullException.ThrowIfNull(resourceObservationExclusions);
         ArgumentNullException.ThrowIfNull(scopeManifestReceipt);
@@ -661,7 +681,8 @@ public sealed class LuxembourgQueryExecutionResult
             ? LuxembourgQueryExecutionCompletion.AllFamiliesProven
             : LuxembourgQueryExecutionCompletion.PartialFamilyRefused;
         return new(
-            topology, familyOutcomes, relationFamilyAcquisitions,
+            topology, familyOutcomes, relationFamilyAcquisitions, resolvedRelations,
+            localInboundRelations,
             resourceObservationSubjects, resourceObservationExclusions, scopeManifestReceipt,
             scopeManifestCanonicalSha256, completion, documentAcquisitionOutcomesByOrdinal,
             corpusRecordSetRef, corpusRecordSet, null);
@@ -676,7 +697,7 @@ public sealed class LuxembourgQueryExecutionResult
         ArgumentNullException.ThrowIfNull(topology);
         ArgumentNullException.ThrowIfNull(refusal);
         return new(
-            topology, familyOutcomes, relationFamilyAcquisitions, [], [], null, null, null,
+            topology, familyOutcomes, relationFamilyAcquisitions, [], [], [], [], null, null, null,
             null, null, null, refusal);
     }
 
@@ -686,6 +707,18 @@ public sealed class LuxembourgQueryExecutionResult
     public IReadOnlyList<LuxembourgFamilyEnumerationOutcome> FamilyOutcomes { get; }
 
     public IReadOnlyList<LuxembourgRelationFamilyAcquisition> RelationFamilyAcquisitions { get; }
+
+    /// <summary>
+    /// Publisher relation edges resolved from this run's verified set-G rows, retaining their
+    /// delivered direction, evidence and explicit publisher authority.
+    /// </summary>
+    public IReadOnlyList<LuxembourgResolvedRelation> ResolvedRelations { get; }
+
+    /// <summary>
+    /// Locally computed inbound edges kept separate from publisher predicates. Each carries local
+    /// authority and names its one source family through <c>derived_from</c>.
+    /// </summary>
+    public IReadOnlyList<LuxembourgResolvedLocalInboundRelation> LocalInboundRelations { get; }
 
     /// <summary>
     /// The exact set of publisher URIs <see cref="LuxembourgQueryExecutionAdapter.BuildResourceObservations"/>
@@ -1152,6 +1185,8 @@ public sealed class LuxembourgQueryExecutionAdapter
                 "The declared scope has not been independently reverified.")).ToArray()
             : BuildRelationFamilyAcquisitions(
                 relationAssertionsFamilyKey, sawRelationFamily, relationProof, relationIncompleteReason);
+        IReadOnlyList<RepeatedEnumerationRow> relationRows = [];
+        RepeatedEnumerationInterpretationProfile? relationProfile = null;
         if (scoped)
         {
             var missing = families.FirstOrDefault(family => FindProvenOutcome(outcomes, family.PartitionRequest.Partition.PartitionId) is null);
@@ -1159,18 +1194,27 @@ public sealed class LuxembourgQueryExecutionAdapter
                 return LuxembourgQueryExecutionResult.Refused(topology, outcomes, relationAcquisitions,
                     new(LuxembourgQueryExecutionRefusal.ResourceObservationFamilyNotProven, null,
                         $"Declared scope member '{missing.PartitionRequest.Partition.PartitionId}' was not proven."));
-            var (relationRows, _, relationRowsRefusal) = await ReopenAndVerifyFamilyRowsUnionAsync(
-                relationLegs, cancellationToken).ConfigureAwait(false);
-            if (relationRows is null)
-                return LuxembourgQueryExecutionResult.Refused(topology, outcomes,
-                    _sourceProfile.RelationRules.Select(rule => LuxembourgRelationFamilyAcquisition.NotComplete(
-                        rule.PredicateIri, LuxembourgRelationFamilyAcquisitionState.Incomplete,
-                        $"Declared relation scope did not reverify: {relationRowsRefusal}.")).ToArray(),
-                    new(LuxembourgQueryExecutionRefusal.ResourceObservationRowsNotVerified, null,
-                        $"Declared relation scope did not reverify: {relationRowsRefusal}."));
             relationAcquisitions = _sourceProfile.RelationRules.Select(rule =>
                 LuxembourgRelationFamilyAcquisition.CompleteAll(rule.PredicateIri,
                     relationLegs.Select(static leg => leg.Proof).ToArray())).ToArray();
+        }
+
+        if (relationLegs.Count > 0)
+        {
+            var reopened = await ReopenAndVerifyFamilyRowsUnionAsync(
+                relationLegs, cancellationToken).ConfigureAwait(false);
+            if (reopened.Rows is null)
+            {
+                return LuxembourgQueryExecutionResult.Refused(topology, outcomes,
+                    _sourceProfile.RelationRules.Select(rule => LuxembourgRelationFamilyAcquisition.NotComplete(
+                        rule.PredicateIri, LuxembourgRelationFamilyAcquisitionState.Incomplete,
+                        $"Relation rows did not reverify: {reopened.Refusal}.")).ToArray(),
+                    new(LuxembourgQueryExecutionRefusal.ResourceObservationRowsNotVerified, null,
+                        $"Relation rows did not reverify: {reopened.Refusal}."));
+            }
+
+            relationRows = reopened.Rows;
+            relationProfile = reopened.Profile;
         }
 
         // D1-04b: derive this run's own observations from the two designated families' own proven,
@@ -1179,14 +1223,39 @@ public sealed class LuxembourgQueryExecutionAdapter
         // reaches the scope manifest at all.
         IReadOnlyList<LuxembourgResourceObservation> observations;
         IReadOnlyList<AbsenceFamilyEnumerationProof> assertionFamilyProofs = [];
+        IReadOnlyList<AbsenceFamilyEnumerationProof> relationObservationFamilyProofs = [];
         IReadOnlyList<string> resourceObservationSubjects = [];
         IReadOnlyList<LuxembourgResourceObservationExclusionAccounting> resourceObservationExclusions = [];
         if (resourceObservationFamilyKey is null)
         {
             // Symmetric with BuildRelationFamilyAcquisitions' own "did not try this run" case: no
-            // designation is the ordinary empty run, not a refusal. The constructor-level guard above
-            // already requires resourceAssertionsFamilyKey to also be null here.
-            observations = [];
+            // designation is the ordinary empty run. A relation family remains independent: its
+            // verified rows define their own observed subjects, so a non-empty set must still pass
+            // the relation decoder and resolver instead of silently becoming an empty result.
+            relationObservationFamilyProofs = relationLegs.Select(static leg => leg.Proof).ToArray();
+            if (relationRows.Count == 0)
+            {
+                observations = [];
+            }
+            else
+            {
+                var buildResult = BuildResourceObservations(
+                    [], null, [], null, [], relationRows, relationProfile,
+                    _sourceProfile.RelationRules.Select(static rule => rule.PredicateIri).ToArray());
+                if (buildResult.Kind != ResourceObservationBuildOutcomeKind.Built)
+                {
+                    var (refusalCode, refusalDetail) = MapResourceObservationBuildFailure(
+                        buildResult, resourceObservationFamilyKey, resourceAssertionsFamilyKey);
+                    return LuxembourgQueryExecutionResult.Refused(
+                        topology,
+                        outcomes,
+                        relationAcquisitions,
+                        new LuxembourgQueryExecutionRefusalDetail(refusalCode, null, refusalDetail));
+                }
+
+                observations = buildResult.Observations!;
+                resourceObservationExclusions = buildResult.Exclusions!;
+            }
         }
         else
         {
@@ -1255,31 +1324,18 @@ public sealed class LuxembourgQueryExecutionAdapter
 
             var buildResult = BuildResourceObservations(
                 censusRows, censusProfile!, assertionRows, assertionProfile!,
-                assertionLegs[0].PartitionRequest.InvariantPlan.SelectorPredicates);
+                assertionLegs[0].PartitionRequest.InvariantPlan.SelectorPredicates,
+                relationRows, relationProfile,
+                _sourceProfile.RelationRules.Select(static rule => rule.PredicateIri).ToArray());
             if (buildResult.Kind != ResourceObservationBuildOutcomeKind.Built)
             {
-                var refusalCode = buildResult.Kind switch
-                {
-                    ResourceObservationBuildOutcomeKind.SubjectNotInCensus =>
-                        LuxembourgQueryExecutionRefusal.ObservationSubjectNotInDeliveredCensus,
-                    ResourceObservationBuildOutcomeKind.ObjectKindNotRecognised =>
-                        LuxembourgQueryExecutionRefusal.AssertionRowObjectKindNotRecognised,
-                    ResourceObservationBuildOutcomeKind.TermUnbound =>
-                        LuxembourgQueryExecutionRefusal.AssertionRowTermUnbound,
-                    _ => throw new InvalidOperationException(
-                        $"Unreachable: BuildResourceObservations returned an unhandled outcome kind " +
-                        $"'{buildResult.Kind}'."),
-                };
-                var detail = buildResult.Kind == ResourceObservationBuildOutcomeKind.SubjectNotInCensus
-                    ? $"the subject '{buildResult.Detail}' has a row in the assertion family " +
-                      $"'{resourceAssertionsFamilyKey}' but is not a member of the census family " +
-                      $"'{resourceObservationFamilyKey}'s own delivered key set."
-                    : buildResult.Detail;
+                var (refusalCode, refusalDetail) = MapResourceObservationBuildFailure(
+                    buildResult, resourceObservationFamilyKey, resourceAssertionsFamilyKey);
                 return LuxembourgQueryExecutionResult.Refused(
                     topology,
                     outcomes,
                     relationAcquisitions,
-                    new LuxembourgQueryExecutionRefusalDetail(refusalCode, null, detail));
+                    new LuxembourgQueryExecutionRefusalDetail(refusalCode, null, refusalDetail));
             }
 
             // Bind channel one's declarations to this run's actual delivery closure. The
@@ -1324,7 +1380,9 @@ public sealed class LuxembourgQueryExecutionAdapter
         // carried by a proof object, so nothing downstream has to check (or be named after) the
         // fact that this family was proven. An empty run designates no family and so has no proof
         // and no observations; RequireProven is reached only on the designated path.
-        if (observations.Count != 0 && assertionFamilyProofs.Count == 0)
+        if (observations.Count != 0 &&
+            assertionFamilyProofs.Count == 0 &&
+            relationObservationFamilyProofs.Count == 0)
         {
             // Unreachable: observations exist only on the designated branch, which refuses the run
             // above unless the family is proven. Typed rather than thrown, for the same reason the
@@ -1336,13 +1394,12 @@ public sealed class LuxembourgQueryExecutionAdapter
                 new LuxembourgQueryExecutionRefusalDetail(
                     LuxembourgQueryExecutionRefusal.ResourceObservationFamilyNotProven,
                     null,
-                    "this run derived resource observations without holding the assertion family's " +
+                    "this run derived resource observations without holding the source family's " +
                     "own enumeration proof."));
         }
 
-        var resolution = _sourceProfile.Resolve(assertionFamilyProofs.Count == 0
-            ? LuxembourgProvenResourceObservations.NoFamilyDesignated()
-            : LuxembourgProvenResourceObservations.RequireAllProven(assertionFamilyProofs, observations));
+        var resolution = _sourceProfile.Resolve(BindResourceObservationProofs(
+            assertionFamilyProofs, relationObservationFamilyProofs, observations));
         if (resolution is LuxembourgProfileResolution.Failed failed)
         {
             return LuxembourgQueryExecutionResult.Refused(
@@ -1415,8 +1472,8 @@ public sealed class LuxembourgQueryExecutionAdapter
             {
                 return LuxembourgQueryExecutionResult.Refused(topology, outcomes, relationAcquisitions, rightsFailure);
             }
-            resolution = _sourceProfile.Resolve(LuxembourgProvenResourceObservations.RequireAllProven(
-                assertionFamilyProofs, withInFileRights!));
+            resolution = _sourceProfile.Resolve(BindResourceObservationProofs(
+                assertionFamilyProofs, relationObservationFamilyProofs, withInFileRights!));
             if (resolution is LuxembourgProfileResolution.Failed finalFailure)
             {
                 return LuxembourgQueryExecutionResult.Refused(topology, outcomes, relationAcquisitions,
@@ -1461,7 +1518,10 @@ public sealed class LuxembourgQueryExecutionAdapter
         }
 
         return LuxembourgQueryExecutionResult.Delivered(
-            topology, outcomes, relationAcquisitions, resourceObservationSubjects,
+            topology, outcomes, relationAcquisitions,
+            resolved.Resources.SelectMany(static resource => resource.Relations).ToArray(),
+            resolved.LocalInboundRelations,
+            resourceObservationSubjects,
             resourceObservationExclusions, writeReceipt!, manifestCanonicalSha256!,
             documentAcquisitionOutcomesByOrdinal!, recordSetResult.SetRef!,
             recordSetResult.VerifiedSet!);
@@ -2229,6 +2289,12 @@ public sealed class LuxembourgQueryExecutionAdapter
     private const string AssertionDatatypeProjectionVariable = "datatype_iri";
     private const string AssertionLanguageProjectionVariable = "language_tag";
 
+    private const string RelationSubjectProjectionVariable = "subject";
+
+    private const string RelationPredicateProjectionVariable = "predicate";
+
+    private const string RelationObjectProjectionVariable = "object";
+
     // D1-04c: the three object_kind tokens used to be duplicated here as private consts,
     // independently restating "iri", "literal" and "unsupported_blank_node" from
     // LuxembourgQueryPlan.BuildTemplates' own SPARQL BIND. Both call sites now read the one
@@ -2240,6 +2306,57 @@ public sealed class LuxembourgQueryExecutionAdapter
     private const string AssertionObjectKindUnsupportedBlankNode =
         LuxembourgQueryPlan.AssertionObjectKindUnsupportedBlankNode;
 
+    private static LuxembourgProvenResourceObservations BindResourceObservationProofs(
+        IReadOnlyList<AbsenceFamilyEnumerationProof> assertionFamilyProofs,
+        IReadOnlyList<AbsenceFamilyEnumerationProof> relationFamilyProofs,
+        IReadOnlyList<LuxembourgResourceObservation> observations)
+    {
+        if (assertionFamilyProofs.Count != 0 && relationFamilyProofs.Count != 0)
+        {
+            throw new InvalidOperationException(
+                "Resource observations cannot be derived from assertion-only and relation-only paths together.");
+        }
+
+        return assertionFamilyProofs.Count != 0
+            ? LuxembourgProvenResourceObservations.RequireAllProven(assertionFamilyProofs, observations)
+            : relationFamilyProofs.Count != 0
+                ? LuxembourgProvenResourceObservations.RequireRelationsProven(relationFamilyProofs, observations)
+                : LuxembourgProvenResourceObservations.NoFamilyDesignated();
+    }
+
+    private static (LuxembourgQueryExecutionRefusal Code, string? Detail) MapResourceObservationBuildFailure(
+        ResourceObservationBuildResult buildResult,
+        string? resourceObservationFamilyKey,
+        string? resourceAssertionsFamilyKey)
+    {
+        var refusalCode = buildResult.Kind switch
+        {
+            ResourceObservationBuildOutcomeKind.SubjectNotInCensus =>
+                LuxembourgQueryExecutionRefusal.ObservationSubjectNotInDeliveredCensus,
+            ResourceObservationBuildOutcomeKind.ObjectKindNotRecognised =>
+                LuxembourgQueryExecutionRefusal.AssertionRowObjectKindNotRecognised,
+            ResourceObservationBuildOutcomeKind.TermUnbound =>
+                LuxembourgQueryExecutionRefusal.AssertionRowTermUnbound,
+            ResourceObservationBuildOutcomeKind.RelationTermUnbound =>
+                LuxembourgQueryExecutionRefusal.ResourceObservationRowsNotVerified,
+            ResourceObservationBuildOutcomeKind.RelationTermNotIri =>
+                LuxembourgQueryExecutionRefusal.RelationRowTermNotIri,
+            ResourceObservationBuildOutcomeKind.RelationPredicateNotAdmitted =>
+                LuxembourgQueryExecutionRefusal.RelationRowPredicateNotAdmitted,
+            ResourceObservationBuildOutcomeKind.RelationSubjectNotInCensus =>
+                LuxembourgQueryExecutionRefusal.RelationRowSubjectNotInCensus,
+            _ => throw new InvalidOperationException(
+                $"Unreachable: BuildResourceObservations returned an unhandled outcome kind " +
+                $"'{buildResult.Kind}'."),
+        };
+        var detail = buildResult.Kind == ResourceObservationBuildOutcomeKind.SubjectNotInCensus
+            ? $"the subject '{buildResult.Detail}' has a row in the assertion family " +
+              $"'{resourceAssertionsFamilyKey}' but is not a member of the census family " +
+              $"'{resourceObservationFamilyKey}'s own delivered key set."
+            : buildResult.Detail;
+        return (refusalCode, detail);
+    }
+
     /// <summary>
     /// D1-04b's real derivation, per the reviewer's ruling
     /// (lex-event-20260904T023842960Z-3b559fba1e3c46dba3ef496e401d96f3): one
@@ -2248,6 +2365,10 @@ public sealed class LuxembourgQueryExecutionAdapter
     /// <see cref="LuxembourgObservedAssertion"/> values <paramref name="assertionRows"/> (the
     /// "assertion-rows" family, set "A") delivered for that same subject -- or honestly empty
     /// assertions when A has none for it.
+    /// When S and A are not designated, each admitted subject in the independently proven set-G
+    /// <paramref name="relationRows"/> supplies its own observation identity. This relation-only
+    /// path carries no assertion or census claim; it keeps the publisher row attached to the
+    /// subject that row names.
     /// <para>
     /// The binding between the two families is IDENTITY-SET membership, never a count: every subject
     /// named by any row in <paramref name="assertionRows"/> (checked here on the RAW, unfiltered
@@ -2274,8 +2395,8 @@ public sealed class LuxembourgQueryExecutionAdapter
     /// so admitting a RelationPredicate-only row here (say, "cites" or "modifies", both common) would
     /// fail scope resolution for essentially every real LU resource. A relation-predicate row is real
     /// content, but it is relation content: it belongs to <see cref="LuxembourgObservedRelation"/>,
-    /// sourced from the unrelated "relation-assertions" family (set "G") through this adapter's
-    /// existing, unchanged relation machinery, not to <see cref="LuxembourgResourceObservation.Assertions"/>.
+    /// sourced from the separately proven and reopened "relation-assertions" family (set "G"),
+    /// not to <see cref="LuxembourgResourceObservation.Assertions"/>.
     /// A row this admission skips is not lost data: it is data this method was never asked to carry.
     /// </para>
     /// <para>
@@ -2304,24 +2425,58 @@ public sealed class LuxembourgQueryExecutionAdapter
     /// </summary>
     private ResourceObservationBuildResult BuildResourceObservations(
         IReadOnlyList<RepeatedEnumerationRow> censusRows,
-        RepeatedEnumerationInterpretationProfile censusProfile,
+        RepeatedEnumerationInterpretationProfile? censusProfile,
         IReadOnlyList<RepeatedEnumerationRow> assertionRows,
-        RepeatedEnumerationInterpretationProfile assertionProfile,
-        IReadOnlyCollection<string> assertionPredicateVocabulary)
+        RepeatedEnumerationInterpretationProfile? assertionProfile,
+        IReadOnlyCollection<string> assertionPredicateVocabulary,
+        IReadOnlyList<RepeatedEnumerationRow> relationRows,
+        RepeatedEnumerationInterpretationProfile? relationProfile,
+        IReadOnlyCollection<string> relationPredicateVocabulary)
     {
-        var censusKeyIndex = RequireProjectionIndex(censusProfile, ResourceIdentityProjectionVariable);
-        var subjectIndex = RequireProjectionIndex(assertionProfile, AssertionSubjectProjectionVariable);
-        var predicateIndex = RequireProjectionIndex(assertionProfile, AssertionPredicateProjectionVariable);
-        var objectIndex = RequireProjectionIndex(assertionProfile, AssertionObjectProjectionVariable);
-        var objectKindIndex = RequireProjectionIndex(assertionProfile, AssertionObjectKindProjectionVariable);
-        var datatypeIndex = RequireProjectionIndex(assertionProfile, AssertionDatatypeProjectionVariable);
-        var languageIndex = RequireProjectionIndex(assertionProfile, AssertionLanguageProjectionVariable);
+        if ((censusProfile is null) != (assertionProfile is null) ||
+            (censusProfile is null && (censusRows.Count != 0 || assertionRows.Count != 0)))
+        {
+            throw new ArgumentException(
+                "Census and assertion rows require both interpretation profiles.",
+                nameof(censusProfile));
+        }
+
+        if (relationRows.Count > 0 && relationProfile is null)
+        {
+            throw new ArgumentException(
+                "Relation rows require the interpretation profile that decoded them.",
+                nameof(relationProfile));
+        }
+
+        var hasResourceCensus = censusProfile is not null;
+        var censusKeyIndex = censusProfile is null
+            ? -1
+            : RequireProjectionIndex(censusProfile, ResourceIdentityProjectionVariable);
+        var subjectIndex = assertionProfile is null
+            ? -1
+            : RequireProjectionIndex(assertionProfile, AssertionSubjectProjectionVariable);
+        var predicateIndex = assertionProfile is null
+            ? -1
+            : RequireProjectionIndex(assertionProfile, AssertionPredicateProjectionVariable);
+        var objectIndex = assertionProfile is null
+            ? -1
+            : RequireProjectionIndex(assertionProfile, AssertionObjectProjectionVariable);
+        var objectKindIndex = assertionProfile is null
+            ? -1
+            : RequireProjectionIndex(assertionProfile, AssertionObjectKindProjectionVariable);
+        var datatypeIndex = assertionProfile is null
+            ? -1
+            : RequireProjectionIndex(assertionProfile, AssertionDatatypeProjectionVariable);
+        var languageIndex = assertionProfile is null
+            ? -1
+            : RequireProjectionIndex(assertionProfile, AssertionLanguageProjectionVariable);
         var assertionPredicates = new HashSet<string>(assertionPredicateVocabulary, StringComparer.Ordinal);
+        var relationPredicates = new HashSet<string>(relationPredicateVocabulary, StringComparer.Ordinal);
 
         // The census: every resource identity the "subjects" family actually delivered this run,
         // preserving delivery order for the observations this method emits below.
         var censusKeys = new HashSet<string>(StringComparer.Ordinal);
-        var censusOrder = new List<string>(censusRows.Count);
+        var censusOrder = new List<string>(censusRows.Count + relationRows.Count);
         foreach (var row in censusRows)
         {
             var key = row.Terms[censusKeyIndex].Value;
@@ -2339,6 +2494,7 @@ public sealed class LuxembourgQueryExecutionAdapter
 
         var observationRef = _sourceProfile.Snapshot.ObservationRef;
         var assertionsBySubject = new Dictionary<string, List<LuxembourgObservedAssertion>>(StringComparer.Ordinal);
+        var relationsBySubject = new Dictionary<string, List<LuxembourgObservedRelation>>(StringComparer.Ordinal);
         var exclusionCounts = new Dictionary<(string Subject, LuxembourgResourceObservationExclusionCause Cause), int>();
         foreach (var row in assertionRows)
         {
@@ -2427,6 +2583,64 @@ public sealed class LuxembourgQueryExecutionAdapter
                 observationRef));
         }
 
+        if (relationProfile is not null)
+        {
+            var relationSubjectIndex = RequireProjectionIndex(
+                relationProfile, RelationSubjectProjectionVariable);
+            var relationPredicateIndex = RequireProjectionIndex(
+                relationProfile, RelationPredicateProjectionVariable);
+            var relationObjectIndex = RequireProjectionIndex(
+                relationProfile, RelationObjectProjectionVariable);
+            foreach (var row in relationRows)
+            {
+                var subjectTerm = row.Terms[relationSubjectIndex];
+                var predicateTerm = row.Terms[relationPredicateIndex];
+                var objectTerm = row.Terms[relationObjectIndex];
+                if (subjectTerm.Value is null || predicateTerm.Value is null || objectTerm.Value is null)
+                {
+                    return ResourceObservationBuildResult.RelationTermUnbound();
+                }
+
+                if (subjectTerm.Kind != RepeatedEnumerationRdfTermKind.Iri ||
+                    predicateTerm.Kind != RepeatedEnumerationRdfTermKind.Iri ||
+                    objectTerm.Kind != RepeatedEnumerationRdfTermKind.Iri)
+                {
+                    return ResourceObservationBuildResult.RelationTermNotIri(
+                        subjectTerm.Value, predicateTerm.Value, objectTerm.Value);
+                }
+
+                if (hasResourceCensus && !censusKeys.Contains(subjectTerm.Value))
+                {
+                    return ResourceObservationBuildResult.RelationSubjectNotInCensus(
+                        subjectTerm.Value);
+                }
+
+                if (!relationPredicates.Contains(predicateTerm.Value))
+                {
+                    return ResourceObservationBuildResult.RelationPredicateNotAdmitted(
+                        subjectTerm.Value, predicateTerm.Value);
+                }
+
+                if (!hasResourceCensus && censusKeys.Add(subjectTerm.Value))
+                {
+                    censusOrder.Add(subjectTerm.Value);
+                }
+
+                if (!relationsBySubject.TryGetValue(subjectTerm.Value, out var list))
+                {
+                    list = [];
+                    relationsBySubject.Add(subjectTerm.Value, list);
+                }
+
+                list.Add(new LuxembourgObservedRelation(
+                    subjectTerm.Value,
+                    predicateTerm.Value,
+                    objectTerm.Value,
+                    observationRef,
+                    LuxembourgRelationAuthority.PublisherAsserted));
+            }
+        }
+
         // ObservationRef is not this method's to vary per row or per page: VerifiedLuxembourgSourceProfile's own
         // ValidateObservation (LuxembourgScopeResolver.cs) requires every observation's ObservationRef, and both
         // rights-channel wrappers' RunIdentity, to equal this exact profile-wide value -- the reviewer's ruling
@@ -2479,8 +2693,10 @@ public sealed class LuxembourgQueryExecutionAdapter
                     assertions.AddRange(originalAssertions);
                 }
             }
+            relationsBySubject.TryGetValue(subject, out var relations);
             observations.Add(BuildResourceObservation(
-                subject, assertions, observationRef, _sourceProfile.ScopeBinding.SourceProfileRef));
+                subject, assertions, relations ?? [], observationRef,
+                _sourceProfile.ScopeBinding.SourceProfileRef));
         }
 
         var exclusions = exclusionCounts
@@ -2504,9 +2720,18 @@ public sealed class LuxembourgQueryExecutionAdapter
         string subject,
         IReadOnlyList<LuxembourgObservedAssertion> assertions,
         SourceArtifactRef observationRef,
+        SourceArtifactRef scopeProfileRef) =>
+        BuildResourceObservation(subject, assertions, [], observationRef, scopeProfileRef);
+
+    internal static LuxembourgResourceObservation BuildResourceObservation(
+        string subject,
+        IReadOnlyList<LuxembourgObservedAssertion> assertions,
+        IReadOnlyList<LuxembourgObservedRelation> relations,
+        SourceArtifactRef observationRef,
         SourceArtifactRef scopeProfileRef)
     {
         ArgumentNullException.ThrowIfNull(assertions);
+        ArgumentNullException.ThrowIfNull(relations);
         ArgumentNullException.ThrowIfNull(observationRef);
         ArgumentNullException.ThrowIfNull(scopeProfileRef);
 
@@ -2523,7 +2748,7 @@ public sealed class LuxembourgQueryExecutionAdapter
             objectRef,
             observationRef,
             assertions,
-            [],
+            relations,
             // Channel one, populated from this run's own proven family. jolux:license is an
             // admitted assertion predicate of the very family already reopened and re-verified
             // before this method is reached, so the licence declaration is held evidence, not a new
@@ -2642,6 +2867,10 @@ public sealed class LuxembourgQueryExecutionAdapter
         SubjectNotInCensus = 2,
         ObjectKindNotRecognised = 3,
         TermUnbound = 4,
+        RelationTermUnbound = 5,
+        RelationTermNotIri = 6,
+        RelationPredicateNotAdmitted = 7,
+        RelationSubjectNotInCensus = 8,
     }
 
     /// <summary>
@@ -2697,6 +2926,34 @@ public sealed class LuxembourgQueryExecutionAdapter
 
         public static ResourceObservationBuildResult TermUnbound(string what) =>
             new(ResourceObservationBuildOutcomeKind.TermUnbound, null, null, $"{what} is unbound.");
+
+        public static ResourceObservationBuildResult RelationTermUnbound() =>
+            new(
+                ResourceObservationBuildOutcomeKind.RelationTermUnbound, null, null,
+                "a relation-assertions row has an unbound subject, predicate or object term.");
+
+        public static ResourceObservationBuildResult RelationTermNotIri(
+            string subject,
+            string predicate,
+            string objectValue) =>
+            new(
+                ResourceObservationBuildOutcomeKind.RelationTermNotIri, null, null,
+                $"the relation-assertions row '{subject}' / '{predicate}' / '{objectValue}' " +
+                "does not carry IRI terms in all three positions.");
+
+        public static ResourceObservationBuildResult RelationPredicateNotAdmitted(
+            string subject,
+            string predicate) =>
+            new(
+                ResourceObservationBuildOutcomeKind.RelationPredicateNotAdmitted, null, null,
+                $"the relation-assertions row for '{subject}' names predicate '{predicate}', " +
+                "which is outside the closed relation plan.");
+
+        public static ResourceObservationBuildResult RelationSubjectNotInCensus(string subject) =>
+            new(
+                ResourceObservationBuildOutcomeKind.RelationSubjectNotInCensus, null, null,
+                $"the relation-assertions row subject '{subject}' is not a member of this run's " +
+                "delivered resource census.");
     }
 
     private static int RequireProjectionIndex(RepeatedEnumerationInterpretationProfile profile, string variable)
