@@ -363,6 +363,9 @@ public sealed class ClosedVocabularyCensusTests
                     + "NeverIngestBody, NeverExpand",
                 "Lex.V3.Contracts.Source.Europe.EuSelectionRowSetRefusal: None, DuplicateSelector, "
                     + "SelectorUndecided",
+                "Lex.V3.Contracts.Source.Europe.EuTransposability: Transposable, "
+                    + "NotTransposable",
+                "Lex.V3.Contracts.Source.Europe.EuTranspositionAssertedBy: Legilux, Nim",
                 "Lex.V3.Contracts.Source.Europe.EuTranspositionDeadlineOutcome: NotADeadline, "
                     + "TranspositionDeadlineEvidenceInsufficient, AcceptedTranspositionDeadline",
                 "Lex.V3.Contracts.Source.Europe.EuValidityDateShape: HyphenatedIso8601, "
