@@ -574,7 +574,7 @@ public sealed class ClosedVocabularyCensusTests
                 "Lex.V3.Contracts.WhatWouldAnswerAction: CorrectedIdentifier, "
                     + "NewOfficialObservation, ExpandedOfficialScope",
                 "Lex.V3.Custody.Probe.CustodyProbeApplication+ProbeMode: Write, Read, ReadReceipt, "
-                    + "Replay",
+                    + "Replay, CommissionReplay",
                 "Lex.V3.Custody.Probe.ProbeConfigurationGuard: SecretCredential, "
                     + "AlternateIdentitySource, MissingSetting, InvalidIdentitySource, InvalidGuid",
                 "Lex.V3.Preview.SyntheticBuildFailpoint: SourcePartialWritten, SourceFlushed, "
