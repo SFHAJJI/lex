@@ -183,7 +183,12 @@ public sealed class EuPredicateExistenceCensus
     /// <c>op.europa.eu/robots.txt</c> directly would be reading a policy the product never reads,
     /// and would stop noticing the day the publisher changes the redirect.
     /// </remarks>
-    private static async Task<byte[]> ReadDeclaredRobotsPolicyAsync(
+    /// <remarks>
+    /// Internal so a sibling live probe reads the publisher's policy through this exact path
+    /// rather than a second copy of it. Two robots readers drift, and the one that drifts is the
+    /// one nobody runs.
+    /// </remarks>
+    internal static async Task<byte[]> ReadDeclaredRobotsPolicyAsync(
         HttpClient http,
         OfficialMachineQuerySourceProfile profile,
         OriginPacer pacer)
@@ -251,7 +256,7 @@ public sealed class EuPredicateExistenceCensus
     /// endpoint -- the same origin -- pace together. The clock and the wait are both injected so
     /// the guard above can read what the pacer asked for without spending the interval.
     /// </remarks>
-    private sealed class OriginPacer(
+    internal sealed class OriginPacer(
         TimeSpan interval, TimeProvider time, Func<TimeSpan, Task> delay)
     {
         private readonly Dictionary<string, DateTimeOffset> _nextAllowed =
