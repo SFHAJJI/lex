@@ -123,6 +123,14 @@ public sealed class RetiredGenerationBoundaryTests
                 yield return $"{assemblyName}:{type.FullName}";
             }
 
+            foreach (var value in AttributeStrings(type.CustomAttributes))
+            {
+                if (ContainsRetiredMarker(value))
+                {
+                    yield return $"{assemblyName}:{type.FullName} attribute:{value}";
+                }
+            }
+
             foreach (var member in type.GetMembers(declared))
             {
                 if (ContainsRetiredMarker(member.Name))
