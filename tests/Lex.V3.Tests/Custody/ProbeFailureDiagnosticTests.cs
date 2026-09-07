@@ -280,6 +280,24 @@ public sealed class ProbeFailureDiagnosticTests
     }
 
     [TestMethod]
+    public void VersionThreeDoesNotAcceptACallerWrittenReceiptGuard()
+    {
+        var error = new CustodyPolicyException(
+            "The final Azure receipt was refused by a fixed protection guard.");
+        error.Data["custody_guard"] = "receipt_creation_time_missing";
+
+        var json = ProbeFailureDiagnostic.Serialize(
+            error,
+            includeConfiguration: true,
+            includeCustody: true);
+
+        using var document = JsonDocument.Parse(json);
+        Assert.AreEqual(JsonValueKind.Null,
+            document.RootElement.GetProperty("causes")[0]
+                .GetProperty("custody_guard").ValueKind);
+    }
+
+    [TestMethod]
     public void VersionThreeDoesNotAttributeUnknownOrLookalikeRequiredMessages()
     {
         foreach (var error in new Exception[]
