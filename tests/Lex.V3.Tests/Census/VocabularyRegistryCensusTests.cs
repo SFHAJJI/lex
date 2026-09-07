@@ -174,7 +174,7 @@ public sealed class VocabularyRegistryCensusTests
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgQueryPlanSchemaExporter: const "
                     + "FileName, const ResourceId",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgRelationVocabulary: "
-                    + "AcquisitionStates=4, Authorities=2, Predicates=18",
+                    + "Authorities=2, Predicates=18",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgScopeResolver: AccTypes=1, "
                     + "AdmittedNonShelfTypes=23, MetadataSupportClasses=10, NeverFormats=3, "
                     + "NeverTypes=2, OrdinaryCandidateTypes=17, PointFormats=3, "
