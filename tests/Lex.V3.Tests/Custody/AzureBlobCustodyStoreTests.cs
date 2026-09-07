@@ -155,9 +155,12 @@ public sealed class AzureBlobCustodyStoreTests
         var harness = new Harness();
         harness.Journal.Exception = new IOException("Journal unavailable");
 
-        await Assert.ThrowsExactlyAsync<CustodyRequiredException>(() =>
+        var refusal = await Assert.ThrowsExactlyAsync<CustodyRequiredException>(() =>
             harness.Store.CreateAsync(Body, CustodyClass.NightlyFloor90d, CancellationToken.None));
 
+        Assert.AreEqual(
+            "Azure custody was unavailable, so no receipt can be issued.",
+            refusal.Message);
         Assert.IsTrue(harness.Events.Contains("configuration.append", StringComparer.Ordinal));
         Assert.IsTrue(harness.Events.Contains("staging.delete", StringComparer.Ordinal));
     }

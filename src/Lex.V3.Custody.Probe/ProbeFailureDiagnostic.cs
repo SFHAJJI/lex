@@ -102,9 +102,21 @@ internal static class ProbeFailureDiagnostic
 
     private static string? CustodyGuard(Exception exception)
     {
-        // CustodyPolicyException is sealed. Read its message only after the exact-type check,
-        // admit two product-owned literals, and publish only the fixed token. Provider text,
-        // arbitrary exception messages and lookalikes remain outside the diagnostic boundary.
+        // These custody exceptions are sealed. Read their message only after an exact-type check,
+        // admit product-owned literals, and publish only fixed tokens. Provider text, arbitrary
+        // exception messages and lookalikes remain outside the diagnostic boundary.
+        if (exception.GetType() == typeof(CustodyRequiredException))
+        {
+            return exception.Message switch
+            {
+                "Azure custody configuration evidence was unavailable."
+                    => "configuration_journal",
+                "Azure custody was unavailable, so no receipt can be issued."
+                    => "create_operation",
+                _ => null,
+            };
+        }
+
         if (exception.GetType() != typeof(CustodyPolicyException))
         {
             return null;

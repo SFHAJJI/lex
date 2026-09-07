@@ -618,6 +618,9 @@ public sealed class AzureBlobCustodyConfigurationJournalTests
                 () => harness.Journal.AppendAsync(receipt, CancellationToken.None),
                 $"status {hostile.Status} was treated as an existing object");
 
+            Assert.AreEqual(
+                "Azure custody configuration evidence was unavailable.",
+                thrown.Message);
             // And specifically not an integrity verdict. Treating a create that never happened
             // as a collision makes the journal read a blob that is not there, receive a 404,
             // and report that custody evidence is corrupt. The alarming answer and the less
