@@ -618,6 +618,41 @@ public sealed class EuAmendmentRelationTests
         StringAssert.Contains(error.Message, "bare code");
     }
 
+    /// <summary>
+    /// The located-amendment door validates its own link-target type, rather than inheriting the
+    /// repeal door's guarantee.
+    /// </summary>
+    /// <remarks>
+    /// THE REVIEWER'S FINDING, and my judgement call that was wrong. I guarded the shape rule at
+    /// the repeal door and argued that duplicating six rows at this door would be noise rather than
+    /// evidence. The rule is one shared method, so pinning it once looked sufficient. It is not:
+    /// the reviewer replaced THIS door's call to <c>RequireLinkTargetType</c> with a direct
+    /// assignment and every repeal-door row stayed green, because those rows exercise the validator
+    /// through the other door entirely. A shared validator being well pinned says nothing about
+    /// whether a given call site still calls it.
+    /// <para>
+    /// One case is enough and duplicating the six is still unnecessary — what was missing was not
+    /// coverage of the rule but coverage of this door's wiring to it.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void TheLocatedDoorValidatesItsOwnLinkTargetType()
+    {
+        var error = Assert.ThrowsExactly<ArgumentException>(() => EuLocatedAmendmentAxiom.Create(
+            Work("00034b8a-6af2-4207-bc76-d24a10b5125c"),
+            Work("62212f0d-011f-471e-a033-bf56990d4329"),
+            TargetBodyScope.BodyInScopeNotHeld,
+            "{AN|" + Fd370 + "/AN} 1",
+            "{R|" + Fd375 + "/R}",
+            "2000-02-09",
+            rawEndOfValidity: null,
+            "M|S",
+            "axiom:invented-link-type",
+            "obs:invented-link-type"));
+
+        Assert.AreEqual("typeOfLinkTarget", error.ParamName);
+    }
+
     // --- The repeal edge ------------------------------------------------------------------------
 
     /// <summary>
@@ -651,6 +686,82 @@ public sealed class EuAmendmentRelationTests
         CollectionAssert.Contains(predicates, LinkTargetAnnotation);
         CollectionAssert.DoesNotContain(predicates, LocationAnnotation);
         CollectionAssert.DoesNotContain(predicates, RoleAnnotation);
+    }
+
+    /// <summary>
+    /// A malformed link-target type is refused rather than carried into the axiom's qualifiers.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// WHAT WAS UNGUARDED. `RequireLinkTargetType` admits 1 to 64 printable ASCII characters
+    /// carrying no space, brace or vertical bar. It is deliberately a SHAPE rule and not a closed
+    /// vocabulary — the method's own remarks say closing the vocabulary would turn the first other
+    /// token the publisher uses into a refusal of real data. But nothing exercised the shape rule
+    /// through this door: replacing its condition with `if (false)`, admitting anything at all, left
+    /// the full solution green at 2,816 tests.
+    /// </para>
+    /// <para>
+    /// The characters the rule excludes are the ones that matter. `typeOfLinkTarget` is a
+    /// publisher-supplied token that becomes an `AxiomQualifier` value, and braces and vertical bars
+    /// are exactly the delimiters an authority-qualified token grammar reserves. Admitting them
+    /// carries a token that cannot be read back as what it was written as.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    [DataRow("", "empty")]
+    [DataRow("M S", "a space")]
+    [DataRow("M{S", "an opening brace")]
+    [DataRow("M}S", "a closing brace")]
+    [DataRow("M|S", "a vertical bar")]
+    [DataRow("MSé", "a non-ASCII character")]
+    public void AMalformedLinkTargetTypeIsRefusedByTheRepealDoor(string linkType, string why)
+    {
+        var error = Assert.ThrowsExactly<ArgumentException>(
+            () => EuRepealEdge.Create(
+                Celex("32016R0679"),
+                Celex("31995L0046"),
+                TargetBodyScope.BodyInScopeHeld,
+                "2018-05-25",
+                rawEndOfValidity: null,
+                linkType,
+                "axiom:invented-repeal",
+                "obs:invented-repeal"),
+            $"a link-target type carrying {why} must be refused.");
+
+        Assert.AreEqual("typeOfLinkTarget", error.ParamName);
+    }
+
+    /// <summary>
+    /// A 64-character type is admitted and a 65-character one is not, so the bound is exact.
+    /// </summary>
+    [TestMethod]
+    public void TheLinkTargetTypeLengthBoundIsExact()
+    {
+        var atBound = new string('M', 64);
+        var overBound = new string('M', 65);
+
+        var admitted = EuRepealEdge.Create(
+            Celex("32016R0679"),
+            Celex("31995L0046"),
+            TargetBodyScope.BodyInScopeHeld,
+            "2018-05-25",
+            rawEndOfValidity: null,
+            atBound,
+            "axiom:invented-repeal",
+            "obs:invented-repeal");
+        Assert.IsNotNull(admitted);
+
+        Assert.ThrowsExactly<ArgumentException>(
+            () => EuRepealEdge.Create(
+                Celex("32016R0679"),
+                Celex("31995L0046"),
+                TargetBodyScope.BodyInScopeHeld,
+                "2018-05-25",
+                rawEndOfValidity: null,
+                overBound,
+                "axiom:invented-repeal",
+                "obs:invented-repeal"),
+            "65 characters is over the stated 1-to-64 bound.");
     }
 
     /// <summary>A repeal with no dates at all is constructible, because both are optional.</summary>
