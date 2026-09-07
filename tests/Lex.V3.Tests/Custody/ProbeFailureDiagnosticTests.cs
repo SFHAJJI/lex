@@ -236,12 +236,57 @@ public sealed class ProbeFailureDiagnosticTests
     }
 
     [TestMethod]
+    [DataRow(
+        "Azure custody configuration evidence was unavailable.",
+        "configuration_journal")]
+    [DataRow(
+        "Azure custody was unavailable, so no receipt can be issued.",
+        "create_operation")]
+    public void VersionThreeDistinguishesTheTwoCreateFailureBoundaries(
+        string message,
+        string expectedGuard)
+    {
+        var json = ProbeFailureDiagnostic.Serialize(
+            new CustodyRequiredException(message),
+            includeConfiguration: true,
+            includeCustody: true);
+
+        using var document = JsonDocument.Parse(json);
+        var cause = document.RootElement.GetProperty("causes")[0];
+        Assert.AreEqual("custody_required", cause.GetProperty("kind").GetString());
+        Assert.AreEqual(expectedGuard, cause.GetProperty("custody_guard").GetString());
+    }
+
+    [TestMethod]
     public void VersionThreeDoesNotPublishOrAttributeAnUnknownPolicyMessage()
     {
         foreach (var error in new Exception[]
                  {
                      new CustodyPolicyException(Secret),
                      new Exception("The final Azure policy reread was refused."),
+                 })
+        {
+            var json = ProbeFailureDiagnostic.Serialize(
+                error,
+                includeConfiguration: true,
+                includeCustody: true);
+
+            Assert.IsFalse(json.Contains(Secret, StringComparison.Ordinal));
+            using var document = JsonDocument.Parse(json);
+            Assert.AreEqual(JsonValueKind.Null,
+                document.RootElement.GetProperty("causes")[0]
+                    .GetProperty("custody_guard").ValueKind);
+        }
+    }
+
+    [TestMethod]
+    public void VersionThreeDoesNotAttributeUnknownOrLookalikeRequiredMessages()
+    {
+        foreach (var error in new Exception[]
+                 {
+                     new CustodyRequiredException(Secret),
+                     new Exception("Azure custody configuration evidence was unavailable."),
+                     new Exception("Azure custody was unavailable, so no receipt can be issued."),
                  })
         {
             var json = ProbeFailureDiagnostic.Serialize(
