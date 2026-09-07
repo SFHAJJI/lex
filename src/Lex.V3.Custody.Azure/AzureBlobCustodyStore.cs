@@ -584,7 +584,8 @@ public sealed class AzureBlobCustodyStore : ICustodyStore
 
         var observedAt = policy.ObservedAt.ToUniversalTime();
         var createdOn = observation.Properties.CreatedOn.ToUniversalTime();
-        if (createdOn > observedAt)
+        // ARM's authoritative HTTP Date has whole-second precision; Blob CreatedOn retains fractions.
+        if (createdOn.ToUnixTimeSeconds() > observedAt.ToUnixTimeSeconds())
         {
             return false;
         }
