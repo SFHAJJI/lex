@@ -515,7 +515,8 @@ public sealed class ClosedVocabularyCensusTests
                     + "ChannelEnumerationUnproven, MissingValue, Stale, EvidenceNotIndependent, "
                     + "Multiple, Conflict, AgreedSameRunCcBy, NonAdmittingLicenceScl, "
                     + "TypedQuarantineUnruledLicence, SecondChannelPending, "
-                    + "TypedQuarantineUnrepresentableLicenceShape",
+                    + "TypedQuarantineUnrepresentableLicenceShape, "
+                    + "TypedQuarantineInFileReadingRejected",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgSelectorCardinality: Missing, Single, "
                     + "Multiple",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgTypedRoleKind: NotApplicable, "

@@ -819,6 +819,15 @@ internal static class LuxembourgScopeResolver
                     "typed_quarantine_unrepresentable_licence_shape",
                     "lu_rights_unrepresentable_licence_shape",
                     evidence),
+            // The in-file channel read this manifestation and refused it. Quarantine with its own
+            // reason, never lu_rights_enumeration_unproven, which would say the channel established
+            // nothing when its reader had established exactly why it would not accept the document.
+            LuxembourgRightsChannelDisposition.TypedQuarantineInFileReadingRejected =>
+                Disposition(
+                    LuScopeTerminalState.TypedQuarantine,
+                    "typed_quarantine_in_file_reading_rejected",
+                    "lu_rights_in_file_reading_rejected",
+                    evidence),
             LuxembourgRightsChannelDisposition.Stale => Disposition(
                 LuScopeTerminalState.TypedQuarantine,
                 "typed_quarantine_stale_rights",

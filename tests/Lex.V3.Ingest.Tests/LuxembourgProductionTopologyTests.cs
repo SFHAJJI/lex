@@ -184,6 +184,13 @@ public sealed class LuxembourgProductionTopologyTests
             ? new[] { new LuxembourgRightsChannelObservation(Manifestation, profileEvidence, bodyRef,
                 reading.GetProperty("LicenceIris").EnumerateArray().Select(value => value.GetString()!).ToArray()) }
             : [];
+        // The replay must carry what the adapter's own fold now carries. A refused reading yields
+        // no row -- it has no licence -- but the refusal itself is retained, so the replayed channel
+        // says "read and refused" rather than "never enumerated". Rebuilding the channel without it
+        // would replay a different channel from the one the run produced.
+        string[] replayRejected = expectedRead == LuxembourgInFileRightsReadStatus.Observed
+            ? []
+            : [Manifestation];
         var replayObservations = sparqlIndex.Value.GetProperty("observations").EnumerateArray().Select(row =>
         {
             var objectRef = JsonSerializer.Deserialize<SourceObjectRef>(row.GetProperty("ObjectRef"))!;
@@ -194,7 +201,8 @@ public sealed class LuxembourgProductionTopologyTests
             return new LuxembourgResourceObservation(objectRef, profileEvidence, observed, [],
                 new LuxembourgSparqlRightsChannelObservations(profileEvidence, sparqlRef!, channelOne),
                 new LuxembourgInFileRightsChannelObservations(profileEvidence, inFileRef!,
-                    inFileRows.Where(channel => observed.Any(assertion => assertion.SubjectIri == channel.ManifestationIri)).ToArray(), true));
+                    inFileRows.Where(channel => observed.Any(assertion => assertion.SubjectIri == channel.ManifestationIri)).ToArray(), true,
+                    replayRejected.Where(iri => observed.Any(assertion => assertion.SubjectIri == iri)).ToArray()));
         }).ToArray();
         var replay = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(profile.Resolve(
             LuxembourgProvenResourceObservations.RequireProven(result.FamilyOutcomes.Single(outcome => outcome.FamilyKey == "assertions").Proof!,
@@ -205,6 +213,14 @@ public sealed class LuxembourgProductionTopologyTests
             "agreed" or "unicode_item" or "escaped_item" => LuxembourgRightsChannelDisposition.AgreedSameRunCcBy,
             "conflict" => LuxembourgRightsChannelDisposition.Conflict,
             "missing" => LuxembourgRightsChannelDisposition.MissingValue,
+            // The reader examined these two representations and refused them — MalformedXml for
+            // one, ManifestationIdentityMismatch for the other, each asserted on its own retained
+            // reading elsewhere in this method. They used to land on ChannelEnumerationUnproven,
+            // which says this channel never established anything about the manifestation, while its
+            // reader had already established exactly why it would not accept it. Named here rather
+            // than left to the discard arm, so a future case cannot join them silently.
+            "malformed" or "mismatched" =>
+                LuxembourgRightsChannelDisposition.TypedQuarantineInFileReadingRejected,
             _ => LuxembourgRightsChannelDisposition.ChannelEnumerationUnproven,
         };
         Assert.AreEqual(expectedRights, rights.Disposition);

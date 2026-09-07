@@ -1574,7 +1574,23 @@ public sealed class LuxembourgQueryExecutionAdapter
             indexReceipt.Reference.ContentSha256);
         // Multiple retained representations of one manifestation do not become one chosen
         // declaration. The index preserves all readings; an ambiguous group stays unproven.
-        var rows = readings.GroupBy(static reading => reading.ManifestationIri, StringComparer.Ordinal)
+        var grouped = readings
+            .GroupBy(static reading => reading.ManifestationIri, StringComparer.Ordinal)
+            .ToArray();
+        // A UNIQUE reading the reader refused is a finding, not an absence. Keeping only Observed
+        // rows is right -- a refused reading has no licence to carry -- but discarding the refusal
+        // with it made a manifestation the reader had examined and rejected indistinguishable from
+        // one this channel never reached, and the resolution then said ChannelEnumerationUnproven.
+        // The ambiguous case is deliberately untouched: a manifestation with more than one reading
+        // "stays unproven" by the rule above, and that is a different decision from this one.
+        var rejected = grouped
+            .Where(static group =>
+                group.Count() == 1 &&
+                group.Single().Status != LuxembourgInFileRightsReadStatus.Observed)
+            .Select(static group => group.Key)
+            .OrderBy(static iri => iri, StringComparer.Ordinal)
+            .ToArray();
+        var rows = grouped
             .Where(static group => group.Count() == 1 && group.Single().Status == LuxembourgInFileRightsReadStatus.Observed)
             .Select(group => new LuxembourgRightsChannelObservation(group.Key,
                 _sourceProfile.Snapshot.ObservationRef, group.Single().BodyRef, group.Single().LicenceIris))
@@ -1585,7 +1601,8 @@ public sealed class LuxembourgQueryExecutionAdapter
             new LuxembourgInFileRightsChannelObservations(observation.ObservationRef, indexRef,
                 observation.Assertions.Select(static assertion => assertion.SubjectIri).Distinct(StringComparer.Ordinal)
                     .Where(rows.ContainsKey).Select(subject => rows[subject]).ToArray(),
-                acquisitionCompleted: true))).ToArray(), null);
+                acquisitionCompleted: true,
+                rejectedManifestationIris: rejected))).ToArray(), null);
     }
 
     internal static IReadOnlyDictionary<SourceObjectRef, LuxembourgDocumentFetchAddress>

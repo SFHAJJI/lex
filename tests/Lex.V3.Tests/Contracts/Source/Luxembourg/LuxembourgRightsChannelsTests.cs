@@ -366,15 +366,78 @@ public sealed class LuxembourgRightsChannelsTests
                 InFileEnumerationRef,
                 inFile));
 
+    /// <summary>
+    /// Repairs CHANGES REQUESTED finding 1: the new disposition must carry a stable reason code,
+    /// and something must actually read it.
+    /// </summary>
+    /// <remarks>
+    /// I added <c>TypedQuarantineUnrepresentableLicenceShape</c> to the enum and mapped it in the
+    /// scope resolver, and never extended <c>LuxembourgRightsChannelResolution.ReasonCode</c>'s own
+    /// switch. Its discard arm throws, so the one state added to carry typed evidence threw instead
+    /// of reporting any. That is the unreachable-arm defect this codebase warns about, produced by
+    /// adding an enum member without checking every switch over the type — a grep I should have run
+    /// and did not.
+    /// </remarks>
+    [TestMethod]
+    public void TheUnrepresentableShapeDispositionHasAReadableReasonCode()
+    {
+        var result = Resolve(
+            [Observation(SelectedManifestation, Run, SparqlEvidence, [], unrepresentable: 1)],
+            []);
+
+        Assert.AreEqual(
+            LuxembourgRightsChannelDisposition.TypedQuarantineUnrepresentableLicenceShape,
+            result.Disposition);
+        Assert.AreEqual(
+            "rights_typed_quarantine_unrepresentable_licence_shape",
+            result.ReasonCode,
+            "reading the reason code must not throw for a state the resolution can reach.");
+    }
+
+    /// <summary>
+    /// Repairs CHANGES REQUESTED finding 2: an unreadable licence assertion fails closed even when
+    /// the same manifestation also carries a readable one.
+    /// </summary>
+    /// <remarks>
+    /// My first version consulted the count only when the licence set was empty, so a manifestation
+    /// with a real CC BY beside a dropped literal resolved on the readable value alone. I flagged
+    /// that as a judgement in my own review request and offered to change it if the clause were
+    /// read the other way. It was, and S2-A05 is the reason: drift fails closed, and a reading that
+    /// lost one of the publisher's assertions is incomplete whatever else it carried. Pinned in
+    /// both directions, so this is a rule about the dropped assertion rather than about CC BY.
+    /// </remarks>
+    [TestMethod]
+    public void AnUnreadableLicenceDominatesAReadableOneOnTheSameManifestation()
+    {
+        var mixed = Resolve(
+            [Observation(SelectedManifestation, Run, SparqlEvidence, [CcBy40], unrepresentable: 1)],
+            []);
+        Assert.AreEqual(
+            LuxembourgRightsChannelDisposition.TypedQuarantineUnrepresentableLicenceShape,
+            mixed.Disposition,
+            "a readable CC BY does not make an incomplete reading complete.");
+
+        var clean = Resolve(
+            [Observation(SelectedManifestation, Run, SparqlEvidence, [CcBy40])],
+            []);
+        Assert.AreNotEqual(
+            LuxembourgRightsChannelDisposition.TypedQuarantineUnrepresentableLicenceShape,
+            clean.Disposition,
+            "with nothing dropped the same licence must resolve normally, or this guard would pass "
+                + "by refusing everything.");
+    }
+
     private static LuxembourgRightsChannelObservation Observation(
         string manifestationIri,
         SourceArtifactRef runIdentity,
         SourceArtifactRef evidenceRef,
-        IReadOnlyList<string> licenceIris) => new(
+        IReadOnlyList<string> licenceIris,
+        int unrepresentable = 0) => new(
         manifestationIri,
         runIdentity,
         evidenceRef,
-        licenceIris);
+        licenceIris,
+        unrepresentable);
 
     private static SourceArtifactRef Run { get; } = Artifact(
         "07b972ed-2a90-4f0a-af09-19ba7c86bc26",
