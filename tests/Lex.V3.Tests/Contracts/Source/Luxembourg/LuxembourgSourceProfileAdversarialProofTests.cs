@@ -97,7 +97,11 @@ public sealed class LuxembourgSourceProfileAdversarialProofTests
         CollectionAssert.AreEqual(
             new[]
             {
-                "selector.record|PublisherValuePresent|ObservedValueSet|observation|" + RootIri,
+                // Was PublisherValuePresent over the object's own IRI, while the record dimension
+                // beside it reported missing_resource_class for the same observation. The subject
+                // asserted no rdf:type, so the honest selector state is the one its sibling
+                // publication_family already published for the same fixture.
+                "selector.record|PublisherValueAbsent|CompleteObservationAbsence|observation|",
                 "selector.relation|SelectorNotApplicable|none|rule:2|",
                 "selector.supporting_document|SelectorNotApplicable|none|rule:3|",
                 "selector.publication_family|PublisherValueAbsent|CompleteObservationAbsence|observation|",

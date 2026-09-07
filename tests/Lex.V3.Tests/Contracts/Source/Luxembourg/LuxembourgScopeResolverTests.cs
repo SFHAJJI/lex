@@ -43,6 +43,55 @@ public sealed class LuxembourgScopeResolverTests
             resolved.OrderedEvidenceArtifacts.ToArray());
     }
 
+    /// <summary>
+    /// #409, clauses S2-A03 and S2-A01: when the publisher asserted no <c>rdf:type</c>, the record
+    /// dimension and the record selector say the same thing.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// WHAT THEY USED TO SAY. The selector's value set began with the object's own publisher URI,
+    /// which is never empty, and <c>Selector</c> answers
+    /// <see cref="ScopeSelectorState.PublisherValueAbsent"/> only on an empty set — so that state
+    /// was unreachable for this dimension by construction. The resolution reported
+    /// <c>missing_resource_class</c> while the wire reported a present value, about the same
+    /// observation.
+    /// </para>
+    /// <para>
+    /// Both halves were already pinned before this guard existed — the dimension in the test
+    /// directly above, the selector in <c>LuxembourgSourceProfileAdversarialProofTests</c> — and
+    /// both had been green the whole time, because they live in different files and nothing read
+    /// them together. That is exactly what this asserts: not either statement alone, but that the
+    /// two agree. Nothing is lost by dropping the IRI from the value set; <c>BuildScopeInput</c>
+    /// hands <c>ObjectRef</c> to <c>ScopeObjectReductionInput</c> as that record's own first field,
+    /// so the subject is on the wire either way — as identity, which is what it is.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void TheRecordSelectorAgreesWithItsDimensionWhenNoClassWasAsserted()
+    {
+        var profile = Profile();
+        var resolved = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(
+            profile.Resolve(Proven([Observation(ObservationRef)])));
+
+        var record = resolved.Resources.Single().Dimensions.Record;
+        Assert.AreEqual(LuScopeTerminalState.MissingPublisherValue, record.State);
+        Assert.AreEqual("missing_resource_class", record.ReasonCode);
+
+        var keys = profile.ScopeBinding.OrderedSelectorMemberOrdinals
+            .Select(ordinal => profile.ScopeBinding.OrderedMembers[ordinal].MemberKey)
+            .ToArray();
+        var index = Array.IndexOf(keys, "selector.record");
+        Assert.IsTrue(index >= 0, "the record selector must exist for this to check anything.");
+        var selector = resolved.ScopeInputs.Single().Selectors[index];
+
+        Assert.AreEqual(
+            ScopeSelectorState.PublisherValueAbsent,
+            selector.State,
+            "the dimension says the required publisher value is missing, so the wire must not say "
+                + "a value is present.");
+        Assert.AreEqual(0, selector.CanonicalValues.Count);
+    }
+
     [TestMethod]
     public void ResourceObservationFromAnotherRunFailsBeforeScopeProjection()
     {

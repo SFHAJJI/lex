@@ -1441,7 +1441,21 @@ internal static class LuxembourgScopeResolver
                 profile,
                 ScopeAxis.Record,
                 dimensions.Record,
-                [observation.ObjectRef.PublisherUri, .. classes, .. types],
+                // THE OBJECT'S OWN IRI IS ITS IDENTITY, NOT A PUBLISHER VALUE ABOUT ITS CLASS, and
+                // it used to be both. This selector accompanies the record dimension, whose missing
+                // state is missing_resource_class -- a statement about rdf:type assertions. The
+                // subject's IRI is always present, so the canonical set was never empty and
+                // Selector, which answers PublisherValueAbsent only on an empty set, could not
+                // reach that state for this dimension at all. An object whose publisher asserted no
+                // class published PublisherValuePresent while the resolution beside it said the
+                // required value was missing. Both statements were already pinned, in two different
+                // test files, and nothing read them together.
+                //
+                // Nothing is lost by dropping it, which is the same reason the rights sentinel went:
+                // the identity is already carried. BuildScopeInput's own return hands ObjectRef to
+                // ScopeObjectReductionInput as that record's first field, so the subject is on the
+                // wire either way -- as identity, which is what it is.
+                [.. classes, .. types],
                 observation.ObservationRef,
                 evidenceOrdinals),
             Selector(
