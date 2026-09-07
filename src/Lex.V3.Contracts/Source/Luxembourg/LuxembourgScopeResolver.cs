@@ -1455,7 +1455,13 @@ internal static class LuxembourgScopeResolver
                 // the identity is already carried. BuildScopeInput's own return hands ObjectRef to
                 // ScopeObjectReductionInput as that record's first field, so the subject is on the
                 // wire either way -- as identity, which is what it is.
-                [.. classes, .. types],
+                // AND `types` DOES NOT BELONG HERE EITHER, which the first repair missed. The
+                // record dimension is derived from `classes` alone -- `classes.Length == 0` is what
+                // produces missing_resource_class -- so a resource carrying jolux:typeDocument but
+                // no rdf:type still disagreed with its own dimension, just more narrowly than
+                // before. typeDocument already has its own selector.publication_family, so carrying
+                // it here was representing one assertion twice and aligning with neither.
+                [.. classes],
                 observation.ObservationRef,
                 evidenceOrdinals),
             Selector(

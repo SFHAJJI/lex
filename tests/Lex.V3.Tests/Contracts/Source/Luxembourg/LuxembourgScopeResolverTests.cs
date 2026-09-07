@@ -92,6 +92,58 @@ public sealed class LuxembourgScopeResolverTests
         Assert.AreEqual(0, selector.CanonicalValues.Count);
     }
 
+    /// <summary>
+    /// The narrower half of the same defect: a resource carrying <c>jolux:typeDocument</c> but no
+    /// <c>rdf:type</c> must still publish an absent record selector.
+    /// </summary>
+    /// <remarks>
+    /// This is the case my first repair missed and the reviewer found. Dropping the object IRI made
+    /// the empty-observation case honest, but the value set still carried <c>types</c>, and the
+    /// record dimension is derived from <c>classes</c> alone — <c>classes.Length == 0</c> is what
+    /// produces <c>missing_resource_class</c>. So a typeDocument with no rdf:type kept the wire
+    /// saying "present" while the resolution said "missing", exactly as before, only for a smaller
+    /// set of observations. <c>typeDocument</c> already has <c>selector.publication_family</c>, so
+    /// carrying it here represented one publisher assertion twice and aligned with neither
+    /// dimension.
+    /// </remarks>
+    [TestMethod]
+    public void ATypeDocumentWithNoResourceClassStillPublishesAnAbsentRecordSelector()
+    {
+        var profile = Profile();
+        var observation = new LuxembourgResourceObservation(
+            ObjectRef(ActIri),
+            ObservationRef,
+            [Iri(ActIri, Jolux + "typeDocument", JoluxAuthority + "resource-type/LOI")],
+            [],
+            new LuxembourgSparqlRightsChannelObservations(
+                ObservationRef, SparqlEnumerationRef, []),
+            new LuxembourgInFileRightsChannelObservations(
+                ObservationRef, InFileEnumerationRef, []));
+        var resolved = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(
+            profile.Resolve(Proven([observation])));
+
+        var record = resolved.Resources.Single().Dimensions.Record;
+        Assert.AreEqual(LuScopeTerminalState.MissingPublisherValue, record.State);
+        Assert.AreEqual("missing_resource_class", record.ReasonCode);
+
+        var keys = profile.ScopeBinding.OrderedSelectorMemberOrdinals
+            .Select(ordinal => profile.ScopeBinding.OrderedMembers[ordinal].MemberKey)
+            .ToArray();
+        var selector = resolved.ScopeInputs.Single()
+            .Selectors[Array.IndexOf(keys, "selector.record")];
+
+        Assert.AreEqual(
+            ScopeSelectorState.PublisherValueAbsent,
+            selector.State,
+            "no rdf:type was asserted, so the record selector must say absent whatever else the "
+                + "publisher said about this resource.");
+        Assert.AreEqual(
+            0,
+            selector.CanonicalValues.Count,
+            "typeDocument belongs to selector.publication_family; representing it here too would "
+                + "put one publisher assertion on two selectors and align it with neither.");
+    }
+
     [TestMethod]
     public void ResourceObservationFromAnotherRunFailsBeforeScopeProjection()
     {
