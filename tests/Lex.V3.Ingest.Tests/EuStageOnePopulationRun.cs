@@ -190,28 +190,13 @@ public sealed class EuStageOnePopulationRun
         // exists so an inflated retry rate would be visible as a finding about our own traffic, and
         // a counter that undercounts is worse than no counter. Carrying the index removes the
         // search entirely.
-        var deferred = records
-            .Select(static (record, index) => (Record: record, Index: index))
-            .Where(static entry => entry.Record.Result is not null
-                && entry.Record.Result.Refusal is not null
-                && IsPublisherUnavailable(entry.Record.Result))
-            .ToArray();
-        foreach (var (record, index) in deferred)
-        {
-            Console.WriteLine(
-                $"POPULATION|deferredSecondAttempt|{record.Seed.Celex}"
-                + $"|firstRefusal={record.Result!.Refusal!.Code}|status={PublisherStatuses(record.Result)}");
-            records[index] = await RunSeedAsync(
+        var secondAttemptIndices = await RunDeferredSecondAttemptsAsync(
+                records,
+                SelectDeferredIndices(records.ToArray()),
+                (record, _) => RunSeedAsync(
                     record.Seed, record.Ordinal, seeds.Length, 2, record.Index,
-                    root, seedDirectory, faults)
-                .ConfigureAwait(false);
-        }
-
-        // AND THE COUNTER CHECKS ITSELF, because the defect above was invisible in a green run and
-        // was found only by comparing the report against the seed files it was built from. Exactly
-        // the deferred seeds may carry a second attempt, and every one of them must: any other
-        // number means the write-back missed a seed or touched one it should not have.
-        AssertDeferredAccounting(records, deferred.Select(static entry => entry.Index).ToArray());
+                    root, seedDirectory, faults))
+            .ConfigureAwait(false);
 
         populationStopwatch.Stop();
 
@@ -594,6 +579,60 @@ public sealed class EuStageOnePopulationRun
     /// recording of a result rather than the getting of it.
     /// </remarks>
     /// <summary>
+    /// Selects the publisher-unavailable seeds, reruns each exactly once at its own position, and
+    /// proves the accounting before returning the indices it touched.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// EXTRACTED SO THE WRITE-BACK ITSELF IS TESTABLE. The defect this repair answers happened
+    /// here, in the loop that writes each rerun result back, and the first version of the repair
+    /// left exactly this loop unreachable from any test: the accounting helper was unit-driven
+    /// while the code that calls it was reachable only through a two-hour publisher run. Deleting
+    /// the call site stayed green, which the reviewer demonstrated rather than argued. Taking the
+    /// runner as a delegate lets a test drive the real selection, the real positional write-back
+    /// and the real assertion with no network at all.
+    /// </para>
+    /// <para>
+    /// The runner receives the record and its index and returns the rerun record. Production hands
+    /// it <c>RunSeedAsync</c> at attempt two; a test hands it a counter.
+    /// </para>
+    /// </remarks>
+    internal static IReadOnlyList<int> SelectDeferredIndices(IReadOnlyList<SeedRecord> records)
+    {
+        ArgumentNullException.ThrowIfNull(records);
+        return records
+            .Select(static (record, index) => (Record: record, Index: index))
+            .Where(static entry => entry.Record.Result is not null
+                && entry.Record.Result.Refusal is not null
+                && IsPublisherUnavailable(entry.Record.Result))
+            .Select(static entry => entry.Index)
+            .ToArray();
+    }
+
+    internal static async Task<IReadOnlyList<int>> RunDeferredSecondAttemptsAsync(
+        IList<SeedRecord> records,
+        IReadOnlyList<int> deferredIndices,
+        Func<SeedRecord, int, Task<SeedRecord>> runner)
+    {
+        ArgumentNullException.ThrowIfNull(records);
+        ArgumentNullException.ThrowIfNull(deferredIndices);
+        ArgumentNullException.ThrowIfNull(runner);
+
+        foreach (var index in deferredIndices)
+        {
+            var record = records[index];
+            Console.WriteLine(
+                $"POPULATION|deferredSecondAttempt|{record.Seed.Celex}"
+                + $"|firstRefusal={record.Result?.Refusal?.Code}"
+                + $"|status={(record.Result is null ? null : PublisherStatuses(record.Result))}");
+            records[index] = await runner(record, index).ConfigureAwait(false);
+        }
+
+        AssertDeferredAccounting(records.ToArray(), deferredIndices);
+        return deferredIndices;
+    }
+
+    /// <summary>
     /// Every deferred seed, and only a deferred seed, carries a second attempt once the write-back
     /// has run.
     /// </summary>
@@ -618,6 +657,24 @@ public sealed class EuStageOnePopulationRun
             throw new InvalidOperationException(
                 "Deferred second-attempt accounting disagrees with the records it wrote back: "
                 + $"deferred [{string.Join(',', expected)}] but attempts>1 at [{string.Join(',', actual)}].");
+        }
+
+        // AND THE CEILING IS EXACTLY ONE EXTRA ATTEMPT, not merely "more than one". Checking the
+        // set of retried positions without checking how far each went let a third request read as
+        // an ordinary second attempt, which is precisely the traffic this field exists to make
+        // visible. A seed is either untried-again at 1 or retried once at 2; nothing else is a
+        // state this harness may reach.
+        var offCeiling = records
+            .Select(static (record, index) => (record, index))
+            .Where(entry => entry.record.Attempts != (expected.Contains(entry.index) ? 2 : 1))
+            .Select(static entry => $"{entry.index}:{entry.record.Attempts}")
+            .ToArray();
+        if (offCeiling.Length > 0)
+        {
+            throw new InvalidOperationException(
+                "Deferred second-attempt accounting exceeded its one-extra-attempt ceiling: "
+                + $"deferred [{string.Join(',', expected)}] but attempts at [{string.Join(',', offCeiling)}] "
+                + "are not exactly 2 when deferred and 1 otherwise.");
         }
     }
 

@@ -79,4 +79,96 @@ public sealed class EuPopulationRetryAccountingTests
         Assert.ThrowsExactly<InvalidOperationException>(
             () => EuStageOnePopulationRun.AssertDeferredAccounting(records, [1]));
     }
+
+    [TestMethod]
+    public void AThirdAttemptIsRefusedRatherThanCountedAsASecond()
+    {
+        // FINDING 1, and the reviewer proved it against my first repair: checking only which
+        // positions retried let Attempts=3 read as an ordinary second attempt. The ceiling is
+        // exactly one extra request, and it is the whole reason this field is trustworthy as a
+        // statement about our own traffic.
+        var records = new[] { Record("A", 1), Record("B", 3), Record("C", 1) };
+
+        var error = Assert.ThrowsExactly<InvalidOperationException>(
+            () => EuStageOnePopulationRun.AssertDeferredAccounting(records, [1]));
+        Assert.IsTrue(
+            error.Message.Contains("one-extra-attempt ceiling", StringComparison.Ordinal),
+            "the refusal must say the ceiling was exceeded, not merely that a set disagreed.");
+        Assert.IsTrue(
+            error.Message.Contains("1:3", StringComparison.Ordinal),
+            "and name the position and the count it actually reached.");
+    }
+
+    [TestMethod]
+    public void ADeferredSeedThatWasNeverRerunIsRefused()
+    {
+        // The converse of the ceiling: deferred but still at one attempt means the write-back
+        // never happened for that seed, which is the original defect's own signature.
+        var records = new[] { Record("A", 1), Record("B", 1) };
+
+        Assert.ThrowsExactly<InvalidOperationException>(
+            () => EuStageOnePopulationRun.AssertDeferredAccounting(records, [1]));
+    }
+
+    // ---- FINDING 2: the write-back loop itself, driven with no publisher. ----
+
+    private static EuStageOnePopulationRun.SeedRecord Refused(string celex) =>
+        new((celex, "http://publications.europa.eu/resource/cellar/" + celex),
+            0, 1, false, null, null, new JsonObject(), new JsonObject());
+
+    [TestMethod]
+    public async Task TheDeferredPassRerunsEachSelectedSeedAtItsOwnPositionExactlyOnce()
+    {
+        // This is the loop the observed defect happened in. Until the deferred pass was extracted
+        // behind an injectable runner it was reachable only through a two-hour publisher run, so
+        // deleting its call site stayed green -- which the reviewer demonstrated rather than argued.
+        var records = new List<EuStageOnePopulationRun.SeedRecord>
+        {
+            Record("A", 1), Refused("B"), Record("C", 1), Refused("D"),
+        };
+        var runFor = new List<string>();
+
+        var touched = await EuStageOnePopulationRun.RunDeferredSecondAttemptsAsync(
+            records,
+            [1, 3],
+            (record, index) =>
+            {
+                runFor.Add($"{record.Seed.Celex}@{index}");
+                return Task.FromResult(Record(record.Seed.Celex, 2));
+            });
+
+        CollectionAssert.AreEqual(new[] { "B@1", "D@3" }, runFor.ToArray(),
+            "each selected seed is rerun once, at its own index.");
+        CollectionAssert.AreEqual(new[] { 1, 3 }, touched.ToArray());
+        CollectionAssert.AreEqual(
+            new[] { "A", "B", "C", "D" },
+            records.Select(record => record.Seed.Celex).ToArray(),
+            "the write-back replaces in place: no seed moves, is duplicated, or is lost.");
+        CollectionAssert.AreEqual(
+            new[] { 1, 2, 1, 2 },
+            records.Select(record => record.Attempts).ToArray());
+    }
+
+    [TestMethod]
+    public async Task AWriteBackThatLandsOnTheWrongPositionIsRefused()
+    {
+        // The exact mechanism of the original defect, reproduced deliberately: the rerun result is
+        // written somewhere other than the seed it belongs to. Before the accounting checked
+        // itself, a run like this reported a lower retry count and passed.
+        var records = new List<EuStageOnePopulationRun.SeedRecord>
+        {
+            Record("A", 1), Refused("B"), Record("C", 1),
+        };
+
+        await Assert.ThrowsExactlyAsync<InvalidOperationException>(() =>
+            EuStageOnePopulationRun.RunDeferredSecondAttemptsAsync(
+                records,
+                [1],
+                (record, _) =>
+                {
+                    // Answer with a record that leaves the deferred seed untouched.
+                    records[0] = Record("A", 2);
+                    return Task.FromResult(record);
+                }));
+    }
 }
