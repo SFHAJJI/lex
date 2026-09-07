@@ -313,6 +313,26 @@ public static class EuDateQualifierVocabulary
     public const string SignatureDatePredicateUri =
         EuConsolidationDiscoveryPlan.Cdm + "resource_legal_date_signature";
 
+    /// <summary>
+    /// The four CDM date predicates this vocabulary knows, in a fixed order, so a query that asks
+    /// for their reified axioms is JOINED FROM THIS SEQUENCE rather than restating it.
+    /// </summary>
+    /// <remarks>
+    /// The same no-drift rule <see cref="EuObjectFactsDiscoveryPlan.ObjectFactAuthorityPredicateIris"/>
+    /// already follows for families P and X: a query and the authority it is checked against must
+    /// come from one sequence, or the two can disagree and only the publisher finds out. These are
+    /// deliberately NOT <see cref="EuCdmPredicate"/> members -- families W and M declare their own
+    /// predicate constants for exactly this reason, because this plan's constructor asserts that
+    /// families P and X partition the closed CDM vocabulary exactly once each.
+    /// </remarks>
+    public static readonly IReadOnlyList<string> DatePredicateUris =
+    [
+        EntryIntoForceAndApplicationPredicateUri,
+        DeadlinePredicateUri,
+        EndOfValidityPredicateUri,
+        SignatureDatePredicateUri,
+    ];
+
     /// <summary>One pinned fd_335 token's expected predicate, label and role, together.</summary>
     internal sealed record Pin(string PredicateUri, string Label, DateSemanticRole Role);
 
