@@ -1254,9 +1254,6 @@ public sealed class LuxembourgQueryExecutionAdapter
                 }
 
                 observations = buildResult.Observations!;
-                resourceObservationSubjects = observations
-                    .Select(static observation => observation.ObjectRef.PublisherUri)
-                    .ToArray();
                 resourceObservationExclusions = buildResult.Exclusions!;
             }
         }

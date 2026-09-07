@@ -307,7 +307,9 @@ public sealed partial class LuxembourgQueryExecutionAdapterTests
         Assert.AreEqual(subjectUri, inbound.ObjectIri);
         Assert.AreEqual(LuxembourgRelationAuthority.LocalInboundView, inbound.Authority);
         Assert.AreEqual(LuxembourgRelationPredicate.Cites, inbound.LocalInboundView.DerivedFrom);
-        CollectionAssert.AreEqual(new[] { subjectUri }, result.ResourceObservationSubjects.ToArray());
+        Assert.IsEmpty(
+            result.ResourceObservationSubjects,
+            "a set-G subject is observed for relation resolution, not delivered by the S census");
         Assert.IsNotNull(result.ScopeManifestReceipt);
 
         var proof = result.FamilyOutcomes.Single().Proof!;
