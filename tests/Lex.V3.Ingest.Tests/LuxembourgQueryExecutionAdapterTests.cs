@@ -913,6 +913,40 @@ public sealed partial class LuxembourgQueryExecutionAdapterTests
         Assert.AreEqual(subjectUri, typedRole.OwnCoordinate);
     }
 
+    /// <summary>
+    /// S1-A02, R5.1 rule 6: ACCA is never ingested, and it must not become ACC because its type
+    /// IRI contains ACC as a substring.
+    /// </summary>
+    /// <remarks>
+    /// THE COLLISION THE AUTHORITY NAMED. ACC is admitted as a constitutional review decision only
+    /// on the publisher's own typeDocument assertion; ACCA is a distinct Legilux resource type held
+    /// in the resolver's own <c>NeverTypes</c> alongside RC. Its type IRI is the ACC IRI with one
+    /// more character, so any gate that matched on prefix or substring instead of exact set
+    /// membership would admit a never-ingest type as an interpretation source whose disclosures say
+    /// it is never statutory text.
+    /// <para>
+    /// The gate is exact today. What was missing is a test that notices if it stops being: I
+    /// replaced <c>AccTypes.Contains(type)</c> with a substring match and the whole solution stayed
+    /// green at 2,828 tests. The existing coverage proves ACC resolves and proves a role cannot be
+    /// read from a title, a relation or an alternate format; none of it separates ACC from ACCA.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void AnAccaTypeDocumentIsNotAdmittedAsAConstitutionalReviewDecision()
+    {
+        const string subjectUri = "http://data.legilux.public.lu/eli/etat/leg/loi/2026/01/01/a0";
+        var (profile, observationRef, _) = BuildProfile();
+
+        var typedRole = ResolveTypedRoleFor(
+            profile, observationRef, subjectUri, JoluxAct, TypeDocumentPrefix + "ACCA");
+
+        Assert.AreNotEqual(
+            LuxembourgTypedRoleKind.ConstitutionalReviewDecision,
+            typedRole.Kind,
+            "ACCA is a never-ingest type; sharing a prefix with ACC must not admit it as a "
+                + "constitutional review decision.");
+    }
+
     [TestMethod]
     public async Task AnAccResourceAcceptedByBucketMembershipResolvesARealConstitutionalReviewTypedRole()
     {
