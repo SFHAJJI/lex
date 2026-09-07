@@ -200,8 +200,42 @@ internal static class LuxembourgScopeResolver
             evidenceArtifacts,
             scopeInputs,
             resources,
+            BuildLocalInboundRelations(resources),
             BuildAccounting(resources));
     }
+
+    private static IReadOnlyList<LuxembourgResolvedLocalInboundRelation> BuildLocalInboundRelations(
+        IReadOnlyList<LuxembourgResourceResolution> resources) =>
+        resources
+            .SelectMany(static resource => resource.Relations)
+            .Where(static relation =>
+                relation.Authority == LuxembourgRelationAuthority.PublisherAsserted &&
+                relation.Disposition == LuxembourgRelationDisposition.Accepted &&
+                string.Equals(
+                    relation.PredicateIri,
+                    "http://data.legilux.public.lu/resource/ontology/jolux#cites",
+                    StringComparison.Ordinal))
+            .Select(static relation => new LuxembourgResolvedLocalInboundRelation(
+                relation.ObjectIri,
+                relation.SubjectIri,
+                relation.ObservationRef,
+                LuxembourgRelationAuthority.LocalInboundView,
+                new LuxembourgLocalInboundView(
+                    LuxembourgRelationPredicate.Cites,
+                    "cited_by")))
+            .OrderBy(
+                static relation => relation.SubjectIri,
+                LuxembourgSourceValidation.UnicodeScalarComparer)
+            .ThenBy(
+                static relation => relation.ObjectIri,
+                LuxembourgSourceValidation.UnicodeScalarComparer)
+            .ThenBy(
+                static relation => relation.ObservationRef.ResourceId,
+                LuxembourgSourceValidation.UnicodeScalarComparer)
+            .ThenBy(
+                static relation => relation.ObservationRef.Sha256,
+                LuxembourgSourceValidation.UnicodeScalarComparer)
+            .ToArray();
 
     private static IEnumerable<SourceArtifactRef> UsedEvidenceArtifacts(
         LuxembourgResourceObservation observation,
@@ -1093,7 +1127,8 @@ internal static class LuxembourgScopeResolver
                     accepted
                         ? LuxembourgRelationDisposition.Accepted
                         : LuxembourgRelationDisposition.TypedQuarantine,
-                    shape);
+                    shape,
+                    relation.Authority);
             })
             .OrderBy(
                 static relation => relation.SubjectIri,

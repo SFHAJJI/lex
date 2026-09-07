@@ -139,7 +139,7 @@ public enum LuxembourgRelationAuthority
     /// Computed locally from held edges. Permanently unlabelled with any publisher predicate and
     /// excluded from evidence export. R4: "Otherwise V3 may expose a generic locally derived
     /// inbound view that is never labeled with a publisher predicate." A caller using this
-    /// authority may optionally attach a <see cref="LuxembourgLocalInboundView"/> naming the exact
+    /// authority must attach a <see cref="LuxembourgLocalInboundView"/> naming the exact
     /// family it transposes (R4: "each derived inverse is exactly one transpose with a
     /// derived_from edge").
     /// </summary>

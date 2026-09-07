@@ -237,7 +237,7 @@ public sealed partial class LuxembourgQueryExecutionAdapterTests
     {
         var (profile, _, enumerationRef) = BuildProfile();
         var store = new InMemoryCustodyStore();
-        var handler = RelationFamilyDeliveringHandler();
+        var handler = EmptyRelationFamilyDeliveringHandler();
         var adapter = new LuxembourgQueryExecutionAdapter(
             store, NewExecutor(store, handler), profile);
         var (partitionRequest, witness) = BuildPartitionRequest(RelationSetId, RelationFamilyKey);
@@ -264,9 +264,112 @@ public sealed partial class LuxembourgQueryExecutionAdapterTests
         }
 
         Assert.AreEqual(0, expectedPredicates.Count, "every relation predicate must appear exactly once");
+        Assert.IsEmpty(result.ResolvedRelations);
+        Assert.IsEmpty(result.LocalInboundRelations);
         Assert.IsNotNull(result.ScopeManifestReceipt);
         Assert.IsNull(result.Refusal);
         Assert.AreEqual(LuxembourgQueryExecutionCompletion.AllFamiliesProven, result.Completion);
+    }
+
+    [TestMethod]
+    public async Task ANonEmptyRelationOnlyRunConsumesEveryVerifiedRow()
+    {
+        const string subjectUri =
+            "http://data.legilux.public.lu/eli/etat/leg/loi/2026/01/01/a0";
+        const string targetUri =
+            "http://data.legilux.public.lu/eli/etat/leg/loi/2025/01/01/a1";
+        var (profile, _, enumerationRef) = BuildProfile();
+        var store = new InMemoryCustodyStore();
+        var adapter = new LuxembourgQueryExecutionAdapter(
+            store, NewExecutor(store, RelationFamilyDeliveringHandler()), profile);
+        var (partitionRequest, witness) = BuildPartitionRequest(
+            RelationSetId, RelationFamilyKey);
+
+        var result = await adapter.RunAsync(
+            [(partitionRequest, witness, null)], RelationFamilyKey, null, null,
+            new PermissiveEvidenceResolver(enumerationRef), DocumentFetchRendererSource(),
+            CancellationToken.None);
+
+        Assert.AreEqual(
+            LuxembourgFamilyEnumerationOutcomeKind.Proven,
+            result.FamilyOutcomes.Single().Kind,
+            "the finding requires rows that were proved and reopened, not an acquisition failure");
+        Assert.IsNull(result.Refusal);
+        Assert.IsTrue(result.RelationFamilyAcquisitions.All(static acquisition =>
+            acquisition.State == LuxembourgRelationFamilyAcquisitionState.AcquiredComplete &&
+            acquisition.CompletionEvidence is not null));
+        var publisher = result.ResolvedRelations.Single();
+        var inbound = result.LocalInboundRelations.Single();
+        Assert.AreEqual(subjectUri, publisher.SubjectIri);
+        Assert.AreEqual(targetUri, publisher.ObjectIri);
+        Assert.AreEqual(LuxembourgRelationAuthority.PublisherAsserted, publisher.Authority);
+        Assert.AreEqual(targetUri, inbound.SubjectIri);
+        Assert.AreEqual(subjectUri, inbound.ObjectIri);
+        Assert.AreEqual(LuxembourgRelationAuthority.LocalInboundView, inbound.Authority);
+        Assert.AreEqual(LuxembourgRelationPredicate.Cites, inbound.LocalInboundView.DerivedFrom);
+        Assert.IsEmpty(
+            result.ResourceObservationSubjects,
+            "a set-G subject is observed for relation resolution, not delivered by the S census");
+        Assert.IsNotNull(result.ScopeManifestReceipt);
+
+        var proof = result.FamilyOutcomes.Single().Proof!;
+        var held = LuxembourgProvenResourceObservations.RequireRelationsProven([proof], []);
+        Assert.IsEmpty(held.AssertionFamilyProofs);
+        Assert.IsNull(held.AssertionFamilyProof);
+        Assert.AreSame(proof, held.RelationFamilyProof);
+        CollectionAssert.AreEqual(new[] { proof }, held.RelationFamilyProofs.ToArray());
+        Assert.ThrowsExactly<ArgumentException>(() =>
+            LuxembourgProvenResourceObservations.RequireRelationsProven([], []));
+        Assert.ThrowsExactly<ArgumentException>(() =>
+            LuxembourgProvenResourceObservations.RequireRelationsProven([proof, proof], []));
+    }
+
+    [TestMethod]
+    [DataRow("predicate_drift", LuxembourgQueryExecutionRefusal.RelationRowPredicateNotAdmitted)]
+    [DataRow("literal_object", LuxembourgQueryExecutionRefusal.RelationRowTermNotIri)]
+    public async Task ARelationOnlyRunRoutesInvalidRowsThroughTheExistingRefusals(
+        string shape,
+        LuxembourgQueryExecutionRefusal expectedRefusal)
+    {
+        const string subjectUri =
+            "http://data.legilux.public.lu/eli/etat/leg/loi/2026/01/01/a0";
+        const string targetUri =
+            "http://data.legilux.public.lu/eli/etat/leg/loi/2025/01/01/a1";
+        const string driftPredicate =
+            "http://data.legilux.public.lu/resource/ontology/jolux#futureRelation";
+        var rows = shape switch
+        {
+            "predicate_drift" => RelationTriplesRowsJson(
+                (subjectUri, driftPredicate, targetUri)),
+            "literal_object" => RelationTriplesRowsJson(
+                (subjectUri, CitesPredicate, targetUri, "literal")),
+            _ => throw new AssertFailedException($"unknown relation-only row shape '{shape}'"),
+        };
+        var (profile, _, enumerationRef) = BuildProfile();
+        var store = new InMemoryCustodyStore();
+        var handler = LuxembourgAcquisitionTestFixture.AllowRobotsThenHandler((ordinal, req) =>
+            ordinal switch
+            {
+                1 or 4 => LuxembourgAcquisitionTestFixture.JsonResponse(
+                    req, LuxembourgAcquisitionTestFixture.CountJson(1)),
+                2 or 5 => LuxembourgAcquisitionTestFixture.JsonResponse(req, rows),
+                3 or 6 => LuxembourgAcquisitionTestFixture.JsonResponse(
+                    req, RelationAssertionsRowsJson()),
+                _ => throw new AssertFailedException($"unexpected ordinal {ordinal}"),
+            });
+        var adapter = new LuxembourgQueryExecutionAdapter(store, NewExecutor(store, handler), profile);
+        var (partitionRequest, witness) = BuildPartitionRequest(
+            RelationSetId, RelationFamilyKey);
+
+        var result = await adapter.RunAsync(
+            [(partitionRequest, witness, null)], RelationFamilyKey, null, null,
+            new PermissiveEvidenceResolver(enumerationRef), DocumentFetchRendererSource(),
+            CancellationToken.None);
+
+        Assert.AreEqual(expectedRefusal, result.Refusal?.Code, $"shape={shape}");
+        Assert.IsEmpty(result.ResolvedRelations);
+        Assert.IsEmpty(result.LocalInboundRelations);
+        Assert.IsNull(result.ScopeManifestReceipt);
     }
 
     [TestMethod]
@@ -434,6 +537,7 @@ public sealed partial class LuxembourgQueryExecutionAdapterTests
         // robots three times -- once at ordinal 0 for the relation family's own bootstrap, once at
         // ordinal 7 for the census family's, once at ordinal 14 for the assertion family's.
         const string subjectUri = "http://data.legilux.public.lu/eli/etat/leg/loi/2026/01/01/a0";
+        const string targetUri = "http://data.legilux.public.lu/eli/etat/leg/loi/2025/01/01/a1";
         var (profile, _, enumerationRef) = BuildProfile();
         var store = new InMemoryCustodyStore();
         var (relationRequest, relationWitness) = BuildPartitionRequest(RelationSetId, RelationFamilyKey);
@@ -443,8 +547,9 @@ public sealed partial class LuxembourgQueryExecutionAdapterTests
         {
             7 or 14 => TextResponse(req, "User-agent: *\nAllow: /\n"),
             1 or 4 => LuxembourgAcquisitionTestFixture.JsonResponse(
-                req, LuxembourgAcquisitionTestFixture.CountJson(2)),
-            2 or 5 => LuxembourgAcquisitionTestFixture.JsonResponse(req, RelationAssertionsRowsJson("a", "b")),
+                req, LuxembourgAcquisitionTestFixture.CountJson(1)),
+            2 or 5 => LuxembourgAcquisitionTestFixture.JsonResponse(
+                req, RelationTriplesRowsJson((subjectUri, CitesPredicate, targetUri))),
             3 or 6 => LuxembourgAcquisitionTestFixture.JsonResponse(req, RelationAssertionsRowsJson()),
             8 or 11 => LuxembourgAcquisitionTestFixture.JsonResponse(
                 req, LuxembourgAcquisitionTestFixture.CountJson(1)),
@@ -484,6 +589,120 @@ public sealed partial class LuxembourgQueryExecutionAdapterTests
         Assert.IsNull(result.Refusal, $"code={result.Refusal?.Code} detail={result.Refusal?.Detail}");
         Assert.IsNotNull(result.ScopeManifestReceipt);
         Assert.AreEqual(LuxembourgQueryExecutionCompletion.AllFamiliesProven, result.Completion);
+        var publisher = result.ResolvedRelations.Single();
+        var inbound = result.LocalInboundRelations.Single();
+        Assert.AreEqual(subjectUri, publisher.SubjectIri);
+        Assert.AreEqual(targetUri, publisher.ObjectIri);
+        Assert.AreEqual(profile.Snapshot.ObservationRef, publisher.ObservationRef);
+        Assert.AreEqual(LuxembourgRelationAuthority.PublisherAsserted, publisher.Authority);
+        Assert.AreEqual(targetUri, inbound.SubjectIri);
+        Assert.AreEqual(subjectUri, inbound.ObjectIri);
+        Assert.AreEqual(publisher.ObservationRef, inbound.ObservationRef);
+        Assert.AreEqual(LuxembourgRelationAuthority.LocalInboundView, inbound.Authority);
+        Assert.AreEqual(LuxembourgRelationPredicate.Cites, inbound.LocalInboundView.DerivedFrom);
+        Assert.AreEqual("cited_by", inbound.LocalInboundView.InverseLabel);
+    }
+
+    [TestMethod]
+    [DataRow("predicate_drift", LuxembourgQueryExecutionRefusal.RelationRowPredicateNotAdmitted,
+        "futureRelation")]
+    [DataRow("subject_outside_census", LuxembourgQueryExecutionRefusal.RelationRowSubjectNotInCensus,
+        "outside-census")]
+    [DataRow("literal_object", LuxembourgQueryExecutionRefusal.RelationRowTermNotIri,
+        "does not carry IRI terms")]
+    [DataRow("unbound_object", LuxembourgQueryExecutionRefusal.None,
+        "DeliveryProofRefused")]
+    public async Task AMalformedOrOutOfScopeRelationRowFailsClosedBeforeAuthorityIsEmitted(
+        string shape,
+        LuxembourgQueryExecutionRefusal expectedRefusal,
+        string expectedDetail)
+    {
+        const string subjectUri =
+            "http://data.legilux.public.lu/eli/etat/leg/loi/2026/01/01/a0";
+        const string targetUri =
+            "http://data.legilux.public.lu/eli/etat/leg/loi/2025/01/01/a1";
+        const string outsideSubject =
+            "http://data.legilux.public.lu/eli/etat/leg/loi/2024/01/01/outside-census";
+        const string driftPredicate =
+            "http://data.legilux.public.lu/resource/ontology/jolux#futureRelation";
+        var relationRows = shape switch
+        {
+            "predicate_drift" => RelationTriplesRowsJson(
+                (subjectUri, driftPredicate, targetUri)),
+            "subject_outside_census" => RelationTriplesRowsJson(
+                (outsideSubject, CitesPredicate, targetUri)),
+            "literal_object" => RelationTriplesRowsJson(
+                (subjectUri, CitesPredicate, targetUri, "literal")),
+            "unbound_object" => RelationTriplesRowsJson(
+                (subjectUri, CitesPredicate, null, "uri")),
+            _ => throw new AssertFailedException($"unknown relation-row shape '{shape}'"),
+        };
+        var (profile, _, enumerationRef) = BuildProfile();
+        var store = new InMemoryCustodyStore();
+        var (relationRequest, relationWitness) = BuildPartitionRequest(
+            RelationSetId, RelationFamilyKey);
+        var (resourceRequest, resourceWitness) = BuildPartitionRequest(
+            ResourceSetId, ResourceFamilyKey);
+        var (assertionRequest, assertionWitness) = BuildPartitionRequest(
+            AssertionSetId, AssertionFamilyKey);
+        var handler = LuxembourgAcquisitionTestFixture.AllowRobotsThenHandler((ordinal, req) =>
+            ordinal switch
+            {
+                7 or 14 => TextResponse(req, "User-agent: *\nAllow: /\n"),
+                1 or 4 or 8 or 11 => LuxembourgAcquisitionTestFixture.JsonResponse(
+                    req, LuxembourgAcquisitionTestFixture.CountJson(1)),
+                2 or 5 => LuxembourgAcquisitionTestFixture.JsonResponse(
+                    req, relationRows),
+                3 or 6 => LuxembourgAcquisitionTestFixture.JsonResponse(
+                    req, RelationAssertionsRowsJson()),
+                9 or 12 => LuxembourgAcquisitionTestFixture.JsonResponse(
+                    req, LuxembourgAcquisitionTestFixture.RowsJson(subjectUri)),
+                10 or 13 => LuxembourgAcquisitionTestFixture.JsonResponse(
+                    req, LuxembourgAcquisitionTestFixture.EmptyRowsJson()),
+                15 or 18 => LuxembourgAcquisitionTestFixture.JsonResponse(
+                    req, LuxembourgAcquisitionTestFixture.CountJson(1)),
+                16 or 19 => LuxembourgAcquisitionTestFixture.JsonResponse(
+                    req, AssertionRowsJson(
+                        (subjectUri, CitesPredicate, targetUri, "iri", "", ""))),
+                17 or 20 => LuxembourgAcquisitionTestFixture.JsonResponse(
+                    req, AssertionRowsJson()),
+                _ => throw new AssertFailedException($"unexpected ordinal {ordinal}"),
+            });
+        var adapter = new LuxembourgQueryExecutionAdapter(store, NewExecutor(store, handler), profile);
+
+        var result = await adapter.RunAsync(
+            [(relationRequest, relationWitness, null), (resourceRequest, resourceWitness, null),
+                (assertionRequest, assertionWitness, null)],
+            RelationFamilyKey, ResourceFamilyKey, AssertionFamilyKey,
+            new PermissiveEvidenceResolver(enumerationRef), DocumentFetchRendererSource(),
+            CancellationToken.None);
+
+        if (expectedRefusal == LuxembourgQueryExecutionRefusal.None)
+        {
+            Assert.IsNull(result.Refusal);
+            var relationOutcome = result.FamilyOutcomes.Single(outcome =>
+                outcome.FamilyKey == RelationFamilyKey);
+            Assert.AreEqual(LuxembourgFamilyEnumerationOutcomeKind.ExecutorRefused, relationOutcome.Kind);
+            Assert.AreEqual(
+                LuxembourgEnumerationRefusal.DeliveryProofRefused,
+                relationOutcome.ExecutorRefusal?.Code);
+            Assert.IsTrue(result.RelationFamilyAcquisitions.All(acquisition =>
+                acquisition.State == LuxembourgRelationFamilyAcquisitionState.Incomplete));
+            Assert.IsEmpty(result.ResolvedRelations);
+            Assert.IsEmpty(result.LocalInboundRelations);
+            return;
+        }
+
+        Assert.AreEqual(
+            expectedRefusal,
+            result.Refusal?.Code,
+            $"shape={shape}; publisherRelations={result.ResolvedRelations.Count}; "
+                + $"localInboundRelations={result.LocalInboundRelations.Count}; "
+                + $"outcomes={string.Join(',', result.FamilyOutcomes.Select(static outcome => $"{outcome.Kind}/{outcome.ExecutorRefusal?.Code}"))}");
+        StringAssert.Contains(result.Refusal?.Detail, expectedDetail);
+        Assert.IsEmpty(result.ResolvedRelations);
+        Assert.IsEmpty(result.LocalInboundRelations);
+        Assert.IsNull(result.ScopeManifestReceipt);
     }
 
     [TestMethod]
@@ -1593,6 +1812,8 @@ public sealed partial class LuxembourgQueryExecutionAdapterTests
                 result.RelationFamilyAcquisitions.All(
                     static acquisition =>
                         acquisition.State == LuxembourgRelationFamilyAcquisitionState.AcquiredComplete));
+            Assert.HasCount(1, result.ResolvedRelations);
+            Assert.HasCount(1, result.LocalInboundRelations);
 
             // Reopened off a BARE store rooted at the same directory: real bytes, on real disk,
             // named by the exact digest this run's receipt reported.
@@ -1647,14 +1868,32 @@ public sealed partial class LuxembourgQueryExecutionAdapterTests
     private static HttpMessageHandler NoSendHandler() =>
         new LuxembourgAcquisitionTestFixture.SequencedHandler((_, _) => throw Unreachable());
 
-    /// <summary>Robots allow, then a two-row page and an empty terminal page, on both passes.</summary>
-    private static HttpMessageHandler RelationFamilyDeliveringHandler() =>
-        LuxembourgAcquisitionTestFixture.AllowRobotsThenHandler((ordinal, req) => ordinal switch
+    /// <summary>Robots allow, then one admitted cites row and an empty terminal page, on both passes.</summary>
+    private static HttpMessageHandler RelationFamilyDeliveringHandler()
+    {
+        const string subjectUri =
+            "http://data.legilux.public.lu/eli/etat/leg/loi/2026/01/01/a0";
+        const string targetUri =
+            "http://data.legilux.public.lu/eli/etat/leg/loi/2025/01/01/a1";
+        return LuxembourgAcquisitionTestFixture.AllowRobotsThenHandler((ordinal, req) => ordinal switch
         {
             1 or 4 => LuxembourgAcquisitionTestFixture.JsonResponse(
-                req, LuxembourgAcquisitionTestFixture.CountJson(2)),
-            2 or 5 => LuxembourgAcquisitionTestFixture.JsonResponse(req, RelationAssertionsRowsJson("a", "b")),
+                req, LuxembourgAcquisitionTestFixture.CountJson(1)),
+            2 or 5 => LuxembourgAcquisitionTestFixture.JsonResponse(
+                req, RelationTriplesRowsJson((subjectUri, CitesPredicate, targetUri))),
             3 or 6 => LuxembourgAcquisitionTestFixture.JsonResponse(req, RelationAssertionsRowsJson()),
+            _ => throw new AssertFailedException("No further sends after both passes complete."),
+        });
+    }
+
+    /// <summary>Robots allow, then a proven empty relation set on both passes.</summary>
+    private static HttpMessageHandler EmptyRelationFamilyDeliveringHandler() =>
+        LuxembourgAcquisitionTestFixture.AllowRobotsThenHandler((ordinal, req) => ordinal switch
+        {
+            1 or 3 => LuxembourgAcquisitionTestFixture.JsonResponse(
+                req, LuxembourgAcquisitionTestFixture.CountJson(0)),
+            2 or 4 => LuxembourgAcquisitionTestFixture.JsonResponse(
+                req, RelationAssertionsRowsJson()),
             _ => throw new AssertFailedException("No further sends after both passes complete."),
         });
 
@@ -1686,6 +1925,62 @@ public sealed partial class LuxembourgQueryExecutionAdapterTests
         }
 
         var bindings = string.Join(',', key1Values.Select(Row));
+        return "{\"head\":{\"link\":[],\"vars\":[\"subject\",\"predicate\",\"object\"," +
+               "\"key_1\",\"key_2\",\"key_3\",\"key_4\",\"key_5\",\"key_6\"]}," +
+               $"\"results\":{{\"distinct\":false,\"ordered\":true,\"bindings\":[{bindings}]}}}}";
+    }
+
+    private static string RelationTriplesRowsJson(
+        params (string Subject, string Predicate, string Object)[] rows)
+    {
+        static string Field(string name, string kind, string value) =>
+            $"\"{name}\":{{\"type\":\"{kind}\",\"value\":\"{value}\"}}";
+
+        static string Row((string Subject, string Predicate, string Object) row)
+        {
+            var triple = new[]
+            {
+                Field("subject", "uri", row.Subject),
+                Field("predicate", "uri", row.Predicate),
+                Field("object", "uri", row.Object),
+            };
+            var keyValues = new[] { row.Subject, row.Predicate, row.Object, "", "", "" };
+            var keys = keyValues.Select(static (value, index) =>
+                Field($"key_{index + 1}", "literal", value));
+            return "{" + string.Join(',', triple.Concat(keys)) + "}";
+        }
+
+        var bindings = string.Join(',', rows.Select(Row));
+        return "{\"head\":{\"link\":[],\"vars\":[\"subject\",\"predicate\",\"object\"," +
+               "\"key_1\",\"key_2\",\"key_3\",\"key_4\",\"key_5\",\"key_6\"]}," +
+               $"\"results\":{{\"distinct\":false,\"ordered\":true,\"bindings\":[{bindings}]}}}}";
+    }
+
+    private static string RelationTriplesRowsJson(
+        params (string Subject, string Predicate, string? Object, string ObjectKind)[] rows)
+    {
+        static string Field(string name, string kind, string value) =>
+            $"\"{name}\":{{\"type\":\"{kind}\",\"value\":\"{value}\"}}";
+
+        static string Row((string Subject, string Predicate, string? Object, string ObjectKind) row)
+        {
+            var triple = new List<string>
+            {
+                Field("subject", "uri", row.Subject),
+                Field("predicate", "uri", row.Predicate),
+            };
+            if (row.Object is not null)
+            {
+                triple.Add(Field("object", row.ObjectKind, row.Object));
+            }
+
+            var keyValues = new[] { row.Subject, row.Predicate, row.Object ?? "", "", "", "" };
+            triple.AddRange(keyValues.Select(static (value, index) =>
+                Field($"key_{index + 1}", "literal", value)));
+            return "{" + string.Join(',', triple) + "}";
+        }
+
+        var bindings = string.Join(',', rows.Select(Row));
         return "{\"head\":{\"link\":[],\"vars\":[\"subject\",\"predicate\",\"object\"," +
                "\"key_1\",\"key_2\",\"key_3\",\"key_4\",\"key_5\",\"key_6\"]}," +
                $"\"results\":{{\"distinct\":false,\"ordered\":true,\"bindings\":[{bindings}]}}}}";

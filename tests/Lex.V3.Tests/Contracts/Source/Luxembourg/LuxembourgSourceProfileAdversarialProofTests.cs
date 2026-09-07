@@ -2,6 +2,8 @@ using Lex.V3.Tests.Contracts.Source.Absence;
 using System.Security.Cryptography;
 using System.Reflection;
 using System.Text;
+using System.Text.Json;
+using Lex.V3.Contracts;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Luxembourg;
 using Lex.V3.Contracts.Source.Scope;
@@ -220,6 +222,57 @@ public sealed class LuxembourgSourceProfileAdversarialProofTests
     }
 
     [TestMethod]
+    public void ObservedAndResolvedRelationsRefuseAuthorityAndLocalViewMismatch()
+    {
+        var inbound = new LuxembourgLocalInboundView(
+            LuxembourgRelationPredicate.Cites,
+            "cited_by");
+
+        var publisherObservation = new LuxembourgObservedRelation(
+            RootIri,
+            Jolux + "cites",
+            RelationTargetIri,
+            ObservationRef,
+            LuxembourgRelationAuthority.PublisherAsserted);
+        var hostileWire = ContractJson.Serialize(publisherObservation).Replace(
+            "publisher_asserted",
+            "local_inbound_view",
+            StringComparison.Ordinal);
+        var wireFailure = Assert.ThrowsExactly<JsonException>(
+            () => ContractJson.Deserialize<LuxembourgObservedRelation>(hostileWire));
+        Assert.IsInstanceOfType<ArgumentException>(wireFailure.InnerException);
+
+        Assert.ThrowsExactly<ArgumentException>(() => new LuxembourgObservedRelation(
+            RootIri,
+            Jolux + "cites",
+            RelationTargetIri,
+            ObservationRef,
+            LuxembourgRelationAuthority.LocalInboundView));
+
+        Assert.ThrowsExactly<ArgumentException>(() => new LuxembourgResolvedRelation(
+            RootIri,
+            Jolux + "cites",
+            RelationTargetIri,
+            ObservationRef,
+            LuxembourgRelationSemantic.AssertedCitation,
+            LuxembourgRelationDisposition.Accepted,
+            null,
+            LuxembourgRelationAuthority.LocalInboundView));
+        Assert.ThrowsExactly<ArgumentException>(() => new LuxembourgResolvedLocalInboundRelation(
+            RelationTargetIri,
+            RootIri,
+            ObservationRef,
+            LuxembourgRelationAuthority.PublisherAsserted,
+            inbound));
+        Assert.ThrowsExactly<ArgumentNullException>(() => new LuxembourgResolvedLocalInboundRelation(
+            RelationTargetIri,
+            RootIri,
+            ObservationRef,
+            LuxembourgRelationAuthority.LocalInboundView,
+            null!));
+    }
+
+    [TestMethod]
     public void FailedResolutionRejectsNullFailure()
     {
         Assert.ThrowsExactly<ArgumentNullException>(() =>
@@ -349,7 +402,8 @@ public sealed class LuxembourgSourceProfileAdversarialProofTests
             RootIri,
             Jolux + "consolidates",
             RelationTargetIri,
-            ObservationRef)],
+            ObservationRef,
+            LuxembourgRelationAuthority.PublisherAsserted)],
         new LuxembourgSparqlRightsChannelObservations(
             ObservationRef,
             SparqlEnumerationRef,

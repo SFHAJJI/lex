@@ -183,15 +183,27 @@ public sealed class LuxembourgRelationVocabularyTests
             },
             ConstructionSurface.Of(typeof(LuxembourgLocalInboundView)).ToArray());
 
-        // Paired with a ProducersIn assertion so a new Contracts producer cannot silently hand out
-        // an inbound view without this accepted construction boundary being reconsidered.
+        // The dedicated local relation is the single production carrier. Pin both reflected exposure
+        // paths so another Contracts surface cannot silently start handing out local views.
         CollectionAssert.AreEqual(
-            Array.Empty<string>(),
+            new[]
+            {
+                "field private instance " + N
+                + "LuxembourgResolvedLocalInboundRelation::<LocalInboundView>k__BackingField -> " + N
+                + "LuxembourgLocalInboundView",
+                "property public instance " + N
+                + "LuxembourgResolvedLocalInboundRelation::LocalInboundView() -> " + N
+                + "LuxembourgLocalInboundView",
+            },
             ConstructionSurface.ProducersIn(
                 typeof(LuxembourgLocalInboundView).Assembly,
                 typeof(LuxembourgLocalInboundView),
                 true).ToArray(),
             "a new Contracts producer now hands out a local inbound view");
+        Assert.IsNull(
+            typeof(LuxembourgResolvedLocalInboundRelation).GetProperty("PredicateIri"),
+            "a local inbound edge must identify its publisher family only through derived_from, "
+                + "never through a predicate slot that could relabel the reverse as publisher asserted");
     }
 
     private static void AssertTokens<TEnum>(params string[] expected)
