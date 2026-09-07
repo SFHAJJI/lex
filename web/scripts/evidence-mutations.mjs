@@ -36,6 +36,44 @@ const MUTATIONS = [
     },
   },
   {
+    // Deliberately makes a SECOND option tabbable rather than removing the group. A mutation that
+    // deleted the listbox would be caught by the landmark and interactive counts and would prove
+    // nothing about roving; this leaves the group intact and breaks only the invariant.
+    name: "a second result made tabbable, so the listbox no longer roves",
+    expect: /listbox with \d+ option\(s\) has 2 tabbable/i,
+    async apply(root) {
+      for (const name of await readdir(root)) {
+        if (!name.endsWith(".html")) continue;
+        const file = join(root, name);
+        const html = await readFile(file, "utf8");
+        if (!html.includes('role="option"')) continue;
+        // The first non-tabbable option becomes tabbable alongside the real one.
+        await writeFile(
+          file,
+          html.replace('tabindex="-1"', 'tabindex="0"'),
+          "utf8",
+        );
+      }
+    },
+  },
+  {
+    name: "a toggle whose pressed state is not a boolean",
+    expect: /aria-pressed="[^"]*" is not a boolean/i,
+    async apply(root) {
+      for (const name of await readdir(root)) {
+        if (!name.endsWith(".html")) continue;
+        const file = join(root, name);
+        const html = await readFile(file, "utf8");
+        if (!html.includes("aria-pressed=")) continue;
+        await writeFile(
+          file,
+          html.replace(/aria-pressed="(true|false)"/, 'aria-pressed="mixed"'),
+          "utf8",
+        );
+      }
+    },
+  },
+  {
     name: "a heading level skipped from h1 to h3",
     expect: /heading level jumps/i,
     async apply(root) {

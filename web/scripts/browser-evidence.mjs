@@ -410,6 +410,25 @@ const PROBE = `(() => {
     focusableCount: focusable.length,
     focusableWithVisibleText: focusable.filter((el) => el.textContent.trim().length > 0).length,
     landmarks: [...document.querySelectorAll('main,[role=note],[role=group],aside')].length,
+    // S5 names roving tabindex and pressed states as RUNTIME browser evidence, and neither was
+    // measured here: both were covered only by unit assertions over a rendered tree. That is a
+    // different claim. A unit test shows the attribute was written; only the hydrated page shows
+    // the client still holds the invariant after it takes over. Exactly one option in a listbox may
+    // be tabbable -- the rest are reached by arrow keys -- so a listbox with two tabbable options,
+    // or none, is a keyboard trap or a dead group whichever way it fails.
+    rovingGroups: [...document.querySelectorAll('[role=listbox]')].map((group) => {
+      const options = [...group.querySelectorAll('[role=option]')];
+      return {
+        options: options.length,
+        tabbable: options.filter((el) => el.getAttribute('tabindex') === '0').length,
+      };
+    }),
+    // A toggle's pressed state has to be a boolean the assistive layer can announce. Anything else
+    // renders as a styled control whose state never reaches a screen reader, which is the exact
+    // failure FilterChips' own comment says aria-pressed exists to prevent.
+    pressedValues: [...document.querySelectorAll('[aria-pressed]')].map((el) =>
+      el.getAttribute('aria-pressed'),
+    ),
     syntheticBanner: !!document.querySelector('[data-synthetic]'),
     horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth,
     scrollWidth: document.documentElement.scrollWidth,
@@ -1006,6 +1025,23 @@ async function main() {
             failures.push(
               `${page} @${viewport.label}: hydrated as ${observed.hydrated}` +
                 `${observed.hydrationRecovered ? `, ${observed.hydrationRecovered}` : ''}`,
+            );
+          }
+        }
+        for (const group of observed.rovingGroups) {
+          if (group.options > 0 && group.tabbable !== 1) {
+            failures.push(
+              `${page} @${viewport.label}: a listbox with ${group.options} option(s) has ` +
+                `${group.tabbable} tabbable; roving tabindex requires exactly one, and any other ` +
+                "count is either a keyboard trap or a group the keyboard cannot enter",
+            );
+          }
+        }
+        for (const value of observed.pressedValues) {
+          if (value !== "true" && value !== "false") {
+            failures.push(
+              `${page} @${viewport.label}: aria-pressed="${value}" is not a boolean a screen ` +
+                "reader can announce; the control's state reaches sighted users only",
             );
           }
         }
