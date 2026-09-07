@@ -166,7 +166,7 @@ public sealed class EuObjectFactsDiscoveryPlanTests
     public void TheObjectFactsPlanIdentityIsPinnedSoTemplateDriftCannotPassSilently()
     {
         Assert.AreEqual(
-            "8f00417ad27a70e7d21c812abd391467dec2c8dfe8640953ce33be0e1abc5f6a",
+            "6e35371b2860a8bc76164fc47587723aaeb6493b26af6f7769546d0bb855b505",
             EuObjectFactsDiscoveryPlan.Create().ArtifactRef.Sha256);
     }
 
@@ -904,7 +904,7 @@ public sealed class EuObjectFactsDiscoveryPlanTests
     }
 
     [TestMethod]
-    public void TheQuerySetEnumHasExactlyFourMembers()
+    public void TheQuerySetEnumHasExactlyFiveMembers()
     {
         CollectionAssert.AreEqual(
             new[]
@@ -916,6 +916,8 @@ public sealed class EuObjectFactsDiscoveryPlanTests
                 "field public static " + N + "EuObjectFactsQuerySet::ManifestationFacts -> "
                     + N + "EuObjectFactsQuerySet",
                 "field public static " + N + "EuObjectFactsQuerySet::ObjectFacts -> "
+                    + N + "EuObjectFactsQuerySet",
+                "field public static " + N + "EuObjectFactsQuerySet::ReifiedAxiomFacts -> "
                     + N + "EuObjectFactsQuerySet",
                 "field public static " + N + "EuObjectFactsQuerySet::RootWatermark -> "
                     + N + "EuObjectFactsQuerySet",

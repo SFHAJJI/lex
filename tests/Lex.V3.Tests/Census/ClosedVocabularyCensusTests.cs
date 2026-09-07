@@ -336,7 +336,7 @@ public sealed class ClosedVocabularyCensusTests
                     + "XmlNoticeIdentifier, TextHtml, ApplicationPdf",
                 "Lex.V3.Contracts.Source.Europe.EuObjectFactsQueryPass: Pass1, Pass2",
                 "Lex.V3.Contracts.Source.Europe.EuObjectFactsQuerySet: ObjectFacts, ExpressionFacts, "
-                    + "RootWatermark, ManifestationFacts",
+                    + "RootWatermark, ManifestationFacts, ReifiedAxiomFacts",
                 "Lex.V3.Contracts.Source.Europe.EuPacingBasis: ChosenAbsentPublishedGuidance, "
                     + "PublishedCrawlDelay",
                 "Lex.V3.Contracts.Source.Europe.EuPackRootCanonicalFormRefusal: None, "
@@ -363,8 +363,7 @@ public sealed class ClosedVocabularyCensusTests
                     + "NeverIngestBody, NeverExpand",
                 "Lex.V3.Contracts.Source.Europe.EuSelectionRowSetRefusal: None, DuplicateSelector, "
                     + "SelectorUndecided",
-                "Lex.V3.Contracts.Source.Europe.EuTransposability: Transposable, "
-                    + "NotTransposable",
+                "Lex.V3.Contracts.Source.Europe.EuTransposability: Transposable, NotTransposable",
                 "Lex.V3.Contracts.Source.Europe.EuTranspositionAssertedBy: Legilux, Nim",
                 "Lex.V3.Contracts.Source.Europe.EuTranspositionDeadlineOutcome: NotADeadline, "
                     + "TranspositionDeadlineEvidenceInsufficient, AcceptedTranspositionDeadline",

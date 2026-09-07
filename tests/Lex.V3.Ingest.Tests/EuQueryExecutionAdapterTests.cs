@@ -71,6 +71,7 @@ public sealed class EuQueryExecutionAdapterTests
                 "W", wRows.Length, wRows,
                 EuAcquisitionTestFixture.RootWatermarkProjection),
             // D1-05d: family M, the office's own manifestation listing for this run's root.
+            ["A"] = EuAcquisitionTestFixture.AxiomAbsenceScriptFor(rootIri),
             ["M"] = EuAcquisitionTestFixture.ManifestationScriptFor(rootIri),
             // Defect 3's own fix drives a real witness traversal from the census bound
             // (watermarkLexical, this same root) on every delivered run now, not just when a test is
@@ -138,7 +139,8 @@ public sealed class EuQueryExecutionAdapterTests
         Assert.AreEqual(1, result.ObservedExpressionCount, "the Expression set X discovered must be exactly one.");
         Assert.AreEqual(EuQueryExecutionCompletion.AllFamiliesProven, result.Completion);
         Assert.AreEqual(
-            5, result.FamilyOutcomes.Count, "one census seed plus one batch each of P, X, W and M.");
+            6, result.FamilyOutcomes.Count,
+            "one census seed plus one batch each of P, X, W, M and A.");
         foreach (var outcome in result.FamilyOutcomes)
         {
             Assert.AreEqual(EuFamilyEnumerationOutcomeKind.Proven, outcome.Kind, outcome.FamilyKey);
@@ -153,7 +155,9 @@ public sealed class EuQueryExecutionAdapterTests
         var byRows = result.FamilyOutcomes.Select(static o => o.DeliveredRowCount!.Value).OrderBy(static v => v).ToArray();
         // D1-05d adds family M's own six delivered rows: the real six-token listing 32003L0088 and
         // four other acts in the band return live.
-        CollectionAssert.AreEqual(new long[] { 0, 1, 1, 6, 13 }, byRows);
+        // Family A adds its own single row: this fixture reifies no date axiom for the root, so
+        // family A delivers the typed absence row its FILTER NOT EXISTS branch emits.
+        CollectionAssert.AreEqual(new long[] { 0, 1, 1, 1, 6, 13 }, byRows);
 
         // ---- Precision two: the closure is bound to Appendix A's own 82-seed pack by identity. ----
         Assert.IsNotNull(result.RootBinding);
@@ -870,6 +874,7 @@ public sealed class EuQueryExecutionAdapterTests
             ["W"] = EuAcquisitionTestFixture.ScriptFor(
                 "W", wRows.Length, wRows, EuAcquisitionTestFixture.RootWatermarkProjection),
             // D1-05d: family M, the office's own manifestation listing for this run's root.
+            ["A"] = EuAcquisitionTestFixture.AxiomAbsenceScriptFor(rootIri),
             ["M"] = EuAcquisitionTestFixture.ManifestationScriptFor(rootIri),
             ["Witness"] = new EuAcquisitionTestFixture.FamilyScript(
                 "Witness", EuAcquisitionTestFixture.WitnessEmptyTraversalScript(rootIri, watermarkLexical)),
@@ -1291,6 +1296,7 @@ public sealed class EuQueryExecutionAdapterTests
                 "W", wRows.Length, wRows,
                 EuAcquisitionTestFixture.RootWatermarkProjection),
             // D1-05d: family M, the office's own manifestation listing for this run's root.
+            ["A"] = EuAcquisitionTestFixture.AxiomAbsenceScriptFor(rootIri),
             ["M"] = EuAcquisitionTestFixture.ManifestationScriptFor(rootIri),
         };
 
@@ -1419,6 +1425,7 @@ public sealed class EuQueryExecutionAdapterTests
             ["W"] = EuAcquisitionTestFixture.ScriptFor(
                 "W", wRows.Length, wRows, EuAcquisitionTestFixture.RootWatermarkProjection),
             // D1-05d: family M, the office's own manifestation listing for this run's root.
+            ["A"] = EuAcquisitionTestFixture.AxiomAbsenceScriptFor(rootIri),
             ["M"] = EuAcquisitionTestFixture.ManifestationScriptFor(rootIri),
             ["Witness"] = new EuAcquisitionTestFixture.FamilyScript(
                 "Witness",
@@ -1483,7 +1490,8 @@ public sealed class EuQueryExecutionAdapterTests
             .OrderBy(static value => value)
             .ToArray();
         // D1-05d adds family M's own six delivered rows (see the sibling full-run test).
-        CollectionAssert.AreEqual(new long[] { 1, 1, 2, 6, 39 }, byRows);
+        // Family A adds its own single typed absence row, as above.
+        CollectionAssert.AreEqual(new long[] { 1, 1, 1, 2, 6, 39 }, byRows);
         Assert.AreEqual(3, result.ObservedObjectCount, "root + the 2 states this fixture itself delivered.");
         Assert.IsNotNull(result.RootBinding);
         CollectionAssert.AreEqual(new[] { rootIri }, result.RootBinding!.DiscoveredRoots.ToArray());
@@ -1581,6 +1589,7 @@ public sealed class EuQueryExecutionAdapterTests
             ["W"] = EuAcquisitionTestFixture.ScriptFor(
                 "W", wRows.Length, wRows, EuAcquisitionTestFixture.RootWatermarkProjection),
             // D1-05d: family M, the office's own manifestation listing for this run's root.
+            ["A"] = EuAcquisitionTestFixture.AxiomAbsenceScriptFor(rootIri),
             ["M"] = EuAcquisitionTestFixture.ManifestationScriptFor(rootIri),
             ["Witness"] = new EuAcquisitionTestFixture.FamilyScript(
                 "Witness",
@@ -1645,7 +1654,8 @@ public sealed class EuQueryExecutionAdapterTests
             .OrderBy(static value => value)
             .ToArray();
         // D1-05d adds family M's own six delivered rows (see the sibling full-run test).
-        CollectionAssert.AreEqual(new long[] { 1, 1, 2, 6, 39 }, byRows);
+        // Family A adds its own single typed absence row, as above.
+        CollectionAssert.AreEqual(new long[] { 1, 1, 1, 2, 6, 39 }, byRows);
         Assert.AreEqual(3, result.ObservedObjectCount, "root + the 2 states this fixture itself delivered.");
         Assert.IsNotNull(result.RootBinding);
         CollectionAssert.AreEqual(new[] { rootIri }, result.RootBinding!.DiscoveredRoots.ToArray());
@@ -1747,6 +1757,7 @@ public sealed class EuQueryExecutionAdapterTests
             ["W"] = EuAcquisitionTestFixture.ScriptFor(
                 "W", wRows.Length, wRows, EuAcquisitionTestFixture.RootWatermarkProjection),
             // D1-05d: family M, the office's own manifestation listing for this run's root.
+            ["A"] = EuAcquisitionTestFixture.AxiomAbsenceScriptFor(rootIri),
             ["M"] = EuAcquisitionTestFixture.ManifestationScriptFor(rootIri),
         };
 
@@ -1865,6 +1876,7 @@ public sealed class EuQueryExecutionAdapterTests
             ["W"] = EuAcquisitionTestFixture.ScriptFor(
                 "W", wRows.Length, wRows, EuAcquisitionTestFixture.RootWatermarkProjection),
             // D1-05d: family M, the office's own manifestation listing for this run's root.
+            ["A"] = EuAcquisitionTestFixture.AxiomAbsenceScriptFor(rootIri),
             ["M"] = EuAcquisitionTestFixture.ManifestationScriptFor(rootIri),
         };
 
@@ -2080,6 +2092,7 @@ public sealed class EuQueryExecutionAdapterTests
             ["W"] = EuAcquisitionTestFixture.ScriptFor(
                 "W", wRows.Length, wRows, EuAcquisitionTestFixture.RootWatermarkProjection),
             // D1-05d: family M, the office's own manifestation listing for this run's root.
+            ["A"] = EuAcquisitionTestFixture.AxiomAbsenceScriptFor(rootIri),
             ["M"] = EuAcquisitionTestFixture.ManifestationScriptFor(rootIri),
             ["Witness"] = new EuAcquisitionTestFixture.FamilyScript(
                 "Witness",
@@ -2178,6 +2191,7 @@ public sealed class EuQueryExecutionAdapterTests
             ["W"] = EuAcquisitionTestFixture.ScriptFor(
                 "W", wRows.Length, wRows, EuAcquisitionTestFixture.RootWatermarkProjection),
             // D1-05d: family M, the office's own manifestation listing for this run's root.
+            ["A"] = EuAcquisitionTestFixture.AxiomAbsenceScriptFor(rootIri),
             ["M"] = EuAcquisitionTestFixture.ManifestationScriptFor(rootIri),
             ["Witness"] = new EuAcquisitionTestFixture.FamilyScript(
                 "Witness",
@@ -2278,6 +2292,7 @@ public sealed class EuQueryExecutionAdapterTests
             ["W"] = EuAcquisitionTestFixture.ScriptFor(
                 "W", wRows.Length, wRows, EuAcquisitionTestFixture.RootWatermarkProjection),
             // D1-05d: family M, the office's own manifestation listing for this run's root.
+            ["A"] = EuAcquisitionTestFixture.AxiomAbsenceScriptFor(rootIri),
             ["M"] = EuAcquisitionTestFixture.ManifestationScriptFor(rootIri),
         };
 
@@ -3009,6 +3024,7 @@ public sealed class EuQueryExecutionAdapterTests
                 "X", xRows.Count, xRows, EuAcquisitionTestFixture.ExpressionFactsProjection),
             ["W"] = EuAcquisitionTestFixture.ScriptFor(
                 "W", wRows.Length, wRows, EuAcquisitionTestFixture.RootWatermarkProjection),
+            ["A"] = EuAcquisitionTestFixture.AxiomAbsenceScriptFor(rootIri),
             ["M"] = listedTypes is null
                 ? EuAcquisitionTestFixture.ManifestationAbsenceScriptFor(rootIri)
                 : EuAcquisitionTestFixture.ManifestationScriptFor(rootIri, listedTypes),
@@ -3321,6 +3337,7 @@ public sealed class EuQueryExecutionAdapterTests
                 "X", xRows.Length, xRows, EuAcquisitionTestFixture.ExpressionFactsProjection),
             ["W"] = EuAcquisitionTestFixture.ScriptFor(
                 "W", wRows.Length, wRows, EuAcquisitionTestFixture.RootWatermarkProjection),
+            ["A"] = EuAcquisitionTestFixture.AxiomAbsenceScriptFor(rootIri),
             ["M"] = EuAcquisitionTestFixture.ManifestationScriptFor(rootIri),
 
             // SCRIPTED PAST THE GUARD ON PURPOSE. With the co-typing guard removed, this run

@@ -97,7 +97,7 @@ public sealed class EuPlanTemplateGuardTests
                 }))
             .ToArray();
 
-        Assert.HasCount(12, templates, "four object-facts sets and two census sets, count and page each.");
+        Assert.HasCount(14, templates, "five object-facts sets and two census sets, count and page each.");
         foreach (var template in templates)
         {
             StringAssert.Contains(template, "SELECT", "a scanned template must be query text.");
@@ -105,13 +105,14 @@ public sealed class EuPlanTemplateGuardTests
 
         // And the replacement form really is present where the banned one used to be, so the scan
         // is not passing because the BINDs vanished.
-        // FIVE, not six, and the missing one is a fact rather than an omission: the census FAMILY
+        // SIX, not seven, and the missing one is a fact rather than an omission: the census FAMILY
         // page carries a single BIND, STR(?state), with no UNION and no FILTER NOT EXISTS, so it has
-        // no absence branch and no possibly-unbound variable to totalise. The other five pages each
-        // derive one cursor key from a variable their own absence branch leaves unbound, and each
-        // totalises it with COALESCE.
+        // no absence branch and no possibly-unbound variable to totalise. The other six pages each
+        // derive at least one cursor key from a variable their own absence branch leaves unbound,
+        // and each totalises it with COALESCE. Family A joined them: its absence branch leaves
+        // ?axiom, ?predicate and ?value unbound together, so it totalises three.
         Assert.AreEqual(
-            5,
+            6,
             templates.Count(static template =>
                 template.Contains("BIND(COALESCE(STR(", StringComparison.Ordinal)),
             "every page template with an absence branch totalises its value-derived cursor key.");
