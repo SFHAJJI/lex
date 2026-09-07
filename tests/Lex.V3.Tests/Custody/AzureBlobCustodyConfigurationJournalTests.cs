@@ -578,10 +578,10 @@ public sealed class AzureBlobCustodyConfigurationJournalTests
     /// </summary>
     /// <remarks>
     /// A create that collides means the object is already there, so the code reads it back and
-    /// compares. A create that failed for any other reason means the object is not there, so the
-    /// read returns 404 and the journal raises an integrity failure. That turns an availability
-    /// problem into an integrity verdict about custody evidence, which is the more alarming of
-    /// the two and the less true. Each status is asserted separately.
+    /// compares. After any other create failure, a bounded read may still prove an existing exact
+    /// anchor. If it cannot, the original availability failure must survive rather than becoming
+    /// an integrity verdict about custody evidence that was never found. Each status is asserted
+    /// separately.
     /// </remarks>
     [TestMethod]
     public async Task OnlyAnExistingObjectCountsAsACreateCollision()
@@ -614,7 +614,8 @@ public sealed class AzureBlobCustodyConfigurationJournalTests
         {
             var harness = new Harness();
             var receipt = Receipt(CustodyClass.NightlyFloor90d, FirstRequestId);
-            Anchor(harness.Nightly, receipt).UploadFailure = hostile;
+            var anchor = Anchor(harness.Nightly, receipt);
+            anchor.UploadFailure = hostile;
 
             var thrown = await Assert.ThrowsExactlyAsync<CustodyRequiredException>(
                 () => harness.Journal.AppendAsync(receipt, CancellationToken.None),
@@ -625,6 +626,8 @@ public sealed class AzureBlobCustodyConfigurationJournalTests
                 thrown.Message);
             Assert.AreSame(hostile, thrown.InnerException,
                 $"status {hostile.Status} was hidden behind a new journal-operation wrapper");
+            Assert.AreEqual(1, anchor.PropertiesConditions.Count,
+                $"status {hostile.Status} was not followed by the bounded anchor proof");
             // And specifically not an integrity verdict. Treating a create that never happened
             // as a collision makes the journal read a blob that is not there, receive a 404,
             // and report that custody evidence is corrupt. The alarming answer and the less
@@ -633,6 +636,80 @@ public sealed class AzureBlobCustodyConfigurationJournalTests
                 thrown,
                 $"status {hostile.Status} became an integrity failure about evidence never written");
         }
+    }
+
+    [TestMethod]
+    public async Task FailedAnchorCreateCanUseOnlyMatchingNormalizedExistingFacts()
+    {
+        var harness = new Harness();
+        var receipt = Receipt(CustodyClass.NightlyFloor90d, FirstRequestId);
+        var existing = Receipt(CustodyClass.NightlyFloor90d, SecondRequestId);
+        var anchor = Anchor(harness.Nightly, receipt);
+        anchor.Seed(ExactAnchorBytes(existing));
+        anchor.UploadFailure = new NotSupportedException("private provider detail");
+
+        await harness.Journal.AppendAsync(receipt, CancellationToken.None);
+
+        AssertExactReceipt(anchor, existing);
+        AssertExactReceipt(
+            harness.Nightly.Blobs[
+                $"{TuplePrefix(receipt)}/requests/{FirstRequestId:N}.json"], receipt);
+    }
+
+    [TestMethod]
+    public async Task FailedAnchorCreateWithConflictingExistingFactsFailsIntegrity()
+    {
+        var harness = new Harness();
+        var receipt = Receipt(CustodyClass.NightlyFloor90d, FirstRequestId);
+        var conflicting = Receipt(
+            CustodyClass.NightlyFloor90d,
+            SecondRequestId,
+            resourceEtag: "\"conflicting-resource-etag\"");
+        var anchor = Anchor(harness.Nightly, receipt);
+        anchor.Seed(ExactAnchorBytes(conflicting));
+        anchor.UploadFailure = new NotSupportedException("private provider detail");
+
+        await Assert.ThrowsExactlyAsync<CustodyIntegrityException>(() =>
+            harness.Journal.AppendAsync(receipt, CancellationToken.None));
+    }
+
+    [TestMethod]
+    public async Task AnchorCreateWithoutAnEtagCannotRecoverFromItsWrittenBytes()
+    {
+        var harness = new Harness();
+        var receipt = Receipt(CustodyClass.NightlyFloor90d, FirstRequestId);
+        var anchor = Anchor(harness.Nightly, receipt);
+        anchor.ReturnMissingEtag = true;
+
+        var thrown = await Assert.ThrowsExactlyAsync<CustodyIntegrityException>(() =>
+            harness.Journal.AppendAsync(receipt, CancellationToken.None));
+
+        Assert.AreEqual("Azure custody configuration evidence returned no ETag.", thrown.Message);
+        Assert.IsTrue(anchor.Present, "the response came from a create that wrote matching bytes");
+        Assert.AreEqual(0, anchor.PropertiesConditions.Count,
+            "an integrity failure entered the anchor recovery read");
+        Assert.IsFalse(harness.Nightly.Blobs.ContainsKey(
+            $"{TuplePrefix(receipt)}/requests/{FirstRequestId:N}.json"),
+            "the request object was written after an unverified anchor create");
+    }
+
+    [TestMethod]
+    public async Task FailedRequestCreateDoesNotUseAnExistingRequestAsFallback()
+    {
+        var harness = new Harness();
+        var receipt = Receipt(CustodyClass.NightlyFloor90d, FirstRequestId);
+        await harness.Journal.AppendAsync(receipt, CancellationToken.None);
+        var request = harness.Nightly.Blobs[
+            $"{TuplePrefix(receipt)}/requests/{FirstRequestId:N}.json"];
+        request.UploadFailure = new NotSupportedException("private provider detail");
+
+        var thrown = await Assert.ThrowsExactlyAsync<CustodyRequiredException>(() =>
+            harness.Journal.AppendAsync(receipt, CancellationToken.None));
+
+        var operation = Assert.IsInstanceOfType<InvalidOperationException>(thrown.InnerException);
+        Assert.AreEqual("configuration_request_create",
+            AzureBlobCustodyConfigurationReceiptJournal.GetOperationDiagnostic(operation));
+        Assert.AreSame(request.UploadFailureObserved, operation.InnerException);
     }
 
     [TestMethod]
@@ -768,6 +845,8 @@ public sealed class AzureBlobCustodyConfigurationJournalTests
 
         public ETag UploadResponseEtag { get; private set; }
 
+        public bool ReturnMissingEtag { get; set; }
+
         public ETag? DownloadResponseEtag { get; set; }
 
         public string? VersionId { get; set; }
@@ -789,6 +868,8 @@ public sealed class AzureBlobCustodyConfigurationJournalTests
         /// </summary>
         public Exception? UploadFailure { get; set; }
 
+        public Exception? UploadFailureObserved { get; private set; }
+
         public void Seed(byte[] bytes)
         {
             Content = bytes.ToArray();
@@ -807,6 +888,7 @@ public sealed class AzureBlobCustodyConfigurationJournalTests
             if (UploadFailure is { } failure)
             {
                 UploadFailure = null;
+                UploadFailureObserved = failure;
                 throw failure;
             }
 
@@ -819,7 +901,7 @@ public sealed class AzureBlobCustodyConfigurationJournalTests
             await content.CopyToAsync(buffer, cancellationToken);
             Content = buffer.ToArray();
             Present = true;
-            UploadResponseEtag = Etag;
+            UploadResponseEtag = ReturnMissingEtag ? default : Etag;
             AfterUpload?.Invoke(this);
             return Response.FromValue(
                 BlobsModelFactory.BlobContentInfo(
