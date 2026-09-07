@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Runtime.ExceptionServices;
 using System.Text;
 using Azure;
 using Azure.Identity;
@@ -109,12 +110,27 @@ public sealed class AzureBlobCustodyConfigurationReceiptJournal
         byte[] bytes,
         CancellationToken cancellationToken)
     {
-        var createdETag = await TryCreateAtOperationAsync(
-                blob,
-                bytes,
-                AnchorCreateDiagnostic,
-                cancellationToken)
-            .ConfigureAwait(false);
+        ETag? createdETag = null;
+        Exception? createFailure = null;
+        try
+        {
+            createdETag = await TryCreateAtOperationAsync(
+                    blob,
+                    bytes,
+                    AnchorCreateDiagnostic,
+                    cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (Exception exception)
+            when (exception is not (ArgumentException
+                or CustodyIntegrityException
+                or CustodyPolicyException
+                or CustodyRequiredException
+                or OperationCanceledException))
+        {
+            createFailure = exception;
+        }
+
         if (createdETag is not null)
         {
             await VerifyExactAsync(blob, createdETag.Value, bytes, cancellationToken)
@@ -122,7 +138,17 @@ public sealed class AzureBlobCustodyConfigurationReceiptJournal
             return;
         }
 
-        var existingBytes = await ReadBoundedAsync(blob, cancellationToken).ConfigureAwait(false);
+        byte[] existingBytes;
+        try
+        {
+            existingBytes = await ReadBoundedAsync(blob, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception exception)
+            when (createFailure is not null && exception is not OperationCanceledException)
+        {
+            ExceptionDispatchInfo.Capture(createFailure).Throw();
+            throw;
+        }
         AzureCustodyConfigurationReceipt existing;
         try
         {
