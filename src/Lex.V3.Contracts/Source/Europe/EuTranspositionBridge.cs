@@ -54,20 +54,90 @@ public enum EuTransposability
 }
 
 /// <summary>
+/// The Member-State responsibility disclaimer the Commission attaches to its NIM collection.
+/// </summary>
+/// <remarks>
+/// <para>
+/// The V3 spec's E5 line requires this disclaimer <b>verbatim</b>, with its archived source. It is
+/// not decoration: the NIM records are what a Member State notified, and the Commission states
+/// plainly that it does not vouch for them. A bridge that carried a NIM row without the disclaimer
+/// would present a Member State's notification with the Union publisher's apparent authority behind
+/// it, which is the same class of error as letting a derived view read as a publisher claim.
+/// </para>
+/// <para>
+/// Verbatim means byte-equal. A paraphrase is a different sentence with different legal weight, so
+/// substitution is refused as firmly as omission.
+/// </para>
+/// </remarks>
+public static class EuMemberStateDisclaimer
+{
+    /// <summary>The disclaimer text, exactly as published.</summary>
+    public const string Text = "The member states bear sole responsibility for all information";
+
+    /// <summary>The archived source the spec pins for that text.</summary>
+    public const string SourceUri =
+        "https://web.archive.org/web/20251230180756id_/https://eur-lex.europa.eu/collection/n-law/mne.html";
+
+    /// <summary>Whether a supplied text and source are the pinned pair, byte for byte.</summary>
+    public static bool IsExact(string? text, string? sourceUri) =>
+        string.Equals(text, Text, StringComparison.Ordinal)
+        && string.Equals(sourceUri, SourceUri, StringComparison.Ordinal);
+}
+
+/// <summary>
 /// One publisher's own side of a transposition bridge, carrying who asserted it.
 /// </summary>
+/// <remarks>
+/// A NIM side carries the Member-State disclaimer and a Legilux side does not. The disclaimer is a
+/// statement about who is answerable for the notification, so attaching it to Legilux's own
+/// assertion would put the Commission's caveat on Luxembourg's publication.
+/// </remarks>
 public sealed record EuTranspositionSide
 {
     [JsonConstructor]
     public EuTranspositionSide(
         EuTranspositionAssertedBy assertedBy,
         string nationalMeasureUri,
-        SourceArtifactRef evidenceRef)
+        SourceArtifactRef evidenceRef,
+        string? memberStateDisclaimer,
+        string? memberStateDisclaimerSourceUri)
     {
         AssertedBy = ContractValidation.RequireDefined(assertedBy, nameof(assertedBy));
         NationalMeasureUri = SourceCoreValidation.RequirePublisherUri(
             nationalMeasureUri, nameof(nationalMeasureUri));
         EvidenceRef = evidenceRef ?? throw new ArgumentNullException(nameof(evidenceRef));
+
+        if (assertedBy == EuTranspositionAssertedBy.Nim)
+        {
+            if (memberStateDisclaimer is null || memberStateDisclaimerSourceUri is null)
+            {
+                throw new ArgumentException(
+                    "a NIM row carries the Member-State responsibility disclaimer and its archived "
+                        + "source; without it the row presents a Member State's own notification as "
+                        + "though the Union publisher vouched for it.",
+                    nameof(memberStateDisclaimer));
+            }
+
+            if (!EuMemberStateDisclaimer.IsExact(memberStateDisclaimer, memberStateDisclaimerSourceUri))
+            {
+                throw new ArgumentException(
+                    "the Member-State disclaimer is carried verbatim with its pinned source; a "
+                        + "paraphrase is a different sentence with different weight and is refused "
+                        + "as firmly as an omission.",
+                    nameof(memberStateDisclaimer));
+            }
+        }
+        else if (memberStateDisclaimer is not null || memberStateDisclaimerSourceUri is not null)
+        {
+            throw new ArgumentException(
+                $"a {assertedBy} row carries no Member-State disclaimer; the disclaimer states who "
+                    + "is answerable for a NIM notification and does not belong on another "
+                    + "publisher's own assertion.",
+                nameof(memberStateDisclaimer));
+        }
+
+        MemberStateDisclaimer = memberStateDisclaimer;
+        MemberStateDisclaimerSourceUri = memberStateDisclaimerSourceUri;
     }
 
     public EuTranspositionAssertedBy AssertedBy { get; }
@@ -76,6 +146,12 @@ public sealed record EuTranspositionSide
     public string NationalMeasureUri { get; }
 
     public SourceArtifactRef EvidenceRef { get; }
+
+    /// <summary>Present exactly on a NIM row, verbatim.</summary>
+    public string? MemberStateDisclaimer { get; }
+
+    /// <summary>The archived source for <see cref="MemberStateDisclaimer"/>.</summary>
+    public string? MemberStateDisclaimerSourceUri { get; }
 }
 
 /// <summary>
@@ -112,6 +188,16 @@ public sealed record EuTranspositionSourceAcquisition
     {
         AssertedBy = ContractValidation.RequireDefined(assertedBy, nameof(assertedBy));
         Acquisition = ContractValidation.RequireDefined(acquisition, nameof(acquisition));
+
+        if (acquisition == EuRelationAcquisitionState.Unacquired && side is not null)
+        {
+            throw new ArgumentException(
+                "an unacquired source carries no side; the state says this publisher was never "
+                    + "asked, and an observed assertion beside that claim contradicts it. "
+                    + "EuCellarRelationFamilyObservation refuses edges in the same state for the "
+                    + "same reason.",
+                nameof(side));
+        }
 
         if (side is not null && side.AssertedBy != assertedBy)
         {

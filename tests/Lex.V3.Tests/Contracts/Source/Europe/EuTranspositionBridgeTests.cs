@@ -24,7 +24,10 @@ public sealed class EuTranspositionBridgeTests
         new("urn:uuid:00000000-0000-4000-8000-00000000c5" + label, new string('b', 64));
 
     private static EuTranspositionSide Side(EuTranspositionAssertedBy by, string label = "01") =>
-        new(by, LuMeasure, Ev(label));
+        by == EuTranspositionAssertedBy.Nim
+            ? new(by, LuMeasure, Ev(label),
+                EuMemberStateDisclaimer.Text, EuMemberStateDisclaimer.SourceUri)
+            : new(by, LuMeasure, Ev(label), null, null);
 
     /// <summary>A source that asserted a measure, its bounded acquisition complete.</summary>
     private static EuTranspositionSourceAcquisition Asserted(
@@ -301,5 +304,91 @@ public sealed class EuTranspositionBridgeTests
         Assert.AreEqual("normalisedEliJoin", error.ParamName);
         StringAssert.Contains(error.Message, "neither side",
             "the refusal must name the true reason: a regulation has no sides to join.");
+    }
+
+    // ---- FINDING 1: the Member-State disclaimer, which the Done When clause requires. ----
+
+    /// <summary>
+    /// A NIM row carries the Member-State disclaimer verbatim, with its pinned source.
+    /// </summary>
+    /// <remarks>
+    /// THE REVIEWER'S FINDING, and the reason I missed it is worth recording: I read this issue's
+    /// body truncated and built against the Authority clause without ever reading the Done When
+    /// clause, which names the disclaimer explicitly. The V3 spec's E5 line requires it verbatim
+    /// with an archived source.
+    /// <para>
+    /// It is not decoration. NIM records are what a Member State notified, and the Commission
+    /// states plainly that it does not vouch for them. A NIM row without the disclaimer presents a
+    /// Member State's notification with the Union publisher's apparent authority behind it.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void ANimRowCarriesTheMemberStateDisclaimerVerbatim()
+    {
+        var nim = Side(EuTranspositionAssertedBy.Nim);
+        Assert.AreEqual(
+            "The member states bear sole responsibility for all information",
+            nim.MemberStateDisclaimer);
+        Assert.AreEqual(EuMemberStateDisclaimer.SourceUri, nim.MemberStateDisclaimerSourceUri);
+
+        var omitted = Assert.ThrowsExactly<ArgumentException>(() => new EuTranspositionSide(
+            EuTranspositionAssertedBy.Nim, LuMeasure, Ev("10"), null, null));
+        Assert.AreEqual("memberStateDisclaimer", omitted.ParamName);
+    }
+
+    /// <summary>A paraphrased disclaimer is refused as firmly as an omitted one.</summary>
+    [TestMethod]
+    public void AParaphrasedOrMissourcedDisclaimerIsRefused()
+    {
+        foreach (var (text, source, why) in new (string, string, string)[]
+                 {
+                     ("The Member States bear sole responsibility for all information",
+                         EuMemberStateDisclaimer.SourceUri, "capitalisation differs"),
+                     ("Member states are solely responsible for all information",
+                         EuMemberStateDisclaimer.SourceUri, "a paraphrase"),
+                     (EuMemberStateDisclaimer.Text,
+                         "https://eur-lex.europa.eu/collection/n-law/mne.html", "an unarchived source"),
+                 })
+        {
+            var error = Assert.ThrowsExactly<ArgumentException>(() => new EuTranspositionSide(
+                EuTranspositionAssertedBy.Nim, LuMeasure, Ev("11"), text, source));
+            Assert.AreEqual("memberStateDisclaimer", error.ParamName, why);
+        }
+    }
+
+    /// <summary>The disclaimer does not travel on Legilux's own assertion.</summary>
+    /// <remarks>
+    /// The disclaimer states who is answerable for a NIM notification. Attaching it to Legilux's
+    /// row would put the Commission's caveat on Luxembourg's own publication, which is a different
+    /// claim about a different publisher.
+    /// </remarks>
+    [TestMethod]
+    public void TheDisclaimerDoesNotTravelOnALegiluxRow()
+    {
+        var error = Assert.ThrowsExactly<ArgumentException>(() => new EuTranspositionSide(
+            EuTranspositionAssertedBy.Legilux, LuMeasure, Ev("12"),
+            EuMemberStateDisclaimer.Text, EuMemberStateDisclaimer.SourceUri));
+        Assert.AreEqual("memberStateDisclaimer", error.ParamName);
+    }
+
+    // ---- FINDING 2: never asked, yet holding an answer. ----
+
+    /// <summary>An unacquired source cannot carry an observed assertion.</summary>
+    /// <remarks>
+    /// I reused <c>EuRelationAcquisitionState</c> and did not carry its invariant with it.
+    /// Unacquired means never asked for; a side beside that state is an observed assertion sitting
+    /// next to a claim that no observation happened. <c>EuCellarRelationFamilyObservation</c>
+    /// refuses edges in the same state for the same reason, which is what makes this an invariant
+    /// of the vocabulary rather than a rule I am inventing here.
+    /// </remarks>
+    [TestMethod]
+    public void AnUnacquiredSourceCannotCarryAnObservedAssertion()
+    {
+        var error = Assert.ThrowsExactly<ArgumentException>(() => new EuTranspositionSourceAcquisition(
+            EuTranspositionAssertedBy.Nim,
+            EuRelationAcquisitionState.Unacquired,
+            Side(EuTranspositionAssertedBy.Nim, "13"),
+            null));
+        Assert.AreEqual("side", error.ParamName);
     }
 }

@@ -146,6 +146,8 @@ public sealed class VocabularyRegistryCensusTests
                     + "const SummarizesResourceLegalPredicateUri",
                 "Lex.V3.Contracts.Source.Europe.EuManifestationListingDecode: FormatLadder=4, "
                     + "ListedTypeTokens=9, const UnadmittedTypeReasonCode",
+                "Lex.V3.Contracts.Source.Europe.EuMemberStateDisclaimer: const SourceUri, "
+                    + "const Text",
                 "Lex.V3.Contracts.Source.Europe.EuPackRootCanonicalForm: const HttpScheme, "
                     + "const HttpsScheme",
                 "Lex.V3.Contracts.Source.Europe.EuScopeProfile: ProjectionRules=4, SelectorKeys=7, "
