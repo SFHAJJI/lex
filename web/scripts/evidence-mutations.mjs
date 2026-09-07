@@ -36,6 +36,30 @@ const MUTATIONS = [
     },
   },
   {
+    // The reviewer's own mutation, ported to the bundle: disable the movement table so ArrowDown
+    // resolves to nothing. The initial markup is untouched -- exactly one option still carries
+    // tabindex="0" -- which is why the attribute-shape gate cannot see this and the driven gate
+    // must. This is the pair that showed my first version of these gates proved nothing.
+    name: "the listbox key handler disabled, so arrow keys move nothing",
+    expect: /ArrowDown moved focus nowhere in a listbox/i,
+    async apply(root) {
+      const file = join(root, "client.js");
+      const code = await readFile(file, "utf8");
+      await writeFile(file, code.replace("ArrowDown:", "ArrowDownDisabled:"), "utf8");
+    },
+  },
+  {
+    // A toggle whose state can never change. aria-pressed keeps rendering a correct boolean from
+    // the model, so every attribute check still passes; only activating it shows the model is inert.
+    name: "the filter toggle made inert, so pressing a chip changes nothing",
+    expect: /left aria-pressed at|state it represents stayed/i,
+    async apply(root) {
+      const file = join(root, "client.js");
+      const code = await readFile(file, "utf8");
+      await writeFile(file, code.replace(/onToggle:[A-Za-z_$][A-Za-z0-9_$]*\}/, "onToggle:()=>{}}"), "utf8");
+    },
+  },
+  {
     // Deliberately makes a SECOND option tabbable rather than removing the group. A mutation that
     // deleted the listbox would be caught by the landmark and interactive counts and would prove
     // nothing about roving; this leaves the group intact and breaks only the invariant.

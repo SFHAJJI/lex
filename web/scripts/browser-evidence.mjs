@@ -510,6 +510,89 @@ const PROBE = `(() => {
  * nothing about whether focus is visible, and nothing about whether a control can be
  * reached at all. This presses Tab and records where focus lands.
  */
+/**
+ * Drives the two interactive contracts this sweep claims, rather than reading their opening
+ * attributes.
+ *
+ * Roving tabindex is a behaviour: pressing ArrowDown must move BOTH the active element and the
+ * single tab stop. A page can ship exactly one `tabindex="0"` for ever and be completely inert,
+ * which is what the reviewer proved by replacing `MOVES[event.key]` with `undefined` -- the
+ * attribute snapshot was unchanged and the earlier gate passed. Pressed state is the same shape:
+ * `aria-pressed` can hold a correct boolean that no click will ever flip, which a no-op `onClick`
+ * produces and an attribute check cannot see.
+ *
+ * Returns null for pages carrying neither control, so the gates stay silent where there is nothing
+ * to drive rather than inventing a pass.
+ */
+export async function drivenBehaviour(session, sessionId) {
+  const read = async (expression) => {
+    const { result } = await session.send(
+      "Runtime.evaluate",
+      { expression, returnByValue: true },
+      sessionId,
+    );
+    return result.value;
+  };
+
+  const listbox = `(() => {
+    const box = document.querySelector('[role=listbox]');
+    if (!box) return null;
+    const options = [...box.querySelectorAll('[role=option]')];
+    if (options.length < 2) return null;
+    return {
+      tab: options.findIndex((o) => o.getAttribute('tabindex') === '0'),
+      active: options.indexOf(document.activeElement),
+      count: options.length,
+    };
+  })()`;
+
+  let roving = null;
+  const start = await read(listbox);
+  if (start && start.tab >= 0) {
+    // Focus the real tab stop first: an arrow key sent to the body proves nothing about the group.
+    await read(`(() => {
+      const box = document.querySelector('[role=listbox]');
+      const options = [...box.querySelectorAll('[role=option]')];
+      options[${start.tab}].focus();
+      return true;
+    })()`);
+    for (const type of ["rawKeyDown", "keyUp"]) {
+      await session.send(
+        "Input.dispatchKeyEvent",
+        {
+          type,
+          key: "ArrowDown",
+          code: "ArrowDown",
+          windowsVirtualKeyCode: 40,
+          nativeVirtualKeyCode: 40,
+        },
+        sessionId,
+      );
+    }
+    const after = await read(listbox);
+    roving = { before: { ...start, active: start.tab }, after };
+  }
+
+  // The pressed contract is two claims at once: the control's own state flips, and the thing it
+  // controls changes with it. A toggle that announces itself pressed while filtering nothing is
+  // still broken, so the represented count is read alongside it.
+  const chip = `(() => {
+    const el = document.querySelector('[aria-pressed]');
+    if (!el) return null;
+    const count = document.querySelector('.filter-count');
+    return { pressed: el.getAttribute('aria-pressed'), represented: count ? count.textContent.trim() : null };
+  })()`;
+
+  let pressed = null;
+  const chipBefore = await read(chip);
+  if (chipBefore) {
+    await read("(() => { document.querySelector('[aria-pressed]').click(); return true; })()");
+    pressed = { before: chipBefore, after: await read(chip) };
+  }
+
+  return roving || pressed ? { roving, pressed } : null;
+}
+
 export async function keyboardWalk(session, sessionId, expected) {
   // Start from a known place. Focus survives a navigation in a reused target, so without
   // this the first Tab can land mid-document and the walk measures the wrong sequence.
@@ -1130,6 +1213,44 @@ async function main() {
             `${page} @${viewport.label}/${scheme}: ${observed.contrastFailures} element(s) below required contrast, ` +
               `worst ${observed.worstContrast} on <${observed.worstContrastTag}> needing ${observed.worstContrastRequired}`,
           );
+        }
+        // DRIVEN LAST, and that ordering is load bearing. This probe focuses an option and
+        // activates a filter, so it leaves the page in a different state from the one it was
+        // served in. Run earlier it silently changed what every later check measured -- the tab
+        // walk reported 6 stops on a page with 15 focusable elements, which was my probe's own
+        // click and not a defect in the page.
+        const behaviour = await drivenBehaviour(session, sessionId);
+        // The behavioural half. The two checks above still earn their place -- they catch malformed
+        // markup an inert page would also produce -- but on their own they pass a page whose
+        // handlers are dead, so neither is allowed to stand as the evidence for its clause.
+        if (behaviour?.roving) {
+          const { before, after } = behaviour.roving;
+          if (after.active === before.active) {
+            failures.push(
+              `${page} @${viewport.label}: ArrowDown moved focus nowhere in a listbox of ` +
+                `${before.count} options; the group renders as a listbox and does not behave as one`,
+            );
+          } else if (after.tab !== after.active) {
+            failures.push(
+              `${page} @${viewport.label}: ArrowDown moved focus to option ${after.active} while ` +
+                `the tab stop stayed on ${after.tab}; roving means the single tab stop follows focus`,
+            );
+          }
+        }
+        if (behaviour?.pressed) {
+          const { before, after } = behaviour.pressed;
+          if (after.pressed === before.pressed) {
+            failures.push(
+              `${page} @${viewport.label}: activating a toggle left aria-pressed at ` +
+                `"${before.pressed}"; the control announces a state it never changes`,
+            );
+          } else if (before.represented !== null && after.represented === before.represented) {
+            failures.push(
+              `${page} @${viewport.label}: a toggle flipped to "${after.pressed}" while the ` +
+                `state it represents stayed "${before.represented}"; a filter that announces ` +
+                "itself on and filters nothing is worse than one that does neither",
+            );
+          }
         }
        }
       }
