@@ -516,6 +516,35 @@ public sealed class EuDateAxiomTests
     }
 
     [TestMethod]
+    public void EvidenceNamingADifferentDirectiveIsInsufficientEvenWhenTheOwnWorkIsAssertedADirective()
+    {
+        // THE TERM THIS ISOLATES, and why the sibling case above does not reach it. Promotion
+        // requires BOTH that the evidence names this binding's own work and that the work is
+        // asserted a directive. The sibling supplies an assertion about 95/46 while the binding is
+        // GDPR, so it fails the assertion term too and would still refuse if the same-work term
+        // were deleted outright -- I checked, by deleting it: the whole solution stayed green at
+        // 2,808 tests. This case asserts GDPR itself a directive, so the assertion term holds and
+        // only the same-work term stands between a work and another work's transposition evidence.
+        //
+        // That is the transfer the comment at the check calls out: "shape alone is not enough".
+        // Without it a deadline could be promoted on evidence belonging to a different directive
+        // entirely, which is authority moving between works rather than being read from one.
+        var gdprDeadline = GdprDeadline();
+        var evidence = new EuDirectiveTranspositionEvidence(
+            new OfficialIdentifier(FactsIdentifierFamily.Celex, "31995L0046"));
+        var assertions = new[] { new EuWorkKindAssertion(Gdpr(), EuWorkKind.Directive) };
+
+        var result = EuTranspositionDeadlineClassification.Classify(gdprDeadline, evidence, assertions);
+
+        Assert.AreEqual(
+            EuTranspositionDeadlineOutcome.TranspositionDeadlineEvidenceInsufficient,
+            result.Outcome,
+            "evidence naming another directive cannot promote this work's deadline.");
+        Assert.IsNull(result.PromotedFact);
+        Assert.IsNotNull(result.Evidence);
+    }
+
+    [TestMethod]
     public void EvidenceNamingTheOwnWorkWithNoDirectiveAssertionAtAllIsInsufficient()
     {
         var deadline = Directive9546Deadline();
