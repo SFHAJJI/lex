@@ -21,7 +21,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { parseObjectUrl } from "./urls.mjs";
+import { SHELLS, parseObjectUrl } from "./urls.mjs";
 
 /**
  * Where a real Chromium lives, per platform.
@@ -98,7 +98,7 @@ const WIDTHS = FAST ? ALL_WIDTHS.slice(2, 3) : ALL_WIDTHS;
  * direction of a clean report. So the list is now the directory: whatever the build emits is
  * what gets measured, and a page cannot ship unmeasured without also not shipping.
  */
-async function pagesFrom(root) {
+export async function pagesFrom(root) {
   // The build says what it emitted, and this run measures exactly that.
   //
   // A floor of "at least N pages" was the same hand-maintained number the directory read was
@@ -125,7 +125,43 @@ async function pagesFrom(root) {
   if (found.length === 0) {
     throw new Error("the build emitted no pages, so this run would prove nothing");
   }
+  const unrouted = routePagesMissingFrom(found);
+  if (unrouted.length > 0) {
+    throw new Error(
+      `the app routes to shells with no measured page: ${unrouted.join(", ")}` +
+        "; the manifest agrees with the directory, so this is a build that emitted a smaller " +
+        "app than it routes, not a stale artefact; run npm run build",
+    );
+  }
   return found;
+}
+
+/**
+ * The pages a declared route surface requires, that a measured page set does not contain.
+ *
+ * WHY THE SET CHECK ABOVE IS NOT THIS CHECK. `pages.json` is written from what the build
+ * emitted, so manifest and directory are two readings of the same act. Delete the shell loop in
+ * `build.mjs` and both shrink together: they still agree, the run still reports every
+ * combination clean, and it is measuring an app smaller than the one the URL scheme routes to.
+ * Agreement between a build and its own output cannot detect a build that did less.
+ *
+ * So completeness is anchored to the route declaration instead. `SHELLS` is the vocabulary
+ * `build.mjs` loops over to emit entry screens and `urls.mjs` validates navigation against, and
+ * a shell that routes without a page is the failure this exists to make loud.
+ *
+ * Exported so it can be driven directly. A guard reachable only through a browser run is a
+ * guard nobody watches fail.
+ *
+ * @param {readonly string[]} measured page file names the run will actually visit
+ * @param {readonly string[]} shells the declared route vocabulary
+ * @returns {string[]} required page names absent from `measured`, sorted
+ */
+export function routePagesMissingFrom(measured, shells = SHELLS) {
+  const present = new Set(measured);
+  return [...shells]
+    .map((shell) => `shell-${shell}.html`)
+    .filter((name) => !present.has(name))
+    .sort();
 }
 
 /**
