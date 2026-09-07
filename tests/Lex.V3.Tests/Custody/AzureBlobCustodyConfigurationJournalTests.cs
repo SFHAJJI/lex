@@ -674,6 +674,26 @@ public sealed class AzureBlobCustodyConfigurationJournalTests
     }
 
     [TestMethod]
+    public async Task AnchorCreateWithoutAnEtagCannotRecoverFromItsWrittenBytes()
+    {
+        var harness = new Harness();
+        var receipt = Receipt(CustodyClass.NightlyFloor90d, FirstRequestId);
+        var anchor = Anchor(harness.Nightly, receipt);
+        anchor.ReturnMissingEtag = true;
+
+        var thrown = await Assert.ThrowsExactlyAsync<CustodyIntegrityException>(() =>
+            harness.Journal.AppendAsync(receipt, CancellationToken.None));
+
+        Assert.AreEqual("Azure custody configuration evidence returned no ETag.", thrown.Message);
+        Assert.IsTrue(anchor.Present, "the response came from a create that wrote matching bytes");
+        Assert.AreEqual(0, anchor.PropertiesConditions.Count,
+            "an integrity failure entered the anchor recovery read");
+        Assert.IsFalse(harness.Nightly.Blobs.ContainsKey(
+            $"{TuplePrefix(receipt)}/requests/{FirstRequestId:N}.json"),
+            "the request object was written after an unverified anchor create");
+    }
+
+    [TestMethod]
     public async Task FailedRequestCreateDoesNotUseAnExistingRequestAsFallback()
     {
         var harness = new Harness();
@@ -825,6 +845,8 @@ public sealed class AzureBlobCustodyConfigurationJournalTests
 
         public ETag UploadResponseEtag { get; private set; }
 
+        public bool ReturnMissingEtag { get; set; }
+
         public ETag? DownloadResponseEtag { get; set; }
 
         public string? VersionId { get; set; }
@@ -879,7 +901,7 @@ public sealed class AzureBlobCustodyConfigurationJournalTests
             await content.CopyToAsync(buffer, cancellationToken);
             Content = buffer.ToArray();
             Present = true;
-            UploadResponseEtag = Etag;
+            UploadResponseEtag = ReturnMissingEtag ? default : Etag;
             AfterUpload?.Invoke(this);
             return Response.FromValue(
                 BlobsModelFactory.BlobContentInfo(
