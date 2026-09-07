@@ -19,6 +19,7 @@ namespace Lex.V3.Custody.Azure;
 /// </summary>
 public sealed class AzureBlobCustodyStore : ICustodyStore
 {
+    private static readonly object ReceiptGuardKey = new();
     private const string StorageScope = "https://storage.azure.com/.default";
     private static readonly TimeSpan NightlyFloor = TimeSpan.FromDays(90);
     private static readonly TimeSpan CleanupTimeout = TimeSpan.FromSeconds(10);
@@ -350,8 +351,11 @@ public sealed class AzureBlobCustodyStore : ICustodyStore
                 .ConfigureAwait(false);
             if (!TryCreateReceipt(reference, finalObservation, finalPolicy, out var receipt))
             {
+                var refusalGuard = GetReceiptRefusalGuard(
+                    reference, finalObservation, finalPolicy);
                 throw new CustodyPolicyException(
-                    "The final Azure object did not prove the protection required by its custody lane.");
+                    "The final Azure object did not prove the protection required by its custody lane.",
+                    refusalGuard is null ? null : ReceiptRefusal(refusalGuard));
             }
 
             await _configurationJournal.AppendAsync(
@@ -571,60 +575,25 @@ public sealed class AzureBlobCustodyStore : ICustodyStore
         out DurableBlobWriteReceipt receipt)
     {
         receipt = null!;
-        if (policy.ConfigurationReceipt is null
-            || policy.CustodyClass != reference.CustodyClass
-            || policy.ConfigurationReceipt.CustodyClass != reference.CustodyClass
-            || policy.ConfigurationReceipt.ObservedAt != policy.ObservedAt
-            || policy.ConfigurationReceipt.RetentionDays != policy.LockedRetentionDays
-            || policy.ConfigurationReceipt.ActiveLegalHold != policy.ActiveLegalHold
-            || observation.Properties.CreatedOn == default)
+        if (GetReceiptRefusalGuard(reference, observation, policy) is not null)
         {
             return false;
         }
 
         var observedAt = policy.ObservedAt.ToUniversalTime();
         var createdOn = observation.Properties.CreatedOn.ToUniversalTime();
-        // ARM's authoritative HTTP Date has whole-second precision; Blob CreatedOn retains fractions.
-        if (createdOn.ToUnixTimeSeconds() > observedAt.ToUnixTimeSeconds())
-        {
-            return false;
-        }
-
         CustodyProtection protection;
         DateTimeOffset? protectedUntil;
         Guid policyKey;
         switch (reference.CustodyClass)
         {
             case CustodyClass.NightlyFloor90d:
-                if (policy.LockedRetentionDays is null || policy.ActiveLegalHold)
-                {
-                    return false;
-                }
-
-                try
-                {
-                    protectedUntil = createdOn.AddDays(policy.LockedRetentionDays.Value);
-                }
-                catch (ArgumentOutOfRangeException)
-                {
-                    return false;
-                }
-
-                if (protectedUntil.Value - observedAt < NightlyFloor)
-                {
-                    return false;
-                }
-
+                protectedUntil = createdOn.AddDays(policy.LockedRetentionDays!.Value);
                 protection = CustodyProtection.LockedTime;
                 policyKey = _options.NightlyPolicyKey;
                 break;
 
             case CustodyClass.LegalHoldEvidence:
-                if (!policy.ActiveLegalHold || policy.LockedRetentionDays is not null)
-                {
-                    return false;
-                }
-
                 protection = CustodyProtection.ActiveLegalHold;
                 protectedUntil = null;
                 policyKey = _options.LegalHoldPolicyKey;
@@ -633,11 +602,6 @@ public sealed class AzureBlobCustodyStore : ICustodyStore
             default:
                 throw new ArgumentOutOfRangeException(
                     nameof(reference), reference.CustodyClass, "Unknown custody class.");
-        }
-
-        if (policy.ConfigurationReceipt.PolicyKey != policyKey)
-        {
-            return false;
         }
 
         var evidence = new CustodyPolicyEvidence(
@@ -653,6 +617,112 @@ public sealed class AzureBlobCustodyStore : ICustodyStore
             reference,
             evidence);
         return true;
+    }
+
+    private string? GetReceiptRefusalGuard(
+        DurableBlobRef reference,
+        RemoteObservation observation,
+        AzureContainerPolicyObservation policy)
+    {
+        if (policy.ConfigurationReceipt is null
+            || policy.CustodyClass != reference.CustodyClass
+            || policy.ConfigurationReceipt.CustodyClass != reference.CustodyClass
+            || policy.ConfigurationReceipt.ObservedAt != policy.ObservedAt
+            || policy.ConfigurationReceipt.RetentionDays != policy.LockedRetentionDays
+            || policy.ConfigurationReceipt.ActiveLegalHold != policy.ActiveLegalHold)
+        {
+            return "receipt_configuration_consistency";
+        }
+
+        if (observation.Properties.CreatedOn == default)
+        {
+            return "receipt_creation_time_missing";
+        }
+
+        var observedAt = policy.ObservedAt.ToUniversalTime();
+        var createdOn = observation.Properties.CreatedOn.ToUniversalTime();
+        // ARM's authoritative HTTP Date has whole-second precision; Blob CreatedOn retains fractions.
+        if (createdOn.ToUnixTimeSeconds() > observedAt.ToUnixTimeSeconds())
+        {
+            return "receipt_created_after_observation";
+        }
+
+        DateTimeOffset? protectedUntil;
+        Guid policyKey;
+        switch (reference.CustodyClass)
+        {
+            case CustodyClass.NightlyFloor90d:
+                if (policy.LockedRetentionDays is null || policy.ActiveLegalHold)
+                {
+                    return "receipt_protection_window";
+                }
+
+                try
+                {
+                    protectedUntil = createdOn.AddDays(policy.LockedRetentionDays.Value);
+                }
+                catch (ArgumentOutOfRangeException)
+                {
+                    return "receipt_protection_window";
+                }
+
+                if (protectedUntil.Value - observedAt < NightlyFloor)
+                {
+                    return "receipt_protection_window";
+                }
+
+                policyKey = _options.NightlyPolicyKey;
+                break;
+
+            case CustodyClass.LegalHoldEvidence:
+                if (!policy.ActiveLegalHold || policy.LockedRetentionDays is not null)
+                {
+                    return "receipt_protection_window";
+                }
+
+                protectedUntil = null;
+                policyKey = _options.LegalHoldPolicyKey;
+                break;
+
+            default:
+                throw new ArgumentOutOfRangeException(
+                    nameof(reference), reference.CustodyClass, "Unknown custody class.");
+        }
+
+        if (policy.ConfigurationReceipt.PolicyKey != policyKey)
+        {
+            return "receipt_policy_key";
+        }
+
+        return null;
+    }
+
+    internal static string? GetReceiptDiagnostic(Exception exception)
+    {
+        // The exception is public and sealed, but its Data dictionary is caller-writable. Read only
+        // our private key on the exact type, then return only the fixed diagnostic vocabulary.
+        if (exception.GetType() != typeof(CustodyPolicyException))
+        {
+            return null;
+        }
+
+        return (exception.Data[ReceiptGuardKey] as string) switch
+        {
+            "receipt_configuration_consistency" => "receipt_configuration_consistency",
+            "receipt_creation_time_missing" => "receipt_creation_time_missing",
+            "receipt_created_after_observation" => "receipt_created_after_observation",
+            "receipt_protection_window" => "receipt_protection_window",
+            "receipt_policy_key" => "receipt_policy_key",
+            _ => null,
+        };
+    }
+
+    private static CustodyPolicyException ReceiptRefusal(string guard)
+    {
+        var exception = new CustodyPolicyException(
+            "The final Azure receipt was refused by a fixed protection guard.");
+        exception.Data[ReceiptGuardKey] = guard;
+        return exception;
     }
 
     private static async Task RevalidateExactGenerationAsync(
