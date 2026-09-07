@@ -241,7 +241,16 @@ public sealed record EuTranspositionSourceAcquisition
     /// <summary>
     /// Whether this source's silence is a proven negative rather than an open question.
     /// </summary>
-    public bool ProvesAbsence =>
+    /// <remarks>
+    /// A METHOD, NOT A PROPERTY, and the reviewer had to tell me why. As a computed getter this was
+    /// emitted on the wire as <c>proves_absence</c> while the JSON constructor could not bind it, so
+    /// a document could carry <c>false</c>, have it silently discarded, and deserialize into an
+    /// object computing <c>true</c>. The retained bytes and the contract would then disagree about
+    /// the same claim. This repository already answered that question -- see
+    /// <c>WireIgnoredMemberTests</c> -- and the answer is that a computed convenience is a method,
+    /// absent from the wire entirely.
+    /// </remarks>
+    public bool ProvesAbsence() =>
         Side is null && Acquisition == EuRelationAcquisitionState.Complete;
 }
 
@@ -252,9 +261,9 @@ public sealed record EuTranspositionSourceAcquisition
 /// S2-A02: a derived view never becomes a publisher claim. The join is ours — it exists because the
 /// two publishers spell the same national measure differently — so it carries no
 /// <see cref="EuTranspositionAssertedBy"/> and cannot be constructed as though a publisher had
-/// asserted it. <see cref="IsDerived"/> is a computed constant rather than a constructor parameter
-/// for exactly the reason <c>EuLegislationSummary.Licence</c> is: a caller who could set it could
-/// set it wrong, and there is no correct value other than <c>true</c>.
+/// asserted it. <see cref="IsDerived"/> is a computed method rather than a constructor parameter or
+/// a property: there is no correct value other than <c>true</c>, and a property would have put the
+/// name on the wire where a document could assert otherwise and be silently ignored.
 /// </remarks>
 public sealed record EuNormalisedEliJoin
 {
@@ -271,7 +280,14 @@ public sealed record EuNormalisedEliJoin
     public SourceArtifactRef EvidenceRef { get; }
 
     /// <summary>Always true. The join is Lex's, never a publisher's.</summary>
-    public bool IsDerived => true;
+    /// <remarks>
+    /// A method for the same reason as <see cref="EuTranspositionSourceAcquisition.ProvesAbsence"/>.
+    /// My earlier remark that a caller who could set this could set it wrong was exactly backwards
+    /// for wire callers: as a property it was emitted and then ignored, so a hostile document could
+    /// assert <c>is_derived: false</c> and be silently overruled rather than refused. Absent from
+    /// the wire, the claim cannot be made at all.
+    /// </remarks>
+    public bool IsDerived() => true;
 }
 
 /// <summary>

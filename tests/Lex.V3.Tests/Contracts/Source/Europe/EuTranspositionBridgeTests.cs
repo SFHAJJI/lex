@@ -171,7 +171,7 @@ public sealed class EuTranspositionBridgeTests
     /// <remarks>
     /// S2-A02: a derived view never becomes a publisher claim. The join exists because the two
     /// publishers spell one national measure differently, so it is Lex's reading rather than
-    /// anyone's assertion. <c>IsDerived</c> is computed rather than supplied for the same reason
+    /// anyone's assertion. <c>IsDerived</c> is a computed method rather than supplied, for the reason
     /// <c>EuLegislationSummary.Licence</c> is: a caller who could set it could set it wrong.
     /// </remarks>
     [TestMethod]
@@ -179,7 +179,7 @@ public sealed class EuTranspositionBridgeTests
     {
         var join = new EuNormalisedEliJoin(LuMeasure, Ev("07"));
 
-        Assert.IsTrue(join.IsDerived);
+        Assert.IsTrue(join.IsDerived());
         Assert.IsNull(
             typeof(EuNormalisedEliJoin).GetProperty(nameof(EuTranspositionSide.AssertedBy)),
             "the join must carry no publisher; a derived reading is nobody's assertion.");
@@ -247,8 +247,8 @@ public sealed class EuTranspositionBridgeTests
 
         Assert.IsNull(neverAsked.Legilux.Side);
         Assert.IsNull(asked.Legilux.Side);
-        Assert.IsFalse(neverAsked.Legilux.ProvesAbsence, "an unqueried source proves nothing.");
-        Assert.IsTrue(asked.Legilux.ProvesAbsence, "a completed acquisition with no side is a real negative.");
+        Assert.IsFalse(neverAsked.Legilux.ProvesAbsence(), "an unqueried source proves nothing.");
+        Assert.IsTrue(asked.Legilux.ProvesAbsence(), "a completed acquisition with no side is a real negative.");
         Assert.AreNotEqual(neverAsked.Legilux.Acquisition, asked.Legilux.Acquisition);
     }
 
