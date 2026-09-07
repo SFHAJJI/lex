@@ -234,31 +234,6 @@ public sealed class EuObjectFactsDiscoveryPlan
 
     internal const string RdfTypePredicateIri = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
 
-    /// <summary>
-    /// Every property the probe observed on a reified date axiom, asked for as one closed block.
-    /// </summary>
-    /// <remarks>
-    /// ALL TEN, INCLUDING THE FOUR THE E1 CONTRACT DOES NOT MODEL. <c>quality_issue</c> and
-    /// <c>error_message</c> are the publisher's own statements about the quality of the very date
-    /// being ingested, and <c>old_value</c> and <c>build_info</c> are its provenance. Asking only
-    /// for the columns the contract happens to bind would make the publisher's doubt disappear at
-    /// the query, which is the false absence Decision 58 and S2-A05 exist to refuse: a gap that is
-    /// first-class upstream must not become an absence downstream. What this slice does with them
-    /// is a separate question; not asking for them would settle it by accident.
-    /// </remarks>
-    internal static readonly IReadOnlyList<string> AxiomPropertyIris =
-    [
-        RdfTypePredicateIri,
-        AnnotatedSourcePredicateIri,
-        AnnotatedPropertyPredicateIri,
-        AnnotatedTargetPredicateIri,
-        EuAmendmentRelationVocabulary.AnnotationNamespace + "type_of_date",
-        EuAmendmentRelationVocabulary.AnnotationNamespace + "comment_on_date",
-        EuAmendmentRelationVocabulary.AnnotationNamespace + "old_value",
-        EuAmendmentRelationVocabulary.AnnotationNamespace + "quality_issue",
-        EuAmendmentRelationVocabulary.AnnotationNamespace + "error_message",
-        EuAmendmentRelationVocabulary.AnnotationNamespace + "build_info",
-    ];
 
     private const string ResourceId = "urn:uuid:6f3f0a1e-6b8b-4e6a-8f36-6a7f2c9d5b41";
     private const string ObjectFactsMemberPrefix = "eu-object-facts";
@@ -1059,10 +1034,27 @@ public sealed class EuObjectFactsDiscoveryPlan
         // datatype, and the fd_335 carrier arriving as an ordinary annotation literal. The axiom
         // node is a skolemised IRI (.../.well-known/genid/<work>/<axiom>), not a blank node, which
         // is what lets it travel a batch path at all.
+        //
+        // IT ASKS ?axiom ?predicate ?value UNCONSTRAINED, AND THAT IS THE POINT. The probe read
+        // each sampled axiom whole and found ten properties, four of which the E1 contract does not
+        // model -- among them quality_issue and error_message, the publisher's own doubt about the
+        // date being ingested. An earlier version of this family pinned exactly those ten in a
+        // VALUES ?predicate block, which reintroduced at the query the false absence that reasoning
+        // was written to refuse: an eleventh or renamed property would have been dropped before it
+        // could become evidence, while the family still enumerated as complete. S2-A05 requires
+        // drift to fail closed into typed evidence, and evidence never acquired cannot fail closed
+        // at all. Appending an eleventh constant would have preserved the defect, not repaired it.
+        //
+        // BOTH BRANCHES AGREE ON WHAT MAKES AN AXIOM EXIST: annotatedSource on this parent plus an
+        // admitted annotatedProperty. The positive branch additionally required rdf:type owl:Axiom
+        // while the absence branch did not, so a node carrying the two annotations but missing or
+        // misstating its type matched neither -- the positive branch emitted nothing, and the
+        // FILTER NOT EXISTS was suppressed by the very node it had failed to describe, leaving that
+        // parent with no positive row and no typed absence row. A silent zero from a publisher
+        // shape that was not empty. The type is now acquired as an ordinary property and is the
+        // decoder's to refuse on, which is where a wrong type belongs.
         var datePredicateValues = string.Join('\n', EuDateQualifierVocabulary.DatePredicateUris
             .Select(static predicate => "    <" + predicate + ">"));
-        var axiomPropertyValues = string.Join('\n', AxiomPropertyIris
-            .Select(static property => "    <" + property + ">"));
         var reifiedAxiomFactsRows = $$"""
             SELECT ?parent ?axiom ?predicate ?value ?value_kind ?datatype_iri ?language_tag WHERE {
               VALUES ?lex_pass_id { {pass_id:uint} }
@@ -1071,13 +1063,9 @@ public sealed class EuObjectFactsDiscoveryPlan
               }
               {
                 ?axiom <{{AnnotatedSourcePredicateIri}}> ?parent .
-                ?axiom <{{RdfTypePredicateIri}}> <{{OwlAxiomClassIri}}> .
                 ?axiom <{{AnnotatedPropertyPredicateIri}}> ?annotated_property .
                 VALUES ?annotated_property {
             {{datePredicateValues}}
-                }
-                VALUES ?predicate {
-            {{axiomPropertyValues}}
                 }
                 ?axiom ?predicate ?value .
                 BIND(IF(isIRI(?value), "iri", IF(isLiteral(?value), "literal", "unsupported_blank_node")) AS ?value_kind)
