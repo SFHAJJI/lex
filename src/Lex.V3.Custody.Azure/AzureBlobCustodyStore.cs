@@ -430,8 +430,6 @@ public sealed class AzureBlobCustodyStore : ICustodyStore
             var propertyResponse = await blob.GetPropertiesAsync(
                     propertyConditions, cancellationToken)
                 .ConfigureAwait(false);
-            var blobObservedAt = RequireBlobObservationDate(
-                propertyResponse.GetRawResponse());
             var properties = propertyResponse.Value;
             if (properties.BlobType != BlobType.Block
                 || !string.IsNullOrEmpty(properties.VersionId))
@@ -475,8 +473,7 @@ public sealed class AzureBlobCustodyStore : ICustodyStore
             return new RemoteObservation(
                 blob,
                 exact,
-                properties,
-                blobObservedAt);
+                properties);
         }
         catch (RequestFailedException exception) when (exception.Status == 404)
         {
@@ -644,12 +641,6 @@ public sealed class AzureBlobCustodyStore : ICustodyStore
 
         var observedAt = policy.ObservedAt.ToUniversalTime();
         var createdOn = observation.Properties.CreatedOn.ToUniversalTime();
-        // Compare values returned by the same Storage response. ARM and Storage clocks are
-        // independent; program order is instead protected by the post-policy ETag revalidation.
-        if (createdOn.ToUnixTimeSeconds() > observation.ObservedAt.ToUnixTimeSeconds())
-        {
-            return "receipt_created_after_observation";
-        }
 
         DateTimeOffset? protectedUntil;
         Guid policyKey;
@@ -714,7 +705,6 @@ public sealed class AzureBlobCustodyStore : ICustodyStore
         {
             "receipt_configuration_consistency" => "receipt_configuration_consistency",
             "receipt_creation_time_missing" => "receipt_creation_time_missing",
-            "receipt_created_after_observation" => "receipt_created_after_observation",
             "receipt_protection_window" => "receipt_protection_window",
             "receipt_policy_key" => "receipt_policy_key",
             _ => null,
@@ -828,22 +818,6 @@ public sealed class AzureBlobCustodyStore : ICustodyStore
         return value;
     }
 
-    private static DateTimeOffset RequireBlobObservationDate(Response response)
-    {
-        if (!response.Headers.TryGetValue("Date", out var value)
-            || !DateTimeOffset.TryParse(
-                value,
-                CultureInfo.InvariantCulture,
-                DateTimeStyles.AllowWhiteSpaces | DateTimeStyles.AssumeUniversal,
-                out var parsed))
-        {
-            throw new CustodyIntegrityException(
-                "The Azure custody object observation carried no authoritative response date.");
-        }
-
-        return parsed.ToUniversalTime();
-    }
-
     private static bool IsGenerationName(string? name, string digest)
     {
         var prefix = $"{digest}/g/";
@@ -868,6 +842,5 @@ public sealed class AzureBlobCustodyStore : ICustodyStore
     private sealed record RemoteObservation(
         BlockBlobClient Blob,
         ReadOnlyMemory<byte> Bytes,
-        BlobProperties Properties,
-        DateTimeOffset ObservedAt);
+        BlobProperties Properties);
 }
