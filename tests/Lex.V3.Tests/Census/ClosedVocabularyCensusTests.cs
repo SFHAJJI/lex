@@ -294,6 +294,8 @@ public sealed class ClosedVocabularyCensusTests
                     + "EurLexPortalFallback, InboundTreatyBasedOnExpansion",
                 "Lex.V3.Contracts.Source.Europe.EuExpressionObservationState: NotObserved, "
                     + "ExpressionObservedBodyCandidate, ExpressionObservedBodyNotHeld",
+                "Lex.V3.Contracts.Source.Europe.EuFactsEvidenceAdmissionRefusal: None, "
+                    + "CandidateIsNotAFactsEvidenceCarrier, CandidateWasNull",
                 "Lex.V3.Contracts.Source.Europe.EuFeedEntrySetRefusal: None, CanonicalEntryRepeated, "
                     + "TraversalStepsDoNotShareOnePlan",
                 "Lex.V3.Contracts.Source.Europe.EuFeedIntersectionRefusal: None, PackRootSetEmpty, "
