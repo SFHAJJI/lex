@@ -72,6 +72,34 @@ public sealed class EuTranspositionBridgeProducerTests
     }
 
     [TestMethod]
+    public void ForeignPublisherUrisCannotBeRewrittenIntoALegiluxJoin()
+    {
+        const string legiluxColumn = "https://example.invalid/eli/etat/leg/loi/2020/01/01/a1/jo";
+        const string nimColumn = "http://example.invalid/eli/etat/leg/loi/2020/01/01/a1/jo";
+        var result = EuTranspositionBridgeProducer.Produce(EuWork, Kind(EuWork, EuWorkKind.Directive),
+            LegiluxWithMeasure(legiluxColumn, LegiluxSide(legiluxColumn)),
+            NimWithEli(nimColumn, NimSide(nimColumn)));
+
+        Assert.IsTrue(result.Delivered, result.Detail);
+        Assert.AreEqual(legiluxColumn, result.Bridge!.Legilux.Side!.NationalMeasureUri);
+        Assert.AreEqual(nimColumn, result.Bridge.Nim.Side!.NationalMeasureUri);
+        Assert.IsNull(result.Bridge.NormalisedEliJoin);
+        Assert.IsNull(result.CopyNormalisedEliJoinEvidenceBytes());
+    }
+
+    [TestMethod]
+    public void EliPathCaseDifferencesRemainDistinct()
+    {
+        const string caseVariant = "http://data.legilux.public.lu/eli/etat/leg/LOI/2020/01/01/a1/jo";
+        var result = EuTranspositionBridgeProducer.Produce(EuWork, Kind(EuWork, EuWorkKind.Directive),
+            Legilux(LegiluxSide()), NimWithEli(caseVariant, NimSide(caseVariant)));
+
+        Assert.IsTrue(result.Delivered, result.Detail);
+        Assert.IsNull(result.Bridge!.NormalisedEliJoin);
+        Assert.IsNull(result.CopyNormalisedEliJoinEvidenceBytes());
+    }
+
+    [TestMethod]
     public void ARegulationWithCompletedEmptyColumnsGetsTheTypedNotTransposableAnswer()
     {
         var result = EuTranspositionBridgeProducer.Produce(EuWork, Kind(EuWork, EuWorkKind.Regulation),
@@ -140,8 +168,13 @@ public sealed class EuTranspositionBridgeProducerTests
             [new OfficialIdentifier(FactsIdentifierFamily.CellarWorkUri, work)]), kind);
 
     private static LuxembourgTranspositionProductionResult Legilux(params EuTranspositionSourceAcquisition[] columns) =>
+        LegiluxWithMeasure(LuMeasure, columns);
+
+    private static LuxembourgTranspositionProductionResult LegiluxWithMeasure(
+        string measureUri,
+        params EuTranspositionSourceAcquisition[] columns) =>
         LuxembourgTranspositionProductionResult.Success(columns.Select(column =>
-            new LuxembourgTranspositionRelation(EuWork, LuMeasure, column)).ToArray(), Evidence);
+            new LuxembourgTranspositionRelation(EuWork, measureUri, column)).ToArray(), Evidence);
 
     private static EuNationalImplementingMeasureProductionResult Nim(params EuTranspositionSourceAcquisition[] columns) =>
         NimWithEli(NimLuMeasure, columns);
@@ -152,9 +185,9 @@ public sealed class EuTranspositionBridgeProducerTests
         EuNationalImplementingMeasureProductionResult.Success(columns.Select(column =>
             new EuNationalImplementingMeasureRelation(EuWork, EuWork, "72020L0001", "https://example.invalid/implements", eli, column)).ToArray(), Evidence, 0);
 
-    private static EuTranspositionSourceAcquisition LegiluxSide() =>
+    private static EuTranspositionSourceAcquisition LegiluxSide(string nationalMeasureUri = LuMeasure) =>
         new(EuTranspositionAssertedBy.Legilux, EuRelationAcquisitionState.Complete,
-            new EuTranspositionSide(EuTranspositionAssertedBy.Legilux, LuMeasure, LegiluxEvidence, null, null), Evidence);
+            new EuTranspositionSide(EuTranspositionAssertedBy.Legilux, nationalMeasureUri, LegiluxEvidence, null, null), Evidence);
 
     private static EuTranspositionSourceAcquisition NimSide(string nationalMeasureUri = NimLuMeasure) =>
         new(EuTranspositionAssertedBy.Nim, EuRelationAcquisitionState.Complete,
