@@ -47,6 +47,21 @@ public sealed class LuxembourgTranspositionIdentityDiscoveryPlanTests
     }
 
     [TestMethod]
+    public void AForeignSameAsTargetIsExcludedAtThePublisherQueryBoundary()
+    {
+        var template = LuxembourgTranspositionIdentityDiscoveryPlan.Create().PageTemplate;
+        var sameAs = template[template.IndexOf(
+            "?local_eu_work <http://www.w3.org/2002/07/owl#sameAs>",
+            StringComparison.Ordinal)..];
+        sameAs = sameAs[..sameAs.IndexOf("}\n", StringComparison.Ordinal)];
+
+        StringAssert.Contains(
+            sameAs,
+            "FILTER(isIRI(?eu_eli) && STRSTARTS(STR(?eu_eli), \"http://data.europa.eu/eli/\"))",
+            "A foreign owl:sameAs target must not reach the unbounded family decoder.");
+    }
+
+    [TestMethod]
     public void BindingProducesClosedCountAndPageRequests()
     {
         var plan = LuxembourgTranspositionIdentityDiscoveryPlan.Create();

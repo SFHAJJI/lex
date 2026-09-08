@@ -126,6 +126,16 @@ public sealed class LuxembourgTranspositionIdentityProducerTests
     }
 
     [TestMethod]
+    public void ARegulationEliCannotBecomeAPublisherDirectiveAssertion()
+    {
+        var result = Decode(Row(euEli: "http://data.europa.eu/eli/reg/2020/284/oj"));
+
+        Assert.AreEqual(LuxembourgTranspositionIdentityProductionRefusal.RowNotAdmitted, result.Refusal);
+        StringAssert.Contains(result.Detail, "directive");
+        Assert.IsNull(result.Relations);
+    }
+
+    [TestMethod]
     public void ALocalTargetMappedToTwoEuIdentitiesIsRefusedRatherThanChosen()
     {
         var result = Decode(
