@@ -61,10 +61,27 @@ public sealed class EuReifiedAxiomDecodeTests
         string axiomIri, string predicateIri, RepeatedEnumerationRdfTerm value) =>
         Row(RepeatedEnumerationRdfTerm.Iri(axiomIri), RepeatedEnumerationRdfTerm.Iri(predicateIri), value);
 
+    /// <summary>
+    /// A row whose projected <c>value_kind</c> marker says <paramref name="markerOverride"/> while
+    /// its terms say whatever they say. Only a test constructs these: the query's own BIND cannot
+    /// disagree with the term it was computed from, which is exactly why a decoder must not take
+    /// the marker's word for it.
+    /// </summary>
+    private static RepeatedEnumerationRow RowMarked(
+        string predicateIri, RepeatedEnumerationRdfTerm value, string markerOverride) =>
+        Row(
+            RepeatedEnumerationRdfTerm.Iri(Axiom),
+            RepeatedEnumerationRdfTerm.Iri(predicateIri),
+            value,
+            markerOverride);
+
     private static RepeatedEnumerationRow Row(
-        RepeatedEnumerationRdfTerm axiom, RepeatedEnumerationRdfTerm predicate, RepeatedEnumerationRdfTerm value)
+        RepeatedEnumerationRdfTerm axiom,
+        RepeatedEnumerationRdfTerm predicate,
+        RepeatedEnumerationRdfTerm value,
+        string? markerOverride = null)
     {
-        var kind = value.Kind switch
+        var kind = markerOverride ?? value.Kind switch
         {
             RepeatedEnumerationRdfTermKind.Iri => "iri",
             RepeatedEnumerationRdfTermKind.Literal => "literal",
@@ -254,26 +271,168 @@ public sealed class EuReifiedAxiomDecodeTests
     }
 
     /// <summary>
-    /// A repeated property is retained in full. Reading one occurrence for a modelled field is a
-    /// reading choice; silently reducing the evidence to that one occurrence would not be.
+    /// A repeated property this decode models nothing about is retained in full, because it decides
+    /// nothing and discarding it would be the silence this family exists to prevent.
     /// </summary>
     [TestMethod]
-    public void ARepeatedPropertyIsRetainedInFullRatherThanReducedToItsFirstOccurrence()
+    public void ARepeatedUnmodelledPropertyIsRetainedInFullRatherThanReducedToOneOccurrence()
     {
+        const string Unmodelled = "http://publications.europa.eu/ontology/annotation#quality_issue";
+
         var rows = WellFormed();
-        rows.Add(Row(CommentOnDate, RepeatedEnumerationRdfTerm.Literal("first", XsdString, null)));
-        rows.Add(Row(CommentOnDate, RepeatedEnumerationRdfTerm.Literal("second", XsdString, null)));
+        rows.Add(Row(Unmodelled, RepeatedEnumerationRdfTerm.Literal("first", XsdString, null)));
+        rows.Add(Row(Unmodelled, RepeatedEnumerationRdfTerm.Literal("second", XsdString, null)));
 
-        var bindings = Decode(rows, out _);
+        var bindings = Decode(rows, out var refusal);
 
+        Assert.AreEqual(EuReifiedAxiomDecodeRefusal.None, refusal);
         Assert.IsNotNull(bindings);
-        Assert.AreEqual("first", bindings[0].PublisherComment);
         CollectionAssert.AreEqual(
             new[] { "first", "second" },
             bindings[0].Axiom.Qualifiers
-                .Where(static qualifier => qualifier.PredicateUri == CommentOnDate)
+                .Where(static qualifier => qualifier.PredicateUri == Unmodelled)
                 .Select(static qualifier => qualifier.RawValue)
                 .ToArray());
+    }
+
+    /// <summary>
+    /// An exactly repeated modelled predicate is one fact stated twice, which decides the same
+    /// thing either way and is therefore admitted.
+    /// </summary>
+    [TestMethod]
+    public void AnExactlyRepeatedModelledPredicateIsTheSameFactTwiceAndIsAdmitted()
+    {
+        var rows = WellFormed();
+        rows.Add(Row(CommentOnDate, RepeatedEnumerationRdfTerm.Literal("see Article 28", XsdString, null)));
+        rows.Add(Row(CommentOnDate, RepeatedEnumerationRdfTerm.Literal("see Article 28", XsdString, null)));
+
+        var bindings = Decode(rows, out var refusal);
+
+        Assert.AreEqual(EuReifiedAxiomDecodeRefusal.None, refusal);
+        Assert.IsNotNull(bindings);
+        Assert.AreEqual("see Article 28", bindings[0].PublisherComment);
+    }
+
+    /// <summary>
+    /// A modelled predicate delivered twice with disagreeing values is refused, and refused the
+    /// same way whichever order the rows arrive in.
+    /// </summary>
+    /// <remarks>
+    /// This replaces a guard I wrote that asserted the opposite - that the first occurrence wins
+    /// and the rest are merely retained. That made the accepted role depend on delivery order:
+    /// reversing two annotatedProperty rows selected a different source predicate and a different
+    /// DateSemanticRole for the same axiom. The reversal assertions below are the point, because a
+    /// reader that resolved the ambiguity at all would answer them differently.
+    /// </remarks>
+    [TestMethod]
+    public void AModelledPredicateDeliveredTwiceWithDisagreeingValuesIsRefusedInEitherOrder()
+    {
+        (string Predicate, RepeatedEnumerationRdfTerm Second)[] conflicts =
+        [
+            (EuObjectFactsDiscoveryPlan.AnnotatedPropertyPredicateIri,
+                RepeatedEnumerationRdfTerm.Iri(EuDateQualifierVocabulary.EndOfValidityPredicateUri)),
+            (EuObjectFactsDiscoveryPlan.AnnotatedSourcePredicateIri,
+                RepeatedEnumerationRdfTerm.Iri("http://publications.europa.eu/resource/cellar/other-work")),
+            (EuObjectFactsDiscoveryPlan.AnnotatedTargetPredicateIri,
+                RepeatedEnumerationRdfTerm.Literal("2011-01-01", XsdDate, null)),
+            (EuObjectFactsDiscoveryPlan.RdfTypePredicateIri,
+                RepeatedEnumerationRdfTerm.Iri("http://www.w3.org/2002/07/owl#Class")),
+            (TypeOfDate, RepeatedEnumerationRdfTerm.Literal("{MA|" + Fd335 + "MA}", XsdString, null)),
+            (CommentOnDate, RepeatedEnumerationRdfTerm.Literal("a different comment", XsdString, null)),
+        ];
+
+        foreach (var (predicate, second) in conflicts)
+        {
+            // Every modelled predicate is present exactly once first, so the added row below is
+            // genuinely a second occurrence rather than the only one.
+            var forward = WellFormed();
+            forward.Add(Row(TypeOfDate, RepeatedEnumerationRdfTerm.Literal("{EV|" + Fd335 + "EV}", XsdString, null)));
+            forward.Add(Row(CommentOnDate, RepeatedEnumerationRdfTerm.Literal("see Article 28", XsdString, null)));
+            forward.Add(Row(predicate, second));
+
+            var reversed = new List<RepeatedEnumerationRow>(forward);
+            reversed.Reverse();
+
+            var forwardBindings = Decode(forward, out var forwardRefusal);
+            var reversedBindings = Decode(reversed, out var reversedRefusal);
+
+            Assert.IsNull(forwardBindings, predicate);
+            Assert.IsNull(reversedBindings, predicate + " (reversed)");
+            Assert.AreEqual(
+                EuReifiedAxiomDecodeRefusal.ModelledPredicateDeliveredMoreThanOnce, forwardRefusal, predicate);
+            Assert.AreEqual(
+                forwardRefusal,
+                reversedRefusal,
+                predicate + ": delivery order must not change the answer");
+        }
+    }
+
+    /// <summary>
+    /// A fully bound row whose projected marker merely SAYS it is unbound must refuse, not vanish.
+    /// </summary>
+    /// <remarks>
+    /// The marker is a value the query computed about the row. A reader that skipped on it alone
+    /// would drop real qualifier evidence on the strength of a computed label - a false absence
+    /// manufactured inside our own reader rather than delivered by the publisher, which is the
+    /// worst version of the shape S2-A05 refuses.
+    /// </remarks>
+    [TestMethod]
+    public void ABoundRowWhoseMarkerClaimsAbsenceIsRefusedRatherThanSilentlyDropped()
+    {
+        var rows = WellFormed();
+        rows.Add(RowMarked(
+            TypeOfDate, RepeatedEnumerationRdfTerm.Literal("{EV|" + Fd335 + "EV}", XsdString, null), "unbound"));
+
+        var bindings = EuReifiedAxiomDecode.TryDecode(
+            rows, AxiomProfile, Observation, out var refusal, out var offendingValue);
+
+        Assert.IsNull(bindings, "a bound qualifier row must not disappear because a marker claims absence");
+        Assert.AreEqual(EuReifiedAxiomDecodeRefusal.RowShapeContradictsItsProjectedKind, refusal);
+        Assert.AreEqual(Axiom, offendingValue);
+    }
+
+    /// <summary>
+    /// The marker is checked in both directions: a bound marker beside terms that are not of that
+    /// kind is the same contradiction read from the other side.
+    /// </summary>
+    [TestMethod]
+    public void AMarkerThatDisagreesWithItsOwnValueTermIsRefused()
+    {
+        var iriMarkerOnALiteral = WellFormed();
+        iriMarkerOnALiteral.Add(RowMarked(
+            CommentOnDate, RepeatedEnumerationRdfTerm.Literal("plain text", XsdString, null), "iri"));
+
+        var unknownMarker = WellFormed();
+        unknownMarker.Add(RowMarked(
+            CommentOnDate, RepeatedEnumerationRdfTerm.Literal("plain text", XsdString, null), "something_else"));
+
+        foreach (var rows in new[] { iriMarkerOnALiteral, unknownMarker })
+        {
+            var bindings = Decode(rows, out var refusal);
+
+            Assert.IsNull(bindings);
+            Assert.AreEqual(EuReifiedAxiomDecodeRefusal.RowShapeContradictsItsProjectedKind, refusal);
+        }
+    }
+
+    /// <summary>
+    /// A type_of_date carrier that is present but not a literal is malformed, not missing.
+    /// </summary>
+    /// <remarks>
+    /// Reading it as missing would convert a qualifier the publisher did assert into one it never
+    /// stated, and the role would then be derived from the predicate as though nothing had been
+    /// sent - the binding would look ordinary and carry a role the evidence does not support.
+    /// </remarks>
+    [TestMethod]
+    public void APresentButNonLiteralQualifierCarrierIsMalformedRatherThanAbsent()
+    {
+        var rows = WellFormed();
+        rows.Add(Row(TypeOfDate, RepeatedEnumerationRdfTerm.Iri(Fd335 + "EV")));
+
+        var bindings = Decode(rows, out var refusal);
+
+        Assert.IsNull(bindings, "an IRI carrier must not fall through to the no-qualifier role path");
+        Assert.AreEqual(EuReifiedAxiomDecodeRefusal.QualifierTermMalformed, refusal);
     }
 
     /// <summary>
@@ -368,8 +527,19 @@ public sealed class EuReifiedAxiomDecodeTests
         pinnedCodeOnTheWrongPredicate.Add(
             Row(TypeOfDate, RepeatedEnumerationRdfTerm.Literal("{EV|" + Fd335 + "EV}", XsdString, null)));
 
+        var markerContradictsTerms = WellFormed();
+        markerContradictsTerms.Add(RowMarked(
+            CommentOnDate, RepeatedEnumerationRdfTerm.Literal("bound after all", XsdString, null), "unbound"));
+
+        var contradictoryRepetition = WellFormed();
+        contradictoryRepetition.Add(Row(
+            EuObjectFactsDiscoveryPlan.AnnotatedTargetPredicateIri,
+            RepeatedEnumerationRdfTerm.Literal("2011-01-01", XsdDate, null)));
+
         (EuReifiedAxiomDecodeRefusal Expected, List<RepeatedEnumerationRow> Rows)[] cases =
         [
+            (EuReifiedAxiomDecodeRefusal.RowShapeContradictsItsProjectedKind, markerContradictsTerms),
+            (EuReifiedAxiomDecodeRefusal.ModelledPredicateDeliveredMoreThanOnce, contradictoryRepetition),
             (EuReifiedAxiomDecodeRefusal.AxiomNodeNotAnIri, malformedAxiomNode),
             (EuReifiedAxiomDecodeRefusal.AnnotatedSourceMissingOrNotAnIri, noSource),
             (EuReifiedAxiomDecodeRefusal.AnnotatedPropertyMissingOrNotAdmitted, unadmittedProperty),

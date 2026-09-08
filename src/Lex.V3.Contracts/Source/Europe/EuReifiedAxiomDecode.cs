@@ -39,6 +39,25 @@ public enum EuReifiedAxiomDecodeRefusal
 
     /// <summary>The accepted binding contract refused this axiom's own combination of terms.</summary>
     BindingRefusedByTheAcceptedContract = 9,
+
+    /// <summary>
+    /// A row's projected <c>value_kind</c> marker contradicts the terms that row actually carries.
+    /// </summary>
+    /// <remarks>
+    /// The marker is a <c>BIND</c> the query computed, not evidence in its own right. Trusting it
+    /// over the terms beside it is how a bound row disappears while claiming to be an absence, so
+    /// the two are required to agree before either is believed.
+    /// </remarks>
+    RowShapeContradictsItsProjectedKind = 10,
+
+    /// <summary>
+    /// A predicate this decode reads by name arrived more than once with values that disagree.
+    /// </summary>
+    /// <remarks>
+    /// Reading the first occurrence would make the accepted fact depend on delivery order, so a
+    /// modelled predicate the publisher contradicts itself on is refused rather than resolved.
+    /// </remarks>
+    ModelledPredicateDeliveredMoreThanOnce = 11,
 }
 
 /// <summary>
@@ -147,9 +166,17 @@ public static class EuReifiedAxiomDecode
 
         foreach (var row in rows)
         {
-            var kind = Term(row, profile, "value_kind");
-            if (kind.Kind == RepeatedEnumerationRdfTermKind.Literal &&
-                string.Equals(kind.Value, "unbound", StringComparison.Ordinal))
+            // The marker is a BIND the query computed ABOUT the row, never evidence in its own
+            // right. Believing it before reading the terms beside it is how a bound row disappears
+            // while claiming to be an absence, so the row's whole shape is checked against its own
+            // marker first and only then interpreted.
+            if (!IsAbsence(row, profile, out var absence, out offendingValue))
+            {
+                refusal = EuReifiedAxiomDecodeRefusal.RowShapeContradictsItsProjectedKind;
+                return null;
+            }
+
+            if (absence)
             {
                 continue;
             }
@@ -206,7 +233,15 @@ public static class EuReifiedAxiomDecode
         refusal = EuReifiedAxiomDecodeRefusal.None;
         offendingValue = null;
 
-        var source = Single(terms, EuObjectFactsDiscoveryPlan.AnnotatedSourcePredicateIri);
+        // Every read below goes through TrySingle: a modelled predicate the publisher contradicts
+        // itself on is refused rather than resolved by whichever row happened to arrive first.
+        if (!TrySingle(terms, EuObjectFactsDiscoveryPlan.AnnotatedSourcePredicateIri, out var source))
+        {
+            refusal = EuReifiedAxiomDecodeRefusal.ModelledPredicateDeliveredMoreThanOnce;
+            offendingValue = EuObjectFactsDiscoveryPlan.AnnotatedSourcePredicateIri;
+            return null;
+        }
+
         if (source is not { Kind: RepeatedEnumerationRdfTermKind.Iri, Value: not null })
         {
             refusal = EuReifiedAxiomDecodeRefusal.AnnotatedSourceMissingOrNotAnIri;
@@ -214,7 +249,13 @@ public static class EuReifiedAxiomDecode
             return null;
         }
 
-        var property = Single(terms, EuObjectFactsDiscoveryPlan.AnnotatedPropertyPredicateIri);
+        if (!TrySingle(terms, EuObjectFactsDiscoveryPlan.AnnotatedPropertyPredicateIri, out var property))
+        {
+            refusal = EuReifiedAxiomDecodeRefusal.ModelledPredicateDeliveredMoreThanOnce;
+            offendingValue = EuObjectFactsDiscoveryPlan.AnnotatedPropertyPredicateIri;
+            return null;
+        }
+
         if (property is not { Kind: RepeatedEnumerationRdfTermKind.Iri, Value: not null } ||
             !EuDateQualifierVocabulary.DatePredicateUris.Contains(property.Value, StringComparer.Ordinal))
         {
@@ -226,7 +267,13 @@ public static class EuReifiedAxiomDecode
         // Family A acquires a node on annotatedSource plus an admitted annotatedProperty and does
         // NOT require the declared type, so that a node missing or misstating it is retained rather
         // than erased at the query. This is where that retained evidence is judged.
-        var declaredType = Single(terms, EuObjectFactsDiscoveryPlan.RdfTypePredicateIri);
+        if (!TrySingle(terms, EuObjectFactsDiscoveryPlan.RdfTypePredicateIri, out var declaredType))
+        {
+            refusal = EuReifiedAxiomDecodeRefusal.ModelledPredicateDeliveredMoreThanOnce;
+            offendingValue = EuObjectFactsDiscoveryPlan.RdfTypePredicateIri;
+            return null;
+        }
+
         if (declaredType is not { Kind: RepeatedEnumerationRdfTermKind.Iri, Value: not null } ||
             !string.Equals(
                 declaredType.Value, EuObjectFactsDiscoveryPlan.OwlAxiomClassIri, StringComparison.Ordinal))
@@ -236,7 +283,13 @@ public static class EuReifiedAxiomDecode
             return null;
         }
 
-        var target = Single(terms, EuObjectFactsDiscoveryPlan.AnnotatedTargetPredicateIri);
+        if (!TrySingle(terms, EuObjectFactsDiscoveryPlan.AnnotatedTargetPredicateIri, out var target))
+        {
+            refusal = EuReifiedAxiomDecodeRefusal.ModelledPredicateDeliveredMoreThanOnce;
+            offendingValue = EuObjectFactsDiscoveryPlan.AnnotatedTargetPredicateIri;
+            return null;
+        }
+
         if (target is not { Kind: RepeatedEnumerationRdfTermKind.Literal, Value: not null })
         {
             refusal = EuReifiedAxiomDecodeRefusal.AnnotatedTargetMissingOrNotALiteral;
@@ -251,10 +304,27 @@ public static class EuReifiedAxiomDecode
             return null;
         }
 
-        string? rawQualifierCode = null;
-        var carrier = Single(terms, TypeOfDateIri);
-        if (carrier is { Kind: RepeatedEnumerationRdfTermKind.Literal, Value: not null })
+        if (!TrySingle(terms, TypeOfDateIri, out var carrier))
         {
+            refusal = EuReifiedAxiomDecodeRefusal.ModelledPredicateDeliveredMoreThanOnce;
+            offendingValue = TypeOfDateIri;
+            return null;
+        }
+
+        // A carrier that is PRESENT but not a literal is malformed, not missing. Letting an IRI or
+        // blank-node carrier fall through to the no-qualifier path would silently convert a
+        // qualifier the publisher did assert into one it never stated, and the role would then be
+        // derived from the predicate as though nothing had been sent.
+        string? rawQualifierCode = null;
+        if (carrier is not null && carrier.Kind != RepeatedEnumerationRdfTermKind.Unbound)
+        {
+            if (carrier.Kind != RepeatedEnumerationRdfTermKind.Literal || carrier.Value is null)
+            {
+                refusal = EuReifiedAxiomDecodeRefusal.QualifierTermMalformed;
+                offendingValue = carrier.Value ?? axiomIri;
+                return null;
+            }
+
             if (!TryParseQualifier(carrier.Value, out rawQualifierCode, out var carrierRefusal))
             {
                 refusal = carrierRefusal;
@@ -269,7 +339,12 @@ public static class EuReifiedAxiomDecode
                 ? pin.Label
                 : null;
 
-        var comment = Single(terms, CommentOnDateIri);
+        if (!TrySingle(terms, CommentOnDateIri, out var comment))
+        {
+            refusal = EuReifiedAxiomDecodeRefusal.ModelledPredicateDeliveredMoreThanOnce;
+            offendingValue = CommentOnDateIri;
+            return null;
+        }
 
         try
         {
@@ -369,22 +444,141 @@ public static class EuReifiedAxiomDecode
     }
 
     /// <summary>
-    /// The one term for a property, or null when the axiom carries none. A property the publisher
-    /// repeats is read as its first occurrence here and retained in full by
-    /// <see cref="RetainedQualifiers"/>, so a repetition is never silently reduced to one.
+    /// The one term for a predicate this decode reads by name, or null when the axiom carries none.
+    /// Returns false when the publisher delivered it more than once with values that disagree.
     /// </summary>
-    private static RepeatedEnumerationRdfTerm? Single(
-        IReadOnlyList<(string Predicate, RepeatedEnumerationRdfTerm Value)> terms, string predicate)
+    /// <remarks>
+    /// Every predicate read through here determines part of the accepted binding - its subject, its
+    /// date, its precision, its role. Taking the first occurrence would make that meaning depend on
+    /// the order rows happened to arrive in, so that two deliveries of the same axiom could produce
+    /// two different accepted facts. An exact repetition is the same fact stated twice and is
+    /// harmless; a disagreeing one is an ambiguity this reader has no authority to resolve, and it
+    /// fails closed. Repetitions are retained in full by <see cref="RetainedQualifiers"/> either
+    /// way, so nothing is discarded on the way to the refusal.
+    /// </remarks>
+    private static bool TrySingle(
+        IReadOnlyList<(string Predicate, RepeatedEnumerationRdfTerm Value)> terms,
+        string predicate,
+        out RepeatedEnumerationRdfTerm? term)
     {
-        foreach (var term in terms)
+        term = null;
+        foreach (var candidate in terms)
         {
-            if (string.Equals(term.Predicate, predicate, StringComparison.Ordinal))
+            if (!string.Equals(candidate.Predicate, predicate, StringComparison.Ordinal))
             {
-                return term.Value;
+                continue;
+            }
+
+            if (term is null)
+            {
+                term = candidate.Value;
+                continue;
+            }
+
+            if (!Agree(term, candidate.Value))
+            {
+                return false;
             }
         }
 
-        return null;
+        return true;
+    }
+
+    /// <summary>Two delivered terms state the same thing in every part a reader could act on.</summary>
+    private static bool Agree(RepeatedEnumerationRdfTerm left, RepeatedEnumerationRdfTerm right) =>
+        left.Kind == right.Kind &&
+        string.Equals(left.Value, right.Value, StringComparison.Ordinal) &&
+        string.Equals(left.Datatype, right.Datatype, StringComparison.Ordinal) &&
+        string.Equals(left.Language, right.Language, StringComparison.Ordinal);
+
+    /// <summary>
+    /// Decides whether a row is the family's typed absence, refusing outright when the row's own
+    /// <c>value_kind</c> marker and the terms beside it do not agree.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The marker is computed by the query's own <c>BIND</c>, so it is a claim ABOUT the row rather
+    /// than a term the publisher asserted. A reader that skipped on the marker alone would drop a
+    /// fully bound axiom whenever the marker merely said <c>unbound</c> - present evidence
+    /// disappearing on the strength of a computed label, which is the exact false absence this
+    /// family exists to prevent. So absence is admitted only when the axiom, predicate and value
+    /// terms are all unbound AND the projected datatype and language fields are empty, and a bound
+    /// marker is admitted only when the value term really carries the kind the marker names.
+    /// </para>
+    /// <para>
+    /// Deliberately NOT checked: that <c>datatype_iri</c> equals the value's own datatype on a bound
+    /// row. SPARQL's <c>DATATYPE()</c> answers <c>rdf:langString</c> for a language-tagged literal
+    /// whose term carries a language and no datatype, so requiring equality there would refuse
+    /// ordinary publisher data. The absence shape is where those two fields carry decisive meaning,
+    /// and that is where they are enforced.
+    /// </para>
+    /// </remarks>
+    private static bool IsAbsence(
+        RepeatedEnumerationRow row,
+        RepeatedEnumerationInterpretationProfile profile,
+        out bool absence,
+        out string? offendingValue)
+    {
+        absence = false;
+        offendingValue = null;
+
+        var marker = Term(row, profile, "value_kind");
+        if (marker.Kind != RepeatedEnumerationRdfTermKind.Literal || marker.Value is null)
+        {
+            offendingValue = marker.Value;
+            return false;
+        }
+
+        var axiom = Term(row, profile, "axiom");
+        var predicate = Term(row, profile, "predicate");
+        var value = Term(row, profile, "value");
+
+        if (string.Equals(marker.Value, "unbound", StringComparison.Ordinal))
+        {
+            if (axiom.Kind != RepeatedEnumerationRdfTermKind.Unbound ||
+                predicate.Kind != RepeatedEnumerationRdfTermKind.Unbound ||
+                value.Kind != RepeatedEnumerationRdfTermKind.Unbound)
+            {
+                offendingValue = axiom.Value ?? predicate.Value ?? value.Value;
+                return false;
+            }
+
+            var datatype = Term(row, profile, "datatype_iri");
+            var language = Term(row, profile, "language_tag");
+            if (!string.IsNullOrEmpty(datatype.Value) || !string.IsNullOrEmpty(language.Value))
+            {
+                offendingValue = datatype.Value is { Length: > 0 } ? datatype.Value : language.Value;
+                return false;
+            }
+
+            absence = true;
+            return true;
+        }
+
+        var expected = marker.Value switch
+        {
+            "iri" => RepeatedEnumerationRdfTermKind.Iri,
+            "literal" => RepeatedEnumerationRdfTermKind.Literal,
+            "unsupported_blank_node" => RepeatedEnumerationRdfTermKind.BlankNode,
+            _ => (RepeatedEnumerationRdfTermKind?)null,
+        };
+
+        if (expected is null || value.Kind != expected)
+        {
+            offendingValue = marker.Value;
+            return false;
+        }
+
+        // The positive branch binds these three together, so a bound marker beside an unbound axiom
+        // or predicate is the same contradiction read from the other side.
+        if (axiom.Kind == RepeatedEnumerationRdfTermKind.Unbound ||
+            predicate.Kind == RepeatedEnumerationRdfTermKind.Unbound)
+        {
+            offendingValue = marker.Value;
+            return false;
+        }
+
+        return true;
     }
 
     /// <summary>Looks up one projection variable's term by name, never by a literal index.</summary>

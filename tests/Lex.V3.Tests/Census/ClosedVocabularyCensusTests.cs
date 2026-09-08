@@ -355,7 +355,8 @@ public sealed class ClosedVocabularyCensusTests
                     + "AnnotatedPropertyMissingOrNotAdmitted, AxiomTypeMissingOrNotOwlAxiom, "
                     + "AnnotatedTargetMissingOrNotALiteral, AnnotatedTargetDatatypeNotADateShape, "
                     + "QualifierTermMalformed, QualifierAuthorityDisagreesWithItsCode, "
-                    + "BindingRefusedByTheAcceptedContract",
+                    + "BindingRefusedByTheAcceptedContract, RowShapeContradictsItsProjectedKind, "
+                    + "ModelledPredicateDeliveredMoreThanOnce",
                 "Lex.V3.Contracts.Source.Europe.EuReuseBasis: Cc0, CcBy40, "
                     + "EurLexLegalNoticePermission",
                 "Lex.V3.Contracts.Source.Europe.EuRightsExceptionChannel: ThirdPartyMaterial, "
