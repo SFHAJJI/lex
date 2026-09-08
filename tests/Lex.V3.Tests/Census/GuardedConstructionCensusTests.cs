@@ -302,8 +302,9 @@ public sealed class GuardedConstructionCensusTests
                     + "method public static "
                     + "Lex.V3.Contracts.Source.Core.RepeatedEnumerationObservationIdentity::NewObse"
                     + "rvation",
-                "Lex.V3.Contracts.Source.Core.RepeatedEnumerationRdfTerm: by-ref-method public "
-                    + "instance "
+                "Lex.V3.Contracts.Source.Core.RepeatedEnumerationRdfTerm: by-ref-method private "
+                    + "static Lex.V3.Contracts.Source.Europe.EuReifiedAxiomDecode::TrySingle, "
+                    + "by-ref-method public instance "
                     + "Lex.V3.Contracts.Source.Core.EnumerationDeliveryComparison+CanonicalTupleDoc"
                     + "ument::Deconstruct, "
                     + "by-ref-method public instance "
@@ -342,6 +343,8 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Contracts.Source.Europe.EuCellarObjectDecode::Term, "
                     + "method private static "
                     + "Lex.V3.Contracts.Source.Europe.EuManifestationListingDecode::Term, "
+                    + "method private static "
+                    + "Lex.V3.Contracts.Source.Europe.EuReifiedAxiomDecode::Term, "
                     + "method public instance "
                     + "Lex.V3.Contracts.Source.Core.RepeatedEnumerationRdfTerm::<Clone>$, "
                     + "method public static "
@@ -422,8 +425,12 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Contracts.Source.Europe.EuConstituentStep::Create",
                 "Lex.V3.Contracts.Source.Europe.EuDateAxiomBinding: constructor private instance "
                     + "Lex.V3.Contracts.Source.Europe.EuDateAxiomBinding::.ctor, "
+                    + "method private static "
+                    + "Lex.V3.Contracts.Source.Europe.EuReifiedAxiomDecode::DecodeOne, "
                     + "method public static "
-                    + "Lex.V3.Contracts.Source.Europe.EuDateAxiomBinding::Create",
+                    + "Lex.V3.Contracts.Source.Europe.EuDateAxiomBinding::Create, "
+                    + "method public static "
+                    + "Lex.V3.Contracts.Source.Europe.EuReifiedAxiomDecode::TryDecode",
                 "Lex.V3.Contracts.Source.Europe.EuDocumentFetchAddress: constructor private "
                     + "instance Lex.V3.Contracts.Source.Europe.EuDocumentFetchAddress::.ctor, "
                     + "method public static "
@@ -1016,15 +1023,17 @@ public sealed class GuardedConstructionCensusTests
                     + "2 compiler-generated",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgResolvedLocalInboundRelation: "
                     + "constructor internal instance "
-                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgResolvedLocalInboundRelation::.ctor, "
+                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgResolvedLocalInboundRelation::."
+                    + "ctor, "
                     + "constructor private instance "
-                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgResolvedLocalInboundRelation::.ctor, "
+                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgResolvedLocalInboundRelation::."
+                    + "ctor, "
                     + "method private static "
                     + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgScopeResolver::BuildLocalInboun"
                     + "dRelations, "
                     + "method public instance "
-                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgResolvedLocalInboundRelation::<Clone>$, "
-                    + "1 compiler-generated",
+                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgResolvedLocalInboundRelation::<"
+                    + "Clone>$, 1 compiler-generated",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgResolvedRelation: constructor "
                     + "internal instance "
                     + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgResolvedRelation::.ctor, "
