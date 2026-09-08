@@ -864,13 +864,19 @@ internal static class EuAcquisitionTestFixture
     /// wrote fails INSIDE the write rather than at some later reopen. When supplied, a matching
     /// (digest, occurrence) raises that exception instead of returning a receipt.
     /// </param>
+    /// <param name="substituteReceiptDigest">
+    /// When supplied, a matching (digest, occurrence) returns a valid, reopenable receipt for
+    /// different bytes. This models a store violating CreateAsync's input-to-receipt binding while
+    /// still satisfying a later lookup by the substituted digest.
+    /// </param>
     internal sealed class EuInMemoryCustodyStore(
         Func<string, bool>? unenforceDigest = null,
         int? unenforceCallOrdinal = null,
         Func<string, int, bool>? failWriteDigest = null,
         Func<string, int, bool>? raiseIntegrityOnWriteDigest = null,
         Func<string, int, bool>? loseBytesAfterWriteDigest = null,
-        int? loseBytesAfterWriteCallOrdinal = null)
+        int? loseBytesAfterWriteCallOrdinal = null,
+        Func<string, int, bool>? substituteReceiptDigest = null)
         : Lex.V3.Contracts.Custody.ICustodyStore
     {
         private readonly Dictionary<string, byte[]> _byDigest = new(StringComparer.Ordinal);
@@ -937,8 +943,20 @@ internal static class EuAcquisitionTestFixture
             {
                 _byDigest[digest] = frozen;
             }
+            var substitutesReceipt = substituteReceiptDigest?.Invoke(digest, occurrence) == true;
+            var receiptBytes = substitutesReceipt
+                ? new byte[] { 0xff }
+                : frozen;
+            var receiptDigest = Lex.V3.Contracts.Custody.CustodyDigest.Of(receiptBytes);
+            if (substitutesReceipt)
+            {
+                _byDigest[receiptDigest] = receiptBytes;
+            }
             var reference = new Lex.V3.Contracts.Custody.DurableBlobRef(
-                Lex.V3.Contracts.Custody.CustodySchemaIds.DurableBlobRef, digest, frozen.LongLength, custodyClass);
+                Lex.V3.Contracts.Custody.CustodySchemaIds.DurableBlobRef,
+                receiptDigest,
+                receiptBytes.LongLength,
+                custodyClass);
             var observedAt = new DateTimeOffset(2026, 9, 4, 0, 0, 0, TimeSpan.Zero);
             // CustodyPolicyEvidence's own ValidateImmutableProtection admits only two exact pairs
             // under CustodyVerificationProfile.ImmutableObject1: (NightlyFloor90d, LockedTime) and

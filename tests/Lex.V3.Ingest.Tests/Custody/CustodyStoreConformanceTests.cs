@@ -57,8 +57,8 @@ public sealed class CustodyStoreConformanceTests
     [
         "Lex.V3.Ingest.Tests.CorpusRecordSetWriterTests+HoldFailingCustodyStore: decorates an "
             + "inner store in order to fail the hold",
-        "Lex.V3.Ingest.Tests.EuAcquisitionTestFixture+EuInMemoryCustodyStore: takes six "
-            + "configuration delegates that decide what it holds and what it refuses",
+        "Lex.V3.Ingest.Tests.EuAcquisitionTestFixture+EuInMemoryCustodyStore: takes seven "
+            + "configuration switches and delegates that decide what it holds and what it refuses",
         "Lex.V3.Ingest.Tests.LuxembourgDocumentGetTests+BodyReopenFailingCustodyStore: decorates "
             + "an inner store and takes the body whose reopen it corrupts at a chosen ordinal",
         "Lex.V3.Ingest.Tests.LuxembourgDocumentGetTests+CustodyRequiredAfterProductRequestStore: "

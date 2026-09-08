@@ -1,4 +1,5 @@
 using Lex.V3.Contracts;
+using Lex.V3.Contracts.Custody;
 using Lex.V3.Contracts.Facts;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Europe;
@@ -133,6 +134,47 @@ public sealed class EuTranspositionBridgePopulationProducerTests
 
         Assert.AreEqual(EuTranspositionBridgePopulationRefusal.JoinEvidenceNotHeld, result.Refusal);
         Assert.IsNull(result.Rows);
+    }
+
+    [TestMethod]
+    public async Task AReceiptForDifferentBytesRefusesThePopulationInsteadOfEscapingAsAnException()
+    {
+        var producer = new EuTranspositionBridgePopulationProducer(
+            new EuAcquisitionTestFixture.EuInMemoryCustodyStore(
+                substituteReceiptDigest: static (_, _) => true));
+
+        var result = await producer.ProduceAsync(
+            [Kind(Directive, EuWorkKind.Directive)],
+            Legilux(Relation(Directive, LegiluxEli, LegiluxSide())),
+            Nim(NimRelation(Directive, NimEli, NimSide())),
+            CancellationToken.None);
+
+        Assert.AreEqual(EuTranspositionBridgePopulationRefusal.JoinEvidenceReceiptMismatch, result.Refusal);
+        Assert.IsNull(result.Rows);
+    }
+
+    [TestMethod]
+    public async Task APopulationRowRequiresJoinAndMatchingReceiptTogether()
+    {
+        var joined = EuTranspositionBridgeProducer.Produce(
+            Directive,
+            Kind(Directive, EuWorkKind.Directive),
+            Legilux(Relation(Directive, LegiluxEli, LegiluxSide())),
+            Nim(NimRelation(Directive, NimEli, NimSide()))).Bridge!;
+        var unjoined = EuTranspositionBridgeProducer.Produce(
+            Directive,
+            Kind(Directive, EuWorkKind.Directive),
+            Legilux(Relation(Directive, LegiluxEli, LegiluxSide())),
+            Nim()).Bridge!;
+        var receipt = await new EuAcquisitionTestFixture.EuInMemoryCustodyStore().CreateAsync(
+            new byte[] { 0xff }, CustodyClass.NightlyFloor90d, CancellationToken.None);
+
+        Assert.ThrowsExactly<ArgumentException>(
+            () => new EuTranspositionBridgePopulationRow(joined, null));
+        Assert.ThrowsExactly<ArgumentException>(
+            () => new EuTranspositionBridgePopulationRow(unjoined, receipt));
+        Assert.ThrowsExactly<ArgumentException>(
+            () => new EuTranspositionBridgePopulationRow(joined, receipt));
     }
 
     private static EuWorkKindAssertion Kind(string work, EuWorkKind kind) =>

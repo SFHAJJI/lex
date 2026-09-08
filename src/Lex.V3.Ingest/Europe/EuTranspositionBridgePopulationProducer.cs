@@ -34,6 +34,9 @@ public enum EuTranspositionBridgePopulationRefusal
     [JsonStringEnumMemberName("join_evidence_not_held")]
     JoinEvidenceNotHeld = 7,
 
+    [JsonStringEnumMemberName("join_evidence_receipt_mismatch")]
+    JoinEvidenceReceiptMismatch = 8,
+
 }
 
 /// <summary>One scoped bridge and the custody receipt for its derived evidence, when it has any.</summary>
@@ -195,6 +198,16 @@ public sealed class EuTranspositionBridgePopulationProducer
                     return EuTranspositionBridgePopulationResult.Refused(
                         EuTranspositionBridgePopulationRefusal.JoinEvidenceNotHeld,
                         $"Derived join evidence for {item.Bridge.EuWorkUri} was not held: {held.Failure}");
+                }
+                if (item.Bridge.NormalisedEliJoin is null ||
+                    !string.Equals(
+                        item.Bridge.NormalisedEliJoin.EvidenceRef.Sha256,
+                        held.Receipt.Reference.ContentSha256,
+                        StringComparison.Ordinal))
+                {
+                    return EuTranspositionBridgePopulationResult.Refused(
+                        EuTranspositionBridgePopulationRefusal.JoinEvidenceReceiptMismatch,
+                        $"Derived join evidence for {item.Bridge.EuWorkUri} was held under a different digest.");
                 }
                 receipt = held.Receipt;
             }

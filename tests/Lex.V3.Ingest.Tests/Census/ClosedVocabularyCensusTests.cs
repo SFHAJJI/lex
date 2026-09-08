@@ -83,7 +83,8 @@ public sealed class ClosedVocabularyCensusTests
                     + "ReifiedAxiomDecodeRefused",
                 "Lex.V3.Ingest.Europe.EuTranspositionBridgePopulationRefusal: None, WorkScopeEmpty, "
                     + "WorkScopeNotUnique, WorkScopeNotAdmitted, SourceNotDelivered, "
-                    + "SourceWorkOutsideScope, BridgeRefused, JoinEvidenceNotHeld",
+                    + "SourceWorkOutsideScope, BridgeRefused, JoinEvidenceNotHeld, "
+                    + "JoinEvidenceReceiptMismatch",
                 "Lex.V3.Ingest.Europe.EuTranspositionBridgeProductionRefusal: None, "
                     + "WorkKindNotForEuWork, LegiluxNotDelivered, NimNotDelivered, "
                     + "LegiluxNotSingular, NimNotSingular, SourceColumnsContradictWorkKind",
