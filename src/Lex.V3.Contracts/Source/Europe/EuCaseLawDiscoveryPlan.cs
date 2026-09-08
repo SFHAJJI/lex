@@ -252,9 +252,31 @@ public sealed class EuCaseLawDiscoveryPlan
     /// <summary>
     /// Pads a canonicalized, sorted batch to exactly <see cref="BatchCapacity"/> by repeating its own
     /// lexicographically greatest member, so every request carries the same shape whatever the batch
-    /// size. Repeating a member the batch already names adds no act to the question and changes no
-    /// observed fact: the duplicate matches the same rows, which <c>VALUES</c> set semantics fold.
+    /// size.
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// PADDING IS A TRANSPORT SHAPE AND MUST NOT REACH THE GRAPH JOIN. An earlier version of this
+    /// remark claimed the duplicates were harmless because "<c>VALUES</c> set semantics fold" them.
+    /// <b>That was false and it produced a real defect.</b> SPARQL solution mappings are a multiset:
+    /// duplicate <c>VALUES</c> rows are preserved, and <c>COUNT(*)</c> counts them. A one-act batch
+    /// padded to fifty therefore made every matching publisher edge contribute fifty solutions and
+    /// reported <c>multiplicity = 50</c>, with the inflation depending on how full the batch happened
+    /// to be. That is invented publisher multiplicity, which is exactly what this family exists to
+    /// report honestly.
+    /// </para>
+    /// <para>
+    /// The padding is kept, because a constant request shape is worth having, but the slots now enter
+    /// through a <c>SELECT DISTINCT ?eu_work</c> subquery so only the distinct acts reach the join.
+    /// The transport carries fifty slots; the question asks about the acts the caller named.
+    /// </para>
+    /// <para>
+    /// The pattern was borrowed from the object-facts family, which pads the same way. What did not
+    /// carry across is that that family projects rows without aggregating them, while this one
+    /// computes a per-row <c>COUNT(*)</c>. Copying a construct is not the same as copying the
+    /// conditions that made it safe.
+    /// </para>
+    /// </remarks>
     internal static string[] PadBatch(IReadOnlyList<string> canonicalSortedBatch)
     {
         var padded = new string[BatchCapacity];
@@ -382,8 +404,12 @@ public sealed class EuCaseLawDiscoveryPlan
         var rows = $$"""
             SELECT ?case_work ?case_predicate ?eu_work ?ecli ?ecli_kind (COUNT(*) AS ?multiplicity) WHERE {
               VALUES ?lex_pass_id { {pass_id:uint} }
-              VALUES ?eu_work {
+              {
+                SELECT DISTINCT ?eu_work WHERE {
+                  VALUES ?eu_work {
             {{valuesBlock}}
+                  }
+                }
               }
               VALUES ?case_predicate {
             {{predicateBlock}}

@@ -113,15 +113,63 @@ public sealed class EuCaseLawDiscoveryPlanTests
         StringAssert.Contains(plan.PageTemplate, "UNION");
     }
 
-    /// <summary>Paging is keyset only: no OFFSET, no DISTINCT, ordered by the cursor keys.</summary>
+    /// <summary>Paging is keyset only: no OFFSET, and the delivered rows are never de-duplicated.</summary>
+    /// <remarks>
+    /// The outer projection must not be <c>DISTINCT</c>, because folding delivered rows would hide
+    /// real publisher multiplicity. The one permitted <c>DISTINCT</c> is the batch boundary, which
+    /// removes transport padding before the join rather than removing publisher facts after it — see
+    /// <see cref="PaddingIsFoldedBeforeTheJoinSoItCannotInflateMultiplicity"/>.
+    /// </remarks>
     [TestMethod]
-    public void PagingIsKeysetOnlyWithNoOffsetAndNoDistinct()
+    public void PagingIsKeysetOnlyWithNoOffsetAndNoDistinctOverDeliveredRows()
     {
         var plan = EuCaseLawDiscoveryPlan.Create();
 
         Assert.IsFalse(plan.PageTemplate.Contains("OFFSET", StringComparison.OrdinalIgnoreCase));
-        Assert.IsFalse(plan.PageTemplate.Contains("SELECT DISTINCT", StringComparison.OrdinalIgnoreCase));
+        Assert.IsFalse(
+            plan.PageTemplate.StartsWith("SELECT DISTINCT", StringComparison.Ordinal),
+            "the delivered row set is never folded.");
+        Assert.AreEqual(
+            1, plan.PageTemplate.Split("SELECT DISTINCT", StringSplitOptions.None).Length - 1,
+            "exactly one DISTINCT exists, and it is the batch boundary.");
         StringAssert.Contains(plan.PageTemplate, "ORDER BY ?key_1 ?key_2 ?key_3 ?key_4");
+    }
+
+    /// <summary>
+    /// Transport padding is folded before the graph join, so a one-act batch cannot report fifty.
+    /// </summary>
+    /// <remarks>
+    /// This is the guard for a defect this plan shipped and had found against it. Padding repeats the
+    /// batch's greatest member through the unused slots to keep a constant request shape. SPARQL
+    /// solution mappings are a MULTISET — duplicate <c>VALUES</c> rows are preserved and
+    /// <c>COUNT(*)</c> counts them — so with the slots bound directly into the pattern, a one-act
+    /// request made every matching edge contribute fifty solutions and report
+    /// <c>multiplicity = 50</c>. The inflation varied with how full the batch happened to be, which
+    /// makes a publisher fact depend on a caller's batching. The <c>SELECT DISTINCT ?eu_work</c>
+    /// boundary is what stops padding becoming invented multiplicity.
+    /// </remarks>
+    [TestMethod]
+    public void PaddingIsFoldedBeforeTheJoinSoItCannotInflateMultiplicity()
+    {
+        var plan = EuCaseLawDiscoveryPlan.Create();
+
+        foreach (var template in new[] { plan.PageTemplate, plan.CountTemplate })
+        {
+            StringAssert.Contains(template, "SELECT DISTINCT ?eu_work WHERE {");
+
+            // The dedup boundary must enclose the slots: the DISTINCT has to come before the VALUES
+            // block, or the padding reaches the join and the multiplicity is inflated again.
+            var distinctAt = template.IndexOf("SELECT DISTINCT ?eu_work", StringComparison.Ordinal);
+            var valuesAt = template.IndexOf("VALUES ?eu_work {", StringComparison.Ordinal);
+            Assert.IsGreaterThan(-1, distinctAt);
+            Assert.IsGreaterThan(-1, valuesAt);
+            Assert.IsLessThan(valuesAt, distinctAt, "the batch slots must sit inside the DISTINCT boundary.");
+
+            // The aggregate must be outside that boundary, counting publisher edges rather than slots.
+            var countAt = template.IndexOf("COUNT(*)", StringComparison.Ordinal);
+            Assert.IsGreaterThan(-1, countAt);
+            Assert.IsLessThan(distinctAt, countAt, "the aggregate sits outside the dedup boundary.");
+        }
     }
 
     /// <summary>The delivery profile pins the whole row and names the batch as its selection.</summary>
