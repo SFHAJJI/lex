@@ -1,3 +1,4 @@
+using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Luxembourg;
 using Lex.V3.Ingest.Luxembourg;
 using Lex.V3.TestSupport;
@@ -322,6 +323,66 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
                 + N + "LuxembourgTypedAssertion",
             },
             ConstructionSurface.Of(typeof(LuxembourgTypedAssertion)).ToArray());
+    }
+
+    [TestMethod]
+    public void TypedAssertionRefusesAnEvidenceReferenceThatDoesNotMatchItsPublisherRow()
+    {
+        var rowRef = new SourceArtifactRef(
+            "urn:uuid:10dd0a6e-3fa4-468d-a2aa-570a93ec4bf0", new string('1', 64));
+        var otherRef = new SourceArtifactRef(
+            "urn:uuid:20dd0a6e-3fa4-468d-a2aa-570a93ec4bf0", new string('2', 64));
+        var assertion = new LuxembourgObservedAssertion(
+            "http://data.legilux.public.lu/eli/etat/leg/loi/2026/01/01/a0",
+            "http://data.legilux.public.lu/resource/ontology/jolux#historicalLegalId",
+            LuxembourgAssertionObjectKind.Literal,
+            "A-42",
+            string.Empty,
+            string.Empty,
+            rowRef);
+        var disposition = new LuxembourgAssertionFactDisposition(
+            LuxembourgAssertionPredicate.HistoricalLegalId,
+            LuxembourgAssertionFactKind.ActIdentity,
+            otherRef);
+
+        var exception = Assert.ThrowsExactly<ArgumentException>(() =>
+            new LuxembourgTypedAssertion(assertion, disposition, null, null));
+
+        StringAssert.Contains(exception.Message, "evidence reference");
+    }
+
+    [TestMethod]
+    public void TypedAssertionRefusesBothDisjointDateFactFamiliesAtOnce()
+    {
+        var evidenceRef = new SourceArtifactRef(
+            "urn:uuid:10dd0a6e-3fa4-468d-a2aa-570a93ec4bf0", new string('1', 64));
+        var assertion = new LuxembourgObservedAssertion(
+            "http://data.legilux.public.lu/eli/etat/leg/loi/2026/01/01/a0",
+            "http://data.legilux.public.lu/resource/ontology/jolux#dateEntryInForce",
+            LuxembourgAssertionObjectKind.Literal,
+            "2026-01-01",
+            "http://www.w3.org/2001/XMLSchema#date",
+            string.Empty,
+            evidenceRef);
+        var disposition = new LuxembourgAssertionFactDisposition(
+            LuxembourgAssertionPredicate.DateEntryInForce,
+            LuxembourgAssertionFactKind.ActForce,
+            evidenceRef);
+        var actForceDate = new LuxembourgActForceDateFact(
+            LuxembourgActForceDatePredicate.DateEntryInForce,
+            "2026-01-01",
+            "http://www.w3.org/2001/XMLSchema#date",
+            evidenceRef);
+        var consolidationDate = new LuxembourgConsolidationApplicabilityDateFact(
+            LuxembourgConsolidationApplicabilityDatePredicate.DateApplicability,
+            "2026-01-01",
+            "http://www.w3.org/2001/XMLSchema#date",
+            evidenceRef);
+
+        var exception = Assert.ThrowsExactly<ArgumentException>(() =>
+            new LuxembourgTypedAssertion(assertion, disposition, actForceDate, consolidationDate));
+
+        StringAssert.Contains(exception.Message, "both disjoint date-fact families");
     }
 
     /// <summary>

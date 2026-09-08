@@ -779,8 +779,8 @@ public sealed class LuxembourgQueryExecutionResult
 
     /// <summary>
     /// Every distinct admitted publisher assertion this run observed, projected through the
-    /// accepted 26-predicate fact-kind vocabulary. Empty when no assertion family was delivered or
-    /// when the run refused before the projection completed.
+    /// accepted 26-predicate fact-kind vocabulary. Empty when no assertion family was delivered and
+    /// on every refused result, including a refusal that occurs after projection completed.
     /// </summary>
     public IReadOnlyList<LuxembourgTypedAssertion> TypedAssertions { get; }
 

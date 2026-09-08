@@ -814,9 +814,11 @@ public sealed partial class LuxembourgQueryExecutionAdapterTests
         var store = new InMemoryCustodyStore();
         var assertionPage = AssertionRowsJson(
             (subjectUri, jolux + "dateApplicability", "2026-01-02", "literal", xsdDate, ""),
+            (subjectUri, jolux + "dateEndApplicability", "2026-12-31", "literal", xsdDate, ""),
             (subjectUri, jolux + "dateEntryInForce", "2026-01-01", "literal", xsdDate, ""),
+            (subjectUri, jolux + "dateNoLongerInForce", "2026-12-30", "literal", xsdDate, ""),
             (subjectUri, jolux + "historicalLegalId", "A-42", "literal", "", ""));
-        var handler = TwoFamilyDeliveringHandler([subjectUri], 3, assertionPage);
+        var handler = TwoFamilyDeliveringHandler([subjectUri], 5, assertionPage);
         var adapter = new LuxembourgQueryExecutionAdapter(store, NewExecutor(store, handler), profile);
         var (resourceRequest, resourceWitness) = BuildPartitionRequest(ResourceSetId, ResourceFamilyKey);
         var (assertionRequest, assertionWitness) = BuildPartitionRequest(AssertionSetId, AssertionFamilyKey);
@@ -827,7 +829,7 @@ public sealed partial class LuxembourgQueryExecutionAdapterTests
             new PermissiveEvidenceResolver(enumerationRef), DocumentFetchRendererSource(), CancellationToken.None);
 
         Assert.IsNull(result.Refusal, $"code={result.Refusal?.Code} detail={result.Refusal?.Detail}");
-        Assert.HasCount(3, result.TypedAssertions);
+        Assert.HasCount(5, result.TypedAssertions);
 
         var applicability = result.TypedAssertions.Single(value =>
             value.Assertion.PredicateIri == jolux + "dateApplicability");
@@ -844,6 +846,19 @@ public sealed partial class LuxembourgQueryExecutionAdapterTests
         Assert.AreEqual(xsdDate, applicability.ConsolidationApplicabilityDateFact.DatatypeIri);
         Assert.AreEqual(observationRef, applicability.ConsolidationApplicabilityDateFact.EvidenceRef);
 
+        var endApplicability = result.TypedAssertions.Single(value =>
+            value.Assertion.PredicateIri == jolux + "dateEndApplicability");
+        Assert.AreEqual(
+            LuxembourgAssertionPredicate.DateEndApplicability,
+            endApplicability.FactDisposition.Predicate);
+        Assert.AreEqual(
+            LuxembourgAssertionFactKind.ConsolidationApplicability,
+            endApplicability.FactDisposition.FactKind);
+        Assert.IsNull(endApplicability.ActForceDateFact);
+        Assert.AreEqual(
+            LuxembourgConsolidationApplicabilityDatePredicate.DateEndApplicability,
+            endApplicability.ConsolidationApplicabilityDateFact?.Predicate);
+
         var entryIntoForce = result.TypedAssertions.Single(value =>
             value.Assertion.PredicateIri == jolux + "dateEntryInForce");
         Assert.AreEqual(LuxembourgAssertionPredicate.DateEntryInForce, entryIntoForce.FactDisposition.Predicate);
@@ -856,6 +871,17 @@ public sealed partial class LuxembourgQueryExecutionAdapterTests
         Assert.AreEqual("2026-01-01", entryIntoForce.ActForceDateFact.RawLexicalValue);
         Assert.AreEqual(xsdDate, entryIntoForce.ActForceDateFact.DatatypeIri);
         Assert.AreEqual(observationRef, entryIntoForce.ActForceDateFact.EvidenceRef);
+
+        var noLongerInForce = result.TypedAssertions.Single(value =>
+            value.Assertion.PredicateIri == jolux + "dateNoLongerInForce");
+        Assert.AreEqual(
+            LuxembourgAssertionPredicate.DateNoLongerInForce,
+            noLongerInForce.FactDisposition.Predicate);
+        Assert.AreEqual(LuxembourgAssertionFactKind.ActForce, noLongerInForce.FactDisposition.FactKind);
+        Assert.AreEqual(
+            LuxembourgActForceDatePredicate.DateNoLongerInForce,
+            noLongerInForce.ActForceDateFact?.Predicate);
+        Assert.IsNull(noLongerInForce.ConsolidationApplicabilityDateFact);
 
         var historicalId = result.TypedAssertions.Single(value =>
             value.Assertion.PredicateIri == jolux + "historicalLegalId");
