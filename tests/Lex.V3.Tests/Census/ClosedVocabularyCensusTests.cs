@@ -335,6 +335,8 @@ public sealed class ClosedVocabularyCensusTests
                 "Lex.V3.Contracts.Source.Europe.EuManifestationMediaType: XhtmlXml, ZipMtypeFmx4, "
                     + "PdfTypePdfa2a, RdfXml, RdfXmlNoticeTree, XmlNoticeBranch, XmlNoticeObject, "
                     + "XmlNoticeIdentifier, TextHtml, ApplicationPdf",
+                "Lex.V3.Contracts.Source.Europe.EuNationalImplementingMeasureQueryPass: Pass1, "
+                    + "Pass2",
                 "Lex.V3.Contracts.Source.Europe.EuObjectFactsQueryPass: Pass1, Pass2",
                 "Lex.V3.Contracts.Source.Europe.EuObjectFactsQuerySet: ObjectFacts, ExpressionFacts, "
                     + "RootWatermark, ManifestationFacts, ReifiedAxiomFacts",

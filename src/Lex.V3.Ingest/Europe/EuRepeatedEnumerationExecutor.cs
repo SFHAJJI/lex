@@ -252,6 +252,12 @@ public sealed record EuObjectFactsPartitionRunRequest(
     IReadOnlyList<string> BatchObjects,
     MachineQueryRendererSource RendererSource);
 
+/// <summary>One bounded enumeration of the plan-fixed Luxembourg sector-7 NIM family.</summary>
+public sealed record EuNationalImplementingMeasureRunRequest(
+    EuNationalImplementingMeasureDiscoveryPlan Plan,
+    string PlanResourceId,
+    MachineQueryRendererSource RendererSource);
+
 /// <summary>
 /// Why <see cref="EuRepeatedEnumerationExecutor.RunWitnessTraversalAsync"/> did not deliver a real
 /// canonical entry set. Closed, and deliberately narrower than <see cref="EuEnumerationRefusal"/>:
@@ -600,6 +606,46 @@ public sealed class EuRepeatedEnumerationExecutor
                     (pass, cursor, selected, evidenceRef) => BindObjectFactsPage(request, pass, cursor, selected, evidenceRef),
                     batchObjects: request.BatchObjects,
                     batchMembershipKeyOrdinal: batchMembershipOrdinal,
+                    cancellationToken)
+                .ConfigureAwait(false);
+        }
+        finally
+        {
+            session.Dispose();
+        }
+    }
+
+    /// <summary>The plan-fixed Luxembourg sector-7 NIM family, one session and two passes.</summary>
+    public async Task<EuEnumerationRunResult> RunNationalImplementingMeasuresAsync(
+        EuNationalImplementingMeasureRunRequest request,
+        BoundMachineRequest sourceWitness,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(sourceWitness);
+
+        var session = await StartSessionAsync(sourceWitness, cancellationToken).ConfigureAwait(false);
+        if (session is null)
+        {
+            return EuEnumerationRunResult.Refused(
+                new EuEnumerationRefusalDetail(
+                    EuEnumerationRefusal.RobotsBootstrapRefused, null, null, null, null, null, null, null, null),
+                productRequestCount: 0);
+        }
+
+        try
+        {
+            var profile = request.Plan.CreateDeliveryProfile();
+            var profileRef = RepeatedEnumerationInterpretationProfileIdentity.Create(NewUrn(), profile);
+            return await RunPassesAsync(
+                    session,
+                    profile,
+                    profileRef,
+                    pass => BindNationalImplementingMeasureCount(request, pass),
+                    (pass, cursor, selected, evidenceRef) =>
+                        BindNationalImplementingMeasurePage(request, pass, cursor, selected, evidenceRef),
+                    batchObjects: null,
+                    batchMembershipKeyOrdinal: null,
                     cancellationToken)
                 .ConfigureAwait(false);
         }
@@ -1537,6 +1583,40 @@ public sealed class EuRepeatedEnumerationExecutor
             request.Set,
             request.BatchObjects,
             (EuObjectFactsQueryPass)passOrdinal,
+            cursor,
+            selected,
+            countEvidenceRef,
+            request.PlanResourceId,
+            NewUrn(),
+            request.RendererSource);
+        return new EuBoundQueryParts(
+            bound.MachinePlanRef, bound.InputArtifact.ArtifactRef, bound.Request,
+            bound.InputArtifact.PartitionBinding.MemberKey, bound.MachinePlan.ResponseCardinality.RowLimit);
+    }
+
+    private static EuBoundQueryParts BindNationalImplementingMeasureCount(
+        EuNationalImplementingMeasureRunRequest request,
+        int passOrdinal)
+    {
+        var bound = request.Plan.BindCount(
+            (EuNationalImplementingMeasureQueryPass)passOrdinal,
+            request.PlanResourceId,
+            NewUrn(),
+            request.RendererSource);
+        return new EuBoundQueryParts(
+            bound.MachinePlanRef, bound.InputArtifact.ArtifactRef, bound.Request,
+            bound.InputArtifact.PartitionBinding.MemberKey, null);
+    }
+
+    private static EuBoundQueryParts BindNationalImplementingMeasurePage(
+        EuNationalImplementingMeasureRunRequest request,
+        int passOrdinal,
+        IReadOnlyList<string>? cursor,
+        long selected,
+        SourceArtifactRef countEvidenceRef)
+    {
+        var bound = request.Plan.BindPage(
+            (EuNationalImplementingMeasureQueryPass)passOrdinal,
             cursor,
             selected,
             countEvidenceRef,
