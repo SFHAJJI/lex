@@ -76,7 +76,8 @@ public sealed class ClosedVocabularyCensusTests
                     + "RootWatermarkBindingRefused, WitnessBindingRefused, "
                     + "WitnessReconciliationRefused, ScopeReductionRefused, WitnessTraversalRefused, "
                     + "DocumentFetchSessionNotStarted, DocumentBodyNotRetained, "
-                    + "AcquisitionOutcomeNotRepresentable, RecordSetNotRetained",
+                    + "AcquisitionOutcomeNotRepresentable, RecordSetNotRetained, "
+                    + "ReifiedAxiomDecodeRefused",
                 "Lex.V3.Ingest.Europe.EuWitnessTraversalRefusal: None, RobotsBootstrapRefused, "
                     + "BindRefused, ObservationNotExecuted, StatusNotAdmitted, MediaTypeNotAdmitted, "
                     + "PageBodyMalformed, CrossingRefused, StepRefused, EntrySetRefused, "

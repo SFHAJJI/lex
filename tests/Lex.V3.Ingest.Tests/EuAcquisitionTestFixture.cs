@@ -381,6 +381,46 @@ internal static class EuAcquisitionTestFixture
         return ScriptFor("A", rows.Length, rows, ReifiedAxiomFactsProjection);
     }
 
+    /// <summary>
+    /// One family-A positive row: the publisher's own <c>?axiom ?predicate ?value</c> shape, with
+    /// the three computed projections bound exactly as the page template's own BINDs produce them.
+    /// </summary>
+    internal static string ReifiedAxiomFactsRow(
+        string parentIri,
+        string axiomIri,
+        string predicateIri,
+        string value,
+        bool valueIsIri,
+        string datatypeIri = "")
+    {
+        var valueTerm = valueIsIri
+            ? Iri(value)
+            : datatypeIri.Length == 0 ? PlainLiteral(value) : TypedLiteral(value, datatypeIri);
+        var kind = valueIsIri ? "iri" : "literal";
+        var fields = new List<(string Var, string Term)>
+        {
+            ("parent", Iri(parentIri)),
+            ("axiom", Iri(axiomIri)),
+            ("predicate", Iri(predicateIri)),
+            ("value", valueTerm),
+            ("value_kind", PlainLiteral(kind)),
+            ("datatype_iri", PlainLiteral(valueIsIri ? "" : datatypeIri)),
+            ("language_tag", PlainLiteral("")),
+            ("key_1", PlainLiteral(parentIri)),
+            ("key_2", PlainLiteral(axiomIri)),
+            ("key_3", PlainLiteral(predicateIri)),
+            ("key_4", PlainLiteral(value)),
+            ("key_5", PlainLiteral(kind)),
+            ("key_6", PlainLiteral(valueIsIri ? "" : datatypeIri)),
+            ("key_7", PlainLiteral("")),
+        };
+        return Row(fields);
+    }
+
+    /// <summary>Family A's scripted sequence from explicit rows, in the order given.</summary>
+    internal static FamilyScript AxiomScriptFrom(params string[] rows) =>
+        ScriptFor("A", rows.Length, rows, ReifiedAxiomFactsProjection);
+
     internal static string ManifestationFactsRowsJson(IReadOnlyList<string> rows) =>
         RowsJson(ManifestationFactsProjection, rows);
 
