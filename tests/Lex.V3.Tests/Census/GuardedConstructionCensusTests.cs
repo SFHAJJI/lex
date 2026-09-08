@@ -210,6 +210,8 @@ public sealed class GuardedConstructionCensusTests
                     + "method public static "
                     + "Lex.V3.Contracts.Source.Absence.AbsenceSubject::TryCreate",
                 "Lex.V3.Contracts.Source.Core.BoundMachineRequest: by-ref-method public instance "
+                    + "Lex.V3.Contracts.Source.Europe.EuCaseLawBoundQuery::Deconstruct, "
+                    + "by-ref-method public instance "
                     + "Lex.V3.Contracts.Source.Europe.EuConsolidationBoundQuery::Deconstruct, "
                     + "by-ref-method public instance "
                     + "Lex.V3.Contracts.Source.Europe.EuDocumentFetchBoundQuery::Deconstruct, "
@@ -258,6 +260,8 @@ public sealed class GuardedConstructionCensusTests
                     + "instance "
                     + "Lex.V3.Contracts.Source.Core.RepeatedEnumerationResolvedEvidence::Deconstruc"
                     + "t, "
+                    + "by-ref-method public instance "
+                    + "Lex.V3.Contracts.Source.Europe.EuCaseLawBoundQuery::Deconstruct, "
                     + "by-ref-method public instance "
                     + "Lex.V3.Contracts.Source.Europe.EuConsolidationBoundQuery::Deconstruct, "
                     + "by-ref-method public instance "
@@ -378,10 +382,18 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Contracts.Source.Europe.EuBoundaryCrossing::.ctor, "
                     + "method public static "
                     + "Lex.V3.Contracts.Source.Europe.EuBoundaryCrossing::TryCross",
+                "Lex.V3.Contracts.Source.Europe.EuCaseLawDiscoveryPlan: constructor private "
+                    + "instance Lex.V3.Contracts.Source.Europe.EuCaseLawDiscoveryPlan::.ctor, "
+                    + "constructor private static "
+                    + "Lex.V3.Contracts.Source.Europe.EuCaseLawDiscoveryPlan::.cctor, "
+                    + "method public static "
+                    + "Lex.V3.Contracts.Source.Europe.EuCaseLawDiscoveryPlan::Create",
                 "Lex.V3.Contracts.Source.Europe.EuCaseLawLinkBinding: constructor private instance "
                     + "Lex.V3.Contracts.Source.Europe.EuCaseLawLinkBinding::.ctor, "
                     + "method public static "
                     + "Lex.V3.Contracts.Source.Europe.EuCaseLawLinkBinding::Create",
+                "Lex.V3.Contracts.Source.Europe.EuCaseLawSparqlRenderer: constructor internal "
+                    + "instance Lex.V3.Contracts.Source.Europe.EuCaseLawSparqlRenderer::.ctor",
                 "Lex.V3.Contracts.Source.Europe.EuCellarObjectSnapshot: constructor private "
                     + "instance Lex.V3.Contracts.Source.Europe.EuCellarObjectSnapshot::.ctor, "
                     + "method private static "
