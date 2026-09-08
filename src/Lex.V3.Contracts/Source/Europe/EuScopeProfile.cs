@@ -667,11 +667,11 @@ public static class EuScopeProfile
         EuRelationFamily.ConsolidatedBasedOn => "act_consolidated_based_on_resource_legal",
         EuRelationFamily.ConsolidatedConsolidates => "act_consolidated_consolidates_resource_legal",
         EuRelationFamily.CaseLawInterpretes => "case-law_interpretes_resource_legal",
-        EuRelationFamily.CaseLawDeclaresVoid =>
+        EuRelationFamily.CaseLawDeclaresVoidByPreliminaryRuling =>
             "case-law_declares_void_by_preliminary_ruling_resource_legal",
         EuRelationFamily.SubmitsPreliminaryQuestion =>
             "communication_case_new_submits_preliminary_question_resource_legal",
-        EuRelationFamily.RequestsAnnulment =>
+        EuRelationFamily.CommunicationCaseRequestsAnnulment =>
             "communication_case_new_requests_annulment_of_resource_legal",
         _ => throw new ArgumentOutOfRangeException(
             nameof(family), family, "Unknown EU relation family."),

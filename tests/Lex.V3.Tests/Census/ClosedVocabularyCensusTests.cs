@@ -102,8 +102,9 @@ public sealed class ClosedVocabularyCensusTests
                     + "LocalInboundView",
                 "Lex.V3.Contracts.EuRelationFamily: Amends, AmendedBy, Corrects, BasedOn, Repeals, "
                     + "ImplicitlyRepeals, ProposesToAmend, ConsolidatedBasedOn, "
-                    + "ConsolidatedConsolidates, CaseLawInterpretes, CaseLawDeclaresVoid, "
-                    + "SubmitsPreliminaryQuestion, RequestsAnnulment",
+                    + "ConsolidatedConsolidates, CaseLawInterpretes, "
+                    + "CaseLawDeclaresVoidByPreliminaryRuling, SubmitsPreliminaryQuestion, "
+                    + "CommunicationCaseRequestsAnnulment",
                 "Lex.V3.Contracts.Facts.CelexProfile: BaseAct, ConsolidatedAct, Corrigendum, "
                     + "TreatyPart, NationalImplementingMeasure",
                 "Lex.V3.Contracts.Facts.DateOpenSentinel: NotOpen, OpenEnded",

@@ -180,13 +180,13 @@ public enum EuRelationFamily
     CaseLawInterpretes = 10,
 
     [JsonStringEnumMemberName("case-law_declares_void_by_preliminary_ruling_resource_legal")]
-    CaseLawDeclaresVoid = 11,
+    CaseLawDeclaresVoidByPreliminaryRuling = 11,
 
     [JsonStringEnumMemberName("communication_case_new_submits_preliminary_question_resource_legal")]
     SubmitsPreliminaryQuestion = 12,
 
     [JsonStringEnumMemberName("communication_case_new_requests_annulment_of_resource_legal")]
-    RequestsAnnulment = 13,
+    CommunicationCaseRequestsAnnulment = 13,
 }
 
 /// <summary>
