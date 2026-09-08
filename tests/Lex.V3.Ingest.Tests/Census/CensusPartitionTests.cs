@@ -42,7 +42,11 @@ public sealed class CensusPartitionTests
     /// is enforced by <see cref="EveryCensusCandidateIsPinnedOrDeclinedWithAReason"/>; the reasons
     /// are the part a person has to keep true.
     /// </summary>
-    private static readonly string[] Declined = [];
+    private static readonly string[] Declined =
+    [
+        "Lex.V3.Ingest.Luxembourg.LuxembourgTranspositionProducer: one private predicate token; "
+            + "the producer has its own direct contract tests and is not a vocabulary registry.",
+    ];
 
     [TestMethod]
     public void EveryCensusCandidateIsPinnedOrDeclinedWithAReason()
@@ -66,14 +70,14 @@ public sealed class CensusPartitionTests
     public void ThePartitionTotalsAreExactlyThese()
     {
         Assert.AreEqual(
-            63, ClosedSurfaceCensus.Candidates(CensusScope.SweptHere).Count, "candidates");
+            66, ClosedSurfaceCensus.Candidates(CensusScope.SweptHere).Count, "candidates");
         Assert.AreEqual(
-            26, ClosedSurfaceCensus.ClosedVocabularies(CensusScope.SweptHere).Count, "vocabularies");
+            27, ClosedSurfaceCensus.ClosedVocabularies(CensusScope.SweptHere).Count, "vocabularies");
         Assert.AreEqual(
-            36, ClosedSurfaceCensus.GuardedConstruction(CensusScope.SweptHere).Count, "guarded types");
+            37, ClosedSurfaceCensus.GuardedConstruction(CensusScope.SweptHere).Count, "guarded types");
         Assert.AreEqual(
             1, ClosedSurfaceCensus.VocabularyRegistries(CensusScope.SweptHere).Count, "registries");
-        Assert.AreEqual(0, Declined.Length, "declined");
+        Assert.AreEqual(1, Declined.Length, "declined");
     }
 
     private static string NameOf(string row) =>
