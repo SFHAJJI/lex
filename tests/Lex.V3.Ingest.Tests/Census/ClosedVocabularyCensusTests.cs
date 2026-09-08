@@ -125,6 +125,9 @@ public sealed class ClosedVocabularyCensusTests
                     + "AcquiredComplete, Unacquired, Incomplete, Uncertain",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgResourceObservationExclusionCause: "
                     + "PredicateNotAdmitted, BlankNodeObject",
+                "Lex.V3.Ingest.Luxembourg.LuxembourgTranspositionIdentityProductionRefusal: None, "
+                    + "EnumerationRefused, EnumerationProofRefused, VerifiedRowsRefused, "
+                    + "RowNotAdmitted, AmbiguousIdentity",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgTranspositionProductionRefusal: None, "
                     + "QueryExecutionRefused, TransposesFamilyNotComplete, "
                     + "TransposesFamilyEvidenceNotSingular, RelationNotAdmitted",

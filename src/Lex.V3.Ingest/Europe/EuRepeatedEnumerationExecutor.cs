@@ -5,6 +5,7 @@ using Lex.V3.Contracts.Custody;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Europe;
 using Lex.V3.Contracts.Source.Http;
+using Lex.V3.Contracts.Source.Luxembourg;
 
 namespace Lex.V3.Ingest.Europe;
 
@@ -255,6 +256,12 @@ public sealed record EuObjectFactsPartitionRunRequest(
 /// <summary>One bounded enumeration of the plan-fixed Luxembourg sector-7 NIM family.</summary>
 public sealed record EuNationalImplementingMeasureRunRequest(
     EuNationalImplementingMeasureDiscoveryPlan Plan,
+    string PlanResourceId,
+    MachineQueryRendererSource RendererSource);
+
+/// <summary>One bounded enumeration of Legilux transposition target identities.</summary>
+public sealed record LuxembourgTranspositionIdentityRunRequest(
+    LuxembourgTranspositionIdentityDiscoveryPlan Plan,
     string PlanResourceId,
     MachineQueryRendererSource RendererSource);
 
@@ -644,6 +651,46 @@ public sealed class EuRepeatedEnumerationExecutor
                     pass => BindNationalImplementingMeasureCount(request, pass),
                     (pass, cursor, selected, evidenceRef) =>
                         BindNationalImplementingMeasurePage(request, pass, cursor, selected, evidenceRef),
+                    batchObjects: null,
+                    batchMembershipKeyOrdinal: null,
+                    cancellationToken)
+                .ConfigureAwait(false);
+        }
+        finally
+        {
+            session.Dispose();
+        }
+    }
+
+    /// <summary>The plan-fixed Legilux transposition target identity family, one session and two passes.</summary>
+    public async Task<EuEnumerationRunResult> RunLuxembourgTranspositionIdentitiesAsync(
+        LuxembourgTranspositionIdentityRunRequest request,
+        BoundMachineRequest sourceWitness,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(sourceWitness);
+
+        var session = await StartSessionAsync(sourceWitness, cancellationToken).ConfigureAwait(false);
+        if (session is null)
+        {
+            return EuEnumerationRunResult.Refused(
+                new EuEnumerationRefusalDetail(
+                    EuEnumerationRefusal.RobotsBootstrapRefused, null, null, null, null, null, null, null, null),
+                productRequestCount: 0);
+        }
+
+        try
+        {
+            var profile = request.Plan.CreateDeliveryProfile();
+            var profileRef = RepeatedEnumerationInterpretationProfileIdentity.Create(NewUrn(), profile);
+            return await RunPassesAsync(
+                    session,
+                    profile,
+                    profileRef,
+                    pass => BindLuxembourgTranspositionIdentityCount(request, pass),
+                    (pass, cursor, selected, evidenceRef) =>
+                        BindLuxembourgTranspositionIdentityPage(request, pass, cursor, selected, evidenceRef),
                     batchObjects: null,
                     batchMembershipKeyOrdinal: null,
                     cancellationToken)
@@ -1617,6 +1664,40 @@ public sealed class EuRepeatedEnumerationExecutor
     {
         var bound = request.Plan.BindPage(
             (EuNationalImplementingMeasureQueryPass)passOrdinal,
+            cursor,
+            selected,
+            countEvidenceRef,
+            request.PlanResourceId,
+            NewUrn(),
+            request.RendererSource);
+        return new EuBoundQueryParts(
+            bound.MachinePlanRef, bound.InputArtifact.ArtifactRef, bound.Request,
+            bound.InputArtifact.PartitionBinding.MemberKey, bound.MachinePlan.ResponseCardinality.RowLimit);
+    }
+
+    private static EuBoundQueryParts BindLuxembourgTranspositionIdentityCount(
+        LuxembourgTranspositionIdentityRunRequest request,
+        int passOrdinal)
+    {
+        var bound = request.Plan.BindCount(
+            (LuxembourgQueryPass)passOrdinal,
+            request.PlanResourceId,
+            NewUrn(),
+            request.RendererSource);
+        return new EuBoundQueryParts(
+            bound.MachinePlanRef, bound.InputArtifact.ArtifactRef, bound.Request,
+            bound.InputArtifact.PartitionBinding.MemberKey, null);
+    }
+
+    private static EuBoundQueryParts BindLuxembourgTranspositionIdentityPage(
+        LuxembourgTranspositionIdentityRunRequest request,
+        int passOrdinal,
+        IReadOnlyList<string>? cursor,
+        long selected,
+        SourceArtifactRef countEvidenceRef)
+    {
+        var bound = request.Plan.BindPage(
+            (LuxembourgQueryPass)passOrdinal,
             cursor,
             selected,
             countEvidenceRef,
