@@ -303,6 +303,15 @@ public sealed class GuardedConstructionCensusTests
                     + "method public static "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgRelationFamilyAcquisition::NotComplete, "
                     + "3 compiler-generated",
+                "Lex.V3.Ingest.Luxembourg.LuxembourgTranspositionProductionResult: constructor "
+                    + "private instance "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgTranspositionProductionResult::.ctor, "
+                    + "method internal static "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgTranspositionProductionResult::Refused, "
+                    + "method internal static "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgTranspositionProductionResult::Success, "
+                    + "method public static "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgTranspositionProducer::Produce",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgTypedAssertion: constructor internal instance "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgTypedAssertion::.ctor, "
                     + "method private static "
