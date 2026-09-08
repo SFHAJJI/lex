@@ -134,6 +134,67 @@ public sealed class LuxembourgOpinionLinkOnlyTests
         Assert.AreEqual(LuxembourgOpinionLocatorRefusal.DocumentLocatorIsNotRobotsPermitted, fragment);
     }
 
+    /// <summary>
+    /// An arbitrary host is refused: one host's robots result is not evidence about another's.
+    /// </summary>
+    /// <remarks>
+    /// This is Codex's finding against `16623c5c`, and it was a real over-generalisation of my own
+    /// measurement. The door accepted any absolute bare HTTP(S) URI, stored its host, and stamped it
+    /// with the link-only disposition — so <c>https://example.com/opinion.pdf</c> was carried as an
+    /// official Conseil d'État locator on the strength of a robots policy <c>example.com</c> never
+    /// published. I measured one host and let the door speak for every host on the internet.
+    /// </remarks>
+    [TestMethod]
+    public void AnArbitraryHostIsRefusedRatherThanCarriedUnderAnotherHostsPermission()
+    {
+        Assert.IsNull(Create(out var foreign, locator: "https://example.com/opinion.pdf"));
+        Assert.AreEqual(
+            LuxembourgOpinionLocatorRefusal.DocumentLocatorIsNotAnAdmittedOfficialFamily, foreign);
+
+        // The right host with the wrong path is refused too: the robots policies disallow by path,
+        // so admission is per path and not merely per host.
+        Assert.IsNull(Create(out var wrongPath, locator: "https://conseil-etat.public.lu/fr/search/x.pdf"));
+        Assert.AreEqual(
+            LuxembourgOpinionLocatorRefusal.DocumentLocatorIsNotAnAdmittedOfficialFamily, wrongPath);
+    }
+
+    /// <summary>
+    /// Each admitted family carries its own measured robots state, and they are not the same.
+    /// </summary>
+    /// <remarks>
+    /// Flattening these into one boolean would repeat the same defect at a smaller scale.
+    /// <c>conseil-etat</c> and the Legilux filestore are permitted by published policies — the first
+    /// disallows only query shapes, the second an explicit list that does not include
+    /// <c>/filestore/</c>. <c>wdocs-pub.chd.lu</c> answers 404 for <c>robots.txt</c> and therefore
+    /// states nothing, which is not permission granted.
+    /// </remarks>
+    [TestMethod]
+    public void EachAdmittedFamilyCarriesItsOwnMeasuredRobotsStateRatherThanASharedOne()
+    {
+        var families = LuxembourgOpinionLinkOnlyVocabulary.AdmittedHostFamilies;
+
+        Assert.HasCount(3, families);
+        CollectionAssert.AreEqual(
+            new[] { "conseil-etat.public.lu", "legilux.public.lu", "wdocs-pub.chd.lu" },
+            families.Select(static family => family.Host).ToArray());
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                LuxembourgOpinionHostRobotsState.PermittedByStatedPolicy,
+                LuxembourgOpinionHostRobotsState.PermittedByStatedPolicy,
+                LuxembourgOpinionHostRobotsState.NoStatedPolicy,
+            },
+            families.Select(static family => family.RobotsState).ToArray(),
+            "the chd document host states no policy, which is not the same as permission.");
+
+        var record = Create(out _);
+        Assert.IsNotNull(record);
+        Assert.AreEqual(
+            LuxembourgOpinionHostRobotsState.PermittedByStatedPolicy,
+            record!.DocumentFamily.RobotsState,
+            "a record carries its own family's state, never a projected one.");
+    }
+
     /// <summary>A date valid for its datatype but impossible in the calendar is refused.</summary>
     [TestMethod]
     public void ADateThatCannotExistIsRefusedEvenThoughItsDatatypeIsAccepted()
@@ -168,6 +229,9 @@ public sealed class LuxembourgOpinionLinkOnlyTests
 
         Assert.IsNull(Create(out var impossibleDate, date: "2026-02-30"));
         reached.Add(impossibleDate);
+
+        Assert.IsNull(Create(out var foreignHost, locator: "https://example.com/opinion.pdf"));
+        reached.Add(foreignHost);
 
         CollectionAssert.AreEqual(
             Enum.GetValues<LuxembourgOpinionLocatorRefusal>()

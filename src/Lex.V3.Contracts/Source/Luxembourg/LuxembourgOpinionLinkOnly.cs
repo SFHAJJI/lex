@@ -34,7 +34,44 @@ public enum LuxembourgOpinionLocatorRefusal
     /// The date literal was valid for its datatype's shape but not a date that exists.
     /// </summary>
     OpinionDateNotValidAtItsPrecision = 6,
+
+    /// <summary>
+    /// The locator is not in one of the official host and path families actually observed.
+    /// </summary>
+    /// <remarks>
+    /// An earlier version of this door accepted any absolute bare HTTP(S) URI and stamped it with
+    /// the link-only disposition. That projected one host's measured robots result onto every host
+    /// on the internet: <c>https://example.com/opinion.pdf</c> would have been carried as an
+    /// official Conseil d'État locator with <c>example.com</c> as its host. Robots evidence is per
+    /// host and per path, so admission is too.
+    /// </remarks>
+    DocumentLocatorIsNotAnAdmittedOfficialFamily = 7,
 }
+
+/// <summary>What a host's own robots policy says about the family a locator belongs to.</summary>
+/// <remarks>
+/// A typed state rather than a boolean, because the observed families are not in the same position
+/// and flattening them would be the same projection this vocabulary exists to prevent. "No stated
+/// policy" is not permission granted in writing, and a reader deciding whether to follow a link
+/// deserves to see which of the two they have.
+/// </remarks>
+public enum LuxembourgOpinionHostRobotsState
+{
+    /// <summary>The host publishes a policy and this family's paths are not disallowed by it.</summary>
+    PermittedByStatedPolicy = 1,
+
+    /// <summary>The host publishes no policy at all, which is a different fact from permission.</summary>
+    NoStatedPolicy = 2,
+}
+
+/// <summary>
+/// One official host and path family the opinion documents were observed on, with that host's own
+/// robots position.
+/// </summary>
+public sealed record LuxembourgOpinionHostFamily(
+    string Host,
+    string PathPrefix,
+    LuxembourgOpinionHostRobotsState RobotsState);
 
 /// <summary>
 /// The closed part of the Conseil d'État opinion surface: the proven JOLux access path, the measured
@@ -55,6 +92,64 @@ public static class LuxembourgOpinionLinkOnlyVocabulary
 
     /// <summary>The opinion's own date. 9,144 observed.</summary>
     public const string OpinionDatePredicateIri = Jolux + "opinionDate";
+
+    /// <summary>
+    /// The official host and path families the opinion documents were observed on, each carrying
+    /// that host's own robots position. Closed: a locator outside these is refused.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Every entry is a measurement rather than an expectation, and the three are deliberately not
+    /// flattened into one rule:
+    /// </para>
+    /// <para>
+    /// <c>conseil-etat.public.lu</c> publishes a policy whose <c>User-agent: *</c> block disallows
+    /// only query-string shapes — <c>Disallow: /*?*</c> with one narrow <c>Allow: /*?b=*</c> — so a
+    /// bare <c>/content/dam/</c> path is permitted. A `HEAD` of the proven locator returned `200
+    /// application/pdf`.
+    /// </para>
+    /// <para>
+    /// <c>legilux.public.lu</c> publishes a policy that disallows an explicit list for
+    /// <c>User-agent: *</c> — <c>/publications-regroupees</c>, <c>/eli/etat/adm/</c>, <c>/search</c>,
+    /// <c>/reg_ue/</c>, <c>/dir_ue/</c>, <c>*.svg</c>, <c>*.docx</c> and named documents.
+    /// <c>/filestore/</c> is not among them, so it is permitted. That host refuses `HEAD` with 403
+    /// while serving a range GET, which is a delivery quirk rather than a robots position.
+    /// </para>
+    /// <para>
+    /// <c>wdocs-pub.chd.lu</c> answers <c>404</c> for <c>robots.txt</c>. It states no policy, which
+    /// is recorded as exactly that. The pack's note that "robots.txt is an allow-list" describes
+    /// <c>www.chd.lu</c>, a different host from the one serving the documents.
+    /// </para>
+    /// </remarks>
+    public static IReadOnlyList<LuxembourgOpinionHostFamily> AdmittedHostFamilies { get; } =
+        Array.AsReadOnly(new[]
+        {
+            new LuxembourgOpinionHostFamily(
+                "conseil-etat.public.lu", "/content/dam/",
+                LuxembourgOpinionHostRobotsState.PermittedByStatedPolicy),
+            new LuxembourgOpinionHostFamily(
+                "legilux.public.lu", "/filestore/",
+                LuxembourgOpinionHostRobotsState.PermittedByStatedPolicy),
+            new LuxembourgOpinionHostFamily(
+                "wdocs-pub.chd.lu", "/docs/",
+                LuxembourgOpinionHostRobotsState.NoStatedPolicy),
+        });
+
+    /// <summary>The admitted family a locator belongs to, or null when it belongs to none.</summary>
+    public static LuxembourgOpinionHostFamily? FamilyFor(Uri locator)
+    {
+        ArgumentNullException.ThrowIfNull(locator);
+        foreach (var family in AdmittedHostFamilies)
+        {
+            if (string.Equals(locator.Host, family.Host, StringComparison.OrdinalIgnoreCase) &&
+                locator.AbsolutePath.StartsWith(family.PathPrefix, StringComparison.Ordinal))
+            {
+                return family;
+            }
+        }
+
+        return null;
+    }
 
     /// <summary>
     /// The condition that would end the link-only disposition, composed from cited authority rather
@@ -124,7 +219,7 @@ public sealed class LuxembourgOpinionLinkOnlyRecord
     private LuxembourgOpinionLinkOnlyRecord(
         string opinionIri,
         string documentLocator,
-        string documentHost,
+        LuxembourgOpinionHostFamily documentFamily,
         string rawOpinionDateLexical,
         string opinionDateDatatypeIri,
         DatePrecision opinionDatePrecision,
@@ -132,7 +227,7 @@ public sealed class LuxembourgOpinionLinkOnlyRecord
     {
         OpinionIri = opinionIri;
         DocumentLocator = documentLocator;
-        DocumentHost = documentHost;
+        DocumentFamily = documentFamily;
         RawOpinionDateLexical = rawOpinionDateLexical;
         OpinionDateDatatypeIri = opinionDateDatatypeIri;
         OpinionDatePrecision = opinionDatePrecision;
@@ -145,8 +240,15 @@ public sealed class LuxembourgOpinionLinkOnlyRecord
     /// <summary>The official document locator, exactly as the publisher stated it.</summary>
     public string DocumentLocator { get; }
 
-    /// <summary>The locator's host, read from the locator rather than accepted as a parameter.</summary>
-    public string DocumentHost { get; }
+    /// <summary>
+    /// The admitted official family this locator belongs to, carrying that host's own robots
+    /// position. Resolved from the locator rather than accepted as a parameter, so a caller cannot
+    /// assert a permission the host never gave.
+    /// </summary>
+    public LuxembourgOpinionHostFamily DocumentFamily { get; }
+
+    /// <summary>The locator's host, read from its admitted family.</summary>
+    public string DocumentHost => DocumentFamily.Host;
 
     /// <summary>The opinion's date exactly as the publisher wrote it.</summary>
     public string RawOpinionDateLexical { get; }
@@ -197,6 +299,16 @@ public sealed class LuxembourgOpinionLinkOnlyRecord
             return null;
         }
 
+        // Admission is per host and per path, because the robots evidence is. Accepting any bare
+        // absolute URI here would carry an arbitrary host under a permission only conseil-etat
+        // actually granted.
+        var family = LuxembourgOpinionLinkOnlyVocabulary.FamilyFor(locator);
+        if (family is null)
+        {
+            refusal = LuxembourgOpinionLocatorRefusal.DocumentLocatorIsNotAnAdmittedOfficialFamily;
+            return null;
+        }
+
         if (string.IsNullOrEmpty(rawOpinionDateLexical))
         {
             refusal = LuxembourgOpinionLocatorRefusal.OpinionDateMissingOrNotALiteral;
@@ -218,7 +330,7 @@ public sealed class LuxembourgOpinionLinkOnlyRecord
         return new LuxembourgOpinionLinkOnlyRecord(
             opinionIri!,
             documentLocator!,
-            locator.Host,
+            family,
             rawOpinionDateLexical!,
             opinionDateDatatypeIri!,
             precision,
