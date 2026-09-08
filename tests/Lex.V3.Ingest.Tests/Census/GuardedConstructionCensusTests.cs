@@ -148,6 +148,16 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Ingest.Europe.EuQueryExecutionAdapter::RunAsync, "
                     + "method public static Lex.V3.Ingest.Europe.EuQueryExecutionResult::Delivered, "
                     + "method public static Lex.V3.Ingest.Europe.EuQueryExecutionResult::Refused",
+                "Lex.V3.Ingest.Europe.EuTranspositionBridgePopulationResult: constructor private "
+                    + "instance Lex.V3.Ingest.Europe.EuTranspositionBridgePopulationResult::.ctor, "
+                    + "method internal static "
+                    + "Lex.V3.Ingest.Europe.EuTranspositionBridgePopulationResult::Refused, "
+                    + "method internal static "
+                    + "Lex.V3.Ingest.Europe.EuTranspositionBridgePopulationResult::Success, "
+                    + "method public instance "
+                    + "Lex.V3.Ingest.Europe.EuTranspositionBridgePopulationProducer::ProduceAsync",
+                "Lex.V3.Ingest.Europe.EuTranspositionBridgePopulationRow: constructor internal "
+                    + "instance Lex.V3.Ingest.Europe.EuTranspositionBridgePopulationRow::.ctor",
                 "Lex.V3.Ingest.Europe.EuTranspositionBridgeProductionResult: constructor private "
                     + "instance "
                     + "Lex.V3.Ingest.Europe.EuTranspositionBridgeProductionResult::.ctor, "
