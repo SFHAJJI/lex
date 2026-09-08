@@ -39,6 +39,29 @@ public enum EuProcedureEventRefusal
     /// as a Cellar work, and that is what this says.
     /// </remarks>
     DossierNotACellarWork = 6,
+
+    /// <summary>
+    /// The event declared a type that is not an absolute HTTP IRI, so it cannot be carried as one.
+    /// </summary>
+    /// <remarks>
+    /// The row is refused rather than delivered without that term. Keeping the well-formed types and
+    /// discarding the malformed one would hand a reader a type list that looks complete and is not,
+    /// and the discarded term would not be there to notice — the same false absence a closed type
+    /// enum would have produced, arrived at by a different route. Tolerating an unknown vocabulary
+    /// is not tolerating an unrepresentable term.
+    /// </remarks>
+    EventTypeNotAnIri = 7,
+
+    /// <summary>
+    /// The date literal carried a datatype this reader accepts, and a value that is not valid at the
+    /// precision that datatype implies.
+    /// </summary>
+    /// <remarks>
+    /// Checking the datatype alone would let <c>"2024-02-30"^^xsd:date</c> through carrying
+    /// <see cref="DatePrecision.YearMonthDay"/>, which asserts a day that does not exist. The
+    /// precision is a claim about the value, so the value has to support it.
+    /// </remarks>
+    EventDateNotValidAtItsPrecision = 8,
 }
 
 /// <summary>
@@ -96,9 +119,14 @@ public static class EuProcedureEventVocabulary
 /// </para>
 /// <para>
 /// WHAT IS STILL REFUSED. An event with NO type is refused, because the authority describes these as
-/// "dated typed records" and an untyped node is not one. A date that is absent, not a literal, or
-/// carries a datatype outside the three date shapes is refused too. Tolerating a mixed vocabulary
-/// means not knowing which types exist; it does not mean accepting a node with no type or no date.
+/// "dated typed records" and an untyped node is not one. An event declaring a type that is not an
+/// absolute HTTP IRI is refused as a whole row, NOT delivered with that term quietly removed: a type
+/// list that looks complete and is not would be the same false absence a closed enum produces. A
+/// date that is absent, not a literal, carries a datatype outside the three date shapes, or carries
+/// a value that is not valid at the precision that datatype implies, is refused too — the precision
+/// is a claim about the value, so a value the claim does not fit is not a narrower reading of the
+/// date, it is a wrong one. Tolerating a mixed vocabulary means not knowing which types exist; it
+/// does not mean accepting a node with no type, an unrepresentable type, or an impossible date.
 /// </para>
 /// </remarks>
 public sealed class EuProcedureEventObservation
@@ -137,6 +165,9 @@ public sealed class EuProcedureEventObservation
     /// A list rather than one value, and a list of raw IRIs rather than an enum, because the
     /// authority says the event vocabularies are mixed. A reader that wants a known type matches
     /// against this; a type nobody here has seen is still present to be matched later.
+    ///
+    /// "Every" is exact. Nothing declared is filtered out on the way in, which is why a term that
+    /// cannot be carried as an IRI refuses the row rather than being dropped from this list.
     /// </remarks>
     public IReadOnlyList<string> ObservedTypeIris { get; }
 
@@ -180,12 +211,19 @@ public sealed class EuProcedureEventObservation
             return null;
         }
 
-        var types = observedTypeIris is null
-            ? []
-            : observedTypeIris.Where(static value => IsAbsoluteHttpIri(value)).ToArray();
+        // Every declared term is kept for inspection. Filtering here was the defect: a row declaring
+        // [event_legal, "not-an-iri"] was delivered as though event_legal were the only type the
+        // publisher stated, and the dropped term left no trace to find.
+        var types = observedTypeIris is null ? [] : observedTypeIris.ToArray();
         if (types.Length == 0)
         {
             refusal = EuProcedureEventRefusal.EventTypeMissing;
+            return null;
+        }
+
+        if (Array.Exists(types, static value => !IsAbsoluteHttpIri(value)))
+        {
+            refusal = EuProcedureEventRefusal.EventTypeNotAnIri;
             return null;
         }
 
@@ -198,6 +236,15 @@ public sealed class EuProcedureEventObservation
         if (!TryPrecision(dateDatatypeIri, out var precision))
         {
             refusal = EuProcedureEventRefusal.EventDateNotADateShape;
+            return null;
+        }
+
+        // The datatype says which shape the publisher claims; only the value can say whether the
+        // claim holds. The accepted Facts surface already owns that grammar, so it is called rather
+        // than restated here — a second spelling of a calendar rule is a second thing to drift.
+        if (!PublisherDate.IsValidLexicalValue(rawDateLexical!, precision))
+        {
+            refusal = EuProcedureEventRefusal.EventDateNotValidAtItsPrecision;
             return null;
         }
 

@@ -109,10 +109,58 @@ public sealed class EuProcedureEventTests
         Assert.IsNull(Create(out var empty, types: []));
         Assert.AreEqual(EuProcedureEventRefusal.EventTypeMissing, empty);
 
-        // A type list that is present but carries nothing usable reaches the same typed refusal:
-        // "no admitted type" and "no type at all" are the same fact about the event.
+        // A list that is present but carries nothing usable is NOT the same fact as an absent one,
+        // and no longer reports it. The publisher did declare a type here; it cannot be carried.
         Assert.IsNull(Create(out var unusable, types: ["not-an-iri", ""]));
-        Assert.AreEqual(EuProcedureEventRefusal.EventTypeMissing, unusable);
+        Assert.AreEqual(EuProcedureEventRefusal.EventTypeNotAnIri, unusable);
+    }
+
+    /// <summary>
+    /// A malformed type beside a well-formed one refuses the row. It is never dropped so that the
+    /// remaining types can be delivered as though they were all the publisher declared.
+    /// </summary>
+    /// <remarks>
+    /// This is the defect Codex found on head 4e798694 and it is worth stating plainly, because the
+    /// first draft of this file argued at length against closing the type vocabulary and then
+    /// silently discarded terms anyway. <c>Where(IsAbsoluteHttpIri)</c> kept every good type and
+    /// removed the bad one, so a row declaring <c>[event_legal, "not-an-iri"]</c> arrived looking
+    /// like a clean single-typed event. That is the same false absence a closed enum produces,
+    /// reached by a different route, and it is worse for being invisible: the discarded term left
+    /// nothing behind to notice.
+    /// </remarks>
+    [TestMethod]
+    public void AMalformedTypeBesideAGoodOneRefusesTheRowRatherThanVanishing()
+    {
+        var observed = Create(out var refusal, types: [Cdm + "event_legal", "not-an-iri"]);
+
+        Assert.IsNull(observed, "the good type must not be delivered as if it were the only one declared.");
+        Assert.AreEqual(EuProcedureEventRefusal.EventTypeNotAnIri, refusal);
+    }
+
+    /// <summary>
+    /// A date valid for its datatype's SHAPE but impossible in the calendar is refused.
+    /// </summary>
+    /// <remarks>
+    /// The second finding on 4e798694. The datatype was checked and the value never was, so
+    /// <c>"2024-02-30"^^xsd:date</c> was delivered reporting
+    /// <see cref="DatePrecision.YearMonthDay"/> — a precision claim about a day that does not
+    /// exist. Precision describes the value, so a value that cannot support it makes the claim
+    /// false rather than approximate. 2024 is a leap year and 29 February exists, which is why the
+    /// 30th is the honest probe here.
+    /// </remarks>
+    [TestMethod]
+    public void ADateThatCannotExistIsRefusedEvenThoughItsDatatypeIsOneWeAccept()
+    {
+        Assert.IsNull(Create(out var impossible, date: "2024-02-30"));
+        Assert.AreEqual(EuProcedureEventRefusal.EventDateNotValidAtItsPrecision, impossible);
+
+        // The neighbouring real date still passes, so the guard is not simply refusing February.
+        Assert.IsNotNull(Create(out var leapDay, date: "2024-02-29"));
+        Assert.AreEqual(EuProcedureEventRefusal.None, leapDay);
+
+        // A value shaped for a different precision than its datatype declares is refused too.
+        Assert.IsNull(Create(out var wrongShape, date: "2024-03"));
+        Assert.AreEqual(EuProcedureEventRefusal.EventDateNotValidAtItsPrecision, wrongShape);
     }
 
     /// <summary>
@@ -141,6 +189,12 @@ public sealed class EuProcedureEventTests
 
         Assert.IsNull(Create(out var badDatatype, datatype: "http://www.w3.org/2001/XMLSchema#string"));
         reached.Add(badDatatype);
+
+        Assert.IsNull(Create(out var badTypeTerm, types: ["not-an-iri"]));
+        reached.Add(badTypeTerm);
+
+        Assert.IsNull(Create(out var impossibleDate, date: "2024-02-30"));
+        reached.Add(impossibleDate);
 
         Assert.IsNull(Create(out var noDate, date: null));
         reached.Add(noDate);
