@@ -511,6 +511,14 @@ public enum LuxembourgQueryExecutionRefusal
     /// <summary>A relation row subject was not a member of this run's delivered resource census.</summary>
     [JsonStringEnumMemberName("relation_row_subject_not_in_census")]
     RelationRowSubjectNotInCensus = 14,
+
+    /// <summary>
+    /// An admitted assertion predicate reached the typed-fact producer in a shape its accepted
+    /// fact contract cannot represent. The original row remains retained as publisher evidence;
+    /// the run refuses rather than inventing or dropping the typed fact.
+    /// </summary>
+    [JsonStringEnumMemberName("assertion_fact_not_representable")]
+    AssertionFactNotRepresentable = 15,
 }
 
 /// <summary>
@@ -551,6 +559,51 @@ public sealed record LuxembourgResourceObservationExclusionAccounting(
     string Subject,
     LuxembourgResourceObservationExclusionCause Cause,
     int RowCount);
+
+/// <summary>
+/// One publisher assertion beside its accepted fact-kind disposition and, for the four date
+/// predicates with a dedicated contract, the one structurally matching date fact.
+/// </summary>
+/// <remarks>
+/// This projection does not replace the scope resolver's accepted/quarantined disposition. It
+/// classifies the publisher row without removing its subject, raw RDF value shape or evidence
+/// reference, so a consumer cannot mistake a typed category for a scope-admission decision.
+/// </remarks>
+public sealed class LuxembourgTypedAssertion
+{
+    internal LuxembourgTypedAssertion(
+        LuxembourgObservedAssertion assertion,
+        LuxembourgAssertionFactDisposition factDisposition,
+        LuxembourgActForceDateFact? actForceDateFact,
+        LuxembourgConsolidationApplicabilityDateFact? consolidationApplicabilityDateFact)
+    {
+        Assertion = assertion ?? throw new ArgumentNullException(nameof(assertion));
+        FactDisposition = factDisposition ?? throw new ArgumentNullException(nameof(factDisposition));
+        ActForceDateFact = actForceDateFact;
+        ConsolidationApplicabilityDateFact = consolidationApplicabilityDateFact;
+
+        if (FactDisposition.EvidenceRef != Assertion.ObservationRef ||
+            (ActForceDateFact is not null && ActForceDateFact.EvidenceRef != Assertion.ObservationRef) ||
+            (ConsolidationApplicabilityDateFact is not null &&
+             ConsolidationApplicabilityDateFact.EvidenceRef != Assertion.ObservationRef))
+        {
+            throw new ArgumentException("Every typed projection must retain the assertion's own evidence reference.");
+        }
+
+        if (ActForceDateFact is not null && ConsolidationApplicabilityDateFact is not null)
+        {
+            throw new ArgumentException("An assertion cannot populate both disjoint date-fact families.");
+        }
+    }
+
+    public LuxembourgObservedAssertion Assertion { get; }
+
+    public LuxembourgAssertionFactDisposition FactDisposition { get; }
+
+    public LuxembourgActForceDateFact? ActForceDateFact { get; }
+
+    public LuxembourgConsolidationApplicabilityDateFact? ConsolidationApplicabilityDateFact { get; }
+}
 
 public sealed class LuxembourgQueryExecutionRefusalDetail
 {
@@ -624,6 +677,7 @@ public sealed class LuxembourgQueryExecutionResult
         IReadOnlyList<LuxembourgRelationFamilyAcquisition> relationFamilyAcquisitions,
         IReadOnlyList<LuxembourgResolvedRelation> resolvedRelations,
         IReadOnlyList<LuxembourgResolvedLocalInboundRelation> localInboundRelations,
+        IReadOnlyList<LuxembourgTypedAssertion> typedAssertions,
         IReadOnlyList<string> resourceObservationSubjects,
         IReadOnlyList<LuxembourgResourceObservationExclusionAccounting> resourceObservationExclusions,
         DurableBlobWriteReceipt? scopeManifestReceipt,
@@ -639,6 +693,7 @@ public sealed class LuxembourgQueryExecutionResult
         RelationFamilyAcquisitions = relationFamilyAcquisitions;
         ResolvedRelations = resolvedRelations;
         LocalInboundRelations = localInboundRelations;
+        TypedAssertions = typedAssertions;
         ResourceObservationSubjects = resourceObservationSubjects;
         ResourceObservationExclusions = resourceObservationExclusions;
         ScopeManifestReceipt = scopeManifestReceipt;
@@ -656,6 +711,7 @@ public sealed class LuxembourgQueryExecutionResult
         IReadOnlyList<LuxembourgRelationFamilyAcquisition> relationFamilyAcquisitions,
         IReadOnlyList<LuxembourgResolvedRelation> resolvedRelations,
         IReadOnlyList<LuxembourgResolvedLocalInboundRelation> localInboundRelations,
+        IReadOnlyList<LuxembourgTypedAssertion> typedAssertions,
         IReadOnlyList<string> resourceObservationSubjects,
         IReadOnlyList<LuxembourgResourceObservationExclusionAccounting> resourceObservationExclusions,
         DurableBlobWriteReceipt scopeManifestReceipt,
@@ -667,6 +723,7 @@ public sealed class LuxembourgQueryExecutionResult
         ArgumentNullException.ThrowIfNull(topology);
         ArgumentNullException.ThrowIfNull(resolvedRelations);
         ArgumentNullException.ThrowIfNull(localInboundRelations);
+        ArgumentNullException.ThrowIfNull(typedAssertions);
         ArgumentNullException.ThrowIfNull(resourceObservationSubjects);
         ArgumentNullException.ThrowIfNull(resourceObservationExclusions);
         ArgumentNullException.ThrowIfNull(scopeManifestReceipt);
@@ -682,7 +739,7 @@ public sealed class LuxembourgQueryExecutionResult
             : LuxembourgQueryExecutionCompletion.PartialFamilyRefused;
         return new(
             topology, familyOutcomes, relationFamilyAcquisitions, resolvedRelations,
-            localInboundRelations,
+            localInboundRelations, typedAssertions,
             resourceObservationSubjects, resourceObservationExclusions, scopeManifestReceipt,
             scopeManifestCanonicalSha256, completion, documentAcquisitionOutcomesByOrdinal,
             corpusRecordSetRef, corpusRecordSet, null);
@@ -697,7 +754,7 @@ public sealed class LuxembourgQueryExecutionResult
         ArgumentNullException.ThrowIfNull(topology);
         ArgumentNullException.ThrowIfNull(refusal);
         return new(
-            topology, familyOutcomes, relationFamilyAcquisitions, [], [], [], [], null, null, null,
+            topology, familyOutcomes, relationFamilyAcquisitions, [], [], [], [], [], null, null, null,
             null, null, null, refusal);
     }
 
@@ -719,6 +776,13 @@ public sealed class LuxembourgQueryExecutionResult
     /// authority and names its one source family through <c>derived_from</c>.
     /// </summary>
     public IReadOnlyList<LuxembourgResolvedLocalInboundRelation> LocalInboundRelations { get; }
+
+    /// <summary>
+    /// Every distinct admitted publisher assertion this run observed, projected through the
+    /// accepted 26-predicate fact-kind vocabulary. Empty when no assertion family was delivered or
+    /// when the run refused before the projection completed.
+    /// </summary>
+    public IReadOnlyList<LuxembourgTypedAssertion> TypedAssertions { get; }
 
     /// <summary>
     /// The exact set of publisher URIs <see cref="LuxembourgQueryExecutionAdapter.BuildResourceObservations"/>
@@ -1398,6 +1462,19 @@ public sealed class LuxembourgQueryExecutionAdapter
                     "own enumeration proof."));
         }
 
+        var typedAssertions = TryBuildTypedAssertions(observations, out var typedAssertionFailure);
+        if (typedAssertions is null)
+        {
+            return LuxembourgQueryExecutionResult.Refused(
+                topology,
+                outcomes,
+                relationAcquisitions,
+                new LuxembourgQueryExecutionRefusalDetail(
+                    LuxembourgQueryExecutionRefusal.AssertionFactNotRepresentable,
+                    null,
+                    typedAssertionFailure));
+        }
+
         var resolution = _sourceProfile.Resolve(BindResourceObservationProofs(
             assertionFamilyProofs, relationObservationFamilyProofs, observations));
         if (resolution is LuxembourgProfileResolution.Failed failed)
@@ -1521,10 +1598,139 @@ public sealed class LuxembourgQueryExecutionAdapter
             topology, outcomes, relationAcquisitions,
             resolved.Resources.SelectMany(static resource => resource.Relations).ToArray(),
             resolved.LocalInboundRelations,
+            typedAssertions,
             resourceObservationSubjects,
             resourceObservationExclusions, writeReceipt!, manifestCanonicalSha256!,
             documentAcquisitionOutcomesByOrdinal!, recordSetResult.SetRef!,
             recordSetResult.VerifiedSet!);
+    }
+
+    private static IReadOnlyList<LuxembourgTypedAssertion>? TryBuildTypedAssertions(
+        IReadOnlyList<LuxembourgResourceObservation> observations,
+        out string? failure)
+    {
+        failure = null;
+        var assertions = observations
+            .SelectMany(static observation => observation.Assertions)
+            .Distinct()
+            .OrderBy(static assertion => assertion.SubjectIri, StringComparer.Ordinal)
+            .ThenBy(static assertion => assertion.PredicateIri, StringComparer.Ordinal)
+            .ThenBy(static assertion => assertion.ObjectKind)
+            .ThenBy(static assertion => assertion.ObjectIriOrLexical, StringComparer.Ordinal)
+            .ThenBy(static assertion => assertion.DatatypeIriOrEmpty, StringComparer.Ordinal)
+            .ThenBy(static assertion => assertion.LanguageTagOrEmpty, StringComparer.Ordinal)
+            .ThenBy(static assertion => assertion.ObservationRef.ResourceId, StringComparer.Ordinal)
+            .ThenBy(static assertion => assertion.ObservationRef.Sha256, StringComparer.Ordinal)
+            .ToArray();
+        var assertionPredicatesByIri = BuildAssertionPredicatesByIri();
+        var typed = new List<LuxembourgTypedAssertion>(assertions.Length);
+        foreach (var assertion in assertions)
+        {
+            if (!assertionPredicatesByIri.TryGetValue(assertion.PredicateIri, out var predicate))
+            {
+                failure = $"Assertion '{assertion.SubjectIri}' named unadmitted predicate " +
+                    $"'{assertion.PredicateIri}'.";
+                return null;
+            }
+
+            var disposition = new LuxembourgAssertionFactDisposition(
+                predicate,
+                LuxembourgAssertionVocabulary.FactKindOf(predicate),
+                assertion.ObservationRef);
+            LuxembourgActForceDateFact? actForceDate = null;
+            LuxembourgConsolidationApplicabilityDateFact? consolidationDate = null;
+            if (predicate is LuxembourgAssertionPredicate.DateEntryInForce or
+                LuxembourgAssertionPredicate.DateNoLongerInForce or
+                LuxembourgAssertionPredicate.DateApplicability or
+                LuxembourgAssertionPredicate.DateEndApplicability)
+            {
+                if (assertion.ObjectKind != LuxembourgAssertionObjectKind.Literal ||
+                    assertion.DatatypeIriOrEmpty.Length == 0 ||
+                    assertion.LanguageTagOrEmpty.Length != 0)
+                {
+                    failure = $"Assertion '{assertion.SubjectIri}' on '{assertion.PredicateIri}' " +
+                        "is not a datatype-bearing, language-neutral literal.";
+                    return null;
+                }
+
+                try
+                {
+                    switch (predicate)
+                    {
+                        case LuxembourgAssertionPredicate.DateEntryInForce:
+                            actForceDate = new LuxembourgActForceDateFact(
+                                LuxembourgActForceDatePredicate.DateEntryInForce,
+                                assertion.ObjectIriOrLexical,
+                                assertion.DatatypeIriOrEmpty,
+                                assertion.ObservationRef);
+                            break;
+                        case LuxembourgAssertionPredicate.DateNoLongerInForce:
+                            actForceDate = new LuxembourgActForceDateFact(
+                                LuxembourgActForceDatePredicate.DateNoLongerInForce,
+                                assertion.ObjectIriOrLexical,
+                                assertion.DatatypeIriOrEmpty,
+                                assertion.ObservationRef);
+                            break;
+                        case LuxembourgAssertionPredicate.DateApplicability:
+                            consolidationDate = new LuxembourgConsolidationApplicabilityDateFact(
+                                LuxembourgConsolidationApplicabilityDatePredicate.DateApplicability,
+                                assertion.ObjectIriOrLexical,
+                                assertion.DatatypeIriOrEmpty,
+                                assertion.ObservationRef);
+                            break;
+                        case LuxembourgAssertionPredicate.DateEndApplicability:
+                            consolidationDate = new LuxembourgConsolidationApplicabilityDateFact(
+                                LuxembourgConsolidationApplicabilityDatePredicate.DateEndApplicability,
+                                assertion.ObjectIriOrLexical,
+                                assertion.DatatypeIriOrEmpty,
+                                assertion.ObservationRef);
+                            break;
+                    }
+                }
+                catch (ArgumentException exception)
+                {
+                    failure = $"Assertion '{assertion.SubjectIri}' on '{assertion.PredicateIri}' " +
+                        $"was refused by the accepted date-fact contract: {exception.Message}";
+                    return null;
+                }
+            }
+
+            typed.Add(new LuxembourgTypedAssertion(
+                assertion, disposition, actForceDate, consolidationDate));
+        }
+
+        return typed;
+    }
+
+    private static IReadOnlyDictionary<string, LuxembourgAssertionPredicate> BuildAssertionPredicatesByIri()
+    {
+        var byLocalName = LuxembourgAssertionVocabulary.Predicates.ToDictionary(
+            static predicate => predicate == LuxembourgAssertionPredicate.RdfType
+                ? "type"
+                : ContractWire.NameOf(predicate));
+        var admitted = VerifiedLuxembourgSourceProfile.RequiredIriVocabulary
+            .Where(static value => value.Kind == LuxembourgVocabularyKind.AssertionPredicate)
+            .ToArray();
+        var result = new Dictionary<string, LuxembourgAssertionPredicate>(StringComparer.Ordinal);
+        foreach (var value in admitted)
+        {
+            var separator = value.FullIri.LastIndexOf('#');
+            var localName = separator < 0 ? string.Empty : value.FullIri[(separator + 1)..];
+            if (!byLocalName.Remove(localName, out var predicate) ||
+                !result.TryAdd(value.FullIri, predicate))
+            {
+                throw new InvalidOperationException(
+                    "The accepted Luxembourg assertion vocabulary is not a one-to-one IRI mapping.");
+            }
+        }
+
+        if (byLocalName.Count != 0 || result.Count != LuxembourgAssertionVocabulary.Predicates.Count)
+        {
+            throw new InvalidOperationException(
+                "The accepted Luxembourg assertion vocabulary is not a complete 26-predicate IRI mapping.");
+        }
+
+        return result;
     }
 
     // Retain and independently reopen both the acquisition plan and the final rights-bearing

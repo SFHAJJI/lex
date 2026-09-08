@@ -208,7 +208,7 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
     }
 
     [TestMethod]
-    public void QueryExecutionRefusalIsAFifteenMemberEnumIncludingNone()
+    public void QueryExecutionRefusalIsASixteenMemberEnumIncludingNone()
     {
         // D1-06c-LU-2 added four: DocumentFetchSessionNotStarted, DocumentBodyNotRetained,
         // AcquisitionOutcomeNotRepresentable and RecordSetNotHeld, one per whole-run failure the
@@ -222,6 +222,9 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
                 "base-constructor protected instance System.ValueType::.ctor() -> System.ValueType",
                 "field public static " + N
                 + "LuxembourgQueryExecutionRefusal::AcquisitionOutcomeNotRepresentable -> "
+                + N + "LuxembourgQueryExecutionRefusal",
+                "field public static " + N
+                + "LuxembourgQueryExecutionRefusal::AssertionFactNotRepresentable -> "
                 + N + "LuxembourgQueryExecutionRefusal",
                 "field public static " + N
                 + "LuxembourgQueryExecutionRefusal::AssertionRowObjectKindNotRecognised -> "
@@ -304,6 +307,23 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
             ConstructionSurface.Of(typeof(LuxembourgResourceObservationExclusionAccounting)).ToArray());
     }
 
+    [TestMethod]
+    public void TypedAssertionHasOneInternalProducerDoor()
+    {
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "constructor internal instance "
+                + N + "LuxembourgTypedAssertion::.ctor("
+                + Contracts + "LuxembourgObservedAssertion, "
+                + Contracts + "LuxembourgAssertionFactDisposition, "
+                + Contracts + "LuxembourgActForceDateFact?, "
+                + Contracts + "LuxembourgConsolidationApplicabilityDateFact?) -> "
+                + N + "LuxembourgTypedAssertion",
+            },
+            ConstructionSurface.Of(typeof(LuxembourgTypedAssertion)).ToArray());
+    }
+
     /// <summary>
     /// One internal constructor, matching <c>LuxembourgEnumerationRefusalDetail</c>'s own door
     /// shape: only this assembly and its own tests can mint a refusal that did not happen.
@@ -348,6 +368,9 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
                 + "System.Collections.Generic.IReadOnlyList<"
                 + Contracts
                 + "LuxembourgResolvedLocalInboundRelation>, "
+                + "System.Collections.Generic.IReadOnlyList<"
+                + N
+                + "LuxembourgTypedAssertion>, "
                 + "System.Collections.Generic.IReadOnlyList<System.String>, "
                 + "System.Collections.Generic.IReadOnlyList<"
                 + N
@@ -381,6 +404,9 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
                 + "System.Collections.Generic.IReadOnlyList<"
                 + Contracts
                 + "LuxembourgResolvedLocalInboundRelation>, "
+                + "System.Collections.Generic.IReadOnlyList<"
+                + N
+                + "LuxembourgTypedAssertion>, "
                 + "System.Collections.Generic.IReadOnlyList<System.String>, "
                 + "System.Collections.Generic.IReadOnlyList<"
                 + N

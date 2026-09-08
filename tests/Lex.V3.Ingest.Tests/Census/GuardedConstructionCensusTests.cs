@@ -289,6 +289,11 @@ public sealed class GuardedConstructionCensusTests
                     + "method public static "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgRelationFamilyAcquisition::NotComplete, "
                     + "3 compiler-generated",
+                "Lex.V3.Ingest.Luxembourg.LuxembourgTypedAssertion: constructor internal instance "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgTypedAssertion::.ctor, "
+                    + "method private static "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionAdapter::TryBuildTypedAsser"
+                    + "tions",
                 "Lex.V3.Ingest.RoutedHttpAcquisitionSession: constructor private instance "
                     + "Lex.V3.Ingest.RoutedHttpAcquisitionSession::.ctor, "
                     + "constructor private static "
