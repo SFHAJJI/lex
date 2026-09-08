@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text.Json.Serialization;
 using Lex.V3.Contracts;
 using Lex.V3.Contracts.Custody;
+using Lex.V3.Contracts.Facts;
 using Lex.V3.Contracts.Source.Absence;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Europe;
@@ -29,6 +30,7 @@ public enum EuNationalImplementingMeasureProductionRefusal
 /// <summary>One Commission NIM assertion and its already guarded bridge-side acquisition.</summary>
 public sealed record EuNationalImplementingMeasureRelation(
     string EuWorkUri,
+    EuWorkKindAssertion WorkKindAssertion,
     string NimWorkUri,
     string NimCelex,
     string ImplementsPredicateIri,
@@ -229,9 +231,9 @@ public sealed class EuNationalImplementingMeasureProducer
         SourceArtifactRef evidenceRef)
     {
         ArgumentNullException.ThrowIfNull(row);
-        if (row.Terms.Count != profile.ProjectionVariables.Count || row.Terms.Count != 13)
+        if (row.Terms.Count != profile.ProjectionVariables.Count || row.Terms.Count != 17)
         {
-            throw new ArgumentException("A Luxembourg sector-7 NIM row has thirteen exact terms.", nameof(row));
+            throw new ArgumentException("A Luxembourg sector-7 NIM row has seventeen exact terms.", nameof(row));
         }
         var nim = RequireCellarWork(Term(row, profile, "nim"), "nim");
         RequireIri(Term(row, profile, "country"),
@@ -239,6 +241,8 @@ public sealed class EuNationalImplementingMeasureProducer
         var nimCelex = RequireSectorSevenCelex(Term(row, profile, "nim_celex"));
         var predicate = RequireImplementsPredicate(Term(row, profile, "implements_predicate"));
         var euWork = RequireCellarWork(Term(row, profile, "eu_work"), "eu_work");
+        var euWorkEli = RequireEuWorkEli(Term(row, profile, "eu_work_eli"));
+        var workKind = RequireWorkKind(Term(row, profile, "eu_work_kind"));
         var eliTerm = Term(row, profile, "eli");
         var eliKind = RequirePlainLiteral(Term(row, profile, "eli_kind"), "eli_kind");
         var eli = RequireEli(eliTerm, eliKind);
@@ -248,7 +252,17 @@ public sealed class EuNationalImplementingMeasureProducer
         RequirePlainLiteral(Term(row, profile, "key_2"), "key_2", nimCelex);
         RequirePlainLiteral(Term(row, profile, "key_3"), "key_3", predicate);
         RequirePlainLiteral(Term(row, profile, "key_4"), "key_4", euWork);
-        RequirePlainLiteral(Term(row, profile, "key_5"), "key_5", eli ?? string.Empty);
+        RequirePlainLiteral(Term(row, profile, "key_5"), "key_5", euWorkEli);
+        RequirePlainLiteral(Term(row, profile, "key_6"), "key_6", WorkKindIri(workKind));
+        RequirePlainLiteral(Term(row, profile, "key_7"), "key_7", eli ?? string.Empty);
+
+        var workKindAssertion = new EuWorkKindAssertion(
+            new OfficialIdentitySet(PublisherId.EuEurLex,
+            [
+                new OfficialIdentifier(FactsIdentifierFamily.CellarWorkUri, euWork),
+                new OfficialIdentifier(FactsIdentifierFamily.Eli, euWorkEli),
+            ]),
+            workKind);
 
         var side = new EuTranspositionSide(
             EuTranspositionAssertedBy.Nim,
@@ -261,7 +275,7 @@ public sealed class EuNationalImplementingMeasureProducer
             EuRelationAcquisitionState.Complete,
             side,
             evidenceRef);
-        return new(euWork, nim, nimCelex, predicate, eli, acquisition);
+        return new(euWork, workKindAssertion, nim, nimCelex, predicate, eli, acquisition);
     }
 
     private static RepeatedEnumerationRdfTerm Term(
@@ -327,6 +341,41 @@ public sealed class EuNationalImplementingMeasureProducer
         }
         return term.Value;
     }
+
+    private static string RequireEuWorkEli(RepeatedEnumerationRdfTerm term)
+    {
+        var admittedTerm = term.Kind is RepeatedEnumerationRdfTermKind.Iri or RepeatedEnumerationRdfTermKind.Literal
+            && term.Language is null
+            && term.Datatype is null or XsdString or XsdAnyUri;
+        if (!admittedTerm || term.Value is null ||
+            OfficialIdentifier.EliMintedBy(term.Value) != PublisherId.EuEurLex)
+        {
+            throw new ArgumentException(
+                "eu_work_eli must be an exact ELI minted by the EU publisher.", nameof(term));
+        }
+        return term.Value;
+    }
+
+    private static EuWorkKind RequireWorkKind(RepeatedEnumerationRdfTerm term)
+    {
+        if (term.Kind != RepeatedEnumerationRdfTermKind.Iri || term.Datatype is not null || term.Language is not null)
+        {
+            throw new ArgumentException("eu_work_kind must be an admitted publisher class IRI.", nameof(term));
+        }
+        return term.Value switch
+        {
+            EuNationalImplementingMeasureDiscoveryPlan.DirectiveClassIri => EuWorkKind.Directive,
+            EuNationalImplementingMeasureDiscoveryPlan.RegulationClassIri => EuWorkKind.Regulation,
+            _ => throw new ArgumentException("eu_work_kind must be directive or regulation.", nameof(term)),
+        };
+    }
+
+    private static string WorkKindIri(EuWorkKind kind) => kind switch
+    {
+        EuWorkKind.Directive => EuNationalImplementingMeasureDiscoveryPlan.DirectiveClassIri,
+        EuWorkKind.Regulation => EuNationalImplementingMeasureDiscoveryPlan.RegulationClassIri,
+        _ => throw new ArgumentOutOfRangeException(nameof(kind)),
+    };
 
     private static string? RequireEli(RepeatedEnumerationRdfTerm term, string kind)
     {

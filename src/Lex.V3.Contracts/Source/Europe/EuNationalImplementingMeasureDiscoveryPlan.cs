@@ -33,6 +33,9 @@ public sealed class EuNationalImplementingMeasureDiscoveryPlan
     public const string LegacyImplementsDirectivePredicateIri =
         Cdm + "measure_national_implementing_implements_directive";
     public const string EliPredicateIri = Cdm + "eli";
+    public const string EuWorkEliPredicateIri = Cdm + "resource_legal_eli";
+    public const string DirectiveClassIri = Cdm + "directive";
+    public const string RegulationClassIri = Cdm + "regulation";
     internal const long PublisherDeliveryCeilingRows = 1_000_000;
     internal const uint Pass1PageLimit = 997;
     internal const uint Pass2PageLimit = 613;
@@ -46,9 +49,11 @@ public sealed class EuNationalImplementingMeasureDiscoveryPlan
     private static readonly string[] Projection =
     [
         "nim", "country", "nim_celex", "implements_predicate", "eu_work",
-        "eli", "eli_kind", "multiplicity", "key_1", "key_2", "key_3", "key_4", "key_5",
+        "eu_work_eli", "eu_work_kind", "eli", "eli_kind", "multiplicity",
+        "key_1", "key_2", "key_3", "key_4", "key_5", "key_6", "key_7",
     ];
-    private static readonly string[] Cursor = ["key_1", "key_2", "key_3", "key_4", "key_5"];
+    private static readonly string[] Cursor =
+        ["key_1", "key_2", "key_3", "key_4", "key_5", "key_6", "key_7"];
     private readonly byte[] _canonicalIdentityBytes;
 
     private EuNationalImplementingMeasureDiscoveryPlan()
@@ -157,7 +162,7 @@ public sealed class EuNationalImplementingMeasureDiscoveryPlan
             var values = cursor?.ToArray() ?? [];
             if (values.Length != 0 && values.Length != Cursor.Length)
             {
-                throw new ArgumentException("A continuation cursor must have five exact parts.", nameof(cursor));
+                throw new ArgumentException("A continuation cursor must have seven exact parts.", nameof(cursor));
             }
 
             parameters.Add(new MachineQueryParameter(
@@ -214,7 +219,7 @@ public sealed class EuNationalImplementingMeasureDiscoveryPlan
     private static (string Count, string Page) BuildTemplates()
     {
         var rows = $$"""
-            SELECT ?nim ?country ?nim_celex ?implements_predicate ?eu_work ?eli ?eli_kind (COUNT(*) AS ?multiplicity) WHERE {
+            SELECT ?nim ?country ?nim_celex ?implements_predicate ?eu_work ?eu_work_eli ?eu_work_kind ?eli ?eli_kind (COUNT(*) AS ?multiplicity) WHERE {
               VALUES ?lex_pass_id { {pass_id:uint} }
               VALUES ?country { <{{LuxembourgCountryIri}}> }
               VALUES ?implements_predicate {
@@ -225,6 +230,14 @@ public sealed class EuNationalImplementingMeasureDiscoveryPlan
                    <{{Cdm}}measure_national_implementing_implemented_by_country> ?country ;
                    <{{Cdm}}resource_legal_id_celex> ?nim_celex ;
                    ?implements_predicate ?eu_work .
+              OPTIONAL {
+                VALUES ?eu_work_kind {
+                  <{{DirectiveClassIri}}>
+                  <{{RegulationClassIri}}>
+                }
+                ?eu_work a ?eu_work_kind .
+              }
+              OPTIONAL { ?eu_work <{{EuWorkEliPredicateIri}}> ?eu_work_eli . }
               FILTER(STRSTARTS(STR(?nim_celex), "7"))
               {
                 ?nim <{{EliPredicateIri}}> ?eli .
@@ -236,7 +249,7 @@ public sealed class EuNationalImplementingMeasureDiscoveryPlan
                 BIND("unbound" AS ?eli_kind)
               }
             }
-            GROUP BY ?nim ?country ?nim_celex ?implements_predicate ?eu_work ?eli ?eli_kind
+            GROUP BY ?nim ?country ?nim_celex ?implements_predicate ?eu_work ?eu_work_eli ?eu_work_kind ?eli ?eli_kind
             """;
         var count = $$"""
             SELECT (COUNT(*) AS ?count) WHERE {
@@ -246,7 +259,7 @@ public sealed class EuNationalImplementingMeasureDiscoveryPlan
             }
             """;
         var page = $$"""
-            SELECT ?nim ?country ?nim_celex ?implements_predicate ?eu_work ?eli ?eli_kind ?multiplicity ?key_1 ?key_2 ?key_3 ?key_4 ?key_5 WHERE {
+            SELECT ?nim ?country ?nim_celex ?implements_predicate ?eu_work ?eu_work_eli ?eu_work_kind ?eli ?eli_kind ?multiplicity ?key_1 ?key_2 ?key_3 ?key_4 ?key_5 ?key_6 ?key_7 WHERE {
               {
             {{Indent(Indent(rows))}}
               }
@@ -254,21 +267,25 @@ public sealed class EuNationalImplementingMeasureDiscoveryPlan
               BIND(STR(?nim_celex) AS ?key_2)
               BIND(STR(?implements_predicate) AS ?key_3)
               BIND(STR(?eu_work) AS ?key_4)
-              BIND(COALESCE(STR(?eli), "") AS ?key_5)
-              VALUES (?has_cursor ?last_key_1 ?last_key_2 ?last_key_3 ?last_key_4 ?last_key_5) {
-                ({has_cursor:uint} {last_key_1:sparql_string} {last_key_2:sparql_string} {last_key_3:sparql_string} {last_key_4:sparql_string} {last_key_5:sparql_string})
+              BIND(COALESCE(STR(?eu_work_eli), "") AS ?key_5)
+              BIND(COALESCE(STR(?eu_work_kind), "") AS ?key_6)
+              BIND(COALESCE(STR(?eli), "") AS ?key_7)
+              VALUES (?has_cursor ?last_key_1 ?last_key_2 ?last_key_3 ?last_key_4 ?last_key_5 ?last_key_6 ?last_key_7) {
+                ({has_cursor:uint} {last_key_1:sparql_string} {last_key_2:sparql_string} {last_key_3:sparql_string} {last_key_4:sparql_string} {last_key_5:sparql_string} {last_key_6:sparql_string} {last_key_7:sparql_string})
               }
               FILTER(
                 ?has_cursor = 0 || ?key_1 > ?last_key_1 ||
                 (?key_1 = ?last_key_1 && ?key_2 > ?last_key_2) ||
                 (?key_1 = ?last_key_1 && ?key_2 = ?last_key_2 && ?key_3 > ?last_key_3) ||
                 (?key_1 = ?last_key_1 && ?key_2 = ?last_key_2 && ?key_3 = ?last_key_3 && ?key_4 > ?last_key_4) ||
-                (?key_1 = ?last_key_1 && ?key_2 = ?last_key_2 && ?key_3 = ?last_key_3 && ?key_4 = ?last_key_4 && ?key_5 > ?last_key_5)
+                (?key_1 = ?last_key_1 && ?key_2 = ?last_key_2 && ?key_3 = ?last_key_3 && ?key_4 = ?last_key_4 && ?key_5 > ?last_key_5) ||
+                (?key_1 = ?last_key_1 && ?key_2 = ?last_key_2 && ?key_3 = ?last_key_3 && ?key_4 = ?last_key_4 && ?key_5 = ?last_key_5 && ?key_6 > ?last_key_6) ||
+                (?key_1 = ?last_key_1 && ?key_2 = ?last_key_2 && ?key_3 = ?last_key_3 && ?key_4 = ?last_key_4 && ?key_5 = ?last_key_5 && ?key_6 = ?last_key_6 && ?key_7 > ?last_key_7)
               )
               FILTER(?has_cursor = 0 || !(
-                ?key_1 = ?last_key_1 && ?key_2 = ?last_key_2 && ?key_3 = ?last_key_3 && ?key_4 = ?last_key_4 && ?key_5 = ?last_key_5))
+                ?key_1 = ?last_key_1 && ?key_2 = ?last_key_2 && ?key_3 = ?last_key_3 && ?key_4 = ?last_key_4 && ?key_5 = ?last_key_5 && ?key_6 = ?last_key_6 && ?key_7 = ?last_key_7))
             }
-            ORDER BY ?key_1 ?key_2 ?key_3 ?key_4 ?key_5
+            ORDER BY ?key_1 ?key_2 ?key_3 ?key_4 ?key_5 ?key_6 ?key_7
             LIMIT {page_limit:uint}
             """;
         return (Normalize(count), Normalize(page));
