@@ -171,6 +171,8 @@ public sealed class VocabularyRegistryCensusTests
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgAssertionVocabulary: "
                     + "ActForceDatePredicates=2, ConsolidationApplicabilityDatePredicates=2, "
                     + "Predicates=26",
+                "Lex.V3.Contracts.Source.Luxembourg.LuxembourgDraftGraphVocabulary: Predicates=1, "
+                    + "Tokens=1",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgItemUriFamily: const "
                     + "CurrentPathPrefix, const Origin, const PreviousPathPrefix",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgLiteralCanonicalizer: "
