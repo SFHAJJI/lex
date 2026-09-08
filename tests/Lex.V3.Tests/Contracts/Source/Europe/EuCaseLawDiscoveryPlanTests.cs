@@ -242,8 +242,21 @@ public sealed class EuCaseLawDiscoveryPlanTests
     /// The batch is fixed at fifty and padded, so one act and fifty acts send the same shape.
     /// </summary>
     /// <remarks>
-    /// Padding repeats the batch's own greatest member, which adds no act to the question: VALUES
-    /// set semantics fold the duplicate, so the padded request asks exactly what the real batch asks.
+    /// <para>
+    /// Padding repeats the batch's own greatest member, and it adds no act to the question because
+    /// the <c>SELECT DISTINCT ?eu_work</c> subquery folds the duplicate slots before the graph join.
+    /// The transport carries fifty slots; the question asks about the acts the caller named.
+    /// </para>
+    /// <para>
+    /// The reason for that boundary, stated here because this is the test a reader reaches first:
+    /// SPARQL solution mappings are a MULTISET. Duplicate <c>VALUES</c> rows are preserved and
+    /// <c>COUNT(*)</c> counts them, so binding the padded slots straight into the pattern made a
+    /// one-act request report <c>multiplicity = 50</c>. An earlier version of this remark claimed
+    /// the opposite — that "VALUES set semantics fold the duplicate" — and that false sentence is
+    /// what the defect was made of. See
+    /// <see cref="PaddingIsFoldedBeforeTheJoinSoItCannotInflateMultiplicity"/>, which guards the
+    /// boundary that actually does the folding.
+    /// </para>
     /// </remarks>
     [TestMethod]
     public void ABatchIsPaddedToAFixedFiftySoOneActAndFiftyLookAlike()
