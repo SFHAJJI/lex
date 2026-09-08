@@ -328,20 +328,30 @@ public sealed class EuReifiedAxiomWiringTests
         const string AxiomOne = "http://publications.europa.eu/.well-known/genid/a3wiring/seed-one";
         const string AxiomTwo = "http://publications.europa.eu/.well-known/genid/a3wiring/seed-two";
 
+        // The roots the script was actually built from, so the expected pairing is the one the
+        // publisher was made to assert rather than one restated from the result.
+        string? suppliedOne = null;
+        string? suppliedTwo = null;
+
         var result = await EuAxiomWiringHarness.RunTwoSeedAsync((rootOne, rootTwo) =>
-            EuAcquisitionTestFixture.AxiomScriptFrom(
+        {
+            suppliedOne = rootOne;
+            suppliedTwo = rootTwo;
+            return EuAcquisitionTestFixture.AxiomScriptFrom(
                 [
                     .. AxiomRows(rootOne, AxiomOne, WellFormedTerms(rootOne)),
                     .. AxiomRows(rootTwo, AxiomTwo, WellFormedTerms(rootTwo)),
-                ]));
+                ]);
+        });
 
         Assert.IsNull(result.Refusal, $"code={result.Refusal?.Code} detail={result.Refusal?.Detail}");
         Assert.HasCount(
             2, result.DateAxioms,
             "two publisher axioms over two works must decode to exactly two bindings.");
 
-        // The pairing is the assertion, not the count alone: dropping the narrowing yields four
-        // bindings in which each work carries the other's axiom as well as its own.
+        // The exact pairs, not two independent facts about them. Asserting only that the works are
+        // distinct and that the axiom identifiers are the expected SET is satisfied by the swapped
+        // pairing, in which each work carries precisely the axiom the other one asserted.
         var pairs = result.DateAxioms
             .Select(static binding => (
                 Work: binding.WorkIdentity.Identifiers[0].RawValue,
@@ -349,22 +359,18 @@ public sealed class EuReifiedAxiomWiringTests
             .OrderBy(static pair => pair.Work, StringComparer.Ordinal)
             .ToArray();
 
-        var roots = new[] { pairs[0].Work, pairs[1].Work };
-        CollectionAssert.AllItemsAreUnique(
-            roots, "no work may be handed an axiom that another work asserted.");
-        CollectionAssert.AreEquivalent(
-            new[] { AxiomOne, AxiomTwo },
-            pairs.Select(static pair => pair.Axiom).ToArray(),
-            "each work must carry exactly its own axiom.");
+        CollectionAssert.AreEqual(
+            new[] { (suppliedOne!, AxiomOne), (suppliedTwo!, AxiomTwo) },
+            pairs,
+            "each work must carry exactly the axiom it asserted, and only that one.");
     }
 
-    // The remaining narrowing case is NOT guarded, and said so rather than left to be found: the
-    // each seed's own closure by ?parent, exactly as it does families X and M. That narrowing only
-    // has an effect on a batch carrying MORE THAN ONE requested seed, because the executor already
-    // refuses any row outside the requested batch (family A's batch-membership key is key_1) before
-    // the adapter sees it. This fixture drives one seed, so no case here can reach the narrowing,
-    // and removing it leaves every test in this file green. A two-seed run needs per-seed P/X/W/M
-    // fixtures the harness does not yet build.
+    // Why the narrowing needs the two-seed case above and cannot be reached by the single-seed
+    // ones: the executor already refuses any row outside the requested batch (family A's
+    // batch-membership key is key_1) before the adapter sees it, so with one requested seed no
+    // foreign parent survives to be narrowed away. The narrowing bites only on a batch carrying
+    // MORE THAN ONE requested seed, which is what EachSeedTakesOnlyItsOwnAxiomWhenTwoWorksShareOneBatch
+    // delivers.
 
     /// <summary>
     /// Family A is required, so a run that never proves it refuses instead of quietly reporting no

@@ -1,4 +1,4 @@
-using System.Text.Json.Serialization;
+﻿using System.Text.Json.Serialization;
 using Lex.V3.Contracts;
 using Lex.V3.Contracts.Custody;
 using Lex.V3.Contracts.Source.Absence;
@@ -2159,24 +2159,6 @@ public sealed class EuQueryExecutionAdapter
     }
 
     /// <summary>
-    /// Every row of <paramref name="rows"/> whose <paramref name="columnVariableName"/> term
-    /// canonicalizes to a member of <paramref name="closure"/> (this seed's own <c>O</c>), plus every
-    /// row that canonicalizes to something outside <paramref name="closure"/> but IS a member of
-    /// <paramref name="allRequestedSeedsClosure"/> -- this run's own union closure across every
-    /// requested seed: that row legitimately belongs to a sibling seed's own decode call, and is
-    /// dropped here only because that other seed's own pass, not this one, is the one that narrows and
-    /// decodes it.
-    /// </summary>
-    /// <remarks>
-    /// Defect 1's fix. A row that does not canonicalize at all, or that canonicalizes to an object no
-    /// requested seed's census discovered, is left in unconditionally:
-    /// <see cref="EuCellarObjectDecode.TryDecode"/> is the one door that turns that shape into a typed
-    /// refusal naming the offending IRI (D1-05c-2 precision two), so this filter must never silently
-    /// drop a row decode would otherwise refuse. Before this fix every out-of-closure row was dropped
-    /// here regardless of which case it was, so a row belonging to no seed at all was silently lost
-    /// rather than ever reaching decode's own refusal.
-    /// </remarks>
-    /// <summary>
     /// Decodes family A one delivered batch at a time, so every binding carries the custody
     /// coordinate ITS OWN rows were read from.
     /// </summary>
@@ -2224,6 +2206,24 @@ public sealed class EuQueryExecutionAdapter
         return decoded;
     }
 
+    /// <summary>
+    /// Every row of <paramref name="rows"/> whose <paramref name="columnVariableName"/> term
+    /// canonicalizes to a member of <paramref name="closure"/> (this seed's own <c>O</c>), plus every
+    /// row that canonicalizes to something outside <paramref name="closure"/> but IS a member of
+    /// <paramref name="allRequestedSeedsClosure"/> -- this run's own union closure across every
+    /// requested seed: that row legitimately belongs to a sibling seed's own decode call, and is
+    /// dropped here only because that other seed's own pass, not this one, is the one that narrows and
+    /// decodes it.
+    /// </summary>
+    /// <remarks>
+    /// Defect 1's fix. A row that does not canonicalize at all, or that canonicalizes to an object no
+    /// requested seed's census discovered, is left in unconditionally:
+    /// <see cref="EuCellarObjectDecode.TryDecode"/> is the one door that turns that shape into a typed
+    /// refusal naming the offending IRI (D1-05c-2 precision two), so this filter must never silently
+    /// drop a row decode would otherwise refuse. Before this fix every out-of-closure row was dropped
+    /// here regardless of which case it was, so a row belonging to no seed at all was silently lost
+    /// rather than ever reaching decode's own refusal.
+    /// </remarks>
     private static IReadOnlyList<RepeatedEnumerationRow> FilterByClosureColumn(
         IReadOnlyList<RepeatedEnumerationRow> rows,
         RepeatedEnumerationInterpretationProfile profile,
