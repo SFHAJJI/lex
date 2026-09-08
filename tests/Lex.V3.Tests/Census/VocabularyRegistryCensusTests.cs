@@ -182,6 +182,10 @@ public sealed class VocabularyRegistryCensusTests
                     + "SupportedDatatypes=3, SupportedDatatypeIris=3, const RdfLangString, "
                     + "const RdfXmlLiteral, const XsdDate, const XsdNotation, const XsdQName, "
                     + "const XsdString",
+                "Lex.V3.Contracts.Source.Luxembourg.LuxembourgOpinionLinkOnlyVocabulary: const "
+                    + "HasOpinionPredicateIri, const HasResultingOpinionDocumentPredicateIri, "
+                    + "const Jolux, const OpinionConseilEtatClassIri, const OpinionDatePredicateIri, "
+                    + "const ReversalCriterion",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgQueryPlanSchemaExporter: const "
                     + "FileName, const ResourceId",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgRelationVocabulary: Authorities=2, "
