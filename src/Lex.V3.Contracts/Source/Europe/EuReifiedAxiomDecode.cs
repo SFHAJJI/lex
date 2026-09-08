@@ -506,11 +506,19 @@ public static class EuReifiedAxiomDecode
     /// marker is admitted only when the value term really carries the kind the marker names.
     /// </para>
     /// <para>
-    /// Deliberately NOT checked: that <c>datatype_iri</c> equals the value's own datatype on a bound
-    /// row. SPARQL's <c>DATATYPE()</c> answers <c>rdf:langString</c> for a language-tagged literal
-    /// whose term carries a language and no datatype, so requiring equality there would refuse
-    /// ordinary publisher data. The absence shape is where those two fields carry decisive meaning,
-    /// and that is where they are enforced.
+    /// The three computed projections are checked as TERMS on both branches, before any of their
+    /// text is read: <c>value_kind</c> and <c>language_tag</c> must be plain literals, and
+    /// <c>datatype_iri</c> must be a plain literal or absent beside a non-empty language tag (see
+    /// <see cref="IsDatatypeTermThePublisherCanProduce"/>). A marker delivered as a typed literal,
+    /// or a datatype delivered as an IRI, is not a shape this query can produce, and accepting the
+    /// row because its lexical text looked plausible is the same error as trusting the marker was.
+    /// </para>
+    /// <para>
+    /// Deliberately still NOT checked: that <c>datatype_iri</c>'s TEXT equals the value's own
+    /// datatype on a bound row. <c>DATATYPE()</c> answers <c>rdf:langString</c> for a
+    /// language-tagged literal whose term carries a language and no datatype, so requiring that
+    /// equality would refuse ordinary publisher data. Shape is enforced; equality is not, and the
+    /// distinction is the point.
     /// </para>
     /// </remarks>
     private static bool IsAbsence(
@@ -523,9 +531,24 @@ public static class EuReifiedAxiomDecode
         offendingValue = null;
 
         var marker = Term(row, profile, "value_kind");
-        if (marker.Kind != RepeatedEnumerationRdfTermKind.Literal || marker.Value is null)
+        var datatype = Term(row, profile, "datatype_iri");
+        var language = Term(row, profile, "language_tag");
+
+        // The three computed projections are checked as TERMS before any of their text is read, on
+        // both branches. A marker that is a typed or language-tagged literal, or a datatype
+        // delivered as an IRI, is not a shape this query can produce, and reading its lexical value
+        // anyway would accept a row on the strength of text that merely looks plausible.
+        if (!IsPlainLiteral(marker) ||
+            !IsPlainLiteral(language) ||
+            !IsDatatypeTermThePublisherCanProduce(datatype, language))
         {
-            offendingValue = marker.Value;
+            offendingValue = marker.Value ?? datatype.Value ?? language.Value;
+            return false;
+        }
+
+        if (marker.Value is null)
+        {
+            offendingValue = null;
             return false;
         }
 
@@ -543,8 +566,6 @@ public static class EuReifiedAxiomDecode
                 return false;
             }
 
-            var datatype = Term(row, profile, "datatype_iri");
-            var language = Term(row, profile, "language_tag");
             if (!string.IsNullOrEmpty(datatype.Value) || !string.IsNullOrEmpty(language.Value))
             {
                 offendingValue = datatype.Value is { Length: > 0 } ? datatype.Value : language.Value;
@@ -580,6 +601,49 @@ public static class EuReifiedAxiomDecode
 
         return true;
     }
+
+    /// <summary>
+    /// The shape every one of this query's own <c>BIND</c>ed projections arrives in: a literal with
+    /// neither a datatype nor a language tag.
+    /// </summary>
+    /// <remarks>
+    /// Defined here rather than shared, following the two decode doors that already carry their own
+    /// copy: <see cref="EuCellarObjectDecode"/> and <see cref="EuManifestationListing"/>. Each door
+    /// states for itself what shapes its own family can deliver.
+    /// </remarks>
+    private static bool IsPlainLiteral(RepeatedEnumerationRdfTerm term) =>
+        term.Kind == RepeatedEnumerationRdfTermKind.Literal && term.Datatype is null && term.Language is null;
+
+    /// <summary>
+    /// Whether a family A row's <c>datatype_iri</c> is a shape this publisher actually produces.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A plain literal always, and absent only for a language-tagged value. The template binds this
+    /// from <c>STR(DATATYPE(?value))</c>, and the endpoint does not answer <c>DATATYPE()</c> on a
+    /// language-tagged literal: the BIND errors and the variable is omitted rather than bound.
+    /// </para>
+    /// <para>
+    /// That behaviour is not this family's own measurement and is not claimed as one. It was
+    /// measured on the D1-05g acceptance run for family X and is recorded, with its retained body
+    /// digest, on <see cref="EuCellarObjectDecode"/>'s own predicate of the same name. Family A
+    /// binds the identical expression against the same endpoint, so it inherits the same shape;
+    /// this note exists so a later reader looks there for the evidence rather than assuming it was
+    /// taken here.
+    /// </para>
+    /// <para>
+    /// The pairing keeps it narrow. An absent datatype is admitted ONLY beside a present, non-empty
+    /// language tag. An absent datatype on an untagged value has no publisher behaviour behind it
+    /// and stays the shape violation it always was.
+    /// </para>
+    /// </remarks>
+    private static bool IsDatatypeTermThePublisherCanProduce(
+        RepeatedEnumerationRdfTerm datatypeTerm,
+        RepeatedEnumerationRdfTerm languageTerm) =>
+        IsPlainLiteral(datatypeTerm)
+        || (datatypeTerm.Kind == RepeatedEnumerationRdfTermKind.Unbound
+            && IsPlainLiteral(languageTerm)
+            && !string.IsNullOrEmpty(languageTerm.Value));
 
     /// <summary>Looks up one projection variable's term by name, never by a literal index.</summary>
     private static RepeatedEnumerationRdfTerm Term(

@@ -75,11 +75,33 @@ public sealed class EuReifiedAxiomDecodeTests
             value,
             markerOverride);
 
+    /// <summary>
+    /// A row whose computed projection TERMS are whatever a case supplies, rather than the plain
+    /// literals the query's own BINDs produce. Only a test can build these, which is exactly why
+    /// the decode must check their shape instead of reading their text.
+    /// </summary>
+    private static RepeatedEnumerationRow RowDrifted(
+        string predicateIri,
+        RepeatedEnumerationRdfTerm value,
+        RepeatedEnumerationRdfTerm? marker = null,
+        RepeatedEnumerationRdfTerm? datatype = null,
+        RepeatedEnumerationRdfTerm? language = null) =>
+        Row(
+            RepeatedEnumerationRdfTerm.Iri(Axiom),
+            RepeatedEnumerationRdfTerm.Iri(predicateIri),
+            value,
+            markerTerm: marker,
+            datatypeTerm: datatype,
+            languageTerm: language);
+
     private static RepeatedEnumerationRow Row(
         RepeatedEnumerationRdfTerm axiom,
         RepeatedEnumerationRdfTerm predicate,
         RepeatedEnumerationRdfTerm value,
-        string? markerOverride = null)
+        string? markerOverride = null,
+        RepeatedEnumerationRdfTerm? markerTerm = null,
+        RepeatedEnumerationRdfTerm? datatypeTerm = null,
+        RepeatedEnumerationRdfTerm? languageTerm = null)
     {
         var kind = markerOverride ?? value.Kind switch
         {
@@ -93,9 +115,9 @@ public sealed class EuReifiedAxiomDecodeTests
             axiom,
             predicate,
             value,
-            RepeatedEnumerationRdfTerm.Literal(kind, null, null),
-            RepeatedEnumerationRdfTerm.Literal(value.Datatype ?? "", null, null),
-            RepeatedEnumerationRdfTerm.Literal(value.Language ?? "", null, null),
+            markerTerm ?? RepeatedEnumerationRdfTerm.Literal(kind, null, null),
+            datatypeTerm ?? RepeatedEnumerationRdfTerm.Literal(value.Datatype ?? "", null, null),
+            languageTerm ?? RepeatedEnumerationRdfTerm.Literal(value.Language ?? "", null, null),
             RepeatedEnumerationRdfTerm.Literal(Work, null, null),
             RepeatedEnumerationRdfTerm.Literal(axiom.Value ?? "", null, null),
             RepeatedEnumerationRdfTerm.Literal(predicate.Value ?? "", null, null),
@@ -109,7 +131,10 @@ public sealed class EuReifiedAxiomDecodeTests
     }
 
     /// <summary>The family's typed "this work reifies nothing", exactly as its absence branch binds it.</summary>
-    private static RepeatedEnumerationRow AbsenceRow()
+    private static RepeatedEnumerationRow AbsenceRow(
+        RepeatedEnumerationRdfTerm? marker = null,
+        RepeatedEnumerationRdfTerm? datatype = null,
+        RepeatedEnumerationRdfTerm? language = null)
     {
         var terms = new[]
         {
@@ -117,9 +142,9 @@ public sealed class EuReifiedAxiomDecodeTests
             RepeatedEnumerationRdfTerm.Unbound(),
             RepeatedEnumerationRdfTerm.Unbound(),
             RepeatedEnumerationRdfTerm.Unbound(),
-            RepeatedEnumerationRdfTerm.Literal("unbound", null, null),
-            RepeatedEnumerationRdfTerm.Literal("", null, null),
-            RepeatedEnumerationRdfTerm.Literal("", null, null),
+            marker ?? RepeatedEnumerationRdfTerm.Literal("unbound", null, null),
+            datatype ?? RepeatedEnumerationRdfTerm.Literal("", null, null),
+            language ?? RepeatedEnumerationRdfTerm.Literal("", null, null),
             RepeatedEnumerationRdfTerm.Literal(Work, null, null),
             RepeatedEnumerationRdfTerm.Literal("", null, null),
             RepeatedEnumerationRdfTerm.Literal("", null, null),
@@ -412,6 +437,110 @@ public sealed class EuReifiedAxiomDecodeTests
 
             Assert.IsNull(bindings);
             Assert.AreEqual(EuReifiedAxiomDecodeRefusal.RowShapeContradictsItsProjectedKind, refusal);
+        }
+    }
+
+    /// <summary>
+    /// The three computed projections are checked as terms, not read as text. A shape this query
+    /// cannot produce is refused on a POSITIVE row, which is the boundary the marker-vs-value check
+    /// left open: the row's own value term agreed with its marker, so everything downstream looked
+    /// ordinary while a projection term had drifted.
+    /// </summary>
+    /// <remarks>
+    /// The first case is the reviewer's own reproduction, kept verbatim in shape: a well-formed
+    /// target row whose <c>datatype_iri</c> arrives as an IRI while its date value and marker are
+    /// untouched. At the rejected head that returned an accepted binding.
+    /// </remarks>
+    [TestMethod]
+    public void APositiveRowWhoseComputedProjectionTermsDriftFromTheirQueryShapeIsRefused()
+    {
+        (string Case, RepeatedEnumerationRow Row)[] drifted =
+        [
+            ("datatype_iri delivered as an IRI", RowDrifted(
+                EuObjectFactsDiscoveryPlan.AnnotatedTargetPredicateIri,
+                RepeatedEnumerationRdfTerm.Literal("2003-08-02", XsdDate, null),
+                datatype: RepeatedEnumerationRdfTerm.Iri(XsdDate))),
+            ("value_kind delivered as a typed literal", RowDrifted(
+                CommentOnDate,
+                RepeatedEnumerationRdfTerm.Literal("x", XsdString, null),
+                marker: RepeatedEnumerationRdfTerm.Literal("literal", XsdString, null))),
+            ("value_kind delivered as a language-tagged literal", RowDrifted(
+                CommentOnDate,
+                RepeatedEnumerationRdfTerm.Literal("x", XsdString, null),
+                marker: RepeatedEnumerationRdfTerm.Literal("literal", null, "en"))),
+            ("language_tag delivered as an IRI", RowDrifted(
+                CommentOnDate,
+                RepeatedEnumerationRdfTerm.Literal("x", XsdString, null),
+                language: RepeatedEnumerationRdfTerm.Iri(Work))),
+            ("datatype_iri absent beside an EMPTY language tag", RowDrifted(
+                CommentOnDate,
+                RepeatedEnumerationRdfTerm.Literal("x", XsdString, null),
+                datatype: RepeatedEnumerationRdfTerm.Unbound(),
+                language: RepeatedEnumerationRdfTerm.Literal("", null, null))),
+        ];
+
+        foreach (var (label, row) in drifted)
+        {
+            var rows = WellFormed();
+            rows.Add(row);
+
+            var bindings = Decode(rows, out var refusal);
+
+            Assert.IsNull(bindings, label);
+            Assert.AreEqual(EuReifiedAxiomDecodeRefusal.RowShapeContradictsItsProjectedKind, refusal, label);
+        }
+    }
+
+    /// <summary>
+    /// The one absent-datatype shape the publisher does produce stays admitted, and only beside a
+    /// language tag that is actually there.
+    /// </summary>
+    /// <remarks>
+    /// The endpoint does not answer <c>DATATYPE()</c> on a language-tagged literal, so the BIND
+    /// errors and the variable is omitted rather than bound. If this guard did not exist, the shape
+    /// check above would be free to tighten into refusing real publisher rows, and nothing would
+    /// say so.
+    /// </remarks>
+    [TestMethod]
+    public void AnAbsentDatatypeIsAdmittedOnlyBesideANonEmptyLanguageTag()
+    {
+        var admitted = WellFormed();
+        admitted.Add(RowDrifted(
+            CommentOnDate,
+            RepeatedEnumerationRdfTerm.Literal("texte en français", null, "fr"),
+            datatype: RepeatedEnumerationRdfTerm.Unbound(),
+            language: RepeatedEnumerationRdfTerm.Literal("fr", null, null)));
+
+        var bindings = Decode(admitted, out var refusal);
+
+        Assert.AreEqual(EuReifiedAxiomDecodeRefusal.None, refusal, "a language-tagged value's omitted datatype is real publisher behaviour");
+        Assert.IsNotNull(bindings);
+        Assert.HasCount(1, bindings);
+    }
+
+    /// <summary>
+    /// The absence branch's computed fields are shape-checked too, so an absence cannot be accepted
+    /// merely because its lexical values look plausible.
+    /// </summary>
+    [TestMethod]
+    public void TheAbsenceBranchsComputedFieldsAreShapeCheckedRatherThanReadAsText()
+    {
+        (string Case, RepeatedEnumerationRow Row)[] drifted =
+        [
+            ("absence datatype_iri delivered as an IRI",
+                AbsenceRow(datatype: RepeatedEnumerationRdfTerm.Iri(XsdDate))),
+            ("absence value_kind delivered as a typed literal",
+                AbsenceRow(marker: RepeatedEnumerationRdfTerm.Literal("unbound", XsdString, null))),
+            ("absence language_tag delivered as an IRI",
+                AbsenceRow(language: RepeatedEnumerationRdfTerm.Iri(Work))),
+        ];
+
+        foreach (var (label, row) in drifted)
+        {
+            var bindings = Decode([row], out var refusal);
+
+            Assert.IsNull(bindings, label);
+            Assert.AreEqual(EuReifiedAxiomDecodeRefusal.RowShapeContradictsItsProjectedKind, refusal, label);
         }
     }
 
