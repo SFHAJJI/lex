@@ -49,10 +49,16 @@ public sealed class EuReifiedAxiomWiringTests
     private static string[] AxiomRows(
         string parentIri,
         params (string Predicate, string Value, bool IsIri, string Datatype)[] terms) =>
+        AxiomRows(parentIri, AxiomIri, terms);
+
+    private static string[] AxiomRows(
+        string parentIri,
+        string axiomIri,
+        params (string Predicate, string Value, bool IsIri, string Datatype)[] terms) =>
         [.. terms
             .OrderBy(static term => term.Predicate, StringComparer.Ordinal)
             .Select(term => EuAcquisitionTestFixture.ReifiedAxiomFactsRow(
-                parentIri, AxiomIri, term.Predicate, term.Value, term.IsIri, term.Datatype))];
+                parentIri, axiomIri, term.Predicate, term.Value, term.IsIri, term.Datatype))];
 
     /// <summary>A well-formed reified entry-into-force axiom on <paramref name="parentIri"/>.</summary>
     private static (string Predicate, string Value, bool IsIri, string Datatype)[] WellFormedTerms(
@@ -132,6 +138,103 @@ public sealed class EuReifiedAxiomWiringTests
     }
 
     /// <summary>
+    /// Two delivered family-A batches, two distinct proofs: each binding names the coordinate its
+    /// own batch was read from, not the first batch's.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Not a hypothetical shape. The executor mints a distinct interpretation-profile reference per
+    /// batch, and the accepted 82-seed population exceeds the fixed 50-object batch capacity before
+    /// any consolidated state is added, so two or more family-A batches is ordinary production
+    /// traffic. Reusing the first batch's reference makes every later binding carry a provenance
+    /// claim the run cannot support, and it left the whole ingest suite green.
+    /// </para>
+    /// <para>
+    /// Driven through the extracted batch seam rather than a full run: reaching two batches from
+    /// the transport needs an observed-object set above the capacity, and building that fixture was
+    /// hiding the batch-to-proof association rather than proving it.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void EachDeliveredBatchStampsItsOwnBindingsWithItsOwnProof()
+    {
+        const string ParentOne = "http://publications.europa.eu/resource/cellar/aaaaaaaa-0000-0000-0000-00000000000a";
+        const string ParentTwo = "http://publications.europa.eu/resource/cellar/bbbbbbbb-0000-0000-0000-00000000000b";
+        const string AxiomOne = "http://publications.europa.eu/.well-known/genid/batch-one/1";
+        const string AxiomTwo = "http://publications.europa.eu/.well-known/genid/batch-two/1";
+
+        var profile = EuObjectFactsDiscoveryPlan.Create()
+            .CreateDeliveryProfile(EuObjectFactsQuerySet.ReifiedAxiomFacts);
+        var proofOne = new SourceArtifactRef("urn:uuid:00000000-0000-4000-8000-00000000aaa1", new string('a', 64));
+        var proofTwo = new SourceArtifactRef("urn:uuid:00000000-0000-4000-8000-00000000bbb2", new string('b', 64));
+
+        var batches = new (IReadOnlyList<RepeatedEnumerationRow>, RepeatedEnumerationInterpretationProfile, SourceArtifactRef)[]
+        {
+            (BatchRows(ParentOne, AxiomOne), profile, proofOne),
+            (BatchRows(ParentTwo, AxiomTwo), profile, proofTwo),
+        };
+
+        var decoded = EuQueryExecutionAdapter.DecodeAxiomBatches(batches, out var refusal, out _);
+
+        Assert.AreEqual(EuReifiedAxiomDecodeRefusal.None, refusal);
+        Assert.IsNotNull(decoded);
+        Assert.HasCount(2, decoded);
+
+        var byAxiom = decoded.ToDictionary(
+            static binding => binding.Axiom.RemoteAxiomId,
+            static binding => binding.Fact.SourceObservationId,
+            StringComparer.Ordinal);
+
+        Assert.AreEqual(
+            proofOne.ResourceId, byAxiom[AxiomOne],
+            "the first batch's binding must name the first batch's coordinate.");
+        Assert.AreEqual(
+            proofTwo.ResourceId, byAxiom[AxiomTwo],
+            "the second batch's binding must name its OWN coordinate, not the first batch's.");
+        Assert.AreNotEqual(
+            byAxiom[AxiomOne], byAxiom[AxiomTwo],
+            "two batches with distinct proofs cannot produce one shared provenance.");
+    }
+
+    /// <summary>
+    /// One well-formed axiom's delivered rows, in the shape the executor hands the adapter.
+    /// </summary>
+    private static IReadOnlyList<RepeatedEnumerationRow> BatchRows(string parentIri, string axiomIri) =>
+        [.. WellFormedTerms(parentIri)
+            .OrderBy(static term => term.Predicate, StringComparer.Ordinal)
+            .Select(term => DeliveredRow(parentIri, axiomIri, term))];
+
+    private static RepeatedEnumerationRow DeliveredRow(
+        string parentIri, string axiomIri, (string Predicate, string Value, bool IsIri, string Datatype) term)
+    {
+        var value = term.IsIri
+            ? RepeatedEnumerationRdfTerm.Iri(term.Value)
+            : RepeatedEnumerationRdfTerm.Literal(
+                term.Value, term.Datatype.Length == 0 ? null : term.Datatype, null);
+        var kind = term.IsIri ? "iri" : "literal";
+        var datatype = term.IsIri ? "" : term.Datatype;
+        var terms = new[]
+        {
+            RepeatedEnumerationRdfTerm.Iri(parentIri),
+            RepeatedEnumerationRdfTerm.Iri(axiomIri),
+            RepeatedEnumerationRdfTerm.Iri(term.Predicate),
+            value,
+            RepeatedEnumerationRdfTerm.Literal(kind, null, null),
+            RepeatedEnumerationRdfTerm.Literal(datatype, null, null),
+            RepeatedEnumerationRdfTerm.Literal("", null, null),
+            RepeatedEnumerationRdfTerm.Literal(parentIri, null, null),
+            RepeatedEnumerationRdfTerm.Literal(axiomIri, null, null),
+            RepeatedEnumerationRdfTerm.Literal(term.Predicate, null, null),
+            RepeatedEnumerationRdfTerm.Literal(term.Value, null, null),
+            RepeatedEnumerationRdfTerm.Literal(kind, null, null),
+            RepeatedEnumerationRdfTerm.Literal(datatype, null, null),
+            RepeatedEnumerationRdfTerm.Literal("", null, null),
+        };
+        return new RepeatedEnumerationRow(
+            Array.AsReadOnly(terms), Array.AsReadOnly(terms[7..]), Array.AsReadOnly(terms[7..]));
+    }
+
+    /// <summary>
     /// The family's typed absence stays an absence on the production path: no bindings, no refusal.
     /// </summary>
     /// <remarks>
@@ -202,21 +305,34 @@ public sealed class EuReifiedAxiomWiringTests
     /// Two seeds, one batch, one axiom each: each seed pass must take only its own work's axiom.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// This is the guard I first claimed the harness could not build and deferred. The reviewer
     /// built it and showed the narrowing is load-bearing, so it is built here: without narrowing
     /// each seed pass decodes BOTH axioms and the run returns four bindings for two publisher
     /// facts, duplicating each work's axiom under the other. Nothing inside a binding is
-    /// misattributed -- each still names its own annotatedSource -- which is exactly why only a
-    /// count and an identity assertion catch it.
+    /// misattributed -- each still names its own annotatedSource -- which is why only the pairing
+    /// below catches it.
+    /// </para>
+    /// <para>
+    /// THE TWO AXIOMS CARRY DISTINCT IDENTIFIERS ON PURPOSE. An earlier version of this guard gave
+    /// both works the same axiom IRI. It still failed when the narrowing was removed, but for the
+    /// wrong reason: the decode grouped both works' rows under one axiom and refused with
+    /// <see cref="EuReifiedAxiomDecodeRefusal.ModelledPredicateDeliveredMoreThanOnce"/> on
+    /// <c>annotatedSource</c>, so the cross-seed duplication this test names was never reached. A
+    /// guard that fails for an unrelated reason is not evidence for the reason it claims.
+    /// </para>
     /// </remarks>
     [TestMethod]
     public async Task EachSeedTakesOnlyItsOwnAxiomWhenTwoWorksShareOneBatch()
     {
+        const string AxiomOne = "http://publications.europa.eu/.well-known/genid/a3wiring/seed-one";
+        const string AxiomTwo = "http://publications.europa.eu/.well-known/genid/a3wiring/seed-two";
+
         var result = await EuAxiomWiringHarness.RunTwoSeedAsync((rootOne, rootTwo) =>
             EuAcquisitionTestFixture.AxiomScriptFrom(
                 [
-                    .. AxiomRows(rootOne, WellFormedTerms(rootOne)),
-                    .. AxiomRows(rootTwo, WellFormedTerms(rootTwo)),
+                    .. AxiomRows(rootOne, AxiomOne, WellFormedTerms(rootOne)),
+                    .. AxiomRows(rootTwo, AxiomTwo, WellFormedTerms(rootTwo)),
                 ]));
 
         Assert.IsNull(result.Refusal, $"code={result.Refusal?.Code} detail={result.Refusal?.Detail}");
@@ -224,12 +340,22 @@ public sealed class EuReifiedAxiomWiringTests
             2, result.DateAxioms,
             "two publisher axioms over two works must decode to exactly two bindings.");
 
-        var works = result.DateAxioms
-            .Select(static binding => binding.WorkIdentity.Identifiers[0].RawValue)
-            .OrderBy(static value => value, StringComparer.Ordinal)
+        // The pairing is the assertion, not the count alone: dropping the narrowing yields four
+        // bindings in which each work carries the other's axiom as well as its own.
+        var pairs = result.DateAxioms
+            .Select(static binding => (
+                Work: binding.WorkIdentity.Identifiers[0].RawValue,
+                Axiom: binding.Axiom.RemoteAxiomId))
+            .OrderBy(static pair => pair.Work, StringComparer.Ordinal)
             .ToArray();
+
+        var roots = new[] { pairs[0].Work, pairs[1].Work };
         CollectionAssert.AllItemsAreUnique(
-            works, "no work may be handed an axiom that another work asserted.");
+            roots, "no work may be handed an axiom that another work asserted.");
+        CollectionAssert.AreEquivalent(
+            new[] { AxiomOne, AxiomTwo },
+            pairs.Select(static pair => pair.Axiom).ToArray(),
+            "each work must carry exactly its own axiom.");
     }
 
     // The remaining narrowing case is NOT guarded, and said so rather than left to be found: the

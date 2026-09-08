@@ -1106,26 +1106,27 @@ public sealed class EuQueryExecutionAdapter
             // the template binds ?axiom owl:annotatedSource ?parent, so each binding takes its work
             // identity from its own annotatedSource -- but the same axiom is then reported once per
             // seed in the batch, duplicated under works that never asserted it.
-            foreach (var (aRows, aBatchProfile, aBatchProof) in aFamilies)
+            var narrowedAxiomBatches = aFamilies
+                .Select(batch => (
+                    Rows: FilterByClosureColumn(
+                        batch.Rows, batch.Profile, "parent", closure, allRequestedSeedsClosure),
+                    batch.Profile,
+                    Proof: batch.Proof.InterpretationProfileRef))
+                .ToArray();
+
+            var seedAxioms = DecodeAxiomBatches(
+                narrowedAxiomBatches, out var axiomRefusal, out var offendingAxiomValue);
+            if (seedAxioms is null)
             {
-                var seedARows = FilterByClosureColumn(
-                    aRows, aBatchProfile, "parent", closure, allRequestedSeedsClosure);
-
-                var seedAxioms = EuReifiedAxiomDecode.TryDecode(
-                    seedARows, aBatchProfile, aBatchProof.InterpretationProfileRef.ResourceId,
-                    out var axiomRefusal, out var offendingAxiomValue);
-                if (seedAxioms is null)
-                {
-                    return EuQueryExecutionResult.Refused(
-                        topology, outcomes,
-                        new EuQueryExecutionRefusalDetail(
-                            EuQueryExecutionRefusal.ReifiedAxiomDecodeRefused,
-                            $"seed '{requestedCelex}' reified-axiom decode refused: {axiomRefusal}" +
-                            (offendingAxiomValue is null ? "." : $" at '{offendingAxiomValue}'.")));
-                }
-
-                dateAxioms.AddRange(seedAxioms);
+                return EuQueryExecutionResult.Refused(
+                    topology, outcomes,
+                    new EuQueryExecutionRefusalDetail(
+                        EuQueryExecutionRefusal.ReifiedAxiomDecodeRefused,
+                        $"seed '{requestedCelex}' reified-axiom decode refused: {axiomRefusal}" +
+                        (offendingAxiomValue is null ? "." : $" at '{offendingAxiomValue}'.")));
             }
+
+            dateAxioms.AddRange(seedAxioms);
 
             var recordForm = recordFormByCelex[requestedCelex];
 
@@ -2175,6 +2176,54 @@ public sealed class EuQueryExecutionAdapter
     /// here regardless of which case it was, so a row belonging to no seed at all was silently lost
     /// rather than ever reaching decode's own refusal.
     /// </remarks>
+    /// <summary>
+    /// Decodes family A one delivered batch at a time, so every binding carries the custody
+    /// coordinate ITS OWN rows were read from.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The executor mints a distinct interpretation-profile reference per batch, and the accepted
+    /// 82-seed population exceeds the fixed 50-object <see cref="EuObjectFactsDiscoveryPlan.BatchCapacity"/>
+    /// before a single consolidated state is added, so more than one family-A batch is ordinary
+    /// production traffic rather than an edge. Reusing the first batch's reference for the rest
+    /// would make every later binding name a coordinate it was not read from --
+    /// <see cref="PublisherDateFact.SourceObservationId"/> is a provenance claim, and one this run
+    /// could not support.
+    /// </para>
+    /// <para>
+    /// Separated from the adapter's own loop so the batch-to-proof association can be driven
+    /// directly with two batches. Reaching it through a real run would need an observed-object set
+    /// above the batch capacity, and the fixture cost of that was hiding the association rather
+    /// than proving it.
+    /// </para>
+    /// </remarks>
+    internal static IReadOnlyList<EuDateAxiomBinding>? DecodeAxiomBatches(
+        IReadOnlyList<(IReadOnlyList<RepeatedEnumerationRow> Rows,
+                       RepeatedEnumerationInterpretationProfile Profile,
+                       SourceArtifactRef Proof)> batches,
+        out EuReifiedAxiomDecodeRefusal refusal,
+        out string? offendingValue)
+    {
+        ArgumentNullException.ThrowIfNull(batches);
+        refusal = EuReifiedAxiomDecodeRefusal.None;
+        offendingValue = null;
+
+        var decoded = new List<EuDateAxiomBinding>();
+        foreach (var batch in batches)
+        {
+            var batchAxioms = EuReifiedAxiomDecode.TryDecode(
+                batch.Rows, batch.Profile, batch.Proof.ResourceId, out refusal, out offendingValue);
+            if (batchAxioms is null)
+            {
+                return null;
+            }
+
+            decoded.AddRange(batchAxioms);
+        }
+
+        return decoded;
+    }
+
     private static IReadOnlyList<RepeatedEnumerationRow> FilterByClosureColumn(
         IReadOnlyList<RepeatedEnumerationRow> rows,
         RepeatedEnumerationInterpretationProfile profile,
