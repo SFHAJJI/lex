@@ -482,6 +482,8 @@ public sealed class ClosedVocabularyCensusTests
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgDimension: Record, Body, Relation, "
                     + "SupportingDocument, PublicationFamily, Language, Format, Authenticity, "
                     + "Rights, Transport",
+                "Lex.V3.Contracts.Source.Luxembourg.LuxembourgDraftRelationPredicate: "
+                    + "DraftTransposes",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgLiteralDisposition: Accepted, "
                     + "TypedQuarantine",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgLiteralReason: "
