@@ -447,6 +447,12 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Contracts.Source.Europe.EuDocumentFetchOutcome::Classify",
                 "Lex.V3.Contracts.Source.Europe.EuDocumentFetchRenderer: constructor internal "
                     + "instance Lex.V3.Contracts.Source.Europe.EuDocumentFetchRenderer::.ctor",
+                "Lex.V3.Contracts.Source.Europe.EuFactsEvidenceBundle: constructor private "
+                    + "instance Lex.V3.Contracts.Source.Europe.EuFactsEvidenceBundle::.ctor, "
+                    + "method public static "
+                    + "Lex.V3.Contracts.Source.Europe.EuFactsEvidenceBundle::Create, "
+                    + "method public static "
+                    + "Lex.V3.Contracts.Source.Europe.EuFactsEvidenceBundle::TryAdmit",
                 "Lex.V3.Contracts.Source.Europe.EuFeedEntryObservation: constructor private "
                     + "instance Lex.V3.Contracts.Source.Europe.EuFeedEntryObservation::.ctor, "
                     + "method public static "
