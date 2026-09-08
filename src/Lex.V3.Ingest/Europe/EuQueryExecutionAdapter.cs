@@ -294,6 +294,20 @@ public enum EuQueryExecutionRefusal
     /// </summary>
     [JsonStringEnumMemberName("record_set_not_retained")]
     RecordSetNotRetained = 19,
+
+    /// <summary>
+    /// Family A delivered reified date-axiom rows this run could not read into the accepted
+    /// <see cref="EuDateAxiomBinding"/> surface. Carries the
+    /// <see cref="EuReifiedAxiomDecodeRefusal"/> member and the offending term.
+    /// </summary>
+    /// <remarks>
+    /// The run refuses rather than handing back a smaller, cleaner axiom set than the publisher
+    /// sent, which is the false absence S2-A05 exists to refuse. A work that reifies nothing is
+    /// NOT this: family A's absence branch delivers a typed unbound row, which decodes to an empty
+    /// binding list without refusing anything.
+    /// </remarks>
+    [JsonStringEnumMemberName("reified_axiom_decode_refused")]
+    ReifiedAxiomDecodeRefused = 20,
 }
 
 public sealed class EuQueryExecutionRefusalDetail
@@ -419,6 +433,7 @@ public sealed class EuQueryExecutionResult
         IReadOnlyDictionary<string, IReadOnlyList<string>>? observedManifestationTypesByCelex,
         IReadOnlyDictionary<string, EuObservedExpressionSplit>? observedExpressionsByCelex,
         IReadOnlyDictionary<int, EuMintedRowAccounting>? mintedRowsByOrdinal,
+        IReadOnlyList<EuDateAxiomBinding> dateAxioms,
         SourceArtifactRef? corpusRecordSetRef,
         VerifiedCorpusRecordSet? corpusRecordSet,
         EuQueryExecutionCompletion? completion,
@@ -445,6 +460,7 @@ public sealed class EuQueryExecutionResult
         ObservedManifestationTypesByCelex = observedManifestationTypesByCelex;
         ObservedExpressionsByCelex = observedExpressionsByCelex;
         MintedRowsByOrdinal = mintedRowsByOrdinal;
+        DateAxioms = dateAxioms;
         CorpusRecordSetRef = corpusRecordSetRef;
         CorpusRecordSet = corpusRecordSet;
         Completion = completion;
@@ -471,6 +487,7 @@ public sealed class EuQueryExecutionResult
         IReadOnlyDictionary<string, IReadOnlyList<string>> observedManifestationTypesByCelex,
         IReadOnlyDictionary<string, EuObservedExpressionSplit> observedExpressionsByCelex,
         IReadOnlyDictionary<int, EuMintedRowAccounting> mintedRowsByOrdinal,
+        IReadOnlyList<EuDateAxiomBinding> dateAxioms,
         SourceArtifactRef corpusRecordSetRef,
         VerifiedCorpusRecordSet corpusRecordSet)
     {
@@ -486,6 +503,7 @@ public sealed class EuQueryExecutionResult
         ArgumentNullException.ThrowIfNull(observedManifestationTypesByCelex);
         ArgumentNullException.ThrowIfNull(observedExpressionsByCelex);
         ArgumentNullException.ThrowIfNull(mintedRowsByOrdinal);
+        ArgumentNullException.ThrowIfNull(dateAxioms);
         ArgumentNullException.ThrowIfNull(corpusRecordSetRef);
         ArgumentNullException.ThrowIfNull(corpusRecordSet);
         var completion = familyOutcomes.All(static outcome => outcome.Kind == EuFamilyEnumerationOutcomeKind.Proven)
@@ -496,7 +514,7 @@ public sealed class EuQueryExecutionResult
             watermarkWitnessPlan, rootBinding, witnessReconciliation, witnessTerminations, scopeManifestReceipt,
             scopeManifestCanonicalSha256, documentAcquisitionOutcomesByOrdinal, documentLadderResultsByOrdinal,
             observedManifestationTypesByCelex, observedExpressionsByCelex, mintedRowsByOrdinal,
-            corpusRecordSetRef, corpusRecordSet, completion, null, null, null, null);
+            dateAxioms, corpusRecordSetRef, corpusRecordSet, completion, null, null, null, null);
     }
 
     public static EuQueryExecutionResult Refused(
@@ -512,11 +530,24 @@ public sealed class EuQueryExecutionResult
         ArgumentNullException.ThrowIfNull(refusal);
         return new(
             topology, familyOutcomes, 0, 0, [], null, null, null, null, null, null, null, null, null, null, null,
-            null, null, null, refusal, decodeRefusal, decodeOffendingIri, decodeSnapshotRefusal,
+            [], null, null, null, refusal, decodeRefusal, decodeOffendingIri, decodeSnapshotRefusal,
             witnessTraversalRefusal);
     }
 
     /// <summary>Always present: minting it cannot fail, and it is useful context on a refusal too.</summary>
+    /// <summary>
+    /// Every reified date axiom family A delivered for this run's seeds, decoded through
+    /// <see cref="EuReifiedAxiomDecode.TryDecode"/> and narrowed to each seed's own closure.
+    /// </summary>
+    /// <remarks>
+    /// Empty means the publisher reified no admitted date on any requested work, which family A
+    /// states as a typed unbound row rather than by returning nothing. It is never empty because a
+    /// row could not be read: that refuses the run as
+    /// <see cref="EuQueryExecutionRefusal.ReifiedAxiomDecodeRefused"/>. Empty on every refused
+    /// result, including a refusal after the decode completed.
+    /// </remarks>
+    public IReadOnlyList<EuDateAxiomBinding> DateAxioms { get; }
+
     public SourceProfileTopology Topology { get; }
 
     public IReadOnlyList<EuFamilyEnumerationOutcome> FamilyOutcomes { get; }
@@ -957,13 +988,14 @@ public sealed class EuQueryExecutionAdapter
         if (!objectFactsRows.TryGetValue(EuObjectFactsQuerySet.ObjectFacts, out var pFamilies) || pFamilies.Count == 0 ||
             !objectFactsRows.TryGetValue(EuObjectFactsQuerySet.ExpressionFacts, out var xFamilies) || xFamilies.Count == 0 ||
             !objectFactsRows.TryGetValue(EuObjectFactsQuerySet.RootWatermark, out var wFamilies) || wFamilies.Count == 0 ||
-            !objectFactsRows.TryGetValue(EuObjectFactsQuerySet.ManifestationFacts, out var mFamilies) || mFamilies.Count == 0)
+            !objectFactsRows.TryGetValue(EuObjectFactsQuerySet.ManifestationFacts, out var mFamilies) || mFamilies.Count == 0 ||
+            !objectFactsRows.TryGetValue(EuObjectFactsQuerySet.ReifiedAxiomFacts, out var aFamilies) || aFamilies.Count == 0)
         {
             return EuQueryExecutionResult.Refused(
                 topology, outcomes,
                 new EuQueryExecutionRefusalDetail(
                     EuQueryExecutionRefusal.ObjectFactsFamilyNotProven,
-                    "this run must enumerate at least one proven batch of each of family P, X, W and M."));
+                    "this run must enumerate at least one proven batch of each of family P, X, W, M and A."));
         }
 
         var pProfile = pFamilies[0].Profile;
@@ -974,6 +1006,13 @@ public sealed class EuQueryExecutionAdapter
         var wProfile = wFamilies[0].Profile;
         var allMRows = mFamilies.SelectMany(static entry => entry.Rows).ToArray();
         var mProfile = mFamilies[0].Profile;
+        var allARows = aFamilies.SelectMany(static entry => entry.Rows).ToArray();
+        var aProfile = aFamilies[0].Profile;
+
+        // Family A's bindings rest on family A's OWN proof, for the same reason family M's format
+        // observations were repaired to rest on M's: a fact stamped with another family's evidence
+        // names a listing it was not read from.
+        var axiomEvidenceRef = aFamilies[0].Proof.InterpretationProfileRef;
 
         // D1-05c-2 precision two: the evidence every observation in every decoded snapshot rests on
         // is family P's own interpretation-profile identity -- a real artifact this run actually
@@ -996,6 +1035,11 @@ public sealed class EuQueryExecutionAdapter
         var discoveredRoots = new List<string>();
         var expressionIris = new HashSet<string>(StringComparer.Ordinal);
         var rootWatermarkObservations = new List<(string WatermarkLexical, string CanonicalEntryKey)>();
+
+        // Family A's decoded bindings, accumulated per seed in the order the seeds are read. Each
+        // binding carries its own work identity from its axiom's annotatedSource, so this stays
+        // self-describing rather than depending on position.
+        var dateAxioms = new List<EuDateAxiomBinding>();
 
         // Every requested seed's own closure, computed once up front, plus their union. Defect 1's
         // fix needs both: FilterByClosureColumn below must keep narrowing allPRows/allXRows down to
@@ -1052,6 +1096,27 @@ public sealed class EuQueryExecutionAdapter
             // Family M is narrowed by its own ?parent column for the identical reason family X is:
             // EuCellarObjectDecode.TryDecode refuses any row outside the ONE closure it is handed.
             var seedMRows = FilterByClosureColumn(allMRows, mProfile, "parent", closure, allRequestedSeedsClosure);
+            // Family A is narrowed by its own ?parent column for the same reason X and M are. Its
+            // template binds ?axiom owl:annotatedSource ?parent against the batch's VALUES block, so
+            // annotatedSource and the batch key are the same IRI by construction and a binding
+            // cannot be misattributed -- but a page covers every work in the batch, so an
+            // unnarrowed call would hand this seed its neighbours' axioms.
+            var seedARows = FilterByClosureColumn(allARows, aProfile, "parent", closure, allRequestedSeedsClosure);
+
+            var seedAxioms = EuReifiedAxiomDecode.TryDecode(
+                seedARows, aProfile, axiomEvidenceRef.ResourceId,
+                out var axiomRefusal, out var offendingAxiomValue);
+            if (seedAxioms is null)
+            {
+                return EuQueryExecutionResult.Refused(
+                    topology, outcomes,
+                    new EuQueryExecutionRefusalDetail(
+                        EuQueryExecutionRefusal.ReifiedAxiomDecodeRefused,
+                        $"seed '{requestedCelex}' reified-axiom decode refused: {axiomRefusal}" +
+                        (offendingAxiomValue is null ? "." : $" at '{offendingAxiomValue}'.")));
+            }
+
+            dateAxioms.AddRange(seedAxioms);
 
             var recordForm = recordFormByCelex[requestedCelex];
 
@@ -1515,6 +1580,7 @@ public sealed class EuQueryExecutionAdapter
             scopeManifestCanonicalSha256: manifestCanonicalSha256,
             documentAcquisitionOutcomesByOrdinal: documentAcquisitionOutcomesByOrdinal!,
             documentLadderResultsByOrdinal: documentLadderResultsByOrdinal!,
+            dateAxioms: dateAxioms,
             corpusRecordSetRef: recordSetResult.SetRef!,
             corpusRecordSet: recordSetResult.VerifiedSet!);
     }

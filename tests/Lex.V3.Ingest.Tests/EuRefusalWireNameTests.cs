@@ -150,6 +150,7 @@ public sealed class EuRefusalWireNameTests
                 "document_body_not_retained",
                 "acquisition_outcome_not_representable",
                 "record_set_not_retained",
+                "reified_axiom_decode_refused",
             }),
             string.Join("\n", WireNames<EuQueryExecutionRefusal>()),
             "a wire name changing is a contract change; a number changing is not.");
