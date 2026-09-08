@@ -350,6 +350,12 @@ public sealed class ClosedVocabularyCensusTests
                 "Lex.V3.Contracts.Source.Europe.EuPrimaryWitnessReconciliationRefusal: None, "
                     + "ClosureIdentityNotStructurallyIndependentFromWitness, "
                     + "WitnessInPackRootMissingFromPrimaryEnumeration",
+                "Lex.V3.Contracts.Source.Europe.EuReifiedAxiomDecodeRefusal: None, "
+                    + "AxiomNodeNotAnIri, AnnotatedSourceMissingOrNotAnIri, "
+                    + "AnnotatedPropertyMissingOrNotAdmitted, AxiomTypeMissingOrNotOwlAxiom, "
+                    + "AnnotatedTargetMissingOrNotALiteral, AnnotatedTargetDatatypeNotADateShape, "
+                    + "QualifierTermMalformed, QualifierAuthorityDisagreesWithItsCode, "
+                    + "BindingRefusedByTheAcceptedContract",
                 "Lex.V3.Contracts.Source.Europe.EuReuseBasis: Cc0, CcBy40, "
                     + "EurLexLegalNoticePermission",
                 "Lex.V3.Contracts.Source.Europe.EuRightsExceptionChannel: ThirdPartyMaterial, "

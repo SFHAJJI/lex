@@ -151,6 +151,9 @@ public sealed class VocabularyRegistryCensusTests
                     + "const Text",
                 "Lex.V3.Contracts.Source.Europe.EuPackRootCanonicalForm: const HttpScheme, "
                     + "const HttpsScheme",
+                "Lex.V3.Contracts.Source.Europe.EuReifiedAxiomDecode: const CommentOnDateIri, "
+                    + "const Fd335ConceptBase, const ParsedByAuthority, const TypeOfDateIri, "
+                    + "const XsdDate, const XsdGYear, const XsdGYearMonth",
                 "Lex.V3.Contracts.Source.Europe.EuScopeProfile: ProjectionRules=4, SelectorKeys=7, "
                     + "const BodyCandidateRoleKey, const Candidate4Sha256, const ProfileResourceId, "
                     + "static readonly ProfileSha256, const SelectorTableResourceId, "

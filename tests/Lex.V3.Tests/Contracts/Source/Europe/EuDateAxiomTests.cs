@@ -719,16 +719,25 @@ public sealed class EuDateAxiomTests
             ConstructionSurface.Of(typeof(EuDateAxiomBinding)).ToArray());
     }
 
+    /// <remarks>
+    /// A2 adds the second producer this pin was waiting for. It exists to catch the binding
+    /// surface proliferating by accident, and until now nothing produced a binding at all -- the
+    /// contract was reachable only from doc comments. <see cref="EuReifiedAxiomDecode"/> is the
+    /// sanctioned producer #410 exists to create, and it lives in this assembly rather than in
+    /// Ingest because the fd_335 label table it must supply is internal to Contracts and Ingest is
+    /// not an InternalsVisibleTo target. Widening this list is a decision, not bookkeeping: any
+    /// further entry should have to argue for itself here.
+    /// </remarks>
     [TestMethod]
-    public void EveryOtherProducerOfABindingInTheAssemblyIsExactlyTheClassificationsOwnHolder()
+    public void EveryOtherProducerOfABindingInTheAssemblyIsExactlyTheDecodeDoorAndTheClassificationsOwnHolder()
     {
         CollectionAssert.AreEqual(
             new[]
             {
-                "field private instance " + N + "EuTranspositionDeadlineClassification::"
-                + "<DerivedFrom>k__BackingField -> " + N + "EuDateAxiomBinding",
-                "property public instance " + N + "EuTranspositionDeadlineClassification::"
-                + "DerivedFrom() -> " + N + "EuDateAxiomBinding",
+                "field private instance " + N + "EuTranspositionDeadlineClassification::<DerivedFrom>k__BackingField -> " + N + "EuDateAxiomBinding",
+                "method private static " + N + "EuReifiedAxiomDecode::DecodeOne(System.String, System.Collections.Generic.IReadOnlyList<System.ValueTuple<System.String, Lex.V3.Contracts.Source.Core.RepeatedEnumerationRdfTerm>>, System.String, out " + N + "EuReifiedAxiomDecodeRefusal&, out System.String&?) -> " + N + "EuDateAxiomBinding?",
+                "method public static " + N + "EuReifiedAxiomDecode::TryDecode(System.Collections.Generic.IReadOnlyList<Lex.V3.Contracts.Source.Core.RepeatedEnumerationRow>, Lex.V3.Contracts.Source.Core.RepeatedEnumerationInterpretationProfile, System.String, out " + N + "EuReifiedAxiomDecodeRefusal&, out System.String&?) -> System.Collections.Generic.IReadOnlyList<" + N + "EuDateAxiomBinding>?",
+                "property public instance " + N + "EuTranspositionDeadlineClassification::DerivedFrom() -> " + N + "EuDateAxiomBinding",
             },
             ConstructionSurface.ProducersIn(
                 typeof(EuDateAxiomBinding).Assembly, typeof(EuDateAxiomBinding), true).ToArray());
