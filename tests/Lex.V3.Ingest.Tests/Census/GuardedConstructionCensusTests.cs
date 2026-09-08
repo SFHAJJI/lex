@@ -111,6 +111,8 @@ public sealed class GuardedConstructionCensusTests
                     + "method private instance "
                     + "Lex.V3.Ingest.Europe.EuRepeatedEnumerationExecutor::RunPassesAsync, "
                     + "method public instance "
+                    + "Lex.V3.Ingest.Europe.EuRepeatedEnumerationExecutor::RunCaseLawLinksAsync, "
+                    + "method public instance "
                     + "Lex.V3.Ingest.Europe.EuRepeatedEnumerationExecutor::RunCensusPartitionAsync, "
                     + "method public instance "
                     + "Lex.V3.Ingest.Europe.EuRepeatedEnumerationExecutor::RunLuxembourgTranspositi"
