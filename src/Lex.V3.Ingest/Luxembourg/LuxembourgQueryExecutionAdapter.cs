@@ -594,6 +594,23 @@ public sealed class LuxembourgTypedAssertion
         {
             throw new ArgumentException("An assertion cannot populate both disjoint date-fact families.");
         }
+
+        var expectsActForceDate = FactDisposition.Predicate is
+            LuxembourgAssertionPredicate.DateEntryInForce or
+            LuxembourgAssertionPredicate.DateNoLongerInForce;
+        var expectsConsolidationDate = FactDisposition.Predicate is
+            LuxembourgAssertionPredicate.DateApplicability or
+            LuxembourgAssertionPredicate.DateEndApplicability;
+        if ((ActForceDateFact is not null) != expectsActForceDate ||
+            (ConsolidationApplicabilityDateFact is not null) != expectsConsolidationDate ||
+            (ActForceDateFact is not null &&
+             ActForceDateFact.UnderlyingPredicate != FactDisposition.Predicate) ||
+            (ConsolidationApplicabilityDateFact is not null &&
+             ConsolidationApplicabilityDateFact.UnderlyingPredicate != FactDisposition.Predicate))
+        {
+            throw new ArgumentException(
+                "A dedicated date predicate requires exactly its own specialized date fact.");
+        }
     }
 
     public LuxembourgObservedAssertion Assertion { get; }

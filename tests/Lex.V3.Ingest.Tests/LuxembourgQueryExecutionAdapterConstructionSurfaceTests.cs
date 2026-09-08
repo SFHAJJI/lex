@@ -385,6 +385,42 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
         StringAssert.Contains(exception.Message, "both disjoint date-fact families");
     }
 
+    [TestMethod]
+    public void TypedAssertionRequiresTheExactSpecializedDateFactForItsDisposition()
+    {
+        var evidenceRef = new SourceArtifactRef(
+            "urn:uuid:10dd0a6e-3fa4-468d-a2aa-570a93ec4bf0", new string('1', 64));
+        var assertion = new LuxembourgObservedAssertion(
+            "http://data.legilux.public.lu/eli/etat/leg/loi/2026/01/01/a0",
+            "http://data.legilux.public.lu/resource/ontology/jolux#dateNoLongerInForce",
+            LuxembourgAssertionObjectKind.Literal,
+            "2026-12-30",
+            "http://www.w3.org/2001/XMLSchema#date",
+            string.Empty,
+            evidenceRef);
+        var disposition = new LuxembourgAssertionFactDisposition(
+            LuxembourgAssertionPredicate.DateNoLongerInForce,
+            LuxembourgAssertionFactKind.ActForce,
+            evidenceRef);
+        var wrongFamily = new LuxembourgConsolidationApplicabilityDateFact(
+            LuxembourgConsolidationApplicabilityDatePredicate.DateEndApplicability,
+            "2026-12-30",
+            "http://www.w3.org/2001/XMLSchema#date",
+            evidenceRef);
+        var wrongMember = new LuxembourgActForceDateFact(
+            LuxembourgActForceDatePredicate.DateEntryInForce,
+            "2026-12-30",
+            "http://www.w3.org/2001/XMLSchema#date",
+            evidenceRef);
+
+        Assert.ThrowsExactly<ArgumentException>(() =>
+            new LuxembourgTypedAssertion(assertion, disposition, null, wrongFamily));
+        Assert.ThrowsExactly<ArgumentException>(() =>
+            new LuxembourgTypedAssertion(assertion, disposition, wrongMember, null));
+        Assert.ThrowsExactly<ArgumentException>(() =>
+            new LuxembourgTypedAssertion(assertion, disposition, null, null));
+    }
+
     /// <summary>
     /// One internal constructor, matching <c>LuxembourgEnumerationRefusalDetail</c>'s own door
     /// shape: only this assembly and its own tests can mint a refusal that did not happen.
