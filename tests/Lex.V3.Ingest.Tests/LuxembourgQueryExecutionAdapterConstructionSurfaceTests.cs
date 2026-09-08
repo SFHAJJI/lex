@@ -1,3 +1,4 @@
+using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Luxembourg;
 using Lex.V3.Ingest.Luxembourg;
 using Lex.V3.TestSupport;
@@ -208,7 +209,7 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
     }
 
     [TestMethod]
-    public void QueryExecutionRefusalIsAFifteenMemberEnumIncludingNone()
+    public void QueryExecutionRefusalIsASixteenMemberEnumIncludingNone()
     {
         // D1-06c-LU-2 added four: DocumentFetchSessionNotStarted, DocumentBodyNotRetained,
         // AcquisitionOutcomeNotRepresentable and RecordSetNotHeld, one per whole-run failure the
@@ -222,6 +223,9 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
                 "base-constructor protected instance System.ValueType::.ctor() -> System.ValueType",
                 "field public static " + N
                 + "LuxembourgQueryExecutionRefusal::AcquisitionOutcomeNotRepresentable -> "
+                + N + "LuxembourgQueryExecutionRefusal",
+                "field public static " + N
+                + "LuxembourgQueryExecutionRefusal::AssertionFactNotRepresentable -> "
                 + N + "LuxembourgQueryExecutionRefusal",
                 "field public static " + N
                 + "LuxembourgQueryExecutionRefusal::AssertionRowObjectKindNotRecognised -> "
@@ -304,6 +308,119 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
             ConstructionSurface.Of(typeof(LuxembourgResourceObservationExclusionAccounting)).ToArray());
     }
 
+    [TestMethod]
+    public void TypedAssertionHasOneInternalProducerDoor()
+    {
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "constructor internal instance "
+                + N + "LuxembourgTypedAssertion::.ctor("
+                + Contracts + "LuxembourgObservedAssertion, "
+                + Contracts + "LuxembourgAssertionFactDisposition, "
+                + Contracts + "LuxembourgActForceDateFact?, "
+                + Contracts + "LuxembourgConsolidationApplicabilityDateFact?) -> "
+                + N + "LuxembourgTypedAssertion",
+            },
+            ConstructionSurface.Of(typeof(LuxembourgTypedAssertion)).ToArray());
+    }
+
+    [TestMethod]
+    public void TypedAssertionRefusesAnEvidenceReferenceThatDoesNotMatchItsPublisherRow()
+    {
+        var rowRef = new SourceArtifactRef(
+            "urn:uuid:10dd0a6e-3fa4-468d-a2aa-570a93ec4bf0", new string('1', 64));
+        var otherRef = new SourceArtifactRef(
+            "urn:uuid:20dd0a6e-3fa4-468d-a2aa-570a93ec4bf0", new string('2', 64));
+        var assertion = new LuxembourgObservedAssertion(
+            "http://data.legilux.public.lu/eli/etat/leg/loi/2026/01/01/a0",
+            "http://data.legilux.public.lu/resource/ontology/jolux#historicalLegalId",
+            LuxembourgAssertionObjectKind.Literal,
+            "A-42",
+            string.Empty,
+            string.Empty,
+            rowRef);
+        var disposition = new LuxembourgAssertionFactDisposition(
+            LuxembourgAssertionPredicate.HistoricalLegalId,
+            LuxembourgAssertionFactKind.ActIdentity,
+            otherRef);
+
+        var exception = Assert.ThrowsExactly<ArgumentException>(() =>
+            new LuxembourgTypedAssertion(assertion, disposition, null, null));
+
+        StringAssert.Contains(exception.Message, "evidence reference");
+    }
+
+    [TestMethod]
+    public void TypedAssertionRefusesBothDisjointDateFactFamiliesAtOnce()
+    {
+        var evidenceRef = new SourceArtifactRef(
+            "urn:uuid:10dd0a6e-3fa4-468d-a2aa-570a93ec4bf0", new string('1', 64));
+        var assertion = new LuxembourgObservedAssertion(
+            "http://data.legilux.public.lu/eli/etat/leg/loi/2026/01/01/a0",
+            "http://data.legilux.public.lu/resource/ontology/jolux#dateEntryInForce",
+            LuxembourgAssertionObjectKind.Literal,
+            "2026-01-01",
+            "http://www.w3.org/2001/XMLSchema#date",
+            string.Empty,
+            evidenceRef);
+        var disposition = new LuxembourgAssertionFactDisposition(
+            LuxembourgAssertionPredicate.DateEntryInForce,
+            LuxembourgAssertionFactKind.ActForce,
+            evidenceRef);
+        var actForceDate = new LuxembourgActForceDateFact(
+            LuxembourgActForceDatePredicate.DateEntryInForce,
+            "2026-01-01",
+            "http://www.w3.org/2001/XMLSchema#date",
+            evidenceRef);
+        var consolidationDate = new LuxembourgConsolidationApplicabilityDateFact(
+            LuxembourgConsolidationApplicabilityDatePredicate.DateApplicability,
+            "2026-01-01",
+            "http://www.w3.org/2001/XMLSchema#date",
+            evidenceRef);
+
+        var exception = Assert.ThrowsExactly<ArgumentException>(() =>
+            new LuxembourgTypedAssertion(assertion, disposition, actForceDate, consolidationDate));
+
+        StringAssert.Contains(exception.Message, "both disjoint date-fact families");
+    }
+
+    [TestMethod]
+    public void TypedAssertionRequiresTheExactSpecializedDateFactForItsDisposition()
+    {
+        var evidenceRef = new SourceArtifactRef(
+            "urn:uuid:10dd0a6e-3fa4-468d-a2aa-570a93ec4bf0", new string('1', 64));
+        var assertion = new LuxembourgObservedAssertion(
+            "http://data.legilux.public.lu/eli/etat/leg/loi/2026/01/01/a0",
+            "http://data.legilux.public.lu/resource/ontology/jolux#dateNoLongerInForce",
+            LuxembourgAssertionObjectKind.Literal,
+            "2026-12-30",
+            "http://www.w3.org/2001/XMLSchema#date",
+            string.Empty,
+            evidenceRef);
+        var disposition = new LuxembourgAssertionFactDisposition(
+            LuxembourgAssertionPredicate.DateNoLongerInForce,
+            LuxembourgAssertionFactKind.ActForce,
+            evidenceRef);
+        var wrongFamily = new LuxembourgConsolidationApplicabilityDateFact(
+            LuxembourgConsolidationApplicabilityDatePredicate.DateEndApplicability,
+            "2026-12-30",
+            "http://www.w3.org/2001/XMLSchema#date",
+            evidenceRef);
+        var wrongMember = new LuxembourgActForceDateFact(
+            LuxembourgActForceDatePredicate.DateEntryInForce,
+            "2026-12-30",
+            "http://www.w3.org/2001/XMLSchema#date",
+            evidenceRef);
+
+        Assert.ThrowsExactly<ArgumentException>(() =>
+            new LuxembourgTypedAssertion(assertion, disposition, null, wrongFamily));
+        Assert.ThrowsExactly<ArgumentException>(() =>
+            new LuxembourgTypedAssertion(assertion, disposition, wrongMember, null));
+        Assert.ThrowsExactly<ArgumentException>(() =>
+            new LuxembourgTypedAssertion(assertion, disposition, null, null));
+    }
+
     /// <summary>
     /// One internal constructor, matching <c>LuxembourgEnumerationRefusalDetail</c>'s own door
     /// shape: only this assembly and its own tests can mint a refusal that did not happen.
@@ -348,6 +465,9 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
                 + "System.Collections.Generic.IReadOnlyList<"
                 + Contracts
                 + "LuxembourgResolvedLocalInboundRelation>, "
+                + "System.Collections.Generic.IReadOnlyList<"
+                + N
+                + "LuxembourgTypedAssertion>, "
                 + "System.Collections.Generic.IReadOnlyList<System.String>, "
                 + "System.Collections.Generic.IReadOnlyList<"
                 + N
@@ -381,6 +501,9 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
                 + "System.Collections.Generic.IReadOnlyList<"
                 + Contracts
                 + "LuxembourgResolvedLocalInboundRelation>, "
+                + "System.Collections.Generic.IReadOnlyList<"
+                + N
+                + "LuxembourgTypedAssertion>, "
                 + "System.Collections.Generic.IReadOnlyList<System.String>, "
                 + "System.Collections.Generic.IReadOnlyList<"
                 + N

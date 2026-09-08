@@ -804,6 +804,150 @@ public sealed partial class LuxembourgQueryExecutionAdapterTests
         Assert.AreEqual(1, exclusion.RowCount);
     }
 
+    [TestMethod]
+    public async Task ProvenAssertionRowsProduceTheAcceptedTypedDispositionsWithoutCollapsingDateFamilies()
+    {
+        const string subjectUri = "http://data.legilux.public.lu/eli/etat/leg/loi/2026/01/01/a0";
+        const string jolux = "http://data.legilux.public.lu/resource/ontology/jolux#";
+        const string xsdDate = "http://www.w3.org/2001/XMLSchema#date";
+        var (profile, observationRef, enumerationRef) = BuildProfile();
+        var store = new InMemoryCustodyStore();
+        var assertionPage = AssertionRowsJson(
+            (subjectUri, jolux + "dateApplicability", "2026-01-02", "literal", xsdDate, ""),
+            (subjectUri, jolux + "dateEndApplicability", "2026-12-31", "literal", xsdDate, ""),
+            (subjectUri, jolux + "dateEntryInForce", "2026-01-01", "literal", xsdDate, ""),
+            (subjectUri, jolux + "dateNoLongerInForce", "2026-12-30", "literal", xsdDate, ""),
+            (subjectUri, jolux + "historicalLegalId", "A-42", "literal", "", ""));
+        var handler = TwoFamilyDeliveringHandler([subjectUri], 5, assertionPage);
+        var adapter = new LuxembourgQueryExecutionAdapter(store, NewExecutor(store, handler), profile);
+        var (resourceRequest, resourceWitness) = BuildPartitionRequest(ResourceSetId, ResourceFamilyKey);
+        var (assertionRequest, assertionWitness) = BuildPartitionRequest(AssertionSetId, AssertionFamilyKey);
+
+        var result = await adapter.RunAsync(
+            [(resourceRequest, resourceWitness, null), (assertionRequest, assertionWitness, null)],
+            null, ResourceFamilyKey, AssertionFamilyKey,
+            new PermissiveEvidenceResolver(enumerationRef), DocumentFetchRendererSource(), CancellationToken.None);
+
+        Assert.IsNull(result.Refusal, $"code={result.Refusal?.Code} detail={result.Refusal?.Detail}");
+        Assert.HasCount(5, result.TypedAssertions);
+
+        var applicability = result.TypedAssertions.Single(value =>
+            value.Assertion.PredicateIri == jolux + "dateApplicability");
+        Assert.AreEqual(LuxembourgAssertionPredicate.DateApplicability, applicability.FactDisposition.Predicate);
+        Assert.AreEqual(
+            LuxembourgAssertionFactKind.ConsolidationApplicability,
+            applicability.FactDisposition.FactKind);
+        Assert.IsNull(applicability.ActForceDateFact);
+        Assert.IsNotNull(applicability.ConsolidationApplicabilityDateFact);
+        Assert.AreEqual(
+            LuxembourgConsolidationApplicabilityDatePredicate.DateApplicability,
+            applicability.ConsolidationApplicabilityDateFact!.Predicate);
+        Assert.AreEqual("2026-01-02", applicability.ConsolidationApplicabilityDateFact.RawLexicalValue);
+        Assert.AreEqual(xsdDate, applicability.ConsolidationApplicabilityDateFact.DatatypeIri);
+        Assert.AreEqual(observationRef, applicability.ConsolidationApplicabilityDateFact.EvidenceRef);
+
+        var endApplicability = result.TypedAssertions.Single(value =>
+            value.Assertion.PredicateIri == jolux + "dateEndApplicability");
+        Assert.AreEqual(
+            LuxembourgAssertionPredicate.DateEndApplicability,
+            endApplicability.FactDisposition.Predicate);
+        Assert.AreEqual(
+            LuxembourgAssertionFactKind.ConsolidationApplicability,
+            endApplicability.FactDisposition.FactKind);
+        Assert.IsNull(endApplicability.ActForceDateFact);
+        Assert.AreEqual(
+            LuxembourgConsolidationApplicabilityDatePredicate.DateEndApplicability,
+            endApplicability.ConsolidationApplicabilityDateFact?.Predicate);
+
+        var entryIntoForce = result.TypedAssertions.Single(value =>
+            value.Assertion.PredicateIri == jolux + "dateEntryInForce");
+        Assert.AreEqual(LuxembourgAssertionPredicate.DateEntryInForce, entryIntoForce.FactDisposition.Predicate);
+        Assert.AreEqual(LuxembourgAssertionFactKind.ActForce, entryIntoForce.FactDisposition.FactKind);
+        Assert.IsNotNull(entryIntoForce.ActForceDateFact);
+        Assert.IsNull(entryIntoForce.ConsolidationApplicabilityDateFact);
+        Assert.AreEqual(
+            LuxembourgActForceDatePredicate.DateEntryInForce,
+            entryIntoForce.ActForceDateFact!.Predicate);
+        Assert.AreEqual("2026-01-01", entryIntoForce.ActForceDateFact.RawLexicalValue);
+        Assert.AreEqual(xsdDate, entryIntoForce.ActForceDateFact.DatatypeIri);
+        Assert.AreEqual(observationRef, entryIntoForce.ActForceDateFact.EvidenceRef);
+
+        var noLongerInForce = result.TypedAssertions.Single(value =>
+            value.Assertion.PredicateIri == jolux + "dateNoLongerInForce");
+        Assert.AreEqual(
+            LuxembourgAssertionPredicate.DateNoLongerInForce,
+            noLongerInForce.FactDisposition.Predicate);
+        Assert.AreEqual(LuxembourgAssertionFactKind.ActForce, noLongerInForce.FactDisposition.FactKind);
+        Assert.AreEqual(
+            LuxembourgActForceDatePredicate.DateNoLongerInForce,
+            noLongerInForce.ActForceDateFact?.Predicate);
+        Assert.IsNull(noLongerInForce.ConsolidationApplicabilityDateFact);
+
+        var historicalId = result.TypedAssertions.Single(value =>
+            value.Assertion.PredicateIri == jolux + "historicalLegalId");
+        Assert.AreEqual(LuxembourgAssertionPredicate.HistoricalLegalId, historicalId.FactDisposition.Predicate);
+        Assert.AreEqual(LuxembourgAssertionFactKind.ActIdentity, historicalId.FactDisposition.FactKind);
+        Assert.AreEqual("A-42", historicalId.Assertion.ObjectIriOrLexical);
+        Assert.AreEqual(observationRef, historicalId.FactDisposition.EvidenceRef);
+        Assert.IsNull(historicalId.ActForceDateFact);
+        Assert.IsNull(historicalId.ConsolidationApplicabilityDateFact);
+    }
+
+    [TestMethod]
+    public async Task AnAdmittedDatePredicateWithAnIriObjectRefusesInsteadOfProducingATypedDate()
+    {
+        const string subjectUri = "http://data.legilux.public.lu/eli/etat/leg/loi/2026/01/01/a0";
+        const string predicateIri =
+            "http://data.legilux.public.lu/resource/ontology/jolux#dateEntryInForce";
+        const string xsdDate = "http://www.w3.org/2001/XMLSchema#date";
+        var (profile, _, enumerationRef) = BuildProfile();
+        var store = new InMemoryCustodyStore();
+        var assertionPage = AssertionRowsJson(
+            (subjectUri, predicateIri, "https://example.invalid/not-a-date", "iri", xsdDate, ""));
+        var handler = TwoFamilyDeliveringHandler([subjectUri], 1, assertionPage);
+        var adapter = new LuxembourgQueryExecutionAdapter(store, NewExecutor(store, handler), profile);
+        var (resourceRequest, resourceWitness) = BuildPartitionRequest(ResourceSetId, ResourceFamilyKey);
+        var (assertionRequest, assertionWitness) = BuildPartitionRequest(AssertionSetId, AssertionFamilyKey);
+
+        var result = await adapter.RunAsync(
+            [(resourceRequest, resourceWitness, null), (assertionRequest, assertionWitness, null)],
+            null, ResourceFamilyKey, AssertionFamilyKey,
+            new PermissiveEvidenceResolver(enumerationRef), DocumentFetchRendererSource(), CancellationToken.None);
+
+        Assert.IsNotNull(result.Refusal);
+        Assert.AreEqual(LuxembourgQueryExecutionRefusal.AssertionFactNotRepresentable, result.Refusal!.Code);
+        StringAssert.Contains(result.Refusal.Detail, subjectUri);
+        StringAssert.Contains(result.Refusal.Detail, predicateIri);
+        Assert.HasCount(0, result.TypedAssertions);
+    }
+
+    [TestMethod]
+    public async Task ADateLiteralRefusedByTheAcceptedContractBecomesATypedRunRefusal()
+    {
+        const string subjectUri = "http://data.legilux.public.lu/eli/etat/leg/loi/2026/01/01/a0";
+        const string predicateIri =
+            "http://data.legilux.public.lu/resource/ontology/jolux#dateEntryInForce";
+        const string xsdDate = "http://www.w3.org/2001/XMLSchema#date";
+        var (profile, _, enumerationRef) = BuildProfile();
+        var store = new InMemoryCustodyStore();
+        var assertionPage = AssertionRowsJson(
+            (subjectUri, predicateIri, "2026‑01‑01", "literal", xsdDate, ""));
+        var handler = TwoFamilyDeliveringHandler([subjectUri], 1, assertionPage);
+        var adapter = new LuxembourgQueryExecutionAdapter(store, NewExecutor(store, handler), profile);
+        var (resourceRequest, resourceWitness) = BuildPartitionRequest(ResourceSetId, ResourceFamilyKey);
+        var (assertionRequest, assertionWitness) = BuildPartitionRequest(AssertionSetId, AssertionFamilyKey);
+
+        var result = await adapter.RunAsync(
+            [(resourceRequest, resourceWitness, null), (assertionRequest, assertionWitness, null)],
+            null, ResourceFamilyKey, AssertionFamilyKey,
+            new PermissiveEvidenceResolver(enumerationRef), DocumentFetchRendererSource(), CancellationToken.None);
+
+        Assert.IsNotNull(result.Refusal);
+        Assert.AreEqual(LuxembourgQueryExecutionRefusal.AssertionFactNotRepresentable, result.Refusal!.Code);
+        StringAssert.Contains(result.Refusal.Detail, "accepted date-fact contract");
+        Assert.HasCount(0, result.TypedAssertions);
+    }
+
     /// <summary>
     /// The manifest gate's REFUSAL direction: a genuine custody failure on the manifest bytes still
     /// refuses with <see cref="LuxembourgQueryExecutionRefusal.ScopeManifestNotRetained"/>, and never

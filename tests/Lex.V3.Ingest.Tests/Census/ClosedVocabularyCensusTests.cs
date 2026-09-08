@@ -108,8 +108,8 @@ public sealed class ClosedVocabularyCensusTests
                     + "ObservationSubjectNotInDeliveredCensus, AssertionRowObjectKindNotRecognised, "
                     + "AssertionRowTermUnbound, DocumentFetchSessionNotStarted, "
                     + "DocumentBodyNotRetained, AcquisitionOutcomeNotRepresentable, "
-                    + "RecordSetNotRetained, RelationRowTermNotIri, "
-                    + "RelationRowPredicateNotAdmitted, RelationRowSubjectNotInCensus",
+                    + "RecordSetNotRetained, RelationRowTermNotIri, RelationRowPredicateNotAdmitted, "
+                    + "RelationRowSubjectNotInCensus, AssertionFactNotRepresentable",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgRelationFamilyAcquisitionState: "
                     + "AcquiredComplete, Unacquired, Incomplete, Uncertain",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgResourceObservationExclusionCause: "
