@@ -195,8 +195,8 @@ public sealed class EuTranspositionBridgePopulationProducerTests
 
     private static EuNationalImplementingMeasureRelation NimRelation(
         string work, string? eli, EuTranspositionSourceAcquisition acquisition) =>
-        new(work, work, "72020L0001", EuNationalImplementingMeasureDiscoveryPlan.ImplementsResourceLegalPredicateIri,
-            eli, acquisition);
+        new(work, Kind(work, EuWorkKind.Directive), work, "72020L0001",
+            EuNationalImplementingMeasureDiscoveryPlan.ImplementsResourceLegalPredicateIri, eli, acquisition);
 
     private static EuTranspositionSourceAcquisition LegiluxSide() =>
         new(EuTranspositionAssertedBy.Legilux, EuRelationAcquisitionState.Complete,
