@@ -67,6 +67,9 @@ public sealed class ClosedVocabularyCensusTests
                     + "DeliveryProofRefused, PageBodyMalformed, PageDecodeFailedOnOurSide",
                 "Lex.V3.Ingest.Europe.EuFamilyEnumerationOutcomeKind: Proven, ExecutorRefused, "
                     + "ProofRefused",
+                "Lex.V3.Ingest.Europe.EuNationalImplementingMeasureProductionRefusal: None, "
+                    + "EnumerationRefused, EnumerationProofRefused, VerifiedRowsRefused, "
+                    + "RowNotAdmitted",
                 "Lex.V3.Ingest.Europe.EuQueryExecutionCompletion: AllFamiliesProven, "
                     + "PartialFamilyRefused",
                 "Lex.V3.Ingest.Europe.EuQueryExecutionRefusal: None, CensusFamilyNotProven, "
