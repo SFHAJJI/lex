@@ -129,6 +129,25 @@ public sealed class EuNationalImplementingMeasureProducerTests
     }
 
     [TestMethod]
+    public void AnUnboundMarkerCannotDiscardABoundPublisherEli()
+    {
+        var result = Decode(Row(eliKind: "unbound", key5: string.Empty));
+
+        Assert.IsFalse(result.Delivered);
+        Assert.AreEqual(EuNationalImplementingMeasureProductionRefusal.RowNotAdmitted, result.Refusal);
+        StringAssert.Contains(result.Detail, "eli must be an absolute publisher URI term or explicitly unbound");
+    }
+
+    [TestMethod]
+    public void ARefusedRunCannotBeReadAsACompletedEmptyNimSet()
+    {
+        var result = Decode(Row(country:
+            "http://publications.europa.eu/resource/authority/country/BEL"));
+
+        Assert.ThrowsExactly<InvalidOperationException>(() => result.ForEuWork(EuWork));
+    }
+
+    [TestMethod]
     public void ARowOutsideLuxembourgReachesTheExistingFailClosedBoundary()
     {
         var result = Decode(Row(country:
