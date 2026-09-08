@@ -551,6 +551,10 @@ public sealed class GuardedConstructionCensusTests
                     + "method public static "
                     + "Lex.V3.Contracts.Source.Europe.EuPrimaryEnumerationWitnessReconciliation::Tr"
                     + "yReconcile",
+                "Lex.V3.Contracts.Source.Europe.EuProcedureEventObservation: constructor private "
+                    + "instance Lex.V3.Contracts.Source.Europe.EuProcedureEventObservation::.ctor, "
+                    + "method public static "
+                    + "Lex.V3.Contracts.Source.Europe.EuProcedureEventObservation::TryCreate",
                 "Lex.V3.Contracts.Source.Europe.EuRelationEdgeBinding: constructor private "
                     + "instance Lex.V3.Contracts.Source.Europe.EuRelationEdgeBinding::.ctor, "
                     + "method public static "

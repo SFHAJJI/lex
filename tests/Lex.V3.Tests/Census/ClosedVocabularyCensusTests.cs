@@ -353,6 +353,9 @@ public sealed class ClosedVocabularyCensusTests
                 "Lex.V3.Contracts.Source.Europe.EuPrimaryWitnessReconciliationRefusal: None, "
                     + "ClosureIdentityNotStructurallyIndependentFromWitness, "
                     + "WitnessInPackRootMissingFromPrimaryEnumeration",
+                "Lex.V3.Contracts.Source.Europe.EuProcedureEventRefusal: None, EventNotAnIri, "
+                    + "DossierNotAnIri, EventTypeMissing, EventDateNotADateShape, "
+                    + "EventDateMissingOrNotALiteral, DossierNotACellarWork",
                 "Lex.V3.Contracts.Source.Europe.EuReifiedAxiomDecodeRefusal: None, "
                     + "AxiomNodeNotAnIri, AnnotatedSourceMissingOrNotAnIri, "
                     + "AnnotatedPropertyMissingOrNotAdmitted, AxiomTypeMissingOrNotOwlAxiom, "
