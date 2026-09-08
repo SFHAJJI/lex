@@ -154,6 +154,8 @@ public sealed class VocabularyRegistryCensusTests
                     + "const Text",
                 "Lex.V3.Contracts.Source.Europe.EuPackRootCanonicalForm: const HttpScheme, "
                     + "const HttpsScheme",
+                "Lex.V3.Contracts.Source.Europe.EuProcedureEventVocabulary: const DossierClassIri, "
+                    + "const EventLegalClassIri, const PartOfDossierPredicateUri",
                 "Lex.V3.Contracts.Source.Europe.EuReifiedAxiomDecode: const CommentOnDateIri, "
                     + "const Fd335ConceptBase, const ParsedByAuthority, const TypeOfDateIri, "
                     + "const XsdDate, const XsdGYear, const XsdGYearMonth",
