@@ -1006,13 +1006,10 @@ public sealed class EuQueryExecutionAdapter
         var wProfile = wFamilies[0].Profile;
         var allMRows = mFamilies.SelectMany(static entry => entry.Rows).ToArray();
         var mProfile = mFamilies[0].Profile;
-        var allARows = aFamilies.SelectMany(static entry => entry.Rows).ToArray();
-        var aProfile = aFamilies[0].Profile;
-
-        // Family A's bindings rest on family A's OWN proof, for the same reason family M's format
-        // observations were repaired to rest on M's: a fact stamped with another family's evidence
-        // names a listing it was not read from.
-        var axiomEvidenceRef = aFamilies[0].Proof.InterpretationProfileRef;
+        // Family A is deliberately NOT flattened here the way P, X, W and M are. Each of its
+        // batches carries its own interpretation-profile proof, and a binding's
+        // SourceObservationId must be the coordinate its own rows were read from, so the batches
+        // stay separate all the way through decode below.
 
         // D1-05c-2 precision two: the evidence every observation in every decoded snapshot rests on
         // is family P's own interpretation-profile identity -- a real artifact this run actually
@@ -1096,27 +1093,39 @@ public sealed class EuQueryExecutionAdapter
             // Family M is narrowed by its own ?parent column for the identical reason family X is:
             // EuCellarObjectDecode.TryDecode refuses any row outside the ONE closure it is handed.
             var seedMRows = FilterByClosureColumn(allMRows, mProfile, "parent", closure, allRequestedSeedsClosure);
-            // Family A is narrowed by its own ?parent column for the same reason X and M are. Its
-            // template binds ?axiom owl:annotatedSource ?parent against the batch's VALUES block, so
-            // annotatedSource and the batch key are the same IRI by construction and a binding
-            // cannot be misattributed -- but a page covers every work in the batch, so an
-            // unnarrowed call would hand this seed its neighbours' axioms.
-            var seedARows = FilterByClosureColumn(allARows, aProfile, "parent", closure, allRequestedSeedsClosure);
-
-            var seedAxioms = EuReifiedAxiomDecode.TryDecode(
-                seedARows, aProfile, axiomEvidenceRef.ResourceId,
-                out var axiomRefusal, out var offendingAxiomValue);
-            if (seedAxioms is null)
+            // Family A is decoded ONE DELIVERED BATCH AT A TIME, and each batch's bindings carry
+            // that batch's own interpretation-profile coordinate. Flattening every batch together
+            // and stamping them all with the first batch's proof would make every binding after
+            // that first batch name a custody coordinate it was not read from: the executor mints a
+            // distinct reference per batch, so the identifier would be a provenance claim this run
+            // cannot support.
+            //
+            // Within a batch the rows are narrowed by family A's own ?parent column, for the reason
+            // families X and M are. A page covers every work in its batch, so an unnarrowed decode
+            // hands this seed its neighbours' axioms. Nothing is misattributed INSIDE a binding --
+            // the template binds ?axiom owl:annotatedSource ?parent, so each binding takes its work
+            // identity from its own annotatedSource -- but the same axiom is then reported once per
+            // seed in the batch, duplicated under works that never asserted it.
+            foreach (var (aRows, aBatchProfile, aBatchProof) in aFamilies)
             {
-                return EuQueryExecutionResult.Refused(
-                    topology, outcomes,
-                    new EuQueryExecutionRefusalDetail(
-                        EuQueryExecutionRefusal.ReifiedAxiomDecodeRefused,
-                        $"seed '{requestedCelex}' reified-axiom decode refused: {axiomRefusal}" +
-                        (offendingAxiomValue is null ? "." : $" at '{offendingAxiomValue}'.")));
-            }
+                var seedARows = FilterByClosureColumn(
+                    aRows, aBatchProfile, "parent", closure, allRequestedSeedsClosure);
 
-            dateAxioms.AddRange(seedAxioms);
+                var seedAxioms = EuReifiedAxiomDecode.TryDecode(
+                    seedARows, aBatchProfile, aBatchProof.InterpretationProfileRef.ResourceId,
+                    out var axiomRefusal, out var offendingAxiomValue);
+                if (seedAxioms is null)
+                {
+                    return EuQueryExecutionResult.Refused(
+                        topology, outcomes,
+                        new EuQueryExecutionRefusalDetail(
+                            EuQueryExecutionRefusal.ReifiedAxiomDecodeRefused,
+                            $"seed '{requestedCelex}' reified-axiom decode refused: {axiomRefusal}" +
+                            (offendingAxiomValue is null ? "." : $" at '{offendingAxiomValue}'.")));
+                }
+
+                dateAxioms.AddRange(seedAxioms);
+            }
 
             var recordForm = recordFormByCelex[requestedCelex];
 

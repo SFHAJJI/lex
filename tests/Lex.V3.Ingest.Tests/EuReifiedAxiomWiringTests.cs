@@ -86,6 +86,52 @@ public sealed class EuReifiedAxiomWiringTests
     }
 
     /// <summary>
+    /// A binding names the custody coordinate its own rows were read from: family A's proof, and
+    /// not another family's that happened to be at hand.
+    /// </summary>
+    /// <remarks>
+    /// This exists because the comment claiming it was decoration. Substituting family P's
+    /// interpretation-profile reference -- the exact wrong-family error the adapter's own remark
+    /// says it prevents -- left the entire ingest suite green, so nothing in this project actually
+    /// held the production path to it. <c>SourceObservationId</c> is a provenance claim; an
+    /// unguarded one is a claim this run cannot support.
+    /// </remarks>
+    [TestMethod]
+    public async Task ABindingNamesFamilyAsOwnProofAndNotAnotherFamilysThatWasToHand()
+    {
+        var result = await EuAxiomWiringHarness.RunAsync(
+            rootIri => EuAcquisitionTestFixture.AxiomScriptFrom(
+                AxiomRows(rootIri, WellFormedTerms(rootIri))));
+
+        Assert.IsNull(result.Refusal, $"code={result.Refusal?.Code} detail={result.Refusal?.Detail}");
+        Assert.HasCount(1, result.DateAxioms);
+
+        // Every object-facts family shares one FamilyKey and is told apart only by its own proof,
+        // so family A is identified here by what it delivered: this fixture's four axiom rows,
+        // against P's thirteen, X's one, W's one, M's six and the census family's none.
+        var axiomFamily = result.FamilyOutcomes.Single(
+            static outcome => outcome.DeliveredRowCount == 4);
+        var otherFamilies = result.FamilyOutcomes
+            .Where(outcome => !ReferenceEquals(outcome, axiomFamily))
+            .Select(static outcome => outcome.Proof?.InterpretationProfileRef.ResourceId)
+            .Where(static resourceId => resourceId is not null)
+            .ToArray();
+
+        Assert.IsNotNull(axiomFamily.Proof);
+        Assert.AreEqual(
+            axiomFamily.Proof!.InterpretationProfileRef.ResourceId,
+            result.DateAxioms[0].Fact.SourceObservationId,
+            "a binding must name family A's own interpretation-profile coordinate.");
+
+        // The executor mints a distinct reference per family, so naming any other family's proof is
+        // detectable rather than merely wrong in principle.
+        CollectionAssert.DoesNotContain(
+            otherFamilies,
+            result.DateAxioms[0].Fact.SourceObservationId,
+            "no other family's coordinate may stand in for family A's.");
+    }
+
+    /// <summary>
     /// The family's typed absence stays an absence on the production path: no bindings, no refusal.
     /// </summary>
     /// <remarks>
@@ -152,7 +198,41 @@ public sealed class EuReifiedAxiomWiringTests
             result.Refusal.Detail, nameof(EuReifiedAxiomDecodeRefusal.QualifierTermMalformed));
     }
 
-    // NOT GUARDED HERE, and said so rather than left to be found: the adapter narrows family A to
+    /// <summary>
+    /// Two seeds, one batch, one axiom each: each seed pass must take only its own work's axiom.
+    /// </summary>
+    /// <remarks>
+    /// This is the guard I first claimed the harness could not build and deferred. The reviewer
+    /// built it and showed the narrowing is load-bearing, so it is built here: without narrowing
+    /// each seed pass decodes BOTH axioms and the run returns four bindings for two publisher
+    /// facts, duplicating each work's axiom under the other. Nothing inside a binding is
+    /// misattributed -- each still names its own annotatedSource -- which is exactly why only a
+    /// count and an identity assertion catch it.
+    /// </remarks>
+    [TestMethod]
+    public async Task EachSeedTakesOnlyItsOwnAxiomWhenTwoWorksShareOneBatch()
+    {
+        var result = await EuAxiomWiringHarness.RunTwoSeedAsync((rootOne, rootTwo) =>
+            EuAcquisitionTestFixture.AxiomScriptFrom(
+                [
+                    .. AxiomRows(rootOne, WellFormedTerms(rootOne)),
+                    .. AxiomRows(rootTwo, WellFormedTerms(rootTwo)),
+                ]));
+
+        Assert.IsNull(result.Refusal, $"code={result.Refusal?.Code} detail={result.Refusal?.Detail}");
+        Assert.HasCount(
+            2, result.DateAxioms,
+            "two publisher axioms over two works must decode to exactly two bindings.");
+
+        var works = result.DateAxioms
+            .Select(static binding => binding.WorkIdentity.Identifiers[0].RawValue)
+            .OrderBy(static value => value, StringComparer.Ordinal)
+            .ToArray();
+        CollectionAssert.AllItemsAreUnique(
+            works, "no work may be handed an axiom that another work asserted.");
+    }
+
+    // The remaining narrowing case is NOT guarded, and said so rather than left to be found: the
     // each seed's own closure by ?parent, exactly as it does families X and M. That narrowing only
     // has an effect on a batch carrying MORE THAN ONE requested seed, because the executor already
     // refuses any row outside the requested batch (family A's batch-membership key is key_1) before
