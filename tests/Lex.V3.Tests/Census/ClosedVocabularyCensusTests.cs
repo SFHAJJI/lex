@@ -257,6 +257,7 @@ public sealed class ClosedVocabularyCensusTests
                     + "WorkRootRepeated, WorkRootNotCanonical, CanonicalBytesDigestMismatch",
                 "Lex.V3.Contracts.Source.Europe.EuCaseLawGranularity: ActLevel",
                 "Lex.V3.Contracts.Source.Europe.EuCaseLawLinkCaseSide: Source, Target",
+                "Lex.V3.Contracts.Source.Europe.EuCaseLawQueryPass: Pass1, Pass2",
                 "Lex.V3.Contracts.Source.Europe.EuCellarObjectDecodeRefusal: None, "
                     + "FamilyRowTermKindMismatch, DuplicateSingleValuedBinding, "
                     + "ObjectSnapshotRejected, ObjectFactRowTermKindMismatch, "
