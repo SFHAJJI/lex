@@ -369,13 +369,31 @@ public enum EuCaseLawLinkCaseSide
 /// accepts.
 /// </summary>
 /// <remarks>
-/// review/23 section 3, line 54 also names <c>case-law_declares_void_by_preliminary_ruling_resource_legal</c>
-/// and <c>resource_legal_amended_by_case-law</c>. Neither is pinned here: section 7, line 91 gives
-/// a worked instance for <c>case-law_interpretes_resource_legal</c> (Schrems II) and evidences
-/// <c>work_cites_work</c> generically (2,257 citations to the GDPR, including items with ECLI), but
-/// no worked instance for either of the other two, and admitting a predicate with no observed
-/// instance would let a caller assert a specific judicial outcome (an act ruled void, or amended, by
-/// a named case) this lane cannot evidence.
+/// <para>
+/// WHY THIS SET GREW, AND WHAT REPLACED THE OLD REASON. Until #415's scope ruling this vocabulary
+/// pinned only the two predicates review/23 gave a worked instance for, and refused the rest on the
+/// stated ground that "admitting a predicate with no observed instance would let a caller assert a
+/// specific judicial outcome this lane cannot evidence". That reasoning was right, and it is
+/// answered rather than abandoned: the three predicates added below are no longer unobserved. Each
+/// was counted live against the publisher's own endpoint, so a caller asserting one is asserting
+/// something the publisher demonstrably publishes.
+/// </para>
+/// <para>
+/// THE COUNTS BELOW WERE NOT MEASURED BY THIS SEAT. They were taken on 2026-09-07 against
+/// <c>https://publications.europa.eu/webapi/rdf/sparql</c>, robots evaluated first, and are recorded
+/// on issue #415. They are cited here as the evidence that admitted these predicates, with their
+/// provenance attached, rather than restated as though this file's author had run them. They order
+/// the vocabulary; they are not a freshness claim, and one has already drifted (see
+/// <see cref="CaseLawDeclaresVoidResourceLegalPredicateUri"/>).
+/// </para>
+/// <para>
+/// STILL REFUSED, AND FOR THE ORIGINAL REASON. <c>resource_legal_amended_by_case-law</c> is named by
+/// review/23 section 3, line 54 and remains unpinned: no worked instance, and no live count was
+/// taken for it, so the sentence above still applies to it unchanged.
+/// <c>case-law_annuls_resource_legal</c> is refused on stronger ground still -- an <c>ASK</c> against
+/// the same endpoint returned <c>false</c>, so it is a dead predicate, and a dead predicate is
+/// authority for nothing.
+/// </para>
 /// </remarks>
 public static class EuCaseLawPredicateVocabulary
 {
@@ -394,8 +412,52 @@ public static class EuCaseLawPredicateVocabulary
     /// </summary>
     public const string WorkCitesWorkPredicateUri = EuConsolidationDiscoveryPlan.Cdm + "work_cites_work";
 
+    /// <summary>
+    /// An action for annulment brought against an act. Measured at <b>1,902</b> triples on
+    /// 2026-09-07 (#415); named on the V3 spec's own E6 line.
+    /// </summary>
+    /// <remarks>
+    /// Not to be confused with <c>communication_case_new_requests_annulment_of_resource_legal</c>,
+    /// a different real predicate measured at 835 on the same day and bound to
+    /// <see cref="EuRelationFamily.CommunicationCaseRequestsAnnulment"/>. Both exist upstream; this is the one E6
+    /// names.
+    /// </remarks>
+    public const string CaseLawRequestsAnnulmentOfResourceLegalPredicateUri =
+        EuConsolidationDiscoveryPlan.Cdm + "case-law_requests_annulment_of_resource_legal";
+
+    /// <summary>
+    /// An act ruled void by a judgment. Measured at <b>1,098</b> triples on 2026-09-07 (#415); named
+    /// on the V3 spec's own E6 line, which recorded 1,105.
+    /// </summary>
+    /// <remarks>
+    /// The difference between 1,105 and 1,098 is ordinary upstream movement between two
+    /// measurements, not a discrepancy between two readings of one corpus, and it is left visible
+    /// here rather than reconciled away: it is the plainest evidence in this file that these counts
+    /// order the vocabulary and do not date it.
+    /// </remarks>
+    public const string CaseLawDeclaresVoidResourceLegalPredicateUri =
+        EuConsolidationDiscoveryPlan.Cdm + "case-law_declares_void_resource_legal";
+
+    /// <summary>
+    /// An act ruled void on a preliminary reference rather than a direct action. Measured at
+    /// <b>170</b> triples on 2026-09-07 (#415), reproducing the V3 spec's E6 figure exactly.
+    /// </summary>
+    /// <remarks>
+    /// Narrower than <see cref="CaseLawDeclaresVoidResourceLegalPredicateUri"/> and separately
+    /// published, so the two are pinned separately: collapsing them would report a preliminary
+    /// ruling as a direct annulment, which is a different judicial act.
+    /// </remarks>
+    public const string CaseLawDeclaresVoidByPreliminaryRulingResourceLegalPredicateUri =
+        EuConsolidationDiscoveryPlan.Cdm + "case-law_declares_void_by_preliminary_ruling_resource_legal";
+
     internal static readonly IReadOnlyCollection<string> Pinned = new HashSet<string>(
-        [CaseLawInterpretesResourceLegalPredicateUri, WorkCitesWorkPredicateUri],
+        [
+            CaseLawInterpretesResourceLegalPredicateUri,
+            WorkCitesWorkPredicateUri,
+            CaseLawRequestsAnnulmentOfResourceLegalPredicateUri,
+            CaseLawDeclaresVoidResourceLegalPredicateUri,
+            CaseLawDeclaresVoidByPreliminaryRulingResourceLegalPredicateUri,
+        ],
         StringComparer.Ordinal);
 }
 

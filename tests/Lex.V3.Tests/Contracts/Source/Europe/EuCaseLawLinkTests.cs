@@ -341,16 +341,78 @@ public sealed class EuCaseLawLinkTests
 
     // --- Pinned predicate vocabulary is closed --------------------------------------------------
 
+    /// <summary>
+    /// The pinned vocabulary is exactly these five, written out rather than read back from the
+    /// vocabulary itself so the pin is evidence rather than a restatement.
+    /// </summary>
+    /// <remarks>
+    /// Renamed with #415's widening. The previous name asserted "the two review-evidenced
+    /// predicates", which stopped being true the moment three more were admitted on live counts
+    /// rather than on review/23 worked instances; a test whose name describes a set it no longer
+    /// pins is the same stale-evidence defect as a comment that outlived its code.
+    /// </remarks>
     [TestMethod]
-    public void ThePinnedPredicateVocabularyIsExactlyTheTwoReviewEvidencedPredicates()
+    public void ThePinnedPredicateVocabularyIsExactlyTheseFivePredicates()
     {
         CollectionAssert.AreEquivalent(
             new[]
             {
                 "http://publications.europa.eu/ontology/cdm#case-law_interpretes_resource_legal",
                 "http://publications.europa.eu/ontology/cdm#work_cites_work",
+                "http://publications.europa.eu/ontology/cdm#case-law_requests_annulment_of_resource_legal",
+                "http://publications.europa.eu/ontology/cdm#case-law_declares_void_resource_legal",
+                "http://publications.europa.eu/ontology/cdm#case-law_declares_void_by_preliminary_ruling_resource_legal",
             },
             EuCaseLawPredicateVocabulary.Pinned.ToArray());
+    }
+
+    /// <summary>
+    /// Each predicate #415 admitted is actually accepted by <see cref="EuCaseLawLinkBinding.Create"/>
+    /// and carries its own predicate through, rather than merely appearing on the pinned list.
+    /// </summary>
+    /// <remarks>
+    /// The pin above asserts the SET. This asserts the behaviour, because those are different
+    /// claims: a predicate could sit on the pinned list while <c>Create</c> rejected it for some
+    /// other reason, and the vocabulary would look widened without a single new edge being
+    /// admissible.
+    /// </remarks>
+    [TestMethod]
+    public void EveryNewlyAdmittedCaseLawPredicateActuallyBuildsALink()
+    {
+        string[] admitted =
+        [
+            "http://publications.europa.eu/ontology/cdm#case-law_requests_annulment_of_resource_legal",
+            "http://publications.europa.eu/ontology/cdm#case-law_declares_void_resource_legal",
+            "http://publications.europa.eu/ontology/cdm#case-law_declares_void_by_preliminary_ruling_resource_legal",
+        ];
+
+        foreach (var predicateUri in admitted)
+        {
+            var binding = EuCaseLawLinkBinding.Create(
+                SchremsIi(), Gdpr(), predicateUri,
+                TargetBodyScope.BodyInScopeHeld, [], "obs:newly-admitted");
+
+            Assert.IsNotNull(binding.Fact.PublisherAsserted, predicateUri);
+            Assert.AreEqual(
+                predicateUri, binding.Fact.PublisherAsserted!.PredicateUri, predicateUri);
+            Assert.AreEqual(
+                EuCaseLawLinkCaseSide.Source, binding.CaseSide,
+                predicateUri + ": the judgment is the subject on every case-law_ predicate.");
+        }
+    }
+
+    /// <summary>
+    /// The dead predicate stays refused. An <c>ASK</c> against the publisher's own endpoint on
+    /// 2026-09-07 returned false for it (#415), so unlike the three admitted beside it there is
+    /// nothing upstream for a caller to be asserting.
+    /// </summary>
+    [TestMethod]
+    public void TheDeadAnnulsPredicateIsRefusedAlongsideTheAdmittedCaseLawOnes()
+    {
+        Assert.ThrowsExactly<ArgumentException>(() => EuCaseLawLinkBinding.Create(
+            SchremsIi(), Gdpr(),
+            "http://publications.europa.eu/ontology/cdm#case-law_annuls_resource_legal",
+            TargetBodyScope.BodyInScopeHeld, [], "obs:dead-annuls-predicate"));
     }
 
     [TestMethod]

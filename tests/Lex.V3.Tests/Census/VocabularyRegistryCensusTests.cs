@@ -129,8 +129,11 @@ public sealed class VocabularyRegistryCensusTests
                     + "const TypeOfLinkTargetUri",
                 "Lex.V3.Contracts.Source.Europe.EuAppendixASeedMap: SeedLines=82, PackRoots=82, "
                     + "SeedsInCelexOrder=82, const AppendixASha256",
-                "Lex.V3.Contracts.Source.Europe.EuCaseLawPredicateVocabulary: Pinned=2, "
+                "Lex.V3.Contracts.Source.Europe.EuCaseLawPredicateVocabulary: Pinned=5, "
+                    + "const CaseLawDeclaresVoidByPreliminaryRulingResourceLegalPredicateUri, "
+                    + "const CaseLawDeclaresVoidResourceLegalPredicateUri, "
                     + "const CaseLawInterpretesResourceLegalPredicateUri, "
+                    + "const CaseLawRequestsAnnulmentOfResourceLegalPredicateUri, "
                     + "const WorkCitesWorkPredicateUri",
                 "Lex.V3.Contracts.Source.Europe.EuCellarObjectDecode: const "
                     + "ConsolidatedActResourceTypeIri, const ConsolidatedTextResourceTypeIri, "
