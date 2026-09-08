@@ -381,10 +381,29 @@ public sealed class RoutedHttpRequestPolicyAuditTests
             + "identifier minted per bind is the way that stops being true: "
             + string.Join(" | ", differing));
 
+        var adapterExecutionLine = firstLines.Single(static line =>
+            line.StartsWith("adapter_execution=", StringComparison.Ordinal));
+        var separator = adapterExecutionLine.LastIndexOf('\t');
+        Assert.AreNotEqual(-1, separator);
+        var runtimeBoundDigest = adapterExecutionLine[(separator + 1)..];
+        StringAssert.Matches(runtimeBoundDigest, new Regex("^[0-9a-f]{64}$"));
         Assert.AreEqual(
-            PinnedLuxembourgCountPolicySha256,
-            Sha256(bytes),
-            "the retained policy's canonical bytes changed for a fixed fixture");
+            2,
+            Regex.Matches(first, Regex.Escape(runtimeBoundDigest)).Count,
+            "the policy must carry the same runtime-bound digest in its reference and byte proof");
+
+        // The adapter execution artifact deliberately records the runtime and System.Net.Http
+        // informational versions. Its digest therefore changes when a host runtime patch changes,
+        // even under the same pinned SDK. Normalize only those two copies of that proven digest;
+        // the ordered key census and the digest below continue to pin every stable policy byte.
+        var normalized = first.Replace(
+            runtimeBoundDigest,
+            "<runtime-bound-sha256>",
+            StringComparison.Ordinal);
+        Assert.AreEqual(
+            PinnedNormalizedLuxembourgCountPolicySha256,
+            Sha256(Encoding.UTF8.GetBytes(normalized)),
+            "the stable retained policy bytes changed for a fixed fixture");
     }
 
     /// <summary>
@@ -410,14 +429,15 @@ public sealed class RoutedHttpRequestPolicyAuditTests
     }
 
     /// <summary>
-    /// The digest of the retained request policy for the fixture above, transcribed from a run
+    /// The digest of the retained request policy for the fixture above after replacing only the
+    /// two copies of its runtime-bound adapter-execution digest. It was transcribed from a run
     /// rather than computed by the test, so that recomputing it the way the code does could not
-    /// make this agree with itself. It is the raw bytes, not a normalised form: since Decision 77
-    /// every identifier reaching a retained policy is derived from the content it names, so two
-    /// binds of one request agree exactly and there is nothing left to normalise away.
+    /// make this agree with itself. Decision 77 still makes two binds on one host agree exactly;
+    /// the narrow replacement keeps that assertion while allowing the evidence-bearing runtime
+    /// artifact to identify the actual runtime patch on each host.
     /// </summary>
-    private const string PinnedLuxembourgCountPolicySha256 =
-        "7a494b3bea961deb9ed7dbfbef67f4de1ca0df28bb7a89beb0f2ca97ab77e5a0";
+    private const string PinnedNormalizedLuxembourgCountPolicySha256 =
+        "ab7996a2655b243456f51843c9da0ecbd9860560f8ca1c7afcc3a5ab796130d6";
 
     [TestMethod]
     public async Task LuxembourgCountSendsAgainstAFreshRealStoreHoldingNothing()
