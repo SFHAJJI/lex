@@ -19,10 +19,17 @@ public sealed class EuNationalImplementingMeasureDiscoveryPlanTests
         StringAssert.Contains(plan.PageTemplate, EuNationalImplementingMeasureDiscoveryPlan.ImplementsResourceLegalPredicateIri);
         StringAssert.Contains(plan.PageTemplate, EuNationalImplementingMeasureDiscoveryPlan.LegacyImplementsDirectivePredicateIri);
         StringAssert.Contains(plan.PageTemplate, EuNationalImplementingMeasureDiscoveryPlan.EliPredicateIri);
+        StringAssert.Contains(plan.PageTemplate, EuNationalImplementingMeasureDiscoveryPlan.EuWorkEliPredicateIri);
+        StringAssert.Contains(plan.PageTemplate, EuNationalImplementingMeasureDiscoveryPlan.DirectiveClassIri);
+        StringAssert.Contains(plan.PageTemplate, EuNationalImplementingMeasureDiscoveryPlan.RegulationClassIri);
+        Assert.AreEqual(2, plan.PageTemplate.Split("OPTIONAL {", StringSplitOptions.None).Length - 1,
+            "Both target-work identity fields must remain optional in the query so missing evidence reaches decode.");
+        StringAssert.Contains(plan.PageTemplate, "COALESCE(STR(?eu_work_eli), \"\") AS ?key_5");
+        StringAssert.Contains(plan.PageTemplate, "COALESCE(STR(?eu_work_kind), \"\") AS ?key_6");
         Assert.IsFalse(plan.PageTemplate.Contains("OFFSET", StringComparison.OrdinalIgnoreCase));
         Assert.IsFalse(plan.PageTemplate.Contains("SELECT DISTINCT", StringComparison.OrdinalIgnoreCase));
         Assert.AreEqual(
-            "13e3f53d213751c83e38195585f1a7b0e6d26ea9775008de578967c670ababbd",
+            "4b7c16a926d3cacd32799b023b926bdad12d59440e8bf875f81a4e08806bcfbe",
             plan.ArtifactRef.Sha256);
     }
 
@@ -37,11 +44,12 @@ public sealed class EuNationalImplementingMeasureDiscoveryPlanTests
             new[]
             {
                 "nim", "country", "nim_celex", "implements_predicate", "eu_work",
-                "eli", "eli_kind", "multiplicity", "key_1", "key_2", "key_3", "key_4", "key_5",
+                "eu_work_eli", "eu_work_kind", "eli", "eli_kind", "multiplicity",
+                "key_1", "key_2", "key_3", "key_4", "key_5", "key_6", "key_7",
             },
             profile.ProjectionVariables.ToArray());
         CollectionAssert.AreEqual(
-            new[] { "key_1", "key_2", "key_3", "key_4", "key_5" },
+            new[] { "key_1", "key_2", "key_3", "key_4", "key_5", "key_6", "key_7" },
             profile.CanonicalKeyVariables.ToArray());
         CollectionAssert.AreEqual(profile.CanonicalKeyVariables.ToArray(), profile.CursorVariables.ToArray());
         Assert.AreEqual(RepeatedEnumerationTerminalPagePolicy.ShortPageTerminal, profile.TerminalPagePolicy);

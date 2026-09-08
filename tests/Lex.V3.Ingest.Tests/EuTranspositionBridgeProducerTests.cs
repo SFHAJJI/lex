@@ -183,7 +183,9 @@ public sealed class EuTranspositionBridgeProducerTests
         string? eli,
         params EuTranspositionSourceAcquisition[] columns) =>
         EuNationalImplementingMeasureProductionResult.Success(columns.Select(column =>
-            new EuNationalImplementingMeasureRelation(EuWork, EuWork, "72020L0001", "https://example.invalid/implements", eli, column)).ToArray(), Evidence, 0);
+            new EuNationalImplementingMeasureRelation(
+                EuWork, Kind(EuWork, EuWorkKind.Directive), EuWork, "72020L0001",
+                "https://example.invalid/implements", eli, column)).ToArray(), Evidence, 0);
 
     private static EuTranspositionSourceAcquisition LegiluxSide(string nationalMeasureUri = LuMeasure) =>
         new(EuTranspositionAssertedBy.Legilux, EuRelationAcquisitionState.Complete,

@@ -1,4 +1,5 @@
 using Lex.V3.Contracts;
+using Lex.V3.Contracts.Facts;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Europe;
 using Lex.V3.Ingest.Europe;
@@ -12,6 +13,7 @@ public sealed class EuNationalImplementingMeasureProducerTests
         "http://publications.europa.eu/resource/cellar/11111111-1111-4111-8111-111111111111";
     private const string EuWork =
         "http://publications.europa.eu/resource/cellar/22222222-2222-4222-8222-222222222222";
+    private const string EuEli = "http://data.europa.eu/eli/dir/2020/1/oj";
     private const string Eli = "https://data.legilux.public.lu/eli/etat/leg/loi/2020/01/01/a1/jo";
     private const string XsdInteger = "http://www.w3.org/2001/XMLSchema#integer";
     private static readonly SourceArtifactRef Evidence = new(
@@ -88,6 +90,9 @@ public sealed class EuNationalImplementingMeasureProducerTests
         Assert.HasCount(1, result.Relations!);
         var relation = result.Relations![0];
         Assert.AreEqual(EuWork, relation.EuWorkUri);
+        Assert.AreEqual(EuWorkKind.Directive, relation.WorkKindAssertion.Kind);
+        Assert.AreEqual(EuWork, relation.WorkKindAssertion.Work.Value(FactsIdentifierFamily.CellarWorkUri));
+        Assert.AreEqual(EuEli, relation.WorkKindAssertion.Work.Value(FactsIdentifierFamily.Eli));
         Assert.AreEqual(Nim, relation.NimWorkUri);
         Assert.AreEqual("72020L0001", relation.NimCelex);
         Assert.AreEqual(Eli, relation.LegiluxEli);
@@ -131,7 +136,7 @@ public sealed class EuNationalImplementingMeasureProducerTests
     [TestMethod]
     public void AnUnboundMarkerCannotDiscardABoundPublisherEli()
     {
-        var result = Decode(Row(eliKind: "unbound", key5: string.Empty));
+        var result = Decode(Row(eliKind: "unbound", key7: string.Empty));
 
         Assert.IsFalse(result.Delivered);
         Assert.AreEqual(EuNationalImplementingMeasureProductionRefusal.RowNotAdmitted, result.Refusal);
@@ -185,11 +190,45 @@ public sealed class EuNationalImplementingMeasureProducerTests
     [TestMethod]
     public void ARowWhoseCursorDoesNotNameItsPublisherValuesIsRefused()
     {
-        var result = Decode(Row(key5: "https://example.invalid/substituted"));
+        var wrongEli = Decode(Row(key5: "https://example.invalid/substituted"));
+        var wrongKind = Decode(Row(key6: EuNationalImplementingMeasureDiscoveryPlan.RegulationClassIri));
+        var wrongMeasure = Decode(Row(key7: "https://example.invalid/substituted"));
 
-        Assert.IsFalse(result.Delivered);
-        Assert.AreEqual(EuNationalImplementingMeasureProductionRefusal.RowNotAdmitted, result.Refusal);
-        StringAssert.Contains(result.Detail, "key_5");
+        Assert.IsFalse(wrongEli.Delivered);
+        StringAssert.Contains(wrongEli.Detail, "key_5");
+        Assert.IsFalse(wrongKind.Delivered);
+        StringAssert.Contains(wrongKind.Detail, "key_6");
+        Assert.IsFalse(wrongMeasure.Delivered);
+        Assert.AreEqual(EuNationalImplementingMeasureProductionRefusal.RowNotAdmitted, wrongMeasure.Refusal);
+        StringAssert.Contains(wrongMeasure.Detail, "key_7");
+    }
+
+    [TestMethod]
+    public void TheTargetWorkKindAndEliMustBeExactPublisherEvidence()
+    {
+        var wrongKind = Decode(Row(
+            euWorkKind: "http://publications.europa.eu/ontology/cdm#decision",
+            key6: EuNationalImplementingMeasureDiscoveryPlan.DirectiveClassIri));
+        var wrongEli = Decode(Row(euWorkEli: "https://example.invalid/eli/dir/2020/1/oj"));
+        var missingKind = Decode(Row(euWorkKind: null));
+        var missingEli = Decode(Row(euWorkEli: null));
+
+        Assert.IsFalse(wrongKind.Delivered);
+        Assert.AreEqual(EuNationalImplementingMeasureProductionRefusal.RowNotAdmitted, wrongKind.Refusal);
+        StringAssert.Contains(wrongKind.Detail, "eu_work_kind");
+        Assert.IsFalse(wrongEli.Delivered);
+        Assert.AreEqual(EuNationalImplementingMeasureProductionRefusal.RowNotAdmitted, wrongEli.Refusal);
+        StringAssert.Contains(wrongEli.Detail, "eu_work_eli");
+        Assert.IsFalse(missingKind.Delivered);
+        StringAssert.Contains(missingKind.Detail, "eu_work_kind");
+        Assert.IsFalse(missingEli.Delivered);
+        StringAssert.Contains(missingEli.Detail, "eu_work_eli");
+
+        var regulation = Decode(Row(
+            euWorkEli: "http://data.europa.eu/eli/reg/2020/1/oj",
+            euWorkKind: EuNationalImplementingMeasureDiscoveryPlan.RegulationClassIri));
+        Assert.IsTrue(regulation.Delivered, regulation.Detail);
+        Assert.AreEqual(EuWorkKind.Regulation, regulation.Relations![0].WorkKindAssertion.Kind);
     }
 
     private static EuNationalImplementingMeasureProductionResult Decode(params RepeatedEnumerationRow[] rows) =>
@@ -201,11 +240,15 @@ public sealed class EuNationalImplementingMeasureProducerTests
     private static RepeatedEnumerationRow Row(
         string country = EuNationalImplementingMeasureDiscoveryPlan.LuxembourgCountryIri,
         string predicate = EuNationalImplementingMeasureDiscoveryPlan.ImplementsResourceLegalPredicateIri,
+        string? key7 = null,
         string? key5 = null,
+        string? key6 = null,
         string? eli = Eli,
         string eliKind = "literal",
         bool eliIsIri = false,
-        string nimCelex = "72020L0001")
+        string nimCelex = "72020L0001",
+        string? euWorkEli = EuEli,
+        string? euWorkKind = EuNationalImplementingMeasureDiscoveryPlan.DirectiveClassIri)
     {
         RepeatedEnumerationRdfTerm Plain(string value) =>
             RepeatedEnumerationRdfTerm.Literal(value, null, null);
@@ -216,6 +259,13 @@ public sealed class EuNationalImplementingMeasureProducerTests
             Plain(nimCelex),
             RepeatedEnumerationRdfTerm.Iri(predicate),
             RepeatedEnumerationRdfTerm.Iri(EuWork),
+            euWorkEli is null
+                ? RepeatedEnumerationRdfTerm.Unbound()
+                : RepeatedEnumerationRdfTerm.Literal(
+                    euWorkEli, "http://www.w3.org/2001/XMLSchema#anyURI", null),
+            euWorkKind is null
+                ? RepeatedEnumerationRdfTerm.Unbound()
+                : RepeatedEnumerationRdfTerm.Iri(euWorkKind),
             eli is null
                 ? RepeatedEnumerationRdfTerm.Unbound()
                 : eliIsIri
@@ -227,9 +277,11 @@ public sealed class EuNationalImplementingMeasureProducerTests
             Plain(nimCelex),
             Plain(predicate),
             Plain(EuWork),
-            Plain(key5 ?? eli ?? string.Empty),
+            Plain(key5 ?? euWorkEli ?? string.Empty),
+            Plain(key6 ?? euWorkKind ?? string.Empty),
+            Plain(key7 ?? eli ?? string.Empty),
         };
-        var keys = terms[8..13];
+        var keys = terms[10..17];
         return new RepeatedEnumerationRow(terms, keys, keys);
     }
 
@@ -258,6 +310,8 @@ public sealed class EuNationalImplementingMeasureProducerTests
             ["implements_predicate"] = Iri(
                 EuNationalImplementingMeasureDiscoveryPlan.ImplementsResourceLegalPredicateIri),
             ["eu_work"] = Iri(EuWork),
+            ["eu_work_eli"] = Literal(EuEli, "http://www.w3.org/2001/XMLSchema#anyURI"),
+            ["eu_work_kind"] = Iri(EuNationalImplementingMeasureDiscoveryPlan.DirectiveClassIri),
             ["eli"] = Literal(Eli),
             ["eli_kind"] = Literal("literal"),
             ["multiplicity"] = Literal("1", XsdInteger),
@@ -265,7 +319,9 @@ public sealed class EuNationalImplementingMeasureProducerTests
             ["key_2"] = Literal("72020L0001"),
             ["key_3"] = Literal(EuNationalImplementingMeasureDiscoveryPlan.ImplementsResourceLegalPredicateIri),
             ["key_4"] = Literal(EuWork),
-            ["key_5"] = Literal(Eli),
+            ["key_5"] = Literal(EuEli),
+            ["key_6"] = Literal(EuNationalImplementingMeasureDiscoveryPlan.DirectiveClassIri),
+            ["key_7"] = Literal(Eli),
         };
         return System.Text.Json.JsonSerializer.Serialize(new
         {
