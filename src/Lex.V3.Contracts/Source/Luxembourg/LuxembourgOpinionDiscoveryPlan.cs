@@ -84,16 +84,47 @@ public sealed class LuxembourgOpinionDiscoveryPlan
 
     private static readonly string[] Projection =
     [
-        "opinion", "document", "document_kind", "opinion_date", "date_kind", "multiplicity",
-        "key_1", "key_2", "key_3",
+        "opinion", "opinion_kind",
+        "document", "document_kind", "document_datatype", "document_language",
+        "opinion_date", "date_kind", "date_datatype", "date_language",
+        "multiplicity",
+        "key_1", "key_2", "key_3", "key_4", "key_5",
+        "key_6", "key_7", "key_8", "key_9", "key_10",
     ];
 
     /// <summary>
-    /// The keyset. All three parts are needed because an opinion is not unique on its own: an event
-    /// carrying two resulting documents, or two dates, delivers a row per combination, and a cursor
-    /// that named only the opinion could not advance past the second of them.
+    /// The keyset, injective over the grouped row rather than over its lexical forms alone.
     /// </summary>
-    private static readonly string[] Cursor = ["key_1", "key_2", "key_3"];
+    /// <remarks>
+    /// <para>
+    /// An opinion is not unique on its own: an event carrying two resulting documents, or two dates,
+    /// delivers a row per combination, and a cursor naming only the opinion could not advance past
+    /// the second of them. That much the first three keys always did.
+    /// </para>
+    /// <para>
+    /// WHAT THEY DID NOT DO IS CARRY THE TERMS' OWN AUTHORITY. The document and the date were keyed
+    /// by <c>STR()</c> alone, so two date literals sharing a lexical value and differing in datatype
+    /// — or in language tag — were distinct grouped rows sharing every canonical key. Source/Core
+    /// requires canonical keys unique and cursors strictly increasing, so such a pair either refuses
+    /// the whole page or cannot be paged across a boundary, and this family retains
+    /// <c>DateDatatypeIri</c> on its record, so they really are different facts rather than a
+    /// distinction without a difference.
+    /// </para>
+    /// <para>
+    /// This is the same defect found twice in review on the procedure-event plan. It was present
+    /// here at the same time and nothing observed it, because the keys were internally consistent
+    /// and no delivery in any fixture carried two literals differing only in qualifier.
+    /// </para>
+    /// <para>
+    /// <c>?opinion</c> carries a kind key because a subject may be a blank node, and no datatype or
+    /// language because a subject cannot be a literal at all.
+    /// </para>
+    /// </remarks>
+    private static readonly string[] Cursor =
+    [
+        "key_1", "key_2", "key_3", "key_4", "key_5",
+        "key_6", "key_7", "key_8", "key_9", "key_10",
+    ];
 
     /// <summary>
     /// How many cursor keys this family has. The renderer reads this rather than repeating the
@@ -275,6 +306,39 @@ public sealed class LuxembourgOpinionDiscoveryPlan
         _ => throw new ArgumentOutOfRangeException(nameof(pass)),
     };
 
+    /// <summary>The terms the row groups on, named once and used by both the SELECT and the GROUP BY.</summary>
+    private const string Grouped =
+        "?opinion ?opinion_kind ?document ?document_kind ?document_datatype ?document_language "
+        + "?opinion_date ?date_kind ?date_datatype ?date_language";
+
+    /// <summary>
+    /// The keyset continuation filter, derived from <see cref="Cursor"/> rather than written out.
+    /// </summary>
+    /// <remarks>
+    /// Ten keys make this comparison ten clauses deep, and a hand-written one would be ten chances
+    /// to transpose a key.
+    /// </remarks>
+    private static string KeysetFilter()
+    {
+        var clauses = new List<string>();
+        for (var index = 0; index < Cursor.Length; index++)
+        {
+            var parts = new List<string>();
+            for (var earlier = 0; earlier < index; earlier++)
+            {
+                parts.Add($"?{Cursor[earlier]} = ?last_{Cursor[earlier]}");
+            }
+
+            parts.Add($"?{Cursor[index]} > ?last_{Cursor[index]}");
+            clauses.Add(parts.Count == 1 ? parts[0] : "(" + string.Join(" && ", parts) + ")");
+        }
+
+        return string.Join(" ||\n    ", clauses);
+    }
+
+    private static string AllKeysEqual() => string.Join(
+        " && ", Cursor.Select(static key => $"?{key} = ?last_{key}"));
+
     private static (string Count, string Page) BuildTemplates()
     {
         // Two sibling questions, each with its own explicit absence branch. The branches of one
@@ -284,9 +348,10 @@ public sealed class LuxembourgOpinionDiscoveryPlan
         // delivers two rows, which is the publisher's own multiset and is what ?multiplicity and the
         // three-part keyset are for.
         var rows = $$"""
-            SELECT ?opinion ?document ?document_kind ?opinion_date ?date_kind (COUNT(*) AS ?multiplicity) WHERE {
+            SELECT {{Grouped}} (COUNT(*) AS ?multiplicity) WHERE {
               VALUES ?lex_pass_id { {pass_id:uint} }
               ?opinion a <{{OpinionClassIri}}> .
+              BIND(IF(isIRI(?opinion), "iri", "unsupported_blank_node") AS ?opinion_kind)
               {
                 ?opinion <{{ResultingDocumentPredicateIri}}> ?document .
                 BIND(IF(isIRI(?document), "iri", IF(isLiteral(?document), "literal", "unsupported_blank_node")) AS ?document_kind)
@@ -305,8 +370,12 @@ public sealed class LuxembourgOpinionDiscoveryPlan
                 FILTER NOT EXISTS { ?opinion <{{OpinionDatePredicateIri}}> ?missing_date }
                 BIND("{{UnboundKind}}" AS ?date_kind)
               }
+              BIND(COALESCE(IF(isLiteral(?document), STR(DATATYPE(?document)), ""), "") AS ?document_datatype)
+              BIND(COALESCE(IF(isLiteral(?document), LANG(?document), ""), "") AS ?document_language)
+              BIND(COALESCE(IF(isLiteral(?opinion_date), STR(DATATYPE(?opinion_date)), ""), "") AS ?date_datatype)
+              BIND(COALESCE(IF(isLiteral(?opinion_date), LANG(?opinion_date), ""), "") AS ?date_language)
             }
-            GROUP BY ?opinion ?document ?document_kind ?opinion_date ?date_kind
+            GROUP BY {{Grouped}}
             """;
 
         var count = $$"""
@@ -317,26 +386,36 @@ public sealed class LuxembourgOpinionDiscoveryPlan
             }
             """;
 
+        var projected = string.Join(' ', Projection.Select(static name => "?" + name));
+        var lastNames = string.Join(' ', Cursor.Select(static key => "?last_" + key));
+        var lastSlots = string.Join(' ', Cursor.Select(static key => "{last_" + key + ":sparql_string}"));
+        var order = string.Join(' ', Cursor.Select(static key => "?" + key));
+
         var page = $$"""
-            SELECT ?opinion ?document ?document_kind ?opinion_date ?date_kind ?multiplicity ?key_1 ?key_2 ?key_3 WHERE {
+            SELECT {{projected}} WHERE {
               {
             {{Indent(Indent(rows))}}
               }
               BIND(STR(?opinion) AS ?key_1)
-              BIND(COALESCE(STR(?document), "") AS ?key_2)
-              BIND(COALESCE(STR(?opinion_date), "") AS ?key_3)
-              VALUES (?has_cursor ?last_key_1 ?last_key_2 ?last_key_3) {
-                ({has_cursor:uint} {last_key_1:sparql_string} {last_key_2:sparql_string} {last_key_3:sparql_string})
+              BIND(?opinion_kind AS ?key_2)
+              BIND(COALESCE(STR(?document), "") AS ?key_3)
+              BIND(?document_kind AS ?key_4)
+              BIND(?document_datatype AS ?key_5)
+              BIND(?document_language AS ?key_6)
+              BIND(COALESCE(STR(?opinion_date), "") AS ?key_7)
+              BIND(?date_kind AS ?key_8)
+              BIND(?date_datatype AS ?key_9)
+              BIND(?date_language AS ?key_10)
+              VALUES (?has_cursor {{lastNames}}) {
+                ({has_cursor:uint} {{lastSlots}})
               }
               FILTER(
-                ?has_cursor = 0 || ?key_1 > ?last_key_1 ||
-                (?key_1 = ?last_key_1 && ?key_2 > ?last_key_2) ||
-                (?key_1 = ?last_key_1 && ?key_2 = ?last_key_2 && ?key_3 > ?last_key_3)
+                ?has_cursor = 0 ||
+            {{Indent(Indent(KeysetFilter()))}}
               )
-              FILTER(?has_cursor = 0 || !(
-                ?key_1 = ?last_key_1 && ?key_2 = ?last_key_2 && ?key_3 = ?last_key_3))
+              FILTER(?has_cursor = 0 || !({{AllKeysEqual()}}))
             }
-            ORDER BY ?key_1 ?key_2 ?key_3
+            ORDER BY {{order}}
             LIMIT {page_limit:uint}
             """;
 
