@@ -265,6 +265,18 @@ public sealed record LuxembourgTranspositionIdentityRunRequest(
     string PlanResourceId,
     MachineQueryRendererSource RendererSource);
 
+/// <summary>One bounded enumeration of the Conseil d'Etat opinion events.</summary>
+/// <remarks>
+/// This request carries no selection, and that is a property of the family rather than an omission.
+/// Its scope is a JOLux class, so a caller chooses nothing about which opinions are asked for - the
+/// contrast is the EU case-law family, which is asked ABOUT a caller-named batch of acts and
+/// therefore carries one.
+/// </remarks>
+public sealed record LuxembourgOpinionRunRequest(
+    LuxembourgOpinionDiscoveryPlan Plan,
+    string PlanResourceId,
+    MachineQueryRendererSource RendererSource);
+
 /// <summary>
 /// One bounded enumeration of the case-law works pointing at a batch of EU acts.
 /// </summary>
@@ -767,6 +779,54 @@ public sealed class EuRepeatedEnumerationExecutor
                     pass => BindLuxembourgTranspositionIdentityCount(request, pass),
                     (pass, cursor, selected, evidenceRef) =>
                         BindLuxembourgTranspositionIdentityPage(request, pass, cursor, selected, evidenceRef),
+                    batchObjects: null,
+                    batchMembershipKeyOrdinal: null,
+                    cancellationToken)
+                .ConfigureAwait(false);
+        }
+        finally
+        {
+            session.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// The plan-fixed Conseil d'Etat opinion family, one session and two passes.
+    /// </summary>
+    /// <remarks>
+    /// Before this, <see cref="LuxembourgOpinionDiscoveryPlan"/> was consumed by nothing, exactly as
+    /// the EU case-law plan was before its own entry point. No batch and no membership ordinal are
+    /// passed because this family has no selection: its scope is a class, so there is no caller
+    /// partition for a delivered row to fall outside of.
+    /// </remarks>
+    public async Task<EuEnumerationRunResult> RunLuxembourgOpinionsAsync(
+        LuxembourgOpinionRunRequest request,
+        BoundMachineRequest sourceWitness,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(sourceWitness);
+
+        var session = await StartSessionAsync(sourceWitness, cancellationToken).ConfigureAwait(false);
+        if (session is null)
+        {
+            return EuEnumerationRunResult.Refused(
+                new EuEnumerationRefusalDetail(
+                    EuEnumerationRefusal.RobotsBootstrapRefused, null, null, null, null, null, null, null, null),
+                productRequestCount: 0);
+        }
+
+        try
+        {
+            var profile = request.Plan.CreateDeliveryProfile();
+            var profileRef = RepeatedEnumerationInterpretationProfileIdentity.Create(NewUrn(), profile);
+            return await RunPassesAsync(
+                    session,
+                    profile,
+                    profileRef,
+                    pass => BindLuxembourgOpinionCount(request, pass),
+                    (pass, cursor, selected, evidenceRef) =>
+                        BindLuxembourgOpinionPage(request, pass, cursor, selected, evidenceRef),
                     batchObjects: null,
                     batchMembershipKeyOrdinal: null,
                     cancellationToken)
@@ -1831,6 +1891,40 @@ public sealed class EuRepeatedEnumerationExecutor
 
     private static EuBoundQueryParts BindLuxembourgTranspositionIdentityPage(
         LuxembourgTranspositionIdentityRunRequest request,
+        int passOrdinal,
+        IReadOnlyList<string>? cursor,
+        long selected,
+        SourceArtifactRef countEvidenceRef)
+    {
+        var bound = request.Plan.BindPage(
+            (LuxembourgQueryPass)passOrdinal,
+            cursor,
+            selected,
+            countEvidenceRef,
+            request.PlanResourceId,
+            NewUrn(),
+            request.RendererSource);
+        return new EuBoundQueryParts(
+            bound.MachinePlanRef, bound.InputArtifact.ArtifactRef, bound.Request,
+            bound.InputArtifact.PartitionBinding.MemberKey, bound.MachinePlan.ResponseCardinality.RowLimit);
+    }
+
+    private static EuBoundQueryParts BindLuxembourgOpinionCount(
+        LuxembourgOpinionRunRequest request,
+        int passOrdinal)
+    {
+        var bound = request.Plan.BindCount(
+            (LuxembourgQueryPass)passOrdinal,
+            request.PlanResourceId,
+            NewUrn(),
+            request.RendererSource);
+        return new EuBoundQueryParts(
+            bound.MachinePlanRef, bound.InputArtifact.ArtifactRef, bound.Request,
+            bound.InputArtifact.PartitionBinding.MemberKey, null);
+    }
+
+    private static EuBoundQueryParts BindLuxembourgOpinionPage(
+        LuxembourgOpinionRunRequest request,
         int passOrdinal,
         IReadOnlyList<string>? cursor,
         long selected,
