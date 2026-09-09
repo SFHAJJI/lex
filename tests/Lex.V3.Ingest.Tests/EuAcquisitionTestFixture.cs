@@ -72,6 +72,18 @@ internal static class EuAcquisitionTestFixture
             "case_celex", "case_celex_kind",
             "multiplicity", "key_1", "key_2", "key_3", "key_4", "key_5"];
 
+    /// <summary>
+    /// E8's procedure-event projection, in the plan's own order. One event contributes one row per
+    /// declared type, so <c>key_2</c> carries the type: without it two types of a single event would
+    /// share a cursor and the page could not advance past the second.
+    /// </summary>
+    internal static readonly string[] ProcedureEventProjection =
+        ["event", "event_kind", "dossier",
+            "event_type", "type_kind", "type_datatype", "type_language",
+            "event_date", "date_kind", "date_datatype", "date_language", "multiplicity",
+            "key_1", "key_2", "key_3", "key_4", "key_5", "key_6",
+            "key_7", "key_8", "key_9", "key_10", "key_11"];
+
     internal static readonly string[] RootWatermarkProjection =
         ["object", "value", "value_kind", "datatype_iri", "language_tag", "key_1", "key_2", "key_3", "key_4", "key_5"];
 
@@ -222,6 +234,80 @@ internal static class EuAcquisitionTestFixture
         fields.Add(("key_3", PlainLiteral(euWorkIri)));
         fields.Add(("key_4", PlainLiteral(ecli ?? string.Empty)));
         fields.Add(("key_5", PlainLiteral(celex ?? string.Empty)));
+        return Row(fields);
+    }
+
+    /// <summary>
+    /// One delivered procedure-event row.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <paramref name="eventTypeIri"/> null is the publisher's own "declared no type" answer and
+    /// <paramref name="eventDate"/> null its "holds no date" answer. Both are ASKED FOR by name
+    /// rather than inferred from a row that never came, so both still deliver a row, carrying the
+    /// <c>unbound</c> marker in the matching kind column.
+    /// </para>
+    /// <para>
+    /// A type is one declared type, not all of them. An event declaring several delivers several of
+    /// these rows; grouping them is the producer's business, and a fixture that concatenated them
+    /// here would describe a delivery this plan never asks for.
+    /// </para>
+    /// </remarks>
+    internal static string ProcedureEventRow(
+        string eventIri,
+        string dossierIri,
+        string? eventTypeIri,
+        string? eventDate,
+        string dateDatatype = "",
+        string dateLanguage = "",
+        string typeDatatype = "",
+        string typeLanguage = "")
+    {
+        var fields = new List<(string Var, string Term)>
+        {
+            ("event", Iri(eventIri)),
+            ("event_kind", PlainLiteral("iri")),
+            ("dossier", Iri(dossierIri)),
+        };
+
+        if (eventTypeIri is not null)
+        {
+            fields.Add(("event_type", Iri(eventTypeIri)));
+            fields.Add(("type_kind", PlainLiteral("iri")));
+        }
+        else
+        {
+            fields.Add(("type_kind", PlainLiteral("unbound")));
+        }
+
+        if (eventDate is not null)
+        {
+            fields.Add(("event_date", dateDatatype.Length == 0
+                ? PlainLiteral(eventDate)
+                : TypedLiteral(eventDate, dateDatatype)));
+            fields.Add(("date_kind", PlainLiteral("literal")));
+        }
+        else
+        {
+            fields.Add(("date_kind", PlainLiteral("unbound")));
+        }
+
+        fields.Add(("type_datatype", PlainLiteral(typeDatatype)));
+        fields.Add(("type_language", PlainLiteral(typeLanguage)));
+        fields.Add(("date_datatype", PlainLiteral(dateDatatype)));
+        fields.Add(("date_language", PlainLiteral(dateLanguage)));
+        fields.Add(("multiplicity", TypedLiteral("1", "http://www.w3.org/2001/XMLSchema#integer")));
+        fields.Add(("key_1", PlainLiteral(eventIri)));
+        fields.Add(("key_2", PlainLiteral("iri")));
+        fields.Add(("key_3", PlainLiteral(eventTypeIri ?? string.Empty)));
+        fields.Add(("key_4", PlainLiteral(eventTypeIri is null ? "unbound" : "iri")));
+        fields.Add(("key_5", PlainLiteral(typeDatatype)));
+        fields.Add(("key_6", PlainLiteral(typeLanguage)));
+        fields.Add(("key_7", PlainLiteral(dossierIri)));
+        fields.Add(("key_8", PlainLiteral(eventDate ?? string.Empty)));
+        fields.Add(("key_9", PlainLiteral(eventDate is null ? "unbound" : "literal")));
+        fields.Add(("key_10", PlainLiteral(dateDatatype)));
+        fields.Add(("key_11", PlainLiteral(dateLanguage)));
         return Row(fields);
     }
 
@@ -702,6 +788,16 @@ internal static class EuAcquisitionTestFixture
         if (body.Contains("case-law_interpretes_resource_legal", StringComparison.Ordinal))
         {
             return "CaseLaw";
+        }
+
+        // E8's procedure-event family is the only one that asks event_legal_part_of_dossier.
+        // Classified explicitly rather than left to the fallthrough for the same reason family A and
+        // the case-law family are: an unclassified body is answered with the CENSUS script, so the
+        // failure would surface as an unrelated census shortfall instead of as this family having no
+        // script of its own.
+        if (body.Contains("event_legal_part_of_dossier", StringComparison.Ordinal))
+        {
+            return "ProcedureEvent";
         }
 
         return "Census";
