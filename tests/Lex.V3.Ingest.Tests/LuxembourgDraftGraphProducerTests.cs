@@ -332,7 +332,8 @@ public sealed class LuxembourgDraftGraphProducerTests
     [DataRow("language_tag", "iri", DisplayName = "an IRI value must answer its language column")]
     [DataRow("datatype_iri", "unbound", DisplayName = "the absence branch binds its datatype column")]
     [DataRow("language_tag", "unbound", DisplayName = "the absence branch binds its language column")]
-    [DataRow("datatype_iri", "plain", DisplayName = "a plain literal must answer its datatype column")]
+    [DataRow("datatype_iri", "plain", DisplayName = "a typed literal must answer its datatype column")]
+    [DataRow("datatype_iri", "bare", DisplayName = "an untagged literal must answer its datatype column")]
     [DataRow("language_tag", "langString", DisplayName = "a language-tagged literal still answers LANG")]
     public void AMissingQualifierIsRefusedOutsideTheOneMeasuredException(string column, string shape)
     {
@@ -341,6 +342,13 @@ public sealed class LuxembourgDraftGraphProducerTests
             "iri" => Iri(Directive),
             "unbound" => RepeatedEnumerationRdfTerm.Unbound(),
             "plain" => Literal("2024-07-11", XsdDate),
+            // NO datatype and NO language, so the expected qualifier is empty and the delivered
+            // column would be empty too. That is the shape where a too-loose exception hides: every
+            // OTHER kind of value is caught by the column/term comparison a step later, which is why
+            // dropping the language check from the exception left every other row still refused.
+            // This publisher is not measured sending bare literals - the retained pages type every
+            // string as xsd:string - but the guard cannot rest on the publisher's habits.
+            "bare" => Literal("en-cours"),
             _ => Literal("en-cours", null, "fr"),
         };
 
