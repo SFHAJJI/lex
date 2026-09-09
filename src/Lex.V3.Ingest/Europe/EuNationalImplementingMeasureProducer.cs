@@ -82,9 +82,9 @@ public sealed class EuNationalImplementingMeasureProductionResult
 
     /// <summary>
     /// All completed NIM assertions for one EU work. A genuinely empty result is represented by
-    /// one completed acquisition with a null side and the same enumeration evidence.
+    /// one completed acquisition with an empty side set and the same enumeration evidence.
     /// </summary>
-    public IReadOnlyList<EuTranspositionSourceAcquisition> ForEuWork(string euWorkUri)
+    public EuTranspositionSourceAcquisition ForEuWork(string euWorkUri)
     {
         if (!Delivered || Relations is null || CompletionEvidenceRef is null)
         {
@@ -93,18 +93,13 @@ public sealed class EuNationalImplementingMeasureProductionResult
         RequireCellarWorkUri(euWorkUri, nameof(euWorkUri));
         var matches = Relations
             .Where(value => string.Equals(value.EuWorkUri, euWorkUri, StringComparison.Ordinal))
-            .Select(static value => value.Acquisition)
+            .SelectMany(static value => value.Acquisition.Sides)
             .ToArray();
-        return matches.Length > 0
-            ? Array.AsReadOnly(matches)
-            : Array.AsReadOnly(new[]
-            {
-                new EuTranspositionSourceAcquisition(
-                    EuTranspositionAssertedBy.Nim,
-                    EuRelationAcquisitionState.Complete,
-                    null,
-                    CompletionEvidenceRef),
-            });
+        return new EuTranspositionSourceAcquisition(
+            EuTranspositionAssertedBy.Nim,
+            EuRelationAcquisitionState.Complete,
+            matches,
+            CompletionEvidenceRef);
     }
 
     private static void RequireCellarWorkUri(string value, string parameterName)
@@ -160,9 +155,14 @@ public sealed class EuNationalImplementingMeasureProducer
             request, sourceWitness, cancellationToken).ConfigureAwait(false);
         if (run.Receipt is not { } receipt)
         {
+            var refusal = run.Refusal;
             return EuNationalImplementingMeasureProductionResult.Refused(
                 EuNationalImplementingMeasureProductionRefusal.EnumerationRefused,
-                run.Refusal?.Code.ToString() ?? "enumeration returned neither a receipt nor a refusal",
+                refusal is null
+                    ? "enumeration returned neither a receipt nor a refusal"
+                    : refusal.Code + (string.IsNullOrEmpty(refusal.CoreRefusalDetail)
+                        ? string.Empty
+                        : $": {refusal.CoreRefusalDetail}"),
                 run.ProductRequestCount);
         }
 
@@ -231,9 +231,9 @@ public sealed class EuNationalImplementingMeasureProducer
         SourceArtifactRef evidenceRef)
     {
         ArgumentNullException.ThrowIfNull(row);
-        if (row.Terms.Count != profile.ProjectionVariables.Count || row.Terms.Count != 17)
+        if (row.Terms.Count != profile.ProjectionVariables.Count || row.Terms.Count != 18)
         {
-            throw new ArgumentException("A Luxembourg sector-7 NIM row has seventeen exact terms.", nameof(row));
+            throw new ArgumentException("A Luxembourg sector-7 NIM row has eighteen exact terms.", nameof(row));
         }
         var nim = RequireCellarWork(Term(row, profile, "nim"), "nim");
         RequireIri(Term(row, profile, "country"),
@@ -255,6 +255,8 @@ public sealed class EuNationalImplementingMeasureProducer
         RequirePlainLiteral(Term(row, profile, "key_5"), "key_5", euWorkEli);
         RequirePlainLiteral(Term(row, profile, "key_6"), "key_6", WorkKindIri(workKind));
         RequirePlainLiteral(Term(row, profile, "key_7"), "key_7", eli ?? string.Empty);
+        RequirePlainLiteral(Term(row, profile, "page_key"), "page_key", PageKey(
+            nim, nimCelex, predicate, euWork, euWorkEli, WorkKindIri(workKind), eli ?? string.Empty));
 
         var workKindAssertion = new EuWorkKindAssertion(
             new OfficialIdentitySet(PublisherId.EuEurLex,
@@ -273,7 +275,7 @@ public sealed class EuNationalImplementingMeasureProducer
         var acquisition = new EuTranspositionSourceAcquisition(
             EuTranspositionAssertedBy.Nim,
             EuRelationAcquisitionState.Complete,
-            side,
+            [side],
             evidenceRef);
         return new(euWork, workKindAssertion, nim, nimCelex, predicate, eli, acquisition);
     }
@@ -364,18 +366,21 @@ public sealed class EuNationalImplementingMeasureProducer
         }
         return term.Value switch
         {
-            EuNationalImplementingMeasureDiscoveryPlan.DirectiveClassIri => EuWorkKind.Directive,
-            EuNationalImplementingMeasureDiscoveryPlan.RegulationClassIri => EuWorkKind.Regulation,
+            EuNationalImplementingMeasureDiscoveryPlan.DirectiveResourceTypeIri => EuWorkKind.Directive,
+            EuNationalImplementingMeasureDiscoveryPlan.RegulationResourceTypeIri => EuWorkKind.Regulation,
             _ => throw new ArgumentException("eu_work_kind must be directive or regulation.", nameof(term)),
         };
     }
 
     private static string WorkKindIri(EuWorkKind kind) => kind switch
     {
-        EuWorkKind.Directive => EuNationalImplementingMeasureDiscoveryPlan.DirectiveClassIri,
-        EuWorkKind.Regulation => EuNationalImplementingMeasureDiscoveryPlan.RegulationClassIri,
+        EuWorkKind.Directive => EuNationalImplementingMeasureDiscoveryPlan.DirectiveResourceTypeIri,
+        EuWorkKind.Regulation => EuNationalImplementingMeasureDiscoveryPlan.RegulationResourceTypeIri,
         _ => throw new ArgumentOutOfRangeException(nameof(kind)),
     };
+
+    private static string PageKey(params string[] parts) =>
+        string.Join('|', parts.Select(Uri.EscapeDataString));
 
     private static string? RequireEli(RepeatedEnumerationRdfTerm term, string kind)
     {

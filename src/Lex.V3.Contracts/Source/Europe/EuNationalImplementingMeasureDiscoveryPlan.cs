@@ -34,8 +34,11 @@ public sealed class EuNationalImplementingMeasureDiscoveryPlan
         Cdm + "measure_national_implementing_implements_directive";
     public const string EliPredicateIri = Cdm + "eli";
     public const string EuWorkEliPredicateIri = Cdm + "resource_legal_eli";
-    public const string DirectiveClassIri = Cdm + "directive";
-    public const string RegulationClassIri = Cdm + "regulation";
+    public const string WorkHasResourceTypePredicateIri = Cdm + "work_has_resource-type";
+    public const string DirectiveResourceTypeIri =
+        "http://publications.europa.eu/resource/authority/resource-type/DIR";
+    public const string RegulationResourceTypeIri =
+        "http://publications.europa.eu/resource/authority/resource-type/REG";
     internal const long PublisherDeliveryCeilingRows = 1_000_000;
     internal const uint Pass1PageLimit = 997;
     internal const uint Pass2PageLimit = 613;
@@ -50,10 +53,9 @@ public sealed class EuNationalImplementingMeasureDiscoveryPlan
     [
         "nim", "country", "nim_celex", "implements_predicate", "eu_work",
         "eu_work_eli", "eu_work_kind", "eli", "eli_kind", "multiplicity",
-        "key_1", "key_2", "key_3", "key_4", "key_5", "key_6", "key_7",
+        "key_1", "key_2", "key_3", "key_4", "key_5", "key_6", "key_7", "page_key",
     ];
-    private static readonly string[] Cursor =
-        ["key_1", "key_2", "key_3", "key_4", "key_5", "key_6", "key_7"];
+    private static readonly string[] Cursor = ["page_key"];
     private readonly byte[] _canonicalIdentityBytes;
 
     private EuNationalImplementingMeasureDiscoveryPlan()
@@ -162,7 +164,7 @@ public sealed class EuNationalImplementingMeasureDiscoveryPlan
             var values = cursor?.ToArray() ?? [];
             if (values.Length != 0 && values.Length != Cursor.Length)
             {
-                throw new ArgumentException("A continuation cursor must have seven exact parts.", nameof(cursor));
+                throw new ArgumentException("A continuation cursor must have one exact part.", nameof(cursor));
             }
 
             parameters.Add(new MachineQueryParameter(
@@ -218,38 +220,61 @@ public sealed class EuNationalImplementingMeasureDiscoveryPlan
 
     private static (string Count, string Page) BuildTemplates()
     {
+        var rowPattern = $$"""
+            VALUES ?lex_pass_id { {pass_id:uint} }
+            VALUES ?country { <{{LuxembourgCountryIri}}> }
+            VALUES ?implements_predicate {
+              <{{ImplementsResourceLegalPredicateIri}}>
+              <{{LegacyImplementsDirectivePredicateIri}}>
+            }
+            ?nim a <{{Cdm}}measure_national_implementing> ;
+                 <{{Cdm}}measure_national_implementing_implemented_by_country> ?country ;
+                 <{{Cdm}}resource_legal_id_celex> ?nim_celex ;
+                 ?implements_predicate ?eu_work .
+            VALUES ?eu_work_kind {
+              <{{DirectiveResourceTypeIri}}>
+              <{{RegulationResourceTypeIri}}>
+            }
+            ?eu_work <{{WorkHasResourceTypePredicateIri}}> ?eu_work_kind .
+            OPTIONAL { ?eu_work <{{EuWorkEliPredicateIri}}> ?eu_work_eli . }
+            FILTER(STRSTARTS(STR(?nim_celex), "7"))
+            {
+              ?nim <{{EliPredicateIri}}> ?eli .
+              BIND(IF(isIRI(?eli), "iri", IF(isLiteral(?eli), "literal", "unsupported_blank_node")) AS ?eli_kind)
+            }
+            UNION
+            {
+              FILTER NOT EXISTS { ?nim <{{EliPredicateIri}}> ?missing_eli }
+              BIND("unbound" AS ?eli_kind)
+            }
+            """;
+        const string groupBy =
+            "GROUP BY ?nim ?country ?nim_celex ?implements_predicate ?eu_work ?eu_work_eli " +
+            "?eu_work_kind ?eli ?eli_kind";
         var rows = $$"""
             SELECT ?nim ?country ?nim_celex ?implements_predicate ?eu_work ?eu_work_eli ?eu_work_kind ?eli ?eli_kind (COUNT(*) AS ?multiplicity) WHERE {
-              VALUES ?lex_pass_id { {pass_id:uint} }
-              VALUES ?country { <{{LuxembourgCountryIri}}> }
-              VALUES ?implements_predicate {
-                <{{ImplementsResourceLegalPredicateIri}}>
-                <{{LegacyImplementsDirectivePredicateIri}}>
-              }
-              ?nim a <{{Cdm}}measure_national_implementing> ;
-                   <{{Cdm}}measure_national_implementing_implemented_by_country> ?country ;
-                   <{{Cdm}}resource_legal_id_celex> ?nim_celex ;
-                   ?implements_predicate ?eu_work .
-              OPTIONAL {
-                VALUES ?eu_work_kind {
-                  <{{DirectiveClassIri}}>
-                  <{{RegulationClassIri}}>
-                }
-                ?eu_work a ?eu_work_kind .
-              }
-              OPTIONAL { ?eu_work <{{EuWorkEliPredicateIri}}> ?eu_work_eli . }
-              FILTER(STRSTARTS(STR(?nim_celex), "7"))
-              {
-                ?nim <{{EliPredicateIri}}> ?eli .
-                BIND(IF(isIRI(?eli), "iri", IF(isLiteral(?eli), "literal", "unsupported_blank_node")) AS ?eli_kind)
-              }
-              UNION
-              {
-                FILTER NOT EXISTS { ?nim <{{EliPredicateIri}}> ?missing_eli }
-                BIND("unbound" AS ?eli_kind)
-              }
+            {{Indent(rowPattern)}}
             }
-            GROUP BY ?nim ?country ?nim_celex ?implements_predicate ?eu_work ?eu_work_eli ?eu_work_kind ?eli ?eli_kind
+            {{groupBy}}
+            """;
+        var pageRows = $$"""
+            SELECT ?nim ?country ?nim_celex ?implements_predicate ?eu_work ?eu_work_eli ?eu_work_kind ?eli ?eli_kind ?page_key (COUNT(*) AS ?multiplicity) WHERE {
+            {{Indent(rowPattern)}}
+              BIND(CONCAT(
+                ENCODE_FOR_URI(STR(?nim)), "|",
+                ENCODE_FOR_URI(STR(?nim_celex)), "|",
+                ENCODE_FOR_URI(STR(?implements_predicate)), "|",
+                ENCODE_FOR_URI(STR(?eu_work)), "|",
+                ENCODE_FOR_URI(COALESCE(STR(?eu_work_eli), "")), "|",
+                ENCODE_FOR_URI(COALESCE(STR(?eu_work_kind), "")), "|",
+                ENCODE_FOR_URI(COALESCE(STR(?eli), ""))
+              ) AS ?page_key)
+              VALUES (?has_cursor ?last_page_key) {
+                ({has_cursor:uint} {last_page_key:sparql_string})
+              }
+              FILTER(?has_cursor = 0 || ?page_key > ?last_page_key)
+            }
+            {{groupBy}} ?page_key
             """;
         var count = $$"""
             SELECT (COUNT(*) AS ?count) WHERE {
@@ -259,9 +284,9 @@ public sealed class EuNationalImplementingMeasureDiscoveryPlan
             }
             """;
         var page = $$"""
-            SELECT ?nim ?country ?nim_celex ?implements_predicate ?eu_work ?eu_work_eli ?eu_work_kind ?eli ?eli_kind ?multiplicity ?key_1 ?key_2 ?key_3 ?key_4 ?key_5 ?key_6 ?key_7 WHERE {
+            SELECT ?nim ?country ?nim_celex ?implements_predicate ?eu_work ?eu_work_eli ?eu_work_kind ?eli ?eli_kind ?multiplicity ?key_1 ?key_2 ?key_3 ?key_4 ?key_5 ?key_6 ?key_7 ?page_key WHERE {
               {
-            {{Indent(Indent(rows))}}
+            {{Indent(Indent(pageRows))}}
               }
               BIND(STR(?nim) AS ?key_1)
               BIND(STR(?nim_celex) AS ?key_2)
@@ -270,22 +295,8 @@ public sealed class EuNationalImplementingMeasureDiscoveryPlan
               BIND(COALESCE(STR(?eu_work_eli), "") AS ?key_5)
               BIND(COALESCE(STR(?eu_work_kind), "") AS ?key_6)
               BIND(COALESCE(STR(?eli), "") AS ?key_7)
-              VALUES (?has_cursor ?last_key_1 ?last_key_2 ?last_key_3 ?last_key_4 ?last_key_5 ?last_key_6 ?last_key_7) {
-                ({has_cursor:uint} {last_key_1:sparql_string} {last_key_2:sparql_string} {last_key_3:sparql_string} {last_key_4:sparql_string} {last_key_5:sparql_string} {last_key_6:sparql_string} {last_key_7:sparql_string})
-              }
-              FILTER(
-                ?has_cursor = 0 || ?key_1 > ?last_key_1 ||
-                (?key_1 = ?last_key_1 && ?key_2 > ?last_key_2) ||
-                (?key_1 = ?last_key_1 && ?key_2 = ?last_key_2 && ?key_3 > ?last_key_3) ||
-                (?key_1 = ?last_key_1 && ?key_2 = ?last_key_2 && ?key_3 = ?last_key_3 && ?key_4 > ?last_key_4) ||
-                (?key_1 = ?last_key_1 && ?key_2 = ?last_key_2 && ?key_3 = ?last_key_3 && ?key_4 = ?last_key_4 && ?key_5 > ?last_key_5) ||
-                (?key_1 = ?last_key_1 && ?key_2 = ?last_key_2 && ?key_3 = ?last_key_3 && ?key_4 = ?last_key_4 && ?key_5 = ?last_key_5 && ?key_6 > ?last_key_6) ||
-                (?key_1 = ?last_key_1 && ?key_2 = ?last_key_2 && ?key_3 = ?last_key_3 && ?key_4 = ?last_key_4 && ?key_5 = ?last_key_5 && ?key_6 = ?last_key_6 && ?key_7 > ?last_key_7)
-              )
-              FILTER(?has_cursor = 0 || !(
-                ?key_1 = ?last_key_1 && ?key_2 = ?last_key_2 && ?key_3 = ?last_key_3 && ?key_4 = ?last_key_4 && ?key_5 = ?last_key_5 && ?key_6 = ?last_key_6 && ?key_7 = ?last_key_7))
             }
-            ORDER BY ?key_1 ?key_2 ?key_3 ?key_4 ?key_5 ?key_6 ?key_7
+            ORDER BY ?page_key
             LIMIT {page_limit:uint}
             """;
         return (Normalize(count), Normalize(page));
@@ -354,15 +365,15 @@ internal sealed class EuNationalImplementingMeasureSparqlRenderer : IMachineQuer
         {
             throw new ArgumentException("Cursor presence must be zero or one.", nameof(input));
         }
-        if (parameters.Count != 2 + (hasCursor == 1 ? 5 : 0))
+        if (parameters.Count != 2 + (hasCursor == 1 ? 1 : 0))
         {
             throw new ArgumentException("A page input has one exact cursor shape.", nameof(input));
         }
         query = Replace(query, "{page_limit:uint}", limit.ToString(CultureInfo.InvariantCulture));
         query = Replace(query, "{has_cursor:uint}", hasCursor.ToString(CultureInfo.InvariantCulture));
-        for (var ordinal = 1; ordinal <= 5; ordinal++)
+        foreach (var cursor in new[] { "page_key" })
         {
-            var name = "last_key_" + ordinal;
+            var name = "last_" + cursor;
             var value = hasCursor == 0 ? string.Empty : Cursor(parameters, name);
             query = Replace(query, "{" + name + ":sparql_string}", SparqlQueryText.StringLiteral(value));
         }

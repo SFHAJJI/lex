@@ -44,31 +44,34 @@ public sealed class EuTranspositionBridgePopulationRow
 {
     internal EuTranspositionBridgePopulationRow(
         EuTranspositionBridge bridge,
-        DurableBlobWriteReceipt? normalisedEliJoinEvidenceReceipt)
+        IReadOnlyList<DurableBlobWriteReceipt> normalisedEliJoinEvidenceReceipts)
     {
         Bridge = bridge ?? throw new ArgumentNullException(nameof(bridge));
-        if ((bridge.NormalisedEliJoin is null) != (normalisedEliJoinEvidenceReceipt is null))
+        ArgumentNullException.ThrowIfNull(normalisedEliJoinEvidenceReceipts);
+        if (bridge.NormalisedEliJoins.Count != normalisedEliJoinEvidenceReceipts.Count)
         {
             throw new ArgumentException(
-                "A derived normalised-ELI join and its custody receipt are present together.",
-                nameof(normalisedEliJoinEvidenceReceipt));
+                "Every derived normalised-ELI join has exactly one custody receipt.",
+                nameof(normalisedEliJoinEvidenceReceipts));
         }
-        if (bridge.NormalisedEliJoin is not null &&
-            !string.Equals(
-                bridge.NormalisedEliJoin.EvidenceRef.Sha256,
-                normalisedEliJoinEvidenceReceipt!.Reference.ContentSha256,
-                StringComparison.Ordinal))
+        for (var index = 0; index < bridge.NormalisedEliJoins.Count; index++)
         {
-            throw new ArgumentException(
-                "The join evidence receipt holds different bytes than the derived join names.",
-                nameof(normalisedEliJoinEvidenceReceipt));
+            if (!string.Equals(
+                    bridge.NormalisedEliJoins[index].EvidenceRef.Sha256,
+                    normalisedEliJoinEvidenceReceipts[index].Reference.ContentSha256,
+                    StringComparison.Ordinal))
+            {
+                throw new ArgumentException(
+                    "A join evidence receipt holds different bytes than the derived join names.",
+                    nameof(normalisedEliJoinEvidenceReceipts));
+            }
         }
 
-        NormalisedEliJoinEvidenceReceipt = normalisedEliJoinEvidenceReceipt;
+        NormalisedEliJoinEvidenceReceipts = Array.AsReadOnly(normalisedEliJoinEvidenceReceipts.ToArray());
     }
 
     public EuTranspositionBridge Bridge { get; }
-    public DurableBlobWriteReceipt? NormalisedEliJoinEvidenceReceipt { get; }
+    public IReadOnlyList<DurableBlobWriteReceipt> NormalisedEliJoinEvidenceReceipts { get; }
 }
 
 /// <summary>A complete scoped population, or one typed refusal. Never both.</summary>
@@ -172,7 +175,7 @@ public sealed class EuTranspositionBridgePopulationProducer
                 $"Publisher evidence names {outsideScope}, which is outside the declared EU work scope.");
         }
 
-        var built = new List<(EuTranspositionBridge Bridge, byte[]? EvidenceBytes)>(scoped.Count);
+        var built = new List<(EuTranspositionBridge Bridge, IReadOnlyList<byte[]> EvidenceBytes)>(scoped.Count);
         foreach (var item in scoped.OrderBy(static value => value.WorkUri, StringComparer.Ordinal))
         {
             var result = EuTranspositionBridgeProducer.Produce(item.WorkUri, item.Kind, legilux, nim);
@@ -188,20 +191,20 @@ public sealed class EuTranspositionBridgePopulationProducer
         var rows = new List<EuTranspositionBridgePopulationRow>(built.Count);
         foreach (var item in built)
         {
-            DurableBlobWriteReceipt? receipt = null;
-            if (item.EvidenceBytes is not null)
+            var receipts = new List<DurableBlobWriteReceipt>(item.EvidenceBytes.Count);
+            for (var index = 0; index < item.EvidenceBytes.Count; index++)
             {
                 var held = await CustodyHold.TryHoldAsync(
-                    _custodyStore, item.EvidenceBytes, cancellationToken).ConfigureAwait(false);
+                    _custodyStore, item.EvidenceBytes[index], cancellationToken).ConfigureAwait(false);
                 if (held.Receipt is null)
                 {
                     return EuTranspositionBridgePopulationResult.Refused(
                         EuTranspositionBridgePopulationRefusal.JoinEvidenceNotHeld,
                         $"Derived join evidence for {item.Bridge.EuWorkUri} was not held: {held.Failure}");
                 }
-                if (item.Bridge.NormalisedEliJoin is null ||
+                if (index >= item.Bridge.NormalisedEliJoins.Count ||
                     !string.Equals(
-                        item.Bridge.NormalisedEliJoin.EvidenceRef.Sha256,
+                        item.Bridge.NormalisedEliJoins[index].EvidenceRef.Sha256,
                         held.Receipt.Reference.ContentSha256,
                         StringComparison.Ordinal))
                 {
@@ -209,9 +212,9 @@ public sealed class EuTranspositionBridgePopulationProducer
                         EuTranspositionBridgePopulationRefusal.JoinEvidenceReceiptMismatch,
                         $"Derived join evidence for {item.Bridge.EuWorkUri} was held under a different digest.");
                 }
-                receipt = held.Receipt;
+                receipts.Add(held.Receipt);
             }
-            rows.Add(new EuTranspositionBridgePopulationRow(item.Bridge, receipt));
+            rows.Add(new EuTranspositionBridgePopulationRow(item.Bridge, receipts));
         }
 
         return EuTranspositionBridgePopulationResult.Success(rows);

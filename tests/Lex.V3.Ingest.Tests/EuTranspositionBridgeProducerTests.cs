@@ -31,21 +31,20 @@ public sealed class EuTranspositionBridgeProducerTests
         Assert.IsNotNull(result.Bridge);
         Assert.AreEqual(EuTranspositionAssertedBy.Legilux, result.Bridge!.Legilux.AssertedBy);
         Assert.AreEqual(EuTranspositionAssertedBy.Nim, result.Bridge.Nim.AssertedBy);
-        Assert.AreNotSame(result.Bridge.Legilux.Side, result.Bridge.Nim.Side);
-        Assert.IsNotNull(result.Bridge.NormalisedEliJoin);
-        Assert.AreEqual(LuMeasure, result.Bridge.NormalisedEliJoin.NormalisedEli);
-        Assert.IsTrue(result.Bridge.NormalisedEliJoin.IsDerived());
+        Assert.AreNotSame(result.Bridge.Legilux.Sides[0], result.Bridge.Nim.Sides[0]);
+        Assert.HasCount(1, result.Bridge.NormalisedEliJoins);
+        Assert.AreEqual(LuMeasure, result.Bridge.NormalisedEliJoins[0].NormalisedEli);
+        Assert.IsTrue(result.Bridge.NormalisedEliJoins[0].IsDerived());
 
-        var evidenceBytes = result.CopyNormalisedEliJoinEvidenceBytes();
-        Assert.IsNotNull(evidenceBytes);
+        var evidenceBytes = result.CopyNormalisedEliJoinEvidenceBytes().Single();
         Assert.AreEqual(
             Convert.ToHexStringLower(SHA256.HashData(evidenceBytes)),
-            result.Bridge.NormalisedEliJoin.EvidenceRef.Sha256);
+            result.Bridge.NormalisedEliJoins[0].EvidenceRef.Sha256);
         Assert.AreEqual(
             ContentDerivedIdentity.DeriveUuidUrn(
                 "lex-v3/eu-transposition-normalised-eli-join/1",
                 evidenceBytes),
-            result.Bridge.NormalisedEliJoin.EvidenceRef.ResourceId);
+            result.Bridge.NormalisedEliJoins[0].EvidenceRef.ResourceId);
         using var evidence = JsonDocument.Parse(evidenceBytes);
         Assert.AreEqual(EuWork, evidence.RootElement.GetProperty("eu_work_uri").GetString());
         Assert.AreEqual(LuMeasure, evidence.RootElement.GetProperty("legilux_eli").GetString());
@@ -65,10 +64,10 @@ public sealed class EuTranspositionBridgeProducerTests
             Legilux(LegiluxSide()), NimWithEli(OtherLuMeasure, NimSide(OtherLuMeasure)));
 
         Assert.IsTrue(result.Delivered, result.Detail);
-        Assert.AreEqual(LuMeasure, result.Bridge!.Legilux.Side!.NationalMeasureUri);
-        Assert.AreEqual(OtherLuMeasure, result.Bridge.Nim.Side!.NationalMeasureUri);
-        Assert.IsNull(result.Bridge.NormalisedEliJoin);
-        Assert.IsNull(result.CopyNormalisedEliJoinEvidenceBytes());
+        Assert.AreEqual(LuMeasure, result.Bridge!.Legilux.Sides[0]!.NationalMeasureUri);
+        Assert.AreEqual(OtherLuMeasure, result.Bridge.Nim.Sides[0]!.NationalMeasureUri);
+        Assert.IsEmpty(result.Bridge.NormalisedEliJoins);
+        Assert.IsEmpty(result.CopyNormalisedEliJoinEvidenceBytes());
     }
 
     [TestMethod]
@@ -81,10 +80,10 @@ public sealed class EuTranspositionBridgeProducerTests
             NimWithEli(nimColumn, NimSide(nimColumn)));
 
         Assert.IsTrue(result.Delivered, result.Detail);
-        Assert.AreEqual(legiluxColumn, result.Bridge!.Legilux.Side!.NationalMeasureUri);
-        Assert.AreEqual(nimColumn, result.Bridge.Nim.Side!.NationalMeasureUri);
-        Assert.IsNull(result.Bridge.NormalisedEliJoin);
-        Assert.IsNull(result.CopyNormalisedEliJoinEvidenceBytes());
+        Assert.AreEqual(legiluxColumn, result.Bridge!.Legilux.Sides[0]!.NationalMeasureUri);
+        Assert.AreEqual(nimColumn, result.Bridge.Nim.Sides[0]!.NationalMeasureUri);
+        Assert.IsEmpty(result.Bridge.NormalisedEliJoins);
+        Assert.IsEmpty(result.CopyNormalisedEliJoinEvidenceBytes());
     }
 
     [TestMethod]
@@ -95,8 +94,8 @@ public sealed class EuTranspositionBridgeProducerTests
             Legilux(LegiluxSide()), NimWithEli(caseVariant, NimSide(caseVariant)));
 
         Assert.IsTrue(result.Delivered, result.Detail);
-        Assert.IsNull(result.Bridge!.NormalisedEliJoin);
-        Assert.IsNull(result.CopyNormalisedEliJoinEvidenceBytes());
+        Assert.IsEmpty(result.Bridge!.NormalisedEliJoins);
+        Assert.IsEmpty(result.CopyNormalisedEliJoinEvidenceBytes());
     }
 
     [TestMethod]
@@ -111,14 +110,25 @@ public sealed class EuTranspositionBridgeProducerTests
     }
 
     [TestMethod]
-    public void MultipleAssertionsFromOnePublisherAreRefusedRatherThanMergedOrChosen()
+    public void MultipleAssertionsStayInTheirPublisherColumnsAndEachExactMatchIsDisclosed()
     {
+        const string secondLegilux = "https://data.legilux.public.lu/eli/etat/leg/loi/2020/01/02/a2/jo";
+        const string secondNim = "http://data.legilux.public.lu/eli/etat/leg/loi/2020/01/02/a2/jo";
         var result = EuTranspositionBridgeProducer.Produce(EuWork, Kind(EuWork, EuWorkKind.Directive),
-            Legilux(LegiluxSide(), LegiluxSide()), Nim(NimSide()));
+            LuxembourgTranspositionProductionResult.Success([
+                new LuxembourgTranspositionRelation(EuWork, LuMeasure, LegiluxSide(), Evidence),
+                new LuxembourgTranspositionRelation(EuWork, secondLegilux, LegiluxSide(secondLegilux), Evidence),
+            ], Evidence),
+            EuNationalImplementingMeasureProductionResult.Success([
+                NimRelation(NimLuMeasure, NimSide()),
+                NimRelation(secondNim, NimSide(secondNim)),
+            ], Evidence, 0));
 
-        Assert.IsFalse(result.Delivered);
-        Assert.AreEqual(EuTranspositionBridgeProductionRefusal.LegiluxNotSingular, result.Refusal);
-        Assert.IsNull(result.Bridge);
+        Assert.IsTrue(result.Delivered, result.Detail);
+        Assert.HasCount(2, result.Bridge!.Legilux.Sides);
+        Assert.HasCount(2, result.Bridge.Nim.Sides);
+        Assert.HasCount(2, result.Bridge.NormalisedEliJoins);
+        Assert.HasCount(2, result.CopyNormalisedEliJoinEvidenceBytes());
     }
 
     [TestMethod]
@@ -152,12 +162,8 @@ public sealed class EuTranspositionBridgeProducerTests
     }
 
     [TestMethod]
-    public void MultipleNimAssertionsAndARegulationContradictionAreTypedRefusals()
+    public void ARegulationContradictionIsATypedRefusal()
     {
-        var multipleNim = EuTranspositionBridgeProducer.Produce(EuWork, Kind(EuWork, EuWorkKind.Directive),
-            Legilux(LegiluxSide()), Nim(NimSide(), NimSide()));
-        Assert.AreEqual(EuTranspositionBridgeProductionRefusal.NimNotSingular, multipleNim.Refusal);
-
         var regulation = EuTranspositionBridgeProducer.Produce(EuWork, Kind(EuWork, EuWorkKind.Regulation),
             Legilux(LegiluxSide()), Nim(NimSide()));
         Assert.AreEqual(EuTranspositionBridgeProductionRefusal.SourceColumnsContradictWorkKind, regulation.Refusal);
@@ -174,7 +180,7 @@ public sealed class EuTranspositionBridgeProducerTests
         string measureUri,
         params EuTranspositionSourceAcquisition[] columns) =>
         LuxembourgTranspositionProductionResult.Success(columns.Select(column =>
-            new LuxembourgTranspositionRelation(EuWork, measureUri, column)).ToArray(), Evidence);
+            new LuxembourgTranspositionRelation(EuWork, measureUri, column, Evidence)).ToArray(), Evidence);
 
     private static EuNationalImplementingMeasureProductionResult Nim(params EuTranspositionSourceAcquisition[] columns) =>
         NimWithEli(NimLuMeasure, columns);
@@ -187,15 +193,21 @@ public sealed class EuTranspositionBridgeProducerTests
                 EuWork, Kind(EuWork, EuWorkKind.Directive), EuWork, "72020L0001",
                 "https://example.invalid/implements", eli, column)).ToArray(), Evidence, 0);
 
+    private static EuNationalImplementingMeasureRelation NimRelation(
+        string eli,
+        EuTranspositionSourceAcquisition column) =>
+        new(EuWork, Kind(EuWork, EuWorkKind.Directive), EuWork, "72020L0001",
+            "https://example.invalid/implements", eli, column);
+
     private static EuTranspositionSourceAcquisition LegiluxSide(string nationalMeasureUri = LuMeasure) =>
         new(EuTranspositionAssertedBy.Legilux, EuRelationAcquisitionState.Complete,
-            new EuTranspositionSide(EuTranspositionAssertedBy.Legilux, nationalMeasureUri, LegiluxEvidence, null, null), Evidence);
+            [new EuTranspositionSide(EuTranspositionAssertedBy.Legilux, nationalMeasureUri, LegiluxEvidence, null, null)], Evidence);
 
     private static EuTranspositionSourceAcquisition NimSide(string nationalMeasureUri = NimLuMeasure) =>
         new(EuTranspositionAssertedBy.Nim, EuRelationAcquisitionState.Complete,
-            new EuTranspositionSide(EuTranspositionAssertedBy.Nim, nationalMeasureUri, NimEvidence,
-                EuMemberStateDisclaimer.Text, EuMemberStateDisclaimer.SourceUri), Evidence);
+            [new EuTranspositionSide(EuTranspositionAssertedBy.Nim, nationalMeasureUri, NimEvidence,
+                EuMemberStateDisclaimer.Text, EuMemberStateDisclaimer.SourceUri)], Evidence);
 
     private static EuTranspositionSourceAcquisition ProvenAbsent(EuTranspositionAssertedBy assertedBy) =>
-        new(assertedBy, EuRelationAcquisitionState.Complete, null, Evidence);
+        new(assertedBy, EuRelationAcquisitionState.Complete, [], Evidence);
 }

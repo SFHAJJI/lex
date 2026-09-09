@@ -42,11 +42,11 @@ public sealed class EuTranspositionBridgePopulationProducerTests
         Assert.HasCount(2, result.Rows);
         Assert.AreEqual(Directive, result.Rows[0].Bridge.EuWorkUri);
         Assert.AreEqual(Regulation, result.Rows[1].Bridge.EuWorkUri);
-        Assert.IsNotNull(result.Rows[0].NormalisedEliJoinEvidenceReceipt);
+        Assert.HasCount(1, result.Rows[0].NormalisedEliJoinEvidenceReceipts);
         Assert.AreEqual(
-            result.Rows[0].Bridge.NormalisedEliJoin!.EvidenceRef.Sha256,
-            result.Rows[0].NormalisedEliJoinEvidenceReceipt!.Reference.ContentSha256);
-        Assert.IsNull(result.Rows[1].NormalisedEliJoinEvidenceReceipt);
+            result.Rows[0].Bridge.NormalisedEliJoins[0].EvidenceRef.Sha256,
+            result.Rows[0].NormalisedEliJoinEvidenceReceipts[0].Reference.ContentSha256);
+        Assert.IsEmpty(result.Rows[1].NormalisedEliJoinEvidenceReceipts);
         Assert.AreEqual(EuTransposability.NotTransposable, result.Rows[1].Bridge.Transposability);
         Assert.AreEqual(1, store.CreateCallCount);
     }
@@ -170,11 +170,11 @@ public sealed class EuTranspositionBridgePopulationProducerTests
             new byte[] { 0xff }, CustodyClass.NightlyFloor90d, CancellationToken.None);
 
         Assert.ThrowsExactly<ArgumentException>(
-            () => new EuTranspositionBridgePopulationRow(joined, null));
+            () => new EuTranspositionBridgePopulationRow(joined, []));
         Assert.ThrowsExactly<ArgumentException>(
-            () => new EuTranspositionBridgePopulationRow(unjoined, receipt));
+            () => new EuTranspositionBridgePopulationRow(unjoined, [receipt]));
         Assert.ThrowsExactly<ArgumentException>(
-            () => new EuTranspositionBridgePopulationRow(joined, receipt));
+            () => new EuTranspositionBridgePopulationRow(joined, [receipt]));
     }
 
     private static EuWorkKindAssertion Kind(string work, EuWorkKind kind) =>
@@ -191,7 +191,7 @@ public sealed class EuTranspositionBridgePopulationProducerTests
 
     private static LuxembourgTranspositionRelation Relation(
         string work, string measure, EuTranspositionSourceAcquisition acquisition) =>
-        new(work, measure, acquisition);
+        new(work, measure, acquisition, Completion);
 
     private static EuNationalImplementingMeasureRelation NimRelation(
         string work, string? eli, EuTranspositionSourceAcquisition acquisition) =>
@@ -200,13 +200,13 @@ public sealed class EuTranspositionBridgePopulationProducerTests
 
     private static EuTranspositionSourceAcquisition LegiluxSide() =>
         new(EuTranspositionAssertedBy.Legilux, EuRelationAcquisitionState.Complete,
-            new EuTranspositionSide(EuTranspositionAssertedBy.Legilux, LegiluxEli,
-                LegiluxEvidence, null, null), Completion);
+            [new EuTranspositionSide(EuTranspositionAssertedBy.Legilux, LegiluxEli,
+                LegiluxEvidence, null, null)], Completion);
 
     private static EuTranspositionSourceAcquisition NimSide() =>
         new(EuTranspositionAssertedBy.Nim, EuRelationAcquisitionState.Complete,
-            new EuTranspositionSide(EuTranspositionAssertedBy.Nim, NimEli,
-                NimEvidence, EuMemberStateDisclaimer.Text, EuMemberStateDisclaimer.SourceUri), Completion);
+            [new EuTranspositionSide(EuTranspositionAssertedBy.Nim, NimEli,
+                NimEvidence, EuMemberStateDisclaimer.Text, EuMemberStateDisclaimer.SourceUri)], Completion);
 
     private static SourceArtifactRef Ref(char value) =>
         new($"urn:uuid:{value}{value}{value}{value}{value}{value}{value}{value}-{value}{value}{value}{value}-4{value}{value}{value}-8{value}{value}{value}-{new string(value, 12)}",

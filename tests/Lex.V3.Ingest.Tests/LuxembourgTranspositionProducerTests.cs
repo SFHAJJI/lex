@@ -29,9 +29,9 @@ public sealed partial class LuxembourgQueryExecutionAdapterTests
         Assert.AreEqual(TransposingMeasure, relation.LegiluxMeasureUri);
         Assert.AreEqual(EuTranspositionAssertedBy.Legilux, relation.Acquisition.AssertedBy);
         Assert.AreEqual(EuRelationAcquisitionState.Complete, relation.Acquisition.Acquisition);
-        Assert.AreEqual(TransposingMeasure, relation.Acquisition.Side!.NationalMeasureUri);
-        Assert.IsNull(relation.Acquisition.Side.MemberStateDisclaimer);
-        Assert.IsNull(relation.Acquisition.Side.MemberStateDisclaimerSourceUri);
+        Assert.AreEqual(TransposingMeasure, relation.Acquisition.Sides[0]!.NationalMeasureUri);
+        Assert.IsNull(relation.Acquisition.Sides[0].MemberStateDisclaimer);
+        Assert.IsNull(relation.Acquisition.Sides[0].MemberStateDisclaimerSourceUri);
         Assert.AreEqual(
             execution.RelationFamilyAcquisitions.Single(value =>
                 value.PredicateIri == TransposesPredicate).CompletionEvidence!.AcquisitionRunRef,
@@ -55,7 +55,7 @@ public sealed partial class LuxembourgQueryExecutionAdapterTests
 
         Assert.IsTrue(result.Delivered, result.Detail);
         Assert.IsEmpty(result.Relations!);
-        var acquisition = result.ForAssertedEuWork(TransposedEuWork).Single();
+        var acquisition = result.ForAssertedEuWork(TransposedEuWork);
         Assert.AreEqual(EuTranspositionAssertedBy.Legilux, acquisition.AssertedBy);
         Assert.IsTrue(acquisition.ProvesAbsence());
     }

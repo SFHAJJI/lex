@@ -155,7 +155,7 @@ public sealed record EuTranspositionSide
 }
 
 /// <summary>
-/// One publisher's side together with how far acquiring it actually got.
+/// One publisher's closed side set together with how far acquiring it actually got.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -172,7 +172,7 @@ public sealed record EuTranspositionSide
 /// acquisition-state vocabularies, committed by the person who reported it.
 /// </para>
 /// <para>
-/// <see cref="Side"/> null with <see cref="EuRelationAcquisitionState.Complete"/> is a real negative
+/// <see cref="Sides"/> empty with <see cref="EuRelationAcquisitionState.Complete"/> is a real negative
 /// fact: this publisher asserts no transposition and a completed bounded acquisition says so. Null
 /// with any other state is an open question, and the state names which one.
 /// </para>
@@ -183,28 +183,37 @@ public sealed record EuTranspositionSourceAcquisition
     public EuTranspositionSourceAcquisition(
         EuTranspositionAssertedBy assertedBy,
         EuRelationAcquisitionState acquisition,
-        EuTranspositionSide? side,
+        IReadOnlyList<EuTranspositionSide> sides,
         SourceArtifactRef? completionEvidenceRef)
     {
         AssertedBy = ContractValidation.RequireDefined(assertedBy, nameof(assertedBy));
         Acquisition = ContractValidation.RequireDefined(acquisition, nameof(acquisition));
+        ArgumentNullException.ThrowIfNull(sides);
 
-        if (acquisition == EuRelationAcquisitionState.Unacquired && side is not null)
+        if (acquisition == EuRelationAcquisitionState.Unacquired && sides.Count != 0)
         {
             throw new ArgumentException(
-                "an unacquired source carries no side; the state says this publisher was never "
+                "an unacquired source carries no sides; the state says this publisher was never "
                     + "asked, and an observed assertion beside that claim contradicts it. "
                     + "EuCellarRelationFamilyObservation refuses edges in the same state for the "
                     + "same reason.",
-                nameof(side));
+                nameof(sides));
         }
 
-        if (side is not null && side.AssertedBy != assertedBy)
+        if (sides.Any(side => side is null || side.AssertedBy != assertedBy))
         {
             throw new ArgumentException(
-                $"a {assertedBy} acquisition carries a side asserted by {side.AssertedBy}; a "
-                    + "publisher's acquisition holds only that publisher's own assertion.",
-                nameof(side));
+                $"a {assertedBy} acquisition carries a side from another publisher; a "
+                    + "publisher's acquisition holds only that publisher's own assertions.",
+                nameof(sides));
+        }
+
+        if (sides.Select(static side => side.NationalMeasureUri)
+            .Distinct(StringComparer.Ordinal).Count() != sides.Count)
+        {
+            throw new ArgumentException(
+                "one publisher column cannot repeat the same national-measure assertion.",
+                nameof(sides));
         }
 
         if (acquisition == EuRelationAcquisitionState.Complete && completionEvidenceRef is null)
@@ -224,7 +233,7 @@ public sealed record EuTranspositionSourceAcquisition
                 nameof(completionEvidenceRef));
         }
 
-        Side = side;
+        Sides = Array.AsReadOnly(sides.ToArray());
         CompletionEvidenceRef = completionEvidenceRef;
     }
 
@@ -232,8 +241,8 @@ public sealed record EuTranspositionSourceAcquisition
 
     public EuRelationAcquisitionState Acquisition { get; }
 
-    /// <summary>This publisher's assertion, or null when it asserts none.</summary>
-    public EuTranspositionSide? Side { get; }
+    /// <summary>This publisher's distinct assertions; empty only when it asserts none.</summary>
+    public IReadOnlyList<EuTranspositionSide> Sides { get; }
 
     /// <summary>Present exactly when <see cref="Acquisition"/> is complete.</summary>
     public SourceArtifactRef? CompletionEvidenceRef { get; }
@@ -251,7 +260,7 @@ public sealed record EuTranspositionSourceAcquisition
     /// absent from the wire entirely.
     /// </remarks>
     public bool ProvesAbsence() =>
-        Side is null && Acquisition == EuRelationAcquisitionState.Complete;
+        Sides.Count == 0 && Acquisition == EuRelationAcquisitionState.Complete;
 }
 
 /// <summary>
@@ -292,14 +301,13 @@ public sealed record EuNormalisedEliJoin
 
 /// <summary>
 /// A two-source LU-to-EU transposition bridge: the EU work, what can be said about transposing it,
-/// and each publisher's own side kept apart.
+/// and each publisher's own assertion set kept apart.
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>The two sides are separate fields, not a list.</b> A list of sides would let two Legilux
-/// assertions sit where a Legilux and a NIM assertion belong, and a reader counting entries would
-/// see agreement between two publishers where there is one publisher repeated. Separate fields make
-/// that shape unrepresentable rather than merely refused.
+/// <b>The two publisher columns are separate fields, not one mixed list.</b> Each field may carry
+/// several assertions from its own publisher, because one EU work can have several implementing
+/// measures. The field boundary and each side's <c>asserted_by</c> keep those rows attributable.
 /// </para>
 /// <para>
 /// <b>Transposability is read, never chosen.</b> It is computed from the publisher's own work-kind
@@ -323,13 +331,14 @@ public sealed record EuTranspositionBridge
         EuTransposability transposability,
         EuTranspositionSourceAcquisition legilux,
         EuTranspositionSourceAcquisition nim,
-        EuNormalisedEliJoin? normalisedEliJoin)
+        IReadOnlyList<EuNormalisedEliJoin> normalisedEliJoins)
     {
         EuWorkUri = SourceCoreValidation.RequirePublisherUri(euWorkUri, nameof(euWorkUri));
         WorkKind = ContractValidation.RequireDefined(workKind, nameof(workKind));
         ContractValidation.RequireDefined(transposability, nameof(transposability));
         ArgumentNullException.ThrowIfNull(legilux);
         ArgumentNullException.ThrowIfNull(nim);
+        ArgumentNullException.ThrowIfNull(normalisedEliJoins);
 
         var read = TransposabilityFor(workKind);
         if (transposability != read)
@@ -359,7 +368,7 @@ public sealed record EuTranspositionBridge
         }
 
         if (transposability == EuTransposability.NotTransposable
-            && (legilux.Side is not null || nim.Side is not null))
+            && (legilux.Sides.Count != 0 || nim.Sides.Count != 0))
         {
             throw new ArgumentException(
                 "a not-transposable work carries no transposition side; a publisher assertion that " +
@@ -368,33 +377,41 @@ public sealed record EuTranspositionBridge
                 nameof(transposability));
         }
 
-        // THE JOIN IS TWO-SOURCE OR IT IS NOT A JOIN. Its own remarks said it is present only when
+        // THE JOIN IS TWO-SOURCE OR IT IS NOT A JOIN. Its own remarks say it is present only when
         // both publishers named a measure, and the first version of this type documented that
         // without enforcing it -- the declared-but-unenforced shape I have reported in other
         // people's code twice this session. A join over one side, or none, or over a regulation
         // whose typed answer is that transposition does not apply, manufactures a two-source
         // derivation from evidence that does not exist.
-        if (normalisedEliJoin is not null)
+        if (normalisedEliJoins.Count != 0)
         {
             // A not-transposable work needs no arm of its own here, and must not have one. It is
-            // already forbidden a side above, so it reaches this point with both sides null and the
+            // already forbidden sides above, so it reaches this point with both columns empty and the
             // check below refuses it for the true reason. I wrote that separate arm first; the
             // mutation that disables it leaves the suite green, because nothing can reach it. An
             // unreachable guard is the shape I have reported twice in other people's code this
             // session, so it is gone rather than kept for symmetry.
-            if (legilux.Side is null || nim.Side is null)
+            if (legilux.Sides.Count == 0 || nim.Sides.Count == 0)
             {
                 throw new ArgumentException(
                     "the normalised ELI join needs both publishers to have named a measure; a join " +
-                    "over " + (legilux.Side is null && nim.Side is null ? "neither side" : "one side") +
+                    "over " + (legilux.Sides.Count == 0 && nim.Sides.Count == 0 ? "neither side" : "one side") +
                     " is a two-source derivation without two sources.",
-                    nameof(normalisedEliJoin));
+                    nameof(normalisedEliJoins));
             }
+        }
+
+        if (normalisedEliJoins.Select(static join => join.NormalisedEli)
+            .Distinct(StringComparer.Ordinal).Count() != normalisedEliJoins.Count)
+        {
+            throw new ArgumentException(
+                "a bridge cannot repeat the same derived normalised-ELI join.",
+                nameof(normalisedEliJoins));
         }
 
         Legilux = legilux;
         Nim = nim;
-        NormalisedEliJoin = normalisedEliJoin;
+        NormalisedEliJoins = Array.AsReadOnly(normalisedEliJoins.ToArray());
     }
 
     public string EuWorkUri { get; }
@@ -403,14 +420,14 @@ public sealed record EuTranspositionBridge
 
     public EuTransposability Transposability { get; }
 
-    /// <summary>Legilux's own acquisition, carrying its side and how far acquiring it got.</summary>
+    /// <summary>Legilux's own acquisition, carrying its assertions and how far acquiring them got.</summary>
     public EuTranspositionSourceAcquisition Legilux { get; }
 
-    /// <summary>The NIM acquisition, carrying its side and how far acquiring it got.</summary>
+    /// <summary>The NIM acquisition, carrying its assertions and how far acquiring them got.</summary>
     public EuTranspositionSourceAcquisition Nim { get; }
 
     /// <summary>The derived join. Enforced, not merely documented: see the constructor.</summary>
-    public EuNormalisedEliJoin? NormalisedEliJoin { get; }
+    public IReadOnlyList<EuNormalisedEliJoin> NormalisedEliJoins { get; }
 
     /// <summary>
     /// What the accepted reading says about transposing a work of this kind.

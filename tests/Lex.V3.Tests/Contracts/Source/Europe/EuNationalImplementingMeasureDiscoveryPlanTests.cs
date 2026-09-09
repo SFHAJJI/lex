@@ -20,16 +20,21 @@ public sealed class EuNationalImplementingMeasureDiscoveryPlanTests
         StringAssert.Contains(plan.PageTemplate, EuNationalImplementingMeasureDiscoveryPlan.LegacyImplementsDirectivePredicateIri);
         StringAssert.Contains(plan.PageTemplate, EuNationalImplementingMeasureDiscoveryPlan.EliPredicateIri);
         StringAssert.Contains(plan.PageTemplate, EuNationalImplementingMeasureDiscoveryPlan.EuWorkEliPredicateIri);
-        StringAssert.Contains(plan.PageTemplate, EuNationalImplementingMeasureDiscoveryPlan.DirectiveClassIri);
-        StringAssert.Contains(plan.PageTemplate, EuNationalImplementingMeasureDiscoveryPlan.RegulationClassIri);
-        Assert.AreEqual(2, plan.PageTemplate.Split("OPTIONAL {", StringSplitOptions.None).Length - 1,
-            "Both target-work identity fields must remain optional in the query so missing evidence reaches decode.");
+        StringAssert.Contains(plan.PageTemplate, EuNationalImplementingMeasureDiscoveryPlan.WorkHasResourceTypePredicateIri);
+        StringAssert.Contains(plan.PageTemplate, EuNationalImplementingMeasureDiscoveryPlan.DirectiveResourceTypeIri);
+        StringAssert.Contains(plan.PageTemplate, EuNationalImplementingMeasureDiscoveryPlan.RegulationResourceTypeIri);
+        Assert.AreEqual(1, plan.PageTemplate.Split("OPTIONAL {", StringSplitOptions.None).Length - 1,
+            "Only the target ELI remains optional; the admitted family is closed by the publisher's canonical type.");
+        Assert.IsFalse(plan.PageTemplate.Contains("?eu_work a ?eu_work_kind", StringComparison.Ordinal));
         StringAssert.Contains(plan.PageTemplate, "COALESCE(STR(?eu_work_eli), \"\") AS ?key_5");
         StringAssert.Contains(plan.PageTemplate, "COALESCE(STR(?eu_work_kind), \"\") AS ?key_6");
+        StringAssert.Contains(plan.PageTemplate, "ENCODE_FOR_URI(STR(?nim))");
+        StringAssert.Contains(plan.PageTemplate, "FILTER(?has_cursor = 0 || ?page_key > ?last_page_key)");
+        StringAssert.Contains(plan.PageTemplate, "ORDER BY ?page_key");
         Assert.IsFalse(plan.PageTemplate.Contains("OFFSET", StringComparison.OrdinalIgnoreCase));
         Assert.IsFalse(plan.PageTemplate.Contains("SELECT DISTINCT", StringComparison.OrdinalIgnoreCase));
         Assert.AreEqual(
-            "4b7c16a926d3cacd32799b023b926bdad12d59440e8bf875f81a4e08806bcfbe",
+            "6b1d3a3547b61c2022d72355fa2c552cad3ee51033cd182857fdad834c063e72",
             plan.ArtifactRef.Sha256);
     }
 
@@ -45,11 +50,11 @@ public sealed class EuNationalImplementingMeasureDiscoveryPlanTests
             {
                 "nim", "country", "nim_celex", "implements_predicate", "eu_work",
                 "eu_work_eli", "eu_work_kind", "eli", "eli_kind", "multiplicity",
-                "key_1", "key_2", "key_3", "key_4", "key_5", "key_6", "key_7",
+                "key_1", "key_2", "key_3", "key_4", "key_5", "key_6", "key_7", "page_key",
             },
             profile.ProjectionVariables.ToArray());
         CollectionAssert.AreEqual(
-            new[] { "key_1", "key_2", "key_3", "key_4", "key_5", "key_6", "key_7" },
+            new[] { "page_key" },
             profile.CanonicalKeyVariables.ToArray());
         CollectionAssert.AreEqual(profile.CanonicalKeyVariables.ToArray(), profile.CursorVariables.ToArray());
         Assert.AreEqual(RepeatedEnumerationTerminalPagePolicy.ShortPageTerminal, profile.TerminalPagePolicy);
@@ -84,7 +89,29 @@ public sealed class EuNationalImplementingMeasureDiscoveryPlanTests
         Assert.AreEqual(1, count.InputArtifact.OrderedParameters.Count);
         Assert.AreEqual(2, page.InputArtifact.OrderedParameters.Count);
         var countText = Encoding.UTF8.GetString(count.Request.CopyRequestBody());
+        var pageText = Encoding.UTF8.GetString(page.Request.CopyRequestBody());
         StringAssert.Contains(countText, "VALUES ?lex_pass_id { 1 }");
         Assert.IsFalse(countText.Contains("{pass_id:uint}", StringComparison.Ordinal));
+        Assert.IsFalse(
+            pageText.Contains("{last_key_", StringComparison.Ordinal),
+            "Every cursor slot in the production page request must be rendered before send.");
+        StringAssert.Contains(pageText, "(0 \"\")");
+    }
+
+    [TestMethod]
+    public void PageAppliesTheCursorToPublisherRowsBeforeGrouping()
+    {
+        var page = EuNationalImplementingMeasureDiscoveryPlan.Create().PageTemplate;
+        var cursor = page.IndexOf("VALUES (?has_cursor ?last_page_key)", StringComparison.Ordinal);
+        var grouping = page.IndexOf("GROUP BY ?nim", StringComparison.Ordinal);
+        var keyProjection = page.IndexOf("BIND(STR(?nim) AS ?key_1)", StringComparison.Ordinal);
+
+        Assert.IsTrue(cursor >= 0 && cursor < grouping && grouping < keyProjection,
+            "The cursor must exclude raw publisher rows before aggregation and key projection. " +
+            "Applying it to aliases after GROUP BY lets Virtuoso repeat the tail of a page.");
+        StringAssert.Contains(page, "ENCODE_FOR_URI(STR(?nim))");
+        StringAssert.Contains(page, "ENCODE_FOR_URI(COALESCE(STR(?eli), \"\"))");
+        StringAssert.Contains(page, "?page_key > ?last_page_key");
+        Assert.IsFalse(page.Contains("?key_1 > ?last_key_1", StringComparison.Ordinal));
     }
 }

@@ -262,6 +262,7 @@ public sealed record EuNationalImplementingMeasureRunRequest(
 /// <summary>One bounded enumeration of Legilux transposition target identities.</summary>
 public sealed record LuxembourgTranspositionIdentityRunRequest(
     LuxembourgTranspositionIdentityDiscoveryPlan Plan,
+    IReadOnlyList<string> BatchEuElis,
     string PlanResourceId,
     MachineQueryRendererSource RendererSource);
 
@@ -767,8 +768,8 @@ public sealed class EuRepeatedEnumerationExecutor
                     pass => BindLuxembourgTranspositionIdentityCount(request, pass),
                     (pass, cursor, selected, evidenceRef) =>
                         BindLuxembourgTranspositionIdentityPage(request, pass, cursor, selected, evidenceRef),
-                    batchObjects: null,
-                    batchMembershipKeyOrdinal: null,
+                    batchObjects: request.BatchEuElis,
+                    batchMembershipKeyOrdinal: LuxembourgTranspositionIdentityBatchMembershipKeyOrdinal(profile),
                     cancellationToken)
                 .ConfigureAwait(false);
         }
@@ -1821,12 +1822,27 @@ public sealed class EuRepeatedEnumerationExecutor
     {
         var bound = request.Plan.BindCount(
             (LuxembourgQueryPass)passOrdinal,
+            request.BatchEuElis,
             request.PlanResourceId,
             NewUrn(),
             request.RendererSource);
         return new EuBoundQueryParts(
             bound.MachinePlanRef, bound.InputArtifact.ArtifactRef, bound.Request,
             bound.InputArtifact.PartitionBinding.MemberKey, null);
+    }
+
+    internal static int LuxembourgTranspositionIdentityBatchMembershipKeyOrdinal(
+        RepeatedEnumerationInterpretationProfile profile)
+    {
+        for (var index = 0; index < profile.CursorVariables.Count; index++)
+        {
+            if (string.Equals(profile.CursorVariables[index], "key_3", StringComparison.Ordinal))
+            {
+                return index;
+            }
+        }
+        throw new InvalidOperationException(
+            "The Legilux target-identity profile must carry its selected EU ELI at key_3.");
     }
 
     private static EuBoundQueryParts BindLuxembourgTranspositionIdentityPage(
@@ -1838,6 +1854,7 @@ public sealed class EuRepeatedEnumerationExecutor
     {
         var bound = request.Plan.BindPage(
             (LuxembourgQueryPass)passOrdinal,
+            request.BatchEuElis,
             cursor,
             selected,
             countEvidenceRef,

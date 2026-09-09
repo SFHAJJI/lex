@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
+using Lex.V3.Contracts.Facts;
 using Lex.V3.Contracts.Source.Core;
 
 namespace Lex.V3.Contracts.Source.Luxembourg;
@@ -25,6 +26,9 @@ public sealed class LuxembourgTranspositionIdentityDiscoveryPlan
     internal const long PublisherDeliveryCeilingRows = 1_000_000;
     internal const uint Pass1PageLimit = 997;
     internal const uint Pass2PageLimit = 613;
+    // A continued page carries pass_id, this fixed selection, has_cursor and four cursor terms.
+    // The shared machine-input contract permits 64 parameters, leaving 58 exact ELI slots.
+    public const int BatchCapacity = 58;
     internal const string PartitionMemberKey = "legilux-transposition-target-identities";
 
     private const string ResourceId = "urn:uuid:96ce0cf2-43e8-49af-9040-c71f46c38caf";
@@ -53,6 +57,7 @@ public sealed class LuxembourgTranspositionIdentityDiscoveryPlan
             "transposes=" + TransposesPredicateIri,
             "identity=" + SameAsPredicateIri,
             "work_kind=" + EuDirectiveClassIri,
+            "batch_capacity=" + BatchCapacity.ToString(CultureInfo.InvariantCulture),
             "publisher_delivery_ceiling_rows=" + PublisherDeliveryCeilingRows.ToString(CultureInfo.InvariantCulture),
             "pass_1=" + (int)LuxembourgQueryPass.Pass1 + ":" + Pass1PageLimit,
             "pass_2=" + (int)LuxembourgQueryPass.Pass2 + ":" + Pass2PageLimit,
@@ -60,6 +65,7 @@ public sealed class LuxembourgTranspositionIdentityDiscoveryPlan
             "projection=" + string.Join(',', Projection),
             "canonical_keys=" + string.Join(',', Cursor),
             "cursor=" + string.Join(',', Cursor),
+            "selection_parameters=" + string.Join(',', BatchParameterNames()),
             "count_member=" + MemberPrefix + ".count",
             "page_member=" + MemberPrefix + ".page",
             CountTemplate,
@@ -94,7 +100,7 @@ public sealed class LuxembourgTranspositionIdentityDiscoveryPlan
         Projection,
         Cursor,
         Cursor,
-        [],
+        BatchParameterNames(),
         "pass_id",
         Cursor.Select(static value => "last_" + value).ToArray(),
         "has_cursor",
@@ -102,22 +108,24 @@ public sealed class LuxembourgTranspositionIdentityDiscoveryPlan
 
     public LuxembourgTranspositionIdentityBoundQuery BindCount(
         LuxembourgQueryPass pass,
+        IReadOnlyList<string> batchEuElis,
         string machinePlanResourceId,
         string inputResourceId,
         MachineQueryRendererSource rendererSource) =>
-        Bind(false, pass, null,
+        Bind(false, pass, batchEuElis, null,
             new MachineResponseCardinality(MachineResponseCardinalityKind.OpaqueBody, null, null, null),
             machinePlanResourceId, inputResourceId, rendererSource);
 
     public LuxembourgTranspositionIdentityBoundQuery BindPage(
         LuxembourgQueryPass pass,
+        IReadOnlyList<string> batchEuElis,
         IReadOnlyList<string>? cursor,
         long expectedPartitionRowCount,
         SourceArtifactRef expectedPartitionRowCountEvidenceRef,
         string machinePlanResourceId,
         string inputResourceId,
         MachineQueryRendererSource rendererSource) =>
-        Bind(true, pass, cursor,
+        Bind(true, pass, batchEuElis, cursor,
             new MachineResponseCardinality(
                 MachineResponseCardinalityKind.BoundedRowSetPage,
                 PageLimit(pass), expectedPartitionRowCount, expectedPartitionRowCountEvidenceRef),
@@ -126,6 +134,7 @@ public sealed class LuxembourgTranspositionIdentityDiscoveryPlan
     private LuxembourgTranspositionIdentityBoundQuery Bind(
         bool isPage,
         LuxembourgQueryPass pass,
+        IReadOnlyList<string> batchEuElis,
         IReadOnlyList<string>? cursor,
         MachineResponseCardinality response,
         string machinePlanResourceId,
@@ -134,10 +143,17 @@ public sealed class LuxembourgTranspositionIdentityDiscoveryPlan
     {
         _ = PageLimit(pass);
         ArgumentNullException.ThrowIfNull(rendererSource);
-        var parameters = new List<MachineQueryParameter>
+        var padded = PadBatch(CanonicalizeSelection(batchEuElis));
+        var parameters = new List<MachineQueryParameter>();
+        var names = BatchParameterNames();
+        for (var index = 0; index < BatchCapacity; index++)
         {
-            new("pass_id", MachineQueryParameterKind.BoundedInteger, (int)pass, null, ArtifactRef),
-        };
+            parameters.Add(new MachineQueryParameter(
+                names[index], MachineQueryParameterKind.PublisherLiteral,
+                null, padded[index], ArtifactRef));
+        }
+        parameters.Add(new MachineQueryParameter(
+            "pass_id", MachineQueryParameterKind.BoundedInteger, (int)pass, null, ArtifactRef));
         if (isPage)
         {
             var values = cursor?.ToArray() ?? [];
@@ -195,20 +211,79 @@ public sealed class LuxembourgTranspositionIdentityDiscoveryPlan
         _ => throw new ArgumentOutOfRangeException(nameof(pass)),
     };
 
+    internal static IReadOnlyList<string> BatchParameterNames()
+    {
+        var names = new string[BatchCapacity];
+        for (var index = 0; index < BatchCapacity; index++)
+        {
+            names[index] = "batch_eu_eli_" + index.ToString("D3", CultureInfo.InvariantCulture);
+        }
+        return Array.AsReadOnly(names);
+    }
+
+    public static IReadOnlyList<string> CanonicalizeSelection(IReadOnlyList<string> batchEuElis)
+    {
+        ArgumentNullException.ThrowIfNull(batchEuElis);
+        if (batchEuElis.Count is 0 or > BatchCapacity)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(batchEuElis), $"A batch must name one to {BatchCapacity} EU directive ELIs.");
+        }
+
+        var values = batchEuElis.ToArray();
+        foreach (var value in values)
+        {
+            if (OfficialIdentifier.EliMintedBy(value) != PublisherId.EuEurLex ||
+                !Uri.TryCreate(value, UriKind.Absolute, out var uri) ||
+                !uri.AbsolutePath.StartsWith("/eli/dir/", StringComparison.Ordinal))
+            {
+                throw new ArgumentException(
+                    $"Batch member '{value}' is not an exact EU directive ELI.", nameof(batchEuElis));
+            }
+        }
+
+        Array.Sort(values, StringComparer.Ordinal);
+        if (values.Distinct(StringComparer.Ordinal).Count() != values.Length)
+        {
+            throw new ArgumentException("A batch cannot repeat an EU ELI.", nameof(batchEuElis));
+        }
+        return Array.AsReadOnly(values);
+    }
+
+    internal static string[] PadBatch(IReadOnlyList<string> canonicalSortedBatch)
+    {
+        var padded = new string[BatchCapacity];
+        var last = canonicalSortedBatch[^1];
+        for (var index = 0; index < BatchCapacity; index++)
+        {
+            padded[index] = index < canonicalSortedBatch.Count ? canonicalSortedBatch[index] : last;
+        }
+        return padded;
+    }
+
     private static (string Count, string Page) BuildTemplates()
     {
-        var rows = $$"""
-            SELECT ?measure ?local_eu_work ?eu_eli ?eu_work_kind (COUNT(*) AS ?multiplicity) WHERE {
+        var valuesBlock = string.Join('\n', BatchParameterNames()
+            .Select(static name => "    {" + name + ":iri}"));
+        var graphPattern = $$"""
               VALUES ?lex_pass_id { {pass_id:uint} }
-              ?measure <{{TransposesPredicateIri}}> ?local_eu_work .
-              OPTIONAL {
-                ?local_eu_work <{{SameAsPredicateIri}}> ?eu_eli .
-                FILTER(isIRI(?eu_eli) && STRSTARTS(STR(?eu_eli), "http://data.europa.eu/eli/"))
+              {
+                SELECT DISTINCT ?eu_eli WHERE {
+                  VALUES ?eu_eli {
+            {{valuesBlock}}
+                  }
+                }
               }
+              ?measure <{{TransposesPredicateIri}}> ?local_eu_work .
+              ?local_eu_work <{{SameAsPredicateIri}}> ?eu_eli .
               OPTIONAL {
                 ?local_eu_work a <{{EuDirectiveClassIri}}> .
                 BIND(<{{EuDirectiveClassIri}}> AS ?eu_work_kind)
               }
+            """;
+        var rows = $$"""
+            SELECT ?measure ?local_eu_work ?eu_eli ?eu_work_kind (COUNT(*) AS ?multiplicity) WHERE {
+            {{Indent(graphPattern)}}
             }
             GROUP BY ?measure ?local_eu_work ?eu_eli ?eu_work_kind
             """;
@@ -219,11 +294,9 @@ public sealed class LuxembourgTranspositionIdentityDiscoveryPlan
               }
             }
             """;
-        var page = $$"""
-            SELECT ?measure ?local_eu_work ?eu_eli ?eu_work_kind ?multiplicity ?key_1 ?key_2 ?key_3 ?key_4 WHERE {
-              {
-            {{Indent(Indent(rows))}}
-              }
+        var pageRows = $$"""
+            SELECT ?measure ?local_eu_work ?eu_eli ?eu_work_kind (COUNT(*) AS ?multiplicity) ?key_1 ?key_2 ?key_3 ?key_4 WHERE {
+            {{Indent(graphPattern)}}
               BIND(STR(?measure) AS ?key_1)
               BIND(STR(?local_eu_work) AS ?key_2)
               BIND(COALESCE(STR(?eu_eli), "") AS ?key_3)
@@ -239,6 +312,14 @@ public sealed class LuxembourgTranspositionIdentityDiscoveryPlan
               )
               FILTER(?has_cursor = 0 || !(
                 ?key_1 = ?last_key_1 && ?key_2 = ?last_key_2 && ?key_3 = ?last_key_3 && ?key_4 = ?last_key_4))
+            }
+            GROUP BY ?measure ?local_eu_work ?eu_eli ?eu_work_kind ?key_1 ?key_2 ?key_3 ?key_4
+            """;
+        var page = $$"""
+            SELECT ?measure ?local_eu_work ?eu_eli ?eu_work_kind ?multiplicity ?key_1 ?key_2 ?key_3 ?key_4 WHERE {
+              {
+            {{Indent(Indent(pageRows))}}
+              }
             }
             ORDER BY ?key_1 ?key_2 ?key_3 ?key_4
             LIMIT {page_limit:uint}
@@ -291,9 +372,15 @@ internal sealed class LuxembourgTranspositionIdentitySparqlRenderer : IMachineQu
         };
         var query = Replace(_isPage ? _plan.PageTemplate : _plan.CountTemplate,
             "{pass_id:uint}", ((int)pass).ToString(CultureInfo.InvariantCulture));
+        foreach (var name in LuxembourgTranspositionIdentityDiscoveryPlan.BatchParameterNames())
+        {
+            query = Replace(query, "{" + name + ":iri}", SparqlIriTerm(Literal(parameters, name)));
+        }
+        var batchCount = LuxembourgTranspositionIdentityDiscoveryPlan.BatchCapacity;
         if (!_isPage)
         {
-            if (response.Kind != MachineResponseCardinalityKind.OpaqueBody || parameters.Count != 1)
+            if (response.Kind != MachineResponseCardinalityKind.OpaqueBody ||
+                parameters.Count != 1 + batchCount)
             {
                 throw new ArgumentException("A count input has one exact shape.", nameof(input));
             }
@@ -309,7 +396,7 @@ internal sealed class LuxembourgTranspositionIdentitySparqlRenderer : IMachineQu
         {
             throw new ArgumentException("Cursor presence must be zero or one.", nameof(input));
         }
-        if (parameters.Count != 2 + (hasCursor == 1 ? 4 : 0))
+        if (parameters.Count != 2 + batchCount + (hasCursor == 1 ? 4 : 0))
         {
             throw new ArgumentException("A page input has one exact cursor shape.", nameof(input));
         }
@@ -332,6 +419,21 @@ internal sealed class LuxembourgTranspositionIdentitySparqlRenderer : IMachineQu
         value.Kind == MachineQueryParameterKind.BoundedInteger && value.IntegerValue is not null
             ? value.IntegerValue.Value
             : throw new ArgumentException($"The integer input {name} is missing or invalid.");
+    private static string Literal(IReadOnlyDictionary<string, MachineQueryParameter> parameters, string name) =>
+        parameters.TryGetValue(name, out var value) &&
+        value.Kind == MachineQueryParameterKind.PublisherLiteral && value.TextValue is not null
+            ? value.TextValue
+            : throw new ArgumentException($"The literal input {name} is missing or invalid.");
+    private static string SparqlIriTerm(string canonicalIri)
+    {
+        if (string.IsNullOrEmpty(canonicalIri) ||
+            canonicalIri.AsSpan().IndexOfAny('<', '>') >= 0 ||
+            canonicalIri.Any(char.IsWhiteSpace))
+        {
+            throw new ArgumentException("A batch member is not a safe SPARQL IRI term.");
+        }
+        return "<" + canonicalIri + ">";
+    }
     private static string Cursor(IReadOnlyDictionary<string, MachineQueryParameter> parameters, string name) =>
         parameters.TryGetValue(name, out var value) &&
         value.Kind == MachineQueryParameterKind.PublisherCursor && value.TextValue is not null
