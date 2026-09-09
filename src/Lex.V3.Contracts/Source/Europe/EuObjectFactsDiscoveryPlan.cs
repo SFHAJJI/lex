@@ -569,6 +569,13 @@ public sealed class EuObjectFactsDiscoveryPlan
             Sha256(StrictUtf8.GetBytes(string.Join('\n', canonical)))[..24];
     }
 
+    /// <summary>
+    /// The exact canonical partition members bound into an object-facts request. Delivery checks
+    /// compare publisher rows against these values rather than the caller's admitted aliases.
+    /// </summary>
+    public static IReadOnlyList<string> RequestedPartitionMembers(IReadOnlyList<string> batchObjects) =>
+        Array.AsReadOnly(CanonicalizeBatch(batchObjects));
+
     private EuObjectFactsBoundQuery Bind(
         EuObjectFactsQueryDefinition definition,
         EuObjectFactsQuerySet set,
