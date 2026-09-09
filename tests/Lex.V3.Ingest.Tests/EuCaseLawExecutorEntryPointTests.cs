@@ -183,6 +183,69 @@ public sealed class EuCaseLawExecutorEntryPointTests
             "the refusal names the act that was never requested.");
     }
 
+    /// <summary>
+    /// An act requested in a spelling the plan canonicalises is still that caller's own act.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The membership check compares the publisher's delivered key against the caller's batch
+    /// ordinally, but the two are not in the same lexical form. <c>EuCaseLawDiscoveryPlan.Bind</c>
+    /// sends <c>PadBatch(CanonicalizeBatch(batchWorks))</c>, and
+    /// <c>EuPackRootCanonicalForm.TryCanonicalize</c> returns <c>HttpScheme + trimmed</c> — it
+    /// rewrites <c>https://</c> to <c>http://</c> and drops one trailing slash. So the publisher is
+    /// asked about the canonical form and answers with it, while the executor was handed the raw
+    /// <c>request.BatchWorks</c> to check against.
+    /// </para>
+    /// <para>
+    /// The consequence is not a wrong row admitted but a whole family that cannot enumerate: a
+    /// caller spelling its acts with <c>https://</c> — a spelling the plan deliberately accepts
+    /// rather than refuses — has every legitimately delivered row refused as outside its own
+    /// partition. The head's other end-to-end guard only ever exercises the refusing direction, so
+    /// nothing observed the admit path at all.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public async Task AnActRequestedInASpellingThePlanCanonicalisesIsStillItsOwnAct()
+    {
+        const string RequestedHttps = "https://publications.europa.eu/resource/cellar/3e485e15-11bd-11e6-ba9a-01aa75ed71a1";
+        const string Canonical = "http://publications.europa.eu/resource/cellar/3e485e15-11bd-11e6-ba9a-01aa75ed71a1";
+
+        // The publisher answers in the form it was asked about, which is the canonical one.
+        Assert.AreEqual(
+            Canonical, EuCaseLawDiscoveryPlan.CanonicalizeBatch([RequestedHttps])[0],
+            "the plan rewrites the scheme, so the delivered key cannot equal the raw request.");
+
+        var row = EuAcquisitionTestFixture.CaseLawRow(
+            "http://publications.europa.eu/resource/cellar/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+            EuCaseLawPredicateVocabulary.CaseLawInterpretesResourceLegalPredicateUri,
+            Canonical,
+            "ECLI:EU:C:2020:559");
+
+        var scripts = new Dictionary<string, EuAcquisitionTestFixture.FamilyScript>(StringComparer.Ordinal)
+        {
+            ["CaseLaw"] = EuAcquisitionTestFixture.ScriptFor(
+                "CaseLaw", 1, [row], EuAcquisitionTestFixture.CaseLawProjection),
+        };
+
+        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
+        var executor = new EuRepeatedEnumerationExecutor(
+            store, new EuAcquisitionTestFixture.FixedTimeProvider(),
+            new EuAcquisitionTestFixture.ClassifyingHandler(scripts));
+
+        var result = await executor.RunCaseLawLinksAsync(
+            new EuCaseLawRunRequest(
+                EuCaseLawDiscoveryPlan.Create(),
+                [RequestedHttps],
+                "urn:uuid:c17f6e83-2a45-4d91-b8e0-56f9ad381c72",
+                Source()),
+            EuAcquisitionTestFixture.SourceWitness(),
+            CancellationToken.None);
+
+        Assert.AreNotEqual(
+            EuEnumerationRefusal.DeliveredRowOutsidePartition, result.Refusal?.Code,
+            "the act the caller asked about must not be refused as outside its own partition.");
+    }
+
     /// <summary>The entry point binds the plan's own count and page, sending no placeholder.</summary>
     /// <remarks>
     /// Exercised through the plan rather than through a live session, because the executor's other

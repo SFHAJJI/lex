@@ -312,6 +312,26 @@ public sealed class EuCaseLawDiscoveryPlan
     /// conditions that made it safe.
     /// </para>
     /// </remarks>
+    /// <summary>
+    /// The batch members exactly as this plan puts them to the publisher.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A membership check downstream compares a delivered key against what was asked, and the two
+    /// have to be in one lexical form. They were not. <see cref="BindCount"/> and
+    /// <see cref="BindPage"/> send <c>PadBatch(CanonicalizeBatch(...))</c>, and
+    /// <c>EuPackRootCanonicalForm.TryCanonicalize</c> returns <c>"http://" + trimmed</c> — it
+    /// rewrites <c>https://</c> to <c>http://</c> and drops one trailing slash. So a caller's own
+    /// spelling is not what the publisher ever sees, and <c>?key_3</c> comes back in this form.
+    /// </para>
+    /// <para>
+    /// Exposed rather than re-derived by the caller, so the rule keeps one owner. The padding is not
+    /// included because it only repeats the last real member, so this is the exact set asked about.
+    /// </para>
+    /// </remarks>
+    public static IReadOnlyList<string> RequestedPartitionMembers(IReadOnlyList<string> batchWorks) =>
+        Array.AsReadOnly(CanonicalizeBatch(batchWorks));
+
     internal static string[] PadBatch(IReadOnlyList<string> canonicalSortedBatch)
     {
         var padded = new string[BatchCapacity];
