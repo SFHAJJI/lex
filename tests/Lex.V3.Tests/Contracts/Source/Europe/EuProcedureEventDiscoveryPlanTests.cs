@@ -460,19 +460,67 @@ public sealed class EuProcedureEventDiscoveryPlanTests
         {
             foreach (var qualifier in new[] { "kind", "datatype", "language" })
             {
-                var companion = term.Replace("event_", string.Empty, StringComparison.Ordinal)
-                    + "_" + qualifier;
-
-                CollectionAssert.Contains(
-                    groupBy, companion,
-                    $"{term} is delivered in object position but ?{companion} is not grouped on, so "
-                        + "two terms differing only in that are folded into one row.");
-                StringAssert.Contains(
-                    page, $"BIND(?{companion} AS ?key_",
-                    $"?{companion} reaches no canonical key, so two {term} terms differing only in "
-                        + "it share every key and cannot be paged apart.");
+                RequireQualifier(
+                    page, lines, groupBy,
+                    term,
+                    term.Replace("event_", string.Empty, StringComparison.Ordinal) + "_" + qualifier);
             }
         }
+
+        // And the same duty falls on any term whose OWN kind marker admits a literal, wherever it
+        // sits. A marker testing isLiteral is the query stating that this term may be one, and two
+        // literals sharing a lexical form are separated by nothing but their datatype and language.
+        // The subject is the case in point: it takes no qualifier keys precisely because a subject
+        // cannot be a literal, so its marker must not claim otherwise. A surviving mutation put the
+        // claim back and every guard here still passed.
+        foreach (var line in lines.Where(static line =>
+                     line.Contains("AS ?", StringComparison.Ordinal)
+                     && line.Contains("_kind)", StringComparison.Ordinal)
+                     && line.Contains("isLiteral(", StringComparison.Ordinal)))
+        {
+            var marker = line[(line.LastIndexOf("AS ?", StringComparison.Ordinal) + 4)..].TrimEnd(')');
+            var term = line[(line.IndexOf("isLiteral(?", StringComparison.Ordinal)
+                + "isLiteral(?".Length)..];
+            term = term[..term.IndexOf(')', StringComparison.Ordinal)];
+            var stem = marker[..^"_kind".Length];
+
+            foreach (var qualifier in new[] { "datatype", "language" })
+            {
+                RequireQualifier(page, lines, groupBy, term, stem + "_" + qualifier);
+            }
+        }
+    }
+
+    /// <summary>
+    /// One qualifier must be grouped, keyed AND computed from the term it qualifies.
+    /// </summary>
+    /// <remarks>
+    /// Computed is the third condition and it is not redundant. Deleting the two BIND lines that
+    /// derive the type's datatype and language, while leaving both variables in the projection, the
+    /// grouping and the keys, survived every other guard: the shape was intact everywhere a test
+    /// looked, and the variables were simply never bound, so those keys were empty on every row and
+    /// separated nothing. A key that is present and always blank is worse than an absent one,
+    /// because it reads as coverage.
+    /// </remarks>
+    private static void RequireQualifier(
+        string page, string[] lines, string[] groupBy, string term, string companion)
+    {
+        CollectionAssert.Contains(
+            groupBy, companion,
+            $"{term} needs ?{companion} grouped on, or two terms differing only in that are folded "
+                + "into one row.");
+
+        StringAssert.Contains(
+            page, $"BIND(?{companion} AS ?key_",
+            $"?{companion} reaches no canonical key, so two {term} terms differing only in it share "
+                + "every key and cannot be paged apart.");
+
+        Assert.IsTrue(
+            lines.Any(line =>
+                line.EndsWith($"AS ?{companion})", StringComparison.Ordinal)
+                && line.Contains($"?{term}", StringComparison.Ordinal)),
+            $"?{companion} is grouped and keyed but never computed from ?{term}, so it is unbound on "
+                + "every row and its key is always blank.");
     }
 
     /// <summary>
