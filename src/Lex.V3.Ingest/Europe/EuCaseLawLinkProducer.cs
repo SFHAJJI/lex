@@ -71,12 +71,14 @@ public sealed class EuCaseLawLinkProductionResult
     private EuCaseLawLinkProductionResult(
         IReadOnlyList<EuCaseLawLinkRelation>? relations,
         IReadOnlyList<EuCaseLawUnrepresentableRow>? unrepresentableRows,
+        IReadOnlySet<string>? actsAskedAbout,
         SourceArtifactRef? completionEvidenceRef,
         EuCaseLawLinkProductionRefusal refusal,
         string? detail)
     {
         Relations = relations;
         UnrepresentableRows = unrepresentableRows;
+        ActsAskedAbout = actsAskedAbout;
         CompletionEvidenceRef = completionEvidenceRef;
         Refusal = refusal;
         Detail = detail;
@@ -89,6 +91,17 @@ public sealed class EuCaseLawLinkProductionResult
     /// refused run, for the same reason <see cref="Relations"/> is.
     /// </summary>
     public IReadOnlyList<EuCaseLawUnrepresentableRow>? UnrepresentableRows { get; }
+
+    /// <summary>
+    /// The acts this production actually asked about. Null on a refused run.
+    /// </summary>
+    /// <remarks>
+    /// Kept so that "no judgment cites this act" can only be said about an act that was asked about.
+    /// Without it, filtering an act nobody enumerated returns an empty list that reads as a proven
+    /// absence, which is the same false emptiness the refused-run guard already prevents by a
+    /// different route.
+    /// </remarks>
+    public IReadOnlySet<string>? ActsAskedAbout { get; }
     public SourceArtifactRef? CompletionEvidenceRef { get; }
     public EuCaseLawLinkProductionRefusal Refusal { get; }
     public string? Detail { get; }
@@ -97,9 +110,10 @@ public sealed class EuCaseLawLinkProductionResult
     internal static EuCaseLawLinkProductionResult Success(
         IReadOnlyList<EuCaseLawLinkRelation> relations,
         IReadOnlyList<EuCaseLawUnrepresentableRow> unrepresentableRows,
+        IReadOnlySet<string> actsAskedAbout,
         SourceArtifactRef completionEvidenceRef) =>
         new(Array.AsReadOnly(relations.ToArray()),
-            Array.AsReadOnly(unrepresentableRows.ToArray()), completionEvidenceRef,
+            Array.AsReadOnly(unrepresentableRows.ToArray()), actsAskedAbout, completionEvidenceRef,
             EuCaseLawLinkProductionRefusal.None, null);
 
     internal static EuCaseLawLinkProductionResult Refused(
@@ -111,7 +125,7 @@ public sealed class EuCaseLawLinkProductionResult
             throw new ArgumentOutOfRangeException(nameof(refusal));
         }
 
-        return new(null, null, null, refusal, detail);
+        return new(null, null, null, null, refusal, detail);
     }
 
     /// <summary>
@@ -119,14 +133,8 @@ public sealed class EuCaseLawLinkProductionResult
     /// </summary>
     public IReadOnlyList<EuCaseLawLinkRelation> ForEuWork(string euWorkUri)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(euWorkUri);
-        if (!Delivered || Relations is null || CompletionEvidenceRef is null)
-        {
-            throw new InvalidOperationException(
-                "A refused case-law production has no admitted links.");
-        }
-
-        return Array.AsReadOnly(Relations
+        RequireAskedAbout(euWorkUri);
+        return Array.AsReadOnly(Relations!
             .Where(value => string.Equals(value.EuWorkUri, euWorkUri, StringComparison.Ordinal))
             .ToArray());
     }
@@ -138,16 +146,37 @@ public sealed class EuCaseLawLinkProductionResult
     /// </summary>
     public IReadOnlyList<EuCaseLawUnrepresentableRow> UnrepresentableForEuWork(string euWorkUri)
     {
+        RequireAskedAbout(euWorkUri);
+        return Array.AsReadOnly(UnrepresentableRows!
+            .Where(value => string.Equals(value.EuWorkUri, euWorkUri, StringComparison.Ordinal))
+            .ToArray());
+    }
+
+    /// <summary>
+    /// Refuses to answer for a run that was refused, or for an act this run never asked about.
+    /// </summary>
+    /// <remarks>
+    /// Both are the same mistake wearing different clothes. Returning an empty list in either case
+    /// would let a caller read "no judgment cites this act" out of a run that either failed or never
+    /// looked, and those are different answers to a user's question from a proven absence.
+    /// </remarks>
+    private void RequireAskedAbout(string euWorkUri)
+    {
         ArgumentException.ThrowIfNullOrWhiteSpace(euWorkUri);
-        if (!Delivered || UnrepresentableRows is null || CompletionEvidenceRef is null)
+        if (!Delivered || Relations is null || UnrepresentableRows is null ||
+            ActsAskedAbout is null || CompletionEvidenceRef is null)
         {
             throw new InvalidOperationException(
                 "A refused case-law production has no admitted links.");
         }
 
-        return Array.AsReadOnly(UnrepresentableRows
-            .Where(value => string.Equals(value.EuWorkUri, euWorkUri, StringComparison.Ordinal))
-            .ToArray());
+        if (!ActsAskedAbout.Contains(euWorkUri))
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(euWorkUri),
+                $"This production never asked about {euWorkUri}, so it cannot say whether case law "
+                    + "cites it.");
+        }
     }
 }
 
@@ -243,7 +272,8 @@ public static class EuCaseLawLinkProducer
         }
 
         return EuCaseLawLinkProductionResult.Success(
-            relations, unrepresentable, completionEvidenceRef);
+            relations, unrepresentable, actBodyScopes.Keys.ToHashSet(StringComparer.Ordinal),
+            completionEvidenceRef);
     }
 
     private static EuCaseLawLinkRelation DecodeRow(
@@ -315,13 +345,10 @@ public static class EuCaseLawLinkProducer
         RepeatedEnumerationRdfTerm celexMarker)
     {
         var ecliIsBoundLiteral = IsBoundLiteral(ecli);
-        var ecliMarkerSaysUnbound = string.Equals(
-            ecliMarker.Value, EuCaseLawDiscoveryPlan.UnboundEcliKind, StringComparison.Ordinal);
-
-        if (ecliIsBoundLiteral == ecliMarkerSaysUnbound)
+        if (!string.Equals(ecliMarker.Value, MarkerFor(ecli), StringComparison.Ordinal))
         {
             throw new ArgumentException(
-                "The ecli term and the ecli_kind marker disagree about whether an ECLI was delivered.",
+                "The ecli term and the ecli_kind marker disagree about what was delivered.",
                 nameof(ecli));
         }
 
@@ -347,20 +374,17 @@ public static class EuCaseLawLinkProducer
         }
 
         var celexIsBoundLiteral = IsBoundLiteral(celex);
-        var celexMarkerSaysUnbound = string.Equals(
-            celexMarker.Value, EuCaseLawDiscoveryPlan.UnboundCelexKind, StringComparison.Ordinal);
-
-        if (celexIsBoundLiteral == celexMarkerSaysUnbound)
+        if (!string.Equals(celexMarker.Value, MarkerFor(celex), StringComparison.Ordinal))
         {
             throw new ArgumentException(
-                "The case_celex term and its marker disagree about whether a CELEX was delivered.",
+                "The case_celex term and its marker disagree about what was delivered.",
                 nameof(celex));
         }
 
         if (!celexIsBoundLiteral)
         {
             throw new CaseSideNotProvableException(
-                "The publisher delivered neither an ECLI nor a CELEX for this case.");
+                "The publisher delivered no ECLI and no CELEX literal for this case.");
         }
 
         var identifier = new OfficialIdentifier(FactsIdentifierFamily.Celex, celex.Value!);
@@ -379,6 +403,26 @@ public static class EuCaseLawLinkProducer
 
     private static bool IsBoundLiteral(RepeatedEnumerationRdfTerm term) =>
         term.Kind == RepeatedEnumerationRdfTermKind.Literal && !string.IsNullOrEmpty(term.Value);
+
+    /// <summary>
+    /// The marker the plan's own <c>BIND</c> must have produced for a term of this kind.
+    /// </summary>
+    /// <remarks>
+    /// The markers have a four-valued space — <c>iri</c>, <c>literal</c>,
+    /// <c>unsupported_blank_node</c> and <c>unbound</c> — and comparing against the whole of it is
+    /// the point. An earlier version asked only "does the marker say unbound", collapsing four
+    /// values to one boolean, so a literal term carrying an <c>iri</c> marker agreed with itself and
+    /// passed. Half the marker's value space could not contradict anything, which made the
+    /// disagreement check weaker than its own name.
+    /// </remarks>
+    private static string MarkerFor(RepeatedEnumerationRdfTerm term) => term.Kind switch
+    {
+        RepeatedEnumerationRdfTermKind.Iri => "iri",
+        RepeatedEnumerationRdfTermKind.Literal => "literal",
+        RepeatedEnumerationRdfTermKind.BlankNode => "unsupported_blank_node",
+        RepeatedEnumerationRdfTermKind.Unbound => EuCaseLawDiscoveryPlan.UnboundEcliKind,
+        _ => throw new ArgumentOutOfRangeException(nameof(term)),
+    };
 
     /// <summary>
     /// A row whose citation is real but whose case side no delivered identity proves. Separate from

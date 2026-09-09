@@ -342,15 +342,63 @@ public sealed class EuCaseLawLinkProducerTests
         Assert.ThrowsExactly<InvalidOperationException>(() => refused.UnrepresentableForEuWork(Act));
     }
 
-    /// <summary>A delivered production answers per act, and only for that act.</summary>
+    /// <summary>
+    /// A delivered production answers for the acts it asked about, and refuses for any other.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The earlier version of this test asserted the opposite and was wrong. It filtered the
+    /// relations by an act the production had never enumerated, got an empty list, and called that
+    /// correct — so the API said "no judgment cites this act" about an act nobody had looked for.
+    /// That is the same false absence the refused-run guard prevents by a different route, and my own
+    /// test had written it down as intended behaviour.
+    /// </para>
+    /// <para>
+    /// The acts asked about are the keys of the supplied body-scope map, which is already the set the
+    /// caller had to name, so nothing new has to be threaded through to know it.
+    /// </para>
+    /// </remarks>
     [TestMethod]
-    public void ADeliveredProductionAnswersForTheActAskedAbout()
+    public void AProductionRefusesToAnswerForAnActItNeverAskedAbout()
     {
         var result = EuCaseLawLinkProducer.DecodeRows(
             [EcliRow()], Profile(), Scopes(), Evidence);
 
         Assert.HasCount(1, result.ForEuWork(Act));
-        Assert.IsEmpty(result.ForEuWork(
-            "http://publications.europa.eu/resource/cellar/99999999-9999-4999-8999-999999999999"));
+        Assert.IsEmpty(result.UnrepresentableForEuWork(Act));
+
+        const string NeverAsked = "http://publications.europa.eu/resource/cellar/99999999-9999-4999-8999-999999999999";
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(
+            () => result.ForEuWork(NeverAsked),
+            "an empty list here would read as a proven absence for an act nobody enumerated.");
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(
+            () => result.UnrepresentableForEuWork(NeverAsked),
+            "the exclusion reader must not become the same false absence by another route.");
+    }
+
+    /// <summary>
+    /// The marker is checked against the term's whole value space, not against one boolean.
+    /// </summary>
+    /// <remarks>
+    /// The plan's <c>BIND</c> produces four values — <c>iri</c>, <c>literal</c>,
+    /// <c>unsupported_blank_node</c> and <c>unbound</c>. An earlier version of this producer asked
+    /// only "does the marker say unbound", so a literal ECLI carrying an <c>iri</c> marker agreed
+    /// with itself and was admitted: half the marker's value space could not contradict anything,
+    /// which made the disagreement check weaker than its own name. Found by attacking this head.
+    /// </remarks>
+    [TestMethod]
+    public void AMarkerNamingTheWrongTermKindIsCaughtEvenWhenBothAgreeSomethingWasDelivered()
+    {
+        var literalTermIriMarker = EuCaseLawLinkProducer.DecodeRows(
+            [Row(Literal(Ecli), "iri")], Profile(), Scopes(), Evidence);
+        Assert.AreEqual(EuCaseLawLinkProductionRefusal.RowNotAdmitted, literalTermIriMarker.Refusal);
+        StringAssert.Contains(literalTermIriMarker.Detail!, "disagree");
+
+        var literalCelexIriMarker = EuCaseLawLinkProducer.DecodeRows(
+            [Row(Unbound(), EuCaseLawDiscoveryPlan.UnboundEcliKind,
+                celex: Literal(CaseCelex), celexKind: "iri")],
+            Profile(), Scopes(), Evidence);
+        Assert.AreEqual(EuCaseLawLinkProductionRefusal.RowNotAdmitted, literalCelexIriMarker.Refusal);
+        StringAssert.Contains(literalCelexIriMarker.Detail!, "disagree");
     }
 }
