@@ -116,6 +116,7 @@ public sealed class EuTranspositionBridgeReconciliationProducer
         if (!legilux.Delivered || legilux.Relations is null || legilux.CompletionEvidenceRef is null ||
             !identities.Delivered || identities.Relations is null || identities.CompletionEvidenceRef is null ||
             !nim.Delivered || nim.Relations is null || nim.OutOfE5WorkKindExclusions is null ||
+            nim.PublisherCoordinateConflicts is null ||
             nim.CompletionEvidenceRef is null)
         {
             return EuTranspositionBridgeReconciliationResult.Refused(
@@ -156,6 +157,17 @@ public sealed class EuTranspositionBridgeReconciliationProducer
             return EuTranspositionBridgeReconciliationResult.Refused(
                 EuTranspositionBridgeReconciliationRefusal.NimWorkIdentityNotConsistent,
                 $"The NIM population both admits and excludes {mixedDisposition.EuWorkUri} from E5.");
+        }
+
+        var conflictedDisposition = nim.PublisherCoordinateConflicts.FirstOrDefault(conflict =>
+            scope.Any(value =>
+                string.Equals(value.WorkUri, conflict.EuWorkUri, StringComparison.Ordinal) ||
+                string.Equals(value.EuEli, conflict.EuWorkEli, StringComparison.Ordinal)));
+        if (conflictedDisposition is not null)
+        {
+            return EuTranspositionBridgeReconciliationResult.Refused(
+                EuTranspositionBridgeReconciliationRefusal.NimWorkIdentityNotConsistent,
+                $"The NIM population both admits and records contradictory publisher coordinates for {conflictedDisposition.EuWorkUri}.");
         }
 
         var ambiguousEli = scope.GroupBy(static value => value.EuEli, StringComparer.Ordinal)

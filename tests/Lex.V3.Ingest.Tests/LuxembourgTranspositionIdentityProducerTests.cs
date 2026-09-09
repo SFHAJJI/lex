@@ -256,6 +256,25 @@ public sealed class LuxembourgTranspositionIdentityProducerTests
     }
 
     [TestMethod]
+    public void DirectiveSubtypeElisReachTheTypedDirectiveDispositionWithoutRewriting()
+    {
+        foreach (var eli in new[]
+                 {
+                     "http://data.europa.eu/eli/dir_del/2012/50/oj",
+                     "http://data.europa.eu/eli/dir_impl/2010/75/oj",
+                 })
+        {
+            var result = Decode(Row(euEli: eli));
+
+            Assert.IsTrue(result.Delivered, result.Detail);
+            var relation = result.Relations!.Single();
+            Assert.AreEqual(eli, relation.EuEli);
+            Assert.AreEqual(EuWorkKind.Directive, relation.WorkKindAssertion!.Kind);
+            Assert.AreEqual(eli, relation.WorkKindAssertion.Work.Value(FactsIdentifierFamily.Eli));
+        }
+    }
+
+    [TestMethod]
     public void ALocalTargetMappedToTwoEuIdentitiesIsRefusedRatherThanChosen()
     {
         var result = Decode(

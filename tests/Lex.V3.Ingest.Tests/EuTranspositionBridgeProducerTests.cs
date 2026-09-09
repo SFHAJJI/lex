@@ -110,6 +110,72 @@ public sealed class EuTranspositionBridgeProducerTests
     }
 
     [TestMethod]
+    public void ARegulationPublisherRowRemainsEvidenceButProjectsACompletedEmptyNimColumn()
+    {
+        const string RegulationEli = "http://data.europa.eu/eli/reg/2023/1/oj";
+        var relation = new EuNationalImplementingMeasureRelation(
+            EuWork,
+            new EuWorkKindAssertion(
+                new OfficialIdentitySet(PublisherId.EuEurLex,
+                [
+                    new OfficialIdentifier(FactsIdentifierFamily.CellarWorkUri, EuWork),
+                    new OfficialIdentifier(FactsIdentifierFamily.Eli, RegulationEli),
+                ]),
+                EuWorkKind.Regulation),
+            EuNationalImplementingMeasureDiscoveryPlan.RegulationResourceTypeIri,
+            EuWork,
+            "72023R0001LUX_000001",
+            EuNationalImplementingMeasureDiscoveryPlan.ImplementsResourceLegalPredicateIri,
+            NimLuMeasure,
+            NimSide());
+        var nim = EuNationalImplementingMeasureProductionResult.Success(
+            [relation], [], [], Evidence, 0);
+
+        var result = EuTranspositionBridgeProducer.Produce(
+            EuWork,
+            relation.WorkKindAssertion,
+            Legilux(ProvenAbsent(EuTranspositionAssertedBy.Legilux)),
+            nim);
+
+        Assert.IsTrue(result.Delivered, result.Detail);
+        Assert.AreSame(relation, nim.Relations!.Single());
+        Assert.AreEqual(EuTransposability.NotTransposable, result.Bridge!.Transposability);
+        Assert.AreEqual(EuRelationAcquisitionState.Complete, result.Bridge.Nim.Acquisition);
+        Assert.IsEmpty(result.Bridge.Nim.Sides);
+    }
+
+    [TestMethod]
+    public void ADirectiveBridgeCannotHideAnAdmittedRegulationRelationAsAnEmptyColumn()
+    {
+        const string RegulationEli = "http://data.europa.eu/eli/reg/2023/1/oj";
+        var regulationKind = new EuWorkKindAssertion(
+            new OfficialIdentitySet(PublisherId.EuEurLex,
+            [
+                new OfficialIdentifier(FactsIdentifierFamily.CellarWorkUri, EuWork),
+                new OfficialIdentifier(FactsIdentifierFamily.Eli, RegulationEli),
+            ]),
+            EuWorkKind.Regulation);
+        var nim = EuNationalImplementingMeasureProductionResult.Success(
+            [new EuNationalImplementingMeasureRelation(
+                EuWork, regulationKind,
+                EuNationalImplementingMeasureDiscoveryPlan.RegulationResourceTypeIri,
+                EuWork, "72023R0001LUX_000001",
+                EuNationalImplementingMeasureDiscoveryPlan.ImplementsResourceLegalPredicateIri,
+                NimLuMeasure, NimSide())],
+            [], [], Evidence, 0);
+
+        var result = EuTranspositionBridgeProducer.Produce(
+            EuWork,
+            Kind(EuWork, EuWorkKind.Directive),
+            Legilux(ProvenAbsent(EuTranspositionAssertedBy.Legilux)),
+            nim);
+
+        Assert.AreEqual(
+            EuTranspositionBridgeProductionRefusal.SourceColumnsContradictWorkKind,
+            result.Refusal);
+    }
+
+    [TestMethod]
     public void MultipleAssertionsStayInTheirPublisherColumnsAndEachExactMatchIsDisclosed()
     {
         const string secondLegilux = "https://data.legilux.public.lu/eli/etat/leg/loi/2020/01/02/a2/jo";
@@ -122,13 +188,155 @@ public sealed class EuTranspositionBridgeProducerTests
             EuNationalImplementingMeasureProductionResult.Success([
                 NimRelation(NimLuMeasure, NimSide()),
                 NimRelation(secondNim, NimSide(secondNim)),
-            ], [], Evidence, 0));
+            ], [], [], Evidence, 0));
 
         Assert.IsTrue(result.Delivered, result.Detail);
         Assert.HasCount(2, result.Bridge!.Legilux.Sides);
         Assert.HasCount(2, result.Bridge.Nim.Sides);
         Assert.HasCount(2, result.Bridge.NormalisedEliJoins);
         Assert.HasCount(2, result.CopyNormalisedEliJoinEvidenceBytes());
+    }
+
+    [TestMethod]
+    public void DistinctNimAssertionsForOneLegiluxEliProduceOneJoinThatRetainsEveryCoordinate()
+    {
+        const string firstNimWork = "http://publications.europa.eu/resource/cellar/44444444-4444-4444-8444-444444444444";
+        const string secondNimWork = "http://publications.europa.eu/resource/cellar/55555555-5555-4555-8555-555555555555";
+        const string firstCelex = "72016L1164LUX_269096";
+        const string secondCelex = "72016L1164LUX_266876";
+        var secondEvidence = new SourceArtifactRef(
+            "urn:uuid:dddddddd-dddd-4ddd-8ddd-dddddddddddd", new string('d', 64));
+        var nim = EuNationalImplementingMeasureProductionResult.Success(
+            [
+                new EuNationalImplementingMeasureRelation(
+                    EuWork, Kind(EuWork, EuWorkKind.Directive),
+                    EuNationalImplementingMeasureDiscoveryPlan.DirectiveResourceTypeIri,
+                    secondNimWork, secondCelex,
+                    EuNationalImplementingMeasureDiscoveryPlan.ImplementsResourceLegalPredicateIri,
+                    NimLuMeasure,
+                    new EuTranspositionSourceAcquisition(
+                        EuTranspositionAssertedBy.Nim,
+                        EuRelationAcquisitionState.Complete,
+                        [new EuTranspositionSide(
+                            EuTranspositionAssertedBy.Nim, secondNimWork, secondEvidence,
+                            EuMemberStateDisclaimer.Text, EuMemberStateDisclaimer.SourceUri)],
+                        Evidence)),
+                new EuNationalImplementingMeasureRelation(
+                    EuWork, Kind(EuWork, EuWorkKind.Directive),
+                    EuNationalImplementingMeasureDiscoveryPlan.DirectiveResourceTypeIri,
+                    firstNimWork, firstCelex,
+                    EuNationalImplementingMeasureDiscoveryPlan.ImplementsResourceLegalPredicateIri,
+                    NimLuMeasure, NimSide(firstNimWork)),
+            ], [], [], Evidence, 0);
+
+        var result = EuTranspositionBridgeProducer.Produce(
+            EuWork, Kind(EuWork, EuWorkKind.Directive), Legilux(LegiluxSide()), nim);
+
+        Assert.IsTrue(result.Delivered, result.Detail);
+        Assert.HasCount(2, result.Bridge!.Nim.Sides);
+        Assert.HasCount(1, result.Bridge.NormalisedEliJoins);
+        var evidenceBytes = result.CopyNormalisedEliJoinEvidenceBytes().Single();
+        Assert.AreEqual(
+            Convert.ToHexStringLower(SHA256.HashData(evidenceBytes)),
+            result.Bridge.NormalisedEliJoins[0].EvidenceRef.Sha256);
+        Assert.AreEqual(
+            ContentDerivedIdentity.DeriveUuidUrn(
+                "lex-v3/eu-transposition-normalised-eli-join/2",
+                evidenceBytes),
+            result.Bridge.NormalisedEliJoins[0].EvidenceRef.ResourceId);
+        using var evidence = JsonDocument.Parse(evidenceBytes);
+        Assert.AreEqual(
+            "eu_transposition_normalised_eli_join_evidence/2",
+            evidence.RootElement.GetProperty("schema").GetString());
+        var assertions = evidence.RootElement.GetProperty("nim_assertions").EnumerateArray().ToArray();
+        Assert.HasCount(2, assertions);
+        CollectionAssert.AreEqual(
+            new[] { firstNimWork, secondNimWork },
+            assertions.Select(static value => value.GetProperty("nim_work_uri").GetString()).ToArray());
+        CollectionAssert.AreEqual(
+            new[] { firstCelex, secondCelex },
+            assertions.Select(static value => value.GetProperty("nim_celex").GetString()).ToArray());
+        CollectionAssert.AreEqual(
+            new[] { NimEvidence.ResourceId, secondEvidence.ResourceId },
+            assertions.Select(static value => value.GetProperty("nim_evidence_resource_id").GetString()).ToArray());
+        Assert.IsTrue(assertions.All(value =>
+            value.GetProperty("nim_eli").GetString() == NimLuMeasure &&
+            value.GetProperty("implements_predicate_iri").GetString() ==
+                EuNationalImplementingMeasureDiscoveryPlan.ImplementsResourceLegalPredicateIri));
+    }
+
+    [TestMethod]
+    public void DistinctRawRowsForOneIdenticalNimAssertionRemainEvidenceButProjectOnce()
+    {
+        var side = NimSide(EuWork);
+        var nim = EuNationalImplementingMeasureProductionResult.Success(
+            [
+                new EuNationalImplementingMeasureRelation(
+                    EuWork, Kind(EuWork, EuWorkKind.Directive),
+                    EuNationalImplementingMeasureDiscoveryPlan.DirectiveResourceTypeIri,
+                    EuWork, "72011L0022LUX_187364",
+                    EuNationalImplementingMeasureDiscoveryPlan.LegacyImplementsDirectivePredicateIri,
+                    null, side),
+                new EuNationalImplementingMeasureRelation(
+                    EuWork, Kind(EuWork, EuWorkKind.Directive),
+                    EuNationalImplementingMeasureDiscoveryPlan.DirectiveResourceTypeIri,
+                    EuWork, "72011L0023LUX_187364",
+                    EuNationalImplementingMeasureDiscoveryPlan.LegacyImplementsDirectivePredicateIri,
+                    null, side),
+            ], [], [], Evidence, 0);
+
+        var result = EuTranspositionBridgeProducer.Produce(
+            EuWork,
+            Kind(EuWork, EuWorkKind.Directive),
+            Legilux(ProvenAbsent(EuTranspositionAssertedBy.Legilux)),
+            nim);
+
+        Assert.IsTrue(result.Delivered, result.Detail);
+        Assert.HasCount(2, nim.Relations!);
+        CollectionAssert.AreEqual(
+            new[] { "72011L0022LUX_187364", "72011L0023LUX_187364" },
+            nim.Relations!.Select(static relation => relation.NimCelex).ToArray());
+        Assert.HasCount(1, result.Bridge!.Nim.Sides);
+        Assert.AreEqual(EuWork, result.Bridge.Nim.Sides[0].NationalMeasureUri);
+    }
+
+    [TestMethod]
+    public void RepeatedNimUrisWithDifferentEvidenceStillRefuseInsteadOfChoosingOne()
+    {
+        var otherEvidence = new SourceArtifactRef(
+            "urn:uuid:dddddddd-dddd-4ddd-8ddd-dddddddddddd", new string('d', 64));
+        var otherSide = new EuTranspositionSourceAcquisition(
+            EuTranspositionAssertedBy.Nim,
+            EuRelationAcquisitionState.Complete,
+            [new EuTranspositionSide(
+                EuTranspositionAssertedBy.Nim, EuWork, otherEvidence,
+                EuMemberStateDisclaimer.Text, EuMemberStateDisclaimer.SourceUri)],
+            Evidence);
+        var nim = EuNationalImplementingMeasureProductionResult.Success(
+            [
+                new EuNationalImplementingMeasureRelation(
+                    EuWork, Kind(EuWork, EuWorkKind.Directive),
+                    EuNationalImplementingMeasureDiscoveryPlan.DirectiveResourceTypeIri,
+                    EuWork, "72011L0022LUX_187364",
+                    EuNationalImplementingMeasureDiscoveryPlan.LegacyImplementsDirectivePredicateIri,
+                    null, NimSide(EuWork)),
+                new EuNationalImplementingMeasureRelation(
+                    EuWork, Kind(EuWork, EuWorkKind.Directive),
+                    EuNationalImplementingMeasureDiscoveryPlan.DirectiveResourceTypeIri,
+                    EuWork, "72011L0023LUX_187364",
+                    EuNationalImplementingMeasureDiscoveryPlan.LegacyImplementsDirectivePredicateIri,
+                    null, otherSide),
+            ], [], [], Evidence, 0);
+
+        var result = EuTranspositionBridgeProducer.Produce(
+            EuWork,
+            Kind(EuWork, EuWorkKind.Directive),
+            Legilux(ProvenAbsent(EuTranspositionAssertedBy.Legilux)),
+            nim);
+
+        Assert.AreEqual(
+            EuTranspositionBridgeProductionRefusal.SourceColumnsContradictWorkKind,
+            result.Refusal);
     }
 
     [TestMethod]
@@ -193,7 +401,7 @@ public sealed class EuTranspositionBridgeProducerTests
                 EuWork, Kind(EuWork, EuWorkKind.Directive),
                 EuNationalImplementingMeasureDiscoveryPlan.DirectiveResourceTypeIri,
                 EuWork, "72020L0001",
-                "https://example.invalid/implements", eli, column)).ToArray(), [], Evidence, 0);
+                "https://example.invalid/implements", eli, column)).ToArray(), [], [], Evidence, 0);
 
     private static EuNationalImplementingMeasureRelation NimRelation(
         string eli,

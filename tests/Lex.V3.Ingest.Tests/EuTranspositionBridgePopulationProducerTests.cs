@@ -63,7 +63,7 @@ public sealed class EuTranspositionBridgePopulationProducerTests
             EuNationalImplementingMeasureDiscoveryPlan.ImplementsResourceLegalPredicateIri,
             null,
             Completion);
-        var nim = EuNationalImplementingMeasureProductionResult.Success([], [decision], Completion, 0);
+        var nim = EuNationalImplementingMeasureProductionResult.Success([], [decision], [], Completion, 0);
 
         var result = await new EuTranspositionBridgePopulationProducer(
             new EuAcquisitionTestFixture.EuInMemoryCustodyStore()).ProduceAsync(
@@ -73,6 +73,31 @@ public sealed class EuTranspositionBridgePopulationProducerTests
         var retained = result.OutOfE5WorkKindExclusions!.Single();
         Assert.AreSame(decision, retained);
         Assert.AreEqual("out_of_e5_work_kind", retained.Disposition);
+    }
+
+    [TestMethod]
+    public async Task EvidenceBoundPublisherCoordinateConflictsSurviveTheCompletedPopulation()
+    {
+        var conflict = new EuNationalImplementingMeasurePublisherCoordinatesConflict(
+            OutsideScope,
+            "http://data.europa.eu/eli/reg/2021/1187/oj",
+            EuNationalImplementingMeasureDiscoveryPlan.DirectiveResourceTypeIri,
+            OutsideScope,
+            "72021L1187LUX_202303648",
+            EuNationalImplementingMeasureDiscoveryPlan.ImplementsResourceLegalPredicateIri,
+            LegiluxEli,
+            Completion);
+        var nim = EuNationalImplementingMeasureProductionResult.Success(
+            [], [], [conflict], Completion, 0);
+
+        var result = await new EuTranspositionBridgePopulationProducer(
+            new EuAcquisitionTestFixture.EuInMemoryCustodyStore()).ProduceAsync(
+                [Kind(Directive, EuWorkKind.Directive)], Legilux(), nim, CancellationToken.None);
+
+        Assert.IsTrue(result.Delivered, result.Detail);
+        var retained = result.PublisherCoordinateConflicts!.Single();
+        Assert.AreSame(conflict, retained);
+        Assert.AreEqual("publisher_coordinates_conflict", retained.Disposition);
     }
 
     [TestMethod]
@@ -211,7 +236,7 @@ public sealed class EuTranspositionBridgePopulationProducerTests
 
     private static EuNationalImplementingMeasureProductionResult Nim(
         params EuNationalImplementingMeasureRelation[] relations) =>
-        EuNationalImplementingMeasureProductionResult.Success(relations, [], Completion, 0);
+        EuNationalImplementingMeasureProductionResult.Success(relations, [], [], Completion, 0);
 
     private static LuxembourgTranspositionRelation Relation(
         string work, string measure, EuTranspositionSourceAcquisition acquisition) =>

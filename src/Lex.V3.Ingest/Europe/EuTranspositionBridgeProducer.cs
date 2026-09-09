@@ -116,6 +116,16 @@ public static class EuTranspositionBridgeProducer
                 "The work-kind assertion does not name this exact EU Cellar work.");
         }
 
+        if (nim.Relations is not null && nim.Relations.Any(relation =>
+                string.Equals(relation.EuWorkUri, euWorkUri, StringComparison.Ordinal) &&
+                relation.Acquisition.Sides.Count > 0 &&
+                relation.WorkKindAssertion.Kind != workKindAssertion.Kind))
+        {
+            return EuTranspositionBridgeProductionResult.Refused(
+                EuTranspositionBridgeProductionRefusal.SourceColumnsContradictWorkKind,
+                "The NIM relation work kind contradicts the bridge work-kind assertion.");
+        }
+
         EuTranspositionSourceAcquisition legiluxColumn;
         try
         {
@@ -201,37 +211,51 @@ public static class EuTranspositionBridgeProducer
                      .OrderBy(static value => value, StringComparer.Ordinal))
         {
             var legiluxMatches = legiluxByEli[normalisedEli].ToArray();
-            var nimMatches = nimByEli[normalisedEli].ToArray();
-            if (legiluxMatches.Length != 1 || nimMatches.Length != 1 ||
+            var nimMatches = nimByEli[normalisedEli]
+                .OrderBy(static value => value.Relation.NimWorkUri, StringComparer.Ordinal)
+                .ThenBy(static value => value.Relation.NimCelex, StringComparer.Ordinal)
+                .ThenBy(static value => value.Relation.ImplementsPredicateIri, StringComparer.Ordinal)
+                .ThenBy(static value => value.Relation.Acquisition.Sides[0].EvidenceRef.ResourceId, StringComparer.Ordinal)
+                .ThenBy(static value => value.Relation.Acquisition.Sides[0].EvidenceRef.Sha256, StringComparer.Ordinal)
+                .ToArray();
+            if (legiluxMatches.Length != 1 || nimMatches.Length == 0 ||
                 legiluxMatches[0].Relation.Acquisition.Sides.Count != 1 ||
-                nimMatches[0].Relation.Acquisition.Sides.Count != 1)
+                nimMatches.Any(static value => value.Relation.Acquisition.Sides.Count != 1))
             {
                 throw new ArgumentException(
                     $"The normalised ELI {normalisedEli} is ambiguous within a publisher column.");
             }
 
             var legiluxRelation = legiluxMatches[0].Relation;
-            var nimRelation = nimMatches[0].Relation;
             if (legiluxRelation.EuWorkIdentityEvidenceRef is null)
             {
                 throw new ArgumentException(
                     "A Legilux local target cannot become a Cellar work without retained identity evidence.");
             }
-            var evidenceBytes = WriteJoinEvidence(
-                euWorkUri,
-                normalisedEli,
-                legiluxRelation.LegiluxMeasureUri,
-                legiluxRelation.Acquisition.Sides[0].EvidenceRef,
-                legiluxRelation.EuWorkIdentityEvidenceRef,
-                nimRelation.LegiluxEli!,
-                nimRelation.NimWorkUri,
-                nimRelation.NimCelex,
-                nimRelation.ImplementsPredicateIri,
-                nimRelation.Acquisition.Sides[0].EvidenceRef);
+            var evidenceBytes = nimMatches.Length == 1
+                ? WriteJoinEvidence(
+                    euWorkUri,
+                    normalisedEli,
+                    legiluxRelation.LegiluxMeasureUri,
+                    legiluxRelation.Acquisition.Sides[0].EvidenceRef,
+                    legiluxRelation.EuWorkIdentityEvidenceRef,
+                    nimMatches[0].Relation.LegiluxEli!,
+                    nimMatches[0].Relation.NimWorkUri,
+                    nimMatches[0].Relation.NimCelex,
+                    nimMatches[0].Relation.ImplementsPredicateIri,
+                    nimMatches[0].Relation.Acquisition.Sides[0].EvidenceRef)
+                : WriteAggregateJoinEvidence(
+                    euWorkUri,
+                    normalisedEli,
+                    legiluxRelation,
+                    nimMatches.Select(static value => value.Relation).ToArray());
             var digest = Convert.ToHexStringLower(SHA256.HashData(evidenceBytes));
+            var evidenceIdentityFamily = nimMatches.Length == 1
+                ? "lex-v3/eu-transposition-normalised-eli-join/1"
+                : "lex-v3/eu-transposition-normalised-eli-join/2";
             var evidenceRef = new SourceArtifactRef(
                 ContentDerivedIdentity.DeriveUuidUrn(
-                    "lex-v3/eu-transposition-normalised-eli-join/1",
+                    evidenceIdentityFamily,
                     evidenceBytes),
                 digest);
             builds.Add(new NormalisedEliJoinBuild(
@@ -292,6 +316,54 @@ public static class EuTranspositionBridgeProducer
             writer.WriteString("implements_predicate_iri", implementsPredicateIri);
             writer.WriteString("nim_evidence_resource_id", nimEvidenceRef.ResourceId);
             writer.WriteString("nim_evidence_sha256", nimEvidenceRef.Sha256);
+            writer.WriteEndObject();
+        }
+        return stream.ToArray();
+    }
+
+    private static byte[] WriteAggregateJoinEvidence(
+        string euWorkUri,
+        string normalisedEli,
+        LuxembourgTranspositionRelation legiluxRelation,
+        IReadOnlyList<EuNationalImplementingMeasureRelation> nimRelations)
+    {
+        using var stream = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(stream))
+        {
+            writer.WriteStartObject();
+            writer.WriteString("schema", "eu_transposition_normalised_eli_join_evidence/2");
+            writer.WriteString("eu_work_uri", euWorkUri);
+            writer.WriteString("normalised_eli", normalisedEli);
+            writer.WriteString("legilux_eli", legiluxRelation.LegiluxMeasureUri);
+            writer.WriteString(
+                "legilux_evidence_resource_id",
+                legiluxRelation.Acquisition.Sides[0].EvidenceRef.ResourceId);
+            writer.WriteString(
+                "legilux_evidence_sha256",
+                legiluxRelation.Acquisition.Sides[0].EvidenceRef.Sha256);
+            writer.WriteString(
+                "legilux_identity_evidence_resource_id",
+                legiluxRelation.EuWorkIdentityEvidenceRef!.ResourceId);
+            writer.WriteString(
+                "legilux_identity_evidence_sha256",
+                legiluxRelation.EuWorkIdentityEvidenceRef.Sha256);
+            writer.WriteStartArray("nim_assertions");
+            foreach (var relation in nimRelations)
+            {
+                writer.WriteStartObject();
+                writer.WriteString("nim_eli", relation.LegiluxEli);
+                writer.WriteString("nim_work_uri", relation.NimWorkUri);
+                writer.WriteString("nim_celex", relation.NimCelex);
+                writer.WriteString("implements_predicate_iri", relation.ImplementsPredicateIri);
+                writer.WriteString(
+                    "nim_evidence_resource_id",
+                    relation.Acquisition.Sides[0].EvidenceRef.ResourceId);
+                writer.WriteString(
+                    "nim_evidence_sha256",
+                    relation.Acquisition.Sides[0].EvidenceRef.Sha256);
+                writer.WriteEndObject();
+            }
+            writer.WriteEndArray();
             writer.WriteEndObject();
         }
         return stream.ToArray();
