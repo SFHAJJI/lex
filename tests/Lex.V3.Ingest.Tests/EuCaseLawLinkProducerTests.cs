@@ -86,6 +86,344 @@ public sealed class EuCaseLawLinkProducerTests
         TargetBodyScope scope = TargetBodyScope.BodyInScopeHeld) =>
         new(StringComparer.Ordinal) { [Act] = scope };
 
+    private static MachineQueryRendererSource RendererSource()
+    {
+        var bytes = System.Text.Encoding.UTF8.GetBytes("eu-case-law-producer-source/1\n");
+        return MachineQueryRendererSource.Open(
+            new SourceArtifactRef(
+                "urn:uuid:2d5b8e14-7f36-4a92-b0c8-49e17d3a6b05",
+                Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(bytes))),
+            bytes);
+    }
+
+    /// <summary>
+    /// The whole chain runs: executor, proof, verified rows, links. Nothing is supplied but scope.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// THIS IS THE GUARD THAT MAKES E6 REACHED BY SOMETHING. Every other test in this file calls the
+    /// decoder with rows a test built and an evidence reference a test invented, which proves the
+    /// decoding and proves nothing about whether the family can be run at all — and it could not be:
+    /// <c>RunCaseLawLinksAsync</c> and <c>DecodeRows</c> were called by no code in <c>src/</c>.
+    /// </para>
+    /// <para>
+    /// The cited artifact is required to NAME ITS OWN SCHEMA rather than being compared against the
+    /// producer's own report of it. On the sibling E8 family a mutation that cited one request's
+    /// HTTP evidence instead of the acquisition run survived exactly that weaker assertion, because
+    /// both sides of it came from the same value.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public async Task TheProducerRunsTheFamilyEndToEndAndCitesTheRunsOwnEvidence()
+    {
+        var scripts = new Dictionary<string, EuAcquisitionTestFixture.FamilyScript>(StringComparer.Ordinal)
+        {
+            ["CaseLaw"] = EuAcquisitionTestFixture.ScriptFor(
+                "CaseLaw", 1,
+                [EuAcquisitionTestFixture.CaseLawRow(
+                    CaseWork,
+                    EuCaseLawPredicateVocabulary.CaseLawInterpretesResourceLegalPredicateUri,
+                    Act,
+                    Ecli)],
+                EuAcquisitionTestFixture.CaseLawProjection),
+        };
+
+        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
+        var producer = new EuCaseLawLinkProducer(
+            store,
+            new EuAcquisitionTestFixture.FixedTimeProvider(),
+            new EuAcquisitionTestFixture.ClassifyingHandler(scripts));
+
+        var result = await producer.RunAsync(
+            new EuCaseLawRunRequest(
+                EuCaseLawDiscoveryPlan.Create(),
+                [Act],
+                "urn:uuid:6c81af29-3d47-4e50-9b12-8f0a5e2c7d63",
+                RendererSource()),
+            Scopes(),
+            EuAcquisitionTestFixture.SourceWitness(),
+            CancellationToken.None);
+
+        Assert.AreEqual(
+            EuCaseLawLinkProductionRefusal.None, result.Refusal,
+            $"the family must be runnable end to end: {result.Refusal} {result.Detail}");
+        Assert.HasCount(1, result.ForEuWork(Act));
+        Assert.IsGreaterThan(0, result.ProductRequestCount);
+
+        var cited = await store.ReadByDigestAsync(
+            result.CompletionEvidenceRef!.Sha256, CancellationToken.None);
+        StringAssert.StartsWith(
+            System.Text.Encoding.UTF8.GetString(cited.Span), "lex-http-acquisition-run/1",
+            "the links must cite the acquisition RUN, not one request's HTTP evidence.");
+    }
+
+    /// <summary>
+    /// The acts this run reports asking about are its OWN batch, never the caller's scope map keys.
+    /// </summary>
+    /// <remarks>
+    /// The two are different sets and the difference is a false absence. A caller supplying scopes
+    /// for two acts while the batch asks about one would have <c>ForEuWork</c> answer an evidenced
+    /// empty list for the act nobody enumerated — indistinguishable from "no judgment cites it".
+    /// </remarks>
+    [TestMethod]
+    public async Task TheRunReportsItsOwnBatchAsCoverageNotTheCallersScopeMap()
+    {
+        const string NeverAsked = "http://publications.europa.eu/resource/cellar/11111111-2222-3333-4444-555555555555";
+
+        var scripts = new Dictionary<string, EuAcquisitionTestFixture.FamilyScript>(StringComparer.Ordinal)
+        {
+            ["CaseLaw"] = EuAcquisitionTestFixture.ScriptFor(
+                "CaseLaw", 1,
+                [EuAcquisitionTestFixture.CaseLawRow(
+                    CaseWork,
+                    EuCaseLawPredicateVocabulary.CaseLawInterpretesResourceLegalPredicateUri,
+                    Act,
+                    Ecli)],
+                EuAcquisitionTestFixture.CaseLawProjection),
+        };
+
+        var producer = new EuCaseLawLinkProducer(
+            new EuAcquisitionTestFixture.EuInMemoryCustodyStore(),
+            new EuAcquisitionTestFixture.FixedTimeProvider(),
+            new EuAcquisitionTestFixture.ClassifyingHandler(scripts));
+
+        var scopes = new Dictionary<string, TargetBodyScope>(StringComparer.Ordinal)
+        {
+            [Act] = TargetBodyScope.BodyInScopeHeld,
+            [NeverAsked] = TargetBodyScope.BodyInScopeHeld,
+        };
+
+        var result = await producer.RunAsync(
+            new EuCaseLawRunRequest(
+                EuCaseLawDiscoveryPlan.Create(),
+                [Act],
+                "urn:uuid:7d92b03a-4e58-4f61-ac23-901b6f3d8e74",
+                RendererSource()),
+            scopes,
+            EuAcquisitionTestFixture.SourceWitness(),
+            CancellationToken.None);
+
+        Assert.AreEqual(EuCaseLawLinkProductionRefusal.None, result.Refusal, result.Detail);
+        Assert.HasCount(1, result.ForEuWork(Act));
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(
+            () => result.ForEuWork(NeverAsked),
+            "a scope supplied for an act the run never asked about does not make it enumerated.");
+    }
+
+    /// <summary>
+    /// An act requested non-canonically is still that caller's own act, all the way to coverage.
+    /// </summary>
+    /// <remarks>
+    /// <c>EuPackRootCanonicalForm.TryCanonicalize</c> rewrites <c>https://</c> to <c>http://</c> and
+    /// drops one trailing slash, and the publisher is asked about — and answers in — the canonical
+    /// form. A run that carried the caller's raw spelling forward would fail its own scope check for
+    /// an act it does hold a scope for, and would publish coverage the publisher never answered in.
+    /// A mutation doing exactly that survived until this test existed, because every other test here
+    /// spells its act canonically already and raw equals canonical there.
+    /// </remarks>
+    [TestMethod]
+    public async Task AnActRequestedNonCanonicallyIsAnsweredUnderItsCanonicalForm()
+    {
+        const string RequestedHttps =
+            "https://publications.europa.eu/resource/cellar/3e485e15-11bd-11e6-ba9a-01aa75ed71a1/";
+
+        Assert.AreEqual(
+            Act, EuCaseLawDiscoveryPlan.CanonicalizeBatch([RequestedHttps])[0],
+            "the plan rewrites this spelling, so raw and canonical genuinely differ here.");
+
+        var scripts = new Dictionary<string, EuAcquisitionTestFixture.FamilyScript>(StringComparer.Ordinal)
+        {
+            ["CaseLaw"] = EuAcquisitionTestFixture.ScriptFor(
+                "CaseLaw", 1,
+                [EuAcquisitionTestFixture.CaseLawRow(
+                    CaseWork,
+                    EuCaseLawPredicateVocabulary.CaseLawInterpretesResourceLegalPredicateUri,
+                    Act,
+                    Ecli)],
+                EuAcquisitionTestFixture.CaseLawProjection),
+        };
+
+        var producer = new EuCaseLawLinkProducer(
+            new EuAcquisitionTestFixture.EuInMemoryCustodyStore(),
+            new EuAcquisitionTestFixture.FixedTimeProvider(),
+            new EuAcquisitionTestFixture.ClassifyingHandler(scripts));
+
+        var result = await producer.RunAsync(
+            new EuCaseLawRunRequest(
+                EuCaseLawDiscoveryPlan.Create(),
+                [RequestedHttps],
+                "urn:uuid:9fb4d25c-6a70-4183-ce45-b23d8f5a0096",
+                RendererSource()),
+            Scopes(),
+            EuAcquisitionTestFixture.SourceWitness(),
+            CancellationToken.None);
+
+        Assert.AreEqual(EuCaseLawLinkProductionRefusal.None, result.Refusal, result.Detail);
+        Assert.HasCount(
+            1, result.ForEuWork(Act),
+            "coverage is the canonical form the publisher was asked about.");
+    }
+
+    /// <summary>
+    /// A run the publisher never completed is a typed refusal, never an empty success.
+    /// </summary>
+    /// <remarks>
+    /// Driven by failing every custody write, so the session cannot retain what it fetched and the
+    /// executor never reaches a receipt. An empty success here would be the worst answer this family
+    /// can give — a proven-empty "no judgment cites this act" for a run that did not happen.
+    /// </remarks>
+    [TestMethod]
+    public async Task ARunThatNeverCompletedIsRefusedRatherThanReportedEmpty()
+    {
+        var scripts = new Dictionary<string, EuAcquisitionTestFixture.FamilyScript>(StringComparer.Ordinal)
+        {
+            ["CaseLaw"] = EuAcquisitionTestFixture.ScriptFor(
+                "CaseLaw", 1,
+                [EuAcquisitionTestFixture.CaseLawRow(
+                    CaseWork,
+                    EuCaseLawPredicateVocabulary.CaseLawInterpretesResourceLegalPredicateUri,
+                    Act,
+                    Ecli)],
+                EuAcquisitionTestFixture.CaseLawProjection),
+        };
+
+        var producer = new EuCaseLawLinkProducer(
+            new EuAcquisitionTestFixture.EuInMemoryCustodyStore(
+                failWriteDigest: static (_, _) => true),
+            new EuAcquisitionTestFixture.FixedTimeProvider(),
+            new EuAcquisitionTestFixture.ClassifyingHandler(scripts));
+
+        var result = await producer.RunAsync(
+            new EuCaseLawRunRequest(
+                EuCaseLawDiscoveryPlan.Create(),
+                [Act],
+                "urn:uuid:a0c5e36d-7b81-4294-df56-c34e906b1107",
+                RendererSource()),
+            Scopes(),
+            EuAcquisitionTestFixture.SourceWitness(),
+            CancellationToken.None);
+
+        Assert.AreNotEqual(
+            EuCaseLawLinkProductionRefusal.None, result.Refusal,
+            "a run that never completed cannot report a proven empty result.");
+        Assert.IsNull(result.Relations);
+        Assert.ThrowsExactly<InvalidOperationException>(() => result.ForEuWork(Act));
+    }
+
+    /// <summary>
+    /// A scope supplied under a different case is evidence for a DIFFERENT act, and is refused.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A Cellar work URI is an exact coordinate; case is part of the identity. The scope map arrives
+    /// from the caller, so its comparer is the caller's choice, and an <c>OrdinalIgnoreCase</c> one
+    /// let a scope supplied for <c>/resource/CELLAR/…</c> answer for the distinct canonical
+    /// <c>/resource/cellar/…</c>. The run then sent traffic and bound the requested act to evidence
+    /// supplied for another coordinate, while the pre-request refusal that exists to prevent exactly
+    /// that never fired. Codex found it at head <c>a27760b5</c>.
+    /// </para>
+    /// <para>
+    /// Nothing here would have caught it: every other test builds its scope map with the default
+    /// ordinal comparer, so the caller's choice never differed from the one the identity needs.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public async Task AScopeSuppliedUnderADifferentCaseIsNotEvidenceForTheRequestedAct()
+    {
+        const string DifferentCoordinate =
+            "http://publications.europa.eu/resource/CELLAR/3e485e15-11bd-11e6-ba9a-01aa75ed71a1";
+
+        var producer = new EuCaseLawLinkProducer(
+            new EuAcquisitionTestFixture.EuInMemoryCustodyStore(),
+            new EuAcquisitionTestFixture.FixedTimeProvider(),
+            new EuAcquisitionTestFixture.ClassifyingHandler(
+                new Dictionary<string, EuAcquisitionTestFixture.FamilyScript>(StringComparer.Ordinal)));
+
+        var result = await producer.RunAsync(
+            new EuCaseLawRunRequest(
+                EuCaseLawDiscoveryPlan.Create(),
+                [Act],
+                "urn:uuid:b1d6f24e-8c92-43a5-e067-d45f017c2218",
+                RendererSource()),
+            new Dictionary<string, TargetBodyScope>(StringComparer.OrdinalIgnoreCase)
+            {
+                [DifferentCoordinate] = TargetBodyScope.BodyInScopeHeld,
+            },
+            EuAcquisitionTestFixture.SourceWitness(),
+            CancellationToken.None);
+
+        Assert.AreEqual(
+            EuCaseLawLinkProductionRefusal.RequestedActBodyScopeNotSupplied, result.Refusal,
+            "case is part of a Cellar work identity, so this act has no supplied scope.");
+        Assert.AreEqual(0, result.ProductRequestCount, "and nothing was sent to learn that.");
+    }
+
+    /// <summary>
+    /// The decode path reads scopes under the exact comparer too, not the caller's.
+    /// </summary>
+    /// <remarks>
+    /// The preflight and the decode are two separate lookups into the same caller-owned map, so
+    /// fixing one and not the other would leave a delivered row able to borrow another coordinate's
+    /// scope even when the requested set was clean.
+    /// </remarks>
+    [TestMethod]
+    public void TheDecodePathAlsoReadsScopesUnderTheExactComparer()
+    {
+        const string DifferentCoordinate =
+            "http://publications.europa.eu/resource/CELLAR/3e485e15-11bd-11e6-ba9a-01aa75ed71a1";
+
+        var result = EuCaseLawLinkProducer.DecodeRows(
+            [EcliRow()],
+            Profile(),
+            new Dictionary<string, TargetBodyScope>(StringComparer.OrdinalIgnoreCase)
+            {
+                [DifferentCoordinate] = TargetBodyScope.BodyInScopeHeld,
+            },
+            Evidence);
+
+        Assert.AreEqual(
+            EuCaseLawLinkProductionRefusal.TargetBodyScopeNotSupplied, result.Refusal,
+            "a delivered row may not borrow the scope of a differently-cased coordinate.");
+    }
+
+    // ONE MUTATION SURVIVES THIS FILE and is recorded rather than left unexplained. Reporting a
+    // refused VerifiedRepeatedEnumerationRows.TryOpen as EnumerationProofRefused rather than
+    // VerifiedRowsRefused survives because nothing here drives a delivery whose enumeration proof
+    // holds while its rows will not reopen. It is a real untested branch, not an argued equivalence,
+    // and the sibling E8 producer has the identical gap.
+
+    /// <summary>
+    /// An act the run asks about with no supplied scope is refused before the request is sent.
+    /// </summary>
+    /// <remarks>
+    /// Caught at the question rather than at the answer. Such an act could produce no links even if
+    /// the publisher answered for it, so a run that proceeded would report a proven empty set for an
+    /// act it genuinely enumerated — and would have spent the publisher's budget to do it.
+    /// </remarks>
+    [TestMethod]
+    public async Task AnActAskedAboutWithNoSuppliedScopeIsRefusedBeforeTheRun()
+    {
+        var producer = new EuCaseLawLinkProducer(
+            new EuAcquisitionTestFixture.EuInMemoryCustodyStore(),
+            new EuAcquisitionTestFixture.FixedTimeProvider(),
+            new EuAcquisitionTestFixture.ClassifyingHandler(
+                new Dictionary<string, EuAcquisitionTestFixture.FamilyScript>(StringComparer.Ordinal)));
+
+        var result = await producer.RunAsync(
+            new EuCaseLawRunRequest(
+                EuCaseLawDiscoveryPlan.Create(),
+                [Act],
+                "urn:uuid:8ea3c14b-5f69-4072-bd34-a12c7e4f9f85",
+                RendererSource()),
+            new Dictionary<string, TargetBodyScope>(StringComparer.Ordinal),
+            EuAcquisitionTestFixture.SourceWitness(),
+            CancellationToken.None);
+
+        Assert.AreEqual(
+            EuCaseLawLinkProductionRefusal.RequestedActBodyScopeNotSupplied, result.Refusal);
+        Assert.AreEqual(0, result.ProductRequestCount, "nothing was sent.");
+    }
+
     /// <summary>A delivered row becomes a binding carrying the case, the act and the predicate.</summary>
     [TestMethod]
     public void ADeliveredRowBecomesAnE6BindingWithItsOwnTerms()

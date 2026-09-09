@@ -1,5 +1,6 @@
 using System.Text.Json.Serialization;
 using Lex.V3.Contracts;
+using Lex.V3.Contracts.Custody;
 using Lex.V3.Contracts.Facts;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Europe;
@@ -34,6 +35,29 @@ public enum EuCaseLawLinkProductionRefusal
     /// </remarks>
     [JsonStringEnumMemberName("target_body_scope_not_supplied")]
     TargetBodyScopeNotSupplied = 4,
+
+    /// <summary>
+    /// The proven pages would not reopen into verified rows.
+    /// </summary>
+    /// <remarks>
+    /// Distinct from <see cref="EnumerationProofRefused"/>: the enumeration was proven and the
+    /// failure is later, in re-deriving each page's rows from its retained bytes. Folding the two
+    /// would report a proof failure for a delivery whose proof held.
+    /// </remarks>
+    [JsonStringEnumMemberName("verified_rows_refused")]
+    VerifiedRowsRefused = 5,
+
+    /// <summary>
+    /// The caller supplied no body scope for an act this run actually asked about.
+    /// </summary>
+    /// <remarks>
+    /// Distinct from <see cref="TargetBodyScopeNotSupplied"/>, which is about an act a DELIVERED ROW
+    /// named. This one is about the run's own question: a batch member with no scope cannot produce
+    /// links even if the publisher answers for it, so the run would report a proven empty set for an
+    /// act it really did ask about. Caught before the request rather than after the answer.
+    /// </remarks>
+    [JsonStringEnumMemberName("requested_act_body_scope_not_supplied")]
+    RequestedActBodyScopeNotSupplied = 6,
 }
 
 /// <summary>
@@ -107,25 +131,39 @@ public sealed class EuCaseLawLinkProductionResult
     public string? Detail { get; }
     public bool Delivered => Refusal == EuCaseLawLinkProductionRefusal.None;
 
+    /// <summary>
+    /// How many product requests the run this result came from actually sent.
+    /// </summary>
+    /// <remarks>
+    /// Carried on a refusal as well as a success, because a refused run still spent the publisher's
+    /// budget and a receipt reporting nothing for it would understate the traffic caused.
+    /// </remarks>
+    public int ProductRequestCount { get; private init; }
+
     internal static EuCaseLawLinkProductionResult Success(
         IReadOnlyList<EuCaseLawLinkRelation> relations,
         IReadOnlyList<EuCaseLawUnrepresentableRow> unrepresentableRows,
         IReadOnlySet<string> actsAskedAbout,
-        SourceArtifactRef completionEvidenceRef) =>
+        SourceArtifactRef completionEvidenceRef,
+        int productRequestCount = 0) =>
         new(Array.AsReadOnly(relations.ToArray()),
             Array.AsReadOnly(unrepresentableRows.ToArray()), actsAskedAbout, completionEvidenceRef,
-            EuCaseLawLinkProductionRefusal.None, null);
+            EuCaseLawLinkProductionRefusal.None, null) { ProductRequestCount = productRequestCount };
 
     internal static EuCaseLawLinkProductionResult Refused(
         EuCaseLawLinkProductionRefusal refusal,
-        string detail)
+        string detail,
+        int productRequestCount = 0)
     {
         if (refusal == EuCaseLawLinkProductionRefusal.None)
         {
             throw new ArgumentOutOfRangeException(nameof(refusal));
         }
 
-        return new(null, null, null, null, refusal, detail);
+        return new(null, null, null, null, refusal, detail)
+        {
+            ProductRequestCount = productRequestCount,
+        };
     }
 
     /// <summary>
@@ -206,8 +244,112 @@ public sealed class EuCaseLawLinkProductionResult
 /// nothing behind to notice.
 /// </para>
 /// </remarks>
-public static class EuCaseLawLinkProducer
+public sealed class EuCaseLawLinkProducer
 {
+    private readonly EuRepeatedEnumerationExecutor _executor;
+    private readonly RepeatedEnumerationDeliveryReopenGlue _reopenGlue;
+
+    public EuCaseLawLinkProducer(ICustodyStore custodyStore, TimeProvider timeProvider)
+        : this(custodyStore, timeProvider, null)
+    {
+    }
+
+    internal EuCaseLawLinkProducer(
+        ICustodyStore custodyStore,
+        TimeProvider timeProvider,
+        System.Net.Http.HttpMessageHandler? testHandlerOverride)
+    {
+        ArgumentNullException.ThrowIfNull(custodyStore);
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _executor = new EuRepeatedEnumerationExecutor(custodyStore, timeProvider, testHandlerOverride);
+        _reopenGlue = new RepeatedEnumerationDeliveryReopenGlue(custodyStore);
+    }
+
+    /// <summary>
+    /// Runs the family and reads its proven rows. The only public way to obtain links.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// THE ACTS THIS RUN ASKED ABOUT ARE ITS OWN BATCH, in the plan's canonical form, not the keys
+    /// of the caller's scope map. Those are different sets and the difference is a false absence: a
+    /// caller supplying scopes for A and B while the batch asks only about A would have
+    /// <c>ForEuWork(B)</c> answer an evidenced empty set for an act nobody enumerated.
+    /// </para>
+    /// <para>
+    /// A scope is still required for every requested act, and refused by name before the request
+    /// rather than after the answer, because an act with no scope cannot produce links even when the
+    /// publisher answers for it.
+    /// </para>
+    /// </remarks>
+    public async Task<EuCaseLawLinkProductionResult> RunAsync(
+        EuCaseLawRunRequest request,
+        IReadOnlyDictionary<string, TargetBodyScope> actBodyScopes,
+        BoundMachineRequest sourceWitness,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(actBodyScopes);
+        ArgumentNullException.ThrowIfNull(sourceWitness);
+
+        var scopes = Exactly(actBodyScopes);
+        var asked = EuCaseLawDiscoveryPlan.RequestedPartitionMembers(request.BatchWorks);
+        foreach (var act in asked)
+        {
+            if (!scopes.ContainsKey(act))
+            {
+                return EuCaseLawLinkProductionResult.Refused(
+                    EuCaseLawLinkProductionRefusal.RequestedActBodyScopeNotSupplied,
+                    $"This run asks about {act} and no body scope was supplied for it.");
+            }
+        }
+
+        var run = await _executor.RunCaseLawLinksAsync(
+            request, sourceWitness, cancellationToken).ConfigureAwait(false);
+        if (run.Receipt is not { } receipt)
+        {
+            return EuCaseLawLinkProductionResult.Refused(
+                EuCaseLawLinkProductionRefusal.EnumerationRefused,
+                run.Refusal?.Code.ToString() ?? "enumeration returned neither a receipt nor a refusal",
+                run.ProductRequestCount);
+        }
+
+        var proof = receipt.TryProveFamilyEnumeration(receipt.Delivery.PartitionKey, out var proofRefusal);
+        if (proof is null)
+        {
+            return EuCaseLawLinkProductionResult.Refused(
+                EuCaseLawLinkProductionRefusal.EnumerationProofRefused,
+                proofRefusal.ToString(),
+                run.ProductRequestCount);
+        }
+
+        var pages = new List<RepeatedEnumerationResolvedEvidence>(receipt.Delivery.PagesA.Pages.Count);
+        foreach (var page in receipt.Delivery.PagesA.Pages.OrderBy(static value => value.Ordinal))
+        {
+            pages.Add(await _reopenGlue.ReopenPageEvidenceAsync(page.Evidence, cancellationToken)
+                .ConfigureAwait(false));
+        }
+
+        var profile = request.Plan.CreateDeliveryProfile();
+        var rows = VerifiedRepeatedEnumerationRows.TryOpen(
+            proof,
+            receipt.Delivery,
+            profile,
+            receipt.Delivery.InterpretationProfileRef,
+            receipt.Delivery.CountA.HttpEvidenceRef,
+            pages,
+            out var rowRefusal);
+        if (rows is null)
+        {
+            return EuCaseLawLinkProductionResult.Refused(
+                EuCaseLawLinkProductionRefusal.VerifiedRowsRefused,
+                rowRefusal.ToString(),
+                run.ProductRequestCount);
+        }
+
+        return DecodeRows(
+            rows, profile, scopes, proof.AcquisitionRunRef, asked, run.ProductRequestCount);
+    }
+
     /// <summary>
     /// Decodes one delivered page set into bindings.
     /// </summary>
@@ -215,16 +357,59 @@ public static class EuCaseLawLinkProducer
     /// Each act's own body scope, keyed by its Cellar work URI. A row naming an act absent from this
     /// map is refused rather than defaulted.
     /// </param>
-    public static EuCaseLawLinkProductionResult DecodeRows(
+    /// <summary>
+    /// The supplied scopes, re-keyed under the exact comparer this identity boundary requires.
+    /// </summary>
+    /// <remarks>
+    /// A CELLAR WORK URI IS AN EXACT COORDINATE and case is part of it. The map arrives from the
+    /// caller, so its comparer is the caller's choice, and an OrdinalIgnoreCase one made a scope
+    /// supplied for <c>/resource/CELLAR/…</c> answer for the distinct canonical
+    /// <c>/resource/cellar/…</c>: the run sent traffic and bound the requested act to evidence
+    /// supplied for another coordinate, and the pre-request refusal meant to prevent exactly that
+    /// never fired. Codex found this at head <c>a27760b5</c>.
+    ///
+    /// Copied rather than merely wrapped, because a wrapper still answers through the comparer it
+    /// was given. Both the preflight and the decode read through this copy.
+    /// </remarks>
+    private static Dictionary<string, TargetBodyScope> Exactly(
+        IReadOnlyDictionary<string, TargetBodyScope> supplied)
+    {
+        var exact = new Dictionary<string, TargetBodyScope>(StringComparer.Ordinal);
+        foreach (var pair in supplied)
+        {
+            exact[pair.Key] = pair.Value;
+        }
+
+        return exact;
+    }
+
+    /// <remarks>
+    /// INTERNAL, and deliberately. A public decoder taking a caller's rows and a caller's evidence
+    /// reference is the unnamed intermediate Candidate 5 R5.3 forbids: it can mint links from rows
+    /// nobody proved, citing custody nobody established. Callers come through
+    /// <see cref="RunAsync"/>; tests reach this by <c>InternalsVisibleTo</c>, which is a test seam
+    /// and not a second public door.
+    /// </remarks>
+    /// <param name="actsAskedAbout">
+    /// The acts the RUN asked about, canonical. Null falls back to the scope map's keys, which is
+    /// what a decode-only caller can offer and is why the run supplies its own.
+    /// </param>
+    internal static EuCaseLawLinkProductionResult DecodeRows(
         IReadOnlyList<RepeatedEnumerationRow> rows,
         RepeatedEnumerationInterpretationProfile profile,
         IReadOnlyDictionary<string, TargetBodyScope> actBodyScopes,
-        SourceArtifactRef completionEvidenceRef)
+        SourceArtifactRef completionEvidenceRef,
+        IReadOnlyList<string>? actsAskedAbout = null,
+        int productRequestCount = 0)
     {
         ArgumentNullException.ThrowIfNull(rows);
         ArgumentNullException.ThrowIfNull(profile);
         ArgumentNullException.ThrowIfNull(actBodyScopes);
         ArgumentNullException.ThrowIfNull(completionEvidenceRef);
+
+        // Read under the exact comparer here as well, so the guard holds for a direct internal
+        // caller and not only for the one RunAsync makes.
+        var exactScopes = Exactly(actBodyScopes);
 
         var relations = new List<EuCaseLawLinkRelation>(rows.Count);
         var unrepresentable = new List<EuCaseLawUnrepresentableRow>();
@@ -241,7 +426,7 @@ public static class EuCaseLawLinkProducer
                     EuCaseLawLinkProductionRefusal.RowNotAdmitted, exception.Message);
             }
 
-            if (!actBodyScopes.TryGetValue(euWorkUri, out var scope))
+            if (!exactScopes.TryGetValue(euWorkUri, out var scope))
             {
                 return EuCaseLawLinkProductionResult.Refused(
                     EuCaseLawLinkProductionRefusal.TargetBodyScopeNotSupplied,
@@ -272,8 +457,11 @@ public static class EuCaseLawLinkProducer
         }
 
         return EuCaseLawLinkProductionResult.Success(
-            relations, unrepresentable, actBodyScopes.Keys.ToHashSet(StringComparer.Ordinal),
-            completionEvidenceRef);
+            relations,
+            unrepresentable,
+            (actsAskedAbout ?? exactScopes.Keys.ToArray()).ToHashSet(StringComparer.Ordinal),
+            completionEvidenceRef,
+            productRequestCount);
     }
 
     private static EuCaseLawLinkRelation DecodeRow(
