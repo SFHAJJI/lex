@@ -36,6 +36,28 @@ public enum EuCaseLawLinkProductionRefusal
     TargetBodyScopeNotSupplied = 4,
 }
 
+/// <summary>
+/// One delivered row that names a real citation this contract cannot carry as a link, because
+/// the publisher delivered nothing that proves which side is the case.
+/// </summary>
+/// <remarks>
+/// <para>
+/// This exists so that "kept and typed, never dropped" is true of the rows too, not only of the
+/// ECLI state. The row is well formed and the citation is real; what is missing is an identity
+/// <c>OfficialIdentifier.ProvesCase()</c> accepts, and inventing one is forbidden.
+/// </para>
+/// <para>
+/// It is deliberately NOT a refusal of the whole production. A malformed row means the delivery
+/// itself cannot be trusted, so that refuses everything; this row is trustworthy and simply
+/// unrepresentable, and sinking the act's other links over it would lose facts the publisher did
+/// deliver. Structural exclusions are first class here rather than absences.
+/// </para>
+/// </remarks>
+public sealed record EuCaseLawUnrepresentableRow(
+    string CaseWorkUri,
+    string EuWorkUri,
+    string PredicateUri);
+
 /// <summary>One admitted case-law link and the coordinates it was read from.</summary>
 public sealed record EuCaseLawLinkRelation(
     string CaseWorkUri,
@@ -48,17 +70,25 @@ public sealed class EuCaseLawLinkProductionResult
 {
     private EuCaseLawLinkProductionResult(
         IReadOnlyList<EuCaseLawLinkRelation>? relations,
+        IReadOnlyList<EuCaseLawUnrepresentableRow>? unrepresentableRows,
         SourceArtifactRef? completionEvidenceRef,
         EuCaseLawLinkProductionRefusal refusal,
         string? detail)
     {
         Relations = relations;
+        UnrepresentableRows = unrepresentableRows;
         CompletionEvidenceRef = completionEvidenceRef;
         Refusal = refusal;
         Detail = detail;
     }
 
     public IReadOnlyList<EuCaseLawLinkRelation>? Relations { get; }
+
+    /// <summary>
+    /// Delivered citations no link could be built for, kept rather than dropped. Null on a
+    /// refused run, for the same reason <see cref="Relations"/> is.
+    /// </summary>
+    public IReadOnlyList<EuCaseLawUnrepresentableRow>? UnrepresentableRows { get; }
     public SourceArtifactRef? CompletionEvidenceRef { get; }
     public EuCaseLawLinkProductionRefusal Refusal { get; }
     public string? Detail { get; }
@@ -66,8 +96,10 @@ public sealed class EuCaseLawLinkProductionResult
 
     internal static EuCaseLawLinkProductionResult Success(
         IReadOnlyList<EuCaseLawLinkRelation> relations,
+        IReadOnlyList<EuCaseLawUnrepresentableRow> unrepresentableRows,
         SourceArtifactRef completionEvidenceRef) =>
-        new(Array.AsReadOnly(relations.ToArray()), completionEvidenceRef,
+        new(Array.AsReadOnly(relations.ToArray()),
+            Array.AsReadOnly(unrepresentableRows.ToArray()), completionEvidenceRef,
             EuCaseLawLinkProductionRefusal.None, null);
 
     internal static EuCaseLawLinkProductionResult Refused(
@@ -79,7 +111,7 @@ public sealed class EuCaseLawLinkProductionResult
             throw new ArgumentOutOfRangeException(nameof(refusal));
         }
 
-        return new(null, null, refusal, detail);
+        return new(null, null, null, refusal, detail);
     }
 
     /// <summary>
@@ -95,6 +127,25 @@ public sealed class EuCaseLawLinkProductionResult
         }
 
         return Array.AsReadOnly(Relations
+            .Where(value => string.Equals(value.EuWorkUri, euWorkUri, StringComparison.Ordinal))
+            .ToArray());
+    }
+
+    /// <summary>
+    /// The delivered citations for one exact EU act that could not become links. A caller that
+    /// reads <see cref="ForEuWork"/> and ignores this is reading a partial answer as a whole one,
+    /// which is why the two are separate methods rather than one filtered list.
+    /// </summary>
+    public IReadOnlyList<EuCaseLawUnrepresentableRow> UnrepresentableForEuWork(string euWorkUri)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(euWorkUri);
+        if (!Delivered || UnrepresentableRows is null || CompletionEvidenceRef is null)
+        {
+            throw new InvalidOperationException(
+                "A refused case-law production has no admitted links.");
+        }
+
+        return Array.AsReadOnly(UnrepresentableRows
             .Where(value => string.Equals(value.EuWorkUri, euWorkUri, StringComparison.Ordinal))
             .ToArray());
     }
@@ -147,6 +198,7 @@ public static class EuCaseLawLinkProducer
         ArgumentNullException.ThrowIfNull(completionEvidenceRef);
 
         var relations = new List<EuCaseLawLinkRelation>(rows.Count);
+        var unrepresentable = new List<EuCaseLawUnrepresentableRow>();
         foreach (var row in rows)
         {
             string euWorkUri;
@@ -174,6 +226,15 @@ public static class EuCaseLawLinkProducer
                 relations.Add(DecodeRow(
                     row, profile, euWorkUri, scope, completionEvidenceRef.ResourceId));
             }
+            catch (CaseSideNotProvableException)
+            {
+                // Well formed, and a real citation, but nothing delivered proves which side is the
+                // case. Kept as a typed exclusion instead of refusing the act's other links.
+                unrepresentable.Add(new EuCaseLawUnrepresentableRow(
+                    RequireIri(Term(row, profile, "case_work"), "case_work"),
+                    euWorkUri,
+                    RequireIri(Term(row, profile, "case_predicate"), "case_predicate")));
+            }
             catch (ArgumentException exception)
             {
                 return EuCaseLawLinkProductionResult.Refused(
@@ -181,7 +242,8 @@ public static class EuCaseLawLinkProducer
             }
         }
 
-        return EuCaseLawLinkProductionResult.Success(relations, completionEvidenceRef);
+        return EuCaseLawLinkProductionResult.Success(
+            relations, unrepresentable, completionEvidenceRef);
     }
 
     private static EuCaseLawLinkRelation DecodeRow(
@@ -191,9 +253,9 @@ public static class EuCaseLawLinkProducer
         TargetBodyScope targetBodyScope,
         string observationId)
     {
-        if (row.Terms.Count != profile.ProjectionVariables.Count || row.Terms.Count != 10)
+        if (row.Terms.Count != profile.ProjectionVariables.Count || row.Terms.Count != 13)
         {
-            throw new ArgumentException("A case-law row has ten exact terms.", nameof(row));
+            throw new ArgumentException("A case-law row has thirteen exact terms.", nameof(row));
         }
 
         var caseWorkUri = RequireIri(Term(row, profile, "case_work"), "case_work");
@@ -205,11 +267,13 @@ public static class EuCaseLawLinkProducer
         // Create's own ArgumentException and leaves this producer as RowNotAdmitted.
         var predicateUri = RequireIri(Term(row, profile, "case_predicate"), "case_predicate");
 
-        var ecli = RequireEcliFromItsTermNotItsMarker(
-            Term(row, profile, "ecli"), Term(row, profile, "ecli_kind"));
+        var caseIdentifier = RequireCaseIdentityFromItsTermsNotItsMarkers(
+            Term(row, profile, "ecli"),
+            Term(row, profile, "ecli_kind"),
+            Term(row, profile, "case_celex"),
+            Term(row, profile, "case_celex_kind"));
 
-        var caseIdentity = new OfficialIdentitySet(
-            PublisherId.EuEurLex, [new OfficialIdentifier(FactsIdentifierFamily.Ecli, ecli)]);
+        var caseIdentity = new OfficialIdentitySet(PublisherId.EuEurLex, [caseIdentifier]);
         var actIdentity = new OfficialIdentitySet(
             PublisherId.EuEurLex,
             [new OfficialIdentifier(FactsIdentifierFamily.CellarWorkUri, euWorkUri)]);
@@ -220,39 +284,107 @@ public static class EuCaseLawLinkProducer
     }
 
     /// <summary>
-    /// Reads the ECLI from the term, and refuses when the plan's marker disagrees with it.
+    /// Reads the case's identity from its terms, using the markers only to detect disagreement.
     /// </summary>
     /// <remarks>
-    /// The marker cannot be the authority: it is this codebase's own <c>BIND</c> about a row. But a
+    /// <para>
+    /// A marker cannot be the authority: it is this codebase's own <c>BIND</c> about a row. But a
     /// marker that contradicts its term is not noise either — it means the delivery is not what
-    /// either side believes, so the row is refused rather than read past. A case with no ECLI is a
-    /// real shape the plan asks for explicitly, and it is refused here for a different reason: E6's
-    /// binding cannot prove the case side without one.
+    /// either side believes, so the row is refused rather than read past.
+    /// </para>
+    /// <para>
+    /// Either identity proves the case, because <c>OfficialIdentifier.ProvesCase()</c> accepts a
+    /// well-formed ECLI or a sector-6 CELEX. The plan asks for the CELEX only on the branch where
+    /// the ECLI is absent, so exactly one of the two is answered per row and the markers say which:
+    /// an ECLI-bearing row carries <see cref="EuCaseLawDiscoveryPlan.CelexNotAskedKind"/>, and a row
+    /// without one carries a real CELEX answer. A row claiming both, or neither, is a delivery this
+    /// plan cannot have produced.
+    /// </para>
+    /// <para>
+    /// Where the publisher honestly has neither, this throws
+    /// <see cref="CaseSideNotProvableException"/> rather than a plain refusal, and the caller keeps
+    /// the row as a typed exclusion. Earlier this producer refused the whole production for that
+    /// shape, which contradicted the accepted "never dropped" and took the act's other links with
+    /// it.
+    /// </para>
     /// </remarks>
-    private static string RequireEcliFromItsTermNotItsMarker(
-        RepeatedEnumerationRdfTerm ecli, RepeatedEnumerationRdfTerm marker)
+    private static OfficialIdentifier RequireCaseIdentityFromItsTermsNotItsMarkers(
+        RepeatedEnumerationRdfTerm ecli,
+        RepeatedEnumerationRdfTerm ecliMarker,
+        RepeatedEnumerationRdfTerm celex,
+        RepeatedEnumerationRdfTerm celexMarker)
     {
-        var termIsBoundLiteral =
-            ecli.Kind == RepeatedEnumerationRdfTermKind.Literal && !string.IsNullOrEmpty(ecli.Value);
-        var markerSaysUnbound = string.Equals(
-            marker.Value, EuCaseLawDiscoveryPlan.UnboundEcliKind, StringComparison.Ordinal);
+        var ecliIsBoundLiteral = IsBoundLiteral(ecli);
+        var ecliMarkerSaysUnbound = string.Equals(
+            ecliMarker.Value, EuCaseLawDiscoveryPlan.UnboundEcliKind, StringComparison.Ordinal);
 
-        if (termIsBoundLiteral == markerSaysUnbound)
+        if (ecliIsBoundLiteral == ecliMarkerSaysUnbound)
         {
             throw new ArgumentException(
                 "The ecli term and the ecli_kind marker disagree about whether an ECLI was delivered.",
                 nameof(ecli));
         }
 
-        if (!termIsBoundLiteral)
+        var celexWasNotAsked = string.Equals(
+            celexMarker.Value, EuCaseLawDiscoveryPlan.CelexNotAskedKind, StringComparison.Ordinal);
+        if (ecliIsBoundLiteral != celexWasNotAsked)
         {
             throw new ArgumentException(
-                "A case-law link needs the case's own ECLI to prove which side is the case.",
-                nameof(ecli));
+                "The plan asks for the CELEX only where the ECLI is absent, so a row cannot answer "
+                    + "both questions or neither.",
+                nameof(celexMarker));
         }
 
-        return ecli.Value!;
+        if (ecliIsBoundLiteral)
+        {
+            if (celex.Kind != RepeatedEnumerationRdfTermKind.Unbound)
+            {
+                throw new ArgumentException(
+                    "A row whose CELEX was never asked for cannot carry one.", nameof(celex));
+            }
+
+            return new OfficialIdentifier(FactsIdentifierFamily.Ecli, ecli.Value!);
+        }
+
+        var celexIsBoundLiteral = IsBoundLiteral(celex);
+        var celexMarkerSaysUnbound = string.Equals(
+            celexMarker.Value, EuCaseLawDiscoveryPlan.UnboundCelexKind, StringComparison.Ordinal);
+
+        if (celexIsBoundLiteral == celexMarkerSaysUnbound)
+        {
+            throw new ArgumentException(
+                "The case_celex term and its marker disagree about whether a CELEX was delivered.",
+                nameof(celex));
+        }
+
+        if (!celexIsBoundLiteral)
+        {
+            throw new CaseSideNotProvableException(
+                "The publisher delivered neither an ECLI nor a CELEX for this case.");
+        }
+
+        var identifier = new OfficialIdentifier(FactsIdentifierFamily.Celex, celex.Value!);
+
+        // ProvesCase is asked rather than restated: sector 6 is case law and this producer does not
+        // own that rule. A CELEX outside it is a real identity for something that is not a case, so
+        // the row is unrepresentable rather than malformed.
+        if (!identifier.ProvesCase())
+        {
+            throw new CaseSideNotProvableException(
+                "The delivered CELEX does not prove the subject is case law.");
+        }
+
+        return identifier;
     }
+
+    private static bool IsBoundLiteral(RepeatedEnumerationRdfTerm term) =>
+        term.Kind == RepeatedEnumerationRdfTermKind.Literal && !string.IsNullOrEmpty(term.Value);
+
+    /// <summary>
+    /// A row whose citation is real but whose case side no delivered identity proves. Separate from
+    /// every other refusal because it does not mean the delivery is untrustworthy.
+    /// </summary>
+    private sealed class CaseSideNotProvableException(string message) : ArgumentException(message);
 
     private static string RequireIri(RepeatedEnumerationRdfTerm term, string name)
     {
