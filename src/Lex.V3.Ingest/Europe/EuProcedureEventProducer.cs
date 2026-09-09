@@ -246,15 +246,25 @@ public sealed class EuProcedureEventProductionResult
 /// delivered as an IRI reading "iri" is not the query's marker at all.
 /// </para>
 /// <para>
-/// THE PRODUCER OWNS THE RUN, and that is what makes the intermediate a NAMED one. Candidate 5 R5.3
-/// requires that drafts and legal-analysis records cannot be accepted through an unnamed
-/// intermediate. Before this, <c>DecodeRows</c> was public and took a caller-supplied row list and a
+/// THE PRODUCER OWNS THE RUN, and the reason is S2-A01: what this family publishes are PUBLISHER
+/// assertions, and an assertion resting on rows a caller handed in and custody a caller named is not
+/// one. Before this, <c>DecodeRows</c> was public and took a caller-supplied row list and a
 /// caller-supplied evidence reference, so observations could be minted from rows nobody had proven,
 /// citing custody nobody had established. Now the public door is <see cref="RunAsync"/>: it drives
 /// the executor, requires a receipt, proves the enumeration, reopens each page's retained bytes and
 /// passes them through <see cref="VerifiedRepeatedEnumerationRows.TryOpen"/> before any row is read.
 /// The completion evidence a record cites is the RUN'S OWN, taken from the proof rather than
 /// accepted from a caller, and decoding is internal.
+/// </para>
+/// <para>
+/// AN EARLIER VERSION OF THIS COMMENT CITED "Candidate 5 R5.3" for a rule against an unnamed
+/// intermediate. R5.3 says no such thing: it is one sentence at <c>05-user-journeys.md:345</c>
+/// requiring every refusal envelope to carry <c>what_would_answer</c>. Neither does anything else in
+/// Candidate 5, whose R5.1-R5.5 are about refusal statuses, short-circuiting, envelopes and the
+/// scope manifest. That citation was mine and it was invented. The design above is unchanged,
+/// because it never rested on that sentence - the reviewed ruling placed this slice on S2-A01,
+/// S2-A03, S2-A04 and S2-A07 - and the retraction is written here so the next reader does not go
+/// looking for a requirement that does not exist.
 /// </para>
 /// <para>
 /// AN HONEST ABSENCE IS AN EXCLUSION, A BROKEN DELIVERY IS A REFUSAL, and the line between them is
@@ -359,10 +369,12 @@ public sealed class EuProcedureEventProducer
     /// </param>
     /// <remarks>
     /// INTERNAL, and that is the point rather than an accident of scoping. A public decoder taking a
-    /// caller's rows and a caller's evidence reference is the unnamed intermediate Candidate 5 R5.3
-    /// forbids: it can mint observations from rows nobody proved, citing custody nobody established.
-    /// Callers come through <see cref="RunAsync"/>; the tests reach this directly by
-    /// <c>InternalsVisibleTo</c>, which is a test seam and not a second public door.
+    /// caller's rows and a caller's evidence reference can mint observations from rows nobody proved,
+    /// citing custody nobody established - which is not the publisher assertion S2-A01 requires,
+    /// whatever it is labelled. Callers come through <see cref="RunAsync"/>; the tests reach this
+    /// directly by <c>InternalsVisibleTo</c>, which is a test seam and not a second public door.
+    /// (This paragraph used to cite Candidate 5 R5.3 for that. It does not say it; see the retraction
+    /// on the type.)
     /// </remarks>
     internal static EuProcedureEventProductionResult DecodeRows(
         IReadOnlyList<RepeatedEnumerationRow> rows,

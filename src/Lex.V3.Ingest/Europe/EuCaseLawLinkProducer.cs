@@ -385,10 +385,17 @@ public sealed class EuCaseLawLinkProducer
 
     /// <remarks>
     /// INTERNAL, and deliberately. A public decoder taking a caller's rows and a caller's evidence
-    /// reference is the unnamed intermediate Candidate 5 R5.3 forbids: it can mint links from rows
-    /// nobody proved, citing custody nobody established. Callers come through
-    /// <see cref="RunAsync"/>; tests reach this by <c>InternalsVisibleTo</c>, which is a test seam
-    /// and not a second public door.
+    /// reference can mint links from rows nobody proved, citing custody nobody established - and a
+    /// case-law link whose evidence a caller invented is not the publisher-asserted metadata S2-A01
+    /// and S2-A07 permit here. Callers come through <see cref="RunAsync"/>; tests reach this by
+    /// <c>InternalsVisibleTo</c>, which is a test seam and not a second public door.
+    /// </remarks>
+    /// <remarks>
+    /// THIS PARAGRAPH USED TO CITE "Candidate 5 R5.3" for a rule against an unnamed intermediate.
+    /// R5.3 is one sentence at <c>05-user-journeys.md:345</c> requiring every refusal envelope to
+    /// carry <c>what_would_answer</c>, and nothing in Candidate 5's R5.1-R5.5 forbids any such
+    /// intermediate. The citation was mine and it was invented; the door stays internal for the
+    /// reason above, which is the one the reviewed ruling placed this slice on.
     /// </remarks>
     /// <param name="actsAskedAbout">
     /// The acts the RUN asked about, canonical. Null falls back to the scope map's keys, which is
