@@ -80,10 +80,12 @@ public sealed class GuardedConstructionCensusTests
                 "Lex.V3.Ingest.Europe.EuCaseLawLinkProductionResult: constructor private instance "
                     + "Lex.V3.Ingest.Europe.EuCaseLawLinkProductionResult::.ctor, "
                     + "method internal static "
+                    + "Lex.V3.Ingest.Europe.EuCaseLawLinkProducer::DecodeRows, "
+                    + "method internal static "
                     + "Lex.V3.Ingest.Europe.EuCaseLawLinkProductionResult::Refused, "
                     + "method internal static "
                     + "Lex.V3.Ingest.Europe.EuCaseLawLinkProductionResult::Success, "
-                    + "method public static Lex.V3.Ingest.Europe.EuCaseLawLinkProducer::DecodeRows",
+                    + "method public instance Lex.V3.Ingest.Europe.EuCaseLawLinkProducer::RunAsync",
                 "Lex.V3.Ingest.Europe.EuDeliveryEvidenceSet: constructor private instance "
                     + "Lex.V3.Ingest.Europe.EuDeliveryEvidenceSet::.ctor, "
                     + "method public static "
