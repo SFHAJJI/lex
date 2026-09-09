@@ -144,8 +144,19 @@ public enum EuActForm
 /// Thirteen, assembled from two independently built sets that overlap by two rather than nesting:
 /// eleven the architect research observed on live records, and four this pipeline reads, of which
 /// two were never in the research list. Stating the union is the only honest way to carry both.
-/// Nine of the thirteen are read by nothing today, including both repeal families and all three
-/// case-law families.
+/// Six of the thirteen are asked for by a real query today; seven are asked for by nothing,
+/// including both repeal families. WHICH SIX IS NOT STATED HERE, because a sentence cannot be
+/// falsified: <c>EuRelationFamilyReachabilityTests</c> derives the partition from the rendered
+/// query templates themselves and pins it, so a family becoming asked for, or ceasing to be, fails
+/// a test instead of quietly outdating a remark.
+///
+/// This sentence used to say nine were read by nothing "including both repeal families and all
+/// three case-law families". It went stale when E6's executor integrated and began asking for two
+/// of them, and nothing failed. It was also loose before it was stale: only two families carry the
+/// case-law_ prefix, and the third it counted is a communication_case_new_ predicate.
+///
+/// Asked for is a narrower claim than read. <c>EuScopeVocabulary.ReadRelationFamilies</c> names the
+/// four this pipeline reads into a disposition, and E6 deliberately did not join that list.
 /// </remarks>
 public enum EuRelationFamily
 {
