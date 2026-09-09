@@ -66,6 +66,11 @@ internal static class EuAcquisitionTestFixture
         ["parent", "object", "predicate", "value", "value_kind", "datatype_iri", "language_tag",
             "key_1", "key_2", "key_3", "key_4", "key_5", "key_6", "key_7"];
 
+    /// <summary>E6's case-law family projection, in the plan's own order.</summary>
+    internal static readonly string[] CaseLawProjection =
+        ["case_work", "case_predicate", "eu_work", "ecli", "ecli_kind",
+            "multiplicity", "key_1", "key_2", "key_3", "key_4"];
+
     internal static readonly string[] RootWatermarkProjection =
         ["object", "value", "value_kind", "datatype_iri", "language_tag", "key_1", "key_2", "key_3", "key_4", "key_5"];
 
@@ -166,6 +171,30 @@ internal static class EuAcquisitionTestFixture
     private static string Iri(string value) => "{\"type\":\"uri\",\"value\":" + J(value) + "}";
 
     /// <summary>One family-P outcome row: a real IRI value, or the explicit unbound marker.</summary>
+    /// <summary>
+    /// One E6 case-law row: which case points at which act, over which predicate, with the case's own
+    /// ECLI. <paramref name="euWorkIri"/> is the act the row claims to be about, which is the term the
+    /// executor checks against the requested batch.
+    /// </summary>
+    internal static string CaseLawRow(
+        string caseWorkIri, string casePredicateIri, string euWorkIri, string ecli)
+    {
+        var fields = new List<(string Var, string Term)>
+        {
+            ("case_work", Iri(caseWorkIri)),
+            ("case_predicate", Iri(casePredicateIri)),
+            ("eu_work", Iri(euWorkIri)),
+            ("ecli", PlainLiteral(ecli)),
+            ("ecli_kind", PlainLiteral("literal")),
+            ("multiplicity", TypedLiteral("1", "http://www.w3.org/2001/XMLSchema#integer")),
+            ("key_1", PlainLiteral(caseWorkIri)),
+            ("key_2", PlainLiteral(casePredicateIri)),
+            ("key_3", PlainLiteral(euWorkIri)),
+            ("key_4", PlainLiteral(ecli)),
+        };
+        return Row(fields);
+    }
+
     internal static string ObjectFactRow(string objectIri, string predicateIri, string? valueIri)
     {
         var kind = valueIri is null ? "unbound" : "iri";
@@ -634,6 +663,15 @@ internal static class EuAcquisitionTestFixture
         if (body.Contains("resource_legal_type", StringComparison.Ordinal))
         {
             return "P";
+        }
+
+        // E6's case-law family is the only one that asks case-law_interpretes_resource_legal.
+        // Classified explicitly rather than left to the fallthrough for the same reason family A is:
+        // an unclassified body is answered with the CENSUS script, so the failure would surface as an
+        // unrelated census shortfall instead of as the case-law family having no script of its own.
+        if (body.Contains("case-law_interpretes_resource_legal", StringComparison.Ordinal))
+        {
+            return "CaseLaw";
         }
 
         return "Census";

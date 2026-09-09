@@ -266,6 +266,23 @@ public sealed record LuxembourgTranspositionIdentityRunRequest(
     MachineQueryRendererSource RendererSource);
 
 /// <summary>
+/// One bounded enumeration of the case-law works pointing at a batch of EU acts.
+/// </summary>
+/// <remarks>
+/// <see cref="BatchWorks"/> is this family's selection, and it is the reason this request carries one
+/// where the NIM and Legilux identity requests do not. Those two have scope fixed entirely by their
+/// plans; this family is asked ABOUT a caller-named batch of acts, because the proven counts are
+/// inbound on the act and an unbounded sweep of <c>work_cites_work</c> is not a family anyone can
+/// enumerate. The plan still fixes the five predicates and the batch capacity, so the caller chooses
+/// which acts are asked about and nothing else.
+/// </remarks>
+public sealed record EuCaseLawRunRequest(
+    EuCaseLawDiscoveryPlan Plan,
+    IReadOnlyList<string> BatchWorks,
+    string PlanResourceId,
+    MachineQueryRendererSource RendererSource);
+
+/// <summary>
 /// Why <see cref="EuRepeatedEnumerationExecutor.RunWitnessTraversalAsync"/> did not deliver a real
 /// canonical entry set. Closed, and deliberately narrower than <see cref="EuEnumerationRefusal"/>:
 /// the witness traversal drives none of that enum's two-pass, threshold or keyset-continuation shape
@@ -653,6 +670,61 @@ public sealed class EuRepeatedEnumerationExecutor
                         BindNationalImplementingMeasurePage(request, pass, cursor, selected, evidenceRef),
                     batchObjects: null,
                     batchMembershipKeyOrdinal: null,
+                    cancellationToken)
+                .ConfigureAwait(false);
+        }
+        finally
+        {
+            session.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// The case-law link family for one batch of EU acts, one session and two passes.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This is the first entry point that asks the publisher a case-law question. Every other family
+    /// binds a closed predicate list containing none of E6's five, which is why
+    /// <c>EuScopeDimensions</c> could record that "all three case-law families" are read by nothing.
+    /// </para>
+    /// <para>
+    /// It is batched, so it passes <c>batchObjects</c> and a membership ordinal where the NIM and
+    /// Legilux identity families pass null for both. The ordinal is read from the profile rather than
+    /// written as a literal, so a cursor reordering in the plan moves it here instead of silently
+    /// verifying membership against the wrong key.
+    /// </para>
+    /// </remarks>
+    public async Task<EuEnumerationRunResult> RunCaseLawLinksAsync(
+        EuCaseLawRunRequest request,
+        BoundMachineRequest sourceWitness,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(sourceWitness);
+
+        var session = await StartSessionAsync(sourceWitness, cancellationToken).ConfigureAwait(false);
+        if (session is null)
+        {
+            return EuEnumerationRunResult.Refused(
+                new EuEnumerationRefusalDetail(
+                    EuEnumerationRefusal.RobotsBootstrapRefused, null, null, null, null, null, null, null, null),
+                productRequestCount: 0);
+        }
+
+        try
+        {
+            var profile = request.Plan.CreateDeliveryProfile();
+            var profileRef = RepeatedEnumerationInterpretationProfileIdentity.Create(NewUrn(), profile);
+            return await RunPassesAsync(
+                    session,
+                    profile,
+                    profileRef,
+                    pass => BindCaseLawCount(request, pass),
+                    (pass, cursor, selected, evidenceRef) =>
+                        BindCaseLawPage(request, pass, cursor, selected, evidenceRef),
+                    batchObjects: request.BatchWorks,
+                    batchMembershipKeyOrdinal: CaseLawBatchMembershipKeyOrdinal(profile),
                     cancellationToken)
                 .ConfigureAwait(false);
         }
@@ -1664,6 +1736,67 @@ public sealed class EuRepeatedEnumerationExecutor
     {
         var bound = request.Plan.BindPage(
             (EuNationalImplementingMeasureQueryPass)passOrdinal,
+            cursor,
+            selected,
+            countEvidenceRef,
+            request.PlanResourceId,
+            NewUrn(),
+            request.RendererSource);
+        return new EuBoundQueryParts(
+            bound.MachinePlanRef, bound.InputArtifact.ArtifactRef, bound.Request,
+            bound.InputArtifact.PartitionBinding.MemberKey, bound.MachinePlan.ResponseCardinality.RowLimit);
+    }
+
+    /// <summary>
+    /// Which cursor position carries this family's batch member, read from the profile.
+    /// </summary>
+    /// <remarks>
+    /// The selection term is the act, which the plan's four-part cursor carries at <c>key_3</c> —
+    /// <c>key_1</c> is the case, the row's own discovered subject. Looked up by name rather than
+    /// written as an index so that reordering the plan's cursor breaks here loudly instead of
+    /// verifying batch membership against the wrong key, which would admit rows for acts nobody
+    /// asked about.
+    /// </remarks>
+    internal static int CaseLawBatchMembershipKeyOrdinal(RepeatedEnumerationInterpretationProfile profile)
+    {
+        var cursorVariables = profile.CursorVariables;
+        for (var index = 0; index < cursorVariables.Count; index++)
+        {
+            if (string.Equals(cursorVariables[index], "key_3", StringComparison.Ordinal))
+            {
+                return index;
+            }
+        }
+
+        throw new InvalidOperationException(
+            "The case-law delivery profile must carry its selected act at key_3.");
+    }
+
+    private static EuBoundQueryParts BindCaseLawCount(
+        EuCaseLawRunRequest request,
+        int passOrdinal)
+    {
+        var bound = request.Plan.BindCount(
+            (EuCaseLawQueryPass)passOrdinal,
+            request.BatchWorks,
+            request.PlanResourceId,
+            NewUrn(),
+            request.RendererSource);
+        return new EuBoundQueryParts(
+            bound.MachinePlanRef, bound.InputArtifact.ArtifactRef, bound.Request,
+            bound.InputArtifact.PartitionBinding.MemberKey, null);
+    }
+
+    private static EuBoundQueryParts BindCaseLawPage(
+        EuCaseLawRunRequest request,
+        int passOrdinal,
+        IReadOnlyList<string>? cursor,
+        long selected,
+        SourceArtifactRef countEvidenceRef)
+    {
+        var bound = request.Plan.BindPage(
+            (EuCaseLawQueryPass)passOrdinal,
+            request.BatchWorks,
             cursor,
             selected,
             countEvidenceRef,
