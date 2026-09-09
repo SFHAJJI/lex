@@ -80,11 +80,13 @@ public sealed class EuTranspositionBridgePopulationResult
     private EuTranspositionBridgePopulationResult(
         IReadOnlyList<EuTranspositionBridgePopulationRow>? rows,
         IReadOnlyList<EuNationalImplementingMeasureOutOfE5WorkKindExclusion>? exclusions,
+        IReadOnlyList<EuNationalImplementingMeasurePublisherCoordinatesConflict>? conflicts,
         EuTranspositionBridgePopulationRefusal refusal,
         string? detail)
     {
         Rows = rows;
         OutOfE5WorkKindExclusions = exclusions;
+        PublisherCoordinateConflicts = conflicts;
         Refusal = refusal;
         Detail = detail;
     }
@@ -92,14 +94,18 @@ public sealed class EuTranspositionBridgePopulationResult
     public IReadOnlyList<EuTranspositionBridgePopulationRow>? Rows { get; }
     public IReadOnlyList<EuNationalImplementingMeasureOutOfE5WorkKindExclusion>?
         OutOfE5WorkKindExclusions { get; }
+    public IReadOnlyList<EuNationalImplementingMeasurePublisherCoordinatesConflict>?
+        PublisherCoordinateConflicts { get; }
     public EuTranspositionBridgePopulationRefusal Refusal { get; }
     public string? Detail { get; }
     public bool Delivered => Refusal == EuTranspositionBridgePopulationRefusal.None;
 
     internal static EuTranspositionBridgePopulationResult Success(
         IReadOnlyList<EuTranspositionBridgePopulationRow> rows,
-        IReadOnlyList<EuNationalImplementingMeasureOutOfE5WorkKindExclusion> exclusions) =>
+        IReadOnlyList<EuNationalImplementingMeasureOutOfE5WorkKindExclusion> exclusions,
+        IReadOnlyList<EuNationalImplementingMeasurePublisherCoordinatesConflict> conflicts) =>
         new(Array.AsReadOnly(rows.ToArray()), Array.AsReadOnly(exclusions.ToArray()),
+            Array.AsReadOnly(conflicts.ToArray()),
             EuTranspositionBridgePopulationRefusal.None, null);
 
     internal static EuTranspositionBridgePopulationResult Refused(
@@ -110,7 +116,7 @@ public sealed class EuTranspositionBridgePopulationResult
         {
             throw new ArgumentOutOfRangeException(nameof(refusal));
         }
-        return new(null, null, refusal, detail);
+        return new(null, null, null, refusal, detail);
     }
 }
 
@@ -144,7 +150,8 @@ public sealed class EuTranspositionBridgePopulationProducer
                 "A complete bridge population requires a nonempty declared EU work scope.");
         }
         if (!legilux.Delivered || !nim.Delivered || legilux.Relations is null ||
-            nim.Relations is null || nim.OutOfE5WorkKindExclusions is null)
+            nim.Relations is null || nim.OutOfE5WorkKindExclusions is null ||
+            nim.PublisherCoordinateConflicts is null)
         {
             return EuTranspositionBridgePopulationResult.Refused(
                 EuTranspositionBridgePopulationRefusal.SourceNotDelivered,
@@ -224,6 +231,7 @@ public sealed class EuTranspositionBridgePopulationProducer
             rows.Add(new EuTranspositionBridgePopulationRow(item.Bridge, receipts));
         }
 
-        return EuTranspositionBridgePopulationResult.Success(rows, nim.OutOfE5WorkKindExclusions);
+        return EuTranspositionBridgePopulationResult.Success(
+            rows, nim.OutOfE5WorkKindExclusions, nim.PublisherCoordinateConflicts);
     }
 }

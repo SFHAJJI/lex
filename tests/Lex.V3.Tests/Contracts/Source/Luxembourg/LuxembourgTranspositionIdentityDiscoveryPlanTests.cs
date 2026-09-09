@@ -9,6 +9,21 @@ namespace Lex.V3.Tests.Contracts.Source.Luxembourg;
 public sealed class LuxembourgTranspositionIdentityDiscoveryPlanTests
 {
     private const string EuEli = "http://data.europa.eu/eli/dir/2020/284/oj";
+
+    [TestMethod]
+    public void TheSelectionRetainsAllThreeAdmittedDirectiveEliFamiliesWithoutRewritingThem()
+    {
+        const string Delegated = "http://data.europa.eu/eli/dir_del/2012/50/oj";
+        const string Implementing = "http://data.europa.eu/eli/dir_impl/2010/75/oj";
+
+        var selection = LuxembourgTranspositionIdentityDiscoveryPlan.CanonicalizeSelection(
+            [Implementing, Delegated, EuEli]);
+
+        CollectionAssert.AreEqual(
+            new[] { EuEli, Delegated, Implementing }.Order(StringComparer.Ordinal).ToArray(),
+            selection.ToArray());
+    }
+
     [TestMethod]
     public void ThePlanSelectsRequiredEuIdentitiesAndKeepsClassificationOptional()
     {

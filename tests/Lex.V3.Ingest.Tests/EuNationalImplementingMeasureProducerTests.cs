@@ -219,9 +219,11 @@ public sealed class EuNationalImplementingMeasureProducerTests
     [TestMethod]
     public void TheTargetWorkKindAndEliMustBeExactPublisherEvidence()
     {
+        const string UnadmittedPublisherType =
+            "http://publications.europa.eu/resource/authority/resource-type/UNADMITTED";
         var wrongKind = Decode(Row(
-            euWorkKind: "http://publications.europa.eu/resource/authority/resource-type/DEC",
-            key6: EuNationalImplementingMeasureDiscoveryPlan.DirectiveResourceTypeIri));
+            euWorkKind: UnadmittedPublisherType,
+            key6: UnadmittedPublisherType));
         var wrongEli = Decode(Row(euWorkEli: "https://example.invalid/eli/dir/2020/1/oj"));
         var missingKind = Decode(Row(euWorkKind: null));
         var missingEli = Decode(Row(euWorkEli: null));
@@ -231,7 +233,7 @@ public sealed class EuNationalImplementingMeasureProducerTests
         StringAssert.Contains(wrongKind.Detail, "eu_work_kind");
         StringAssert.Contains(
             wrongKind.Detail,
-            "http://publications.europa.eu/resource/authority/resource-type/DEC",
+            UnadmittedPublisherType,
             "The typed refusal must retain the exact unadmitted publisher value for diagnosis.");
         Assert.IsFalse(wrongEli.Delivered);
         Assert.AreEqual(EuNationalImplementingMeasureProductionRefusal.RowNotAdmitted, wrongEli.Refusal);
@@ -265,6 +267,7 @@ public sealed class EuNationalImplementingMeasureProducerTests
             EuNationalImplementingMeasureDiscoveryPlan.DelegatedDirectiveResourceTypeIri,
             delegatedRelation.PublisherWorkTypeIri);
         Assert.IsEmpty(delegated.OutOfE5WorkKindExclusions!);
+        Assert.IsEmpty(delegated.PublisherCoordinateConflicts!);
 
         Assert.IsTrue(implementing.Delivered, implementing.Detail);
         var implementingRelation = implementing.Relations!.Single();
@@ -273,6 +276,7 @@ public sealed class EuNationalImplementingMeasureProducerTests
             EuNationalImplementingMeasureDiscoveryPlan.ImplementingDirectiveResourceTypeIri,
             implementingRelation.PublisherWorkTypeIri);
         Assert.IsEmpty(implementing.OutOfE5WorkKindExclusions!);
+        Assert.IsEmpty(implementing.PublisherCoordinateConflicts!);
     }
 
     [TestMethod]
@@ -301,30 +305,42 @@ public sealed class EuNationalImplementingMeasureProducerTests
     }
 
     [TestMethod]
-    public void RawPublisherTypeAndEliFamilyMustAgreeBeforeMappingOrExclusion()
+    public void RawPublisherTypeAndEliFamilyConflictIsRetainedWithoutChoosingEitherCoordinate()
     {
         var result = Decode(Row(
             euWorkEli: DecisionEli,
             euWorkKind: EuNationalImplementingMeasureDiscoveryPlan.DelegatedDirectiveResourceTypeIri));
 
-        Assert.IsFalse(result.Delivered);
-        Assert.AreEqual(EuNationalImplementingMeasureProductionRefusal.RowNotAdmitted, result.Refusal);
-        StringAssert.Contains(result.Detail, "publisher eu_work_kind and ELI family disagree");
+        Assert.IsTrue(result.Delivered, result.Detail);
+        Assert.IsEmpty(result.Relations!);
+        Assert.IsEmpty(result.OutOfE5WorkKindExclusions!);
+        var conflict = result.PublisherCoordinateConflicts!.Single();
+        Assert.AreEqual("publisher_coordinates_conflict", conflict.Disposition);
+        Assert.AreEqual(EuWork, conflict.EuWorkUri);
+        Assert.AreEqual(DecisionEli, conflict.EuWorkEli);
+        Assert.AreEqual(
+            EuNationalImplementingMeasureDiscoveryPlan.DelegatedDirectiveResourceTypeIri,
+            conflict.PublisherWorkTypeIri);
+        Assert.AreEqual(Nim, conflict.NimWorkUri);
+        Assert.AreEqual("72020L0001", conflict.NimCelex);
+        Assert.AreEqual(Evidence, conflict.EvidenceRef);
+        Assert.ThrowsExactly<InvalidOperationException>(() => result.ForEuWork(EuWork));
     }
 
     [TestMethod]
-    public void AnExistingDirectiveEliContradictionRemainsObservableForReconciliation()
+    public void TheObservedDirectiveRegulationCoordinateConflictIsEvidenceBound()
     {
         var result = Decode(Row(
             euWorkEli: "http://data.europa.eu/eli/reg/2021/1187/oj",
             euWorkKind: EuNationalImplementingMeasureDiscoveryPlan.DirectiveResourceTypeIri));
 
         Assert.IsTrue(result.Delivered, result.Detail);
-        var relation = result.Relations!.Single();
-        Assert.AreEqual(EuWorkKind.Directive, relation.WorkKindAssertion.Kind);
+        Assert.IsEmpty(result.Relations!);
+        var conflict = result.PublisherCoordinateConflicts!.Single();
+        Assert.AreEqual("http://data.europa.eu/eli/reg/2021/1187/oj", conflict.EuWorkEli);
         Assert.AreEqual(
             EuNationalImplementingMeasureDiscoveryPlan.DirectiveResourceTypeIri,
-            relation.PublisherWorkTypeIri);
+            conflict.PublisherWorkTypeIri);
     }
 
     [TestMethod]
@@ -339,6 +355,7 @@ public sealed class EuNationalImplementingMeasureProducerTests
         StringAssert.Contains(result.Detail, Other);
         Assert.IsNull(result.Relations);
         Assert.IsNull(result.OutOfE5WorkKindExclusions);
+        Assert.IsNull(result.PublisherCoordinateConflicts);
     }
 
     [TestMethod]
@@ -348,11 +365,15 @@ public sealed class EuNationalImplementingMeasureProducerTests
             Row(),
             Row(
                 euWorkEli: DecisionEli,
-                euWorkKind: EuNationalImplementingMeasureDiscoveryPlan.DecisionResourceTypeIri));
+                euWorkKind: EuNationalImplementingMeasureDiscoveryPlan.DecisionResourceTypeIri),
+            Row(
+                euWorkEli: "http://data.europa.eu/eli/reg/2021/1187/oj",
+                euWorkKind: EuNationalImplementingMeasureDiscoveryPlan.DirectiveResourceTypeIri));
 
         Assert.IsTrue(result.Delivered, result.Detail);
         Assert.HasCount(1, result.Relations!);
         Assert.HasCount(1, result.OutOfE5WorkKindExclusions!);
+        Assert.HasCount(1, result.PublisherCoordinateConflicts!);
     }
 
     private static EuNationalImplementingMeasureProductionResult Decode(params RepeatedEnumerationRow[] rows) =>

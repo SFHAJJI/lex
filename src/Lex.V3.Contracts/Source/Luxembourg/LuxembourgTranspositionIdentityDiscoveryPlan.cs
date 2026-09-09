@@ -235,7 +235,7 @@ public sealed class LuxembourgTranspositionIdentityDiscoveryPlan
         {
             if (OfficialIdentifier.EliMintedBy(value) != PublisherId.EuEurLex ||
                 !Uri.TryCreate(value, UriKind.Absolute, out var uri) ||
-                !uri.AbsolutePath.StartsWith("/eli/dir/", StringComparison.Ordinal))
+                !IsAdmittedDirectiveEliPath(uri.AbsolutePath))
             {
                 throw new ArgumentException(
                     $"Batch member '{value}' is not an exact EU directive ELI.", nameof(batchEuElis));
@@ -249,6 +249,11 @@ public sealed class LuxembourgTranspositionIdentityDiscoveryPlan
         }
         return Array.AsReadOnly(values);
     }
+
+    private static bool IsAdmittedDirectiveEliPath(string absolutePath) =>
+        absolutePath.StartsWith("/eli/dir/", StringComparison.Ordinal) ||
+        absolutePath.StartsWith("/eli/dir_del/", StringComparison.Ordinal) ||
+        absolutePath.StartsWith("/eli/dir_impl/", StringComparison.Ordinal);
 
     internal static string[] PadBatch(IReadOnlyList<string> canonicalSortedBatch)
     {

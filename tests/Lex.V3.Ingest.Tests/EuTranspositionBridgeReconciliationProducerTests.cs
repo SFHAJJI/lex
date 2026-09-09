@@ -192,7 +192,31 @@ public sealed class EuTranspositionBridgeReconciliationProducerTests
             null,
             NimCompletion);
         var nim = EuNationalImplementingMeasureProductionResult.Success(
-            [NimRelation(Cellar, EuEli, Measure1, 'd')], [exclusion], NimCompletion, 4);
+            [NimRelation(Cellar, EuEli, Measure1, 'd')], [exclusion], [], NimCompletion, 4);
+
+        var result = await ProduceAsync(
+            Legilux(LegiluxRelation(Measure1)), Identities(Identity(Measure1)), nim);
+
+        Assert.AreEqual(
+            EuTranspositionBridgeReconciliationRefusal.NimWorkIdentityNotConsistent,
+            result.Refusal);
+        Assert.IsNull(result.Population);
+    }
+
+    [TestMethod]
+    public async Task OnePublisherIdentityCannotBeBothAdmittedAndAPublisherCoordinateConflict()
+    {
+        var conflict = new EuNationalImplementingMeasurePublisherCoordinatesConflict(
+            Cellar,
+            EuEli,
+            EuNationalImplementingMeasureDiscoveryPlan.DelegatedDirectiveResourceTypeIri,
+            OtherCellar,
+            "72020L0001",
+            EuNationalImplementingMeasureDiscoveryPlan.ImplementsResourceLegalPredicateIri,
+            Measure1,
+            NimCompletion);
+        var nim = EuNationalImplementingMeasureProductionResult.Success(
+            [NimRelation(Cellar, EuEli, Measure1, 'd')], [], [conflict], NimCompletion, 4);
 
         var result = await ProduceAsync(
             Legilux(LegiluxRelation(Measure1)), Identities(Identity(Measure1)), nim);
@@ -248,7 +272,7 @@ public sealed class EuTranspositionBridgeReconciliationProducerTests
 
     private static EuNationalImplementingMeasureProductionResult Nim(
         params EuNationalImplementingMeasureRelation[] relations) =>
-        EuNationalImplementingMeasureProductionResult.Success(relations, [], NimCompletion, 4);
+        EuNationalImplementingMeasureProductionResult.Success(relations, [], [], NimCompletion, 4);
 
     private static EuNationalImplementingMeasureRelation NimRelation(
         string cellar,
