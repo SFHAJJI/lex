@@ -306,6 +306,99 @@ public sealed class LuxembourgDraftGraphProducerTests
         Assert.AreEqual("fr", record.ValueLanguageTag, "the language tag is what identifies it.");
     }
 
+    /// <summary>
+    /// The one admitted absence does not extend to the other column, to another kind of term, or to
+    /// the query's own absence branch.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// THE FIRST REPAIR WAS TOO WIDE AND THE REVIEW CAUGHT IT. Reading any unbound qualifier as the
+    /// empty string admitted an IRI-valued row with either column simply missing, because that row's
+    /// expected qualifier is empty anyway and its totalised cursor key is empty either way — so
+    /// "the publisher answered empty" and "nothing arrived" became the same row, which is the
+    /// evidence ambiguity this family exists to refuse.
+    /// </para>
+    /// <para>
+    /// The measurement says which of those the publisher actually does. Both columns are bound by
+    /// <c>IF(isLiteral(?value), ..., "")</c>, which answers an empty plain literal for a term that is
+    /// not a literal, and the retained page bears it out: of its 41 bindings 23 are IRI-valued and
+    /// <c>datatype_iri</c> is present and empty in every one. The absence branch binds both columns
+    /// to <c>""</c> outright. So the only honest absence is <c>datatype_iri</c> on a LANGUAGE-TAGGED
+    /// literal, and each of these rows is otherwise coherent — one column removed, nothing else.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    [DataRow("datatype_iri", "iri", DisplayName = "an IRI value must answer its datatype column")]
+    [DataRow("language_tag", "iri", DisplayName = "an IRI value must answer its language column")]
+    [DataRow("datatype_iri", "unbound", DisplayName = "the absence branch binds its datatype column")]
+    [DataRow("language_tag", "unbound", DisplayName = "the absence branch binds its language column")]
+    [DataRow("datatype_iri", "plain", DisplayName = "a plain literal must answer its datatype column")]
+    [DataRow("language_tag", "langString", DisplayName = "a language-tagged literal still answers LANG")]
+    public void AMissingQualifierIsRefusedOutsideTheOneMeasuredException(string column, string shape)
+    {
+        var value = shape switch
+        {
+            "iri" => Iri(Directive),
+            "unbound" => RepeatedEnumerationRdfTerm.Unbound(),
+            "plain" => Literal("2024-07-11", XsdDate),
+            _ => Literal("en-cours", null, "fr"),
+        };
+
+        var result = Decode(WithoutColumn(
+            Row(
+                predicate: shape == "iri"
+                    ? LuxembourgDraftGraphDiscoveryPlan.DraftTransposesPredicateIri
+                    : LuxembourgDraftGraphDiscoveryPlan.StatusDraftPredicateIri,
+                value: value),
+            column));
+
+        Assert.AreEqual(
+            LuxembourgDraftGraphProductionRefusal.RowNotAdmitted, result.Refusal,
+            $"a missing {column} on a {shape} value is not this query's answer: {result.Detail}");
+    }
+
+    /// <summary>
+    /// The admitted exception is keyed on the VALUE, not on the columns, so a row cannot claim it by
+    /// dropping both.
+    /// </summary>
+    /// <remarks>
+    /// Keying it on the language COLUMN would have been the obvious reading and is circular: a row
+    /// that omitted both columns would present as "no language, so no exception" or as "empty
+    /// language" depending on which column was consulted first. The term carries the tag itself, and
+    /// SPARQL JSON delivers it on the value whether or not <c>LANG()</c> was projected.
+    /// </remarks>
+    [TestMethod]
+    public void ARowDroppingBothQualifiersCannotClaimTheLanguageTaggedException()
+    {
+        var row = WithoutColumn(
+            WithoutColumn(
+                Row(
+                    predicate: LuxembourgDraftGraphDiscoveryPlan.StatusDraftPredicateIri,
+                    value: Literal("en-cours", null, "fr")),
+                "datatype_iri"),
+            "language_tag");
+
+        var result = Decode(row);
+
+        Assert.AreEqual(
+            LuxembourgDraftGraphProductionRefusal.RowNotAdmitted, result.Refusal,
+            $"LANG() answers on this term, so the language column cannot be missing: {result.Detail}");
+    }
+
+    /// <summary>One projected column removed from an otherwise coherent row, as the wire drops it.</summary>
+    /// <remarks>
+    /// The cursor keys are deliberately left alone. SPARQL JSON omits an unbound variable from the
+    /// binding, and the totalised key derived from it still arrives as the empty string, so a row
+    /// with the column gone and the key present is exactly what this engine sends.
+    /// </remarks>
+    private static RepeatedEnumerationRow WithoutColumn(RepeatedEnumerationRow row, string column)
+    {
+        var terms = row.Terms.ToList();
+        terms[Profile().ProjectionVariables.ToList().IndexOf(column)] =
+            RepeatedEnumerationRdfTerm.Unbound();
+        return new RepeatedEnumerationRow(terms, terms, terms);
+    }
+
     /// <summary>A delivered transposition intention becomes a record carrying its exact terms.</summary>
     [TestMethod]
     public void ADeliveredTranspositionBecomesARecord()

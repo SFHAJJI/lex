@@ -369,13 +369,10 @@ public sealed class LuxembourgDraftGraphProducer
         var draftIri = RequireIri(draftTerm, "draft");
         var predicateIri = RequireIri(predicateTerm, "predicate");
 
-        // THE QUALIFIER COLUMNS MAY BE ABSENT, and that is the publisher's own encoding rather than a
-        // malformed row. EuPageDecodeClassificationTests retains the page: for a language-tagged
-        // literal this engine does not answer DATATYPE() with rdf:langString, so the BIND errors and
-        // the column is simply omitted from the binding. Requiring a plain literal here refused 32
-        // of 373 rows on that page, and would refuse every language-tagged statusDraft value.
-        var datatype = ReadQualifier(row, profile, "datatype_iri");
-        var language = ReadQualifier(row, profile, "language_tag");
+        // ONE qualifier column may be absent, in ONE case, and it is the case this engine was
+        // measured doing. Everywhere else the query answers both columns and the row must carry them.
+        var datatype = ReadQualifier(row, profile, "datatype_iri", valueTerm);
+        var language = ReadQualifier(row, profile, "language_tag", valueTerm);
 
         // The qualifier columns must agree with the term they describe. Both are bound from
         // DATATYPE() and LANG() over that very term, so an honest delivery cannot disagree, and a
@@ -460,23 +457,53 @@ public sealed class LuxembourgDraftGraphProducer
     }
 
     /// <summary>
-    /// One qualifier column, reading the publisher's own absence as the empty string.
+    /// One qualifier column, admitting the single absence this engine was measured producing.
     /// </summary>
     /// <remarks>
-    /// Unbound is a value here rather than a malformation, because this engine leaves the column
-    /// unbound for a language-tagged literal. Anything that IS present must still be the query's own
-    /// unqualified plain literal: an absent column is the publisher answering nothing, while an
-    /// IRI-valued one did not come from this query at all.
+    /// <para>
+    /// THE EXCEPTION IS ONE COLUMN ON ONE KIND OF TERM, not a general permission for a qualifier to
+    /// go missing. Both columns are bound by <c>IF(isLiteral(?value), ..., "")</c>, which answers an
+    /// empty plain literal for anything that is not a literal, and the query's own absence branch
+    /// binds both to <c>""</c> outright. So the ONLY row that can honestly arrive without a column is
+    /// a language-tagged literal missing <c>datatype_iri</c>, because this Virtuoso will not answer
+    /// <c>DATATYPE()</c> with <c>rdf:langString</c> and the erroring BIND drops that one column.
+    /// <c>LANG()</c> answers on the same term, so <c>language_tag</c> is still delivered.
+    /// </para>
+    /// <para>
+    /// A FIRST REPAIR HERE WAS TOO WIDE, and the review caught it. Mapping any unbound qualifier to
+    /// the empty string admitted an IRI-valued row with either column missing, because that row's
+    /// expected qualifier is empty too and the totalised cursor key is empty either way - so the
+    /// evidence for "the publisher answered empty" and for "nothing arrived" became the same row. The
+    /// retained page says which of those actually happens: of its 41 bindings 23 are IRI-valued and
+    /// <c>datatype_iri</c> is present and empty in EVERY one. A missing column on such a row is not
+    /// this query's answer and is refused.
+    /// </para>
     /// </remarks>
     private static string ReadQualifier(
         RepeatedEnumerationRow row,
         RepeatedEnumerationInterpretationProfile profile,
-        string name)
+        string name,
+        RepeatedEnumerationRdfTerm valueTerm)
     {
         var term = Term(row, profile, name);
-        return term.Kind == RepeatedEnumerationRdfTermKind.Unbound
-            ? string.Empty
-            : RequirePlainLiteral(term, name);
+        if (term.Kind != RepeatedEnumerationRdfTermKind.Unbound)
+        {
+            return RequirePlainLiteral(term, name);
+        }
+
+        // Keyed on the VALUE TERM's own language rather than on the language COLUMN, so the exception
+        // cannot be claimed by a row that simply omitted both.
+        if (!string.Equals(name, "datatype_iri", StringComparison.Ordinal) ||
+            valueTerm.Kind != RepeatedEnumerationRdfTermKind.Literal ||
+            string.IsNullOrEmpty(valueTerm.Language))
+        {
+            throw new ArgumentException(
+                $"{name} is absent, and this query answers it for every term but the datatype of a "
+                    + "language-tagged literal.",
+                nameof(row));
+        }
+
+        return string.Empty;
     }
 
     private static string RequireIri(RepeatedEnumerationRdfTerm term, string name)
