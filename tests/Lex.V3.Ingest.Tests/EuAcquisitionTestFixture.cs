@@ -69,7 +69,8 @@ internal static class EuAcquisitionTestFixture
     /// <summary>E6's case-law family projection, in the plan's own order.</summary>
     internal static readonly string[] CaseLawProjection =
         ["case_work", "case_predicate", "eu_work", "ecli", "ecli_kind",
-            "multiplicity", "key_1", "key_2", "key_3", "key_4"];
+            "case_celex", "case_celex_kind",
+            "multiplicity", "key_1", "key_2", "key_3", "key_4", "key_5"];
 
     internal static readonly string[] RootWatermarkProjection =
         ["object", "value", "value_kind", "datatype_iri", "language_tag", "key_1", "key_2", "key_3", "key_4", "key_5"];
@@ -176,22 +177,51 @@ internal static class EuAcquisitionTestFixture
     /// ECLI. <paramref name="euWorkIri"/> is the act the row claims to be about, which is the term the
     /// executor checks against the requested batch.
     /// </summary>
+    /// <summary>
+    /// One delivered case-law row. <paramref name="ecli"/> null means the publisher held none, in
+    /// which case the plan asks for the CELEX instead and <paramref name="celex"/> answers that
+    /// question — null there in turn is the honest "neither identity exists" shape.
+    /// </summary>
     internal static string CaseLawRow(
-        string caseWorkIri, string casePredicateIri, string euWorkIri, string ecli)
+        string caseWorkIri,
+        string casePredicateIri,
+        string euWorkIri,
+        string? ecli,
+        string? celex = null)
     {
         var fields = new List<(string Var, string Term)>
         {
             ("case_work", Iri(caseWorkIri)),
             ("case_predicate", Iri(casePredicateIri)),
             ("eu_work", Iri(euWorkIri)),
-            ("ecli", PlainLiteral(ecli)),
-            ("ecli_kind", PlainLiteral("literal")),
-            ("multiplicity", TypedLiteral("1", "http://www.w3.org/2001/XMLSchema#integer")),
-            ("key_1", PlainLiteral(caseWorkIri)),
-            ("key_2", PlainLiteral(casePredicateIri)),
-            ("key_3", PlainLiteral(euWorkIri)),
-            ("key_4", PlainLiteral(ecli)),
         };
+
+        if (ecli is not null)
+        {
+            fields.Add(("ecli", PlainLiteral(ecli)));
+            fields.Add(("ecli_kind", PlainLiteral("literal")));
+            fields.Add(("case_celex_kind", PlainLiteral("not_asked")));
+        }
+        else
+        {
+            fields.Add(("ecli_kind", PlainLiteral("unbound")));
+            if (celex is not null)
+            {
+                fields.Add(("case_celex", PlainLiteral(celex)));
+                fields.Add(("case_celex_kind", PlainLiteral("literal")));
+            }
+            else
+            {
+                fields.Add(("case_celex_kind", PlainLiteral("unbound")));
+            }
+        }
+
+        fields.Add(("multiplicity", TypedLiteral("1", "http://www.w3.org/2001/XMLSchema#integer")));
+        fields.Add(("key_1", PlainLiteral(caseWorkIri)));
+        fields.Add(("key_2", PlainLiteral(casePredicateIri)));
+        fields.Add(("key_3", PlainLiteral(euWorkIri)));
+        fields.Add(("key_4", PlainLiteral(ecli ?? string.Empty)));
+        fields.Add(("key_5", PlainLiteral(celex ?? string.Empty)));
         return Row(fields);
     }
 

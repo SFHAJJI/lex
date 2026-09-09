@@ -723,7 +723,11 @@ public sealed class EuRepeatedEnumerationExecutor
                     pass => BindCaseLawCount(request, pass),
                     (pass, cursor, selected, evidenceRef) =>
                         BindCaseLawPage(request, pass, cursor, selected, evidenceRef),
-                    batchObjects: request.BatchWorks,
+                    // The plan's own asked-about form, not the caller's spelling. The publisher is
+                    // asked about the canonical batch and answers in it, so comparing a delivered
+                    // key against the raw request refuses every honest row for a caller who wrote
+                    // https:// or a trailing slash - spellings the plan accepts rather than refuses.
+                    batchObjects: EuCaseLawDiscoveryPlan.RequestedPartitionMembers(request.BatchWorks),
                     batchMembershipKeyOrdinal: CaseLawBatchMembershipKeyOrdinal(profile),
                     cancellationToken)
                 .ConfigureAwait(false);

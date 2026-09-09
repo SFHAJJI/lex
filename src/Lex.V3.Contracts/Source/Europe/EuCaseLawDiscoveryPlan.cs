@@ -86,6 +86,25 @@ public sealed class EuCaseLawDiscoveryPlan
     public const string UnboundEcliKind = "unbound";
 
     /// <summary>
+    /// The predicate carrying a work's CELEX. Asked for only where it decides whether a case can
+    /// be carried at all, which is the branch where the ECLI is absent.
+    /// </summary>
+    public const string CaseLawCelexPredicateIri = Cdm + "resource_legal_id_celex";
+
+    /// <summary>The marker a row carries when the publisher holds no CELEX for that case either.</summary>
+    public const string UnboundCelexKind = "unbound";
+
+    /// <summary>
+    /// The marker a row carries when the CELEX was never asked for, because the ECLI answered first.
+    /// </summary>
+    /// <remarks>
+    /// This is deliberately not <see cref="UnboundCelexKind"/>. "We did not ask" and "we asked and
+    /// the publisher had none" are different facts, and collapsing them would manufacture exactly
+    /// the false absence the <c>FILTER NOT EXISTS</c> branches exist to prevent.
+    /// </remarks>
+    public const string CelexNotAskedKind = "not_asked";
+
+    /// <summary>
     /// How many acts one request may ask about. Fixed at 50, matching the object-facts family, so
     /// batch size is a property of this plan rather than a caller's choice.
     /// </summary>
@@ -105,10 +124,23 @@ public sealed class EuCaseLawDiscoveryPlan
     private static readonly string[] Projection =
     [
         "case_work", "case_predicate", "eu_work", "ecli", "ecli_kind",
-        "multiplicity", "key_1", "key_2", "key_3", "key_4",
+        "case_celex", "case_celex_kind",
+        "multiplicity", "key_1", "key_2", "key_3", "key_4", "key_5",
     ];
 
-    private static readonly string[] Cursor = ["key_1", "key_2", "key_3", "key_4"];
+    /// <summary>
+    /// The keyset. <c>key_5</c> carries the CELEX and is not decoration: a case whose ECLI is
+    /// absent leaves <c>key_4</c> empty, so two CELEX values on one case would otherwise produce
+    /// two rows with an identical four-key cursor and the page could not advance past them.
+    /// </summary>
+    private static readonly string[] Cursor = ["key_1", "key_2", "key_3", "key_4", "key_5"];
+
+    /// <summary>
+    /// How many cursor keys this family has. The renderer reads this rather than repeating the
+    /// number, because a cursor that grew while the renderer still bound four slots would send a
+    /// template with an unfilled slot.
+    /// </summary>
+    internal static int CursorKeyCount => Cursor.Length;
 
     private readonly byte[] _canonicalIdentityBytes;
 
@@ -126,6 +158,9 @@ public sealed class EuCaseLawDiscoveryPlan
             "batch_capacity=" + BatchCapacity.ToString(CultureInfo.InvariantCulture),
             "ecli_predicate=" + CaseLawEcliPredicateIri,
             "unbound_ecli_kind=" + UnboundEcliKind,
+            "celex_predicate=" + CaseLawCelexPredicateIri,
+            "unbound_celex_kind=" + UnboundCelexKind,
+            "celex_not_asked_kind=" + CelexNotAskedKind,
             "case_predicates=" + string.Join(',', PinnedPredicatesInOrder()),
             "cursor_envelope=" + EnumerationCursorEnvelope.Identity,
             "threshold_detector=" + ThresholdDetectorIdentity,
@@ -277,6 +312,26 @@ public sealed class EuCaseLawDiscoveryPlan
     /// conditions that made it safe.
     /// </para>
     /// </remarks>
+    /// <summary>
+    /// The batch members exactly as this plan puts them to the publisher.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A membership check downstream compares a delivered key against what was asked, and the two
+    /// have to be in one lexical form. They were not. <see cref="BindCount"/> and
+    /// <see cref="BindPage"/> send <c>PadBatch(CanonicalizeBatch(...))</c>, and
+    /// <c>EuPackRootCanonicalForm.TryCanonicalize</c> returns <c>"http://" + trimmed</c> — it
+    /// rewrites <c>https://</c> to <c>http://</c> and drops one trailing slash. So a caller's own
+    /// spelling is not what the publisher ever sees, and <c>?key_3</c> comes back in this form.
+    /// </para>
+    /// <para>
+    /// Exposed rather than re-derived by the caller, so the rule keeps one owner. The padding is not
+    /// included because it only repeats the last real member, so this is the exact set asked about.
+    /// </para>
+    /// </remarks>
+    public static IReadOnlyList<string> RequestedPartitionMembers(IReadOnlyList<string> batchWorks) =>
+        Array.AsReadOnly(CanonicalizeBatch(batchWorks));
+
     internal static string[] PadBatch(IReadOnlyList<string> canonicalSortedBatch)
     {
         var padded = new string[BatchCapacity];
@@ -329,10 +384,14 @@ public sealed class EuCaseLawDiscoveryPlan
         ArgumentNullException.ThrowIfNull(rendererSource);
         var padded = PadBatch(CanonicalizeBatch(batchWorks));
 
-        var parameters = new List<MachineQueryParameter>
-        {
-            new("pass_id", MachineQueryParameterKind.BoundedInteger, (int)pass, null, ArtifactRef),
-        };
+        // THE SELECTION COMES FIRST AND pass_id FOLLOWS IT, because that is the order
+        // RepeatedEnumerationDeliveryProof.RequireInputRoleShape requires: it builds its expectation
+        // as SelectionParameterNames.Append(PassParameterName) and compares the ordered roles by
+        // sequence. This bound pass_id first, so a fully requested, publisher-consistent delivery
+        // reached DeliveryProofRefused - "the ordered machine input parameter roles are not exact" -
+        // instead of producing a receipt. The family could refuse correctly and could never succeed.
+        // Found in review on head 067aa290.
+        var parameters = new List<MachineQueryParameter>();
         var names = BatchParameterNames();
         for (var index = 0; index < BatchCapacity; index++)
         {
@@ -340,6 +399,9 @@ public sealed class EuCaseLawDiscoveryPlan
                 names[index], MachineQueryParameterKind.PublisherLiteral,
                 null, padded[index], ArtifactRef));
         }
+
+        parameters.Add(new MachineQueryParameter(
+            "pass_id", MachineQueryParameterKind.BoundedInteger, (int)pass, null, ArtifactRef));
 
         if (isPage)
         {
@@ -402,7 +464,7 @@ public sealed class EuCaseLawDiscoveryPlan
             .Select(static predicate => "    <" + predicate + ">"));
 
         var rows = $$"""
-            SELECT ?case_work ?case_predicate ?eu_work ?ecli ?ecli_kind (COUNT(*) AS ?multiplicity) WHERE {
+            SELECT ?case_work ?case_predicate ?eu_work ?ecli ?ecli_kind ?case_celex ?case_celex_kind (COUNT(*) AS ?multiplicity) WHERE {
               VALUES ?lex_pass_id { {pass_id:uint} }
               {
                 SELECT DISTINCT ?eu_work WHERE {
@@ -418,14 +480,24 @@ public sealed class EuCaseLawDiscoveryPlan
               {
                 ?case_work <{{CaseLawEcliPredicateIri}}> ?ecli .
                 BIND(IF(isIRI(?ecli), "iri", IF(isLiteral(?ecli), "literal", "unsupported_blank_node")) AS ?ecli_kind)
+                BIND("{{CelexNotAskedKind}}" AS ?case_celex_kind)
               }
               UNION
               {
                 FILTER NOT EXISTS { ?case_work <{{CaseLawEcliPredicateIri}}> ?missing_ecli }
                 BIND("{{UnboundEcliKind}}" AS ?ecli_kind)
+                {
+                  ?case_work <{{CaseLawCelexPredicateIri}}> ?case_celex .
+                  BIND(IF(isLiteral(?case_celex), "literal", IF(isIRI(?case_celex), "iri", "unsupported_blank_node")) AS ?case_celex_kind)
+                }
+                UNION
+                {
+                  FILTER NOT EXISTS { ?case_work <{{CaseLawCelexPredicateIri}}> ?missing_celex }
+                  BIND("{{UnboundCelexKind}}" AS ?case_celex_kind)
+                }
               }
             }
-            GROUP BY ?case_work ?case_predicate ?eu_work ?ecli ?ecli_kind
+            GROUP BY ?case_work ?case_predicate ?eu_work ?ecli ?ecli_kind ?case_celex ?case_celex_kind
             """;
 
         var count = $$"""
@@ -437,7 +509,7 @@ public sealed class EuCaseLawDiscoveryPlan
             """;
 
         var page = $$"""
-            SELECT ?case_work ?case_predicate ?eu_work ?ecli ?ecli_kind ?multiplicity ?key_1 ?key_2 ?key_3 ?key_4 WHERE {
+            SELECT ?case_work ?case_predicate ?eu_work ?ecli ?ecli_kind ?case_celex ?case_celex_kind ?multiplicity ?key_1 ?key_2 ?key_3 ?key_4 ?key_5 WHERE {
               {
             {{Indent(Indent(rows))}}
               }
@@ -445,19 +517,22 @@ public sealed class EuCaseLawDiscoveryPlan
               BIND(STR(?case_predicate) AS ?key_2)
               BIND(STR(?eu_work) AS ?key_3)
               BIND(COALESCE(STR(?ecli), "") AS ?key_4)
-              VALUES (?has_cursor ?last_key_1 ?last_key_2 ?last_key_3 ?last_key_4) {
-                ({has_cursor:uint} {last_key_1:sparql_string} {last_key_2:sparql_string} {last_key_3:sparql_string} {last_key_4:sparql_string})
+              BIND(COALESCE(STR(?case_celex), "") AS ?key_5)
+              VALUES (?has_cursor ?last_key_1 ?last_key_2 ?last_key_3 ?last_key_4 ?last_key_5) {
+                ({has_cursor:uint} {last_key_1:sparql_string} {last_key_2:sparql_string} {last_key_3:sparql_string} {last_key_4:sparql_string} {last_key_5:sparql_string})
               }
               FILTER(
                 ?has_cursor = 0 || ?key_1 > ?last_key_1 ||
                 (?key_1 = ?last_key_1 && ?key_2 > ?last_key_2) ||
                 (?key_1 = ?last_key_1 && ?key_2 = ?last_key_2 && ?key_3 > ?last_key_3) ||
-                (?key_1 = ?last_key_1 && ?key_2 = ?last_key_2 && ?key_3 = ?last_key_3 && ?key_4 > ?last_key_4)
+                (?key_1 = ?last_key_1 && ?key_2 = ?last_key_2 && ?key_3 = ?last_key_3 && ?key_4 > ?last_key_4) ||
+                (?key_1 = ?last_key_1 && ?key_2 = ?last_key_2 && ?key_3 = ?last_key_3 && ?key_4 = ?last_key_4 && ?key_5 > ?last_key_5)
               )
               FILTER(?has_cursor = 0 || !(
-                ?key_1 = ?last_key_1 && ?key_2 = ?last_key_2 && ?key_3 = ?last_key_3 && ?key_4 = ?last_key_4))
+                ?key_1 = ?last_key_1 && ?key_2 = ?last_key_2 && ?key_3 = ?last_key_3 && ?key_4 = ?last_key_4 &&
+                ?key_5 = ?last_key_5))
             }
-            ORDER BY ?key_1 ?key_2 ?key_3 ?key_4
+            ORDER BY ?key_1 ?key_2 ?key_3 ?key_4 ?key_5
             LIMIT {page_limit:uint}
             """;
 
@@ -541,14 +616,15 @@ internal sealed class EuCaseLawSparqlRenderer : IMachineQueryRenderer
             throw new ArgumentException("Cursor presence must be zero or one.", nameof(input));
         }
 
-        if (parameters.Count != 2 + batchCount + (hasCursor == 1 ? 4 : 0))
+        if (parameters.Count != 2 + batchCount +
+            (hasCursor == 1 ? EuCaseLawDiscoveryPlan.CursorKeyCount : 0))
         {
             throw new ArgumentException("A page input has one exact cursor shape.", nameof(input));
         }
 
         query = Replace(query, "{page_limit:uint}", limit.ToString(CultureInfo.InvariantCulture));
         query = Replace(query, "{has_cursor:uint}", hasCursor.ToString(CultureInfo.InvariantCulture));
-        for (var ordinal = 1; ordinal <= 4; ordinal++)
+        for (var ordinal = 1; ordinal <= EuCaseLawDiscoveryPlan.CursorKeyCount; ordinal++)
         {
             var name = "last_key_" + ordinal;
             var value = hasCursor == 0 ? string.Empty : CursorValue(parameters, name);

@@ -183,11 +183,12 @@ public sealed class EuCaseLawDiscoveryPlanTests
             new[]
             {
                 "case_work", "case_predicate", "eu_work", "ecli", "ecli_kind",
-                "multiplicity", "key_1", "key_2", "key_3", "key_4",
+                "case_celex", "case_celex_kind",
+                "multiplicity", "key_1", "key_2", "key_3", "key_4", "key_5",
             },
             profile.ProjectionVariables.ToArray());
         CollectionAssert.AreEqual(
-            new[] { "key_1", "key_2", "key_3", "key_4" },
+            new[] { "key_1", "key_2", "key_3", "key_4", "key_5" },
             profile.CanonicalKeyVariables.ToArray());
         CollectionAssert.AreEqual(profile.CanonicalKeyVariables.ToArray(), profile.CursorVariables.ToArray());
         Assert.HasCount(50, profile.SelectionParameterNames);
