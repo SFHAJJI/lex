@@ -183,6 +183,47 @@ public sealed class EuCaseLawExecutorEntryPointTests
             "the refusal names the act that was never requested.");
     }
 
+    [TestMethod]
+    public async Task AnUnrequestedRowBeforeARequestedLastRowIsStillRefused()
+    {
+        const string Requested = "http://publications.europa.eu/resource/cellar/3e485e15-11bd-11e6-ba9a-01aa75ed71a1";
+        const string NeverRequested = "http://publications.europa.eu/resource/cellar/00000000-1111-2222-3333-444444444444";
+        var foreignFirst = EuAcquisitionTestFixture.CaseLawRow(
+            "http://publications.europa.eu/resource/cellar/aaaaaaaa-0000-0000-0000-000000000000",
+            EuCaseLawPredicateVocabulary.CaseLawInterpretesResourceLegalPredicateUri,
+            NeverRequested,
+            "ECLI:EU:C:2020:001");
+        var requestedLast = EuAcquisitionTestFixture.CaseLawRow(
+            "http://publications.europa.eu/resource/cellar/bbbbbbbb-0000-0000-0000-000000000000",
+            EuCaseLawPredicateVocabulary.CaseLawInterpretesResourceLegalPredicateUri,
+            Requested,
+            "ECLI:EU:C:2020:002");
+        var scripts = new Dictionary<string, EuAcquisitionTestFixture.FamilyScript>(StringComparer.Ordinal)
+        {
+            ["CaseLaw"] = EuAcquisitionTestFixture.ScriptFor(
+                "CaseLaw", 2, [foreignFirst, requestedLast], EuAcquisitionTestFixture.CaseLawProjection),
+        };
+        var executor = new EuRepeatedEnumerationExecutor(
+            new EuAcquisitionTestFixture.EuInMemoryCustodyStore(),
+            new EuAcquisitionTestFixture.FixedTimeProvider(),
+            new EuAcquisitionTestFixture.ClassifyingHandler(scripts));
+
+        var result = await executor.RunCaseLawLinksAsync(
+            new EuCaseLawRunRequest(
+                EuCaseLawDiscoveryPlan.Create(),
+                [Requested],
+                "urn:uuid:30bd64e8-bd1b-42c5-93d8-f527981682b3",
+                Source()),
+            EuAcquisitionTestFixture.SourceWitness(),
+            CancellationToken.None);
+
+        Assert.AreEqual(
+            EuEnumerationRefusal.DeliveredRowOutsidePartition,
+            result.Refusal?.Code,
+            result.Refusal?.CoreRefusalDetail);
+        Assert.AreEqual(NeverRequested, result.Refusal?.OffendingKey);
+    }
+
     /// <summary>
     /// An act requested in a spelling the plan canonicalises is still that caller's own act.
     /// </summary>

@@ -349,6 +349,16 @@ public sealed class EuObjectFactsDiscoveryPlanTests
             () => EuObjectFactsDiscoveryPlan.PartitionKeyFor([RootA, https]));
     }
 
+    [TestMethod]
+    public void RequestedPartitionMembersExposeTheSameCanonicalIdentitiesThePlanBinds()
+    {
+        var admittedAlias = "https" + RootA["http".Length..] + "/";
+
+        CollectionAssert.AreEqual(
+            new[] { RootA },
+            EuObjectFactsDiscoveryPlan.RequestedPartitionMembers([admittedAlias]).ToArray());
+    }
+
     // ---- Bind round trips. ----
 
     private static readonly byte[] RendererSourceBytes =
@@ -1004,4 +1014,3 @@ public sealed class EuObjectFactsDiscoveryPlanTests
                 typeof(EuObjectFactsDiscoveryPlan).Assembly, typeof(EuObjectFactsBoundQuery), true).ToArray());
     }
 }
-
