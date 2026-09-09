@@ -42,13 +42,37 @@ public sealed class EuTranspositionBridgePopulationProducerTests
         Assert.HasCount(2, result.Rows);
         Assert.AreEqual(Directive, result.Rows[0].Bridge.EuWorkUri);
         Assert.AreEqual(Regulation, result.Rows[1].Bridge.EuWorkUri);
-        Assert.IsNotNull(result.Rows[0].NormalisedEliJoinEvidenceReceipt);
+        Assert.HasCount(1, result.Rows[0].NormalisedEliJoinEvidenceReceipts);
         Assert.AreEqual(
-            result.Rows[0].Bridge.NormalisedEliJoin!.EvidenceRef.Sha256,
-            result.Rows[0].NormalisedEliJoinEvidenceReceipt!.Reference.ContentSha256);
-        Assert.IsNull(result.Rows[1].NormalisedEliJoinEvidenceReceipt);
+            result.Rows[0].Bridge.NormalisedEliJoins[0].EvidenceRef.Sha256,
+            result.Rows[0].NormalisedEliJoinEvidenceReceipts[0].Reference.ContentSha256);
+        Assert.IsEmpty(result.Rows[1].NormalisedEliJoinEvidenceReceipts);
         Assert.AreEqual(EuTransposability.NotTransposable, result.Rows[1].Bridge.Transposability);
         Assert.AreEqual(1, store.CreateCallCount);
+    }
+
+    [TestMethod]
+    public async Task EvidenceBoundOutOfE5WorkKindRowsSurviveTheCompletedPopulation()
+    {
+        var decision = new EuNationalImplementingMeasureOutOfE5WorkKindExclusion(
+            OutsideScope,
+            "http://data.europa.eu/eli/dec/2020/1/oj",
+            EuNationalImplementingMeasureDiscoveryPlan.DecisionResourceTypeIri,
+            OutsideScope,
+            "72020D0001",
+            EuNationalImplementingMeasureDiscoveryPlan.ImplementsResourceLegalPredicateIri,
+            null,
+            Completion);
+        var nim = EuNationalImplementingMeasureProductionResult.Success([], [decision], Completion, 0);
+
+        var result = await new EuTranspositionBridgePopulationProducer(
+            new EuAcquisitionTestFixture.EuInMemoryCustodyStore()).ProduceAsync(
+                [Kind(Directive, EuWorkKind.Directive)], Legilux(), nim, CancellationToken.None);
+
+        Assert.IsTrue(result.Delivered, result.Detail);
+        var retained = result.OutOfE5WorkKindExclusions!.Single();
+        Assert.AreSame(decision, retained);
+        Assert.AreEqual("out_of_e5_work_kind", retained.Disposition);
     }
 
     [TestMethod]
@@ -170,11 +194,11 @@ public sealed class EuTranspositionBridgePopulationProducerTests
             new byte[] { 0xff }, CustodyClass.NightlyFloor90d, CancellationToken.None);
 
         Assert.ThrowsExactly<ArgumentException>(
-            () => new EuTranspositionBridgePopulationRow(joined, null));
+            () => new EuTranspositionBridgePopulationRow(joined, []));
         Assert.ThrowsExactly<ArgumentException>(
-            () => new EuTranspositionBridgePopulationRow(unjoined, receipt));
+            () => new EuTranspositionBridgePopulationRow(unjoined, [receipt]));
         Assert.ThrowsExactly<ArgumentException>(
-            () => new EuTranspositionBridgePopulationRow(joined, receipt));
+            () => new EuTranspositionBridgePopulationRow(joined, [receipt]));
     }
 
     private static EuWorkKindAssertion Kind(string work, EuWorkKind kind) =>
@@ -187,26 +211,27 @@ public sealed class EuTranspositionBridgePopulationProducerTests
 
     private static EuNationalImplementingMeasureProductionResult Nim(
         params EuNationalImplementingMeasureRelation[] relations) =>
-        EuNationalImplementingMeasureProductionResult.Success(relations, Completion, 0);
+        EuNationalImplementingMeasureProductionResult.Success(relations, [], Completion, 0);
 
     private static LuxembourgTranspositionRelation Relation(
         string work, string measure, EuTranspositionSourceAcquisition acquisition) =>
-        new(work, measure, acquisition);
+        new(work, measure, acquisition, Completion);
 
     private static EuNationalImplementingMeasureRelation NimRelation(
         string work, string? eli, EuTranspositionSourceAcquisition acquisition) =>
-        new(work, Kind(work, EuWorkKind.Directive), work, "72020L0001",
+        new(work, Kind(work, EuWorkKind.Directive),
+            EuNationalImplementingMeasureDiscoveryPlan.DirectiveResourceTypeIri, work, "72020L0001",
             EuNationalImplementingMeasureDiscoveryPlan.ImplementsResourceLegalPredicateIri, eli, acquisition);
 
     private static EuTranspositionSourceAcquisition LegiluxSide() =>
         new(EuTranspositionAssertedBy.Legilux, EuRelationAcquisitionState.Complete,
-            new EuTranspositionSide(EuTranspositionAssertedBy.Legilux, LegiluxEli,
-                LegiluxEvidence, null, null), Completion);
+            [new EuTranspositionSide(EuTranspositionAssertedBy.Legilux, LegiluxEli,
+                LegiluxEvidence, null, null)], Completion);
 
     private static EuTranspositionSourceAcquisition NimSide() =>
         new(EuTranspositionAssertedBy.Nim, EuRelationAcquisitionState.Complete,
-            new EuTranspositionSide(EuTranspositionAssertedBy.Nim, NimEli,
-                NimEvidence, EuMemberStateDisclaimer.Text, EuMemberStateDisclaimer.SourceUri), Completion);
+            [new EuTranspositionSide(EuTranspositionAssertedBy.Nim, NimEli,
+                NimEvidence, EuMemberStateDisclaimer.Text, EuMemberStateDisclaimer.SourceUri)], Completion);
 
     private static SourceArtifactRef Ref(char value) =>
         new($"urn:uuid:{value}{value}{value}{value}{value}{value}{value}{value}-{value}{value}{value}{value}-4{value}{value}{value}-8{value}{value}{value}-{new string(value, 12)}",

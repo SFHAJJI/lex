@@ -32,16 +32,16 @@ public sealed class EuTranspositionBridgeTests
     /// <summary>A source that asserted a measure, its bounded acquisition complete.</summary>
     private static EuTranspositionSourceAcquisition Asserted(
         EuTranspositionAssertedBy by, string label = "01") =>
-        new(by, EuRelationAcquisitionState.Complete, Side(by, label), EvC(label));
+        new(by, EuRelationAcquisitionState.Complete, [Side(by, label)], EvC(label));
 
     /// <summary>A source whose completed acquisition found nothing: a proven absence.</summary>
     private static EuTranspositionSourceAcquisition ProvenAbsent(
         EuTranspositionAssertedBy by, string label = "02") =>
-        new(by, EuRelationAcquisitionState.Complete, null, EvC(label));
+        new(by, EuRelationAcquisitionState.Complete, [], EvC(label));
 
     /// <summary>A source never queried: an open question, not an absence.</summary>
     private static EuTranspositionSourceAcquisition Unacquired(EuTranspositionAssertedBy by) =>
-        new(by, EuRelationAcquisitionState.Unacquired, null, null);
+        new(by, EuRelationAcquisitionState.Unacquired, [], null);
 
     // ---- The separation, which is what REL-003 is for. ----
 
@@ -59,21 +59,21 @@ public sealed class EuTranspositionBridgeTests
     {
         var wrongInLegilux = Assert.ThrowsExactly<ArgumentException>(() => new EuTranspositionBridge(
             Directive, EuWorkKind.Directive, EuTransposability.Transposable,
-            Asserted(EuTranspositionAssertedBy.Nim), Asserted(EuTranspositionAssertedBy.Nim), null));
+            Asserted(EuTranspositionAssertedBy.Nim), Asserted(EuTranspositionAssertedBy.Nim), []));
         Assert.AreEqual("legilux", wrongInLegilux.ParamName);
 
         var wrongInNim = Assert.ThrowsExactly<ArgumentException>(() => new EuTranspositionBridge(
             Directive, EuWorkKind.Directive, EuTransposability.Transposable,
-            Asserted(EuTranspositionAssertedBy.Legilux), Asserted(EuTranspositionAssertedBy.Legilux), null));
+            Asserted(EuTranspositionAssertedBy.Legilux), Asserted(EuTranspositionAssertedBy.Legilux), []));
         Assert.AreEqual("nim", wrongInNim.ParamName);
 
         // And a publisher's own acquisition cannot hold the other publisher's assertion either.
         var crossed = Assert.ThrowsExactly<ArgumentException>(() => new EuTranspositionSourceAcquisition(
             EuTranspositionAssertedBy.Legilux,
             EuRelationAcquisitionState.Complete,
-            Side(EuTranspositionAssertedBy.Nim),
+            [Side(EuTranspositionAssertedBy.Nim)],
             Ev("09")));
-        Assert.AreEqual("side", crossed.ParamName);
+        Assert.AreEqual("sides", crossed.ParamName);
     }
 
     /// <summary>
@@ -86,11 +86,11 @@ public sealed class EuTranspositionBridgeTests
             Directive, EuWorkKind.Directive, EuTransposability.Transposable,
             Asserted(EuTranspositionAssertedBy.Legilux, "02"),
             Asserted(EuTranspositionAssertedBy.Nim, "03"),
-            new EuNormalisedEliJoin(LuMeasure, Ev("04")));
+            [new EuNormalisedEliJoin(LuMeasure, Ev("04"))]);
 
-        Assert.AreEqual(EuTranspositionAssertedBy.Legilux, bridge.Legilux.Side!.AssertedBy);
-        Assert.AreEqual(EuTranspositionAssertedBy.Nim, bridge.Nim.Side!.AssertedBy);
-        Assert.AreNotSame(bridge.Legilux.Side.EvidenceRef, bridge.Nim.Side.EvidenceRef);
+        Assert.AreEqual(EuTranspositionAssertedBy.Legilux, bridge.Legilux.Sides[0]!.AssertedBy);
+        Assert.AreEqual(EuTranspositionAssertedBy.Nim, bridge.Nim.Sides[0]!.AssertedBy);
+        Assert.AreNotSame(bridge.Legilux.Sides[0].EvidenceRef, bridge.Nim.Sides[0].EvidenceRef);
     }
 
     // ---- The typed answer for regulations. ----
@@ -109,7 +109,7 @@ public sealed class EuTranspositionBridgeTests
         var bridge = new EuTranspositionBridge(
             Gdpr, EuWorkKind.Regulation, EuTransposability.NotTransposable,
             ProvenAbsent(EuTranspositionAssertedBy.Legilux),
-            ProvenAbsent(EuTranspositionAssertedBy.Nim), null);
+            ProvenAbsent(EuTranspositionAssertedBy.Nim), []);
 
         Assert.AreEqual(EuTransposability.NotTransposable, bridge.Transposability);
         Assert.AreEqual(EuTransposability.NotTransposable,
@@ -134,13 +134,13 @@ public sealed class EuTranspositionBridgeTests
             () => new EuTranspositionBridge(
                 Gdpr, EuWorkKind.Regulation, EuTransposability.Transposable,
                 Unacquired(EuTranspositionAssertedBy.Legilux),
-                Unacquired(EuTranspositionAssertedBy.Nim), null));
+                Unacquired(EuTranspositionAssertedBy.Nim), []));
         Assert.AreEqual("transposability", claimedTransposable.ParamName);
 
         Assert.ThrowsExactly<ArgumentException>(() => new EuTranspositionBridge(
             Directive, EuWorkKind.Directive, EuTransposability.NotTransposable,
             Unacquired(EuTranspositionAssertedBy.Legilux),
-            Unacquired(EuTranspositionAssertedBy.Nim), null));
+            Unacquired(EuTranspositionAssertedBy.Nim), []));
     }
 
     /// <summary>
@@ -158,7 +158,7 @@ public sealed class EuTranspositionBridgeTests
                  })
         {
             var error = Assert.ThrowsExactly<ArgumentException>(() => new EuTranspositionBridge(
-                Gdpr, EuWorkKind.Regulation, EuTransposability.NotTransposable, legilux, nim, null));
+                Gdpr, EuWorkKind.Regulation, EuTransposability.NotTransposable, legilux, nim, []));
             Assert.AreEqual("transposability", error.ParamName);
         }
     }
@@ -204,7 +204,7 @@ public sealed class EuTranspositionBridgeTests
     public void CompletionEvidenceBelongsToACompletedAcquisitionAndOnlyToOne()
     {
         var missing = Assert.ThrowsExactly<ArgumentException>(() => new EuTranspositionSourceAcquisition(
-            EuTranspositionAssertedBy.Legilux, EuRelationAcquisitionState.Complete, null, null));
+            EuTranspositionAssertedBy.Legilux, EuRelationAcquisitionState.Complete, [], null));
         Assert.AreEqual("completionEvidenceRef", missing.ParamName);
 
         foreach (var state in new[]
@@ -216,7 +216,7 @@ public sealed class EuTranspositionBridgeTests
         {
             var unearned = Assert.ThrowsExactly<ArgumentException>(
                 () => new EuTranspositionSourceAcquisition(
-                    EuTranspositionAssertedBy.Nim, state, null, Ev("08")));
+                    EuTranspositionAssertedBy.Nim, state, [], Ev("08")));
             Assert.AreEqual("completionEvidenceRef", unearned.ParamName,
                 $"{state} must not carry completion evidence.");
         }
@@ -238,15 +238,15 @@ public sealed class EuTranspositionBridgeTests
         var neverAsked = new EuTranspositionBridge(
             Directive, EuWorkKind.Directive, EuTransposability.Transposable,
             Unacquired(EuTranspositionAssertedBy.Legilux),
-            Unacquired(EuTranspositionAssertedBy.Nim), null);
+            Unacquired(EuTranspositionAssertedBy.Nim), []);
 
         var asked = new EuTranspositionBridge(
             Directive, EuWorkKind.Directive, EuTransposability.Transposable,
             ProvenAbsent(EuTranspositionAssertedBy.Legilux),
-            ProvenAbsent(EuTranspositionAssertedBy.Nim), null);
+            ProvenAbsent(EuTranspositionAssertedBy.Nim), []);
 
-        Assert.IsNull(neverAsked.Legilux.Side);
-        Assert.IsNull(asked.Legilux.Side);
+        Assert.IsEmpty(neverAsked.Legilux.Sides);
+        Assert.IsEmpty(asked.Legilux.Sides);
         Assert.IsFalse(neverAsked.Legilux.ProvesAbsence(), "an unqueried source proves nothing.");
         Assert.IsTrue(asked.Legilux.ProvesAbsence(), "a completed acquisition with no side is a real negative.");
         Assert.AreNotEqual(neverAsked.Legilux.Acquisition, asked.Legilux.Acquisition);
@@ -269,16 +269,16 @@ public sealed class EuTranspositionBridgeTests
             Directive, EuWorkKind.Directive, EuTransposability.Transposable,
             Asserted(EuTranspositionAssertedBy.Legilux),
             ProvenAbsent(EuTranspositionAssertedBy.Nim),
-            new EuNormalisedEliJoin(LuMeasure, Ev("05"))));
-        Assert.AreEqual("normalisedEliJoin", onlyLegilux.ParamName);
+            [new EuNormalisedEliJoin(LuMeasure, Ev("05"))]));
+        Assert.AreEqual("normalisedEliJoins", onlyLegilux.ParamName);
         StringAssert.Contains(onlyLegilux.Message, "one side");
 
         var neither = Assert.ThrowsExactly<ArgumentException>(() => new EuTranspositionBridge(
             Directive, EuWorkKind.Directive, EuTransposability.Transposable,
             ProvenAbsent(EuTranspositionAssertedBy.Legilux),
             ProvenAbsent(EuTranspositionAssertedBy.Nim),
-            new EuNormalisedEliJoin(LuMeasure, Ev("06"))));
-        Assert.AreEqual("normalisedEliJoin", neither.ParamName);
+            [new EuNormalisedEliJoin(LuMeasure, Ev("06"))]));
+        Assert.AreEqual("normalisedEliJoins", neither.ParamName);
         StringAssert.Contains(neither.Message, "neither side");
     }
 
@@ -300,8 +300,8 @@ public sealed class EuTranspositionBridgeTests
             Gdpr, EuWorkKind.Regulation, EuTransposability.NotTransposable,
             ProvenAbsent(EuTranspositionAssertedBy.Legilux),
             ProvenAbsent(EuTranspositionAssertedBy.Nim),
-            new EuNormalisedEliJoin(LuMeasure, Ev("07"))));
-        Assert.AreEqual("normalisedEliJoin", error.ParamName);
+            [new EuNormalisedEliJoin(LuMeasure, Ev("07"))]));
+        Assert.AreEqual("normalisedEliJoins", error.ParamName);
         StringAssert.Contains(error.Message, "neither side",
             "the refusal must name the true reason: a regulation has no sides to join.");
     }
@@ -394,8 +394,36 @@ public sealed class EuTranspositionBridgeTests
         var error = Assert.ThrowsExactly<ArgumentException>(() => new EuTranspositionSourceAcquisition(
             EuTranspositionAssertedBy.Nim,
             EuRelationAcquisitionState.Unacquired,
-            Side(EuTranspositionAssertedBy.Nim, "13"),
+            [Side(EuTranspositionAssertedBy.Nim, "13")],
             null));
-        Assert.AreEqual("side", error.ParamName);
+        Assert.AreEqual("sides", error.ParamName);
+    }
+
+    [TestMethod]
+    public void OnePublisherColumnCarriesSeveralDistinctMeasuresButNeverADuplicate()
+    {
+        EuTranspositionSide Distinct(string suffix) => new(
+            EuTranspositionAssertedBy.Legilux,
+            LuMeasure + suffix,
+            Ev(suffix == "/a" ? "14" : "15"),
+            null,
+            null);
+        var first = Distinct("/a");
+        var second = Distinct("/b");
+
+        var acquisition = new EuTranspositionSourceAcquisition(
+            EuTranspositionAssertedBy.Legilux,
+            EuRelationAcquisitionState.Complete,
+            [first, second],
+            EvC("14"));
+
+        Assert.HasCount(2, acquisition.Sides);
+        var duplicate = Assert.ThrowsExactly<ArgumentException>(() =>
+            new EuTranspositionSourceAcquisition(
+                EuTranspositionAssertedBy.Legilux,
+                EuRelationAcquisitionState.Complete,
+                [first, first],
+                EvC("15")));
+        Assert.AreEqual("sides", duplicate.ParamName);
     }
 }

@@ -29,6 +29,12 @@ public enum LuxembourgTranspositionIdentityProductionRefusal
 
     [JsonStringEnumMemberName("ambiguous_identity")]
     AmbiguousIdentity = 5,
+
+    [JsonStringEnumMemberName("batch_population_refused")]
+    BatchPopulationRefused = 6,
+
+    [JsonStringEnumMemberName("composite_evidence_not_held")]
+    CompositeEvidenceNotHeld = 7,
 }
 
 /// <summary>
@@ -39,7 +45,7 @@ public sealed record LuxembourgTranspositionIdentityRelation(
     string NationalMeasureUri,
     string LocalEuWorkUri,
     string EuEli,
-    EuWorkKindAssertion WorkKindAssertion,
+    EuWorkKindAssertion? WorkKindAssertion,
     SourceArtifactRef CompletionEvidenceRef);
 
 /// <summary>Delivered identity relations, or one typed refusal. Never both.</summary>
@@ -123,9 +129,14 @@ public sealed class LuxembourgTranspositionIdentityProducer
             request, sourceWitness, cancellationToken).ConfigureAwait(false);
         if (run.Receipt is not { } receipt)
         {
+            var refusal = run.Refusal;
             return LuxembourgTranspositionIdentityProductionResult.Refused(
                 LuxembourgTranspositionIdentityProductionRefusal.EnumerationRefused,
-                run.Refusal?.Code.ToString() ?? "enumeration returned neither a receipt nor a refusal",
+                refusal is null
+                    ? "enumeration returned neither a receipt nor a refusal"
+                    : refusal.Code + (string.IsNullOrEmpty(refusal.CoreRefusalDetail)
+                        ? string.Empty
+                        : $": {refusal.CoreRefusalDetail}"),
                 run.ProductRequestCount);
         }
 
@@ -212,14 +223,19 @@ public sealed class LuxembourgTranspositionIdentityProducer
             throw new ArgumentException("A Legilux transposition identity row has nine exact terms.", nameof(row));
         }
 
-        var measure = RequireLegiluxEli(Term(row, profile, "measure"), "measure", "/eli/etat/leg/");
+        var measure = RequireLegiluxNationalMeasureEli(Term(row, profile, "measure"));
         var localEuWork = RequireLegiluxEli(
             Term(row, profile, "local_eu_work"), "local_eu_work", "/eli/dir_ue/");
         var euEli = RequireEuEli(Term(row, profile, "eu_eli"));
-        RequireExactIri(
-            Term(row, profile, "eu_work_kind"),
-            LuxembourgTranspositionIdentityDiscoveryPlan.EuDirectiveClassIri,
-            "eu_work_kind must be the publisher's EUDirective class.");
+        var workKindTerm = Term(row, profile, "eu_work_kind");
+        var hasWorkKind = workKindTerm.Kind != RepeatedEnumerationRdfTermKind.Unbound;
+        if (hasWorkKind)
+        {
+            RequireExactIri(
+                workKindTerm,
+                LuxembourgTranspositionIdentityDiscoveryPlan.EuDirectiveClassIri,
+                "eu_work_kind must be the publisher's EUDirective class.");
+        }
         _ = RequirePositiveInteger(Term(row, profile, "multiplicity"), "multiplicity");
 
         RequirePlainLiteral(Term(row, profile, "key_1"), "key_1", measure);
@@ -228,7 +244,7 @@ public sealed class LuxembourgTranspositionIdentityProducer
         RequirePlainLiteral(
             Term(row, profile, "key_4"),
             "key_4",
-            LuxembourgTranspositionIdentityDiscoveryPlan.EuDirectiveClassIri);
+            hasWorkKind ? LuxembourgTranspositionIdentityDiscoveryPlan.EuDirectiveClassIri : string.Empty);
 
         var work = new OfficialIdentitySet(
             PublisherId.EuEurLex,
@@ -237,7 +253,7 @@ public sealed class LuxembourgTranspositionIdentityProducer
             measure,
             localEuWork,
             euEli,
-            new EuWorkKindAssertion(work, EuWorkKind.Directive),
+            hasWorkKind ? new EuWorkKindAssertion(work, EuWorkKind.Directive) : null,
             evidenceRef);
     }
 
@@ -274,6 +290,22 @@ public sealed class LuxembourgTranspositionIdentityProducer
         {
             throw new ArgumentException($"{name} must be an exact Legilux ELI in the admitted family.", name);
         }
+        return value;
+    }
+
+    private static string RequireLegiluxNationalMeasureEli(RepeatedEnumerationRdfTerm term)
+    {
+        var value = RequireBareIri(term, "measure");
+        if (OfficialIdentifier.EliMintedBy(value) != PublisherId.LuLegilux ||
+            !Uri.TryCreate(value, UriKind.Absolute, out var uri) ||
+            !(uri.AbsolutePath.StartsWith("/eli/etat/leg/", StringComparison.Ordinal) ||
+              uri.AbsolutePath.StartsWith("/eli/etat/adm/", StringComparison.Ordinal)))
+        {
+            throw new ArgumentException(
+                "measure must be an exact Legilux national-measure ELI in the admitted legislative or administrative family.",
+                nameof(term));
+        }
+
         return value;
     }
 

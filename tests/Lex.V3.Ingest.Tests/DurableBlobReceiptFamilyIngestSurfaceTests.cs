@@ -65,7 +65,8 @@ public sealed class DurableBlobReceiptFamilyIngestSurfaceTests
                 + "&, out System.ReadOnlyMemory<System.Byte>&, out System.String&) -> System.Void",
                 "field private instance " + CorpusAcquisitionOutcome + "::<Receipt>k__BackingField -> " + Receipt + "?",
                 "field private instance " + EuQueryExecutionResult + "::<ScopeManifestReceipt>k__BackingField -> " + Receipt + "?",
-                "field private instance " + TranspositionPopulationRow + "::<NormalisedEliJoinEvidenceReceipt>k__BackingField -> " + Receipt + "?",
+                "field private instance " + TranspositionPopulationRow + "::<NormalisedEliJoinEvidenceReceipts>k__BackingField -> "
+                + "System.Collections.Generic.IReadOnlyList<" + Receipt + ">",
                 "field private instance " + QueryExecutionResult + "::<ScopeManifestReceipt>k__BackingField -> " + Receipt + "?",
                 "field private instance " + Session + "+HeldBodyReceipt::<Receipt>k__BackingField -> " + Receipt,
                 "field private instance " + Session + "+ResolvedHeldBody::<Receipt>k__BackingField -> " + Receipt,
@@ -89,7 +90,8 @@ public sealed class DurableBlobReceiptFamilyIngestSurfaceTests
                 + "-> System.Collections.Generic.Dictionary<System.String, " + Receipt + ">",
                 "property public instance " + CorpusAcquisitionOutcome + "::Receipt() -> " + Receipt + "?",
                 "property public instance " + EuQueryExecutionResult + "::ScopeManifestReceipt() -> " + Receipt + "?",
-                "property public instance " + TranspositionPopulationRow + "::NormalisedEliJoinEvidenceReceipt() -> " + Receipt + "?",
+                "property public instance " + TranspositionPopulationRow + "::NormalisedEliJoinEvidenceReceipts() -> "
+                + "System.Collections.Generic.IReadOnlyList<" + Receipt + ">",
                 "property public instance " + QueryExecutionResult + "::ScopeManifestReceipt() -> " + Receipt + "?",
                 "property public instance " + Session + "+HeldBodyReceipt::Receipt() -> " + Receipt,
                 "property public instance " + Session + "+ResolvedHeldBody::Receipt() -> " + Receipt,
