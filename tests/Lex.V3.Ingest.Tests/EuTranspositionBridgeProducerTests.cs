@@ -132,6 +132,80 @@ public sealed class EuTranspositionBridgeProducerTests
     }
 
     [TestMethod]
+    public void DistinctRawRowsForOneIdenticalNimAssertionRemainEvidenceButProjectOnce()
+    {
+        var side = NimSide(EuWork);
+        var nim = EuNationalImplementingMeasureProductionResult.Success(
+            [
+                new EuNationalImplementingMeasureRelation(
+                    EuWork, Kind(EuWork, EuWorkKind.Directive),
+                    EuNationalImplementingMeasureDiscoveryPlan.DirectiveResourceTypeIri,
+                    EuWork, "72011L0022LUX_187364",
+                    EuNationalImplementingMeasureDiscoveryPlan.LegacyImplementsDirectivePredicateIri,
+                    null, side),
+                new EuNationalImplementingMeasureRelation(
+                    EuWork, Kind(EuWork, EuWorkKind.Directive),
+                    EuNationalImplementingMeasureDiscoveryPlan.DirectiveResourceTypeIri,
+                    EuWork, "72011L0023LUX_187364",
+                    EuNationalImplementingMeasureDiscoveryPlan.LegacyImplementsDirectivePredicateIri,
+                    null, side),
+            ], [], [], Evidence, 0);
+
+        var result = EuTranspositionBridgeProducer.Produce(
+            EuWork,
+            Kind(EuWork, EuWorkKind.Directive),
+            Legilux(ProvenAbsent(EuTranspositionAssertedBy.Legilux)),
+            nim);
+
+        Assert.IsTrue(result.Delivered, result.Detail);
+        Assert.HasCount(2, nim.Relations!);
+        CollectionAssert.AreEqual(
+            new[] { "72011L0022LUX_187364", "72011L0023LUX_187364" },
+            nim.Relations!.Select(static relation => relation.NimCelex).ToArray());
+        Assert.HasCount(1, result.Bridge!.Nim.Sides);
+        Assert.AreEqual(EuWork, result.Bridge.Nim.Sides[0].NationalMeasureUri);
+    }
+
+    [TestMethod]
+    public void RepeatedNimUrisWithDifferentEvidenceStillRefuseInsteadOfChoosingOne()
+    {
+        var otherEvidence = new SourceArtifactRef(
+            "urn:uuid:dddddddd-dddd-4ddd-8ddd-dddddddddddd", new string('d', 64));
+        var otherSide = new EuTranspositionSourceAcquisition(
+            EuTranspositionAssertedBy.Nim,
+            EuRelationAcquisitionState.Complete,
+            [new EuTranspositionSide(
+                EuTranspositionAssertedBy.Nim, EuWork, otherEvidence,
+                EuMemberStateDisclaimer.Text, EuMemberStateDisclaimer.SourceUri)],
+            Evidence);
+        var nim = EuNationalImplementingMeasureProductionResult.Success(
+            [
+                new EuNationalImplementingMeasureRelation(
+                    EuWork, Kind(EuWork, EuWorkKind.Directive),
+                    EuNationalImplementingMeasureDiscoveryPlan.DirectiveResourceTypeIri,
+                    EuWork, "72011L0022LUX_187364",
+                    EuNationalImplementingMeasureDiscoveryPlan.LegacyImplementsDirectivePredicateIri,
+                    null, NimSide(EuWork)),
+                new EuNationalImplementingMeasureRelation(
+                    EuWork, Kind(EuWork, EuWorkKind.Directive),
+                    EuNationalImplementingMeasureDiscoveryPlan.DirectiveResourceTypeIri,
+                    EuWork, "72011L0023LUX_187364",
+                    EuNationalImplementingMeasureDiscoveryPlan.LegacyImplementsDirectivePredicateIri,
+                    null, otherSide),
+            ], [], [], Evidence, 0);
+
+        var result = EuTranspositionBridgeProducer.Produce(
+            EuWork,
+            Kind(EuWork, EuWorkKind.Directive),
+            Legilux(ProvenAbsent(EuTranspositionAssertedBy.Legilux)),
+            nim);
+
+        Assert.AreEqual(
+            EuTranspositionBridgeProductionRefusal.SourceColumnsContradictWorkKind,
+            result.Refusal);
+    }
+
+    [TestMethod]
     public void AWorkKindAssertionForAnotherWorkCannotClassifyThisBridge()
     {
         var result = EuTranspositionBridgeProducer.Produce(EuWork, Kind(OtherWork, EuWorkKind.Directive),

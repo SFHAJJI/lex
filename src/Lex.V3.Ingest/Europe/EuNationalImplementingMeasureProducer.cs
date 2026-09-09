@@ -156,6 +156,11 @@ public sealed class EuNationalImplementingMeasureProductionResult
         var matches = Relations
             .Where(value => string.Equals(value.EuWorkUri, euWorkUri, StringComparison.Ordinal))
             .SelectMany(static value => value.Acquisition.Sides)
+            // Distinct raw rows can name one identical publisher assertion under separate CELEX
+            // coordinates. Relations retains every row; the bridge column carries the assertion
+            // once. Any difference in evidence or disclaimer survives this equality check and the
+            // acquisition constructor continues to refuse the repeated URI.
+            .Distinct()
             .ToArray();
         return new EuTranspositionSourceAcquisition(
             EuTranspositionAssertedBy.Nim,
