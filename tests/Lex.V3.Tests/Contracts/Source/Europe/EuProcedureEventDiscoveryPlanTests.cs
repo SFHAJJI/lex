@@ -381,6 +381,49 @@ public sealed class EuProcedureEventDiscoveryPlanTests
     /// separate — so the family stalls on the one case those keys exist for. Derived from the plan's
     /// own cursor rather than transcribed. A surviving mutation found this one too.
     /// </remarks>
+    /// <summary>
+    /// The grouped row carries exactly the terms the delivery profile says the row has.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The profile is what the executor and the producer read; the GROUP BY is what the publisher
+    /// actually groups on. This requires them to be the same list, so a term can neither be dropped
+    /// from the query while the profile still promises it, nor grouped on without being declared.
+    /// </para>
+    /// <para>
+    /// The sibling projection-versus-grouping guard cannot see this, and a surviving mutation is why
+    /// it is here. Both of those lists are built from one string in the template, so removing a
+    /// variable moves them together and they go on agreeing with each other perfectly — while the
+    /// page still binds a key from a variable the subquery no longer projects, leaving that key
+    /// unbound on every row. The profile is the independent second source that does not move.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void TheGroupedRowCarriesExactlyTheTermsTheProfileDeclares()
+    {
+        var plan = EuProcedureEventDiscoveryPlan.Create();
+        var profile = plan.CreateDeliveryProfile();
+
+        var declared = profile.ProjectionVariables
+            .Where(static name => !name.StartsWith("key_", StringComparison.Ordinal))
+            .Where(static name => name != "multiplicity")
+            .Select(static name => "?" + name)
+            .ToArray();
+
+        foreach (var template in new[] { plan.CountTemplate, plan.PageTemplate })
+        {
+            var groupBy = template.Split('\n')
+                .Select(static line => line.Trim())
+                .Single(static line => line.StartsWith("GROUP BY ", StringComparison.Ordinal))
+                .Substring("GROUP BY ".Length)
+                .Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+            CollectionAssert.AreEquivalent(
+                declared, groupBy,
+                "the grouped row and the profile must describe the same terms.");
+        }
+    }
+
     [TestMethod]
     public void TheKeysetFilterComparesEveryCursorKeyRightDownToTheLast()
     {
