@@ -258,7 +258,7 @@ internal static class EuAcquisitionTestFixture
         string dossierIri,
         string? eventTypeIri,
         string? eventDate,
-        string dateDatatype = "",
+        string dateDatatype = "http://www.w3.org/2001/XMLSchema#date",
         string dateLanguage = "",
         string typeDatatype = "",
         string typeLanguage = "")
@@ -282,6 +282,11 @@ internal static class EuAcquisitionTestFixture
 
         if (eventDate is not null)
         {
+            // A DATE ARRIVES TYPED, because that is what the publisher sends and what the accepted
+            // observation needs to read a precision from. The default used to be a plain literal, so
+            // every row this fixture built was one EuProcedureEventObservation.TryCreate refuses as
+            // EventDateNotADateShape - which no executor test could notice, because the executor
+            // never builds observations. The end-to-end producer run found it.
             fields.Add(("event_date", dateDatatype.Length == 0
                 ? PlainLiteral(eventDate)
                 : TypedLiteral(eventDate, dateDatatype)));

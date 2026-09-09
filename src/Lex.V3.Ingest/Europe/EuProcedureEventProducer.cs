@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Lex.V3.Contracts.Custody;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Europe;
 
@@ -17,6 +18,17 @@ public enum EuProcedureEventProductionRefusal
     /// <summary>The run delivered but its whole enumeration was not proven.</summary>
     [JsonStringEnumMemberName("enumeration_proof_refused")]
     EnumerationProofRefused = 2,
+
+    /// <summary>
+    /// The proven pages would not reopen into verified rows.
+    /// </summary>
+    /// <remarks>
+    /// Distinct from <see cref="EnumerationProofRefused"/>: the enumeration was proven and the
+    /// failure is later, in re-deriving each page's own rows from its retained bytes. Folding the
+    /// two would report a proof failure for a delivery whose proof held.
+    /// </remarks>
+    [JsonStringEnumMemberName("verified_rows_refused")]
+    VerifiedRowsRefused = 7,
 
     /// <summary>
     /// A delivered row could not be read at all: a wrong term count, a marker that is not the
@@ -115,7 +127,8 @@ public sealed class EuProcedureEventProductionResult
         IReadOnlySet<string>? dossiersAskedAbout,
         SourceArtifactRef? completionEvidenceRef,
         EuProcedureEventProductionRefusal refusal,
-        string? detail)
+        string? detail,
+        int productRequestCount)
     {
         Observations = observations;
         ExcludedEvents = excludedEvents;
@@ -123,7 +136,18 @@ public sealed class EuProcedureEventProductionResult
         CompletionEvidenceRef = completionEvidenceRef;
         Refusal = refusal;
         Detail = detail;
+        ProductRequestCount = productRequestCount;
     }
+
+    /// <summary>
+    /// How many product requests the run this result came from actually sent.
+    /// </summary>
+    /// <remarks>
+    /// Carried on a refusal as well as on a success, because a refused run still spent the
+    /// publisher's budget and a receipt that reported nothing for it would understate the traffic
+    /// this codebase caused.
+    /// </remarks>
+    public int ProductRequestCount { get; }
 
     public IReadOnlyList<EuProcedureEventObservation>? Observations { get; }
 
@@ -146,13 +170,14 @@ public sealed class EuProcedureEventProductionResult
         IReadOnlyList<EuProcedureEventObservation> observations,
         IReadOnlyList<EuProcedureEventExcludedEvent> excludedEvents,
         IReadOnlySet<string> dossiersAskedAbout,
-        SourceArtifactRef completionEvidenceRef) =>
+        SourceArtifactRef completionEvidenceRef,
+        int productRequestCount = 0) =>
         new(observations, excludedEvents, dossiersAskedAbout, completionEvidenceRef,
-            EuProcedureEventProductionRefusal.None, null);
+            EuProcedureEventProductionRefusal.None, null, productRequestCount);
 
     internal static EuProcedureEventProductionResult Refused(
-        EuProcedureEventProductionRefusal refusal, string? detail) =>
-        new(null, null, null, null, refusal, detail);
+        EuProcedureEventProductionRefusal refusal, string? detail, int productRequestCount = 0) =>
+        new(null, null, null, null, refusal, detail, productRequestCount);
 
     /// <summary>Every admitted event of one dossier this run asked about.</summary>
     public IReadOnlyList<EuProcedureEventObservation> EventsOf(string dossierIri)
@@ -221,6 +246,17 @@ public sealed class EuProcedureEventProductionResult
 /// delivered as an IRI reading "iri" is not the query's marker at all.
 /// </para>
 /// <para>
+/// THE PRODUCER OWNS THE RUN, and that is what makes the intermediate a NAMED one. Candidate 5 R5.3
+/// requires that drafts and legal-analysis records cannot be accepted through an unnamed
+/// intermediate. Before this, <c>DecodeRows</c> was public and took a caller-supplied row list and a
+/// caller-supplied evidence reference, so observations could be minted from rows nobody had proven,
+/// citing custody nobody had established. Now the public door is <see cref="RunAsync"/>: it drives
+/// the executor, requires a receipt, proves the enumeration, reopens each page's retained bytes and
+/// passes them through <see cref="VerifiedRepeatedEnumerationRows.TryOpen"/> before any row is read.
+/// The completion evidence a record cites is the RUN'S OWN, taken from the proof rather than
+/// accepted from a caller, and decoding is internal.
+/// </para>
+/// <para>
 /// AN HONEST ABSENCE IS AN EXCLUSION, A BROKEN DELIVERY IS A REFUSAL, and the line between them is
 /// the whole design. An untyped or undated event is something the plan asked for by name and the
 /// publisher answered; it is carried as <see cref="EuProcedureEventExcludedEvent"/> with the
@@ -228,19 +264,112 @@ public sealed class EuProcedureEventProductionResult
 /// refuses the production whole.
 /// </para>
 /// </remarks>
-public static class EuProcedureEventProducer
+public sealed class EuProcedureEventProducer
 {
+    private readonly EuRepeatedEnumerationExecutor _executor;
+    private readonly RepeatedEnumerationDeliveryReopenGlue _reopenGlue;
+
+    public EuProcedureEventProducer(ICustodyStore custodyStore, TimeProvider timeProvider)
+        : this(custodyStore, timeProvider, null)
+    {
+    }
+
+    internal EuProcedureEventProducer(
+        ICustodyStore custodyStore,
+        TimeProvider timeProvider,
+        System.Net.Http.HttpMessageHandler? testHandlerOverride)
+    {
+        ArgumentNullException.ThrowIfNull(custodyStore);
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _executor = new EuRepeatedEnumerationExecutor(custodyStore, timeProvider, testHandlerOverride);
+        _reopenGlue = new RepeatedEnumerationDeliveryReopenGlue(custodyStore);
+    }
+
+    /// <summary>
+    /// Runs the family and reads its proven rows. The only public way to obtain observations.
+    /// </summary>
+    /// <remarks>
+    /// The dossiers this run asked about are taken from the request's own batch in the plan's
+    /// canonical form, never from a second caller-supplied list that could disagree with what was
+    /// actually sent.
+    /// </remarks>
+    public async Task<EuProcedureEventProductionResult> RunAsync(
+        EuProcedureEventRunRequest request,
+        BoundMachineRequest sourceWitness,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(sourceWitness);
+
+        var run = await _executor.RunEuProcedureEventsAsync(
+            request, sourceWitness, cancellationToken).ConfigureAwait(false);
+        if (run.Receipt is not { } receipt)
+        {
+            return EuProcedureEventProductionResult.Refused(
+                EuProcedureEventProductionRefusal.EnumerationRefused,
+                run.Refusal?.Code.ToString() ?? "enumeration returned neither a receipt nor a refusal",
+                run.ProductRequestCount);
+        }
+
+        var proof = receipt.TryProveFamilyEnumeration(receipt.Delivery.PartitionKey, out var proofRefusal);
+        if (proof is null)
+        {
+            return EuProcedureEventProductionResult.Refused(
+                EuProcedureEventProductionRefusal.EnumerationProofRefused,
+                proofRefusal.ToString(),
+                run.ProductRequestCount);
+        }
+
+        var pages = new List<RepeatedEnumerationResolvedEvidence>(receipt.Delivery.PagesA.Pages.Count);
+        foreach (var page in receipt.Delivery.PagesA.Pages.OrderBy(static value => value.Ordinal))
+        {
+            pages.Add(await _reopenGlue.ReopenPageEvidenceAsync(page.Evidence, cancellationToken)
+                .ConfigureAwait(false));
+        }
+
+        var profile = request.Plan.CreateDeliveryProfile();
+        var rows = VerifiedRepeatedEnumerationRows.TryOpen(
+            proof,
+            receipt.Delivery,
+            profile,
+            receipt.Delivery.InterpretationProfileRef,
+            receipt.Delivery.CountA.HttpEvidenceRef,
+            pages,
+            out var rowRefusal);
+        if (rows is null)
+        {
+            return EuProcedureEventProductionResult.Refused(
+                EuProcedureEventProductionRefusal.VerifiedRowsRefused,
+                rowRefusal.ToString(),
+                run.ProductRequestCount);
+        }
+
+        return DecodeRows(
+            rows,
+            profile,
+            EuProcedureEventDiscoveryPlan.RequestedPartitionMembers(request.BatchDossiers),
+            proof.AcquisitionRunRef,
+            run.ProductRequestCount);
+    }
+
     /// <summary>Decodes one delivered page set into observations.</summary>
     /// <param name="dossiersAskedAbout">
-    /// The dossiers the run asked about, in the plan's canonical form — pass
-    /// <see cref="EuProcedureEventDiscoveryPlan.RequestedPartitionMembers"/>, which is the form the
-    /// publisher was asked in and therefore answers in.
+    /// The dossiers the run asked about, in the plan's canonical form — the form the publisher was
+    /// asked in and therefore answers in.
     /// </param>
-    public static EuProcedureEventProductionResult DecodeRows(
+    /// <remarks>
+    /// INTERNAL, and that is the point rather than an accident of scoping. A public decoder taking a
+    /// caller's rows and a caller's evidence reference is the unnamed intermediate Candidate 5 R5.3
+    /// forbids: it can mint observations from rows nobody proved, citing custody nobody established.
+    /// Callers come through <see cref="RunAsync"/>; the tests reach this directly by
+    /// <c>InternalsVisibleTo</c>, which is a test seam and not a second public door.
+    /// </remarks>
+    internal static EuProcedureEventProductionResult DecodeRows(
         IReadOnlyList<RepeatedEnumerationRow> rows,
         RepeatedEnumerationInterpretationProfile profile,
         IReadOnlyList<string> dossiersAskedAbout,
-        SourceArtifactRef completionEvidenceRef)
+        SourceArtifactRef completionEvidenceRef,
+        int productRequestCount = 0)
     {
         ArgumentNullException.ThrowIfNull(rows);
         ArgumentNullException.ThrowIfNull(profile);
@@ -255,7 +384,8 @@ public static class EuProcedureEventProducer
         catch (ArgumentException exception)
         {
             return EuProcedureEventProductionResult.Refused(
-                EuProcedureEventProductionRefusal.RowNotAdmitted, exception.Message);
+                EuProcedureEventProductionRefusal.RowNotAdmitted, exception.Message,
+                productRequestCount);
         }
 
         // EVERY DELIVERED DOSSIER MUST BE ONE THAT WAS ASKED ABOUT, checked before any success is
@@ -268,7 +398,8 @@ public static class EuProcedureEventProducer
             {
                 return EuProcedureEventProductionResult.Refused(
                     EuProcedureEventProductionRefusal.DeliveredDossierOutsideRequestedPartition,
-                    $"A row names dossier {row.DossierIri}, which this run never asked about.");
+                    $"A row names dossier {row.DossierIri}, which this run never asked about.",
+                    productRequestCount);
             }
         }
 
@@ -286,7 +417,8 @@ public static class EuProcedureEventProducer
             {
                 return EuProcedureEventProductionResult.Refused(
                     EuProcedureEventProductionRefusal.EventDossierNotConsistent,
-                    $"The rows for {group.Key} name more than one dossier.");
+                    $"The rows for {group.Key} name more than one dossier.",
+                    productRequestCount);
             }
 
             if (group.Any(value =>
@@ -295,7 +427,8 @@ public static class EuProcedureEventProducer
             {
                 return EuProcedureEventProductionResult.Refused(
                     EuProcedureEventProductionRefusal.EventDateNotConsistent,
-                    $"The rows for {group.Key} state more than one date.");
+                    $"The rows for {group.Key} state more than one date.",
+                    productRequestCount);
             }
 
             // Delivery order, kept exactly. The plan orders by the cursor, whose first key is the
@@ -329,7 +462,8 @@ public static class EuProcedureEventProducer
             observations,
             excluded,
             dossiersAskedAbout.ToHashSet(StringComparer.Ordinal),
-            completionEvidenceRef);
+            completionEvidenceRef,
+            productRequestCount);
     }
 
     /// <summary>One delivered row, read from its own terms.</summary>

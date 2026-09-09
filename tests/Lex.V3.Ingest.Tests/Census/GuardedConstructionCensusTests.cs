@@ -159,11 +159,13 @@ public sealed class GuardedConstructionCensusTests
                 "Lex.V3.Ingest.Europe.EuProcedureEventProductionResult: constructor private "
                     + "instance Lex.V3.Ingest.Europe.EuProcedureEventProductionResult::.ctor, "
                     + "method internal static "
+                    + "Lex.V3.Ingest.Europe.EuProcedureEventProducer::DecodeRows, "
+                    + "method internal static "
                     + "Lex.V3.Ingest.Europe.EuProcedureEventProductionResult::Refused, "
                     + "method internal static "
                     + "Lex.V3.Ingest.Europe.EuProcedureEventProductionResult::Success, "
-                    + "method public static "
-                    + "Lex.V3.Ingest.Europe.EuProcedureEventProducer::DecodeRows",
+                    + "method public instance "
+                    + "Lex.V3.Ingest.Europe.EuProcedureEventProducer::RunAsync",
                 "Lex.V3.Ingest.Europe.EuQueryExecutionRefusalDetail: constructor internal instance "
                     + "Lex.V3.Ingest.Europe.EuQueryExecutionRefusalDetail::.ctor, "
                     + "method internal instance "

@@ -31,6 +31,16 @@ public sealed class EuProcedureEventProducerTests
     private static RepeatedEnumerationInterpretationProfile Profile() =>
         EuProcedureEventDiscoveryPlan.Create().CreateDeliveryProfile();
 
+    private static MachineQueryRendererSource RendererSource()
+    {
+        var bytes = System.Text.Encoding.UTF8.GetBytes("eu-procedure-event-producer-source/1\n");
+        return MachineQueryRendererSource.Open(
+            new SourceArtifactRef(
+                "urn:uuid:4b0f7c26-9d31-4e58-a07b-13c58fe2a904",
+                Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(bytes))),
+            bytes);
+    }
+
     private static RepeatedEnumerationRdfTerm Iri(string value) =>
         RepeatedEnumerationRdfTerm.Iri(value);
 
@@ -160,6 +170,74 @@ public sealed class EuProcedureEventProducerTests
 
     private static EuProcedureEventProductionResult Decode(params RepeatedEnumerationRow[] rows) =>
         EuProcedureEventProducer.DecodeRows(rows, Profile(), [Dossier], Evidence);
+
+    /// <summary>
+    /// The whole chain runs: executor, proof, verified rows, observations. Nothing is supplied.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// THIS IS THE GUARD THAT MAKES THE FAMILY REACHED BY SOMETHING. Every other test here calls the
+    /// internal decoder with rows a test built and an evidence reference a test invented. That
+    /// proves the decoding and proves nothing about whether this family can be run at all — and
+    /// before <see cref="EuProcedureEventProducer.RunAsync"/> existed it could not be: the plan, the
+    /// executor entry point and the decoder were three parts joined by no caller in <c>src/</c>.
+    /// </para>
+    /// <para>
+    /// It is also what satisfies Candidate 5 R5.3's second clause. The completion evidence these
+    /// observations cite is the RUN'S own, taken from the enumeration proof, and the rows reached
+    /// the decoder through <c>VerifiedRepeatedEnumerationRows.TryOpen</c> rather than from a caller.
+    /// A test asserting the observations exist would pass without either; this asserts the evidence
+    /// reference is the one the run produced, which nothing but a real run can supply.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public async Task TheProducerRunsTheFamilyEndToEndAndCitesTheRunsOwnEvidence()
+    {
+        var scripts = new Dictionary<string, EuAcquisitionTestFixture.FamilyScript>(StringComparer.Ordinal)
+        {
+            ["ProcedureEvent"] = EuAcquisitionTestFixture.ScriptFor(
+                "ProcedureEvent",
+                2,
+                [
+                    EuAcquisitionTestFixture.ProcedureEventRow(Event, Dossier, FirstType, "2021-11-24"),
+                    EuAcquisitionTestFixture.ProcedureEventRow(Event, Dossier, SecondType, "2021-11-24"),
+                ],
+                EuAcquisitionTestFixture.ProcedureEventProjection),
+        };
+
+        var producer = new EuProcedureEventProducer(
+            new EuAcquisitionTestFixture.EuInMemoryCustodyStore(),
+            new EuAcquisitionTestFixture.FixedTimeProvider(),
+            new EuAcquisitionTestFixture.ClassifyingHandler(scripts));
+
+        var result = await producer.RunAsync(
+            new EuProcedureEventRunRequest(
+                EuProcedureEventDiscoveryPlan.Create(),
+                [Dossier],
+                "urn:uuid:c17d4e83-2f60-4b95-8a1e-6d9074bf3c52",
+                RendererSource()),
+            EuAcquisitionTestFixture.SourceWitness(),
+            CancellationToken.None);
+
+        Assert.AreEqual(
+            EuProcedureEventProductionRefusal.None, result.Refusal,
+            $"the family must be runnable end to end: {result.Refusal} {result.Detail}");
+        Assert.HasCount(1, result.Observations!);
+
+        var observation = result.Observations![0];
+        CollectionAssert.AreEqual(
+            new[] { FirstType, SecondType }, observation.ObservedTypeIris.ToArray(),
+            "the two delivered rows grouped back into one event with both declared types.");
+
+        Assert.IsNotNull(result.CompletionEvidenceRef);
+        Assert.AreEqual(
+            result.CompletionEvidenceRef!.ResourceId, observation.SourceObservationId,
+            "the custody coordinate is the run's own, not one a caller invented.");
+        Assert.IsGreaterThan(0, result.ProductRequestCount);
+
+        // The coverage this run publishes is what it ASKED, in the plan's canonical form.
+        Assert.HasCount(1, result.EventsOf(Dossier));
+    }
 
     /// <summary>
     /// An event's two declared types become one observation carrying both, in delivery order.
