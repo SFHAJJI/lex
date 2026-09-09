@@ -1,4 +1,5 @@
 using Lex.V3.Contracts.Facts;
+using Lex.V3.Contracts.Source.Absence;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Europe;
 using Lex.V3.Ingest.Europe;
@@ -386,11 +387,75 @@ public sealed class EuCaseLawLinkProducerTests
             "a delivered row may not borrow the scope of a differently-cased coordinate.");
     }
 
+    /// <summary>
+    /// A publisher whose count and delivery disagree is refused at the PROOF, before a row is read.
+    /// </summary>
+    /// <remarks>
+    /// This producer's own mapping of a proof refusal, which nothing here drove before: every other
+    /// refusal in this file is decoded out of rows, so the branch turning a refused
+    /// <c>TryProveFamilyEnumeration</c> into
+    /// <see cref="EuCaseLawLinkProductionRefusal.EnumerationProofRefused"/> was reached by no test.
+    /// It is also the premise of the equivalence recorded below - the reason a delivery whose proof
+    /// holds can never fail to reopen is that a delivery like this one never gets a proof at all.
+    /// </remarks>
+    [TestMethod]
+    public async Task APublisherWhoseCountAndDeliveryDisagreeIsRefusedAtTheProof()
+    {
+        var scripts = new Dictionary<string, EuAcquisitionTestFixture.FamilyScript>(StringComparer.Ordinal)
+        {
+            // Two counted, one delivered, in BOTH passes. The passes agree with each other; only the
+            // publisher's count disagrees with what the publisher sent.
+            ["CaseLaw"] = EuAcquisitionTestFixture.ScriptFor(
+                "CaseLaw", 2,
+                [EuAcquisitionTestFixture.CaseLawRow(
+                    CaseWork,
+                    EuCaseLawPredicateVocabulary.CaseLawInterpretesResourceLegalPredicateUri,
+                    Act,
+                    Ecli)],
+                EuAcquisitionTestFixture.CaseLawProjection),
+        };
+
+        var producer = new EuCaseLawLinkProducer(
+            new EuAcquisitionTestFixture.EuInMemoryCustodyStore(),
+            new EuAcquisitionTestFixture.FixedTimeProvider(),
+            new EuAcquisitionTestFixture.ClassifyingHandler(scripts));
+
+        var result = await producer.RunAsync(
+            new EuCaseLawRunRequest(
+                EuCaseLawDiscoveryPlan.Create(),
+                [Act],
+                "urn:uuid:6c81af29-3d47-4e50-9b12-8f0a5e2c7d63",
+                RendererSource()),
+            Scopes(),
+            EuAcquisitionTestFixture.SourceWitness(),
+            CancellationToken.None);
+
+        Assert.AreEqual(
+            EuCaseLawLinkProductionRefusal.EnumerationProofRefused, result.Refusal,
+            $"a counted-but-undelivered row is a proof failure, not a decode failure: {result.Detail}");
+        StringAssert.Contains(
+            result.Detail!,
+            AbsenceFamilyEnumerationProofRefusal.PassesDeliveredDifferentSelections.ToString(),
+            "the refusal must carry the proof's own reason rather than a summary of it.");
+    }
+
     // ONE MUTATION SURVIVES THIS FILE and is recorded rather than left unexplained. Reporting a
     // refused VerifiedRepeatedEnumerationRows.TryOpen as EnumerationProofRefused rather than
     // VerifiedRowsRefused survives because nothing here drives a delivery whose enumeration proof
-    // holds while its rows will not reopen. It is a real untested branch, not an argued equivalence,
-    // and the sibling E8 producer has the identical gap.
+    // holds while its rows will not reopen.
+    //
+    // I recorded that as a real untested branch. IT IS NOT ONE, and the same correction applies to
+    // the sibling E8 producer, which I had described as having the identical gap. It has the
+    // identical EQUIVALENCE. No delivery whose proof holds can fail to reopen through this door:
+    // ClassifyOutcome admits EqualSelections only when the selected and delivered counts agree,
+    // TryCreate refuses everything else as PassesDeliveredDifferentSelections before TryOpen is
+    // called, TryOpen therefore re-verifies with the very count that minted the proof, and the pages
+    // it re-parses are read back by digest-checked custody restore. EuProcedureEventProducerTests
+    // carries the argument link by link, with the test each link rests on and the one link whose
+    // weakening would make this branch reachable again.
+    //
+    // The five refusals are not untested. They are driven where a caller-supplied mismatch can
+    // actually be constructed: VerifiedRepeatedEnumerationRowsTests, at the Source/Core door.
 
     /// <summary>
     /// An act the run asks about with no supplied scope is refused before the request is sent.
