@@ -313,6 +313,62 @@ public sealed class EuProcedureEventProducerTests
         StringAssert.Contains(result.Detail!, "key_7");
     }
 
+    /// <summary>
+    /// Corrupting ANY ONE of the eleven cursor keys refuses the row, naming that key.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Written as a sweep because the individual guards left holes. Mutations that dropped the
+    /// event's kind key and the type's language key both survived a suite that checked two keys by
+    /// hand: the honest value of several of these is the empty string, so a producer ignoring them
+    /// agrees with a fixture that also leaves them empty, and neither side ever disagrees.
+    /// </para>
+    /// <para>
+    /// The six kind and qualifier keys are the ones this most protects. They exist because two terms
+    /// can share every lexical form and still be different facts — the whole content of the plan's
+    /// second review round — so a producer that verified only the lexical five would be ignoring the
+    /// result of that round while appearing to check the cursor.
+    /// </para>
+    /// <para>
+    /// Driven off the live profile rather than a written list, so a key added to the plan is covered
+    /// here the day it appears instead of the day someone remembers.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void CorruptingAnySingleCursorKeyRefusesTheRowAndNamesIt()
+    {
+        var profile = Profile();
+        var keys = profile.CursorVariables;
+
+        Assert.IsGreaterThan(
+            10, keys.Count, "this family keys eleven positions; a smaller cursor is a repair lost.");
+
+        // A row rich enough that no key's honest value is empty by accident: a language-tagged
+        // literal type carries both qualifiers, and the date carries its datatype.
+        static RepeatedEnumerationRow Honest() => Row(
+            typeTerm: RepeatedEnumerationRdfTerm.Literal("some-type", null, "en"));
+
+        foreach (var key in keys)
+        {
+            var ordinal = profile.ProjectionVariables.ToList().IndexOf(key);
+            Assert.IsGreaterThan(-1, ordinal, $"{key} is projected.");
+
+            var terms = Honest().Terms.ToList();
+            var honestValue = terms[ordinal].Value ?? string.Empty;
+            terms[ordinal] = Literal(honestValue + "-not-what-was-delivered");
+
+            var result = EuProcedureEventProducer.DecodeRows(
+                [new RepeatedEnumerationRow(terms, terms, terms)], profile, [Dossier], Evidence);
+
+            Assert.AreEqual(
+                EuProcedureEventProductionRefusal.RowNotAdmitted, result.Refusal,
+                $"{key} was corrupted and the row was still admitted, so that key keys nothing.");
+            StringAssert.Contains(
+                result.Detail!, key,
+                $"the refusal must name {key} rather than some other key that happened to differ.");
+        }
+    }
+
     /// <summary>The empty key an unbound term contributes is asserted, not skipped.</summary>
     [TestMethod]
     public void TheEmptyKeyAnUnboundTermContributesIsCheckedRatherThanSkipped()
