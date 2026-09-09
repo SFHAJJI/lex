@@ -555,6 +555,67 @@ public sealed class EuProcedureEventProducerTests
     }
 
     /// <summary>
+    /// A foreign row is caught wherever it sits in the delivery, not only when it comes first.
+    /// </summary>
+    /// <remarks>
+    /// The membership check walks every decoded row. A check that looked only at the first would
+    /// pass the sibling guard above, which supplies a single foreign row — so that guard alone
+    /// cannot tell "every row is checked" from "the first row is checked". A surviving mutation
+    /// showed exactly that.
+    /// </remarks>
+    [TestMethod]
+    public void AForeignRowIsRefusedEvenWhenAValidRowPrecedesIt()
+    {
+        const string NeverRequested =
+            "http://publications.europa.eu/resource/cellar/00000000-1111-2222-3333-444444444444";
+
+        var result = EuProcedureEventProducer.DecodeRows(
+            [
+                Row(dossier: Dossier),
+                Row(eventTerm: Iri(OtherEvent), dossier: NeverRequested),
+            ],
+            Profile(), [Dossier], Evidence);
+
+        Assert.AreEqual(
+            EuProcedureEventProductionRefusal.DeliveredDossierOutsideRequestedPartition,
+            result.Refusal);
+        StringAssert.Contains(result.Detail!, NeverRequested);
+    }
+
+    /// <summary>
+    /// A requested dossier that returned no events answers a PROVEN EMPTY list, not an error.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This is the whole reason <c>DossiersAskedAbout</c> is the REQUESTED set and not the delivered
+    /// one. "We asked and the publisher held nothing" is a real answer and the only kind this family
+    /// can give about a dossier with no events; publishing the delivered set instead would make that
+    /// dossier indistinguishable from one nobody asked about, and turn a proven absence into a
+    /// throw.
+    /// </para>
+    /// <para>
+    /// A surviving mutation published the delivered set as coverage and nothing noticed, because
+    /// every other test asks only about dossiers that did return rows.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void ARequestedDossierWithNoEventsAnswersAProvenEmptyListRatherThanThrowing()
+    {
+        const string AlsoRequested =
+            "http://publications.europa.eu/resource/cellar/7c3e5a91-4d59-11ec-91ac-01aa75ed71a1";
+
+        var result = EuProcedureEventProducer.DecodeRows(
+            [Row(dossier: Dossier)], Profile(), [Dossier, AlsoRequested], Evidence);
+
+        Assert.AreEqual(EuProcedureEventProductionRefusal.None, result.Refusal, result.Detail);
+        Assert.HasCount(1, result.EventsOf(Dossier));
+        Assert.IsEmpty(
+            result.EventsOf(AlsoRequested),
+            "asked about and nothing held is an answer this run is entitled to give.");
+        Assert.IsEmpty(result.ExcludedEventsOf(AlsoRequested));
+    }
+
+    /// <summary>
     /// The companion admit case: a row naming a dossier that WAS requested is admitted.
     /// </summary>
     /// <remarks>
@@ -588,16 +649,15 @@ public sealed class EuProcedureEventProducerTests
         StringAssert.Contains(result.Detail!, "multiplicity");
     }
 
-    /// <summary>A count carrying a language tag is refused for the same reason.</summary>
-    [TestMethod]
-    public void ACountCarryingALanguageTagIsRefused()
-    {
-        var result = Decode(Row(
-            multiplicity: RepeatedEnumerationRdfTerm.Literal("3", null, "en")));
-
-        Assert.AreEqual(EuProcedureEventProductionRefusal.RowNotAdmitted, result.Refusal);
-        StringAssert.Contains(result.Detail!, "multiplicity");
-    }
+    // A count carrying BOTH an xsd:integer datatype and a language tag has no test, and the reason
+    // is worth writing down rather than leaving as an absence. RepeatedEnumerationRdfTerm's own
+    // constructor refuses the combination outright - "Only one literal datatype or language
+    // qualifier is allowed", RepeatedEnumerationDeliveryProof.cs:78 - so the term cannot be built
+    // and no delivery can present it. The producer's `term.Language is not null` clause is therefore
+    // unreachable behind its datatype check: redundant rather than load bearing. It is kept because
+    // every sibling producer spells the guard the same way, and deleting it here alone would make
+    // E8 differ from the LU family for no behavioural gain. Mutating that clause away produces an
+    // EQUIVALENT mutant, which is why one survives the sweep by construction and not by omission.
 
     /// <summary>The grouped count is read rather than ignored.</summary>
     [TestMethod]
