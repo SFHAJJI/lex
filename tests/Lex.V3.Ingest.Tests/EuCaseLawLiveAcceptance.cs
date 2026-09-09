@@ -106,10 +106,17 @@ public sealed class EuCaseLawLiveAcceptance
         var relations = acts.SelectMany(result.ForEuWork).ToArray();
         foreach (var relation in relations)
         {
-            Assert.AreEqual(
-                EuCaseLawPredicateVocabulary.CaseLawInterpretesResourceLegalPredicateUri,
+            // Part one: a real CDM predicate this family asked for, which is the PINNED SET and not
+            // one chosen member of it. The first draft of this assertion named
+            // case-law_interpretes_resource_legal alone and was wrong: the family asks a union of
+            // five, and the plan's own measurement records work_cites_work at 2,257 against
+            // interpretes at 74 on a single act. The live answer agrees - every row of the 2,052
+            // retained came back under work_cites_work - so an assertion naming one predicate would
+            // have failed a correct delivery.
+            CollectionAssert.Contains(
+                EuCaseLawDiscoveryPlan.PinnedPredicatesInOrder().ToArray(),
                 relation.PredicateUri,
-                "part one: the edge carries the real CDM predicate this family asked for.");
+                "part one: the edge carries a real CDM predicate this family pinned and asked for.");
             Assert.AreEqual(
                 EuJudgmentBodyDisposition.LinkOnlyNeverHeldOrFetched,
                 relation.Binding.JudgmentBodyDisposition,
