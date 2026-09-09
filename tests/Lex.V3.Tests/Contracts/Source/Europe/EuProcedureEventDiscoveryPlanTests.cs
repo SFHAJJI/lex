@@ -92,7 +92,7 @@ public sealed class EuProcedureEventDiscoveryPlanTests
                 template.Contains("GROUP_CONCAT", StringComparison.OrdinalIgnoreCase),
                 "concatenating the types would destroy the per-term authority the contract keeps.");
             StringAssert.Contains(
-                template, "GROUP BY ?event ?dossier ?event_type",
+                template, "GROUP BY ?event ?event_kind ?dossier ?event_type ?type_kind",
                 "the type is grouped on, so one event contributes one row per declared type.");
         }
     }
@@ -175,7 +175,7 @@ public sealed class EuProcedureEventDiscoveryPlanTests
             "this is the exact expectation RequireInputRoleShape builds and compares by sequence.");
     }
 
-    /// <summary>The delivery profile pins the whole row and the four-part keyset.</summary>
+    /// <summary>The delivery profile pins the whole row and the nine-part keyset.</summary>
     [TestMethod]
     public void TheDeliveryProfilePinsTheWholeRowAndItsKeyset()
     {
@@ -185,12 +185,14 @@ public sealed class EuProcedureEventDiscoveryPlanTests
         CollectionAssert.AreEqual(
             new[]
             {
-                "event", "dossier", "event_type", "event_date", "date_kind", "multiplicity",
-                "key_1", "key_2", "key_3", "key_4",
+                "event", "event_kind", "dossier", "event_type", "type_kind",
+                "event_date", "date_kind", "date_datatype", "date_language", "multiplicity",
+                "key_1", "key_2", "key_3", "key_4", "key_5", "key_6", "key_7", "key_8", "key_9",
             },
             profile.ProjectionVariables.ToArray());
         CollectionAssert.AreEqual(
-            new[] { "key_1", "key_2", "key_3", "key_4" }, profile.CursorVariables.ToArray());
+            new[] { "key_1", "key_2", "key_3", "key_4", "key_5", "key_6", "key_7", "key_8", "key_9" },
+            profile.CursorVariables.ToArray());
         CollectionAssert.AreEqual(
             profile.CanonicalKeyVariables.ToArray(), profile.CursorVariables.ToArray());
         Assert.HasCount(50, profile.SelectionParameterNames);
@@ -213,10 +215,101 @@ public sealed class EuProcedureEventDiscoveryPlanTests
         var page = EuProcedureEventDiscoveryPlan.Create().PageTemplate;
 
         StringAssert.Contains(page, "BIND(STR(?event) AS ?key_1)");
-        StringAssert.Contains(page, "BIND(STR(?event_type) AS ?key_2)");
-        StringAssert.Contains(page, "BIND(STR(?dossier) AS ?key_3)");
-        StringAssert.Contains(page, "BIND(COALESCE(STR(?event_date), \"\") AS ?key_4)");
-        StringAssert.Contains(page, "ORDER BY ?key_1 ?key_2 ?key_3 ?key_4");
+        StringAssert.Contains(page, "BIND(COALESCE(STR(?event_type), \"\") AS ?key_3)");
+        StringAssert.Contains(page, "BIND(STR(?dossier) AS ?key_5)");
+        StringAssert.Contains(page, "BIND(COALESCE(STR(?event_date), \"\") AS ?key_6)");
+        StringAssert.Contains(
+            page, "ORDER BY ?key_1 ?key_2 ?key_3 ?key_4 ?key_5 ?key_6 ?key_7 ?key_8 ?key_9");
+    }
+
+    /// <summary>
+    /// The untyped event is asked for explicitly, and its branch pins the triple rather than a word.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Leaving <c>?event a ?event_type</c> mandatory made an event carrying the dossier edge and no
+    /// <c>rdf:type</c> contribute NO ROW AT ALL. That is a silent drop, and it also made the accepted
+    /// <see cref="EuProcedureEventRefusal.EventTypeMissing"/> a production path no real delivery could
+    /// ever reach — the contract could refuse an untyped event only if somebody hand-built one.
+    /// </para>
+    /// <para>
+    /// Pinned as whole triples in both templates for the same reason the date branch is: a guard
+    /// asserting only that <c>a ?event_type</c> appears somewhere is satisfied by the mandatory form
+    /// alone, which is the exact shape being repaired.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void TheUntypedEventBranchIsAskedForAndPinsItsOwnTriple()
+    {
+        var plan = EuProcedureEventDiscoveryPlan.Create();
+
+        foreach (var template in new[] { plan.CountTemplate, plan.PageTemplate })
+        {
+            StringAssert.Contains(
+                template, "FILTER NOT EXISTS { ?event a ?missing_type }",
+                "the untyped event is asked about by name, never inferred from a row that never came.");
+            StringAssert.Contains(
+                template, "BIND(\"unbound\" AS ?type_kind)",
+                "and it arrives carrying the marker that says so.");
+        }
+    }
+
+    /// <summary>
+    /// Every term the row groups on contributes to the canonical key, kind and qualifiers included.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The canonical key must be INJECTIVE over the grouped row: Source/Core requires canonical keys
+    /// unique and cursors strictly increasing, so two distinct grouped rows sharing a key either
+    /// refuse the whole page or cannot be paged across a boundary. A key built from <c>STR()</c>
+    /// alone is not injective over terms — an IRI type and a literal type spelled identically share
+    /// every lexical form, as do two date literals with one lexical value and different datatypes or
+    /// language tags, and the accepted observation retains <c>DateDatatypeIri</c> and every type term,
+    /// so those really are different facts.
+    /// </para>
+    /// <para>
+    /// Derived from the template's own GROUP BY list rather than transcribed, so a variable added to
+    /// the grouping and forgotten in the keyset fails here instead of waiting for a publisher to
+    /// deliver the collision.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void EveryGroupedTermContributesToTheCanonicalKeyIncludingItsTermAuthority()
+    {
+        var page = EuProcedureEventDiscoveryPlan.Create().PageTemplate;
+
+        // The grouped row is a subquery inside the page, so its GROUP BY line is indented.
+        var groupBy = page.Split('\n')
+            .Select(static line => line.Trim())
+            .Single(static line => line.StartsWith("GROUP BY ", StringComparison.Ordinal))
+            .Substring("GROUP BY ".Length)
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+        Assert.IsGreaterThan(1, groupBy.Length, "the row groups on more than one term.");
+
+        var keyBindings = page.Split('\n')
+            .Where(static line => line.Contains(" AS ?key_", StringComparison.Ordinal))
+            .ToArray();
+
+        Assert.HasCount(9, keyBindings, "every cursor key is bound in the page template.");
+
+        foreach (var variable in groupBy)
+        {
+            Assert.IsTrue(
+                keyBindings.Any(binding => binding.Contains(
+                    variable + ")", StringComparison.Ordinal)
+                    || binding.Contains(variable + " AS ", StringComparison.Ordinal)),
+                $"{variable} is grouped on but reaches no canonical key, so two rows differing only "
+                    + "in it would collide.");
+        }
+
+        // The two collisions named in review, stated as the keys that separate them.
+        StringAssert.Contains(page, "BIND(?type_kind AS ?key_4)",
+            "an IRI type and a literal type spelled the same are separated by their kind.");
+        StringAssert.Contains(page, "BIND(?date_datatype AS ?key_8)",
+            "two date literals with one lexical value and different datatypes are separated.");
+        StringAssert.Contains(page, "BIND(?date_language AS ?key_9)",
+            "and so are two with different language tags.");
     }
 
     /// <summary>Binding fills every slot and sends no renderer placeholder.</summary>

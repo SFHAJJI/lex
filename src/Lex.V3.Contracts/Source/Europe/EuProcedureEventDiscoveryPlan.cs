@@ -112,6 +112,20 @@ public sealed class EuProcedureEventDiscoveryPlan
     public const string UnboundDateKind = "unbound";
 
     /// <summary>
+    /// The marker a row carries when the publisher declared no type at all for that event.
+    /// </summary>
+    /// <remarks>
+    /// The untyped event is ASKED FOR, exactly as the undated one is. Leaving <c>?event a
+    /// ?event_type</c> mandatory made an event with the dossier edge and no <c>rdf:type</c>
+    /// contribute no row at all, which turned the accepted
+    /// <see cref="EuProcedureEventRefusal.EventTypeMissing"/> into a production path no delivery
+    /// could reach and a missing observation into silence. Codex found that on head
+    /// <c>2f0e86ea</c>; it is the same defect the date branch already existed to avoid, and it was
+    /// present in the very query whose own remarks explained why absence must be asked for.
+    /// </remarks>
+    public const string UnboundTypeKind = "unbound";
+
+    /// <summary>
     /// How many dossiers one request may ask about. Fixed at 50, matching the case-law and
     /// object-facts families, so batch size is a property of this plan rather than a caller's choice.
     /// </summary>
@@ -130,16 +144,38 @@ public sealed class EuProcedureEventDiscoveryPlan
 
     private static readonly string[] Projection =
     [
-        "event", "dossier", "event_type", "event_date", "date_kind", "multiplicity",
-        "key_1", "key_2", "key_3", "key_4",
+        "event", "event_kind", "dossier", "event_type", "type_kind",
+        "event_date", "date_kind", "date_datatype", "date_language", "multiplicity",
+        "key_1", "key_2", "key_3", "key_4", "key_5", "key_6", "key_7", "key_8", "key_9",
     ];
 
     /// <summary>
-    /// The keyset. <c>key_2</c> carries the declared type because one event contributes one row per
-    /// type: without it two types of a single event would share a cursor and the page could not
-    /// advance past the second.
+    /// The keyset, and it must be INJECTIVE OVER THE GROUPED ROW rather than merely plausible.
     /// </summary>
-    private static readonly string[] Cursor = ["key_1", "key_2", "key_3", "key_4"];
+    /// <remarks>
+    /// <para>
+    /// <c>key_3</c> carries the declared type because one event contributes one row per type:
+    /// without it two types of a single event would share a cursor and the page could not advance
+    /// past the second.
+    /// </para>
+    /// <para>
+    /// THE KIND AND QUALIFIER KEYS ARE NOT DECORATION. The row groups on the publisher's TERMS, but
+    /// a key built from <c>STR()</c> alone carries only their lexical forms, and two distinct
+    /// assertions can share every lexical form: an IRI type and a literal type spelled the same, or
+    /// two date literals with one lexical value and different datatypes or language tags. Source/Core
+    /// requires canonical keys unique and cursors strictly increasing, so such a pair either refuses
+    /// the whole page or cannot be paged across a boundary — and the accepted observation retains
+    /// <c>DateDatatypeIri</c> and every type term, so these really are different facts rather than a
+    /// distinction without a difference. Codex found this on head <c>2f0e86ea</c>.
+    /// </para>
+    /// <para>
+    /// <c>key_5</c>, the dossier, needs no kind key: it is bound from a VALUES block of IRIs, so it
+    /// is an IRI by construction rather than by hope. Every other term is whatever the publisher
+    /// delivered, which is why each carries its own kind.
+    /// </para>
+    /// </remarks>
+    private static readonly string[] Cursor =
+        ["key_1", "key_2", "key_3", "key_4", "key_5", "key_6", "key_7", "key_8", "key_9"];
 
     /// <summary>
     /// How many cursor keys this family has. The renderer reads this rather than repeating the
@@ -393,13 +429,47 @@ public sealed class EuProcedureEventDiscoveryPlan
             MachineQueryBinder.BindForSend(machinePlan, machinePlanRef, input, renderer));
     }
 
+    /// <summary>
+    /// The keyset continuation filter, derived from <see cref="Cursor"/> rather than written out.
+    /// </summary>
+    /// <remarks>
+    /// Nine keys make this comparison nine clauses deep, and a hand-written one would be nine
+    /// chances to transpose a key. It is generated from the same array the projection, the ORDER BY
+    /// and the bound parameters come from, so a cursor that gains or loses a key cannot leave a
+    /// stale comparison behind — the defect class this plan's own <see cref="CursorKeyCount"/>
+    /// already exists to prevent for the renderer.
+    /// </remarks>
+    private static string KeysetFilter()
+    {
+        var clauses = new List<string>();
+        for (var index = 0; index < Cursor.Length; index++)
+        {
+            var parts = new List<string>();
+            for (var earlier = 0; earlier < index; earlier++)
+            {
+                parts.Add($"?{Cursor[earlier]} = ?last_{Cursor[earlier]}");
+            }
+
+            parts.Add($"?{Cursor[index]} > ?last_{Cursor[index]}");
+            clauses.Add(parts.Count == 1 ? parts[0] : "(" + string.Join(" && ", parts) + ")");
+        }
+
+        return string.Join(" ||\n    ", clauses);
+    }
+
+    private static string AllKeysEqual() => string.Join(
+        " && ", Cursor.Select(static key => $"?{key} = ?last_{key}"));
+
     private static (string Count, string Page) BuildTemplates()
     {
         var valuesBlock = string.Join('\n', BatchParameterNames()
             .Select(static name => "    {" + name + ":iri}"));
 
+        var grouped = "?event ?event_kind ?dossier ?event_type ?type_kind "
+            + "?event_date ?date_kind ?date_datatype ?date_language";
+
         var rows = $$"""
-            SELECT ?event ?dossier ?event_type ?event_date ?date_kind (COUNT(*) AS ?multiplicity) WHERE {
+            SELECT {{grouped}} (COUNT(*) AS ?multiplicity) WHERE {
               VALUES ?lex_pass_id { {pass_id:uint} }
               {
                 SELECT DISTINCT ?dossier WHERE {
@@ -409,7 +479,16 @@ public sealed class EuProcedureEventDiscoveryPlan
                 }
               }
               ?event <{{PartOfDossierPredicateIri}}> ?dossier .
-              ?event a ?event_type .
+              BIND(IF(isIRI(?event), "iri", IF(isLiteral(?event), "literal", "unsupported_blank_node")) AS ?event_kind)
+              {
+                ?event a ?event_type .
+                BIND(IF(isIRI(?event_type), "iri", IF(isLiteral(?event_type), "literal", "unsupported_blank_node")) AS ?type_kind)
+              }
+              UNION
+              {
+                FILTER NOT EXISTS { ?event a ?missing_type }
+                BIND("{{UnboundTypeKind}}" AS ?type_kind)
+              }
               {
                 ?event <{{EventDatePredicateIri}}> ?event_date .
                 BIND(IF(isLiteral(?event_date), "literal", IF(isIRI(?event_date), "iri", "unsupported_blank_node")) AS ?date_kind)
@@ -419,8 +498,10 @@ public sealed class EuProcedureEventDiscoveryPlan
                 FILTER NOT EXISTS { ?event <{{EventDatePredicateIri}}> ?missing_date }
                 BIND("{{UnboundDateKind}}" AS ?date_kind)
               }
+              BIND(COALESCE(IF(isLiteral(?event_date), STR(DATATYPE(?event_date)), ""), "") AS ?date_datatype)
+              BIND(COALESCE(IF(isLiteral(?event_date), LANG(?event_date), ""), "") AS ?date_language)
             }
-            GROUP BY ?event ?dossier ?event_type ?event_date ?date_kind
+            GROUP BY {{grouped}}
             """;
 
         var count = $$"""
@@ -431,28 +512,35 @@ public sealed class EuProcedureEventDiscoveryPlan
             }
             """;
 
+        var projected = string.Join(' ', Projection.Select(static name => "?" + name));
+        var lastNames = string.Join(' ', Cursor.Select(static key => "?last_" + key));
+        var lastSlots = string.Join(' ', Cursor.Select(static key => "{last_" + key + ":sparql_string}"));
+        var order = string.Join(' ', Cursor.Select(static key => "?" + key));
+
         var page = $$"""
-            SELECT ?event ?dossier ?event_type ?event_date ?date_kind ?multiplicity ?key_1 ?key_2 ?key_3 ?key_4 WHERE {
+            SELECT {{projected}} WHERE {
               {
             {{Indent(Indent(rows))}}
               }
               BIND(STR(?event) AS ?key_1)
-              BIND(STR(?event_type) AS ?key_2)
-              BIND(STR(?dossier) AS ?key_3)
-              BIND(COALESCE(STR(?event_date), "") AS ?key_4)
-              VALUES (?has_cursor ?last_key_1 ?last_key_2 ?last_key_3 ?last_key_4) {
-                ({has_cursor:uint} {last_key_1:sparql_string} {last_key_2:sparql_string} {last_key_3:sparql_string} {last_key_4:sparql_string})
+              BIND(?event_kind AS ?key_2)
+              BIND(COALESCE(STR(?event_type), "") AS ?key_3)
+              BIND(?type_kind AS ?key_4)
+              BIND(STR(?dossier) AS ?key_5)
+              BIND(COALESCE(STR(?event_date), "") AS ?key_6)
+              BIND(?date_kind AS ?key_7)
+              BIND(?date_datatype AS ?key_8)
+              BIND(?date_language AS ?key_9)
+              VALUES (?has_cursor {{lastNames}}) {
+                ({has_cursor:uint} {{lastSlots}})
               }
               FILTER(
-                ?has_cursor = 0 || ?key_1 > ?last_key_1 ||
-                (?key_1 = ?last_key_1 && ?key_2 > ?last_key_2) ||
-                (?key_1 = ?last_key_1 && ?key_2 = ?last_key_2 && ?key_3 > ?last_key_3) ||
-                (?key_1 = ?last_key_1 && ?key_2 = ?last_key_2 && ?key_3 = ?last_key_3 && ?key_4 > ?last_key_4)
+                ?has_cursor = 0 ||
+            {{Indent(Indent(KeysetFilter()))}}
               )
-              FILTER(?has_cursor = 0 || !(
-                ?key_1 = ?last_key_1 && ?key_2 = ?last_key_2 && ?key_3 = ?last_key_3 && ?key_4 = ?last_key_4))
+              FILTER(?has_cursor = 0 || !({{AllKeysEqual()}}))
             }
-            ORDER BY ?key_1 ?key_2 ?key_3 ?key_4
+            ORDER BY {{order}}
             LIMIT {page_limit:uint}
             """;
 
