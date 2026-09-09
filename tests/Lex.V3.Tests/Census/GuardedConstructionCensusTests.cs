@@ -931,6 +931,12 @@ public sealed class GuardedConstructionCensusTests
                     + "method public static "
                     + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgLiteralCanonicalizer::Canonical"
                     + "ize",
+                "Lex.V3.Contracts.Source.Luxembourg.LuxembourgOpinionLinkOnlyRecord: constructor "
+                    + "private instance "
+                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgOpinionLinkOnlyRecord::.ctor, "
+                    + "method public static "
+                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgOpinionLinkOnlyRecord::TryCreat"
+                    + "e",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgPartitionChain: constructor private "
                     + "instance Lex.V3.Contracts.Source.Luxembourg.LuxembourgPartitionChain::.ctor, "
                     + "method public instance "
