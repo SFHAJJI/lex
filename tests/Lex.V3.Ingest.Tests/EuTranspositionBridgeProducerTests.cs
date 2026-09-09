@@ -198,6 +198,74 @@ public sealed class EuTranspositionBridgeProducerTests
     }
 
     [TestMethod]
+    public void DistinctNimAssertionsForOneLegiluxEliProduceOneJoinThatRetainsEveryCoordinate()
+    {
+        const string firstNimWork = "http://publications.europa.eu/resource/cellar/44444444-4444-4444-8444-444444444444";
+        const string secondNimWork = "http://publications.europa.eu/resource/cellar/55555555-5555-4555-8555-555555555555";
+        const string firstCelex = "72016L1164LUX_269096";
+        const string secondCelex = "72016L1164LUX_266876";
+        var secondEvidence = new SourceArtifactRef(
+            "urn:uuid:dddddddd-dddd-4ddd-8ddd-dddddddddddd", new string('d', 64));
+        var nim = EuNationalImplementingMeasureProductionResult.Success(
+            [
+                new EuNationalImplementingMeasureRelation(
+                    EuWork, Kind(EuWork, EuWorkKind.Directive),
+                    EuNationalImplementingMeasureDiscoveryPlan.DirectiveResourceTypeIri,
+                    secondNimWork, secondCelex,
+                    EuNationalImplementingMeasureDiscoveryPlan.ImplementsResourceLegalPredicateIri,
+                    NimLuMeasure,
+                    new EuTranspositionSourceAcquisition(
+                        EuTranspositionAssertedBy.Nim,
+                        EuRelationAcquisitionState.Complete,
+                        [new EuTranspositionSide(
+                            EuTranspositionAssertedBy.Nim, secondNimWork, secondEvidence,
+                            EuMemberStateDisclaimer.Text, EuMemberStateDisclaimer.SourceUri)],
+                        Evidence)),
+                new EuNationalImplementingMeasureRelation(
+                    EuWork, Kind(EuWork, EuWorkKind.Directive),
+                    EuNationalImplementingMeasureDiscoveryPlan.DirectiveResourceTypeIri,
+                    firstNimWork, firstCelex,
+                    EuNationalImplementingMeasureDiscoveryPlan.ImplementsResourceLegalPredicateIri,
+                    NimLuMeasure, NimSide(firstNimWork)),
+            ], [], [], Evidence, 0);
+
+        var result = EuTranspositionBridgeProducer.Produce(
+            EuWork, Kind(EuWork, EuWorkKind.Directive), Legilux(LegiluxSide()), nim);
+
+        Assert.IsTrue(result.Delivered, result.Detail);
+        Assert.HasCount(2, result.Bridge!.Nim.Sides);
+        Assert.HasCount(1, result.Bridge.NormalisedEliJoins);
+        var evidenceBytes = result.CopyNormalisedEliJoinEvidenceBytes().Single();
+        Assert.AreEqual(
+            Convert.ToHexStringLower(SHA256.HashData(evidenceBytes)),
+            result.Bridge.NormalisedEliJoins[0].EvidenceRef.Sha256);
+        Assert.AreEqual(
+            ContentDerivedIdentity.DeriveUuidUrn(
+                "lex-v3/eu-transposition-normalised-eli-join/2",
+                evidenceBytes),
+            result.Bridge.NormalisedEliJoins[0].EvidenceRef.ResourceId);
+        using var evidence = JsonDocument.Parse(evidenceBytes);
+        Assert.AreEqual(
+            "eu_transposition_normalised_eli_join_evidence/2",
+            evidence.RootElement.GetProperty("schema").GetString());
+        var assertions = evidence.RootElement.GetProperty("nim_assertions").EnumerateArray().ToArray();
+        Assert.HasCount(2, assertions);
+        CollectionAssert.AreEqual(
+            new[] { firstNimWork, secondNimWork },
+            assertions.Select(static value => value.GetProperty("nim_work_uri").GetString()).ToArray());
+        CollectionAssert.AreEqual(
+            new[] { firstCelex, secondCelex },
+            assertions.Select(static value => value.GetProperty("nim_celex").GetString()).ToArray());
+        CollectionAssert.AreEqual(
+            new[] { NimEvidence.ResourceId, secondEvidence.ResourceId },
+            assertions.Select(static value => value.GetProperty("nim_evidence_resource_id").GetString()).ToArray());
+        Assert.IsTrue(assertions.All(value =>
+            value.GetProperty("nim_eli").GetString() == NimLuMeasure &&
+            value.GetProperty("implements_predicate_iri").GetString() ==
+                EuNationalImplementingMeasureDiscoveryPlan.ImplementsResourceLegalPredicateIri));
+    }
+
+    [TestMethod]
     public void DistinctRawRowsForOneIdenticalNimAssertionRemainEvidenceButProjectOnce()
     {
         var side = NimSide(EuWork);
