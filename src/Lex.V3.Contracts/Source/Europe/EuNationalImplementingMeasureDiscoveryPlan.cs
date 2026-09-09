@@ -231,11 +231,7 @@ public sealed class EuNationalImplementingMeasureDiscoveryPlan
                  <{{Cdm}}measure_national_implementing_implemented_by_country> ?country ;
                  <{{Cdm}}resource_legal_id_celex> ?nim_celex ;
                  ?implements_predicate ?eu_work .
-            VALUES ?eu_work_kind {
-              <{{DirectiveResourceTypeIri}}>
-              <{{RegulationResourceTypeIri}}>
-            }
-            ?eu_work <{{WorkHasResourceTypePredicateIri}}> ?eu_work_kind .
+            OPTIONAL { ?eu_work <{{WorkHasResourceTypePredicateIri}}> ?eu_work_kind . }
             OPTIONAL { ?eu_work <{{EuWorkEliPredicateIri}}> ?eu_work_eli . }
             FILTER(STRSTARTS(STR(?nim_celex), "7"))
             {

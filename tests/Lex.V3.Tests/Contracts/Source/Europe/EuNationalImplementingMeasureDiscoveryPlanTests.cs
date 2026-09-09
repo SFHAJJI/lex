@@ -21,10 +21,8 @@ public sealed class EuNationalImplementingMeasureDiscoveryPlanTests
         StringAssert.Contains(plan.PageTemplate, EuNationalImplementingMeasureDiscoveryPlan.EliPredicateIri);
         StringAssert.Contains(plan.PageTemplate, EuNationalImplementingMeasureDiscoveryPlan.EuWorkEliPredicateIri);
         StringAssert.Contains(plan.PageTemplate, EuNationalImplementingMeasureDiscoveryPlan.WorkHasResourceTypePredicateIri);
-        StringAssert.Contains(plan.PageTemplate, EuNationalImplementingMeasureDiscoveryPlan.DirectiveResourceTypeIri);
-        StringAssert.Contains(plan.PageTemplate, EuNationalImplementingMeasureDiscoveryPlan.RegulationResourceTypeIri);
-        Assert.AreEqual(1, plan.PageTemplate.Split("OPTIONAL {", StringSplitOptions.None).Length - 1,
-            "Only the target ELI remains optional; the admitted family is closed by the publisher's canonical type.");
+        Assert.AreEqual(2, plan.PageTemplate.Split("OPTIONAL {", StringSplitOptions.None).Length - 1,
+            "Both the target ELI and its publisher resource type remain observable when absent.");
         Assert.IsFalse(plan.PageTemplate.Contains("?eu_work a ?eu_work_kind", StringComparison.Ordinal));
         StringAssert.Contains(plan.PageTemplate, "COALESCE(STR(?eu_work_eli), \"\") AS ?key_5");
         StringAssert.Contains(plan.PageTemplate, "COALESCE(STR(?eu_work_kind), \"\") AS ?key_6");
@@ -34,7 +32,7 @@ public sealed class EuNationalImplementingMeasureDiscoveryPlanTests
         Assert.IsFalse(plan.PageTemplate.Contains("OFFSET", StringComparison.OrdinalIgnoreCase));
         Assert.IsFalse(plan.PageTemplate.Contains("SELECT DISTINCT", StringComparison.OrdinalIgnoreCase));
         Assert.AreEqual(
-            "6b1d3a3547b61c2022d72355fa2c552cad3ee51033cd182857fdad834c063e72",
+            "b5629669e048954ef4d8e72d489ebb5509498d479fa1c9c0998889f47065232c",
             plan.ArtifactRef.Sha256);
     }
 
@@ -113,5 +111,21 @@ public sealed class EuNationalImplementingMeasureDiscoveryPlanTests
         StringAssert.Contains(page, "ENCODE_FOR_URI(COALESCE(STR(?eli), \"\"))");
         StringAssert.Contains(page, "?page_key > ?last_page_key");
         Assert.IsFalse(page.Contains("?key_1 > ?last_key_1", StringComparison.Ordinal));
+    }
+
+    [TestMethod]
+    public void MissingOrUnadmittedWorkKindsRemainObservableForTheProducerToRefuse()
+    {
+        var page = EuNationalImplementingMeasureDiscoveryPlan.Create().PageTemplate;
+        var observedKind =
+            $"OPTIONAL {{ ?eu_work <{EuNationalImplementingMeasureDiscoveryPlan.WorkHasResourceTypePredicateIri}> ?eu_work_kind . }}";
+
+        StringAssert.Contains(
+            page,
+            observedKind,
+            "The family must deliver a missing or unadmitted publisher type to the existing typed producer refusal.");
+        Assert.IsFalse(
+            page.Contains("VALUES ?eu_work_kind", StringComparison.Ordinal),
+            "A closed query-side VALUES clause silently discards a real third publisher type such as DEC.");
     }
 }

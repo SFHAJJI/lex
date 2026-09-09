@@ -368,7 +368,8 @@ public sealed class EuNationalImplementingMeasureProducer
         {
             EuNationalImplementingMeasureDiscoveryPlan.DirectiveResourceTypeIri => EuWorkKind.Directive,
             EuNationalImplementingMeasureDiscoveryPlan.RegulationResourceTypeIri => EuWorkKind.Regulation,
-            _ => throw new ArgumentException("eu_work_kind must be directive or regulation.", nameof(term)),
+            _ => throw new ArgumentException(
+                $"eu_work_kind '{term.Value}' must be directive or regulation.", nameof(term)),
         };
     }
 

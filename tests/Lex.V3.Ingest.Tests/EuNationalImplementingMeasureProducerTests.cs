@@ -225,6 +225,10 @@ public sealed class EuNationalImplementingMeasureProducerTests
         Assert.IsFalse(wrongKind.Delivered);
         Assert.AreEqual(EuNationalImplementingMeasureProductionRefusal.RowNotAdmitted, wrongKind.Refusal);
         StringAssert.Contains(wrongKind.Detail, "eu_work_kind");
+        StringAssert.Contains(
+            wrongKind.Detail,
+            "http://publications.europa.eu/resource/authority/resource-type/DEC",
+            "The typed refusal must retain the exact unadmitted publisher value for diagnosis.");
         Assert.IsFalse(wrongEli.Delivered);
         Assert.AreEqual(EuNationalImplementingMeasureProductionRefusal.RowNotAdmitted, wrongEli.Refusal);
         StringAssert.Contains(wrongEli.Detail, "eu_work_eli");
