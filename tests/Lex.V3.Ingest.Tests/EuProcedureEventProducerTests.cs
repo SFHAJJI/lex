@@ -22,6 +22,8 @@ public sealed class EuProcedureEventProducerTests
     private const string FirstType = "http://publications.europa.eu/ontology/cdm#event_legal_type_one";
     private const string SecondType = "http://publications.europa.eu/ontology/cdm#event_legal_type_two";
     private const string XsdDate = "http://www.w3.org/2001/XMLSchema#date";
+    private const string XsdInteger = "http://www.w3.org/2001/XMLSchema#integer";
+    private const string XsdString = "http://www.w3.org/2001/XMLSchema#string";
 
     private static readonly SourceArtifactRef Evidence = new(
         "urn:uuid:3c7e9f21-8b45-4d06-a19e-5f2b7c48d031", new string('b', 64));
@@ -46,6 +48,19 @@ public sealed class EuProcedureEventProducerTests
     /// </remarks>
     private static RepeatedEnumerationRdfTerm TypedDate(string value, string datatype = XsdDate) =>
         RepeatedEnumerationRdfTerm.Literal(value, datatype, null);
+
+    /// <summary>
+    /// The grouped count as SPARQL delivers it: an <c>xsd:integer</c> literal.
+    /// </summary>
+    /// <remarks>
+    /// The fixture used to emit a PLAIN literal here, which no <c>COUNT(*)</c> produces. Codex found
+    /// the matching hole in the producer, which checked the digits and not the datatype — a positive
+    /// <c>xsd:string</c> was accepted as a count. Fixture and guard were weak in the same place, so
+    /// neither could reveal the other.
+    /// </remarks>
+    private static RepeatedEnumerationRdfTerm Count(long value) =>
+        RepeatedEnumerationRdfTerm.Literal(
+            value.ToString(System.Globalization.CultureInfo.InvariantCulture), XsdInteger, null);
 
     private static RepeatedEnumerationRdfTerm Unbound() =>
         RepeatedEnumerationRdfTerm.Unbound();
@@ -83,7 +98,7 @@ public sealed class EuProcedureEventProducerTests
         string? dateKind = null,
         string? dateDatatype = null,
         string dossier = Dossier,
-        string multiplicity = "1",
+        RepeatedEnumerationRdfTerm? multiplicity = null,
         string? typeDatatype = null,
         string? typeLanguage = null,
         string? key1 = null,
@@ -96,6 +111,7 @@ public sealed class EuProcedureEventProducerTests
         string? key10 = null)
     {
         var subject = eventTerm ?? Iri(Event);
+        var count = multiplicity ?? Count(1);
         var type = typeTerm ?? Iri(FirstType);
         var date = dateTerm ?? TypedDate("2021-11-24");
         // Defaults to whatever the term itself carries, so an honest row is coherent by
@@ -125,7 +141,7 @@ public sealed class EuProcedureEventProducerTests
             Literal(dateKind ?? Marker(date)),
             Literal(datatype),
             Literal(dateLanguageColumn),
-            Literal(multiplicity),
+            count,
             Literal(key1 ?? subject.Value ?? string.Empty),
             Literal(key2 ?? Marker(subject)),
             Literal(key3 ?? type.Value ?? string.Empty),
@@ -504,11 +520,90 @@ public sealed class EuProcedureEventProducerTests
         StringAssert.Contains(result.Detail!, "date_datatype");
     }
 
+    /// <summary>
+    /// A row naming a dossier this run never asked about refuses, rather than being admitted.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Codex found this at head <c>f8a3b5c0</c> and it is the sharpest defect this family has had.
+    /// The producer decoded every row, admitted it, and then published the CALLER'S requested set as
+    /// <c>DossiersAskedAbout</c> — as though that set were proven coverage of what came back. A run
+    /// asking about A and delivered an event of B returned success, and <c>EventsOf(A)</c> then
+    /// answered an evidenced EMPTY set while the sole admitted observation belonged to B.
+    /// </para>
+    /// <para>
+    /// A false absence that looks proven is worse than an error, because nothing downstream can tell
+    /// it from a real one. The executor makes the same check on the delivery it drives; that did not
+    /// cover this, because <c>DecodeRows</c> is a public entry point that can be handed rows from
+    /// anywhere.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void ARowNamingADossierThisRunNeverAskedAboutRefusesRatherThanBeingAdmitted()
+    {
+        const string NeverRequested =
+            "http://publications.europa.eu/resource/cellar/00000000-1111-2222-3333-444444444444";
+
+        var result = EuProcedureEventProducer.DecodeRows(
+            [Row(dossier: NeverRequested)], Profile(), [Dossier], Evidence);
+
+        Assert.AreEqual(
+            EuProcedureEventProductionRefusal.DeliveredDossierOutsideRequestedPartition,
+            result.Refusal,
+            "an event of an unrequested dossier must not be admitted under this run's coverage.");
+        StringAssert.Contains(result.Detail!, NeverRequested);
+    }
+
+    /// <summary>
+    /// The companion admit case: a row naming a dossier that WAS requested is admitted.
+    /// </summary>
+    /// <remarks>
+    /// Without this the membership check could refuse everything and the guard above would still
+    /// pass, which is the failure mode the case-law family shipped with.
+    /// </remarks>
+    [TestMethod]
+    public void ARowNamingARequestedDossierIsStillAdmitted()
+    {
+        var result = EuProcedureEventProducer.DecodeRows(
+            [Row(dossier: Dossier)], Profile(), [Dossier], Evidence);
+
+        Assert.AreEqual(EuProcedureEventProductionRefusal.None, result.Refusal, result.Detail);
+        Assert.HasCount(1, result.EventsOf(Dossier));
+    }
+
+    /// <summary>
+    /// A count that is not an <c>xsd:integer</c> is not the term <c>COUNT(*)</c> delivers.
+    /// </summary>
+    /// <remarks>
+    /// A positive <c>xsd:string</c> passed every earlier guard: the kind was right, the digits
+    /// parsed, the value was positive. Only the datatype said it was not a count.
+    /// </remarks>
+    [TestMethod]
+    public void ACountCarryingTheWrongDatatypeIsRefused()
+    {
+        var result = Decode(Row(
+            multiplicity: RepeatedEnumerationRdfTerm.Literal("3", XsdString, null)));
+
+        Assert.AreEqual(EuProcedureEventProductionRefusal.RowNotAdmitted, result.Refusal);
+        StringAssert.Contains(result.Detail!, "multiplicity");
+    }
+
+    /// <summary>A count carrying a language tag is refused for the same reason.</summary>
+    [TestMethod]
+    public void ACountCarryingALanguageTagIsRefused()
+    {
+        var result = Decode(Row(
+            multiplicity: RepeatedEnumerationRdfTerm.Literal("3", null, "en")));
+
+        Assert.AreEqual(EuProcedureEventProductionRefusal.RowNotAdmitted, result.Refusal);
+        StringAssert.Contains(result.Detail!, "multiplicity");
+    }
+
     /// <summary>The grouped count is read rather than ignored.</summary>
     [TestMethod]
     public void TheGroupedCountIsReadRatherThanIgnored()
     {
-        var result = Decode(Row(multiplicity: "0"));
+        var result = Decode(Row(multiplicity: Count(0)));
 
         Assert.AreEqual(EuProcedureEventProductionRefusal.RowNotAdmitted, result.Refusal);
         StringAssert.Contains(result.Detail!, "multiplicity");

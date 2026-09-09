@@ -74,7 +74,7 @@ public sealed class ClosedVocabularyCensusTests
                     + "RowNotAdmitted",
                 "Lex.V3.Ingest.Europe.EuProcedureEventProductionRefusal: None, EnumerationRefused, "
                     + "EnumerationProofRefused, RowNotAdmitted, EventDossierNotConsistent, "
-                    + "EventDateNotConsistent",
+                    + "EventDateNotConsistent, DeliveredDossierOutsideRequestedPartition",
                 "Lex.V3.Ingest.Europe.EuQueryExecutionCompletion: AllFamiliesProven, "
                     + "PartialFamilyRefused",
                 "Lex.V3.Ingest.Europe.EuQueryExecutionRefusal: None, CensusFamilyNotProven, "

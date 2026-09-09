@@ -32,6 +32,34 @@ public enum EuProcedureEventProductionRefusal
     RowNotAdmitted = 3,
 
     /// <summary>
+    /// A delivered row named a dossier this run never asked about.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// THE FALSE ABSENCE THIS PREVENTS IS THE POINT. Without it the producer admitted every decoded
+    /// row and then published the CALLER'S requested set as <c>DossiersAskedAbout</c>, as though that
+    /// set were proven coverage of what came back. A run asked about dossier A and delivered an event
+    /// of dossier B therefore returned success, and <c>EventsOf(A)</c> answered an evidenced empty
+    /// set while the one admitted observation belonged to B. An empty answer that looks proven is
+    /// worse than an error, because nothing downstream can tell it from a real absence.
+    /// </para>
+    /// <para>
+    /// Distinct from <see cref="RowNotAdmitted"/> deliberately, and this repository's own rule says
+    /// why: a typed reason that misdescribes the fact it reports is read, believed and never
+    /// questioned. The row here is perfectly readable — every term, marker and key is well formed.
+    /// What is wrong is that it answers a question nobody asked.
+    /// </para>
+    /// <para>
+    /// The executor performs the same membership check on the delivery it drives. This one is not a
+    /// duplicate of it: <see cref="EuProcedureEventProducer.DecodeRows"/> is a public entry point
+    /// that can be handed rows from anywhere, so a check living only in the executor leaves the
+    /// producer trusting its caller about the one thing it must not.
+    /// </para>
+    /// </remarks>
+    [JsonStringEnumMemberName("delivered_dossier_outside_requested_partition")]
+    DeliveredDossierOutsideRequestedPartition = 6,
+
+    /// <summary>
     /// One event's rows disagreed about which dossier it belongs to.
     /// </summary>
     /// <remarks>
@@ -228,6 +256,20 @@ public static class EuProcedureEventProducer
         {
             return EuProcedureEventProductionResult.Refused(
                 EuProcedureEventProductionRefusal.RowNotAdmitted, exception.Message);
+        }
+
+        // EVERY DELIVERED DOSSIER MUST BE ONE THAT WAS ASKED ABOUT, checked before any success is
+        // returned. DossiersAskedAbout is published as this run's coverage, so admitting a row from
+        // outside it makes that publication a claim the delivery does not support.
+        var requested = dossiersAskedAbout.ToHashSet(StringComparer.Ordinal);
+        foreach (var row in decoded)
+        {
+            if (!requested.Contains(row.DossierIri))
+            {
+                return EuProcedureEventProductionResult.Refused(
+                    EuProcedureEventProductionRefusal.DeliveredDossierOutsideRequestedPartition,
+                    $"A row names dossier {row.DossierIri}, which this run never asked about.");
+            }
         }
 
         var observations = new List<EuProcedureEventObservation>();
@@ -535,13 +577,33 @@ public static class EuProcedureEventProducer
         return term.Value;
     }
 
+    /// <summary>
+    /// The grouped count, required to be the term the publisher actually delivers.
+    /// </summary>
+    /// <remarks>
+    /// The datatype is checked, not just the kind and the digits. <c>COUNT(*)</c> yields an
+    /// <c>xsd:integer</c>, so a positive count arriving as an <c>xsd:string</c> — or carrying a
+    /// language tag — is not the term this query produces, and accepting it means the reader cannot
+    /// tell the publisher's count from something that merely looks like one.
+    ///
+    /// The fixture was wrong in the same place and hid it: it emitted a plain literal, so no test
+    /// modelled the delivered shape. That is the second time on this family that a fixture agreeing
+    /// with a weaker guard made the guard look sufficient — the date's datatype was the first.
+    /// </remarks>
     private static long RequirePositiveInteger(RepeatedEnumerationRdfTerm term, string name)
     {
         if (term.Kind != RepeatedEnumerationRdfTermKind.Literal || term.Value is null ||
+            // xsd:integer inline rather than as a named token. A const here would make this
+            // producer a closed-surface census candidate holding exactly one datatype IRI, and it is
+            // not a vocabulary; the sibling LuxembourgOpinionProducer spells it the same way.
+            term.Datatype != "http://www.w3.org/2001/XMLSchema#integer" ||
+            term.Language is not null ||
             !long.TryParse(term.Value, System.Globalization.NumberStyles.None,
                 System.Globalization.CultureInfo.InvariantCulture, out var value) || value <= 0)
         {
-            throw new ArgumentException($"{name} must be a positive integer literal.", name);
+            throw new ArgumentException(
+                $"{name} must be a positive xsd:integer literal, which is what COUNT(*) delivers.",
+                name);
         }
 
         return value;
