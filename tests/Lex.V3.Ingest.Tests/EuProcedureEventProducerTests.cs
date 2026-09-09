@@ -273,6 +273,20 @@ public sealed class EuProcedureEventProducerTests
         Assert.HasCount(1, result.EventsOf(Dossier));
     }
 
+    // TWO MUTATIONS ON THE RUN CHAIN SURVIVE THIS FILE, and both are recorded rather than left as
+    // an unexplained gap in the sweep.
+    //
+    // Reopening the pages in reverse instead of by ordinal survives because every delivery here is
+    // ONE page, where reversing is identity. It is not unguarded: VerifiedRepeatedEnumerationRows
+    // .TryOpen compares CanonicalRowDigestA, which is computed over the rows in delivery order, so a
+    // genuinely misordered multi-page delivery is refused there. Reaching a second page costs 811
+    // rows - EuProcedureEventDiscoveryPlan.Pass1PageLimit - so no cheap fixture can drive it.
+    //
+    // Reporting a refused TryOpen as EnumerationProofRefused rather than VerifiedRowsRefused
+    // survives because nothing here drives a delivery whose enumeration proof holds while its rows
+    // will not reopen. That one is a real untested branch, not an argued equivalence, and it is
+    // named here so it is a known gap rather than a silent one.
+
     /// <summary>
     /// A caller spelling its dossier non-canonically still gets an answer under the canonical form.
     /// </summary>
