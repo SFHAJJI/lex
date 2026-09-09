@@ -57,6 +57,8 @@ public sealed class ClosedVocabularyCensusTests
                 "Lex.V3.Ingest.CorpusRecordOutcomeKind: Held, NotHeld, PendingAcquisition",
                 "Lex.V3.Ingest.CorpusRecordSetCompletionState: Complete, Partial",
                 "Lex.V3.Ingest.CorpusRecordSetWriteRefusalKind: RecordSetNotRetained",
+                "Lex.V3.Ingest.Europe.EuCaseLawLinkProductionRefusal: None, EnumerationRefused, "
+                    + "EnumerationProofRefused, RowNotAdmitted, TargetBodyScopeNotSupplied",
                 "Lex.V3.Ingest.Europe.EuDocumentFetchAttemptRefusal: None, RobotsBootstrapRefused, "
                     + "ObservationNotExecuted",
                 "Lex.V3.Ingest.Europe.EuEnumerationRefusal: None, RobotsBootstrapRefused, "

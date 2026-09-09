@@ -115,6 +115,93 @@ public sealed class EuRepeatedEnumerationExecutorTests
         Assert.AreEqual(EuEnumerationRefusal.DeliveredKeyNotRepresentable, result.Refusal!.Code);
     }
 
+    [TestMethod]
+    public async Task EveryDeliveredRowMustBelongToTheRequestedObjectFactsPartition()
+    {
+        var canonical = EuAppendixASeedMap.SeedsInCelexOrder
+            .Select(static seed => EuPackRootCanonicalForm.TryCanonicalize(seed.WorkRoot, out _)!)
+            .OrderBy(static iri => iri, StringComparer.Ordinal)
+            .Take(2)
+            .ToArray();
+        var neverRequested = canonical[0];
+        var requested = canonical[1];
+        var rows = new[]
+        {
+            EuAcquisitionTestFixture.ObjectFactRow(
+                neverRequested,
+                EuAcquisitionTestFixture.WorkHasResourceType,
+                EuAcquisitionTestFixture.RegulationResourceType),
+            EuAcquisitionTestFixture.ObjectFactRow(
+                requested,
+                EuAcquisitionTestFixture.WorkHasResourceType,
+                EuAcquisitionTestFixture.RegulationResourceType),
+        };
+        var scripts = new Dictionary<string, EuAcquisitionTestFixture.FamilyScript>(StringComparer.Ordinal)
+        {
+            ["P"] = EuAcquisitionTestFixture.ScriptFor(
+                "P", rows.Length, rows, EuAcquisitionTestFixture.ObjectFactsProjection),
+        };
+        var (plan, planResourceId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
+        var request = new EuObjectFactsPartitionRunRequest(
+            plan,
+            planResourceId,
+            EuObjectFactsQuerySet.ObjectFacts,
+            [requested],
+            EuAcquisitionTestFixture.BuildRendererSource(2101));
+        var executor = new EuRepeatedEnumerationExecutor(
+            new EuAcquisitionTestFixture.EuInMemoryCustodyStore(),
+            new EuAcquisitionTestFixture.FixedTimeProvider(),
+            new EuAcquisitionTestFixture.ClassifyingHandler(scripts));
+
+        var result = await executor.RunObjectFactsPartitionAsync(
+            request,
+            EuAcquisitionTestFixture.SourceWitness(),
+            CancellationToken.None);
+
+        Assert.AreEqual(EuEnumerationRefusal.DeliveredRowOutsidePartition, result.Refusal?.Code);
+        Assert.AreEqual(neverRequested, result.Refusal?.OffendingKey);
+    }
+
+    [TestMethod]
+    public async Task AnAdmittedObjectAliasMatchesTheCanonicalPublisherIdentity()
+    {
+        var canonical = EuPackRootCanonicalForm.TryCanonicalize(
+            EuAppendixASeedMap.SeedsInCelexOrder[0].WorkRoot,
+            out _)!;
+        var admittedAlias = "https" + canonical["http".Length..] + "/";
+        var rows = new[]
+        {
+            EuAcquisitionTestFixture.ObjectFactRow(
+                canonical,
+                EuAcquisitionTestFixture.WorkHasResourceType,
+                EuAcquisitionTestFixture.RegulationResourceType),
+        };
+        var scripts = new Dictionary<string, EuAcquisitionTestFixture.FamilyScript>(StringComparer.Ordinal)
+        {
+            ["P"] = EuAcquisitionTestFixture.ScriptFor(
+                "P", rows.Length, rows, EuAcquisitionTestFixture.ObjectFactsProjection),
+        };
+        var (plan, planResourceId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
+        var request = new EuObjectFactsPartitionRunRequest(
+            plan,
+            planResourceId,
+            EuObjectFactsQuerySet.ObjectFacts,
+            [admittedAlias],
+            EuAcquisitionTestFixture.BuildRendererSource(2102));
+        var executor = new EuRepeatedEnumerationExecutor(
+            new EuAcquisitionTestFixture.EuInMemoryCustodyStore(),
+            new EuAcquisitionTestFixture.FixedTimeProvider(),
+            new EuAcquisitionTestFixture.ClassifyingHandler(scripts));
+
+        var result = await executor.RunObjectFactsPartitionAsync(
+            request,
+            EuAcquisitionTestFixture.SourceWitness(),
+            CancellationToken.None);
+
+        Assert.IsNull(result.Refusal, result.Refusal?.CoreRefusalDetail);
+        Assert.IsNotNull(result.Receipt);
+    }
+
     /// <summary>
     /// Fold-in from the D1-06c-EU refreeze review (SCOPE_RULING
     /// lex-event-20260904T143553601Z-e6842d729c9b41fc8f5a6e76d5750bc2):

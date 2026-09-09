@@ -628,7 +628,7 @@ public sealed class EuRepeatedEnumerationExecutor
                     profileRef,
                     pass => BindObjectFactsCount(request, pass),
                     (pass, cursor, selected, evidenceRef) => BindObjectFactsPage(request, pass, cursor, selected, evidenceRef),
-                    batchObjects: request.BatchObjects,
+                    batchObjects: EuObjectFactsDiscoveryPlan.RequestedPartitionMembers(request.BatchObjects),
                     batchMembershipKeyOrdinal: batchMembershipOrdinal,
                     cancellationToken)
                 .ConfigureAwait(false);
@@ -723,7 +723,11 @@ public sealed class EuRepeatedEnumerationExecutor
                     pass => BindCaseLawCount(request, pass),
                     (pass, cursor, selected, evidenceRef) =>
                         BindCaseLawPage(request, pass, cursor, selected, evidenceRef),
-                    batchObjects: request.BatchWorks,
+                    // The plan's own asked-about form, not the caller's spelling. The publisher is
+                    // asked about the canonical batch and answers in it, so comparing a delivered
+                    // key against the raw request refuses every honest row for a caller who wrote
+                    // https:// or a trailing slash - spellings the plan accepts rather than refuses.
+                    batchObjects: EuCaseLawDiscoveryPlan.RequestedPartitionMembers(request.BatchWorks),
                     batchMembershipKeyOrdinal: CaseLawBatchMembershipKeyOrdinal(profile),
                     cancellationToken)
                 .ConfigureAwait(false);
@@ -1559,18 +1563,21 @@ public sealed class EuRepeatedEnumerationExecutor
                 // selection is the one requested seed CELEX (unreachable except through a malformed
                 // publisher response, since every row is guarded by RequireCelex downstream too; kept
                 // here as the executor's own defense, exactly mirroring LU's own range check).
-                if (batchMembershipKeyOrdinal is { } ordinal)
+                if (batchMembershipKeyOrdinal is { } ordinal && batchObjects is not null)
                 {
-                    var member = candidate[ordinal];
-                    if (batchObjects is not null && !batchObjects.Contains(member, StringComparer.Ordinal))
+                    foreach (var row in rows)
                     {
-                        return new PassOutcome(
-                            null,
-                            partitionKey,
-                            new EuEnumerationRefusalDetail(
-                                EuEnumerationRefusal.DeliveredRowOutsidePartition,
-                                pageOutcome.RequestOrdinal, null, transport.HttpEvidence.Hops[0].Status,
-                                transport.HttpEvidence.Hops[0].Sha256, null, null, member, null));
+                        var member = row[ordinal];
+                        if (!batchObjects.Contains(member, StringComparer.Ordinal))
+                        {
+                            return new PassOutcome(
+                                null,
+                                partitionKey,
+                                new EuEnumerationRefusalDetail(
+                                    EuEnumerationRefusal.DeliveredRowOutsidePartition,
+                                    pageOutcome.RequestOrdinal, null, transport.HttpEvidence.Hops[0].Status,
+                                    transport.HttpEvidence.Hops[0].Sha256, null, null, member, null));
+                        }
                     }
                 }
 

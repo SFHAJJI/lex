@@ -1821,13 +1821,13 @@ public sealed class EuQueryExecutionAdapterTests
     }
 
     /// <summary>
-    /// Required fold-in 3 / defect 2's own driving test. Before the fix,
-    /// <c>CollectRootWatermarkObservations</c> added any root it saw with no check that it was a
-    /// member of this run's own primary enumeration; after the fix a root W names that this run never
-    /// discovered is refused by name.
+    /// Required fold-in 3 / defect 2's own driving test. A root-watermark row naming a root outside
+    /// this run's proven object set is refused before decode. The shared executor now checks every
+    /// delivered row against the derived W partition, so this stops at family proof rather than the
+    /// adapter's later watermark-binding check.
     /// </summary>
     [TestMethod]
-    public async Task AWRowNamingARootOutsideOIsRefused()
+    public async Task AWRowNamingARootOutsideOIsRefusedBeforeDecode()
     {
         var seed = EuAppendixASeedMap.SeedsInCelexOrder[0];
         var rootIri = EuPackRootCanonicalForm.TryCanonicalize(seed.WorkRoot, out _)!;
@@ -1924,8 +1924,8 @@ public sealed class EuQueryExecutionAdapterTests
 
         Assert.IsNull(result.ScopeManifestReceipt);
         Assert.IsNotNull(result.Refusal);
-        Assert.AreEqual(EuQueryExecutionRefusal.RootWatermarkBindingRefused, result.Refusal!.Code);
-        StringAssert.Contains(result.Refusal.Detail, otherRootIri);
+        Assert.AreEqual(EuQueryExecutionRefusal.ObjectFactsFamilyNotProven, result.Refusal!.Code);
+        Assert.IsNull(result.DecodeRefusal);
     }
 
     /// <summary>
