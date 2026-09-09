@@ -310,6 +310,82 @@ public sealed class EuCaseLawLinkProducerTests
         Assert.ThrowsExactly<InvalidOperationException>(() => result.ForEuWork(Act));
     }
 
+    /// <summary>
+    /// A scope supplied under a different case is evidence for a DIFFERENT act, and is refused.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A Cellar work URI is an exact coordinate; case is part of the identity. The scope map arrives
+    /// from the caller, so its comparer is the caller's choice, and an <c>OrdinalIgnoreCase</c> one
+    /// let a scope supplied for <c>/resource/CELLAR/…</c> answer for the distinct canonical
+    /// <c>/resource/cellar/…</c>. The run then sent traffic and bound the requested act to evidence
+    /// supplied for another coordinate, while the pre-request refusal that exists to prevent exactly
+    /// that never fired. Codex found it at head <c>a27760b5</c>.
+    /// </para>
+    /// <para>
+    /// Nothing here would have caught it: every other test builds its scope map with the default
+    /// ordinal comparer, so the caller's choice never differed from the one the identity needs.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public async Task AScopeSuppliedUnderADifferentCaseIsNotEvidenceForTheRequestedAct()
+    {
+        const string DifferentCoordinate =
+            "http://publications.europa.eu/resource/CELLAR/3e485e15-11bd-11e6-ba9a-01aa75ed71a1";
+
+        var producer = new EuCaseLawLinkProducer(
+            new EuAcquisitionTestFixture.EuInMemoryCustodyStore(),
+            new EuAcquisitionTestFixture.FixedTimeProvider(),
+            new EuAcquisitionTestFixture.ClassifyingHandler(
+                new Dictionary<string, EuAcquisitionTestFixture.FamilyScript>(StringComparer.Ordinal)));
+
+        var result = await producer.RunAsync(
+            new EuCaseLawRunRequest(
+                EuCaseLawDiscoveryPlan.Create(),
+                [Act],
+                "urn:uuid:b1d6f24e-8c92-43a5-e067-d45f017c2218",
+                RendererSource()),
+            new Dictionary<string, TargetBodyScope>(StringComparer.OrdinalIgnoreCase)
+            {
+                [DifferentCoordinate] = TargetBodyScope.BodyInScopeHeld,
+            },
+            EuAcquisitionTestFixture.SourceWitness(),
+            CancellationToken.None);
+
+        Assert.AreEqual(
+            EuCaseLawLinkProductionRefusal.RequestedActBodyScopeNotSupplied, result.Refusal,
+            "case is part of a Cellar work identity, so this act has no supplied scope.");
+        Assert.AreEqual(0, result.ProductRequestCount, "and nothing was sent to learn that.");
+    }
+
+    /// <summary>
+    /// The decode path reads scopes under the exact comparer too, not the caller's.
+    /// </summary>
+    /// <remarks>
+    /// The preflight and the decode are two separate lookups into the same caller-owned map, so
+    /// fixing one and not the other would leave a delivered row able to borrow another coordinate's
+    /// scope even when the requested set was clean.
+    /// </remarks>
+    [TestMethod]
+    public void TheDecodePathAlsoReadsScopesUnderTheExactComparer()
+    {
+        const string DifferentCoordinate =
+            "http://publications.europa.eu/resource/CELLAR/3e485e15-11bd-11e6-ba9a-01aa75ed71a1";
+
+        var result = EuCaseLawLinkProducer.DecodeRows(
+            [EcliRow()],
+            Profile(),
+            new Dictionary<string, TargetBodyScope>(StringComparer.OrdinalIgnoreCase)
+            {
+                [DifferentCoordinate] = TargetBodyScope.BodyInScopeHeld,
+            },
+            Evidence);
+
+        Assert.AreEqual(
+            EuCaseLawLinkProductionRefusal.TargetBodyScopeNotSupplied, result.Refusal,
+            "a delivered row may not borrow the scope of a differently-cased coordinate.");
+    }
+
     // ONE MUTATION SURVIVES THIS FILE and is recorded rather than left unexplained. Reporting a
     // refused VerifiedRepeatedEnumerationRows.TryOpen as EnumerationProofRefused rather than
     // VerifiedRowsRefused survives because nothing here drives a delivery whose enumeration proof

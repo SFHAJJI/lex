@@ -291,10 +291,11 @@ public sealed class EuCaseLawLinkProducer
         ArgumentNullException.ThrowIfNull(actBodyScopes);
         ArgumentNullException.ThrowIfNull(sourceWitness);
 
+        var scopes = Exactly(actBodyScopes);
         var asked = EuCaseLawDiscoveryPlan.RequestedPartitionMembers(request.BatchWorks);
         foreach (var act in asked)
         {
-            if (!actBodyScopes.ContainsKey(act))
+            if (!scopes.ContainsKey(act))
             {
                 return EuCaseLawLinkProductionResult.Refused(
                     EuCaseLawLinkProductionRefusal.RequestedActBodyScopeNotSupplied,
@@ -346,7 +347,7 @@ public sealed class EuCaseLawLinkProducer
         }
 
         return DecodeRows(
-            rows, profile, actBodyScopes, proof.AcquisitionRunRef, asked, run.ProductRequestCount);
+            rows, profile, scopes, proof.AcquisitionRunRef, asked, run.ProductRequestCount);
     }
 
     /// <summary>
@@ -356,6 +357,32 @@ public sealed class EuCaseLawLinkProducer
     /// Each act's own body scope, keyed by its Cellar work URI. A row naming an act absent from this
     /// map is refused rather than defaulted.
     /// </param>
+    /// <summary>
+    /// The supplied scopes, re-keyed under the exact comparer this identity boundary requires.
+    /// </summary>
+    /// <remarks>
+    /// A CELLAR WORK URI IS AN EXACT COORDINATE and case is part of it. The map arrives from the
+    /// caller, so its comparer is the caller's choice, and an OrdinalIgnoreCase one made a scope
+    /// supplied for <c>/resource/CELLAR/…</c> answer for the distinct canonical
+    /// <c>/resource/cellar/…</c>: the run sent traffic and bound the requested act to evidence
+    /// supplied for another coordinate, and the pre-request refusal meant to prevent exactly that
+    /// never fired. Codex found this at head <c>a27760b5</c>.
+    ///
+    /// Copied rather than merely wrapped, because a wrapper still answers through the comparer it
+    /// was given. Both the preflight and the decode read through this copy.
+    /// </remarks>
+    private static Dictionary<string, TargetBodyScope> Exactly(
+        IReadOnlyDictionary<string, TargetBodyScope> supplied)
+    {
+        var exact = new Dictionary<string, TargetBodyScope>(StringComparer.Ordinal);
+        foreach (var pair in supplied)
+        {
+            exact[pair.Key] = pair.Value;
+        }
+
+        return exact;
+    }
+
     /// <remarks>
     /// INTERNAL, and deliberately. A public decoder taking a caller's rows and a caller's evidence
     /// reference is the unnamed intermediate Candidate 5 R5.3 forbids: it can mint links from rows
@@ -380,6 +407,10 @@ public sealed class EuCaseLawLinkProducer
         ArgumentNullException.ThrowIfNull(actBodyScopes);
         ArgumentNullException.ThrowIfNull(completionEvidenceRef);
 
+        // Read under the exact comparer here as well, so the guard holds for a direct internal
+        // caller and not only for the one RunAsync makes.
+        var exactScopes = Exactly(actBodyScopes);
+
         var relations = new List<EuCaseLawLinkRelation>(rows.Count);
         var unrepresentable = new List<EuCaseLawUnrepresentableRow>();
         foreach (var row in rows)
@@ -395,7 +426,7 @@ public sealed class EuCaseLawLinkProducer
                     EuCaseLawLinkProductionRefusal.RowNotAdmitted, exception.Message);
             }
 
-            if (!actBodyScopes.TryGetValue(euWorkUri, out var scope))
+            if (!exactScopes.TryGetValue(euWorkUri, out var scope))
             {
                 return EuCaseLawLinkProductionResult.Refused(
                     EuCaseLawLinkProductionRefusal.TargetBodyScopeNotSupplied,
@@ -428,7 +459,7 @@ public sealed class EuCaseLawLinkProducer
         return EuCaseLawLinkProductionResult.Success(
             relations,
             unrepresentable,
-            (actsAskedAbout ?? actBodyScopes.Keys.ToArray()).ToHashSet(StringComparer.Ordinal),
+            (actsAskedAbout ?? exactScopes.Keys.ToArray()).ToHashSet(StringComparer.Ordinal),
             completionEvidenceRef,
             productRequestCount);
     }
