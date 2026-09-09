@@ -31,6 +31,26 @@ public sealed class EuProcedureEventProducerTests
     private static RepeatedEnumerationInterpretationProfile Profile() =>
         EuProcedureEventDiscoveryPlan.Create().CreateDeliveryProfile();
 
+    /// <summary>A producer wired to a scripted transport, with its store handed back.</summary>
+    private static (EuProcedureEventProducer Producer, EuAcquisitionTestFixture.EuInMemoryCustodyStore Store)
+        RunnableProducer(params string[] rows)
+    {
+        var scripts = new Dictionary<string, EuAcquisitionTestFixture.FamilyScript>(StringComparer.Ordinal)
+        {
+            ["ProcedureEvent"] = EuAcquisitionTestFixture.ScriptFor(
+                "ProcedureEvent", rows.Length, rows,
+                EuAcquisitionTestFixture.ProcedureEventProjection),
+        };
+
+        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
+        return (
+            new EuProcedureEventProducer(
+                store,
+                new EuAcquisitionTestFixture.FixedTimeProvider(),
+                new EuAcquisitionTestFixture.ClassifyingHandler(scripts)),
+            store);
+    }
+
     private static MachineQueryRendererSource RendererSource()
     {
         var bytes = System.Text.Encoding.UTF8.GetBytes("eu-procedure-event-producer-source/1\n");
@@ -205,8 +225,9 @@ public sealed class EuProcedureEventProducerTests
                 EuAcquisitionTestFixture.ProcedureEventProjection),
         };
 
+        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
         var producer = new EuProcedureEventProducer(
-            new EuAcquisitionTestFixture.EuInMemoryCustodyStore(),
+            store,
             new EuAcquisitionTestFixture.FixedTimeProvider(),
             new EuAcquisitionTestFixture.ClassifyingHandler(scripts));
 
@@ -232,11 +253,104 @@ public sealed class EuProcedureEventProducerTests
         Assert.IsNotNull(result.CompletionEvidenceRef);
         Assert.AreEqual(
             result.CompletionEvidenceRef!.ResourceId, observation.SourceObservationId,
-            "the custody coordinate is the run's own, not one a caller invented.");
+            "every observation cites the reference this result reports.");
+
+        // AND THAT REFERENCE IS THE ACQUISITION RUN'S, established by reading the artifact rather
+        // than by comparing the producer against itself. The assertion above is self-referential:
+        // both sides come from the same value, so swapping WHICH reference the run cites changes
+        // them together and it cannot notice. A mutation that cited the count's HTTP evidence
+        // instead survived on exactly that. The stored bytes name their own schema, which nothing
+        // in the producer chooses.
+        var cited = await store.ReadByDigestAsync(
+            result.CompletionEvidenceRef!.Sha256, CancellationToken.None);
+        StringAssert.StartsWith(
+            System.Text.Encoding.UTF8.GetString(cited.Span), "lex-http-acquisition-run/1",
+            "the observations must cite the acquisition RUN, not one request's HTTP evidence.");
+
         Assert.IsGreaterThan(0, result.ProductRequestCount);
 
         // The coverage this run publishes is what it ASKED, in the plan's canonical form.
         Assert.HasCount(1, result.EventsOf(Dossier));
+    }
+
+    /// <summary>
+    /// A caller spelling its dossier non-canonically still gets an answer under the canonical form.
+    /// </summary>
+    /// <remarks>
+    /// The publisher is asked about the canonical batch and answers in it, so the coverage this run
+    /// publishes must be canonical too. Publishing the caller's raw spelling instead makes
+    /// <c>EventsOf</c> throw for the very dossier the run asked about — and a mutation doing that
+    /// survived, because every other test spells its dossier canonically already and raw equals
+    /// canonical there.
+    /// </remarks>
+    [TestMethod]
+    public async Task ADossierRequestedNonCanonicallyIsAnsweredUnderItsCanonicalForm()
+    {
+        const string RequestedHttps =
+            "https://publications.europa.eu/resource/cellar/1f7ba2c8-4d59-11ec-91ac-01aa75ed71a1/";
+
+        Assert.AreEqual(
+            Dossier, EuProcedureEventDiscoveryPlan.CanonicalizeBatch([RequestedHttps])[0],
+            "the plan rewrites this spelling, so raw and canonical genuinely differ here.");
+
+        var (producer, _) = RunnableProducer(
+            EuAcquisitionTestFixture.ProcedureEventRow(Event, Dossier, FirstType, "2021-11-24"));
+
+        var result = await producer.RunAsync(
+            new EuProcedureEventRunRequest(
+                EuProcedureEventDiscoveryPlan.Create(),
+                [RequestedHttps],
+                "urn:uuid:e39f6a05-4b82-4d17-ac30-8f1296de5e74",
+                RendererSource()),
+            EuAcquisitionTestFixture.SourceWitness(),
+            CancellationToken.None);
+
+        Assert.AreEqual(EuProcedureEventProductionRefusal.None, result.Refusal, result.Detail);
+        Assert.HasCount(
+            1, result.EventsOf(Dossier),
+            "the run's coverage is the canonical form the publisher was asked about.");
+    }
+
+    /// <summary>
+    /// A run the publisher never completed is a typed refusal, never an empty success.
+    /// </summary>
+    /// <remarks>
+    /// Driven by failing every custody write, so the session cannot retain what it fetched and the
+    /// executor never reaches a receipt. An empty success here would be the worst answer this family
+    /// can give: a proven-empty claim about a run that did not happen. A mutation returning exactly
+    /// that survived until this existed.
+    /// </remarks>
+    [TestMethod]
+    public async Task ARunThatNeverCompletedIsRefusedRatherThanReportedEmpty()
+    {
+        var scripts = new Dictionary<string, EuAcquisitionTestFixture.FamilyScript>(StringComparer.Ordinal)
+        {
+            ["ProcedureEvent"] = EuAcquisitionTestFixture.ScriptFor(
+                "ProcedureEvent", 1,
+                [EuAcquisitionTestFixture.ProcedureEventRow(Event, Dossier, FirstType, "2021-11-24")],
+                EuAcquisitionTestFixture.ProcedureEventProjection),
+        };
+
+        var producer = new EuProcedureEventProducer(
+            new EuAcquisitionTestFixture.EuInMemoryCustodyStore(
+                failWriteDigest: static (_, _) => true),
+            new EuAcquisitionTestFixture.FixedTimeProvider(),
+            new EuAcquisitionTestFixture.ClassifyingHandler(scripts));
+
+        var result = await producer.RunAsync(
+            new EuProcedureEventRunRequest(
+                EuProcedureEventDiscoveryPlan.Create(),
+                [Dossier],
+                "urn:uuid:f4a07b16-5c93-4e28-bd41-901387ef6f85",
+                RendererSource()),
+            EuAcquisitionTestFixture.SourceWitness(),
+            CancellationToken.None);
+
+        Assert.AreNotEqual(
+            EuProcedureEventProductionRefusal.None, result.Refusal,
+            "a run that never completed cannot report a proven empty result.");
+        Assert.IsNull(result.Observations);
+        Assert.ThrowsExactly<InvalidOperationException>(() => result.EventsOf(Dossier));
     }
 
     /// <summary>
