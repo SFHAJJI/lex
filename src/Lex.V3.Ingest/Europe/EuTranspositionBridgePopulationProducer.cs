@@ -79,22 +79,28 @@ public sealed class EuTranspositionBridgePopulationResult
 {
     private EuTranspositionBridgePopulationResult(
         IReadOnlyList<EuTranspositionBridgePopulationRow>? rows,
+        IReadOnlyList<EuNationalImplementingMeasureOutOfE5WorkKindExclusion>? exclusions,
         EuTranspositionBridgePopulationRefusal refusal,
         string? detail)
     {
         Rows = rows;
+        OutOfE5WorkKindExclusions = exclusions;
         Refusal = refusal;
         Detail = detail;
     }
 
     public IReadOnlyList<EuTranspositionBridgePopulationRow>? Rows { get; }
+    public IReadOnlyList<EuNationalImplementingMeasureOutOfE5WorkKindExclusion>?
+        OutOfE5WorkKindExclusions { get; }
     public EuTranspositionBridgePopulationRefusal Refusal { get; }
     public string? Detail { get; }
     public bool Delivered => Refusal == EuTranspositionBridgePopulationRefusal.None;
 
     internal static EuTranspositionBridgePopulationResult Success(
-        IReadOnlyList<EuTranspositionBridgePopulationRow> rows) =>
-        new(Array.AsReadOnly(rows.ToArray()), EuTranspositionBridgePopulationRefusal.None, null);
+        IReadOnlyList<EuTranspositionBridgePopulationRow> rows,
+        IReadOnlyList<EuNationalImplementingMeasureOutOfE5WorkKindExclusion> exclusions) =>
+        new(Array.AsReadOnly(rows.ToArray()), Array.AsReadOnly(exclusions.ToArray()),
+            EuTranspositionBridgePopulationRefusal.None, null);
 
     internal static EuTranspositionBridgePopulationResult Refused(
         EuTranspositionBridgePopulationRefusal refusal,
@@ -104,7 +110,7 @@ public sealed class EuTranspositionBridgePopulationResult
         {
             throw new ArgumentOutOfRangeException(nameof(refusal));
         }
-        return new(null, refusal, detail);
+        return new(null, null, refusal, detail);
     }
 }
 
@@ -137,7 +143,8 @@ public sealed class EuTranspositionBridgePopulationProducer
                 EuTranspositionBridgePopulationRefusal.WorkScopeEmpty,
                 "A complete bridge population requires a nonempty declared EU work scope.");
         }
-        if (!legilux.Delivered || !nim.Delivered || legilux.Relations is null || nim.Relations is null)
+        if (!legilux.Delivered || !nim.Delivered || legilux.Relations is null ||
+            nim.Relations is null || nim.OutOfE5WorkKindExclusions is null)
         {
             return EuTranspositionBridgePopulationResult.Refused(
                 EuTranspositionBridgePopulationRefusal.SourceNotDelivered,
@@ -217,6 +224,6 @@ public sealed class EuTranspositionBridgePopulationProducer
             rows.Add(new EuTranspositionBridgePopulationRow(item.Bridge, receipts));
         }
 
-        return EuTranspositionBridgePopulationResult.Success(rows);
+        return EuTranspositionBridgePopulationResult.Success(rows, nim.OutOfE5WorkKindExclusions);
     }
 }

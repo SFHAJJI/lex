@@ -128,4 +128,27 @@ public sealed class EuNationalImplementingMeasureDiscoveryPlanTests
             page.Contains("VALUES ?eu_work_kind", StringComparison.Ordinal),
             "A closed query-side VALUES clause silently discards a real third publisher type such as DEC.");
     }
+
+    [TestMethod]
+    public void TheRuledRawPublisherTypesAreNamedWithoutNarrowingTheQuery()
+    {
+        CollectionAssert.AreEquivalent(
+            new[]
+            {
+                "http://publications.europa.eu/resource/authority/resource-type/DIR_DEL",
+                "http://publications.europa.eu/resource/authority/resource-type/DIR_IMPL",
+                "http://publications.europa.eu/resource/authority/resource-type/DEC",
+                "http://publications.europa.eu/resource/authority/resource-type/DEC_FRAMW",
+            },
+            new[]
+            {
+                EuNationalImplementingMeasureDiscoveryPlan.DelegatedDirectiveResourceTypeIri,
+                EuNationalImplementingMeasureDiscoveryPlan.ImplementingDirectiveResourceTypeIri,
+                EuNationalImplementingMeasureDiscoveryPlan.DecisionResourceTypeIri,
+                EuNationalImplementingMeasureDiscoveryPlan.FrameworkDecisionResourceTypeIri,
+            });
+        Assert.IsFalse(
+            EuNationalImplementingMeasureDiscoveryPlan.Create().PageTemplate
+                .Contains("VALUES ?eu_work_kind", StringComparison.Ordinal));
+    }
 }

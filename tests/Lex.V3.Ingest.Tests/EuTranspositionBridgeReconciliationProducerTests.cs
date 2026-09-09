@@ -132,6 +132,49 @@ public sealed class EuTranspositionBridgeReconciliationProducerTests
     }
 
     [TestMethod]
+    public async Task ADelegatedDirectiveRetainsItsRawTypeAcrossExactEliReconciliation()
+    {
+        const string DelegatedEli = "http://data.europa.eu/eli/dir_del/2020/1/oj";
+        var result = await ProduceAsync(
+            Legilux(LegiluxRelation(Measure1)),
+            Identities(Identity(Measure1, DelegatedEli)),
+            Nim(NimRelation(
+                Cellar,
+                DelegatedEli,
+                Measure1,
+                'd',
+                EuWorkKind.Directive,
+                EuNationalImplementingMeasureDiscoveryPlan.DelegatedDirectiveResourceTypeIri)));
+
+        Assert.IsTrue(result.Delivered, result.Detail);
+        Assert.AreEqual(EuWorkKind.Directive, result.Population!.Rows!.Single().Bridge.WorkKind);
+    }
+
+    [TestMethod]
+    public async Task OnePublisherIdentityCannotBeBothAdmittedAndOutOfE5WorkKind()
+    {
+        var exclusion = new EuNationalImplementingMeasureOutOfE5WorkKindExclusion(
+            Cellar,
+            EuEli,
+            EuNationalImplementingMeasureDiscoveryPlan.DecisionResourceTypeIri,
+            Cellar,
+            "72020D0001",
+            EuNationalImplementingMeasureDiscoveryPlan.ImplementsResourceLegalPredicateIri,
+            null,
+            NimCompletion);
+        var nim = EuNationalImplementingMeasureProductionResult.Success(
+            [NimRelation(Cellar, EuEli, Measure1, 'd')], [exclusion], NimCompletion, 4);
+
+        var result = await ProduceAsync(
+            Legilux(LegiluxRelation(Measure1)), Identities(Identity(Measure1)), nim);
+
+        Assert.AreEqual(
+            EuTranspositionBridgeReconciliationRefusal.NimWorkIdentityNotConsistent,
+            result.Refusal);
+        Assert.IsNull(result.Population);
+    }
+
+    [TestMethod]
     public async Task ARefusedSourceCannotBecomeACompletedEmptyPopulation()
     {
         var result = await ProduceAsync(
@@ -176,17 +219,21 @@ public sealed class EuTranspositionBridgeReconciliationProducerTests
 
     private static EuNationalImplementingMeasureProductionResult Nim(
         params EuNationalImplementingMeasureRelation[] relations) =>
-        EuNationalImplementingMeasureProductionResult.Success(relations, NimCompletion, 4);
+        EuNationalImplementingMeasureProductionResult.Success(relations, [], NimCompletion, 4);
 
     private static EuNationalImplementingMeasureRelation NimRelation(
         string cellar,
         string euEli,
         string measure,
         char evidence,
-        EuWorkKind kind = EuWorkKind.Directive) =>
+        EuWorkKind kind = EuWorkKind.Directive,
+        string? publisherWorkTypeIri = null) =>
         new(
             cellar,
             CellarKind(cellar, euEli, kind),
+            publisherWorkTypeIri ?? (kind == EuWorkKind.Regulation
+                ? EuNationalImplementingMeasureDiscoveryPlan.RegulationResourceTypeIri
+                : EuNationalImplementingMeasureDiscoveryPlan.DirectiveResourceTypeIri),
             $"http://publications.europa.eu/resource/cellar/{evidence}{new string(evidence, 7)}-{evidence}{new string(evidence, 3)}-4{new string(evidence, 3)}-8{new string(evidence, 3)}-{new string(evidence, 12)}",
             "72020L0001",
             EuNationalImplementingMeasureDiscoveryPlan.ImplementsResourceLegalPredicateIri,

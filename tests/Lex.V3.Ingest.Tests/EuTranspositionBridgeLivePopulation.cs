@@ -50,7 +50,19 @@ public sealed class EuTranspositionBridgeLivePopulation
             CancellationToken.None);
         Assert.IsTrue(nim.Delivered, $"NIM refused: {nim.Refusal}: {nim.Detail}");
         Assert.IsNotNull(nim.Relations);
+        Assert.IsNotNull(nim.OutOfE5WorkKindExclusions);
         Assert.IsNotNull(nim.CompletionEvidenceRef);
+        Console.WriteLine(
+            $"E5 NIM partition: admitted={nim.Relations.Count}; " +
+            $"out_of_e5_work_kind={nim.OutOfE5WorkKindExclusions.Count}; " +
+            "admitted_types=" + string.Join(',', nim.Relations
+                .GroupBy(static relation => relation.PublisherWorkTypeIri, StringComparer.Ordinal)
+                .OrderBy(static group => group.Key, StringComparer.Ordinal)
+                .Select(static group => $"{group.Key}={group.Count()}")) + "; " +
+            "excluded_types=" + string.Join(',', nim.OutOfE5WorkKindExclusions
+                .GroupBy(static exclusion => exclusion.PublisherWorkTypeIri, StringComparer.Ordinal)
+                .OrderBy(static group => group.Key, StringComparer.Ordinal)
+                .Select(static group => $"{group.Key}={group.Count()}")));
 
         var identityPlan = LuxembourgTranspositionIdentityDiscoveryPlan.Create();
         var directiveElis = nim.Relations
@@ -62,8 +74,9 @@ public sealed class EuTranspositionBridgeLivePopulation
             .Order(StringComparer.Ordinal)
             .ToArray();
         var contradictoryNimIdentity = nim.Relations.FirstOrDefault(relation =>
-            !EuTranspositionBridgeReconciliationProducer.WorkKindMatchesEli(
+            !EuNationalImplementingMeasureProducer.WorkTypeMatchesKindAndEli(
                 relation.WorkKindAssertion.Kind,
+                relation.PublisherWorkTypeIri,
                 relation.WorkKindAssertion.Work.Value(FactsIdentifierFamily.Eli)!));
         Assert.IsNull(
             contradictoryNimIdentity,
@@ -132,6 +145,7 @@ public sealed class EuTranspositionBridgeLivePopulation
             {
                 nim.ProductRequestCount,
                 relationCount = nim.Relations.Count,
+                outOfE5WorkKindExclusionCount = nim.OutOfE5WorkKindExclusions.Count,
                 completion = nim.CompletionEvidenceRef,
             },
             legilux = new
@@ -150,6 +164,8 @@ public sealed class EuTranspositionBridgeLivePopulation
                 normalisedJoinCount = rows.Sum(static row => row.Bridge.NormalisedEliJoins.Count),
                 heldJoinEvidenceCount = rows.Sum(static row => row.NormalisedEliJoinEvidenceReceipts.Count),
                 reconciliationCount = reconciliation.Reconciliations.Count,
+                outOfE5WorkKindExclusionCount =
+                    reconciliation.Population.OutOfE5WorkKindExclusions!.Count,
             },
             limitations = new[]
             {

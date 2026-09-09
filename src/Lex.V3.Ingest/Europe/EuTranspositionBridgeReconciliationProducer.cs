@@ -115,7 +115,8 @@ public sealed class EuTranspositionBridgeReconciliationProducer
         ArgumentNullException.ThrowIfNull(nim);
         if (!legilux.Delivered || legilux.Relations is null || legilux.CompletionEvidenceRef is null ||
             !identities.Delivered || identities.Relations is null || identities.CompletionEvidenceRef is null ||
-            !nim.Delivered || nim.Relations is null || nim.CompletionEvidenceRef is null)
+            !nim.Delivered || nim.Relations is null || nim.OutOfE5WorkKindExclusions is null ||
+            nim.CompletionEvidenceRef is null)
         {
             return EuTranspositionBridgeReconciliationResult.Refused(
                 EuTranspositionBridgeReconciliationRefusal.SourceNotDelivered,
@@ -128,9 +129,14 @@ public sealed class EuTranspositionBridgeReconciliationProducer
             var first = group.First().WorkKindAssertion;
             var eli = first.Work.Value(FactsIdentifierFamily.Eli);
             if (eli is null || first.Work.Publisher != PublisherId.EuEurLex ||
-                !WorkKindMatchesEli(first.Kind, eli) ||
+                !EuNationalImplementingMeasureProducer.WorkTypeMatchesKindAndEli(
+                    first.Kind, group.First().PublisherWorkTypeIri, eli) ||
                 !string.Equals(first.Work.Value(FactsIdentifierFamily.CellarWorkUri), group.Key, StringComparison.Ordinal) ||
                 group.Any(relation => relation.WorkKindAssertion.Kind != first.Kind ||
+                    !string.Equals(
+                        relation.PublisherWorkTypeIri,
+                        group.First().PublisherWorkTypeIri,
+                        StringComparison.Ordinal) ||
                     !string.Equals(relation.WorkKindAssertion.Work.Value(FactsIdentifierFamily.CellarWorkUri), group.Key, StringComparison.Ordinal) ||
                     !string.Equals(relation.WorkKindAssertion.Work.Value(FactsIdentifierFamily.Eli), eli, StringComparison.Ordinal)))
             {
@@ -139,6 +145,17 @@ public sealed class EuTranspositionBridgeReconciliationProducer
                     $"The NIM rows for {group.Key} do not retain one exact Cellar/ELI/work-kind identity.");
             }
             scope.Add((group.Key, eli, first));
+        }
+
+        var mixedDisposition = nim.OutOfE5WorkKindExclusions.FirstOrDefault(exclusion =>
+            scope.Any(value =>
+                string.Equals(value.WorkUri, exclusion.EuWorkUri, StringComparison.Ordinal) ||
+                string.Equals(value.EuEli, exclusion.EuWorkEli, StringComparison.Ordinal)));
+        if (mixedDisposition is not null)
+        {
+            return EuTranspositionBridgeReconciliationResult.Refused(
+                EuTranspositionBridgeReconciliationRefusal.NimWorkIdentityNotConsistent,
+                $"The NIM population both admits and excludes {mixedDisposition.EuWorkUri} from E5.");
         }
 
         var ambiguousEli = scope.GroupBy(static value => value.EuEli, StringComparer.Ordinal)
@@ -228,17 +245,4 @@ public sealed class EuTranspositionBridgeReconciliationProducer
                 population);
     }
 
-    internal static bool WorkKindMatchesEli(EuWorkKind kind, string eli)
-    {
-        if (!Uri.TryCreate(eli, UriKind.Absolute, out var uri))
-        {
-            return false;
-        }
-        return kind switch
-        {
-            EuWorkKind.Directive => uri.AbsolutePath.StartsWith("/eli/dir/", StringComparison.Ordinal),
-            EuWorkKind.Regulation => uri.AbsolutePath.StartsWith("/eli/reg/", StringComparison.Ordinal),
-            _ => false,
-        };
-    }
 }

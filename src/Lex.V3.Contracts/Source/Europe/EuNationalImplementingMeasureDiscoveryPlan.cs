@@ -39,6 +39,14 @@ public sealed class EuNationalImplementingMeasureDiscoveryPlan
         "http://publications.europa.eu/resource/authority/resource-type/DIR";
     public const string RegulationResourceTypeIri =
         "http://publications.europa.eu/resource/authority/resource-type/REG";
+    public const string DelegatedDirectiveResourceTypeIri =
+        "http://publications.europa.eu/resource/authority/resource-type/DIR_DEL";
+    public const string ImplementingDirectiveResourceTypeIri =
+        "http://publications.europa.eu/resource/authority/resource-type/DIR_IMPL";
+    public const string DecisionResourceTypeIri =
+        "http://publications.europa.eu/resource/authority/resource-type/DEC";
+    public const string FrameworkDecisionResourceTypeIri =
+        "http://publications.europa.eu/resource/authority/resource-type/DEC_FRAMW";
     internal const long PublisherDeliveryCeilingRows = 1_000_000;
     internal const uint Pass1PageLimit = 997;
     internal const uint Pass2PageLimit = 613;

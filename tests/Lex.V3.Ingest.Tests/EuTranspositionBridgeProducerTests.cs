@@ -122,7 +122,7 @@ public sealed class EuTranspositionBridgeProducerTests
             EuNationalImplementingMeasureProductionResult.Success([
                 NimRelation(NimLuMeasure, NimSide()),
                 NimRelation(secondNim, NimSide(secondNim)),
-            ], Evidence, 0));
+            ], [], Evidence, 0));
 
         Assert.IsTrue(result.Delivered, result.Detail);
         Assert.HasCount(2, result.Bridge!.Legilux.Sides);
@@ -190,13 +190,17 @@ public sealed class EuTranspositionBridgeProducerTests
         params EuTranspositionSourceAcquisition[] columns) =>
         EuNationalImplementingMeasureProductionResult.Success(columns.Select(column =>
             new EuNationalImplementingMeasureRelation(
-                EuWork, Kind(EuWork, EuWorkKind.Directive), EuWork, "72020L0001",
-                "https://example.invalid/implements", eli, column)).ToArray(), Evidence, 0);
+                EuWork, Kind(EuWork, EuWorkKind.Directive),
+                EuNationalImplementingMeasureDiscoveryPlan.DirectiveResourceTypeIri,
+                EuWork, "72020L0001",
+                "https://example.invalid/implements", eli, column)).ToArray(), [], Evidence, 0);
 
     private static EuNationalImplementingMeasureRelation NimRelation(
         string eli,
         EuTranspositionSourceAcquisition column) =>
-        new(EuWork, Kind(EuWork, EuWorkKind.Directive), EuWork, "72020L0001",
+        new(EuWork, Kind(EuWork, EuWorkKind.Directive),
+            EuNationalImplementingMeasureDiscoveryPlan.DirectiveResourceTypeIri,
+            EuWork, "72020L0001",
             "https://example.invalid/implements", eli, column);
 
     private static EuTranspositionSourceAcquisition LegiluxSide(string nationalMeasureUri = LuMeasure) =>

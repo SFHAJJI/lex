@@ -14,6 +14,10 @@ public sealed class EuNationalImplementingMeasureProducerTests
     private const string EuWork =
         "http://publications.europa.eu/resource/cellar/22222222-2222-4222-8222-222222222222";
     private const string EuEli = "http://data.europa.eu/eli/dir/2020/1/oj";
+    private const string DelegatedDirectiveEli = "http://data.europa.eu/eli/dir_del/2020/1/oj";
+    private const string ImplementingDirectiveEli = "http://data.europa.eu/eli/dir_impl/2020/1/oj";
+    private const string DecisionEli = "http://data.europa.eu/eli/dec/2020/1/oj";
+    private const string FrameworkDecisionEli = "http://data.europa.eu/eli/dec_framw/2020/1/oj";
     private const string Eli = "https://data.legilux.public.lu/eli/etat/leg/loi/2020/01/01/a1/jo";
     private const string XsdInteger = "http://www.w3.org/2001/XMLSchema#integer";
     private static readonly SourceArtifactRef Evidence = new(
@@ -242,6 +246,113 @@ public sealed class EuNationalImplementingMeasureProducerTests
             euWorkKind: EuNationalImplementingMeasureDiscoveryPlan.RegulationResourceTypeIri));
         Assert.IsTrue(regulation.Delivered, regulation.Detail);
         Assert.AreEqual(EuWorkKind.Regulation, regulation.Relations![0].WorkKindAssertion.Kind);
+    }
+
+    [TestMethod]
+    public void AuthorityNamedDirectiveSubtypesMapToDirectiveAndRetainTheirRawType()
+    {
+        var delegated = Decode(Row(
+            euWorkEli: DelegatedDirectiveEli,
+            euWorkKind: EuNationalImplementingMeasureDiscoveryPlan.DelegatedDirectiveResourceTypeIri));
+        var implementing = Decode(Row(
+            euWorkEli: ImplementingDirectiveEli,
+            euWorkKind: EuNationalImplementingMeasureDiscoveryPlan.ImplementingDirectiveResourceTypeIri));
+
+        Assert.IsTrue(delegated.Delivered, delegated.Detail);
+        var delegatedRelation = delegated.Relations!.Single();
+        Assert.AreEqual(EuWorkKind.Directive, delegatedRelation.WorkKindAssertion.Kind);
+        Assert.AreEqual(
+            EuNationalImplementingMeasureDiscoveryPlan.DelegatedDirectiveResourceTypeIri,
+            delegatedRelation.PublisherWorkTypeIri);
+        Assert.IsEmpty(delegated.OutOfE5WorkKindExclusions!);
+
+        Assert.IsTrue(implementing.Delivered, implementing.Detail);
+        var implementingRelation = implementing.Relations!.Single();
+        Assert.AreEqual(EuWorkKind.Directive, implementingRelation.WorkKindAssertion.Kind);
+        Assert.AreEqual(
+            EuNationalImplementingMeasureDiscoveryPlan.ImplementingDirectiveResourceTypeIri,
+            implementingRelation.PublisherWorkTypeIri);
+        Assert.IsEmpty(implementing.OutOfE5WorkKindExclusions!);
+    }
+
+    [TestMethod]
+    public void DecisionsAreEvidenceBoundOutOfE5WorkKindExclusionsRatherThanAbsences()
+    {
+        var decision = Decode(Row(
+            euWorkEli: DecisionEli,
+            euWorkKind: EuNationalImplementingMeasureDiscoveryPlan.DecisionResourceTypeIri));
+        var framework = Decode(Row(
+            euWorkEli: FrameworkDecisionEli,
+            euWorkKind: EuNationalImplementingMeasureDiscoveryPlan.FrameworkDecisionResourceTypeIri));
+
+        Assert.IsTrue(decision.Delivered, decision.Detail);
+        Assert.IsEmpty(decision.Relations!);
+        var excluded = decision.OutOfE5WorkKindExclusions!.Single();
+        Assert.AreEqual("out_of_e5_work_kind", excluded.Disposition);
+        Assert.AreEqual(DecisionEli, excluded.EuWorkEli);
+        Assert.AreEqual(EuNationalImplementingMeasureDiscoveryPlan.DecisionResourceTypeIri,
+            excluded.PublisherWorkTypeIri);
+        Assert.AreEqual(Evidence, excluded.EvidenceRef);
+        Assert.ThrowsExactly<InvalidOperationException>(() => decision.ForEuWork(EuWork));
+
+        Assert.IsTrue(framework.Delivered, framework.Detail);
+        Assert.AreEqual(EuNationalImplementingMeasureDiscoveryPlan.FrameworkDecisionResourceTypeIri,
+            framework.OutOfE5WorkKindExclusions!.Single().PublisherWorkTypeIri);
+    }
+
+    [TestMethod]
+    public void RawPublisherTypeAndEliFamilyMustAgreeBeforeMappingOrExclusion()
+    {
+        var result = Decode(Row(
+            euWorkEli: DecisionEli,
+            euWorkKind: EuNationalImplementingMeasureDiscoveryPlan.DelegatedDirectiveResourceTypeIri));
+
+        Assert.IsFalse(result.Delivered);
+        Assert.AreEqual(EuNationalImplementingMeasureProductionRefusal.RowNotAdmitted, result.Refusal);
+        StringAssert.Contains(result.Detail, "publisher eu_work_kind and ELI family disagree");
+    }
+
+    [TestMethod]
+    public void AnExistingDirectiveEliContradictionRemainsObservableForReconciliation()
+    {
+        var result = Decode(Row(
+            euWorkEli: "http://data.europa.eu/eli/reg/2021/1187/oj",
+            euWorkKind: EuNationalImplementingMeasureDiscoveryPlan.DirectiveResourceTypeIri));
+
+        Assert.IsTrue(result.Delivered, result.Detail);
+        var relation = result.Relations!.Single();
+        Assert.AreEqual(EuWorkKind.Directive, relation.WorkKindAssertion.Kind);
+        Assert.AreEqual(
+            EuNationalImplementingMeasureDiscoveryPlan.DirectiveResourceTypeIri,
+            relation.PublisherWorkTypeIri);
+    }
+
+    [TestMethod]
+    public void AnUnruledPublisherTypeStillReachesTheTypedRefusal()
+    {
+        const string Other =
+            "http://publications.europa.eu/resource/authority/resource-type/OTHER";
+        var result = Decode(Row(euWorkKind: Other));
+
+        Assert.IsFalse(result.Delivered);
+        Assert.AreEqual(EuNationalImplementingMeasureProductionRefusal.RowNotAdmitted, result.Refusal);
+        StringAssert.Contains(result.Detail, Other);
+        Assert.IsNull(result.Relations);
+        Assert.IsNull(result.OutOfE5WorkKindExclusions);
+    }
+
+    [TestMethod]
+    public void EveryVerifiedRowEntersExactlyOneRuledPartition()
+    {
+        var result = Decode(
+            Row(),
+            Row(
+                euWorkEli: DecisionEli,
+                euWorkKind: EuNationalImplementingMeasureDiscoveryPlan.DecisionResourceTypeIri));
+
+        Assert.IsTrue(result.Delivered, result.Detail);
+        Assert.HasCount(1, result.Relations!);
+        Assert.HasCount(1, result.OutOfE5WorkKindExclusions!);
     }
 
     private static EuNationalImplementingMeasureProductionResult Decode(params RepeatedEnumerationRow[] rows) =>

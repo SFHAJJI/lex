@@ -52,6 +52,30 @@ public sealed class EuTranspositionBridgePopulationProducerTests
     }
 
     [TestMethod]
+    public async Task EvidenceBoundOutOfE5WorkKindRowsSurviveTheCompletedPopulation()
+    {
+        var decision = new EuNationalImplementingMeasureOutOfE5WorkKindExclusion(
+            OutsideScope,
+            "http://data.europa.eu/eli/dec/2020/1/oj",
+            EuNationalImplementingMeasureDiscoveryPlan.DecisionResourceTypeIri,
+            OutsideScope,
+            "72020D0001",
+            EuNationalImplementingMeasureDiscoveryPlan.ImplementsResourceLegalPredicateIri,
+            null,
+            Completion);
+        var nim = EuNationalImplementingMeasureProductionResult.Success([], [decision], Completion, 0);
+
+        var result = await new EuTranspositionBridgePopulationProducer(
+            new EuAcquisitionTestFixture.EuInMemoryCustodyStore()).ProduceAsync(
+                [Kind(Directive, EuWorkKind.Directive)], Legilux(), nim, CancellationToken.None);
+
+        Assert.IsTrue(result.Delivered, result.Detail);
+        var retained = result.OutOfE5WorkKindExclusions!.Single();
+        Assert.AreSame(decision, retained);
+        Assert.AreEqual("out_of_e5_work_kind", retained.Disposition);
+    }
+
+    [TestMethod]
     public async Task AnEmptyOrDuplicateDeclaredScopeCannotMasqueradeAsACompletePopulation()
     {
         var producer = new EuTranspositionBridgePopulationProducer(
@@ -187,7 +211,7 @@ public sealed class EuTranspositionBridgePopulationProducerTests
 
     private static EuNationalImplementingMeasureProductionResult Nim(
         params EuNationalImplementingMeasureRelation[] relations) =>
-        EuNationalImplementingMeasureProductionResult.Success(relations, Completion, 0);
+        EuNationalImplementingMeasureProductionResult.Success(relations, [], Completion, 0);
 
     private static LuxembourgTranspositionRelation Relation(
         string work, string measure, EuTranspositionSourceAcquisition acquisition) =>
@@ -195,7 +219,8 @@ public sealed class EuTranspositionBridgePopulationProducerTests
 
     private static EuNationalImplementingMeasureRelation NimRelation(
         string work, string? eli, EuTranspositionSourceAcquisition acquisition) =>
-        new(work, Kind(work, EuWorkKind.Directive), work, "72020L0001",
+        new(work, Kind(work, EuWorkKind.Directive),
+            EuNationalImplementingMeasureDiscoveryPlan.DirectiveResourceTypeIri, work, "72020L0001",
             EuNationalImplementingMeasureDiscoveryPlan.ImplementsResourceLegalPredicateIri, eli, acquisition);
 
     private static EuTranspositionSourceAcquisition LegiluxSide() =>
