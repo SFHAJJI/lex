@@ -221,6 +221,8 @@ public sealed class GuardedConstructionCensusTests
                     + "by-ref-method public instance "
                     + "Lex.V3.Contracts.Source.Europe.EuObjectFactsBoundQuery::Deconstruct, "
                     + "by-ref-method public instance "
+                    + "Lex.V3.Contracts.Source.Europe.EuProcedureEventBoundQuery::Deconstruct, "
+                    + "by-ref-method public instance "
                     + "Lex.V3.Contracts.Source.Europe.EuWatermarkWitnessBoundQuery::Deconstruct, "
                     + "by-ref-method public instance "
                     + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgBoundMachineTuple::Deconstruct, "
@@ -276,6 +278,8 @@ public sealed class GuardedConstructionCensusTests
                     + "nstruct, "
                     + "by-ref-method public instance "
                     + "Lex.V3.Contracts.Source.Europe.EuObjectFactsBoundQuery::Deconstruct, "
+                    + "by-ref-method public instance "
+                    + "Lex.V3.Contracts.Source.Europe.EuProcedureEventBoundQuery::Deconstruct, "
                     + "by-ref-method public instance "
                     + "Lex.V3.Contracts.Source.Europe.EuWatermarkWitnessBoundQuery::Deconstruct, "
                     + "by-ref-method public instance "
@@ -579,10 +583,19 @@ public sealed class GuardedConstructionCensusTests
                     + "method public static "
                     + "Lex.V3.Contracts.Source.Europe.EuPrimaryEnumerationWitnessReconciliation::Tr"
                     + "yReconcile",
+                "Lex.V3.Contracts.Source.Europe.EuProcedureEventDiscoveryPlan: constructor private "
+                    + "instance Lex.V3.Contracts.Source.Europe.EuProcedureEventDiscoveryPlan::.ctor, "
+                    + "constructor private static "
+                    + "Lex.V3.Contracts.Source.Europe.EuProcedureEventDiscoveryPlan::.cctor, "
+                    + "method public static "
+                    + "Lex.V3.Contracts.Source.Europe.EuProcedureEventDiscoveryPlan::Create",
                 "Lex.V3.Contracts.Source.Europe.EuProcedureEventObservation: constructor private "
                     + "instance Lex.V3.Contracts.Source.Europe.EuProcedureEventObservation::.ctor, "
                     + "method public static "
                     + "Lex.V3.Contracts.Source.Europe.EuProcedureEventObservation::TryCreate",
+                "Lex.V3.Contracts.Source.Europe.EuProcedureEventSparqlRenderer: constructor "
+                    + "internal instance "
+                    + "Lex.V3.Contracts.Source.Europe.EuProcedureEventSparqlRenderer::.ctor",
                 "Lex.V3.Contracts.Source.Europe.EuRelationEdgeBinding: constructor private "
                     + "instance Lex.V3.Contracts.Source.Europe.EuRelationEdgeBinding::.ctor, "
                     + "method public static "
