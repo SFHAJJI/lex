@@ -296,6 +296,23 @@ public sealed record EuCaseLawRunRequest(
     MachineQueryRendererSource RendererSource);
 
 /// <summary>
+/// One bounded enumeration of the procedure events belonging to a batch of dossiers.
+/// </summary>
+/// <remarks>
+/// <see cref="BatchDossiers"/> is this family's selection, and it carries one for the same reason
+/// the case-law request does: an event names its dossier rather than the reverse, so there is no
+/// class-scoped sweep to fall back on and an unbounded enumeration of
+/// <c>procedure_event_belongs_to_procedure_dossier</c> is not a family anyone can bound. The plan
+/// still fixes the two predicates, the batch capacity and both page limits, so the caller chooses
+/// which dossiers are asked about and nothing else.
+/// </remarks>
+public sealed record EuProcedureEventRunRequest(
+    EuProcedureEventDiscoveryPlan Plan,
+    IReadOnlyList<string> BatchDossiers,
+    string PlanResourceId,
+    MachineQueryRendererSource RendererSource);
+
+/// <summary>
 /// Why <see cref="EuRepeatedEnumerationExecutor.RunWitnessTraversalAsync"/> did not deliver a real
 /// canonical entry set. Closed, and deliberately narrower than <see cref="EuEnumerationRefusal"/>:
 /// the witness traversal drives none of that enum's two-pass, threshold or keyset-continuation shape
@@ -830,6 +847,68 @@ public sealed class EuRepeatedEnumerationExecutor
                         BindLuxembourgOpinionPage(request, pass, cursor, selected, evidenceRef),
                     batchObjects: null,
                     batchMembershipKeyOrdinal: null,
+                    cancellationToken)
+                .ConfigureAwait(false);
+        }
+        finally
+        {
+            session.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// The procedure-event family, one session and two passes over a caller-named batch of dossiers.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Before this, <see cref="EuProcedureEventDiscoveryPlan"/> was consumed by nothing and
+    /// <see cref="EuProcedureEventObservation"/> was a merged contract reached by no live path at
+    /// all - the same gap the case-law and opinion families each had before their own entry points.
+    /// </para>
+    /// <para>
+    /// It is batched, so it passes <c>batchObjects</c> and a membership ordinal where the opinion
+    /// family passes null for both. The batch is the plan's own asked-about form rather than the
+    /// caller's spelling, because the publisher is asked about the canonical batch and answers in
+    /// it; comparing a delivered key against the raw request would refuse every honest row for a
+    /// caller who wrote a spelling the plan accepts rather than refuses.
+    /// </para>
+    /// <para>
+    /// ONE EVENT CONTRIBUTES SEVERAL ROWS HERE, one per declared type, and that is deliberate: the
+    /// contract judges each declared type as its own term. This entry point does not group them.
+    /// Grouping is the producer's business, and doing it here would put a decision the contract
+    /// owns inside the transport.
+    /// </para>
+    /// </remarks>
+    public async Task<EuEnumerationRunResult> RunEuProcedureEventsAsync(
+        EuProcedureEventRunRequest request,
+        BoundMachineRequest sourceWitness,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(sourceWitness);
+
+        var session = await StartSessionAsync(sourceWitness, cancellationToken).ConfigureAwait(false);
+        if (session is null)
+        {
+            return EuEnumerationRunResult.Refused(
+                new EuEnumerationRefusalDetail(
+                    EuEnumerationRefusal.RobotsBootstrapRefused, null, null, null, null, null, null, null, null),
+                productRequestCount: 0);
+        }
+
+        try
+        {
+            var profile = request.Plan.CreateDeliveryProfile();
+            var profileRef = RepeatedEnumerationInterpretationProfileIdentity.Create(NewUrn(), profile);
+            return await RunPassesAsync(
+                    session,
+                    profile,
+                    profileRef,
+                    pass => BindEuProcedureEventCount(request, pass),
+                    (pass, cursor, selected, evidenceRef) =>
+                        BindEuProcedureEventPage(request, pass, cursor, selected, evidenceRef),
+                    batchObjects: EuProcedureEventDiscoveryPlan.RequestedPartitionMembers(request.BatchDossiers),
+                    batchMembershipKeyOrdinal: ProcedureEventBatchMembershipKeyOrdinal(profile),
                     cancellationToken)
                 .ConfigureAwait(false);
         }
@@ -1949,6 +2028,72 @@ public sealed class EuRepeatedEnumerationExecutor
     {
         var bound = request.Plan.BindPage(
             (LuxembourgQueryPass)passOrdinal,
+            cursor,
+            selected,
+            countEvidenceRef,
+            request.PlanResourceId,
+            NewUrn(),
+            request.RendererSource);
+        return new EuBoundQueryParts(
+            bound.MachinePlanRef, bound.InputArtifact.ArtifactRef, bound.Request,
+            bound.InputArtifact.PartitionBinding.MemberKey, bound.MachinePlan.ResponseCardinality.RowLimit);
+    }
+
+    /// <summary>
+    /// Which cursor position carries this family's batch member, read from the profile.
+    /// </summary>
+    /// <remarks>
+    /// The selection term is the dossier, which the plan's eleven-part cursor carries at
+    /// <c>key_7</c>. The ten it does not carry it at are all plausible: <c>key_1</c> is the event,
+    /// the row's own discovered subject, <c>key_3</c> is the declared type, and the rest are the kind
+    /// and qualifier keys that keep two publisher assertions apart. Looked up by name rather than
+    /// written as an index for the same reason as <see cref="CaseLawBatchMembershipKeyOrdinal"/>,
+    /// and the reason has now earned its keep twice: the cursor went four keys, then nine, then
+    /// eleven across two review rounds, and the dossier moved from position three to five to seven.
+    /// A written index would have gone on verifying batch membership against the declared type, or
+    /// against a language tag, without a word.
+    /// </remarks>
+    internal static int ProcedureEventBatchMembershipKeyOrdinal(
+        RepeatedEnumerationInterpretationProfile profile)
+    {
+        var cursorVariables = profile.CursorVariables;
+        for (var index = 0; index < cursorVariables.Count; index++)
+        {
+            if (string.Equals(cursorVariables[index], "key_7", StringComparison.Ordinal))
+            {
+                return index;
+            }
+        }
+
+        throw new InvalidOperationException(
+            "The procedure-event delivery profile must carry its selected dossier at key_7.");
+    }
+
+    private static EuBoundQueryParts BindEuProcedureEventCount(
+        EuProcedureEventRunRequest request,
+        int passOrdinal)
+    {
+        var bound = request.Plan.BindCount(
+            (EuProcedureEventQueryPass)passOrdinal,
+            request.BatchDossiers,
+            request.PlanResourceId,
+            NewUrn(),
+            request.RendererSource);
+        return new EuBoundQueryParts(
+            bound.MachinePlanRef, bound.InputArtifact.ArtifactRef, bound.Request,
+            bound.InputArtifact.PartitionBinding.MemberKey, null);
+    }
+
+    private static EuBoundQueryParts BindEuProcedureEventPage(
+        EuProcedureEventRunRequest request,
+        int passOrdinal,
+        IReadOnlyList<string>? cursor,
+        long selected,
+        SourceArtifactRef countEvidenceRef)
+    {
+        var bound = request.Plan.BindPage(
+            (EuProcedureEventQueryPass)passOrdinal,
+            request.BatchDossiers,
             cursor,
             selected,
             countEvidenceRef,
