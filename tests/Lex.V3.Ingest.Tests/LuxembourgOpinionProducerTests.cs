@@ -40,23 +40,37 @@ public sealed class LuxembourgOpinionProducerTests
 
     private static RepeatedEnumerationRdfTerm Unbound() => RepeatedEnumerationRdfTerm.Unbound();
 
-    /// <summary>One delivered row, with every term and every marker chosen independently.</summary>
+    private static RepeatedEnumerationRdfTerm Blank(string value) =>
+        RepeatedEnumerationRdfTerm.BlankNode(value);
+
+    /// <summary>
+    /// One delivered row. Every term, every marker and every publisher-computed proof field is
+    /// chosen independently, so a test can put any one of them out of agreement on purpose.
+    /// </summary>
     private static RepeatedEnumerationRow Row(
         RepeatedEnumerationRdfTerm? document = null,
         string documentKind = "iri",
         RepeatedEnumerationRdfTerm? date = null,
         string dateKind = "literal",
-        string opinion = Opinion)
+        string opinion = Opinion,
+        RepeatedEnumerationRdfTerm? documentKindTerm = null,
+        RepeatedEnumerationRdfTerm? dateKindTerm = null,
+        RepeatedEnumerationRdfTerm? multiplicity = null,
+        RepeatedEnumerationRdfTerm? key1 = null,
+        RepeatedEnumerationRdfTerm? key2 = null,
+        RepeatedEnumerationRdfTerm? key3 = null)
     {
         var documentTerm = document ?? Iri(Locator);
         var dateTerm = date ?? Literal(Date, XsdDate);
         var terms = new List<RepeatedEnumerationRdfTerm>
         {
             Iri(opinion),
-            documentTerm, Literal(documentKind),
-            dateTerm, Literal(dateKind),
-            Literal("1", XsdInteger),
-            Literal(opinion), Literal(documentTerm.Value ?? ""), Literal(dateTerm.Value ?? ""),
+            documentTerm, documentKindTerm ?? Literal(documentKind),
+            dateTerm, dateKindTerm ?? Literal(dateKind),
+            multiplicity ?? Literal("1", XsdInteger),
+            key1 ?? Literal(opinion),
+            key2 ?? Literal(documentTerm.Value ?? ""),
+            key3 ?? Literal(dateTerm.Value ?? ""),
         };
         return new RepeatedEnumerationRow(terms, terms, terms);
     }
@@ -184,6 +198,118 @@ public sealed class LuxembourgOpinionProducerTests
         var boundTermAbsentMarker = Decode(
             Row(documentKind: LuxembourgOpinionDiscoveryPlan.UnboundKind));
         Assert.AreEqual(LuxembourgOpinionProductionRefusal.RowNotAdmitted, boundTermAbsentMarker.Refusal);
+    }
+
+    /// <summary>
+    /// A delivered term of the wrong RDF kind is malformed, however plausible its lexical value.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Found in review on head <c>38d83056</c>. Agreeing with a marker established only WHICH kind
+    /// arrived; it did not establish that the kind is one this contract can read. The producer then
+    /// passed <c>document.Value</c> to a string-only door, so a <b>literal</b> whose lexical value
+    /// happened to be an admitted HTTPS URL became an admitted link-only record with
+    /// <c>Refusal.None</c> — the publisher's own term authority discarded at the last step.
+    /// </para>
+    /// <para>
+    /// A locator is an IRI and a date is a literal. Any other bound kind is a delivery this plan
+    /// cannot have produced, so it is malformed rather than merely unrepresentable, and it refuses
+    /// the production rather than being filed as an ordinary excluded fact.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void ADeliveredTermOfTheWrongRdfKindIsMalformedHoweverPlausibleItsValue()
+    {
+        // The exact shape from the review: a literal that reads like the admitted locator.
+        var literalLocator = Decode(Row(document: Literal(Locator), documentKind: "literal"));
+        Assert.AreEqual(
+            LuxembourgOpinionProductionRefusal.RowNotAdmitted, literalLocator.Refusal,
+            "a literal is not a locator, however much its lexical value looks like one.");
+        StringAssert.Contains(literalLocator.Detail!, "publisher IRI");
+
+        var blankLocator = Decode(
+            Row(document: Blank("b0"), documentKind: "unsupported_blank_node"));
+        Assert.AreEqual(LuxembourgOpinionProductionRefusal.RowNotAdmitted, blankLocator.Refusal);
+
+        var iriDate = Decode(Row(date: Iri("http://example.com/2026-07-17"), dateKind: "iri"));
+        Assert.AreEqual(
+            LuxembourgOpinionProductionRefusal.RowNotAdmitted, iriDate.Refusal,
+            "a date that is not a literal cannot carry a lexical value at a precision.");
+        StringAssert.Contains(iriDate.Detail!, "publisher literal");
+
+        var blankDate = Decode(Row(date: Blank("b1"), dateKind: "unsupported_blank_node"));
+        Assert.AreEqual(LuxembourgOpinionProductionRefusal.RowNotAdmitted, blankDate.Refusal);
+    }
+
+    /// <summary>
+    /// A kind marker is read as a term, so a marker that is not the query's plain literal refuses.
+    /// </summary>
+    /// <remarks>
+    /// The plan binds both markers with a <c>BIND</c> over string constants, so each always arrives
+    /// as an unqualified plain literal. Comparing only <c>marker.Value</c> admitted an IRI-valued
+    /// marker whose lexical value happened to read <c>iri</c> — a term that did not come from this
+    /// query at all.
+    /// </remarks>
+    [TestMethod]
+    public void AMarkerThatIsNotTheQuerysOwnPlainLiteralRefusesTheRow()
+    {
+        var iriMarker = Decode(Row(documentKindTerm: Iri("iri")));
+        Assert.AreEqual(LuxembourgOpinionProductionRefusal.RowNotAdmitted, iriMarker.Refusal);
+
+        var typedMarker = Decode(Row(dateKindTerm: Literal("literal", XsdDate)));
+        Assert.AreEqual(
+            LuxembourgOpinionProductionRefusal.RowNotAdmitted, typedMarker.Refusal,
+            "a datatyped marker is not the unqualified plain literal the BIND produces.");
+    }
+
+    /// <summary>
+    /// The publisher-computed count and the three cursor keys are read, not ignored.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The plan groups on <c>multiplicity</c> and orders and paginates on <c>key_1..key_3</c>. A
+    /// decoder that never reads them lets the verified page prove one tuple while the producer emits
+    /// another — the page's own proof and the record would then describe different rows.
+    /// </para>
+    /// <para>
+    /// The empty key for an unbound term is asserted rather than skipped, because "" is the value
+    /// the plan's own <c>COALESCE</c> contributes and a decoder that ignored it would accept any
+    /// key for a record-less opinion.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void TheGroupedCountAndTheThreeCursorKeysAreReadRatherThanIgnored()
+    {
+        var zeroCount = Decode(Row(multiplicity: Literal("0", XsdInteger)));
+        Assert.AreEqual(LuxembourgOpinionProductionRefusal.RowNotAdmitted, zeroCount.Refusal);
+        StringAssert.Contains(zeroCount.Detail!, "multiplicity");
+
+        var untypedCount = Decode(Row(multiplicity: Literal("1")));
+        Assert.AreEqual(
+            LuxembourgOpinionProductionRefusal.RowNotAdmitted, untypedCount.Refusal,
+            "the grouped count arrives as a typed xsd:integer, not a plain literal.");
+
+        var wrongOpinionKey = Decode(Row(
+            key1: Literal("http://data.legilux.public.lu/resource/opinion/99999")));
+        Assert.AreEqual(LuxembourgOpinionProductionRefusal.RowNotAdmitted, wrongOpinionKey.Refusal);
+        StringAssert.Contains(wrongOpinionKey.Detail!, "key_1");
+
+        var wrongDocumentKey = Decode(Row(key2: Literal("https://example.com/other.pdf")));
+        Assert.AreEqual(LuxembourgOpinionProductionRefusal.RowNotAdmitted, wrongDocumentKey.Refusal);
+        StringAssert.Contains(wrongDocumentKey.Detail!, "key_2");
+
+        var wrongDateKey = Decode(Row(key3: Literal("2020-01-01")));
+        Assert.AreEqual(LuxembourgOpinionProductionRefusal.RowNotAdmitted, wrongDateKey.Refusal);
+        StringAssert.Contains(wrongDateKey.Detail!, "key_3");
+
+        // An unbound term contributes "" to its key. A non-empty key there is a contradiction.
+        var absentDocumentNonEmptyKey = Decode(Row(
+            document: Unbound(),
+            documentKind: LuxembourgOpinionDiscoveryPlan.UnboundKind,
+            key2: Literal(Locator)));
+        Assert.AreEqual(
+            LuxembourgOpinionProductionRefusal.RowNotAdmitted, absentDocumentNonEmptyKey.Refusal,
+            "an absent document cannot carry a non-empty key_2.");
     }
 
     /// <summary>One malformed row refuses the whole production; the good rows are not kept.</summary>

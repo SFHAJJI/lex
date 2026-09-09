@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json.Serialization;
 using Lex.V3.Contracts.Custody;
 using Lex.V3.Contracts.Source.Core;
@@ -300,8 +301,38 @@ public sealed class LuxembourgOpinionProducer
         RequireMarkerAgrees(document, Term(row, profile, "document_kind"), "document");
         RequireMarkerAgrees(date, Term(row, profile, "date_kind"), "opinion_date");
 
+        // THE TERM'S KIND DECIDES, NOT ITS LEXICAL VALUE. Agreeing with a marker only established
+        // WHICH kind was delivered; it did not establish that the kind is one this contract can
+        // read. A locator is an IRI and a date is a literal, so any other bound kind is a delivery
+        // this plan cannot have produced and the row is malformed rather than merely unrepresentable.
+        // Found in review on head 38d83056: a literal whose lexical value happened to be an admitted
+        // HTTPS URL was handed to the string-only contract door and became an admitted record, and a
+        // blank-node document was filed as an ordinary excluded fact. Both discarded the publisher's
+        // own term authority, which is the one thing the marker check exists to preserve.
         var documentDelivered = document.Kind != RepeatedEnumerationRdfTermKind.Unbound;
+        if (documentDelivered && document.Kind != RepeatedEnumerationRdfTermKind.Iri)
+        {
+            throw new ArgumentException(
+                "A delivered document must be a publisher IRI, not a literal or blank node.",
+                nameof(row));
+        }
+
         var dateDelivered = date.Kind != RepeatedEnumerationRdfTermKind.Unbound;
+        if (dateDelivered && date.Kind != RepeatedEnumerationRdfTermKind.Literal)
+        {
+            throw new ArgumentException(
+                "A delivered opinion_date must be a publisher literal.", nameof(row));
+        }
+
+        // The four publisher-computed proof fields. The plan groups on the count and orders and
+        // paginates on the three keys, so a page can prove one tuple while a decoder that never
+        // reads them emits another. Every sibling producer in this repository checks them; this one
+        // did not, and an isolated regression showed a key_1 naming a different opinion and a
+        // multiplicity of zero both producing a delivered result.
+        _ = RequirePositiveInteger(Term(row, profile, "multiplicity"), "multiplicity");
+        RequirePlainLiteral(Term(row, profile, "key_1"), "key_1", opinion.Value);
+        RequirePlainLiteral(Term(row, profile, "key_2"), "key_2", document.Value ?? string.Empty);
+        RequirePlainLiteral(Term(row, profile, "key_3"), "key_3", date.Value ?? string.Empty);
 
         // Asked for and honestly absent. Kept as an exclusion carrying which half was missing, with
         // no contract refusal, because the record's door was never reached.
@@ -355,11 +386,50 @@ public sealed class LuxembourgOpinionProducer
             _ => throw new ArgumentOutOfRangeException(nameof(term)),
         };
 
-        if (!string.Equals(marker.Value, expected, StringComparison.Ordinal))
+        // The marker is compared as a TERM, not as a bare string. The plan binds it with a
+        // BIND over string constants, so it always arrives as an unqualified plain literal; an
+        // IRI-valued marker whose lexical value happens to read "iri" did not come from this query.
+        // Checking only marker.Value admitted exactly that.
+        if (marker.Kind != RepeatedEnumerationRdfTermKind.Literal ||
+            marker.Datatype is not null || marker.Language is not null ||
+            !string.Equals(marker.Value, expected, StringComparison.Ordinal))
         {
             throw new ArgumentException(
                 $"The {name} term and its kind marker disagree about what was delivered.", nameof(marker));
         }
+    }
+
+    private static long RequirePositiveInteger(RepeatedEnumerationRdfTerm term, string name)
+    {
+        if (term.Kind != RepeatedEnumerationRdfTermKind.Literal ||
+            term.Datatype != "http://www.w3.org/2001/XMLSchema#integer" || term.Language is not null ||
+            !long.TryParse(term.Value, NumberStyles.None, CultureInfo.InvariantCulture, out var value) ||
+            value <= 0)
+        {
+            throw new ArgumentException($"{name} must be one positive xsd:integer literal.", name);
+        }
+
+        return value;
+    }
+
+    /// <summary>
+    /// The exact plain literal the query selected. An empty <paramref name="expected"/> is the
+    /// value an unbound term contributes to its key, and is asserted rather than skipped.
+    /// </summary>
+    private static string RequirePlainLiteral(
+        RepeatedEnumerationRdfTerm term,
+        string name,
+        string expected)
+    {
+        if (term.Kind != RepeatedEnumerationRdfTermKind.Literal || term.Value is null ||
+            term.Datatype is not null || term.Language is not null ||
+            !string.Equals(term.Value, expected, StringComparison.Ordinal))
+        {
+            throw new ArgumentException(
+                $"{name} must be the exact plain literal selected by the query.", name);
+        }
+
+        return term.Value;
     }
 
     private static RepeatedEnumerationRdfTerm Term(
