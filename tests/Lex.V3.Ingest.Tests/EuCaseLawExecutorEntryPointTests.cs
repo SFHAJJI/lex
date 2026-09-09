@@ -241,9 +241,101 @@ public sealed class EuCaseLawExecutorEntryPointTests
             EuAcquisitionTestFixture.SourceWitness(),
             CancellationToken.None);
 
-        Assert.AreNotEqual(
-            EuEnumerationRefusal.DeliveredRowOutsidePartition, result.Refusal?.Code,
-            "the act the caller asked about must not be refused as outside its own partition.");
+        // FULL SUCCESS, not merely "some other refusal". Asserting only that this particular
+        // refusal did not occur is the weakness that let a second defect hide behind the first: at
+        // the head where I first wrote this, the run was in fact still failing, with
+        // DeliveryProofRefused from the parameter-order defect below, and an AreNotEqual on one
+        // refusal code passed anyway. A family whose only end-to-end guards are refusals can refuse
+        // correctly and never succeed, and nothing observes it.
+        Assert.IsNull(
+            result.Refusal,
+            "an honest, fully requested delivery must produce a receipt: " +
+                $"{result.Refusal?.Code} {result.Refusal?.CoreRefusalDetail}");
+        Assert.IsNotNull(result.Receipt);
+    }
+
+    /// <summary>
+    /// A fully requested, publisher-consistent delivery produces a receipt.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The family's admit path. Every other end-to-end guard here drives a refusal, so before this
+    /// one nothing in the repository had ever seen this family succeed — and it could not.
+    /// <c>Bind</c> ordered <c>pass_id</c> ahead of the fifty selection parameters while
+    /// <c>RepeatedEnumerationDeliveryProof.RequireInputRoleShape</c> builds its expectation as
+    /// <c>SelectionParameterNames.Append(PassParameterName)</c> and compares the ordered roles by
+    /// sequence, so an honest row reached <c>DeliveryProofRefused</c>, "the ordered machine input
+    /// parameter roles are not exact".
+    /// </para>
+    /// <para>
+    /// Found in review on head <c>067aa290</c>. The shape of the miss is worth keeping: a plan and a
+    /// proof each internally consistent, disagreeing only in the order they name the same
+    /// parameters, and a test suite that only ever asked the family to say no.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public async Task AFullyRequestedConsistentDeliveryProducesAReceipt()
+    {
+        const string Requested = "http://publications.europa.eu/resource/cellar/3e485e15-11bd-11e6-ba9a-01aa75ed71a1";
+
+        var row = EuAcquisitionTestFixture.CaseLawRow(
+            "http://publications.europa.eu/resource/cellar/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+            EuCaseLawPredicateVocabulary.CaseLawInterpretesResourceLegalPredicateUri,
+            Requested,
+            "ECLI:EU:C:2020:559");
+
+        var scripts = new Dictionary<string, EuAcquisitionTestFixture.FamilyScript>(StringComparer.Ordinal)
+        {
+            ["CaseLaw"] = EuAcquisitionTestFixture.ScriptFor(
+                "CaseLaw", 1, [row], EuAcquisitionTestFixture.CaseLawProjection),
+        };
+
+        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
+        var executor = new EuRepeatedEnumerationExecutor(
+            store, new EuAcquisitionTestFixture.FixedTimeProvider(),
+            new EuAcquisitionTestFixture.ClassifyingHandler(scripts));
+
+        var result = await executor.RunCaseLawLinksAsync(
+            new EuCaseLawRunRequest(
+                EuCaseLawDiscoveryPlan.Create(),
+                [Requested],
+                "urn:uuid:9f2c48ad-6b31-4e7f-8c05-2d71ba6e3948",
+                Source()),
+            EuAcquisitionTestFixture.SourceWitness(),
+            CancellationToken.None);
+
+        Assert.IsNull(
+            result.Refusal,
+            $"the family must be able to succeed: {result.Refusal?.Code} {result.Refusal?.CoreRefusalDetail}");
+        Assert.IsNotNull(result.Receipt);
+        Assert.IsGreaterThan(0, result.ProductRequestCount);
+    }
+
+    /// <summary>
+    /// The bound input names the selection first and <c>pass_id</c> last, which is the order the
+    /// delivery proof checks by sequence.
+    /// </summary>
+    /// <remarks>
+    /// Asserted against the profile's own names rather than a transcribed list, so a plan that
+    /// renamed or reordered its selection cannot agree with a stale copy here.
+    /// </remarks>
+    [TestMethod]
+    public void TheBoundInputOrdersTheSelectionBeforeThePassIdentifier()
+    {
+        var plan = EuCaseLawDiscoveryPlan.Create();
+        var profile = plan.CreateDeliveryProfile();
+        string[] batch = ["http://publications.europa.eu/resource/cellar/3e485e15-11bd-11e6-ba9a-01aa75ed71a1"];
+
+        var count = plan.BindCount(
+            EuCaseLawQueryPass.Pass1, batch,
+            "urn:uuid:1b5c9e07-4a26-4f83-9d1e-8c07f2b64a5d",
+            "urn:uuid:2c6da118-5b37-4094-ae2f-9d18a3c75b6e",
+            Source());
+
+        CollectionAssert.AreEqual(
+            profile.SelectionParameterNames.Append(profile.PassParameterName).ToArray(),
+            count.InputArtifact.OrderedParameters.Select(static parameter => parameter.Name).ToArray(),
+            "this is the exact expectation RequireInputRoleShape builds and compares by sequence.");
     }
 
     /// <summary>The entry point binds the plan's own count and page, sending no placeholder.</summary>

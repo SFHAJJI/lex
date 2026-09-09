@@ -384,10 +384,14 @@ public sealed class EuCaseLawDiscoveryPlan
         ArgumentNullException.ThrowIfNull(rendererSource);
         var padded = PadBatch(CanonicalizeBatch(batchWorks));
 
-        var parameters = new List<MachineQueryParameter>
-        {
-            new("pass_id", MachineQueryParameterKind.BoundedInteger, (int)pass, null, ArtifactRef),
-        };
+        // THE SELECTION COMES FIRST AND pass_id FOLLOWS IT, because that is the order
+        // RepeatedEnumerationDeliveryProof.RequireInputRoleShape requires: it builds its expectation
+        // as SelectionParameterNames.Append(PassParameterName) and compares the ordered roles by
+        // sequence. This bound pass_id first, so a fully requested, publisher-consistent delivery
+        // reached DeliveryProofRefused - "the ordered machine input parameter roles are not exact" -
+        // instead of producing a receipt. The family could refuse correctly and could never succeed.
+        // Found in review on head 067aa290.
+        var parameters = new List<MachineQueryParameter>();
         var names = BatchParameterNames();
         for (var index = 0; index < BatchCapacity; index++)
         {
@@ -395,6 +399,9 @@ public sealed class EuCaseLawDiscoveryPlan
                 names[index], MachineQueryParameterKind.PublisherLiteral,
                 null, padded[index], ArtifactRef));
         }
+
+        parameters.Add(new MachineQueryParameter(
+            "pass_id", MachineQueryParameterKind.BoundedInteger, (int)pass, null, ArtifactRef));
 
         if (isPage)
         {
