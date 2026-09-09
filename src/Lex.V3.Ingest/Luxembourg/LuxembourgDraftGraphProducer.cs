@@ -46,6 +46,26 @@ public enum LuxembourgDraftGraphProductionRefusal
     /// </remarks>
     [JsonStringEnumMemberName("predicate_not_asked_about")]
     PredicateNotAskedAbout = 5,
+
+    /// <summary>
+    /// A delivered draft carried rows for some of the asked properties and not others.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The plan asks every draft about every one of its five predicates, and its absence branch
+    /// means a property the publisher holds nothing for still delivers a row. So an honest delivery
+    /// carries FIVE rows per draft, and a draft carrying fewer is a partial answer.
+    /// </para>
+    /// <para>
+    /// Admitting one would be the false absence this family exists to end, arriving by a route the
+    /// unbound marker cannot describe: <c>For(draftTransposes)</c> would return an empty list for a
+    /// draft whose transposition row simply never came, indistinguishable from a draft the publisher
+    /// answered "none" for. An explicit unbound row and a missing row are different facts, and only
+    /// the first is an answer.
+    /// </para>
+    /// </remarks>
+    [JsonStringEnumMemberName("draft_property_coverage_incomplete")]
+    DraftPropertyCoverageIncomplete = 6,
 }
 
 /// <summary>
@@ -301,6 +321,29 @@ public sealed class LuxembourgDraftGraphProducer
             records.Add(record);
         }
 
+        // EVERY DELIVERED DRAFT MUST ANSWER FOR EVERY ASKED PROPERTY. The plan's absence branch
+        // guarantees a row per (draft, predicate) pair, so a draft carrying fewer than the full set
+        // is a partial delivery — and admitting one would let For(predicate) return an empty list
+        // for a draft whose row never came, which is indistinguishable from the publisher answering
+        // "none". An explicit unbound row and a missing row are different facts.
+        //
+        // A delivery with no drafts at all stays valid: the class being empty is a complete answer,
+        // and this loop has nothing to complain about.
+        foreach (var draft in records.GroupBy(static value => value.DraftIri, StringComparer.Ordinal))
+        {
+            var covered = draft.Select(static value => value.PredicateIri)
+                .ToHashSet(StringComparer.Ordinal);
+            if (!asked.All(covered.Contains))
+            {
+                var missing = asked.Except(covered, StringComparer.Ordinal).Order(StringComparer.Ordinal);
+                return LuxembourgDraftGraphProductionResult.Refused(
+                    LuxembourgDraftGraphProductionRefusal.DraftPropertyCoverageIncomplete,
+                    $"The delivery answers for {draft.Key} on only some asked properties; "
+                        + "these are missing: " + string.Join(", ", missing) + ".",
+                    productRequestCount);
+            }
+        }
+
         return LuxembourgDraftGraphProductionResult.Success(
             records, asked, completionEvidenceRef, productRequestCount);
     }
@@ -326,12 +369,20 @@ public sealed class LuxembourgDraftGraphProducer
         var draftIri = RequireIri(draftTerm, "draft");
         var predicateIri = RequireIri(predicateTerm, "predicate");
 
-        var datatype = RequirePlainLiteral(Term(row, profile, "datatype_iri"), "datatype_iri");
-        var language = RequirePlainLiteral(Term(row, profile, "language_tag"), "language_tag");
+        // THE QUALIFIER COLUMNS MAY BE ABSENT, and that is the publisher's own encoding rather than a
+        // malformed row. EuPageDecodeClassificationTests retains the page: for a language-tagged
+        // literal this engine does not answer DATATYPE() with rdf:langString, so the BIND errors and
+        // the column is simply omitted from the binding. Requiring a plain literal here refused 32
+        // of 373 rows on that page, and would refuse every language-tagged statusDraft value.
+        var datatype = ReadQualifier(row, profile, "datatype_iri");
+        var language = ReadQualifier(row, profile, "language_tag");
 
         // The qualifier columns must agree with the term they describe. Both are bound from
         // DATATYPE() and LANG() over that very term, so an honest delivery cannot disagree, and a
         // row that does keys as one fact and decodes as another.
+        // A language-tagged literal carries no datatype in SPARQL JSON, so the term's own datatype is
+        // null and the expected column is empty — which is exactly what the engine's erroring BIND
+        // leaves behind. The two agree without either being taught about the other.
         var expectedDatatype = valueTerm.Kind == RepeatedEnumerationRdfTermKind.Literal
             ? valueTerm.Datatype ?? string.Empty
             : string.Empty;
@@ -406,6 +457,26 @@ public sealed class LuxembourgDraftGraphProducer
             throw new ArgumentException(
                 $"{keyName} does not key the terms this row delivered.", nameof(row));
         }
+    }
+
+    /// <summary>
+    /// One qualifier column, reading the publisher's own absence as the empty string.
+    /// </summary>
+    /// <remarks>
+    /// Unbound is a value here rather than a malformation, because this engine leaves the column
+    /// unbound for a language-tagged literal. Anything that IS present must still be the query's own
+    /// unqualified plain literal: an absent column is the publisher answering nothing, while an
+    /// IRI-valued one did not come from this query at all.
+    /// </remarks>
+    private static string ReadQualifier(
+        RepeatedEnumerationRow row,
+        RepeatedEnumerationInterpretationProfile profile,
+        string name)
+    {
+        var term = Term(row, profile, name);
+        return term.Kind == RepeatedEnumerationRdfTermKind.Unbound
+            ? string.Empty
+            : RequirePlainLiteral(term, name);
     }
 
     private static string RequireIri(RepeatedEnumerationRdfTerm term, string name)

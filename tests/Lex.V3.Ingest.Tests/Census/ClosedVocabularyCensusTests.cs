@@ -107,7 +107,7 @@ public sealed class ClosedVocabularyCensusTests
                     + "RobotsDisallowed, RobotsBootstrapNotCompleted, ObservationNotExecuted",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgDraftGraphProductionRefusal: None, "
                     + "EnumerationRefused, EnumerationProofRefused, VerifiedRowsRefused, "
-                    + "RowNotAdmitted, PredicateNotAskedAbout",
+                    + "RowNotAdmitted, PredicateNotAskedAbout, DraftPropertyCoverageIncomplete",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgEnumerationRefusal: None, "
                     + "RobotsBootstrapRefused, ObservationNotExecuted, StatusNotAdmitted, "
                     + "MediaTypeNotAdmitted, CountNotOneNonNegativeInteger, PartitionRequired, "

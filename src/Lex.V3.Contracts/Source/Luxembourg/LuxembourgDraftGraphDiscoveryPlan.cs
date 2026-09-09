@@ -41,13 +41,28 @@ public sealed record LuxembourgDraftGraphBoundQuery(
 /// literals can share a lexical form and still be different facts.
 /// </para>
 /// <para>
-/// THE VALUE-DERIVED CURSOR KEY USES COALESCE AND NOT <c>IF(BOUND(...))</c>, and that is measured
-/// rather than stylistic. <see cref="EuObjectFactsDiscoveryPlan"/> records the probe: this
-/// publisher's engine selects IF's branch correctly and evaluates the arguments EAGERLY, so
-/// <c>STR</c> on the unbound term raised, the erroring BIND left the key unbound, and SPARQL's JSON
-/// omitted it from 8 of 41 rows. COALESCE is specified to swallow an erroring argument and take the
-/// next. The same probe confirmed the other binds need no change, because they dereference a bound
-/// term of the wrong type rather than an unbound one.
+/// EVERY DERIVED CURSOR KEY IS TOTALISED WITH COALESCE, for two separately measured reasons, and
+/// neither is stylistic.
+/// </para>
+/// <para>
+/// The first is the value key. <see cref="EuObjectFactsDiscoveryPlan"/> records the probe: this
+/// engine selects IF's branch correctly and evaluates the arguments EAGERLY, so <c>STR</c> on the
+/// unbound term raised, the erroring BIND left the key unbound, and SPARQL's JSON omitted it from 8
+/// of 41 rows.
+/// </para>
+/// <para>
+/// The second is the qualifier keys, and it is a DIFFERENT cause with the same symptom.
+/// <c>EuPageDecodeClassificationTests</c> retains the page: for a language-tagged literal this
+/// engine does not answer <c>DATATYPE()</c> with <c>rdf:langString</c> as SPARQL 1.1 specifies, so
+/// that BIND errors and leaves <c>datatype_iri</c> unbound — and any key derived from it unbound
+/// with it. 32 of 373 rows on that page were the shape. The COLUMN is therefore left as the
+/// publisher answers it, absent and all, exactly as the EU family leaves it; only the KEY is made
+/// total, so the keyset is never short a component.
+/// </para>
+/// <para>
+/// Nothing is lost by <c>datatype_iri</c> reading empty for a language-tagged literal, because
+/// <c>language_tag</c> is non-empty for precisely those and empty for a plain one. The pair is
+/// unambiguous where either alone would not be.
 /// </para>
 /// <para>
 /// WHAT IS NOT MODELLED HERE, and each omission is a decision rather than an oversight.
@@ -417,8 +432,8 @@ public sealed class LuxembourgDraftGraphDiscoveryPlan
               BIND(STR(?predicate) AS ?key_3)
               BIND(COALESCE(STR(?value), "") AS ?key_4)
               BIND(?value_kind AS ?key_5)
-              BIND(?datatype_iri AS ?key_6)
-              BIND(?language_tag AS ?key_7)
+              BIND(COALESCE(?datatype_iri, "") AS ?key_6)
+              BIND(COALESCE(?language_tag, "") AS ?key_7)
               VALUES (?has_cursor {{lastNames}}) {
                 ({has_cursor:uint} {{lastSlots}})
               }

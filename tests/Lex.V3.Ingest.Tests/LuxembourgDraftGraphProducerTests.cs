@@ -1,3 +1,4 @@
+using Lex.V3.Contracts;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Luxembourg;
 using Lex.V3.Ingest.Europe;
@@ -107,8 +108,203 @@ public sealed class LuxembourgDraftGraphProducerTests
         RepeatedEnumerationRdfTerm term, Func<RepeatedEnumerationRdfTerm, string?> select) =>
         term.Kind == RepeatedEnumerationRdfTermKind.Literal ? select(term) ?? string.Empty : string.Empty;
 
-    private static LuxembourgDraftGraphProductionResult Decode(params RepeatedEnumerationRow[] rows) =>
+    /// <summary>
+    /// Decodes the given rows PLUS the unbound rows that complete every draft they mention.
+    /// </summary>
+    /// <remarks>
+    /// An honest delivery answers every draft for every one of the five asked properties, because
+    /// the plan's absence branch guarantees a row per pair. A test naming one property is describing
+    /// the row it cares about, not a delivery that omits the rest, so the completion is added here
+    /// rather than written out in every test. <see cref="DecodeExactly"/> is the door for a test
+    /// that means the delivery to be partial.
+    /// </remarks>
+    private static LuxembourgDraftGraphProductionResult Decode(params RepeatedEnumerationRow[] rows)
+    {
+        var profile = Profile();
+        var draftOrdinal = profile.ProjectionVariables.ToList().IndexOf("draft");
+        var predicateOrdinal = profile.ProjectionVariables.ToList().IndexOf("predicate");
+
+        var complete = rows.ToList();
+        foreach (var draft in rows
+                     .Select(row => (Draft: row.Terms[draftOrdinal].Value!, Row: row))
+                     .GroupBy(static pair => pair.Draft, StringComparer.Ordinal))
+        {
+            var present = draft
+                .Select(pair => pair.Row.Terms[predicateOrdinal].Value!)
+                .ToHashSet(StringComparer.Ordinal);
+
+            foreach (var predicate in LuxembourgDraftGraphDiscoveryPlan.AskedAbout
+                         .Where(value => !present.Contains(value)))
+            {
+                complete.Add(Row(draft: draft.Key, predicate: predicate, value: Unbound()));
+            }
+        }
+
+        return LuxembourgDraftGraphProducer.DecodeRows(complete, profile, Evidence);
+    }
+
+    /// <summary>Decodes exactly the rows given, completing nothing.</summary>
+    private static LuxembourgDraftGraphProductionResult DecodeExactly(params RepeatedEnumerationRow[] rows) =>
         LuxembourgDraftGraphProducer.DecodeRows(rows, Profile(), Evidence);
+
+    /// <summary>
+    /// The whole chain runs: executor, two passes, proof, reopened pages, verified rows, records.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// THE GUARD THAT MAKES THE PUBLIC PATH REAL. Every other test here calls the internal decoder
+    /// with rows a test built. That proves the decoding and proves nothing about whether the family
+    /// can be run — and Codex demonstrated exactly that on the first head of this slice by making
+    /// <see cref="LuxembourgDraftGraphProducer.RunAsync"/> throw for any request: the eleven tests
+    /// still passed. A slice whose stated point is that the producer owns its run must drive the run.
+    /// </para>
+    /// <para>
+    /// The cited artifact has to name its own schema, read back out of custody, rather than being
+    /// compared against the producer's own report of it. That weaker assertion is self-referential —
+    /// both sides come from the same value — and a mutation citing one request's HTTP evidence
+    /// instead of the acquisition run survived it on the procedure-event family.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public async Task TheFamilyRunsEndToEndAndCitesTheRunsOwnEvidence()
+    {
+        var plan = LuxembourgDraftGraphDiscoveryPlan.Create();
+        var page = PageJson(plan.CreateDeliveryProfile().ProjectionVariables);
+        var handler = LuxembourgAcquisitionTestFixture.AllowRobotsThenHandler((ordinal, request) =>
+            LuxembourgAcquisitionTestFixture.JsonResponse(request, ordinal switch
+            {
+                1 or 3 => LuxembourgAcquisitionTestFixture.CountJson(
+                    LuxembourgDraftGraphDiscoveryPlan.AskedAbout.Count),
+                2 or 4 => page,
+                _ => throw new AssertFailedException("No request is admitted after both passes complete."),
+            }));
+
+        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
+        var producer = new LuxembourgDraftGraphProducer(
+            store, new EuAcquisitionTestFixture.FixedTimeProvider(), handler);
+
+        var result = await producer.RunAsync(
+            new LuxembourgDraftGraphRunRequest(
+                plan,
+                "urn:uuid:1a7c5e39-4b62-4d80-9f13-6e025ac84b71",
+                LuxembourgAcquisitionTestFixture.BuildRendererSource(9101)),
+            LuxembourgSourceWitness(),
+            CancellationToken.None);
+
+        Assert.IsTrue(result.Delivered, $"{result.Refusal}: {result.Detail}");
+        Assert.HasCount(
+            LuxembourgDraftGraphDiscoveryPlan.AskedAbout.Count, result.Records!,
+            "the delivery answers the draft for every asked property.");
+        Assert.IsGreaterThan(0, result.ProductRequestCount);
+
+        var cited = await store.ReadByDigestAsync(
+            result.CompletionEvidenceRef!.Sha256, CancellationToken.None);
+        StringAssert.StartsWith(
+            System.Text.Encoding.UTF8.GetString(cited.Span), "lex-http-acquisition-run/1",
+            "the records cite the acquisition RUN, not one request's HTTP evidence.");
+
+        Assert.HasCount(
+            1, result.For(LuxembourgDraftGraphDiscoveryPlan.DraftTransposesPredicateIri));
+    }
+
+    /// <summary>
+    /// A draft answered on some properties and not others is a partial delivery, not a completed one.
+    /// </summary>
+    /// <remarks>
+    /// The plan's absence branch guarantees a row per (draft, property) pair, so fewer than five is
+    /// a delivery this family cannot complete. Admitting one would let <c>For</c> return an empty
+    /// list for a property whose row never came — indistinguishable from the publisher answering
+    /// "none", which is the false absence arriving by a route the unbound marker cannot describe.
+    /// </remarks>
+    [TestMethod]
+    public void ADraftAnsweredOnOnlySomePropertiesIsRefusedAsIncomplete()
+    {
+        var result = DecodeExactly(
+            Row(predicate: LuxembourgDraftGraphDiscoveryPlan.StatusDraftPredicateIri,
+                value: Literal("en-cours")));
+
+        Assert.AreEqual(
+            LuxembourgDraftGraphProductionRefusal.DraftPropertyCoverageIncomplete, result.Refusal);
+        StringAssert.Contains(
+            result.Detail!, LuxembourgDraftGraphDiscoveryPlan.DraftTransposesPredicateIri,
+            "the refusal names what the delivery did not answer.");
+    }
+
+    /// <summary>
+    /// An explicit unbound row completes a property; a missing row does not.
+    /// </summary>
+    /// <remarks>
+    /// The distinction this family exists for, asserted directly rather than implied: the same draft
+    /// answered "none" for a property is admitted, and the same draft simply missing that property
+    /// is refused.
+    /// </remarks>
+    [TestMethod]
+    public void AnExplicitUnboundRowCompletesAPropertyAndAMissingRowDoesNot()
+    {
+        var complete = LuxembourgDraftGraphDiscoveryPlan.AskedAbout
+            .Select(predicate => Row(predicate: predicate, value: Unbound()))
+            .ToArray();
+
+        var answered = DecodeExactly(complete);
+        Assert.AreEqual(
+            LuxembourgDraftGraphProductionRefusal.None, answered.Refusal, answered.Detail);
+        Assert.HasCount(LuxembourgDraftGraphDiscoveryPlan.AskedAbout.Count, answered.Records!);
+
+        var missingOne = DecodeExactly(complete.Take(complete.Length - 1).ToArray());
+        Assert.AreEqual(
+            LuxembourgDraftGraphProductionRefusal.DraftPropertyCoverageIncomplete,
+            missingOne.Refusal,
+            "one fewer row is a partial delivery even when every row present says 'none'.");
+    }
+
+    /// <summary>A delivery with no drafts at all is a complete answer about an empty class.</summary>
+    [TestMethod]
+    public void ADeliveryWithNoDraftsIsACompleteAnswerRatherThanAnIncompleteOne()
+    {
+        var result = DecodeExactly();
+
+        Assert.AreEqual(LuxembourgDraftGraphProductionRefusal.None, result.Refusal, result.Detail);
+        Assert.IsEmpty(result.Records!);
+    }
+
+    /// <summary>
+    /// A language-tagged value arrives with its datatype column absent, and that is admitted.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// THE PUBLISHER'S OWN ENCODING, measured and retained. For a language-tagged literal this
+    /// engine does not answer <c>DATATYPE()</c> with <c>rdf:langString</c>, so the BIND errors and
+    /// the column is omitted from the binding entirely —
+    /// <c>EuPageDecodeClassificationTests</c> holds the page where 32 of 373 rows were that shape.
+    /// </para>
+    /// <para>
+    /// The first head of this slice required both qualifier columns to be plain literals and
+    /// therefore refused every language-tagged value, which for <c>statusDraft</c> is the ordinary
+    /// case. Nothing is lost by the column reading empty: <c>language_tag</c> is non-empty for
+    /// exactly these rows.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void ALanguageTaggedValueWhoseDatatypeColumnIsAbsentIsAdmitted()
+    {
+        var profile = Profile();
+        var row = Row(
+            predicate: LuxembourgDraftGraphDiscoveryPlan.StatusDraftPredicateIri,
+            value: Literal("en-cours", null, "fr"));
+
+        // The publisher's wire shape: the column is not empty, it is ABSENT.
+        var terms = row.Terms.ToList();
+        terms[profile.ProjectionVariables.ToList().IndexOf("datatype_iri")] =
+            RepeatedEnumerationRdfTerm.Unbound();
+
+        var result = Decode(new RepeatedEnumerationRow(terms, terms, terms));
+
+        Assert.AreEqual(LuxembourgDraftGraphProductionRefusal.None, result.Refusal, result.Detail);
+        var record = result.Records!.Single(value =>
+            value.PredicateIri == LuxembourgDraftGraphDiscoveryPlan.StatusDraftPredicateIri);
+        Assert.AreEqual(string.Empty, record.ValueDatatypeIri);
+        Assert.AreEqual("fr", record.ValueLanguageTag, "the language tag is what identifies it.");
+    }
 
     /// <summary>A delivered transposition intention becomes a record carrying its exact terms.</summary>
     [TestMethod]
@@ -117,9 +313,10 @@ public sealed class LuxembourgDraftGraphProducerTests
         var result = Decode(Row());
 
         Assert.AreEqual(LuxembourgDraftGraphProductionRefusal.None, result.Refusal, result.Detail);
-        Assert.HasCount(1, result.Records!);
 
-        var record = result.Records![0];
+        // The delivery answers all five properties; this test is about the transposition row.
+        var record = result
+            .For(LuxembourgDraftGraphDiscoveryPlan.DraftTransposesPredicateIri).Single();
         Assert.AreEqual(Draft, record.DraftIri);
         Assert.AreEqual(LuxembourgDraftGraphDiscoveryPlan.DraftTransposesPredicateIri, record.PredicateIri);
         Assert.AreEqual(Directive, record.Value);
@@ -142,10 +339,12 @@ public sealed class LuxembourgDraftGraphProducerTests
         var result = Decode(Row(value: Unbound()));
 
         Assert.AreEqual(LuxembourgDraftGraphProductionRefusal.None, result.Refusal, result.Detail);
-        Assert.HasCount(1, result.Records!);
-        Assert.IsNull(result.Records![0].Value);
+
+        var record = result
+            .For(LuxembourgDraftGraphDiscoveryPlan.DraftTransposesPredicateIri).Single();
+        Assert.IsNull(record.Value);
         Assert.AreEqual(
-            LuxembourgDraftGraphDiscoveryPlan.UnboundKind, result.Records![0].ValueKind,
+            LuxembourgDraftGraphDiscoveryPlan.UnboundKind, record.ValueKind,
             "the marker says the publisher holds none, which is the fact.");
     }
 
@@ -207,7 +406,7 @@ public sealed class LuxembourgDraftGraphProducerTests
     {
         const string NeverAsked = "http://data.legilux.public.lu/resource/ontology/jolux#titleDraft";
 
-        var result = Decode(Row(predicate: NeverAsked));
+        var result = DecodeExactly(Row(predicate: NeverAsked));
 
         Assert.AreEqual(LuxembourgDraftGraphProductionRefusal.PredicateNotAskedAbout, result.Refusal);
         StringAssert.Contains(result.Detail!, NeverAsked);
@@ -322,5 +521,84 @@ public sealed class LuxembourgDraftGraphProducerTests
         Assert.IsNull(result.Records);
         Assert.ThrowsExactly<InvalidOperationException>(
             () => result.For(LuxembourgDraftGraphDiscoveryPlan.DraftTransposesPredicateIri));
+    }
+
+    private static BoundMachineRequest LuxembourgSourceWitness()
+    {
+        var (plan, planResourceId, _) = LuxembourgAcquisitionTestFixture.BuildInvariantPlan(9102);
+        return plan.BindCount(
+            planResourceId,
+            "urn:uuid:2b8d6f4a-5c73-4e91-a024-7f136bd95c82",
+            "urn:uuid:3c9e705b-6d84-4fa2-b135-80247ce06d93",
+            LuxembourgAcquisitionTestFixture.SubjectsSetId,
+            LuxembourgQueryPass.Pass1,
+            LuxembourgAcquisitionTestFixture.FullRange(),
+            LuxembourgAcquisitionTestFixture.BuildRendererSource(9102)).Request;
+    }
+
+    /// <summary>
+    /// One page answering the draft for all five properties, in the publisher's own wire shape.
+    /// </summary>
+    private static string PageJson(IReadOnlyList<string> projection)
+    {
+        static object IriTerm(string value) => new Dictionary<string, string>
+        {
+            ["type"] = "uri",
+            ["value"] = value,
+        };
+
+        static object LiteralTerm(string value, string? datatype = null, string? language = null)
+        {
+            var term = new Dictionary<string, string> { ["type"] = "literal", ["value"] = value };
+            if (datatype is not null)
+            {
+                term["datatype"] = datatype;
+            }
+
+            if (language is not null)
+            {
+                term["xml:lang"] = language;
+            }
+
+            return term;
+        }
+
+        // ORDERED BY THE KEYSET, because that is what the page is ordered by and what the executor
+        // advances on. The declaration order of the asked predicates is not their lexical order, and
+        // a page delivered out of order refuses with CursorDidNotAdvance.
+        var bindings = new List<Dictionary<string, object>>();
+        foreach (var predicate in LuxembourgDraftGraphDiscoveryPlan.AskedAbout
+                     .OrderBy(static value => value, StringComparer.Ordinal))
+        {
+            var isIri = predicate == LuxembourgDraftGraphDiscoveryPlan.DraftTransposesPredicateIri
+                || predicate == LuxembourgDraftGraphDiscoveryPlan.ResultingLegalResourcePredicateIri;
+            var value = isIri ? Directive : "en-cours";
+            var datatype = isIri ? null : (string?)null;
+
+            bindings.Add(new Dictionary<string, object>(StringComparer.Ordinal)
+            {
+                ["draft"] = IriTerm(Draft),
+                ["draft_kind"] = LiteralTerm("iri"),
+                ["predicate"] = IriTerm(predicate),
+                ["value"] = isIri ? IriTerm(value) : LiteralTerm(value),
+                ["value_kind"] = LiteralTerm(isIri ? "iri" : "literal"),
+                ["datatype_iri"] = LiteralTerm(datatype ?? string.Empty),
+                ["language_tag"] = LiteralTerm(string.Empty),
+                ["multiplicity"] = LiteralTerm("1", XsdInteger),
+                ["key_1"] = LiteralTerm(Draft),
+                ["key_2"] = LiteralTerm("iri"),
+                ["key_3"] = LiteralTerm(predicate),
+                ["key_4"] = LiteralTerm(value),
+                ["key_5"] = LiteralTerm(isIri ? "iri" : "literal"),
+                ["key_6"] = LiteralTerm(datatype ?? string.Empty),
+                ["key_7"] = LiteralTerm(string.Empty),
+            });
+        }
+
+        return System.Text.Json.JsonSerializer.Serialize(new
+        {
+            head = new { link = Array.Empty<string>(), vars = projection },
+            results = new { distinct = false, ordered = true, bindings = bindings.ToArray() },
+        });
     }
 }
