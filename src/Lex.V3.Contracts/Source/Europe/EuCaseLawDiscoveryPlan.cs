@@ -25,13 +25,17 @@ public sealed record EuCaseLawBoundQuery(
 /// </summary>
 /// <remarks>
 /// <para>
-/// WHY THIS FAMILY HAS TO EXIST. E6's contract has been merged since its own slice and is reachable
-/// from nothing: no query in this repository asks the publisher a case-law question. The executor
-/// drives five families — consolidation, object facts, NIM, witness traversal, document fetch — and
-/// every one binds a closed predicate list that contains none of E6's. <c>EuScopeDimensions</c>
-/// records the same fact about itself: "Nine of the thirteen are read by nothing today, including
-/// both repeal families and all three case-law families." A case-law triple is therefore not merely
-/// unmatched upstream; it is never requested.
+/// WHY THIS FAMILY HAD TO EXIST, in the past tense it has since earned. E6's contract was merged
+/// and reachable from nothing: no query in this repository asked the publisher a case-law question.
+/// The executor drove five families — consolidation, object facts, NIM, witness traversal, document
+/// fetch — and every one bound a closed predicate list containing none of E6's, so a case-law triple
+/// was not merely unmatched upstream, it was never requested.
+///
+/// This plan is what changed that. The paragraph used to quote <c>EuScopeDimensions</c>'s claim that
+/// all three case-law families were read by nothing, and kept asserting in the present tense that
+/// case law is never requested, after both had stopped being true. Repeating a coverage claim in a
+/// second place is how the first one outlived its truth, so the quotation is gone rather than
+/// updated.
 /// </para>
 /// <para>
 /// WHY IT IS ITS OWN PLAN RATHER THAN A WIDER OBJECT-FACTS FAMILY. Three of the five pinned

@@ -144,8 +144,23 @@ public enum EuActForm
 /// Thirteen, assembled from two independently built sets that overlap by two rather than nesting:
 /// eleven the architect research observed on live records, and four this pipeline reads, of which
 /// two were never in the research list. Stating the union is the only honest way to carry both.
-/// Nine of the thirteen are read by nothing today, including both repeal families and all three
-/// case-law families.
+/// <para>
+/// Both repeal families are asked for by no query in this repository. This sentence used to extend
+/// that to "all three case-law families", which is no longer true — E6's own query asks the
+/// publisher for the two families carrying the <c>case-law_</c> prefix — and was imprecise besides,
+/// since the third family it counted carries a <c>communication_case_new_</c> predicate.
+/// </para>
+/// <para>
+/// NO COUNT IS RESTATED IN ITS PLACE. A number written here is a claim no test can falsify, and
+/// that is how the previous one outlived its truth: it was accurate when written, and nothing failed
+/// when E6's executor integrated and made it false. Read the plans if you need the current answer.
+/// </para>
+/// <para>
+/// Asked for by a query and read into a disposition are different sets, and this type governs only
+/// the second. <c>EuScopeVocabulary.ReadRelationFamilies</c> names the four this pipeline reads; E6
+/// asks for its two without joining that list, deliberately, because widening it would mint
+/// vocabulary the authority has not proven.
+/// </para>
 /// </remarks>
 public enum EuRelationFamily
 {
