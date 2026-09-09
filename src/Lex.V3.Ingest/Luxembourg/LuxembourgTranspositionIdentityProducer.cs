@@ -312,11 +312,16 @@ public sealed class LuxembourgTranspositionIdentityProducer
     private static string RequireEuEli(RepeatedEnumerationRdfTerm term)
     {
         var value = RequireBareIri(term, "eu_eli");
-        if (OfficialIdentifier.EliMintedBy(value) != PublisherId.EuEurLex ||
-            !Uri.TryCreate(value, UriKind.Absolute, out var uri) ||
-            !uri.AbsolutePath.StartsWith("/eli/dir/", StringComparison.Ordinal))
+        try
         {
-            throw new ArgumentException("eu_eli must be an exact EU publisher ELI for a directive.", nameof(term));
+            _ = LuxembourgTranspositionIdentityDiscoveryPlan.CanonicalizeSelection([value]);
+        }
+        catch (ArgumentException exception)
+        {
+            throw new ArgumentException(
+                "eu_eli must be an exact EU publisher ELI for a directive.",
+                nameof(term),
+                exception);
         }
         return value;
     }
