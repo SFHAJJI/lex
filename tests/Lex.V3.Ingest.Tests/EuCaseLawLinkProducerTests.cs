@@ -211,6 +211,112 @@ public sealed class EuCaseLawLinkProducerTests
     }
 
     /// <summary>
+    /// An act requested non-canonically is still that caller's own act, all the way to coverage.
+    /// </summary>
+    /// <remarks>
+    /// <c>EuPackRootCanonicalForm.TryCanonicalize</c> rewrites <c>https://</c> to <c>http://</c> and
+    /// drops one trailing slash, and the publisher is asked about — and answers in — the canonical
+    /// form. A run that carried the caller's raw spelling forward would fail its own scope check for
+    /// an act it does hold a scope for, and would publish coverage the publisher never answered in.
+    /// A mutation doing exactly that survived until this test existed, because every other test here
+    /// spells its act canonically already and raw equals canonical there.
+    /// </remarks>
+    [TestMethod]
+    public async Task AnActRequestedNonCanonicallyIsAnsweredUnderItsCanonicalForm()
+    {
+        const string RequestedHttps =
+            "https://publications.europa.eu/resource/cellar/3e485e15-11bd-11e6-ba9a-01aa75ed71a1/";
+
+        Assert.AreEqual(
+            Act, EuCaseLawDiscoveryPlan.CanonicalizeBatch([RequestedHttps])[0],
+            "the plan rewrites this spelling, so raw and canonical genuinely differ here.");
+
+        var scripts = new Dictionary<string, EuAcquisitionTestFixture.FamilyScript>(StringComparer.Ordinal)
+        {
+            ["CaseLaw"] = EuAcquisitionTestFixture.ScriptFor(
+                "CaseLaw", 1,
+                [EuAcquisitionTestFixture.CaseLawRow(
+                    CaseWork,
+                    EuCaseLawPredicateVocabulary.CaseLawInterpretesResourceLegalPredicateUri,
+                    Act,
+                    Ecli)],
+                EuAcquisitionTestFixture.CaseLawProjection),
+        };
+
+        var producer = new EuCaseLawLinkProducer(
+            new EuAcquisitionTestFixture.EuInMemoryCustodyStore(),
+            new EuAcquisitionTestFixture.FixedTimeProvider(),
+            new EuAcquisitionTestFixture.ClassifyingHandler(scripts));
+
+        var result = await producer.RunAsync(
+            new EuCaseLawRunRequest(
+                EuCaseLawDiscoveryPlan.Create(),
+                [RequestedHttps],
+                "urn:uuid:9fb4d25c-6a70-4183-ce45-b23d8f5a0096",
+                RendererSource()),
+            Scopes(),
+            EuAcquisitionTestFixture.SourceWitness(),
+            CancellationToken.None);
+
+        Assert.AreEqual(EuCaseLawLinkProductionRefusal.None, result.Refusal, result.Detail);
+        Assert.HasCount(
+            1, result.ForEuWork(Act),
+            "coverage is the canonical form the publisher was asked about.");
+    }
+
+    /// <summary>
+    /// A run the publisher never completed is a typed refusal, never an empty success.
+    /// </summary>
+    /// <remarks>
+    /// Driven by failing every custody write, so the session cannot retain what it fetched and the
+    /// executor never reaches a receipt. An empty success here would be the worst answer this family
+    /// can give — a proven-empty "no judgment cites this act" for a run that did not happen.
+    /// </remarks>
+    [TestMethod]
+    public async Task ARunThatNeverCompletedIsRefusedRatherThanReportedEmpty()
+    {
+        var scripts = new Dictionary<string, EuAcquisitionTestFixture.FamilyScript>(StringComparer.Ordinal)
+        {
+            ["CaseLaw"] = EuAcquisitionTestFixture.ScriptFor(
+                "CaseLaw", 1,
+                [EuAcquisitionTestFixture.CaseLawRow(
+                    CaseWork,
+                    EuCaseLawPredicateVocabulary.CaseLawInterpretesResourceLegalPredicateUri,
+                    Act,
+                    Ecli)],
+                EuAcquisitionTestFixture.CaseLawProjection),
+        };
+
+        var producer = new EuCaseLawLinkProducer(
+            new EuAcquisitionTestFixture.EuInMemoryCustodyStore(
+                failWriteDigest: static (_, _) => true),
+            new EuAcquisitionTestFixture.FixedTimeProvider(),
+            new EuAcquisitionTestFixture.ClassifyingHandler(scripts));
+
+        var result = await producer.RunAsync(
+            new EuCaseLawRunRequest(
+                EuCaseLawDiscoveryPlan.Create(),
+                [Act],
+                "urn:uuid:a0c5e36d-7b81-4294-df56-c34e906b1107",
+                RendererSource()),
+            Scopes(),
+            EuAcquisitionTestFixture.SourceWitness(),
+            CancellationToken.None);
+
+        Assert.AreNotEqual(
+            EuCaseLawLinkProductionRefusal.None, result.Refusal,
+            "a run that never completed cannot report a proven empty result.");
+        Assert.IsNull(result.Relations);
+        Assert.ThrowsExactly<InvalidOperationException>(() => result.ForEuWork(Act));
+    }
+
+    // ONE MUTATION SURVIVES THIS FILE and is recorded rather than left unexplained. Reporting a
+    // refused VerifiedRepeatedEnumerationRows.TryOpen as EnumerationProofRefused rather than
+    // VerifiedRowsRefused survives because nothing here drives a delivery whose enumeration proof
+    // holds while its rows will not reopen. It is a real untested branch, not an argued equivalence,
+    // and the sibling E8 producer has the identical gap.
+
+    /// <summary>
     /// An act the run asks about with no supplied scope is refused before the request is sent.
     /// </summary>
     /// <remarks>
