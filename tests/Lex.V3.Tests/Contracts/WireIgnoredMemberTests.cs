@@ -85,7 +85,7 @@ public sealed class WireIgnoredMemberTests
             static () => new EuTranspositionSourceAcquisition(
                 EuTranspositionAssertedBy.Legilux,
                 EuRelationAcquisitionState.Complete,
-                null,
+                [],
                 new SourceArtifactRef("urn:uuid:00000000-0000-4000-8000-00000000c501", Digest)),
             null),
         new("EuNormalisedEliJoin", "IsDerived", "is_derived", "false",

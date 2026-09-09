@@ -29,7 +29,8 @@ public enum LuxembourgTranspositionProductionRefusal
 public sealed record LuxembourgTranspositionRelation(
     string EuWorkUri,
     string LegiluxMeasureUri,
-    EuTranspositionSourceAcquisition Acquisition);
+    EuTranspositionSourceAcquisition Acquisition,
+    SourceArtifactRef? EuWorkIdentityEvidenceRef = null);
 
 /// <summary>Completed Legilux acquisitions, or one typed refusal. Never both.</summary>
 public sealed class LuxembourgTranspositionProductionResult
@@ -73,7 +74,7 @@ public sealed class LuxembourgTranspositionProductionResult
     /// Legilux's completed answer for one exact EU work IRI. An empty completed relation set is
     /// a proven absence; a refused producer result is never readable as that absence.
     /// </summary>
-    public IReadOnlyList<EuTranspositionSourceAcquisition> ForAssertedEuWork(string euWorkUri)
+    public EuTranspositionSourceAcquisition ForAssertedEuWork(string euWorkUri)
     {
         if (!Delivered || Relations is null || CompletionEvidenceRef is null)
         {
@@ -82,18 +83,13 @@ public sealed class LuxembourgTranspositionProductionResult
         var publisherUri = LuxembourgTranspositionProducer.RequirePublisherUri(euWorkUri, nameof(euWorkUri));
         var matches = Relations
             .Where(value => string.Equals(value.EuWorkUri, publisherUri, StringComparison.Ordinal))
-            .Select(static value => value.Acquisition)
+            .SelectMany(static value => value.Acquisition.Sides)
             .ToArray();
-        return matches.Length > 0
-            ? Array.AsReadOnly(matches)
-            : Array.AsReadOnly(new[]
-            {
-                new EuTranspositionSourceAcquisition(
-                    EuTranspositionAssertedBy.Legilux,
-                    EuRelationAcquisitionState.Complete,
-                    null,
-                    CompletionEvidenceRef),
-            });
+        return new EuTranspositionSourceAcquisition(
+            EuTranspositionAssertedBy.Legilux,
+            EuRelationAcquisitionState.Complete,
+            matches,
+            CompletionEvidenceRef);
     }
 }
 
@@ -151,6 +147,45 @@ public static class LuxembourgTranspositionProducer
         }
     }
 
+    /// <summary>
+    /// Projects a separately completed Legilux target-identity acquisition onto the publisher's
+    /// transposes column. The local target remains the publisher coordinate; the EU ELI is retained
+    /// only as the identity evidence used later by the two-source reconciliation.
+    /// </summary>
+    public static LuxembourgTranspositionProductionResult Produce(
+        LuxembourgTranspositionIdentityProductionResult identities)
+    {
+        ArgumentNullException.ThrowIfNull(identities);
+        if (!identities.Delivered || identities.Relations is null ||
+            identities.CompletionEvidenceRef is null)
+        {
+            return LuxembourgTranspositionProductionResult.Refused(
+                LuxembourgTranspositionProductionRefusal.QueryExecutionRefused,
+                $"The Legilux target-identity acquisition did not deliver: {identities.Refusal}: {identities.Detail}");
+        }
+
+        var completionEvidenceRef = identities.CompletionEvidenceRef;
+        var relations = identities.Relations.Select(identity =>
+        {
+            var side = new EuTranspositionSide(
+                EuTranspositionAssertedBy.Legilux,
+                identity.NationalMeasureUri,
+                identity.CompletionEvidenceRef,
+                null,
+                null);
+            return new LuxembourgTranspositionRelation(
+                identity.LocalEuWorkUri,
+                identity.NationalMeasureUri,
+                new EuTranspositionSourceAcquisition(
+                    EuTranspositionAssertedBy.Legilux,
+                    EuRelationAcquisitionState.Complete,
+                    [side],
+                    completionEvidenceRef),
+                identity.CompletionEvidenceRef);
+        }).ToArray();
+        return LuxembourgTranspositionProductionResult.Success(relations, completionEvidenceRef);
+    }
+
     private static LuxembourgTranspositionRelation Decode(
         LuxembourgResolvedRelation relation,
         SourceArtifactRef completionEvidenceRef)
@@ -174,7 +209,7 @@ public static class LuxembourgTranspositionProducer
             new EuTranspositionSourceAcquisition(
                 EuTranspositionAssertedBy.Legilux,
                 EuRelationAcquisitionState.Complete,
-                side,
+                [side],
                 completionEvidenceRef));
     }
 

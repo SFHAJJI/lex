@@ -181,6 +181,16 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Ingest.Europe.EuTranspositionBridgeProductionResult::Success, "
                     + "method public static "
                     + "Lex.V3.Ingest.Europe.EuTranspositionBridgeProducer::Produce",
+                "Lex.V3.Ingest.Europe.EuTranspositionBridgeReconciliationResult: constructor "
+                    + "private instance "
+                    + "Lex.V3.Ingest.Europe.EuTranspositionBridgeReconciliationResult::.ctor, "
+                    + "method internal static "
+                    + "Lex.V3.Ingest.Europe.EuTranspositionBridgeReconciliationResult::Refused, "
+                    + "method internal static "
+                    + "Lex.V3.Ingest.Europe.EuTranspositionBridgeReconciliationResult::Success, "
+                    + "method public instance "
+                    + "Lex.V3.Ingest.Europe.EuTranspositionBridgeReconciliationProducer::ProduceAsy"
+                    + "nc",
                 "Lex.V3.Ingest.Europe.EuWitnessTraversalRefusalDetail: constructor internal "
                     + "instance Lex.V3.Ingest.Europe.EuWitnessTraversalRefusalDetail::.ctor",
                 "Lex.V3.Ingest.Europe.EuWitnessTraversalResult: constructor private instance "
@@ -347,6 +357,9 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgRelationFamilyAcquisition::NotComplete, "
                     + "3 compiler-generated",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgTranspositionIdentityProductionResult: "
+                    + "by-ref-method public instance "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgTranspositionIdentityCompletedBatch::Deco"
+                    + "nstruct, "
                     + "constructor private instance "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgTranspositionIdentityProductionResult::.c"
                     + "tor, "
@@ -358,6 +371,12 @@ public sealed class GuardedConstructionCensusTests
                     + "method internal static "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgTranspositionIdentityProductionResult::Su"
                     + "ccess, "
+                    + "method private static "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgTranspositionIdentityPopulationProducer::"
+                    + "Refused, "
+                    + "method public instance "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgTranspositionIdentityPopulationProducer::"
+                    + "ProduceAsync, "
                     + "method public instance "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgTranspositionIdentityProducer::RunAsync",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgTranspositionProductionResult: constructor "
@@ -367,6 +386,8 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgTranspositionProductionResult::Refused, "
                     + "method internal static "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgTranspositionProductionResult::Success, "
+                    + "method public static "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgTranspositionProducer::Produce, "
                     + "method public static "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgTranspositionProducer::Produce",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgTypedAssertion: constructor internal instance "

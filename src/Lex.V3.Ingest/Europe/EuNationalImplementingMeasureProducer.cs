@@ -31,23 +31,44 @@ public enum EuNationalImplementingMeasureProductionRefusal
 public sealed record EuNationalImplementingMeasureRelation(
     string EuWorkUri,
     EuWorkKindAssertion WorkKindAssertion,
+    string PublisherWorkTypeIri,
     string NimWorkUri,
     string NimCelex,
     string ImplementsPredicateIri,
     string? LegiluxEli,
     EuTranspositionSourceAcquisition Acquisition);
 
+/// <summary>
+/// One verified publisher row whose exact work type is outside E5's two-member work-kind contract.
+/// It remains evidence-bound and must not be read as a non-transposable work or a missing row.
+/// </summary>
+public sealed record EuNationalImplementingMeasureOutOfE5WorkKindExclusion(
+    string EuWorkUri,
+    string EuWorkEli,
+    string PublisherWorkTypeIri,
+    string NimWorkUri,
+    string NimCelex,
+    string ImplementsPredicateIri,
+    string? LegiluxEli,
+    SourceArtifactRef EvidenceRef)
+{
+    public const string DispositionToken = "out_of_e5_work_kind";
+    public string Disposition => DispositionToken;
+}
+
 /// <summary>Delivered relations, or one typed refusal. Never both.</summary>
 public sealed class EuNationalImplementingMeasureProductionResult
 {
     private EuNationalImplementingMeasureProductionResult(
         IReadOnlyList<EuNationalImplementingMeasureRelation>? relations,
+        IReadOnlyList<EuNationalImplementingMeasureOutOfE5WorkKindExclusion>? exclusions,
         SourceArtifactRef? completionEvidenceRef,
         EuNationalImplementingMeasureProductionRefusal refusal,
         string? detail,
         int productRequestCount)
     {
         Relations = relations;
+        OutOfE5WorkKindExclusions = exclusions;
         CompletionEvidenceRef = completionEvidenceRef;
         Refusal = refusal;
         Detail = detail;
@@ -55,6 +76,8 @@ public sealed class EuNationalImplementingMeasureProductionResult
     }
 
     public IReadOnlyList<EuNationalImplementingMeasureRelation>? Relations { get; }
+    public IReadOnlyList<EuNationalImplementingMeasureOutOfE5WorkKindExclusion>?
+        OutOfE5WorkKindExclusions { get; }
     public SourceArtifactRef? CompletionEvidenceRef { get; }
     public EuNationalImplementingMeasureProductionRefusal Refusal { get; }
     public string? Detail { get; }
@@ -63,9 +86,10 @@ public sealed class EuNationalImplementingMeasureProductionResult
 
     internal static EuNationalImplementingMeasureProductionResult Success(
         IReadOnlyList<EuNationalImplementingMeasureRelation> relations,
+        IReadOnlyList<EuNationalImplementingMeasureOutOfE5WorkKindExclusion> exclusions,
         SourceArtifactRef completionEvidenceRef,
         int productRequestCount) =>
-        new(Array.AsReadOnly(relations.ToArray()), completionEvidenceRef,
+        new(Array.AsReadOnly(relations.ToArray()), Array.AsReadOnly(exclusions.ToArray()), completionEvidenceRef,
             EuNationalImplementingMeasureProductionRefusal.None, null, productRequestCount);
 
     internal static EuNationalImplementingMeasureProductionResult Refused(
@@ -77,34 +101,36 @@ public sealed class EuNationalImplementingMeasureProductionResult
         {
             throw new ArgumentOutOfRangeException(nameof(refusal));
         }
-        return new(null, null, refusal, detail, productRequestCount);
+        return new(null, null, null, refusal, detail, productRequestCount);
     }
 
     /// <summary>
     /// All completed NIM assertions for one EU work. A genuinely empty result is represented by
-    /// one completed acquisition with a null side and the same enumeration evidence.
+    /// one completed acquisition with an empty side set and the same enumeration evidence.
     /// </summary>
-    public IReadOnlyList<EuTranspositionSourceAcquisition> ForEuWork(string euWorkUri)
+    public EuTranspositionSourceAcquisition ForEuWork(string euWorkUri)
     {
-        if (!Delivered || Relations is null || CompletionEvidenceRef is null)
+        if (!Delivered || Relations is null || OutOfE5WorkKindExclusions is null ||
+            CompletionEvidenceRef is null)
         {
             throw new InvalidOperationException("A refused production result has no completed NIM acquisition.");
         }
         RequireCellarWorkUri(euWorkUri, nameof(euWorkUri));
+        if (OutOfE5WorkKindExclusions.Any(value =>
+                string.Equals(value.EuWorkUri, euWorkUri, StringComparison.Ordinal)))
+        {
+            throw new InvalidOperationException(
+                "An out-of-E5-work-kind publisher row cannot be read as a completed empty E5 set.");
+        }
         var matches = Relations
             .Where(value => string.Equals(value.EuWorkUri, euWorkUri, StringComparison.Ordinal))
-            .Select(static value => value.Acquisition)
+            .SelectMany(static value => value.Acquisition.Sides)
             .ToArray();
-        return matches.Length > 0
-            ? Array.AsReadOnly(matches)
-            : Array.AsReadOnly(new[]
-            {
-                new EuTranspositionSourceAcquisition(
-                    EuTranspositionAssertedBy.Nim,
-                    EuRelationAcquisitionState.Complete,
-                    null,
-                    CompletionEvidenceRef),
-            });
+        return new EuTranspositionSourceAcquisition(
+            EuTranspositionAssertedBy.Nim,
+            EuRelationAcquisitionState.Complete,
+            matches,
+            CompletionEvidenceRef);
     }
 
     private static void RequireCellarWorkUri(string value, string parameterName)
@@ -160,9 +186,14 @@ public sealed class EuNationalImplementingMeasureProducer
             request, sourceWitness, cancellationToken).ConfigureAwait(false);
         if (run.Receipt is not { } receipt)
         {
+            var refusal = run.Refusal;
             return EuNationalImplementingMeasureProductionResult.Refused(
                 EuNationalImplementingMeasureProductionRefusal.EnumerationRefused,
-                run.Refusal?.Code.ToString() ?? "enumeration returned neither a receipt nor a refusal",
+                refusal is null
+                    ? "enumeration returned neither a receipt nor a refusal"
+                    : refusal.Code + (string.IsNullOrEmpty(refusal.CoreRefusalDetail)
+                        ? string.Empty
+                        : $": {refusal.CoreRefusalDetail}"),
                 run.ProductRequestCount);
         }
 
@@ -212,9 +243,13 @@ public sealed class EuNationalImplementingMeasureProducer
         ArgumentNullException.ThrowIfNull(completionEvidenceRef);
         try
         {
-            var relations = rows.Select(row => DecodeRow(row, profile, completionEvidenceRef)).ToArray();
+            var decoded = rows.Select(row => DecodeRow(row, profile, completionEvidenceRef)).ToArray();
             return EuNationalImplementingMeasureProductionResult.Success(
-                relations, completionEvidenceRef, productRequestCount);
+                decoded.Where(static value => value.Relation is not null)
+                    .Select(static value => value.Relation!).ToArray(),
+                decoded.Where(static value => value.Exclusion is not null)
+                    .Select(static value => value.Exclusion!).ToArray(),
+                completionEvidenceRef, productRequestCount);
         }
         catch (ArgumentException exception)
         {
@@ -225,15 +260,15 @@ public sealed class EuNationalImplementingMeasureProducer
         }
     }
 
-    private static EuNationalImplementingMeasureRelation DecodeRow(
+    private static DecodedRow DecodeRow(
         RepeatedEnumerationRow row,
         RepeatedEnumerationInterpretationProfile profile,
         SourceArtifactRef evidenceRef)
     {
         ArgumentNullException.ThrowIfNull(row);
-        if (row.Terms.Count != profile.ProjectionVariables.Count || row.Terms.Count != 17)
+        if (row.Terms.Count != profile.ProjectionVariables.Count || row.Terms.Count != 18)
         {
-            throw new ArgumentException("A Luxembourg sector-7 NIM row has seventeen exact terms.", nameof(row));
+            throw new ArgumentException("A Luxembourg sector-7 NIM row has eighteen exact terms.", nameof(row));
         }
         var nim = RequireCellarWork(Term(row, profile, "nim"), "nim");
         RequireIri(Term(row, profile, "country"),
@@ -242,10 +277,11 @@ public sealed class EuNationalImplementingMeasureProducer
         var predicate = RequireImplementsPredicate(Term(row, profile, "implements_predicate"));
         var euWork = RequireCellarWork(Term(row, profile, "eu_work"), "eu_work");
         var euWorkEli = RequireEuWorkEli(Term(row, profile, "eu_work_eli"));
-        var workKind = RequireWorkKind(Term(row, profile, "eu_work_kind"));
+        var publisherWorkTypeIri = RequirePublisherWorkTypeIri(Term(row, profile, "eu_work_kind"));
         var eliTerm = Term(row, profile, "eli");
         var eliKind = RequirePlainLiteral(Term(row, profile, "eli_kind"), "eli_kind");
         var eli = RequireEli(eliTerm, eliKind);
+        var workKind = ClassifyWorkType(publisherWorkTypeIri, euWorkEli);
         _ = RequirePositiveInteger(Term(row, profile, "multiplicity"), "multiplicity");
 
         RequirePlainLiteral(Term(row, profile, "key_1"), "key_1", nim);
@@ -253,8 +289,16 @@ public sealed class EuNationalImplementingMeasureProducer
         RequirePlainLiteral(Term(row, profile, "key_3"), "key_3", predicate);
         RequirePlainLiteral(Term(row, profile, "key_4"), "key_4", euWork);
         RequirePlainLiteral(Term(row, profile, "key_5"), "key_5", euWorkEli);
-        RequirePlainLiteral(Term(row, profile, "key_6"), "key_6", WorkKindIri(workKind));
+        RequirePlainLiteral(Term(row, profile, "key_6"), "key_6", publisherWorkTypeIri);
         RequirePlainLiteral(Term(row, profile, "key_7"), "key_7", eli ?? string.Empty);
+        RequirePlainLiteral(Term(row, profile, "page_key"), "page_key", PageKey(
+            nim, nimCelex, predicate, euWork, euWorkEli, publisherWorkTypeIri, eli ?? string.Empty));
+
+        if (workKind is null)
+        {
+            return new DecodedRow(null, new EuNationalImplementingMeasureOutOfE5WorkKindExclusion(
+                euWork, euWorkEli, publisherWorkTypeIri, nim, nimCelex, predicate, eli, evidenceRef));
+        }
 
         var workKindAssertion = new EuWorkKindAssertion(
             new OfficialIdentitySet(PublisherId.EuEurLex,
@@ -262,7 +306,7 @@ public sealed class EuNationalImplementingMeasureProducer
                 new OfficialIdentifier(FactsIdentifierFamily.CellarWorkUri, euWork),
                 new OfficialIdentifier(FactsIdentifierFamily.Eli, euWorkEli),
             ]),
-            workKind);
+            workKind.Value);
 
         var side = new EuTranspositionSide(
             EuTranspositionAssertedBy.Nim,
@@ -273,9 +317,13 @@ public sealed class EuNationalImplementingMeasureProducer
         var acquisition = new EuTranspositionSourceAcquisition(
             EuTranspositionAssertedBy.Nim,
             EuRelationAcquisitionState.Complete,
-            side,
+            [side],
             evidenceRef);
-        return new(euWork, workKindAssertion, nim, nimCelex, predicate, eli, acquisition);
+        return new DecodedRow(
+            new EuNationalImplementingMeasureRelation(
+                euWork, workKindAssertion, publisherWorkTypeIri,
+                nim, nimCelex, predicate, eli, acquisition),
+            null);
     }
 
     private static RepeatedEnumerationRdfTerm Term(
@@ -356,26 +404,78 @@ public sealed class EuNationalImplementingMeasureProducer
         return term.Value;
     }
 
-    private static EuWorkKind RequireWorkKind(RepeatedEnumerationRdfTerm term)
+    private static string RequirePublisherWorkTypeIri(RepeatedEnumerationRdfTerm term)
     {
         if (term.Kind != RepeatedEnumerationRdfTermKind.Iri || term.Datatype is not null || term.Language is not null)
         {
             throw new ArgumentException("eu_work_kind must be an admitted publisher class IRI.", nameof(term));
         }
-        return term.Value switch
-        {
-            EuNationalImplementingMeasureDiscoveryPlan.DirectiveClassIri => EuWorkKind.Directive,
-            EuNationalImplementingMeasureDiscoveryPlan.RegulationClassIri => EuWorkKind.Regulation,
-            _ => throw new ArgumentException("eu_work_kind must be directive or regulation.", nameof(term)),
-        };
+        return term.Value ?? throw new ArgumentException(
+            "eu_work_kind must be an admitted publisher class IRI.", nameof(term));
     }
 
-    private static string WorkKindIri(EuWorkKind kind) => kind switch
+    private static EuWorkKind? ClassifyWorkType(string publisherWorkTypeIri, string euWorkEli)
     {
-        EuWorkKind.Directive => EuNationalImplementingMeasureDiscoveryPlan.DirectiveClassIri,
-        EuWorkKind.Regulation => EuNationalImplementingMeasureDiscoveryPlan.RegulationClassIri,
-        _ => throw new ArgumentOutOfRangeException(nameof(kind)),
+        var rule = WorkTypeRule(publisherWorkTypeIri);
+        var requiresRuledFamilyMatch = publisherWorkTypeIri is not (
+            EuNationalImplementingMeasureDiscoveryPlan.DirectiveResourceTypeIri or
+            EuNationalImplementingMeasureDiscoveryPlan.RegulationResourceTypeIri);
+        if (requiresRuledFamilyMatch &&
+            !WorkTypeMatchesKindAndEli(rule.Kind, publisherWorkTypeIri, euWorkEli))
+        {
+            throw new ArgumentException(
+                $"The publisher eu_work_kind and ELI family disagree: '{publisherWorkTypeIri}' and '{euWorkEli}'.",
+                nameof(euWorkEli));
+        }
+        return rule.Kind;
+    }
+
+    internal static bool WorkTypeMatchesKindAndEli(
+        EuWorkKind? kind,
+        string publisherWorkTypeIri,
+        string euWorkEli)
+    {
+        ArgumentNullException.ThrowIfNull(publisherWorkTypeIri);
+        ArgumentNullException.ThrowIfNull(euWorkEli);
+        try
+        {
+            var rule = WorkTypeRule(publisherWorkTypeIri);
+            return rule.Kind == kind &&
+                Uri.TryCreate(euWorkEli, UriKind.Absolute, out var uri) &&
+                uri.AbsolutePath.StartsWith(rule.EliPathPrefix, StringComparison.Ordinal);
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+    }
+
+    private static (EuWorkKind? Kind, string EliPathPrefix) WorkTypeRule(
+        string publisherWorkTypeIri) => publisherWorkTypeIri switch
+    {
+        EuNationalImplementingMeasureDiscoveryPlan.DirectiveResourceTypeIri =>
+            (EuWorkKind.Directive, "/eli/dir/"),
+        EuNationalImplementingMeasureDiscoveryPlan.RegulationResourceTypeIri =>
+            (EuWorkKind.Regulation, "/eli/reg/"),
+        EuNationalImplementingMeasureDiscoveryPlan.DelegatedDirectiveResourceTypeIri =>
+            (EuWorkKind.Directive, "/eli/dir_del/"),
+        EuNationalImplementingMeasureDiscoveryPlan.ImplementingDirectiveResourceTypeIri =>
+            (EuWorkKind.Directive, "/eli/dir_impl/"),
+        EuNationalImplementingMeasureDiscoveryPlan.DecisionResourceTypeIri =>
+            (null, "/eli/dec/"),
+        EuNationalImplementingMeasureDiscoveryPlan.FrameworkDecisionResourceTypeIri =>
+            (null, "/eli/dec_framw/"),
+        _ => throw new ArgumentException(
+            $"eu_work_kind '{publisherWorkTypeIri}' is outside the ruled E5 work-type partition.",
+            nameof(publisherWorkTypeIri)),
     };
+
+    private sealed record DecodedRow(
+        EuNationalImplementingMeasureRelation? Relation,
+        EuNationalImplementingMeasureOutOfE5WorkKindExclusion? Exclusion);
+
+    private static string PageKey(params string[] parts) =>
+        string.Join('|', parts.Select(Uri.EscapeDataString));
 
     private static string? RequireEli(RepeatedEnumerationRdfTerm term, string kind)
     {

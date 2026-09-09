@@ -89,7 +89,11 @@ public sealed class ClosedVocabularyCensusTests
                     + "JoinEvidenceReceiptMismatch",
                 "Lex.V3.Ingest.Europe.EuTranspositionBridgeProductionRefusal: None, "
                     + "WorkKindNotForEuWork, LegiluxNotDelivered, NimNotDelivered, "
-                    + "LegiluxNotSingular, NimNotSingular, SourceColumnsContradictWorkKind",
+                    + "SourceColumnsContradictWorkKind",
+                "Lex.V3.Ingest.Europe.EuTranspositionBridgeReconciliationRefusal: None, "
+                    + "SourceNotDelivered, NimWorkIdentityNotConsistent, LegiluxIdentityNotSingular, "
+                    + "LegiluxIdentityNotInNimPopulation, LegiluxIdentityContradictsNim, "
+                    + "IdentityObservationUnused, PopulationRefused",
                 "Lex.V3.Ingest.Europe.EuWitnessTraversalRefusal: None, RobotsBootstrapRefused, "
                     + "BindRefused, ObservationNotExecuted, StatusNotAdmitted, MediaTypeNotAdmitted, "
                     + "PageBodyMalformed, CrossingRefused, StepRefused, EntrySetRefused, "
@@ -131,7 +135,8 @@ public sealed class ClosedVocabularyCensusTests
                     + "PredicateNotAdmitted, BlankNodeObject",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgTranspositionIdentityProductionRefusal: None, "
                     + "EnumerationRefused, EnumerationProofRefused, VerifiedRowsRefused, "
-                    + "RowNotAdmitted, AmbiguousIdentity",
+                    + "RowNotAdmitted, AmbiguousIdentity, BatchPopulationRefused, "
+                    + "CompositeEvidenceNotHeld",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgTranspositionProductionRefusal: None, "
                     + "QueryExecutionRefused, TransposesFamilyNotComplete, "
                     + "TransposesFamilyEvidenceNotSingular, RelationNotAdmitted",
