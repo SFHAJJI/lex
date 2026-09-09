@@ -50,6 +50,21 @@ public sealed class EuProcedureEventProducerTests
     private static RepeatedEnumerationRdfTerm Unbound() =>
         RepeatedEnumerationRdfTerm.Unbound();
 
+    /// <summary>The marker the plan's own BIND produces for a term of this kind.</summary>
+    private static string Marker(RepeatedEnumerationRdfTerm term) => term.Kind switch
+    {
+        RepeatedEnumerationRdfTermKind.Iri => "iri",
+        RepeatedEnumerationRdfTermKind.Literal => "literal",
+        RepeatedEnumerationRdfTermKind.BlankNode => "unsupported_blank_node",
+        _ => "unbound",
+    };
+
+    private static string Datatype(RepeatedEnumerationRdfTerm term) =>
+        term.Kind == RepeatedEnumerationRdfTermKind.Literal ? term.Datatype ?? string.Empty : string.Empty;
+
+    private static string Language(RepeatedEnumerationRdfTerm term) =>
+        term.Kind == RepeatedEnumerationRdfTermKind.Literal ? term.Language ?? string.Empty : string.Empty;
+
     /// <summary>
     /// One delivered row, with every term, marker and cursor key chosen independently so a test can
     /// put them in disagreement on purpose.
@@ -69,10 +84,15 @@ public sealed class EuProcedureEventProducerTests
         string? dateDatatype = null,
         string dossier = Dossier,
         string multiplicity = "1",
+        string? typeDatatype = null,
+        string? typeLanguage = null,
         string? key1 = null,
+        string? key2 = null,
         string? key3 = null,
+        string? key4 = null,
         string? key7 = null,
         string? key8 = null,
+        string? key9 = null,
         string? key10 = null)
     {
         var subject = eventTerm ?? Iri(Event);
@@ -83,31 +103,40 @@ public sealed class EuProcedureEventProducerTests
         var datatype = dateDatatype ??
             (date.Kind == RepeatedEnumerationRdfTermKind.Literal ? date.Datatype ?? string.Empty : string.Empty);
 
+        var typeLanguageColumn = typeLanguage ?? Language(type);
+        var typeDatatypeColumn = typeDatatype ?? Datatype(type);
+        var dateLanguageColumn = Language(date);
+
+        // Every marker and key defaults to what the term itself says, so an honest row is COHERENT
+        // BY CONSTRUCTION and a test that wants a contradiction has to ask for exactly one. The
+        // builder used to hard-code "iri" for the type's kind key regardless of the term, so a
+        // blank-node test refused for the key rather than for the blank node - it passed while the
+        // rule it named was unreachable. A surviving mutation is what showed that.
         var terms = new List<RepeatedEnumerationRdfTerm>
         {
             subject,
-            Literal(eventKind ?? "iri"),
+            Literal(eventKind ?? Marker(subject)),
             Iri(dossier),
             type,
-            Literal(typeKind ?? "iri"),
-            Literal(string.Empty),
-            Literal(string.Empty),
+            Literal(typeKind ?? Marker(type)),
+            Literal(typeDatatypeColumn),
+            Literal(typeLanguageColumn),
             date,
-            Literal(dateKind ?? "literal"),
+            Literal(dateKind ?? Marker(date)),
             Literal(datatype),
-            Literal(string.Empty),
+            Literal(dateLanguageColumn),
             Literal(multiplicity),
             Literal(key1 ?? subject.Value ?? string.Empty),
-            Literal("iri"),
+            Literal(key2 ?? Marker(subject)),
             Literal(key3 ?? type.Value ?? string.Empty),
-            Literal(type.Kind == RepeatedEnumerationRdfTermKind.Unbound ? "unbound" : "iri"),
-            Literal(string.Empty),
-            Literal(string.Empty),
+            Literal(key4 ?? Marker(type)),
+            Literal(typeDatatypeColumn),
+            Literal(typeLanguageColumn),
             Literal(key7 ?? dossier),
             Literal(key8 ?? date.Value ?? string.Empty),
-            Literal(date.Kind == RepeatedEnumerationRdfTermKind.Unbound ? "unbound" : "literal"),
+            Literal(key9 ?? Marker(date)),
             Literal(key10 ?? datatype),
-            Literal(string.Empty),
+            Literal(dateLanguageColumn),
         };
 
         return new RepeatedEnumerationRow(terms, terms, terms);
@@ -334,18 +363,12 @@ public sealed class EuProcedureEventProducerTests
     [TestMethod]
     public void ABlankNodeTypeIsRefusedRatherThanExcluded()
     {
-        var profile = Profile();
-        var row = Row();
-        var terms = row.Terms.ToList();
-        terms[profile.ProjectionVariables.ToList().IndexOf("event_type")] =
-            RepeatedEnumerationRdfTerm.BlankNode("b0");
-        terms[profile.ProjectionVariables.ToList().IndexOf("type_kind")] =
-            Literal("unsupported_blank_node");
-
-        var result = EuProcedureEventProducer.DecodeRows(
-            [new RepeatedEnumerationRow(terms, terms, terms)], profile, [Dossier], Evidence);
+        var result = Decode(Row(typeTerm: RepeatedEnumerationRdfTerm.BlankNode("b0")));
 
         Assert.AreEqual(EuProcedureEventProductionRefusal.RowNotAdmitted, result.Refusal);
+        StringAssert.Contains(
+            result.Detail!, "blank node",
+            "refused for being a blank node, not incidentally for some key that disagrees.");
     }
 
     /// <summary>
@@ -406,14 +429,9 @@ public sealed class EuProcedureEventProducerTests
     [TestMethod]
     public void ATypeWhoseLanguageContradictsItsProjectedColumnIsRefused()
     {
-        var profile = Profile();
-        var row = Row(typeTerm: RepeatedEnumerationRdfTerm.Literal("x", null, "en"),
-            typeKind: "literal", key3: "x");
-        var terms = row.Terms.ToList();
-        terms[profile.ProjectionVariables.ToList().IndexOf("type_language")] = Literal(string.Empty);
-
-        var result = EuProcedureEventProducer.DecodeRows(
-            [new RepeatedEnumerationRow(terms, terms, terms)], profile, [Dossier], Evidence);
+        var result = Decode(Row(
+            typeTerm: RepeatedEnumerationRdfTerm.Literal("x", null, "en"),
+            typeLanguage: string.Empty));
 
         Assert.AreEqual(EuProcedureEventProductionRefusal.RowNotAdmitted, result.Refusal);
         StringAssert.Contains(result.Detail!, "type_language");

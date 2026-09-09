@@ -370,14 +370,26 @@ public static class EuProcedureEventProducer
 
         _ = RequirePositiveInteger(Term(row, profile, "multiplicity"), "multiplicity");
 
-        // The eleven cursor keys are the page's own proof of what it delivered and in what order.
-        // Reading them is what stops a verified page proving one tuple while this producer emits
-        // another; the empty key an unbound term contributes is asserted rather than skipped.
+        // ALL ELEVEN cursor keys, not just the lexical ones. The keys are the page's own proof of
+        // what it delivered and in what order, and checking a subset lets a verified page prove one
+        // tuple while this producer emits another.
+        //
+        // The six kind and qualifier keys matter most, and checking only the five lexical keys was
+        // the gap. Those six exist BECAUSE two terms can share every lexical form and still be
+        // different facts - that is the whole content of the plan's second review round. A row whose
+        // kind key contradicts the kind it delivered is keyed as the term it is not, so it sorts and
+        // pages as a different row than the one this producer reads.
         RequireKey(row, profile, "key_1", eventIri);
+        RequireKey(row, profile, "key_2", MarkerFor(eventTerm, EuProcedureEventDiscoveryPlan.UnboundTypeKind));
         RequireKey(row, profile, "key_3", typeIri ?? string.Empty);
+        RequireKey(row, profile, "key_4", MarkerFor(typeTerm, EuProcedureEventDiscoveryPlan.UnboundTypeKind));
+        RequireKey(row, profile, "key_5", QualifierOf(typeTerm, static term => term.Datatype));
+        RequireKey(row, profile, "key_6", QualifierOf(typeTerm, static term => term.Language));
         RequireKey(row, profile, "key_7", dossierIri);
         RequireKey(row, profile, "key_8", dateLexical ?? string.Empty);
+        RequireKey(row, profile, "key_9", MarkerFor(dateTerm, EuProcedureEventDiscoveryPlan.UnboundDateKind));
         RequireKey(row, profile, "key_10", dateDatatypeIri ?? string.Empty);
+        RequireKey(row, profile, "key_11", QualifierOf(dateTerm, static term => term.Language));
 
         return new DecodedRow(eventIri, dossierIri, typeIri, dateLexical, dateDatatypeIri);
     }
@@ -475,6 +487,17 @@ public static class EuProcedureEventProducer
                 nameof(row));
         }
     }
+
+    /// <summary>
+    /// One qualifier of a term, in the form the plan's own COALESCE binds it: the empty string for
+    /// anything that is not a literal, and for a literal that carries none.
+    /// </summary>
+    private static string QualifierOf(
+        RepeatedEnumerationRdfTerm term,
+        Func<RepeatedEnumerationRdfTerm, string?> select) =>
+        term.Kind == RepeatedEnumerationRdfTermKind.Literal
+            ? select(term) ?? string.Empty
+            : string.Empty;
 
     private static void RequireKey(
         RepeatedEnumerationRow row,
