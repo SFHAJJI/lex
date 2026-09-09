@@ -65,11 +65,30 @@ public enum LuxembourgOpinionHostRobotsState
 }
 
 /// <summary>
-/// One official host and path family the opinion documents were observed on, with that host's own
-/// robots position.
+/// One official origin and path family the opinion documents were observed on, with that origin's
+/// own robots position.
 /// </summary>
+/// <remarks>
+/// <para>
+/// <b>The origin is scheme, host and port together, never the host alone.</b> A robots policy and a
+/// delivery observation are properties of the origin that answered them. <c>http://</c> is a
+/// different origin from <c>https://</c> and can reach a different service; so can an arbitrary
+/// port. Every probe recorded on <see cref="LuxembourgOpinionLinkOnlyVocabulary.AdmittedHostFamilies"/>
+/// was made over <c>https</c> on the default port, so that is exactly what is admitted.
+/// </para>
+/// <para>
+/// This is the second repair of this table and both had the same cause: a measurement generalised
+/// past what was measured. The first admitted any bare absolute HTTP(S) URI, projecting
+/// conseil-etat's robots result onto every host on the internet. The second bound host and path, so
+/// <c>http://conseil-etat.public.lu/content/dam/...</c> and
+/// <c>https://conseil-etat.public.lu:444/content/dam/...</c> still passed under a permission neither
+/// origin had granted. Both were found in review rather than here.
+/// </para>
+/// </remarks>
 public sealed record LuxembourgOpinionHostFamily(
+    string Scheme,
     string Host,
+    int Port,
     string PathPrefix,
     LuxembourgOpinionHostRobotsState RobotsState);
 
@@ -80,6 +99,9 @@ public sealed record LuxembourgOpinionHostFamily(
 public static class LuxembourgOpinionLinkOnlyVocabulary
 {
     private const string Jolux = "http://data.legilux.public.lu/resource/ontology/jolux#";
+
+    /// <summary>The port every recorded probe was made on. Named so the table states an origin.</summary>
+    private const int HttpsDefaultPort = 443;
 
     /// <summary>The JOLux class of an opinion event. 13,009 observed.</summary>
     public const string OpinionConseilEtatClassIri = Jolux + "OpinionConseilEtat";
@@ -94,8 +116,8 @@ public static class LuxembourgOpinionLinkOnlyVocabulary
     public const string OpinionDatePredicateIri = Jolux + "opinionDate";
 
     /// <summary>
-    /// The official host and path families the opinion documents were observed on, each carrying
-    /// that host's own robots position. Closed: a locator outside these is refused.
+    /// The official origin and path families the opinion documents were observed on, each carrying
+    /// that origin's own robots position. Closed: a locator outside these is refused.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -125,23 +147,32 @@ public static class LuxembourgOpinionLinkOnlyVocabulary
         Array.AsReadOnly(new[]
         {
             new LuxembourgOpinionHostFamily(
-                "conseil-etat.public.lu", "/content/dam/",
+                "https", "conseil-etat.public.lu", HttpsDefaultPort, "/content/dam/",
                 LuxembourgOpinionHostRobotsState.PermittedByStatedPolicy),
             new LuxembourgOpinionHostFamily(
-                "legilux.public.lu", "/filestore/",
+                "https", "legilux.public.lu", HttpsDefaultPort, "/filestore/",
                 LuxembourgOpinionHostRobotsState.PermittedByStatedPolicy),
             new LuxembourgOpinionHostFamily(
-                "wdocs-pub.chd.lu", "/docs/",
+                "https", "wdocs-pub.chd.lu", HttpsDefaultPort, "/docs/",
                 LuxembourgOpinionHostRobotsState.NoStatedPolicy),
         });
 
     /// <summary>The admitted family a locator belongs to, or null when it belongs to none.</summary>
+    /// <remarks>
+    /// All four parts are checked because all four are what was measured. <see cref="Uri.Scheme"/>
+    /// and <see cref="Uri.Host"/> arrive normalised, and <see cref="Uri.Port"/> is the effective
+    /// port, so <c>https://host/x</c> and <c>https://host:443/x</c> are the same origin and both
+    /// admitted, while <c>http://host/x</c> and <c>https://host:444/x</c> are different origins and
+    /// both refused.
+    /// </remarks>
     public static LuxembourgOpinionHostFamily? FamilyFor(Uri locator)
     {
         ArgumentNullException.ThrowIfNull(locator);
         foreach (var family in AdmittedHostFamilies)
         {
-            if (string.Equals(locator.Host, family.Host, StringComparison.OrdinalIgnoreCase) &&
+            if (string.Equals(locator.Scheme, family.Scheme, StringComparison.Ordinal) &&
+                string.Equals(locator.Host, family.Host, StringComparison.OrdinalIgnoreCase) &&
+                locator.Port == family.Port &&
                 locator.AbsolutePath.StartsWith(family.PathPrefix, StringComparison.Ordinal))
             {
                 return family;
@@ -299,9 +330,10 @@ public sealed class LuxembourgOpinionLinkOnlyRecord
             return null;
         }
 
-        // Admission is per host and per path, because the robots evidence is. Accepting any bare
+        // Admission is per origin and per path, because the robots evidence is. Accepting any bare
         // absolute URI here would carry an arbitrary host under a permission only conseil-etat
-        // actually granted.
+        // actually granted; accepting any scheme or port on an admitted host would carry a
+        // different service under the same permission, since the probes were https on 443.
         var family = LuxembourgOpinionLinkOnlyVocabulary.FamilyFor(locator);
         if (family is null)
         {

@@ -159,6 +159,69 @@ public sealed class LuxembourgOpinionLinkOnlyTests
     }
 
     /// <summary>
+    /// An origin the evidence does not cover is refused even when the host and path are admitted.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Found in review on head <c>a30a5394</c>, and the second time this table generalised past what
+    /// was measured. The first repair admitted any bare absolute HTTP(S) URI, projecting
+    /// conseil-etat's robots result onto every host. This one bound host and path, so a scheme
+    /// downgrade and an arbitrary port still walked through: <c>http://</c> is a different origin
+    /// from <c>https://</c> and can reach a different service, and so can <c>:444</c>.
+    /// </para>
+    /// <para>
+    /// Every probe behind <see cref="LuxembourgOpinionLinkOnlyVocabulary.AdmittedHostFamilies"/> —
+    /// the robots fetches and the delivery checks alike — was made over <c>https</c> on the default
+    /// port. So the admitted set is exactly those origins, and the explicit-<c>:443</c> case is
+    /// asserted alongside the refusals to show this refuses a different origin rather than merely
+    /// refusing any URL that carries a port.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void AnOriginTheEvidenceDoesNotCoverIsRefusedEvenOnAnAdmittedHostAndPath()
+    {
+        const string AdmittedPath = "/content/dam/conseil_etat/fr/avis/2026/17072026/62629-avis.pdf";
+
+        Assert.IsNull(
+            Create(out var downgraded, locator: "http://conseil-etat.public.lu" + AdmittedPath),
+            "a scheme downgrade reaches a different service than the one that answered robots.");
+        Assert.AreEqual(
+            LuxembourgOpinionLocatorRefusal.DocumentLocatorIsNotAnAdmittedOfficialFamily, downgraded);
+
+        Assert.IsNull(
+            Create(out var otherPort, locator: "https://conseil-etat.public.lu:444" + AdmittedPath),
+            "an arbitrary port is a different origin and carries no measured permission.");
+        Assert.AreEqual(
+            LuxembourgOpinionLocatorRefusal.DocumentLocatorIsNotAnAdmittedOfficialFamily, otherPort);
+
+        // Plaintext on the TLS port. This case is why the scheme is checked at all: it is the one
+        // shape a port-only door admits, since 443 matches and the host and path do too. I found it
+        // by mutation — deleting the scheme check left every other assertion here passing.
+        Assert.IsNull(
+            Create(out var plaintextOn443,
+                locator: "http://conseil-etat.public.lu:443" + AdmittedPath),
+            "http on 443 is still plaintext to a different service than the one measured.");
+        Assert.AreEqual(
+            LuxembourgOpinionLocatorRefusal.DocumentLocatorIsNotAnAdmittedOfficialFamily,
+            plaintextOn443);
+
+        // The same origin written with its default port explicit is the origin that was measured,
+        // so it is admitted. Without this the two refusals above would also pass on a door that
+        // simply refused every locator carrying a port.
+        var explicitDefault = Create(
+            out var admitted, locator: "https://conseil-etat.public.lu:443" + AdmittedPath);
+        Assert.AreEqual(LuxembourgOpinionLocatorRefusal.None, admitted);
+        Assert.IsNotNull(explicitDefault);
+
+        // The table states the origin rather than leaving scheme and port to the door's discretion.
+        foreach (var family in LuxembourgOpinionLinkOnlyVocabulary.AdmittedHostFamilies)
+        {
+            Assert.AreEqual("https", family.Scheme, family.Host);
+            Assert.AreEqual(443, family.Port, family.Host);
+        }
+    }
+
+    /// <summary>
     /// Each admitted family carries its own measured robots state, and they are not the same.
     /// </summary>
     /// <remarks>
