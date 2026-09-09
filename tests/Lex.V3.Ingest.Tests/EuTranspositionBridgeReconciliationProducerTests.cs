@@ -151,6 +151,35 @@ public sealed class EuTranspositionBridgeReconciliationProducerTests
     }
 
     [TestMethod]
+    public async Task OneCellarWorkCannotChooseBetweenTwoRawPublisherTypes()
+    {
+        const string DelegatedEli = "http://data.europa.eu/eli/dir_del/2020/1/oj";
+        var result = await ProduceAsync(
+            Legilux(LegiluxRelation(Measure1)),
+            Identities(Identity(Measure1, DelegatedEli)),
+            Nim(
+                NimRelation(
+                    Cellar,
+                    DelegatedEli,
+                    Measure1,
+                    'd',
+                    publisherWorkTypeIri:
+                        EuNationalImplementingMeasureDiscoveryPlan.DelegatedDirectiveResourceTypeIri),
+                NimRelation(
+                    Cellar,
+                    DelegatedEli,
+                    Measure2,
+                    'e',
+                    publisherWorkTypeIri:
+                        EuNationalImplementingMeasureDiscoveryPlan.DirectiveResourceTypeIri)));
+
+        Assert.AreEqual(
+            EuTranspositionBridgeReconciliationRefusal.NimWorkIdentityNotConsistent,
+            result.Refusal);
+        Assert.IsNull(result.Population);
+    }
+
+    [TestMethod]
     public async Task OnePublisherIdentityCannotBeBothAdmittedAndOutOfE5WorkKind()
     {
         var exclusion = new EuNationalImplementingMeasureOutOfE5WorkKindExclusion(
