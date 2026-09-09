@@ -110,6 +110,72 @@ public sealed class EuTranspositionBridgeProducerTests
     }
 
     [TestMethod]
+    public void ARegulationPublisherRowRemainsEvidenceButProjectsACompletedEmptyNimColumn()
+    {
+        const string RegulationEli = "http://data.europa.eu/eli/reg/2023/1/oj";
+        var relation = new EuNationalImplementingMeasureRelation(
+            EuWork,
+            new EuWorkKindAssertion(
+                new OfficialIdentitySet(PublisherId.EuEurLex,
+                [
+                    new OfficialIdentifier(FactsIdentifierFamily.CellarWorkUri, EuWork),
+                    new OfficialIdentifier(FactsIdentifierFamily.Eli, RegulationEli),
+                ]),
+                EuWorkKind.Regulation),
+            EuNationalImplementingMeasureDiscoveryPlan.RegulationResourceTypeIri,
+            EuWork,
+            "72023R0001LUX_000001",
+            EuNationalImplementingMeasureDiscoveryPlan.ImplementsResourceLegalPredicateIri,
+            NimLuMeasure,
+            NimSide());
+        var nim = EuNationalImplementingMeasureProductionResult.Success(
+            [relation], [], [], Evidence, 0);
+
+        var result = EuTranspositionBridgeProducer.Produce(
+            EuWork,
+            relation.WorkKindAssertion,
+            Legilux(ProvenAbsent(EuTranspositionAssertedBy.Legilux)),
+            nim);
+
+        Assert.IsTrue(result.Delivered, result.Detail);
+        Assert.AreSame(relation, nim.Relations!.Single());
+        Assert.AreEqual(EuTransposability.NotTransposable, result.Bridge!.Transposability);
+        Assert.AreEqual(EuRelationAcquisitionState.Complete, result.Bridge.Nim.Acquisition);
+        Assert.IsEmpty(result.Bridge.Nim.Sides);
+    }
+
+    [TestMethod]
+    public void ADirectiveBridgeCannotHideAnAdmittedRegulationRelationAsAnEmptyColumn()
+    {
+        const string RegulationEli = "http://data.europa.eu/eli/reg/2023/1/oj";
+        var regulationKind = new EuWorkKindAssertion(
+            new OfficialIdentitySet(PublisherId.EuEurLex,
+            [
+                new OfficialIdentifier(FactsIdentifierFamily.CellarWorkUri, EuWork),
+                new OfficialIdentifier(FactsIdentifierFamily.Eli, RegulationEli),
+            ]),
+            EuWorkKind.Regulation);
+        var nim = EuNationalImplementingMeasureProductionResult.Success(
+            [new EuNationalImplementingMeasureRelation(
+                EuWork, regulationKind,
+                EuNationalImplementingMeasureDiscoveryPlan.RegulationResourceTypeIri,
+                EuWork, "72023R0001LUX_000001",
+                EuNationalImplementingMeasureDiscoveryPlan.ImplementsResourceLegalPredicateIri,
+                NimLuMeasure, NimSide())],
+            [], [], Evidence, 0);
+
+        var result = EuTranspositionBridgeProducer.Produce(
+            EuWork,
+            Kind(EuWork, EuWorkKind.Directive),
+            Legilux(ProvenAbsent(EuTranspositionAssertedBy.Legilux)),
+            nim);
+
+        Assert.AreEqual(
+            EuTranspositionBridgeProductionRefusal.SourceColumnsContradictWorkKind,
+            result.Refusal);
+    }
+
+    [TestMethod]
     public void MultipleAssertionsStayInTheirPublisherColumnsAndEachExactMatchIsDisclosed()
     {
         const string secondLegilux = "https://data.legilux.public.lu/eli/etat/leg/loi/2020/01/02/a2/jo";

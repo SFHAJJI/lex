@@ -153,8 +153,27 @@ public sealed class EuNationalImplementingMeasureProductionResult
             throw new InvalidOperationException(
                 "A publisher-coordinate conflict cannot be read as a completed empty E5 set.");
         }
-        var matches = Relations
+        var workRelations = Relations
             .Where(value => string.Equals(value.EuWorkUri, euWorkUri, StringComparison.Ordinal))
+            .ToArray();
+        var workKinds = workRelations.Select(static value => value.WorkKindAssertion.Kind)
+            .Distinct()
+            .ToArray();
+        if (workKinds.Length > 1)
+        {
+            throw new ArgumentException(
+                "One EU work cannot carry more than one admitted work kind.", nameof(euWorkUri));
+        }
+        if (workKinds is [EuWorkKind.Regulation])
+        {
+            return new EuTranspositionSourceAcquisition(
+                EuTranspositionAssertedBy.Nim,
+                EuRelationAcquisitionState.Complete,
+                [],
+                CompletionEvidenceRef);
+        }
+
+        var matches = workRelations
             .SelectMany(static value => value.Acquisition.Sides)
             // Distinct raw rows can name one identical publisher assertion under separate CELEX
             // coordinates. Relations retains every row; the bridge column carries the assertion

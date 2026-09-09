@@ -116,6 +116,16 @@ public static class EuTranspositionBridgeProducer
                 "The work-kind assertion does not name this exact EU Cellar work.");
         }
 
+        if (nim.Relations is not null && nim.Relations.Any(relation =>
+                string.Equals(relation.EuWorkUri, euWorkUri, StringComparison.Ordinal) &&
+                relation.Acquisition.Sides.Count > 0 &&
+                relation.WorkKindAssertion.Kind != workKindAssertion.Kind))
+        {
+            return EuTranspositionBridgeProductionResult.Refused(
+                EuTranspositionBridgeProductionRefusal.SourceColumnsContradictWorkKind,
+                "The NIM relation work kind contradicts the bridge work-kind assertion.");
+        }
+
         EuTranspositionSourceAcquisition legiluxColumn;
         try
         {
