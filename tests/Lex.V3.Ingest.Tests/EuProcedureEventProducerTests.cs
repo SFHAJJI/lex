@@ -31,6 +31,36 @@ public sealed class EuProcedureEventProducerTests
     private static RepeatedEnumerationInterpretationProfile Profile() =>
         EuProcedureEventDiscoveryPlan.Create().CreateDeliveryProfile();
 
+    /// <summary>A producer wired to a scripted transport, with its store handed back.</summary>
+    private static (EuProcedureEventProducer Producer, EuAcquisitionTestFixture.EuInMemoryCustodyStore Store)
+        RunnableProducer(params string[] rows)
+    {
+        var scripts = new Dictionary<string, EuAcquisitionTestFixture.FamilyScript>(StringComparer.Ordinal)
+        {
+            ["ProcedureEvent"] = EuAcquisitionTestFixture.ScriptFor(
+                "ProcedureEvent", rows.Length, rows,
+                EuAcquisitionTestFixture.ProcedureEventProjection),
+        };
+
+        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
+        return (
+            new EuProcedureEventProducer(
+                store,
+                new EuAcquisitionTestFixture.FixedTimeProvider(),
+                new EuAcquisitionTestFixture.ClassifyingHandler(scripts)),
+            store);
+    }
+
+    private static MachineQueryRendererSource RendererSource()
+    {
+        var bytes = System.Text.Encoding.UTF8.GetBytes("eu-procedure-event-producer-source/1\n");
+        return MachineQueryRendererSource.Open(
+            new SourceArtifactRef(
+                "urn:uuid:4b0f7c26-9d31-4e58-a07b-13c58fe2a904",
+                Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(bytes))),
+            bytes);
+    }
+
     private static RepeatedEnumerationRdfTerm Iri(string value) =>
         RepeatedEnumerationRdfTerm.Iri(value);
 
@@ -160,6 +190,182 @@ public sealed class EuProcedureEventProducerTests
 
     private static EuProcedureEventProductionResult Decode(params RepeatedEnumerationRow[] rows) =>
         EuProcedureEventProducer.DecodeRows(rows, Profile(), [Dossier], Evidence);
+
+    /// <summary>
+    /// The whole chain runs: executor, proof, verified rows, observations. Nothing is supplied.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// THIS IS THE GUARD THAT MAKES THE FAMILY REACHED BY SOMETHING. Every other test here calls the
+    /// internal decoder with rows a test built and an evidence reference a test invented. That
+    /// proves the decoding and proves nothing about whether this family can be run at all — and
+    /// before <see cref="EuProcedureEventProducer.RunAsync"/> existed it could not be: the plan, the
+    /// executor entry point and the decoder were three parts joined by no caller in <c>src/</c>.
+    /// </para>
+    /// <para>
+    /// It is also what satisfies Candidate 5 R5.3's second clause. The completion evidence these
+    /// observations cite is the RUN'S own, taken from the enumeration proof, and the rows reached
+    /// the decoder through <c>VerifiedRepeatedEnumerationRows.TryOpen</c> rather than from a caller.
+    /// A test asserting the observations exist would pass without either; this asserts the evidence
+    /// reference is the one the run produced, which nothing but a real run can supply.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public async Task TheProducerRunsTheFamilyEndToEndAndCitesTheRunsOwnEvidence()
+    {
+        var scripts = new Dictionary<string, EuAcquisitionTestFixture.FamilyScript>(StringComparer.Ordinal)
+        {
+            ["ProcedureEvent"] = EuAcquisitionTestFixture.ScriptFor(
+                "ProcedureEvent",
+                2,
+                [
+                    EuAcquisitionTestFixture.ProcedureEventRow(Event, Dossier, FirstType, "2021-11-24"),
+                    EuAcquisitionTestFixture.ProcedureEventRow(Event, Dossier, SecondType, "2021-11-24"),
+                ],
+                EuAcquisitionTestFixture.ProcedureEventProjection),
+        };
+
+        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
+        var producer = new EuProcedureEventProducer(
+            store,
+            new EuAcquisitionTestFixture.FixedTimeProvider(),
+            new EuAcquisitionTestFixture.ClassifyingHandler(scripts));
+
+        var result = await producer.RunAsync(
+            new EuProcedureEventRunRequest(
+                EuProcedureEventDiscoveryPlan.Create(),
+                [Dossier],
+                "urn:uuid:c17d4e83-2f60-4b95-8a1e-6d9074bf3c52",
+                RendererSource()),
+            EuAcquisitionTestFixture.SourceWitness(),
+            CancellationToken.None);
+
+        Assert.AreEqual(
+            EuProcedureEventProductionRefusal.None, result.Refusal,
+            $"the family must be runnable end to end: {result.Refusal} {result.Detail}");
+        Assert.HasCount(1, result.Observations!);
+
+        var observation = result.Observations![0];
+        CollectionAssert.AreEqual(
+            new[] { FirstType, SecondType }, observation.ObservedTypeIris.ToArray(),
+            "the two delivered rows grouped back into one event with both declared types.");
+
+        Assert.IsNotNull(result.CompletionEvidenceRef);
+        Assert.AreEqual(
+            result.CompletionEvidenceRef!.ResourceId, observation.SourceObservationId,
+            "every observation cites the reference this result reports.");
+
+        // AND THAT REFERENCE IS THE ACQUISITION RUN'S, established by reading the artifact rather
+        // than by comparing the producer against itself. The assertion above is self-referential:
+        // both sides come from the same value, so swapping WHICH reference the run cites changes
+        // them together and it cannot notice. A mutation that cited the count's HTTP evidence
+        // instead survived on exactly that. The stored bytes name their own schema, which nothing
+        // in the producer chooses.
+        var cited = await store.ReadByDigestAsync(
+            result.CompletionEvidenceRef!.Sha256, CancellationToken.None);
+        StringAssert.StartsWith(
+            System.Text.Encoding.UTF8.GetString(cited.Span), "lex-http-acquisition-run/1",
+            "the observations must cite the acquisition RUN, not one request's HTTP evidence.");
+
+        Assert.IsGreaterThan(0, result.ProductRequestCount);
+
+        // The coverage this run publishes is what it ASKED, in the plan's canonical form.
+        Assert.HasCount(1, result.EventsOf(Dossier));
+    }
+
+    // TWO MUTATIONS ON THE RUN CHAIN SURVIVE THIS FILE, and both are recorded rather than left as
+    // an unexplained gap in the sweep.
+    //
+    // Reopening the pages in reverse instead of by ordinal survives because every delivery here is
+    // ONE page, where reversing is identity. It is not unguarded: VerifiedRepeatedEnumerationRows
+    // .TryOpen compares CanonicalRowDigestA, which is computed over the rows in delivery order, so a
+    // genuinely misordered multi-page delivery is refused there. Reaching a second page costs 811
+    // rows - EuProcedureEventDiscoveryPlan.Pass1PageLimit - so no cheap fixture can drive it.
+    //
+    // Reporting a refused TryOpen as EnumerationProofRefused rather than VerifiedRowsRefused
+    // survives because nothing here drives a delivery whose enumeration proof holds while its rows
+    // will not reopen. That one is a real untested branch, not an argued equivalence, and it is
+    // named here so it is a known gap rather than a silent one.
+
+    /// <summary>
+    /// A caller spelling its dossier non-canonically still gets an answer under the canonical form.
+    /// </summary>
+    /// <remarks>
+    /// The publisher is asked about the canonical batch and answers in it, so the coverage this run
+    /// publishes must be canonical too. Publishing the caller's raw spelling instead makes
+    /// <c>EventsOf</c> throw for the very dossier the run asked about — and a mutation doing that
+    /// survived, because every other test spells its dossier canonically already and raw equals
+    /// canonical there.
+    /// </remarks>
+    [TestMethod]
+    public async Task ADossierRequestedNonCanonicallyIsAnsweredUnderItsCanonicalForm()
+    {
+        const string RequestedHttps =
+            "https://publications.europa.eu/resource/cellar/1f7ba2c8-4d59-11ec-91ac-01aa75ed71a1/";
+
+        Assert.AreEqual(
+            Dossier, EuProcedureEventDiscoveryPlan.CanonicalizeBatch([RequestedHttps])[0],
+            "the plan rewrites this spelling, so raw and canonical genuinely differ here.");
+
+        var (producer, _) = RunnableProducer(
+            EuAcquisitionTestFixture.ProcedureEventRow(Event, Dossier, FirstType, "2021-11-24"));
+
+        var result = await producer.RunAsync(
+            new EuProcedureEventRunRequest(
+                EuProcedureEventDiscoveryPlan.Create(),
+                [RequestedHttps],
+                "urn:uuid:e39f6a05-4b82-4d17-ac30-8f1296de5e74",
+                RendererSource()),
+            EuAcquisitionTestFixture.SourceWitness(),
+            CancellationToken.None);
+
+        Assert.AreEqual(EuProcedureEventProductionRefusal.None, result.Refusal, result.Detail);
+        Assert.HasCount(
+            1, result.EventsOf(Dossier),
+            "the run's coverage is the canonical form the publisher was asked about.");
+    }
+
+    /// <summary>
+    /// A run the publisher never completed is a typed refusal, never an empty success.
+    /// </summary>
+    /// <remarks>
+    /// Driven by failing every custody write, so the session cannot retain what it fetched and the
+    /// executor never reaches a receipt. An empty success here would be the worst answer this family
+    /// can give: a proven-empty claim about a run that did not happen. A mutation returning exactly
+    /// that survived until this existed.
+    /// </remarks>
+    [TestMethod]
+    public async Task ARunThatNeverCompletedIsRefusedRatherThanReportedEmpty()
+    {
+        var scripts = new Dictionary<string, EuAcquisitionTestFixture.FamilyScript>(StringComparer.Ordinal)
+        {
+            ["ProcedureEvent"] = EuAcquisitionTestFixture.ScriptFor(
+                "ProcedureEvent", 1,
+                [EuAcquisitionTestFixture.ProcedureEventRow(Event, Dossier, FirstType, "2021-11-24")],
+                EuAcquisitionTestFixture.ProcedureEventProjection),
+        };
+
+        var producer = new EuProcedureEventProducer(
+            new EuAcquisitionTestFixture.EuInMemoryCustodyStore(
+                failWriteDigest: static (_, _) => true),
+            new EuAcquisitionTestFixture.FixedTimeProvider(),
+            new EuAcquisitionTestFixture.ClassifyingHandler(scripts));
+
+        var result = await producer.RunAsync(
+            new EuProcedureEventRunRequest(
+                EuProcedureEventDiscoveryPlan.Create(),
+                [Dossier],
+                "urn:uuid:f4a07b16-5c93-4e28-bd41-901387ef6f85",
+                RendererSource()),
+            EuAcquisitionTestFixture.SourceWitness(),
+            CancellationToken.None);
+
+        Assert.AreNotEqual(
+            EuProcedureEventProductionRefusal.None, result.Refusal,
+            "a run that never completed cannot report a proven empty result.");
+        Assert.IsNull(result.Observations);
+        Assert.ThrowsExactly<InvalidOperationException>(() => result.EventsOf(Dossier));
+    }
 
     /// <summary>
     /// An event's two declared types become one observation carrying both, in delivery order.
