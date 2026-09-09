@@ -77,6 +77,13 @@ public sealed class GuardedConstructionCensusTests
                     + "method public instance Lex.V3.Ingest.CorpusRecordSetWriter::WriteAsync, "
                     + "method public static Lex.V3.Ingest.CorpusRecordSetWriteResult::Refused, "
                     + "method public static Lex.V3.Ingest.CorpusRecordSetWriteResult::Written",
+                "Lex.V3.Ingest.Europe.EuCaseLawLinkProductionResult: constructor private instance "
+                    + "Lex.V3.Ingest.Europe.EuCaseLawLinkProductionResult::.ctor, "
+                    + "method internal static "
+                    + "Lex.V3.Ingest.Europe.EuCaseLawLinkProductionResult::Refused, "
+                    + "method internal static "
+                    + "Lex.V3.Ingest.Europe.EuCaseLawLinkProductionResult::Success, "
+                    + "method public static Lex.V3.Ingest.Europe.EuCaseLawLinkProducer::DecodeRows",
                 "Lex.V3.Ingest.Europe.EuDeliveryEvidenceSet: constructor private instance "
                     + "Lex.V3.Ingest.Europe.EuDeliveryEvidenceSet::.ctor, "
                     + "method public static "
