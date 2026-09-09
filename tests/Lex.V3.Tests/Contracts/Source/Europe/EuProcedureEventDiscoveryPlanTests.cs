@@ -175,7 +175,7 @@ public sealed class EuProcedureEventDiscoveryPlanTests
             "this is the exact expectation RequireInputRoleShape builds and compares by sequence.");
     }
 
-    /// <summary>The delivery profile pins the whole row and the nine-part keyset.</summary>
+    /// <summary>The delivery profile pins the whole row and the eleven-part keyset.</summary>
     [TestMethod]
     public void TheDeliveryProfilePinsTheWholeRowAndItsKeyset()
     {
@@ -185,13 +185,19 @@ public sealed class EuProcedureEventDiscoveryPlanTests
         CollectionAssert.AreEqual(
             new[]
             {
-                "event", "event_kind", "dossier", "event_type", "type_kind",
+                "event", "event_kind", "dossier",
+                "event_type", "type_kind", "type_datatype", "type_language",
                 "event_date", "date_kind", "date_datatype", "date_language", "multiplicity",
-                "key_1", "key_2", "key_3", "key_4", "key_5", "key_6", "key_7", "key_8", "key_9",
+                "key_1", "key_2", "key_3", "key_4", "key_5", "key_6",
+                "key_7", "key_8", "key_9", "key_10", "key_11",
             },
             profile.ProjectionVariables.ToArray());
         CollectionAssert.AreEqual(
-            new[] { "key_1", "key_2", "key_3", "key_4", "key_5", "key_6", "key_7", "key_8", "key_9" },
+            new[]
+            {
+                "key_1", "key_2", "key_3", "key_4", "key_5", "key_6",
+                "key_7", "key_8", "key_9", "key_10", "key_11",
+            },
             profile.CursorVariables.ToArray());
         CollectionAssert.AreEqual(
             profile.CanonicalKeyVariables.ToArray(), profile.CursorVariables.ToArray());
@@ -216,10 +222,11 @@ public sealed class EuProcedureEventDiscoveryPlanTests
 
         StringAssert.Contains(page, "BIND(STR(?event) AS ?key_1)");
         StringAssert.Contains(page, "BIND(COALESCE(STR(?event_type), \"\") AS ?key_3)");
-        StringAssert.Contains(page, "BIND(STR(?dossier) AS ?key_5)");
-        StringAssert.Contains(page, "BIND(COALESCE(STR(?event_date), \"\") AS ?key_6)");
+        StringAssert.Contains(page, "BIND(STR(?dossier) AS ?key_7)");
+        StringAssert.Contains(page, "BIND(COALESCE(STR(?event_date), \"\") AS ?key_8)");
         StringAssert.Contains(
-            page, "ORDER BY ?key_1 ?key_2 ?key_3 ?key_4 ?key_5 ?key_6 ?key_7 ?key_8 ?key_9");
+            page,
+            "ORDER BY ?key_1 ?key_2 ?key_3 ?key_4 ?key_5 ?key_6 ?key_7 ?key_8 ?key_9 ?key_10 ?key_11");
     }
 
     /// <summary>
@@ -291,7 +298,13 @@ public sealed class EuProcedureEventDiscoveryPlanTests
             .Where(static line => line.Contains(" AS ?key_", StringComparison.Ordinal))
             .ToArray();
 
-        Assert.HasCount(9, keyBindings, "every cursor key is bound in the page template.");
+        // Derived from the plan's own cursor: a keyset that grows must grow its bindings with it,
+        // and writing the number here would just be one more place to forget. It grew from four to
+        // nine to eleven across two review rounds, which is the argument.
+        Assert.HasCount(
+            EuProcedureEventDiscoveryPlan.Create().CreateDeliveryProfile().CursorVariables.Count,
+            keyBindings,
+            "every cursor key is bound in the page template.");
 
         foreach (var variable in groupBy)
         {
@@ -306,10 +319,14 @@ public sealed class EuProcedureEventDiscoveryPlanTests
         // The two collisions named in review, stated as the keys that separate them.
         StringAssert.Contains(page, "BIND(?type_kind AS ?key_4)",
             "an IRI type and a literal type spelled the same are separated by their kind.");
-        StringAssert.Contains(page, "BIND(?date_datatype AS ?key_8)",
-            "two date literals with one lexical value and different datatypes are separated.");
-        StringAssert.Contains(page, "BIND(?date_language AS ?key_9)",
+        StringAssert.Contains(page, "BIND(?type_datatype AS ?key_5)",
+            "two literal types with one lexical value and different datatypes are separated.");
+        StringAssert.Contains(page, "BIND(?type_language AS ?key_6)",
             "and so are two with different language tags.");
+        StringAssert.Contains(page, "BIND(?date_datatype AS ?key_10)",
+            "the same holds for the date, which is where this rule was first applied.");
+        StringAssert.Contains(page, "BIND(?date_language AS ?key_11)",
+            "and for its language tag.");
     }
 
     /// <summary>
@@ -381,6 +398,83 @@ public sealed class EuProcedureEventDiscoveryPlanTests
     /// separate — so the family stalls on the one case those keys exist for. Derived from the plan's
     /// own cursor rather than transcribed. A surviving mutation found this one too.
     /// </remarks>
+    /// <summary>
+    /// Every term the publisher delivers in object position is keyed by kind, datatype AND language.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This is the general rule, written as a rule because stating it case by case has already
+    /// failed twice. A term in object position may be an IRI, a literal or a blank node, and two
+    /// literals may share a lexical form while differing in datatype or language tag. A canonical
+    /// key that omits any of the three is not injective over the terms the row groups on, which
+    /// Source/Core forbids and which strands exactly the malformed rows the accepted refusals exist
+    /// to name.
+    /// </para>
+    /// <para>
+    /// The first repair carried kind, datatype and language for the date and gave the type a kind
+    /// alone. Every guard passed: the type DID reach a key, so the coverage test was satisfied, and
+    /// the profile DID match the grouping. Nothing asked whether the type was covered as completely
+    /// as the date. This does, for every object-position term the template actually contains, so a
+    /// term added later inherits the rule instead of waiting for a reviewer.
+    /// </para>
+    /// <para>
+    /// The exemption is derived rather than declared: a variable constrained by a VALUES block of
+    /// IRIs cannot be a literal, so it needs no qualifier keys. That is why <c>?dossier</c> is out,
+    /// and it is out because the query says so rather than because this test says so.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void EveryObjectPositionTermIsKeyedByKindDatatypeAndLanguageAlike()
+    {
+        var plan = EuProcedureEventDiscoveryPlan.Create();
+        var page = plan.PageTemplate;
+        var lines = page.Split('\n').Select(static line => line.Trim()).ToArray();
+
+        var groupBy = lines
+            .Single(static line => line.StartsWith("GROUP BY ", StringComparison.Ordinal))
+            .Substring("GROUP BY ".Length)
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Select(static name => name.TrimStart('?'))
+            .ToArray();
+
+        // Terms bound from a VALUES list of IRIs cannot be literals and need no qualifiers.
+        var valuesBound = lines
+            .Where(static line => line.StartsWith("VALUES ?", StringComparison.Ordinal))
+            .Select(static line => line.Substring("VALUES ?".Length).Split(' ')[0])
+            .ToHashSet(StringComparer.Ordinal);
+
+        // Object-position variables: the third term of "?s <p> ?o ." and "?s a ?o .".
+        var objects = lines
+            .Select(static line => System.Text.RegularExpressions.Regex.Match(
+                line, @"^\?[A-Za-z_][A-Za-z0-9_]*\s+(?:a|<[^>]+>)\s+\?([A-Za-z_][A-Za-z0-9_]*)\s*\.$"))
+            .Where(static match => match.Success)
+            .Select(static match => match.Groups[1].Value)
+            .Distinct(StringComparer.Ordinal)
+            .Where(name => !valuesBound.Contains(name))
+            .Where(static name => !name.StartsWith("missing_", StringComparison.Ordinal))
+            .ToArray();
+
+        Assert.IsGreaterThan(1, objects.Length, "the query walks more than one object-position term.");
+
+        foreach (var term in objects)
+        {
+            foreach (var qualifier in new[] { "kind", "datatype", "language" })
+            {
+                var companion = term.Replace("event_", string.Empty, StringComparison.Ordinal)
+                    + "_" + qualifier;
+
+                CollectionAssert.Contains(
+                    groupBy, companion,
+                    $"{term} is delivered in object position but ?{companion} is not grouped on, so "
+                        + "two terms differing only in that are folded into one row.");
+                StringAssert.Contains(
+                    page, $"BIND(?{companion} AS ?key_",
+                    $"?{companion} reaches no canonical key, so two {term} terms differing only in "
+                        + "it share every key and cannot be paged apart.");
+            }
+        }
+    }
+
     /// <summary>
     /// The grouped row carries exactly the terms the delivery profile says the row has.
     /// </summary>

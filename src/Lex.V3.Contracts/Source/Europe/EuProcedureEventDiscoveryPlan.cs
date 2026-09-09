@@ -144,9 +144,11 @@ public sealed class EuProcedureEventDiscoveryPlan
 
     private static readonly string[] Projection =
     [
-        "event", "event_kind", "dossier", "event_type", "type_kind",
+        "event", "event_kind", "dossier",
+        "event_type", "type_kind", "type_datatype", "type_language",
         "event_date", "date_kind", "date_datatype", "date_language", "multiplicity",
-        "key_1", "key_2", "key_3", "key_4", "key_5", "key_6", "key_7", "key_8", "key_9",
+        "key_1", "key_2", "key_3", "key_4", "key_5", "key_6",
+        "key_7", "key_8", "key_9", "key_10", "key_11",
     ];
 
     /// <summary>
@@ -169,13 +171,26 @@ public sealed class EuProcedureEventDiscoveryPlan
     /// distinction without a difference. Codex found this on head <c>2f0e86ea</c>.
     /// </para>
     /// <para>
-    /// <c>key_5</c>, the dossier, needs no kind key: it is bound from a VALUES block of IRIs, so it
-    /// is an IRI by construction rather than by hope. Every other term is whatever the publisher
-    /// delivered, which is why each carries its own kind.
+    /// THE RULE THIS FOLLOWS, stated so the next term added obeys it without a second review round:
+    /// every term delivered in OBJECT POSITION carries its kind, its datatype and its language tag,
+    /// because any of the three can differ while the lexical form does not. The first repair applied
+    /// that to the date and gave the type only a kind marker, so two literal type terms with one
+    /// lexical value and different datatypes still shared every key — the same finding, half
+    /// applied. Codex found it twice.
+    /// </para>
+    /// <para>
+    /// Two terms are exempt and both are exempt for a reason that can be checked rather than
+    /// asserted. <c>?dossier</c> is bound from a VALUES block of IRIs, so it is an IRI by
+    /// construction rather than by hope. <c>?event</c> is a subject, and it carries a kind because a
+    /// subject may still be a blank node, but it takes no datatype or language because a subject
+    /// cannot be a literal at all.
     /// </para>
     /// </remarks>
     private static readonly string[] Cursor =
-        ["key_1", "key_2", "key_3", "key_4", "key_5", "key_6", "key_7", "key_8", "key_9"];
+    [
+        "key_1", "key_2", "key_3", "key_4", "key_5", "key_6",
+        "key_7", "key_8", "key_9", "key_10", "key_11",
+    ];
 
     /// <summary>
     /// How many cursor keys this family has. The renderer reads this rather than repeating the
@@ -465,7 +480,8 @@ public sealed class EuProcedureEventDiscoveryPlan
         var valuesBlock = string.Join('\n', BatchParameterNames()
             .Select(static name => "    {" + name + ":iri}"));
 
-        var grouped = "?event ?event_kind ?dossier ?event_type ?type_kind "
+        var grouped = "?event ?event_kind ?dossier "
+            + "?event_type ?type_kind ?type_datatype ?type_language "
             + "?event_date ?date_kind ?date_datatype ?date_language";
 
         var rows = $$"""
@@ -479,7 +495,7 @@ public sealed class EuProcedureEventDiscoveryPlan
                 }
               }
               ?event <{{PartOfDossierPredicateIri}}> ?dossier .
-              BIND(IF(isIRI(?event), "iri", IF(isLiteral(?event), "literal", "unsupported_blank_node")) AS ?event_kind)
+              BIND(IF(isIRI(?event), "iri", "unsupported_blank_node") AS ?event_kind)
               {
                 ?event a ?event_type .
                 BIND(IF(isIRI(?event_type), "iri", IF(isLiteral(?event_type), "literal", "unsupported_blank_node")) AS ?type_kind)
@@ -489,6 +505,8 @@ public sealed class EuProcedureEventDiscoveryPlan
                 FILTER NOT EXISTS { ?event a ?missing_type }
                 BIND("{{UnboundTypeKind}}" AS ?type_kind)
               }
+              BIND(COALESCE(IF(isLiteral(?event_type), STR(DATATYPE(?event_type)), ""), "") AS ?type_datatype)
+              BIND(COALESCE(IF(isLiteral(?event_type), LANG(?event_type), ""), "") AS ?type_language)
               {
                 ?event <{{EventDatePredicateIri}}> ?event_date .
                 BIND(IF(isLiteral(?event_date), "literal", IF(isIRI(?event_date), "iri", "unsupported_blank_node")) AS ?date_kind)
@@ -526,11 +544,13 @@ public sealed class EuProcedureEventDiscoveryPlan
               BIND(?event_kind AS ?key_2)
               BIND(COALESCE(STR(?event_type), "") AS ?key_3)
               BIND(?type_kind AS ?key_4)
-              BIND(STR(?dossier) AS ?key_5)
-              BIND(COALESCE(STR(?event_date), "") AS ?key_6)
-              BIND(?date_kind AS ?key_7)
-              BIND(?date_datatype AS ?key_8)
-              BIND(?date_language AS ?key_9)
+              BIND(?type_datatype AS ?key_5)
+              BIND(?type_language AS ?key_6)
+              BIND(STR(?dossier) AS ?key_7)
+              BIND(COALESCE(STR(?event_date), "") AS ?key_8)
+              BIND(?date_kind AS ?key_9)
+              BIND(?date_datatype AS ?key_10)
+              BIND(?date_language AS ?key_11)
               VALUES (?has_cursor {{lastNames}}) {
                 ({has_cursor:uint} {{lastSlots}})
               }
