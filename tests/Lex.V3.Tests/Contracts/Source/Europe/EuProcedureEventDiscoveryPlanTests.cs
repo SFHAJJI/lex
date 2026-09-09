@@ -312,6 +312,93 @@ public sealed class EuProcedureEventDiscoveryPlanTests
             "and so are two with different language tags.");
     }
 
+    /// <summary>
+    /// Every non-aggregate variable the row projects is also grouped on.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// SPARQL requires it — a projected variable that is neither aggregated nor grouped makes the
+    /// query ill-formed — but the reason it is pinned here is sharper than well-formedness. The
+    /// qualifier variables exist to keep two publisher assertions apart. Dropping one from the GROUP
+    /// BY folds those rows into a single grouped row BEFORE any key is built, so the keys can carry
+    /// every qualifier and still describe a row that already lost the distinction.
+    /// </para>
+    /// <para>
+    /// This is the guard the sibling coverage test could not be. That one derives its expectation
+    /// from the template's own GROUP BY, so removing a variable from the grouping also removes it
+    /// from what is checked, and the test agrees with whatever the code happens to say. This one
+    /// reads the projection and the grouping and requires them to agree with EACH OTHER, which
+    /// neither side can satisfy alone. A surviving mutation found it.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void EveryProjectedTermIsGroupedOnSoNoDistinctionIsFoldedBeforeTheKeys()
+    {
+        foreach (var template in new[]
+                 {
+                     EuProcedureEventDiscoveryPlan.Create().CountTemplate,
+                     EuProcedureEventDiscoveryPlan.Create().PageTemplate,
+                 })
+        {
+            var lines = template.Split('\n').Select(static line => line.Trim()).ToArray();
+
+            // The GROUPED ROW's own SELECT, identified by its aggregate. The page template's outer
+            // SELECT also begins "SELECT ?event", and it projects the nine keys, which are bound
+            // outside the grouping and are correctly absent from the GROUP BY.
+            var selectLine = lines.Single(static line =>
+                line.Contains("(COUNT(*) AS ?multiplicity)", StringComparison.Ordinal));
+            var groupBy = lines
+                .Single(static line => line.StartsWith("GROUP BY ", StringComparison.Ordinal))
+                .Substring("GROUP BY ".Length)
+                .Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+            // Everything the inner SELECT names before the aggregate is a plain projected term.
+            var projected = selectLine
+                .Substring("SELECT ".Length)
+                .Split(' ', StringSplitOptions.RemoveEmptyEntries)
+                .TakeWhile(static token => token.StartsWith('?'))
+                .ToArray();
+
+            Assert.IsGreaterThan(1, projected.Length, "the row projects more than one term.");
+
+            foreach (var variable in projected)
+            {
+                CollectionAssert.Contains(
+                    groupBy, variable,
+                    $"{variable} is projected but not grouped on, so rows differing only in it are "
+                        + "folded together before any canonical key is built.");
+            }
+        }
+    }
+
+    /// <summary>
+    /// The keyset continuation filter compares every cursor key, not merely the first few.
+    /// </summary>
+    /// <remarks>
+    /// A filter one clause short still pages correctly for every row that differs earlier, so a
+    /// suite exercising ordinary rows never notices. What it cannot do is advance past two rows
+    /// identical in all but the last key — exactly the collision the deepest keys were added to
+    /// separate — so the family stalls on the one case those keys exist for. Derived from the plan's
+    /// own cursor rather than transcribed. A surviving mutation found this one too.
+    /// </remarks>
+    [TestMethod]
+    public void TheKeysetFilterComparesEveryCursorKeyRightDownToTheLast()
+    {
+        var plan = EuProcedureEventDiscoveryPlan.Create();
+        var page = plan.PageTemplate;
+        var cursor = plan.CreateDeliveryProfile().CursorVariables;
+
+        foreach (var key in cursor)
+        {
+            StringAssert.Contains(
+                page, $"?{key} > ?last_{key}",
+                $"{key} never advances a page, so two rows differing only in it cannot be paged apart.");
+            StringAssert.Contains(
+                page, $"?{key} = ?last_{key}",
+                $"{key} is not part of the tie the continuation excludes.");
+        }
+    }
+
     /// <summary>Binding fills every slot and sends no renderer placeholder.</summary>
     [TestMethod]
     public void BindingFillsEverySlotAndSendsNoPlaceholder()
