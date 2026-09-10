@@ -118,6 +118,46 @@ public sealed class LuxembourgInitialDraftInventoryProducerTests
             "a smaller inventory must not mint the same selection digest.");
     }
 
+    /// <summary>
+    /// The proven population cannot be edited through the list the producer built it in.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// CODEX REPRODUCED THIS. <c>Subjects</c> was the producer's own <c>List</c> handed out behind an
+    /// <c>IReadOnlyList</c>, which is a promise the type system does not keep: a caller could cast it
+    /// back, add a draft the publisher never returned, and every batch would then be derived from the
+    /// mutated list while the citation went on carrying the digest of the original. The population a
+    /// cover reconciles against and the digest that identifies it would describe different classes.
+    /// </para>
+    /// <para>
+    /// Asserted through the write path rather than by naming a type, so it stays a statement about
+    /// what a caller can DO. Found unprotected by mutation: replacing the snapshot with the live list
+    /// killed no test in either scope before this one existed.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void TheProvenPopulationCannotBeEditedThroughTheListItWasBuiltIn()
+    {
+        const string SecondDraft = "http://data.legilux.public.lu/eli/dl/pl/2000/998";
+        var result = Decode(Row(), Row(Iri(SecondDraft)));
+
+        Assert.AreEqual(LuxembourgInitialDraftInventoryRefusal.None, result.Refusal, result.Detail);
+        var before = result.AddressableInOrder().Count;
+        var digest = result.Citation!.SelectionDigest;
+
+        if (result.Subjects is ICollection<LuxembourgInitialDraftSubject> writable && !writable.IsReadOnly)
+        {
+            writable.Clear();
+        }
+
+        Assert.AreEqual(
+            before, result.AddressableInOrder().Count,
+            "the population a batch is derived from is not editable by whoever holds the result.");
+        Assert.AreEqual(
+            digest, result.Citation!.SelectionDigest,
+            "and the digest still identifies the population the run actually proved.");
+    }
+
     /// <summary>A refused inventory carries no citation for anyone to lean on.</summary>
     [TestMethod]
     public void ARefusedInventoryMintsNoCitation()
