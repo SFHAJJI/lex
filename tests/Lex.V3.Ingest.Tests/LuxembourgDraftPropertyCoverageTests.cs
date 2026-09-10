@@ -17,18 +17,42 @@ public sealed class LuxembourgDraftPropertyCoverageTests
     private const string Draft = "http://data.legilux.public.lu/eli/dl/pl/2000/";
     private static readonly string[] Asked = [.. LuxembourgDraftGraphDiscoveryPlan.AskedAbout];
 
-    private static SourceArtifactRef Ref(string seed) => new(
-        "urn:uuid:" + Guid.NewGuid().ToString("D"),
-        Convert.ToHexStringLower(
-            System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(seed))));
+    /// <summary>A run reference that is a function of its seed, so one seed is one run.</summary>
+    /// <remarks>
+    /// It used to mint a fresh GUID per call, which meant <c>Inventory(drafts)</c> built a DIFFERENT
+    /// citation each time it was called and equality against a retained one failed on the resource id
+    /// alone. Nothing about the fixture wanted that: a test naming the same seed twice means the same
+    /// run both times.
+    /// </remarks>
+    private static SourceArtifactRef Ref(string seed)
+    {
+        var digest = System.Security.Cryptography.SHA256.HashData(
+            System.Text.Encoding.UTF8.GetBytes(seed));
+        return new(
+            "urn:uuid:" + new Guid(digest.AsSpan(0, 16)).ToString("D"),
+            Convert.ToHexStringLower(digest));
+    }
 
     private static IReadOnlyList<string> Drafts(int count) =>
         LuxembourgDraftGraphDiscoveryPlan.RequestedPartitionMembers(
             Enumerable.Range(0, count).Select(index => Draft + index.ToString("D3")).ToArray());
 
-    private static LuxembourgInitialDraftInventoryCitation Inventory() =>
-        new("legilux-initial-draft-inventory", Ref("inventory"), "7753-subjects", 7753,
+    /// <summary>A citation over exactly these drafts, as the enumerating run would mint it.</summary>
+    /// <remarks>
+    /// The digest is over the population, so a citation can no longer be paired with a different
+    /// draft list: <see cref="LuxembourgDraftBatchAssignment.Over"/> recomputes it and refuses. A
+    /// test that wants a mismatch has to build one deliberately, which is what
+    /// <c>AnAssignmentCannotBeBuiltForDraftsTheCitationDoesNotName</c> does.
+    /// </remarks>
+    private static LuxembourgInitialDraftInventoryCitation Inventory(IReadOnlyList<string> drafts) =>
+        new("legilux-initial-draft-inventory",
+            Ref("inventory"),
+            LuxembourgDraftGraphDiscoveryPlan.SelectionDigestFor(drafts),
+            drafts.Count,
             "2026-09-10T07:29:37.8950843Z");
+
+    private static LuxembourgDraftBatchAssignment Assignment(IReadOnlyList<string> drafts) =>
+        LuxembourgDraftBatchAssignment.Over(drafts, Inventory(drafts))[0];
 
     private const string ObservedAt = "2026-09-10T13:50:31.0000000Z";
 
@@ -42,13 +66,11 @@ public sealed class LuxembourgDraftPropertyCoverageTests
     private static LuxembourgDraftPropertyCoverage Complete(
         IReadOnlyList<string> drafts,
         IReadOnlyList<LuxembourgDraftPropertyRecordView> rows,
-        LuxembourgDraftBatchCitation? batch = null,
-        LuxembourgInitialDraftInventoryCitation? inventory = null)
+        LuxembourgDraftBatchCitation? batch = null)
     {
         var coverage = LuxembourgDraftPropertyCoverage.TryComplete(
-            drafts, Asked, rows,
+            Assignment(drafts), Asked, rows,
             batch ?? Batch(drafts, rows.Count),
-            inventory ?? Inventory(),
             0,
             LuxembourgDraftGraphDiscoveryPlan.PredicatesNotDeclaredOnTheDraft,
             out var refusal, out var detail);
@@ -59,11 +81,10 @@ public sealed class LuxembourgDraftPropertyCoverageTests
     private static LuxembourgDraftPropertyCoverageRefusal RefusalOf(
         IReadOnlyList<string> drafts,
         IReadOnlyList<LuxembourgDraftPropertyRecordView> rows,
-        LuxembourgDraftBatchCitation? batch,
-        LuxembourgInitialDraftInventoryCitation? inventory)
+        LuxembourgDraftBatchCitation? batch)
     {
         var coverage = LuxembourgDraftPropertyCoverage.TryComplete(
-            drafts, Asked, rows, batch, inventory, 0,
+            Assignment(drafts), Asked, rows, batch, 0,
             LuxembourgDraftGraphDiscoveryPlan.PredicatesNotDeclaredOnTheDraft,
             out var refusal, out _);
         Assert.IsNull(coverage, "a refused completion mints nothing.");
@@ -209,17 +230,56 @@ public sealed class LuxembourgDraftPropertyCoverageTests
         var drafts = Drafts(2);
         Assert.AreEqual(
             LuxembourgDraftPropertyCoverageRefusal.MatrixCompletionOverUnprovenEnumeration,
-            RefusalOf(drafts, [], null, Inventory()));
+            RefusalOf(drafts, [], null));
     }
 
-    /// <summary>An absence names a corpus, so the inventory must be cited.</summary>
+    /// <summary>
+    /// An assignment cannot be built for drafts the inventory citation does not name.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// THE BYPASS THIS REPLACED. The coverage factory used to take the draft list and the inventory
+    /// citation as two independent values, so a caller holding an inventory genuinely proven for one
+    /// draft could ask for a different one and receive derived absences and gaps for a subject the
+    /// proven population never contained - no run request, no terminal cover, no guard reached.
+    /// </para>
+    /// <para>
+    /// It is not refused now, it is unrepresentable: there is no conclusion without an assignment,
+    /// and no assignment unless the members are the ones the citation digests. The check recomputes
+    /// the digest the enumerating run minted rather than comparing a value with itself.
+    /// </para>
+    /// </remarks>
     [TestMethod]
-    public void NoAbsenceCanBeDerivedWithoutTheInventoryItPartitions()
+    public void AnAssignmentCannotBeBuiltForDraftsTheCitationDoesNotName()
     {
-        var drafts = Drafts(2);
-        Assert.AreEqual(
-            LuxembourgDraftPropertyCoverageRefusal.InventoryEvidenceNotSupplied,
-            RefusalOf(drafts, [], Batch(drafts, 0), null));
+        var proven = Drafts(3);
+        var somethingElse = new[] { "http://data.legilux.public.lu/eli/dl/pl/1999/999" };
+
+        Assert.ThrowsExactly<ArgumentException>(
+            () => LuxembourgDraftBatchAssignment.Over(somethingElse, Inventory(proven)),
+            "a citation for one population cannot issue a batch of another.");
+
+        // Nor by matching only the count, which a length check alone would have accepted.
+        var sameSizeDifferentDrafts = proven.Select(static value => value + "-elsewhere").ToArray();
+        Assert.ThrowsExactly<ArgumentException>(
+            () => LuxembourgDraftBatchAssignment.Over(sameSizeDifferentDrafts, Inventory(proven)),
+            "three drafts are not these three drafts.");
+
+        // WHAT THIS DELIBERATELY DOES NOT REFUSE. The digest canonicalises, so a permutation of the
+        // proven population is the same population and is accepted - correctly, because membership
+        // is what this check is for and every member is still the inventory's own. A permutation
+        // does change where the batch boundaries fall, and that is caught where it is actually
+        // visible: the terminal cover, whose expected keys come from the inventory's own ordering.
+        // See LuxembourgDraftGraphBatchCoverTests.ABatchOutsideTheInventoryIsRefused.
+        var permuted = LuxembourgDraftBatchAssignment.Over(proven.Reverse().ToArray(), Inventory(proven));
+        CollectionAssert.AreEquivalent(
+            proven.ToArray(),
+            permuted.SelectMany(static value => value.Drafts).ToArray(),
+            "the same subjects, whatever the order they arrived in.");
+
+        // And the honest pairing still works.
+        var assignment = LuxembourgDraftBatchAssignment.Over(proven, Inventory(proven))[0];
+        CollectionAssert.AreEqual(proven.ToArray(), assignment.Drafts.ToArray());
     }
 
     /// <summary>Every derived absence carries the batch and inventory that make it readable.</summary>
@@ -229,9 +289,7 @@ public sealed class LuxembourgDraftPropertyCoverageTests
         var drafts = Drafts(3);
         var rows = drafts.Select(draft => Row(draft, Asked[0], "urn:status:" + draft)).ToArray();
         var batch = Batch(drafts, rows.Length);
-        var inventory = Inventory();
-
-        var coverage = Complete(drafts, rows, batch, inventory);
+        var coverage = Complete(drafts, rows, batch);
 
         Assert.HasCount(
             9, coverage.DerivedAbsences, "three drafts x three absent properties (referralDate is a gap).");
@@ -239,7 +297,7 @@ public sealed class LuxembourgDraftPropertyCoverageTests
         foreach (var absence in coverage.DerivedAbsences)
         {
             Assert.AreSame(batch, absence.Batch, "the exact batch enumeration, not a copy of its shape.");
-            Assert.AreSame(inventory, absence.Inventory);
+            Assert.AreEqual(Inventory(drafts), absence.Inventory);
             Assert.AreEqual(
                 LuxembourgDraftPropertyAbsenceReason.EnumeratedAndNotHeld, absence.Reason,
                 "an absence with no stated reason is not readable as a fact.");
@@ -263,7 +321,7 @@ public sealed class LuxembourgDraftPropertyCoverageTests
 
         Assert.AreEqual(
             LuxembourgDraftPropertyCoverageRefusal.DeliveredDraftNotRequested,
-            RefusalOf(drafts, [stranger], Batch(drafts, 1), Inventory()));
+            RefusalOf(drafts, [stranger], Batch(drafts, 1)));
     }
 
     /// <summary>Every present row is consumed exactly once, counted against the proof's own total.</summary>
@@ -276,7 +334,7 @@ public sealed class LuxembourgDraftPropertyCoverageTests
         // The citation says two rows were delivered; only one was decoded.
         Assert.AreEqual(
             LuxembourgDraftPropertyCoverageRefusal.PresentRowNotConsumedExactlyOnce,
-            RefusalOf(drafts, rows, Batch(drafts, 2), Inventory()));
+            RefusalOf(drafts, rows, Batch(drafts, 2)));
     }
 
     /// <summary>
@@ -441,7 +499,7 @@ public sealed class LuxembourgDraftPropertyCoverageTests
 
         Assert.AreEqual(
             LuxembourgDraftPropertyCoverageRefusal.AbsenceEvidenceNotFromThisRun,
-            RefusalOf(drafts, [], someoneElses, Inventory()));
+            RefusalOf(drafts, [], someoneElses));
 
         // And the keys really do differ, so the test above is not passing by accident.
         Assert.AreNotEqual(
@@ -465,7 +523,7 @@ public sealed class LuxembourgDraftPropertyCoverageTests
 
         Assert.AreEqual(
             LuxembourgDraftPropertyCoverageRefusal.AbsenceEvidenceNotFromThisRun,
-            RefusalOf(drafts, [], undated, Inventory()));
+            RefusalOf(drafts, [], undated));
     }
 
     /// <summary>Every derived absence carries the instant its batch was observed.</summary>
@@ -513,6 +571,6 @@ public sealed class LuxembourgDraftPropertyCoverageTests
 
         Assert.AreEqual(
             LuxembourgDraftPropertyCoverageRefusal.RequestedBatchNotRetained,
-            RefusalOf(drafts, [], wrong, Inventory()));
+            RefusalOf(drafts, [], wrong));
     }
 }

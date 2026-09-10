@@ -46,17 +46,16 @@ public sealed class LuxembourgDraftGraphBatchCoverTests
             Profile, Evidence, "legilux-initial-draft-inventory", ObservedAt);
 
     /// <summary>One delivered batch: every draft answers statusDraft and nothing else.</summary>
-    private static LuxembourgDraftPropertyCoverage Batch(
-        IReadOnlyList<string> drafts,
-        LuxembourgInitialDraftInventoryCitation inventory)
+    private static LuxembourgDraftPropertyCoverage Batch(LuxembourgDraftBatchAssignment assignment)
     {
+        var drafts = assignment.Drafts;
         var rows = drafts
             .Select(draft => new LuxembourgDraftPropertyRecordView(
                 draft, LuxembourgDraftGraphDiscoveryPlan.StatusDraftPredicateIri, "urn:status:" + draft, "iri"))
             .ToArray();
 
         var coverage = LuxembourgDraftPropertyCoverage.TryComplete(
-            drafts,
+            assignment,
             Asked,
             rows,
             new LuxembourgDraftBatchCitation(
@@ -66,7 +65,6 @@ public sealed class LuxembourgDraftGraphBatchCoverTests
                 rows.Length,
                 LuxembourgDraftGraphDiscoveryPlan.PartitionKeyFor(drafts),
                 ObservedAt),
-            inventory,
             0,
             LuxembourgDraftGraphDiscoveryPlan.PredicatesNotDeclaredOnTheDraft,
             out var refusal,
@@ -81,7 +79,7 @@ public sealed class LuxembourgDraftGraphBatchCoverTests
     {
         var inventory = Inventory(subjects);
         var batches = LuxembourgDraftGraphBatchFactory.AssignBatches(inventory)
-            .Select(drafts => Batch(drafts, inventory.Citation!))
+            .Select(Batch)
             .ToList();
         return (inventory, batches);
     }
@@ -127,7 +125,8 @@ public sealed class LuxembourgDraftGraphBatchCoverTests
             var request = LuxembourgDraftGraphRunRequest.ForBatch(
                 plan, inventory, ordinal, "urn:uuid:5c2f1a08-7d63-4e91-bf20-9a4c8e3d7016", source);
 
-            CollectionAssert.AreEqual(assigned[ordinal].ToArray(), request.BatchDrafts.ToArray());
+            CollectionAssert.AreEqual(
+                assigned[ordinal].Drafts.ToArray(), request.BatchDrafts.ToArray());
             Assert.AreEqual(inventory.Citation, request.Inventory, "one inventory, not two values.");
         }
 
@@ -194,8 +193,7 @@ public sealed class LuxembourgDraftGraphBatchCoverTests
         Assert.IsNull(cover);
         Assert.AreEqual(LuxembourgDraftGraphBatchCoverRefusal.BatchOmittedFromSweep, refusal);
         StringAssert.Contains(
-            detail!, LuxembourgDraftGraphDiscoveryPlan.PartitionKeyFor(
-                LuxembourgDraftGraphBatchFactory.AssignBatches(inventory)[1]),
+            detail!, LuxembourgDraftGraphBatchFactory.AssignBatches(inventory)[1].PartitionKey,
             "the refusal names the batch that is missing, so it can be run.");
     }
 
@@ -216,7 +214,26 @@ public sealed class LuxembourgDraftGraphBatchCoverTests
     public void ABatchOutsideTheInventoryIsRefused()
     {
         var (inventory, batches) = Swept(127);
-        batches.Add(Batch([Prefix + "99999"], inventory.Citation!));
+
+        // THE ROUTE THAT ACTUALLY REACHES THIS REFUSAL, and the reason it is not redundant with the
+        // one-inventory check beside it. An assignment verifies its population against a CANONICAL
+        // digest, so a permutation of the proven population is accepted as that population - rightly,
+        // because it is the same subjects, and every absence derived over it is about a proven one.
+        // What it is not is the same PARTITIONING: chunked from a different starting point it falls
+        // on different boundaries, so its batches carry keys this inventory never assigned. Every
+        // member is legitimate, every citation matches, and the sweep is still not this inventory's
+        // cover - which no per-batch check can see, because each such batch is internally perfect.
+        var population = inventory.AddressableInOrder();
+        var rotated = population.Skip(1).Concat(population.Take(1)).ToArray();
+        var elsewhere = LuxembourgDraftBatchAssignment.Over(rotated, inventory.Citation!);
+
+        CollectionAssert.DoesNotContain(
+            LuxembourgDraftGraphBatchFactory.ExpectedPartitionKeys(inventory).ToArray(),
+            elsewhere[0].PartitionKey,
+            "a rotated population must fall on boundaries this inventory never assigned, or the "
+                + "refusal below is being reached by some other route and this proves nothing.");
+
+        batches.Add(Batch(elsewhere[0]));
 
         Assert.AreEqual(
             LuxembourgDraftGraphBatchCoverRefusal.BatchOutsideTheInventoryCover,
@@ -230,8 +247,7 @@ public sealed class LuxembourgDraftGraphBatchCoverTests
         var (inventory, batches) = Swept(127);
         var other = Inventory(126);
 
-        batches[0] = Batch(
-            LuxembourgDraftGraphBatchFactory.AssignBatches(inventory)[0], other.Citation!);
+        batches[0] = Batch(LuxembourgDraftGraphBatchFactory.AssignBatches(other)[0]);
 
         Assert.AreEqual(
             LuxembourgDraftGraphBatchCoverRefusal.BatchesSpanMoreThanOneInventory,

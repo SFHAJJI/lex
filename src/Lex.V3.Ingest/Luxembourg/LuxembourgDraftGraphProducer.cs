@@ -415,8 +415,7 @@ public sealed class LuxembourgDraftGraphProducer
             rows,
             profile,
             proof.AcquisitionRunRef,
-            LuxembourgDraftGraphDiscoveryPlan.RequestedPartitionMembers(request.BatchDrafts),
-            request.Inventory,
+            request.Assignment,
             // FROM THE DELIVERY, NOT FROM THE REQUEST. Both travel back through the retained
             // receipt, so the coverage compares what was actually sent and when it was observed
             // against what this run believes it asked.
@@ -434,8 +433,7 @@ public sealed class LuxembourgDraftGraphProducer
         IReadOnlyList<RepeatedEnumerationRow> rows,
         RepeatedEnumerationInterpretationProfile profile,
         SourceArtifactRef completionEvidenceRef,
-        IReadOnlyList<string> requestedDrafts,
-        LuxembourgInitialDraftInventoryCitation inventory,
+        LuxembourgDraftBatchAssignment assignment,
         string partitionKey,
         string observedAt,
         int productRequestCount = 0)
@@ -443,8 +441,8 @@ public sealed class LuxembourgDraftGraphProducer
         ArgumentNullException.ThrowIfNull(rows);
         ArgumentNullException.ThrowIfNull(profile);
         ArgumentNullException.ThrowIfNull(completionEvidenceRef);
-        ArgumentNullException.ThrowIfNull(requestedDrafts);
-        ArgumentNullException.ThrowIfNull(inventory);
+        ArgumentNullException.ThrowIfNull(assignment);
+        var requestedDrafts = assignment.Drafts;
 
         // ADMITTED FROM A DRAFT TRIPLE, which is not the same as "in the accepted vocabulary".
         // referralDate is accepted and is declared on OpinionRequest, so a triple asserting it of a
@@ -514,7 +512,7 @@ public sealed class LuxembourgDraftGraphProducer
         // is what makes the exactly-once check mean anything: comparing the decoded list against
         // itself would pass for a decoder that dropped a row and never notice.
         var coverage = LuxembourgDraftPropertyCoverage.TryComplete(
-            requestedDrafts,
+            assignment,
             LuxembourgDraftGraphDiscoveryPlan.AskedAbout,
             records.Select(static value => new LuxembourgDraftPropertyRecordView(
                 value.DraftIri, value.PredicateIri, value.Value, value.ValueKind)).ToArray(),
@@ -525,7 +523,6 @@ public sealed class LuxembourgDraftGraphProducer
                 rows.Count,
                 partitionKey,
                 observedAt),
-            inventory,
             notAdmitted.Count,
             LuxembourgDraftGraphDiscoveryPlan.PredicatesNotDeclaredOnTheDraft,
             out var coverageRefusal,

@@ -346,18 +346,27 @@ public sealed class LuxembourgDraftPropertyCoverage
     /// Every precondition is asked before the first absence is constructed, so a refusal cannot
     /// leave half a matrix behind for a caller to read as a whole one.
     /// </remarks>
+    /// <remarks>
+    /// TAKES AN INVENTORY-ISSUED ASSIGNMENT, NOT A DRAFT LIST AND A CITATION. Those were two
+    /// independent parameters, so a caller could hold an inventory genuinely proven for one draft,
+    /// pass a different draft, and receive derived absences and gaps for a subject that population
+    /// never contained - without any run request or terminal cover being involved. The assignment
+    /// cannot be built for members the citation does not digest, so that pairing is now
+    /// unrepresentable rather than merely discouraged.
+    /// </remarks>
     public static LuxembourgDraftPropertyCoverage? TryComplete(
-        IReadOnlyList<string> requestedDrafts,
+        LuxembourgDraftBatchAssignment assignment,
         IReadOnlyList<string> askedPredicates,
         IReadOnlyList<LuxembourgDraftPropertyRecordView> present,
         LuxembourgDraftBatchCitation? batch,
-        LuxembourgInitialDraftInventoryCitation? inventory,
         int retainedNotAdmittedRows,
         IReadOnlyDictionary<string, string> predicatesDeclaredElsewhere,
         out LuxembourgDraftPropertyCoverageRefusal refusal,
         out string? detail)
     {
-        ArgumentNullException.ThrowIfNull(requestedDrafts);
+        ArgumentNullException.ThrowIfNull(assignment);
+        var requestedDrafts = assignment.Drafts;
+        var inventory = assignment.Inventory;
         ArgumentNullException.ThrowIfNull(askedPredicates);
         ArgumentNullException.ThrowIfNull(present);
         detail = null;
@@ -370,13 +379,6 @@ public sealed class LuxembourgDraftPropertyCoverage
         {
             refusal = LuxembourgDraftPropertyCoverageRefusal.MatrixCompletionOverUnprovenEnumeration;
             detail = "A derived absence means nothing without the enumeration that proves it.";
-            return null;
-        }
-
-        if (inventory is null)
-        {
-            refusal = LuxembourgDraftPropertyCoverageRefusal.InventoryEvidenceNotSupplied;
-            detail = "An absence names a corpus, so the inventory this batch partitions must be cited.";
             return null;
         }
 

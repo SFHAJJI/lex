@@ -132,11 +132,19 @@ public sealed class LuxembourgDraftGraphProducerTests
     /// every fixture authored its own absence rows by hand, so the delivery a test examined was one
     /// the publisher had never sent.
     /// </remarks>
-    private static LuxembourgDraftGraphProductionResult Decode(params RepeatedEnumerationRow[] rows) =>
-        LuxembourgDraftGraphProducer.DecodeRows(
-            rows, Profile(), Evidence, RequestedIn(rows), TestInventory,
-            LuxembourgDraftGraphDiscoveryPlan.PartitionKeyFor(RequestedIn(rows)),
+    private static LuxembourgDraftGraphProductionResult Decode(params RepeatedEnumerationRow[] rows)
+    {
+        // AN INVENTORY THAT ACTUALLY CONTAINS THESE DRAFTS. A fixture can no longer decode a batch
+        // no inventory issued, which is the whole of the repair: the members and the citation come
+        // from one place or the coverage cannot be built at all.
+        var drafts = RequestedIn(rows);
+        var assignment = LuxembourgDraftGraphBatchFactory.AssignBatches(InventoryOf([.. drafts]))[0];
+
+        return LuxembourgDraftGraphProducer.DecodeRows(
+            rows, Profile(), Evidence, assignment,
+            assignment.PartitionKey,
             "2026-09-10T13:50:31.0000000Z");
+    }
 
     /// <summary>The drafts a fixture delivery names, as the set it asked about.</summary>
     /// <remarks>
@@ -183,9 +191,7 @@ public sealed class LuxembourgDraftGraphProducerTests
             "2026-09-10T07:29:37.8950843Z");
     }
 
-    private static readonly LuxembourgInitialDraftInventoryCitation TestInventory =
-        new("legilux-initial-draft-inventory", Evidence, "fixture-inventory", 1,
-            "2026-09-10T07:29:37.8950843Z");
+
 
     /// <summary>
     /// The whole chain runs: executor, two passes, proof, reopened pages, verified rows, records.
@@ -746,7 +752,7 @@ public sealed class LuxembourgDraftGraphProducerTests
 
             var result = LuxembourgDraftGraphProducer.DecodeRows(
                 [new RepeatedEnumerationRow(terms, terms, terms)], profile, Evidence,
-                [Draft], TestInventory,
+                LuxembourgDraftGraphBatchFactory.AssignBatches(InventoryOf(Draft))[0],
                 LuxembourgDraftGraphDiscoveryPlan.PartitionKeyFor([Draft]),
                 "2026-09-10T13:50:31.0000000Z");
 

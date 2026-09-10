@@ -111,8 +111,14 @@ public sealed class LuxembourgInitialDraftInventoryResult
         int productRequestCount,
         IReadOnlyList<LuxembourgInitialDraftSubject>? observedNonAddressable = null)
     {
-        ObservedNonAddressable = observedNonAddressable ?? [];
-        Subjects = subjects;
+        // SNAPSHOTTED, NOT ALIASED. These were the producer's own List, handed out behind an
+        // IReadOnlyList that a caller could cast back to and mutate. Doing so changed the members a
+        // later batch derived while the citation kept the digest of the ORIGINAL population - so the
+        // batch and the citation it claims to come from could describe two different inventories.
+        ObservedNonAddressable = observedNonAddressable is null
+            ? []
+            : Array.AsReadOnly(observedNonAddressable.ToArray());
+        Subjects = subjects is null ? null : Array.AsReadOnly(subjects.ToArray());
         CompletionEvidenceRef = completionEvidenceRef;
         Citation = citation;
         Refusal = refusal;

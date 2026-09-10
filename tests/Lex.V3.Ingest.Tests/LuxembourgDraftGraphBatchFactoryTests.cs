@@ -55,11 +55,11 @@ public sealed class LuxembourgDraftGraphBatchFactoryTests
         var batches = LuxembourgDraftGraphBatchFactory.AssignBatches(inventory);
 
         Assert.HasCount(3, batches, "127 members at capacity 50 is two full batches and a short one.");
-        Assert.HasCount(LuxembourgDraftGraphDiscoveryPlan.BatchCapacity, batches[0]);
-        Assert.HasCount(LuxembourgDraftGraphDiscoveryPlan.BatchCapacity, batches[1]);
-        Assert.HasCount(27, batches[2], "the final batch is short, which is ordinary.");
+        Assert.HasCount(LuxembourgDraftGraphDiscoveryPlan.BatchCapacity, batches[0].Drafts);
+        Assert.HasCount(LuxembourgDraftGraphDiscoveryPlan.BatchCapacity, batches[1].Drafts);
+        Assert.HasCount(27, batches[2].Drafts, "the final batch is short, which is ordinary.");
 
-        var flattened = batches.SelectMany(static value => value).ToArray();
+        var flattened = batches.SelectMany(static value => value.Drafts).ToArray();
         CollectionAssert.AreEqual(
             inventory.AddressableInOrder().ToArray(), flattened,
             "the batches must reassemble the population, in order, exactly once.");
@@ -127,6 +127,6 @@ public sealed class LuxembourgDraftGraphBatchFactoryTests
             Inventory(LuxembourgDraftGraphDiscoveryPlan.BatchCapacity * 2));
 
         Assert.HasCount(2, batches);
-        Assert.IsFalse(batches.Any(static value => value.Count is 0));
+        Assert.IsFalse(batches.Any(static value => value.Drafts.Count is 0));
     }
 }

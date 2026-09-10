@@ -34,7 +34,7 @@ public static class LuxembourgDraftGraphBatchFactory
     /// ordinary: the query pads its parameter block to capacity and the padding collapses inside the
     /// <c>SELECT DISTINCT</c>, so a short batch asks about exactly its own members.
     /// </remarks>
-    public static IReadOnlyList<IReadOnlyList<string>> AssignBatches(
+    public static IReadOnlyList<LuxembourgDraftBatchAssignment> AssignBatches(
         LuxembourgInitialDraftInventoryResult inventory)
     {
         ArgumentNullException.ThrowIfNull(inventory);
@@ -44,29 +44,15 @@ public static class LuxembourgDraftGraphBatchFactory
         // read downstream as a sweep that covered everything.
         var population = inventory.AddressableInOrder();
 
-        var batches = new List<IReadOnlyList<string>>();
-        for (var index = 0; index < population.Count; index += LuxembourgDraftGraphDiscoveryPlan.BatchCapacity)
-        {
-            batches.Add(Array.AsReadOnly(population
-                .Skip(index)
-                .Take(LuxembourgDraftGraphDiscoveryPlan.BatchCapacity)
-                .ToArray()));
-        }
-
-        // RECOMPUTED, NOT TRUSTED. The chunking above is three lines and obviously right, which is
-        // exactly the kind of code that is quietly wrong after a later edit. The sibling family this
-        // follows gives exactly-once by construction and never checks it, and no test there asserts
-        // that the union of its batches is the population. This is that check.
-        var flattened = batches.SelectMany(static value => value).ToArray();
-        if (flattened.Length != population.Count ||
-            !flattened.SequenceEqual(population, StringComparer.Ordinal))
+        if (inventory.Citation is not { } citation)
         {
             throw new InvalidOperationException(
-                "The batches do not reassemble the inventory population exactly once, so the sweep "
-                    + "they describe is not the class this inventory proved.");
+                "A refused inventory issues no batches, because nothing proved its population.");
         }
 
-        return Array.AsReadOnly(batches.ToArray());
+        // The chunking, the reassembly re-check and the population/citation binding all live on the
+        // assignment itself, so the only way to obtain one is the way that verifies it.
+        return LuxembourgDraftBatchAssignment.Over(population, citation);
     }
 
     /// <summary>
@@ -80,6 +66,6 @@ public static class LuxembourgDraftGraphBatchFactory
     public static IReadOnlyList<string> ExpectedPartitionKeys(
         LuxembourgInitialDraftInventoryResult inventory) =>
         Array.AsReadOnly(AssignBatches(inventory)
-            .Select(LuxembourgDraftGraphDiscoveryPlan.PartitionKeyFor)
+            .Select(static value => value.PartitionKey)
             .ToArray());
 }

@@ -318,34 +318,33 @@ public sealed record LuxembourgDraftGraphRunRequest
 {
     private LuxembourgDraftGraphRunRequest(
         LuxembourgDraftGraphDiscoveryPlan plan,
-        IReadOnlyList<string> batchDrafts,
+        LuxembourgDraftBatchAssignment assignment,
         string planResourceId,
-        MachineQueryRendererSource rendererSource,
-        LuxembourgInitialDraftInventoryCitation inventory,
-        int batchOrdinal)
+        MachineQueryRendererSource rendererSource)
     {
         Plan = plan;
-        BatchDrafts = batchDrafts;
+        Assignment = assignment;
         PlanResourceId = planResourceId;
         RendererSource = rendererSource;
-        Inventory = inventory;
-        BatchOrdinal = batchOrdinal;
     }
+
+    /// <summary>The inventory-issued batch this run sweeps.</summary>
+    public LuxembourgDraftBatchAssignment Assignment { get; }
 
     public LuxembourgDraftGraphDiscoveryPlan Plan { get; }
 
     /// <summary>The batch's members, taken from the inventory rather than from a caller.</summary>
-    public IReadOnlyList<string> BatchDrafts { get; }
+    public IReadOnlyList<string> BatchDrafts => Assignment.Drafts;
 
     public string PlanResourceId { get; }
 
     public MachineQueryRendererSource RendererSource { get; }
 
     /// <summary>The proven inventory these drafts came out of.</summary>
-    public LuxembourgInitialDraftInventoryCitation Inventory { get; }
+    public LuxembourgInitialDraftInventoryCitation Inventory => Assignment.Inventory;
 
     /// <summary>Which of the inventory's own batches this run is.</summary>
-    public int BatchOrdinal { get; }
+    public int BatchOrdinal => Assignment.Ordinal;
 
     /// <summary>
     /// One batch of a proven inventory, by ordinal into that inventory's own assignment.
@@ -381,8 +380,9 @@ public sealed record LuxembourgDraftGraphRunRequest
                 $"This inventory assigns {batches.Count} batches.");
         }
 
+        _ = citation;
         return new LuxembourgDraftGraphRunRequest(
-            plan, batches[batchOrdinal], planResourceId, rendererSource, citation, batchOrdinal);
+            plan, batches[batchOrdinal], planResourceId, rendererSource);
     }
 }
 

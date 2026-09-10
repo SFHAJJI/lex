@@ -29,6 +29,21 @@ public enum LuxembourgDraftGraphBatchCoverRefusal
     BatchDeliveredTwice = 3,
 
     /// <summary>A delivered coverage names a batch this inventory never assigned.</summary>
+    /// <remarks>
+    /// <para>
+    /// NOT REDUNDANT WITH THE ONE-INVENTORY CHECK, and reachable with every citation matching. An
+    /// assignment verifies its population against a canonical digest, so a permutation of the proven
+    /// population is accepted as that population - rightly, since it is the same subjects. It does
+    /// fall on different batch boundaries, so its batches carry keys this inventory never assigned
+    /// while every member and every citation remains legitimate.
+    /// </para>
+    /// <para>
+    /// MEASURED, not assumed: with this refusal deleted, such a delivery is neither counted nor
+    /// refused. The reconciliation below selects the expected keys out of the delivered map, so an
+    /// unexpected batch is silently DISCARDED, the pair total still balances, and a cover is minted
+    /// reporting a clean sweep over work it threw away. The pair-count check does not catch it.
+    /// </para>
+    /// </remarks>
     [JsonStringEnumMemberName("batch_outside_the_inventory_cover")]
     BatchOutsideTheInventoryCover = 4,
 

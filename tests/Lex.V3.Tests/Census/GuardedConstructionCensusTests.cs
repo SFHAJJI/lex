@@ -944,6 +944,11 @@ public sealed class GuardedConstructionCensusTests
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgDocumentFetchRenderer: constructor "
                     + "internal instance "
                     + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgDocumentFetchRenderer::.ctor",
+                "Lex.V3.Contracts.Source.Luxembourg.LuxembourgDraftBatchAssignment: constructor "
+                    + "private instance "
+                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgDraftBatchAssignment::.ctor, "
+                    + "method public static "
+                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgDraftBatchAssignment::Over",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgDraftGraphDiscoveryPlan: constructor "
                     + "private instance "
                     + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgDraftGraphDiscoveryPlan::.ctor, "
