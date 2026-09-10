@@ -105,59 +105,7 @@ public sealed class EuCaseLawLiveAcceptance
         // REL-005's three parts, on every relation the PUBLISHER delivered.
         var relations = acts.SelectMany(result.ForEuWork).ToArray();
 
-        // AND THERE MUST BE ONE. Without this the three assertions below are a foreach over an
-        // empty list: a complete publisher answer carrying zero rows would reach a green result
-        // after real requests, having proven no predicate, no disposition and no granularity. An
-        // observed empty set stays honest evidence - it is written to the summary either way - but
-        // it cannot be what an acceptance proof rests on.
-        Assert.IsNotEmpty(
-            relations,
-            "an acceptance proof of REL-005's three parts requires at least one delivered relation; "
-            + "an empty answer is evidence, not acceptance.");
-
-        foreach (var relation in relations)
-        {
-            // Part one: a real CDM predicate this family asked for, which is the PINNED SET and not
-            // one chosen member of it. The first draft of this assertion named
-            // case-law_interpretes_resource_legal alone and was wrong: the family asks a union of
-            // five, and the plan's own measurement records work_cites_work at 2,257 against
-            // interpretes at 74 on a single act. The live answer agrees - every row of the 2,052
-            // retained came back under work_cites_work - so an assertion naming one predicate would
-            // have failed a correct delivery.
-            CollectionAssert.Contains(
-                EuCaseLawDiscoveryPlan.PinnedPredicatesInOrder().ToArray(),
-                relation.PredicateUri,
-                "part one: the edge carries a real CDM predicate this family pinned and asked for.");
-            Assert.AreEqual(
-                EuJudgmentBodyDisposition.LinkOnlyNeverHeldOrFetched,
-                relation.Binding.JudgmentBodyDisposition,
-                "part two: judgment text is link only, and the disposition says so on the fact.");
-            Assert.AreEqual(
-                EuCaseLawGranularity.ActLevel,
-                relation.Binding.Granularity,
-                "part three: granularity is disclosed as act level, never article level.");
-
-            // S2-A04 and REL-005's identity rule: the three states are exhaustive, and an ECLI
-            // exists on the fact only where the publisher actually declared one. This is the
-            // assertion that would catch an invented ECLI, which is the failure the ledger names.
-            switch (relation.Binding.CaseEcliState)
-            {
-                case EcliState.EcliPresent:
-                    Assert.IsNotNull(
-                        relation.Binding.CaseEcli(),
-                        "EcliPresent must carry the publisher's own literal.");
-                    break;
-                case EcliState.EcliNotInThisSet:
-                case EcliState.EcliNotApplicable:
-                    Assert.IsNull(
-                        relation.Binding.CaseEcli(),
-                        "an ECLI the publisher did not declare is never minted.");
-                    break;
-                default:
-                    Assert.Fail($"unexpected ECLI state {relation.Binding.CaseEcliState}.");
-                    break;
-            }
-        }
+        AssertRel005HoldsOnDeliveredRelations(relations);
 
         // S2-A07's negative, checked against what the run actually retained rather than against the
         // producer's intentions. A judgment body fetched from anywhere would leave its own target
@@ -285,6 +233,15 @@ public sealed class EuCaseLawLiveAcceptance
                 "{\"schema\":\"lex-http-logical-request/1\",\"request_uri\":\""
                 + EuCaseLawLiveEndpoint + "/judgment-body\"}");
 
+            // THE ACCEPTANCE PREDICATE, driven both ways offline. The scripted run delivers one
+            // relation, so the three REL-005 parts hold on real decoded output; and an empty list
+            // must be REFUSED, which is the defect the reviewer found - it was a foreach over
+            // nothing and passed.
+            AssertRel005HoldsOnDeliveredRelations(result.ForEuWork(ScanAct));
+            Assert.ThrowsExactly<AssertFailedException>(
+                static () => AssertRel005HoldsOnDeliveredRelations([]),
+                "an empty answer must not satisfy the acceptance proof.");
+
             var caught = OffEndpointTargetsIn(root);
             Assert.IsNotEmpty(
                 caught,
@@ -304,6 +261,76 @@ public sealed class EuCaseLawLiveAcceptance
     public TestContext? TestContext { get; set; }
 
     private const string EuCaseLawLiveEndpoint = "https://publications.europa.eu/webapi/rdf/sparql";
+
+    /// <summary>
+    /// REL-005's three parts, over relations the publisher actually delivered.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// EXTRACTED SO IT CAN BE PROVEN. Its first version was a <c>foreach</c> over a list nothing
+    /// required to be non-empty, so a complete publisher answer carrying zero rows reached a green
+    /// result after real requests while proving no predicate, no disposition and no granularity.
+    /// Requiring a relation fixes that; putting the requirement inside a gate that is skipped by
+    /// default would leave the fix in exactly the condition that produced the defect, which is why
+    /// this is a method an ungated test drives both ways.
+    /// </para>
+    /// <para>
+    /// An observed empty set stays honest evidence - the live test writes it to the summary either
+    /// way - but it cannot be what an acceptance proof rests on.
+    /// </para>
+    /// </remarks>
+    internal static void AssertRel005HoldsOnDeliveredRelations(
+        IReadOnlyList<EuCaseLawLinkRelation> relations)
+    {
+        Assert.IsNotEmpty(
+            relations,
+            "an acceptance proof of REL-005's three parts requires at least one delivered relation; "
+            + "an empty answer is evidence, not acceptance.");
+
+        foreach (var relation in relations)
+        {
+            // Part one: a real CDM predicate this family asked for, which is the PINNED SET and not
+            // one chosen member of it. The first draft of this assertion named
+            // case-law_interpretes_resource_legal alone and was wrong: the family asks a union of
+            // five, and the plan's own measurement records work_cites_work at 2,257 against
+            // interpretes at 74 on a single act. The live answer agrees - every row of the 2,052
+            // retained came back under work_cites_work - so an assertion naming one predicate would
+            // have failed a correct delivery.
+            CollectionAssert.Contains(
+                EuCaseLawDiscoveryPlan.PinnedPredicatesInOrder().ToArray(),
+                relation.PredicateUri,
+                "part one: the edge carries a real CDM predicate this family pinned and asked for.");
+            Assert.AreEqual(
+                EuJudgmentBodyDisposition.LinkOnlyNeverHeldOrFetched,
+                relation.Binding.JudgmentBodyDisposition,
+                "part two: judgment text is link only, and the disposition says so on the fact.");
+            Assert.AreEqual(
+                EuCaseLawGranularity.ActLevel,
+                relation.Binding.Granularity,
+                "part three: granularity is disclosed as act level, never article level.");
+
+            // S2-A04 and REL-005's identity rule: the three states are exhaustive, and an ECLI
+            // exists on the fact only where the publisher actually declared one. This is the
+            // assertion that would catch an invented ECLI, which is the failure the ledger names.
+            switch (relation.Binding.CaseEcliState)
+            {
+                case EcliState.EcliPresent:
+                    Assert.IsNotNull(
+                        relation.Binding.CaseEcli(),
+                        "EcliPresent must carry the publisher's own literal.");
+                    break;
+                case EcliState.EcliNotInThisSet:
+                case EcliState.EcliNotApplicable:
+                    Assert.IsNull(
+                        relation.Binding.CaseEcli(),
+                        "an ECLI the publisher did not declare is never minted.");
+                    break;
+                default:
+                    Assert.Fail($"unexpected ECLI state {relation.Binding.CaseEcliState}.");
+                    break;
+            }
+        }
+    }
 
     /// <summary>
     /// Every retained request target that is not EXACTLY the official endpoint.
