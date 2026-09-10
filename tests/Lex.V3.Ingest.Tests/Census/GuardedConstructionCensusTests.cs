@@ -232,6 +232,10 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgDocumentGetAttemptResult::Refused, "
                     + "method public static "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgDocumentGetAttemptResult::RobotsRefused",
+                "Lex.V3.Ingest.Luxembourg.LuxembourgDraftGraphBatchCover: constructor private "
+                    + "instance Lex.V3.Ingest.Luxembourg.LuxembourgDraftGraphBatchCover::.ctor, "
+                    + "method public static "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgDraftGraphBatchCover::TryCreate",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgDraftGraphProductionResult: constructor "
                     + "private instance "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgDraftGraphProductionResult::.ctor, "
