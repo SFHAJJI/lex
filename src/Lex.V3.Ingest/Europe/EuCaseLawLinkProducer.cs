@@ -58,6 +58,19 @@ public enum EuCaseLawLinkProductionRefusal
     /// </remarks>
     [JsonStringEnumMemberName("requested_act_body_scope_not_supplied")]
     RequestedActBodyScopeNotSupplied = 6,
+
+    /// <summary>
+    /// A delivered row reached neither an admitted relation nor a typed unrepresentable row.
+    /// </summary>
+    /// <remarks>
+    /// A conservation failure rather than anything the publisher can cause. The decode loop has
+    /// three exits per row - admitted, unrepresentable, or a refusal that returns - so a row can
+    /// only go missing through an edit that adds a fourth. A row silently dropped between delivery
+    /// and result is the false absence S2-A03 forbids, and it would be invisible in every count this
+    /// result reports, which is why it is refused loudly instead.
+    /// </remarks>
+    [JsonStringEnumMemberName("delivered_row_not_accounted_for")]
+    DeliveredRowNotAccountedFor = 7,
 }
 
 /// <summary>
@@ -463,6 +476,20 @@ public sealed class EuCaseLawLinkProducer
             }
         }
 
+        // EVERY DELIVERED ROW IS ACCOUNTED FOR EXACTLY ONCE. The loop above has three exits per
+        // row - an admitted relation, a typed unrepresentable row, or a refusal that returns - so a
+        // delivered row can only go missing through a future edit that adds a fourth. This is that
+        // edit's alarm, and it is a conservation check rather than a guard against the publisher:
+        // a row silently dropped between delivery and result is the false absence S2-A03 forbids,
+        // and it would be invisible in every count this result reports.
+        if (relations.Count + unrepresentable.Count != rows.Count)
+        {
+            return EuCaseLawLinkProductionResult.Refused(
+                EuCaseLawLinkProductionRefusal.DeliveredRowNotAccountedFor,
+                $"The delivery carried {rows.Count} rows and this result accounts for "
+                    + $"{relations.Count + unrepresentable.Count} of them.");
+        }
+
         return EuCaseLawLinkProductionResult.Success(
             relations,
             unrepresentable,
@@ -485,12 +512,38 @@ public sealed class EuCaseLawLinkProducer
 
         var caseWorkUri = RequireIri(Term(row, profile, "case_work"), "case_work");
 
-        // The predicate is deliberately NOT re-checked against the pinned set here.
-        // EuCaseLawLinkBinding.Create already refuses an unpinned predicate by name and owns that
-        // vocabulary; restating the membership test would be a second copy of one rule, free to
-        // drift from the copy that actually decides. An unpinned predicate therefore arrives as
-        // Create's own ArgumentException and leaves this producer as RowNotAdmitted.
         var predicateUri = RequireIri(Term(row, profile, "case_predicate"), "case_predicate");
+
+        // EVERYTHING THAT DOES NOT DEPEND ON THE CASE IDENTITY IS ASKED BEFORE THE CASE IDENTITY IS
+        // CLASSIFIED. This ordering is load-bearing and it was not, until review caught it.
+        //
+        // Classifying the identity can now END this row's decoding: a citation whose identifier
+        // belongs to another scheme throws CaseSideNotProvableException, which the caller records
+        // as a typed exclusion with Refusal=None. Anything asked AFTER that point is therefore
+        // never asked at all for such a row. A delivery carrying both a foreign identifier and a
+        // predicate this family never requested was accepted as an ordinary excluded citation, and
+        // the unasked predicate - which means the response is not the answer to the question asked
+        // - went unreported.
+        //
+        // So the rule is: the typed exclusion may only ever mean "the case side is not provable".
+        // It must never also mean "and we stopped looking before we found the rest".
+        //
+        // The predicate is asked of EuCaseLawPredicateVocabulary itself rather than restated here.
+        // Create still refuses an unpinned predicate on its own, and that is deliberate: this is
+        // the earlier of two asks of ONE authority, not a second copy of the rule.
+        if (!EuCaseLawPredicateVocabulary.IsPinned(predicateUri))
+        {
+            throw new ArgumentException(
+                $"\"{predicateUri}\" is not one of the pinned EU case-law predicates, so this "
+                    + "delivery is not the answer to the question this family asked.",
+                nameof(row));
+        }
+
+        // Hoisted above the identity for the same reason: the act's identity is the publisher's
+        // claim about the act, and it is knowable without knowing which side is the case.
+        var actIdentity = new OfficialIdentitySet(
+            PublisherId.EuEurLex,
+            [new OfficialIdentifier(FactsIdentifierFamily.CellarWorkUri, euWorkUri)]);
 
         var caseIdentifier = RequireCaseIdentityFromItsTermsNotItsMarkers(
             Term(row, profile, "ecli"),
@@ -499,9 +552,6 @@ public sealed class EuCaseLawLinkProducer
             Term(row, profile, "case_celex_kind"));
 
         var caseIdentity = new OfficialIdentitySet(PublisherId.EuEurLex, [caseIdentifier]);
-        var actIdentity = new OfficialIdentitySet(
-            PublisherId.EuEurLex,
-            [new OfficialIdentifier(FactsIdentifierFamily.CellarWorkUri, euWorkUri)]);
 
         var binding = EuCaseLawLinkBinding.Create(
             caseIdentity, actIdentity, predicateUri, targetBodyScope, [], observationId);
@@ -539,6 +589,19 @@ public sealed class EuCaseLawLinkProducer
         RepeatedEnumerationRdfTerm celex,
         RepeatedEnumerationRdfTerm celexMarker)
     {
+        // THE IDENTITY CONTRACT'S FIRST GATE, ASKED BEFORE ANY OTHER QUESTION ABOUT THESE TERMS.
+        // It has to come first because the questions below cannot tell a corrupt term from an
+        // absent one: IsBoundLiteral reports an EMPTY literal as "not bound", which sends a
+        // delivered-but-empty identifier down the same path as a term the publisher never sent.
+        // Those are different claims. "The publisher answered with nothing in the field" means the
+        // response is untrustworthy; "the publisher sent no term at all" is an honest absence this
+        // family records as a typed exclusion. Collapsing them is the false absence S2-A03 forbids.
+        //
+        // Asked of BOTH terms, because the hole is symmetric - an empty ecli literal reached the
+        // same typed exclusion by the same route.
+        RequireDeliveredLiteralIsAnIdentity(ecli, nameof(ecli));
+        RequireDeliveredLiteralIsAnIdentity(celex, nameof(celex));
+
         var ecliIsBoundLiteral = IsBoundLiteral(ecli);
         if (!string.Equals(ecliMarker.Value, MarkerFor(ecli), StringComparison.Ordinal))
         {
@@ -582,6 +645,26 @@ public sealed class EuCaseLawLinkProducer
                 "The publisher delivered no ECLI and no CELEX literal for this case.");
         }
 
+        // A LITERAL NO CELEX GRAMMAR ADMITS IS A CITATION WE CANNOT REPRESENT, NOT A BROKEN
+        // DELIVERY. Measured, not supposed: the retained E6 run under #415 carried 81 such values
+        // across 338 rows - OJ C-series references like C/2024/01610 and C2023/099/01, and the EFTA
+        // case number E2014C0273. Letting the identifier constructor throw made every one of them
+        // sink the whole production, so 2,052 links the publisher did deliver were lost to a
+        // citation whose identifier belongs to a scheme this family does not read.
+        //
+        // The check is asked BEFORE construction rather than caught after it, so it can only ever
+        // reclassify the grammar decision. Catching the constructor's ArgumentException would also
+        // swallow a genuinely malformed row, and those must keep refusing the delivery. By this
+        // point the identity gate above has already rejected everything that is not an identity at
+        // all, so a null profile here means exactly one thing: a real identifier from a scheme this
+        // family does not read.
+        if (OfficialIdentifier.ProfileOf(celex.Value!) is null)
+        {
+            throw new CaseSideNotProvableException(
+                "The delivered case_celex literal is not a CELEX identifier in any sector: "
+                    + celex.Value);
+        }
+
         var identifier = new OfficialIdentifier(FactsIdentifierFamily.Celex, celex.Value!);
 
         // ProvesCase is asked rather than restated: sector 6 is case law and this producer does not
@@ -596,6 +679,84 @@ public sealed class EuCaseLawLinkProducer
         return identifier;
     }
 
+    /// <summary>
+    /// A literal delivered in an identifier position must be an opaque identity, or the response
+    /// cannot be trusted.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This is the identity contract's FIRST gate, the one <see cref="OfficialIdentifier"/> asks
+    /// before it consults any family grammar. It is restated here because
+    /// <c>FactsValidation.IsOpaqueIdentity</c> is internal to the contracts assembly, and it is
+    /// restated in FULL: an earlier version of this producer mirrored only the length and printable
+    /// rules, which let an empty literal and a space-padded one through to the typed-exclusion path
+    /// and reported a corrupt identity term as an ordinary citation from another scheme.
+    /// </para>
+    /// <para>
+    /// Any divergence fails safe. A value this admits and the constructor still rejects throws from
+    /// the constructor, and a throw from there is a whole-delivery refusal.
+    /// </para>
+    /// </remarks>
+    private static void RequireDeliveredLiteralIsAnIdentity(
+        RepeatedEnumerationRdfTerm term, string parameterName)
+    {
+        // Only a delivered LITERAL makes this claim. An unbound term asserts nothing, and an IRI or
+        // blank node in this position is caught by the marker comparison that follows.
+        if (term.Kind != RepeatedEnumerationRdfTermKind.Literal)
+        {
+            return;
+        }
+
+        if (!IsOpaqueIdentityValue(term.Value))
+        {
+            throw new ArgumentException(
+                "An identifier position carries something that is not an identifier at all, so the "
+                    + "delivery cannot be trusted.",
+                parameterName);
+        }
+    }
+
+    /// <summary>
+    /// One to two hundred printable ASCII characters, non-blank, with no surrounding whitespace.
+    /// </summary>
+    /// <remarks>
+    /// Kept deliberately in the same order and shape as the contract's own rule so the two can be
+    /// read against each other. Surrounding whitespace is rejected because two spellings that
+    /// differ only in it are one value to a reader and two keys everywhere else, which is the shape
+    /// that lets a duplicate hide.
+    /// </remarks>
+    private static bool IsOpaqueIdentityValue(string? value)
+    {
+        if (value is null || value.Length is 0 or > 200)
+        {
+            return false;
+        }
+
+        if (value.Trim().Length != value.Length || value.Trim().Length == 0)
+        {
+            return false;
+        }
+
+        foreach (var character in value)
+        {
+            if (character is < ' ' or > '~')
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Whether the publisher delivered a literal with something in it.
+    /// </summary>
+    /// <remarks>
+    /// This reports an EMPTY literal as unbound, which is why
+    /// <see cref="RequireDeliveredLiteralIsAnIdentity"/> runs first: by the time anything asks this
+    /// question, a delivered-but-empty identifier term has already refused the delivery, so a false
+    /// answer here means the term genuinely was not sent.
+    /// </remarks>
     private static bool IsBoundLiteral(RepeatedEnumerationRdfTerm term) =>
         term.Kind == RepeatedEnumerationRdfTermKind.Literal && !string.IsNullOrEmpty(term.Value);
 
