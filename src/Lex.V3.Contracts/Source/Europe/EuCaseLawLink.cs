@@ -262,8 +262,7 @@ public sealed class EuCaseLawLinkBinding : IEuFactsEvidenceCarrier
         if (!EuCaseLawPredicateVocabulary.IsPinned(predicateUri))
         {
             throw new ArgumentException(
-                $"\"{predicateUri}\" is not one of the pinned, review/23-evidenced EU case-law " +
-                "predicates.",
+                $"\"{predicateUri}\" is not one of the accepted, pinned EU case-law predicates.",
                 nameof(predicateUri));
         }
 
@@ -364,10 +363,19 @@ public enum EuCaseLawLinkCaseSide
 }
 
 /// <summary>
-/// The exact, closed set of real EU case-law CDM predicates review/23-research-temporal.md
-/// evidences with a worked instance, and the only predicates <see cref="EuCaseLawLinkBinding.Create"/>
-/// accepts.
+/// The exact, closed, accepted E6 case-law predicate vocabulary: the only predicates
+/// <see cref="EuCaseLawLinkBinding.Create"/> accepts.
 /// </summary>
+/// <remarks>
+/// <para>
+/// THE MEMBERS DO NOT SHARE ONE PROVENANCE, AND THIS SUMMARY MUST NOT IMPLY THEY DO. Two are
+/// evidenced by a worked instance in review/23-research-temporal.md; three were admitted under
+/// #415's scope ruling on live counts taken against the publisher's own endpoint. Each member
+/// carries its own evidence below, and that per-member attribution is the authority - not a blanket
+/// claim here. An earlier version of this summary described all of them as review/23-evidenced,
+/// which was true when the set held two and became false when it grew.
+/// </para>
+/// </remarks>
 /// <remarks>
 /// <para>
 /// WHY THIS SET GREW, AND WHAT REPLACED THE OLD REASON. Until #415's scope ruling this vocabulary
@@ -450,13 +458,21 @@ public static class EuCaseLawPredicateVocabulary
     public const string CaseLawDeclaresVoidByPreliminaryRulingResourceLegalPredicateUri =
         EuConsolidationDiscoveryPlan.Cdm + "case-law_declares_void_by_preliminary_ruling_resource_legal";
 
-    /// <summary>Whether this is one of the pinned, review/23-evidenced EU case-law predicates.</summary>
+    /// <summary>Whether this is one of the accepted, pinned EU case-law predicates.</summary>
     /// <remarks>
+    /// <para>
     /// The single membership test, asked by <see cref="EuCaseLawLinkBinding.Create"/> and by any
     /// reader that must know BEFORE it reaches Create. It exists because a caller outside this
     /// assembly cannot see <see cref="Pinned"/>, and a caller that cannot ask the authority ends up
     /// either restating the vocabulary or discovering it too late - which is exactly the ordering
     /// defect this door was added to close.
+    /// </para>
+    /// <para>
+    /// It answers MEMBERSHIP and asserts nothing about why any member is in the set. The five do not
+    /// share one provenance - two are review/23-evidenced, three rest on the live counts #415
+    /// accepted - and each member records its own. A blanket claim here would be false for three of
+    /// them and would put a second, contradicting authority account on the public surface.
+    /// </para>
     /// </remarks>
     public static bool IsPinned(string? predicateUri) =>
         predicateUri is not null && Pinned.Contains(predicateUri);
@@ -476,8 +492,8 @@ public static class EuCaseLawPredicateVocabulary
 /// Whether an EU case-law link points at a whole act or at one article or paragraph within it.
 /// </summary>
 /// <remarks>
-/// Carries exactly one member. Both predicates <see cref="EuCaseLawPredicateVocabulary"/> pins
-/// relate whole works to whole works; review/23 line 109 names
+/// Carries exactly one member. Every predicate <see cref="EuCaseLawPredicateVocabulary"/> pins
+/// relates whole works to whole works; review/23 line 109 names
 /// <c>reference_to_modified_location</c>, a separate and not-yet-exploited mechanism, as the one
 /// that would carry article-level detail. No member for that case is declared here because
 /// <see cref="EuCaseLawLinkBinding.Create"/> has no path that could ever produce one, and an enum
