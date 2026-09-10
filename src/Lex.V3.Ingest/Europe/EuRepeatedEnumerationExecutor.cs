@@ -278,6 +278,16 @@ public sealed record LuxembourgOpinionRunRequest(
     string PlanResourceId,
     MachineQueryRendererSource RendererSource);
 
+/// <summary>One bounded enumeration of the Luxembourg draft graph.</summary>
+/// <remarks>
+/// Like the opinion request and unlike the case-law one, this carries no selection: the scope is a
+/// JOLux class and the properties asked about are fixed by the plan, so a caller chooses nothing.
+/// </remarks>
+public sealed record LuxembourgDraftGraphRunRequest(
+    LuxembourgDraftGraphDiscoveryPlan Plan,
+    string PlanResourceId,
+    MachineQueryRendererSource RendererSource);
+
 /// <summary>
 /// One bounded enumeration of the case-law works pointing at a batch of EU acts.
 /// </summary>
@@ -845,6 +855,61 @@ public sealed class EuRepeatedEnumerationExecutor
                     pass => BindLuxembourgOpinionCount(request, pass),
                     (pass, cursor, selected, evidenceRef) =>
                         BindLuxembourgOpinionPage(request, pass, cursor, selected, evidenceRef),
+                    batchObjects: null,
+                    batchMembershipKeyOrdinal: null,
+                    cancellationToken)
+                .ConfigureAwait(false);
+        }
+        finally
+        {
+            session.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// The Luxembourg draft graph, one session and two passes over the InitialDraft class.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Before this, <see cref="LuxembourgDraftGraphDiscoveryPlan"/> did not exist and
+    /// <c>LuxembourgDraftRelationPredicate</c> was a closed vocabulary reached by nothing: this
+    /// repository declared <c>draftTransposes</c> and never asked the publisher about it.
+    /// </para>
+    /// <para>
+    /// No batch and no membership ordinal, because this family has no selection — its scope is a
+    /// class and the five properties it asks about are the plan's, not a caller's. There is
+    /// therefore no caller partition for a delivered row to fall outside of, which is why the
+    /// membership check the case-law and procedure-event families need has no counterpart here.
+    /// </para>
+    /// </remarks>
+    public async Task<EuEnumerationRunResult> RunLuxembourgDraftGraphAsync(
+        LuxembourgDraftGraphRunRequest request,
+        BoundMachineRequest sourceWitness,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(sourceWitness);
+
+        var session = await StartSessionAsync(sourceWitness, cancellationToken).ConfigureAwait(false);
+        if (session is null)
+        {
+            return EuEnumerationRunResult.Refused(
+                new EuEnumerationRefusalDetail(
+                    EuEnumerationRefusal.RobotsBootstrapRefused, null, null, null, null, null, null, null, null),
+                productRequestCount: 0);
+        }
+
+        try
+        {
+            var profile = request.Plan.CreateDeliveryProfile();
+            var profileRef = RepeatedEnumerationInterpretationProfileIdentity.Create(NewUrn(), profile);
+            return await RunPassesAsync(
+                    session,
+                    profile,
+                    profileRef,
+                    pass => BindLuxembourgDraftGraphCount(request, pass),
+                    (pass, cursor, selected, evidenceRef) =>
+                        BindLuxembourgDraftGraphPage(request, pass, cursor, selected, evidenceRef),
                     batchObjects: null,
                     batchMembershipKeyOrdinal: null,
                     cancellationToken)
@@ -2021,6 +2086,40 @@ public sealed class EuRepeatedEnumerationExecutor
 
     private static EuBoundQueryParts BindLuxembourgOpinionPage(
         LuxembourgOpinionRunRequest request,
+        int passOrdinal,
+        IReadOnlyList<string>? cursor,
+        long selected,
+        SourceArtifactRef countEvidenceRef)
+    {
+        var bound = request.Plan.BindPage(
+            (LuxembourgQueryPass)passOrdinal,
+            cursor,
+            selected,
+            countEvidenceRef,
+            request.PlanResourceId,
+            NewUrn(),
+            request.RendererSource);
+        return new EuBoundQueryParts(
+            bound.MachinePlanRef, bound.InputArtifact.ArtifactRef, bound.Request,
+            bound.InputArtifact.PartitionBinding.MemberKey, bound.MachinePlan.ResponseCardinality.RowLimit);
+    }
+
+    private static EuBoundQueryParts BindLuxembourgDraftGraphCount(
+        LuxembourgDraftGraphRunRequest request,
+        int passOrdinal)
+    {
+        var bound = request.Plan.BindCount(
+            (LuxembourgQueryPass)passOrdinal,
+            request.PlanResourceId,
+            NewUrn(),
+            request.RendererSource);
+        return new EuBoundQueryParts(
+            bound.MachinePlanRef, bound.InputArtifact.ArtifactRef, bound.Request,
+            bound.InputArtifact.PartitionBinding.MemberKey, null);
+    }
+
+    private static EuBoundQueryParts BindLuxembourgDraftGraphPage(
+        LuxembourgDraftGraphRunRequest request,
         int passOrdinal,
         IReadOnlyList<string>? cursor,
         long selected,

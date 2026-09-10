@@ -1,3 +1,4 @@
+using Lex.V3.Contracts.Source.Absence;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Europe;
 using Lex.V3.Ingest.Europe;
@@ -203,11 +204,18 @@ public sealed class EuProcedureEventProducerTests
     /// executor entry point and the decoder were three parts joined by no caller in <c>src/</c>.
     /// </para>
     /// <para>
-    /// It is also what satisfies Candidate 5 R5.3's second clause. The completion evidence these
-    /// observations cite is the RUN'S own, taken from the enumeration proof, and the rows reached
-    /// the decoder through <c>VerifiedRepeatedEnumerationRows.TryOpen</c> rather than from a caller.
-    /// A test asserting the observations exist would pass without either; this asserts the evidence
-    /// reference is the one the run produced, which nothing but a real run can supply.
+    /// The completion evidence these observations cite is the RUN'S own, taken from the enumeration
+    /// proof, and the rows reached the decoder through
+    /// <c>VerifiedRepeatedEnumerationRows.TryOpen</c> rather than from a caller. A test asserting the
+    /// observations exist would pass without either; this asserts the evidence reference is the one
+    /// the run produced, which nothing but a real run can supply.
+    /// </para>
+    /// <para>
+    /// THIS PARAGRAPH USED TO OPEN "It is also what satisfies Candidate 5 R5.3's second clause".
+    /// R5.3 has no second clause: it is one sentence at <c>05-user-journeys.md:345</c> requiring
+    /// every refusal envelope to carry <c>what_would_answer</c>. The citation was mine and it was
+    /// invented. What the test does is unchanged and is worth doing on its own terms, which is the
+    /// paragraph above.
     /// </para>
     /// </remarks>
     [TestMethod]
@@ -273,6 +281,66 @@ public sealed class EuProcedureEventProducerTests
         Assert.HasCount(1, result.EventsOf(Dossier));
     }
 
+    /// <summary>
+    /// A publisher whose count and delivery disagree is refused at the PROOF, before a row is read.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Worth its own test for two reasons. It is this producer's own mapping of a proof refusal, and
+    /// nothing here drove one before: every other refusal in this file is decoded out of rows, so the
+    /// whole branch that turns a refused <c>TryProveFamilyEnumeration</c> into
+    /// <see cref="EuProcedureEventProductionRefusal.EnumerationProofRefused"/> was reached by no test.
+    /// </para>
+    /// <para>
+    /// And it is the PREMISE the equivalence argument below rests on. If this delivery minted a proof
+    /// instead of being refused, <c>TryOpen</c> would go on to re-verify pages whose declared
+    /// cardinality binds a count of three against a <c>DeliveredRowCount</c> of two, and the branch
+    /// that argument calls unreachable would be reachable. Asserting the refusal here is what keeps
+    /// the argument checkable from inside this file rather than only by reading Source/Core.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public async Task APublisherWhoseCountAndDeliveryDisagreeIsRefusedAtTheProof()
+    {
+        var scripts = new Dictionary<string, EuAcquisitionTestFixture.FamilyScript>(StringComparer.Ordinal)
+        {
+            // Three counted, two delivered, and BOTH passes say exactly that. So the passes agree
+            // with each other - this is not a two-pass disagreement - and the only thing out of step
+            // is the publisher's own count against what the publisher actually sent.
+            ["ProcedureEvent"] = EuAcquisitionTestFixture.ScriptFor(
+                "ProcedureEvent",
+                3,
+                [
+                    EuAcquisitionTestFixture.ProcedureEventRow(Event, Dossier, FirstType, "2021-11-24"),
+                    EuAcquisitionTestFixture.ProcedureEventRow(Event, Dossier, SecondType, "2021-11-24"),
+                ],
+                EuAcquisitionTestFixture.ProcedureEventProjection),
+        };
+
+        var producer = new EuProcedureEventProducer(
+            new EuAcquisitionTestFixture.EuInMemoryCustodyStore(),
+            new EuAcquisitionTestFixture.FixedTimeProvider(),
+            new EuAcquisitionTestFixture.ClassifyingHandler(scripts));
+
+        var result = await producer.RunAsync(
+            new EuProcedureEventRunRequest(
+                EuProcedureEventDiscoveryPlan.Create(),
+                [Dossier],
+                "urn:uuid:c17d4e83-2f60-4b95-8a1e-6d9074bf3c52",
+                RendererSource()),
+            EuAcquisitionTestFixture.SourceWitness(),
+            CancellationToken.None);
+
+        Assert.AreEqual(
+            EuProcedureEventProductionRefusal.EnumerationProofRefused, result.Refusal,
+            $"a counted-but-undelivered row is a proof failure, not a decode failure: {result.Detail}");
+        StringAssert.Contains(
+            result.Detail!,
+            AbsenceFamilyEnumerationProofRefusal.PassesDeliveredDifferentSelections.ToString(),
+            "the refusal must carry the proof's own reason rather than a summary of it.");
+        Assert.IsNull(result.Observations, "nothing may be published from an unproven enumeration.");
+    }
+
     // TWO MUTATIONS ON THE RUN CHAIN SURVIVE THIS FILE, and both are recorded rather than left as
     // an unexplained gap in the sweep.
     //
@@ -284,8 +352,37 @@ public sealed class EuProcedureEventProducerTests
     //
     // Reporting a refused TryOpen as EnumerationProofRefused rather than VerifiedRowsRefused
     // survives because nothing here drives a delivery whose enumeration proof holds while its rows
-    // will not reopen. That one is a real untested branch, not an argued equivalence, and it is
-    // named here so it is a known gap rather than a silent one.
+    // will not reopen. I recorded that as a real untested branch. IT IS NOT ONE: no such delivery
+    // can reach this producer, and the chain that makes it impossible is four links, each already
+    // tested somewhere else.
+    //
+    //   1. EnumerationDeliveryComparison.ClassifyOutcome returns EqualSelections only when
+    //      selectedA == deliveredA == deliveredB == selectedB AND all three digest pairs agree.
+    //      RepeatedEnumerationDeliveryProofTests pins it, including the case where both passes skip
+    //      the same row and so agree with each other anyway.
+    //   2. AbsenceFamilyEnumerationProof.TryCreate refuses any outcome but EqualSelections, as
+    //      PassesDeliveredDifferentSelections - which arrives here as EnumerationProofRefused,
+    //      BEFORE TryOpen is ever called. Both execution adapters drive that refusal.
+    //   3. So by the time TryOpen runs, proof.DeliveredRowCount is exactly the count
+    //      EnumerationDeliveryComparison.Create passed to VerifyPages when it minted the proof.
+    //      TryOpen re-runs VerifyPages over the same pages with that same count, the same
+    //      countHttpEvidenceRef and the same profile - and a differing profile throws rather than
+    //      refusing, so it cannot arrive as a refusal by that route either.
+    //   4. Those pages come back through ReopenPageEvidenceAsync, which reads by
+    //      CustodyRestore.ReadByDigestCheckedAsync. Substituted bytes are caught there, so TryOpen
+    //      re-parses the identical bytes with the identical code that produced every digest it is
+    //      about to compare them against.
+    //
+    // The mutation is therefore EQUIVALENT through this door rather than merely uncovered, and no
+    // test written here could kill it. The refusals themselves are not untested: all five members of
+    // RepeatedEnumerationRowsOpenRefusal are driven directly at the Source/Core door in
+    // VerifiedRepeatedEnumerationRowsTests, which is where a caller-supplied mismatch can be
+    // constructed at all.
+    //
+    // Link 1 is the one holding this up. If ClassifyOutcome ever stops requiring selected to equal
+    // delivered, a publisher answering "3" while delivering 2 would mint a proof, TryOpen would
+    // re-verify pages whose declared cardinality binds 3 against a DeliveredRowCount of 2, and the
+    // branch would become reachable and would need a test here.
 
     /// <summary>
     /// A caller spelling its dossier non-canonically still gets an answer under the canonical form.
