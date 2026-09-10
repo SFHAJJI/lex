@@ -259,7 +259,7 @@ public sealed class EuCaseLawLinkBinding : IEuFactsEvidenceCarrier
         ArgumentNullException.ThrowIfNull(target);
         ArgumentNullException.ThrowIfNull(qualifiedAxioms);
 
-        if (predicateUri is null || !EuCaseLawPredicateVocabulary.Pinned.Contains(predicateUri))
+        if (!EuCaseLawPredicateVocabulary.IsPinned(predicateUri))
         {
             throw new ArgumentException(
                 $"\"{predicateUri}\" is not one of the pinned, review/23-evidenced EU case-law " +
@@ -449,6 +449,17 @@ public static class EuCaseLawPredicateVocabulary
     /// </remarks>
     public const string CaseLawDeclaresVoidByPreliminaryRulingResourceLegalPredicateUri =
         EuConsolidationDiscoveryPlan.Cdm + "case-law_declares_void_by_preliminary_ruling_resource_legal";
+
+    /// <summary>Whether this is one of the pinned, review/23-evidenced EU case-law predicates.</summary>
+    /// <remarks>
+    /// The single membership test, asked by <see cref="EuCaseLawLinkBinding.Create"/> and by any
+    /// reader that must know BEFORE it reaches Create. It exists because a caller outside this
+    /// assembly cannot see <see cref="Pinned"/>, and a caller that cannot ask the authority ends up
+    /// either restating the vocabulary or discovering it too late - which is exactly the ordering
+    /// defect this door was added to close.
+    /// </remarks>
+    public static bool IsPinned(string? predicateUri) =>
+        predicateUri is not null && Pinned.Contains(predicateUri);
 
     internal static readonly IReadOnlyCollection<string> Pinned = new HashSet<string>(
         [

@@ -512,12 +512,38 @@ public sealed class EuCaseLawLinkProducer
 
         var caseWorkUri = RequireIri(Term(row, profile, "case_work"), "case_work");
 
-        // The predicate is deliberately NOT re-checked against the pinned set here.
-        // EuCaseLawLinkBinding.Create already refuses an unpinned predicate by name and owns that
-        // vocabulary; restating the membership test would be a second copy of one rule, free to
-        // drift from the copy that actually decides. An unpinned predicate therefore arrives as
-        // Create's own ArgumentException and leaves this producer as RowNotAdmitted.
         var predicateUri = RequireIri(Term(row, profile, "case_predicate"), "case_predicate");
+
+        // EVERYTHING THAT DOES NOT DEPEND ON THE CASE IDENTITY IS ASKED BEFORE THE CASE IDENTITY IS
+        // CLASSIFIED. This ordering is load-bearing and it was not, until review caught it.
+        //
+        // Classifying the identity can now END this row's decoding: a citation whose identifier
+        // belongs to another scheme throws CaseSideNotProvableException, which the caller records
+        // as a typed exclusion with Refusal=None. Anything asked AFTER that point is therefore
+        // never asked at all for such a row. A delivery carrying both a foreign identifier and a
+        // predicate this family never requested was accepted as an ordinary excluded citation, and
+        // the unasked predicate - which means the response is not the answer to the question asked
+        // - went unreported.
+        //
+        // So the rule is: the typed exclusion may only ever mean "the case side is not provable".
+        // It must never also mean "and we stopped looking before we found the rest".
+        //
+        // The predicate is asked of EuCaseLawPredicateVocabulary itself rather than restated here.
+        // Create still refuses an unpinned predicate on its own, and that is deliberate: this is
+        // the earlier of two asks of ONE authority, not a second copy of the rule.
+        if (!EuCaseLawPredicateVocabulary.IsPinned(predicateUri))
+        {
+            throw new ArgumentException(
+                $"\"{predicateUri}\" is not one of the pinned EU case-law predicates, so this "
+                    + "delivery is not the answer to the question this family asked.",
+                nameof(row));
+        }
+
+        // Hoisted above the identity for the same reason: the act's identity is the publisher's
+        // claim about the act, and it is knowable without knowing which side is the case.
+        var actIdentity = new OfficialIdentitySet(
+            PublisherId.EuEurLex,
+            [new OfficialIdentifier(FactsIdentifierFamily.CellarWorkUri, euWorkUri)]);
 
         var caseIdentifier = RequireCaseIdentityFromItsTermsNotItsMarkers(
             Term(row, profile, "ecli"),
@@ -526,9 +552,6 @@ public sealed class EuCaseLawLinkProducer
             Term(row, profile, "case_celex_kind"));
 
         var caseIdentity = new OfficialIdentitySet(PublisherId.EuEurLex, [caseIdentifier]);
-        var actIdentity = new OfficialIdentitySet(
-            PublisherId.EuEurLex,
-            [new OfficialIdentifier(FactsIdentifierFamily.CellarWorkUri, euWorkUri)]);
 
         var binding = EuCaseLawLinkBinding.Create(
             caseIdentity, actIdentity, predicateUri, targetBodyScope, [], observationId);

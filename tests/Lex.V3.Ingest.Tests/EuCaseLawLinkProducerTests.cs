@@ -487,6 +487,72 @@ public sealed class EuCaseLawLinkProducerTests
     }
 
     /// <summary>
+    /// An unasked predicate still refuses the whole delivery when the identity is also foreign.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// FOUND IN REVIEW. Routing a foreign identifier to a typed exclusion made that exclusion a
+    /// RETURN from this row's decoding, and the pinned-predicate check sat after it - inside
+    /// <c>EuCaseLawLinkBinding.Create</c>, which such a row now never reaches. A delivery carrying
+    /// both <c>C/2024/01610</c> and a predicate this family never asked about came back
+    /// <c>Refusal=None</c>: an untrustworthy response accepted as an ordinary excluded citation.
+    /// </para>
+    /// <para>
+    /// Either half alone was already caught. Only the combination escaped, which is why the
+    /// regression has to carry both at once.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void AnUnaskedPredicateRefusesEvenWhenTheIdentityIsForeign()
+    {
+        var result = EuCaseLawLinkProducer.DecodeRows(
+            [Row(Unbound(), EuCaseLawDiscoveryPlan.UnboundEcliKind,
+                celex: Literal("C/2024/01610"), celexKind: "literal",
+                predicate: "http://example.invalid/not-asked-about")],
+            Profile(),
+            Scopes(),
+            Evidence);
+
+        Assert.AreEqual(
+            EuCaseLawLinkProductionRefusal.RowNotAdmitted, result.Refusal,
+            "a predicate this family never asked about means the delivery is not the answer asked "
+                + "for, and a foreign identifier beside it does not excuse that.");
+
+        // Deliberately not asserted by reading the rows back: a refused result refuses the
+        // question too (RequireAskedAbout), which is itself the guarantee that nothing was filed.
+    }
+
+    /// <summary>
+    /// The typed exclusion means the case side is not provable, and never that we stopped looking.
+    /// </summary>
+    /// <remarks>
+    /// The general form of the finding above, asserted so the ordering cannot rot back one check at
+    /// a time. Here the act's own identity is not a Cellar work URI - a fact about the ACT, knowable
+    /// without knowing which side is the case. Read after the identity was classified it would be
+    /// masked by the foreign citation exactly as the predicate was; read before, it refuses.
+    /// </remarks>
+    [TestMethod]
+    public void AnIdentityIndependentDefectIsNotMaskedByAForeignCitation()
+    {
+        const string NotACellarWork = "http://example.invalid/act";
+        var scopes = new Dictionary<string, TargetBodyScope>(StringComparer.Ordinal)
+        {
+            [NotACellarWork] = TargetBodyScope.BodyInScopeHeld,
+        };
+
+        var result = EuCaseLawLinkProducer.DecodeRows(
+            [Row(Unbound(), EuCaseLawDiscoveryPlan.UnboundEcliKind,
+                celex: Literal("C/2024/01610"), celexKind: "literal", act: NotACellarWork)],
+            Profile(),
+            scopes,
+            Evidence);
+
+        Assert.AreEqual(
+            EuCaseLawLinkProductionRefusal.RowNotAdmitted, result.Refusal,
+            "the act's identity is knowable without the case's, so a foreign citation cannot bury it.");
+    }
+
+    /// <summary>
     /// A delivered but EMPTY identifier literal refuses the whole delivery.
     /// </summary>
     /// <remarks>
