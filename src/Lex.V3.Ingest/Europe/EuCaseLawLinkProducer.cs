@@ -566,6 +566,19 @@ public sealed class EuCaseLawLinkProducer
         RepeatedEnumerationRdfTerm celex,
         RepeatedEnumerationRdfTerm celexMarker)
     {
+        // THE IDENTITY CONTRACT'S FIRST GATE, ASKED BEFORE ANY OTHER QUESTION ABOUT THESE TERMS.
+        // It has to come first because the questions below cannot tell a corrupt term from an
+        // absent one: IsBoundLiteral reports an EMPTY literal as "not bound", which sends a
+        // delivered-but-empty identifier down the same path as a term the publisher never sent.
+        // Those are different claims. "The publisher answered with nothing in the field" means the
+        // response is untrustworthy; "the publisher sent no term at all" is an honest absence this
+        // family records as a typed exclusion. Collapsing them is the false absence S2-A03 forbids.
+        //
+        // Asked of BOTH terms, because the hole is symmetric - an empty ecli literal reached the
+        // same typed exclusion by the same route.
+        RequireDeliveredLiteralIsAnIdentity(ecli, nameof(ecli));
+        RequireDeliveredLiteralIsAnIdentity(celex, nameof(celex));
+
         var ecliIsBoundLiteral = IsBoundLiteral(ecli);
         if (!string.Equals(ecliMarker.Value, MarkerFor(ecli), StringComparison.Ordinal))
         {
@@ -618,35 +631,18 @@ public sealed class EuCaseLawLinkProducer
         //
         // The check is asked BEFORE construction rather than caught after it, so it can only ever
         // reclassify the grammar decision. Catching the constructor's ArgumentException would also
-        // swallow a genuinely malformed row, and those must keep refusing the delivery.
-        // AN IDENTIFIER POSITION CARRYING SOMETHING THAT IS NOT AN IDENTIFIER AT ALL is a malformed
-        // delivery rather than a citation from a scheme this family does not read. The identity
-        // contract admits one to two hundred printable ASCII characters; a control character or an
-        // over-long blob here means the response cannot be trusted, and filing it as merely
-        // unrepresentable would let a corrupt delivery pass as a partial success.
-        //
-        // Stated here because FactsValidation is internal to the contracts assembly. Any divergence
-        // fails safe: a value this admits and the constructor still rejects throws, and a throw from
-        // there is a whole-delivery refusal.
-        //
-        // Found by a mutation. Catching the constructor's ArgumentException instead of asking first
-        // looked equivalent and is not: the constructor rejects for TWO reasons, and the broad catch
-        // would file a corrupt value as unrepresentable alongside a genuine foreign identifier.
-        if (celex.Value!.Length > 200 ||
-            celex.Value.Any(static character => character is < ' ' or > '~'))
-        {
-            throw new ArgumentException(
-                "case_celex carries something that is not an identifier at all.", nameof(celex));
-        }
-
-        if (OfficialIdentifier.ProfileOf(celex.Value) is null)
+        // swallow a genuinely malformed row, and those must keep refusing the delivery. By this
+        // point the identity gate above has already rejected everything that is not an identity at
+        // all, so a null profile here means exactly one thing: a real identifier from a scheme this
+        // family does not read.
+        if (OfficialIdentifier.ProfileOf(celex.Value!) is null)
         {
             throw new CaseSideNotProvableException(
                 "The delivered case_celex literal is not a CELEX identifier in any sector: "
                     + celex.Value);
         }
 
-        var identifier = new OfficialIdentifier(FactsIdentifierFamily.Celex, celex.Value);
+        var identifier = new OfficialIdentifier(FactsIdentifierFamily.Celex, celex.Value!);
 
         // ProvesCase is asked rather than restated: sector 6 is case law and this producer does not
         // own that rule. A CELEX outside it is a real identity for something that is not a case, so
@@ -660,6 +656,84 @@ public sealed class EuCaseLawLinkProducer
         return identifier;
     }
 
+    /// <summary>
+    /// A literal delivered in an identifier position must be an opaque identity, or the response
+    /// cannot be trusted.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This is the identity contract's FIRST gate, the one <see cref="OfficialIdentifier"/> asks
+    /// before it consults any family grammar. It is restated here because
+    /// <c>FactsValidation.IsOpaqueIdentity</c> is internal to the contracts assembly, and it is
+    /// restated in FULL: an earlier version of this producer mirrored only the length and printable
+    /// rules, which let an empty literal and a space-padded one through to the typed-exclusion path
+    /// and reported a corrupt identity term as an ordinary citation from another scheme.
+    /// </para>
+    /// <para>
+    /// Any divergence fails safe. A value this admits and the constructor still rejects throws from
+    /// the constructor, and a throw from there is a whole-delivery refusal.
+    /// </para>
+    /// </remarks>
+    private static void RequireDeliveredLiteralIsAnIdentity(
+        RepeatedEnumerationRdfTerm term, string parameterName)
+    {
+        // Only a delivered LITERAL makes this claim. An unbound term asserts nothing, and an IRI or
+        // blank node in this position is caught by the marker comparison that follows.
+        if (term.Kind != RepeatedEnumerationRdfTermKind.Literal)
+        {
+            return;
+        }
+
+        if (!IsOpaqueIdentityValue(term.Value))
+        {
+            throw new ArgumentException(
+                "An identifier position carries something that is not an identifier at all, so the "
+                    + "delivery cannot be trusted.",
+                parameterName);
+        }
+    }
+
+    /// <summary>
+    /// One to two hundred printable ASCII characters, non-blank, with no surrounding whitespace.
+    /// </summary>
+    /// <remarks>
+    /// Kept deliberately in the same order and shape as the contract's own rule so the two can be
+    /// read against each other. Surrounding whitespace is rejected because two spellings that
+    /// differ only in it are one value to a reader and two keys everywhere else, which is the shape
+    /// that lets a duplicate hide.
+    /// </remarks>
+    private static bool IsOpaqueIdentityValue(string? value)
+    {
+        if (value is null || value.Length is 0 or > 200)
+        {
+            return false;
+        }
+
+        if (value.Trim().Length != value.Length || value.Trim().Length == 0)
+        {
+            return false;
+        }
+
+        foreach (var character in value)
+        {
+            if (character is < ' ' or > '~')
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Whether the publisher delivered a literal with something in it.
+    /// </summary>
+    /// <remarks>
+    /// This reports an EMPTY literal as unbound, which is why
+    /// <see cref="RequireDeliveredLiteralIsAnIdentity"/> runs first: by the time anything asks this
+    /// question, a delivered-but-empty identifier term has already refused the delivery, so a false
+    /// answer here means the term genuinely was not sent.
+    /// </remarks>
     private static bool IsBoundLiteral(RepeatedEnumerationRdfTerm term) =>
         term.Kind == RepeatedEnumerationRdfTermKind.Literal && !string.IsNullOrEmpty(term.Value);
 

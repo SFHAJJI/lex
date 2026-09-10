@@ -487,6 +487,94 @@ public sealed class EuCaseLawLinkProducerTests
     }
 
     /// <summary>
+    /// A delivered but EMPTY identifier literal refuses the whole delivery.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// FOUND IN REVIEW OF THE FIRST VERSION OF THIS REPAIR. That precheck mirrored only part of the
+    /// identity contract - length and printable characters - so an empty literal was never asked
+    /// about, and <c>IsBoundLiteral</c> reported it as "not bound". A term the publisher DID send,
+    /// carrying nothing, was therefore filed as a case with no identity at all: the accepted typed
+    /// exclusion, with <c>Refusal=None</c>.
+    /// </para>
+    /// <para>
+    /// That is the S2-A03 collapse in miniature, and the same mistake #532 caught in a different
+    /// file. "Answered empty" and "never arrived" are different claims about the publisher, and
+    /// only the second is an honest absence.
+    /// </para>
+    /// <para>
+    /// Asserted through the production decode path rather than against the gate helper, because the
+    /// defect was precisely that the gate was never reached.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void ADeliveredButEmptyIdentifierLiteralRefusesTheWholeDelivery()
+    {
+        var emptyCelex = EuCaseLawLinkProducer.DecodeRows(
+            [CelexRow(string.Empty)], Profile(), Scopes(), Evidence);
+        Assert.AreEqual(
+            EuCaseLawLinkProductionRefusal.RowNotAdmitted, emptyCelex.Refusal,
+            "an empty case_celex literal is a delivered term with nothing in it, not an absence.");
+
+        // The hole was symmetric: an empty ecli literal reached the same typed exclusion by the
+        // same route, because the same helper answered the same way about it.
+        var emptyEcli = EuCaseLawLinkProducer.DecodeRows(
+            [Row(Literal(string.Empty), "literal",
+                celex: Unbound(), celexKind: EuCaseLawDiscoveryPlan.UnboundCelexKind)],
+            Profile(),
+            Scopes(),
+            Evidence);
+        Assert.AreEqual(
+            EuCaseLawLinkProductionRefusal.RowNotAdmitted, emptyEcli.Refusal,
+            "an empty ecli literal is a delivered term with nothing in it, not an absence.");
+    }
+
+    /// <summary>
+    /// An identifier literal carrying surrounding whitespace refuses the whole delivery.
+    /// </summary>
+    /// <remarks>
+    /// The second half of the same review finding. A space-padded value passes a printable-ASCII
+    /// test - space IS printable - and then fails the CELEX grammar, so it used to arrive at the
+    /// typed exclusion and be reported as an ordinary citation from another scheme. It is not: the
+    /// identity contract rejects surrounding whitespace, because two spellings that differ only in
+    /// it are one value to a reader and two keys everywhere else.
+    /// </remarks>
+    [TestMethod]
+    public void AnIdentifierLiteralWithSurroundingWhitespaceRefusesTheWholeDelivery()
+    {
+        foreach (var padded in new[] { " " + CaseCelex, CaseCelex + " ", " ", "   " })
+        {
+            var result = EuCaseLawLinkProducer.DecodeRows(
+                [CelexRow(padded)], Profile(), Scopes(), Evidence);
+
+            Assert.AreEqual(
+                EuCaseLawLinkProductionRefusal.RowNotAdmitted, result.Refusal,
+                $"[{padded}] is not an opaque identity, so the delivery cannot be trusted.");
+        }
+    }
+
+    /// <summary>
+    /// Tightening the identity gate did not turn a genuine absence into a refusal.
+    /// </summary>
+    /// <remarks>
+    /// The counterweight to the two tests above, and the assertion an over-correction breaks first.
+    /// A row where the publisher sent no ECLI term and no CELEX term is an honest "this citation
+    /// carries no identity we can read", and it must remain a typed exclusion that leaves the act's
+    /// other links standing. A gate that refused this would be the original #415 defect again in a
+    /// stricter coat, and the admitted link beside it is here to prove it survives.
+    /// </remarks>
+    [TestMethod]
+    public void AGenuinelyAbsentIdentityIsStillATypedExclusion()
+    {
+        var result = EuCaseLawLinkProducer.DecodeRows(
+            [EcliRow(), NeitherRow()], Profile(), Scopes(), Evidence);
+
+        Assert.AreEqual(EuCaseLawLinkProductionRefusal.None, result.Refusal, result.Detail);
+        Assert.HasCount(1, result.ForEuWork(Act));
+        Assert.HasCount(1, result.UnrepresentableForEuWork(Act));
+    }
+
+    /// <summary>
     /// Every delivered row becomes exactly one admitted relation or one typed unrepresentable row.
     /// </summary>
     /// <remarks>
