@@ -202,9 +202,21 @@ public sealed class LuxembourgDraftGraphProducerTests
             CancellationToken.None);
 
         Assert.IsTrue(result.Delivered, $"{result.Refusal}: {result.Detail}");
+        // ADMITTED, NOT ACCEPTED. The fixture delivers a row for every accepted predicate, and one
+        // of them - referralDate - is declared on OpinionRequest, so a triple asserting it of a
+        // draft is drift: retained with its shape, never a record.
         Assert.HasCount(
-            LuxembourgDraftGraphDiscoveryPlan.AskedAbout.Count, result.Records!,
-            "the delivery answers the draft for every asked property.");
+            LuxembourgDraftGraphDiscoveryPlan.DirectlyAdmissiblePredicates.Count, result.Records!,
+            "every admissible property the delivery answered becomes a record.");
+
+        var drift = result.RetainedNotAdmitted.Single();
+        Assert.AreEqual(LuxembourgDraftGraphDiscoveryPlan.ReferralDatePredicateIri, drift.PredicateIri);
+        Assert.AreEqual(
+            LuxembourgDraftRetentionReason.PredicateDeclaredOnAnotherClass, drift.Reason,
+            "an accepted predicate on the wrong class is drift, not an unknown predicate.");
+        Assert.AreEqual(
+            LuxembourgDraftAcquiredScope.EveryPredicateOnTheSubject, result.AcquiredScope,
+            "the run reports what it asked for, not what it admits.");
         Assert.IsGreaterThan(0, result.ProductRequestCount);
 
         var cited = await store.ReadByDigestAsync(
@@ -496,8 +508,11 @@ public sealed class LuxembourgDraftGraphProducerTests
     [TestMethod]
     public void ALiteralValueKeepsItsDatatypeAndLanguage()
     {
+        // Uses an ADMISSIBLE predicate. This once used referralDate, which is declared on
+        // OpinionRequest: a direct triple for it is drift and is retained rather than admitted, so
+        // the test was pinning an admission that must not happen.
         var dated = Decode(Row(
-            predicate: LuxembourgDraftGraphDiscoveryPlan.ReferralDatePredicateIri,
+            predicate: LuxembourgDraftGraphDiscoveryPlan.StatusDraftPredicateIri,
             value: Literal("2024-05-22", XsdDate)));
 
         Assert.AreEqual(LuxembourgDraftGraphProductionRefusal.None, dated.Refusal, dated.Detail);
@@ -562,8 +577,18 @@ public sealed class LuxembourgDraftGraphProducerTests
                 value: Iri("http://data.legilux.public.lu/resource/authority/legal-status/EN-COURS")));
 
         Assert.AreEqual(LuxembourgDraftGraphProductionRefusal.None, result.Refusal, result.Detail);
-        CollectionAssert.AreEqual(new[] { NotAdmitted }, result.RetainedNotAdmitted.ToArray());
         Assert.HasCount(1, result.Records!, "only the admitted predicate becomes a record.");
+
+        // RETAINED WITH ITS SHAPE, not as a bare predicate name. Reducing it to a string would throw
+        // away what makes it evidence: which draft, what value, what kind of term.
+        var retained = result.RetainedNotAdmitted.Single();
+        Assert.AreEqual(NotAdmitted, retained.PredicateIri);
+        Assert.AreEqual(Draft, retained.DraftIri);
+        Assert.AreEqual("Projet de loi", retained.Value);
+        Assert.AreEqual("literal", retained.ValueKind);
+        Assert.AreEqual(
+            LuxembourgDraftRetentionReason.PredicateOutsideTheAcceptedVocabulary, retained.Reason);
+        Assert.AreEqual(Evidence.ResourceId, retained.SourceObservationId);
         Assert.AreEqual(
             LuxembourgDraftGraphDiscoveryPlan.StatusDraftPredicateIri, result.Records![0].PredicateIri);
     }

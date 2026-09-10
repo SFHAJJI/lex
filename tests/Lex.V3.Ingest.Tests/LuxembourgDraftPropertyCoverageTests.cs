@@ -403,12 +403,15 @@ public sealed class LuxembourgDraftPropertyCoverageTests
             CollectionAssert.Contains(drafts.ToArray(), gap.DraftIri);
         }
 
-        // And it is still ASKED about: a direct triple, if the publisher ever delivers one, is an
-        // E8 fact. Only the conclusion of absence is withheld.
+        // IT IS ASKED ABOUT AND STILL NOT ADMISSIBLE FROM A DRAFT TRIPLE, and I had that wrong: I
+        // wrote that a direct triple would be an E8 fact. It would be ontology drift. Admitting one
+        // because its IRI sits in the accepted vocabulary would widen this family's authority to a
+        // class it never proved the subject holds, which S2-A05 requires to fail closed into typed
+        // evidence instead.
         CollectionAssert.Contains(
             LuxembourgDraftGraphDiscoveryPlan.AskedAbout.ToArray(), referral);
         CollectionAssert.DoesNotContain(
-            LuxembourgDraftGraphDiscoveryPlan.AbsenceMatrixPredicates.ToArray(), referral);
+            LuxembourgDraftGraphDiscoveryPlan.DirectlyAdmissiblePredicates.ToArray(), referral);
     }
 
     /// <summary>

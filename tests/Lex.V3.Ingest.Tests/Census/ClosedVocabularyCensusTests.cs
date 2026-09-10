@@ -105,9 +105,12 @@ public sealed class ClosedVocabularyCensusTests
                     + "PageBudgetExhausted, PageDecodeFailedOnOurSide",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgDocumentGetAttemptRefusal: None, "
                     + "RobotsDisallowed, RobotsBootstrapNotCompleted, ObservationNotExecuted",
+                "Lex.V3.Ingest.Luxembourg.LuxembourgDraftAcquiredScope: EveryPredicateOnTheSubject",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgDraftGraphProductionRefusal: None, "
                     + "EnumerationRefused, EnumerationProofRefused, VerifiedRowsRefused, "
                     + "RowNotAdmitted, MatrixCompletionRefused",
+                "Lex.V3.Ingest.Luxembourg.LuxembourgDraftRetentionReason: "
+                    + "PredicateOutsideTheAcceptedVocabulary, PredicateDeclaredOnAnotherClass",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgEnumerationRefusal: None, "
                     + "RobotsBootstrapRefused, ObservationNotExecuted, StatusNotAdmitted, "
                     + "MediaTypeNotAdmitted, CountNotOneNonNegativeInteger, PartitionRequired, "

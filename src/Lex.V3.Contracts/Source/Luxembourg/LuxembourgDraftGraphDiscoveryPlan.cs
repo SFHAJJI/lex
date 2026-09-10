@@ -210,8 +210,26 @@ public sealed class LuxembourgDraftGraphDiscoveryPlan
             [ReferralDatePredicateIri] = OpinionRequestClassIri,
         }.AsReadOnly();
 
-    /// <summary>The accepted predicates whose absence a draft-property delivery CAN evidence.</summary>
-    public static IReadOnlyList<string> AbsenceMatrixPredicates { get; } = Array.AsReadOnly(
+    /// <summary>
+    /// The predicates a triple ON THE DRAFT may be admitted for, and equally the ones whose absence
+    /// such a delivery can evidence.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// ONE SET, BECAUSE IT IS ONE QUESTION: is this predicate declared on this subject? A predicate
+    /// that is not can neither be read off a draft triple as a fact nor have its absence concluded
+    /// from a delivery that could never have carried it.
+    /// </para>
+    /// <para>
+    /// SO A DIRECT <c>InitialDraft referralDate</c> TRIPLE IS DRIFT, NOT A FACT. The broad
+    /// acquisition asks for every predicate on the subject, so such a row can arrive; admitting it
+    /// because its IRI happens to sit in the accepted vocabulary would silently widen this family's
+    /// authority to a class it never proved the subject holds. S2-A05 requires drift to fail closed
+    /// into typed evidence, which is what it now does. It becomes admissible only through a proven
+    /// <see cref="OpinionRequestClassIri"/> traversal, which this family does not yet have.
+    /// </para>
+    /// </remarks>
+    public static IReadOnlyList<string> DirectlyAdmissiblePredicates { get; } = Array.AsReadOnly(
         AskedPredicates.Where(static value =>
             !PredicatesNotDeclaredOnTheDraft.ContainsKey(value)).ToArray());
 
