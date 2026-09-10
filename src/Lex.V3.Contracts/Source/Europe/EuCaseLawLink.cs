@@ -111,7 +111,12 @@ namespace Lex.V3.Contracts.Source.Europe;
 /// REL-005 in that direction.
 /// </para>
 /// <para>
-/// <b>Why two predicates, not one, and why not a third.</b> The scope ruling's second precision
+/// <b>Why these five, and how the set got here.</b> It began as two and was widened by #415's scope
+/// ruling on live measurements; the history matters because the two halves rest on different
+/// evidence, and a reader deciding whether to trust a member needs to know which.
+/// </para>
+/// <para>
+/// <b>The original two, on review/23's worked instance.</b> The scope ruling's second precision
 /// asks for "the real CDM predicate (case law interpretes resource legal) on the edge." Review/23
 /// section 3, line 54 lists it among the observed CDM predicates
 /// (<c>case-law_interpretes_resource_legal</c>, alongside <c>resource_legal_amended_by_case-law</c>
@@ -131,13 +136,27 @@ namespace Lex.V3.Contracts.Source.Europe;
 /// is. <c>EuCaseLawLinkTests</c> uses it to exercise <see cref="CaseSide"/> and the refusals below
 /// on a case-at-target shape, disclosed there as synthetic scaffolding rather than a worked
 /// instance, because review/23 gives no specific example placing a case at <c>work_cites_work</c>'s
-/// target. Two further predicates section 3, line 54 also names,
-/// <c>resource_legal_amended_by_case-law</c> and
-/// <c>case-law_declares_void_by_preliminary_ruling_resource_legal</c>, would likewise place a case
-/// at either end, but neither carries a worked instance example anywhere in review/23: pinning
-/// either here would let a caller assert a specific judicial outcome (an act ruled void or amended
-/// by a named case) this lane has no evidence for, which is a materially stronger and more easily
-/// misleading claim than a citation. They are deliberately left out.
+/// target.
+/// </para>
+/// <para>
+/// <b>The three added later, on measured counts — and this paragraph used to say the opposite.</b>
+/// It said that <c>resource_legal_amended_by_case-law</c> and
+/// <c>case-law_declares_void_by_preliminary_ruling_resource_legal</c> carry no worked instance in
+/// review/23, that pinning either would let a caller assert a judicial outcome this lane cannot
+/// evidence, and that both were deliberately left out. The first two clauses are still true of
+/// review/23. The last is not: #415's scope ruling admitted three predicates on live counts taken
+/// against the publisher's own endpoint on 2026-09-07, and
+/// <c>case-law_declares_void_by_preliminary_ruling_resource_legal</c> is one of them. Saying a
+/// pinned member is deliberately excluded, in the same public contract that pins it, is a
+/// contradiction about accepted membership rather than stale phrasing.
+/// </para>
+/// <para>
+/// The original objection was answered rather than dropped: those predicates are no longer
+/// unobserved, so a caller asserting one asserts something the publisher demonstrably publishes.
+/// Each member records its own count and date on its own declaration, and that per-member evidence
+/// is the authority - not any summary here.
+/// <c>resource_legal_amended_by_case-law</c> remains unpinned, with no worked instance and no live
+/// count, so the original sentence still applies to it unchanged.
 /// </para>
 /// <para>
 /// <b>The judgment-body disposition applies to the case side, wherever it sits.</b>
@@ -155,7 +174,7 @@ namespace Lex.V3.Contracts.Source.Europe;
 /// </para>
 /// <para>
 /// <b>Granularity is fixed, not a parameter.</b> <see cref="Create"/>'s <see cref="Granularity"/>
-/// output is always the same value, because both predicates pinned here relate whole works to whole
+/// output is always the same value, because every predicate pinned here relates whole works to whole
 /// works (never to an article or paragraph within one: review/23 line 109 names
 /// <c>reference_to_modified_location</c>, a different, not-yet-exploited mechanism, as the one that
 /// would carry article-level detail). An enum member that a mutation could flip without any test
@@ -240,7 +259,8 @@ public sealed class EuCaseLawLinkBinding : IEuFactsEvidenceCarrier
     /// </param>
     /// <param name="qualifiedAxioms">
     /// Every <c>owl:Axiom</c> qualifier the publisher attached to this edge, or an empty list.
-    /// Neither pinned predicate has an observed qualifier example in review/23.
+    /// No pinned predicate has an observed qualifier example in review/23 - which is a statement
+    /// about review/23 and not about the three members review/23 did not supply at all.
     /// </param>
     /// <param name="sourceObservationId">The custody coordinate for the observation this edge came from.</param>
     public static EuCaseLawLinkBinding Create(
