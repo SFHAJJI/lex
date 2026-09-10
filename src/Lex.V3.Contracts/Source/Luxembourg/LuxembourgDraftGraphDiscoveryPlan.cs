@@ -491,24 +491,42 @@ public sealed class LuxembourgDraftGraphDiscoveryPlan
 
         var grouped = "?draft ?draft_kind ?predicate ?value ?value_kind ?datatype_iri ?language_tag";
 
-        // THE PAIR IS BOUND BEFORE ITS VALUE IS LOOKED FOR, and that is the repair a live run
-        // forced. The accepted shape asked the absent case with
-        // `{ ... } UNION { FILTER NOT EXISTS { ?draft ?predicate ?missing_value } ... }`, and the
-        // first bounded batch ever sent to Legilux came back with 103 rows for 50 drafts and NOT ONE
-        // carrying the unbound marker. A UNION is evaluated on its own and then joined, so inside
-        // that branch neither ?draft nor ?predicate was bound by the VALUES and the class triple;
-        // NOT EXISTS over three unbound terms asks whether ANY triple exists, which is true, so the
-        // branch was inert and had always been. Every fixture in the suite authored its absence rows
-        // by hand, so nothing in the repository could see it.
+        // THIS QUERY ASKS THE PUBLISHER FOR PRESENT FACTS ONLY, and the gap is derived afterwards
+        // rather than requested. Both halves of that were forced, and by different things.
         //
-        // The cross product is now formed by the class triple and the predicate VALUES, and OPTIONAL
-        // observes the value of each pair. A pair the publisher holds nothing for still delivers its
-        // row, with ?value unbound - which is what S2-A03 requires of a gap and what #532 claimed
-        // this family already did.
+        // Asking the publisher to MATERIALISE the absent case does not work. An OPTIONAL emitting a
+        // row per (draft, predicate) pair was sent three times and never served: ~49s and a read
+        // timeout, ordered and unordered alike, and again as five constant-predicate UNION branches
+        // whose predicates the engine could index. The same fifty drafts asked for present facts
+        // answer in 6.7 seconds. This engine will enumerate what it holds; it will not enumerate
+        // what it does not.
         //
-        // A MULTI-VALUED PROPERTY STILL DELIVERS EVERY VALUE. OPTIONAL preserves one row per value
-        // rather than collapsing to one row per pair, so a draft transposing two directives is two
-        // rows and the count is not forced to the pair count.
+        // And asking it to was the wrong question anyway. A row the publisher returns is something
+        // the publisher SAID. There is no triple behind an absent pair, so a row claiming to be one
+        // is our inference wearing the publisher's clothes - which is what S2-A01 forbids. The gap
+        // is real and must stay first-class (S2-A03), but it is OURS to state: derived from a
+        // complete enumeration, citing that enumeration, and typed so no reader can mistake it for
+        // an assertion. So the absent case leaves this query entirely.
+        //
+        // A MULTI-VALUED PROPERTY STILL DELIVERS EVERY VALUE. The mandatory triple yields one row
+        // per value, so a draft transposing nine directives is nine rows - measured, not supposed:
+        // pl/2000/119 does exactly that, and those eight extra rows are the whole of the difference
+        // between the 103 rows delivered and the 95 distinct pairs they cover.
+        //
+        // NO COLUMN HERE IS COALESCEd, AND THAT IS MEASURED ON THIS PUBLISHER RATHER THAN ASSUMED.
+        // The eager-IF raise this family guards against elsewhere comes from dereferencing an
+        // UNBOUND variable; the mandatory triple removes that cause outright. Applying DATATYPE or
+        // LANG to a BOUND term of the wrong type is a different case, and Legilux does not raise on
+        // it: the 103-row delivery retained under #417 was produced by exactly these four BINDs,
+        // un-COALESCEd, and carried datatype_iri and language_tag in every one of its 103 rows -
+        // all of them IRI-valued.
+        //
+        // COALESCE here would not merely be redundant, it would DESTROY a fact the decoder needs.
+        // This engine will not answer DATATYPE() with rdf:langString, so on a language-tagged
+        // literal that BIND errors and the column drops out of the binding - the one measured
+        // absence ReadQualifier admits, and the thing that lets it tell a language-tagged literal
+        // from a plain one. Swallowing the raise into "" would make that branch unreachable and
+        // erase the distinction #532 was repaired to preserve. Only the KEYS are totalised.
         var batchValues = string.Join('\n', BatchParameterNames()
             .Select(static name => "      {" + name + ":iri}"));
 
@@ -526,13 +544,11 @@ public sealed class LuxembourgDraftGraphDiscoveryPlan
               VALUES ?predicate {
             {{predicateValues}}
               }
-              OPTIONAL {
-                ?draft ?predicate ?value .
-              }
+              ?draft ?predicate ?value .
               BIND(IF(isIRI(?draft), "iri", "unsupported_blank_node") AS ?draft_kind)
-              BIND(COALESCE(IF(isIRI(?value), "iri", IF(isLiteral(?value), "literal", "unsupported_blank_node")), "{{UnboundKind}}") AS ?value_kind)
-              BIND(COALESCE(IF(isLiteral(?value), STR(DATATYPE(?value)), ""), "") AS ?datatype_iri)
-              BIND(COALESCE(IF(isLiteral(?value), LANG(?value), ""), "") AS ?language_tag)
+              BIND(IF(isIRI(?value), "iri", IF(isLiteral(?value), "literal", "unsupported_blank_node")) AS ?value_kind)
+              BIND(IF(isLiteral(?value), STR(DATATYPE(?value)), "") AS ?datatype_iri)
+              BIND(IF(isLiteral(?value), LANG(?value), "") AS ?language_tag)
             }
             GROUP BY {{grouped}}
             """;

@@ -47,25 +47,20 @@ public enum LuxembourgDraftGraphProductionRefusal
     [JsonStringEnumMemberName("predicate_not_asked_about")]
     PredicateNotAskedAbout = 5,
 
-    /// <summary>
-    /// A delivered draft carried rows for some of the asked properties and not others.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// The plan asks every draft about every one of its five predicates, and its absence branch
-    /// means a property the publisher holds nothing for still delivers a row. So an honest delivery
-    /// carries FIVE rows per draft, and a draft carrying fewer is a partial answer.
-    /// </para>
-    /// <para>
-    /// Admitting one would be the false absence this family exists to end, arriving by a route the
-    /// unbound marker cannot describe: <c>For(draftTransposes)</c> would return an empty list for a
-    /// draft whose transposition row simply never came, indistinguishable from a draft the publisher
-    /// answered "none" for. An explicit unbound row and a missing row are different facts, and only
-    /// the first is an answer.
-    /// </para>
-    /// </remarks>
-    [JsonStringEnumMemberName("draft_property_coverage_incomplete")]
-    DraftPropertyCoverageIncomplete = 6,
+    // ORDINAL 6 IS RETIRED AND PERMANENTLY UNALLOCATED. It was
+    // "draft_property_coverage_incomplete", and it refused any draft carrying fewer than five rows.
+    // That invariant was true only while the query asked for the absent case: with the mandatory
+    // value triple a draft delivers a row per value it HAS, so 50 drafts delivered 95 present pairs
+    // and this member would have refused the very first honest batch.
+    //
+    // Its claim did not disappear, it moved. Coverage is now proven over the whole
+    // requested-drafts x asked-predicates matrix by LuxembourgDraftPropertyCoverage, which is the
+    // only thing that can prove it: under the present-facts shape a draft holding none of the five
+    // properties delivers no rows at all, so the delivered rows cannot say which drafts were asked
+    // about. The requested set has to come from the run, not from the answer.
+    //
+    // Not reused, because a retained artifact carrying the old name must not silently acquire a new
+    // meaning when it is read back.
 }
 
 /// <summary>
@@ -86,10 +81,17 @@ public enum LuxembourgDraftGraphProductionRefusal
 /// could.
 /// </para>
 /// <para>
-/// <see cref="ValueKind"/> is <c>unbound</c> for a property the publisher holds no value for, and
-/// that row is an ANSWER rather than a gap: the plan asks for the absence by name with
-/// <c>FILTER NOT EXISTS</c>. A draft with no transposition target is distinguishable here from a
-/// draft nobody asked about, which is what S2-A03 requires.
+/// <see cref="ValueKind"/> is <c>iri</c> or <c>literal</c> and NEVER <c>unbound</c>. Every record
+/// here is a value the publisher actually returned - the query's value triple is mandatory, so a
+/// pair the publisher holds nothing for produces no row at all.
+/// </para>
+/// <para>
+/// THE GAP IS NOT MISSING; IT IS SOMEWHERE ELSE. A pair with no delivered value becomes a separate,
+/// typed, evidence-bound observed-absence record derived from the batch's completed enumeration.
+/// The separation is the point: a row here is something the publisher SAID, and an absence is
+/// something THIS CODE CONCLUDED from a complete enumeration. S2-A03 requires the gap to be
+/// first-class, and S2-A01 requires the assertion to be typed as the publisher's; one record type
+/// carrying both would satisfy the first by breaking the second.
 /// </para>
 /// </remarks>
 public sealed record LuxembourgDraftPropertyRecord(
@@ -149,9 +151,11 @@ public sealed class LuxembourgDraftGraphProductionResult
 
     /// <summary>Every delivered value of one property this run asked about.</summary>
     /// <remarks>
-    /// Returns the <c>unbound</c> rows too, because they are the run's answer for drafts holding no
-    /// such value. A caller wanting only held values filters on <see cref="LuxembourgDraftPropertyRecord.ValueKind"/>,
-    /// which is a choice it makes explicitly rather than one this method makes for it.
+    /// PRESENT VALUES ONLY, and every one of them is a value the publisher returned. A caller that
+    /// reads this and believes it has seen every (draft, property) pair has read a partial answer as
+    /// a whole one: the pairs the publisher holds nothing for are not here and are not rows. They
+    /// are the run's separate observed-absence records, which is what makes them readable as this
+    /// code's conclusion rather than as the publisher's silence rendered into a row.
     /// </remarks>
     public IReadOnlyList<LuxembourgDraftPropertyRecord> For(string predicateIri)
     {
@@ -321,29 +325,6 @@ public sealed class LuxembourgDraftGraphProducer
             records.Add(record);
         }
 
-        // EVERY DELIVERED DRAFT MUST ANSWER FOR EVERY ASKED PROPERTY. The plan's absence branch
-        // guarantees a row per (draft, predicate) pair, so a draft carrying fewer than the full set
-        // is a partial delivery — and admitting one would let For(predicate) return an empty list
-        // for a draft whose row never came, which is indistinguishable from the publisher answering
-        // "none". An explicit unbound row and a missing row are different facts.
-        //
-        // A delivery with no drafts at all stays valid: the class being empty is a complete answer,
-        // and this loop has nothing to complain about.
-        foreach (var draft in records.GroupBy(static value => value.DraftIri, StringComparer.Ordinal))
-        {
-            var covered = draft.Select(static value => value.PredicateIri)
-                .ToHashSet(StringComparer.Ordinal);
-            if (!asked.All(covered.Contains))
-            {
-                var missing = asked.Except(covered, StringComparer.Ordinal).Order(StringComparer.Ordinal);
-                return LuxembourgDraftGraphProductionResult.Refused(
-                    LuxembourgDraftGraphProductionRefusal.DraftPropertyCoverageIncomplete,
-                    $"The delivery answers for {draft.Key} on only some asked properties; "
-                        + "these are missing: " + string.Join(", ", missing) + ".",
-                    productRequestCount);
-            }
-        }
-
         return LuxembourgDraftGraphProductionResult.Success(
             records, asked, completionEvidenceRef, productRequestCount);
     }
@@ -365,6 +346,19 @@ public sealed class LuxembourgDraftGraphProducer
 
         RequireMarkerAgrees(row, profile, "draft_kind", draftTerm);
         RequireMarkerAgrees(row, profile, "value_kind", valueTerm);
+
+        // THE VALUE TRIPLE IS MANDATORY, SO AN UNBOUND VALUE CANNOT HONESTLY ARRIVE. Refused rather
+        // than admitted, and the distinction is the whole design: admitting it would mint a record
+        // that LOOKS like the publisher reporting an absence, when an absence is this code's
+        // conclusion from a complete enumeration and never the publisher's statement. A delivery
+        // producing one is not a delivery this plan can have produced, so the page is not trusted.
+        if (valueTerm.Kind == RepeatedEnumerationRdfTermKind.Unbound)
+        {
+            throw new ArgumentException(
+                "The value triple is mandatory, so a row carrying no value is not a delivery this "
+                    + "plan can have produced.",
+                nameof(row));
+        }
 
         var draftIri = RequireIri(draftTerm, "draft");
         var predicateIri = RequireIri(predicateTerm, "predicate");

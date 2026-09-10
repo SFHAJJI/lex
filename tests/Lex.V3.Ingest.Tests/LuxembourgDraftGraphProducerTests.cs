@@ -108,43 +108,17 @@ public sealed class LuxembourgDraftGraphProducerTests
         RepeatedEnumerationRdfTerm term, Func<RepeatedEnumerationRdfTerm, string?> select) =>
         term.Kind == RepeatedEnumerationRdfTermKind.Literal ? select(term) ?? string.Empty : string.Empty;
 
-    /// <summary>
-    /// Decodes the given rows PLUS the unbound rows that complete every draft they mention.
-    /// </summary>
+    /// <summary>Decodes exactly the rows given.</summary>
     /// <remarks>
-    /// An honest delivery answers every draft for every one of the five asked properties, because
-    /// the plan's absence branch guarantees a row per pair. A test naming one property is describing
-    /// the row it cares about, not a delivery that omits the rest, so the completion is added here
-    /// rather than written out in every test. <see cref="DecodeExactly"/> is the door for a test
-    /// that means the delivery to be partial.
+    /// This used to complete every draft with unbound rows for the properties a test did not name,
+    /// because the query asked for the absent case and an honest delivery carried a row per pair.
+    /// It does not any more: the value triple is mandatory, so a delivery naming one property IS
+    /// honest and the pairs with no row are answered by derived absences instead. The completion
+    /// was also the reason no test in this suite could ever see that the absence branch was inert -
+    /// every fixture authored its own absence rows by hand, so the delivery a test examined was one
+    /// the publisher had never sent.
     /// </remarks>
-    private static LuxembourgDraftGraphProductionResult Decode(params RepeatedEnumerationRow[] rows)
-    {
-        var profile = Profile();
-        var draftOrdinal = profile.ProjectionVariables.ToList().IndexOf("draft");
-        var predicateOrdinal = profile.ProjectionVariables.ToList().IndexOf("predicate");
-
-        var complete = rows.ToList();
-        foreach (var draft in rows
-                     .Select(row => (Draft: row.Terms[draftOrdinal].Value!, Row: row))
-                     .GroupBy(static pair => pair.Draft, StringComparer.Ordinal))
-        {
-            var present = draft
-                .Select(pair => pair.Row.Terms[predicateOrdinal].Value!)
-                .ToHashSet(StringComparer.Ordinal);
-
-            foreach (var predicate in LuxembourgDraftGraphDiscoveryPlan.AskedAbout
-                         .Where(value => !present.Contains(value)))
-            {
-                complete.Add(Row(draft: draft.Key, predicate: predicate, value: Unbound()));
-            }
-        }
-
-        return LuxembourgDraftGraphProducer.DecodeRows(complete, profile, Evidence);
-    }
-
-    /// <summary>Decodes exactly the rows given, completing nothing.</summary>
-    private static LuxembourgDraftGraphProductionResult DecodeExactly(params RepeatedEnumerationRow[] rows) =>
+    private static LuxembourgDraftGraphProductionResult Decode(params RepeatedEnumerationRow[] rows) =>
         LuxembourgDraftGraphProducer.DecodeRows(rows, Profile(), Evidence);
 
     /// <summary>
@@ -209,60 +183,80 @@ public sealed class LuxembourgDraftGraphProducerTests
     }
 
     /// <summary>
-    /// A draft answered on some properties and not others is a partial delivery, not a completed one.
+    /// A draft answered on some properties and not others is the ordinary case, not a partial one.
     /// </summary>
     /// <remarks>
-    /// The plan's absence branch guarantees a row per (draft, property) pair, so fewer than five is
-    /// a delivery this family cannot complete. Admitting one would let <c>For</c> return an empty
-    /// list for a property whose row never came — indistinguishable from the publisher answering
-    /// "none", which is the false absence arriving by a route the unbound marker cannot describe.
+    /// <para>
+    /// THE INVERSION THIS SHAPE FORCED, and it is measured. This test previously refused such a
+    /// delivery, on the reasoning that the query's absence branch guaranteed a row per pair. That
+    /// branch was found permanently inert and then removed: the publisher will not serve a query
+    /// that materialises absent pairs, and asking it to would have made it assert something it
+    /// never said. The mandatory value triple delivers a row per value HELD.
+    /// </para>
+    /// <para>
+    /// So fewer than five rows per draft is what an honest delivery looks like. The retained
+    /// fifty-draft delivery carried 95 present pairs out of 250: had this refusal survived, the
+    /// first real batch would have been rejected as incomplete. The pairs with no row are not lost
+    /// - they become derived absences in <see cref="LuxembourgDraftPropertyCoverage"/>, which is
+    /// where completeness is now proven, over the requested set rather than over the answer.
+    /// </para>
     /// </remarks>
     [TestMethod]
-    public void ADraftAnsweredOnOnlySomePropertiesIsRefusedAsIncomplete()
+    public void ADraftAnsweredOnOnlySomePropertiesIsAdmitted()
     {
-        var result = DecodeExactly(
+        var result = Decode(
             Row(predicate: LuxembourgDraftGraphDiscoveryPlan.StatusDraftPredicateIri,
                 value: Literal("en-cours")));
 
-        Assert.AreEqual(
-            LuxembourgDraftGraphProductionRefusal.DraftPropertyCoverageIncomplete, result.Refusal);
-        StringAssert.Contains(
-            result.Detail!, LuxembourgDraftGraphDiscoveryPlan.DraftTransposesPredicateIri,
-            "the refusal names what the delivery did not answer.");
+        Assert.AreEqual(LuxembourgDraftGraphProductionRefusal.None, result.Refusal, result.Detail);
+        Assert.HasCount(1, result.Records!);
+        Assert.IsEmpty(
+            result.For(LuxembourgDraftGraphDiscoveryPlan.DraftTransposesPredicateIri),
+            "a property with no delivered row simply has no record here; its absence is derived "
+                + "against the requested batch, not read out of the delivery.");
     }
 
     /// <summary>
-    /// An explicit unbound row completes a property; a missing row does not.
+    /// An unbound value refuses the delivery; a missing row is ordinary.
     /// </summary>
     /// <remarks>
-    /// The distinction this family exists for, asserted directly rather than implied: the same draft
-    /// answered "none" for a property is admitted, and the same draft simply missing that property
-    /// is refused.
+    /// <para>
+    /// EXACTLY INVERTED FROM WHAT THIS TEST ONCE ASSERTED, and the inversion is the design. The
+    /// value triple is mandatory, so no solution mapping can leave the value unbound: a row that
+    /// does is a delivery this plan cannot have produced, and the page is not trusted.
+    /// </para>
+    /// <para>
+    /// Admitting it is the specific thing the ruling forbids. Such a row would become a record that
+    /// LOOKS like the publisher reporting an absence, when the publisher said no such thing - an
+    /// absence is this code's conclusion from a complete enumeration, and it must be typed as one.
+    /// A missing row, meanwhile, is not a defect at all: it is how the publisher says nothing, and
+    /// it is answered by a derived absence rather than by a refusal.
+    /// </para>
     /// </remarks>
     [TestMethod]
-    public void AnExplicitUnboundRowCompletesAPropertyAndAMissingRowDoesNot()
+    public void AnUnboundValueRefusesTheDeliveryAndAMissingRowIsOrdinary()
     {
-        var complete = LuxembourgDraftGraphDiscoveryPlan.AskedAbout
-            .Select(predicate => Row(predicate: predicate, value: Unbound()))
-            .ToArray();
-
-        var answered = DecodeExactly(complete);
+        var unbound = Decode(
+            Row(predicate: LuxembourgDraftGraphDiscoveryPlan.StatusDraftPredicateIri,
+                value: Unbound()));
         Assert.AreEqual(
-            LuxembourgDraftGraphProductionRefusal.None, answered.Refusal, answered.Detail);
-        Assert.HasCount(LuxembourgDraftGraphDiscoveryPlan.AskedAbout.Count, answered.Records!);
+            LuxembourgDraftGraphProductionRefusal.RowNotAdmitted, unbound.Refusal,
+            "the publisher cannot answer a mandatory triple with nothing.");
 
-        var missingOne = DecodeExactly(complete.Take(complete.Length - 1).ToArray());
+        var held = Decode(
+            Row(predicate: LuxembourgDraftGraphDiscoveryPlan.StatusDraftPredicateIri,
+                value: Literal("en-cours")));
         Assert.AreEqual(
-            LuxembourgDraftGraphProductionRefusal.DraftPropertyCoverageIncomplete,
-            missingOne.Refusal,
-            "one fewer row is a partial delivery even when every row present says 'none'.");
+            LuxembourgDraftGraphProductionRefusal.None, held.Refusal,
+            "and the four properties with no row at all are ordinary, not a refusal.");
+        Assert.HasCount(1, held.Records!);
     }
 
     /// <summary>A delivery with no drafts at all is a complete answer about an empty class.</summary>
     [TestMethod]
     public void ADeliveryWithNoDraftsIsACompleteAnswerRatherThanAnIncompleteOne()
     {
-        var result = DecodeExactly();
+        var result = Decode();
 
         Assert.AreEqual(LuxembourgDraftGraphProductionRefusal.None, result.Refusal, result.Detail);
         Assert.IsEmpty(result.Records!);
@@ -427,27 +421,33 @@ public sealed class LuxembourgDraftGraphProducerTests
     }
 
     /// <summary>
-    /// A property the publisher holds nothing for is an ANSWER, delivered and recorded.
+    /// A property the publisher holds nothing for produces no row, and no record.
     /// </summary>
     /// <remarks>
-    /// The plan asks for the absence by name with <c>FILTER NOT EXISTS</c>, so "this draft
-    /// transposes nothing" is a row rather than a missing row. Dropping it would make that
-    /// indistinguishable from a draft nobody asked about, which is the false absence S2-A03 forbids
-    /// and the defect this family exists to end.
+    /// <para>
+    /// THE CLAIM THIS TEST ONCE MADE WAS TRUE OF A QUERY THAT NEVER WORKED. It asserted that "this
+    /// draft transposes nothing" arrived as a row carrying the unbound marker, because the plan
+    /// asked for the absence by name. That branch was found permanently inert - the first bounded
+    /// batch ever sent came back with 103 rows and not one unbound marker - and every variant that
+    /// would have made it fire timed the publisher out.
+    /// </para>
+    /// <para>
+    /// So the gap does not arrive as a row, and this producer no longer pretends it can. What S2-A03
+    /// requires is that the gap be first-class, not that the publisher utter it: the pair becomes a
+    /// derived absence in <see cref="LuxembourgDraftPropertyCoverage"/>, typed so it can never be
+    /// read as something Legilux said. What must NOT happen is the delivery being admitted with a
+    /// fabricated unbound row, and that is what this now asserts.
+    /// </para>
     /// </remarks>
     [TestMethod]
-    public void APropertyTheDraftHoldsNothingForIsRecordedRatherThanAbsent()
+    public void APropertyTheDraftHoldsNothingForProducesNoRowAtAll()
     {
         var result = Decode(Row(value: Unbound()));
 
-        Assert.AreEqual(LuxembourgDraftGraphProductionRefusal.None, result.Refusal, result.Detail);
-
-        var record = result
-            .For(LuxembourgDraftGraphDiscoveryPlan.DraftTransposesPredicateIri).Single();
-        Assert.IsNull(record.Value);
         Assert.AreEqual(
-            LuxembourgDraftGraphDiscoveryPlan.UnboundKind, record.ValueKind,
-            "the marker says the publisher holds none, which is the fact.");
+            LuxembourgDraftGraphProductionRefusal.RowNotAdmitted, result.Refusal,
+            "an unbound value under a mandatory triple is a delivery this plan cannot have made.");
+        StringAssert.Contains(result.Detail!, "mandatory");
     }
 
     /// <summary>
@@ -508,7 +508,7 @@ public sealed class LuxembourgDraftGraphProducerTests
     {
         const string NeverAsked = "http://data.legilux.public.lu/resource/ontology/jolux#titleDraft";
 
-        var result = DecodeExactly(Row(predicate: NeverAsked));
+        var result = Decode(Row(predicate: NeverAsked));
 
         Assert.AreEqual(LuxembourgDraftGraphProductionRefusal.PredicateNotAskedAbout, result.Refusal);
         StringAssert.Contains(result.Detail!, NeverAsked);
