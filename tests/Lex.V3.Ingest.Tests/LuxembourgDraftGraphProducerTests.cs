@@ -919,7 +919,7 @@ public sealed class LuxembourgDraftGraphProducerTests
             () => result.For(LuxembourgDraftGraphDiscoveryPlan.DraftTransposesPredicateIri));
     }
 
-    private static BoundMachineRequest LuxembourgSourceWitness()
+    internal static BoundMachineRequest LuxembourgSourceWitness()
     {
         var (plan, planResourceId, _) = LuxembourgAcquisitionTestFixture.BuildInvariantPlan(9102);
         return plan.BindCount(
@@ -935,7 +935,7 @@ public sealed class LuxembourgDraftGraphProducerTests
     /// <summary>
     /// One page answering the draft for all five properties, in the publisher's own wire shape.
     /// </summary>
-    private static string PageJson(IReadOnlyList<string> projection)
+    internal static string PageJson(IReadOnlyList<string> projection)
     {
         static object IriTerm(string value) => new Dictionary<string, string>
         {
