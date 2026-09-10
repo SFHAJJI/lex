@@ -60,6 +60,8 @@ public sealed class LuxembourgOpinionProducerTests
         RepeatedEnumerationRdfTerm? date = null,
         string? dateKind = null,
         string opinion = Opinion,
+        string? opinionKind = null,
+        RepeatedEnumerationRdfTerm? opinionKindTerm = null,
         RepeatedEnumerationRdfTerm? documentKindTerm = null,
         RepeatedEnumerationRdfTerm? dateKindTerm = null,
         RepeatedEnumerationRdfTerm? multiplicity = null,
@@ -88,7 +90,7 @@ public sealed class LuxembourgOpinionProducerTests
 
         var terms = new List<RepeatedEnumerationRdfTerm>
         {
-            opinionTerm, Literal(Marker(opinionTerm)),
+            opinionTerm, opinionKindTerm ?? Literal(opinionKind ?? Marker(opinionTerm)),
             documentTerm, documentKindTerm ?? Literal(documentKind ?? Marker(documentTerm)),
             Literal(documentDatatypeColumn), Literal(documentLanguageColumn),
             dateTerm, dateKindTerm ?? Literal(dateKind ?? Marker(dateTerm)),
@@ -243,6 +245,45 @@ public sealed class LuxembourgOpinionProducerTests
         var boundTermAbsentMarker = Decode(
             Row(documentKind: LuxembourgOpinionDiscoveryPlan.UnboundKind));
         Assert.AreEqual(LuxembourgOpinionProductionRefusal.RowNotAdmitted, boundTermAbsentMarker.Refusal);
+    }
+
+    /// <summary>
+    /// The opinion's own projected marker is read, not recomputed from the term it describes.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// FOUND IN REVIEW ON HEAD 33e68161, and it was this slice's own doing. Growing the cursor to
+    /// key the row by its terms made <c>opinion_kind</c> a projected, grouped, key-bearing column,
+    /// and nothing consumed it: <c>key_2</c> was compared against a marker RECOMPUTED from the
+    /// opinion term, so the delivered column could contradict both the term and the key and still be
+    /// admitted. Recomputing what a column says is not reading it.
+    /// </para>
+    /// <para>
+    /// The exact row the reviewer built is the first case here: a real publisher IRI, a marker
+    /// calling it a blank node, and a key agreeing with the term. Nothing about it is internally
+    /// inconsistent except the one column this producer was ignoring.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void AnOpinionMarkerContradictingItsOwnTermRefusesTheRow()
+    {
+        var contradicted = Decode(Row(opinionKind: "unsupported_blank_node"));
+        Assert.AreEqual(LuxembourgOpinionProductionRefusal.RowNotAdmitted, contradicted.Refusal);
+        StringAssert.Contains(contradicted.Detail!, "opinion");
+
+        // The whole marker space, not the one value that occasioned the finding.
+        foreach (var wrong in new[] { "literal", LuxembourgOpinionDiscoveryPlan.UnboundKind })
+        {
+            var result = Decode(Row(opinionKind: wrong));
+            Assert.AreEqual(
+                LuxembourgOpinionProductionRefusal.RowNotAdmitted, result.Refusal,
+                $"an opinion marker reading {wrong} contradicts a delivered IRI.");
+        }
+
+        // And it is compared as a TERM: an IRI-valued marker whose lexical value reads "iri" did not
+        // come from this query, whose BIND is over string constants.
+        var iriShapedMarker = Decode(Row(opinionKindTerm: Iri("iri")));
+        Assert.AreEqual(LuxembourgOpinionProductionRefusal.RowNotAdmitted, iriShapedMarker.Refusal);
     }
 
     /// <summary>

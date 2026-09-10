@@ -303,6 +303,16 @@ public sealed class LuxembourgOpinionProducer
 
         var document = Term(row, profile, "document");
         var date = Term(row, profile, "opinion_date");
+
+        // THE OPINION'S OWN MARKER IS READ, and this slice is why. When the cursor grew to key the
+        // row by its terms, opinion_kind became a projected, grouped, key-bearing column - and
+        // nothing consumed it. key_2 was compared against a marker RECOMPUTED from the opinion term,
+        // so the delivered column contradicting both the term and the key was admitted: found in
+        // review on head 33e68161 with opinion = <publisher IRI>, opinion_kind =
+        // "unsupported_blank_node", key_2 = "iri". A projected column this design groups and keys on
+        // is authoritative; recomputing what it says is not reading it. The already integrated
+        // procedure-event producer reads event_kind exactly this way.
+        RequireMarkerAgrees(opinion, Term(row, profile, "opinion_kind"), "opinion");
         RequireMarkerAgrees(document, Term(row, profile, "document_kind"), "document");
         RequireMarkerAgrees(date, Term(row, profile, "date_kind"), "opinion_date");
 
