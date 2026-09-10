@@ -43,8 +43,11 @@ public sealed class LuxembourgDraftPropertyCoverageTests
         string familyKey,
         IReadOnlyList<string> subjects)
     {
-        var (proof, keys) = AbsenceFixtures.Delivery(familyKey, subjects.Count);
-        var rows = subjects
+        // KEYED ON THE SUBJECTS THEMSELVES, because the door derives the proven population from
+        // the first key component. Ordered to match the fixture's own delivered order.
+        var ordered = subjects.OrderBy(static value => value, StringComparer.Ordinal).ToArray();
+        var (proof, keys) = AbsenceFixtures.DeliveryOfSubjects(familyKey, ordered);
+        var rows = ordered
             .Select((subject, index) => new RepeatedEnumerationRow(
                 [RepeatedEnumerationRdfTerm.Iri(subject)],
                 keys[index],
@@ -396,25 +399,53 @@ public sealed class LuxembourgDraftPropertyCoverageTests
         var drafts = Drafts(3);
         var (mine, myRows) = DeliveryOf(InventoryFamily, drafts);
 
-        // The honest pairing still works, or everything below proves nothing.
+        // The honest pairing still mints, or everything below passes by refusing everything.
         Assert.IsNotNull(LuxembourgInitialDraftInventoryCitation.MintedOver(
             mine, myRows, drafts, ObservedAt));
 
-        // 1. Another family's real, admitted proof, beside this population.
-        var (elsewhere, _) = DeliveryOf("unrelated-enumeration-family", drafts);
+        // 1. THE SUBSTITUTION BETWEEN THE TWO HALVES OF ONE ROW. A row carries Terms and
+        //    CanonicalKey as independently settable lists, and only the keys are covered by the
+        //    proof. Keeping the proved keys and rewriting the terms to name an undelivered draft
+        //    minted a coverage with absences for it, which is why the population is now taken from
+        //    the key rather than scanned out of the terms.
+        var unobserved = "http://data.legilux.public.lu/eli/dl/pl/1999/999";
+        var termsRewritten = myRows
+            .Select(row => new RepeatedEnumerationRow(
+                [RepeatedEnumerationRdfTerm.Iri(unobserved)], row.CanonicalKey, row.Cursor))
+            .ToArray();
         Assert.ThrowsExactly<ArgumentException>(
-            () => LuxembourgInitialDraftInventoryCitation.MintedOver(elsewhere, myRows, drafts, ObservedAt),
+            () => LuxembourgInitialDraftInventoryCitation.MintedOver(
+                mine, termsRewritten, [unobserved], ObservedAt),
+            "the proved keys do not name this draft, whatever the terms beside them say.");
+
+        // 2. Another enumeration's real, admitted proof - of different subjects.
+        var (elsewhere, elsewhereRows) = DeliveryOf("unrelated-enumeration-family", Drafts(4));
+        Assert.ThrowsExactly<ArgumentException>(
+            () => LuxembourgInitialDraftInventoryCitation.MintedOver(
+                elsewhere, myRows, drafts, ObservedAt),
             "a proof of another enumeration does not prove this delivery.");
-
-        // 2. This run's own proof and rows, and a subject no row carried.
-        var invented = drafts.Concat(["http://example.invalid/caller-chosen-draft"]).ToArray();
         Assert.ThrowsExactly<ArgumentException>(
-            () => LuxembourgInitialDraftInventoryCitation.MintedOver(mine, myRows, invented, ObservedAt),
-            "a subject appearing in no delivered row was never observed.");
+            () => LuxembourgInitialDraftInventoryCitation.MintedOver(
+                elsewhere, elsewhereRows, drafts, ObservedAt),
+            "nor does its own delivery prove this population.");
 
-        // 3. A delivery whose size disagrees with the proof, even with honest rows.
+        // 3. This run's own proof and rows, and one subject it never keyed.
         Assert.ThrowsExactly<ArgumentException>(
-            () => LuxembourgInitialDraftInventoryCitation.MintedOver(mine, myRows[..2], drafts, ObservedAt),
+            () => LuxembourgInitialDraftInventoryCitation.MintedOver(
+                mine, myRows, [.. drafts, unobserved], ObservedAt),
+            "a subject the delivery never keyed was never observed.");
+
+        // 4. And a population that drops one the delivery DID key, which would narrow the class
+        //    every later absence is derived against.
+        Assert.ThrowsExactly<ArgumentException>(
+            () => LuxembourgInitialDraftInventoryCitation.MintedOver(
+                mine, myRows, drafts.Take(2).ToArray(), ObservedAt),
+            "the population is the delivery's own, not a subset a caller chose.");
+
+        // 5. A delivery whose size disagrees with what the proof proves.
+        Assert.ThrowsExactly<ArgumentException>(
+            () => LuxembourgInitialDraftInventoryCitation.MintedOver(
+                mine, myRows[..2], drafts, ObservedAt),
             "two rows are not the three this proof proves were delivered.");
     }
 

@@ -73,14 +73,15 @@ internal sealed class AbsenceEnumerationProofFixture : IRepeatedEnumerationEvide
     public static EnumerationDeliveryComparison DeliveryOf(
         string partitionKey,
         int runSeed,
-        string rowValues)
+        string rowValues,
+        bool rawKeys = false)
     {
         // Both bounds have to clear the row set, and the two page limits stay DIFFERENT so the two
         // passes are still paginated differently - which is the property the comparison exists to
         // test. The default path keeps its original 10 and 7.
         var rowCount = rowValues.Length is 0 ? 0 : rowValues.Split(',').Length;
         return new AbsenceEnumerationProofFixture(partitionKey, runSeed, (rowCount * 2) + 100)
-            .Build(rowValues, rowValues, rowCount + 3, rowCount + 1);
+            .Build(rowValues, rowValues, rowCount + 3, rowCount + 1, rawKeys);
     }
 
     /// <summary>The canonical key one row value carries in <see cref="DeliveryOf"/>.</summary>
@@ -111,20 +112,21 @@ internal sealed class AbsenceEnumerationProofFixture : IRepeatedEnumerationEvide
     internal static SourceArtifactRef Artifact(int seed) =>
         new($"urn:uuid:00000000-0000-4000-8000-{seed:D12}", seed.ToString("x64"));
 
-    private EnumerationDeliveryComparison Build(string rowsA, string rowsB, long limitA = 10, long limitB = 7)
+    private EnumerationDeliveryComparison Build(
+        string rowsA, string rowsB, long limitA = 10, long limitB = 7, bool rawKeys = false)
     {
         // An empty delivery is a real shape - a batch may ask about drafts the publisher holds
         // nothing for - and Split would otherwise report one empty row for none.
         var rowCount = rowsA.Length is 0 ? 0 : rowsA.Split(',').Length;
         var countA = Add(1, CountJson(rowCount), rowCount, Artifact(301), DateTimeOffset.UnixEpoch, true, 1);
         var pageA = Add(
-            2, RowsJson(rowsA), rowCount, countA.HttpEvidenceRef,
+            2, RowsJson(rowsA, rawKeys), rowCount, countA.HttpEvidenceRef,
             DateTimeOffset.UnixEpoch.AddSeconds(1), false, 1, rowLimit: limitA);
         var countB = Add(
             3, CountJson(rowCount), rowCount, Artifact(303),
             DateTimeOffset.UnixEpoch.AddSeconds(2), true, 2);
         var pageB = Add(
-            4, RowsJson(rowsB), rowCount, countB.HttpEvidenceRef,
+            4, RowsJson(rowsB, rawKeys), rowCount, countB.HttpEvidenceRef,
             DateTimeOffset.UnixEpoch.AddSeconds(3), false, 2, rowLimit: limitB);
         var profile = Profile();
         return EnumerationDeliveryComparison.Create(
@@ -287,11 +289,17 @@ internal sealed class AbsenceEnumerationProofFixture : IRepeatedEnumerationEvide
         + "\"datatype\":\"http://www.w3.org/2001/XMLSchema#integer\","
         + $"\"value\":\"{count}\"}}}}]}}}}";
 
-    private static string RowsJson(string values) =>
+    /// <param name="rawKeys">
+    /// When true the row id is the value verbatim rather than <c>urn:row:{value}</c>, so a caller
+    /// can make the proved canonical key BE the subject its family keys on. The Luxembourg inventory
+    /// keys on <c>STR(?draft)</c>, so its citation door derives the population from the proved key
+    /// rather than from the row terms - which a caller can replace independently.
+    /// </param>
+    private static string RowsJson(string values, bool rawKeys = false) =>
         "{\"head\":{\"link\":[],\"vars\":[\"id\",\"cursor\",\"value\"]},"
         + "\"results\":{\"distinct\":false,\"ordered\":true,\"bindings\":["
-        + string.Join(',', (values.Length is 0 ? [] : values.Split(',')).Select(static value =>
-            $"{{\"id\":{{\"type\":\"uri\",\"value\":\"urn:row:{value}\"}},"
+        + string.Join(',', (values.Length is 0 ? [] : values.Split(',')).Select(value =>
+            $"{{\"id\":{{\"type\":\"uri\",\"value\":\"{(rawKeys ? value : "urn:row:" + value)}\"}},"
             + $"\"cursor\":{{\"type\":\"literal\",\"value\":\"{value}\"}}}}"))
         + "]}}";
 

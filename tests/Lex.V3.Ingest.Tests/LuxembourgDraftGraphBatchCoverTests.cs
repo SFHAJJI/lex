@@ -66,6 +66,8 @@ public sealed class LuxembourgDraftGraphBatchCoverTests
     /// <summary>An inventory the producer refuses, because one subject arrives twice.</summary>
     private static LuxembourgInitialDraftInventoryResult RefusedInventory()
     {
+        // Positional keys: a delivery repeating a subject cannot be keyed on subjects, and the
+        // producer refuses it before any citation is minted.
         var (proof, keys) = AbsenceFixtures.Delivery(InventoryFamily, 2);
         return LuxembourgInitialDraftInventoryProducer.DecodeRows(
             [Subject(Prefix + "00001", keys[0]), Subject(Prefix + "00001", keys[1])],
@@ -76,10 +78,15 @@ public sealed class LuxembourgDraftGraphBatchCoverTests
 
     private static LuxembourgInitialDraftInventoryResult Inventory(int subjects)
     {
-        var (proof, keys) = AbsenceFixtures.Delivery(InventoryFamily, subjects);
-        var rows = Enumerable.Range(0, subjects)
-            .Select(index => Subject(Prefix + index.ToString("D5"), keys[index]))
+        // KEYED ON THE DRAFTS THEMSELVES. The citation door derives its proven population from the
+        // first key component, because a caller can replace a row's terms while keeping a real
+        // proof's keys. The prefix and D5 padding already put these in sorted order, which is the
+        // order the delivery keys them in.
+        var drafts = Enumerable.Range(0, subjects)
+            .Select(static index => Prefix + index.ToString("D5"))
             .ToArray();
+        var (proof, keys) = AbsenceFixtures.DeliveryOfSubjects(InventoryFamily, drafts);
+        var rows = drafts.Select((draft, index) => Subject(draft, keys[index])).ToArray();
         return LuxembourgInitialDraftInventoryProducer.DecodeRows(rows, Profile, proof, ObservedAt);
     }
 

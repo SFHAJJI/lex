@@ -177,6 +177,40 @@ internal static class AbsenceFixtures
     /// <c>Keys[i]</c> and its terms to whatever the family under test decodes; the producers read
     /// only the terms, so the two are independent by design.
     /// </remarks>
+    /// <summary>
+    /// A proof whose canonical keys ARE the supplied subjects, for a family that keys on its subject.
+    /// </summary>
+    /// <remarks>
+    /// The Luxembourg inventory keys on <c>STR(?draft)</c>, so its citation door derives the proven
+    /// population from the first key component rather than from the row terms - which a caller can
+    /// replace while keeping a real proof's keys. A fixture for that door therefore has to prove the
+    /// subjects themselves, not stand-in row values.
+    /// </remarks>
+    public static (AbsenceFamilyEnumerationProof Proof, RepeatedEnumerationRdfTerm[][] Keys) DeliveryOfSubjects(
+        string familyKey,
+        IReadOnlyList<string> subjects,
+        int runSeed = 930)
+    {
+        // Cursors must strictly increase over the delivered order, so the subjects are keyed in
+        // their own sorted order and the caller is told which order that was.
+        var ordered = subjects.OrderBy(static value => value, StringComparer.Ordinal).ToArray();
+        var proof = AbsenceFamilyEnumerationProof.TryCreate(
+            familyKey,
+            AbsenceEnumerationProofFixture.DeliveryOf(
+                familyKey, runSeed, string.Join(',', ordered), rawKeys: true),
+            CustodyMembership.Floored,
+            out var refusal);
+        if (proof is null)
+        {
+            throw new InvalidOperationException($"fixture proof refused as {refusal}");
+        }
+
+        var keys = ordered
+            .Select(static subject => new[] { RepeatedEnumerationRdfTerm.Iri(subject) })
+            .ToArray();
+        return (proof, keys);
+    }
+
     public static (AbsenceFamilyEnumerationProof Proof, RepeatedEnumerationRdfTerm[][] Keys) Delivery(
         string familyKey,
         int rowCount,

@@ -338,25 +338,48 @@ internal static class LuxembourgProvenDelivery
             return;
         }
 
-        var carried = new HashSet<string>(StringComparer.Ordinal);
+        // FROM THE PROVEN KEY, NOT FROM THE TERMS. A row is a public record carrying Terms,
+        // CanonicalKey and Cursor as three independently settable lists, and only the keys are
+        // covered by the proof's digest. Scanning the terms therefore established nothing: a caller
+        // holding a real proof kept its exact proved keys, replaced Terms with a draft no
+        // enumeration had delivered, and the coverage minted absences for it.
+        //
+        // This family keys on key_1, which the page derives as STR(?draft) - the subject itself. So
+        // the population it proves is the first key component, and that is digest-bound above. If
+        // this family's key layout ever changes, honest runs refuse here rather than admitting a
+        // subject nobody enumerated, which is the direction this must fail in.
+        var proven = new HashSet<string>(StringComparer.Ordinal);
         foreach (var row in deliveredRows)
         {
-            foreach (var term in row.Terms.Concat(row.CanonicalKey))
+            if (row.CanonicalKey.Count is 0 || row.CanonicalKey[0].Value is not { } subject)
             {
-                if (term.Value is { } value)
-                {
-                    carried.Add(value);
-                }
+                throw new ArgumentException(
+                    "A delivered row carries no subject key, so it names no population member.",
+                    nameof(deliveredRows));
             }
+
+            proven.Add(subject);
         }
 
-        var invented = namedSubjects.Where(value => !carried.Contains(value)).ToArray();
+        var invented = namedSubjects.Where(value => !proven.Contains(value)).ToArray();
         if (invented.Length is not 0)
         {
             throw new ArgumentException(
-                invented.Length + " named subject(s) appear nowhere in the delivery this proof "
+                invented.Length + " named subject(s) are not keyed by the delivery this proof "
                     + "proves, so no enumeration observed them: "
                     + string.Join(", ", invented.Take(4)),
+                nameof(namedSubjects));
+        }
+
+        // EXACT, not merely a subset: a population that omitted a proven subject would describe a
+        // narrower class than the one enumerated, and every absence derived over it would be about
+        // a corpus the run never agreed to.
+        var omitted = proven.Where(value => !namedSubjects.Contains(value)).ToArray();
+        if (omitted.Length is not 0)
+        {
+            throw new ArgumentException(
+                omitted.Length + " subject(s) this delivery keyed are missing from the population: "
+                    + string.Join(", ", omitted.Take(4)),
                 nameof(namedSubjects));
         }
     }

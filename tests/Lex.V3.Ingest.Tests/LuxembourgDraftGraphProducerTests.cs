@@ -51,7 +51,36 @@ public sealed class LuxembourgDraftGraphProducerTests
         string familyKey,
         IReadOnlyList<RepeatedEnumerationRow> rows)
     {
-        var (proof, keys) = AbsenceFixtures.Delivery(familyKey, rows.Count);
+        // The inventory door derives its proven population from the first key component, so the key
+        // must be the subject each row decodes to - which is its first term.
+        var subjects = rows.Select(static row => row.Terms[0].Value ?? string.Empty).ToArray();
+
+        // A delivery that repeats a subject cannot be keyed on subjects at all - canonical keys must
+        // be unique - and it is not an enumeration either: the producer refuses it before any
+        // citation is minted, so the door this keying exists for is never reached. Those fixtures
+        // keep positional keys, which is the honest description of a delivery that proves nothing.
+        // A delivery that repeats a subject, or delivers out of key order, cannot be proven at all:
+        // Source/Core requires canonical keys unique and cursors strictly increasing. Those are
+        // exactly the deliveries the producer refuses before any citation is minted, so they keep
+        // positional keys - an honest description of a delivery that proves nothing about subjects.
+        var sortedUnique = subjects
+            .OrderBy(static value => value, StringComparer.Ordinal)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        if (!subjects.SequenceEqual(sortedUnique, StringComparer.Ordinal))
+        {
+            var (refusedProof, refusedKeys) = AbsenceFixtures.Delivery(familyKey, rows.Count);
+            return (refusedProof, rows
+                .Select((row, index) => new RepeatedEnumerationRow(row.Terms, refusedKeys[index], row.Cursor))
+                .ToArray());
+        }
+
+        // ROW ORDER IS PRESERVED, never rearranged to suit the fixture. An earlier version sorted
+        // the rows to line them up with the keys, which silently changed what a test observed about
+        // delivery order. A proven delivery is necessarily key-ordered - Source/Core requires
+        // cursors to strictly increase - so a fixture wanting a proof must deliver in that order,
+        // and saying so out loud is better than quietly reordering behind the test.
+        var (proof, keys) = AbsenceFixtures.DeliveryOfSubjects(familyKey, subjects);
         var bound = rows
             .Select((row, index) => new RepeatedEnumerationRow(row.Terms, keys[index], row.Cursor))
             .ToArray();
