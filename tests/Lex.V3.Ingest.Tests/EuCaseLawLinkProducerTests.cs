@@ -367,6 +367,315 @@ public sealed class EuCaseLawLinkProducerTests
     /// fixing one and not the other would leave a delivered row able to borrow another coordinate's
     /// scope even when the requested set was clean.
     /// </remarks>
+    /// <summary>
+    /// A citation whose identifier belongs to no CELEX sector is unrepresentable, not malformed.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// MEASURED, NOT SUPPOSED. The retained E6 run under #415 carried 81 such values across 338
+    /// rows: OJ C-series references and one EFTA case number. Every one of them made the identifier
+    /// constructor throw, which the decode loop read as a broken delivery, so 2,052 links the
+    /// publisher DID deliver were lost to a citation naming a scheme this family does not read.
+    /// </para>
+    /// <para>
+    /// The values here are verbatim from that delivery. An invented near-miss would exercise the
+    /// same branch and would prove nothing about what Legilux and Cellar actually send.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void ACitationWhoseIdentifierIsNotCelexBecomesAnUnrepresentableRow()
+    {
+        foreach (var notCelex in new[] { "C/2024/01610", "C2023/099/01", "C/2023/01458", "E2014C0273" })
+        {
+            var result = EuCaseLawLinkProducer.DecodeRows(
+                [CelexRow(notCelex)], Profile(), Scopes(), Evidence);
+
+            Assert.AreEqual(
+                EuCaseLawLinkProductionRefusal.None, result.Refusal,
+                $"{notCelex} is a citation this family cannot represent, not a broken delivery: {result.Detail}");
+            Assert.IsEmpty(result.ForEuWork(Act));
+
+            var excluded = result.UnrepresentableForEuWork(Act).Single();
+            Assert.AreEqual(CaseWork, excluded.CaseWorkUri);
+            Assert.AreEqual(Act, excluded.EuWorkUri);
+        }
+    }
+
+    /// <summary>
+    /// One unrepresentable citation does not take the act's other links with it.
+    /// </summary>
+    /// <remarks>
+    /// This is the whole point of the repair. In the retained delivery a single OJ reference sank
+    /// 2,052 rows; here the admitted link beside it survives, and the excluded one is still reported
+    /// rather than dropped.
+    /// </remarks>
+    [TestMethod]
+    public void AnUnrepresentableCitationDoesNotSinkTheLinksBesideIt()
+    {
+        var result = EuCaseLawLinkProducer.DecodeRows(
+            [EcliRow(), CelexRow("C/2024/01610"), CelexRow(CaseCelex)],
+            Profile(),
+            Scopes(),
+            Evidence);
+
+        Assert.AreEqual(EuCaseLawLinkProductionRefusal.None, result.Refusal, result.Detail);
+        Assert.HasCount(2, result.ForEuWork(Act));
+        Assert.HasCount(1, result.UnrepresentableForEuWork(Act));
+    }
+
+    /// <summary>
+    /// A malformed row still refuses the whole delivery, and widening the identity gate did not
+    /// quietly widen that.
+    /// </summary>
+    /// <remarks>
+    /// The distinction the repair turns on. An identifier from another scheme means the publisher
+    /// said something true that this family cannot carry; a row whose marker contradicts its term,
+    /// or whose predicate is not one this family asked about, means the DELIVERY cannot be trusted -
+    /// and trusting the rest of it would be reading facts out of a response already known to be
+    /// wrong. The identity check is asked BEFORE the constructor precisely so it cannot swallow
+    /// these.
+    /// </remarks>
+    [TestMethod]
+    public void AMalformedRowStillRefusesTheWholeDelivery()
+    {
+        var markerDisagrees = EuCaseLawLinkProducer.DecodeRows(
+            [Row(Literal(Ecli), "iri")], Profile(), Scopes(), Evidence);
+        Assert.AreEqual(
+            EuCaseLawLinkProductionRefusal.RowNotAdmitted, markerDisagrees.Refusal,
+            "a marker contradicting its own term means the delivery is untrustworthy.");
+
+        var celexMarkerDisagrees = EuCaseLawLinkProducer.DecodeRows(
+            [Row(Unbound(), EuCaseLawDiscoveryPlan.UnboundEcliKind,
+                celex: Literal("C/2024/01610"), celexKind: "iri")],
+            Profile(),
+            Scopes(),
+            Evidence);
+        Assert.AreEqual(
+            EuCaseLawLinkProductionRefusal.RowNotAdmitted, celexMarkerDisagrees.Refusal,
+            "a non-CELEX literal does not excuse a marker that lies about what was delivered.");
+
+        // NOT AN IDENTIFIER AT ALL, which is different from an identifier this family cannot read.
+        // The identity contract admits one to two hundred printable ASCII characters, so a control
+        // character or an over-long blob in the identifier position means the response is corrupt -
+        // and filing that as unrepresentable would let a corrupt delivery pass as a partial success.
+        foreach (var notAnIdentifier in new[]
+                 {
+                     new string('X', 201),
+                     "3201" + (char)1 + "6R0679",
+                     "32016R0679" + (char)10,
+                 })
+        {
+            var corrupt = EuCaseLawLinkProducer.DecodeRows(
+                [Row(Unbound(), EuCaseLawDiscoveryPlan.UnboundEcliKind,
+                    celex: Literal(notAnIdentifier), celexKind: "literal")],
+                Profile(),
+                Scopes(),
+                Evidence);
+            Assert.AreEqual(
+                EuCaseLawLinkProductionRefusal.RowNotAdmitted, corrupt.Refusal,
+                "an identifier position carrying a non-identifier means the delivery is corrupt.");
+        }
+
+        var wrongPredicate = EuCaseLawLinkProducer.DecodeRows(
+            [Row(Literal(Ecli), "literal", predicate: "http://example.invalid/not-asked-about")],
+            Profile(),
+            Scopes(),
+            Evidence);
+        Assert.AreEqual(
+            EuCaseLawLinkProductionRefusal.RowNotAdmitted, wrongPredicate.Refusal,
+            "a predicate this family never asked about means the delivery is not the answer asked for.");
+    }
+
+    /// <summary>
+    /// An unasked predicate still refuses the whole delivery when the identity is also foreign.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// FOUND IN REVIEW. Routing a foreign identifier to a typed exclusion made that exclusion a
+    /// RETURN from this row's decoding, and the pinned-predicate check sat after it - inside
+    /// <c>EuCaseLawLinkBinding.Create</c>, which such a row now never reaches. A delivery carrying
+    /// both <c>C/2024/01610</c> and a predicate this family never asked about came back
+    /// <c>Refusal=None</c>: an untrustworthy response accepted as an ordinary excluded citation.
+    /// </para>
+    /// <para>
+    /// Either half alone was already caught. Only the combination escaped, which is why the
+    /// regression has to carry both at once.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void AnUnaskedPredicateRefusesEvenWhenTheIdentityIsForeign()
+    {
+        var result = EuCaseLawLinkProducer.DecodeRows(
+            [Row(Unbound(), EuCaseLawDiscoveryPlan.UnboundEcliKind,
+                celex: Literal("C/2024/01610"), celexKind: "literal",
+                predicate: "http://example.invalid/not-asked-about")],
+            Profile(),
+            Scopes(),
+            Evidence);
+
+        Assert.AreEqual(
+            EuCaseLawLinkProductionRefusal.RowNotAdmitted, result.Refusal,
+            "a predicate this family never asked about means the delivery is not the answer asked "
+                + "for, and a foreign identifier beside it does not excuse that.");
+
+        // Deliberately not asserted by reading the rows back: a refused result refuses the
+        // question too (RequireAskedAbout), which is itself the guarantee that nothing was filed.
+    }
+
+    /// <summary>
+    /// The typed exclusion means the case side is not provable, and never that we stopped looking.
+    /// </summary>
+    /// <remarks>
+    /// The general form of the finding above, asserted so the ordering cannot rot back one check at
+    /// a time. Here the act's own identity is not a Cellar work URI - a fact about the ACT, knowable
+    /// without knowing which side is the case. Read after the identity was classified it would be
+    /// masked by the foreign citation exactly as the predicate was; read before, it refuses.
+    /// </remarks>
+    [TestMethod]
+    public void AnIdentityIndependentDefectIsNotMaskedByAForeignCitation()
+    {
+        const string NotACellarWork = "http://example.invalid/act";
+        var scopes = new Dictionary<string, TargetBodyScope>(StringComparer.Ordinal)
+        {
+            [NotACellarWork] = TargetBodyScope.BodyInScopeHeld,
+        };
+
+        var result = EuCaseLawLinkProducer.DecodeRows(
+            [Row(Unbound(), EuCaseLawDiscoveryPlan.UnboundEcliKind,
+                celex: Literal("C/2024/01610"), celexKind: "literal", act: NotACellarWork)],
+            Profile(),
+            scopes,
+            Evidence);
+
+        Assert.AreEqual(
+            EuCaseLawLinkProductionRefusal.RowNotAdmitted, result.Refusal,
+            "the act's identity is knowable without the case's, so a foreign citation cannot bury it.");
+    }
+
+    /// <summary>
+    /// A delivered but EMPTY identifier literal refuses the whole delivery.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// FOUND IN REVIEW OF THE FIRST VERSION OF THIS REPAIR. That precheck mirrored only part of the
+    /// identity contract - length and printable characters - so an empty literal was never asked
+    /// about, and <c>IsBoundLiteral</c> reported it as "not bound". A term the publisher DID send,
+    /// carrying nothing, was therefore filed as a case with no identity at all: the accepted typed
+    /// exclusion, with <c>Refusal=None</c>.
+    /// </para>
+    /// <para>
+    /// That is the S2-A03 collapse in miniature, and the same mistake #532 caught in a different
+    /// file. "Answered empty" and "never arrived" are different claims about the publisher, and
+    /// only the second is an honest absence.
+    /// </para>
+    /// <para>
+    /// Asserted through the production decode path rather than against the gate helper, because the
+    /// defect was precisely that the gate was never reached.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void ADeliveredButEmptyIdentifierLiteralRefusesTheWholeDelivery()
+    {
+        var emptyCelex = EuCaseLawLinkProducer.DecodeRows(
+            [CelexRow(string.Empty)], Profile(), Scopes(), Evidence);
+        Assert.AreEqual(
+            EuCaseLawLinkProductionRefusal.RowNotAdmitted, emptyCelex.Refusal,
+            "an empty case_celex literal is a delivered term with nothing in it, not an absence.");
+
+        // The hole was symmetric: an empty ecli literal reached the same typed exclusion by the
+        // same route, because the same helper answered the same way about it.
+        var emptyEcli = EuCaseLawLinkProducer.DecodeRows(
+            [Row(Literal(string.Empty), "literal",
+                celex: Unbound(), celexKind: EuCaseLawDiscoveryPlan.UnboundCelexKind)],
+            Profile(),
+            Scopes(),
+            Evidence);
+        Assert.AreEqual(
+            EuCaseLawLinkProductionRefusal.RowNotAdmitted, emptyEcli.Refusal,
+            "an empty ecli literal is a delivered term with nothing in it, not an absence.");
+    }
+
+    /// <summary>
+    /// An identifier literal carrying surrounding whitespace refuses the whole delivery.
+    /// </summary>
+    /// <remarks>
+    /// The second half of the same review finding. A space-padded value passes a printable-ASCII
+    /// test - space IS printable - and then fails the CELEX grammar, so it used to arrive at the
+    /// typed exclusion and be reported as an ordinary citation from another scheme. It is not: the
+    /// identity contract rejects surrounding whitespace, because two spellings that differ only in
+    /// it are one value to a reader and two keys everywhere else.
+    /// </remarks>
+    [TestMethod]
+    public void AnIdentifierLiteralWithSurroundingWhitespaceRefusesTheWholeDelivery()
+    {
+        foreach (var padded in new[] { " " + CaseCelex, CaseCelex + " ", " ", "   " })
+        {
+            var result = EuCaseLawLinkProducer.DecodeRows(
+                [CelexRow(padded)], Profile(), Scopes(), Evidence);
+
+            Assert.AreEqual(
+                EuCaseLawLinkProductionRefusal.RowNotAdmitted, result.Refusal,
+                $"[{padded}] is not an opaque identity, so the delivery cannot be trusted.");
+        }
+    }
+
+    /// <summary>
+    /// Tightening the identity gate did not turn a genuine absence into a refusal.
+    /// </summary>
+    /// <remarks>
+    /// The counterweight to the two tests above, and the assertion an over-correction breaks first.
+    /// A row where the publisher sent no ECLI term and no CELEX term is an honest "this citation
+    /// carries no identity we can read", and it must remain a typed exclusion that leaves the act's
+    /// other links standing. A gate that refused this would be the original #415 defect again in a
+    /// stricter coat, and the admitted link beside it is here to prove it survives.
+    /// </remarks>
+    [TestMethod]
+    public void AGenuinelyAbsentIdentityIsStillATypedExclusion()
+    {
+        var result = EuCaseLawLinkProducer.DecodeRows(
+            [EcliRow(), NeitherRow()], Profile(), Scopes(), Evidence);
+
+        Assert.AreEqual(EuCaseLawLinkProductionRefusal.None, result.Refusal, result.Detail);
+        Assert.HasCount(1, result.ForEuWork(Act));
+        Assert.HasCount(1, result.UnrepresentableForEuWork(Act));
+    }
+
+    /// <summary>
+    /// Every delivered row becomes exactly one admitted relation or one typed unrepresentable row.
+    /// </summary>
+    /// <remarks>
+    /// The conservation property the whole result rests on. A row that reached neither would be a
+    /// silent drop - invisible in every count this result reports, and the false absence S2-A03
+    /// forbids. The delivery here carries one of each shape the loop can take: an admitted ECLI, an
+    /// admitted CELEX, an identifier from another scheme, a CELEX that is real but not case law,
+    /// and a citation with no identity at all.
+    /// </remarks>
+    [TestMethod]
+    public void EveryDeliveredRowIsAccountedForExactlyOnce()
+    {
+        RepeatedEnumerationRow[] delivered =
+        [
+            EcliRow(),
+            CelexRow(CaseCelex),
+            CelexRow("C/2024/01610"),
+            CelexRow(NonCaseCelex),
+            NeitherRow(),
+        ];
+
+        var result = EuCaseLawLinkProducer.DecodeRows(delivered, Profile(), Scopes(), Evidence);
+
+        Assert.AreEqual(EuCaseLawLinkProductionRefusal.None, result.Refusal, result.Detail);
+        Assert.AreEqual(
+            delivered.Length,
+            result.ForEuWork(Act).Count + result.UnrepresentableForEuWork(Act).Count,
+            "every delivered row lands in exactly one bucket, and none is dropped.");
+
+        // Named rather than left to the arithmetic: two are representable and three are not, for
+        // three different reasons.
+        Assert.HasCount(2, result.ForEuWork(Act));
+        Assert.HasCount(3, result.UnrepresentableForEuWork(Act));
+    }
+
     [TestMethod]
     public void TheDecodePathAlsoReadsScopesUnderTheExactComparer()
     {

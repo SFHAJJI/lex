@@ -10,8 +10,8 @@ namespace Lex.V3.Contracts.Source.Europe;
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>This is a rework, not the original E6 head.</b> The design objection
-/// (coordination/EVENTS.md event <c>lex-event-20260904T044207644Z-8b9be4b0357f4f798a4489b562d2f1e7</c>)
+/// <b>This is a rework, not the original E6 head.</b> The design objection, recorded on the issue
+/// record for <c>SFHAJJI/lex#415</c>,
 /// held that REL-005 and R4 line 547
 /// ("A Cellar case relation without ECLI remains under its Cellar or CELEX identity with typed
 /// <c>ecli_missing</c> across every accepted case-link family") are about the <b>case's own</b>
@@ -42,9 +42,9 @@ namespace Lex.V3.Contracts.Source.Europe;
 /// <c>EcliNotInThisSetDescribesTheSetRatherThanThePublisher</c>, which asserts the wire vocabulary
 /// never carries the string <c>ecli_missing</c>). This file's own fixtures
 /// (<c>EuCaseLawLinkTests.cs</c>) repeat the same proof against real EU case-law shapes, now on the
-/// direction review/23 actually evidences. The scope ruling accepting this mapping is recorded at
-/// coordination/EVENTS.md event
-/// <c>lex-event-20260904T040310991Z-dc5a156f7293412b9680a24f44182bc5</c>.
+/// direction review/23 actually evidences. The scope ruling accepting this mapping is recorded on
+/// the issue record for <c>SFHAJJI/lex#415</c>, which also carries the later ruling that widened
+/// the predicate set to five.
 /// </para>
 /// <para>
 /// <b>Why this is a thin binding rather than a parallel vocabulary.</b> Mirrors the precedent
@@ -111,7 +111,12 @@ namespace Lex.V3.Contracts.Source.Europe;
 /// REL-005 in that direction.
 /// </para>
 /// <para>
-/// <b>Why two predicates, not one, and why not a third.</b> The scope ruling's second precision
+/// <b>Why these five, and how the set got here.</b> It began as two and was widened by #415's scope
+/// ruling on live measurements; the history matters because the two halves rest on different
+/// evidence, and a reader deciding whether to trust a member needs to know which.
+/// </para>
+/// <para>
+/// <b>The original two, on review/23's worked instance.</b> The scope ruling's second precision
 /// asks for "the real CDM predicate (case law interpretes resource legal) on the edge." Review/23
 /// section 3, line 54 lists it among the observed CDM predicates
 /// (<c>case-law_interpretes_resource_legal</c>, alongside <c>resource_legal_amended_by_case-law</c>
@@ -131,13 +136,27 @@ namespace Lex.V3.Contracts.Source.Europe;
 /// is. <c>EuCaseLawLinkTests</c> uses it to exercise <see cref="CaseSide"/> and the refusals below
 /// on a case-at-target shape, disclosed there as synthetic scaffolding rather than a worked
 /// instance, because review/23 gives no specific example placing a case at <c>work_cites_work</c>'s
-/// target. Two further predicates section 3, line 54 also names,
-/// <c>resource_legal_amended_by_case-law</c> and
-/// <c>case-law_declares_void_by_preliminary_ruling_resource_legal</c>, would likewise place a case
-/// at either end, but neither carries a worked instance example anywhere in review/23: pinning
-/// either here would let a caller assert a specific judicial outcome (an act ruled void or amended
-/// by a named case) this lane has no evidence for, which is a materially stronger and more easily
-/// misleading claim than a citation. They are deliberately left out.
+/// target.
+/// </para>
+/// <para>
+/// <b>The three added later, on measured counts — and this paragraph used to say the opposite.</b>
+/// It said that <c>resource_legal_amended_by_case-law</c> and
+/// <c>case-law_declares_void_by_preliminary_ruling_resource_legal</c> carry no worked instance in
+/// review/23, that pinning either would let a caller assert a judicial outcome this lane cannot
+/// evidence, and that both were deliberately left out. The first two clauses are still true of
+/// review/23. The last is not: #415's scope ruling admitted three predicates on live counts taken
+/// against the publisher's own endpoint on 2026-09-07, and
+/// <c>case-law_declares_void_by_preliminary_ruling_resource_legal</c> is one of them. Saying a
+/// pinned member is deliberately excluded, in the same public contract that pins it, is a
+/// contradiction about accepted membership rather than stale phrasing.
+/// </para>
+/// <para>
+/// The original objection was answered rather than dropped: those predicates are no longer
+/// unobserved, so a caller asserting one asserts something the publisher demonstrably publishes.
+/// Each member records its own count and date on its own declaration, and that per-member evidence
+/// is the authority - not any summary here.
+/// <c>resource_legal_amended_by_case-law</c> remains unpinned, with no worked instance and no live
+/// count, so the original sentence still applies to it unchanged.
 /// </para>
 /// <para>
 /// <b>The judgment-body disposition applies to the case side, wherever it sits.</b>
@@ -155,7 +174,7 @@ namespace Lex.V3.Contracts.Source.Europe;
 /// </para>
 /// <para>
 /// <b>Granularity is fixed, not a parameter.</b> <see cref="Create"/>'s <see cref="Granularity"/>
-/// output is always the same value, because both predicates pinned here relate whole works to whole
+/// output is always the same value, because every predicate pinned here relates whole works to whole
 /// works (never to an article or paragraph within one: review/23 line 109 names
 /// <c>reference_to_modified_location</c>, a different, not-yet-exploited mechanism, as the one that
 /// would carry article-level detail). An enum member that a mutation could flip without any test
@@ -240,7 +259,8 @@ public sealed class EuCaseLawLinkBinding : IEuFactsEvidenceCarrier
     /// </param>
     /// <param name="qualifiedAxioms">
     /// Every <c>owl:Axiom</c> qualifier the publisher attached to this edge, or an empty list.
-    /// Neither pinned predicate has an observed qualifier example in review/23.
+    /// No pinned predicate has an observed qualifier example in review/23 - which is a statement
+    /// about review/23 and not about the three members review/23 did not supply at all.
     /// </param>
     /// <param name="sourceObservationId">The custody coordinate for the observation this edge came from.</param>
     public static EuCaseLawLinkBinding Create(
@@ -259,11 +279,10 @@ public sealed class EuCaseLawLinkBinding : IEuFactsEvidenceCarrier
         ArgumentNullException.ThrowIfNull(target);
         ArgumentNullException.ThrowIfNull(qualifiedAxioms);
 
-        if (predicateUri is null || !EuCaseLawPredicateVocabulary.Pinned.Contains(predicateUri))
+        if (!EuCaseLawPredicateVocabulary.IsPinned(predicateUri))
         {
             throw new ArgumentException(
-                $"\"{predicateUri}\" is not one of the pinned, review/23-evidenced EU case-law " +
-                "predicates.",
+                $"\"{predicateUri}\" is not one of the accepted, pinned EU case-law predicates.",
                 nameof(predicateUri));
         }
 
@@ -364,10 +383,19 @@ public enum EuCaseLawLinkCaseSide
 }
 
 /// <summary>
-/// The exact, closed set of real EU case-law CDM predicates review/23-research-temporal.md
-/// evidences with a worked instance, and the only predicates <see cref="EuCaseLawLinkBinding.Create"/>
-/// accepts.
+/// The exact, closed, accepted E6 case-law predicate vocabulary: the only predicates
+/// <see cref="EuCaseLawLinkBinding.Create"/> accepts.
 /// </summary>
+/// <remarks>
+/// <para>
+/// THE MEMBERS DO NOT SHARE ONE PROVENANCE, AND THIS SUMMARY MUST NOT IMPLY THEY DO. Two are
+/// evidenced by a worked instance in review/23-research-temporal.md; three were admitted under
+/// #415's scope ruling on live counts taken against the publisher's own endpoint. Each member
+/// carries its own evidence below, and that per-member attribution is the authority - not a blanket
+/// claim here. An earlier version of this summary described all of them as review/23-evidenced,
+/// which was true when the set held two and became false when it grew.
+/// </para>
+/// </remarks>
 /// <remarks>
 /// <para>
 /// WHY THIS SET GREW, AND WHAT REPLACED THE OLD REASON. Until #415's scope ruling this vocabulary
@@ -450,6 +478,25 @@ public static class EuCaseLawPredicateVocabulary
     public const string CaseLawDeclaresVoidByPreliminaryRulingResourceLegalPredicateUri =
         EuConsolidationDiscoveryPlan.Cdm + "case-law_declares_void_by_preliminary_ruling_resource_legal";
 
+    /// <summary>Whether this is one of the accepted, pinned EU case-law predicates.</summary>
+    /// <remarks>
+    /// <para>
+    /// The single membership test, asked by <see cref="EuCaseLawLinkBinding.Create"/> and by any
+    /// reader that must know BEFORE it reaches Create. It exists because a caller outside this
+    /// assembly cannot see <see cref="Pinned"/>, and a caller that cannot ask the authority ends up
+    /// either restating the vocabulary or discovering it too late - which is exactly the ordering
+    /// defect this door was added to close.
+    /// </para>
+    /// <para>
+    /// It answers MEMBERSHIP and asserts nothing about why any member is in the set. The five do not
+    /// share one provenance - two are review/23-evidenced, three rest on the live counts #415
+    /// accepted - and each member records its own. A blanket claim here would be false for three of
+    /// them and would put a second, contradicting authority account on the public surface.
+    /// </para>
+    /// </remarks>
+    public static bool IsPinned(string? predicateUri) =>
+        predicateUri is not null && Pinned.Contains(predicateUri);
+
     internal static readonly IReadOnlyCollection<string> Pinned = new HashSet<string>(
         [
             CaseLawInterpretesResourceLegalPredicateUri,
@@ -465,8 +512,8 @@ public static class EuCaseLawPredicateVocabulary
 /// Whether an EU case-law link points at a whole act or at one article or paragraph within it.
 /// </summary>
 /// <remarks>
-/// Carries exactly one member. Both predicates <see cref="EuCaseLawPredicateVocabulary"/> pins
-/// relate whole works to whole works; review/23 line 109 names
+/// Carries exactly one member. Every predicate <see cref="EuCaseLawPredicateVocabulary"/> pins
+/// relates whole works to whole works; review/23 line 109 names
 /// <c>reference_to_modified_location</c>, a separate and not-yet-exploited mechanism, as the one
 /// that would carry article-level detail. No member for that case is declared here because
 /// <see cref="EuCaseLawLinkBinding.Create"/> has no path that could ever produce one, and an enum
