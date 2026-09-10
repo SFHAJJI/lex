@@ -128,12 +128,21 @@ public sealed class LuxembourgOpinionDiscoveryPlanTests
         CollectionAssert.AreEqual(
             new[]
             {
-                "opinion", "document", "document_kind", "opinion_date", "date_kind", "multiplicity",
-                "key_1", "key_2", "key_3",
+                "opinion", "opinion_kind",
+                "document", "document_kind", "document_datatype", "document_language",
+                "opinion_date", "date_kind", "date_datatype", "date_language",
+                "multiplicity",
+                "key_1", "key_2", "key_3", "key_4", "key_5",
+                "key_6", "key_7", "key_8", "key_9", "key_10",
             },
             profile.ProjectionVariables.ToArray());
         CollectionAssert.AreEqual(
-            new[] { "key_1", "key_2", "key_3" }, profile.CursorVariables.ToArray());
+            new[]
+            {
+                "key_1", "key_2", "key_3", "key_4", "key_5",
+                "key_6", "key_7", "key_8", "key_9", "key_10",
+            },
+            profile.CursorVariables.ToArray());
         CollectionAssert.AreEqual(
             profile.CanonicalKeyVariables.ToArray(), profile.CursorVariables.ToArray());
         Assert.IsEmpty(profile.SelectionParameterNames, "this family's scope is a class, not a batch.");
