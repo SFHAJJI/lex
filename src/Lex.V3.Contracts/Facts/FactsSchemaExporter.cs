@@ -232,10 +232,31 @@ internal static class FactsSchemaHardener
         "|02(0[1-9]|1[0-9]|2[0-8]))" +
         "|" + LeapYear + "0229)";
 
-    /// <summary>The five admitted CELEX profiles, anchored at both ends.</summary>
     /// <summary>The CELEX grammar without its anchors, so one definition serves both users.</summary>
+    /// <remarks>
+    /// <para>
+    /// THIS MUST ADMIT EXACTLY WHAT <see cref="OfficialIdentifier.ProfileOf"/> ADMITS. They are two
+    /// statements of one grammar - the reader decides what this package will accept, and this decides
+    /// what its canonical JSON will validate - so any identifier the reader takes and this refuses is
+    /// a document that passes production and fails its own schema. Widening the reader without
+    /// widening this is exactly that break, and it is what the review caught.
+    /// </para>
+    /// <para>
+    /// <c>R?</c> before the parenthesised ordinal is the same repair as the reader's. <c>R(nn)</c> is
+    /// a corrigendum and a bare <c>(nn)</c> is CELEX's own same-day sequence number; both are
+    /// well-formed identifiers, so both validate here. WHICH of the two a given identifier is remains
+    /// the reader's judgement and is tested there - a schema validates shape, it does not classify.
+    /// </para>
+    /// <para>
+    /// The bare sector 1 alternative carries no number because a treaty is identified by its
+    /// descriptor alone, as in <c>12012P</c>. It is deliberately narrower than the first alternative
+    /// rather than folded into it: outside sector 1 a numberless identifier is not an act with the
+    /// number left off, and <c>32016R</c> must keep failing both this and the reader.
+    /// </para>
+    /// </remarks>
     internal const string CelexBody =
-        @"([0-9]{5}[A-Z]{1,3}([0-9]+(R\([0-9]+\))?(-" + YyyyMmDd + @")?|/[A-Z0-9]+(/[A-Z0-9]+)*)" +
+        @"([0-9]{5}[A-Z]{1,3}([0-9]+(R?\([0-9]+\))?(-" + YyyyMmDd + @")?|/[A-Z0-9]+(/[A-Z0-9]+)*)" +
+        @"|1[0-9]{4}[A-Z]{1,3}" +
         @"|7[0-9]{4}[A-Z]{1,3}[0-9]+[A-Z]{3}_[0-9A-Z]+)";
 
     internal const string CelexPattern = "^" + CelexBody + End;

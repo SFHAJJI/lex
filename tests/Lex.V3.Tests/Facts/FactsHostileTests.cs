@@ -1210,6 +1210,75 @@ public sealed class FactsHostileTests
     }
 
     /// <summary>
+    /// The reader and the emitted schema admit exactly the same identifiers.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// THEY ARE TWO STATEMENTS OF ONE GRAMMAR and nothing was holding them together. The reader
+    /// decides what this package accepts; <c>FactsSchemaHardener.CelexPattern</c> decides what its
+    /// canonical JSON validates. When I widened the reader for the forms this publisher sends, the
+    /// pattern still required a numeric tail and still allowed only <c>R(NN)</c> — so a facts
+    /// document carrying <c>22012A1215(01)</c> or <c>12012P</c> would have passed production and
+    /// failed its own schema. The review caught it by running the pattern; nothing in the suite did.
+    /// </para>
+    /// <para>
+    /// So the equivalence is asserted directly, over both the admitted and the refused, rather than
+    /// each side being tested against its own idea of the grammar. A widening on either side that
+    /// the other does not match fails here.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void TheReaderAndTheEmittedSchemaAdmitTheSameCelexIdentifiers()
+    {
+        string[] admitted =
+        [
+            "32016R0679",
+            "02016R0679-20160504",
+            "32016R0679R(02)",
+            "12012E/TXT",
+            "22012A1215(01)",
+            "52016XC0409(01)",
+            "22014A0830(02)",
+            "12012P",
+            "12012P/TXT",
+            "12012P001",
+            "72019L1937LUX_202303892",
+        ];
+
+        string[] refused =
+        [
+            "not-a-celex",
+            "32016R0679-2016",
+            "32016R0679R(xx)",
+            "32016R0679()",
+            "32016R0679(1a)",
+            "32016R",
+            "02016R-20160504",
+            "C/2024/01610",
+            "C2023/099/01",
+            "C/2023/01458",
+            "E2014C0273",
+            "12012P-20160504",
+        ];
+
+        foreach (var value in admitted)
+        {
+            Assert.IsNotNull(OfficialIdentifier.ProfileOf(value), $"the reader must admit {value}");
+            Assert.IsTrue(
+                System.Text.RegularExpressions.Regex.IsMatch(value, FactsSchemaHardener.CelexPattern),
+                $"the emitted schema must admit {value}, or a document the reader accepts fails it");
+        }
+
+        foreach (var value in refused)
+        {
+            Assert.IsNull(OfficialIdentifier.ProfileOf(value), $"the reader must refuse {value}");
+            Assert.IsFalse(
+                System.Text.RegularExpressions.Regex.IsMatch(value, FactsSchemaHardener.CelexPattern),
+                $"the emitted schema must refuse {value}, or it is wider than the reader");
+        }
+    }
+
+    /// <summary>
     /// MUTATION RECEIPT: the level claim resting on the caller's tag. Both families called the
     /// identical check, so one URI was admissible as either work or resource level.
     /// </summary>
