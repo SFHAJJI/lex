@@ -58,6 +58,19 @@ public enum EuCaseLawLinkProductionRefusal
     /// </remarks>
     [JsonStringEnumMemberName("requested_act_body_scope_not_supplied")]
     RequestedActBodyScopeNotSupplied = 6,
+
+    /// <summary>
+    /// A delivered row reached neither an admitted relation nor a typed unrepresentable row.
+    /// </summary>
+    /// <remarks>
+    /// A conservation failure rather than anything the publisher can cause. The decode loop has
+    /// three exits per row - admitted, unrepresentable, or a refusal that returns - so a row can
+    /// only go missing through an edit that adds a fourth. A row silently dropped between delivery
+    /// and result is the false absence S2-A03 forbids, and it would be invisible in every count this
+    /// result reports, which is why it is refused loudly instead.
+    /// </remarks>
+    [JsonStringEnumMemberName("delivered_row_not_accounted_for")]
+    DeliveredRowNotAccountedFor = 7,
 }
 
 /// <summary>
@@ -463,6 +476,20 @@ public sealed class EuCaseLawLinkProducer
             }
         }
 
+        // EVERY DELIVERED ROW IS ACCOUNTED FOR EXACTLY ONCE. The loop above has three exits per
+        // row - an admitted relation, a typed unrepresentable row, or a refusal that returns - so a
+        // delivered row can only go missing through a future edit that adds a fourth. This is that
+        // edit's alarm, and it is a conservation check rather than a guard against the publisher:
+        // a row silently dropped between delivery and result is the false absence S2-A03 forbids,
+        // and it would be invisible in every count this result reports.
+        if (relations.Count + unrepresentable.Count != rows.Count)
+        {
+            return EuCaseLawLinkProductionResult.Refused(
+                EuCaseLawLinkProductionRefusal.DeliveredRowNotAccountedFor,
+                $"The delivery carried {rows.Count} rows and this result accounts for "
+                    + $"{relations.Count + unrepresentable.Count} of them.");
+        }
+
         return EuCaseLawLinkProductionResult.Success(
             relations,
             unrepresentable,
@@ -580,6 +607,23 @@ public sealed class EuCaseLawLinkProducer
         {
             throw new CaseSideNotProvableException(
                 "The publisher delivered no ECLI and no CELEX literal for this case.");
+        }
+
+        // A LITERAL NO CELEX GRAMMAR ADMITS IS A CITATION WE CANNOT REPRESENT, NOT A BROKEN
+        // DELIVERY. Measured, not supposed: the retained E6 run under #415 carried 81 such values
+        // across 338 rows - OJ C-series references like C/2024/01610 and C2023/099/01, and the EFTA
+        // case number E2014C0273. Letting the identifier constructor throw made every one of them
+        // sink the whole production, so 2,052 links the publisher did deliver were lost to a
+        // citation whose identifier belongs to a scheme this family does not read.
+        //
+        // The check is asked BEFORE construction rather than caught after it, so it can only ever
+        // reclassify the grammar decision. Catching the constructor's ArgumentException would also
+        // swallow a genuinely malformed row, and those must keep refusing the delivery.
+        if (OfficialIdentifier.ProfileOf(celex.Value!) is null)
+        {
+            throw new CaseSideNotProvableException(
+                "The delivered case_celex literal is not a CELEX identifier in any sector: "
+                    + celex.Value);
         }
 
         var identifier = new OfficialIdentifier(FactsIdentifierFamily.Celex, celex.Value!);
