@@ -263,13 +263,16 @@ public sealed class LuxembourgDraftPropertyCoverage
         LuxembourgDraftBatchCitation batch,
         LuxembourgInitialDraftInventoryCitation inventory)
     {
-        RequestedDrafts = requestedDrafts;
-        AskedPredicates = askedPredicates;
-        _present = present;
+        // SNAPSHOTTED AGAIN HERE, and not only at the door. Everything below is published through a
+        // public IReadOnlyList, which a caller can cast back to IList and write through; the lists
+        // this file builds itself are no safer than the caller's once handed out under that type.
+        RequestedDrafts = Array.AsReadOnly(requestedDrafts.ToArray());
+        AskedPredicates = Array.AsReadOnly(askedPredicates.ToArray());
+        _present = Array.AsReadOnly(present.ToArray());
         _valueIndexesByPair = valueIndexesByPair;
-        DerivedAbsences = derivedAbsences;
-        UnresolvedGaps = unresolvedGaps;
-        DraftsOfUnconfirmedClass = draftsOfUnconfirmedClass;
+        DerivedAbsences = Array.AsReadOnly(derivedAbsences.ToArray());
+        UnresolvedGaps = Array.AsReadOnly(unresolvedGaps.ToArray());
+        DraftsOfUnconfirmedClass = Array.AsReadOnly(draftsOfUnconfirmedClass.ToArray());
         Batch = batch;
         Inventory = inventory;
     }
@@ -356,8 +359,8 @@ public sealed class LuxembourgDraftPropertyCoverage
     /// </remarks>
     public static LuxembourgDraftPropertyCoverage? TryComplete(
         LuxembourgDraftBatchAssignment assignment,
-        IReadOnlyList<string> askedPredicates,
-        IReadOnlyList<LuxembourgDraftPropertyRecordView> present,
+        IReadOnlyList<string> askedPredicatesInput,
+        IReadOnlyList<LuxembourgDraftPropertyRecordView> presentInput,
         LuxembourgDraftBatchCitation? batch,
         int retainedNotAdmittedRows,
         IReadOnlyDictionary<string, string> predicatesDeclaredElsewhere,
@@ -367,9 +370,20 @@ public sealed class LuxembourgDraftPropertyCoverage
         ArgumentNullException.ThrowIfNull(assignment);
         var requestedDrafts = assignment.Drafts;
         var inventory = assignment.Inventory;
-        ArgumentNullException.ThrowIfNull(askedPredicates);
-        ArgumentNullException.ThrowIfNull(present);
+        ArgumentNullException.ThrowIfNull(askedPredicatesInput);
+        ArgumentNullException.ThrowIfNull(presentInput);
         detail = null;
+
+        // SNAPSHOT BEFORE ANYTHING READS THEM, which is why these arrive under Input names and are
+        // never touched again. Both belong to the caller, and a completed coverage that kept them by
+        // reference was not completed at all: its own totals moved afterwards. The value index built
+        // below is POSITIONAL into the delivered rows, so a caller who removed a row would not merely
+        // change a count, it would silently repoint every value lookup past it.
+        //
+        // Array.AsReadOnly over a fresh copy, not ToArray alone: a bare array reports IsReadOnly true
+        // and refuses Clear while its IList indexer setter still assigns.
+        var askedPredicates = Array.AsReadOnly(askedPredicatesInput.ToArray());
+        var present = Array.AsReadOnly(presentInput.ToArray());
 
         // AN ABSENCE MAY ONLY BE DERIVED FROM A PROVEN, COMPLETE ENUMERATION. The batch citation is
         // minted from the enumeration proof and cannot be built without one, so this is the

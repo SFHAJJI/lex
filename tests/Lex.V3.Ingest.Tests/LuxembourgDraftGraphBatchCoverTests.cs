@@ -212,6 +212,45 @@ public sealed class LuxembourgDraftGraphBatchCoverTests
     }
 
     /// <summary>
+    /// A citation that came back equal is the same inventory, whatever instance carries it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// THE ONE-INVENTORY CHECK MUST NOT BE REFERENCE EQUALITY. The citation is a record, and it
+    /// crosses a receipt boundary: a coverage rebuilt from retained evidence carries a citation that
+    /// is value-equal to the inventory's own and is necessarily a different instance. Comparing by
+    /// reference would refuse every honest reconstructed delivery as spanning two inventories.
+    /// </para>
+    /// <para>
+    /// That is the failure this codebase has already shipped once - a family that could refuse
+    /// correctly and never succeed - so it is asserted in the direction that can catch it: the cover
+    /// must be MINTED, not refused. Swapping the comparison for ReferenceEquals kills no other test.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void AValueEqualCitationFromAnotherInstanceIsStillThisInventory()
+    {
+        var inventory = Inventory(127);
+        var rebuilt = Inventory(127);
+
+        Assert.AreEqual(
+            inventory.Citation, rebuilt.Citation, "the same population mints an equal citation.");
+        Assert.IsFalse(
+            ReferenceEquals(inventory.Citation, rebuilt.Citation),
+            "and a different instance carries it, or this proves nothing.");
+
+        var batches = LuxembourgDraftGraphBatchFactory.AssignBatches(rebuilt)
+            .Select(static assignment => Batch(assignment))
+            .ToList();
+
+        var cover = LuxembourgDraftGraphBatchCover.TryCreate(
+            inventory, batches, out var refusal, out var detail);
+
+        Assert.IsNotNull(cover, $"an equal citation is the same inventory: {refusal}: {detail}");
+        Assert.AreEqual(127, cover.SubjectCount);
+    }
+
+    /// <summary>
     /// A cover reads in the inventory's assignment order, not the order deliveries arrived.
     /// </summary>
     /// <remarks>

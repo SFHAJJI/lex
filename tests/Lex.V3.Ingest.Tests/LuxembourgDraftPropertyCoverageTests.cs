@@ -234,6 +234,72 @@ public sealed class LuxembourgDraftPropertyCoverageTests
     }
 
     /// <summary>
+    /// A completed coverage does not change when the caller edits the lists it was built from.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// REPRODUCED BY THE REVIEWER FROM OUTSIDE THIS ASSEMBLY. The private constructor stored the
+    /// asked predicates and the delivered rows BY REFERENCE, while <c>CoveredPairCount</c> and
+    /// <c>PublisherRowCount</c> read those live collections and the terminal cover sums those
+    /// properties. Removing one asked predicate and clearing the delivered rows after
+    /// <c>TryComplete</c> had already succeeded moved a minted coverage from five covered pairs to
+    /// four and from one publisher row to none - after every completeness check had run and passed.
+    /// </para>
+    /// <para>
+    /// The positional index is the sharper half. Values are looked up by INDEX into the delivered
+    /// rows, so a caller removing a row does not merely change a total: it repoints every lookup
+    /// past it, and a pair answers with another pair's value. That is a false publisher assertion,
+    /// not an arithmetic slip.
+    /// </para>
+    /// <para>
+    /// Asserted unconditionally on both counts and on every published collection, because a
+    /// conditional probe would pass against a defect that reports itself read-only and still writes
+    /// through the indexer.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void ACompletedCoverageDoesNotMoveWhenItsInputsAreEdited()
+    {
+        var drafts = Drafts(3);
+        var asked = new List<string>(Asked);
+        var rows = drafts.Select(draft => Row(draft, Asked[0], "urn:status:" + draft)).ToList();
+
+        var coverage = LuxembourgDraftPropertyCoverage.TryComplete(
+            Assignment(drafts), asked, rows, Batch(drafts, rows.Count), 0,
+            LuxembourgDraftGraphDiscoveryPlan.PredicatesNotDeclaredOnTheDraft,
+            out var refusal, out var detail);
+        Assert.IsNotNull(coverage, $"{refusal}: {detail}");
+
+        var coveredPairs = coverage.CoveredPairCount;
+        var publisherRows = coverage.PublisherRowCount;
+        var presentPairs = coverage.PresentPairCount;
+        var firstValue = coverage.ValuesFor(drafts[0], Asked[0])[0];
+
+        // The caller still owns these. It may do whatever it likes with them.
+        asked.RemoveAt(asked.Count - 1);
+        rows.Clear();
+
+        Assert.AreEqual(coveredPairs, coverage.CoveredPairCount, "covered pairs are of the completed batch.");
+        Assert.AreEqual(publisherRows, coverage.PublisherRowCount, "so is the delivered row count.");
+        Assert.AreEqual(presentPairs, coverage.PresentPairCount, "and the present pair count.");
+        Assert.AreEqual(
+            firstValue, coverage.ValuesFor(drafts[0], Asked[0])[0],
+            "and a value lookup still answers with its own pair's row.");
+
+        // Nor through the collections the coverage itself publishes.
+        Assert.ThrowsExactly<NotSupportedException>(
+            () => ((IList<string>)coverage.AskedPredicates)[0] = "http://example.invalid/forged");
+        Assert.ThrowsExactly<NotSupportedException>(
+            () => ((IList<string>)coverage.RequestedDrafts)[0] = "http://example.invalid/forged");
+        Assert.ThrowsExactly<NotSupportedException>(
+            () => ((ICollection<LuxembourgDraftPropertyObservedAbsence>)coverage.DerivedAbsences).Clear());
+        Assert.ThrowsExactly<NotSupportedException>(
+            () => ((ICollection<LuxembourgDraftPropertyUnresolvedGap>)coverage.UnresolvedGaps).Clear());
+        Assert.ThrowsExactly<NotSupportedException>(
+            () => ((ICollection<string>)coverage.DraftsOfUnconfirmedClass).Clear());
+    }
+
+    /// <summary>
     /// An assignment's members cannot be edited after its key was computed over them.
     /// </summary>
     /// <remarks>
