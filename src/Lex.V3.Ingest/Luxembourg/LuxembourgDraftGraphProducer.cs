@@ -115,7 +115,27 @@ public sealed record LuxembourgDraftPropertyRecord(
     string ValueKind,
     string ValueDatatypeIri,
     string ValueLanguageTag,
-    string SourceObservationId);
+    string SourceObservationId)
+{
+    /// <summary>What the publisher delivered: an IRI or a literal, and never an absence.</summary>
+    /// <remarks>
+    /// GUARDED HERE BECAUSE THE TYPE IS PUBLIC. The producer refuses an unbound value when it
+    /// decodes, but this record has a public constructor, so any assembly could otherwise mint one
+    /// carrying the unbound marker and the acquisition run ref of a real batch - a record
+    /// indistinguishable, to every reader downstream, from a publisher-returned absence. That is
+    /// the exact fabrication this family's design exists to make impossible, so it is refused at
+    /// the only door that can reach it.
+    /// </remarks>
+    public string ValueKind { get; init; } = RequireDelivered(ValueKind);
+
+    private static string RequireDelivered(string valueKind) =>
+        string.Equals(valueKind, LuxembourgDraftGraphDiscoveryPlan.UnboundKind, StringComparison.Ordinal)
+            ? throw new ArgumentException(
+                "A delivered record carries a value the publisher returned. An absence is derived, "
+                    + "typed and cited elsewhere, and may not be minted as a row.",
+                nameof(valueKind))
+            : valueKind;
+}
 
 /// <summary>Admitted draft-property records, or one typed refusal. Never both.</summary>
 public sealed class LuxembourgDraftGraphProductionResult

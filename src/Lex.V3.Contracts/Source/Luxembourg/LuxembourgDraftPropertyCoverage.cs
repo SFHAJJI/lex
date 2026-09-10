@@ -170,6 +170,7 @@ public sealed class LuxembourgDraftPropertyCoverage
         IReadOnlyList<LuxembourgDraftPropertyRecordView> present,
         Dictionary<(string, string), List<int>> valueIndexesByPair,
         IReadOnlyList<LuxembourgDraftPropertyObservedAbsence> derivedAbsences,
+        IReadOnlyList<string> draftsOfUnconfirmedClass,
         LuxembourgDraftBatchCitation batch,
         LuxembourgInitialDraftInventoryCitation inventory)
     {
@@ -178,6 +179,7 @@ public sealed class LuxembourgDraftPropertyCoverage
         _present = present;
         _valueIndexesByPair = valueIndexesByPair;
         DerivedAbsences = derivedAbsences;
+        DraftsOfUnconfirmedClass = draftsOfUnconfirmedClass;
         Batch = batch;
         Inventory = inventory;
     }
@@ -193,6 +195,31 @@ public sealed class LuxembourgDraftPropertyCoverage
     public int PublisherRowCount => _present.Count;
 
     public IReadOnlyList<LuxembourgDraftPropertyObservedAbsence> DerivedAbsences { get; }
+
+    /// <summary>
+    /// Requested drafts this delivery cannot confirm are still <c>InitialDraft</c>, and for which no
+    /// absence is derived.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// PUBLISHER DRIFT IS RECORDED, NEVER CONVERTED INTO ABSENCE. The query joins
+    /// <c>?draft a jolux:InitialDraft</c> BEFORE the mandatory value triple, so a subject that has
+    /// since left the class delivers zero rows for all five properties - identical, from here, to a
+    /// subject still in the class that simply holds none of them. Those are different facts about
+    /// the publisher and this delivery cannot tell them apart.
+    /// </para>
+    /// <para>
+    /// So the five pairs of such a draft are represented HERE rather than as five asserted absences.
+    /// Deriving absences for them would be the false absence S2-A03 forbids, arriving through drift
+    /// rather than through an incomplete enumeration. A draft that delivered even one row is
+    /// confirmed: the class triple was satisfied for it.
+    /// </para>
+    /// <para>
+    /// Settling it needs a question this batch does not ask - whether each requested subject still
+    /// satisfies the class triple - which is a separate observation and a separate request.
+    /// </para>
+    /// </remarks>
+    public IReadOnlyList<string> DraftsOfUnconfirmedClass { get; }
 
     public LuxembourgDraftBatchCitation Batch { get; }
 
@@ -317,11 +344,28 @@ public sealed class LuxembourgDraftPropertyCoverage
             return null;
         }
 
+        // A DRAFT THAT DELIVERED NOTHING IS NOT A DRAFT THAT HOLDS NOTHING. The class triple is
+        // joined before the value triple, so a subject that left InitialDraft is silent in exactly
+        // the same way as one that is still in it and holds none of the five properties. Absence is
+        // derived only for the drafts this delivery confirms - the ones that delivered a row.
+        var confirmed = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var (draft, _) in byPair.Keys)
+        {
+            confirmed.Add(draft);
+        }
+
+        var unconfirmed = requestedDrafts.Where(value => !confirmed.Contains(value)).ToArray();
+
         // EMITTED IN A DETERMINISTIC ORDER so two runs over one batch produce the same records.
         var absences = new List<LuxembourgDraftPropertyObservedAbsence>();
         var absencePairs = new HashSet<(string, string)>();
         foreach (var draft in requestedDrafts)
         {
+            if (!confirmed.Contains(draft))
+            {
+                continue;
+            }
+
             foreach (var predicate in askedPredicates)
             {
                 var key = (draft, predicate);
@@ -352,18 +396,31 @@ public sealed class LuxembourgDraftPropertyCoverage
         // EVERY REQUESTED PAIR IS REPRESENTED, recomputed rather than declared. The count identity
         // alone would be satisfied by one duplicate absence beside one missing pair, so the set
         // difference is checked too and the unrepresented pairs are named rather than dropped.
+        // EVERY REQUESTED PAIR IS REPRESENTED, as a delivered value, a derived absence, or a draft
+        // whose class this delivery could not confirm. Recomputed rather than declared.
+        //
+        // HONEST ABOUT WHAT THIS CAN CATCH: over sets, absences are the complement of the present
+        // pairs by construction, so this identity cannot detect publisher under-delivery - the
+        // enumeration proof does that, upstream. What it catches is a coding error in the emission
+        // loop, and mutation C6 (absence decided per DRAFT rather than per PAIR - the realistic form
+        // of the arithmetic error this design exists to prevent) is killed here.
         var expected = requestedDrafts.Count * askedPredicates.Count;
-        if (absences.Count + byPair.Count != expected || absencePairs.Count != absences.Count)
+        var accounted = byPair.Count + absences.Count + (unconfirmed.Length * askedPredicates.Count);
+        if (accounted != expected || absencePairs.Count != absences.Count)
         {
             refusal = LuxembourgDraftPropertyCoverageRefusal.MatrixPairNotRepresented;
-            detail = $"{expected} pairs were asked about and "
-                + $"{byPair.Count + absences.Count} were accounted for.";
+            detail = $"{expected} pairs were asked about and {accounted} were accounted for.";
             return null;
         }
 
         var unrepresented = new List<string>();
         foreach (var draft in requestedDrafts)
         {
+            if (!confirmed.Contains(draft))
+            {
+                continue;
+            }
+
             foreach (var predicate in askedPredicates)
             {
                 var key = (draft, predicate);
@@ -383,7 +440,8 @@ public sealed class LuxembourgDraftPropertyCoverage
 
         refusal = LuxembourgDraftPropertyCoverageRefusal.None;
         return new LuxembourgDraftPropertyCoverage(
-            requestedDrafts, askedPredicates, present, byPair, absences, batch, inventory);
+            requestedDrafts, askedPredicates, present, byPair, absences, unconfirmed, batch,
+            inventory);
     }
 
     /// <summary>Every delivered value of one pair, in delivery order.</summary>
@@ -422,6 +480,17 @@ public sealed class LuxembourgDraftPropertyCoverage
                     + "not even an empty one. Reading one here would be the false absence this "
                     + "whole type exists to prevent.");
         }
+
+        // The same rule for a draft whose class this delivery could not confirm: it has no values
+        // AND no derived absence, so answering either would let a caller read a fact out of a
+        // subject the run never established was still in the class.
+        if (DraftsOfUnconfirmedClass.Contains(draftIri, StringComparer.Ordinal))
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(draftIri),
+                "This delivery could not confirm that draft is still an InitialDraft, so it holds "
+                    + "neither values nor an absence for it. See DraftsOfUnconfirmedClass.");
+        }
     }
 
     /// <summary>A one-line measured summary, in the units each number is actually in.</summary>
@@ -429,6 +498,7 @@ public sealed class LuxembourgDraftPropertyCoverage
         CultureInfo.InvariantCulture,
         $"publisher_rows={PublisherRowCount} distinct_present_pairs={PresentPairCount} "
         + $"derived_absences={DerivedAbsences.Count} covered_pairs={CoveredPairCount} "
+        + $"unconfirmed_drafts={DraftsOfUnconfirmedClass.Count} "
         + $"total_records={PublisherRowCount + DerivedAbsences.Count}");
 }
 

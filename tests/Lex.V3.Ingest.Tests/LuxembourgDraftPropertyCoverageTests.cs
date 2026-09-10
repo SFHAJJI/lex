@@ -81,17 +81,29 @@ public sealed class LuxembourgDraftPropertyCoverageTests
         var drafts = Drafts(50);
         var rows = new List<LuxembourgDraftPropertyRecordView>();
 
-        // 94 single-valued pairs, then one pair carrying nine values: 94 + 9 = 103 rows, 95 pairs.
-        var pairs = drafts.SelectMany(d => Asked.Select(p => (d, p))).Take(94).ToArray();
-        foreach (var (draft, predicate) in pairs)
+        // THE MEASURED DISTRIBUTION, not an invented one. From the retained delivery:
+        //   statusDraft               50 rows / 50 pairs
+        //   hasResultingLegalResource 42 rows / 42 pairs
+        //   draftTransposes           11 rows /  3 pairs  (one draft carries nine values)
+        //                            103 rows / 95 pairs
+        foreach (var draft in drafts)
         {
-            rows.Add(Row(draft, predicate, "urn:value:" + draft + predicate));
+            rows.Add(Row(draft, LuxembourgDraftGraphDiscoveryPlan.StatusDraftPredicateIri, "urn:status:" + draft));
         }
 
-        var multi = drafts.SelectMany(d => Asked.Select(p => (d, p))).Skip(94).First();
+        foreach (var draft in drafts.Take(42))
+        {
+            rows.Add(Row(
+                draft, LuxembourgDraftGraphDiscoveryPlan.ResultingLegalResourcePredicateIri,
+                "urn:act:" + draft));
+        }
+
+        var transposes = LuxembourgDraftGraphDiscoveryPlan.DraftTransposesPredicateIri;
+        rows.Add(Row(drafts[0], transposes, "urn:directive:a"));
+        rows.Add(Row(drafts[1], transposes, "urn:directive:b"));
         for (var index = 0; index < 9; index++)
         {
-            rows.Add(Row(multi.Item1, multi.Item2, "urn:directive:" + index));
+            rows.Add(Row(drafts[2], transposes, "urn:directive:" + index));
         }
 
         var coverage = Complete(drafts, rows);
@@ -137,7 +149,7 @@ public sealed class LuxembourgDraftPropertyCoverageTests
     public void EveryRequestedPairIsRepresentedExactlyOnce()
     {
         var drafts = Drafts(7);
-        var rows = drafts.Take(3)
+        var rows = drafts
             .Select(draft => Row(draft, Asked[0], "urn:status:" + draft))
             .ToArray();
 
@@ -190,12 +202,13 @@ public sealed class LuxembourgDraftPropertyCoverageTests
     public void EveryDerivedAbsenceCitesItsBatchAndItsInventory()
     {
         var drafts = Drafts(3);
-        var batch = Batch(drafts, 0);
+        var rows = drafts.Select(draft => Row(draft, Asked[0], "urn:status:" + draft)).ToArray();
+        var batch = Batch(drafts, rows.Length);
         var inventory = Inventory();
 
-        var coverage = Complete(drafts, [], batch, inventory);
+        var coverage = Complete(drafts, rows, batch, inventory);
 
-        Assert.HasCount(15, coverage.DerivedAbsences);
+        Assert.HasCount(12, coverage.DerivedAbsences, "three drafts x four unanswered properties.");
         foreach (var absence in coverage.DerivedAbsences)
         {
             Assert.AreSame(batch, absence.Batch, "the exact batch enumeration, not a copy of its shape.");
@@ -250,7 +263,9 @@ public sealed class LuxembourgDraftPropertyCoverageTests
     [TestMethod]
     public void APairOutsideTheMatrixThrowsRatherThanAnsweringEmpty()
     {
-        var coverage = Complete(Drafts(2), []);
+        var drafts = Drafts(2);
+        var coverage = Complete(
+            drafts, drafts.Select(draft => Row(draft, Asked[0], "urn:status:" + draft)).ToArray());
 
         Assert.ThrowsExactly<ArgumentOutOfRangeException>(
             () => coverage.ValuesFor("http://data.legilux.public.lu/eli/dl/pl/1888/1", Asked[0]));
@@ -258,6 +273,64 @@ public sealed class LuxembourgDraftPropertyCoverageTests
             () => coverage.ValuesFor(coverage.RequestedDrafts[0], "http://example.invalid/never-asked"));
         Assert.ThrowsExactly<ArgumentOutOfRangeException>(
             () => coverage.DerivedAbsenceFor(coverage.RequestedDrafts[0], "http://example.invalid/never-asked"));
+    }
+
+    /// <summary>
+    /// A draft that delivered nothing is recorded, never turned into five absences.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// PUBLISHER DRIFT MUST NOT BECOME ABSENCE, and this is the route it would take. The query joins
+    /// the class triple before the value triple, so a subject that has left <c>InitialDraft</c>
+    /// delivers zero rows - indistinguishable here from a subject still in the class holding none of
+    /// the five properties. Deriving absences for it would assert five facts about a subject the run
+    /// never confirmed it was looking at.
+    /// </para>
+    /// <para>
+    /// So its pairs are represented by <c>DraftsOfUnconfirmedClass</c> instead, and reading either a
+    /// value or an absence for it throws rather than answering empty. A draft that delivered even
+    /// one row is confirmed, because the class triple was satisfied for it.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void ADraftThatDeliveredNothingIsRecordedRatherThanTurnedIntoAbsences()
+    {
+        var drafts = Drafts(3);
+
+        // Two drafts answer; the third is silent.
+        var rows = drafts.Take(2)
+            .Select(draft => Row(draft, Asked[0], "urn:status:" + draft))
+            .ToArray();
+
+        var coverage = Complete(drafts, rows);
+
+        CollectionAssert.AreEqual(
+            new[] { drafts[2] }, coverage.DraftsOfUnconfirmedClass.ToArray(),
+            "the silent draft is named, not silently absorbed.");
+        Assert.AreEqual(
+            8, coverage.DerivedAbsences.Count,
+            "two confirmed drafts x four unanswered properties, and NOTHING for the silent one.");
+        Assert.IsFalse(
+            coverage.DerivedAbsences.Any(value =>
+                string.Equals(value.DraftIri, drafts[2], StringComparison.Ordinal)),
+            "no absence may be derived for a draft whose class this delivery cannot confirm.");
+
+        foreach (var predicate in Asked)
+        {
+            Assert.ThrowsExactly<ArgumentOutOfRangeException>(
+                () => coverage.ValuesFor(drafts[2], predicate),
+                "reading a value for it must not answer empty.");
+            Assert.ThrowsExactly<ArgumentOutOfRangeException>(
+                () => coverage.DerivedAbsenceFor(drafts[2], predicate),
+                "and neither must reading an absence.");
+        }
+
+        // Every pair is still accounted for: 2 present + 8 absences + 5 unconfirmed = 15.
+        Assert.AreEqual(15, coverage.CoveredPairCount);
+        Assert.AreEqual(
+            coverage.CoveredPairCount,
+            coverage.PresentPairCount + coverage.DerivedAbsences.Count
+                + (coverage.DraftsOfUnconfirmedClass.Count * Asked.Length));
     }
 
     /// <summary>The selection digest changes when the batch changes.</summary>
