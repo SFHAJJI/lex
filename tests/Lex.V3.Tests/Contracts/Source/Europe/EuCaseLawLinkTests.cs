@@ -15,11 +15,8 @@ namespace Lex.V3.Tests.Contracts.Source.Europe;
 /// <remarks>
 /// <para>
 /// This is a rework of the original E6 head. See the remarks on <see cref="EuCaseLawLinkBinding"/>
-/// for the full reasoning, including the design objection
-/// (coordination/EVENTS.md event <c>lex-event-20260904T044207644Z-8b9be4b0357f4f798a4489b562d2f1e7</c>),
-/// the scope ruling
-/// (coordination/EVENTS.md event <c>lex-event-20260904T040310991Z-dc5a156f7293412b9680a24f44182bc5</c>)
-/// and R4 (coordination/D1-01-OFFICIAL-SOURCE-BOUNDARY-CANDIDATE-5-2026-08-31.md, line 547).
+/// for the full reasoning, including the design objection and the scope ruling, both recorded on
+/// the issue record for <c>SFHAJJI/lex#415</c>, and R4 line 547.
 /// </para>
 /// <para>
 /// Fixtures are hand built directly from review/23-research-temporal.md. <see cref="Gdpr"/>'s CELEX

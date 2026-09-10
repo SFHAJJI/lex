@@ -10,8 +10,8 @@ namespace Lex.V3.Contracts.Source.Europe;
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>This is a rework, not the original E6 head.</b> The design objection
-/// (coordination/EVENTS.md event <c>lex-event-20260904T044207644Z-8b9be4b0357f4f798a4489b562d2f1e7</c>)
+/// <b>This is a rework, not the original E6 head.</b> The design objection, recorded on the issue
+/// record for <c>SFHAJJI/lex#415</c>,
 /// held that REL-005 and R4 line 547
 /// ("A Cellar case relation without ECLI remains under its Cellar or CELEX identity with typed
 /// <c>ecli_missing</c> across every accepted case-link family") are about the <b>case's own</b>
@@ -42,9 +42,9 @@ namespace Lex.V3.Contracts.Source.Europe;
 /// <c>EcliNotInThisSetDescribesTheSetRatherThanThePublisher</c>, which asserts the wire vocabulary
 /// never carries the string <c>ecli_missing</c>). This file's own fixtures
 /// (<c>EuCaseLawLinkTests.cs</c>) repeat the same proof against real EU case-law shapes, now on the
-/// direction review/23 actually evidences. The scope ruling accepting this mapping is recorded at
-/// coordination/EVENTS.md event
-/// <c>lex-event-20260904T040310991Z-dc5a156f7293412b9680a24f44182bc5</c>.
+/// direction review/23 actually evidences. The scope ruling accepting this mapping is recorded on
+/// the issue record for <c>SFHAJJI/lex#415</c>, which also carries the later ruling that widened
+/// the predicate set to five.
 /// </para>
 /// <para>
 /// <b>Why this is a thin binding rather than a parallel vocabulary.</b> Mirrors the precedent
