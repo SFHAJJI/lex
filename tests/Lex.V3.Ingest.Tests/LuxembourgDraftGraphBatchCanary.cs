@@ -76,10 +76,17 @@ public sealed class LuxembourgDraftGraphBatchCanary
                 + "over one bounded batch. Skipped by default so the suite sends no unasked traffic.");
         }
 
-        var batch = BatchIris();
-        Assert.HasCount(
-            LuxembourgDraftGraphDiscoveryPlan.BatchCapacity, batch,
-            "the canary asks a full batch, which is the shape batching will send.");
+        // DISTINCT DRAFTS, not parameters. The plan pads every batch to capacity, so a shorter
+        // batch binds the same fifty parameters and asks the publisher about fewer subjects - which
+        // is what makes this a measurement of query cost rather than of input shape.
+        var distinct = int.TryParse(
+            Environment.GetEnvironmentVariable("LEX_E8_BATCH_DISTINCT"), out var requested)
+            ? requested
+            : LuxembourgDraftGraphDiscoveryPlan.BatchCapacity;
+        Assert.IsTrue(
+            distinct is > 0 && distinct <= LuxembourgDraftGraphDiscoveryPlan.BatchCapacity,
+            "a batch names one to capacity drafts.");
+        var batch = BatchIris().Take(distinct).ToArray();
 
         var checkout = CheckoutRoot();
         var root = Path.Combine(checkout, "artifacts", "e8-batch-" + Guid.NewGuid().ToString("N"));
