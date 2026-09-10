@@ -117,10 +117,15 @@ public sealed class LuxembourgDraftGraphDiscoveryPlanTests
         var page = LuxembourgDraftGraphDiscoveryPlan.Create().PageTemplate;
 
         StringAssert.Contains(page, "FILTER NOT EXISTS { ?draft ?predicate ?missing_value }");
+
+        // The absence branch no longer binds its own markers, and that is the SR319 repair rather
+        // than a loosening: the markers are derived after the grouping now, so an absence row says
+        // so by leaving ?value unbound and the outer COALESCE reading it as the unbound kind. The
+        // fact is carried in exactly one place instead of two that could disagree.
         StringAssert.Contains(
             page,
-            "BIND(\"" + LuxembourgDraftGraphDiscoveryPlan.UnboundKind + "\" AS ?value_kind)",
-            "the absence carries its own marker rather than arriving as a missing row.");
+            "\"unsupported_blank_node\")), \"" + LuxembourgDraftGraphDiscoveryPlan.UnboundKind + "\") AS ?value_kind)",
+            "an unbound value must still deliver a row that says it is unbound.");
         Assert.AreEqual(
             1,
             page.Split("UNION", StringSplitOptions.None).Length - 1,
@@ -175,27 +180,48 @@ public sealed class LuxembourgDraftGraphDiscoveryPlanTests
     }
 
     /// <summary>
-    /// The qualifier columns stay exactly as the publisher answers them, absence included.
+    /// Every derived column is total, because every one of them now reads a possibly-unbound value.
     /// </summary>
     /// <remarks>
-    /// The pairing with the test above is the whole point and is easy to undo by accident. Making
-    /// these columns total too would look like more safety and would delete a fact: the decoder
-    /// distinguishes a literal whose datatype the engine WOULD NOT GIVE from one it answered as
-    /// empty, and it can only do that while the column is allowed to be missing. The EU families
-    /// left the same binds alone for the same measured reason, and their retained page settles the
-    /// adjacent worry: of its 41 bindings 23 are IRI-valued and <c>datatype_iri</c> is present and
-    /// empty in every one, so this engine does not raise inside DATATYPE or LANG on a bound IRI.
+    /// <para>
+    /// THIS REVERSES AN EARLIER DECISION OF MINE, and the reversal is forced rather than a change of
+    /// mind. While the markers were bound INSIDE the grouping, each branch bound its own and the
+    /// columns could be left exactly as the publisher answered them — absent for a language-tagged
+    /// literal's datatype, which this engine will not give. Moving them outside the grouping is what
+    /// fixed Virtuoso SR319, and outside it every one of them dereferences a variable the absence
+    /// branch leaves unbound. Without COALESCE they would vanish from every absence row, taking the
+    /// required <c>value_kind</c> marker with them.
+    /// </para>
+    /// <para>
+    /// The information is not lost, which is why the trade is acceptable. A language-tagged literal
+    /// was never identified by its absent datatype; it is identified by <c>language_tag</c> being
+    /// non-empty while <c>value_kind</c> reads <c>literal</c>, and that pair is unchanged. What is
+    /// lost is only the ability to tell a datatype the engine WITHHELD from one it answered as
+    /// empty, and nothing downstream reads that difference.
+    /// </para>
+    /// <para>
+    /// The decoder's narrow allowance for an absent <c>datatype_iri</c> on a language-tagged literal
+    /// is therefore no longer reachable through this plan. It is left in place and still tested,
+    /// because it is a statement about what the decoder will accept from a publisher rather than
+    /// about what this query sends — but a reviewer may reasonably want it removed instead.
+    /// </para>
     /// </remarks>
     [TestMethod]
-    public void TheQualifierColumnsAreLeftAsThePublisherAnswersThem()
+    public void EveryDerivedColumnIsTotalBecauseItIsComputedOverAPossiblyUnboundValue()
     {
         var page = LuxembourgDraftGraphDiscoveryPlan.Create().PageTemplate;
 
-        StringAssert.Contains(page, "BIND(IF(isLiteral(?value), STR(DATATYPE(?value)), \"\") AS ?datatype_iri)");
-        StringAssert.Contains(page, "BIND(IF(isLiteral(?value), LANG(?value), \"\") AS ?language_tag)");
-        Assert.IsFalse(
-            page.Contains("BIND(COALESCE(STR(DATATYPE(", StringComparison.Ordinal),
-            "totalising the column would erase the difference between a datatype withheld and one answered empty.");
+        foreach (var derived in new[] { "?draft_kind", "?value_kind", "?datatype_iri", "?language_tag" })
+        {
+            StringAssert.Contains(
+                page,
+                "BIND(COALESCE(",
+                $"{derived} is derived after the grouping, over a value the absence branch leaves unbound.");
+            StringAssert.Contains(page, ") AS " + derived + ")");
+        }
+
+        StringAssert.Contains(page, "BIND(COALESCE(IF(isLiteral(?value), STR(DATATYPE(?value)), \"\"), \"\") AS ?datatype_iri)");
+        StringAssert.Contains(page, "BIND(COALESCE(IF(isLiteral(?value), LANG(?value), \"\"), \"\") AS ?language_tag)");
     }
 
     /// <summary>

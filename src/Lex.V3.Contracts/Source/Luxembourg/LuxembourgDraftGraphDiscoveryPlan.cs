@@ -378,35 +378,55 @@ public sealed class LuxembourgDraftGraphDiscoveryPlan
         var predicateValues = string.Join('\n', AskedPredicates
             .Select(static iri => "    <" + iri + ">"));
 
-        var grouped = "?draft ?draft_kind ?predicate ?value ?value_kind ?datatype_iri ?language_tag";
+        // ONLY THE THREE TERMS THE PUBLISHER ACTUALLY DELIVERS ARE GROUPED. The first live run
+        // against Legilux refused at the pass-one count with Virtuoso SR319, "Max row length is
+        // exceeded when trying to store a string of 5 chars into a temp col", echoing this very
+        // query: grouping on seven columns made the engine's temp row too wide before a five-
+        // character marker could be stored in it. Two ~75-character IRIs and an unbounded value
+        // already fill it.
+        //
+        // The four that moved out are PURE FUNCTIONS of the two that stayed - draft_kind of ?draft,
+        // and the value's kind, datatype and language of ?value - so deriving them after the
+        // grouping asks the identical question of the publisher and returns the identical rows.
+        // What is grouped is what the publisher said; what is derived is what this design says
+        // about it, and only the first needs to survive a GROUP BY.
+        var grouped = "?draft ?predicate ?value";
 
         // One question asked of a closed predicate list, with its own explicit absence branch. A
-        // draft holding none of the asked properties still delivers a row per predicate, carrying
-        // the unbound marker: that absence IS the fact, and omitting it would be the silent drop
-        // this family exists to avoid.
+        // draft holding none of the asked properties still delivers a row per predicate: that
+        // absence IS the fact, and omitting it would be the silent drop this family exists to
+        // avoid. The absence no longer needs its own marker BINDs, because an unbound ?value is
+        // exactly what the outer markers read it from.
         var rows = $$"""
             SELECT {{grouped}} (COUNT(*) AS ?multiplicity) WHERE {
               VALUES ?lex_pass_id { {pass_id:uint} }
               ?draft a <{{InitialDraftClassIri}}> .
-              BIND(IF(isIRI(?draft), "iri", "unsupported_blank_node") AS ?draft_kind)
               VALUES ?predicate {
             {{predicateValues}}
               }
               {
                 ?draft ?predicate ?value .
-                BIND(IF(isIRI(?value), "iri", IF(isLiteral(?value), "literal", "unsupported_blank_node")) AS ?value_kind)
-                BIND(IF(isLiteral(?value), STR(DATATYPE(?value)), "") AS ?datatype_iri)
-                BIND(IF(isLiteral(?value), LANG(?value), "") AS ?language_tag)
               }
               UNION
               {
                 FILTER NOT EXISTS { ?draft ?predicate ?missing_value }
-                BIND("{{UnboundKind}}" AS ?value_kind)
-                BIND("" AS ?datatype_iri)
-                BIND("" AS ?language_tag)
               }
             }
             GROUP BY {{grouped}}
+            """;
+
+        // THE MARKERS AND QUALIFIERS, derived outside the grouping and TOTALISED WITH COALESCE.
+        // Every one of them now dereferences a variable the absence branch leaves unbound, which is
+        // the exact shape EuObjectFactsDiscoveryPlan measured this engine erroring on: it evaluates
+        // IF's arguments EAGERLY, so isIRI or DATATYPE over an unbound term raises and the erroring
+        // BIND leaves the variable out of the binding entirely. COALESCE is specified to swallow an
+        // erroring argument and take the next, which is what makes the unbound case say so rather
+        // than vanish.
+        var markers = $$"""
+            BIND(COALESCE(IF(isIRI(?draft), "iri", "unsupported_blank_node"), "{{UnboundKind}}") AS ?draft_kind)
+            BIND(COALESCE(IF(isIRI(?value), "iri", IF(isLiteral(?value), "literal", "unsupported_blank_node")), "{{UnboundKind}}") AS ?value_kind)
+            BIND(COALESCE(IF(isLiteral(?value), STR(DATATYPE(?value)), ""), "") AS ?datatype_iri)
+            BIND(COALESCE(IF(isLiteral(?value), LANG(?value), ""), "") AS ?language_tag)
             """;
 
         var count = $$"""
@@ -427,6 +447,7 @@ public sealed class LuxembourgDraftGraphDiscoveryPlan
               {
             {{Indent(Indent(rows))}}
               }
+            {{Indent(markers)}}
               BIND(STR(?draft) AS ?key_1)
               BIND(?draft_kind AS ?key_2)
               BIND(STR(?predicate) AS ?key_3)
