@@ -106,12 +106,28 @@ public sealed class LuxembourgDraftGraphDiscoveryPlan
 
     /// <summary>The date the draft was referred.</summary>
     /// <remarks>
+    /// <para>
     /// NOT DECLARED ON THE DRAFT. <c>baseline/pack/38-verified-claims.md</c> puts it on
     /// <see cref="OpinionRequestClassIri"/>, and the measurement agrees: a broad acquisition over
     /// ten proven drafts returned seventeen distinct predicates and this was not among them.
-    /// It stays in the accepted vocabulary because a direct triple, if the publisher ever delivers
-    /// one, is an E8 fact - but its ABSENCE cannot be concluded from a draft-property delivery that
-    /// was never able to carry it. See <see cref="PredicatesNotDeclaredOnTheDraft"/>.
+    /// It stays in the ACCEPTED E8 vocabulary for the OpinionRequest traversal that will one day
+    /// resolve it. It is not, and must not become, admissible from a triple on a draft: a delivery
+    /// asserting it of a draft subject says that subject holds a class role no run has proved, so it
+    /// is retained as <c>PredicateDeclaredOnAnotherClass</c> drift and is never a fact in this
+    /// family. Admission would come only through a separate evidence-bound traversal proving the
+    /// subject role.
+    /// </para>
+    /// <para>
+    /// THIS PARAGRAPH USED TO SAY THE OPPOSITE - that a direct triple would be an E8 fact - and that
+    /// claim is what made the drift admissible in the first place. It is recorded here rather than
+    /// quietly replaced, because the next reader deciding whether to widen admission will reach for
+    /// exactly that reasoning. See <see cref="DirectlyAdmissiblePredicates"/> and
+    /// <see cref="PredicatesNotDeclaredOnTheDraft"/>.
+    /// </para>
+    /// <para>
+    /// Its ABSENCE is equally unconcludable: a draft-property delivery was never able to carry it,
+    /// so silence about it evidences nothing and the pair becomes a typed unresolved gap.
+    /// </para>
     /// </remarks>
     public const string ReferralDatePredicateIri = Jolux + "referralDate";
 
