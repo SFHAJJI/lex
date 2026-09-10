@@ -131,6 +131,7 @@ public sealed class LuxembourgDraftGraphBatchCanary
             .AppendLine("detail=" + (result.Detail ?? string.Empty))
             .AppendLine("product_requests=" + result.ProductRequestCount)
             .AppendLine("records=" + (result.Records?.Count.ToString() ?? "none"))
+            .AppendLine("coverage=" + (result.Coverage?.Describe() ?? "none"))
             .ToString();
         await File.WriteAllTextAsync(Path.Combine(root, "canary-summary.txt"), summary);
         TestContext?.WriteLine(summary);
@@ -153,6 +154,29 @@ public sealed class LuxembourgDraftGraphBatchCanary
         foreach (var record in result.Records!)
         {
             CollectionAssert.Contains(batch, record.DraftIri);
+        }
+
+        // THE RELATIONSHIP, NEVER THE NUMBERS. The ruling says remeasure rather than pin, so the
+        // only constants asserted here are local: how many drafts this run asked about and how many
+        // properties this family asks. 103, 95, 155, 250 and 258 are written to the summary as
+        // measurements and asserted nowhere.
+        var coverage = result.Coverage!;
+        Assert.AreEqual(
+            batch.Length * LuxembourgDraftGraphDiscoveryPlan.AskedAbout.Count,
+            coverage.CoveredPairCount);
+        Assert.AreEqual(
+            coverage.CoveredPairCount,
+            coverage.PresentPairCount + coverage.DerivedAbsences.Count
+                + (coverage.DraftsOfUnconfirmedClass.Count
+                    * LuxembourgDraftGraphDiscoveryPlan.AskedAbout.Count),
+            "every asked pair is present, derived-absent, or a draft whose class went unconfirmed.");
+
+        foreach (var absence in coverage.DerivedAbsences)
+        {
+            CollectionAssert.Contains(batch, absence.DraftIri);
+            Assert.IsEmpty(
+                coverage.ValuesFor(absence.DraftIri, absence.PredicateIri),
+                "a pair cannot carry both a derived absence and delivered values.");
         }
     }
 
