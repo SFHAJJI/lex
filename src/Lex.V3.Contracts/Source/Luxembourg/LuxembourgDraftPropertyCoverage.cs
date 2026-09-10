@@ -242,12 +242,16 @@ public sealed record LuxembourgInitialDraftInventoryCitation
     /// <param name="observedAt">When the enumeration was observed.</param>
     public static LuxembourgInitialDraftInventoryCitation MintedOver(
         AbsenceFamilyEnumerationProof proof,
+        IReadOnlyList<RepeatedEnumerationRow> deliveredRows,
         IReadOnlyList<string> addressablePopulation,
         string observedAt)
     {
         ArgumentNullException.ThrowIfNull(proof);
+        ArgumentNullException.ThrowIfNull(deliveredRows);
         ArgumentNullException.ThrowIfNull(addressablePopulation);
         ArgumentException.ThrowIfNullOrWhiteSpace(observedAt);
+
+        LuxembourgProvenDelivery.Bind(proof, deliveredRows, addressablePopulation);
 
         var familyKey = proof.FamilyKey;
         var acquisitionRunRef = proof.AcquisitionRunRef;
@@ -269,6 +273,92 @@ public sealed record LuxembourgInitialDraftInventoryCitation
             LuxembourgDraftGraphDiscoveryPlan.SelectionDigestFor(addressablePopulation),
             addressablePopulation.Count,
             observedAt);
+    }
+}
+
+/// <summary>
+/// Ties a citation to the enumeration its proof actually proves, not merely to some enumeration.
+/// </summary>
+/// <remarks>
+/// <para>
+/// WHAT DEMANDING A PROOF DID NOT ESTABLISH. Requiring an
+/// <see cref="AbsenceFamilyEnumerationProof"/> made a citation impossible to write out of nothing,
+/// and nothing more. A reviewer took the repository's own real proof fixture - an admitted proof
+/// over two independently agreeing, custody-verified passes, for a family called
+/// <c>unrelated-enumeration-family</c>, delivering two rows - and passed it beside a caller-chosen
+/// one-member population that no enumeration ever delivered. The coverage minted:
+/// <c>refusal=None</c>, three derived absences, one unresolved gap. A reusable honest proof had
+/// simply replaced the forged value.
+/// </para>
+/// <para>
+/// SO THE ROWS ARE BOUND TO THE PROOF, AND THE POPULATION TO THE ROWS. The rows' canonical-key
+/// digest must equal the digest the proof carries, over the same schema Source/Core used when the
+/// proof was minted. Rows are publicly constructible, which is exactly why the check is a DIGEST
+/// rather than a type: substituting rows means finding a canonical-key set that hashes to a digest
+/// fixed before this call, which is not something a caller assembles by choosing arguments. The
+/// delivered count must agree too, and every named subject must appear as a term the delivery
+/// actually carried.
+/// </para>
+/// <para>
+/// Deliberately NOT a second decoder. It does not learn the family's projection or re-derive which
+/// variable holds a subject - that lives in the producer, and drifting from it would refuse honest
+/// runs. It asks only what can be asked without knowing the shape: are these the proof's rows, and
+/// is every subject named one the delivery carried.
+/// </para>
+/// </remarks>
+internal static class LuxembourgProvenDelivery
+{
+    internal static void Bind(
+        AbsenceFamilyEnumerationProof proof,
+        IReadOnlyList<RepeatedEnumerationRow> deliveredRows,
+        IReadOnlyList<string> namedSubjects)
+    {
+        if (deliveredRows.Count != proof.DeliveredRowCount)
+        {
+            throw new ArgumentException(
+                "This delivery carries " + deliveredRows.Count + " rows and its own proof proves "
+                    + proof.DeliveredRowCount + ", so they are not the same enumeration.",
+                nameof(deliveredRows));
+        }
+
+        var digest = EnumerationDeliveryComparison.Digest(
+            EnumerationDeliveryComparison.CanonicalKeySetSchema,
+            deliveredRows.Select(static row => row.CanonicalKey));
+        if (!string.Equals(digest, proof.CanonicalKeyDigest, StringComparison.Ordinal))
+        {
+            throw new ArgumentException(
+                "These rows are not the ones this proof proves were delivered: their canonical keys "
+                    + "digest to " + digest + " and the proof carries " + proof.CanonicalKeyDigest
+                    + ". An honest proof of another enumeration authorizes nothing here.",
+                nameof(deliveredRows));
+        }
+
+        if (namedSubjects.Count is 0)
+        {
+            return;
+        }
+
+        var carried = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var row in deliveredRows)
+        {
+            foreach (var term in row.Terms.Concat(row.CanonicalKey))
+            {
+                if (term.Value is { } value)
+                {
+                    carried.Add(value);
+                }
+            }
+        }
+
+        var invented = namedSubjects.Where(value => !carried.Contains(value)).ToArray();
+        if (invented.Length is not 0)
+        {
+            throw new ArgumentException(
+                invented.Length + " named subject(s) appear nowhere in the delivery this proof "
+                    + "proves, so no enumeration observed them: "
+                    + string.Join(", ", invented.Take(4)),
+                nameof(namedSubjects));
+        }
     }
 }
 
@@ -335,27 +425,43 @@ public sealed record LuxembourgDraftBatchCitation
     /// </param>
     /// <param name="selectionDigest">The digest of the members asked about.</param>
     /// <param name="requestedDraftCount">How many drafts were asked about.</param>
-    /// <param name="deliveredRowCount">
-    /// How many rows came back. NOT cross-checked against the proof, and the reason is worth
-    /// stating: the rows reaching a batch are opened through
-    /// <see cref="Lex.V3.Contracts.Source.Core.VerifiedRepeatedEnumerationRows"/>, which already
-    /// re-derives their count against this same proof, so the equality would hold in production by
-    /// construction while forcing every fixture to claim the shared proof fixture's own row count
-    /// instead of its own. A check that makes tests misstate their shape buys nothing.
+    /// <param name="deliveredRows">
+    /// The rows this batch actually received, bound to <paramref name="proof"/> by their
+    /// canonical-key digest. The delivered count is taken from them rather than stated.
     /// </param>
     /// <param name="partitionKey">This batch's own partition key.</param>
     /// <param name="observedAt">When the delivery was observed.</param>
     public static LuxembourgDraftBatchCitation ForDelivery(
         AbsenceFamilyEnumerationProof proof,
+        IReadOnlyList<RepeatedEnumerationRow> deliveredRows,
         string selectionDigest,
         int requestedDraftCount,
-        long deliveredRowCount,
         string partitionKey,
         string observedAt)
     {
         ArgumentNullException.ThrowIfNull(proof);
+        ArgumentNullException.ThrowIfNull(deliveredRows);
         ArgumentException.ThrowIfNullOrWhiteSpace(selectionDigest);
         ArgumentException.ThrowIfNullOrWhiteSpace(partitionKey);
+
+        // The rows this batch cites must be the ones its proof proves. No subjects are named here -
+        // a batch asks about drafts the publisher may hold nothing for, so a draft legitimately
+        // appears in no row and naming them would refuse honest deliveries.
+        LuxembourgProvenDelivery.Bind(proof, deliveredRows, []);
+
+        // AND THE PARTITION THE PROOF ITSELF NAMES. The run proves an enumeration of one partition;
+        // a citation claiming another is describing a batch this proof says nothing about.
+        if (!string.Equals(partitionKey, proof.FamilyKey, StringComparison.Ordinal))
+        {
+            throw new ArgumentException(
+                "This batch citation names partition " + partitionKey + " and its proof proves "
+                    + proof.FamilyKey + ".",
+                nameof(partitionKey));
+        }
+
+        // DERIVED, not accepted: the delivered count is a fact about the rows just bound above, so
+        // there is nothing for a caller to state about it.
+        var deliveredRowCount = (long)deliveredRows.Count;
 
         // observedAt IS DELIBERATELY NOT CHECKED HERE. An undatable delivery is a first-class
         // refusal at TryComplete - AbsenceEvidenceNotFromThisRun - because an absence that cannot be

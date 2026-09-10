@@ -18,18 +18,52 @@ namespace Lex.V3.Ingest.Tests;
 public sealed class LuxembourgDraftPropertyCoverageTests
 {
 
+    private const string InventoryFamily = "legilux-initial-draft-inventory";
+
     /// <summary>
-    /// A REAL enumeration proof, because the citation doors now require one.
+    /// One delivery: a real proof, and the rows it proves, carrying the drafts under test.
     /// </summary>
     /// <remarks>
-    /// The run reference and the family key used to be handed to the producer as loose values, which
-    /// is how a citation could state an identity instead of carrying one. Both now come off the
-    /// proof, whose only door refuses anything but two independently agreeing, custody-verified
-    /// passes. <c>AbsenceFixtures.Proof</c> is the same builder the contract tests use and is
-    /// memoised, so this costs one assembly for the whole run rather than one per test.
+    /// <para>
+    /// A CITATION IS NO LONGER MINTABLE BESIDE JUST ANY HONEST PROOF. The reviewer took the
+    /// repository's own real proof fixture - an admitted two-pass, custody-verified proof for an
+    /// unrelated family - and passed it beside a caller-chosen population no enumeration had
+    /// delivered; the coverage minted. So the door now re-derives the rows' canonical-key digest and
+    /// requires it to equal the proof's, and every named subject must appear in those rows.
+    /// </para>
+    /// <para>
+    /// Which means a fixture can no longer build rows and reach for a shared proof: the two must be
+    /// one delivery. The canonical keys come from the proof's own delivery, and the terms carry the
+    /// draft IRIs the producer reads. Those are independent by design - the producers read only
+    /// <c>Terms</c> - so a test can be Luxembourg-shaped where it is decoded and fixture-shaped
+    /// where it is proven.
+    /// </para>
     /// </remarks>
-    private static AbsenceFamilyEnumerationProof InventoryProof =>
-        AbsenceFixtures.Proof("legilux-initial-draft-inventory");
+    private static (AbsenceFamilyEnumerationProof Proof, RepeatedEnumerationRow[] Rows) DeliveryOf(
+        string familyKey,
+        IReadOnlyList<string> subjects)
+    {
+        var (proof, keys) = AbsenceFixtures.Delivery(familyKey, subjects.Count);
+        var rows = subjects
+            .Select((subject, index) => new RepeatedEnumerationRow(
+                [RepeatedEnumerationRdfTerm.Iri(subject)],
+                keys[index],
+                [RepeatedEnumerationRdfTerm.Iri(subject)]))
+            .ToArray();
+        return (proof, rows);
+    }
+
+    /// <summary>A delivery of a stated size that names no subject, for a batch citation.</summary>
+    private static (AbsenceFamilyEnumerationProof Proof, RepeatedEnumerationRow[] Rows) DeliveryOfSize(
+        string familyKey,
+        int rowCount)
+    {
+        var (proof, keys) = AbsenceFixtures.Delivery(familyKey, rowCount);
+        var rows = keys
+            .Select(static key => new RepeatedEnumerationRow(key, key, key))
+            .ToArray();
+        return (proof, rows);
+    }
     private const string Draft = "http://data.legilux.public.lu/eli/dl/pl/2000/";
     private static readonly string[] Asked = [.. LuxembourgDraftGraphDiscoveryPlan.AskedAbout];
 
@@ -60,11 +94,12 @@ public sealed class LuxembourgDraftPropertyCoverageTests
     /// test that wants a mismatch has to build one deliberately, which is what
     /// <c>AnAssignmentCannotBeBuiltForDraftsTheCitationDoesNotName</c> does.
     /// </remarks>
-    private static LuxembourgInitialDraftInventoryCitation Inventory(IReadOnlyList<string> drafts) =>
-        LuxembourgInitialDraftInventoryCitation.MintedOver(
-            InventoryProof,
-            drafts,
-            "2026-09-10T07:29:37.8950843Z");
+    private static LuxembourgInitialDraftInventoryCitation Inventory(IReadOnlyList<string> drafts)
+    {
+        var (proof, rows) = DeliveryOf(InventoryFamily, drafts);
+        return LuxembourgInitialDraftInventoryCitation.MintedOver(
+            proof, rows, drafts, "2026-09-10T07:29:37.8950843Z");
+    }
 
     private static LuxembourgDraftBatchAssignment Assignment(IReadOnlyList<string> drafts) =>
         LuxembourgDraftBatchAssignment.Over(drafts, Inventory(drafts))[0];
@@ -72,9 +107,27 @@ public sealed class LuxembourgDraftPropertyCoverageTests
     private const string ObservedAt = "2026-09-10T13:50:31.0000000Z";
 
     private static LuxembourgDraftBatchCitation Batch(IReadOnlyList<string> drafts, long rows) =>
-        LuxembourgDraftBatchCitation.ForDelivery(
-            InventoryProof, LuxembourgDraftPropertyCoverage.SelectionDigestFor(drafts), drafts.Count,
-            rows, LuxembourgDraftGraphDiscoveryPlan.PartitionKeyFor(drafts), ObservedAt);
+        Batch(drafts, rows, LuxembourgDraftGraphDiscoveryPlan.PartitionKeyFor(drafts));
+
+    /// <remarks>
+    /// The partition a batch citation names must be the one its proof proves, so the proof is built
+    /// for that partition rather than a shared family key.
+    /// </remarks>
+    private static LuxembourgDraftBatchCitation Batch(
+        IReadOnlyList<string> drafts,
+        long rows,
+        string partitionKey,
+        string? observedAt = null)
+    {
+        var (proof, delivered) = DeliveryOfSize(partitionKey, (int)rows);
+        return LuxembourgDraftBatchCitation.ForDelivery(
+            proof,
+            delivered,
+            LuxembourgDraftPropertyCoverage.SelectionDigestFor(drafts),
+            drafts.Count,
+            partitionKey,
+            observedAt ?? ObservedAt);
+    }
 
     private static LuxembourgDraftPropertyRecordView Row(string draft, string predicate, string value) =>
         new(draft, predicate, value, "iri");
@@ -313,6 +366,56 @@ public sealed class LuxembourgDraftPropertyCoverageTests
             () => ((ICollection<LuxembourgDraftPropertyUnresolvedGap>)coverage.UnresolvedGaps).Clear());
         Assert.ThrowsExactly<NotSupportedException>(
             () => ((ICollection<string>)coverage.DraftsOfUnconfirmedClass).Clear());
+    }
+
+    /// <summary>
+    /// An honest proof of another enumeration authorizes nothing about these subjects.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// REPRODUCED BY THE REVIEWER, AFTER THE FORGED CITATION WAS ALREADY CLOSED. Demanding an
+    /// <see cref="AbsenceFamilyEnumerationProof"/> made a citation impossible to write out of
+    /// nothing, and established nothing further. The reviewer took the repository's own real proof
+    /// fixture - admitted, over two independently agreeing custody-verified passes, for a family
+    /// called <c>unrelated-enumeration-family</c>, delivering two rows - and passed it beside a
+    /// caller-chosen one-member population no enumeration had delivered. <c>Over</c> and
+    /// <c>TryComplete</c> accepted the pair: <c>refusal=None</c>, three derived absences, one
+    /// unresolved gap. The same false conclusion, with a reusable honest proof standing in for the
+    /// forged value.
+    /// </para>
+    /// <para>
+    /// So the door binds the rows to the proof by canonical-key digest and the subjects to the rows.
+    /// Asserted in all three directions a reusable proof could be misused: the wrong enumeration
+    /// entirely, the right shape but invented subjects, and a delivery whose size disagrees with
+    /// what the proof proves.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void AnHonestProofOfAnotherEnumerationCannotAuthorizeTheseSubjects()
+    {
+        var drafts = Drafts(3);
+        var (mine, myRows) = DeliveryOf(InventoryFamily, drafts);
+
+        // The honest pairing still works, or everything below proves nothing.
+        Assert.IsNotNull(LuxembourgInitialDraftInventoryCitation.MintedOver(
+            mine, myRows, drafts, ObservedAt));
+
+        // 1. Another family's real, admitted proof, beside this population.
+        var (elsewhere, _) = DeliveryOf("unrelated-enumeration-family", drafts);
+        Assert.ThrowsExactly<ArgumentException>(
+            () => LuxembourgInitialDraftInventoryCitation.MintedOver(elsewhere, myRows, drafts, ObservedAt),
+            "a proof of another enumeration does not prove this delivery.");
+
+        // 2. This run's own proof and rows, and a subject no row carried.
+        var invented = drafts.Concat(["http://example.invalid/caller-chosen-draft"]).ToArray();
+        Assert.ThrowsExactly<ArgumentException>(
+            () => LuxembourgInitialDraftInventoryCitation.MintedOver(mine, myRows, invented, ObservedAt),
+            "a subject appearing in no delivered row was never observed.");
+
+        // 3. A delivery whose size disagrees with the proof, even with honest rows.
+        Assert.ThrowsExactly<ArgumentException>(
+            () => LuxembourgInitialDraftInventoryCitation.MintedOver(mine, myRows[..2], drafts, ObservedAt),
+            "two rows are not the three this proof proves were delivered.");
     }
 
     /// <summary>
@@ -621,9 +724,8 @@ public sealed class LuxembourgDraftPropertyCoverageTests
     public void AProofWhosePartitionKeyNamesOtherDraftsCannotEvidenceThisBatch()
     {
         var drafts = Drafts(3);
-        var someoneElses = LuxembourgDraftBatchCitation.ForDelivery(
-            InventoryProof, LuxembourgDraftPropertyCoverage.SelectionDigestFor(drafts), drafts.Count, 0,
-            LuxembourgDraftGraphDiscoveryPlan.PartitionKeyFor(Drafts(4)), ObservedAt);
+        var someoneElses = Batch(
+            drafts, 0, LuxembourgDraftGraphDiscoveryPlan.PartitionKeyFor(Drafts(4)));
 
         Assert.AreEqual(
             LuxembourgDraftPropertyCoverageRefusal.AbsenceEvidenceNotFromThisRun,
@@ -645,9 +747,8 @@ public sealed class LuxembourgDraftPropertyCoverageTests
     public void AnAbsenceThatCannotBeDatedIsNotDerived()
     {
         var drafts = Drafts(3);
-        var undated = LuxembourgDraftBatchCitation.ForDelivery(
-            InventoryProof, LuxembourgDraftPropertyCoverage.SelectionDigestFor(drafts), drafts.Count, 0,
-            LuxembourgDraftGraphDiscoveryPlan.PartitionKeyFor(drafts), "   ");
+        var undated = Batch(
+            drafts, 0, LuxembourgDraftGraphDiscoveryPlan.PartitionKeyFor(drafts), "   ");
 
         Assert.AreEqual(
             LuxembourgDraftPropertyCoverageRefusal.AbsenceEvidenceNotFromThisRun,
@@ -693,9 +794,15 @@ public sealed class LuxembourgDraftPropertyCoverageTests
     public void ACitationThatDoesNotMatchTheRequestedBatchRefuses()
     {
         var drafts = Drafts(3);
+        var partitionKey = LuxembourgDraftGraphDiscoveryPlan.PartitionKeyFor(drafts);
+        var (proof, delivered) = DeliveryOfSize(partitionKey, 0);
         var wrong = LuxembourgDraftBatchCitation.ForDelivery(
-            InventoryProof, LuxembourgDraftPropertyCoverage.SelectionDigestFor(Drafts(4)), 3, 0,
-            LuxembourgDraftGraphDiscoveryPlan.PartitionKeyFor(drafts), ObservedAt);
+            proof,
+            delivered,
+            LuxembourgDraftPropertyCoverage.SelectionDigestFor(Drafts(4)),
+            3,
+            partitionKey,
+            ObservedAt);
 
         Assert.AreEqual(
             LuxembourgDraftPropertyCoverageRefusal.RequestedBatchNotRetained,

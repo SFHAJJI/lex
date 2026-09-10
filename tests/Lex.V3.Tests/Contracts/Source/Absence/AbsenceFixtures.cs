@@ -143,6 +143,69 @@ internal static class AbsenceFixtures
             return proof;
         });
 
+    /// <summary>A real proof over a caller-named row set, for a door that binds to the rows.</summary>
+    /// <remarks>
+    /// Not memoized on the row set alone - the family key and seed are part of the identity too, and
+    /// two families sharing one row set must not share one proof.
+    /// </remarks>
+    public static AbsenceFamilyEnumerationProof ProofOver(
+        string familyKey,
+        string rowValues,
+        int runSeed = 930)
+    {
+        var proof = AbsenceFamilyEnumerationProof.TryCreate(
+            familyKey,
+            AbsenceEnumerationProofFixture.DeliveryOf(familyKey, runSeed, rowValues),
+            CustodyMembership.Floored,
+            out var refusal);
+        if (proof is null)
+        {
+            throw new InvalidOperationException($"fixture proof refused as {refusal}");
+        }
+
+        return proof;
+    }
+
+    /// <summary>
+    /// A proof and the canonical keys the rows it proves must carry, for a door that binds the two.
+    /// </summary>
+    /// <remarks>
+    /// A citation may no longer be minted beside just any honest proof: the door re-derives the
+    /// delivered rows' canonical-key digest and requires it to equal the proof's. So a fixture can no
+    /// longer build rows and reach for a shared proof - the rows and the proof have to be one
+    /// delivery. This returns both halves of exactly one. Set each row's canonical key to
+    /// <c>Keys[i]</c> and its terms to whatever the family under test decodes; the producers read
+    /// only the terms, so the two are independent by design.
+    /// </remarks>
+    public static (AbsenceFamilyEnumerationProof Proof, RepeatedEnumerationRdfTerm[][] Keys) Delivery(
+        string familyKey,
+        int rowCount,
+        int runSeed = 930)
+    {
+        // KEYED BY FAMILY, not by position alone. Two enumerations of different families deliver
+        // different subjects, so their canonical keys must differ - otherwise a proof of one family
+        // digests identically to a proof of another and a door binding on that digest cannot tell
+        // them apart. Found by the unrelated-proof regression, which passed for the wrong reason
+        // while every family shared one key set.
+        //
+        // Zero-padded after the family token so lexical order still matches emission order: the
+        // delivery proof requires cursors to strictly increase, and "d10" sorts before "d2".
+        var token = Convert.ToHexStringLower(
+            System.Security.Cryptography.SHA256.HashData(
+                System.Text.Encoding.UTF8.GetBytes(familyKey)))[..8];
+        var values = Enumerable.Range(0, rowCount)
+            .Select(index => token + "-d" + index.ToString("D6"))
+            .ToArray();
+        var proof = ProofOver(familyKey, string.Join(',', values), runSeed);
+        var keys = values
+            .Select(static value => new[]
+            {
+                RepeatedEnumerationRdfTerm.Iri(AbsenceEnumerationProofFixture.CanonicalKeyFor(value)),
+            })
+            .ToArray();
+        return (proof, keys);
+    }
+
     public static AbsenceCut Cut(
         string runId,
         DateTimeOffset at,

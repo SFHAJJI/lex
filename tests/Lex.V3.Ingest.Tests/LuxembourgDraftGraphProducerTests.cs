@@ -32,8 +32,31 @@ public sealed class LuxembourgDraftGraphProducerTests
     /// passes. <c>AbsenceFixtures.Proof</c> is the same builder the contract tests use and is
     /// memoised, so this costs one assembly for the whole run rather than one per test.
     /// </remarks>
-    private static AbsenceFamilyEnumerationProof InventoryProof =>
-        AbsenceFixtures.Proof("legilux-initial-draft-inventory");
+    private const string InventoryFamily = "legilux-initial-draft-inventory";
+
+    /// <summary>
+    /// Rebinds rows onto the canonical keys of a real delivery, so the proof proves THESE rows.
+    /// </summary>
+    /// <remarks>
+    /// The citation doors re-derive the delivered rows' canonical-key digest and require it to equal
+    /// the proof's, because an honest proof of some other enumeration was found to authorize
+    /// caller-chosen subjects. Only the canonical key is replaced; the terms, which are all the
+    /// producer reads, stay exactly as each test wrote them.
+    /// </remarks>
+    /// <summary>The run reference a delivery of this size carries, rebuilt independently.</summary>
+    private static SourceArtifactRef RunRefFor(int rowCount) =>
+        AbsenceFixtures.Delivery(InventoryFamily, rowCount).Proof.AcquisitionRunRef;
+
+    private static (AbsenceFamilyEnumerationProof Proof, RepeatedEnumerationRow[] Rows) Bound(
+        string familyKey,
+        IReadOnlyList<RepeatedEnumerationRow> rows)
+    {
+        var (proof, keys) = AbsenceFixtures.Delivery(familyKey, rows.Count);
+        var bound = rows
+            .Select((row, index) => new RepeatedEnumerationRow(row.Terms, keys[index], row.Cursor))
+            .ToArray();
+        return (proof, bound);
+    }
     private const string Draft = "http://data.legilux.public.lu/resource/draft/8357";
     private const string OtherDraft = "http://data.legilux.public.lu/resource/draft/8358";
     private const string Directive = "http://publications.europa.eu/resource/cellar/3e485e15-11bd-11e6-ba9a-01aa75ed71a1";
@@ -199,8 +222,11 @@ public sealed class LuxembourgDraftGraphProducerTests
         var drafts = RequestedIn(rows);
         var assignment = LuxembourgDraftGraphBatchFactory.AssignBatches(InventoryOf([.. drafts]))[0];
 
+        // The partition a batch citation names must be the one its proof proves.
+        var (proof, bound) = Bound(assignment.PartitionKey, rows);
+
         return LuxembourgDraftGraphProducer.DecodeRows(
-            rows, Profile(), InventoryProof, assignment,
+            bound, Profile(), proof, assignment,
             assignment.PartitionKey,
             "2026-09-10T13:50:31.0000000Z");
     }
@@ -245,9 +271,9 @@ public sealed class LuxembourgDraftGraphProducerTests
             return new RepeatedEnumerationRow(terms, terms, terms);
         }).ToArray();
 
+        var (proof, bound) = Bound(InventoryFamily, rows);
         return LuxembourgInitialDraftInventoryProducer.DecodeRows(
-            rows, profile, InventoryProof,
-            "2026-09-10T07:29:37.8950843Z");
+            bound, profile, proof, "2026-09-10T07:29:37.8950843Z");
     }
 
 
@@ -561,7 +587,7 @@ public sealed class LuxembourgDraftGraphProducerTests
         Assert.AreEqual(LuxembourgDraftGraphDiscoveryPlan.DraftTransposesPredicateIri, record.PredicateIri);
         Assert.AreEqual(Directive, record.Value);
         Assert.AreEqual("iri", record.ValueKind);
-        Assert.AreEqual(InventoryProof.AcquisitionRunRef.ResourceId, record.SourceObservationId);
+        Assert.AreEqual(RunRefFor(1).ResourceId, record.SourceObservationId);
     }
 
     /// <summary>
@@ -685,7 +711,7 @@ public sealed class LuxembourgDraftGraphProducerTests
         Assert.AreEqual("literal", retained.ValueKind);
         Assert.AreEqual(
             LuxembourgDraftRetentionReason.PredicateOutsideTheAcceptedVocabulary, retained.Reason);
-        Assert.AreEqual(InventoryProof.AcquisitionRunRef.ResourceId, retained.SourceObservationId);
+        Assert.AreEqual(RunRefFor(1).ResourceId, retained.SourceObservationId);
         Assert.AreEqual(
             LuxembourgDraftGraphDiscoveryPlan.StatusDraftPredicateIri, result.Records![0].PredicateIri);
     }
@@ -809,10 +835,14 @@ public sealed class LuxembourgDraftGraphProducerTests
                 value: Literal("en-cours", null, "fr")).Terms.ToList();
             terms[ordinal] = Literal((terms[ordinal].Value ?? string.Empty) + "-not-delivered");
 
+            var partitionKey = LuxembourgDraftGraphDiscoveryPlan.PartitionKeyFor([Draft]);
+            var (cursorProof, boundRow) = Bound(
+                partitionKey, [new RepeatedEnumerationRow(terms, terms, terms)]);
+
             var result = LuxembourgDraftGraphProducer.DecodeRows(
-                [new RepeatedEnumerationRow(terms, terms, terms)], profile, InventoryProof,
+                boundRow, profile, cursorProof,
                 LuxembourgDraftGraphBatchFactory.AssignBatches(InventoryOf(Draft))[0],
-                LuxembourgDraftGraphDiscoveryPlan.PartitionKeyFor([Draft]),
+                partitionKey,
                 "2026-09-10T13:50:31.0000000Z");
 
             Assert.AreEqual(

@@ -20,6 +20,40 @@ namespace Lex.V3.Ingest.Tests;
 [TestClass]
 public sealed class LuxembourgInitialDraftInventoryProducerTests
 {
+    private const string InventoryFamily = "legilux-initial-draft-inventory";
+
+    /// <summary>
+    /// Rebinds rows onto the canonical keys of a real delivery, so the proof proves THESE rows.
+    /// </summary>
+    /// <remarks>
+    /// The citation door re-derives the delivered rows' canonical-key digest and requires it to equal
+    /// the proof's, because an honest proof of some other enumeration was found to authorize
+    /// caller-chosen subjects. A fixture therefore cannot build rows and reach for a shared proof.
+    /// Only the canonical key is replaced - the terms, which are all the producer reads, are exactly
+    /// the ones each test wrote.
+    /// </remarks>
+    /// <summary>
+    /// The run reference a delivery of this size carries, rebuilt independently of the decode.
+    /// </summary>
+    /// <remarks>
+    /// Reconstructed rather than read back off the result, so the assertion compares the citation
+    /// against the run the fixture actually proved instead of against another field of the same
+    /// object.
+    /// </remarks>
+    private static SourceArtifactRef RunRefFor(int rowCount) =>
+        AbsenceFixtures.Delivery(InventoryFamily, rowCount).Proof.AcquisitionRunRef;
+
+    private static (AbsenceFamilyEnumerationProof Proof, RepeatedEnumerationRow[] Rows) Bound(
+        string familyKey,
+        IReadOnlyList<RepeatedEnumerationRow> rows)
+    {
+        var (proof, keys) = AbsenceFixtures.Delivery(familyKey, rows.Count);
+        var bound = rows
+            .Select((row, index) => new RepeatedEnumerationRow(row.Terms, keys[index], row.Cursor))
+            .ToArray();
+        return (proof, bound);
+    }
+
 
     /// <summary>
     /// A REAL enumeration proof, because the citation doors now require one.
@@ -31,8 +65,7 @@ public sealed class LuxembourgInitialDraftInventoryProducerTests
     /// passes. <c>AbsenceFixtures.Proof</c> is the same builder the contract tests use and is
     /// memoised, so this costs one assembly for the whole run rather than one per test.
     /// </remarks>
-    private static AbsenceFamilyEnumerationProof InventoryProof =>
-        AbsenceFixtures.Proof("legilux-initial-draft-inventory");
+
     private const string Draft = "http://data.legilux.public.lu/eli/etat/leg/projet/2019/03/14/a123/jo";
     private const string OtherDraft = "http://data.legilux.public.lu/eli/etat/leg/projet/2020/07/02/b456/jo";
     private const string XsdInteger = "http://www.w3.org/2001/XMLSchema#integer";
@@ -92,8 +125,14 @@ public sealed class LuxembourgInitialDraftInventoryProducerTests
     }
 
     private static LuxembourgInitialDraftInventoryResult Decode(params RepeatedEnumerationRow[] rows) =>
-        LuxembourgInitialDraftInventoryProducer.DecodeRows(
-            rows, Profile(), InventoryProof, "2026-09-10T13:50:31.0000000Z");
+        DecodeBound(rows);
+
+    private static LuxembourgInitialDraftInventoryResult DecodeBound(RepeatedEnumerationRow[] rows)
+    {
+        var (proof, bound) = Bound(InventoryFamily, rows);
+        return LuxembourgInitialDraftInventoryProducer.DecodeRows(
+            bound, Profile(), proof, "2026-09-10T13:50:31.0000000Z");
+    }
 
     /// <summary>
     /// The inventory mints the citation a later batch must carry, from its own run.
@@ -122,7 +161,8 @@ public sealed class LuxembourgInitialDraftInventoryProducerTests
         var citation = result.Citation!;
         Assert.IsNotNull(citation, "a delivered inventory carries its own citation.");
         Assert.AreEqual("legilux-initial-draft-inventory", citation.FamilyKey);
-        Assert.AreEqual(InventoryProof.AcquisitionRunRef, citation.AcquisitionRunRef, "the run's own evidence, not a caller's.");
+        Assert.AreEqual(
+            RunRefFor(2), citation.AcquisitionRunRef, "the run's own evidence, not a caller's.");
         Assert.AreEqual(result.AddressableInOrder().Count, citation.SubjectCount);
         Assert.IsNotEmpty(citation.ObservedAt, "an inventory a batch relies on must be datable.");
 
@@ -205,7 +245,7 @@ public sealed class LuxembourgInitialDraftInventoryProducerTests
         Assert.AreEqual(Draft, subject.Value);
         Assert.AreEqual(LuxembourgInitialDraftInventoryDiscoveryPlan.IriKind, subject.Kind);
         Assert.AreEqual(1, subject.Multiplicity);
-        Assert.AreEqual(InventoryProof.AcquisitionRunRef.ResourceId, subject.SourceObservationId);
+        Assert.AreEqual(RunRefFor(1).ResourceId, subject.SourceObservationId);
         Assert.IsTrue(subject.IsAddressable);
     }
 

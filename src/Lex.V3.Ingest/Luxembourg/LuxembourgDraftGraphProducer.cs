@@ -531,9 +531,9 @@ public sealed class LuxembourgDraftGraphProducer
                 value.DraftIri, value.PredicateIri, value.Value, value.ValueKind)).ToArray(),
             LuxembourgDraftBatchCitation.ForDelivery(
                 proof,
+                rows,
                 LuxembourgDraftPropertyCoverage.SelectionDigestFor(requestedDrafts),
                 requestedDrafts.Count,
-                rows.Count,
                 partitionKey,
                 observedAt),
             notAdmitted.Count,

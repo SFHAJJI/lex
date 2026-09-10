@@ -406,8 +406,14 @@ public sealed class LuxembourgInitialDraftInventoryProducer
             .Order(StringComparer.Ordinal)
             .ToArray();
 
+        // THE ROWS THIS RUN ACTUALLY RECEIVED, so the door can check they are the ones the proof
+        // proves rather than trusting that some proof exists. They came from
+        // VerifiedRepeatedEnumerationRows.TryOpen, which already re-derived their count and
+        // canonical-key digest against this same proof, so the door's check passes here by
+        // construction - and fails for anyone pairing this proof with another delivery.
         var citation = LuxembourgInitialDraftInventoryCitation.MintedOver(
             proof,
+            rows,
             addressable,
             observedAt);
 

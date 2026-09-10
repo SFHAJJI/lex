@@ -29,8 +29,7 @@ public sealed class LuxembourgDraftGraphBatchCoverTests
     /// passes. <c>AbsenceFixtures.Proof</c> is the same builder the contract tests use and is
     /// memoised, so this costs one assembly for the whole run rather than one per test.
     /// </remarks>
-    private static AbsenceFamilyEnumerationProof InventoryProof =>
-        AbsenceFixtures.Proof("legilux-initial-draft-inventory");
+    private const string InventoryFamily = "legilux-initial-draft-inventory";
     private const string Prefix = "http://data.legilux.public.lu/eli/dl/pl/2000/";
     private const string ObservedAt = "2026-09-10T07:29:37.8950843Z";
 
@@ -42,7 +41,16 @@ public sealed class LuxembourgDraftGraphBatchCoverTests
 
     private static readonly string[] Asked = [.. LuxembourgDraftGraphDiscoveryPlan.AskedAbout];
 
-    private static RepeatedEnumerationRow Subject(string iri)
+    /// <summary>
+    /// One subject row: Luxembourg-shaped where it is decoded, delivery-shaped where it is proven.
+    /// </summary>
+    /// <remarks>
+    /// The canonical key comes from the proof's own delivery rather than from the terms, because the
+    /// citation door re-derives the rows' canonical-key digest and requires it to equal the proof's.
+    /// The producers read only <c>Terms</c>, so the two halves are independent by design and this is
+    /// still exactly the row the decoder sees.
+    /// </remarks>
+    private static RepeatedEnumerationRow Subject(string iri, RepeatedEnumerationRdfTerm[] canonicalKey)
     {
         var terms = new List<RepeatedEnumerationRdfTerm>
         {
@@ -52,13 +60,28 @@ public sealed class LuxembourgDraftGraphBatchCoverTests
             RepeatedEnumerationRdfTerm.Literal(iri, null, null),
             RepeatedEnumerationRdfTerm.Literal(LuxembourgInitialDraftInventoryDiscoveryPlan.IriKind, null, null),
         };
-        return new RepeatedEnumerationRow(terms, terms, terms);
+        return new RepeatedEnumerationRow(terms, canonicalKey, terms);
     }
 
-    private static LuxembourgInitialDraftInventoryResult Inventory(int subjects) =>
-        LuxembourgInitialDraftInventoryProducer.DecodeRows(
-            Enumerable.Range(0, subjects).Select(index => Subject(Prefix + index.ToString("D5"))).ToArray(),
-            Profile, InventoryProof, ObservedAt);
+    /// <summary>An inventory the producer refuses, because one subject arrives twice.</summary>
+    private static LuxembourgInitialDraftInventoryResult RefusedInventory()
+    {
+        var (proof, keys) = AbsenceFixtures.Delivery(InventoryFamily, 2);
+        return LuxembourgInitialDraftInventoryProducer.DecodeRows(
+            [Subject(Prefix + "00001", keys[0]), Subject(Prefix + "00001", keys[1])],
+            Profile,
+            proof,
+            ObservedAt);
+    }
+
+    private static LuxembourgInitialDraftInventoryResult Inventory(int subjects)
+    {
+        var (proof, keys) = AbsenceFixtures.Delivery(InventoryFamily, subjects);
+        var rows = Enumerable.Range(0, subjects)
+            .Select(index => Subject(Prefix + index.ToString("D5"), keys[index]))
+            .ToArray();
+        return LuxembourgInitialDraftInventoryProducer.DecodeRows(rows, Profile, proof, ObservedAt);
+    }
 
     /// <summary>One delivered batch: every draft answers statusDraft and nothing else.</summary>
     private static LuxembourgDraftPropertyCoverage Batch(
@@ -75,13 +98,7 @@ public sealed class LuxembourgDraftGraphBatchCoverTests
             assignment,
             asked ?? Asked,
             rows,
-            LuxembourgDraftBatchCitation.ForDelivery(
-                InventoryProof,
-                LuxembourgDraftPropertyCoverage.SelectionDigestFor(drafts),
-                drafts.Count,
-                rows.Length,
-                LuxembourgDraftGraphDiscoveryPlan.PartitionKeyFor(drafts),
-                ObservedAt),
+            BatchCitation(drafts, rows.Length),
             0,
             LuxembourgDraftGraphDiscoveryPlan.PredicatesNotDeclaredOnTheDraft,
             out var refusal,
@@ -89,6 +106,24 @@ public sealed class LuxembourgDraftGraphBatchCoverTests
 
         Assert.IsNotNull(coverage, $"{refusal}: {detail}");
         return coverage;
+    }
+
+    /// <remarks>
+    /// The partition a batch citation names must be the one its proof proves, so the proof is built
+    /// for that partition and over exactly the rows this batch received.
+    /// </remarks>
+    private static LuxembourgDraftBatchCitation BatchCitation(IReadOnlyList<string> drafts, int rowCount)
+    {
+        var partitionKey = LuxembourgDraftGraphDiscoveryPlan.PartitionKeyFor(drafts);
+        var (proof, keys) = AbsenceFixtures.Delivery(partitionKey, rowCount);
+        var delivered = keys.Select(static key => new RepeatedEnumerationRow(key, key, key)).ToArray();
+        return LuxembourgDraftBatchCitation.ForDelivery(
+            proof,
+            delivered,
+            LuxembourgDraftPropertyCoverage.SelectionDigestFor(drafts),
+            drafts.Count,
+            partitionKey,
+            ObservedAt);
     }
 
     private static (LuxembourgInitialDraftInventoryResult Inventory,
@@ -160,9 +195,7 @@ public sealed class LuxembourgDraftGraphBatchCoverTests
     [TestMethod]
     public void ARefusedInventoryCannotBeSwept()
     {
-        var refused = LuxembourgInitialDraftInventoryProducer.DecodeRows(
-            [Subject(Prefix + "00001"), Subject(Prefix + "00001")],
-            Profile, InventoryProof, ObservedAt);
+        var refused = RefusedInventory();
 
         Assert.ThrowsExactly<ArgumentException>(
             () => LuxembourgDraftGraphRunRequest.ForBatch(
@@ -376,9 +409,7 @@ public sealed class LuxembourgDraftGraphBatchCoverTests
     [TestMethod]
     public void ARefusedInventoryHasNoCover()
     {
-        var refused = LuxembourgInitialDraftInventoryProducer.DecodeRows(
-            [Subject(Prefix + "00001"), Subject(Prefix + "00001")],
-            Profile, InventoryProof, ObservedAt);
+        var refused = RefusedInventory();
 
         Assert.AreEqual(
             LuxembourgDraftGraphBatchCoverRefusal.InventoryNotProven,

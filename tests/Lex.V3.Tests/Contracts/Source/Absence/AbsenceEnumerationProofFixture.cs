@@ -59,6 +59,34 @@ internal sealed class AbsenceEnumerationProofFixture : IRepeatedEnumerationEvide
         new AbsenceEnumerationProofFixture(partitionKey, runSeed, 100).Build("a,b", "a,b");
 
     /// <summary>
+    /// The same real comparison over a caller-named row set rather than the default two rows.
+    /// </summary>
+    /// <remarks>
+    /// Added because a citation may no longer be minted beside just any honest proof: the door now
+    /// re-derives the delivered rows' canonical-key digest and requires it to equal the proof's, so a
+    /// test needs a proof over ITS OWN rows rather than a shared one. The row values become the
+    /// canonical keys (<c>urn:row:{value}</c>), which is what a test row must carry to be the
+    /// delivery this proof proves. Still the whole real tuple - two counts, two page sets at
+    /// different limits, custody-bound bytes - because a stub here would let the binding pass
+    /// against a proof that proves nothing, which is the defect wearing a fixture's clothes.
+    /// </remarks>
+    public static EnumerationDeliveryComparison DeliveryOf(
+        string partitionKey,
+        int runSeed,
+        string rowValues)
+    {
+        // Both bounds have to clear the row set, and the two page limits stay DIFFERENT so the two
+        // passes are still paginated differently - which is the property the comparison exists to
+        // test. The default path keeps its original 10 and 7.
+        var rowCount = rowValues.Length is 0 ? 0 : rowValues.Split(',').Length;
+        return new AbsenceEnumerationProofFixture(partitionKey, runSeed, (rowCount * 2) + 100)
+            .Build(rowValues, rowValues, rowCount + 3, rowCount + 1);
+    }
+
+    /// <summary>The canonical key one row value carries in <see cref="DeliveryOf"/>.</summary>
+    public static string CanonicalKeyFor(string rowValue) => "urn:row:" + rowValue;
+
+    /// <summary>
     /// A comparison whose passes disagreed. Both counted two rows and both delivered two rows, so
     /// only the row identities differ and only the digest comparison can refuse it.
     /// </summary>
@@ -83,19 +111,21 @@ internal sealed class AbsenceEnumerationProofFixture : IRepeatedEnumerationEvide
     internal static SourceArtifactRef Artifact(int seed) =>
         new($"urn:uuid:00000000-0000-4000-8000-{seed:D12}", seed.ToString("x64"));
 
-    private EnumerationDeliveryComparison Build(string rowsA, string rowsB)
+    private EnumerationDeliveryComparison Build(string rowsA, string rowsB, long limitA = 10, long limitB = 7)
     {
-        var rowCount = rowsA.Split(',').Length;
+        // An empty delivery is a real shape - a batch may ask about drafts the publisher holds
+        // nothing for - and Split would otherwise report one empty row for none.
+        var rowCount = rowsA.Length is 0 ? 0 : rowsA.Split(',').Length;
         var countA = Add(1, CountJson(rowCount), rowCount, Artifact(301), DateTimeOffset.UnixEpoch, true, 1);
         var pageA = Add(
             2, RowsJson(rowsA), rowCount, countA.HttpEvidenceRef,
-            DateTimeOffset.UnixEpoch.AddSeconds(1), false, 1);
+            DateTimeOffset.UnixEpoch.AddSeconds(1), false, 1, rowLimit: limitA);
         var countB = Add(
             3, CountJson(rowCount), rowCount, Artifact(303),
             DateTimeOffset.UnixEpoch.AddSeconds(2), true, 2);
         var pageB = Add(
             4, RowsJson(rowsB), rowCount, countB.HttpEvidenceRef,
-            DateTimeOffset.UnixEpoch.AddSeconds(3), false, 2, rowLimit: 7);
+            DateTimeOffset.UnixEpoch.AddSeconds(3), false, 2, rowLimit: limitB);
         var profile = Profile();
         return EnumerationDeliveryComparison.Create(
             profile,
@@ -260,7 +290,7 @@ internal sealed class AbsenceEnumerationProofFixture : IRepeatedEnumerationEvide
     private static string RowsJson(string values) =>
         "{\"head\":{\"link\":[],\"vars\":[\"id\",\"cursor\",\"value\"]},"
         + "\"results\":{\"distinct\":false,\"ordered\":true,\"bindings\":["
-        + string.Join(',', values.Split(',').Select(static value =>
+        + string.Join(',', (values.Length is 0 ? [] : values.Split(',')).Select(static value =>
             $"{{\"id\":{{\"type\":\"uri\",\"value\":\"urn:row:{value}\"}},"
             + $"\"cursor\":{{\"type\":\"literal\",\"value\":\"{value}\"}}}}"))
         + "]}}";

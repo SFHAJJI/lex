@@ -391,7 +391,7 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Contracts.Source.Core.RepeatedEnumerationRdfTerm::Literal, "
                     + "method public static "
                     + "Lex.V3.Contracts.Source.Core.RepeatedEnumerationRdfTerm::Unbound, "
-                    + "22 compiler-generated",
+                    + "23 compiler-generated",
                 "Lex.V3.Contracts.Source.Corpus.VerifiedCorpusRecord: constructor internal "
                     + "instance Lex.V3.Contracts.Source.Corpus.VerifiedCorpusRecord::.ctor, "
                     + "method public static "

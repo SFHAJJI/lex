@@ -12,6 +12,36 @@ namespace Lex.V3.Ingest.Tests;
 [TestClass]
 public sealed class LuxembourgDraftGraphBatchFactoryTests
 {
+    private const string InventoryFamily = "legilux-initial-draft-inventory";
+
+    /// <summary>
+    /// Rebinds rows onto the canonical keys of a real delivery, so the proof proves THESE rows.
+    /// </summary>
+    /// <remarks>
+    /// The citation door re-derives the delivered rows' canonical-key digest and requires it to equal
+    /// the proof's, because an honest proof of some other enumeration was found to authorize
+    /// caller-chosen subjects. A fixture therefore cannot build rows and reach for a shared proof.
+    /// Only the canonical key is replaced - the terms, which are all the producer reads, are exactly
+    /// the ones each test wrote.
+    /// </remarks>
+    private static (AbsenceFamilyEnumerationProof Proof, RepeatedEnumerationRow[] Rows) Bound(
+        string familyKey,
+        IReadOnlyList<RepeatedEnumerationRow> rows)
+    {
+        var (proof, keys) = AbsenceFixtures.Delivery(familyKey, rows.Count);
+        var bound = rows
+            .Select((row, index) => new RepeatedEnumerationRow(row.Terms, keys[index], row.Cursor))
+            .ToArray();
+        return (proof, bound);
+    }
+
+    private static LuxembourgInitialDraftInventoryResult DecodeBound(RepeatedEnumerationRow[] rows)
+    {
+        var (proof, bound) = Bound(InventoryFamily, rows);
+        return LuxembourgInitialDraftInventoryProducer.DecodeRows(
+            bound, Profile, proof, "2026-09-10T07:29:37.8950843Z");
+    }
+
 
     /// <summary>
     /// A REAL enumeration proof, because the citation doors now require one.
@@ -23,8 +53,7 @@ public sealed class LuxembourgDraftGraphBatchFactoryTests
     /// passes. <c>AbsenceFixtures.Proof</c> is the same builder the contract tests use and is
     /// memoised, so this costs one assembly for the whole run rather than one per test.
     /// </remarks>
-    private static AbsenceFamilyEnumerationProof InventoryProof =>
-        AbsenceFixtures.Proof("legilux-initial-draft-inventory");
+
     private const string Prefix = "http://data.legilux.public.lu/eli/dl/pl/2000/";
 
     private static readonly SourceArtifactRef Evidence = new(
@@ -50,11 +79,8 @@ public sealed class LuxembourgDraftGraphBatchFactoryTests
     }
 
     private static LuxembourgInitialDraftInventoryResult Inventory(int subjects) =>
-        LuxembourgInitialDraftInventoryProducer.DecodeRows(
-            Enumerable.Range(0, subjects).Select(index => Subject(Prefix + index.ToString("D5"))).ToArray(),
-            Profile,
-            InventoryProof,
-            "2026-09-10T07:29:37.8950843Z");
+        DecodeBound(
+            Enumerable.Range(0, subjects).Select(index => Subject(Prefix + index.ToString("D5"))).ToArray());
 
     /// <summary>Every inventory member lands in exactly one batch, and nothing else does.</summary>
     /// <remarks>
@@ -121,11 +147,7 @@ public sealed class LuxembourgDraftGraphBatchFactoryTests
     [TestMethod]
     public void ARefusedInventoryAssignsNoBatches()
     {
-        var refused = LuxembourgInitialDraftInventoryProducer.DecodeRows(
-            [Subject(Prefix + "00001"), Subject(Prefix + "00001")],
-            Profile,
-            InventoryProof,
-            "2026-09-10T07:29:37.8950843Z");
+        var refused = DecodeBound([Subject(Prefix + "00001"), Subject(Prefix + "00001")]);
 
         Assert.AreNotEqual(LuxembourgInitialDraftInventoryRefusal.None, refused.Refusal);
         Assert.ThrowsExactly<InvalidOperationException>(
