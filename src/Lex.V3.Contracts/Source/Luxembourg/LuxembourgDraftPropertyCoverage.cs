@@ -256,6 +256,7 @@ public sealed class LuxembourgDraftPropertyCoverage
         IReadOnlyList<LuxembourgDraftPropertyRecordView> present,
         LuxembourgDraftBatchCitation? batch,
         LuxembourgInitialDraftInventoryCitation? inventory,
+        int retainedNotAdmittedRows,
         out LuxembourgDraftPropertyCoverageRefusal refusal,
         out string? detail)
     {
@@ -335,12 +336,19 @@ public sealed class LuxembourgDraftPropertyCoverage
             consumed[index] = true;
         }
 
+        // CONSERVATION OVER THE WHOLE DELIVERY, not just over the admitted half. The broad
+        // acquisition carries every predicate the publisher holds about these subjects, so a
+        // delivered row is either admitted here and folded exactly once, or retained by name as
+        // evidence this family asserts nothing about. A row that is neither has gone missing
+        // between the page and this matrix, and it would be invisible in every count below.
         var folded = byPair.Values.Sum(static value => value.Count);
         if (folded != present.Count || Array.Exists(consumed, static value => !value) ||
-            batch.DeliveredRowCount != present.Count)
+            retainedNotAdmittedRows < 0 ||
+            batch.DeliveredRowCount != present.Count + retainedNotAdmittedRows)
         {
             refusal = LuxembourgDraftPropertyCoverageRefusal.PresentRowNotConsumedExactlyOnce;
-            detail = $"The delivery carried {batch.DeliveredRowCount} rows and this matrix folded {folded}.";
+            detail = $"The delivery carried {batch.DeliveredRowCount} rows; this matrix folded "
+                + $"{folded} admitted and {retainedNotAdmittedRows} were retained unadmitted.";
             return null;
         }
 

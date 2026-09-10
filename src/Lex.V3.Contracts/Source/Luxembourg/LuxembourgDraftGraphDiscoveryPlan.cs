@@ -486,11 +486,27 @@ public sealed class LuxembourgDraftGraphDiscoveryPlan
 
     private static (string Count, string Page) BuildTemplates()
     {
-        var predicateValues = string.Join('\n', AskedPredicates
-            .Select(static iri => "    <" + iri + ">"));
-
         var grouped = "?draft ?draft_kind ?predicate ?value ?value_kind ?datatype_iri ?language_tag";
 
+        // THE PUBLISHER IS ASKED FOR EVERY PREDICATE IT HOLDS ABOUT THESE SUBJECTS, and admission
+        // to the E8 vocabulary happens locally afterwards. That is not a widening of scope; it is
+        // the only shape whose completeness can be checked.
+        //
+        // MEASURED, AND IT IS WHY THIS CHANGED. With `VALUES ?predicate { <five IRIs> }` in front of
+        // the triple, Legilux returned ZERO parliamentDraftUrl rows for fifty drafts. The same ten
+        // of those drafts, asked with a free predicate variable, return TEN of them - the IRI in the
+        // VALUES block byte-identical to the one that comes back, the subjects the same, the class
+        // triple satisfied for them since their statusDraft arrives either way. The predicate VALUES
+        // was silently dropping rows the publisher holds, and every one of those pairs was being
+        // minted as a derived absence: a typed record asserting the publisher holds no parliament
+        // URL for a draft that has one.
+        //
+        // A complete enumeration proof does not make an enumeration complete. It proves the pages
+        // arrived whole; it cannot prove the question asked for everything. Asking without a
+        // predicate filter removes the only step that could drop a triple before we ever see it,
+        // and the accepted-predicate projection of the broad delivery reproduces the retained
+        // predicate census over the same subjects exactly.
+        //
         // THIS QUERY ASKS THE PUBLISHER FOR PRESENT FACTS ONLY, and the gap is derived afterwards
         // rather than requested. Both halves of that were forced, and by different things.
         //
@@ -541,9 +557,6 @@ public sealed class LuxembourgDraftGraphDiscoveryPlan
                 }
               }
               ?draft a <{{InitialDraftClassIri}}> .
-              VALUES ?predicate {
-            {{predicateValues}}
-              }
               ?draft ?predicate ?value .
               BIND(IF(isIRI(?draft), "iri", "unsupported_blank_node") AS ?draft_kind)
               BIND(IF(isIRI(?value), "iri", IF(isLiteral(?value), "literal", "unsupported_blank_node")) AS ?value_kind)

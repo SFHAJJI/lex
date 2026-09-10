@@ -57,14 +57,20 @@ public sealed class LuxembourgDraftGraphDiscoveryPlanTests
             // draft the caller had never heard of is still swept.
             StringAssert.Contains(
                 template, sweep, "the family sweeps the class rather than a supplied list of drafts.");
-            StringAssert.Contains(template, "VALUES ?predicate {");
+            // NO PREDICATE FILTER, AND NO ASKED PREDICATE NAMED IN THE QUERY AT ALL. Measured:
+            // with VALUES ?predicate in front of the triple, Legilux returned zero
+            // parliamentDraftUrl rows for fifty drafts that carry them, and each dropped pair was
+            // minted as a derived absence. The publisher is asked for everything it holds about
+            // these subjects; admission to the five happens in the producer, where it is visible.
+            Assert.IsFalse(
+                template.Contains("VALUES ?predicate", StringComparison.Ordinal),
+                "a publisher-side predicate filter was measured dropping rows the publisher holds.");
 
             foreach (var predicate in LuxembourgDraftGraphDiscoveryPlan.AskedAbout)
             {
-                StringAssert.Contains(
-                    template,
-                    "<" + predicate + ">",
-                    "every asked property must appear in the query that claims to ask about it.");
+                Assert.IsFalse(
+                    template.Contains("<" + predicate + ">", StringComparison.Ordinal),
+                    "an accepted predicate is an admission rule, not a question put to the publisher.");
             }
 
             // The count and the page must ask the SAME question, or the count proves nothing about
@@ -159,13 +165,15 @@ public sealed class LuxembourgDraftGraphDiscoveryPlanTests
         var classTriple = page.IndexOf(
             "?draft a <" + LuxembourgDraftGraphDiscoveryPlan.InitialDraftClassIri + ">",
             StringComparison.Ordinal);
-        var predicateValues = page.IndexOf("VALUES ?predicate {", StringComparison.Ordinal);
         var valueTriple = page.IndexOf("?draft ?predicate ?value .", StringComparison.Ordinal);
         Assert.IsGreaterThanOrEqualTo(0, classTriple);
         Assert.IsGreaterThanOrEqualTo(0, valueTriple);
         Assert.IsTrue(
-            classTriple < predicateValues && predicateValues < valueTriple,
-            "the draft and the predicate are both bound before the value is matched.");
+            classTriple < valueTriple,
+            "the subject is constrained to the class before its triples are matched.");
+        Assert.IsFalse(
+            page.Contains("VALUES ?predicate", StringComparison.Ordinal),
+            "the predicate is free: a publisher-side filter was measured dropping held rows.");
 
         // AND NO MARKER MAY SAY "unbound". Under a mandatory triple no solution can leave the value
         // unbound, so a page able to emit that marker could only do so by fabricating it - which is
@@ -323,11 +331,11 @@ public sealed class LuxembourgDraftGraphDiscoveryPlanTests
         // The member arrives as a real IRI term, and the pair is bound before its value is sought.
         StringAssert.Contains(query, "<" + InventoryDraft + ">");
         var classTriple = query.IndexOf("?draft a <", StringComparison.Ordinal);
-        var predicateValues = query.IndexOf("VALUES ?predicate {", StringComparison.Ordinal);
         var valueTriple = query.IndexOf("?draft ?predicate ?value .", StringComparison.Ordinal);
         Assert.IsGreaterThanOrEqualTo(0, classTriple);
         Assert.IsGreaterThanOrEqualTo(0, valueTriple);
-        Assert.IsTrue(classTriple < predicateValues && predicateValues < valueTriple);
+        Assert.IsTrue(classTriple < valueTriple);
+        Assert.IsFalse(query.Contains("VALUES ?predicate", StringComparison.Ordinal));
         Assert.IsFalse(query.Contains("FILTER NOT EXISTS", StringComparison.Ordinal));
         Assert.IsFalse(query.Contains("OPTIONAL", StringComparison.Ordinal));
     }

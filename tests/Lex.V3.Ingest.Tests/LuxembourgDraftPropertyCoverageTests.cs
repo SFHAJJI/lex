@@ -45,6 +45,7 @@ public sealed class LuxembourgDraftPropertyCoverageTests
             drafts, Asked, rows,
             batch ?? Batch(drafts, rows.Count),
             inventory ?? Inventory(),
+            0,
             out var refusal, out var detail);
         Assert.IsNotNull(coverage, $"{refusal}: {detail}");
         return coverage;
@@ -57,7 +58,7 @@ public sealed class LuxembourgDraftPropertyCoverageTests
         LuxembourgInitialDraftInventoryCitation? inventory)
     {
         var coverage = LuxembourgDraftPropertyCoverage.TryComplete(
-            drafts, Asked, rows, batch, inventory, out var refusal, out _);
+            drafts, Asked, rows, batch, inventory, 0, out var refusal, out _);
         Assert.IsNull(coverage, "a refused completion mints nothing.");
         return refusal;
     }

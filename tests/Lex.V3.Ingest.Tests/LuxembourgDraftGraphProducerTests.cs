@@ -71,7 +71,7 @@ public sealed class LuxembourgDraftGraphProducerTests
         var draftTerm = Iri(draft);
         var predicateIri = predicate ?? LuxembourgDraftGraphDiscoveryPlan.DraftTransposesPredicateIri;
         var valueTerm = value ?? Iri(Directive);
-        var datatypeColumn = datatype ?? Qualifier(valueTerm, static term => term.Datatype);
+        var datatypeColumn = datatype ?? DatatypeColumnFor(valueTerm);
         var languageColumn = language ?? Qualifier(valueTerm, static term => term.Language);
 
         var terms = new List<RepeatedEnumerationRdfTerm>
@@ -107,6 +107,20 @@ public sealed class LuxembourgDraftGraphProducerTests
     private static string Qualifier(
         RepeatedEnumerationRdfTerm term, Func<RepeatedEnumerationRdfTerm, string?> select) =>
         term.Kind == RepeatedEnumerationRdfTermKind.Literal ? select(term) ?? string.Empty : string.Empty;
+
+    /// <summary>The datatype column as THIS ENGINE answers it, not as the term spells it.</summary>
+    /// <remarks>
+    /// Measured on the first broad delivery. SPARQL JSON omits <c>datatype</c> for a plain literal,
+    /// but <c>DATATYPE()</c> answers it with <c>xsd:string</c>, because under RDF 1.1 a simple
+    /// literal IS an xsd:string. A fixture that mirrored the term instead would model a delivery
+    /// this publisher does not send - and mirroring is precisely the conflation that let a real
+    /// forty-row delivery be refused.
+    /// </remarks>
+    private static string DatatypeColumnFor(RepeatedEnumerationRdfTerm term) =>
+        term.Kind != RepeatedEnumerationRdfTermKind.Literal ? string.Empty
+        : term.Datatype is { Length: > 0 } declared ? declared
+        : term.Language is { Length: > 0 } ? string.Empty
+        : "http://www.w3.org/2001/XMLSchema#string";
 
     /// <summary>Decodes exactly the rows given.</summary>
     /// <remarks>
@@ -516,21 +530,96 @@ public sealed class LuxembourgDraftGraphProducerTests
         Assert.AreEqual(XsdAnyUri, result.Records![0].ValueDatatypeIri);
     }
 
-    /// <summary>A row naming a property this family never asked about refuses the delivery.</summary>
+    /// <summary>
+    /// A property this family does not admit is retained as evidence, not refused and not a fact.
+    /// </summary>
     /// <remarks>
-    /// The plan binds its predicates from a VALUES block, so an honest delivery cannot contain
-    /// another. One that does is answering a question nobody asked, and admitting it would let the
-    /// asked-about set this production publishes describe a delivery it does not match.
+    /// <para>
+    /// INVERTED BY MEASUREMENT. This test used to refuse such a row, on the reasoning that the plan
+    /// bound its five predicates from a VALUES block so an honest delivery could not contain
+    /// another. The VALUES block is gone: it was measured DROPPING rows the publisher holds -
+    /// zero parliamentDraftUrl for fifty drafts where ten of them carry one - and every dropped pair
+    /// was being minted as a derived absence.
+    /// </para>
+    /// <para>
+    /// So the publisher is now asked for every predicate it holds about these subjects and
+    /// admission is made here. A predicate outside the accepted five is named on
+    /// <c>RetainedNotAdmitted</c> and becomes no record: this family asserts nothing about it, and
+    /// the retained page is the evidence for anyone who later wants to. What it must NOT do is
+    /// refuse the delivery, because that would throw away the admitted rows beside it.
+    /// </para>
     /// </remarks>
     [TestMethod]
-    public void ARowNamingAPropertyNeverAskedAboutIsRefused()
+    public void APropertyThisFamilyDoesNotAdmitIsRetainedRatherThanRefused()
     {
-        const string NeverAsked = "http://data.legilux.public.lu/resource/ontology/jolux#titleDraft";
+        const string NotAdmitted = "http://data.legilux.public.lu/resource/ontology/jolux#titleDraft";
 
-        var result = Decode(Row(predicate: NeverAsked));
+        var result = Decode(
+            Row(predicate: NotAdmitted, value: Literal("Projet de loi")),
+            Row(predicate: LuxembourgDraftGraphDiscoveryPlan.StatusDraftPredicateIri,
+                value: Iri("http://data.legilux.public.lu/resource/authority/legal-status/EN-COURS")));
 
-        Assert.AreEqual(LuxembourgDraftGraphProductionRefusal.PredicateNotAskedAbout, result.Refusal);
-        StringAssert.Contains(result.Detail!, NeverAsked);
+        Assert.AreEqual(LuxembourgDraftGraphProductionRefusal.None, result.Refusal, result.Detail);
+        CollectionAssert.AreEqual(new[] { NotAdmitted }, result.RetainedNotAdmitted.ToArray());
+        Assert.HasCount(1, result.Records!, "only the admitted predicate becomes a record.");
+        Assert.AreEqual(
+            LuxembourgDraftGraphDiscoveryPlan.StatusDraftPredicateIri, result.Records![0].PredicateIri);
+    }
+
+    /// <summary>
+    /// Every value shape the first broad delivery actually carried decodes.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// MEASURED, NOT ENUMERATED FROM THE SPEC. These are the four (term, datatype column) pairs the
+    /// ten-draft broad acquisition returned, in their measured proportions: 118 IRI values, 40 plain
+    /// literals, 10 <c>xsd:anyURI</c> literals - which is what parliamentDraftUrl carries - and 10
+    /// <c>xsd:dateTime</c> literals.
+    /// </para>
+    /// <para>
+    /// The narrow five-predicate query returned IRIs and nothing else, so three of these four shapes
+    /// had never reached this decoder. The plain-literal one refused a real page.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void EveryValueShapeTheBroadDeliveryCarriedDecodes()
+    {
+        const string XsdStringIri = "http://www.w3.org/2001/XMLSchema#string";
+        const string XsdDateTime = "http://www.w3.org/2001/XMLSchema#dateTime";
+        var status = LuxembourgDraftGraphDiscoveryPlan.StatusDraftPredicateIri;
+
+        foreach (var (value, expectedDatatype, what) in new[]
+                 {
+                     (Iri(Directive), string.Empty, "an IRI value"),
+                     (Literal("Projet de loi"), XsdStringIri, "a plain literal, serialised with no datatype"),
+                     (Literal("https://www.chd.lu/fr/dossier/8357", XsdAnyUri), XsdAnyUri, "an xsd:anyURI literal"),
+                     (Literal("2002-07-16T00:00:00", XsdDateTime), XsdDateTime, "an xsd:dateTime literal"),
+                 })
+        {
+            var result = Decode(Row(predicate: status, value: value));
+
+            Assert.AreEqual(
+                LuxembourgDraftGraphProductionRefusal.None, result.Refusal,
+                what + " must decode: " + result.Detail);
+            Assert.AreEqual(expectedDatatype, result.Records![0].ValueDatatypeIri, what);
+        }
+    }
+
+    /// <summary>A predicate that cannot be read at all still refuses the delivery.</summary>
+    /// <remarks>
+    /// The boundary the test above must not erode. "Not admitted" is a decision about vocabulary;
+    /// a predicate term that is not a readable IRI is a statement about the DELIVERY, and admitting
+    /// one would mean reading facts out of a response already known to be malformed.
+    /// </remarks>
+    [TestMethod]
+    public void APredicateThatCannotBeReadStillRefusesTheDelivery()
+    {
+        var result = Decode(Row(predicate: LuxembourgDraftGraphDiscoveryPlan.StatusDraftPredicateIri,
+            value: Iri(Directive), key3: "not-the-predicate"));
+
+        Assert.AreNotEqual(
+            LuxembourgDraftGraphProductionRefusal.None, result.Refusal,
+            "a row whose own keys contradict it is not admitted by the vocabulary check.");
     }
 
     /// <summary>A marker disagreeing with its term refuses the delivery whole.</summary>
@@ -695,7 +784,13 @@ public sealed class LuxembourgDraftGraphProducerTests
             var isIri = predicate == LuxembourgDraftGraphDiscoveryPlan.DraftTransposesPredicateIri
                 || predicate == LuxembourgDraftGraphDiscoveryPlan.ResultingLegalResourcePredicateIri;
             var value = isIri ? Directive : "en-cours";
-            var datatype = isIri ? null : (string?)null;
+
+            // THE COLUMN AS THE ENGINE ANSWERS IT. A plain literal is serialised without a
+            // datatype attribute, but DATATYPE() answers xsd:string - RDF 1.1 says a simple literal
+            // IS an xsd:string. This fixture used to write an empty column here, which is a page
+            // Legilux does not send, and the disagreement only surfaced when a broad delivery
+            // carried forty real plain literals.
+            var datatype = isIri ? string.Empty : "http://www.w3.org/2001/XMLSchema#string";
 
             bindings.Add(new Dictionary<string, object>(StringComparer.Ordinal)
             {
@@ -704,7 +799,7 @@ public sealed class LuxembourgDraftGraphProducerTests
                 ["predicate"] = IriTerm(predicate),
                 ["value"] = isIri ? IriTerm(value) : LiteralTerm(value),
                 ["value_kind"] = LiteralTerm(isIri ? "iri" : "literal"),
-                ["datatype_iri"] = LiteralTerm(datatype ?? string.Empty),
+                ["datatype_iri"] = LiteralTerm(datatype),
                 ["language_tag"] = LiteralTerm(string.Empty),
                 ["multiplicity"] = LiteralTerm("1", XsdInteger),
                 ["key_1"] = LiteralTerm(Draft),
@@ -712,7 +807,7 @@ public sealed class LuxembourgDraftGraphProducerTests
                 ["key_3"] = LiteralTerm(predicate),
                 ["key_4"] = LiteralTerm(value),
                 ["key_5"] = LiteralTerm(isIri ? "iri" : "literal"),
-                ["key_6"] = LiteralTerm(datatype ?? string.Empty),
+                ["key_6"] = LiteralTerm(datatype),
                 ["key_7"] = LiteralTerm(string.Empty),
             });
         }

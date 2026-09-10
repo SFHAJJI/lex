@@ -36,16 +36,14 @@ public enum LuxembourgDraftGraphProductionRefusal
     [JsonStringEnumMemberName("row_not_admitted")]
     RowNotAdmitted = 4,
 
-    /// <summary>
-    /// A delivered row named a property this family never asked about.
-    /// </summary>
-    /// <remarks>
-    /// The plan binds its five predicates from a VALUES block, so an honest delivery cannot contain
-    /// another. One that does is answering a question nobody asked, and admitting it would let the
-    /// asked-about set this production publishes describe a delivery it does not match.
-    /// </remarks>
-    [JsonStringEnumMemberName("predicate_not_asked_about")]
-    PredicateNotAskedAbout = 5,
+    // ORDINAL 5 IS RETIRED AND PERMANENTLY UNALLOCATED. It was "predicate_not_asked_about", and
+    // it rested on the plan binding its five predicates from a VALUES block, so that an honest
+    // delivery could contain no other. That block is gone: it was measured DROPPING rows the
+    // publisher holds. The publisher is now asked for every predicate it has about these subjects,
+    // so a delivery containing another is not merely honest but expected, and the ones this family
+    // does not admit are named on RetainedNotAdmitted rather than refused.
+    //
+    // Not reused, so a retained artifact carrying the old name cannot acquire a new meaning.
 
     /// <summary>
     /// The delivery was read, but the (requested drafts x asked properties) matrix could not be
@@ -145,10 +143,12 @@ public sealed class LuxembourgDraftGraphProductionResult
         IReadOnlySet<string>? predicatesAskedAbout,
         SourceArtifactRef? completionEvidenceRef,
         LuxembourgDraftPropertyCoverage? coverage,
+        IReadOnlyList<string> retainedNotAdmitted,
         LuxembourgDraftGraphProductionRefusal refusal,
         string? detail,
         int productRequestCount)
     {
+        RetainedNotAdmitted = retainedNotAdmitted;
         Records = records;
         PredicatesAskedAbout = predicatesAskedAbout;
         CompletionEvidenceRef = completionEvidenceRef;
@@ -164,6 +164,24 @@ public sealed class LuxembourgDraftGraphProductionResult
     public IReadOnlySet<string>? PredicatesAskedAbout { get; }
 
     public SourceArtifactRef? CompletionEvidenceRef { get; }
+
+    /// <summary>
+    /// Predicates the publisher delivered for these subjects that this family does not admit.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// RETAINED EVIDENCE, NEVER PRODUCT FACTS. The broad acquisition asks for every predicate the
+    /// publisher holds about the requested subjects, because a publisher-side predicate filter was
+    /// measured dropping rows it holds. Admission to the E8 vocabulary is therefore made here, where
+    /// it is visible and testable, instead of by the query.
+    /// </para>
+    /// <para>
+    /// These are counted and named so a reader can see what the delivery carried, and they are not
+    /// decoded into records: this family asserts nothing about them, and the retained page is the
+    /// evidence for anyone who later wants to.
+    /// </para>
+    /// </remarks>
+    public IReadOnlyList<string> RetainedNotAdmitted { get; }
 
     /// <summary>
     /// The completed matrix over this batch: present values and derived absences together.
@@ -187,13 +205,14 @@ public sealed class LuxembourgDraftGraphProductionResult
         IReadOnlySet<string> predicatesAskedAbout,
         SourceArtifactRef completionEvidenceRef,
         LuxembourgDraftPropertyCoverage coverage,
+        IReadOnlyList<string> retainedNotAdmitted,
         int productRequestCount = 0) =>
-        new(records, predicatesAskedAbout, completionEvidenceRef, coverage,
+        new(records, predicatesAskedAbout, completionEvidenceRef, coverage, retainedNotAdmitted,
             LuxembourgDraftGraphProductionRefusal.None, null, productRequestCount);
 
     internal static LuxembourgDraftGraphProductionResult Refused(
         LuxembourgDraftGraphProductionRefusal refusal, string? detail, int productRequestCount = 0) =>
-        new(null, null, null, null, refusal, detail, productRequestCount);
+        new(null, null, null, null, [], refusal, detail, productRequestCount);
 
     /// <summary>Every delivered value of one property this run asked about.</summary>
     /// <remarks>
@@ -353,6 +372,7 @@ public sealed class LuxembourgDraftGraphProducer
         ArgumentNullException.ThrowIfNull(inventory);
 
         var asked = LuxembourgDraftGraphDiscoveryPlan.AskedAbout.ToHashSet(StringComparer.Ordinal);
+        var notAdmitted = new List<string>();
         var records = new List<LuxembourgDraftPropertyRecord>(rows.Count);
 
         foreach (var row in rows)
@@ -360,6 +380,24 @@ public sealed class LuxembourgDraftGraphProducer
             LuxembourgDraftPropertyRecord record;
             try
             {
+                // ADMISSION BEFORE DECODE, AND THE ORDER IS THE POINT. The broad acquisition
+                // deliberately carries every predicate the publisher holds about these subjects, so
+                // most delivered rows are ones this family asserts nothing about. Decoding those
+                // fully would let a value shape E8 makes no claim about refuse a delivery whose
+                // admitted half is perfectly readable - which is exactly what happened on the first
+                // broad run: forty plain-literal rows, none of them an admitted predicate, refused
+                // a page whose thirty-six admitted rows were clean.
+                //
+                // The predicate itself is still required to be a readable IRI. A row whose
+                // predicate cannot be read is a delivery this codebase cannot trust, admitted or
+                // not, and it still refuses.
+                var predicateIri = RequireIri(Term(row, profile, "predicate"), "predicate");
+                if (!asked.Contains(predicateIri))
+                {
+                    notAdmitted.Add(predicateIri);
+                    continue;
+                }
+
                 record = DecodeRow(row, profile, completionEvidenceRef.ResourceId);
             }
             catch (ArgumentException exception)
@@ -367,14 +405,6 @@ public sealed class LuxembourgDraftGraphProducer
                 return LuxembourgDraftGraphProductionResult.Refused(
                     LuxembourgDraftGraphProductionRefusal.RowNotAdmitted,
                     exception.Message,
-                    productRequestCount);
-            }
-
-            if (!asked.Contains(record.PredicateIri))
-            {
-                return LuxembourgDraftGraphProductionResult.Refused(
-                    LuxembourgDraftGraphProductionRefusal.PredicateNotAskedAbout,
-                    $"A row names {record.PredicateIri}, which this family never asked about.",
                     productRequestCount);
             }
 
@@ -399,6 +429,7 @@ public sealed class LuxembourgDraftGraphProducer
                 requestedDrafts.Count,
                 rows.Count),
             inventory,
+            notAdmitted.Count,
             out var coverageRefusal,
             out var coverageDetail);
         if (coverage is null)
@@ -410,8 +441,11 @@ public sealed class LuxembourgDraftGraphProducer
         }
 
         return LuxembourgDraftGraphProductionResult.Success(
-            records, asked, completionEvidenceRef, coverage, productRequestCount);
+            records, asked, completionEvidenceRef, coverage, notAdmitted, productRequestCount);
     }
+
+    /// <summary>RDF 1.1: a simple literal is an xsd:string, and this engine's DATATYPE says so.</summary>
+    private const string XsdString = "http://www.w3.org/2001/XMLSchema#string";
 
     private static LuxembourgDraftPropertyRecord DecodeRow(
         RepeatedEnumerationRow row,
@@ -455,11 +489,24 @@ public sealed class LuxembourgDraftGraphProducer
         // The qualifier columns must agree with the term they describe. Both are bound from
         // DATATYPE() and LANG() over that very term, so an honest delivery cannot disagree, and a
         // row that does keys as one fact and decodes as another.
-        // A language-tagged literal carries no datatype in SPARQL JSON, so the term's own datatype is
-        // null and the expected column is empty — which is exactly what the engine's erroring BIND
-        // leaves behind. The two agree without either being taught about the other.
+        // A NULL DATATYPE ON THE TERM MEANS TWO DIFFERENT THINGS, and reading it as one was a
+        // defect the narrow query could never expose.
+        //
+        // A language-tagged literal carries no datatype in SPARQL JSON, and DATATYPE() raises on it
+        // here, so the erroring BIND leaves the column absent and the expected value is empty. That
+        // was measured, and it is the case this check was written for.
+        //
+        // A PLAIN literal also carries no datatype in SPARQL JSON - but DATATYPE() answers it with
+        // xsd:string, because under RDF 1.1 a simple literal IS an xsd:string. So the column says
+        // xsd:string while the term says nothing, and the two agree in fact while differing in
+        // spelling. Treating that as a disagreement refused a real delivery: the first broad run
+        // carried forty such rows and the whole page was rejected.
+        //
+        // Only the narrow five-predicate query could hide this, and only because every value it
+        // ever returned was an IRI.
         var expectedDatatype = valueTerm.Kind == RepeatedEnumerationRdfTermKind.Literal
-            ? valueTerm.Datatype ?? string.Empty
+            ? valueTerm.Datatype
+                ?? (valueTerm.Language is { Length: > 0 } ? string.Empty : XsdString)
             : string.Empty;
         var expectedLanguage = valueTerm.Kind == RepeatedEnumerationRdfTermKind.Literal
             ? valueTerm.Language ?? string.Empty
