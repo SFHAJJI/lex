@@ -454,6 +454,28 @@ public sealed class EuCaseLawLinkProducerTests
             EuCaseLawLinkProductionRefusal.RowNotAdmitted, celexMarkerDisagrees.Refusal,
             "a non-CELEX literal does not excuse a marker that lies about what was delivered.");
 
+        // NOT AN IDENTIFIER AT ALL, which is different from an identifier this family cannot read.
+        // The identity contract admits one to two hundred printable ASCII characters, so a control
+        // character or an over-long blob in the identifier position means the response is corrupt -
+        // and filing that as unrepresentable would let a corrupt delivery pass as a partial success.
+        foreach (var notAnIdentifier in new[]
+                 {
+                     new string('X', 201),
+                     "3201" + (char)1 + "6R0679",
+                     "32016R0679" + (char)10,
+                 })
+        {
+            var corrupt = EuCaseLawLinkProducer.DecodeRows(
+                [Row(Unbound(), EuCaseLawDiscoveryPlan.UnboundEcliKind,
+                    celex: Literal(notAnIdentifier), celexKind: "literal")],
+                Profile(),
+                Scopes(),
+                Evidence);
+            Assert.AreEqual(
+                EuCaseLawLinkProductionRefusal.RowNotAdmitted, corrupt.Refusal,
+                "an identifier position carrying a non-identifier means the delivery is corrupt.");
+        }
+
         var wrongPredicate = EuCaseLawLinkProducer.DecodeRows(
             [Row(Literal(Ecli), "literal", predicate: "http://example.invalid/not-asked-about")],
             Profile(),

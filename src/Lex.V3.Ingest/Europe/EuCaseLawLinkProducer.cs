@@ -619,14 +619,34 @@ public sealed class EuCaseLawLinkProducer
         // The check is asked BEFORE construction rather than caught after it, so it can only ever
         // reclassify the grammar decision. Catching the constructor's ArgumentException would also
         // swallow a genuinely malformed row, and those must keep refusing the delivery.
-        if (OfficialIdentifier.ProfileOf(celex.Value!) is null)
+        // AN IDENTIFIER POSITION CARRYING SOMETHING THAT IS NOT AN IDENTIFIER AT ALL is a malformed
+        // delivery rather than a citation from a scheme this family does not read. The identity
+        // contract admits one to two hundred printable ASCII characters; a control character or an
+        // over-long blob here means the response cannot be trusted, and filing it as merely
+        // unrepresentable would let a corrupt delivery pass as a partial success.
+        //
+        // Stated here because FactsValidation is internal to the contracts assembly. Any divergence
+        // fails safe: a value this admits and the constructor still rejects throws, and a throw from
+        // there is a whole-delivery refusal.
+        //
+        // Found by a mutation. Catching the constructor's ArgumentException instead of asking first
+        // looked equivalent and is not: the constructor rejects for TWO reasons, and the broad catch
+        // would file a corrupt value as unrepresentable alongside a genuine foreign identifier.
+        if (celex.Value!.Length > 200 ||
+            celex.Value.Any(static character => character is < ' ' or > '~'))
+        {
+            throw new ArgumentException(
+                "case_celex carries something that is not an identifier at all.", nameof(celex));
+        }
+
+        if (OfficialIdentifier.ProfileOf(celex.Value) is null)
         {
             throw new CaseSideNotProvableException(
                 "The delivered case_celex literal is not a CELEX identifier in any sector: "
                     + celex.Value);
         }
 
-        var identifier = new OfficialIdentifier(FactsIdentifierFamily.Celex, celex.Value!);
+        var identifier = new OfficialIdentifier(FactsIdentifierFamily.Celex, celex.Value);
 
         // ProvesCase is asked rather than restated: sector 6 is case law and this producer does not
         // own that rule. A CELEX outside it is a real identity for something that is not a case, so
