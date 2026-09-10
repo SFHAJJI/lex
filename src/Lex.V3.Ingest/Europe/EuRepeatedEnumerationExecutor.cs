@@ -289,6 +289,19 @@ public sealed record LuxembourgDraftGraphRunRequest(
     MachineQueryRendererSource RendererSource);
 
 /// <summary>
+/// One bounded enumeration of the InitialDraft class's own subjects.
+/// </summary>
+/// <remarks>
+/// It carries no selection for the same reason the draft-graph request does not: the question is
+/// the class itself, and a caller able to narrow it could narrow what "complete" means. The batching
+/// stage that follows takes its members from this run's proven output rather than from a caller.
+/// </remarks>
+public sealed record LuxembourgInitialDraftInventoryRunRequest(
+    LuxembourgInitialDraftInventoryDiscoveryPlan Plan,
+    string PlanResourceId,
+    MachineQueryRendererSource RendererSource);
+
+/// <summary>
 /// One bounded enumeration of the case-law works pointing at a batch of EU acts.
 /// </summary>
 /// <remarks>
@@ -910,6 +923,53 @@ public sealed class EuRepeatedEnumerationExecutor
                     pass => BindLuxembourgDraftGraphCount(request, pass),
                     (pass, cursor, selected, evidenceRef) =>
                         BindLuxembourgDraftGraphPage(request, pass, cursor, selected, evidenceRef),
+                    batchObjects: null,
+                    batchMembershipKeyOrdinal: null,
+                    cancellationToken)
+                .ConfigureAwait(false);
+        }
+        finally
+        {
+            session.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// The InitialDraft inventory, one session and two passes over the whole class.
+    /// </summary>
+    /// <remarks>
+    /// The narrow first stage of E8's staged class sweep. It exists because Legilux refused the
+    /// five-predicate draft-graph query at class scope with SR319, twice, and a bounded batch needs
+    /// a proven membership list to be bounded BY. Like the family it serves it names no selection.
+    /// </remarks>
+    public async Task<EuEnumerationRunResult> RunLuxembourgInitialDraftInventoryAsync(
+        LuxembourgInitialDraftInventoryRunRequest request,
+        BoundMachineRequest sourceWitness,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(sourceWitness);
+
+        var session = await StartSessionAsync(sourceWitness, cancellationToken).ConfigureAwait(false);
+        if (session is null)
+        {
+            return EuEnumerationRunResult.Refused(
+                new EuEnumerationRefusalDetail(
+                    EuEnumerationRefusal.RobotsBootstrapRefused, null, null, null, null, null, null, null, null),
+                productRequestCount: 0);
+        }
+
+        try
+        {
+            var profile = request.Plan.CreateDeliveryProfile();
+            var profileRef = RepeatedEnumerationInterpretationProfileIdentity.Create(NewUrn(), profile);
+            return await RunPassesAsync(
+                    session,
+                    profile,
+                    profileRef,
+                    pass => BindLuxembourgInitialDraftInventoryCount(request, pass),
+                    (pass, cursor, selected, evidenceRef) =>
+                        BindLuxembourgInitialDraftInventoryPage(request, pass, cursor, selected, evidenceRef),
                     batchObjects: null,
                     batchMembershipKeyOrdinal: null,
                     cancellationToken)
@@ -2086,6 +2146,40 @@ public sealed class EuRepeatedEnumerationExecutor
 
     private static EuBoundQueryParts BindLuxembourgOpinionPage(
         LuxembourgOpinionRunRequest request,
+        int passOrdinal,
+        IReadOnlyList<string>? cursor,
+        long selected,
+        SourceArtifactRef countEvidenceRef)
+    {
+        var bound = request.Plan.BindPage(
+            (LuxembourgQueryPass)passOrdinal,
+            cursor,
+            selected,
+            countEvidenceRef,
+            request.PlanResourceId,
+            NewUrn(),
+            request.RendererSource);
+        return new EuBoundQueryParts(
+            bound.MachinePlanRef, bound.InputArtifact.ArtifactRef, bound.Request,
+            bound.InputArtifact.PartitionBinding.MemberKey, bound.MachinePlan.ResponseCardinality.RowLimit);
+    }
+
+    private static EuBoundQueryParts BindLuxembourgInitialDraftInventoryCount(
+        LuxembourgInitialDraftInventoryRunRequest request,
+        int passOrdinal)
+    {
+        var bound = request.Plan.BindCount(
+            (LuxembourgQueryPass)passOrdinal,
+            request.PlanResourceId,
+            NewUrn(),
+            request.RendererSource);
+        return new EuBoundQueryParts(
+            bound.MachinePlanRef, bound.InputArtifact.ArtifactRef, bound.Request,
+            bound.InputArtifact.PartitionBinding.MemberKey, null);
+    }
+
+    private static EuBoundQueryParts BindLuxembourgInitialDraftInventoryPage(
+        LuxembourgInitialDraftInventoryRunRequest request,
         int passOrdinal,
         IReadOnlyList<string>? cursor,
         long selected,

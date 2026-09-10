@@ -119,6 +119,9 @@ public sealed class ClosedVocabularyCensusTests
                 "Lex.V3.Ingest.Luxembourg.LuxembourgInFileRightsReadStatus: Observed, "
                     + "UnsupportedRepresentation, MalformedXml, ManifestationIdentityMismatch, "
                     + "InvalidLicenceIri",
+                "Lex.V3.Ingest.Luxembourg.LuxembourgInitialDraftInventoryRefusal: None, "
+                    + "EnumerationRefused, EnumerationProofRefused, VerifiedRowsRefused, "
+                    + "RowNotAdmitted, SubjectDeliveredTwice",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgOpinionProductionRefusal: None, RowNotAdmitted, "
                     + "EnumerationRefused, EnumerationProofRefused, VerifiedRowsRefused",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgPartitionCoverReconciliationRefusal: "
