@@ -296,7 +296,8 @@ public sealed record LuxembourgDraftGraphRunRequest(
     LuxembourgDraftGraphDiscoveryPlan Plan,
     IReadOnlyList<string> BatchDrafts,
     string PlanResourceId,
-    MachineQueryRendererSource RendererSource);
+    MachineQueryRendererSource RendererSource,
+    LuxembourgInitialDraftInventoryCitation Inventory);
 
 /// <summary>
 /// One bounded enumeration of the InitialDraft class's own subjects.

@@ -47,6 +47,20 @@ public enum LuxembourgDraftGraphProductionRefusal
     [JsonStringEnumMemberName("predicate_not_asked_about")]
     PredicateNotAskedAbout = 5,
 
+    /// <summary>
+    /// The delivery was read, but the (requested drafts x asked properties) matrix could not be
+    /// completed over it.
+    /// </summary>
+    /// <remarks>
+    /// A statement about coverage rather than about any row. The delivered rows may each be
+    /// perfectly readable and the matrix still be unprovable - a draft delivered that this batch
+    /// never asked about, a row folded twice, a pair left represented by nothing. Refusing is the
+    /// only honest option: a partial matrix read as a whole one is a set of absences asserted over
+    /// a corpus nobody established.
+    /// </remarks>
+    [JsonStringEnumMemberName("matrix_completion_refused")]
+    MatrixCompletionRefused = 7,
+
     // ORDINAL 6 IS RETIRED AND PERMANENTLY UNALLOCATED. It was
     // "draft_property_coverage_incomplete", and it refused any draft carrying fewer than five rows.
     // That invariant was true only while the query asked for the absent case: with the mandatory
@@ -110,6 +124,7 @@ public sealed class LuxembourgDraftGraphProductionResult
         IReadOnlyList<LuxembourgDraftPropertyRecord>? records,
         IReadOnlySet<string>? predicatesAskedAbout,
         SourceArtifactRef? completionEvidenceRef,
+        LuxembourgDraftPropertyCoverage? coverage,
         LuxembourgDraftGraphProductionRefusal refusal,
         string? detail,
         int productRequestCount)
@@ -117,6 +132,7 @@ public sealed class LuxembourgDraftGraphProductionResult
         Records = records;
         PredicatesAskedAbout = predicatesAskedAbout;
         CompletionEvidenceRef = completionEvidenceRef;
+        Coverage = coverage;
         Refusal = refusal;
         Detail = detail;
         ProductRequestCount = productRequestCount;
@@ -128,6 +144,15 @@ public sealed class LuxembourgDraftGraphProductionResult
     public IReadOnlySet<string>? PredicatesAskedAbout { get; }
 
     public SourceArtifactRef? CompletionEvidenceRef { get; }
+
+    /// <summary>
+    /// The completed matrix over this batch: present values and derived absences together.
+    /// </summary>
+    /// <remarks>
+    /// Non-null exactly when <see cref="Delivered"/>. <see cref="Records"/> is what the publisher
+    /// said; this is what the run concluded, and the pairs with no row live only here.
+    /// </remarks>
+    public LuxembourgDraftPropertyCoverage? Coverage { get; }
 
     public LuxembourgDraftGraphProductionRefusal Refusal { get; }
 
@@ -141,13 +166,14 @@ public sealed class LuxembourgDraftGraphProductionResult
         IReadOnlyList<LuxembourgDraftPropertyRecord> records,
         IReadOnlySet<string> predicatesAskedAbout,
         SourceArtifactRef completionEvidenceRef,
+        LuxembourgDraftPropertyCoverage coverage,
         int productRequestCount = 0) =>
-        new(records, predicatesAskedAbout, completionEvidenceRef,
+        new(records, predicatesAskedAbout, completionEvidenceRef, coverage,
             LuxembourgDraftGraphProductionRefusal.None, null, productRequestCount);
 
     internal static LuxembourgDraftGraphProductionResult Refused(
         LuxembourgDraftGraphProductionRefusal refusal, string? detail, int productRequestCount = 0) =>
-        new(null, null, null, refusal, detail, productRequestCount);
+        new(null, null, null, null, refusal, detail, productRequestCount);
 
     /// <summary>Every delivered value of one property this run asked about.</summary>
     /// <remarks>
@@ -278,7 +304,13 @@ public sealed class LuxembourgDraftGraphProducer
                 run.ProductRequestCount);
         }
 
-        return DecodeRows(rows, profile, proof.AcquisitionRunRef, run.ProductRequestCount);
+        return DecodeRows(
+            rows,
+            profile,
+            proof.AcquisitionRunRef,
+            LuxembourgDraftGraphDiscoveryPlan.RequestedPartitionMembers(request.BatchDrafts),
+            request.Inventory,
+            run.ProductRequestCount);
     }
 
     /// <summary>Decodes one delivered page set into records.</summary>
@@ -290,11 +322,15 @@ public sealed class LuxembourgDraftGraphProducer
         IReadOnlyList<RepeatedEnumerationRow> rows,
         RepeatedEnumerationInterpretationProfile profile,
         SourceArtifactRef completionEvidenceRef,
+        IReadOnlyList<string> requestedDrafts,
+        LuxembourgInitialDraftInventoryCitation inventory,
         int productRequestCount = 0)
     {
         ArgumentNullException.ThrowIfNull(rows);
         ArgumentNullException.ThrowIfNull(profile);
         ArgumentNullException.ThrowIfNull(completionEvidenceRef);
+        ArgumentNullException.ThrowIfNull(requestedDrafts);
+        ArgumentNullException.ThrowIfNull(inventory);
 
         var asked = LuxembourgDraftGraphDiscoveryPlan.AskedAbout.ToHashSet(StringComparer.Ordinal);
         var records = new List<LuxembourgDraftPropertyRecord>(rows.Count);
@@ -325,8 +361,36 @@ public sealed class LuxembourgDraftGraphProducer
             records.Add(record);
         }
 
+        // ONLY NOW, AND ONLY HERE. Every refusal above returns before this point, so a matrix can
+        // only ever be completed over a delivery that was read whole - the ruling's "only after
+        // that batch proof is Delivered" made structural rather than sequential.
+        //
+        // The delivered row count comes from the ROWS and the folded count from the RECORDS, which
+        // is what makes the exactly-once check mean anything: comparing the decoded list against
+        // itself would pass for a decoder that dropped a row and never notice.
+        var coverage = LuxembourgDraftPropertyCoverage.TryComplete(
+            requestedDrafts,
+            LuxembourgDraftGraphDiscoveryPlan.AskedAbout,
+            records.Select(static value => new LuxembourgDraftPropertyRecordView(
+                value.DraftIri, value.PredicateIri, value.Value, value.ValueKind)).ToArray(),
+            new LuxembourgDraftBatchCitation(
+                completionEvidenceRef,
+                LuxembourgDraftPropertyCoverage.SelectionDigestFor(requestedDrafts),
+                requestedDrafts.Count,
+                rows.Count),
+            inventory,
+            out var coverageRefusal,
+            out var coverageDetail);
+        if (coverage is null)
+        {
+            return LuxembourgDraftGraphProductionResult.Refused(
+                LuxembourgDraftGraphProductionRefusal.MatrixCompletionRefused,
+                coverageRefusal + ": " + coverageDetail,
+                productRequestCount);
+        }
+
         return LuxembourgDraftGraphProductionResult.Success(
-            records, asked, completionEvidenceRef, productRequestCount);
+            records, asked, completionEvidenceRef, coverage, productRequestCount);
     }
 
     private static LuxembourgDraftPropertyRecord DecodeRow(

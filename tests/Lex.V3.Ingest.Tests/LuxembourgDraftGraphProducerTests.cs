@@ -119,7 +119,25 @@ public sealed class LuxembourgDraftGraphProducerTests
     /// the publisher had never sent.
     /// </remarks>
     private static LuxembourgDraftGraphProductionResult Decode(params RepeatedEnumerationRow[] rows) =>
-        LuxembourgDraftGraphProducer.DecodeRows(rows, Profile(), Evidence);
+        LuxembourgDraftGraphProducer.DecodeRows(
+            rows, Profile(), Evidence, RequestedIn(rows), TestInventory);
+
+    /// <summary>The drafts a fixture delivery names, as the set it asked about.</summary>
+    /// <remarks>
+    /// Only honest for a fixture that means its delivery to be complete. A test that needs the
+    /// requested set and the delivered set to DISAGREE says so by calling the producer directly;
+    /// the coverage guards themselves are proven in
+    /// <c>LuxembourgDraftPropertyCoverageTests</c>, where both sides are chosen independently.
+    /// </remarks>
+    private static IReadOnlyList<string> RequestedIn(IReadOnlyList<RepeatedEnumerationRow> rows)
+    {
+        var ordinal = Profile().ProjectionVariables.ToList().IndexOf("draft");
+        return LuxembourgDraftGraphDiscoveryPlan.RequestedPartitionMembers(
+            rows.Select(row => row.Terms[ordinal].Value ?? Draft).DefaultIfEmpty(Draft).ToArray());
+    }
+
+    private static readonly LuxembourgInitialDraftInventoryCitation TestInventory =
+        new("legilux-initial-draft-inventory", Evidence, "fixture-inventory");
 
     /// <summary>
     /// The whole chain runs: executor, two passes, proof, reopened pages, verified rows, records.
@@ -162,7 +180,8 @@ public sealed class LuxembourgDraftGraphProducerTests
                 plan,
                 [Draft],
                 "urn:uuid:1a7c5e39-4b62-4d80-9f13-6e025ac84b71",
-                LuxembourgAcquisitionTestFixture.BuildRendererSource(9101)),
+                LuxembourgAcquisitionTestFixture.BuildRendererSource(9101),
+                TestInventory),
             LuxembourgSourceWitness(),
             CancellationToken.None);
 
@@ -578,7 +597,8 @@ public sealed class LuxembourgDraftGraphProducerTests
             terms[ordinal] = Literal((terms[ordinal].Value ?? string.Empty) + "-not-delivered");
 
             var result = LuxembourgDraftGraphProducer.DecodeRows(
-                [new RepeatedEnumerationRow(terms, terms, terms)], profile, Evidence);
+                [new RepeatedEnumerationRow(terms, terms, terms)], profile, Evidence,
+                [Draft], TestInventory);
 
             Assert.AreEqual(
                 LuxembourgDraftGraphProductionRefusal.RowNotAdmitted, result.Refusal,

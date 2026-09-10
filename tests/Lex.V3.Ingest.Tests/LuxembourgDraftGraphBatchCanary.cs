@@ -97,7 +97,8 @@ public sealed class LuxembourgDraftGraphBatchCanary
         var plan = LuxembourgDraftGraphDiscoveryPlan.Create();
 
         var result = await producer.RunAsync(
-            new LuxembourgDraftGraphRunRequest(plan, batch, NewUrn(), RendererSource(checkout)),
+            new LuxembourgDraftGraphRunRequest(
+                plan, batch, NewUrn(), RendererSource(checkout), RetainedInventory()),
             LuxembourgSourceWitness(),
             CancellationToken.None);
 
@@ -153,6 +154,40 @@ public sealed class LuxembourgDraftGraphBatchCanary
         {
             CollectionAssert.Contains(batch, record.DraftIri);
         }
+    }
+
+    /// <summary>The retained inventory run this batch is a partition of.</summary>
+    /// <remarks>
+    /// <para>
+    /// READ FROM THE RUN THAT PRODUCED IT, NEVER MINTED HERE. Every absence this canary derives
+    /// cites this citation, so inventing one would put a reference to a run that never happened
+    /// inside a hundred and fifty records asserting what a publisher does not hold. The canary
+    /// declines to run rather than do that.
+    /// </para>
+    /// <para>
+    /// The values come from the retained two-pass inventory under #417 - 7,753 InitialDraft
+    /// subjects over 24 requests, both passes agreeing - and are passed in rather than rediscovered
+    /// so this canary sends exactly one product request family and not the inventory again.
+    /// </para>
+    /// </remarks>
+    private static LuxembourgInitialDraftInventoryCitation RetainedInventory()
+    {
+        var resource = Environment.GetEnvironmentVariable("LEX_E8_INVENTORY_RUN_RESOURCE");
+        var digest = Environment.GetEnvironmentVariable("LEX_E8_INVENTORY_RUN_SHA256");
+        var selection = Environment.GetEnvironmentVariable("LEX_E8_INVENTORY_SELECTION");
+        if (string.IsNullOrWhiteSpace(resource) ||
+            string.IsNullOrWhiteSpace(digest) ||
+            string.IsNullOrWhiteSpace(selection))
+        {
+            Assert.Inconclusive(
+                "Set LEX_E8_INVENTORY_RUN_RESOURCE, LEX_E8_INVENTORY_RUN_SHA256 and "
+                + "LEX_E8_INVENTORY_SELECTION from the retained inventory run. Every derived "
+                + "absence cites them, and a citation this canary made up would name a run that "
+                + "never happened.");
+        }
+
+        return new LuxembourgInitialDraftInventoryCitation(
+            "legilux-initial-draft-inventory", new SourceArtifactRef(resource!, digest!), selection!);
     }
 
     private static BoundMachineRequest LuxembourgSourceWitness()
