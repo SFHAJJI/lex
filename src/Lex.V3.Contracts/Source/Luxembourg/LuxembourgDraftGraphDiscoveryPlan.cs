@@ -5,149 +5,196 @@ using Lex.V3.Contracts.Source.Core;
 
 namespace Lex.V3.Contracts.Source.Luxembourg;
 
-public sealed record LuxembourgOpinionBoundQuery(
+public sealed record LuxembourgDraftGraphBoundQuery(
     MachineQueryPlan MachinePlan,
     SourceArtifactRef MachinePlanRef,
     MachineQueryInputArtifact InputArtifact,
     BoundMachineRequest Request);
 
 /// <summary>
-/// Enumerates Conseil d'État opinion events with the locator of their resulting document and their
-/// own date, and asks for nothing else.
+/// Asks Legilux which properties each <c>InitialDraft</c> carries, one row per declared value.
 /// </summary>
 /// <remarks>
 /// <para>
-/// THIS QUERY CANNOT FETCH AN OPINION'S TEXT, AND THAT IS THE POINT. E8's decision is that
-/// unlicensed opinion text stays link-only, and
-/// <see cref="LuxembourgOpinionLinkOnlyRecord"/> enforces it in the type by having nowhere to put a
-/// body. This plan is the same decision one layer earlier: it projects a locator and a date, so the
-/// enumeration that feeds that record never carries text to put anywhere. A licence would change
-/// the record's disposition; it would still have to change this query too, which is a second place
-/// the decision is written down rather than a restatement of the first.
+/// THIS IS THE PRODUCTION PATH <see cref="LuxembourgDraftRelationPredicate"/> HAS NEVER HAD. That
+/// vocabulary was accepted on its own and reached by nothing: no query asked for
+/// <c>draftTransposes</c>, so a predicate this repository declares was one the publisher was never
+/// asked about. A closed vocabulary reached by nothing covers nothing, which is what S2-A01 requires
+/// of publisher assertions, and it leaves "no draft transposes this directive" indistinguishable
+/// from "nobody asked", which is the false absence S2-A03 forbids.
 /// </para>
 /// <para>
-/// ABSENCE IS ASKED FOR, NEVER INFERRED FROM SILENCE, and here it is the common case rather than the
-/// corner. The vocabulary's own observations: 13,009 <c>OpinionConseilEtat</c> events, of which
-/// 6,393 carry <c>hasResultingOpinionDocument</c> and 9,144 carry <c>opinionDate</c>. So roughly
-/// half the events have no document at all, and a query that dropped them would report a corpus half
-/// its real size while looking complete. Both edges are therefore asked through an explicit
-/// <c>FILTER NOT EXISTS</c> branch carrying a marker, exactly as the EU case-law family asks for a
-/// missing ECLI.
+/// ONE FAMILY, NOT TWO, AND THE AUTHORITY SAYS SO. <c>draftTransposes</c> is one of
+/// <c>InitialDraft</c>'s own properties — <c>baseline/pack/24-research-users.md:62</c> lists it
+/// among titleDraft, statusDraft, parliamentDraftUrl, referralDate, hasResultingLegalResource and
+/// the rest — so the question-catalogue's row 56 and row 60 are the same node asked two ways.
+/// Building <c>draftTransposes</c> alone would have produced a family whose node type is asked for
+/// by nothing, which is the defect this plan exists to end rather than repeat.
 /// </para>
 /// <para>
-/// This is deliberately NOT the shape of its Luxembourg sibling.
-/// <see cref="LuxembourgTranspositionIdentityDiscoveryPlan"/> uses <c>OPTIONAL</c> with
-/// <c>COALESCE(..., "")</c>, which cannot distinguish "the publisher holds no value" from "a value
-/// was held and the pattern failed to match it": both arrive as the empty string. That is tolerable
-/// where the absent column is decoration. Here the absent column decides whether a record can exist
-/// at all, so the two have to be different answers.
+/// THE SHAPE IS THE OBJECT-FACTS SHAPE, deliberately, rather than the sibling opinion plan's. A
+/// draft carries several heterogeneous properties, and one UNION pair per property multiplies the
+/// query without bound. <see cref="EuObjectFactsDiscoveryPlan"/>'s
+/// <c>(node, predicate, value, value_kind, datatype_iri, language_tag)</c> row already carries every
+/// term's authority, which is the rule two review rounds settled on the procedure-event plan: a term
+/// delivered in object position carries its kind, its datatype AND its language, because two
+/// literals can share a lexical form and still be different facts.
 /// </para>
 /// <para>
-/// THE KIND MARKERS ARE NOT THE TERMS. <c>?document_kind</c> and <c>?date_kind</c> are <c>BIND</c>
-/// values this plan computes ABOUT a row; they are not the publisher's word for what the row is. A
-/// decoder reads the terms and may use a marker only to detect disagreement. Trusting a marker over
-/// its term is a defect this seat has shipped once, on the E1 axiom decoder, and a marker read as one
-/// boolean rather than its whole four-valued space is a defect this seat shipped again on the E6
-/// producer. Both were found in review.
+/// EVERY DERIVED CURSOR KEY IS TOTALISED WITH COALESCE, for two separately measured reasons, and
+/// neither is stylistic.
 /// </para>
 /// <para>
-/// The family is swept whole rather than asked about a batch: its scope is a class, not a caller's
-/// list, so there are no selection parameters and a caller chooses nothing. At 13,009 events and a
-/// pass-1 page limit of 971 that is an enumeration this plan can finish.
+/// The first is the value key. <see cref="EuObjectFactsDiscoveryPlan"/> records the probe: this
+/// engine selects IF's branch correctly and evaluates the arguments EAGERLY, so <c>STR</c> on the
+/// unbound term raised, the erroring BIND left the key unbound, and SPARQL's JSON omitted it from 8
+/// of 41 rows.
+/// </para>
+/// <para>
+/// The second is the qualifier keys, and it is a DIFFERENT cause with the same symptom.
+/// <c>EuPageDecodeClassificationTests</c> retains the page: for a language-tagged literal this
+/// engine does not answer <c>DATATYPE()</c> with <c>rdf:langString</c> as SPARQL 1.1 specifies, so
+/// that BIND errors and leaves <c>datatype_iri</c> unbound — and any key derived from it unbound
+/// with it. 32 of 373 rows on that page were the shape. The COLUMN is therefore left as the
+/// publisher answers it, absent and all, exactly as the EU family leaves it; only the KEY is made
+/// total, so the keyset is never short a component.
+/// </para>
+/// <para>
+/// Nothing is lost by <c>datatype_iri</c> reading empty for a language-tagged literal, because
+/// <c>language_tag</c> is non-empty for precisely those and empty for a plain one. The pair is
+/// unambiguous where either alone would not be.
+/// </para>
+/// <para>
+/// WHAT IS NOT MODELLED HERE, and each omission is a decision rather than an oversight.
+/// <c>statusDraft</c>'s four observed values are not a closed enum: the accepted E8 line's own
+/// instruction to the sibling family is to tolerate mixed vocabularies, and pinning a value set from
+/// a research note is how source drift becomes a silent refusal (S2-A05). No count is pinned either
+/// — <c>baseline/pack/38-verified-claims.md:12</c> says those figures must be treated as a
+/// hypothesis, the endpoint having answered 502 when they were re-checked.
+/// </para>
+/// <para>
+/// <c>parliamentDraftUrl</c> VALUES ARE RETAINED AS TEXT AND NEVER FETCHED. They name pages on
+/// <c>www.chd.lu</c>, a host this pipeline does not contact. Retaining a URL is not requesting one,
+/// and no part of this family dereferences it; a slice that did would be reaching a new host class.
 /// </para>
 /// </remarks>
-public sealed class LuxembourgOpinionDiscoveryPlan
+public sealed class LuxembourgDraftGraphDiscoveryPlan
 {
-    /// <summary>The JOLux class of an opinion event. 13,009 observed.</summary>
-    public const string OpinionClassIri = LuxembourgOpinionLinkOnlyVocabulary.OpinionConseilEtatClassIri;
+    private const string Jolux = "http://data.legilux.public.lu/resource/ontology/jolux#";
 
-    /// <summary>The opinion-to-document edge. 6,393 of the 13,009 events carry one.</summary>
-    public const string ResultingDocumentPredicateIri =
-        LuxembourgOpinionLinkOnlyVocabulary.HasResultingOpinionDocumentPredicateIri;
+    /// <summary>The JOLux class of a legislative draft.</summary>
+    /// <remarks>
+    /// Already admitted as a resource class by <c>LuxembourgScopeResolver</c> and
+    /// <c>LuxembourgSourceProfile</c>; what has never existed is a query that asks for it.
+    /// </remarks>
+    public const string InitialDraftClassIri = Jolux + "InitialDraft";
 
-    /// <summary>The opinion's own date. 9,144 of the 13,009 events carry one.</summary>
-    public const string OpinionDatePredicateIri = LuxembourgOpinionLinkOnlyVocabulary.OpinionDatePredicateIri;
+    /// <summary>The draft's own status token.</summary>
+    public const string StatusDraftPredicateIri = Jolux + "statusDraft";
 
-    /// <summary>The marker a row carries when the publisher holds no such edge for that opinion.</summary>
+    /// <summary>The Chambre des Deputes dossier page for the draft. Retained as a link, never fetched.</summary>
+    public const string ParliamentDraftUrlPredicateIri = Jolux + "parliamentDraftUrl";
+
+    /// <summary>The date the draft was referred.</summary>
+    public const string ReferralDatePredicateIri = Jolux + "referralDate";
+
+    /// <summary>The enacted act a draft became, where it became one.</summary>
+    /// <remarks>
+    /// Distinct from <c>hasResultingOpinionDocument</c>, which is a different predicate on a
+    /// different class and whose count is adjacent enough to invite the confusion. This one links a
+    /// draft to an act; that one links an opinion to its PDF.
+    /// </remarks>
+    public const string ResultingLegalResourcePredicateIri = Jolux + "hasResultingLegalResource";
+
+    /// <summary>The draft-to-EU-act transposition intention.</summary>
+    /// <remarks>
+    /// The predicate <see cref="LuxembourgDraftRelationPredicate.DraftTransposes"/> declares. A
+    /// draft that proposes to transpose a directive has transposed nothing; that separation is the
+    /// whole reason the draft-graph vocabulary is disjoint from the final-law one.
+    /// </remarks>
+    public const string DraftTransposesPredicateIri = Jolux + "draftTransposes";
+
+    /// <summary>The marker a row carries when the publisher holds no value for that property.</summary>
     public const string UnboundKind = "unbound";
 
     internal const long PublisherDeliveryCeilingRows = 1_000_000;
-    internal const uint Pass1PageLimit = 971;
-    internal const uint Pass2PageLimit = 587;
-    internal const string PartitionMemberKey = "legilux-conseil-etat-opinions";
+    internal const uint Pass1PageLimit = 953;
+    internal const uint Pass2PageLimit = 571;
+    internal const string PartitionMemberKey = "legilux-initial-draft-graph";
 
-    private const string ResourceId = "urn:uuid:0b7d41e6-58a2-4c93-9f16-3ad82e5c7401";
-    private const string MemberPrefix = "lu-conseil-etat-opinions";
+    private const string ResourceId = "urn:uuid:7c9e2f4b-18a6-4d05-b3e7-52f0a91c6d84";
+    private const string MemberPrefix = "lu-initial-draft-graph";
     private const string ResponseMediaType = "application/sparql-results+json";
     private const string ThresholdDetectorIdentity = "enumeration-row-threshold/1";
     private static readonly UTF8Encoding StrictUtf8 = new(false, true);
 
+    /// <summary>
+    /// The properties this family asks each draft for, in the exact order the query binds them.
+    /// </summary>
+    /// <remarks>
+    /// Closed and ordered, because the order is part of the canonical identity and therefore part of
+    /// what a reviewer can compare. A property added here changes the plan's digest, which is the
+    /// intended cost of widening what this family asks about.
+    /// </remarks>
+    private static readonly string[] AskedPredicates =
+    [
+        StatusDraftPredicateIri,
+        ParliamentDraftUrlPredicateIri,
+        ReferralDatePredicateIri,
+        ResultingLegalResourcePredicateIri,
+        DraftTransposesPredicateIri,
+    ];
+
+    /// <summary>Every predicate this family asks about, for a caller that needs to name them.</summary>
+    public static IReadOnlyList<string> AskedAbout { get; } = Array.AsReadOnly(AskedPredicates);
+
     private static readonly string[] Projection =
     [
-        "opinion", "opinion_kind",
-        "document", "document_kind", "document_datatype", "document_language",
-        "opinion_date", "date_kind", "date_datatype", "date_language",
+        "draft", "draft_kind", "predicate", "value", "value_kind", "datatype_iri", "language_tag",
         "multiplicity",
-        "key_1", "key_2", "key_3", "key_4", "key_5",
-        "key_6", "key_7", "key_8", "key_9", "key_10",
+        "key_1", "key_2", "key_3", "key_4", "key_5", "key_6", "key_7",
     ];
 
     /// <summary>
-    /// The keyset, injective over the grouped row rather than over its lexical forms alone.
+    /// The keyset, injective over the grouped row rather than merely plausible.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// An opinion is not unique on its own: an event carrying two resulting documents, or two dates,
-    /// delivers a row per combination, and a cursor naming only the opinion could not advance past
-    /// the second of them. That much the first three keys always did.
+    /// A draft is not unique on its own and neither is a (draft, predicate) pair: a draft carrying
+    /// two transposition targets delivers a row for each, and a cursor naming only the draft could
+    /// not advance past the second. So the value participates — and with it the value's OWN
+    /// AUTHORITY, because Source/Core requires canonical keys unique and cursors strictly
+    /// increasing, and two literals sharing a lexical form while differing in datatype or language
+    /// are different facts that would otherwise share every key.
     /// </para>
     /// <para>
-    /// WHAT THEY DID NOT DO IS CARRY THE TERMS' OWN AUTHORITY. The document and the date were keyed
-    /// by <c>STR()</c> alone, so two date literals sharing a lexical value and differing in datatype
-    /// — or in language tag — were distinct grouped rows sharing every canonical key. Source/Core
-    /// requires canonical keys unique and cursors strictly increasing, so such a pair either refuses
-    /// the whole page or cannot be paged across a boundary, and this family retains
-    /// <c>DateDatatypeIri</c> on its record, so they really are different facts rather than a
-    /// distinction without a difference.
-    /// </para>
-    /// <para>
-    /// This is the same defect found twice in review on the procedure-event plan. It was present
-    /// here at the same time and nothing observed it, because the keys were internally consistent
-    /// and no delivery in any fixture carried two literals differing only in qualifier.
-    /// </para>
-    /// <para>
-    /// <c>?opinion</c> carries a kind key because a subject may be a blank node, and no datatype or
-    /// language because a subject cannot be a literal at all.
+    /// <c>key_3</c>, the predicate, needs no kind key: it is bound from a VALUES block of IRIs, so it
+    /// is an IRI by construction rather than by hope. The draft and the value are whatever the
+    /// publisher delivered, which is why each carries its own.
     /// </para>
     /// </remarks>
     private static readonly string[] Cursor =
-    [
-        "key_1", "key_2", "key_3", "key_4", "key_5",
-        "key_6", "key_7", "key_8", "key_9", "key_10",
-    ];
+        ["key_1", "key_2", "key_3", "key_4", "key_5", "key_6", "key_7"];
 
     /// <summary>
-    /// How many cursor keys this family has. The renderer reads this rather than repeating the
-    /// number, because a cursor that grew while the renderer still bound the old count would send a
-    /// template with an unfilled slot. The EU case-law family had that number written twice.
+    /// How many cursor keys this family has, read by the renderer rather than written twice.
     /// </summary>
     internal static int CursorKeyCount => Cursor.Length;
 
     private readonly byte[] _canonicalIdentityBytes;
 
-    private LuxembourgOpinionDiscoveryPlan()
+    private LuxembourgDraftGraphDiscoveryPlan()
     {
         (CountTemplate, PageTemplate) = BuildTemplates();
         _canonicalIdentityBytes = StrictUtf8.GetBytes(string.Join('\n', new[]
         {
-            "lu-conseil-etat-opinion-plan/1",
+            "lu-initial-draft-graph-plan/1",
             "endpoint=" + LuxembourgQueryPlan.PublisherEndpoint,
             "method=POST",
             "request_media_type=application/x-www-form-urlencoded",
             "response_media_type=" + ResponseMediaType,
-            "opinion_class=" + OpinionClassIri,
-            "resulting_document=" + ResultingDocumentPredicateIri,
-            "opinion_date=" + OpinionDatePredicateIri,
+            "draft_class=" + InitialDraftClassIri,
+            "asked_predicates=" + string.Join(',', AskedPredicates),
             "unbound_kind=" + UnboundKind,
             "publisher_delivery_ceiling_rows=" + PublisherDeliveryCeilingRows.ToString(CultureInfo.InvariantCulture),
             "pass_1=" + (int)LuxembourgQueryPass.Pass1 + ":" + Pass1PageLimit,
@@ -173,7 +220,7 @@ public sealed class LuxembourgOpinionDiscoveryPlan
     public string CountTemplate { get; }
     public string PageTemplate { get; }
 
-    public static LuxembourgOpinionDiscoveryPlan Create() => new();
+    public static LuxembourgDraftGraphDiscoveryPlan Create() => new();
 
     internal byte[] CopyCanonicalIdentityBytes() => _canonicalIdentityBytes.ToArray();
 
@@ -196,7 +243,7 @@ public sealed class LuxembourgOpinionDiscoveryPlan
         "has_cursor",
         RepeatedEnumerationTerminalPagePolicy.ShortPageTerminal);
 
-    public LuxembourgOpinionBoundQuery BindCount(
+    public LuxembourgDraftGraphBoundQuery BindCount(
         LuxembourgQueryPass pass,
         string machinePlanResourceId,
         string inputResourceId,
@@ -205,7 +252,7 @@ public sealed class LuxembourgOpinionDiscoveryPlan
             new MachineResponseCardinality(MachineResponseCardinalityKind.OpaqueBody, null, null, null),
             machinePlanResourceId, inputResourceId, rendererSource);
 
-    public LuxembourgOpinionBoundQuery BindPage(
+    public LuxembourgDraftGraphBoundQuery BindPage(
         LuxembourgQueryPass pass,
         IReadOnlyList<string>? cursor,
         long expectedPartitionRowCount,
@@ -219,14 +266,7 @@ public sealed class LuxembourgOpinionDiscoveryPlan
                 PageLimit(pass), expectedPartitionRowCount, expectedPartitionRowCountEvidenceRef),
             machinePlanResourceId, inputResourceId, rendererSource);
 
-    /// <remarks>
-    /// There is deliberately no "a count query cannot carry a cursor" refusal here. The sibling
-    /// transposition plan has one, and it is unreachable: <see cref="BindCount"/> has no cursor
-    /// parameter to pass, so no caller can reach the branch. A refusal nothing can produce is a
-    /// sentence that reads like a guarantee and is enforced by the signature instead, so the
-    /// signature is what the test asserts.
-    /// </remarks>
-    private LuxembourgOpinionBoundQuery Bind(
+    private LuxembourgDraftGraphBoundQuery Bind(
         bool isPage,
         LuxembourgQueryPass pass,
         IReadOnlyList<string>? cursor,
@@ -238,13 +278,11 @@ public sealed class LuxembourgOpinionDiscoveryPlan
         _ = PageLimit(pass);
         ArgumentNullException.ThrowIfNull(rendererSource);
 
-        // This family has no selection parameters, so the ordered roles reduce to pass_id and the
-        // page's cursor shape. RepeatedEnumerationDeliveryProof.RequireInputRoleShape builds its
-        // expectation as SelectionParameterNames.Append(PassParameterName) and compares by sequence:
-        // with an empty selection, pass-first and selection-first are the same list. The EU case-law
-        // family had a non-empty selection and bound pass_id ahead of it, so an honest delivery
-        // reached DeliveryProofRefused and that family could never succeed. Nothing to get wrong
-        // here, and it is written down so a later slice that adds a selection knows where it goes.
+        // No selection: the scope is a class, and the asked-about predicates are fixed by this plan
+        // rather than chosen by a caller. RequireInputRoleShape compares
+        // SelectionParameterNames.Append(PassParameterName) by sequence, and with an empty selection
+        // pass-first and selection-first are the same list. Written down so a later slice that adds
+        // a selection knows it binds BEFORE pass_id.
         var parameters = new List<MachineQueryParameter>
         {
             new("pass_id", MachineQueryParameterKind.BoundedInteger, (int)pass, null, ArtifactRef),
@@ -273,7 +311,7 @@ public sealed class LuxembourgOpinionDiscoveryPlan
         var family = isPage ? PageQueryFamilyRef : CountQueryFamilyRef;
         var input = MachineQueryInputArtifact.Create(
             inputResourceId, family, PartitionMemberKey, response, parameters);
-        var renderer = new LuxembourgOpinionSparqlRenderer(this, isPage, rendererSource);
+        var renderer = new LuxembourgDraftGraphSparqlRenderer(this, isPage, rendererSource);
         var rendered = renderer.RenderInput(input, response);
         var body = rendered.CopyRequestBody();
         var targetBytes = Encoding.ASCII.GetBytes("/sparqlendpoint");
@@ -306,17 +344,13 @@ public sealed class LuxembourgOpinionDiscoveryPlan
         _ => throw new ArgumentOutOfRangeException(nameof(pass)),
     };
 
-    /// <summary>The terms the row groups on, named once and used by both the SELECT and the GROUP BY.</summary>
-    private const string Grouped =
-        "?opinion ?opinion_kind ?document ?document_kind ?document_datatype ?document_language "
-        + "?opinion_date ?date_kind ?date_datatype ?date_language";
-
     /// <summary>
     /// The keyset continuation filter, derived from <see cref="Cursor"/> rather than written out.
     /// </summary>
     /// <remarks>
-    /// Ten keys make this comparison ten clauses deep, and a hand-written one would be ten chances
-    /// to transpose a key.
+    /// Seven keys make this comparison seven clauses deep, and a hand-written one would be seven
+    /// chances to transpose a key. It is generated from the same array the projection, the ORDER BY
+    /// and the bound parameters come from.
     /// </remarks>
     private static string KeysetFilter()
     {
@@ -341,41 +375,38 @@ public sealed class LuxembourgOpinionDiscoveryPlan
 
     private static (string Count, string Page) BuildTemplates()
     {
-        // Two sibling questions, each with its own explicit absence branch. The branches of one
-        // question are mutually exclusive by construction - either the triple exists or the
-        // FILTER NOT EXISTS holds - so joining the two questions yields exactly one combination per
-        // (opinion, document, date) tuple rather than a blow-up. An event carrying two documents
-        // delivers two rows, which is the publisher's own multiset and is what ?multiplicity and the
-        // three-part keyset are for.
+        var predicateValues = string.Join('\n', AskedPredicates
+            .Select(static iri => "    <" + iri + ">"));
+
+        var grouped = "?draft ?draft_kind ?predicate ?value ?value_kind ?datatype_iri ?language_tag";
+
+        // One question asked of a closed predicate list, with its own explicit absence branch. A
+        // draft holding none of the asked properties still delivers a row per predicate, carrying
+        // the unbound marker: that absence IS the fact, and omitting it would be the silent drop
+        // this family exists to avoid.
         var rows = $$"""
-            SELECT {{Grouped}} (COUNT(*) AS ?multiplicity) WHERE {
+            SELECT {{grouped}} (COUNT(*) AS ?multiplicity) WHERE {
               VALUES ?lex_pass_id { {pass_id:uint} }
-              ?opinion a <{{OpinionClassIri}}> .
-              BIND(IF(isIRI(?opinion), "iri", "unsupported_blank_node") AS ?opinion_kind)
+              ?draft a <{{InitialDraftClassIri}}> .
+              BIND(IF(isIRI(?draft), "iri", "unsupported_blank_node") AS ?draft_kind)
+              VALUES ?predicate {
+            {{predicateValues}}
+              }
               {
-                ?opinion <{{ResultingDocumentPredicateIri}}> ?document .
-                BIND(IF(isIRI(?document), "iri", IF(isLiteral(?document), "literal", "unsupported_blank_node")) AS ?document_kind)
+                ?draft ?predicate ?value .
+                BIND(IF(isIRI(?value), "iri", IF(isLiteral(?value), "literal", "unsupported_blank_node")) AS ?value_kind)
+                BIND(IF(isLiteral(?value), STR(DATATYPE(?value)), "") AS ?datatype_iri)
+                BIND(IF(isLiteral(?value), LANG(?value), "") AS ?language_tag)
               }
               UNION
               {
-                FILTER NOT EXISTS { ?opinion <{{ResultingDocumentPredicateIri}}> ?missing_document }
-                BIND("{{UnboundKind}}" AS ?document_kind)
+                FILTER NOT EXISTS { ?draft ?predicate ?missing_value }
+                BIND("{{UnboundKind}}" AS ?value_kind)
+                BIND("" AS ?datatype_iri)
+                BIND("" AS ?language_tag)
               }
-              {
-                ?opinion <{{OpinionDatePredicateIri}}> ?opinion_date .
-                BIND(IF(isLiteral(?opinion_date), "literal", IF(isIRI(?opinion_date), "iri", "unsupported_blank_node")) AS ?date_kind)
-              }
-              UNION
-              {
-                FILTER NOT EXISTS { ?opinion <{{OpinionDatePredicateIri}}> ?missing_date }
-                BIND("{{UnboundKind}}" AS ?date_kind)
-              }
-              BIND(COALESCE(IF(isLiteral(?document), STR(DATATYPE(?document)), ""), "") AS ?document_datatype)
-              BIND(COALESCE(IF(isLiteral(?document), LANG(?document), ""), "") AS ?document_language)
-              BIND(COALESCE(IF(isLiteral(?opinion_date), STR(DATATYPE(?opinion_date)), ""), "") AS ?date_datatype)
-              BIND(COALESCE(IF(isLiteral(?opinion_date), LANG(?opinion_date), ""), "") AS ?date_language)
             }
-            GROUP BY {{Grouped}}
+            GROUP BY {{grouped}}
             """;
 
         var count = $$"""
@@ -396,16 +427,13 @@ public sealed class LuxembourgOpinionDiscoveryPlan
               {
             {{Indent(Indent(rows))}}
               }
-              BIND(STR(?opinion) AS ?key_1)
-              BIND(?opinion_kind AS ?key_2)
-              BIND(COALESCE(STR(?document), "") AS ?key_3)
-              BIND(?document_kind AS ?key_4)
-              BIND(?document_datatype AS ?key_5)
-              BIND(?document_language AS ?key_6)
-              BIND(COALESCE(STR(?opinion_date), "") AS ?key_7)
-              BIND(?date_kind AS ?key_8)
-              BIND(?date_datatype AS ?key_9)
-              BIND(?date_language AS ?key_10)
+              BIND(STR(?draft) AS ?key_1)
+              BIND(?draft_kind AS ?key_2)
+              BIND(STR(?predicate) AS ?key_3)
+              BIND(COALESCE(STR(?value), "") AS ?key_4)
+              BIND(?value_kind AS ?key_5)
+              BIND(COALESCE(?datatype_iri, "") AS ?key_6)
+              BIND(COALESCE(?language_tag, "") AS ?key_7)
               VALUES (?has_cursor {{lastNames}}) {
                 ({has_cursor:uint} {{lastSlots}})
               }
@@ -433,18 +461,18 @@ public sealed class LuxembourgOpinionDiscoveryPlan
 }
 
 /// <summary>
-/// Renders one bound opinion request. Every slot is filled from the ordered parameter set and each
-/// must occur exactly once in the template, so a template edit that drops or duplicates a slot is a
-/// loud failure rather than a silently different question.
+/// Renders one bound draft-graph request. Every slot is filled from the ordered parameter set and
+/// each must occur exactly once, so a template edit that drops or duplicates a slot fails loudly
+/// rather than asking a silently different question.
 /// </summary>
-internal sealed class LuxembourgOpinionSparqlRenderer : IMachineQueryRenderer
+internal sealed class LuxembourgDraftGraphSparqlRenderer : IMachineQueryRenderer
 {
-    private readonly LuxembourgOpinionDiscoveryPlan _plan;
+    private readonly LuxembourgDraftGraphDiscoveryPlan _plan;
     private readonly bool _isPage;
     private readonly MachineQueryRendererSource _rendererSource;
 
-    internal LuxembourgOpinionSparqlRenderer(
-        LuxembourgOpinionDiscoveryPlan plan,
+    internal LuxembourgDraftGraphSparqlRenderer(
+        LuxembourgDraftGraphDiscoveryPlan plan,
         bool isPage,
         MachineQueryRendererSource rendererSource)
     {
@@ -467,7 +495,7 @@ internal sealed class LuxembourgOpinionSparqlRenderer : IMachineQueryRenderer
     {
         var parameters = input.OrderedParameters.ToDictionary(static value => value.Name, StringComparer.Ordinal);
         var pass = (LuxembourgQueryPass)Integer(parameters, "pass_id");
-        var limit = LuxembourgOpinionDiscoveryPlan.PageLimit(pass);
+        var limit = LuxembourgDraftGraphDiscoveryPlan.PageLimit(pass);
         var query = Replace(_isPage ? _plan.PageTemplate : _plan.CountTemplate,
             "{pass_id:uint}", ((int)pass).ToString(CultureInfo.InvariantCulture));
 
@@ -493,14 +521,14 @@ internal sealed class LuxembourgOpinionSparqlRenderer : IMachineQueryRenderer
         }
 
         if (parameters.Count != 2 +
-            (hasCursor == 1 ? LuxembourgOpinionDiscoveryPlan.CursorKeyCount : 0))
+            (hasCursor == 1 ? LuxembourgDraftGraphDiscoveryPlan.CursorKeyCount : 0))
         {
             throw new ArgumentException("A page input has one exact cursor shape.", nameof(input));
         }
 
         query = Replace(query, "{page_limit:uint}", limit.ToString(CultureInfo.InvariantCulture));
         query = Replace(query, "{has_cursor:uint}", hasCursor.ToString(CultureInfo.InvariantCulture));
-        for (var ordinal = 1; ordinal <= LuxembourgOpinionDiscoveryPlan.CursorKeyCount; ordinal++)
+        for (var ordinal = 1; ordinal <= LuxembourgDraftGraphDiscoveryPlan.CursorKeyCount; ordinal++)
         {
             var name = "last_key_" + ordinal;
             var value = hasCursor == 0 ? string.Empty : Cursor(parameters, name);

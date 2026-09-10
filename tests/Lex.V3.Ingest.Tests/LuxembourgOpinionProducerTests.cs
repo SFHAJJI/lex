@@ -35,8 +35,9 @@ public sealed class LuxembourgOpinionProducerTests
     private static RepeatedEnumerationRdfTerm Iri(string value) =>
         RepeatedEnumerationRdfTerm.Iri(value);
 
-    private static RepeatedEnumerationRdfTerm Literal(string value, string? datatype = null) =>
-        RepeatedEnumerationRdfTerm.Literal(value, datatype, null);
+    private static RepeatedEnumerationRdfTerm Literal(
+        string value, string? datatype = null, string? language = null) =>
+        RepeatedEnumerationRdfTerm.Literal(value, datatype, language);
 
     private static RepeatedEnumerationRdfTerm Unbound() => RepeatedEnumerationRdfTerm.Unbound();
 
@@ -44,36 +45,82 @@ public sealed class LuxembourgOpinionProducerTests
         RepeatedEnumerationRdfTerm.BlankNode(value);
 
     /// <summary>
-    /// One delivered row. Every term, every marker and every publisher-computed proof field is
-    /// chosen independently, so a test can put any one of them out of agreement on purpose.
+    /// One delivered row, coherent by construction unless a test asks for one contradiction.
     /// </summary>
+    /// <remarks>
+    /// Every marker, qualifier column and cursor key defaults to what the term itself says, so an
+    /// honest row needs no arranging. The builder used to hard-code the markers and the three keys,
+    /// which meant a test wanting a wrong kind had to remember to move the key too — and, more to
+    /// the point, no row it built could ever carry two literals differing only in qualifier, which
+    /// is the collision this family's keyset now exists to separate.
+    /// </remarks>
     private static RepeatedEnumerationRow Row(
         RepeatedEnumerationRdfTerm? document = null,
-        string documentKind = "iri",
+        string? documentKind = null,
         RepeatedEnumerationRdfTerm? date = null,
-        string dateKind = "literal",
+        string? dateKind = null,
         string opinion = Opinion,
+        string? opinionKind = null,
+        RepeatedEnumerationRdfTerm? opinionKindTerm = null,
         RepeatedEnumerationRdfTerm? documentKindTerm = null,
         RepeatedEnumerationRdfTerm? dateKindTerm = null,
         RepeatedEnumerationRdfTerm? multiplicity = null,
+        string? documentDatatype = null,
+        string? documentLanguage = null,
+        string? dateDatatype = null,
+        string? dateLanguage = null,
         RepeatedEnumerationRdfTerm? key1 = null,
         RepeatedEnumerationRdfTerm? key2 = null,
-        RepeatedEnumerationRdfTerm? key3 = null)
+        RepeatedEnumerationRdfTerm? key3 = null,
+        RepeatedEnumerationRdfTerm? key4 = null,
+        RepeatedEnumerationRdfTerm? key5 = null,
+        RepeatedEnumerationRdfTerm? key6 = null,
+        RepeatedEnumerationRdfTerm? key7 = null,
+        RepeatedEnumerationRdfTerm? key8 = null,
+        RepeatedEnumerationRdfTerm? key9 = null,
+        RepeatedEnumerationRdfTerm? key10 = null)
     {
+        var opinionTerm = Iri(opinion);
         var documentTerm = document ?? Iri(Locator);
         var dateTerm = date ?? Literal(Date, XsdDate);
+        var documentDatatypeColumn = documentDatatype ?? Qualifier(documentTerm, static t => t.Datatype);
+        var documentLanguageColumn = documentLanguage ?? Qualifier(documentTerm, static t => t.Language);
+        var dateDatatypeColumn = dateDatatype ?? Qualifier(dateTerm, static t => t.Datatype);
+        var dateLanguageColumn = dateLanguage ?? Qualifier(dateTerm, static t => t.Language);
+
         var terms = new List<RepeatedEnumerationRdfTerm>
         {
-            Iri(opinion),
-            documentTerm, documentKindTerm ?? Literal(documentKind),
-            dateTerm, dateKindTerm ?? Literal(dateKind),
+            opinionTerm, opinionKindTerm ?? Literal(opinionKind ?? Marker(opinionTerm)),
+            documentTerm, documentKindTerm ?? Literal(documentKind ?? Marker(documentTerm)),
+            Literal(documentDatatypeColumn), Literal(documentLanguageColumn),
+            dateTerm, dateKindTerm ?? Literal(dateKind ?? Marker(dateTerm)),
+            Literal(dateDatatypeColumn), Literal(dateLanguageColumn),
             multiplicity ?? Literal("1", XsdInteger),
             key1 ?? Literal(opinion),
-            key2 ?? Literal(documentTerm.Value ?? ""),
-            key3 ?? Literal(dateTerm.Value ?? ""),
+            key2 ?? Literal(Marker(opinionTerm)),
+            key3 ?? Literal(documentTerm.Value ?? ""),
+            key4 ?? Literal(Marker(documentTerm)),
+            key5 ?? Literal(documentDatatypeColumn),
+            key6 ?? Literal(documentLanguageColumn),
+            key7 ?? Literal(dateTerm.Value ?? ""),
+            key8 ?? Literal(Marker(dateTerm)),
+            key9 ?? Literal(dateDatatypeColumn),
+            key10 ?? Literal(dateLanguageColumn),
         };
         return new RepeatedEnumerationRow(terms, terms, terms);
     }
+
+    private static string Marker(RepeatedEnumerationRdfTerm term) => term.Kind switch
+    {
+        RepeatedEnumerationRdfTermKind.Iri => "iri",
+        RepeatedEnumerationRdfTermKind.Literal => "literal",
+        RepeatedEnumerationRdfTermKind.BlankNode => "unsupported_blank_node",
+        _ => LuxembourgOpinionDiscoveryPlan.UnboundKind,
+    };
+
+    private static string Qualifier(
+        RepeatedEnumerationRdfTerm term, Func<RepeatedEnumerationRdfTerm, string?> select) =>
+        term.Kind == RepeatedEnumerationRdfTermKind.Literal ? select(term) ?? string.Empty : string.Empty;
 
     private static LuxembourgOpinionProductionResult Decode(params RepeatedEnumerationRow[] rows) =>
         LuxembourgOpinionProducer.DecodeRows(rows, Profile(), Evidence);
@@ -201,6 +248,45 @@ public sealed class LuxembourgOpinionProducerTests
     }
 
     /// <summary>
+    /// The opinion's own projected marker is read, not recomputed from the term it describes.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// FOUND IN REVIEW ON HEAD 33e68161, and it was this slice's own doing. Growing the cursor to
+    /// key the row by its terms made <c>opinion_kind</c> a projected, grouped, key-bearing column,
+    /// and nothing consumed it: <c>key_2</c> was compared against a marker RECOMPUTED from the
+    /// opinion term, so the delivered column could contradict both the term and the key and still be
+    /// admitted. Recomputing what a column says is not reading it.
+    /// </para>
+    /// <para>
+    /// The exact row the reviewer built is the first case here: a real publisher IRI, a marker
+    /// calling it a blank node, and a key agreeing with the term. Nothing about it is internally
+    /// inconsistent except the one column this producer was ignoring.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void AnOpinionMarkerContradictingItsOwnTermRefusesTheRow()
+    {
+        var contradicted = Decode(Row(opinionKind: "unsupported_blank_node"));
+        Assert.AreEqual(LuxembourgOpinionProductionRefusal.RowNotAdmitted, contradicted.Refusal);
+        StringAssert.Contains(contradicted.Detail!, "opinion");
+
+        // The whole marker space, not the one value that occasioned the finding.
+        foreach (var wrong in new[] { "literal", LuxembourgOpinionDiscoveryPlan.UnboundKind })
+        {
+            var result = Decode(Row(opinionKind: wrong));
+            Assert.AreEqual(
+                LuxembourgOpinionProductionRefusal.RowNotAdmitted, result.Refusal,
+                $"an opinion marker reading {wrong} contradicts a delivered IRI.");
+        }
+
+        // And it is compared as a TERM: an IRI-valued marker whose lexical value reads "iri" did not
+        // come from this query, whose BIND is over string constants.
+        var iriShapedMarker = Decode(Row(opinionKindTerm: Iri("iri")));
+        Assert.AreEqual(LuxembourgOpinionProductionRefusal.RowNotAdmitted, iriShapedMarker.Refusal);
+    }
+
+    /// <summary>
     /// A delivered term of the wrong RDF kind is malformed, however plausible its lexical value.
     /// </summary>
     /// <remarks>
@@ -277,8 +363,91 @@ public sealed class LuxembourgOpinionProducerTests
     /// key for a record-less opinion.
     /// </para>
     /// </remarks>
+    /// <summary>
+    /// Two dates sharing a lexical value and differing in datatype are keyed apart.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// THE COLLISION THIS KEYSET WAS REPAIRED FOR. The document and the date used to be keyed by
+    /// <c>STR()</c> alone, so these two rows were distinct grouped rows sharing every canonical key.
+    /// Source/Core requires canonical keys unique and cursors strictly increasing, so such a pair
+    /// either refuses the whole page or cannot be paged across a boundary — and this family retains
+    /// the date's datatype on its record, so they really are different facts.
+    /// </para>
+    /// <para>
+    /// It is the same defect found twice in review on the procedure-event plan, and it was present
+    /// here at the same time. Nothing observed it because the keys were internally consistent and no
+    /// fixture row ever carried two literals differing only in a qualifier.
+    /// </para>
+    /// </remarks>
     [TestMethod]
-    public void TheGroupedCountAndTheThreeCursorKeysAreReadRatherThanIgnored()
+    public void TwoDatesSharingALexicalValueAndDifferingInDatatypeAreKeptApart()
+    {
+        const string XsdGYearMonth = "http://www.w3.org/2001/XMLSchema#gYearMonth";
+
+        var profile = Profile();
+        var dated = Row(date: Literal(Date, XsdDate));
+        var otherDatatype = Row(date: Literal(Date, XsdGYearMonth));
+
+        string KeyOf(RepeatedEnumerationRow row, string key) =>
+            row.Terms[profile.ProjectionVariables.ToList().IndexOf(key)].Value ?? string.Empty;
+
+        Assert.AreEqual(
+            KeyOf(dated, "key_7"), KeyOf(otherDatatype, "key_7"),
+            "the lexical key cannot tell them apart, which is why it alone was not enough.");
+        Assert.AreNotEqual(
+            KeyOf(dated, "key_9"), KeyOf(otherDatatype, "key_9"),
+            "the datatype key does, and that is the whole repair.");
+
+        // Both are readable rows: the keyset separates them rather than refusing either.
+        Assert.AreEqual(LuxembourgOpinionProductionRefusal.None, Decode(dated).Refusal);
+        Assert.AreEqual(LuxembourgOpinionProductionRefusal.None, Decode(otherDatatype).Refusal);
+    }
+
+    /// <summary>
+    /// Corrupting any one of the ten cursor keys refuses the row and names that key.
+    /// </summary>
+    /// <remarks>
+    /// A sweep driven off the live profile rather than ten near-identical tests, so a key added
+    /// later is covered the day it appears. The honest value of several of these is a marker or an
+    /// empty qualifier, and a producer ignoring one would agree with a fixture that also left it
+    /// empty — two mutations survived the procedure-event family on exactly that.
+    /// </remarks>
+    [TestMethod]
+    public void CorruptingAnySingleCursorKeyRefusesTheRowAndNamesIt()
+    {
+        var profile = Profile();
+        var keys = profile.CursorVariables;
+
+        Assert.HasCount(10, keys, "this family keys ten positions since the qualifier repair.");
+
+        foreach (var key in keys)
+        {
+            var ordinal = profile.ProjectionVariables.ToList().IndexOf(key);
+            Assert.IsGreaterThan(-1, ordinal, $"{key} is projected.");
+
+            // The ordinary honest row. A delivered document must be an IRI here — that is the
+            // contract's own rule, and a literal one is refused before any key is read — so several
+            // qualifier keys are legitimately empty. That costs this sweep nothing, because the
+            // corruption APPENDS rather than blanks: an empty key becomes non-empty and a producer
+            // ignoring it still fails.
+            var terms = Row(date: Literal(Date, XsdDate)).Terms.ToList();
+            terms[ordinal] = Literal((terms[ordinal].Value ?? string.Empty) + "-not-delivered");
+
+            var result = LuxembourgOpinionProducer.DecodeRows(
+                [new RepeatedEnumerationRow(terms, terms, terms)], profile, Evidence);
+
+            Assert.AreEqual(
+                LuxembourgOpinionProductionRefusal.RowNotAdmitted, result.Refusal,
+                $"{key} was corrupted and the row was still admitted, so that key keys nothing.");
+            StringAssert.Contains(
+                result.Detail!, key,
+                $"the refusal must name {key} rather than another key that happened to differ.");
+        }
+    }
+
+    [TestMethod]
+    public void TheGroupedCountAndTheCursorKeysAreReadRatherThanIgnored()
     {
         var zeroCount = Decode(Row(multiplicity: Literal("0", XsdInteger)));
         Assert.AreEqual(LuxembourgOpinionProductionRefusal.RowNotAdmitted, zeroCount.Refusal);
@@ -424,14 +593,26 @@ public sealed class LuxembourgOpinionProducerTests
         var binding = new Dictionary<string, object>(StringComparer.Ordinal)
         {
             ["opinion"] = IriTerm(Opinion),
+            ["opinion_kind"] = LiteralTerm("iri"),
             ["document"] = IriTerm(Locator),
             ["document_kind"] = LiteralTerm("iri"),
+            ["document_datatype"] = LiteralTerm(""),
+            ["document_language"] = LiteralTerm(""),
             ["opinion_date"] = LiteralTerm(Date, XsdDate),
             ["date_kind"] = LiteralTerm("literal"),
+            ["date_datatype"] = LiteralTerm(XsdDate),
+            ["date_language"] = LiteralTerm(""),
             ["multiplicity"] = LiteralTerm("1", XsdInteger),
             ["key_1"] = LiteralTerm(Opinion),
-            ["key_2"] = LiteralTerm(Locator),
-            ["key_3"] = LiteralTerm(Date),
+            ["key_2"] = LiteralTerm("iri"),
+            ["key_3"] = LiteralTerm(Locator),
+            ["key_4"] = LiteralTerm("iri"),
+            ["key_5"] = LiteralTerm(""),
+            ["key_6"] = LiteralTerm(""),
+            ["key_7"] = LiteralTerm(Date),
+            ["key_8"] = LiteralTerm("literal"),
+            ["key_9"] = LiteralTerm(XsdDate),
+            ["key_10"] = LiteralTerm(""),
         };
         return System.Text.Json.JsonSerializer.Serialize(new
         {

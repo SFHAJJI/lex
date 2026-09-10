@@ -285,9 +285,14 @@ public sealed class LuxembourgOpinionProducer
         List<LuxembourgOpinionLinkOnlyRecord> records,
         List<LuxembourgOpinionExcludedEvent> excluded)
     {
-        if (row.Terms.Count != profile.ProjectionVariables.Count || row.Terms.Count != 9)
+        // Counted against the profile alone. The literal 9 beside it was a second copy of a number
+        // the profile already owns, and it is exactly the drift CursorKeyCount exists to prevent for
+        // the renderer: widening the projection to carry each term's qualifiers made every honest
+        // row fail a check that had nothing to do with the change.
+        if (row.Terms.Count != profile.ProjectionVariables.Count)
         {
-            throw new ArgumentException("An opinion row has nine exact terms.", nameof(row));
+            throw new ArgumentException(
+                "An opinion row has exactly the profile's terms.", nameof(row));
         }
 
         var opinion = Term(row, profile, "opinion");
@@ -298,6 +303,16 @@ public sealed class LuxembourgOpinionProducer
 
         var document = Term(row, profile, "document");
         var date = Term(row, profile, "opinion_date");
+
+        // THE OPINION'S OWN MARKER IS READ, and this slice is why. When the cursor grew to key the
+        // row by its terms, opinion_kind became a projected, grouped, key-bearing column - and
+        // nothing consumed it. key_2 was compared against a marker RECOMPUTED from the opinion term,
+        // so the delivered column contradicting both the term and the key was admitted: found in
+        // review on head 33e68161 with opinion = <publisher IRI>, opinion_kind =
+        // "unsupported_blank_node", key_2 = "iri". A projected column this design groups and keys on
+        // is authoritative; recomputing what it says is not reading it. The already integrated
+        // procedure-event producer reads event_kind exactly this way.
+        RequireMarkerAgrees(opinion, Term(row, profile, "opinion_kind"), "opinion");
         RequireMarkerAgrees(document, Term(row, profile, "document_kind"), "document");
         RequireMarkerAgrees(date, Term(row, profile, "date_kind"), "opinion_date");
 
@@ -324,15 +339,32 @@ public sealed class LuxembourgOpinionProducer
                 "A delivered opinion_date must be a publisher literal.", nameof(row));
         }
 
-        // The four publisher-computed proof fields. The plan groups on the count and orders and
-        // paginates on the three keys, so a page can prove one tuple while a decoder that never
-        // reads them emits another. Every sibling producer in this repository checks them; this one
-        // did not, and an isolated regression showed a key_1 naming a different opinion and a
-        // multiplicity of zero both producing a delivered result.
+        // The publisher-computed proof fields. The plan groups on the count and orders and paginates
+        // on the keys, so a page can prove one tuple while a decoder that never reads them emits
+        // another. Every sibling producer checks them; this one did not, and an isolated regression
+        // showed a key_1 naming a different opinion and a multiplicity of zero both producing a
+        // delivered result.
+        //
+        // ALL TEN, not the three lexical ones. The six kind and qualifier keys were added because
+        // two terms can share every lexical form and still be different facts, so a producer
+        // verifying only the lexical keys would ignore the very repair that added them.
         _ = RequirePositiveInteger(Term(row, profile, "multiplicity"), "multiplicity");
         RequirePlainLiteral(Term(row, profile, "key_1"), "key_1", opinion.Value);
-        RequirePlainLiteral(Term(row, profile, "key_2"), "key_2", document.Value ?? string.Empty);
-        RequirePlainLiteral(Term(row, profile, "key_3"), "key_3", date.Value ?? string.Empty);
+        RequirePlainLiteral(Term(row, profile, "key_2"), "key_2", MarkerFor(opinion));
+        RequirePlainLiteral(Term(row, profile, "key_3"), "key_3", document.Value ?? string.Empty);
+        RequirePlainLiteral(Term(row, profile, "key_4"), "key_4", MarkerFor(document));
+        RequirePlainLiteral(Term(row, profile, "key_5"), "key_5", QualifierOf(document, static term => term.Datatype));
+        RequirePlainLiteral(Term(row, profile, "key_6"), "key_6", QualifierOf(document, static term => term.Language));
+        RequirePlainLiteral(Term(row, profile, "key_7"), "key_7", date.Value ?? string.Empty);
+        RequirePlainLiteral(Term(row, profile, "key_8"), "key_8", MarkerFor(date));
+        RequirePlainLiteral(Term(row, profile, "key_9"), "key_9", QualifierOf(date, static term => term.Datatype));
+        RequirePlainLiteral(Term(row, profile, "key_10"), "key_10", QualifierOf(date, static term => term.Language));
+
+        // And the qualifier COLUMNS must agree with the terms they describe, for the same reason the
+        // markers must: both are bound from DATATYPE() and LANG() over that very term, so an honest
+        // delivery cannot disagree, and a row that does keys as one fact and decodes as another.
+        RequireQualifierColumns(row, profile, "document", document);
+        RequireQualifierColumns(row, profile, "date", date);
 
         // Asked for and honestly absent. Kept as an exclusion carrying which half was missing, with
         // no contract refusal, because the record's door was never reached.
@@ -374,17 +406,26 @@ public sealed class LuxembourgOpinionProducer
     /// is refused rather than read past on the term alone. Compared against the whole four-valued
     /// space rather than a single boolean, for the reason recorded on the type.
     /// </remarks>
+    /// <summary>
+    /// The marker the plan's own BIND must have produced for a term of this kind.
+    /// </summary>
+    /// <remarks>
+    /// Shared by the marker check and the kind cursor keys, so the two cannot drift into disagreeing
+    /// about what a kind is called.
+    /// </remarks>
+    private static string MarkerFor(RepeatedEnumerationRdfTerm term) => term.Kind switch
+    {
+        RepeatedEnumerationRdfTermKind.Iri => "iri",
+        RepeatedEnumerationRdfTermKind.Literal => "literal",
+        RepeatedEnumerationRdfTermKind.BlankNode => "unsupported_blank_node",
+        RepeatedEnumerationRdfTermKind.Unbound => LuxembourgOpinionDiscoveryPlan.UnboundKind,
+        _ => throw new ArgumentOutOfRangeException(nameof(term)),
+    };
+
     private static void RequireMarkerAgrees(
         RepeatedEnumerationRdfTerm term, RepeatedEnumerationRdfTerm marker, string name)
     {
-        var expected = term.Kind switch
-        {
-            RepeatedEnumerationRdfTermKind.Iri => "iri",
-            RepeatedEnumerationRdfTermKind.Literal => "literal",
-            RepeatedEnumerationRdfTermKind.BlankNode => "unsupported_blank_node",
-            RepeatedEnumerationRdfTermKind.Unbound => LuxembourgOpinionDiscoveryPlan.UnboundKind,
-            _ => throw new ArgumentOutOfRangeException(nameof(term)),
-        };
+        var expected = MarkerFor(term);
 
         // The marker is compared as a TERM, not as a bare string. The plan binds it with a
         // BIND over string constants, so it always arrives as an unqualified plain literal; an
@@ -397,6 +438,34 @@ public sealed class LuxembourgOpinionProducer
             throw new ArgumentException(
                 $"The {name} term and its kind marker disagree about what was delivered.", nameof(marker));
         }
+    }
+
+    /// <summary>
+    /// One qualifier of a term, in the form the plan's own COALESCE binds it: the empty string for
+    /// anything that is not a literal, and for a literal carrying none.
+    /// </summary>
+    private static string QualifierOf(
+        RepeatedEnumerationRdfTerm term,
+        Func<RepeatedEnumerationRdfTerm, string?> select) =>
+        term.Kind == RepeatedEnumerationRdfTermKind.Literal
+            ? select(term) ?? string.Empty
+            : string.Empty;
+
+    /// <summary>
+    /// A term's datatype and language must agree with the columns the plan projects for them.
+    /// </summary>
+    private static void RequireQualifierColumns(
+        RepeatedEnumerationRow row,
+        RepeatedEnumerationInterpretationProfile profile,
+        string stem,
+        RepeatedEnumerationRdfTerm term)
+    {
+        RequirePlainLiteral(
+            Term(row, profile, stem + "_datatype"), stem + "_datatype",
+            QualifierOf(term, static value => value.Datatype));
+        RequirePlainLiteral(
+            Term(row, profile, stem + "_language"), stem + "_language",
+            QualifierOf(term, static value => value.Language));
     }
 
     private static long RequirePositiveInteger(RepeatedEnumerationRdfTerm term, string name)
