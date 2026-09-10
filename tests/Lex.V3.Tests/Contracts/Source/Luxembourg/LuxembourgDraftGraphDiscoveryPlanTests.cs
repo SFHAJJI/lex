@@ -241,11 +241,14 @@ public sealed class LuxembourgDraftGraphDiscoveryPlanTests
         // rows would arrive missing the marker that says they are unbound.
         foreach (var derived in new[] { "?value_kind", "?datatype_iri", "?language_tag" })
         {
+            // THE COLUMN'S OWN BIND, not "the page contains a COALESCE somewhere". The first
+            // version of this loop asserted the latter and a mutation removing totalisation from
+            // datatype_iri alone survived it, because value_kind's COALESCE satisfied the assertion
+            // on every iteration.
             StringAssert.Contains(
-                page,
-                "BIND(COALESCE(",
-                $"{derived} reads a value the OPTIONAL may leave unbound.");
-            StringAssert.Contains(page, ") AS " + derived + ")");
+                BindExpressionFor(page, derived),
+                "COALESCE(",
+                $"{derived} reads a value the OPTIONAL may leave unbound, so its BIND must totalise.");
         }
 
         // AND NOT ONE COLUMN MORE. ?draft is bound by the batch and the class triple on every row,
@@ -488,6 +491,23 @@ public sealed class LuxembourgDraftGraphDiscoveryPlanTests
             "urn:uuid:6a3c8e50-9b21-4d7f-83e6-4f0a1c5d92b7",
             "urn:uuid:2c9f5b18-7e43-4a60-b2d9-8a1e6c40f375",
             RendererSource()));
+    }
+
+    /// <summary>
+    /// The one BIND expression that assigns <paramref name="variable"/>, and nothing else.
+    /// </summary>
+    /// <remarks>
+    /// Asserting against the whole template lets one column's property stand in for another's,
+    /// which is how a mutation removing totalisation from a single column survived. This walks back
+    /// from the assignment to the BIND that owns it, so each column is judged on its own text.
+    /// </remarks>
+    private static string BindExpressionFor(string template, string variable)
+    {
+        var assignment = template.IndexOf(") AS " + variable + ")", StringComparison.Ordinal);
+        Assert.IsGreaterThanOrEqualTo(0, assignment, $"{variable} is bound by nothing.");
+        var open = template.LastIndexOf("BIND(", assignment, StringComparison.Ordinal);
+        Assert.IsGreaterThanOrEqualTo(0, open, $"{variable} has no BIND of its own.");
+        return template[open..(assignment + 5 + variable.Length)];
     }
 
     private static MachineQueryRendererSource RendererSource()
