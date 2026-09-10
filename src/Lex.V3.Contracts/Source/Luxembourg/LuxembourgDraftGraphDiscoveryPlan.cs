@@ -160,7 +160,7 @@ public sealed class LuxembourgDraftGraphDiscoveryPlan
     internal const long PublisherDeliveryCeilingRows = 1_000_000;
     internal const uint Pass1PageLimit = 953;
     internal const uint Pass2PageLimit = 571;
-    internal const string PartitionMemberKey = "legilux-initial-draft-graph";
+    internal const string PartitionMemberKeyPrefix = "legilux-initial-draft-graph-batch-";
 
     private const string ResourceId = "urn:uuid:7c9e2f4b-18a6-4d05-b3e7-52f0a91c6d84";
     private const string MemberPrefix = "lu-initial-draft-graph";
@@ -235,9 +235,13 @@ public sealed class LuxembourgDraftGraphDiscoveryPlan
     /// are different facts that would otherwise share every key.
     /// </para>
     /// <para>
-    /// <c>key_3</c>, the predicate, needs no kind key: it is bound from a VALUES block of IRIs, so it
-    /// is an IRI by construction rather than by hope. The draft and the value are whatever the
-    /// publisher delivered, which is why each carries its own.
+    /// <c>key_3</c>, the predicate, needs no kind key - but no longer for the reason this once gave.
+    /// It said the predicate is bound from a VALUES block of IRIs and so is an IRI by construction;
+    /// that block is gone, because it was measured dropping rows the publisher holds. The
+    /// conclusion survives on RDF itself, where a predicate is always an IRI, and on the producer,
+    /// which requires the delivered predicate term to be a readable IRI before it reads anything
+    /// else from the row. The draft and the value are whatever the publisher delivered, which is why
+    /// each still carries its own kind.
     /// </para>
     /// </remarks>
     private static readonly string[] Cursor =
@@ -284,6 +288,39 @@ public sealed class LuxembourgDraftGraphDiscoveryPlan
     /// exactly the drafts asked about. The padding that fills the parameter block is a rendering
     /// detail and would make a repeated member look like a member asked about twice.
     /// </remarks>
+    /// <summary>The partition key for one batch, digesting the batch's own members.</summary>
+    /// <remarks>
+    /// <para>
+    /// A CONSTANT KEY HERE WOULD MAKE THE TERMINAL COVER UNIMPLEMENTABLE, and it was one. Every
+    /// batch bound the same member key, so every batch minted an enumeration proof with an
+    /// identical <c>FamilyKey</c> - which is the delivery's partition key exactly. Batches were
+    /// therefore indistinguishable in their own receipts: no omitted batch and no duplicated batch
+    /// could be detected from them, and <c>AbsenceCut.Create</c> would refuse any multi-batch cut
+    /// outright as a duplicate family.
+    /// </para>
+    /// <para>
+    /// The remarks on <see cref="CanonicalizeAndPad"/> have said the key digests the batch's members
+    /// since the batching was written; the code passed a constant. This is that intent, implemented,
+    /// and it follows <c>EuObjectFactsDiscoveryPlan.PartitionKeyFor</c>, which does exactly this at
+    /// the identical bind site for the same reason.
+    /// </para>
+    /// <para>
+    /// Digested over the sorted, deduplicated, UNPADDED members, so two runs naming the same drafts
+    /// in a different order mint the same key and a short final batch is not confused with one whose
+    /// padding happens to repeat the same tail.
+    /// </para>
+    /// </remarks>
+    public static string PartitionKeyFor(IReadOnlyList<string> batchDrafts) =>
+        PartitionMemberKeyPrefix + SelectionDigestFor(batchDrafts)[..24];
+
+    /// <summary>The full digest of a batch's requested members.</summary>
+    /// <remarks>
+    /// The whole hash, not the truncated form the partition key carries. An absence cites this: a
+    /// key shortened for readability is not the thing to bind evidence to.
+    /// </remarks>
+    public static string SelectionDigestFor(IReadOnlyList<string> batchDrafts) =>
+        Sha256(StrictUtf8.GetBytes(string.Join('\n', RequestedPartitionMembers(batchDrafts))));
+
     public static IReadOnlyList<string> RequestedPartitionMembers(IReadOnlyList<string> batchDrafts)
     {
         ArgumentNullException.ThrowIfNull(batchDrafts);
@@ -331,6 +368,7 @@ public sealed class LuxembourgDraftGraphDiscoveryPlan
             "asked_predicates=" + string.Join(',', AskedPredicates),
             "unbound_kind=" + UnboundKind,
             "batch_capacity=" + BatchCapacity.ToString(CultureInfo.InvariantCulture),
+            "partition_member_key_prefix=" + PartitionMemberKeyPrefix,
             "publisher_delivery_ceiling_rows=" + PublisherDeliveryCeilingRows.ToString(CultureInfo.InvariantCulture),
             "pass_1=" + (int)LuxembourgQueryPass.Pass1 + ":" + Pass1PageLimit,
             "pass_2=" + (int)LuxembourgQueryPass.Pass2 + ":" + Pass2PageLimit,
@@ -459,7 +497,7 @@ public sealed class LuxembourgDraftGraphDiscoveryPlan
 
         var family = isPage ? PageQueryFamilyRef : CountQueryFamilyRef;
         var input = MachineQueryInputArtifact.Create(
-            inputResourceId, family, PartitionMemberKey, response, parameters);
+            inputResourceId, family, PartitionKeyFor(batchDrafts), response, parameters);
         var renderer = new LuxembourgDraftGraphSparqlRenderer(this, isPage, rendererSource);
         var rendered = renderer.RenderInput(input, response);
         var body = rendered.CopyRequestBody();

@@ -478,12 +478,18 @@ public sealed class LuxembourgDraftGraphDiscoveryPlanTests
             "urn:uuid:8d40e2b7-51c6-4a03-9e7f-2c1b5a8d3406",
             source);
 
-        Assert.AreEqual(
-            LuxembourgDraftGraphDiscoveryPlan.PartitionMemberKey,
-            count.InputArtifact.PartitionBinding.MemberKey);
-        Assert.AreEqual(
-            LuxembourgDraftGraphDiscoveryPlan.PartitionMemberKey,
-            page.InputArtifact.PartitionBinding.MemberKey);
+        // THE KEY DIGESTS THE BATCH, so two batches are distinguishable in their own receipts.
+        // While it was a constant, every batch of this family minted an enumeration proof with an
+        // identical FamilyKey: no omitted or duplicated batch was detectable from the receipts, and
+        // a multi-batch cut would have been refused outright as a duplicate family.
+        var expectedKey = LuxembourgDraftGraphDiscoveryPlan.PartitionKeyFor([InventoryDraft]);
+        Assert.AreEqual(expectedKey, count.InputArtifact.PartitionBinding.MemberKey);
+        Assert.AreEqual(expectedKey, page.InputArtifact.PartitionBinding.MemberKey);
+        Assert.AreNotEqual(
+            expectedKey,
+            LuxembourgDraftGraphDiscoveryPlan.PartitionKeyFor(
+                [InventoryDraft, "http://data.legilux.public.lu/eli/dl/pl/2000/999"]),
+            "a different batch must mint a different key, or the cover cannot tell them apart.");
 
         // The batch binds FIRST and at full capacity whatever its real size, so the input role is
         // the same for every batch including a short final one. Then the pass; then, on a page,

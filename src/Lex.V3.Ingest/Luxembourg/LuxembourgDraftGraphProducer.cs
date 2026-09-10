@@ -349,6 +349,11 @@ public sealed class LuxembourgDraftGraphProducer
             proof.AcquisitionRunRef,
             LuxembourgDraftGraphDiscoveryPlan.RequestedPartitionMembers(request.BatchDrafts),
             request.Inventory,
+            // FROM THE DELIVERY, NOT FROM THE REQUEST. Both travel back through the retained
+            // receipt, so the coverage compares what was actually sent and when it was observed
+            // against what this run believes it asked.
+            proof.FamilyKey,
+            receipt.Delivery.ObservationTimes.CountA,
             run.ProductRequestCount);
     }
 
@@ -363,6 +368,8 @@ public sealed class LuxembourgDraftGraphProducer
         SourceArtifactRef completionEvidenceRef,
         IReadOnlyList<string> requestedDrafts,
         LuxembourgInitialDraftInventoryCitation inventory,
+        string partitionKey,
+        string observedAt,
         int productRequestCount = 0)
     {
         ArgumentNullException.ThrowIfNull(rows);
@@ -427,7 +434,9 @@ public sealed class LuxembourgDraftGraphProducer
                 completionEvidenceRef,
                 LuxembourgDraftPropertyCoverage.SelectionDigestFor(requestedDrafts),
                 requestedDrafts.Count,
-                rows.Count),
+                rows.Count,
+                partitionKey,
+                observedAt),
             inventory,
             notAdmitted.Count,
             LuxembourgDraftGraphDiscoveryPlan.PredicatesNotDeclaredOnTheDraft,

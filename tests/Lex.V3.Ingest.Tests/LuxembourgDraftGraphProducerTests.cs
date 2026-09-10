@@ -134,7 +134,9 @@ public sealed class LuxembourgDraftGraphProducerTests
     /// </remarks>
     private static LuxembourgDraftGraphProductionResult Decode(params RepeatedEnumerationRow[] rows) =>
         LuxembourgDraftGraphProducer.DecodeRows(
-            rows, Profile(), Evidence, RequestedIn(rows), TestInventory);
+            rows, Profile(), Evidence, RequestedIn(rows), TestInventory,
+            LuxembourgDraftGraphDiscoveryPlan.PartitionKeyFor(RequestedIn(rows)),
+            "2026-09-10T13:50:31.0000000Z");
 
     /// <summary>The drafts a fixture delivery names, as the set it asked about.</summary>
     /// <remarks>
@@ -687,7 +689,9 @@ public sealed class LuxembourgDraftGraphProducerTests
 
             var result = LuxembourgDraftGraphProducer.DecodeRows(
                 [new RepeatedEnumerationRow(terms, terms, terms)], profile, Evidence,
-                [Draft], TestInventory);
+                [Draft], TestInventory,
+                LuxembourgDraftGraphDiscoveryPlan.PartitionKeyFor([Draft]),
+                "2026-09-10T13:50:31.0000000Z");
 
             Assert.AreEqual(
                 LuxembourgDraftGraphProductionRefusal.RowNotAdmitted, result.Refusal,

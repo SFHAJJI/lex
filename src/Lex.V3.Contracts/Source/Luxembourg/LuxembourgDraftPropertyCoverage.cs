@@ -158,7 +158,9 @@ public sealed record LuxembourgDraftBatchCitation(
     SourceArtifactRef AcquisitionRunRef,
     string SelectionDigest,
     int RequestedDraftCount,
-    long DeliveredRowCount);
+    long DeliveredRowCount,
+    string PartitionKey,
+    string ObservedAt);
 
 /// <summary>Why a completed matrix could not be built over a delivered batch.</summary>
 public enum LuxembourgDraftPropertyCoverageRefusal
@@ -197,6 +199,19 @@ public enum LuxembourgDraftPropertyCoverageRefusal
     /// <summary>One pair carries both present values and a derived absence.</summary>
     [JsonStringEnumMemberName("pair_holds_present_and_derived_absence")]
     PairHoldsPresentAndDerivedAbsence = 8,
+
+    /// <summary>
+    /// The enumeration proof in hand is not this batch's own, or carries no observation instant.
+    /// </summary>
+    /// <remarks>
+    /// The partition key travels out with the bound request and back through the retained delivery,
+    /// so comparing it against a key recomputed here from the requested members checks that the
+    /// request actually sent named these drafts. It became a real check only when the key started
+    /// digesting the batch: while every batch bound the same constant, it compared a constant with
+    /// itself and would have read as protection while proving nothing.
+    /// </remarks>
+    [JsonStringEnumMemberName("absence_evidence_not_from_this_run")]
+    AbsenceEvidenceNotFromThisRun = 9,
 }
 
 /// <summary>
@@ -307,12 +322,8 @@ public sealed class LuxembourgDraftPropertyCoverage
     /// its last member to fill the query's fixed slot count, so digesting it would give two
     /// different batches the same digest whenever both padded to the same tail.
     /// </remarks>
-    public static string SelectionDigestFor(IReadOnlyList<string> requestedDrafts)
-    {
-        ArgumentNullException.ThrowIfNull(requestedDrafts);
-        var joined = string.Join('\n', requestedDrafts);
-        return Convert.ToHexStringLower(SHA256.HashData(new UTF8Encoding(false, true).GetBytes(joined)));
-    }
+    public static string SelectionDigestFor(IReadOnlyList<string> requestedDrafts) =>
+        LuxembourgDraftGraphDiscoveryPlan.SelectionDigestFor(requestedDrafts);
 
     /// <summary>
     /// Completes the matrix over a delivered batch, or refuses without minting anything.
@@ -363,6 +374,19 @@ public sealed class LuxembourgDraftPropertyCoverage
         {
             refusal = LuxembourgDraftPropertyCoverageRefusal.RequestedBatchNotRetained;
             detail = "The requested batch does not match the selection its own citation names.";
+            return null;
+        }
+
+        // THE PROOF IN HAND MUST BE THIS BATCH'S OWN, and an absence must be datable.
+        if (!string.Equals(
+                LuxembourgDraftGraphDiscoveryPlan.PartitionKeyFor(requestedDrafts),
+                batch.PartitionKey,
+                StringComparison.Ordinal) ||
+            string.IsNullOrWhiteSpace(batch.ObservedAt))
+        {
+            refusal = LuxembourgDraftPropertyCoverageRefusal.AbsenceEvidenceNotFromThisRun;
+            detail = "The delivery's own partition key does not name these drafts, or the run "
+                + "carries no observation instant.";
             return null;
         }
 

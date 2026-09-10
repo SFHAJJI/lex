@@ -29,8 +29,11 @@ public sealed class LuxembourgDraftPropertyCoverageTests
     private static LuxembourgInitialDraftInventoryCitation Inventory() =>
         new("legilux-initial-draft-inventory", Ref("inventory"), "7753-subjects");
 
+    private const string ObservedAt = "2026-09-10T13:50:31.0000000Z";
+
     private static LuxembourgDraftBatchCitation Batch(IReadOnlyList<string> drafts, long rows) =>
-        new(Ref("batch"), LuxembourgDraftPropertyCoverage.SelectionDigestFor(drafts), drafts.Count, rows);
+        new(Ref("batch"), LuxembourgDraftPropertyCoverage.SelectionDigestFor(drafts), drafts.Count,
+            rows, LuxembourgDraftGraphDiscoveryPlan.PartitionKeyFor(drafts), ObservedAt);
 
     private static LuxembourgDraftPropertyRecordView Row(string draft, string predicate, string value) =>
         new(draft, predicate, value, "iri");
@@ -408,6 +411,75 @@ public sealed class LuxembourgDraftPropertyCoverageTests
             LuxembourgDraftGraphDiscoveryPlan.AbsenceMatrixPredicates.ToArray(), referral);
     }
 
+    /// <summary>
+    /// A proof whose own partition key names other drafts cannot evidence this batch's absences.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// THIS CHECK WAS VACUOUS UNTIL THE KEY DIGESTED THE BATCH. Every batch of this family bound the
+    /// same constant member key, so the delivery's key and a locally recomputed one agreed for every
+    /// batch in the sweep no matter which drafts it named - a guard comparing a constant with
+    /// itself, which reads as protection and proves nothing. I left it out rather than write it
+    /// that way, and it is here now because the key finally varies.
+    /// </para>
+    /// <para>
+    /// The key travels out with the bound request and back through the retained delivery, so this
+    /// compares what was actually sent against what this run believes it asked.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void AProofWhosePartitionKeyNamesOtherDraftsCannotEvidenceThisBatch()
+    {
+        var drafts = Drafts(3);
+        var someoneElses = new LuxembourgDraftBatchCitation(
+            Ref("batch"), LuxembourgDraftPropertyCoverage.SelectionDigestFor(drafts), drafts.Count, 0,
+            LuxembourgDraftGraphDiscoveryPlan.PartitionKeyFor(Drafts(4)), ObservedAt);
+
+        Assert.AreEqual(
+            LuxembourgDraftPropertyCoverageRefusal.AbsenceEvidenceNotFromThisRun,
+            RefusalOf(drafts, [], someoneElses, Inventory()));
+
+        // And the keys really do differ, so the test above is not passing by accident.
+        Assert.AreNotEqual(
+            LuxembourgDraftGraphDiscoveryPlan.PartitionKeyFor(drafts),
+            LuxembourgDraftGraphDiscoveryPlan.PartitionKeyFor(Drafts(4)));
+    }
+
+    /// <summary>An absence that cannot be dated cannot be derived.</summary>
+    /// <remarks>
+    /// An absence is true of a corpus AT AN INSTANT, and publisher drift after the run silently
+    /// turns it false. Without the observation time nothing records when it was true, so the record
+    /// reads as timeless - which is a stronger claim than the run can support.
+    /// </remarks>
+    [TestMethod]
+    public void AnAbsenceThatCannotBeDatedIsNotDerived()
+    {
+        var drafts = Drafts(3);
+        var undated = new LuxembourgDraftBatchCitation(
+            Ref("batch"), LuxembourgDraftPropertyCoverage.SelectionDigestFor(drafts), drafts.Count, 0,
+            LuxembourgDraftGraphDiscoveryPlan.PartitionKeyFor(drafts), "   ");
+
+        Assert.AreEqual(
+            LuxembourgDraftPropertyCoverageRefusal.AbsenceEvidenceNotFromThisRun,
+            RefusalOf(drafts, [], undated, Inventory()));
+    }
+
+    /// <summary>Every derived absence carries the instant its batch was observed.</summary>
+    [TestMethod]
+    public void EveryDerivedAbsenceCarriesItsObservationInstant()
+    {
+        var drafts = Drafts(2);
+        var rows = drafts.Select(draft => Row(draft, Asked[0], "urn:status:" + draft)).ToArray();
+
+        var coverage = Complete(drafts, rows);
+
+        Assert.IsNotEmpty(coverage.DerivedAbsences);
+        foreach (var absence in coverage.DerivedAbsences)
+        {
+            Assert.AreEqual(ObservedAt, absence.Batch.ObservedAt);
+        }
+    }
+
     /// <summary>The selection digest changes when the batch changes.</summary>
     /// <remarks>
     /// Without this the citation on an absence would be the same for every batch in the sweep, and
@@ -432,7 +504,8 @@ public sealed class LuxembourgDraftPropertyCoverageTests
     {
         var drafts = Drafts(3);
         var wrong = new LuxembourgDraftBatchCitation(
-            Ref("batch"), LuxembourgDraftPropertyCoverage.SelectionDigestFor(Drafts(4)), 3, 0);
+            Ref("batch"), LuxembourgDraftPropertyCoverage.SelectionDigestFor(Drafts(4)), 3, 0,
+            LuxembourgDraftGraphDiscoveryPlan.PartitionKeyFor(drafts), ObservedAt);
 
         Assert.AreEqual(
             LuxembourgDraftPropertyCoverageRefusal.RequestedBatchNotRetained,
