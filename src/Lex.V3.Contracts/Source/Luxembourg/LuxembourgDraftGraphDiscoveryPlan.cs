@@ -41,6 +41,15 @@ public sealed record LuxembourgDraftGraphBoundQuery(
 /// literals can share a lexical form and still be different facts.
 /// </para>
 /// <para>
+/// THE VALUE-DERIVED COLUMNS ARE TOTALISED AND <c>draft_kind</c> IS NOT, which is the optional
+/// shape deciding it rather than a preference. <c>OPTIONAL</c> leaves <c>?value</c> unbound for a
+/// pair the publisher holds nothing for, and this engine evaluates <c>IF</c>'s arguments EAGERLY, so
+/// every BIND that dereferences it raises on exactly the rows the absence branch exists to deliver -
+/// and an erroring BIND leaves its variable out of the binding entirely. Without COALESCE the
+/// unbound rows would arrive missing the very marker that says they are unbound. <c>?draft</c> is
+/// bound by the batch and the class triple on every row, so its marker needs no such treatment.
+/// </para>
+/// <para>
 /// EVERY DERIVED CURSOR KEY IS TOTALISED WITH COALESCE, for two separately measured reasons, and
 /// neither is stylistic.
 /// </para>
@@ -482,10 +491,24 @@ public sealed class LuxembourgDraftGraphDiscoveryPlan
 
         var grouped = "?draft ?draft_kind ?predicate ?value ?value_kind ?datatype_iri ?language_tag";
 
-        // One question asked of a closed predicate list, with its own explicit absence branch. A
-        // draft holding none of the asked properties still delivers a row per predicate, carrying
-        // the unbound marker: that absence IS the fact, and omitting it would be the silent drop
-        // this family exists to avoid.
+        // THE PAIR IS BOUND BEFORE ITS VALUE IS LOOKED FOR, and that is the repair a live run
+        // forced. The accepted shape asked the absent case with
+        // `{ ... } UNION { FILTER NOT EXISTS { ?draft ?predicate ?missing_value } ... }`, and the
+        // first bounded batch ever sent to Legilux came back with 103 rows for 50 drafts and NOT ONE
+        // carrying the unbound marker. A UNION is evaluated on its own and then joined, so inside
+        // that branch neither ?draft nor ?predicate was bound by the VALUES and the class triple;
+        // NOT EXISTS over three unbound terms asks whether ANY triple exists, which is true, so the
+        // branch was inert and had always been. Every fixture in the suite authored its absence rows
+        // by hand, so nothing in the repository could see it.
+        //
+        // The cross product is now formed by the class triple and the predicate VALUES, and OPTIONAL
+        // observes the value of each pair. A pair the publisher holds nothing for still delivers its
+        // row, with ?value unbound - which is what S2-A03 requires of a gap and what #532 claimed
+        // this family already did.
+        //
+        // A MULTI-VALUED PROPERTY STILL DELIVERS EVERY VALUE. OPTIONAL preserves one row per value
+        // rather than collapsing to one row per pair, so a draft transposing two directives is two
+        // rows and the count is not forced to the pair count.
         var batchValues = string.Join('\n', BatchParameterNames()
             .Select(static name => "      {" + name + ":iri}"));
 
@@ -500,23 +523,16 @@ public sealed class LuxembourgDraftGraphDiscoveryPlan
                 }
               }
               ?draft a <{{InitialDraftClassIri}}> .
-              BIND(IF(isIRI(?draft), "iri", "unsupported_blank_node") AS ?draft_kind)
               VALUES ?predicate {
             {{predicateValues}}
               }
-              {
+              OPTIONAL {
                 ?draft ?predicate ?value .
-                BIND(IF(isIRI(?value), "iri", IF(isLiteral(?value), "literal", "unsupported_blank_node")) AS ?value_kind)
-                BIND(IF(isLiteral(?value), STR(DATATYPE(?value)), "") AS ?datatype_iri)
-                BIND(IF(isLiteral(?value), LANG(?value), "") AS ?language_tag)
               }
-              UNION
-              {
-                FILTER NOT EXISTS { ?draft ?predicate ?missing_value }
-                BIND("{{UnboundKind}}" AS ?value_kind)
-                BIND("" AS ?datatype_iri)
-                BIND("" AS ?language_tag)
-              }
+              BIND(IF(isIRI(?draft), "iri", "unsupported_blank_node") AS ?draft_kind)
+              BIND(COALESCE(IF(isIRI(?value), "iri", IF(isLiteral(?value), "literal", "unsupported_blank_node")), "{{UnboundKind}}") AS ?value_kind)
+              BIND(COALESCE(IF(isLiteral(?value), STR(DATATYPE(?value)), ""), "") AS ?datatype_iri)
+              BIND(COALESCE(IF(isLiteral(?value), LANG(?value), ""), "") AS ?language_tag)
             }
             GROUP BY {{grouped}}
             """;

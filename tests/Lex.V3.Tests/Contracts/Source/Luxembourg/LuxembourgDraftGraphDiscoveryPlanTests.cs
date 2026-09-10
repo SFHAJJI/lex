@@ -132,15 +132,42 @@ public sealed class LuxembourgDraftGraphDiscoveryPlanTests
     {
         var page = LuxembourgDraftGraphDiscoveryPlan.Create().PageTemplate;
 
-        StringAssert.Contains(page, "FILTER NOT EXISTS { ?draft ?predicate ?missing_value }");
+        // THE INERT SHAPE MUST NOT COME BACK. A UNION is evaluated on its own and then joined, so
+        // inside its branch neither ?draft nor ?predicate was bound and NOT EXISTS over three
+        // unbound terms asked whether ANY triple exists - always true, so the branch never fired.
+        // The first bounded batch ever sent to Legilux returned 103 rows for 50 drafts with not one
+        // unbound marker among them.
+        Assert.IsFalse(
+            page.Contains("FILTER NOT EXISTS", StringComparison.Ordinal),
+            "the absence branch may not be a NOT EXISTS over terms the branch does not bind.");
+        Assert.IsFalse(
+            page.Contains("UNION", StringComparison.Ordinal),
+            "the pair is bound once and its value observed, rather than two arms being unioned.");
+
+        // THE PAIR IS BOUND BEFORE ITS VALUE IS LOOKED FOR. That ordering is the whole repair: the
+        // cross product comes from the class triple and the predicate VALUES, and OPTIONAL then
+        // observes each pair's value, so a pair the publisher holds nothing for still delivers a row.
+        var classTriple = page.IndexOf(
+            "?draft a <" + LuxembourgDraftGraphDiscoveryPlan.InitialDraftClassIri + ">",
+            StringComparison.Ordinal);
+        var predicateValues = page.IndexOf("VALUES ?predicate {", StringComparison.Ordinal);
+        var optional = page.IndexOf("OPTIONAL {", StringComparison.Ordinal);
+        Assert.IsGreaterThanOrEqualTo(0, classTriple);
+        Assert.IsTrue(
+            classTriple < predicateValues && predicateValues < optional,
+            "the draft and the predicate must both be bound before the OPTIONAL observes a value.");
+        // The triple itself, without pinning indentation: a reformat is not a defect.
+        StringAssert.Contains(page, "?draft ?predicate ?value .");
+        Assert.IsTrue(
+            optional < page.IndexOf("?draft ?predicate ?value .", StringComparison.Ordinal),
+            "the value triple sits inside the OPTIONAL, which is what makes an absent pair a row.");
+
+        // And the unbound row still says it is unbound, which is now carried by the totalised marker
+        // rather than by a branch that never ran.
         StringAssert.Contains(
             page,
-            "BIND(\"" + LuxembourgDraftGraphDiscoveryPlan.UnboundKind + "\" AS ?value_kind)",
-            "the absence carries its own marker rather than arriving as a missing row.");
-        Assert.AreEqual(
-            1,
-            page.Split("UNION", StringSplitOptions.None).Length - 1,
-            "exactly two arms: the property answered, and the property answered as absent.");
+            "\"" + LuxembourgDraftGraphDiscoveryPlan.UnboundKind + "\") AS ?value_kind)",
+            "a pair with no value delivers a row whose marker says so.");
 
         // ?value itself is deliberately NOT totalised. Its absence IS the unbound fact, and a page
         // that bound it to "" would destroy the fact while appearing to succeed.
@@ -203,15 +230,82 @@ public sealed class LuxembourgDraftGraphDiscoveryPlanTests
     /// empty in every one, so this engine does not raise inside DATATYPE or LANG on a bound IRI.
     /// </remarks>
     [TestMethod]
-    public void TheQualifierColumnsAreLeftAsThePublisherAnswersThem()
+    public void OnlyTheValueDerivedColumnsAreTotalisedAndTheDraftMarkerIsNot()
     {
         var page = LuxembourgDraftGraphDiscoveryPlan.Create().PageTemplate;
 
-        StringAssert.Contains(page, "BIND(IF(isLiteral(?value), STR(DATATYPE(?value)), \"\") AS ?datatype_iri)");
-        StringAssert.Contains(page, "BIND(IF(isLiteral(?value), LANG(?value), \"\") AS ?language_tag)");
-        Assert.IsFalse(
-            page.Contains("BIND(COALESCE(STR(DATATYPE(", StringComparison.Ordinal),
-            "totalising the column would erase the difference between a datatype withheld and one answered empty.");
+        // REQUIRED BY THE OPTIONAL SHAPE, not preferred. OPTIONAL leaves ?value unbound for a pair
+        // the publisher holds nothing for, and this engine evaluates IF's arguments EAGERLY, so
+        // every BIND dereferencing it raises on exactly the rows the absence case exists to deliver
+        // and the erroring BIND drops its variable from the binding. Without COALESCE the unbound
+        // rows would arrive missing the marker that says they are unbound.
+        foreach (var derived in new[] { "?value_kind", "?datatype_iri", "?language_tag" })
+        {
+            StringAssert.Contains(
+                page,
+                "BIND(COALESCE(",
+                $"{derived} reads a value the OPTIONAL may leave unbound.");
+            StringAssert.Contains(page, ") AS " + derived + ")");
+        }
+
+        // AND NOT ONE COLUMN MORE. ?draft is bound by the batch and the class triple on every row,
+        // so totalising its marker would be covering for a case that cannot arise - and a guard for
+        // an impossible case is a guard nobody can ever see fail.
+        StringAssert.Contains(
+            page,
+            "BIND(IF(isIRI(?draft), \"iri\", \"unsupported_blank_node\") AS ?draft_kind)",
+            "the draft marker needs no totalisation and does not get it.");
+
+        // The qualifier pair still distinguishes what it always did: a language-tagged literal is
+        // the one with a non-empty language beside a literal kind, whatever its datatype reads.
+        StringAssert.Contains(page, "IF(isLiteral(?value), STR(DATATYPE(?value)), \"\")");
+        StringAssert.Contains(page, "IF(isLiteral(?value), LANG(?value), \"\")");
+    }
+
+    /// <summary>
+    /// The query AS RENDERED carries the repair, not merely the template it was rendered from.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Every other assertion here reads <c>PageTemplate</c>. That is the text before its slots are
+    /// filled, and the defect this repairs was invisible in the template too — the inert UNION read
+    /// perfectly well. What reaches the publisher is the rendered body, so this asserts on that: the
+    /// batch members substituted as real IRI terms, the pair bound before the OPTIONAL, and no slot
+    /// left behind.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void TheRenderedQueryCarriesTheBoundPairAndItsOptionalValue()
+    {
+        var plan = LuxembourgDraftGraphDiscoveryPlan.Create();
+        var bound = plan.BindPage(
+            LuxembourgQueryPass.Pass1,
+            [InventoryDraft],
+            null,
+            0,
+            new SourceArtifactRef(
+                "urn:uuid:4c81b0d7-95e2-4f31-8a67-2e0d5b93a4f1", new string('7', 64)),
+            "urn:uuid:0a6f3e28-71b4-4d95-9c30-8f52e1b7d6a4",
+            "urn:uuid:6b24e0f7-3a19-4c86-b502-9d7f4e6a1c38",
+            RendererSource());
+
+        var body = System.Text.Encoding.UTF8.GetString(bound.Request.CopyRequestBody());
+        StringAssert.StartsWith(body, "query=");
+        var query = Uri.UnescapeDataString(body["query=".Length..].Replace('+', ' '));
+
+        // No slot survives rendering. A leftover would be sent to the publisher verbatim.
+        Assert.IsFalse(query.Contains("{batch_draft_", StringComparison.Ordinal));
+        Assert.IsFalse(query.Contains(":iri}", StringComparison.Ordinal));
+        Assert.IsFalse(query.Contains(":uint}", StringComparison.Ordinal));
+
+        // The member arrives as a real IRI term, and the pair is bound before its value is sought.
+        StringAssert.Contains(query, "<" + InventoryDraft + ">");
+        var classTriple = query.IndexOf("?draft a <", StringComparison.Ordinal);
+        var predicateValues = query.IndexOf("VALUES ?predicate {", StringComparison.Ordinal);
+        var optional = query.IndexOf("OPTIONAL {", StringComparison.Ordinal);
+        Assert.IsGreaterThanOrEqualTo(0, classTriple);
+        Assert.IsTrue(classTriple < predicateValues && predicateValues < optional);
+        Assert.IsFalse(query.Contains("FILTER NOT EXISTS", StringComparison.Ordinal));
     }
 
     /// <summary>
