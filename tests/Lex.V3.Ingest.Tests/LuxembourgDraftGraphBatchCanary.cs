@@ -166,10 +166,19 @@ public sealed class LuxembourgDraftGraphBatchCanary
             coverage.CoveredPairCount);
         Assert.AreEqual(
             coverage.CoveredPairCount,
-            coverage.PresentPairCount + coverage.DerivedAbsences.Count
+            coverage.PresentPairCount + coverage.DerivedAbsences.Count + coverage.UnresolvedGaps.Count
                 + (coverage.DraftsOfUnconfirmedClass.Count
                     * LuxembourgDraftGraphDiscoveryPlan.AskedAbout.Count),
-            "every asked pair is present, derived-absent, or a draft whose class went unconfirmed.");
+            "every asked pair is present, derived-absent, unresolved, or on a draft whose class "
+                + "went unconfirmed - exactly one of the four.");
+
+        // The admitted half and the retained half must account for the whole delivery. The coverage
+        // enforces this internally; asserting it here too means the canary reports a delivery it
+        // has actually reconciled rather than one it merely received.
+        Assert.AreEqual(
+            result.Records!.Count + result.RetainedNotAdmitted.Count,
+            (int)coverage.Batch.DeliveredRowCount,
+            "every delivered row is admitted or retained by name.");
 
         foreach (var absence in coverage.DerivedAbsences)
         {
