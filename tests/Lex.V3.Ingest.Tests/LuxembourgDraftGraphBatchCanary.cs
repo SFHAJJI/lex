@@ -48,8 +48,7 @@ public sealed class LuxembourgDraftGraphBatchCanary
     /// passes. <c>AbsenceFixtures.Proof</c> is the same builder the contract tests use and is
     /// memoised, so this costs one assembly for the whole run rather than one per test.
     /// </remarks>
-    private static AbsenceFamilyEnumerationProof InventoryProof =>
-        AbsenceFixtures.Proof("legilux-initial-draft-inventory");
+    private const string InventoryFamily = "legilux-initial-draft-inventory";
     private const string EnableVariable = "LEX_E8_BATCH_CANARY";
     private const string LegiluxEndpoint = "https://data.legilux.public.lu/sparqlendpoint";
     private const string DraftPrefix = "http://data.legilux.public.lu/eli/dl/";
@@ -226,10 +225,6 @@ public sealed class LuxembourgDraftGraphBatchCanary
     private static LuxembourgInitialDraftInventoryResult InventoryOver(IReadOnlyList<string> drafts)
     {
         var profile = LuxembourgInitialDraftInventoryDiscoveryPlan.Create().CreateDeliveryProfile();
-        var evidence = new SourceArtifactRef(
-            NewUrn(),
-            Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(
-                Encoding.UTF8.GetBytes("e8-batch-canary-inventory/1"))));
 
         var rows = drafts.Select(draft =>
         {
@@ -247,9 +242,16 @@ public sealed class LuxembourgDraftGraphBatchCanary
             return new RepeatedEnumerationRow(terms, terms, terms);
         }).ToArray();
 
+        // The citation door binds the rows to the proof by canonical-key digest, so this
+        // synthesised inventory needs a proof over ITS rows rather than a shared one. Only the
+        // canonical key comes from the delivery; the terms are the ones this canary wrote.
+        var (proof, keys) = AbsenceFixtures.Delivery(InventoryFamily, rows.Length);
+        var bound = rows
+            .Select((row, index) => new RepeatedEnumerationRow(row.Terms, keys[index], row.Cursor))
+            .ToArray();
+
         return LuxembourgInitialDraftInventoryProducer.DecodeRows(
-            rows, profile, InventoryProof,
-            "2026-09-10T07:29:37.8950843Z");
+            bound, profile, proof, "2026-09-10T07:29:37.8950843Z");
     }
 
     private static BoundMachineRequest LuxembourgSourceWitness()
