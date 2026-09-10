@@ -1157,6 +1157,59 @@ public sealed class FactsHostileTests
     }
 
     /// <summary>
+    /// The forms this publisher actually sends, taken from a retained live delivery.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// EVERY VALUE HERE WAS DELIVERED BY THE PUBLISHER AND REFUSED BY THIS GRAMMAR. They come from
+    /// the E6 case-law run retained under #415, where 162 of 700 distinct identifiers were rejected
+    /// across 590 rows — and because one rejected identifier sinks the whole production, those rows
+    /// took all 2,052 delivered links with them. Roughly half the rejected rows were valid CELEX.
+    /// </para>
+    /// <para>
+    /// They are pinned as literals rather than derived from the spec, because a grammar written from
+    /// my reading of what CELEX permits is exactly what produced the defect. What settles it is what
+    /// arrived.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void TheFormsThePublisherSendsAreRecognised()
+    {
+        // A same-day SEQUENCE number, not a corrigendum: the largest rejected class, 80 distinct
+        // identifiers over 248 rows. It disambiguates documents published on one date and does not
+        // change what kind of document it is.
+        Assert.AreEqual(CelexProfile.BaseAct, OfficialIdentifier.ProfileOf("22012A1215(01)"));
+        Assert.AreEqual(CelexProfile.BaseAct, OfficialIdentifier.ProfileOf("52016XC0409(01)"));
+        Assert.AreEqual(CelexProfile.BaseAct, OfficialIdentifier.ProfileOf("22014A0830(02)"));
+
+        // AND R(nn) IS STILL A CORRIGENDUM. Widening the parenthesised form must not collapse the
+        // two: an identifier that says it is a corrigendum still has to be reported as one.
+        Assert.AreEqual(CelexProfile.Corrigendum, OfficialIdentifier.ProfileOf("32016R0679R(02)"));
+
+        // The whole treaty document, carrying no number. Its own text part was already accepted, so
+        // the grammar was taking the part and refusing the whole.
+        Assert.AreEqual(CelexProfile.BaseAct, OfficialIdentifier.ProfileOf("12012P"));
+        Assert.AreEqual(CelexProfile.TreatyPart, OfficialIdentifier.ProfileOf("12012P/TXT"));
+        Assert.AreEqual(CelexProfile.BaseAct, OfficialIdentifier.ProfileOf("12012P001"));
+
+        // WHAT MUST STILL BE REFUSED, from the same delivery. These are not CELEX in any sector, and
+        // the repair to the grammar must not quietly swallow them: they are the rows that belong in
+        // a typed unrepresentable record, which is a separate slice.
+        foreach (var notCelex in new[] { "C/2024/01610", "C2023/099/01", "C/2023/01458", "E2014C0273" })
+        {
+            Assert.IsNull(
+                OfficialIdentifier.ProfileOf(notCelex),
+                $"{notCelex} is a publisher reference, not a CELEX identifier.");
+        }
+
+        // A numberless identifier outside the treaty sector is not an act with the number left off.
+        Assert.IsNull(OfficialIdentifier.ProfileOf("32016R"), "only sector 1 identifies without a number");
+        Assert.IsNull(OfficialIdentifier.ProfileOf("02016R-20160504"), "and never a consolidation");
+        Assert.IsNull(OfficialIdentifier.ProfileOf("32016R0679()"), "an empty ordinal is not a sequence");
+        Assert.IsNull(OfficialIdentifier.ProfileOf("32016R0679(1a)"), "nor a non-numeric one");
+    }
+
+    /// <summary>
     /// MUTATION RECEIPT: the level claim resting on the caller's tag. Both families called the
     /// identical check, so one URI was admissible as either work or resource level.
     /// </summary>
