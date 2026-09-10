@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json.Serialization;
 using Lex.V3.Contracts.Custody;
+using Lex.V3.Contracts.Source.Absence;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Luxembourg;
 using Lex.V3.Ingest.Europe;
@@ -300,13 +301,15 @@ public sealed class LuxembourgInitialDraftInventoryProducer
                 run.ProductRequestCount);
         }
 
+        // THE PROOF ITSELF, not the two fields read off it. This used to hand DecodeRows the run
+        // reference and the family key as separate values, which is how the citation ended up
+        // stating an identity rather than carrying one - and how an outside consumer could state a
+        // different identity entirely. Both are still taken from the proof; they are just no longer
+        // detachable from it on the way.
         return DecodeRows(
             rows,
             profile,
-            proof.AcquisitionRunRef,
-            // FROM THE DELIVERY. Both travel back through the retained receipt, so the citation a
-            // batch later relies on names what this run actually enumerated and when.
-            proof.FamilyKey,
+            proof,
             receipt.Delivery.ObservationTimes.CountA,
             run.ProductRequestCount);
     }
@@ -329,16 +332,17 @@ public sealed class LuxembourgInitialDraftInventoryProducer
     internal static LuxembourgInitialDraftInventoryResult DecodeRows(
         IReadOnlyList<RepeatedEnumerationRow> rows,
         RepeatedEnumerationInterpretationProfile profile,
-        SourceArtifactRef completionEvidenceRef,
-        string familyKey,
+        AbsenceFamilyEnumerationProof proof,
         string observedAt,
         int productRequestCount = 0)
     {
         ArgumentNullException.ThrowIfNull(rows);
         ArgumentNullException.ThrowIfNull(profile);
-        ArgumentNullException.ThrowIfNull(completionEvidenceRef);
-        ArgumentException.ThrowIfNullOrWhiteSpace(familyKey);
+        ArgumentNullException.ThrowIfNull(proof);
         ArgumentException.ThrowIfNullOrWhiteSpace(observedAt);
+
+        var completionEvidenceRef = proof.AcquisitionRunRef;
+        var familyKey = proof.FamilyKey;
 
         var subjects = new List<LuxembourgInitialDraftSubject>(rows.Count);
         var seen = new HashSet<(string Value, string Kind)>();
@@ -402,13 +406,9 @@ public sealed class LuxembourgInitialDraftInventoryProducer
             .Order(StringComparer.Ordinal)
             .ToArray();
 
-        var citation = new LuxembourgInitialDraftInventoryCitation(
-            familyKey,
-            completionEvidenceRef,
-            Convert.ToHexStringLower(SHA256.HashData(
-                new UTF8Encoding(false, true).GetBytes(
-                    string.Join(LineFeed, addressable)))),
-            addressable.Length,
+        var citation = LuxembourgInitialDraftInventoryCitation.MintedOver(
+            proof,
+            addressable,
             observedAt);
 
         return LuxembourgInitialDraftInventoryResult.Success(

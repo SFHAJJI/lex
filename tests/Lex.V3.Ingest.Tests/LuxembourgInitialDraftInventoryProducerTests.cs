@@ -1,8 +1,10 @@
 using System.Text.Json;
+using Lex.V3.Contracts.Source.Absence;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Luxembourg;
 using Lex.V3.Ingest.Europe;
 using Lex.V3.Ingest.Luxembourg;
+using Lex.V3.Tests.Contracts.Source.Absence;
 
 namespace Lex.V3.Ingest.Tests;
 
@@ -18,6 +20,19 @@ namespace Lex.V3.Ingest.Tests;
 [TestClass]
 public sealed class LuxembourgInitialDraftInventoryProducerTests
 {
+
+    /// <summary>
+    /// A REAL enumeration proof, because the citation doors now require one.
+    /// </summary>
+    /// <remarks>
+    /// The run reference and the family key used to be handed to the producer as loose values, which
+    /// is how a citation could state an identity instead of carrying one. Both now come off the
+    /// proof, whose only door refuses anything but two independently agreeing, custody-verified
+    /// passes. <c>AbsenceFixtures.Proof</c> is the same builder the contract tests use and is
+    /// memoised, so this costs one assembly for the whole run rather than one per test.
+    /// </remarks>
+    private static AbsenceFamilyEnumerationProof InventoryProof =>
+        AbsenceFixtures.Proof("legilux-initial-draft-inventory");
     private const string Draft = "http://data.legilux.public.lu/eli/etat/leg/projet/2019/03/14/a123/jo";
     private const string OtherDraft = "http://data.legilux.public.lu/eli/etat/leg/projet/2020/07/02/b456/jo";
     private const string XsdInteger = "http://www.w3.org/2001/XMLSchema#integer";
@@ -78,7 +93,7 @@ public sealed class LuxembourgInitialDraftInventoryProducerTests
 
     private static LuxembourgInitialDraftInventoryResult Decode(params RepeatedEnumerationRow[] rows) =>
         LuxembourgInitialDraftInventoryProducer.DecodeRows(
-            rows, Profile(), Evidence, "legilux-initial-draft-inventory", "2026-09-10T13:50:31.0000000Z");
+            rows, Profile(), InventoryProof, "2026-09-10T13:50:31.0000000Z");
 
     /// <summary>
     /// The inventory mints the citation a later batch must carry, from its own run.
@@ -107,7 +122,7 @@ public sealed class LuxembourgInitialDraftInventoryProducerTests
         var citation = result.Citation!;
         Assert.IsNotNull(citation, "a delivered inventory carries its own citation.");
         Assert.AreEqual("legilux-initial-draft-inventory", citation.FamilyKey);
-        Assert.AreEqual(Evidence, citation.AcquisitionRunRef, "the run's own evidence, not a caller's.");
+        Assert.AreEqual(InventoryProof.AcquisitionRunRef, citation.AcquisitionRunRef, "the run's own evidence, not a caller's.");
         Assert.AreEqual(result.AddressableInOrder().Count, citation.SubjectCount);
         Assert.IsNotEmpty(citation.ObservedAt, "an inventory a batch relies on must be datable.");
 
@@ -190,7 +205,7 @@ public sealed class LuxembourgInitialDraftInventoryProducerTests
         Assert.AreEqual(Draft, subject.Value);
         Assert.AreEqual(LuxembourgInitialDraftInventoryDiscoveryPlan.IriKind, subject.Kind);
         Assert.AreEqual(1, subject.Multiplicity);
-        Assert.AreEqual(Evidence.ResourceId, subject.SourceObservationId);
+        Assert.AreEqual(InventoryProof.AcquisitionRunRef.ResourceId, subject.SourceObservationId);
         Assert.IsTrue(subject.IsAddressable);
     }
 

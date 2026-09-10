@@ -1,5 +1,7 @@
+using System.Collections.Frozen;
 using System.Text.Json.Serialization;
 using Lex.V3.Contracts.Custody;
+using Lex.V3.Contracts.Source.Absence;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Luxembourg;
 using Lex.V3.Ingest.Europe;
@@ -203,9 +205,16 @@ public sealed class LuxembourgDraftGraphProductionResult
         string? detail,
         int productRequestCount)
     {
-        RetainedNotAdmitted = retainedNotAdmitted;
-        Records = records;
-        AdmittedPredicates = admittedPredicates;
+        // SNAPSHOTTED, for the same reason the coverage beside it is. All three are published
+        // through read-only interfaces over collections the caller built and still holds, and For()
+        // reads two of them LIVE. Casting AdmittedPredicates back to its HashSet and adding an
+        // invented predicate does not merely alter a listing: it walks past the
+        // ArgumentOutOfRangeException that exists to say "this family asserts nothing here" and
+        // returns an empty record list instead - a false absence, manufactured after the production
+        // was accepted.
+        RetainedNotAdmitted = Array.AsReadOnly(retainedNotAdmitted.ToArray());
+        Records = records is null ? null : Array.AsReadOnly(records.ToArray());
+        AdmittedPredicates = admittedPredicates?.ToFrozenSet(StringComparer.Ordinal);
         CompletionEvidenceRef = completionEvidenceRef;
         Coverage = coverage;
         Refusal = refusal;
@@ -411,10 +420,12 @@ public sealed class LuxembourgDraftGraphProducer
                 run.ProductRequestCount);
         }
 
+        // THE PROOF ITSELF. The run reference used to travel here detached from the proof it came
+        // from, which is how a batch citation could state an acquisition run rather than carry one.
         return DecodeRows(
             rows,
             profile,
-            proof.AcquisitionRunRef,
+            proof,
             request.Assignment,
             // FROM THE DELIVERY, NOT FROM THE REQUEST. Both travel back through the retained
             // receipt, so the coverage compares what was actually sent and when it was observed
@@ -432,12 +443,14 @@ public sealed class LuxembourgDraftGraphProducer
     internal static LuxembourgDraftGraphProductionResult DecodeRows(
         IReadOnlyList<RepeatedEnumerationRow> rows,
         RepeatedEnumerationInterpretationProfile profile,
-        SourceArtifactRef completionEvidenceRef,
+        AbsenceFamilyEnumerationProof proof,
         LuxembourgDraftBatchAssignment assignment,
         string partitionKey,
         string observedAt,
         int productRequestCount = 0)
     {
+        ArgumentNullException.ThrowIfNull(proof);
+        var completionEvidenceRef = proof.AcquisitionRunRef;
         ArgumentNullException.ThrowIfNull(rows);
         ArgumentNullException.ThrowIfNull(profile);
         ArgumentNullException.ThrowIfNull(completionEvidenceRef);
@@ -516,8 +529,8 @@ public sealed class LuxembourgDraftGraphProducer
             LuxembourgDraftGraphDiscoveryPlan.AskedAbout,
             records.Select(static value => new LuxembourgDraftPropertyRecordView(
                 value.DraftIri, value.PredicateIri, value.Value, value.ValueKind)).ToArray(),
-            new LuxembourgDraftBatchCitation(
-                completionEvidenceRef,
+            LuxembourgDraftBatchCitation.ForDelivery(
+                proof,
                 LuxembourgDraftPropertyCoverage.SelectionDigestFor(requestedDrafts),
                 requestedDrafts.Count,
                 rows.Count,

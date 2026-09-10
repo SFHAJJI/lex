@@ -1,10 +1,12 @@
 using System.Text;
 using Lex.V3.Artifacts;
 using Lex.V3.Contracts.Custody;
+using Lex.V3.Contracts.Source.Absence;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Luxembourg;
 using Lex.V3.Ingest.Europe;
 using Lex.V3.Ingest.Luxembourg;
+using Lex.V3.Tests.Contracts.Source.Absence;
 
 namespace Lex.V3.Ingest.Tests;
 
@@ -35,6 +37,19 @@ namespace Lex.V3.Ingest.Tests;
 [TestClass]
 public sealed class LuxembourgDraftGraphBatchCanary
 {
+
+    /// <summary>
+    /// A REAL enumeration proof, because the citation doors now require one.
+    /// </summary>
+    /// <remarks>
+    /// The run reference and the family key used to be handed to the producer as loose values, which
+    /// is how a citation could state an identity instead of carrying one. Both now come off the
+    /// proof, whose only door refuses anything but two independently agreeing, custody-verified
+    /// passes. <c>AbsenceFixtures.Proof</c> is the same builder the contract tests use and is
+    /// memoised, so this costs one assembly for the whole run rather than one per test.
+    /// </remarks>
+    private static AbsenceFamilyEnumerationProof InventoryProof =>
+        AbsenceFixtures.Proof("legilux-initial-draft-inventory");
     private const string EnableVariable = "LEX_E8_BATCH_CANARY";
     private const string LegiluxEndpoint = "https://data.legilux.public.lu/sparqlendpoint";
     private const string DraftPrefix = "http://data.legilux.public.lu/eli/dl/";
@@ -233,7 +248,7 @@ public sealed class LuxembourgDraftGraphBatchCanary
         }).ToArray();
 
         return LuxembourgInitialDraftInventoryProducer.DecodeRows(
-            rows, profile, evidence, "legilux-initial-draft-inventory",
+            rows, profile, InventoryProof,
             "2026-09-10T07:29:37.8950843Z");
     }
 

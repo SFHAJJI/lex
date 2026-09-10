@@ -1,5 +1,8 @@
+using Lex.V3.Contracts.Source.Absence;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Luxembourg;
+
+using Lex.V3.Tests.Contracts.Source.Absence;
 
 namespace Lex.V3.Ingest.Tests;
 
@@ -14,6 +17,19 @@ namespace Lex.V3.Ingest.Tests;
 [TestClass]
 public sealed class LuxembourgDraftPropertyCoverageTests
 {
+
+    /// <summary>
+    /// A REAL enumeration proof, because the citation doors now require one.
+    /// </summary>
+    /// <remarks>
+    /// The run reference and the family key used to be handed to the producer as loose values, which
+    /// is how a citation could state an identity instead of carrying one. Both now come off the
+    /// proof, whose only door refuses anything but two independently agreeing, custody-verified
+    /// passes. <c>AbsenceFixtures.Proof</c> is the same builder the contract tests use and is
+    /// memoised, so this costs one assembly for the whole run rather than one per test.
+    /// </remarks>
+    private static AbsenceFamilyEnumerationProof InventoryProof =>
+        AbsenceFixtures.Proof("legilux-initial-draft-inventory");
     private const string Draft = "http://data.legilux.public.lu/eli/dl/pl/2000/";
     private static readonly string[] Asked = [.. LuxembourgDraftGraphDiscoveryPlan.AskedAbout];
 
@@ -45,10 +61,9 @@ public sealed class LuxembourgDraftPropertyCoverageTests
     /// <c>AnAssignmentCannotBeBuiltForDraftsTheCitationDoesNotName</c> does.
     /// </remarks>
     private static LuxembourgInitialDraftInventoryCitation Inventory(IReadOnlyList<string> drafts) =>
-        new("legilux-initial-draft-inventory",
-            Ref("inventory"),
-            LuxembourgDraftGraphDiscoveryPlan.SelectionDigestFor(drafts),
-            drafts.Count,
+        LuxembourgInitialDraftInventoryCitation.MintedOver(
+            InventoryProof,
+            drafts,
             "2026-09-10T07:29:37.8950843Z");
 
     private static LuxembourgDraftBatchAssignment Assignment(IReadOnlyList<string> drafts) =>
@@ -57,7 +72,8 @@ public sealed class LuxembourgDraftPropertyCoverageTests
     private const string ObservedAt = "2026-09-10T13:50:31.0000000Z";
 
     private static LuxembourgDraftBatchCitation Batch(IReadOnlyList<string> drafts, long rows) =>
-        new(Ref("batch"), LuxembourgDraftPropertyCoverage.SelectionDigestFor(drafts), drafts.Count,
+        LuxembourgDraftBatchCitation.ForDelivery(
+            InventoryProof, LuxembourgDraftPropertyCoverage.SelectionDigestFor(drafts), drafts.Count,
             rows, LuxembourgDraftGraphDiscoveryPlan.PartitionKeyFor(drafts), ObservedAt);
 
     private static LuxembourgDraftPropertyRecordView Row(string draft, string predicate, string value) =>
@@ -605,8 +621,8 @@ public sealed class LuxembourgDraftPropertyCoverageTests
     public void AProofWhosePartitionKeyNamesOtherDraftsCannotEvidenceThisBatch()
     {
         var drafts = Drafts(3);
-        var someoneElses = new LuxembourgDraftBatchCitation(
-            Ref("batch"), LuxembourgDraftPropertyCoverage.SelectionDigestFor(drafts), drafts.Count, 0,
+        var someoneElses = LuxembourgDraftBatchCitation.ForDelivery(
+            InventoryProof, LuxembourgDraftPropertyCoverage.SelectionDigestFor(drafts), drafts.Count, 0,
             LuxembourgDraftGraphDiscoveryPlan.PartitionKeyFor(Drafts(4)), ObservedAt);
 
         Assert.AreEqual(
@@ -629,8 +645,8 @@ public sealed class LuxembourgDraftPropertyCoverageTests
     public void AnAbsenceThatCannotBeDatedIsNotDerived()
     {
         var drafts = Drafts(3);
-        var undated = new LuxembourgDraftBatchCitation(
-            Ref("batch"), LuxembourgDraftPropertyCoverage.SelectionDigestFor(drafts), drafts.Count, 0,
+        var undated = LuxembourgDraftBatchCitation.ForDelivery(
+            InventoryProof, LuxembourgDraftPropertyCoverage.SelectionDigestFor(drafts), drafts.Count, 0,
             LuxembourgDraftGraphDiscoveryPlan.PartitionKeyFor(drafts), "   ");
 
         Assert.AreEqual(
@@ -677,8 +693,8 @@ public sealed class LuxembourgDraftPropertyCoverageTests
     public void ACitationThatDoesNotMatchTheRequestedBatchRefuses()
     {
         var drafts = Drafts(3);
-        var wrong = new LuxembourgDraftBatchCitation(
-            Ref("batch"), LuxembourgDraftPropertyCoverage.SelectionDigestFor(Drafts(4)), 3, 0,
+        var wrong = LuxembourgDraftBatchCitation.ForDelivery(
+            InventoryProof, LuxembourgDraftPropertyCoverage.SelectionDigestFor(Drafts(4)), 3, 0,
             LuxembourgDraftGraphDiscoveryPlan.PartitionKeyFor(drafts), ObservedAt);
 
         Assert.AreEqual(

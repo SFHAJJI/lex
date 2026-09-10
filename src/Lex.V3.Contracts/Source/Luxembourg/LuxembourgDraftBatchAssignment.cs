@@ -32,7 +32,7 @@ public sealed class LuxembourgDraftBatchAssignment
         int ordinal,
         string partitionKey)
     {
-        Drafts = drafts;
+        Drafts = Array.AsReadOnly(drafts.ToArray());
         Inventory = inventory;
         Ordinal = ordinal;
         PartitionKey = partitionKey;

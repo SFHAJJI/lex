@@ -1,6 +1,8 @@
+using Lex.V3.Contracts.Source.Absence;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Luxembourg;
 using Lex.V3.Ingest.Luxembourg;
+using Lex.V3.Tests.Contracts.Source.Absence;
 
 namespace Lex.V3.Ingest.Tests;
 
@@ -10,6 +12,19 @@ namespace Lex.V3.Ingest.Tests;
 [TestClass]
 public sealed class LuxembourgDraftGraphBatchFactoryTests
 {
+
+    /// <summary>
+    /// A REAL enumeration proof, because the citation doors now require one.
+    /// </summary>
+    /// <remarks>
+    /// The run reference and the family key used to be handed to the producer as loose values, which
+    /// is how a citation could state an identity instead of carrying one. Both now come off the
+    /// proof, whose only door refuses anything but two independently agreeing, custody-verified
+    /// passes. <c>AbsenceFixtures.Proof</c> is the same builder the contract tests use and is
+    /// memoised, so this costs one assembly for the whole run rather than one per test.
+    /// </remarks>
+    private static AbsenceFamilyEnumerationProof InventoryProof =>
+        AbsenceFixtures.Proof("legilux-initial-draft-inventory");
     private const string Prefix = "http://data.legilux.public.lu/eli/dl/pl/2000/";
 
     private static readonly SourceArtifactRef Evidence = new(
@@ -38,8 +53,7 @@ public sealed class LuxembourgDraftGraphBatchFactoryTests
         LuxembourgInitialDraftInventoryProducer.DecodeRows(
             Enumerable.Range(0, subjects).Select(index => Subject(Prefix + index.ToString("D5"))).ToArray(),
             Profile,
-            Evidence,
-            "legilux-initial-draft-inventory",
+            InventoryProof,
             "2026-09-10T07:29:37.8950843Z");
 
     /// <summary>Every inventory member lands in exactly one batch, and nothing else does.</summary>
@@ -110,8 +124,7 @@ public sealed class LuxembourgDraftGraphBatchFactoryTests
         var refused = LuxembourgInitialDraftInventoryProducer.DecodeRows(
             [Subject(Prefix + "00001"), Subject(Prefix + "00001")],
             Profile,
-            Evidence,
-            "legilux-initial-draft-inventory",
+            InventoryProof,
             "2026-09-10T07:29:37.8950843Z");
 
         Assert.AreNotEqual(LuxembourgInitialDraftInventoryRefusal.None, refused.Refusal);

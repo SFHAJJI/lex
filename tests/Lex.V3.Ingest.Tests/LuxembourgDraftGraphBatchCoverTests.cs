@@ -1,7 +1,9 @@
+using Lex.V3.Contracts.Source.Absence;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Luxembourg;
 using Lex.V3.Ingest.Europe;
 using Lex.V3.Ingest.Luxembourg;
+using Lex.V3.Tests.Contracts.Source.Absence;
 
 namespace Lex.V3.Ingest.Tests;
 
@@ -16,6 +18,19 @@ namespace Lex.V3.Ingest.Tests;
 [TestClass]
 public sealed class LuxembourgDraftGraphBatchCoverTests
 {
+
+    /// <summary>
+    /// A REAL enumeration proof, because the citation doors now require one.
+    /// </summary>
+    /// <remarks>
+    /// The run reference and the family key used to be handed to the producer as loose values, which
+    /// is how a citation could state an identity instead of carrying one. Both now come off the
+    /// proof, whose only door refuses anything but two independently agreeing, custody-verified
+    /// passes. <c>AbsenceFixtures.Proof</c> is the same builder the contract tests use and is
+    /// memoised, so this costs one assembly for the whole run rather than one per test.
+    /// </remarks>
+    private static AbsenceFamilyEnumerationProof InventoryProof =>
+        AbsenceFixtures.Proof("legilux-initial-draft-inventory");
     private const string Prefix = "http://data.legilux.public.lu/eli/dl/pl/2000/";
     private const string ObservedAt = "2026-09-10T07:29:37.8950843Z";
 
@@ -43,7 +58,7 @@ public sealed class LuxembourgDraftGraphBatchCoverTests
     private static LuxembourgInitialDraftInventoryResult Inventory(int subjects) =>
         LuxembourgInitialDraftInventoryProducer.DecodeRows(
             Enumerable.Range(0, subjects).Select(index => Subject(Prefix + index.ToString("D5"))).ToArray(),
-            Profile, Evidence, "legilux-initial-draft-inventory", ObservedAt);
+            Profile, InventoryProof, ObservedAt);
 
     /// <summary>One delivered batch: every draft answers statusDraft and nothing else.</summary>
     private static LuxembourgDraftPropertyCoverage Batch(
@@ -60,8 +75,8 @@ public sealed class LuxembourgDraftGraphBatchCoverTests
             assignment,
             asked ?? Asked,
             rows,
-            new LuxembourgDraftBatchCitation(
-                Evidence,
+            LuxembourgDraftBatchCitation.ForDelivery(
+                InventoryProof,
                 LuxembourgDraftPropertyCoverage.SelectionDigestFor(drafts),
                 drafts.Count,
                 rows.Length,
@@ -147,7 +162,7 @@ public sealed class LuxembourgDraftGraphBatchCoverTests
     {
         var refused = LuxembourgInitialDraftInventoryProducer.DecodeRows(
             [Subject(Prefix + "00001"), Subject(Prefix + "00001")],
-            Profile, Evidence, "legilux-initial-draft-inventory", ObservedAt);
+            Profile, InventoryProof, ObservedAt);
 
         Assert.ThrowsExactly<ArgumentException>(
             () => LuxembourgDraftGraphRunRequest.ForBatch(
@@ -363,7 +378,7 @@ public sealed class LuxembourgDraftGraphBatchCoverTests
     {
         var refused = LuxembourgInitialDraftInventoryProducer.DecodeRows(
             [Subject(Prefix + "00001"), Subject(Prefix + "00001")],
-            Profile, Evidence, "legilux-initial-draft-inventory", ObservedAt);
+            Profile, InventoryProof, ObservedAt);
 
         Assert.AreEqual(
             LuxembourgDraftGraphBatchCoverRefusal.InventoryNotProven,

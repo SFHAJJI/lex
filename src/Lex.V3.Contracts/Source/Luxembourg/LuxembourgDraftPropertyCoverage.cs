@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json.Serialization;
+using Lex.V3.Contracts.Source.Absence;
 using Lex.V3.Contracts.Source.Core;
 
 namespace Lex.V3.Contracts.Source.Luxembourg;
@@ -155,12 +156,121 @@ public sealed class LuxembourgDraftPropertyUnresolvedGap
 /// population's size, and the cover checks the batches against both.
 /// </para>
 /// </remarks>
-public sealed record LuxembourgInitialDraftInventoryCitation(
-    string FamilyKey,
-    SourceArtifactRef AcquisitionRunRef,
-    string SelectionDigest,
-    int SubjectCount,
-    string ObservedAt);
+public sealed record LuxembourgInitialDraftInventoryCitation
+{
+    private LuxembourgInitialDraftInventoryCitation(
+        string familyKey,
+        SourceArtifactRef acquisitionRunRef,
+        string selectionDigest,
+        int subjectCount,
+        string observedAt)
+    {
+        FamilyKey = familyKey;
+        AcquisitionRunRef = acquisitionRunRef;
+        SelectionDigest = selectionDigest;
+        SubjectCount = subjectCount;
+        ObservedAt = observedAt;
+    }
+
+    /// <summary>Which family's inventory this is.</summary>
+    public string FamilyKey { get; }
+
+    /// <summary>The run that enumerated the population.</summary>
+    public SourceArtifactRef AcquisitionRunRef { get; }
+
+    /// <summary>The digest of the population this inventory hands to batching.</summary>
+    public string SelectionDigest { get; }
+
+    /// <summary>That population's size.</summary>
+    public int SubjectCount { get; }
+
+    /// <summary>When the enumeration was observed.</summary>
+    public string ObservedAt { get; }
+
+    /// <summary>
+    /// Mints a citation over a population an inventory run actually enumerated.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// THE CONSTRUCTOR IS PRIVATE AND THIS DOOR IS NOT PUBLIC, because the previous shape was a
+    /// public positional record and that made every check downstream of it circular. A reviewer
+    /// referencing only Lex.V3.Contracts - no producer, no enumeration result, no friend access -
+    /// constructed this citation and the batch citation beside it, called
+    /// <see cref="LuxembourgDraftBatchAssignment.Over"/>, then called
+    /// <see cref="LuxembourgDraftPropertyCoverage.TryComplete"/>, and received a minted coverage
+    /// carrying derived absences and unresolved gaps for a family called
+    /// <c>caller-invented-family</c>. <c>Over</c> proved only that the caller's population matched
+    /// the caller's own citation; it could not prove an inventory run minted either, because both
+    /// were the caller's to write.
+    /// </para>
+    /// <para>
+    /// THE DIGEST AND THE COUNT ARE DERIVED HERE, not accepted. A citation cannot be minted whose
+    /// digest disagrees with its own population, which is what makes <c>Over</c>'s later comparison
+    /// a real check rather than a value compared against a copy of itself.
+    /// </para>
+    /// <para>
+    /// VISIBILITY WAS NOT THE ANSWER, and this repository had already decided so. An earlier attempt
+    /// made this door internal and granted <c>InternalsVisibleTo</c> to <c>Lex.V3.Ingest</c>, where
+    /// both producers live; <c>ProductionIngestCannotBypassContractConstructionControls</c> failed
+    /// immediately, and the reasoning is written out at
+    /// <c>RoutedHttpEvidenceSurfaceTests</c>: that grant is assembly-wide and reopens the D1-Core
+    /// guard keeping Contracts from ever handing Ingest blanket internal access. Decision 80's
+    /// answer is a PUBLIC door that demands evidence of genuine construction, exactly as
+    /// <c>RoutedHttpEvidence.Create</c> demands the custody write receipt for every hop.
+    /// </para>
+    /// <para>
+    /// WHAT THIS ESTABLISHES, claimed no more strongly than the repository already claims it. Every
+    /// proof in existence came from <c>AbsenceFamilyEnumerationProof.TryCreate</c>, which refuses
+    /// any outcome but equal selections over an <c>EnumerationDeliveryComparison</c> whose own only
+    /// door replayed two independently agreeing, custody-verified passes. That is a PROCEDURAL
+    /// guarantee, not a cryptographic one: a caller that reproduced every one of those equalities
+    /// would hold a real proof. What it is not is free, and it is not something an outside consumer
+    /// can write out of nothing - which is exactly what the forged citation was.
+    /// </para>
+    /// </remarks>
+    /// <param name="proof">
+    /// The family's own enumeration proof. Its constructor is private and its only door refuses any
+    /// outcome but two independently agreeing, custody-verified passes, so a caller that never ran
+    /// an enumeration cannot present one. THE IDENTITY IS TAKEN FROM IT, not accepted beside it:
+    /// the family key and the acquisition run are read off the proof, which is what stops a caller
+    /// naming a family of its own invention.
+    /// </param>
+    /// <param name="addressablePopulation">
+    /// The population the inventory hands to batching. Its digest and its size are taken from it
+    /// here, so neither can be stated independently of the members they describe.
+    /// </param>
+    /// <param name="observedAt">When the enumeration was observed.</param>
+    public static LuxembourgInitialDraftInventoryCitation MintedOver(
+        AbsenceFamilyEnumerationProof proof,
+        IReadOnlyList<string> addressablePopulation,
+        string observedAt)
+    {
+        ArgumentNullException.ThrowIfNull(proof);
+        ArgumentNullException.ThrowIfNull(addressablePopulation);
+        ArgumentException.ThrowIfNullOrWhiteSpace(observedAt);
+
+        var familyKey = proof.FamilyKey;
+        var acquisitionRunRef = proof.AcquisitionRunRef;
+
+        // A population that repeats a subject would digest identically to one that names it once,
+        // and the count is what separates them - so it is refused here rather than recorded.
+        var canonical = LuxembourgDraftGraphDiscoveryPlan.RequestedPartitionMembers(addressablePopulation);
+        if (canonical.Count != addressablePopulation.Count)
+        {
+            throw new ArgumentException(
+                "An inventory population names each subject once, so no citation is minted over a "
+                    + "list that repeats one.",
+                nameof(addressablePopulation));
+        }
+
+        return new LuxembourgInitialDraftInventoryCitation(
+            familyKey,
+            acquisitionRunRef,
+            LuxembourgDraftGraphDiscoveryPlan.SelectionDigestFor(addressablePopulation),
+            addressablePopulation.Count,
+            observedAt);
+    }
+}
 
 /// <summary>The exact batch enumeration an absence is derived from.</summary>
 /// <remarks>
@@ -168,13 +278,95 @@ public sealed record LuxembourgInitialDraftInventoryCitation(
 /// about: it digests the requested members themselves, so it changes when the batch changes. The
 /// acquisition run ref pins which run delivered them.
 /// </remarks>
-public sealed record LuxembourgDraftBatchCitation(
-    SourceArtifactRef AcquisitionRunRef,
-    string SelectionDigest,
-    int RequestedDraftCount,
-    long DeliveredRowCount,
-    string PartitionKey,
-    string ObservedAt);
+public sealed record LuxembourgDraftBatchCitation
+{
+    private LuxembourgDraftBatchCitation(
+        SourceArtifactRef acquisitionRunRef,
+        string selectionDigest,
+        int requestedDraftCount,
+        long deliveredRowCount,
+        string partitionKey,
+        string observedAt)
+    {
+        AcquisitionRunRef = acquisitionRunRef;
+        SelectionDigest = selectionDigest;
+        RequestedDraftCount = requestedDraftCount;
+        DeliveredRowCount = deliveredRowCount;
+        PartitionKey = partitionKey;
+        ObservedAt = observedAt;
+    }
+
+    /// <summary>The run that delivered the batch.</summary>
+    public SourceArtifactRef AcquisitionRunRef { get; }
+
+    /// <summary>The digest of the members this batch asked about.</summary>
+    public string SelectionDigest { get; }
+
+    /// <summary>How many drafts were asked about.</summary>
+    public int RequestedDraftCount { get; }
+
+    /// <summary>How many rows the publisher delivered.</summary>
+    public long DeliveredRowCount { get; }
+
+    /// <summary>This batch's own partition key.</summary>
+    public string PartitionKey { get; }
+
+    /// <summary>When the delivery was observed.</summary>
+    public string ObservedAt { get; }
+
+    /// <summary>Mints the citation of a batch a run actually delivered.</summary>
+    /// <remarks>
+    /// <para>
+    /// Not constructible without a proof, for the same reason as the inventory citation beside it:
+    /// it was the other half of the forged pair, and a public positional record let an external
+    /// consumer write the proof of the very delivery it was claiming.
+    /// </para>
+    /// <para>
+    /// The digest, the count and the partition key are taken here rather than derived, and that is
+    /// deliberate. <see cref="LuxembourgDraftPropertyCoverage.TryComplete"/> checks all three
+    /// against the INVENTORY-ISSUED assignment's own members. Deriving them from a list handed to
+    /// this door would turn that check into a value compared against a copy of itself, which is the
+    /// one thing it must not become.
+    /// </para>
+    /// </remarks>
+    /// <param name="proof">
+    /// The batch's own enumeration proof, which supplies the acquisition run rather than letting a
+    /// caller name one, and whose delivered row count this citation may not contradict.
+    /// </param>
+    /// <param name="selectionDigest">The digest of the members asked about.</param>
+    /// <param name="requestedDraftCount">How many drafts were asked about.</param>
+    /// <param name="deliveredRowCount">
+    /// How many rows came back. NOT cross-checked against the proof, and the reason is worth
+    /// stating: the rows reaching a batch are opened through
+    /// <see cref="Lex.V3.Contracts.Source.Core.VerifiedRepeatedEnumerationRows"/>, which already
+    /// re-derives their count against this same proof, so the equality would hold in production by
+    /// construction while forcing every fixture to claim the shared proof fixture's own row count
+    /// instead of its own. A check that makes tests misstate their shape buys nothing.
+    /// </param>
+    /// <param name="partitionKey">This batch's own partition key.</param>
+    /// <param name="observedAt">When the delivery was observed.</param>
+    public static LuxembourgDraftBatchCitation ForDelivery(
+        AbsenceFamilyEnumerationProof proof,
+        string selectionDigest,
+        int requestedDraftCount,
+        long deliveredRowCount,
+        string partitionKey,
+        string observedAt)
+    {
+        ArgumentNullException.ThrowIfNull(proof);
+        ArgumentException.ThrowIfNullOrWhiteSpace(selectionDigest);
+        ArgumentException.ThrowIfNullOrWhiteSpace(partitionKey);
+
+        // observedAt IS DELIBERATELY NOT CHECKED HERE. An undatable delivery is a first-class
+        // refusal at TryComplete - AbsenceEvidenceNotFromThisRun - because an absence that cannot be
+        // dated must be REPRESENTED as unresolvable rather than thrown over. Guarding it here
+        // replaced that typed refusal with an exception and took its test with it, which is the
+        // shape S2-A03 exists to prevent.
+        return new LuxembourgDraftBatchCitation(
+            proof.AcquisitionRunRef, selectionDigest, requestedDraftCount, deliveredRowCount,
+            partitionKey, observedAt);
+    }
+}
 
 /// <summary>Why a completed matrix could not be built over a delivered batch.</summary>
 public enum LuxembourgDraftPropertyCoverageRefusal

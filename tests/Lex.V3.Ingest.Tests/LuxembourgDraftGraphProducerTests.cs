@@ -1,8 +1,10 @@
 using Lex.V3.Contracts;
+using Lex.V3.Contracts.Source.Absence;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Luxembourg;
 using Lex.V3.Ingest.Europe;
 using Lex.V3.Ingest.Luxembourg;
+using Lex.V3.Tests.Contracts.Source.Absence;
 
 namespace Lex.V3.Ingest.Tests;
 
@@ -19,6 +21,19 @@ namespace Lex.V3.Ingest.Tests;
 [TestClass]
 public sealed class LuxembourgDraftGraphProducerTests
 {
+
+    /// <summary>
+    /// A REAL enumeration proof, because the citation doors now require one.
+    /// </summary>
+    /// <remarks>
+    /// The run reference and the family key used to be handed to the producer as loose values, which
+    /// is how a citation could state an identity instead of carrying one. Both now come off the
+    /// proof, whose only door refuses anything but two independently agreeing, custody-verified
+    /// passes. <c>AbsenceFixtures.Proof</c> is the same builder the contract tests use and is
+    /// memoised, so this costs one assembly for the whole run rather than one per test.
+    /// </remarks>
+    private static AbsenceFamilyEnumerationProof InventoryProof =>
+        AbsenceFixtures.Proof("legilux-initial-draft-inventory");
     private const string Draft = "http://data.legilux.public.lu/resource/draft/8357";
     private const string OtherDraft = "http://data.legilux.public.lu/resource/draft/8358";
     private const string Directive = "http://publications.europa.eu/resource/cellar/3e485e15-11bd-11e6-ba9a-01aa75ed71a1";
@@ -132,6 +147,50 @@ public sealed class LuxembourgDraftGraphProducerTests
     /// every fixture authored its own absence rows by hand, so the delivery a test examined was one
     /// the publisher had never sent.
     /// </remarks>
+    /// <summary>
+    /// An accepted production cannot be edited into asserting a predicate it does not admit.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// THE FALSE-ABSENCE DOOR THIS CLOSES. <c>Records</c>, <c>AdmittedPredicates</c> and
+    /// <c>RetainedNotAdmitted</c> were published through read-only interfaces over collections the
+    /// producer had built and still held, and <c>For()</c> reads two of them live. Casting the
+    /// admitted set back to its <c>HashSet</c> and adding a predicate this family does not admit
+    /// walks straight past the <c>ArgumentOutOfRangeException</c> that exists to say so, and
+    /// <c>For()</c> then answers with an empty record list - an absence manufactured after the
+    /// production was accepted, which is exactly what S2-A03 forbids.
+    /// </para>
+    /// <para>
+    /// Found by an audit of the aliasing surface rather than reported, and it is the same defect the
+    /// reviewer measured one layer up on the coverage. Fixing only the layer that was reported would
+    /// have left this one open.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void AnAcceptedProductionCannotBeEditedIntoAssertingWhatItDoesNotAdmit()
+    {
+        var result = Decode(Row());
+        Assert.AreEqual(LuxembourgDraftGraphProductionRefusal.None, result.Refusal, result.Detail);
+
+        const string NotAdmitted = "http://example.invalid/predicate-this-family-never-admits";
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(
+            () => result.For(NotAdmitted),
+            "a predicate this family does not admit has no assertion to give.");
+
+        Assert.IsFalse(
+            result.AdmittedPredicates is ICollection<string> { IsReadOnly: false },
+            "the admitted set must not be writable through a downcast.");
+        Assert.ThrowsExactly<NotSupportedException>(
+            () => ((IList<LuxembourgDraftPropertyRecord>)result.Records!)[0] = result.Records![0],
+            "nor may the records be repointed after admission.");
+        Assert.ThrowsExactly<NotSupportedException>(
+            () => ((ICollection<LuxembourgDraftRetainedEvidenceRow>)result.RetainedNotAdmitted).Clear(),
+            "nor may the retained evidence be emptied.");
+
+        // And the door still refuses, which is what the mutation above was trying to get past.
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => result.For(NotAdmitted));
+    }
+
     private static LuxembourgDraftGraphProductionResult Decode(params RepeatedEnumerationRow[] rows)
     {
         // AN INVENTORY THAT ACTUALLY CONTAINS THESE DRAFTS. A fixture can no longer decode a batch
@@ -141,7 +200,7 @@ public sealed class LuxembourgDraftGraphProducerTests
         var assignment = LuxembourgDraftGraphBatchFactory.AssignBatches(InventoryOf([.. drafts]))[0];
 
         return LuxembourgDraftGraphProducer.DecodeRows(
-            rows, Profile(), Evidence, assignment,
+            rows, Profile(), InventoryProof, assignment,
             assignment.PartitionKey,
             "2026-09-10T13:50:31.0000000Z");
     }
@@ -187,7 +246,7 @@ public sealed class LuxembourgDraftGraphProducerTests
         }).ToArray();
 
         return LuxembourgInitialDraftInventoryProducer.DecodeRows(
-            rows, profile, Evidence, "legilux-initial-draft-inventory",
+            rows, profile, InventoryProof,
             "2026-09-10T07:29:37.8950843Z");
     }
 
@@ -502,7 +561,7 @@ public sealed class LuxembourgDraftGraphProducerTests
         Assert.AreEqual(LuxembourgDraftGraphDiscoveryPlan.DraftTransposesPredicateIri, record.PredicateIri);
         Assert.AreEqual(Directive, record.Value);
         Assert.AreEqual("iri", record.ValueKind);
-        Assert.AreEqual(Evidence.ResourceId, record.SourceObservationId);
+        Assert.AreEqual(InventoryProof.AcquisitionRunRef.ResourceId, record.SourceObservationId);
     }
 
     /// <summary>
@@ -626,7 +685,7 @@ public sealed class LuxembourgDraftGraphProducerTests
         Assert.AreEqual("literal", retained.ValueKind);
         Assert.AreEqual(
             LuxembourgDraftRetentionReason.PredicateOutsideTheAcceptedVocabulary, retained.Reason);
-        Assert.AreEqual(Evidence.ResourceId, retained.SourceObservationId);
+        Assert.AreEqual(InventoryProof.AcquisitionRunRef.ResourceId, retained.SourceObservationId);
         Assert.AreEqual(
             LuxembourgDraftGraphDiscoveryPlan.StatusDraftPredicateIri, result.Records![0].PredicateIri);
     }
@@ -751,7 +810,7 @@ public sealed class LuxembourgDraftGraphProducerTests
             terms[ordinal] = Literal((terms[ordinal].Value ?? string.Empty) + "-not-delivered");
 
             var result = LuxembourgDraftGraphProducer.DecodeRows(
-                [new RepeatedEnumerationRow(terms, terms, terms)], profile, Evidence,
+                [new RepeatedEnumerationRow(terms, terms, terms)], profile, InventoryProof,
                 LuxembourgDraftGraphBatchFactory.AssignBatches(InventoryOf(Draft))[0],
                 LuxembourgDraftGraphDiscoveryPlan.PartitionKeyFor([Draft]),
                 "2026-09-10T13:50:31.0000000Z");
