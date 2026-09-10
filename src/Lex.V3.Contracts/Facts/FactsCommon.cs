@@ -105,7 +105,12 @@ public sealed record OfficialIdentifier
     /// </remarks>
     public static CelexProfile? ProfileOf(string value)
     {
-        if (value is null || value.Length < 7 || value[0] is < '0' or > '9')
+        // SIX, not seven. A sector 1 treaty document carries no number at all - 12012P is the
+        // Charter of Fundamental Rights - so the structural minimum is sector, year and one
+        // descriptor letter. Requiring seven refused the whole document while ACCEPTING 12012P/TXT,
+        // its own text part, in the same delivery: taking the part and refusing the whole is not a
+        // line anything can defend. Measured on the retained E6 pages under #415.
+        if (value is null || value.Length < 6 || value[0] is < '0' or > '9')
         {
             return null;
         }
@@ -160,12 +165,20 @@ public sealed record OfficialIdentifier
             consolidated = true;
         }
 
-        // A corrigendum carries R(nn) after the number.
+        // A PARENTHESISED ORDINAL IS TWO DIFFERENT THINGS, and this used to recognise only one.
+        // R(nn) after the number is a corrigendum. A bare (nn) is CELEX's own same-day SEQUENCE
+        // number, disambiguating several documents of the same type published on one date, as in
+        // 22012A1215(01) or 52016XC0409(01). It does not make the document a different kind of
+        // thing, so it keeps the kind it already had.
+        //
+        // Refusing it refused 80 distinct identifiers across 248 rows of one retained E6 delivery -
+        // by far the largest class our own grammar was turning away - and because a rejected
+        // identifier sinks the whole production, those rows took every other link with them.
         var corrigendum = false;
         var open = rest.IndexOf('(');
         if (open >= 0)
         {
-            if (!rest.EndsWith(')') || open == 0 || rest[open - 1] != 'R')
+            if (!rest.EndsWith(')') || open == 0)
             {
                 return null;
             }
@@ -176,8 +189,15 @@ public sealed record OfficialIdentifier
                 return null;
             }
 
-            rest = rest[..(open - 1)];
-            corrigendum = true;
+            if (rest[open - 1] == 'R')
+            {
+                rest = rest[..(open - 1)];
+                corrigendum = true;
+            }
+            else
+            {
+                rest = rest[..open];
+            }
         }
 
         // Sector 7 national implementing measures carry a country code and a national reference
@@ -203,7 +223,19 @@ public sealed record OfficialIdentifier
                     : null;
         }
 
-        if (rest.Length == 0 || !rest.All(char.IsAsciiDigit))
+        // A NUMBERLESS DOCUMENT IS A TREATY-SECTOR ONE OR IT IS NOTHING. Sector 1 identifies a
+        // treaty by its descriptor alone; every other sector numbers its acts, so "32016R" is not
+        // an act with the number left off, it is not an identifier. The whole document is reported
+        // as a base act rather than a TreatyPart, because it is not a part of anything - the parts
+        // are 12012P/TXT and 12012P001, and both already resolve on their own branches. A dedicated
+        // profile member would be more precise and would move a closed vocabulary and its wire
+        // token; that trade is worth a reviewer's opinion rather than my own.
+        if (rest.Length == 0)
+        {
+            return value[0] == '1' && !consolidated && !corrigendum ? CelexProfile.BaseAct : null;
+        }
+
+        if (!rest.All(char.IsAsciiDigit))
         {
             return null;
         }
