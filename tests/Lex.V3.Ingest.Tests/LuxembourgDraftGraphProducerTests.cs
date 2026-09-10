@@ -71,7 +71,7 @@ public sealed class LuxembourgDraftGraphProducerTests
         var draftTerm = Iri(draft);
         var predicateIri = predicate ?? LuxembourgDraftGraphDiscoveryPlan.DraftTransposesPredicateIri;
         var valueTerm = value ?? Iri(Directive);
-        var datatypeColumn = datatype ?? Qualifier(valueTerm, static term => term.Datatype);
+        var datatypeColumn = datatype ?? DatatypeColumnFor(valueTerm);
         var languageColumn = language ?? Qualifier(valueTerm, static term => term.Language);
 
         var terms = new List<RepeatedEnumerationRdfTerm>
@@ -108,44 +108,52 @@ public sealed class LuxembourgDraftGraphProducerTests
         RepeatedEnumerationRdfTerm term, Func<RepeatedEnumerationRdfTerm, string?> select) =>
         term.Kind == RepeatedEnumerationRdfTermKind.Literal ? select(term) ?? string.Empty : string.Empty;
 
-    /// <summary>
-    /// Decodes the given rows PLUS the unbound rows that complete every draft they mention.
-    /// </summary>
+    /// <summary>The datatype column as THIS ENGINE answers it, not as the term spells it.</summary>
     /// <remarks>
-    /// An honest delivery answers every draft for every one of the five asked properties, because
-    /// the plan's absence branch guarantees a row per pair. A test naming one property is describing
-    /// the row it cares about, not a delivery that omits the rest, so the completion is added here
-    /// rather than written out in every test. <see cref="DecodeExactly"/> is the door for a test
-    /// that means the delivery to be partial.
+    /// Measured on the first broad delivery. SPARQL JSON omits <c>datatype</c> for a plain literal,
+    /// but <c>DATATYPE()</c> answers it with <c>xsd:string</c>, because under RDF 1.1 a simple
+    /// literal IS an xsd:string. A fixture that mirrored the term instead would model a delivery
+    /// this publisher does not send - and mirroring is precisely the conflation that let a real
+    /// forty-row delivery be refused.
     /// </remarks>
-    private static LuxembourgDraftGraphProductionResult Decode(params RepeatedEnumerationRow[] rows)
+    private static string DatatypeColumnFor(RepeatedEnumerationRdfTerm term) =>
+        term.Kind != RepeatedEnumerationRdfTermKind.Literal ? string.Empty
+        : term.Datatype is { Length: > 0 } declared ? declared
+        : term.Language is { Length: > 0 } ? string.Empty
+        : "http://www.w3.org/2001/XMLSchema#string";
+
+    /// <summary>Decodes exactly the rows given.</summary>
+    /// <remarks>
+    /// This used to complete every draft with unbound rows for the properties a test did not name,
+    /// because the query asked for the absent case and an honest delivery carried a row per pair.
+    /// It does not any more: the value triple is mandatory, so a delivery naming one property IS
+    /// honest and the pairs with no row are answered by derived absences instead. The completion
+    /// was also the reason no test in this suite could ever see that the absence branch was inert -
+    /// every fixture authored its own absence rows by hand, so the delivery a test examined was one
+    /// the publisher had never sent.
+    /// </remarks>
+    private static LuxembourgDraftGraphProductionResult Decode(params RepeatedEnumerationRow[] rows) =>
+        LuxembourgDraftGraphProducer.DecodeRows(
+            rows, Profile(), Evidence, RequestedIn(rows), TestInventory,
+            LuxembourgDraftGraphDiscoveryPlan.PartitionKeyFor(RequestedIn(rows)),
+            "2026-09-10T13:50:31.0000000Z");
+
+    /// <summary>The drafts a fixture delivery names, as the set it asked about.</summary>
+    /// <remarks>
+    /// Only honest for a fixture that means its delivery to be complete. A test that needs the
+    /// requested set and the delivered set to DISAGREE says so by calling the producer directly;
+    /// the coverage guards themselves are proven in
+    /// <c>LuxembourgDraftPropertyCoverageTests</c>, where both sides are chosen independently.
+    /// </remarks>
+    private static IReadOnlyList<string> RequestedIn(IReadOnlyList<RepeatedEnumerationRow> rows)
     {
-        var profile = Profile();
-        var draftOrdinal = profile.ProjectionVariables.ToList().IndexOf("draft");
-        var predicateOrdinal = profile.ProjectionVariables.ToList().IndexOf("predicate");
-
-        var complete = rows.ToList();
-        foreach (var draft in rows
-                     .Select(row => (Draft: row.Terms[draftOrdinal].Value!, Row: row))
-                     .GroupBy(static pair => pair.Draft, StringComparer.Ordinal))
-        {
-            var present = draft
-                .Select(pair => pair.Row.Terms[predicateOrdinal].Value!)
-                .ToHashSet(StringComparer.Ordinal);
-
-            foreach (var predicate in LuxembourgDraftGraphDiscoveryPlan.AskedAbout
-                         .Where(value => !present.Contains(value)))
-            {
-                complete.Add(Row(draft: draft.Key, predicate: predicate, value: Unbound()));
-            }
-        }
-
-        return LuxembourgDraftGraphProducer.DecodeRows(complete, profile, Evidence);
+        var ordinal = Profile().ProjectionVariables.ToList().IndexOf("draft");
+        return LuxembourgDraftGraphDiscoveryPlan.RequestedPartitionMembers(
+            rows.Select(row => row.Terms[ordinal].Value ?? Draft).DefaultIfEmpty(Draft).ToArray());
     }
 
-    /// <summary>Decodes exactly the rows given, completing nothing.</summary>
-    private static LuxembourgDraftGraphProductionResult DecodeExactly(params RepeatedEnumerationRow[] rows) =>
-        LuxembourgDraftGraphProducer.DecodeRows(rows, Profile(), Evidence);
+    private static readonly LuxembourgInitialDraftInventoryCitation TestInventory =
+        new("legilux-initial-draft-inventory", Evidence, "fixture-inventory");
 
     /// <summary>
     /// The whole chain runs: executor, two passes, proof, reopened pages, verified rows, records.
@@ -186,15 +194,29 @@ public sealed class LuxembourgDraftGraphProducerTests
         var result = await producer.RunAsync(
             new LuxembourgDraftGraphRunRequest(
                 plan,
+                [Draft],
                 "urn:uuid:1a7c5e39-4b62-4d80-9f13-6e025ac84b71",
-                LuxembourgAcquisitionTestFixture.BuildRendererSource(9101)),
+                LuxembourgAcquisitionTestFixture.BuildRendererSource(9101),
+                TestInventory),
             LuxembourgSourceWitness(),
             CancellationToken.None);
 
         Assert.IsTrue(result.Delivered, $"{result.Refusal}: {result.Detail}");
+        // ADMITTED, NOT ACCEPTED. The fixture delivers a row for every accepted predicate, and one
+        // of them - referralDate - is declared on OpinionRequest, so a triple asserting it of a
+        // draft is drift: retained with its shape, never a record.
         Assert.HasCount(
-            LuxembourgDraftGraphDiscoveryPlan.AskedAbout.Count, result.Records!,
-            "the delivery answers the draft for every asked property.");
+            LuxembourgDraftGraphDiscoveryPlan.DirectlyAdmissiblePredicates.Count, result.Records!,
+            "every admissible property the delivery answered becomes a record.");
+
+        var drift = result.RetainedNotAdmitted.Single();
+        Assert.AreEqual(LuxembourgDraftGraphDiscoveryPlan.ReferralDatePredicateIri, drift.PredicateIri);
+        Assert.AreEqual(
+            LuxembourgDraftRetentionReason.PredicateDeclaredOnAnotherClass, drift.Reason,
+            "an accepted predicate on the wrong class is drift, not an unknown predicate.");
+        Assert.AreEqual(
+            LuxembourgDraftAcquiredScope.EveryPredicateOnTheSubject, result.AcquiredScope,
+            "the run reports what it asked for, not what it admits.");
         Assert.IsGreaterThan(0, result.ProductRequestCount);
 
         var cited = await store.ReadByDigestAsync(
@@ -208,60 +230,80 @@ public sealed class LuxembourgDraftGraphProducerTests
     }
 
     /// <summary>
-    /// A draft answered on some properties and not others is a partial delivery, not a completed one.
+    /// A draft answered on some properties and not others is the ordinary case, not a partial one.
     /// </summary>
     /// <remarks>
-    /// The plan's absence branch guarantees a row per (draft, property) pair, so fewer than five is
-    /// a delivery this family cannot complete. Admitting one would let <c>For</c> return an empty
-    /// list for a property whose row never came — indistinguishable from the publisher answering
-    /// "none", which is the false absence arriving by a route the unbound marker cannot describe.
+    /// <para>
+    /// THE INVERSION THIS SHAPE FORCED, and it is measured. This test previously refused such a
+    /// delivery, on the reasoning that the query's absence branch guaranteed a row per pair. That
+    /// branch was found permanently inert and then removed: the publisher will not serve a query
+    /// that materialises absent pairs, and asking it to would have made it assert something it
+    /// never said. The mandatory value triple delivers a row per value HELD.
+    /// </para>
+    /// <para>
+    /// So fewer than five rows per draft is what an honest delivery looks like. The retained
+    /// fifty-draft delivery carried 95 present pairs out of 250: had this refusal survived, the
+    /// first real batch would have been rejected as incomplete. The pairs with no row are not lost
+    /// - they become derived absences in <see cref="LuxembourgDraftPropertyCoverage"/>, which is
+    /// where completeness is now proven, over the requested set rather than over the answer.
+    /// </para>
     /// </remarks>
     [TestMethod]
-    public void ADraftAnsweredOnOnlySomePropertiesIsRefusedAsIncomplete()
+    public void ADraftAnsweredOnOnlySomePropertiesIsAdmitted()
     {
-        var result = DecodeExactly(
+        var result = Decode(
             Row(predicate: LuxembourgDraftGraphDiscoveryPlan.StatusDraftPredicateIri,
                 value: Literal("en-cours")));
 
-        Assert.AreEqual(
-            LuxembourgDraftGraphProductionRefusal.DraftPropertyCoverageIncomplete, result.Refusal);
-        StringAssert.Contains(
-            result.Detail!, LuxembourgDraftGraphDiscoveryPlan.DraftTransposesPredicateIri,
-            "the refusal names what the delivery did not answer.");
+        Assert.AreEqual(LuxembourgDraftGraphProductionRefusal.None, result.Refusal, result.Detail);
+        Assert.HasCount(1, result.Records!);
+        Assert.IsEmpty(
+            result.For(LuxembourgDraftGraphDiscoveryPlan.DraftTransposesPredicateIri),
+            "a property with no delivered row simply has no record here; its absence is derived "
+                + "against the requested batch, not read out of the delivery.");
     }
 
     /// <summary>
-    /// An explicit unbound row completes a property; a missing row does not.
+    /// An unbound value refuses the delivery; a missing row is ordinary.
     /// </summary>
     /// <remarks>
-    /// The distinction this family exists for, asserted directly rather than implied: the same draft
-    /// answered "none" for a property is admitted, and the same draft simply missing that property
-    /// is refused.
+    /// <para>
+    /// EXACTLY INVERTED FROM WHAT THIS TEST ONCE ASSERTED, and the inversion is the design. The
+    /// value triple is mandatory, so no solution mapping can leave the value unbound: a row that
+    /// does is a delivery this plan cannot have produced, and the page is not trusted.
+    /// </para>
+    /// <para>
+    /// Admitting it is the specific thing the ruling forbids. Such a row would become a record that
+    /// LOOKS like the publisher reporting an absence, when the publisher said no such thing - an
+    /// absence is this code's conclusion from a complete enumeration, and it must be typed as one.
+    /// A missing row, meanwhile, is not a defect at all: it is how the publisher says nothing, and
+    /// it is answered by a derived absence rather than by a refusal.
+    /// </para>
     /// </remarks>
     [TestMethod]
-    public void AnExplicitUnboundRowCompletesAPropertyAndAMissingRowDoesNot()
+    public void AnUnboundValueRefusesTheDeliveryAndAMissingRowIsOrdinary()
     {
-        var complete = LuxembourgDraftGraphDiscoveryPlan.AskedAbout
-            .Select(predicate => Row(predicate: predicate, value: Unbound()))
-            .ToArray();
-
-        var answered = DecodeExactly(complete);
+        var unbound = Decode(
+            Row(predicate: LuxembourgDraftGraphDiscoveryPlan.StatusDraftPredicateIri,
+                value: Unbound()));
         Assert.AreEqual(
-            LuxembourgDraftGraphProductionRefusal.None, answered.Refusal, answered.Detail);
-        Assert.HasCount(LuxembourgDraftGraphDiscoveryPlan.AskedAbout.Count, answered.Records!);
+            LuxembourgDraftGraphProductionRefusal.RowNotAdmitted, unbound.Refusal,
+            "the publisher cannot answer a mandatory triple with nothing.");
 
-        var missingOne = DecodeExactly(complete.Take(complete.Length - 1).ToArray());
+        var held = Decode(
+            Row(predicate: LuxembourgDraftGraphDiscoveryPlan.StatusDraftPredicateIri,
+                value: Literal("en-cours")));
         Assert.AreEqual(
-            LuxembourgDraftGraphProductionRefusal.DraftPropertyCoverageIncomplete,
-            missingOne.Refusal,
-            "one fewer row is a partial delivery even when every row present says 'none'.");
+            LuxembourgDraftGraphProductionRefusal.None, held.Refusal,
+            "and the four properties with no row at all are ordinary, not a refusal.");
+        Assert.HasCount(1, held.Records!);
     }
 
     /// <summary>A delivery with no drafts at all is a complete answer about an empty class.</summary>
     [TestMethod]
     public void ADeliveryWithNoDraftsIsACompleteAnswerRatherThanAnIncompleteOne()
     {
-        var result = DecodeExactly();
+        var result = Decode();
 
         Assert.AreEqual(LuxembourgDraftGraphProductionRefusal.None, result.Refusal, result.Detail);
         Assert.IsEmpty(result.Records!);
@@ -426,27 +468,33 @@ public sealed class LuxembourgDraftGraphProducerTests
     }
 
     /// <summary>
-    /// A property the publisher holds nothing for is an ANSWER, delivered and recorded.
+    /// A property the publisher holds nothing for produces no row, and no record.
     /// </summary>
     /// <remarks>
-    /// The plan asks for the absence by name with <c>FILTER NOT EXISTS</c>, so "this draft
-    /// transposes nothing" is a row rather than a missing row. Dropping it would make that
-    /// indistinguishable from a draft nobody asked about, which is the false absence S2-A03 forbids
-    /// and the defect this family exists to end.
+    /// <para>
+    /// THE CLAIM THIS TEST ONCE MADE WAS TRUE OF A QUERY THAT NEVER WORKED. It asserted that "this
+    /// draft transposes nothing" arrived as a row carrying the unbound marker, because the plan
+    /// asked for the absence by name. That branch was found permanently inert - the first bounded
+    /// batch ever sent came back with 103 rows and not one unbound marker - and every variant that
+    /// would have made it fire timed the publisher out.
+    /// </para>
+    /// <para>
+    /// So the gap does not arrive as a row, and this producer no longer pretends it can. What S2-A03
+    /// requires is that the gap be first-class, not that the publisher utter it: the pair becomes a
+    /// derived absence in <see cref="LuxembourgDraftPropertyCoverage"/>, typed so it can never be
+    /// read as something Legilux said. What must NOT happen is the delivery being admitted with a
+    /// fabricated unbound row, and that is what this now asserts.
+    /// </para>
     /// </remarks>
     [TestMethod]
-    public void APropertyTheDraftHoldsNothingForIsRecordedRatherThanAbsent()
+    public void APropertyTheDraftHoldsNothingForProducesNoRowAtAll()
     {
         var result = Decode(Row(value: Unbound()));
 
-        Assert.AreEqual(LuxembourgDraftGraphProductionRefusal.None, result.Refusal, result.Detail);
-
-        var record = result
-            .For(LuxembourgDraftGraphDiscoveryPlan.DraftTransposesPredicateIri).Single();
-        Assert.IsNull(record.Value);
         Assert.AreEqual(
-            LuxembourgDraftGraphDiscoveryPlan.UnboundKind, record.ValueKind,
-            "the marker says the publisher holds none, which is the fact.");
+            LuxembourgDraftGraphProductionRefusal.RowNotAdmitted, result.Refusal,
+            "an unbound value under a mandatory triple is a delivery this plan cannot have made.");
+        StringAssert.Contains(result.Detail!, "mandatory");
     }
 
     /// <summary>
@@ -460,8 +508,11 @@ public sealed class LuxembourgDraftGraphProducerTests
     [TestMethod]
     public void ALiteralValueKeepsItsDatatypeAndLanguage()
     {
+        // Uses an ADMISSIBLE predicate. This once used referralDate, which is declared on
+        // OpinionRequest: a direct triple for it is drift and is retained rather than admitted, so
+        // the test was pinning an admission that must not happen.
         var dated = Decode(Row(
-            predicate: LuxembourgDraftGraphDiscoveryPlan.ReferralDatePredicateIri,
+            predicate: LuxembourgDraftGraphDiscoveryPlan.StatusDraftPredicateIri,
             value: Literal("2024-05-22", XsdDate)));
 
         Assert.AreEqual(LuxembourgDraftGraphProductionRefusal.None, dated.Refusal, dated.Detail);
@@ -496,21 +547,106 @@ public sealed class LuxembourgDraftGraphProducerTests
         Assert.AreEqual(XsdAnyUri, result.Records![0].ValueDatatypeIri);
     }
 
-    /// <summary>A row naming a property this family never asked about refuses the delivery.</summary>
+    /// <summary>
+    /// A property this family does not admit is retained as evidence, not refused and not a fact.
+    /// </summary>
     /// <remarks>
-    /// The plan binds its predicates from a VALUES block, so an honest delivery cannot contain
-    /// another. One that does is answering a question nobody asked, and admitting it would let the
-    /// asked-about set this production publishes describe a delivery it does not match.
+    /// <para>
+    /// INVERTED BY MEASUREMENT. This test used to refuse such a row, on the reasoning that the plan
+    /// bound its five predicates from a VALUES block so an honest delivery could not contain
+    /// another. The VALUES block is gone: it was measured DROPPING rows the publisher holds -
+    /// zero parliamentDraftUrl for fifty drafts where ten of them carry one - and every dropped pair
+    /// was being minted as a derived absence.
+    /// </para>
+    /// <para>
+    /// So the publisher is now asked for every predicate it holds about these subjects and
+    /// admission is made here. A predicate outside the accepted five is named on
+    /// <c>RetainedNotAdmitted</c> and becomes no record: this family asserts nothing about it, and
+    /// the retained page is the evidence for anyone who later wants to. What it must NOT do is
+    /// refuse the delivery, because that would throw away the admitted rows beside it.
+    /// </para>
     /// </remarks>
     [TestMethod]
-    public void ARowNamingAPropertyNeverAskedAboutIsRefused()
+    public void APropertyThisFamilyDoesNotAdmitIsRetainedRatherThanRefused()
     {
-        const string NeverAsked = "http://data.legilux.public.lu/resource/ontology/jolux#titleDraft";
+        const string NotAdmitted = "http://data.legilux.public.lu/resource/ontology/jolux#titleDraft";
 
-        var result = DecodeExactly(Row(predicate: NeverAsked));
+        var result = Decode(
+            Row(predicate: NotAdmitted, value: Literal("Projet de loi")),
+            Row(predicate: LuxembourgDraftGraphDiscoveryPlan.StatusDraftPredicateIri,
+                value: Iri("http://data.legilux.public.lu/resource/authority/legal-status/EN-COURS")));
 
-        Assert.AreEqual(LuxembourgDraftGraphProductionRefusal.PredicateNotAskedAbout, result.Refusal);
-        StringAssert.Contains(result.Detail!, NeverAsked);
+        Assert.AreEqual(LuxembourgDraftGraphProductionRefusal.None, result.Refusal, result.Detail);
+        Assert.HasCount(1, result.Records!, "only the admitted predicate becomes a record.");
+
+        // RETAINED WITH ITS SHAPE, not as a bare predicate name. Reducing it to a string would throw
+        // away what makes it evidence: which draft, what value, what kind of term.
+        var retained = result.RetainedNotAdmitted.Single();
+        Assert.AreEqual(NotAdmitted, retained.PredicateIri);
+        Assert.AreEqual(Draft, retained.DraftIri);
+        Assert.AreEqual("Projet de loi", retained.Value);
+        Assert.AreEqual("literal", retained.ValueKind);
+        Assert.AreEqual(
+            LuxembourgDraftRetentionReason.PredicateOutsideTheAcceptedVocabulary, retained.Reason);
+        Assert.AreEqual(Evidence.ResourceId, retained.SourceObservationId);
+        Assert.AreEqual(
+            LuxembourgDraftGraphDiscoveryPlan.StatusDraftPredicateIri, result.Records![0].PredicateIri);
+    }
+
+    /// <summary>
+    /// Every value shape the first broad delivery actually carried decodes.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// MEASURED, NOT ENUMERATED FROM THE SPEC. These are the four (term, datatype column) pairs the
+    /// ten-draft broad acquisition returned, in their measured proportions: 118 IRI values, 40 plain
+    /// literals, 10 <c>xsd:anyURI</c> literals - which is what parliamentDraftUrl carries - and 10
+    /// <c>xsd:dateTime</c> literals.
+    /// </para>
+    /// <para>
+    /// The narrow five-predicate query returned IRIs and nothing else, so three of these four shapes
+    /// had never reached this decoder. The plain-literal one refused a real page.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void EveryValueShapeTheBroadDeliveryCarriedDecodes()
+    {
+        const string XsdStringIri = "http://www.w3.org/2001/XMLSchema#string";
+        const string XsdDateTime = "http://www.w3.org/2001/XMLSchema#dateTime";
+        var status = LuxembourgDraftGraphDiscoveryPlan.StatusDraftPredicateIri;
+
+        foreach (var (value, expectedDatatype, what) in new[]
+                 {
+                     (Iri(Directive), string.Empty, "an IRI value"),
+                     (Literal("Projet de loi"), XsdStringIri, "a plain literal, serialised with no datatype"),
+                     (Literal("https://www.chd.lu/fr/dossier/8357", XsdAnyUri), XsdAnyUri, "an xsd:anyURI literal"),
+                     (Literal("2002-07-16T00:00:00", XsdDateTime), XsdDateTime, "an xsd:dateTime literal"),
+                 })
+        {
+            var result = Decode(Row(predicate: status, value: value));
+
+            Assert.AreEqual(
+                LuxembourgDraftGraphProductionRefusal.None, result.Refusal,
+                what + " must decode: " + result.Detail);
+            Assert.AreEqual(expectedDatatype, result.Records![0].ValueDatatypeIri, what);
+        }
+    }
+
+    /// <summary>A predicate that cannot be read at all still refuses the delivery.</summary>
+    /// <remarks>
+    /// The boundary the test above must not erode. "Not admitted" is a decision about vocabulary;
+    /// a predicate term that is not a readable IRI is a statement about the DELIVERY, and admitting
+    /// one would mean reading facts out of a response already known to be malformed.
+    /// </remarks>
+    [TestMethod]
+    public void APredicateThatCannotBeReadStillRefusesTheDelivery()
+    {
+        var result = Decode(Row(predicate: LuxembourgDraftGraphDiscoveryPlan.StatusDraftPredicateIri,
+            value: Iri(Directive), key3: "not-the-predicate"));
+
+        Assert.AreNotEqual(
+            LuxembourgDraftGraphProductionRefusal.None, result.Refusal,
+            "a row whose own keys contradict it is not admitted by the vocabulary check.");
     }
 
     /// <summary>A marker disagreeing with its term refuses the delivery whole.</summary>
@@ -577,7 +713,10 @@ public sealed class LuxembourgDraftGraphProducerTests
             terms[ordinal] = Literal((terms[ordinal].Value ?? string.Empty) + "-not-delivered");
 
             var result = LuxembourgDraftGraphProducer.DecodeRows(
-                [new RepeatedEnumerationRow(terms, terms, terms)], profile, Evidence);
+                [new RepeatedEnumerationRow(terms, terms, terms)], profile, Evidence,
+                [Draft], TestInventory,
+                LuxembourgDraftGraphDiscoveryPlan.PartitionKeyFor([Draft]),
+                "2026-09-10T13:50:31.0000000Z");
 
             Assert.AreEqual(
                 LuxembourgDraftGraphProductionRefusal.RowNotAdmitted, result.Refusal,
@@ -674,7 +813,13 @@ public sealed class LuxembourgDraftGraphProducerTests
             var isIri = predicate == LuxembourgDraftGraphDiscoveryPlan.DraftTransposesPredicateIri
                 || predicate == LuxembourgDraftGraphDiscoveryPlan.ResultingLegalResourcePredicateIri;
             var value = isIri ? Directive : "en-cours";
-            var datatype = isIri ? null : (string?)null;
+
+            // THE COLUMN AS THE ENGINE ANSWERS IT. A plain literal is serialised without a
+            // datatype attribute, but DATATYPE() answers xsd:string - RDF 1.1 says a simple literal
+            // IS an xsd:string. This fixture used to write an empty column here, which is a page
+            // Legilux does not send, and the disagreement only surfaced when a broad delivery
+            // carried forty real plain literals.
+            var datatype = isIri ? string.Empty : "http://www.w3.org/2001/XMLSchema#string";
 
             bindings.Add(new Dictionary<string, object>(StringComparer.Ordinal)
             {
@@ -683,7 +828,7 @@ public sealed class LuxembourgDraftGraphProducerTests
                 ["predicate"] = IriTerm(predicate),
                 ["value"] = isIri ? IriTerm(value) : LiteralTerm(value),
                 ["value_kind"] = LiteralTerm(isIri ? "iri" : "literal"),
-                ["datatype_iri"] = LiteralTerm(datatype ?? string.Empty),
+                ["datatype_iri"] = LiteralTerm(datatype),
                 ["language_tag"] = LiteralTerm(string.Empty),
                 ["multiplicity"] = LiteralTerm("1", XsdInteger),
                 ["key_1"] = LiteralTerm(Draft),
@@ -691,7 +836,7 @@ public sealed class LuxembourgDraftGraphProducerTests
                 ["key_3"] = LiteralTerm(predicate),
                 ["key_4"] = LiteralTerm(value),
                 ["key_5"] = LiteralTerm(isIri ? "iri" : "literal"),
-                ["key_6"] = LiteralTerm(datatype ?? string.Empty),
+                ["key_6"] = LiteralTerm(datatype),
                 ["key_7"] = LiteralTerm(string.Empty),
             });
         }

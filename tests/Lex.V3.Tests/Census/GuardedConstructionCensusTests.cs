@@ -954,6 +954,23 @@ public sealed class GuardedConstructionCensusTests
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgDraftGraphSparqlRenderer: "
                     + "constructor internal instance "
                     + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgDraftGraphSparqlRenderer::.ctor",
+                "Lex.V3.Contracts.Source.Luxembourg.LuxembourgDraftPropertyCoverage: constructor "
+                    + "private instance "
+                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgDraftPropertyCoverage::.ctor, "
+                    + "method public static "
+                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgDraftPropertyCoverage::TryCompl"
+                    + "ete",
+                "Lex.V3.Contracts.Source.Luxembourg.LuxembourgDraftPropertyObservedAbsence: "
+                    + "constructor internal instance "
+                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgDraftPropertyObservedAbsence::."
+                    + "ctor, "
+                    + "method public instance "
+                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgDraftPropertyCoverage::DerivedA"
+                    + "bsenceFor",
+                "Lex.V3.Contracts.Source.Luxembourg.LuxembourgDraftPropertyUnresolvedGap: "
+                    + "constructor internal instance "
+                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgDraftPropertyUnresolvedGap::.ct"
+                    + "or",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgInitialDraftInventoryDiscoveryPlan: "
                     + "constructor private instance "
                     + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgInitialDraftInventoryDiscoveryP"

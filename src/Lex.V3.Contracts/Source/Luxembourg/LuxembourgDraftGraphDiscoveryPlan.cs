@@ -41,6 +41,15 @@ public sealed record LuxembourgDraftGraphBoundQuery(
 /// literals can share a lexical form and still be different facts.
 /// </para>
 /// <para>
+/// THE VALUE-DERIVED COLUMNS ARE TOTALISED AND <c>draft_kind</c> IS NOT, which is the optional
+/// shape deciding it rather than a preference. <c>OPTIONAL</c> leaves <c>?value</c> unbound for a
+/// pair the publisher holds nothing for, and this engine evaluates <c>IF</c>'s arguments EAGERLY, so
+/// every BIND that dereferences it raises on exactly the rows the absence branch exists to deliver -
+/// and an erroring BIND leaves its variable out of the binding entirely. Without COALESCE the
+/// unbound rows would arrive missing the very marker that says they are unbound. <c>?draft</c> is
+/// bound by the batch and the class triple on every row, so its marker needs no such treatment.
+/// </para>
+/// <para>
 /// EVERY DERIVED CURSOR KEY IS TOTALISED WITH COALESCE, for two separately measured reasons, and
 /// neither is stylistic.
 /// </para>
@@ -96,7 +105,34 @@ public sealed class LuxembourgDraftGraphDiscoveryPlan
     public const string ParliamentDraftUrlPredicateIri = Jolux + "parliamentDraftUrl";
 
     /// <summary>The date the draft was referred.</summary>
+    /// <remarks>
+    /// <para>
+    /// NOT DECLARED ON THE DRAFT. <c>baseline/pack/38-verified-claims.md</c> puts it on
+    /// <see cref="OpinionRequestClassIri"/>, and the measurement agrees: a broad acquisition over
+    /// ten proven drafts returned seventeen distinct predicates and this was not among them.
+    /// It stays in the ACCEPTED E8 vocabulary for the OpinionRequest traversal that will one day
+    /// resolve it. It is not, and must not become, admissible from a triple on a draft: a delivery
+    /// asserting it of a draft subject says that subject holds a class role no run has proved, so it
+    /// is retained as <c>PredicateDeclaredOnAnotherClass</c> drift and is never a fact in this
+    /// family. Admission would come only through a separate evidence-bound traversal proving the
+    /// subject role.
+    /// </para>
+    /// <para>
+    /// THIS PARAGRAPH USED TO SAY THE OPPOSITE - that a direct triple would be an E8 fact - and that
+    /// claim is what made the drift admissible in the first place. It is recorded here rather than
+    /// quietly replaced, because the next reader deciding whether to widen admission will reach for
+    /// exactly that reasoning. See <see cref="DirectlyAdmissiblePredicates"/> and
+    /// <see cref="PredicatesNotDeclaredOnTheDraft"/>.
+    /// </para>
+    /// <para>
+    /// Its ABSENCE is equally unconcludable: a draft-property delivery was never able to carry it,
+    /// so silence about it evidences nothing and the pair becomes a typed unresolved gap.
+    /// </para>
+    /// </remarks>
     public const string ReferralDatePredicateIri = Jolux + "referralDate";
+
+    /// <summary>The JOLux class that declares the referral date.</summary>
+    public const string OpinionRequestClassIri = Jolux + "OpinionRequest";
 
     /// <summary>The enacted act a draft became, where it became one.</summary>
     /// <remarks>
@@ -117,10 +153,30 @@ public sealed class LuxembourgDraftGraphDiscoveryPlan
     /// <summary>The marker a row carries when the publisher holds no value for that property.</summary>
     public const string UnboundKind = "unbound";
 
+    /// <summary>
+    /// How many drafts one request may name.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// NOT A TUNING CONSTANT. Every batch member travels as its own <c>publisher_literal</c>
+    /// <see cref="MachineQueryParameter"/> and <c>MachineQueryValidation.MaximumParameterCount</c>
+    /// is 64. This family always spends one on <c>pass_id</c>, one on <c>has_cursor</c> and up to
+    /// seven on cursor continuation, so 55 remain; 50 keeps the same margin the EU object-facts
+    /// batch keeps, and reading the arithmetic here rather than restating it means a batch that
+    /// could not be bound cannot be minted.
+    /// </para>
+    /// <para>
+    /// The class sweep is not narrowed by this. The batch is a PARTITION of the class, and which
+    /// drafts are in it comes from a proven inventory of the whole class rather than from a caller
+    /// choosing a subset.
+    /// </para>
+    /// </remarks>
+    public const int BatchCapacity = 50;
+
     internal const long PublisherDeliveryCeilingRows = 1_000_000;
     internal const uint Pass1PageLimit = 953;
     internal const uint Pass2PageLimit = 571;
-    internal const string PartitionMemberKey = "legilux-initial-draft-graph";
+    internal const string PartitionMemberKeyPrefix = "legilux-initial-draft-graph-batch-";
 
     private const string ResourceId = "urn:uuid:7c9e2f4b-18a6-4d05-b3e7-52f0a91c6d84";
     private const string MemberPrefix = "lu-initial-draft-graph";
@@ -148,6 +204,51 @@ public sealed class LuxembourgDraftGraphDiscoveryPlan
     /// <summary>Every predicate this family asks about, for a caller that needs to name them.</summary>
     public static IReadOnlyList<string> AskedAbout { get; } = Array.AsReadOnly(AskedPredicates);
 
+    /// <summary>
+    /// Accepted predicates that are NOT declared on the draft, so a draft-property delivery cannot
+    /// evidence their absence.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A DELIVERY CAN ONLY EVIDENCE THE ABSENCE OF SOMETHING IT COULD HAVE CARRIED. These predicates
+    /// hang off another class, so no completeness proof over draft triples says anything about them:
+    /// concluding absence would be asserting a fact about a subject this query never looked at.
+    /// </para>
+    /// <para>
+    /// Measured before it was ruled. A first canary derived fifty (draft, referralDate) absences and
+    /// every one was false - not because the question dropped rows, which was the separate
+    /// parliamentDraftUrl defect, but because the question could never have been answered here.
+    /// </para>
+    /// </remarks>
+    public static IReadOnlyDictionary<string, string> PredicatesNotDeclaredOnTheDraft { get; } =
+        new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            [ReferralDatePredicateIri] = OpinionRequestClassIri,
+        }.AsReadOnly();
+
+    /// <summary>
+    /// The predicates a triple ON THE DRAFT may be admitted for, and equally the ones whose absence
+    /// such a delivery can evidence.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// ONE SET, BECAUSE IT IS ONE QUESTION: is this predicate declared on this subject? A predicate
+    /// that is not can neither be read off a draft triple as a fact nor have its absence concluded
+    /// from a delivery that could never have carried it.
+    /// </para>
+    /// <para>
+    /// SO A DIRECT <c>InitialDraft referralDate</c> TRIPLE IS DRIFT, NOT A FACT. The broad
+    /// acquisition asks for every predicate on the subject, so such a row can arrive; admitting it
+    /// because its IRI happens to sit in the accepted vocabulary would silently widen this family's
+    /// authority to a class it never proved the subject holds. S2-A05 requires drift to fail closed
+    /// into typed evidence, which is what it now does. It becomes admissible only through a proven
+    /// <see cref="OpinionRequestClassIri"/> traversal, which this family does not yet have.
+    /// </para>
+    /// </remarks>
+    public static IReadOnlyList<string> DirectlyAdmissiblePredicates { get; } = Array.AsReadOnly(
+        AskedPredicates.Where(static value =>
+            !PredicatesNotDeclaredOnTheDraft.ContainsKey(value)).ToArray());
+
     private static readonly string[] Projection =
     [
         "draft", "draft_kind", "predicate", "value", "value_kind", "datatype_iri", "language_tag",
@@ -168,9 +269,13 @@ public sealed class LuxembourgDraftGraphDiscoveryPlan
     /// are different facts that would otherwise share every key.
     /// </para>
     /// <para>
-    /// <c>key_3</c>, the predicate, needs no kind key: it is bound from a VALUES block of IRIs, so it
-    /// is an IRI by construction rather than by hope. The draft and the value are whatever the
-    /// publisher delivered, which is why each carries its own.
+    /// <c>key_3</c>, the predicate, needs no kind key - but no longer for the reason this once gave.
+    /// It said the predicate is bound from a VALUES block of IRIs and so is an IRI by construction;
+    /// that block is gone, because it was measured dropping rows the publisher holds. The
+    /// conclusion survives on RDF itself, where a predicate is always an IRI, and on the producer,
+    /// which requires the delivered predicate term to be a readable IRI before it reads anything
+    /// else from the row. The draft and the value are whatever the publisher delivered, which is why
+    /// each still carries its own kind.
     /// </para>
     /// </remarks>
     private static readonly string[] Cursor =
@@ -180,6 +285,106 @@ public sealed class LuxembourgDraftGraphDiscoveryPlan
     /// How many cursor keys this family has, read by the renderer rather than written twice.
     /// </summary>
     internal static int CursorKeyCount => Cursor.Length;
+
+    /// <summary>The batch member parameter names, in the order they bind.</summary>
+    /// <remarks>
+    /// They bind BEFORE <c>pass_id</c>, and that is not cosmetic: <c>RequireInputRoleShape</c>
+    /// compares <c>SelectionParameterNames.Append(PassParameterName)</c> by sequence, so a selection
+    /// appended after the pass would be a different input role from the one the profile declares.
+    /// The plan said so in a comment while the selection was empty; this is that comment coming due.
+    /// </remarks>
+    internal static string[] BatchParameterNames()
+    {
+        var names = new string[BatchCapacity];
+        for (var index = 0; index < BatchCapacity; index++)
+        {
+            names[index] = "batch_draft_" + index.ToString("D3", CultureInfo.InvariantCulture);
+        }
+
+        return names;
+    }
+
+    /// <summary>
+    /// One batch as the query will carry it: sorted, deduplicated, and padded to capacity.
+    /// </summary>
+    /// <remarks>
+    /// Sorted and deduplicated HERE rather than trusted, because the partition key digests the
+    /// batch's own members and two runs naming the same drafts in a different order must mint the
+    /// same key. Padding repeats the last member: the <c>VALUES</c> block sits inside a
+    /// <c>SELECT DISTINCT</c>, so a repeat asks nothing extra, and a fixed parameter count keeps the
+    /// input role identical for every batch including a short final one.
+    /// </remarks>
+    /// <summary>
+    /// The batch as the partition names it: sorted, deduplicated, and NOT padded.
+    /// </summary>
+    /// <remarks>
+    /// The executor verifies every delivered row's own key against this set, so it must contain
+    /// exactly the drafts asked about. The padding that fills the parameter block is a rendering
+    /// detail and would make a repeated member look like a member asked about twice.
+    /// </remarks>
+    /// <summary>The partition key for one batch, digesting the batch's own members.</summary>
+    /// <remarks>
+    /// <para>
+    /// A CONSTANT KEY HERE WOULD MAKE THE TERMINAL COVER UNIMPLEMENTABLE, and it was one. Every
+    /// batch bound the same member key, so every batch minted an enumeration proof with an
+    /// identical <c>FamilyKey</c> - which is the delivery's partition key exactly. Batches were
+    /// therefore indistinguishable in their own receipts: no omitted batch and no duplicated batch
+    /// could be detected from them, and <c>AbsenceCut.Create</c> would refuse any multi-batch cut
+    /// outright as a duplicate family.
+    /// </para>
+    /// <para>
+    /// The remarks on <see cref="CanonicalizeAndPad"/> have said the key digests the batch's members
+    /// since the batching was written; the code passed a constant. This is that intent, implemented,
+    /// and it follows <c>EuObjectFactsDiscoveryPlan.PartitionKeyFor</c>, which does exactly this at
+    /// the identical bind site for the same reason.
+    /// </para>
+    /// <para>
+    /// Digested over the sorted, deduplicated, UNPADDED members, so two runs naming the same drafts
+    /// in a different order mint the same key and a short final batch is not confused with one whose
+    /// padding happens to repeat the same tail.
+    /// </para>
+    /// </remarks>
+    public static string PartitionKeyFor(IReadOnlyList<string> batchDrafts) =>
+        PartitionMemberKeyPrefix + SelectionDigestFor(batchDrafts)[..24];
+
+    /// <summary>The full digest of a batch's requested members.</summary>
+    /// <remarks>
+    /// The whole hash, not the truncated form the partition key carries. An absence cites this: a
+    /// key shortened for readability is not the thing to bind evidence to.
+    /// </remarks>
+    public static string SelectionDigestFor(IReadOnlyList<string> batchDrafts) =>
+        Sha256(StrictUtf8.GetBytes(string.Join('\n', RequestedPartitionMembers(batchDrafts))));
+
+    public static IReadOnlyList<string> RequestedPartitionMembers(IReadOnlyList<string> batchDrafts)
+    {
+        ArgumentNullException.ThrowIfNull(batchDrafts);
+        return batchDrafts
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(static value => value, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    internal static string[] CanonicalizeAndPad(IReadOnlyList<string> batchDrafts)
+    {
+        ArgumentNullException.ThrowIfNull(batchDrafts);
+        var ordered = batchDrafts
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(static value => value, StringComparer.Ordinal)
+            .ToArray();
+        if (ordered.Length is 0 || ordered.Length > BatchCapacity)
+        {
+            throw new ArgumentException(
+                $"A batch names one to {BatchCapacity} drafts.", nameof(batchDrafts));
+        }
+
+        var padded = new string[BatchCapacity];
+        for (var index = 0; index < BatchCapacity; index++)
+        {
+            padded[index] = index < ordered.Length ? ordered[index] : ordered[^1];
+        }
+
+        return padded;
+    }
 
     private readonly byte[] _canonicalIdentityBytes;
 
@@ -196,6 +401,8 @@ public sealed class LuxembourgDraftGraphDiscoveryPlan
             "draft_class=" + InitialDraftClassIri,
             "asked_predicates=" + string.Join(',', AskedPredicates),
             "unbound_kind=" + UnboundKind,
+            "batch_capacity=" + BatchCapacity.ToString(CultureInfo.InvariantCulture),
+            "partition_member_key_prefix=" + PartitionMemberKeyPrefix,
             "publisher_delivery_ceiling_rows=" + PublisherDeliveryCeilingRows.ToString(CultureInfo.InvariantCulture),
             "pass_1=" + (int)LuxembourgQueryPass.Pass1 + ":" + Pass1PageLimit,
             "pass_2=" + (int)LuxembourgQueryPass.Pass2 + ":" + Pass2PageLimit,
@@ -237,7 +444,7 @@ public sealed class LuxembourgDraftGraphDiscoveryPlan
         Projection,
         Cursor,
         Cursor,
-        [],
+        BatchParameterNames(),
         "pass_id",
         Cursor.Select(static value => "last_" + value).ToArray(),
         "has_cursor",
@@ -245,22 +452,24 @@ public sealed class LuxembourgDraftGraphDiscoveryPlan
 
     public LuxembourgDraftGraphBoundQuery BindCount(
         LuxembourgQueryPass pass,
+        IReadOnlyList<string> batchDrafts,
         string machinePlanResourceId,
         string inputResourceId,
         MachineQueryRendererSource rendererSource) =>
-        Bind(false, pass, null,
+        Bind(false, pass, batchDrafts, null,
             new MachineResponseCardinality(MachineResponseCardinalityKind.OpaqueBody, null, null, null),
             machinePlanResourceId, inputResourceId, rendererSource);
 
     public LuxembourgDraftGraphBoundQuery BindPage(
         LuxembourgQueryPass pass,
+        IReadOnlyList<string> batchDrafts,
         IReadOnlyList<string>? cursor,
         long expectedPartitionRowCount,
         SourceArtifactRef expectedPartitionRowCountEvidenceRef,
         string machinePlanResourceId,
         string inputResourceId,
         MachineQueryRendererSource rendererSource) =>
-        Bind(true, pass, cursor,
+        Bind(true, pass, batchDrafts, cursor,
             new MachineResponseCardinality(
                 MachineResponseCardinalityKind.BoundedRowSetPage,
                 PageLimit(pass), expectedPartitionRowCount, expectedPartitionRowCountEvidenceRef),
@@ -269,6 +478,7 @@ public sealed class LuxembourgDraftGraphDiscoveryPlan
     private LuxembourgDraftGraphBoundQuery Bind(
         bool isPage,
         LuxembourgQueryPass pass,
+        IReadOnlyList<string> batchDrafts,
         IReadOnlyList<string>? cursor,
         MachineResponseCardinality response,
         string machinePlanResourceId,
@@ -278,15 +488,26 @@ public sealed class LuxembourgDraftGraphDiscoveryPlan
         _ = PageLimit(pass);
         ArgumentNullException.ThrowIfNull(rendererSource);
 
-        // No selection: the scope is a class, and the asked-about predicates are fixed by this plan
-        // rather than chosen by a caller. RequireInputRoleShape compares
-        // SelectionParameterNames.Append(PassParameterName) by sequence, and with an empty selection
-        // pass-first and selection-first are the same list. Written down so a later slice that adds
-        // a selection knows it binds BEFORE pass_id.
-        var parameters = new List<MachineQueryParameter>
+        // THE SELECTION BINDS FIRST, which is the ordering the empty-selection comment on this plan
+        // was written to anticipate: RequireInputRoleShape compares
+        // SelectionParameterNames.Append(PassParameterName) by sequence.
+        //
+        // The class is not narrowed by the batch. The members come from a proven inventory of the
+        // whole class, so this is a partition of the sweep rather than a caller's subset - which is
+        // the distinction the owner ruling turns on.
+        var padded = CanonicalizeAndPad(batchDrafts);
+        var names = BatchParameterNames();
+        var parameters = new List<MachineQueryParameter>(BatchCapacity + 2 + Cursor.Length);
+        for (var index = 0; index < BatchCapacity; index++)
         {
-            new("pass_id", MachineQueryParameterKind.BoundedInteger, (int)pass, null, ArtifactRef),
-        };
+            parameters.Add(new MachineQueryParameter(
+                names[index], MachineQueryParameterKind.PublisherLiteral,
+                null, padded[index], ArtifactRef));
+        }
+
+        parameters.Add(
+            new MachineQueryParameter(
+                "pass_id", MachineQueryParameterKind.BoundedInteger, (int)pass, null, ArtifactRef));
 
         if (isPage)
         {
@@ -310,7 +531,7 @@ public sealed class LuxembourgDraftGraphDiscoveryPlan
 
         var family = isPage ? PageQueryFamilyRef : CountQueryFamilyRef;
         var input = MachineQueryInputArtifact.Create(
-            inputResourceId, family, PartitionMemberKey, response, parameters);
+            inputResourceId, family, PartitionKeyFor(batchDrafts), response, parameters);
         var renderer = new LuxembourgDraftGraphSparqlRenderer(this, isPage, rendererSource);
         var rendered = renderer.RenderInput(input, response);
         var body = rendered.CopyRequestBody();
@@ -375,36 +596,82 @@ public sealed class LuxembourgDraftGraphDiscoveryPlan
 
     private static (string Count, string Page) BuildTemplates()
     {
-        var predicateValues = string.Join('\n', AskedPredicates
-            .Select(static iri => "    <" + iri + ">"));
-
         var grouped = "?draft ?draft_kind ?predicate ?value ?value_kind ?datatype_iri ?language_tag";
 
-        // One question asked of a closed predicate list, with its own explicit absence branch. A
-        // draft holding none of the asked properties still delivers a row per predicate, carrying
-        // the unbound marker: that absence IS the fact, and omitting it would be the silent drop
-        // this family exists to avoid.
+        // THE PUBLISHER IS ASKED FOR EVERY PREDICATE IT HOLDS ABOUT THESE SUBJECTS, and admission
+        // to the E8 vocabulary happens locally afterwards. That is not a widening of scope; it is
+        // the only shape whose completeness can be checked.
+        //
+        // MEASURED, AND IT IS WHY THIS CHANGED. With `VALUES ?predicate { <five IRIs> }` in front of
+        // the triple, Legilux returned ZERO parliamentDraftUrl rows for fifty drafts. The same ten
+        // of those drafts, asked with a free predicate variable, return TEN of them - the IRI in the
+        // VALUES block byte-identical to the one that comes back, the subjects the same, the class
+        // triple satisfied for them since their statusDraft arrives either way. The predicate VALUES
+        // was silently dropping rows the publisher holds, and every one of those pairs was being
+        // minted as a derived absence: a typed record asserting the publisher holds no parliament
+        // URL for a draft that has one.
+        //
+        // A complete enumeration proof does not make an enumeration complete. It proves the pages
+        // arrived whole; it cannot prove the question asked for everything. Asking without a
+        // predicate filter removes the only step that could drop a triple before we ever see it,
+        // and the accepted-predicate projection of the broad delivery reproduces the retained
+        // predicate census over the same subjects exactly.
+        //
+        // THIS QUERY ASKS THE PUBLISHER FOR PRESENT FACTS ONLY, and the gap is derived afterwards
+        // rather than requested. Both halves of that were forced, and by different things.
+        //
+        // Asking the publisher to MATERIALISE the absent case does not work. An OPTIONAL emitting a
+        // row per (draft, predicate) pair was sent three times and never served: ~49s and a read
+        // timeout, ordered and unordered alike, and again as five constant-predicate UNION branches
+        // whose predicates the engine could index. The same fifty drafts asked for present facts
+        // answer in 6.7 seconds. This engine will enumerate what it holds; it will not enumerate
+        // what it does not.
+        //
+        // And asking it to was the wrong question anyway. A row the publisher returns is something
+        // the publisher SAID. There is no triple behind an absent pair, so a row claiming to be one
+        // is our inference wearing the publisher's clothes - which is what S2-A01 forbids. The gap
+        // is real and must stay first-class (S2-A03), but it is OURS to state: derived from a
+        // complete enumeration, citing that enumeration, and typed so no reader can mistake it for
+        // an assertion. So the absent case leaves this query entirely.
+        //
+        // A MULTI-VALUED PROPERTY STILL DELIVERS EVERY VALUE. The mandatory triple yields one row
+        // per value, so a draft transposing nine directives is nine rows - measured, not supposed:
+        // pl/2000/119 does exactly that, and those eight extra rows are the whole of the difference
+        // between the 103 rows delivered and the 95 distinct pairs they cover.
+        //
+        // NO COLUMN HERE IS COALESCEd, AND THAT IS MEASURED ON THIS PUBLISHER RATHER THAN ASSUMED.
+        // The eager-IF raise this family guards against elsewhere comes from dereferencing an
+        // UNBOUND variable; the mandatory triple removes that cause outright. Applying DATATYPE or
+        // LANG to a BOUND term of the wrong type is a different case, and Legilux does not raise on
+        // it: the 103-row delivery retained under #417 was produced by exactly these four BINDs,
+        // un-COALESCEd, and carried datatype_iri and language_tag in every one of its 103 rows -
+        // all of them IRI-valued.
+        //
+        // COALESCE here would not merely be redundant, it would DESTROY a fact the decoder needs.
+        // This engine will not answer DATATYPE() with rdf:langString, so on a language-tagged
+        // literal that BIND errors and the column drops out of the binding - the one measured
+        // absence ReadQualifier admits, and the thing that lets it tell a language-tagged literal
+        // from a plain one. Swallowing the raise into "" would make that branch unreachable and
+        // erase the distinction #532 was repaired to preserve. Only the KEYS are totalised.
+        var batchValues = string.Join('\n', BatchParameterNames()
+            .Select(static name => "      {" + name + ":iri}"));
+
         var rows = $$"""
             SELECT {{grouped}} (COUNT(*) AS ?multiplicity) WHERE {
               VALUES ?lex_pass_id { {pass_id:uint} }
+              {
+                SELECT DISTINCT ?draft WHERE {
+                  VALUES ?draft {
+            {{batchValues}}
+                  }
+                }
+              }
               ?draft a <{{InitialDraftClassIri}}> .
+              ?draft ?predicate ?value .
               BIND(IF(isIRI(?draft), "iri", "unsupported_blank_node") AS ?draft_kind)
-              VALUES ?predicate {
-            {{predicateValues}}
-              }
-              {
-                ?draft ?predicate ?value .
-                BIND(IF(isIRI(?value), "iri", IF(isLiteral(?value), "literal", "unsupported_blank_node")) AS ?value_kind)
-                BIND(IF(isLiteral(?value), STR(DATATYPE(?value)), "") AS ?datatype_iri)
-                BIND(IF(isLiteral(?value), LANG(?value), "") AS ?language_tag)
-              }
-              UNION
-              {
-                FILTER NOT EXISTS { ?draft ?predicate ?missing_value }
-                BIND("{{UnboundKind}}" AS ?value_kind)
-                BIND("" AS ?datatype_iri)
-                BIND("" AS ?language_tag)
-              }
+              BIND(IF(isIRI(?value), "iri", IF(isLiteral(?value), "literal", "unsupported_blank_node")) AS ?value_kind)
+              BIND(IF(isLiteral(?value), STR(DATATYPE(?value)), "") AS ?datatype_iri)
+              BIND(IF(isLiteral(?value), LANG(?value), "") AS ?language_tag)
             }
             GROUP BY {{grouped}}
             """;
@@ -499,9 +766,19 @@ internal sealed class LuxembourgDraftGraphSparqlRenderer : IMachineQueryRenderer
         var query = Replace(_isPage ? _plan.PageTemplate : _plan.CountTemplate,
             "{pass_id:uint}", ((int)pass).ToString(CultureInfo.InvariantCulture));
 
+        // Every batch slot is filled from the ordered parameter set, and Replace requires each to
+        // occur exactly once - so a template that dropped or duplicated a member fails here rather
+        // than asking the publisher about a different set of drafts than the input names.
+        foreach (var name in LuxembourgDraftGraphDiscoveryPlan.BatchParameterNames())
+        {
+            query = Replace(query, "{" + name + ":iri}", SparqlIriTerm(Literal(parameters, name)));
+        }
+
+        var batchCount = LuxembourgDraftGraphDiscoveryPlan.BatchCapacity;
         if (!_isPage)
         {
-            if (response.Kind != MachineResponseCardinalityKind.OpaqueBody || parameters.Count != 1)
+            if (response.Kind != MachineResponseCardinalityKind.OpaqueBody ||
+                parameters.Count != 1 + batchCount)
             {
                 throw new ArgumentException("A count input has one exact shape.", nameof(input));
             }
@@ -520,7 +797,7 @@ internal sealed class LuxembourgDraftGraphSparqlRenderer : IMachineQueryRenderer
             throw new ArgumentException("Cursor presence must be zero or one.", nameof(input));
         }
 
-        if (parameters.Count != 2 +
+        if (parameters.Count != 2 + batchCount +
             (hasCursor == 1 ? LuxembourgDraftGraphDiscoveryPlan.CursorKeyCount : 0))
         {
             throw new ArgumentException("A page input has one exact cursor shape.", nameof(input));
@@ -541,6 +818,37 @@ internal sealed class LuxembourgDraftGraphSparqlRenderer : IMachineQueryRenderer
     private static MachineQueryRenderOutput Output(string query) => new(
         LuxembourgQueryPlan.PublisherEndpoint,
         Encoding.UTF8.GetBytes("query=" + Uri.EscapeDataString(query)));
+
+    /// <summary>One batch member, as the publisher literal the input carries it as.</summary>
+    private static string Literal(
+        IReadOnlyDictionary<string, MachineQueryParameter> parameters, string name) =>
+        parameters.TryGetValue(name, out var value) &&
+        value.Kind == MachineQueryParameterKind.PublisherLiteral && value.TextValue is not null
+            ? value.TextValue
+            : throw new ArgumentException($"The batch input {name} is missing or invalid.");
+
+    /// <summary>
+    /// One batch member rendered as a SPARQL IRI term.
+    /// </summary>
+    /// <remarks>
+    /// An IRI cannot be embedded free-form in query text, which is why every member travels as its
+    /// own parameter and is rendered here rather than concatenated at the caller.
+    /// </remarks>
+    private static string SparqlIriTerm(string canonicalIri)
+    {
+        // Guarded rather than trusted, matching the sibling transposition renderer: a member
+        // carrying an angle bracket or whitespace would close this term early and change the query
+        // into one nobody wrote. The members come from a proven inventory, which is a reason to
+        // expect them well formed and not a reason to skip checking.
+        if (string.IsNullOrEmpty(canonicalIri) ||
+            canonicalIri.AsSpan().IndexOfAny('<', '>') >= 0 ||
+            canonicalIri.Any(char.IsWhiteSpace))
+        {
+            throw new ArgumentException("A batch member is not a safe SPARQL IRI term.");
+        }
+
+        return "<" + canonicalIri + ">";
+    }
 
     private static long Integer(IReadOnlyDictionary<string, MachineQueryParameter> parameters, string name) =>
         parameters.TryGetValue(name, out var value) &&

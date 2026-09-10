@@ -492,6 +492,16 @@ public sealed class ClosedVocabularyCensusTests
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgDimension: Record, Body, Relation, "
                     + "SupportingDocument, PublicationFamily, Language, Format, Authenticity, "
                     + "Rights, Transport",
+                "Lex.V3.Contracts.Source.Luxembourg.LuxembourgDraftPropertyAbsenceReason: "
+                    + "EnumeratedAndNotHeld",
+                "Lex.V3.Contracts.Source.Luxembourg.LuxembourgDraftPropertyCoverageRefusal: None, "
+                    + "MatrixCompletionOverUnprovenEnumeration, InventoryEvidenceNotSupplied, "
+                    + "RequestedBatchNotRetained, DeliveredDraftNotRequested, "
+                    + "DeliveredPredicateNotAskedAbout, PresentRowNotConsumedExactlyOnce, "
+                    + "MatrixPairNotRepresented, PairHoldsPresentAndDerivedAbsence, "
+                    + "AbsenceEvidenceNotFromThisRun",
+                "Lex.V3.Contracts.Source.Luxembourg.LuxembourgDraftPropertyGapReason: "
+                    + "DeclaredOnAnotherClass",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgDraftRelationPredicate: "
                     + "DraftTransposes",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgLiteralDisposition: Accepted, "

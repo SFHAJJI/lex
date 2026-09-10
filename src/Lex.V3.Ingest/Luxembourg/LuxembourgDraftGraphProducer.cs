@@ -36,36 +36,43 @@ public enum LuxembourgDraftGraphProductionRefusal
     [JsonStringEnumMemberName("row_not_admitted")]
     RowNotAdmitted = 4,
 
-    /// <summary>
-    /// A delivered row named a property this family never asked about.
-    /// </summary>
-    /// <remarks>
-    /// The plan binds its five predicates from a VALUES block, so an honest delivery cannot contain
-    /// another. One that does is answering a question nobody asked, and admitting it would let the
-    /// asked-about set this production publishes describe a delivery it does not match.
-    /// </remarks>
-    [JsonStringEnumMemberName("predicate_not_asked_about")]
-    PredicateNotAskedAbout = 5,
+    // ORDINAL 5 IS RETIRED AND PERMANENTLY UNALLOCATED. It was "predicate_not_asked_about", and
+    // it rested on the plan binding its five predicates from a VALUES block, so that an honest
+    // delivery could contain no other. That block is gone: it was measured DROPPING rows the
+    // publisher holds. The publisher is now asked for every predicate it has about these subjects,
+    // so a delivery containing another is not merely honest but expected, and the ones this family
+    // does not admit are named on RetainedNotAdmitted rather than refused.
+    //
+    // Not reused, so a retained artifact carrying the old name cannot acquire a new meaning.
 
     /// <summary>
-    /// A delivered draft carried rows for some of the asked properties and not others.
+    /// The delivery was read, but the (requested drafts x asked properties) matrix could not be
+    /// completed over it.
     /// </summary>
     /// <remarks>
-    /// <para>
-    /// The plan asks every draft about every one of its five predicates, and its absence branch
-    /// means a property the publisher holds nothing for still delivers a row. So an honest delivery
-    /// carries FIVE rows per draft, and a draft carrying fewer is a partial answer.
-    /// </para>
-    /// <para>
-    /// Admitting one would be the false absence this family exists to end, arriving by a route the
-    /// unbound marker cannot describe: <c>For(draftTransposes)</c> would return an empty list for a
-    /// draft whose transposition row simply never came, indistinguishable from a draft the publisher
-    /// answered "none" for. An explicit unbound row and a missing row are different facts, and only
-    /// the first is an answer.
-    /// </para>
+    /// A statement about coverage rather than about any row. The delivered rows may each be
+    /// perfectly readable and the matrix still be unprovable - a draft delivered that this batch
+    /// never asked about, a row folded twice, a pair left represented by nothing. Refusing is the
+    /// only honest option: a partial matrix read as a whole one is a set of absences asserted over
+    /// a corpus nobody established.
     /// </remarks>
-    [JsonStringEnumMemberName("draft_property_coverage_incomplete")]
-    DraftPropertyCoverageIncomplete = 6,
+    [JsonStringEnumMemberName("matrix_completion_refused")]
+    MatrixCompletionRefused = 7,
+
+    // ORDINAL 6 IS RETIRED AND PERMANENTLY UNALLOCATED. It was
+    // "draft_property_coverage_incomplete", and it refused any draft carrying fewer than five rows.
+    // That invariant was true only while the query asked for the absent case: with the mandatory
+    // value triple a draft delivers a row per value it HAS, so 50 drafts delivered 95 present pairs
+    // and this member would have refused the very first honest batch.
+    //
+    // Its claim did not disappear, it moved. Coverage is now proven over the whole
+    // requested-drafts x asked-predicates matrix by LuxembourgDraftPropertyCoverage, which is the
+    // only thing that can prove it: under the present-facts shape a draft holding none of the five
+    // properties delivers no rows at all, so the delivered rows cannot say which drafts were asked
+    // about. The requested set has to come from the run, not from the answer.
+    //
+    // Not reused, because a retained artifact carrying the old name must not silently acquire a new
+    // meaning when it is read back.
 }
 
 /// <summary>
@@ -86,10 +93,17 @@ public enum LuxembourgDraftGraphProductionRefusal
 /// could.
 /// </para>
 /// <para>
-/// <see cref="ValueKind"/> is <c>unbound</c> for a property the publisher holds no value for, and
-/// that row is an ANSWER rather than a gap: the plan asks for the absence by name with
-/// <c>FILTER NOT EXISTS</c>. A draft with no transposition target is distinguishable here from a
-/// draft nobody asked about, which is what S2-A03 requires.
+/// <see cref="ValueKind"/> is <c>iri</c> or <c>literal</c> and NEVER <c>unbound</c>. Every record
+/// here is a value the publisher actually returned - the query's value triple is mandatory, so a
+/// pair the publisher holds nothing for produces no row at all.
+/// </para>
+/// <para>
+/// THE GAP IS NOT MISSING; IT IS SOMEWHERE ELSE. A pair with no delivered value becomes a separate,
+/// typed, evidence-bound observed-absence record derived from the batch's completed enumeration.
+/// The separation is the point: a row here is something the publisher SAID, and an absence is
+/// something THIS CODE CONCLUDED from a complete enumeration. S2-A03 requires the gap to be
+/// first-class, and S2-A01 requires the assertion to be typed as the publisher's; one record type
+/// carrying both would satisfy the first by breaking the second.
 /// </para>
 /// </remarks>
 public sealed record LuxembourgDraftPropertyRecord(
@@ -99,22 +113,101 @@ public sealed record LuxembourgDraftPropertyRecord(
     string ValueKind,
     string ValueDatatypeIri,
     string ValueLanguageTag,
+    string SourceObservationId)
+{
+    /// <summary>What the publisher delivered: an IRI or a literal, and never an absence.</summary>
+    /// <remarks>
+    /// GUARDED HERE BECAUSE THE TYPE IS PUBLIC. The producer refuses an unbound value when it
+    /// decodes, but this record has a public constructor, so any assembly could otherwise mint one
+    /// carrying the unbound marker and the acquisition run ref of a real batch - a record
+    /// indistinguishable, to every reader downstream, from a publisher-returned absence. That is
+    /// the exact fabrication this family's design exists to make impossible, so it is refused at
+    /// the only door that can reach it.
+    /// </remarks>
+    public string ValueKind { get; init; } = RequireDelivered(ValueKind);
+
+    private static string RequireDelivered(string valueKind) =>
+        string.Equals(valueKind, LuxembourgDraftGraphDiscoveryPlan.UnboundKind, StringComparison.Ordinal)
+            ? throw new ArgumentException(
+                "A delivered record carries a value the publisher returned. An absence is derived, "
+                    + "typed and cited elsewhere, and may not be minted as a row.",
+                nameof(valueKind))
+            : valueKind;
+}
+
+/// <summary>Why a delivered row was retained as evidence rather than admitted as a fact.</summary>
+public enum LuxembourgDraftRetentionReason
+{
+    /// <summary>The predicate is not one this family's vocabulary accepts at all.</summary>
+    [JsonStringEnumMemberName("predicate_outside_the_accepted_vocabulary")]
+    PredicateOutsideTheAcceptedVocabulary = 1,
+
+    /// <summary>
+    /// The predicate is accepted, but is declared on another class, so a triple asserting it of a
+    /// draft is ontology drift rather than a fact about the draft.
+    /// </summary>
+    [JsonStringEnumMemberName("predicate_declared_on_another_class")]
+    PredicateDeclaredOnAnotherClass = 2,
+}
+
+/// <summary>One delivered row this family retains as evidence and asserts nothing from.</summary>
+/// <remarks>
+/// <para>
+/// TYPED, WITH ITS SHAPE, NOT A BARE PREDICATE NAME. The broad acquisition deliberately carries
+/// every predicate the publisher holds about these subjects, so most delivered rows are ones E8
+/// makes no claim about - and reducing them to a predicate string would throw away the very thing
+/// that makes them evidence: which draft, what value, what kind of term.
+/// </para>
+/// <para>
+/// The terms are recorded AS DELIVERED. This is not a fact being read, so the admission-grade
+/// invariants that guard a record are deliberately not applied: nothing here is asserted, and a
+/// value shape this family makes no claim about must not be able to refuse a delivery whose
+/// admitted half is sound.
+/// </para>
+/// </remarks>
+public sealed record LuxembourgDraftRetainedEvidenceRow(
+    string DraftIri,
+    string PredicateIri,
+    string? Value,
+    string ValueKind,
+    string ValueDatatypeIri,
+    string ValueLanguageTag,
+    LuxembourgDraftRetentionReason Reason,
     string SourceObservationId);
+
+/// <summary>What a run asked the publisher for, as distinct from what it admits.</summary>
+public enum LuxembourgDraftAcquiredScope
+{
+    /// <summary>
+    /// Every predicate the publisher holds about the requested subjects.
+    /// </summary>
+    /// <remarks>
+    /// The only scope this family acquires at. A publisher-side predicate filter was measured
+    /// dropping rows the publisher holds, and each dropped pair was then minted as a derived
+    /// absence, so the question deliberately asks for everything and admission is made locally.
+    /// </remarks>
+    [JsonStringEnumMemberName("every_predicate_on_the_subject")]
+    EveryPredicateOnTheSubject = 1,
+}
 
 /// <summary>Admitted draft-property records, or one typed refusal. Never both.</summary>
 public sealed class LuxembourgDraftGraphProductionResult
 {
     private LuxembourgDraftGraphProductionResult(
         IReadOnlyList<LuxembourgDraftPropertyRecord>? records,
-        IReadOnlySet<string>? predicatesAskedAbout,
+        IReadOnlySet<string>? admittedPredicates,
         SourceArtifactRef? completionEvidenceRef,
+        LuxembourgDraftPropertyCoverage? coverage,
+        IReadOnlyList<LuxembourgDraftRetainedEvidenceRow> retainedNotAdmitted,
         LuxembourgDraftGraphProductionRefusal refusal,
         string? detail,
         int productRequestCount)
     {
+        RetainedNotAdmitted = retainedNotAdmitted;
         Records = records;
-        PredicatesAskedAbout = predicatesAskedAbout;
+        AdmittedPredicates = admittedPredicates;
         CompletionEvidenceRef = completionEvidenceRef;
+        Coverage = coverage;
         Refusal = refusal;
         Detail = detail;
         ProductRequestCount = productRequestCount;
@@ -122,10 +215,47 @@ public sealed class LuxembourgDraftGraphProductionResult
 
     public IReadOnlyList<LuxembourgDraftPropertyRecord>? Records { get; }
 
-    /// <summary>The properties this run actually asked every draft about.</summary>
-    public IReadOnlySet<string>? PredicatesAskedAbout { get; }
+    /// <summary>What this run asked the publisher for.</summary>
+    /// <remarks>
+    /// ACQUIRED SCOPE AND ADMITTED SCOPE ARE DIFFERENT THINGS, and this property used to state the
+    /// second while being named the first. The query asks for EVERY predicate on the subject; only
+    /// <see cref="AdmittedPredicates"/> become facts. Saying the run asked about five predicates
+    /// made the public acquisition account false, and it made <see cref="For"/> tell callers a
+    /// delivered predicate had never been asked about when it had been asked about and retained.
+    /// </remarks>
+    public LuxembourgDraftAcquiredScope AcquiredScope => LuxembourgDraftAcquiredScope.EveryPredicateOnTheSubject;
+
+    /// <summary>The predicates this family admits as facts from a triple on the draft.</summary>
+    public IReadOnlySet<string>? AdmittedPredicates { get; }
 
     public SourceArtifactRef? CompletionEvidenceRef { get; }
+
+    /// <summary>
+    /// Predicates the publisher delivered for these subjects that this family does not admit.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// RETAINED EVIDENCE, NEVER PRODUCT FACTS. The broad acquisition asks for every predicate the
+    /// publisher holds about the requested subjects, because a publisher-side predicate filter was
+    /// measured dropping rows it holds. Admission to the E8 vocabulary is therefore made here, where
+    /// it is visible and testable, instead of by the query.
+    /// </para>
+    /// <para>
+    /// These are counted and named so a reader can see what the delivery carried, and they are not
+    /// decoded into records: this family asserts nothing about them, and the retained page is the
+    /// evidence for anyone who later wants to.
+    /// </para>
+    /// </remarks>
+    public IReadOnlyList<LuxembourgDraftRetainedEvidenceRow> RetainedNotAdmitted { get; }
+
+    /// <summary>
+    /// The completed matrix over this batch: present values and derived absences together.
+    /// </summary>
+    /// <remarks>
+    /// Non-null exactly when <see cref="Delivered"/>. <see cref="Records"/> is what the publisher
+    /// said; this is what the run concluded, and the pairs with no row live only here.
+    /// </remarks>
+    public LuxembourgDraftPropertyCoverage? Coverage { get; }
 
     public LuxembourgDraftGraphProductionRefusal Refusal { get; }
 
@@ -137,37 +267,44 @@ public sealed class LuxembourgDraftGraphProductionResult
 
     internal static LuxembourgDraftGraphProductionResult Success(
         IReadOnlyList<LuxembourgDraftPropertyRecord> records,
-        IReadOnlySet<string> predicatesAskedAbout,
+        IReadOnlySet<string> admittedPredicates,
         SourceArtifactRef completionEvidenceRef,
+        LuxembourgDraftPropertyCoverage coverage,
+        IReadOnlyList<LuxembourgDraftRetainedEvidenceRow> retainedNotAdmitted,
         int productRequestCount = 0) =>
-        new(records, predicatesAskedAbout, completionEvidenceRef,
+        new(records, admittedPredicates, completionEvidenceRef, coverage, retainedNotAdmitted,
             LuxembourgDraftGraphProductionRefusal.None, null, productRequestCount);
 
     internal static LuxembourgDraftGraphProductionResult Refused(
         LuxembourgDraftGraphProductionRefusal refusal, string? detail, int productRequestCount = 0) =>
-        new(null, null, null, refusal, detail, productRequestCount);
+        new(null, null, null, null, [], refusal, detail, productRequestCount);
 
     /// <summary>Every delivered value of one property this run asked about.</summary>
     /// <remarks>
-    /// Returns the <c>unbound</c> rows too, because they are the run's answer for drafts holding no
-    /// such value. A caller wanting only held values filters on <see cref="LuxembourgDraftPropertyRecord.ValueKind"/>,
-    /// which is a choice it makes explicitly rather than one this method makes for it.
+    /// PRESENT VALUES ONLY, and every one of them is a value the publisher returned. A caller that
+    /// reads this and believes it has seen every (draft, property) pair has read a partial answer as
+    /// a whole one: the pairs the publisher holds nothing for are not here and are not rows. They
+    /// are the run's separate observed-absence records, which is what makes them readable as this
+    /// code's conclusion rather than as the publisher's silence rendered into a row.
     /// </remarks>
     public IReadOnlyList<LuxembourgDraftPropertyRecord> For(string predicateIri)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(predicateIri);
-        if (!Delivered || Records is null || PredicatesAskedAbout is null || CompletionEvidenceRef is null)
+        if (!Delivered || Records is null || AdmittedPredicates is null || CompletionEvidenceRef is null)
         {
             throw new InvalidOperationException(
                 "A refused draft-graph production has no admitted records.");
         }
 
-        if (!PredicatesAskedAbout.Contains(predicateIri))
+        if (!AdmittedPredicates.Contains(predicateIri))
         {
+            // NOT "never asked about" - the query asks for every predicate on the subject. This one
+            // was asked about and, if the publisher held it, delivered and retained; what this
+            // family will not do is assert it. Saying otherwise would misdescribe the acquisition.
             throw new ArgumentOutOfRangeException(
                 nameof(predicateIri),
-                $"This production never asked about {predicateIri}, so it cannot say what drafts "
-                    + "hold for it.");
+                $"{predicateIri} is not admitted as a draft property, so this production asserts "
+                    + "nothing for it. Any delivered rows are in RetainedNotAdmitted.");
         }
 
         return Array.AsReadOnly(Records!
@@ -274,7 +411,18 @@ public sealed class LuxembourgDraftGraphProducer
                 run.ProductRequestCount);
         }
 
-        return DecodeRows(rows, profile, proof.AcquisitionRunRef, run.ProductRequestCount);
+        return DecodeRows(
+            rows,
+            profile,
+            proof.AcquisitionRunRef,
+            LuxembourgDraftGraphDiscoveryPlan.RequestedPartitionMembers(request.BatchDrafts),
+            request.Inventory,
+            // FROM THE DELIVERY, NOT FROM THE REQUEST. Both travel back through the retained
+            // receipt, so the coverage compares what was actually sent and when it was observed
+            // against what this run believes it asked.
+            proof.FamilyKey,
+            receipt.Delivery.ObservationTimes.CountA,
+            run.ProductRequestCount);
     }
 
     /// <summary>Decodes one delivered page set into records.</summary>
@@ -286,13 +434,25 @@ public sealed class LuxembourgDraftGraphProducer
         IReadOnlyList<RepeatedEnumerationRow> rows,
         RepeatedEnumerationInterpretationProfile profile,
         SourceArtifactRef completionEvidenceRef,
+        IReadOnlyList<string> requestedDrafts,
+        LuxembourgInitialDraftInventoryCitation inventory,
+        string partitionKey,
+        string observedAt,
         int productRequestCount = 0)
     {
         ArgumentNullException.ThrowIfNull(rows);
         ArgumentNullException.ThrowIfNull(profile);
         ArgumentNullException.ThrowIfNull(completionEvidenceRef);
+        ArgumentNullException.ThrowIfNull(requestedDrafts);
+        ArgumentNullException.ThrowIfNull(inventory);
 
-        var asked = LuxembourgDraftGraphDiscoveryPlan.AskedAbout.ToHashSet(StringComparer.Ordinal);
+        // ADMITTED FROM A DRAFT TRIPLE, which is not the same as "in the accepted vocabulary".
+        // referralDate is accepted and is declared on OpinionRequest, so a triple asserting it of a
+        // draft is drift and is retained rather than read.
+        var admissible = LuxembourgDraftGraphDiscoveryPlan.DirectlyAdmissiblePredicates
+            .ToHashSet(StringComparer.Ordinal);
+        var accepted = LuxembourgDraftGraphDiscoveryPlan.AskedAbout.ToHashSet(StringComparer.Ordinal);
+        var notAdmitted = new List<LuxembourgDraftRetainedEvidenceRow>();
         var records = new List<LuxembourgDraftPropertyRecord>(rows.Count);
 
         foreach (var row in rows)
@@ -300,6 +460,39 @@ public sealed class LuxembourgDraftGraphProducer
             LuxembourgDraftPropertyRecord record;
             try
             {
+                // ADMISSION BEFORE DECODE, AND THE ORDER IS THE POINT. The broad acquisition
+                // deliberately carries every predicate the publisher holds about these subjects, so
+                // most delivered rows are ones this family asserts nothing about. Decoding those
+                // fully would let a value shape E8 makes no claim about refuse a delivery whose
+                // admitted half is perfectly readable - which is exactly what happened on the first
+                // broad run: forty plain-literal rows, none of them an admitted predicate, refused
+                // a page whose thirty-six admitted rows were clean.
+                //
+                // The predicate itself is still required to be a readable IRI. A row whose
+                // predicate cannot be read is a delivery this codebase cannot trust, admitted or
+                // not, and it still refuses.
+                var predicateIri = RequireIri(Term(row, profile, "predicate"), "predicate");
+                if (!admissible.Contains(predicateIri))
+                {
+                    // RETAINED WITH ITS SHAPE, AS DELIVERED. The terms are read from themselves and
+                    // the admission-grade invariants are deliberately not applied: nothing here is
+                    // asserted, so a value shape this family makes no claim about must not be able
+                    // to refuse a delivery whose admitted half is sound.
+                    var retainedValue = Term(row, profile, "value");
+                    notAdmitted.Add(new LuxembourgDraftRetainedEvidenceRow(
+                        RequireIri(Term(row, profile, "draft"), "draft"),
+                        predicateIri,
+                        retainedValue.Value,
+                        MarkerFor(retainedValue),
+                        retainedValue.Datatype ?? string.Empty,
+                        retainedValue.Language ?? string.Empty,
+                        accepted.Contains(predicateIri)
+                            ? LuxembourgDraftRetentionReason.PredicateDeclaredOnAnotherClass
+                            : LuxembourgDraftRetentionReason.PredicateOutsideTheAcceptedVocabulary,
+                        completionEvidenceRef.ResourceId));
+                    continue;
+                }
+
                 record = DecodeRow(row, profile, completionEvidenceRef.ResourceId);
             }
             catch (ArgumentException exception)
@@ -310,43 +503,47 @@ public sealed class LuxembourgDraftGraphProducer
                     productRequestCount);
             }
 
-            if (!asked.Contains(record.PredicateIri))
-            {
-                return LuxembourgDraftGraphProductionResult.Refused(
-                    LuxembourgDraftGraphProductionRefusal.PredicateNotAskedAbout,
-                    $"A row names {record.PredicateIri}, which this family never asked about.",
-                    productRequestCount);
-            }
-
             records.Add(record);
         }
 
-        // EVERY DELIVERED DRAFT MUST ANSWER FOR EVERY ASKED PROPERTY. The plan's absence branch
-        // guarantees a row per (draft, predicate) pair, so a draft carrying fewer than the full set
-        // is a partial delivery — and admitting one would let For(predicate) return an empty list
-        // for a draft whose row never came, which is indistinguishable from the publisher answering
-        // "none". An explicit unbound row and a missing row are different facts.
+        // ONLY NOW, AND ONLY HERE. Every refusal above returns before this point, so a matrix can
+        // only ever be completed over a delivery that was read whole - the ruling's "only after
+        // that batch proof is Delivered" made structural rather than sequential.
         //
-        // A delivery with no drafts at all stays valid: the class being empty is a complete answer,
-        // and this loop has nothing to complain about.
-        foreach (var draft in records.GroupBy(static value => value.DraftIri, StringComparer.Ordinal))
+        // The delivered row count comes from the ROWS and the folded count from the RECORDS, which
+        // is what makes the exactly-once check mean anything: comparing the decoded list against
+        // itself would pass for a decoder that dropped a row and never notice.
+        var coverage = LuxembourgDraftPropertyCoverage.TryComplete(
+            requestedDrafts,
+            LuxembourgDraftGraphDiscoveryPlan.AskedAbout,
+            records.Select(static value => new LuxembourgDraftPropertyRecordView(
+                value.DraftIri, value.PredicateIri, value.Value, value.ValueKind)).ToArray(),
+            new LuxembourgDraftBatchCitation(
+                completionEvidenceRef,
+                LuxembourgDraftPropertyCoverage.SelectionDigestFor(requestedDrafts),
+                requestedDrafts.Count,
+                rows.Count,
+                partitionKey,
+                observedAt),
+            inventory,
+            notAdmitted.Count,
+            LuxembourgDraftGraphDiscoveryPlan.PredicatesNotDeclaredOnTheDraft,
+            out var coverageRefusal,
+            out var coverageDetail);
+        if (coverage is null)
         {
-            var covered = draft.Select(static value => value.PredicateIri)
-                .ToHashSet(StringComparer.Ordinal);
-            if (!asked.All(covered.Contains))
-            {
-                var missing = asked.Except(covered, StringComparer.Ordinal).Order(StringComparer.Ordinal);
-                return LuxembourgDraftGraphProductionResult.Refused(
-                    LuxembourgDraftGraphProductionRefusal.DraftPropertyCoverageIncomplete,
-                    $"The delivery answers for {draft.Key} on only some asked properties; "
-                        + "these are missing: " + string.Join(", ", missing) + ".",
-                    productRequestCount);
-            }
+            return LuxembourgDraftGraphProductionResult.Refused(
+                LuxembourgDraftGraphProductionRefusal.MatrixCompletionRefused,
+                coverageRefusal + ": " + coverageDetail,
+                productRequestCount);
         }
 
         return LuxembourgDraftGraphProductionResult.Success(
-            records, asked, completionEvidenceRef, productRequestCount);
+            records, admissible, completionEvidenceRef, coverage, notAdmitted, productRequestCount);
     }
+
+    /// <summary>RDF 1.1: a simple literal is an xsd:string, and this engine's DATATYPE says so.</summary>
+    private const string XsdString = "http://www.w3.org/2001/XMLSchema#string";
 
     private static LuxembourgDraftPropertyRecord DecodeRow(
         RepeatedEnumerationRow row,
@@ -366,6 +563,19 @@ public sealed class LuxembourgDraftGraphProducer
         RequireMarkerAgrees(row, profile, "draft_kind", draftTerm);
         RequireMarkerAgrees(row, profile, "value_kind", valueTerm);
 
+        // THE VALUE TRIPLE IS MANDATORY, SO AN UNBOUND VALUE CANNOT HONESTLY ARRIVE. Refused rather
+        // than admitted, and the distinction is the whole design: admitting it would mint a record
+        // that LOOKS like the publisher reporting an absence, when an absence is this code's
+        // conclusion from a complete enumeration and never the publisher's statement. A delivery
+        // producing one is not a delivery this plan can have produced, so the page is not trusted.
+        if (valueTerm.Kind == RepeatedEnumerationRdfTermKind.Unbound)
+        {
+            throw new ArgumentException(
+                "The value triple is mandatory, so a row carrying no value is not a delivery this "
+                    + "plan can have produced.",
+                nameof(row));
+        }
+
         var draftIri = RequireIri(draftTerm, "draft");
         var predicateIri = RequireIri(predicateTerm, "predicate");
 
@@ -377,11 +587,24 @@ public sealed class LuxembourgDraftGraphProducer
         // The qualifier columns must agree with the term they describe. Both are bound from
         // DATATYPE() and LANG() over that very term, so an honest delivery cannot disagree, and a
         // row that does keys as one fact and decodes as another.
-        // A language-tagged literal carries no datatype in SPARQL JSON, so the term's own datatype is
-        // null and the expected column is empty — which is exactly what the engine's erroring BIND
-        // leaves behind. The two agree without either being taught about the other.
+        // A NULL DATATYPE ON THE TERM MEANS TWO DIFFERENT THINGS, and reading it as one was a
+        // defect the narrow query could never expose.
+        //
+        // A language-tagged literal carries no datatype in SPARQL JSON, and DATATYPE() raises on it
+        // here, so the erroring BIND leaves the column absent and the expected value is empty. That
+        // was measured, and it is the case this check was written for.
+        //
+        // A PLAIN literal also carries no datatype in SPARQL JSON - but DATATYPE() answers it with
+        // xsd:string, because under RDF 1.1 a simple literal IS an xsd:string. So the column says
+        // xsd:string while the term says nothing, and the two agree in fact while differing in
+        // spelling. Treating that as a disagreement refused a real delivery: the first broad run
+        // carried forty such rows and the whole page was rejected.
+        //
+        // Only the narrow five-predicate query could hide this, and only because every value it
+        // ever returned was an IRI.
         var expectedDatatype = valueTerm.Kind == RepeatedEnumerationRdfTermKind.Literal
-            ? valueTerm.Datatype ?? string.Empty
+            ? valueTerm.Datatype
+                ?? (valueTerm.Language is { Length: > 0 } ? string.Empty : XsdString)
             : string.Empty;
         var expectedLanguage = valueTerm.Kind == RepeatedEnumerationRdfTermKind.Literal
             ? valueTerm.Language ?? string.Empty

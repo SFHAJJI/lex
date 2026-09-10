@@ -1,0 +1,285 @@
+using System.Text;
+using Lex.V3.Artifacts;
+using Lex.V3.Contracts.Custody;
+using Lex.V3.Contracts.Source.Core;
+using Lex.V3.Contracts.Source.Luxembourg;
+using Lex.V3.Ingest.Europe;
+using Lex.V3.Ingest.Luxembourg;
+
+namespace Lex.V3.Ingest.Tests;
+
+/// <summary>
+/// Does the five-predicate draft-graph query avoid SR319 when it is bounded to one batch?
+/// </summary>
+/// <remarks>
+/// <para>
+/// THIS RUNS BEFORE THE BATCHING MACHINERY, and the order is the point. Legilux refused this
+/// family's query twice at class scope with <c>Virtuoso SR319: Max row length is exceeded</c>, at
+/// seven grouped columns and at three. The inventory then answered 7,753 subjects of the same class
+/// under a one-column grouping, which removed the reason to assume the engine cannot answer this
+/// family at all — but it did not establish that the FIVE-PREDICATE query answers over fifty named
+/// drafts. Building deterministic batching on that assumption would be building on a guess.
+/// </para>
+/// <para>
+/// THE BATCH IS THE ONE BATCHING WOULD PRODUCE FIRST: the ordinal-first fifty of the proven
+/// inventory retained under #417, not a hand-picked sample. Ordinal order is what the batching stage
+/// will use, so if this batch answers, batch one answers.
+/// </para>
+/// <para>
+/// It asserts almost nothing about the answer, for the reason the inventory probe does not either:
+/// a refusal is a finding rather than a failure of the probe, and it must be retained and diagnosed
+/// without narrowing class scope. What it does fail on is a request sent somewhere this family may
+/// not send one, which holds whether the publisher answered or refused.
+/// </para>
+/// </remarks>
+[TestClass]
+public sealed class LuxembourgDraftGraphBatchCanary
+{
+    private const string EnableVariable = "LEX_E8_BATCH_CANARY";
+    private const string LegiluxEndpoint = "https://data.legilux.public.lu/sparqlendpoint";
+    private const string DraftPrefix = "http://data.legilux.public.lu/eli/dl/";
+
+    /// <summary>
+    /// The ordinal-first fifty subjects of the retained inventory run.
+    /// </summary>
+    /// <remarks>
+    /// Real drafts the publisher answered for, not invented IRIs. An invented one would bind and
+    /// render exactly as well and would prove nothing about a class Legilux actually holds. The
+    /// shared prefix is factored out only to keep them readable; the suffixes are verbatim.
+    /// </remarks>
+    private static readonly string[] FirstBatch =
+    [
+        "pc/2002/215", "pc/2002/221", "pc/2002/231", "pc/2003/23", "pc/2003/24",
+        "pc/2004/80", "pc/2005/7", "pc/2006/111", "pc/2006/112", "pc/2008/240",
+        "pl/1985/268", "pl/1985/313", "pl/1985/329", "pl/1988/103", "pl/1988/8",
+        "pl/1988/96", "pl/1989/60", "pl/1992/194", "pl/1993/68", "pl/1994/72",
+        "pl/1996/177", "pl/1999/104", "pl/1999/118", "pl/2000/1", "pl/2000/10",
+        "pl/2000/102", "pl/2000/11", "pl/2000/110", "pl/2000/114", "pl/2000/118",
+        "pl/2000/119", "pl/2000/120", "pl/2000/121", "pl/2000/122", "pl/2000/123",
+        "pl/2000/124", "pl/2000/125", "pl/2000/129", "pl/2000/133", "pl/2000/136",
+        "pl/2000/138", "pl/2000/140", "pl/2000/146", "pl/2000/147", "pl/2000/149",
+        "pl/2000/150", "pl/2000/153", "pl/2000/154", "pl/2000/155", "pl/2000/16",
+    ];
+
+    private static string[] BatchIris() =>
+        FirstBatch.Select(static suffix => DraftPrefix + suffix).ToArray();
+
+    public TestContext? TestContext { get; set; }
+
+    [TestMethod]
+    public async Task TheFivePredicateQueryIsAskedAboutOneBatchAndWhateverCameBackIsRecorded()
+    {
+        if (Environment.GetEnvironmentVariable(EnableVariable) != "1")
+        {
+            Assert.Inconclusive(
+                $"Set {EnableVariable}=1 to ask Legilux whether the five-predicate query answers "
+                + "over one bounded batch. Skipped by default so the suite sends no unasked traffic.");
+        }
+
+        // DISTINCT DRAFTS, not parameters. The plan pads every batch to capacity, so a shorter
+        // batch binds the same fifty parameters and asks the publisher about fewer subjects - which
+        // is what makes this a measurement of query cost rather than of input shape.
+        var distinct = int.TryParse(
+            Environment.GetEnvironmentVariable("LEX_E8_BATCH_DISTINCT"), out var requested)
+            ? requested
+            : LuxembourgDraftGraphDiscoveryPlan.BatchCapacity;
+        Assert.IsTrue(
+            distinct is > 0 && distinct <= LuxembourgDraftGraphDiscoveryPlan.BatchCapacity,
+            "a batch names one to capacity drafts.");
+        var batch = BatchIris().Take(distinct).ToArray();
+
+        var checkout = CheckoutRoot();
+        var root = Path.Combine(checkout, "artifacts", "e8-batch-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+
+        var store = new FileSystemCustodyStore(root);
+        var producer = new LuxembourgDraftGraphProducer(store, TimeProvider.System);
+        var plan = LuxembourgDraftGraphDiscoveryPlan.Create();
+
+        var result = await producer.RunAsync(
+            new LuxembourgDraftGraphRunRequest(
+                plan, batch, NewUrn(), RendererSource(checkout), RetainedInventory()),
+            LuxembourgSourceWitness(),
+            CancellationToken.None);
+
+        // Holds whether the publisher answered or refused: a request sent in error is a finding even
+        // when the answer was no.
+        var offending = new List<string>();
+        foreach (var file in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
+        {
+            var text = Encoding.UTF8.GetString(await File.ReadAllBytesAsync(file));
+            foreach (var target in RequestTargetsIn(text))
+            {
+                if (!string.Equals(target, LegiluxEndpoint, StringComparison.Ordinal))
+                {
+                    offending.Add(Path.GetFileName(file)[..12] + " -> " + target);
+                }
+            }
+        }
+
+        Assert.IsEmpty(
+            offending,
+            "this canary may contact the Legilux SPARQL endpoint and nothing else: "
+            + string.Join("; ", offending.Take(10)));
+
+        var summary = new StringBuilder()
+            .AppendLine("e8-batch-canary/1")
+            .AppendLine("endpoint=" + LegiluxEndpoint)
+            .AppendLine("batch_size=" + batch.Length)
+            .AppendLine("delivered=" + result.Delivered)
+            .AppendLine("refusal=" + result.Refusal)
+            .AppendLine("detail=" + (result.Detail ?? string.Empty))
+            .AppendLine("product_requests=" + result.ProductRequestCount)
+            .AppendLine("records=" + (result.Records?.Count.ToString() ?? "none"))
+            .AppendLine("coverage=" + (result.Coverage?.Describe() ?? "none"))
+            .ToString();
+        await File.WriteAllTextAsync(Path.Combine(root, "canary-summary.txt"), summary);
+        TestContext?.WriteLine(summary);
+
+        Assert.IsTrue(
+            result.Delivered || result.Refusal != LuxembourgDraftGraphProductionRefusal.None,
+            "a run reports a delivery or a typed refusal, never neither.");
+
+        if (!result.Delivered)
+        {
+            Assert.Inconclusive(
+                "Legilux did not answer the five-predicate query over one batch. The refusal is "
+                + "retained and diagnosed without narrowing class scope. Retained under "
+                + root + ". Refusal: " + result.Refusal + " " + result.Detail);
+        }
+
+        // Every delivered record names a draft this run asked about. The executor already verifies
+        // batch membership on the cursor; this reads the same claim off the decoded records, because
+        // a record naming a draft outside the batch would mean the partition is not what it says.
+        foreach (var record in result.Records!)
+        {
+            CollectionAssert.Contains(batch, record.DraftIri);
+        }
+
+        // THE RELATIONSHIP, NEVER THE NUMBERS. The ruling says remeasure rather than pin, so the
+        // only constants asserted here are local: how many drafts this run asked about and how many
+        // properties this family asks. 103, 95, 155, 250 and 258 are written to the summary as
+        // measurements and asserted nowhere.
+        var coverage = result.Coverage!;
+        Assert.AreEqual(
+            batch.Length * LuxembourgDraftGraphDiscoveryPlan.AskedAbout.Count,
+            coverage.CoveredPairCount);
+        Assert.AreEqual(
+            coverage.CoveredPairCount,
+            coverage.PresentPairCount + coverage.DerivedAbsences.Count + coverage.UnresolvedGaps.Count
+                + (coverage.DraftsOfUnconfirmedClass.Count
+                    * LuxembourgDraftGraphDiscoveryPlan.AskedAbout.Count),
+            "every asked pair is present, derived-absent, unresolved, or on a draft whose class "
+                + "went unconfirmed - exactly one of the four.");
+
+        // The admitted half and the retained half must account for the whole delivery. The coverage
+        // enforces this internally; asserting it here too means the canary reports a delivery it
+        // has actually reconciled rather than one it merely received.
+        Assert.AreEqual(
+            result.Records!.Count + result.RetainedNotAdmitted.Count,
+            (int)coverage.Batch.DeliveredRowCount,
+            "every delivered row is admitted or retained by name.");
+
+        foreach (var absence in coverage.DerivedAbsences)
+        {
+            CollectionAssert.Contains(batch, absence.DraftIri);
+            Assert.IsEmpty(
+                coverage.ValuesFor(absence.DraftIri, absence.PredicateIri),
+                "a pair cannot carry both a derived absence and delivered values.");
+        }
+    }
+
+    /// <summary>The retained inventory run this batch is a partition of.</summary>
+    /// <remarks>
+    /// <para>
+    /// READ FROM THE RUN THAT PRODUCED IT, NEVER MINTED HERE. Every absence this canary derives
+    /// cites this citation, so inventing one would put a reference to a run that never happened
+    /// inside a hundred and fifty records asserting what a publisher does not hold. The canary
+    /// declines to run rather than do that.
+    /// </para>
+    /// <para>
+    /// The values come from the retained two-pass inventory under #417 - 7,753 InitialDraft
+    /// subjects over 24 requests, both passes agreeing - and are passed in rather than rediscovered
+    /// so this canary sends exactly one product request family and not the inventory again.
+    /// </para>
+    /// </remarks>
+    private static LuxembourgInitialDraftInventoryCitation RetainedInventory()
+    {
+        var resource = Environment.GetEnvironmentVariable("LEX_E8_INVENTORY_RUN_RESOURCE");
+        var digest = Environment.GetEnvironmentVariable("LEX_E8_INVENTORY_RUN_SHA256");
+        var selection = Environment.GetEnvironmentVariable("LEX_E8_INVENTORY_SELECTION");
+        if (string.IsNullOrWhiteSpace(resource) ||
+            string.IsNullOrWhiteSpace(digest) ||
+            string.IsNullOrWhiteSpace(selection))
+        {
+            Assert.Inconclusive(
+                "Set LEX_E8_INVENTORY_RUN_RESOURCE, LEX_E8_INVENTORY_RUN_SHA256 and "
+                + "LEX_E8_INVENTORY_SELECTION from the retained inventory run. Every derived "
+                + "absence cites them, and a citation this canary made up would name a run that "
+                + "never happened.");
+        }
+
+        return new LuxembourgInitialDraftInventoryCitation(
+            "legilux-initial-draft-inventory", new SourceArtifactRef(resource!, digest!), selection!);
+    }
+
+    private static BoundMachineRequest LuxembourgSourceWitness()
+    {
+        var (witnessPlan, planResourceId, _) = LuxembourgAcquisitionTestFixture.BuildInvariantPlan(9501);
+        return witnessPlan.BindCount(
+            planResourceId,
+            NewUrn(),
+            NewUrn(),
+            LuxembourgAcquisitionTestFixture.SubjectsSetId,
+            LuxembourgQueryPass.Pass1,
+            LuxembourgAcquisitionTestFixture.FullRange(),
+            LuxembourgAcquisitionTestFixture.BuildRendererSource(9501)).Request;
+    }
+
+    private static IEnumerable<string> RequestTargetsIn(string artifact)
+    {
+        const string Marker = "\"request_uri\"";
+        var index = artifact.IndexOf(Marker, StringComparison.Ordinal);
+        while (index >= 0)
+        {
+            var open = artifact.IndexOf('"', index + Marker.Length);
+            if (open < 0)
+            {
+                yield break;
+            }
+
+            var close = artifact.IndexOf('"', open + 1);
+            if (close < 0)
+            {
+                yield break;
+            }
+
+            yield return artifact[(open + 1)..close];
+            index = artifact.IndexOf(Marker, close, StringComparison.Ordinal);
+        }
+    }
+
+    private static MachineQueryRendererSource RendererSource(string checkout)
+    {
+        var bytes = File.ReadAllBytes(Path.Combine(
+            checkout, "src/Lex.V3.Contracts/Source/Luxembourg/LuxembourgDraftGraphDiscoveryPlan.cs"));
+        return MachineQueryRendererSource.Open(
+            new SourceArtifactRef(
+                NewUrn(),
+                Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(bytes))),
+            bytes);
+    }
+
+    private static string NewUrn() => "urn:uuid:" + Guid.NewGuid().ToString("D");
+
+    private static string CheckoutRoot()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "Lex.V3.slnx")))
+        {
+            directory = directory.Parent;
+        }
+
+        return directory?.FullName ?? throw new InvalidOperationException("Checkout root not found.");
+    }
+}
