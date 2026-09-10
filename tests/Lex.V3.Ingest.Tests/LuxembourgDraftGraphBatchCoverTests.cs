@@ -46,7 +46,9 @@ public sealed class LuxembourgDraftGraphBatchCoverTests
             Profile, Evidence, "legilux-initial-draft-inventory", ObservedAt);
 
     /// <summary>One delivered batch: every draft answers statusDraft and nothing else.</summary>
-    private static LuxembourgDraftPropertyCoverage Batch(LuxembourgDraftBatchAssignment assignment)
+    private static LuxembourgDraftPropertyCoverage Batch(
+        LuxembourgDraftBatchAssignment assignment,
+        IReadOnlyList<string>? asked = null)
     {
         var drafts = assignment.Drafts;
         var rows = drafts
@@ -56,7 +58,7 @@ public sealed class LuxembourgDraftGraphBatchCoverTests
 
         var coverage = LuxembourgDraftPropertyCoverage.TryComplete(
             assignment,
-            Asked,
+            asked ?? Asked,
             rows,
             new LuxembourgDraftBatchCitation(
                 Evidence,
@@ -79,7 +81,7 @@ public sealed class LuxembourgDraftGraphBatchCoverTests
     {
         var inventory = Inventory(subjects);
         var batches = LuxembourgDraftGraphBatchFactory.AssignBatches(inventory)
-            .Select(Batch)
+            .Select(static assignment => Batch(assignment))
             .ToList();
         return (inventory, batches);
     }
@@ -206,6 +208,68 @@ public sealed class LuxembourgDraftGraphBatchCoverTests
 
         Assert.AreEqual(
             LuxembourgDraftGraphBatchCoverRefusal.BatchDeliveredTwice,
+            RefusalOf(inventory, batches));
+    }
+
+    /// <summary>
+    /// A cover reads in the inventory's assignment order, not the order deliveries arrived.
+    /// </summary>
+    /// <remarks>
+    /// Both halves were promised in prose and asserted by nothing: the order, and that the
+    /// reconciled list cannot be edited afterwards. Order matters because a receipt read in arrival
+    /// order is not reproducible from the same inventory on a later run, and immutability matters
+    /// because every total on the cover recomputes from this list.
+    /// </remarks>
+    [TestMethod]
+    public void ACoverIsOrderedByTheInventoryAndCannotBeEditedAfterwards()
+    {
+        var (inventory, batches) = Swept(127);
+        batches.Reverse();
+
+        var cover = LuxembourgDraftGraphBatchCover.TryCreate(inventory, batches, out var refusal, out var detail);
+        Assert.IsNotNull(cover, $"{refusal}: {detail}");
+
+        CollectionAssert.AreEqual(
+            LuxembourgDraftGraphBatchFactory.ExpectedPartitionKeys(inventory).ToArray(),
+            cover.Batches.Select(static value => value.Batch.PartitionKey).ToArray(),
+            "deliveries arrived reversed and the cover still reads in the inventory's own order.");
+
+        Assert.ThrowsExactly<NotSupportedException>(
+            () => ((IList<LuxembourgDraftPropertyCoverage>)cover.Batches).Clear(),
+            "and a reconciled cover cannot be emptied by whoever holds it.");
+    }
+
+    /// <summary>
+    /// A batch complete over a narrower question does not add up to the inventory's own.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// THE CHECK THE COVER EXISTS FOR, and until this test it was asserted by nothing: every other
+    /// case here returns at an earlier guard, and the complete sweep satisfies it. The comment
+    /// calling it "recomputed independently" was an unverified promise.
+    /// </para>
+    /// <para>
+    /// It is reachable because a batch is completed against the predicates it was ASKED, which
+    /// TryComplete takes as a parameter, while the cover recomputes the total from the family's own
+    /// AskedAbout. So a batch can be internally perfect - proven enumeration, matching key, one
+    /// inventory, nothing omitted or duplicated - and still account for fewer pairs than the class
+    /// requires. That is a partial sweep wearing a complete batch's receipt, which is the exact
+    /// false absence at scale this guard is here to refuse.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void ABatchCompletedOverFewerPredicatesDoesNotCoverTheInventory()
+    {
+        var (inventory, batches) = Swept(127);
+        var narrower = Asked[..^1];
+        Assert.AreEqual(
+            Asked[0], narrower[0],
+            "the delivered rows' predicate must still be asked about, or this fails for that reason.");
+
+        batches[2] = Batch(LuxembourgDraftGraphBatchFactory.AssignBatches(inventory)[2], narrower);
+
+        Assert.AreEqual(
+            LuxembourgDraftGraphBatchCoverRefusal.CoveredPairsDoNotEqualTheInventorySum,
             RefusalOf(inventory, batches));
     }
 

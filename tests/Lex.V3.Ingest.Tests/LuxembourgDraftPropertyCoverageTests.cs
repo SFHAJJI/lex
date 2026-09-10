@@ -234,6 +234,33 @@ public sealed class LuxembourgDraftPropertyCoverageTests
     }
 
     /// <summary>
+    /// An assignment's members cannot be edited after its key was computed over them.
+    /// </summary>
+    /// <remarks>
+    /// The digest check and the partition key both run at construction, so a writable member list
+    /// would let a caller pass the check, take the key, and then swap a draft - leaving a batch whose
+    /// own key describes a population it no longer holds. The same applies to the returned batch
+    /// list, which is what the cover's expected key set is derived from.
+    /// </remarks>
+    [TestMethod]
+    public void AnAssignmentsMembersAndBatchListCannotBeMutated()
+    {
+        var proven = Drafts(3);
+        var assignments = LuxembourgDraftBatchAssignment.Over(proven, Inventory(proven));
+
+        Assert.ThrowsExactly<NotSupportedException>(
+            () => ((IList<string>)assignments[0].Drafts)[0] = "http://example.invalid/forged",
+            "a member cannot be swapped after the key was taken over it.");
+        Assert.ThrowsExactly<NotSupportedException>(
+            () => ((IList<LuxembourgDraftBatchAssignment>)assignments).Add(assignments[0]),
+            "and the sweep cannot gain a batch the inventory never issued.");
+
+        Assert.AreEqual(
+            LuxembourgDraftGraphDiscoveryPlan.PartitionKeyFor(proven), assignments[0].PartitionKey,
+            "the key still names the members it was computed over.");
+    }
+
+    /// <summary>
     /// An assignment cannot be built for drafts the inventory citation does not name.
     /// </summary>
     /// <remarks>
@@ -264,6 +291,20 @@ public sealed class LuxembourgDraftPropertyCoverageTests
         Assert.ThrowsExactly<ArgumentException>(
             () => LuxembourgDraftBatchAssignment.Over(sameSizeDifferentDrafts, Inventory(proven)),
             "three drafts are not these three drafts.");
+
+        // THE CASE THE DIGEST ALONE CANNOT SEE, found by mutation: deleting the count check killed
+        // no test. The digest canonicalises, which means it DEDUPLICATES, so a population carrying
+        // a draft twice digests identically to the population carrying it once. Only the count
+        // separates them, and without it a batch would be issued with a member repeated - a subject
+        // counted twice in a sweep that is supposed to cover the class exactly once.
+        var duplicated = proven.Concat(proven.Take(1)).ToArray();
+        Assert.AreEqual(
+            LuxembourgDraftGraphDiscoveryPlan.SelectionDigestFor(proven),
+            LuxembourgDraftGraphDiscoveryPlan.SelectionDigestFor(duplicated),
+            "the digests must actually agree, or this is testing something else.");
+        Assert.ThrowsExactly<ArgumentException>(
+            () => LuxembourgDraftBatchAssignment.Over(duplicated, Inventory(proven)),
+            "a repeated member is not this population, however it digests.");
 
         // WHAT THIS DELIBERATELY DOES NOT REFUSE. The digest canonicalises, so a permutation of the
         // proven population is the same population and is accepted - correctly, because membership
@@ -301,9 +342,14 @@ public sealed class LuxembourgDraftPropertyCoverageTests
             Assert.AreEqual(
                 LuxembourgDraftPropertyAbsenceReason.EnumeratedAndNotHeld, absence.Reason,
                 "an absence with no stated reason is not readable as a fact.");
-            Assert.AreEqual(
-                LuxembourgDraftPropertyCoverage.SelectionDigestFor(drafts), absence.Batch.SelectionDigest,
-                "the digest proves which pairs were asked about.");
+            // Deliberately NOT re-asserting equality here: the fixture built this citation's digest
+            // with the same call on the same drafts, so comparing them passes for any implementation
+            // of TryComplete, including one returning the empty string. That the digest distinguishes
+            // one batch from another is proved where it can fail, in
+            // TheSelectionDigestDistinguishesOneBatchFromAnother.
+            Assert.AreNotEqual(
+                LuxembourgDraftPropertyCoverage.SelectionDigestFor(Drafts(4)), absence.Batch.SelectionDigest,
+                "a different selection would carry a different digest.");
         }
     }
 

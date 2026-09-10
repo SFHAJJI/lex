@@ -134,6 +134,14 @@ public sealed class LuxembourgInitialDraftInventoryProducerTests
     /// what a caller can DO. Found unprotected by mutation: replacing the snapshot with the live list
     /// killed no test in either scope before this one existed.
     /// </para>
+    /// <para>
+    /// AND BOTH WRITE PATHS, because the first version of this test only closed one. It asked
+    /// whether the collection reported itself writable and mutated it only if so, which made it a
+    /// no-op against correct code and - worse - let the likeliest regression through: a bare
+    /// <c>ToArray()</c> reports <c>IsReadOnly</c> true and refuses <c>Clear</c>, yet assigns happily
+    /// through the <c>IList</c> indexer. That mutant survived. An unconditional refusal on each path
+    /// is both the stronger statement and the shorter one.
+    /// </para>
     /// </remarks>
     [TestMethod]
     public void TheProvenPopulationCannotBeEditedThroughTheListItWasBuiltIn()
@@ -145,10 +153,12 @@ public sealed class LuxembourgInitialDraftInventoryProducerTests
         var before = result.AddressableInOrder().Count;
         var digest = result.Citation!.SelectionDigest;
 
-        if (result.Subjects is ICollection<LuxembourgInitialDraftSubject> writable && !writable.IsReadOnly)
-        {
-            writable.Clear();
-        }
+        Assert.ThrowsExactly<NotSupportedException>(
+            () => ((IList<LuxembourgInitialDraftSubject>)result.Subjects!)[0] = result.Subjects![1],
+            "a member cannot be replaced through the indexer.");
+        Assert.ThrowsExactly<NotSupportedException>(
+            () => ((ICollection<LuxembourgInitialDraftSubject>)result.Subjects!).Clear(),
+            "and the population cannot be emptied.");
 
         Assert.AreEqual(
             before, result.AddressableInOrder().Count,
