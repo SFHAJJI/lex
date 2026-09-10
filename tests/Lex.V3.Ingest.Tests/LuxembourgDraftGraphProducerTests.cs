@@ -186,6 +186,7 @@ public sealed class LuxembourgDraftGraphProducerTests
         var result = await producer.RunAsync(
             new LuxembourgDraftGraphRunRequest(
                 plan,
+                [Draft],
                 "urn:uuid:1a7c5e39-4b62-4d80-9f13-6e025ac84b71",
                 LuxembourgAcquisitionTestFixture.BuildRendererSource(9101)),
             LuxembourgSourceWitness(),

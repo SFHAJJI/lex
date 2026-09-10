@@ -34,6 +34,15 @@ public sealed class LuxembourgDraftGraphDiscoveryPlanTests
     /// </summary>
     private const string EagerGuardForm = "BIND(IF(BOUND(";
 
+    /// <summary>
+    /// One draft the publisher actually holds, from the retained inventory run.
+    /// </summary>
+    /// <remarks>
+    /// An invented IRI would bind and render exactly as well, and would make every assertion here
+    /// about a subject Legilux has never heard of.
+    /// </remarks>
+    private const string InventoryDraft = "http://data.legilux.public.lu/eli/dl/pc/2002/215";
+
     [TestMethod]
     public void TheFamilySweepsTheClassAndAsksEveryDraftAboutEveryProperty()
     {
@@ -69,6 +78,13 @@ public sealed class LuxembourgDraftGraphDiscoveryPlanTests
         Assert.IsFalse(
             plan.PageTemplate.Contains("OFFSET", StringComparison.OrdinalIgnoreCase),
             "pagination is by keyset; OFFSET over an unstable order would skip and repeat rows.");
+
+        // THE CLASS MEMBERSHIP TRIPLE SURVIVES THE BATCH. A batch that replaced `?draft a
+        // <InitialDraft>` with a bare VALUES list would answer for anything a caller named,
+        // including something that is not a draft at all, and the sweep would stop being a sweep of
+        // the class. Both are asked: the batch bounds the request, the triple keeps it about drafts.
+        StringAssert.Contains(plan.PageTemplate, "VALUES ?draft {");
+        StringAssert.Contains(plan.PageTemplate, "SELECT DISTINCT ?draft WHERE {");
     }
 
     /// <summary>
@@ -225,7 +241,7 @@ public sealed class LuxembourgDraftGraphDiscoveryPlanTests
     }
 
     [TestMethod]
-    public void TheDeliveryProfilePinsThePublisherCoordinatesAndAsksForNoSelection()
+    public void TheDeliveryProfilePinsThePublisherCoordinatesAndItsBoundSelection()
     {
         var profile = LuxembourgDraftGraphDiscoveryPlan.Create().CreateDeliveryProfile();
 
@@ -244,11 +260,26 @@ public sealed class LuxembourgDraftGraphDiscoveryPlanTests
             },
             profile.ProjectionVariables.ToArray());
 
-        // EMPTY, and that is a decision rather than an omission: the scope is a class and the asked
-        // properties are fixed by the plan, so there is nothing for a caller to select. Written down
-        // because RequireInputRoleShape compares SelectionParameterNames.Append(PassParameterName)
-        // by sequence, so a later slice that adds a selection binds it BEFORE pass_id.
-        Assert.IsEmpty(profile.SelectionParameterNames);
+        // THIS IS THE LATER SLICE THE EMPTY-SELECTION COMMENT ANTICIPATED. The selection is no
+        // longer empty, and it binds BEFORE pass_id because RequireInputRoleShape compares
+        // SelectionParameterNames.Append(PassParameterName) by sequence.
+        //
+        // The class is not narrowed by it. Legilux refused this family's query unbounded, twice,
+        // with SR319; the batch is a PARTITION of the class whose members come from a proven
+        // inventory of the whole of it, which is what keeps "every InitialDraft" true of a run that
+        // asks in fifty-draft pieces.
+        Assert.HasCount(
+            LuxembourgDraftGraphDiscoveryPlan.BatchCapacity, profile.SelectionParameterNames);
+        Assert.AreEqual("batch_draft_000", profile.SelectionParameterNames[0]);
+        Assert.AreEqual("batch_draft_049", profile.SelectionParameterNames[^1]);
+
+        // The arithmetic the capacity rests on, asserted rather than restated in a comment: every
+        // member is its own parameter, and the pass, the cursor flag and the seven continuation
+        // keys have to fit beside them under MachineQueryValidation's ceiling of 64.
+        Assert.IsLessThanOrEqualTo(
+            64,
+            profile.SelectionParameterNames.Count + 2 + profile.CanonicalKeyVariables.Count,
+            "a batch that could not be bound must not be mintable.");
     }
 
     /// <summary>
@@ -307,11 +338,13 @@ public sealed class LuxembourgDraftGraphDiscoveryPlanTests
 
         var count = plan.BindCount(
             LuxembourgQueryPass.Pass1,
+            [InventoryDraft],
             "urn:uuid:9c2f4d61-77a3-4a2e-8f0b-1d5e6a7c8b90",
             "urn:uuid:5e8b1c30-42d7-4f19-b6a4-0c3d9e2f7a15",
             source);
         var page = plan.BindPage(
             LuxembourgQueryPass.Pass2,
+            [InventoryDraft],
             null,
             0,
             count.InputArtifact.ArtifactRef,
@@ -326,12 +359,16 @@ public sealed class LuxembourgDraftGraphDiscoveryPlanTests
             LuxembourgDraftGraphDiscoveryPlan.PartitionMemberKey,
             page.InputArtifact.PartitionBinding.MemberKey);
 
-        // The count asks only which pass. The page adds has_cursor, and a continuation adds one
-        // parameter per key -- so an empty cursor is a first page rather than a short keyset.
-        Assert.HasCount(1, count.InputArtifact.OrderedParameters);
-        Assert.AreEqual("pass_id", count.InputArtifact.OrderedParameters[0].Name);
-        Assert.HasCount(2, page.InputArtifact.OrderedParameters);
-        Assert.AreEqual("has_cursor", page.InputArtifact.OrderedParameters[1].Name);
+        // The batch binds FIRST and at full capacity whatever its real size, so the input role is
+        // the same for every batch including a short final one. Then the pass; then, on a page,
+        // has_cursor; then one parameter per key on a continuation, so an empty cursor is a first
+        // page rather than a short keyset.
+        var capacity = LuxembourgDraftGraphDiscoveryPlan.BatchCapacity;
+        Assert.HasCount(capacity + 1, count.InputArtifact.OrderedParameters);
+        Assert.AreEqual("batch_draft_000", count.InputArtifact.OrderedParameters[0].Name);
+        Assert.AreEqual("pass_id", count.InputArtifact.OrderedParameters[capacity].Name);
+        Assert.HasCount(capacity + 2, page.InputArtifact.OrderedParameters);
+        Assert.AreEqual("has_cursor", page.InputArtifact.OrderedParameters[capacity + 1].Name);
     }
 
     /// <summary>
@@ -348,6 +385,7 @@ public sealed class LuxembourgDraftGraphDiscoveryPlanTests
 
         Assert.ThrowsExactly<ArgumentException>(() => plan.BindPage(
             LuxembourgQueryPass.Pass1,
+            [InventoryDraft],
             ["a", "b", "c"],
             0,
             new SourceArtifactRef(

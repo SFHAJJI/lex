@@ -283,8 +283,18 @@ public sealed record LuxembourgOpinionRunRequest(
 /// Like the opinion request and unlike the case-law one, this carries no selection: the scope is a
 /// JOLux class and the properties asked about are fixed by the plan, so a caller chooses nothing.
 /// </remarks>
+/// <summary>
+/// One bounded enumeration of the five asked properties over ONE BATCH of drafts.
+/// </summary>
+/// <remarks>
+/// <see cref="BatchDrafts"/> is a partition of the InitialDraft class, not a caller's subset of it:
+/// its members come from a proven inventory of the whole class. Legilux refused this family's query
+/// unbounded, twice, with SR319, which is why the class is swept in batches rather than in one
+/// request.
+/// </remarks>
 public sealed record LuxembourgDraftGraphRunRequest(
     LuxembourgDraftGraphDiscoveryPlan Plan,
+    IReadOnlyList<string> BatchDrafts,
     string PlanResourceId,
     MachineQueryRendererSource RendererSource);
 
@@ -923,8 +933,13 @@ public sealed class EuRepeatedEnumerationExecutor
                     pass => BindLuxembourgDraftGraphCount(request, pass),
                     (pass, cursor, selected, evidenceRef) =>
                         BindLuxembourgDraftGraphPage(request, pass, cursor, selected, evidenceRef),
-                    batchObjects: null,
-                    batchMembershipKeyOrdinal: null,
+                    // BATCHED, so membership is verified rather than assumed. key_1 is STR(?draft),
+                    // the first cursor component, so ordinal 0 is where a delivered row names the
+                    // draft it belongs to - and a row naming a draft outside the batch is a delivery
+                    // this run never asked for.
+                    batchObjects: LuxembourgDraftGraphDiscoveryPlan.RequestedPartitionMembers(
+                        request.BatchDrafts),
+                    batchMembershipKeyOrdinal: 0,
                     cancellationToken)
                 .ConfigureAwait(false);
         }
@@ -2204,6 +2219,7 @@ public sealed class EuRepeatedEnumerationExecutor
     {
         var bound = request.Plan.BindCount(
             (LuxembourgQueryPass)passOrdinal,
+            request.BatchDrafts,
             request.PlanResourceId,
             NewUrn(),
             request.RendererSource);
@@ -2221,6 +2237,7 @@ public sealed class EuRepeatedEnumerationExecutor
     {
         var bound = request.Plan.BindPage(
             (LuxembourgQueryPass)passOrdinal,
+            request.BatchDrafts,
             cursor,
             selected,
             countEvidenceRef,

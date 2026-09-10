@@ -117,6 +117,26 @@ public sealed class LuxembourgDraftGraphDiscoveryPlan
     /// <summary>The marker a row carries when the publisher holds no value for that property.</summary>
     public const string UnboundKind = "unbound";
 
+    /// <summary>
+    /// How many drafts one request may name.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// NOT A TUNING CONSTANT. Every batch member travels as its own <c>publisher_literal</c>
+    /// <see cref="MachineQueryParameter"/> and <c>MachineQueryValidation.MaximumParameterCount</c>
+    /// is 64. This family always spends one on <c>pass_id</c>, one on <c>has_cursor</c> and up to
+    /// seven on cursor continuation, so 55 remain; 50 keeps the same margin the EU object-facts
+    /// batch keeps, and reading the arithmetic here rather than restating it means a batch that
+    /// could not be bound cannot be minted.
+    /// </para>
+    /// <para>
+    /// The class sweep is not narrowed by this. The batch is a PARTITION of the class, and which
+    /// drafts are in it comes from a proven inventory of the whole class rather than from a caller
+    /// choosing a subset.
+    /// </para>
+    /// </remarks>
+    public const int BatchCapacity = 50;
+
     internal const long PublisherDeliveryCeilingRows = 1_000_000;
     internal const uint Pass1PageLimit = 953;
     internal const uint Pass2PageLimit = 571;
@@ -181,6 +201,73 @@ public sealed class LuxembourgDraftGraphDiscoveryPlan
     /// </summary>
     internal static int CursorKeyCount => Cursor.Length;
 
+    /// <summary>The batch member parameter names, in the order they bind.</summary>
+    /// <remarks>
+    /// They bind BEFORE <c>pass_id</c>, and that is not cosmetic: <c>RequireInputRoleShape</c>
+    /// compares <c>SelectionParameterNames.Append(PassParameterName)</c> by sequence, so a selection
+    /// appended after the pass would be a different input role from the one the profile declares.
+    /// The plan said so in a comment while the selection was empty; this is that comment coming due.
+    /// </remarks>
+    internal static string[] BatchParameterNames()
+    {
+        var names = new string[BatchCapacity];
+        for (var index = 0; index < BatchCapacity; index++)
+        {
+            names[index] = "batch_draft_" + index.ToString("D3", CultureInfo.InvariantCulture);
+        }
+
+        return names;
+    }
+
+    /// <summary>
+    /// One batch as the query will carry it: sorted, deduplicated, and padded to capacity.
+    /// </summary>
+    /// <remarks>
+    /// Sorted and deduplicated HERE rather than trusted, because the partition key digests the
+    /// batch's own members and two runs naming the same drafts in a different order must mint the
+    /// same key. Padding repeats the last member: the <c>VALUES</c> block sits inside a
+    /// <c>SELECT DISTINCT</c>, so a repeat asks nothing extra, and a fixed parameter count keeps the
+    /// input role identical for every batch including a short final one.
+    /// </remarks>
+    /// <summary>
+    /// The batch as the partition names it: sorted, deduplicated, and NOT padded.
+    /// </summary>
+    /// <remarks>
+    /// The executor verifies every delivered row's own key against this set, so it must contain
+    /// exactly the drafts asked about. The padding that fills the parameter block is a rendering
+    /// detail and would make a repeated member look like a member asked about twice.
+    /// </remarks>
+    public static IReadOnlyList<string> RequestedPartitionMembers(IReadOnlyList<string> batchDrafts)
+    {
+        ArgumentNullException.ThrowIfNull(batchDrafts);
+        return batchDrafts
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(static value => value, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    internal static string[] CanonicalizeAndPad(IReadOnlyList<string> batchDrafts)
+    {
+        ArgumentNullException.ThrowIfNull(batchDrafts);
+        var ordered = batchDrafts
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(static value => value, StringComparer.Ordinal)
+            .ToArray();
+        if (ordered.Length is 0 || ordered.Length > BatchCapacity)
+        {
+            throw new ArgumentException(
+                $"A batch names one to {BatchCapacity} drafts.", nameof(batchDrafts));
+        }
+
+        var padded = new string[BatchCapacity];
+        for (var index = 0; index < BatchCapacity; index++)
+        {
+            padded[index] = index < ordered.Length ? ordered[index] : ordered[^1];
+        }
+
+        return padded;
+    }
+
     private readonly byte[] _canonicalIdentityBytes;
 
     private LuxembourgDraftGraphDiscoveryPlan()
@@ -196,6 +283,7 @@ public sealed class LuxembourgDraftGraphDiscoveryPlan
             "draft_class=" + InitialDraftClassIri,
             "asked_predicates=" + string.Join(',', AskedPredicates),
             "unbound_kind=" + UnboundKind,
+            "batch_capacity=" + BatchCapacity.ToString(CultureInfo.InvariantCulture),
             "publisher_delivery_ceiling_rows=" + PublisherDeliveryCeilingRows.ToString(CultureInfo.InvariantCulture),
             "pass_1=" + (int)LuxembourgQueryPass.Pass1 + ":" + Pass1PageLimit,
             "pass_2=" + (int)LuxembourgQueryPass.Pass2 + ":" + Pass2PageLimit,
@@ -237,7 +325,7 @@ public sealed class LuxembourgDraftGraphDiscoveryPlan
         Projection,
         Cursor,
         Cursor,
-        [],
+        BatchParameterNames(),
         "pass_id",
         Cursor.Select(static value => "last_" + value).ToArray(),
         "has_cursor",
@@ -245,22 +333,24 @@ public sealed class LuxembourgDraftGraphDiscoveryPlan
 
     public LuxembourgDraftGraphBoundQuery BindCount(
         LuxembourgQueryPass pass,
+        IReadOnlyList<string> batchDrafts,
         string machinePlanResourceId,
         string inputResourceId,
         MachineQueryRendererSource rendererSource) =>
-        Bind(false, pass, null,
+        Bind(false, pass, batchDrafts, null,
             new MachineResponseCardinality(MachineResponseCardinalityKind.OpaqueBody, null, null, null),
             machinePlanResourceId, inputResourceId, rendererSource);
 
     public LuxembourgDraftGraphBoundQuery BindPage(
         LuxembourgQueryPass pass,
+        IReadOnlyList<string> batchDrafts,
         IReadOnlyList<string>? cursor,
         long expectedPartitionRowCount,
         SourceArtifactRef expectedPartitionRowCountEvidenceRef,
         string machinePlanResourceId,
         string inputResourceId,
         MachineQueryRendererSource rendererSource) =>
-        Bind(true, pass, cursor,
+        Bind(true, pass, batchDrafts, cursor,
             new MachineResponseCardinality(
                 MachineResponseCardinalityKind.BoundedRowSetPage,
                 PageLimit(pass), expectedPartitionRowCount, expectedPartitionRowCountEvidenceRef),
@@ -269,6 +359,7 @@ public sealed class LuxembourgDraftGraphDiscoveryPlan
     private LuxembourgDraftGraphBoundQuery Bind(
         bool isPage,
         LuxembourgQueryPass pass,
+        IReadOnlyList<string> batchDrafts,
         IReadOnlyList<string>? cursor,
         MachineResponseCardinality response,
         string machinePlanResourceId,
@@ -278,15 +369,26 @@ public sealed class LuxembourgDraftGraphDiscoveryPlan
         _ = PageLimit(pass);
         ArgumentNullException.ThrowIfNull(rendererSource);
 
-        // No selection: the scope is a class, and the asked-about predicates are fixed by this plan
-        // rather than chosen by a caller. RequireInputRoleShape compares
-        // SelectionParameterNames.Append(PassParameterName) by sequence, and with an empty selection
-        // pass-first and selection-first are the same list. Written down so a later slice that adds
-        // a selection knows it binds BEFORE pass_id.
-        var parameters = new List<MachineQueryParameter>
+        // THE SELECTION BINDS FIRST, which is the ordering the empty-selection comment on this plan
+        // was written to anticipate: RequireInputRoleShape compares
+        // SelectionParameterNames.Append(PassParameterName) by sequence.
+        //
+        // The class is not narrowed by the batch. The members come from a proven inventory of the
+        // whole class, so this is a partition of the sweep rather than a caller's subset - which is
+        // the distinction the owner ruling turns on.
+        var padded = CanonicalizeAndPad(batchDrafts);
+        var names = BatchParameterNames();
+        var parameters = new List<MachineQueryParameter>(BatchCapacity + 2 + Cursor.Length);
+        for (var index = 0; index < BatchCapacity; index++)
         {
-            new("pass_id", MachineQueryParameterKind.BoundedInteger, (int)pass, null, ArtifactRef),
-        };
+            parameters.Add(new MachineQueryParameter(
+                names[index], MachineQueryParameterKind.PublisherLiteral,
+                null, padded[index], ArtifactRef));
+        }
+
+        parameters.Add(
+            new MachineQueryParameter(
+                "pass_id", MachineQueryParameterKind.BoundedInteger, (int)pass, null, ArtifactRef));
 
         if (isPage)
         {
@@ -384,9 +486,19 @@ public sealed class LuxembourgDraftGraphDiscoveryPlan
         // draft holding none of the asked properties still delivers a row per predicate, carrying
         // the unbound marker: that absence IS the fact, and omitting it would be the silent drop
         // this family exists to avoid.
+        var batchValues = string.Join('\n', BatchParameterNames()
+            .Select(static name => "      {" + name + ":iri}"));
+
         var rows = $$"""
             SELECT {{grouped}} (COUNT(*) AS ?multiplicity) WHERE {
               VALUES ?lex_pass_id { {pass_id:uint} }
+              {
+                SELECT DISTINCT ?draft WHERE {
+                  VALUES ?draft {
+            {{batchValues}}
+                  }
+                }
+              }
               ?draft a <{{InitialDraftClassIri}}> .
               BIND(IF(isIRI(?draft), "iri", "unsupported_blank_node") AS ?draft_kind)
               VALUES ?predicate {
@@ -499,9 +611,19 @@ internal sealed class LuxembourgDraftGraphSparqlRenderer : IMachineQueryRenderer
         var query = Replace(_isPage ? _plan.PageTemplate : _plan.CountTemplate,
             "{pass_id:uint}", ((int)pass).ToString(CultureInfo.InvariantCulture));
 
+        // Every batch slot is filled from the ordered parameter set, and Replace requires each to
+        // occur exactly once - so a template that dropped or duplicated a member fails here rather
+        // than asking the publisher about a different set of drafts than the input names.
+        foreach (var name in LuxembourgDraftGraphDiscoveryPlan.BatchParameterNames())
+        {
+            query = Replace(query, "{" + name + ":iri}", SparqlIriTerm(Literal(parameters, name)));
+        }
+
+        var batchCount = LuxembourgDraftGraphDiscoveryPlan.BatchCapacity;
         if (!_isPage)
         {
-            if (response.Kind != MachineResponseCardinalityKind.OpaqueBody || parameters.Count != 1)
+            if (response.Kind != MachineResponseCardinalityKind.OpaqueBody ||
+                parameters.Count != 1 + batchCount)
             {
                 throw new ArgumentException("A count input has one exact shape.", nameof(input));
             }
@@ -520,7 +642,7 @@ internal sealed class LuxembourgDraftGraphSparqlRenderer : IMachineQueryRenderer
             throw new ArgumentException("Cursor presence must be zero or one.", nameof(input));
         }
 
-        if (parameters.Count != 2 +
+        if (parameters.Count != 2 + batchCount +
             (hasCursor == 1 ? LuxembourgDraftGraphDiscoveryPlan.CursorKeyCount : 0))
         {
             throw new ArgumentException("A page input has one exact cursor shape.", nameof(input));
@@ -541,6 +663,37 @@ internal sealed class LuxembourgDraftGraphSparqlRenderer : IMachineQueryRenderer
     private static MachineQueryRenderOutput Output(string query) => new(
         LuxembourgQueryPlan.PublisherEndpoint,
         Encoding.UTF8.GetBytes("query=" + Uri.EscapeDataString(query)));
+
+    /// <summary>One batch member, as the publisher literal the input carries it as.</summary>
+    private static string Literal(
+        IReadOnlyDictionary<string, MachineQueryParameter> parameters, string name) =>
+        parameters.TryGetValue(name, out var value) &&
+        value.Kind == MachineQueryParameterKind.PublisherLiteral && value.TextValue is not null
+            ? value.TextValue
+            : throw new ArgumentException($"The batch input {name} is missing or invalid.");
+
+    /// <summary>
+    /// One batch member rendered as a SPARQL IRI term.
+    /// </summary>
+    /// <remarks>
+    /// An IRI cannot be embedded free-form in query text, which is why every member travels as its
+    /// own parameter and is rendered here rather than concatenated at the caller.
+    /// </remarks>
+    private static string SparqlIriTerm(string canonicalIri)
+    {
+        // Guarded rather than trusted, matching the sibling transposition renderer: a member
+        // carrying an angle bracket or whitespace would close this term early and change the query
+        // into one nobody wrote. The members come from a proven inventory, which is a reason to
+        // expect them well formed and not a reason to skip checking.
+        if (string.IsNullOrEmpty(canonicalIri) ||
+            canonicalIri.AsSpan().IndexOfAny('<', '>') >= 0 ||
+            canonicalIri.Any(char.IsWhiteSpace))
+        {
+            throw new ArgumentException("A batch member is not a safe SPARQL IRI term.");
+        }
+
+        return "<" + canonicalIri + ">";
+    }
 
     private static long Integer(IReadOnlyDictionary<string, MachineQueryParameter> parameters, string name) =>
         parameters.TryGetValue(name, out var value) &&
