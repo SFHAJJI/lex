@@ -967,6 +967,10 @@ public sealed class GuardedConstructionCensusTests
                     + "method public instance "
                     + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgDraftPropertyCoverage::DerivedA"
                     + "bsenceFor",
+                "Lex.V3.Contracts.Source.Luxembourg.LuxembourgDraftPropertyUnresolvedGap: "
+                    + "constructor internal instance "
+                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgDraftPropertyUnresolvedGap::.ct"
+                    + "or",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgInitialDraftInventoryDiscoveryPlan: "
                     + "constructor private instance "
                     + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgInitialDraftInventoryDiscoveryP"

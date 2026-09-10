@@ -78,6 +78,65 @@ public sealed class LuxembourgDraftPropertyObservedAbsence
     public LuxembourgInitialDraftInventoryCitation Inventory { get; }
 }
 
+/// <summary>Why a pair could not be resolved either way by this delivery.</summary>
+public enum LuxembourgDraftPropertyGapReason
+{
+    /// <summary>
+    /// The predicate is declared on another class, so a draft-property delivery could never have
+    /// carried it and its absence here evidences nothing.
+    /// </summary>
+    [JsonStringEnumMemberName("declared_on_another_class")]
+    DeclaredOnAnotherClass = 1,
+}
+
+/// <summary>
+/// One (draft, property) pair this delivery can resolve neither as a value nor as an absence.
+/// </summary>
+/// <remarks>
+/// <para>
+/// THE THIRD HONEST ANSWER, and it exists because the other two would both be lies here. There is
+/// no delivered value, so it is not a fact; and the delivery could never have carried one, so its
+/// silence is not evidence of absence. A delivery can only evidence the absence of something it
+/// could have carried.
+/// </para>
+/// <para>
+/// It is typed rather than dropped because a pair that simply vanished would be the false absence
+/// read back as "we never asked" - and this family DID ask, of the wrong subject. The gap stands
+/// until the traversal that could answer it is proven.
+/// </para>
+/// </remarks>
+public sealed class LuxembourgDraftPropertyUnresolvedGap
+{
+    internal LuxembourgDraftPropertyUnresolvedGap(
+        string draftIri,
+        string predicateIri,
+        LuxembourgDraftPropertyGapReason reason,
+        string declaredOnClassIri,
+        LuxembourgDraftBatchCitation batch,
+        LuxembourgInitialDraftInventoryCitation inventory)
+    {
+        DraftIri = draftIri;
+        PredicateIri = predicateIri;
+        Reason = reason;
+        DeclaredOnClassIri = declaredOnClassIri;
+        Batch = batch;
+        Inventory = inventory;
+    }
+
+    public string DraftIri { get; }
+
+    public string PredicateIri { get; }
+
+    public LuxembourgDraftPropertyGapReason Reason { get; }
+
+    /// <summary>The class that does declare it, and therefore where an answer would come from.</summary>
+    public string DeclaredOnClassIri { get; }
+
+    public LuxembourgDraftBatchCitation Batch { get; }
+
+    public LuxembourgInitialDraftInventoryCitation Inventory { get; }
+}
+
 /// <summary>The proven inventory a draft-graph batch partitions.</summary>
 /// <remarks>
 /// Carried into the batch run rather than discovered by it. A batch that cannot name the inventory
@@ -170,6 +229,7 @@ public sealed class LuxembourgDraftPropertyCoverage
         IReadOnlyList<LuxembourgDraftPropertyRecordView> present,
         Dictionary<(string, string), List<int>> valueIndexesByPair,
         IReadOnlyList<LuxembourgDraftPropertyObservedAbsence> derivedAbsences,
+        IReadOnlyList<LuxembourgDraftPropertyUnresolvedGap> unresolvedGaps,
         IReadOnlyList<string> draftsOfUnconfirmedClass,
         LuxembourgDraftBatchCitation batch,
         LuxembourgInitialDraftInventoryCitation inventory)
@@ -179,6 +239,7 @@ public sealed class LuxembourgDraftPropertyCoverage
         _present = present;
         _valueIndexesByPair = valueIndexesByPair;
         DerivedAbsences = derivedAbsences;
+        UnresolvedGaps = unresolvedGaps;
         DraftsOfUnconfirmedClass = draftsOfUnconfirmedClass;
         Batch = batch;
         Inventory = inventory;
@@ -195,6 +256,16 @@ public sealed class LuxembourgDraftPropertyCoverage
     public int PublisherRowCount => _present.Count;
 
     public IReadOnlyList<LuxembourgDraftPropertyObservedAbsence> DerivedAbsences { get; }
+
+    /// <summary>
+    /// Pairs this delivery can resolve neither as a value nor as an absence.
+    /// </summary>
+    /// <remarks>
+    /// A predicate declared on another class could never have been carried by a draft-property
+    /// delivery, so its silence evidences nothing. The pair is represented here rather than derived
+    /// as an absence or dropped.
+    /// </remarks>
+    public IReadOnlyList<LuxembourgDraftPropertyUnresolvedGap> UnresolvedGaps { get; }
 
     /// <summary>
     /// Requested drafts this delivery cannot confirm are still <c>InitialDraft</c>, and for which no
@@ -257,6 +328,7 @@ public sealed class LuxembourgDraftPropertyCoverage
         LuxembourgDraftBatchCitation? batch,
         LuxembourgInitialDraftInventoryCitation? inventory,
         int retainedNotAdmittedRows,
+        IReadOnlyDictionary<string, string> predicatesDeclaredElsewhere,
         out LuxembourgDraftPropertyCoverageRefusal refusal,
         out string? detail)
     {
@@ -367,6 +439,8 @@ public sealed class LuxembourgDraftPropertyCoverage
         // EMITTED IN A DETERMINISTIC ORDER so two runs over one batch produce the same records.
         var absences = new List<LuxembourgDraftPropertyObservedAbsence>();
         var absencePairs = new HashSet<(string, string)>();
+        var gaps = new List<LuxembourgDraftPropertyUnresolvedGap>();
+        var gapPairs = new HashSet<(string, string)>();
         foreach (var draft in requestedDrafts)
         {
             if (!confirmed.Contains(draft))
@@ -379,6 +453,19 @@ public sealed class LuxembourgDraftPropertyCoverage
                 var key = (draft, predicate);
                 if (byPair.ContainsKey(key))
                 {
+                    continue;
+                }
+
+                // A DELIVERY CAN ONLY EVIDENCE THE ABSENCE OF SOMETHING IT COULD HAVE CARRIED. A
+                // predicate declared on another class was never askable of this subject, so its
+                // silence here is not evidence - it is an unresolved gap, and saying so is the only
+                // honest third answer.
+                if (predicatesDeclaredElsewhere.TryGetValue(predicate, out var declaringClass))
+                {
+                    gaps.Add(new LuxembourgDraftPropertyUnresolvedGap(
+                        draft, predicate, LuxembourgDraftPropertyGapReason.DeclaredOnAnotherClass,
+                        declaringClass, batch, inventory));
+                    gapPairs.Add(key);
                     continue;
                 }
 
@@ -413,7 +500,8 @@ public sealed class LuxembourgDraftPropertyCoverage
         // loop, and mutation C6 (absence decided per DRAFT rather than per PAIR - the realistic form
         // of the arithmetic error this design exists to prevent) is killed here.
         var expected = requestedDrafts.Count * askedPredicates.Count;
-        var accounted = byPair.Count + absences.Count + (unconfirmed.Length * askedPredicates.Count);
+        var accounted = byPair.Count + absences.Count + gaps.Count
+            + (unconfirmed.Length * askedPredicates.Count);
         if (accounted != expected || absencePairs.Count != absences.Count)
         {
             refusal = LuxembourgDraftPropertyCoverageRefusal.MatrixPairNotRepresented;
@@ -432,7 +520,7 @@ public sealed class LuxembourgDraftPropertyCoverage
             foreach (var predicate in askedPredicates)
             {
                 var key = (draft, predicate);
-                if (!byPair.ContainsKey(key) && !absencePairs.Contains(key))
+                if (!byPair.ContainsKey(key) && !absencePairs.Contains(key) && !gapPairs.Contains(key))
                 {
                     unrepresented.Add(draft + " " + predicate);
                 }
@@ -448,7 +536,7 @@ public sealed class LuxembourgDraftPropertyCoverage
 
         refusal = LuxembourgDraftPropertyCoverageRefusal.None;
         return new LuxembourgDraftPropertyCoverage(
-            requestedDrafts, askedPredicates, present, byPair, absences, unconfirmed, batch,
+            requestedDrafts, askedPredicates, present, byPair, absences, gaps, unconfirmed, batch,
             inventory);
     }
 
@@ -489,6 +577,19 @@ public sealed class LuxembourgDraftPropertyCoverage
                     + "whole type exists to prevent.");
         }
 
+        // The same rule for an unresolved gap: no value and no absence, because the delivery could
+        // never have carried the predicate. Answering empty would turn "we asked the wrong subject"
+        // into "the publisher holds nothing", which is the false absence by a third route.
+        if (UnresolvedGaps.Any(value =>
+                string.Equals(value.DraftIri, draftIri, StringComparison.Ordinal) &&
+                string.Equals(value.PredicateIri, predicateIri, StringComparison.Ordinal)))
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(predicateIri),
+                "That property is declared on another class, so this delivery resolves it neither "
+                    + "way. See UnresolvedGaps.");
+        }
+
         // The same rule for a draft whose class this delivery could not confirm: it has no values
         // AND no derived absence, so answering either would let a caller read a fact out of a
         // subject the run never established was still in the class.
@@ -506,6 +607,7 @@ public sealed class LuxembourgDraftPropertyCoverage
         CultureInfo.InvariantCulture,
         $"publisher_rows={PublisherRowCount} distinct_present_pairs={PresentPairCount} "
         + $"derived_absences={DerivedAbsences.Count} covered_pairs={CoveredPairCount} "
+        + $"unresolved_gaps={UnresolvedGaps.Count} "
         + $"unconfirmed_drafts={DraftsOfUnconfirmedClass.Count} "
         + $"total_records={PublisherRowCount + DerivedAbsences.Count}");
 }

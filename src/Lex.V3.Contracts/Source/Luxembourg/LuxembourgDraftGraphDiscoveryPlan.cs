@@ -105,7 +105,18 @@ public sealed class LuxembourgDraftGraphDiscoveryPlan
     public const string ParliamentDraftUrlPredicateIri = Jolux + "parliamentDraftUrl";
 
     /// <summary>The date the draft was referred.</summary>
+    /// <remarks>
+    /// NOT DECLARED ON THE DRAFT. <c>baseline/pack/38-verified-claims.md</c> puts it on
+    /// <see cref="OpinionRequestClassIri"/>, and the measurement agrees: a broad acquisition over
+    /// ten proven drafts returned seventeen distinct predicates and this was not among them.
+    /// It stays in the accepted vocabulary because a direct triple, if the publisher ever delivers
+    /// one, is an E8 fact - but its ABSENCE cannot be concluded from a draft-property delivery that
+    /// was never able to carry it. See <see cref="PredicatesNotDeclaredOnTheDraft"/>.
+    /// </remarks>
     public const string ReferralDatePredicateIri = Jolux + "referralDate";
+
+    /// <summary>The JOLux class that declares the referral date.</summary>
+    public const string OpinionRequestClassIri = Jolux + "OpinionRequest";
 
     /// <summary>The enacted act a draft became, where it became one.</summary>
     /// <remarks>
@@ -176,6 +187,33 @@ public sealed class LuxembourgDraftGraphDiscoveryPlan
 
     /// <summary>Every predicate this family asks about, for a caller that needs to name them.</summary>
     public static IReadOnlyList<string> AskedAbout { get; } = Array.AsReadOnly(AskedPredicates);
+
+    /// <summary>
+    /// Accepted predicates that are NOT declared on the draft, so a draft-property delivery cannot
+    /// evidence their absence.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A DELIVERY CAN ONLY EVIDENCE THE ABSENCE OF SOMETHING IT COULD HAVE CARRIED. These predicates
+    /// hang off another class, so no completeness proof over draft triples says anything about them:
+    /// concluding absence would be asserting a fact about a subject this query never looked at.
+    /// </para>
+    /// <para>
+    /// Measured before it was ruled. A first canary derived fifty (draft, referralDate) absences and
+    /// every one was false - not because the question dropped rows, which was the separate
+    /// parliamentDraftUrl defect, but because the question could never have been answered here.
+    /// </para>
+    /// </remarks>
+    public static IReadOnlyDictionary<string, string> PredicatesNotDeclaredOnTheDraft { get; } =
+        new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            [ReferralDatePredicateIri] = OpinionRequestClassIri,
+        }.AsReadOnly();
+
+    /// <summary>The accepted predicates whose absence a draft-property delivery CAN evidence.</summary>
+    public static IReadOnlyList<string> AbsenceMatrixPredicates { get; } = Array.AsReadOnly(
+        AskedPredicates.Where(static value =>
+            !PredicatesNotDeclaredOnTheDraft.ContainsKey(value)).ToArray());
 
     private static readonly string[] Projection =
     [

@@ -499,6 +499,8 @@ public sealed class ClosedVocabularyCensusTests
                     + "RequestedBatchNotRetained, DeliveredDraftNotRequested, "
                     + "DeliveredPredicateNotAskedAbout, PresentRowNotConsumedExactlyOnce, "
                     + "MatrixPairNotRepresented, PairHoldsPresentAndDerivedAbsence",
+                "Lex.V3.Contracts.Source.Luxembourg.LuxembourgDraftPropertyGapReason: "
+                    + "DeclaredOnAnotherClass",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgDraftRelationPredicate: "
                     + "DraftTransposes",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgLiteralDisposition: Accepted, "

@@ -46,6 +46,7 @@ public sealed class LuxembourgDraftPropertyCoverageTests
             batch ?? Batch(drafts, rows.Count),
             inventory ?? Inventory(),
             0,
+            LuxembourgDraftGraphDiscoveryPlan.PredicatesNotDeclaredOnTheDraft,
             out var refusal, out var detail);
         Assert.IsNotNull(coverage, $"{refusal}: {detail}");
         return coverage;
@@ -58,7 +59,9 @@ public sealed class LuxembourgDraftPropertyCoverageTests
         LuxembourgInitialDraftInventoryCitation? inventory)
     {
         var coverage = LuxembourgDraftPropertyCoverage.TryComplete(
-            drafts, Asked, rows, batch, inventory, 0, out var refusal, out _);
+            drafts, Asked, rows, batch, inventory, 0,
+            LuxembourgDraftGraphDiscoveryPlan.PredicatesNotDeclaredOnTheDraft,
+            out var refusal, out _);
         Assert.IsNull(coverage, "a refused completion mints nothing.");
         return refusal;
     }
@@ -111,15 +114,22 @@ public sealed class LuxembourgDraftPropertyCoverageTests
 
         Assert.AreEqual(103, coverage.PublisherRowCount, "rows the publisher delivered.");
         Assert.AreEqual(95, coverage.PresentPairCount, "distinct pairs those rows cover.");
-        Assert.AreEqual(155, coverage.DerivedAbsences.Count, "250 - 95, by distinct pair set.");
         Assert.AreEqual(250, coverage.CoveredPairCount, "50 drafts x 5 properties.");
+
+        // referralDate is declared on OpinionRequest, so its fifty pairs are unresolved gaps rather
+        // than absences. An earlier canary derived all fifty as absences and every one was false.
+        Assert.AreEqual(50, coverage.UnresolvedGaps.Count, "one per draft, for referralDate.");
         Assert.AreEqual(
-            258, coverage.PublisherRowCount + coverage.DerivedAbsences.Count,
-            "103 publisher rows plus 155 derived absences.");
+            105, coverage.DerivedAbsences.Count, "250 - 95 present - 50 unresolved, by pair set.");
+
+        Assert.AreEqual(
+            coverage.CoveredPairCount,
+            coverage.PresentPairCount + coverage.DerivedAbsences.Count + coverage.UnresolvedGaps.Count,
+            "every asked pair is present, absent or unresolved - exactly one of the three.");
 
         Assert.AreNotEqual(
             250 - coverage.PublisherRowCount, coverage.DerivedAbsences.Count,
-            "row arithmetic would have given 147 and under-counted by the eight multi-value rows.");
+            "row arithmetic would have under-counted by the eight multi-value rows.");
     }
 
     /// <summary>Every value of a multi-valued property is kept, and it is still one pair.</summary>
@@ -142,7 +152,8 @@ public sealed class LuxembourgDraftPropertyCoverageTests
         Assert.AreEqual(9, coverage.PublisherRowCount);
         Assert.AreEqual(1, coverage.PresentPairCount);
         Assert.HasCount(9, coverage.ValuesFor(drafts[0], transposes), "every value is retained.");
-        Assert.AreEqual(4, coverage.DerivedAbsences.Count, "the other four properties are absent.");
+        Assert.AreEqual(3, coverage.DerivedAbsences.Count, "three of the other four are absent.");
+        Assert.AreEqual(1, coverage.UnresolvedGaps.Count, "and referralDate is unresolved, not absent.");
     }
 
     /// <summary>Every requested pair is represented exactly once, and never twice.</summary>
@@ -160,6 +171,15 @@ public sealed class LuxembourgDraftPropertyCoverageTests
         {
             foreach (var predicate in Asked)
             {
+                if (LuxembourgDraftGraphDiscoveryPlan.PredicatesNotDeclaredOnTheDraft
+                        .ContainsKey(predicate))
+                {
+                    Assert.ThrowsExactly<ArgumentOutOfRangeException>(
+                        () => coverage.ValuesFor(draft, predicate),
+                        "an unresolved pair answers neither way.");
+                    continue;
+                }
+
                 var values = coverage.ValuesFor(draft, predicate);
                 var absence = coverage.DerivedAbsenceFor(draft, predicate);
                 Assert.IsTrue(
@@ -170,7 +190,7 @@ public sealed class LuxembourgDraftPropertyCoverageTests
 
         Assert.AreEqual(
             coverage.CoveredPairCount,
-            coverage.PresentPairCount + coverage.DerivedAbsences.Count);
+            coverage.PresentPairCount + coverage.DerivedAbsences.Count + coverage.UnresolvedGaps.Count);
     }
 
     /// <summary>No absence may be derived from an enumeration nobody proved.</summary>
@@ -209,7 +229,9 @@ public sealed class LuxembourgDraftPropertyCoverageTests
 
         var coverage = Complete(drafts, rows, batch, inventory);
 
-        Assert.HasCount(12, coverage.DerivedAbsences, "three drafts x four unanswered properties.");
+        Assert.HasCount(
+            9, coverage.DerivedAbsences, "three drafts x three absent properties (referralDate is a gap).");
+        Assert.HasCount(3, coverage.UnresolvedGaps);
         foreach (var absence in coverage.DerivedAbsences)
         {
             Assert.AreSame(batch, absence.Batch, "the exact batch enumeration, not a copy of its shape.");
@@ -309,8 +331,9 @@ public sealed class LuxembourgDraftPropertyCoverageTests
             new[] { drafts[2] }, coverage.DraftsOfUnconfirmedClass.ToArray(),
             "the silent draft is named, not silently absorbed.");
         Assert.AreEqual(
-            8, coverage.DerivedAbsences.Count,
-            "two confirmed drafts x four unanswered properties, and NOTHING for the silent one.");
+            6, coverage.DerivedAbsences.Count,
+            "two confirmed drafts x three absent properties, and NOTHING for the silent one.");
+        Assert.AreEqual(2, coverage.UnresolvedGaps.Count, "one per CONFIRMED draft only.");
         Assert.IsFalse(
             coverage.DerivedAbsences.Any(value =>
                 string.Equals(value.DraftIri, drafts[2], StringComparison.Ordinal)),
@@ -330,8 +353,59 @@ public sealed class LuxembourgDraftPropertyCoverageTests
         Assert.AreEqual(15, coverage.CoveredPairCount);
         Assert.AreEqual(
             coverage.CoveredPairCount,
-            coverage.PresentPairCount + coverage.DerivedAbsences.Count
+            coverage.PresentPairCount + coverage.DerivedAbsences.Count + coverage.UnresolvedGaps.Count
                 + (coverage.DraftsOfUnconfirmedClass.Count * Asked.Length));
+    }
+
+    /// <summary>
+    /// A predicate declared on another class is an unresolved gap, never a derived absence.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A DELIVERY CAN ONLY EVIDENCE THE ABSENCE OF SOMETHING IT COULD HAVE CARRIED.
+    /// <c>referralDate</c> is declared on <c>jolux:OpinionRequest</c>, not on the draft, so a
+    /// draft-property acquisition was never able to answer it either way. Its silence is not
+    /// evidence.
+    /// </para>
+    /// <para>
+    /// MEASURED BEFORE IT WAS RULED, and by two independent routes: a broad acquisition over ten
+    /// proven drafts returned seventeen distinct predicates with this among none of them, and an
+    /// earlier canary derived fifty of these as absences - every one false, and false differently
+    /// from the parliamentDraftUrl fifty, which the question dropped rather than never asked.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void APredicateDeclaredOnAnotherClassIsAnUnresolvedGapNotAnAbsence()
+    {
+        var drafts = Drafts(2);
+        var referral = LuxembourgDraftGraphDiscoveryPlan.ReferralDatePredicateIri;
+        var rows = drafts.Select(draft => Row(draft, Asked[0], "urn:status:" + draft)).ToArray();
+
+        var coverage = Complete(drafts, rows);
+
+        Assert.IsFalse(
+            coverage.DerivedAbsences.Any(value =>
+                string.Equals(value.PredicateIri, referral, StringComparison.Ordinal)),
+            "no absence may be derived for a property this delivery could not have carried.");
+
+        Assert.HasCount(2, coverage.UnresolvedGaps);
+        foreach (var gap in coverage.UnresolvedGaps)
+        {
+            Assert.AreEqual(referral, gap.PredicateIri);
+            Assert.AreEqual(
+                LuxembourgDraftPropertyGapReason.DeclaredOnAnotherClass, gap.Reason);
+            Assert.AreEqual(
+                LuxembourgDraftGraphDiscoveryPlan.OpinionRequestClassIri, gap.DeclaredOnClassIri,
+                "the gap names where an answer would have to come from.");
+            CollectionAssert.Contains(drafts.ToArray(), gap.DraftIri);
+        }
+
+        // And it is still ASKED about: a direct triple, if the publisher ever delivers one, is an
+        // E8 fact. Only the conclusion of absence is withheld.
+        CollectionAssert.Contains(
+            LuxembourgDraftGraphDiscoveryPlan.AskedAbout.ToArray(), referral);
+        CollectionAssert.DoesNotContain(
+            LuxembourgDraftGraphDiscoveryPlan.AbsenceMatrixPredicates.ToArray(), referral);
     }
 
     /// <summary>The selection digest changes when the batch changes.</summary>

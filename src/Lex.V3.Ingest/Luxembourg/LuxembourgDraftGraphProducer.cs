@@ -430,6 +430,7 @@ public sealed class LuxembourgDraftGraphProducer
                 rows.Count),
             inventory,
             notAdmitted.Count,
+            LuxembourgDraftGraphDiscoveryPlan.PredicatesNotDeclaredOnTheDraft,
             out var coverageRefusal,
             out var coverageDetail);
         if (coverage is null)
