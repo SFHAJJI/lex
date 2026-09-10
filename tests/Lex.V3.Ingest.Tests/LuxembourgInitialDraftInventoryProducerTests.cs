@@ -94,37 +94,86 @@ public sealed class LuxembourgInitialDraftInventoryProducerTests
     }
 
     /// <summary>
-    /// A blank-node member is carried and typed, never filtered away.
+    /// A blank-node member is reported, and it stops the inventory completing.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// THIS IS THE OWNER RULING'S "refuse or type any non-addressable subject; it must not filter
-    /// such a subject away", and it is why the query asks the class membership triple without an
-    /// <c>isIRI</c> guard. Filtering at the query would make a member the publisher holds vanish
-    /// from an inventory calling itself complete — the false absence S2-A03 forbids — and would do
-    /// it invisibly, because the count would agree with the pages.
+    /// THE FIRST HEAD OF THIS SLICE TYPED IT AND CARRIED ON, and the review showed why that is not
+    /// enough. The page derives <c>key_1</c> from <c>STR(?draft)</c>, which for a blank node is a
+    /// label scoped to the result set that carried it — SPARQL's JSON results format says reuse of a
+    /// label in another results object does not imply the same blank node. Source/Core refuses a
+    /// canonical-key component whose RDF kind is a blank node, but here it never sees one: it sees
+    /// the derived plain literal. Two passes could agree on <c>b0</c> while meaning different
+    /// subjects, and the run still called itself complete.
     /// </para>
     /// <para>
-    /// It is not addressable: a blank-node label is scoped to the result set that produced it, so
-    /// naming it in a later <c>VALUES</c> batch asks about nothing. That makes it a typed gap for
-    /// the batching stage, which is a different thing from a member that does not exist.
+    /// The ruling permits refusing OR typing a non-addressable subject and forbids filtering one
+    /// away. Typing alone leaves the typed row inside a list that claims to be exact, and the whole
+    /// point of this family is that a later stage covers that list exactly once. So the member is
+    /// named on the refusal — which is what keeps this from being a silent filter — and no inventory
+    /// is produced.
     /// </para>
     /// </remarks>
     [TestMethod]
-    public void ABlankNodeMemberIsCarriedAndTypedRatherThanDropped()
+    public void ABlankNodeMemberIsReportedAndPreventsAnExactInventory()
     {
         var result = Decode(Row(), Row(draft: Blank("b0")));
 
-        Assert.AreEqual(LuxembourgInitialDraftInventoryRefusal.None, result.Refusal, result.Detail);
-        Assert.HasCount(2, result.Subjects!);
-
-        var blank = result.Subjects!.Single(static value => !value.IsAddressable);
-        Assert.AreEqual("b0", blank.Value);
         Assert.AreEqual(
-            LuxembourgInitialDraftInventoryDiscoveryPlan.UnsupportedBlankNodeKind, blank.Kind);
+            LuxembourgInitialDraftInventoryRefusal.NonAddressableSubjectObserved, result.Refusal);
+        Assert.IsFalse(result.Delivered);
+        Assert.IsNull(result.Subjects, "a list that cannot be exact is not handed over at all.");
 
-        CollectionAssert.AreEqual(new[] { Draft }, result.AddressableInOrder().ToArray());
-        Assert.HasCount(1, result.NonAddressable());
+        // REPORTED, NOT FILTERED. The member the publisher holds is named, with its kind, by a run
+        // that declined to call itself complete.
+        var observed = result.ObservedNonAddressable.Single();
+        Assert.AreEqual("b0", observed.Value);
+        Assert.AreEqual(
+            LuxembourgInitialDraftInventoryDiscoveryPlan.UnsupportedBlankNodeKind, observed.Kind);
+        StringAssert.Contains(result.Detail!, "b0");
+    }
+
+    /// <summary>
+    /// The reviewer's own reproduction: two passes agreeing on a label prove nothing about identity.
+    /// </summary>
+    /// <remarks>
+    /// Driven through the live door rather than the decoder, because that is where it was found and
+    /// because the two-pass agreement is exactly what made the delivery look trustworthy. Both
+    /// passes return the same labels; nothing in the SPARQL results format makes them the same
+    /// subjects.
+    /// </remarks>
+    [TestMethod]
+    public async Task TwoPassesAgreeingOnBlankNodeLabelsDoNotProduceAnInventory()
+    {
+        var plan = LuxembourgInitialDraftInventoryDiscoveryPlan.Create();
+        var page = BlankNodePageJson(plan.CreateDeliveryProfile().ProjectionVariables);
+        var handler = LuxembourgAcquisitionTestFixture.AllowRobotsThenHandler((ordinal, request) =>
+            LuxembourgAcquisitionTestFixture.JsonResponse(request, ordinal switch
+            {
+                1 or 3 => LuxembourgAcquisitionTestFixture.CountJson(2),
+                2 or 4 => page,
+                _ => throw new AssertFailedException("No request is admitted after both passes complete."),
+            }));
+
+        var producer = new LuxembourgInitialDraftInventoryProducer(
+            new EuAcquisitionTestFixture.EuInMemoryCustodyStore(),
+            new EuAcquisitionTestFixture.FixedTimeProvider(),
+            handler);
+
+        var result = await producer.RunAsync(
+            new LuxembourgInitialDraftInventoryRunRequest(
+                plan,
+                "urn:uuid:7c05e91a-2d38-4b64-8f17-90a3d51e6b2c",
+                LuxembourgAcquisitionTestFixture.BuildRendererSource(9302)),
+            LuxembourgSourceWitness(),
+            CancellationToken.None);
+
+        Assert.IsFalse(
+            result.Delivered,
+            "agreeing labels are not agreeing subjects, so this cannot be an exact inventory.");
+        Assert.AreEqual(
+            LuxembourgInitialDraftInventoryRefusal.NonAddressableSubjectObserved, result.Refusal);
+        Assert.HasCount(2, result.ObservedNonAddressable);
     }
 
     /// <summary>
@@ -245,7 +294,6 @@ public sealed class LuxembourgInitialDraftInventoryProducerTests
     {
         var result = Decode(
             Row(draft: Iri(OtherDraft)),
-            Row(draft: Blank("b0")),
             Row(draft: Iri(Draft)));
 
         Assert.AreEqual(LuxembourgInitialDraftInventoryRefusal.None, result.Refusal, result.Detail);
@@ -253,7 +301,7 @@ public sealed class LuxembourgInitialDraftInventoryProducerTests
         // Delivery order is preserved in Subjects and is NOT what the batch input uses: the batches
         // must be reproducible from the same inventory, and the publisher's order is not a promise.
         CollectionAssert.AreEqual(
-            new[] { OtherDraft, "b0", Draft },
+            new[] { OtherDraft, Draft },
             result.Subjects!.Select(static value => value.Value).ToArray());
         CollectionAssert.AreEqual(
             new[] { Draft, OtherDraft }.Order(StringComparer.Ordinal).ToArray(),
@@ -273,7 +321,9 @@ public sealed class LuxembourgInitialDraftInventoryProducerTests
         Assert.IsFalse(refused.Delivered);
         Assert.IsNull(refused.Subjects);
         Assert.ThrowsExactly<InvalidOperationException>(() => refused.AddressableInOrder());
-        Assert.ThrowsExactly<InvalidOperationException>(() => refused.NonAddressable());
+        Assert.IsEmpty(
+            refused.ObservedNonAddressable,
+            "this refusal is about a malformed row, not about a member no request can name.");
     }
 
     /// <summary>An empty class is a complete answer about an empty class.</summary>
@@ -351,13 +401,23 @@ public sealed class LuxembourgInitialDraftInventoryProducerTests
             LuxembourgAcquisitionTestFixture.BuildRendererSource(9301)).Request;
     }
 
+    /// <summary>Two blank-node members, labelled exactly as a second response would label them.</summary>
+    private static string BlankNodePageJson(IReadOnlyList<string> projection) =>
+        PageJson(projection, blankNodes: true);
+
     /// <summary>Two members, in the publisher's own wire shape, ordered by the keyset.</summary>
-    private static string PageJson(IReadOnlyList<string> projection)
+    private static string PageJson(IReadOnlyList<string> projection, bool blankNodes = false)
     {
         static Dictionary<string, string> IriTerm(string value) => new(StringComparer.Ordinal)
         {
             ["type"] = "uri",
             ["value"] = value,
+        };
+
+        static Dictionary<string, string> BlankTerm(string label) => new(StringComparer.Ordinal)
+        {
+            ["type"] = "bnode",
+            ["value"] = label,
         };
 
         static Dictionary<string, string> LiteralTerm(string value, string? datatype = null)
@@ -377,16 +437,27 @@ public sealed class LuxembourgInitialDraftInventoryProducerTests
 
         // ORDERED BY THE KEYSET, which is what the page is ordered by and what the executor advances
         // on. A page delivered out of order refuses with CursorDidNotAdvance.
+        var subjects = blankNodes
+            ? new[] { "b0", "b1" }
+            : new[] { Draft, OtherDraft }.Order(StringComparer.Ordinal).ToArray();
+        var kind = blankNodes
+            ? LuxembourgInitialDraftInventoryDiscoveryPlan.UnsupportedBlankNodeKind
+            : LuxembourgInitialDraftInventoryDiscoveryPlan.IriKind;
+
         var bindings = new List<Dictionary<string, object>>();
-        foreach (var subject in new[] { Draft, OtherDraft }.Order(StringComparer.Ordinal))
+        foreach (var subject in subjects)
         {
             bindings.Add(new Dictionary<string, object>(StringComparer.Ordinal)
             {
-                ["draft"] = IriTerm(subject),
-                ["draft_kind"] = LiteralTerm(LuxembourgInitialDraftInventoryDiscoveryPlan.IriKind),
+                ["draft"] = blankNodes ? BlankTerm(subject) : IriTerm(subject),
+                ["draft_kind"] = LiteralTerm(kind),
                 ["multiplicity"] = LiteralTerm("1", XsdInteger),
+
+                // key_1 IS THE DERIVED PLAIN LITERAL, exactly as STR(?draft) produces it — which for
+                // a blank node is the result-scoped label. That is the shape the defect lived in:
+                // Source/Core's refusal of a blank-node canonical key never sees a blank node here.
                 ["key_1"] = LiteralTerm(subject),
-                ["key_2"] = LiteralTerm(LuxembourgInitialDraftInventoryDiscoveryPlan.IriKind),
+                ["key_2"] = LiteralTerm(kind),
             });
         }
 

@@ -49,11 +49,22 @@ public sealed record LuxembourgInitialDraftInventoryBoundQuery(
 /// the refusal is the finding and no population may be inferred from it.
 /// </para>
 /// <para>
-/// A NON-ADDRESSABLE SUBJECT IS TYPED, NEVER FILTERED. The class membership triple is asked without
-/// an <c>isIRI</c> guard, so a blank-node subject arrives and is carried with the marker saying so.
-/// Filtering it at the query would make a subject the publisher holds vanish from an inventory that
-/// calls itself complete, which is the false absence S2-A03 forbids; and a later stage that cannot
-/// address it must refuse to batch it rather than quietly cover a smaller class.
+/// A NON-ADDRESSABLE SUBJECT IS OBSERVED, NEVER FILTERED - AND IT STOPS THE INVENTORY. The class
+/// membership triple is asked without an <c>isIRI</c> guard, so a blank-node subject arrives and is
+/// carried with the marker saying so. Filtering it at the query would make a subject the publisher
+/// holds vanish from an inventory that calls itself complete, which is the false absence S2-A03
+/// forbids.
+/// </para>
+/// <para>
+/// BUT TYPING IT AND CONTINUING IS NOT ENOUGH, and the first head of this slice did exactly that.
+/// The page derives <c>key_1</c> from <c>STR(?draft)</c>, which for a blank node is a label scoped
+/// to the result set that carried it - SPARQL's JSON results format says reuse of a label in another
+/// results object does not imply the same blank node. Source/Core refuses a canonical-key component
+/// whose RDF kind is a blank node, but here it never sees one: it sees the derived plain literal.
+/// So two passes could agree on <c>b0</c> while meaning different subjects, and successive pages
+/// could skip, repeat or relabel a member, while the run still reported a complete inventory. No
+/// exact membership list exists over an identity that does not survive its own response, so the
+/// member is reported and the inventory refuses.
 /// </para>
 /// <para>
 /// THE DERIVED KEYS ARE TOTALISED WITH COALESCE, for the reason
@@ -76,10 +87,11 @@ public sealed class LuxembourgInitialDraftInventoryDiscoveryPlan
     /// The marker a row carries when its subject is a blank node.
     /// </summary>
     /// <remarks>
-    /// Such a subject is a real class member this publisher holds and is retained as one. It is not
-    /// addressable in a later <c>VALUES</c> batch, because a blank-node label is scoped to the
-    /// result set that produced it and naming it in a new request asks about nothing. That makes it
-    /// a typed gap for the batching stage rather than a row to drop here.
+    /// Such a subject is a real class member this publisher holds, and it is reported rather than
+    /// dropped. It is not addressable, because a blank-node label is scoped to the result set that
+    /// produced it: naming it in a new request asks about nothing, and two responses reusing the
+    /// label are not thereby about the same subject. That is why observing one REFUSES the
+    /// inventory instead of merely tagging a row - see the type remarks.
     /// </remarks>
     public const string UnsupportedBlankNodeKind = "unsupported_blank_node";
 

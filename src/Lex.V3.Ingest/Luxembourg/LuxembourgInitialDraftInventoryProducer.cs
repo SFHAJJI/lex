@@ -52,6 +52,28 @@ public enum LuxembourgInitialDraftInventoryRefusal
     /// </remarks>
     [JsonStringEnumMemberName("subject_delivered_twice")]
     SubjectDeliveredTwice = 5,
+
+    /// <summary>
+    /// The publisher delivered a class member no request can name, so no exact inventory exists.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A blank node's label is scoped to the result set that carried it. SPARQL's JSON results
+    /// format says so outright: reuse of a label in another results object does not imply the same
+    /// blank node. This family's whole output is an EXACT membership list that a later stage covers
+    /// exactly once, and no exact list can be built where a member's identity does not survive the
+    /// request that reported it - two passes can agree on the label b0 while meaning different
+    /// subjects, and successive pages can skip, repeat or relabel one.
+    /// </para>
+    /// <para>
+    /// The observation is RETAINED on the refusal rather than dropped. The ruling permits refusing
+    /// or typing a non-addressable subject and forbids filtering one away; typing alone is not
+    /// enough here, because a typed row still sits inside a list that claims to be exact. So the
+    /// member is reported, and the inventory does not complete.
+    /// </para>
+    /// </remarks>
+    [JsonStringEnumMemberName("non_addressable_subject_observed")]
+    NonAddressableSubjectObserved = 6,
 }
 
 /// <summary>
@@ -83,8 +105,10 @@ public sealed class LuxembourgInitialDraftInventoryResult
         SourceArtifactRef? completionEvidenceRef,
         LuxembourgInitialDraftInventoryRefusal refusal,
         string? detail,
-        int productRequestCount)
+        int productRequestCount,
+        IReadOnlyList<LuxembourgInitialDraftSubject>? observedNonAddressable = null)
     {
+        ObservedNonAddressable = observedNonAddressable ?? [];
         Subjects = subjects;
         CompletionEvidenceRef = completionEvidenceRef;
         Refusal = refusal;
@@ -93,7 +117,24 @@ public sealed class LuxembourgInitialDraftInventoryResult
     }
 
     /// <summary>Every delivered subject, in the publisher's own delivery order.</summary>
+    /// <remarks>
+    /// Every one of them is addressable. A delivery carrying a member no request can name produces
+    /// no inventory at all - see
+    /// <see cref="LuxembourgInitialDraftInventoryRefusal.NonAddressableSubjectObserved"/> - so this
+    /// list never needs filtering by a caller, and a caller that filtered it would be guessing.
+    /// </remarks>
     public IReadOnlyList<LuxembourgInitialDraftSubject>? Subjects { get; }
+
+    /// <summary>
+    /// The non-addressable members this run saw, retained even though it produced no inventory.
+    /// </summary>
+    /// <remarks>
+    /// Non-empty exactly when the refusal is
+    /// <see cref="LuxembourgInitialDraftInventoryRefusal.NonAddressableSubjectObserved"/>. This is
+    /// what keeps that refusal from being a silent filter: the members the publisher holds are
+    /// named, with their own evidence, by a run that declined to call itself complete.
+    /// </remarks>
+    public IReadOnlyList<LuxembourgInitialDraftSubject> ObservedNonAddressable { get; }
 
     public SourceArtifactRef? CompletionEvidenceRef { get; }
     public LuxembourgInitialDraftInventoryRefusal Refusal { get; }
@@ -108,8 +149,11 @@ public sealed class LuxembourgInitialDraftInventoryResult
         new(subjects, completionEvidenceRef, LuxembourgInitialDraftInventoryRefusal.None, null, productRequestCount);
 
     internal static LuxembourgInitialDraftInventoryResult Refused(
-        LuxembourgInitialDraftInventoryRefusal refusal, string detail, int productRequestCount) =>
-        new(null, null, refusal, detail, productRequestCount);
+        LuxembourgInitialDraftInventoryRefusal refusal,
+        string detail,
+        int productRequestCount,
+        IReadOnlyList<LuxembourgInitialDraftSubject>? observedNonAddressable = null) =>
+        new(null, null, refusal, detail, productRequestCount, observedNonAddressable);
 
     /// <summary>
     /// The subjects a later batch can name, deduplicated and in one deterministic order.
@@ -130,23 +174,10 @@ public sealed class LuxembourgInitialDraftInventoryResult
     public IReadOnlyList<string> AddressableInOrder() =>
         Subjects is null
             ? throw new InvalidOperationException("A refused inventory has no subjects to batch.")
-            : Subjects.Where(static value => value.IsAddressable)
-                .Select(static value => value.Value)
+            : Subjects.Select(static value => value.Value)
                 .Order(StringComparer.Ordinal)
                 .ToArray();
 
-    /// <summary>
-    /// The delivered subjects a later batch cannot name.
-    /// </summary>
-    /// <remarks>
-    /// These are the typed gaps the owner ruling requires: a subject the publisher holds, retained
-    /// with its own evidence, which the batching stage must report as unbatchable rather than treat
-    /// as absent. An empty list here is itself a fact, not a default.
-    /// </remarks>
-    public IReadOnlyList<LuxembourgInitialDraftSubject> NonAddressable() =>
-        Subjects is null
-            ? throw new InvalidOperationException("A refused inventory has no subjects to report.")
-            : Subjects.Where(static value => !value.IsAddressable).ToArray();
 }
 
 /// <summary>
@@ -295,6 +326,29 @@ public sealed class LuxembourgInitialDraftInventoryProducer
             }
 
             subjects.Add(subject);
+        }
+
+        // NO EXACT INVENTORY EXISTS OVER AN IDENTITY THAT DOES NOT SURVIVE ITS OWN RESPONSE. The
+        // page derives key_1 from STR(?draft), which for a blank node is a label scoped to the
+        // result set that carried it - so Source/Core's own refusal of a BlankNode canonical-key
+        // component never sees one here, it sees a plain literal. Two passes can then agree on "b0"
+        // while meaning different subjects, and successive pages can skip, repeat or relabel a
+        // member. Found in review at 031fbd51 with a two-pass delivery of b0 and b1 that this
+        // producer called Delivered.
+        //
+        // The members are named on the refusal rather than dropped, which is how the ruling's
+        // no-silent-filter requirement is met by refusing rather than by typing: a typed row would
+        // still be sitting inside a list that calls itself exact.
+        var nonAddressable = subjects.Where(static value => !value.IsAddressable).ToArray();
+        if (nonAddressable.Length != 0)
+        {
+            return LuxembourgInitialDraftInventoryResult.Refused(
+                LuxembourgInitialDraftInventoryRefusal.NonAddressableSubjectObserved,
+                "The class holds " + nonAddressable.Length
+                    + " member(s) no request can name, so no exact inventory exists over them: "
+                    + string.Join(", ", nonAddressable.Select(static value => value.Value)) + ".",
+                productRequestCount,
+                nonAddressable);
         }
 
         return LuxembourgInitialDraftInventoryResult.Success(

@@ -121,7 +121,7 @@ public sealed class ClosedVocabularyCensusTests
                     + "InvalidLicenceIri",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgInitialDraftInventoryRefusal: None, "
                     + "EnumerationRefused, EnumerationProofRefused, VerifiedRowsRefused, "
-                    + "RowNotAdmitted, SubjectDeliveredTwice",
+                    + "RowNotAdmitted, SubjectDeliveredTwice, NonAddressableSubjectObserved",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgOpinionProductionRefusal: None, RowNotAdmitted, "
                     + "EnumerationRefused, EnumerationProofRefused, VerifiedRowsRefused",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgPartitionCoverReconciliationRefusal: "
