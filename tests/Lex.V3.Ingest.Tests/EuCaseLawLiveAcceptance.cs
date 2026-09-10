@@ -104,6 +104,17 @@ public sealed class EuCaseLawLiveAcceptance
 
         // REL-005's three parts, on every relation the PUBLISHER delivered.
         var relations = acts.SelectMany(result.ForEuWork).ToArray();
+
+        // AND THERE MUST BE ONE. Without this the three assertions below are a foreach over an
+        // empty list: a complete publisher answer carrying zero rows would reach a green result
+        // after real requests, having proven no predicate, no disposition and no granularity. An
+        // observed empty set stays honest evidence - it is written to the summary either way - but
+        // it cannot be what an acceptance proof rests on.
+        Assert.IsNotEmpty(
+            relations,
+            "an acceptance proof of REL-005's three parts requires at least one delivered relation; "
+            + "an empty answer is evidence, not acceptance.");
+
         foreach (var relation in relations)
         {
             // Part one: a real CDM predicate this family asked for, which is the PINNED SET and not
@@ -149,20 +160,9 @@ public sealed class EuCaseLawLiveAcceptance
         }
 
         // S2-A07's negative, checked against what the run actually retained rather than against the
-        // producer's intentions. Every retained artifact that names an HTTP target names the SPARQL
-        // endpoint; a judgment body fetched from anywhere would leave its own target behind.
-        var offendingTargets = new List<string>();
-        foreach (var file in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
-        {
-            var text = Encoding.UTF8.GetString(await File.ReadAllBytesAsync(file));
-            foreach (var target in HttpTargetsIn(text))
-            {
-                if (!target.StartsWith(EuCaseLawLiveEndpoint, StringComparison.Ordinal))
-                {
-                    offendingTargets.Add(Path.GetFileName(file) + " -> " + target);
-                }
-            }
-        }
+        // producer's intentions. A judgment body fetched from anywhere would leave its own target
+        // behind, and this is the check that would see it.
+        var offendingTargets = OffEndpointTargetsIn(root);
 
         Assert.IsEmpty(
             offendingTargets,
@@ -266,10 +266,31 @@ public sealed class EuCaseLawLiveAcceptance
                 "the scan must actually find request targets, or the live test's negative is vacuous.");
             foreach (var target in targets)
             {
-                StringAssert.StartsWith(
-                    target, EuCaseLawLiveEndpoint,
+                Assert.AreEqual(
+                    EuCaseLawLiveEndpoint, target,
                     "this family asks the SPARQL endpoint and nothing else.");
             }
+
+            // A REAL RUN'S EVIDENCE MUST BE ACCEPTED by the same call the live test makes, or the
+            // two could diverge and only the skipped one would know.
+            Assert.IsEmpty(OffEndpointTargetsIn(root));
+
+            // AND THE GUARD MUST BE ABLE TO FAIL. This is the reviewer's own injection: a path under
+            // the endpoint, which the prefix comparison admitted. It is written into the same
+            // directory the scan just passed on, so nothing about the fixture explains the
+            // difference except the target itself.
+            var planted = Path.Combine(root, "planted-off-endpoint-request");
+            await File.WriteAllTextAsync(
+                planted,
+                "{\"schema\":\"lex-http-logical-request/1\",\"request_uri\":\""
+                + EuCaseLawLiveEndpoint + "/judgment-body\"}");
+
+            var caught = OffEndpointTargetsIn(root);
+            Assert.IsNotEmpty(
+                caught,
+                "a request to a path UNDER the endpoint is off-endpoint and must be caught.");
+            StringAssert.Contains(string.Join(";", caught), "/judgment-body");
+            File.Delete(planted);
         }
         finally
         {
@@ -283,6 +304,41 @@ public sealed class EuCaseLawLiveAcceptance
     public TestContext? TestContext { get; set; }
 
     private const string EuCaseLawLiveEndpoint = "https://publications.europa.eu/webapi/rdf/sparql";
+
+    /// <summary>
+    /// Every retained request target that is not EXACTLY the official endpoint.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// EXACT, NOT A PREFIX, and the difference is not pedantry. The first version compared with
+    /// <c>StartsWith</c>, and the reviewer injected
+    /// <c>https://publications.europa.eu/webapi/rdf/sparql/judgment-body</c> into the retained
+    /// evidence: it starts with the endpoint, so the guard admitted the one request shape it exists
+    /// to forbid, and the focused class still passed. A prefix comparison over a URI is a guard
+    /// against typos, not against a path.
+    /// </para>
+    /// <para>
+    /// Extracted so a regression can drive it over a directory a test wrote. A guard that is only
+    /// ever exercised by a gate skipped in CI is a guard nobody has seen fail.
+    /// </para>
+    /// </remarks>
+    internal static IReadOnlyList<string> OffEndpointTargetsIn(string root)
+    {
+        var offending = new List<string>();
+        foreach (var file in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
+        {
+            var text = Encoding.UTF8.GetString(File.ReadAllBytes(file));
+            foreach (var target in HttpTargetsIn(text))
+            {
+                if (!string.Equals(target, EuCaseLawLiveEndpoint, StringComparison.Ordinal))
+                {
+                    offending.Add(Path.GetFileName(file) + " -> " + target);
+                }
+            }
+        }
+
+        return offending;
+    }
 
     /// <summary>
     /// Every absolute http(s) target mentioned by one retained artifact.
