@@ -27,7 +27,8 @@ public sealed class LuxembourgDraftPropertyCoverageTests
             Enumerable.Range(0, count).Select(index => Draft + index.ToString("D3")).ToArray());
 
     private static LuxembourgInitialDraftInventoryCitation Inventory() =>
-        new("legilux-initial-draft-inventory", Ref("inventory"), "7753-subjects");
+        new("legilux-initial-draft-inventory", Ref("inventory"), "7753-subjects", 7753,
+            "2026-09-10T07:29:37.8950843Z");
 
     private const string ObservedAt = "2026-09-10T13:50:31.0000000Z";
 

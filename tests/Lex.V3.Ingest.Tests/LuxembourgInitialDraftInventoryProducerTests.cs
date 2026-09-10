@@ -77,7 +77,58 @@ public sealed class LuxembourgInitialDraftInventoryProducerTests
     }
 
     private static LuxembourgInitialDraftInventoryResult Decode(params RepeatedEnumerationRow[] rows) =>
-        LuxembourgInitialDraftInventoryProducer.DecodeRows(rows, Profile(), Evidence);
+        LuxembourgInitialDraftInventoryProducer.DecodeRows(
+            rows, Profile(), Evidence, "legilux-initial-draft-inventory", "2026-09-10T13:50:31.0000000Z");
+
+    /// <summary>
+    /// The inventory mints the citation a later batch must carry, from its own run.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A BATCH CITING AN INVENTORY IT ASSEMBLED ITSELF PROVES NOTHING. The citation was passed into
+    /// the batch run by hand - in the canary, out of three environment variables - so nothing
+    /// stopped it naming an inventory no run ever produced. Every field now comes from the run that
+    /// enumerated the class.
+    /// </para>
+    /// <para>
+    /// The digest is taken over the ADDRESSABLE population, which is what
+    /// <c>AddressableInOrder</c> hands the batching stage, so it changes exactly when what the
+    /// batches must cover changes - not when some other part of the delivery moves.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void TheInventoryMintsTheCitationABatchMustCarry()
+    {
+        const string SecondDraft = "http://data.legilux.public.lu/eli/dl/pl/2000/998";
+        var result = Decode(Row(), Row(Iri(SecondDraft)));
+
+        Assert.AreEqual(LuxembourgInitialDraftInventoryRefusal.None, result.Refusal, result.Detail);
+
+        var citation = result.Citation!;
+        Assert.IsNotNull(citation, "a delivered inventory carries its own citation.");
+        Assert.AreEqual("legilux-initial-draft-inventory", citation.FamilyKey);
+        Assert.AreEqual(Evidence, citation.AcquisitionRunRef, "the run's own evidence, not a caller's.");
+        Assert.AreEqual(result.AddressableInOrder().Count, citation.SubjectCount);
+        Assert.IsNotEmpty(citation.ObservedAt, "an inventory a batch relies on must be datable.");
+
+        // The digest is over the population, so a different population is a different citation.
+        var narrower = Decode(Row());
+        Assert.AreNotEqual(
+            citation.SelectionDigest, narrower.Citation!.SelectionDigest,
+            "a smaller inventory must not mint the same selection digest.");
+    }
+
+    /// <summary>A refused inventory carries no citation for anyone to lean on.</summary>
+    [TestMethod]
+    public void ARefusedInventoryMintsNoCitation()
+    {
+        var refused = Decode(Row(), Row());
+
+        Assert.AreNotEqual(LuxembourgInitialDraftInventoryRefusal.None, refused.Refusal);
+        Assert.IsNull(
+            refused.Citation,
+            "a batch must not be able to cite an inventory whose own enumeration was refused.");
+    }
 
     [TestMethod]
     public void ADeliveredSubjectBecomesAMemberCarryingItsOwnTerms()

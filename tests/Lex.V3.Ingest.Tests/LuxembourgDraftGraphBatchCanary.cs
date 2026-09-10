@@ -220,7 +220,13 @@ public sealed class LuxembourgDraftGraphBatchCanary
         }
 
         return new LuxembourgInitialDraftInventoryCitation(
-            "legilux-initial-draft-inventory", new SourceArtifactRef(resource!, digest!), selection!);
+            "legilux-initial-draft-inventory",
+            new SourceArtifactRef(resource!, digest!),
+            selection!,
+            int.TryParse(Environment.GetEnvironmentVariable("LEX_E8_INVENTORY_SUBJECTS"), out var count)
+                ? count
+                : 0,
+            Environment.GetEnvironmentVariable("LEX_E8_INVENTORY_OBSERVED_AT") ?? string.Empty);
     }
 
     private static BoundMachineRequest LuxembourgSourceWitness()

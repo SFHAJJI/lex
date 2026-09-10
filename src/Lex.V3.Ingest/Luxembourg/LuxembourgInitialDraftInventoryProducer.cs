@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json.Serialization;
 using Lex.V3.Contracts.Custody;
 using Lex.V3.Contracts.Source.Core;
@@ -103,6 +105,7 @@ public sealed class LuxembourgInitialDraftInventoryResult
     private LuxembourgInitialDraftInventoryResult(
         IReadOnlyList<LuxembourgInitialDraftSubject>? subjects,
         SourceArtifactRef? completionEvidenceRef,
+        LuxembourgInitialDraftInventoryCitation? citation,
         LuxembourgInitialDraftInventoryRefusal refusal,
         string? detail,
         int productRequestCount,
@@ -111,6 +114,7 @@ public sealed class LuxembourgInitialDraftInventoryResult
         ObservedNonAddressable = observedNonAddressable ?? [];
         Subjects = subjects;
         CompletionEvidenceRef = completionEvidenceRef;
+        Citation = citation;
         Refusal = refusal;
         Detail = detail;
         ProductRequestCount = productRequestCount;
@@ -137,6 +141,16 @@ public sealed class LuxembourgInitialDraftInventoryResult
     public IReadOnlyList<LuxembourgInitialDraftSubject> ObservedNonAddressable { get; }
 
     public SourceArtifactRef? CompletionEvidenceRef { get; }
+
+    /// <summary>
+    /// This inventory as a later batch must cite it, minted here from this run's own proof.
+    /// </summary>
+    /// <remarks>
+    /// Non-null exactly when <see cref="Delivered"/>. It exists because a batch citing an inventory
+    /// it assembled itself proves nothing: the fields have to come from the run that enumerated the
+    /// class, or "derived from the proven inventory" is a claim with no evidence behind it.
+    /// </remarks>
+    public LuxembourgInitialDraftInventoryCitation? Citation { get; }
     public LuxembourgInitialDraftInventoryRefusal Refusal { get; }
     public string? Detail { get; }
     public int ProductRequestCount { get; }
@@ -145,15 +159,17 @@ public sealed class LuxembourgInitialDraftInventoryResult
     internal static LuxembourgInitialDraftInventoryResult Success(
         IReadOnlyList<LuxembourgInitialDraftSubject> subjects,
         SourceArtifactRef completionEvidenceRef,
+        LuxembourgInitialDraftInventoryCitation citation,
         int productRequestCount) =>
-        new(subjects, completionEvidenceRef, LuxembourgInitialDraftInventoryRefusal.None, null, productRequestCount);
+        new(subjects, completionEvidenceRef, citation,
+            LuxembourgInitialDraftInventoryRefusal.None, null, productRequestCount);
 
     internal static LuxembourgInitialDraftInventoryResult Refused(
         LuxembourgInitialDraftInventoryRefusal refusal,
         string detail,
         int productRequestCount,
         IReadOnlyList<LuxembourgInitialDraftSubject>? observedNonAddressable = null) =>
-        new(null, null, refusal, detail, productRequestCount, observedNonAddressable);
+        new(null, null, null, refusal, detail, productRequestCount, observedNonAddressable);
 
     /// <summary>
     /// The subjects a later batch can name, deduplicated and in one deterministic order.
@@ -278,8 +294,24 @@ public sealed class LuxembourgInitialDraftInventoryProducer
                 run.ProductRequestCount);
         }
 
-        return DecodeRows(rows, profile, proof.AcquisitionRunRef, run.ProductRequestCount);
+        return DecodeRows(
+            rows,
+            profile,
+            proof.AcquisitionRunRef,
+            // FROM THE DELIVERY. Both travel back through the retained receipt, so the citation a
+            // batch later relies on names what this run actually enumerated and when.
+            proof.FamilyKey,
+            receipt.Delivery.ObservationTimes.CountA,
+            run.ProductRequestCount);
     }
+
+    /// <summary>The separator the inventory selection digest joins on.</summary>
+    /// <remarks>
+    /// Named rather than written inline: an escape in this position has been mangled by a shell
+    /// twice in this file's history, and a digest that silently joins on the wrong byte is a
+    /// citation that silently names a different population.
+    /// </remarks>
+    private const char LineFeed = (char)10;
 
     /// <summary>Decodes one delivered page set into subjects.</summary>
     /// <remarks>
@@ -292,11 +324,15 @@ public sealed class LuxembourgInitialDraftInventoryProducer
         IReadOnlyList<RepeatedEnumerationRow> rows,
         RepeatedEnumerationInterpretationProfile profile,
         SourceArtifactRef completionEvidenceRef,
+        string familyKey,
+        string observedAt,
         int productRequestCount = 0)
     {
         ArgumentNullException.ThrowIfNull(rows);
         ArgumentNullException.ThrowIfNull(profile);
         ArgumentNullException.ThrowIfNull(completionEvidenceRef);
+        ArgumentException.ThrowIfNullOrWhiteSpace(familyKey);
+        ArgumentException.ThrowIfNullOrWhiteSpace(observedAt);
 
         var subjects = new List<LuxembourgInitialDraftSubject>(rows.Count);
         var seen = new HashSet<(string Value, string Kind)>();
@@ -351,8 +387,26 @@ public sealed class LuxembourgInitialDraftInventoryProducer
                 nonAddressable);
         }
 
+        // THE CITATION IS MINTED HERE, over the population this inventory actually hands to
+        // batching. Digesting AddressableInOrder rather than the raw subjects means the digest
+        // changes exactly when what the batches must cover changes.
+        var addressable = subjects
+            .Where(static value => value.IsAddressable)
+            .Select(static value => value.Value)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        var citation = new LuxembourgInitialDraftInventoryCitation(
+            familyKey,
+            completionEvidenceRef,
+            Convert.ToHexStringLower(SHA256.HashData(
+                new UTF8Encoding(false, true).GetBytes(
+                    string.Join(LineFeed, addressable)))),
+            addressable.Length,
+            observedAt);
+
         return LuxembourgInitialDraftInventoryResult.Success(
-            subjects, completionEvidenceRef, productRequestCount);
+            subjects, completionEvidenceRef, citation, productRequestCount);
     }
 
     private static LuxembourgInitialDraftSubject DecodeRow(

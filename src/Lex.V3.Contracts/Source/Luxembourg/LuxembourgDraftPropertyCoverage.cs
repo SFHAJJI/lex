@@ -139,14 +139,28 @@ public sealed class LuxembourgDraftPropertyUnresolvedGap
 
 /// <summary>The proven inventory a draft-graph batch partitions.</summary>
 /// <remarks>
+/// <para>
 /// Carried into the batch run rather than discovered by it. A batch that cannot name the inventory
 /// it partitions cannot honestly derive an absence from its own emptiness: "the publisher holds
 /// nothing here" only means something against a subject set someone proved.
+/// </para>
+/// <para>
+/// MINTED BY THE RUN THAT EARNED IT, never assembled by a caller. Every field comes from that run's
+/// own enumeration proof and delivery, so a citation cannot name an inventory nobody produced -
+/// which is what a hand-assembled one could do, and did while this was passed in by hand.
+/// </para>
+/// <para>
+/// <see cref="SelectionDigest"/> digests the addressable population the inventory hands to
+/// batching, so it changes when the population changes; <see cref="SubjectCount"/> is that
+/// population's size, and the cover checks the batches against both.
+/// </para>
 /// </remarks>
 public sealed record LuxembourgInitialDraftInventoryCitation(
     string FamilyKey,
     SourceArtifactRef AcquisitionRunRef,
-    string SelectionDigest);
+    string SelectionDigest,
+    int SubjectCount,
+    string ObservedAt);
 
 /// <summary>The exact batch enumeration an absence is derived from.</summary>
 /// <remarks>

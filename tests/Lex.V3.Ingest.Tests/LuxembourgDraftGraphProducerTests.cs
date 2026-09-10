@@ -153,7 +153,8 @@ public sealed class LuxembourgDraftGraphProducerTests
     }
 
     private static readonly LuxembourgInitialDraftInventoryCitation TestInventory =
-        new("legilux-initial-draft-inventory", Evidence, "fixture-inventory");
+        new("legilux-initial-draft-inventory", Evidence, "fixture-inventory", 1,
+            "2026-09-10T07:29:37.8950843Z");
 
     /// <summary>
     /// The whole chain runs: executor, two passes, proof, reopened pages, verified rows, records.
