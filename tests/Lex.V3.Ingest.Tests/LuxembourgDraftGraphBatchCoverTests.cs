@@ -1,5 +1,6 @@
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Luxembourg;
+using Lex.V3.Ingest.Europe;
 using Lex.V3.Ingest.Luxembourg;
 
 namespace Lex.V3.Ingest.Tests;
@@ -92,6 +93,68 @@ public sealed class LuxembourgDraftGraphBatchCoverTests
         var cover = LuxembourgDraftGraphBatchCover.TryCreate(inventory, batches, out var refusal, out _);
         Assert.IsNull(cover, "a refused cover mints nothing.");
         return refusal;
+    }
+
+    /// <summary>
+    /// A batch outside the inventory cannot be run at all, so it can mint no conclusions.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// THE PRODUCTION PATH, NOT THE COVER. The cover refuses a batch outside the inventory only if
+    /// someone hands it the coverage - after the per-batch absences and gaps already exist and look
+    /// authoritative. The run request used to take the draft list and the inventory citation as two
+    /// independent values, so an inventory proven for one draft could be paired with another and the
+    /// run would mint derived conclusions for a subject the proven population never contained.
+    /// </para>
+    /// <para>
+    /// That is the false absence S2-A03 forbids, reached around the outside of every guard built to
+    /// stop it, and I claimed the boundary was structural while the door stood open. It is
+    /// structural now: the only way to name a batch is by ordinal into the batches the proven
+    /// inventory itself assigns, so the members and the citation cannot disagree.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void ABatchOutsideTheInventoryCannotBeRunAtAll()
+    {
+        var inventory = Inventory(60);
+        var plan = LuxembourgDraftGraphDiscoveryPlan.Create();
+        var source = LuxembourgAcquisitionTestFixture.BuildRendererSource(9701);
+
+        // Every batch a request can name comes out of the inventory it cites.
+        var assigned = LuxembourgDraftGraphBatchFactory.AssignBatches(inventory);
+        for (var ordinal = 0; ordinal < assigned.Count; ordinal++)
+        {
+            var request = LuxembourgDraftGraphRunRequest.ForBatch(
+                plan, inventory, ordinal, "urn:uuid:5c2f1a08-7d63-4e91-bf20-9a4c8e3d7016", source);
+
+            CollectionAssert.AreEqual(assigned[ordinal].ToArray(), request.BatchDrafts.ToArray());
+            Assert.AreEqual(inventory.Citation, request.Inventory, "one inventory, not two values.");
+        }
+
+        // And there is no ordinal that names drafts the inventory never contained.
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(
+            () => LuxembourgDraftGraphRunRequest.ForBatch(
+                plan, inventory, assigned.Count, "urn:uuid:5c2f1a08-7d63-4e91-bf20-9a4c8e3d7016", source));
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(
+            () => LuxembourgDraftGraphRunRequest.ForBatch(
+                plan, inventory, -1, "urn:uuid:5c2f1a08-7d63-4e91-bf20-9a4c8e3d7016", source));
+    }
+
+    /// <summary>A refused inventory cannot be swept, so it mints no conclusions either.</summary>
+    [TestMethod]
+    public void ARefusedInventoryCannotBeSwept()
+    {
+        var refused = LuxembourgInitialDraftInventoryProducer.DecodeRows(
+            [Subject(Prefix + "00001"), Subject(Prefix + "00001")],
+            Profile, Evidence, "legilux-initial-draft-inventory", ObservedAt);
+
+        Assert.ThrowsExactly<ArgumentException>(
+            () => LuxembourgDraftGraphRunRequest.ForBatch(
+                LuxembourgDraftGraphDiscoveryPlan.Create(),
+                refused,
+                0,
+                "urn:uuid:5c2f1a08-7d63-4e91-bf20-9a4c8e3d7016",
+                LuxembourgAcquisitionTestFixture.BuildRendererSource(9702)));
     }
 
     /// <summary>A complete sweep covers every subject's every property exactly once.</summary>

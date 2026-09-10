@@ -221,6 +221,14 @@ public sealed class GuardedConstructionCensusTests
                     + "method public static "
                     + "Lex.V3.Ingest.Europe.EuWitnessTraversalResult::Delivered, "
                     + "method public static Lex.V3.Ingest.Europe.EuWitnessTraversalResult::Refused",
+                "Lex.V3.Ingest.Europe.LuxembourgDraftGraphRunRequest: constructor private instance "
+                    + "Lex.V3.Ingest.Europe.LuxembourgDraftGraphRunRequest::.ctor, "
+                    + "constructor private instance "
+                    + "Lex.V3.Ingest.Europe.LuxembourgDraftGraphRunRequest::.ctor, "
+                    + "method public instance "
+                    + "Lex.V3.Ingest.Europe.LuxembourgDraftGraphRunRequest::<Clone>$, "
+                    + "method public static "
+                    + "Lex.V3.Ingest.Europe.LuxembourgDraftGraphRunRequest::ForBatch",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgDocumentGetAttemptResult: constructor private "
                     + "instance Lex.V3.Ingest.Luxembourg.LuxembourgDocumentGetAttemptResult::.ctor, "
                     + "method public instance "

@@ -152,6 +152,37 @@ public sealed class LuxembourgDraftGraphProducerTests
             rows.Select(row => row.Terms[ordinal].Value ?? Draft).DefaultIfEmpty(Draft).ToArray());
     }
 
+    /// <summary>A delivered inventory over exactly the named drafts.</summary>
+    /// <remarks>
+    /// A batch run can no longer be handed a draft list and an unrelated inventory, so a test that
+    /// wants to sweep a draft has to prove an inventory containing it. That is the point of the
+    /// change rather than an inconvenience of it: the pairing this used to allow is what let a run
+    /// mint absences for a subject the proven population never contained.
+    /// </remarks>
+    private static LuxembourgInitialDraftInventoryResult InventoryOf(params string[] drafts)
+    {
+        var profile = LuxembourgInitialDraftInventoryDiscoveryPlan.Create().CreateDeliveryProfile();
+        var rows = drafts.Select(draft =>
+        {
+            var terms = new List<RepeatedEnumerationRdfTerm>
+            {
+                RepeatedEnumerationRdfTerm.Iri(draft),
+                RepeatedEnumerationRdfTerm.Literal(
+                    LuxembourgInitialDraftInventoryDiscoveryPlan.IriKind, null, null),
+                RepeatedEnumerationRdfTerm.Literal(
+                    "1", "http://www.w3.org/2001/XMLSchema#integer", null),
+                RepeatedEnumerationRdfTerm.Literal(draft, null, null),
+                RepeatedEnumerationRdfTerm.Literal(
+                    LuxembourgInitialDraftInventoryDiscoveryPlan.IriKind, null, null),
+            };
+            return new RepeatedEnumerationRow(terms, terms, terms);
+        }).ToArray();
+
+        return LuxembourgInitialDraftInventoryProducer.DecodeRows(
+            rows, profile, Evidence, "legilux-initial-draft-inventory",
+            "2026-09-10T07:29:37.8950843Z");
+    }
+
     private static readonly LuxembourgInitialDraftInventoryCitation TestInventory =
         new("legilux-initial-draft-inventory", Evidence, "fixture-inventory", 1,
             "2026-09-10T07:29:37.8950843Z");
@@ -193,12 +224,12 @@ public sealed class LuxembourgDraftGraphProducerTests
             store, new EuAcquisitionTestFixture.FixedTimeProvider(), handler);
 
         var result = await producer.RunAsync(
-            new LuxembourgDraftGraphRunRequest(
+            LuxembourgDraftGraphRunRequest.ForBatch(
                 plan,
-                [Draft],
+                InventoryOf(Draft),
+                0,
                 "urn:uuid:1a7c5e39-4b62-4d80-9f13-6e025ac84b71",
-                LuxembourgAcquisitionTestFixture.BuildRendererSource(9101),
-                TestInventory),
+                LuxembourgAcquisitionTestFixture.BuildRendererSource(9101)),
             LuxembourgSourceWitness(),
             CancellationToken.None);
 

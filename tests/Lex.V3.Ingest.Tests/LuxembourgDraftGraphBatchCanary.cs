@@ -97,8 +97,8 @@ public sealed class LuxembourgDraftGraphBatchCanary
         var plan = LuxembourgDraftGraphDiscoveryPlan.Create();
 
         var result = await producer.RunAsync(
-            new LuxembourgDraftGraphRunRequest(
-                plan, batch, NewUrn(), RendererSource(checkout), RetainedInventory()),
+            LuxembourgDraftGraphRunRequest.ForBatch(
+                plan, InventoryOver(batch), 0, NewUrn(), RendererSource(checkout)),
             LuxembourgSourceWitness(),
             CancellationToken.None);
 
@@ -189,44 +189,52 @@ public sealed class LuxembourgDraftGraphBatchCanary
         }
     }
 
-    /// <summary>The retained inventory run this batch is a partition of.</summary>
+    /// <summary>An inventory over exactly the drafts this canary sweeps.</summary>
     /// <remarks>
     /// <para>
-    /// READ FROM THE RUN THAT PRODUCED IT, NEVER MINTED HERE. Every absence this canary derives
-    /// cites this citation, so inventing one would put a reference to a run that never happened
-    /// inside a hundred and fifty records asserting what a publisher does not hold. The canary
-    /// declines to run rather than do that.
+    /// SYNTHETIC, AND LABELLED AS SUCH. This is not the proven 7,753-member class enumeration; it is
+    /// an inventory over the drafts this canary names, so that the run has a population its batch is
+    /// genuinely a partition of. The canary measures whether the publisher serves a shape, and that
+    /// question does not need the whole class.
     /// </para>
     /// <para>
-    /// The values come from the retained two-pass inventory under #417 - 7,753 InitialDraft
-    /// subjects over 24 requests, both passes agreeing - and are passed in rather than rediscovered
-    /// so this canary sends exactly one product request family and not the inventory again.
+    /// It replaces a citation assembled from three environment variables. A run can no longer be
+    /// handed a citation at all - the batch and the citation are both derived from one inventory
+    /// result - which is what closes the pairing that let a run mint absences for subjects the cited
+    /// population never contained. The environment variables were that hole wearing a seatbelt.
+    /// </para>
+    /// <para>
+    /// A full acceptance run over the real class does not come through here: it comes from the
+    /// proven inventory, through the batch factory, and is reconciled by the terminal cover.
     /// </para>
     /// </remarks>
-    private static LuxembourgInitialDraftInventoryCitation RetainedInventory()
+    private static LuxembourgInitialDraftInventoryResult InventoryOver(IReadOnlyList<string> drafts)
     {
-        var resource = Environment.GetEnvironmentVariable("LEX_E8_INVENTORY_RUN_RESOURCE");
-        var digest = Environment.GetEnvironmentVariable("LEX_E8_INVENTORY_RUN_SHA256");
-        var selection = Environment.GetEnvironmentVariable("LEX_E8_INVENTORY_SELECTION");
-        if (string.IsNullOrWhiteSpace(resource) ||
-            string.IsNullOrWhiteSpace(digest) ||
-            string.IsNullOrWhiteSpace(selection))
-        {
-            Assert.Inconclusive(
-                "Set LEX_E8_INVENTORY_RUN_RESOURCE, LEX_E8_INVENTORY_RUN_SHA256 and "
-                + "LEX_E8_INVENTORY_SELECTION from the retained inventory run. Every derived "
-                + "absence cites them, and a citation this canary made up would name a run that "
-                + "never happened.");
-        }
+        var profile = LuxembourgInitialDraftInventoryDiscoveryPlan.Create().CreateDeliveryProfile();
+        var evidence = new SourceArtifactRef(
+            NewUrn(),
+            Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(
+                Encoding.UTF8.GetBytes("e8-batch-canary-inventory/1"))));
 
-        return new LuxembourgInitialDraftInventoryCitation(
-            "legilux-initial-draft-inventory",
-            new SourceArtifactRef(resource!, digest!),
-            selection!,
-            int.TryParse(Environment.GetEnvironmentVariable("LEX_E8_INVENTORY_SUBJECTS"), out var count)
-                ? count
-                : 0,
-            Environment.GetEnvironmentVariable("LEX_E8_INVENTORY_OBSERVED_AT") ?? string.Empty);
+        var rows = drafts.Select(draft =>
+        {
+            var terms = new List<RepeatedEnumerationRdfTerm>
+            {
+                RepeatedEnumerationRdfTerm.Iri(draft),
+                RepeatedEnumerationRdfTerm.Literal(
+                    LuxembourgInitialDraftInventoryDiscoveryPlan.IriKind, null, null),
+                RepeatedEnumerationRdfTerm.Literal(
+                    "1", "http://www.w3.org/2001/XMLSchema#integer", null),
+                RepeatedEnumerationRdfTerm.Literal(draft, null, null),
+                RepeatedEnumerationRdfTerm.Literal(
+                    LuxembourgInitialDraftInventoryDiscoveryPlan.IriKind, null, null),
+            };
+            return new RepeatedEnumerationRow(terms, terms, terms);
+        }).ToArray();
+
+        return LuxembourgInitialDraftInventoryProducer.DecodeRows(
+            rows, profile, evidence, "legilux-initial-draft-inventory",
+            "2026-09-10T07:29:37.8950843Z");
     }
 
     private static BoundMachineRequest LuxembourgSourceWitness()

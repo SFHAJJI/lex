@@ -6,6 +6,7 @@ using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Europe;
 using Lex.V3.Contracts.Source.Http;
 using Lex.V3.Contracts.Source.Luxembourg;
+using Lex.V3.Ingest.Luxembourg;
 
 namespace Lex.V3.Ingest.Europe;
 
@@ -292,12 +293,98 @@ public sealed record LuxembourgOpinionRunRequest(
 /// unbounded, twice, with SR319, which is why the class is swept in batches rather than in one
 /// request.
 /// </remarks>
-public sealed record LuxembourgDraftGraphRunRequest(
-    LuxembourgDraftGraphDiscoveryPlan Plan,
-    IReadOnlyList<string> BatchDrafts,
-    string PlanResourceId,
-    MachineQueryRendererSource RendererSource,
-    LuxembourgInitialDraftInventoryCitation Inventory);
+/// <summary>One draft-graph batch run, named by the inventory it partitions.</summary>
+/// <remarks>
+/// <para>
+/// THE BATCH CANNOT BE CHOSEN BY A CALLER, and that is the whole point of this type. It used to take
+/// the draft list and the inventory citation as two independent values, so an inventory proven for
+/// one draft could be paired with a completely different draft and the run would mint derived
+/// absences and unresolved gaps for a subject the proven population never contained. The batch cover
+/// would have rejected it only if someone voluntarily handed the coverage to the cover - after the
+/// authoritative-looking per-batch conclusions already existed.
+/// </para>
+/// <para>
+/// That is the false absence S2-A03 forbids, reached around the outside of every guard built to stop
+/// it. I claimed the membership boundary was structural while this door was open; it was structural
+/// only in the factory, and this is the door.
+/// </para>
+/// <para>
+/// So the only way to name a batch is by ORDINAL into the batches the proven inventory itself
+/// assigns. The members and the citation are both derived here from that one inventory result, and
+/// no combination of arguments can make them disagree.
+/// </para>
+/// </remarks>
+public sealed record LuxembourgDraftGraphRunRequest
+{
+    private LuxembourgDraftGraphRunRequest(
+        LuxembourgDraftGraphDiscoveryPlan plan,
+        IReadOnlyList<string> batchDrafts,
+        string planResourceId,
+        MachineQueryRendererSource rendererSource,
+        LuxembourgInitialDraftInventoryCitation inventory,
+        int batchOrdinal)
+    {
+        Plan = plan;
+        BatchDrafts = batchDrafts;
+        PlanResourceId = planResourceId;
+        RendererSource = rendererSource;
+        Inventory = inventory;
+        BatchOrdinal = batchOrdinal;
+    }
+
+    public LuxembourgDraftGraphDiscoveryPlan Plan { get; }
+
+    /// <summary>The batch's members, taken from the inventory rather than from a caller.</summary>
+    public IReadOnlyList<string> BatchDrafts { get; }
+
+    public string PlanResourceId { get; }
+
+    public MachineQueryRendererSource RendererSource { get; }
+
+    /// <summary>The proven inventory these drafts came out of.</summary>
+    public LuxembourgInitialDraftInventoryCitation Inventory { get; }
+
+    /// <summary>Which of the inventory's own batches this run is.</summary>
+    public int BatchOrdinal { get; }
+
+    /// <summary>
+    /// One batch of a proven inventory, by ordinal into that inventory's own assignment.
+    /// </summary>
+    /// <remarks>
+    /// The only door. A refused inventory has no batches and is refused here rather than allowed to
+    /// produce a run whose conclusions would rest on an enumeration nobody proved.
+    /// </remarks>
+    public static LuxembourgDraftGraphRunRequest ForBatch(
+        LuxembourgDraftGraphDiscoveryPlan plan,
+        LuxembourgInitialDraftInventoryResult inventory,
+        int batchOrdinal,
+        string planResourceId,
+        MachineQueryRendererSource rendererSource)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        ArgumentNullException.ThrowIfNull(inventory);
+        ArgumentNullException.ThrowIfNull(rendererSource);
+        ArgumentException.ThrowIfNullOrWhiteSpace(planResourceId);
+
+        if (!inventory.Delivered || inventory.Citation is not { } citation)
+        {
+            throw new ArgumentException(
+                "A batch run partitions a PROVEN inventory, and this one was refused.",
+                nameof(inventory));
+        }
+
+        var batches = LuxembourgDraftGraphBatchFactory.AssignBatches(inventory);
+        if (batchOrdinal < 0 || batchOrdinal >= batches.Count)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(batchOrdinal),
+                $"This inventory assigns {batches.Count} batches.");
+        }
+
+        return new LuxembourgDraftGraphRunRequest(
+            plan, batches[batchOrdinal], planResourceId, rendererSource, citation, batchOrdinal);
+    }
+}
 
 /// <summary>
 /// One bounded enumeration of the InitialDraft class's own subjects.
