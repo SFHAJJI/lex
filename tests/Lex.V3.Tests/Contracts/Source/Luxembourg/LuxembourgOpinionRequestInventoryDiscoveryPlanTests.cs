@@ -309,6 +309,66 @@ public sealed class LuxembourgOpinionRequestInventoryDiscoveryPlanTests
             "the marker is the convention the producers share, not this family's own spelling.");
     }
 
+    /// <summary>
+    /// The rendered question is the proven one, differing only in class and subject name.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// THE MIRROR, PINNED AS A MIRROR. This plan was written by copying
+    /// <see cref="LuxembourgInitialDraftInventoryDiscoveryPlan"/>, whose query shape is the only one
+    /// in this family measured running to completion against this engine: an unbounded
+    /// one-grouped-column class sweep, 2 counts and 22 pages over 7,753 subjects, retained under
+    /// <c>artifacts/e8-draft-live-7a07f85b...</c>. What Legilux refused with <c>Virtuoso SR319</c>
+    /// was the draft graph's sweep - class-wide AND seven columns wide - and neither of these is
+    /// that.
+    /// </para>
+    /// <para>
+    /// So the useful assertion is not that this template contains some expected fragments, which is
+    /// how a mirrored file drifts one fragment at a time while every fragment test still passes. It
+    /// is that the whole rendered text is the proven text, with exactly two substitutions allowed:
+    /// the class IRI and the subject variable's name. Any other difference - a changed limit slot, a
+    /// dropped FILTER, a reordered BIND, an added guard - fails here and has to be argued for
+    /// rather than inherited by accident.
+    /// </para>
+    /// <para>
+    /// It couples the two families deliberately. If the proven plan changes, this fails, and that is
+    /// the point: a mirror whose original moved is no longer evidence of anything.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void TheRenderedQuestionIsTheProvenOneWithOnlyTheClassAndSubjectChanged()
+    {
+        var mine = LuxembourgOpinionRequestInventoryDiscoveryPlan.Create();
+        var proven = LuxembourgInitialDraftInventoryDiscoveryPlan.Create();
+
+        static string Fold(string template, string classIri, string subject) => template
+            .Replace(classIri, "{class}", StringComparison.Ordinal)
+            .Replace(subject, "{subject}", StringComparison.Ordinal);
+
+        Assert.AreEqual(
+            Fold(proven.CountTemplate,
+                LuxembourgInitialDraftInventoryDiscoveryPlan.InitialDraftClassIri, "?draft"),
+            Fold(mine.CountTemplate,
+                LuxembourgOpinionRequestInventoryDiscoveryPlan.OpinionRequestClassIri, "?request"),
+            "the count is the proven count, or this family is asking something unmeasured.");
+
+        Assert.AreEqual(
+            Fold(proven.PageTemplate,
+                LuxembourgInitialDraftInventoryDiscoveryPlan.InitialDraftClassIri, "?draft"),
+            Fold(mine.PageTemplate,
+                LuxembourgOpinionRequestInventoryDiscoveryPlan.OpinionRequestClassIri, "?request"),
+            "and so is the page, including every filter, bind, order and limit slot.");
+
+        // The substitutions are real: folding must not have hidden a template that never mentioned
+        // its own class or subject at all.
+        StringAssert.Contains(mine.PageTemplate, "?request");
+        StringAssert.Contains(
+            mine.PageTemplate, LuxembourgOpinionRequestInventoryDiscoveryPlan.OpinionRequestClassIri);
+        Assert.IsFalse(
+            mine.PageTemplate.Contains("?draft", StringComparison.Ordinal),
+            "the mirrored template must not still bind the subject it was copied from.");
+    }
+
     [TestMethod]
     public void ThePlanIdentityCoversTheQuestionItAsks()
     {
