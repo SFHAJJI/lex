@@ -105,6 +105,8 @@ internal static class EuAcquisitionTestFixture
         ["parent", "axiom", "predicate", "value", "value_kind", "datatype_iri", "language_tag",
             "key_1", "key_2", "key_3", "key_4", "key_5", "key_6", "key_7"];
 
+    internal static readonly string[] LocatedAmendmentFactsProjection = ReifiedAxiomFactsProjection;
+
     internal static readonly string[] CensusFamilyProjection =
         ["base_celex", "base", "state", "family_multiplicity", "state_key"];
 
@@ -571,6 +573,18 @@ internal static class EuAcquisitionTestFixture
     internal static FamilyScript AxiomScriptFrom(params string[] rows) =>
         ScriptFor("A", rows.Length, rows, ReifiedAxiomFactsProjection);
 
+    internal static FamilyScript LocatedAmendmentAbsenceScriptFor(params string[] parentIris)
+    {
+        var rows = parentIris
+            .OrderBy(static parent => parent, StringComparer.Ordinal)
+            .Select(ReifiedAxiomFactsUnboundRow)
+            .ToArray();
+        return ScriptFor("L", rows.Length, rows, LocatedAmendmentFactsProjection);
+    }
+
+    internal static FamilyScript LocatedAmendmentScriptFrom(params string[] rows) =>
+        ScriptFor("L", rows.Length, rows, LocatedAmendmentFactsProjection);
+
     internal static string ManifestationFactsRowsJson(IReadOnlyList<string> rows) =>
         RowsJson(ManifestationFactsProjection, rows);
 
@@ -754,7 +768,15 @@ internal static class EuAcquisitionTestFixture
             return "Witness";
         }
 
-        // Family A is the only family that walks owl#annotatedSource. It is classified here rather
+        // Family L also walks owl#annotatedSource, but uniquely fixes annotatedProperty to the
+        // publisher's amendment predicate. It must be classified before the wider family A check.
+        if (body.Contains("owl#annotatedSource", StringComparison.Ordinal) &&
+            body.Contains("resource_legal_amends_resource_legal", StringComparison.Ordinal))
+        {
+            return "L";
+        }
+
+        // Family A is the only remaining family that walks owl#annotatedSource. It is classified here rather
         // than left to the fallthrough deliberately: an unclassified body is answered with the
         // CENSUS script, which consumes that script's response budget, so the failure would surface
         // as an unrelated census shortfall instead of as family A having no script of its own.

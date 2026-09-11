@@ -210,7 +210,7 @@ public sealed class EuRepeatedEnumerationExecutorTests
             out _)!;
         var scripts = new Dictionary<string, EuAcquisitionTestFixture.FamilyScript>(StringComparer.Ordinal)
         {
-            ["A"] = EuAcquisitionTestFixture.AxiomAbsenceScriptFor(parent),
+            ["L"] = EuAcquisitionTestFixture.LocatedAmendmentAbsenceScriptFor(parent),
         };
         var (plan, planResourceId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var request = new EuObjectFactsPartitionRunRequest(
