@@ -57,11 +57,19 @@ public sealed class LuxembourgDraftPropertyCoverageTests
     }
 
     /// <summary>A delivery of a stated size that names no subject, for a batch citation.</summary>
+    /// <summary>
+    /// A proven batch delivery of this size, read under the draft graph's own profile.
+    /// </summary>
+    /// <remarks>
+    /// UNDER THE GRAPH PLAN'S PROFILE, not the generic fixture one. The batch citation door binds
+    /// that profile, and a generic-profile delivery is exactly what could mint a citation for a
+    /// batch this family never ran.
+    /// </remarks>
     private static (AbsenceFamilyEnumerationProof Proof, RepeatedEnumerationRow[] Rows) DeliveryOfSize(
         string familyKey,
         int rowCount)
     {
-        var (proof, keys) = AbsenceFixtures.Delivery(familyKey, rowCount);
+        var (proof, keys) = AbsenceFixtures.DraftGraphBatchDeliveryOfSize(familyKey, rowCount);
         var rows = keys
             .Select(static key => new RepeatedEnumerationRow(key, key, key))
             .ToArray();
@@ -855,6 +863,51 @@ public sealed class LuxembourgDraftPropertyCoverageTests
         Assert.AreEqual(
             first, LuxembourgDraftPropertyCoverage.SelectionDigestFor(Drafts(50)),
             "and it is stable for one batch.");
+    }
+
+    /// <summary>
+    /// A delivery of this exact partition, read under another profile, mints no citation.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// THE PARTITION KEY IS NOT FAMILY AUTHORITY. It digests the batch's drafts, so a delivery some
+    /// other query family produced over the same drafts carries the same key: the partition check
+    /// agrees, the rows bind to their own proof, and until the profile was bound this door minted a
+    /// citation over a delivery read under another dialect, projection and keyset entirely. A
+    /// citation is what makes an edge row evidence, so one that any family's delivery can mint is
+    /// not evidence of anything.
+    /// </para>
+    /// <para>
+    /// The assertion is on the guard's OWN message. Every refusal on this door is an
+    /// ArgumentException, so a type-only assertion passes by falling through to the row or partition
+    /// binding beside it.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void ABatchDeliveryReadUnderAnotherProfileMintsNoCitation()
+    {
+        var drafts = Drafts(3);
+        var partitionKey = LuxembourgDraftGraphDiscoveryPlan.PartitionKeyFor(drafts);
+        var (honestProof, delivered) = DeliveryOfSize(partitionKey, 2);
+
+        // Same partition, same delivered rows - and a proof of it read under another profile.
+        var foreignProof = AbsenceFixtures.ProofNamingFamilyUnderAnotherProfile(partitionKey, drafts);
+
+        Assert.AreEqual(
+            honestProof.FamilyKey, foreignProof.FamilyKey,
+            "the partition check cannot tell these apart, which is why the profile must.");
+
+        var refusal = Assert.ThrowsExactly<ArgumentException>(
+            () => LuxembourgDraftBatchCitation.ForDelivery(
+                foreignProof,
+                delivered,
+                LuxembourgDraftPropertyCoverage.SelectionDigestFor(drafts),
+                drafts.Count,
+                partitionKey,
+                ObservedAt),
+            "another query family's delivery does not evidence this family's batch.");
+        StringAssert.Contains(refusal.Message, "another interpretation profile");
+        StringAssert.Contains(refusal.Message, "this family's graph");
     }
 
     /// <summary>A citation naming a different selection than the batch in hand refuses.</summary>

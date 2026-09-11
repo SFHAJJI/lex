@@ -214,6 +214,17 @@ internal static class AbsenceFixtures
             LuxembourgOpinionRequestInventoryDiscoveryPlan.PartitionMemberKeyForFixtures,
             StringComparison.Ordinal);
 
+        // A BATCH IS A GRAPH RUN, and its citation door binds the graph plan's profile. The family
+        // key says which: a batch partition key carries its plan's own prefix, so routing on that
+        // is the same dispatch the two inventories above already use rather than a new rule.
+        var draftGraphBatch = familyKey.StartsWith(
+            LuxembourgDraftGraphDiscoveryPlan.PartitionMemberKeyPrefix, StringComparison.Ordinal);
+
+        if (draftGraphBatch)
+        {
+            return DraftGraphBatchDelivery(familyKey, ordered, runSeed);
+        }
+
         var delivery = lux
             ? AbsenceEnumerationProofFixture.LuxembourgInventoryDelivery(ordered, runSeed)
             : request
@@ -281,6 +292,65 @@ internal static class AbsenceFixtures
     }
 
     /// <summary>
+    /// A draft batch's graph delivery, proven under the draft graph plan's own profile.
+    /// </summary>
+    /// <remarks>
+    /// The draft batch citation door binds that profile, so this is the only shape an honest draft
+    /// batch proof can have. <see cref="ProofNamingFamilyUnderAnotherProfile"/> is its mirror.
+    /// </remarks>
+    public static (AbsenceFamilyEnumerationProof Proof, RepeatedEnumerationRdfTerm[][] Keys)
+        DraftGraphBatchDelivery(
+            string partitionKey,
+            IReadOnlyList<string> subjects,
+            int runSeed = 936)
+    {
+        var ordered = subjects.OrderBy(static value => value, StringComparer.Ordinal).ToArray();
+        var delivery = AbsenceEnumerationProofFixture.LuxembourgDraftGraphDelivery(
+            partitionKey, ordered, runSeed);
+
+        var proof = AbsenceFamilyEnumerationProof.TryCreate(
+            partitionKey, delivery, CustodyMembership.Floored, out var refusal);
+        if (proof is null)
+        {
+            throw new InvalidOperationException($"fixture proof refused as {refusal}");
+        }
+
+        const string IriKind = LuxembourgInitialDraftInventoryDiscoveryPlan.IriKind;
+        const string Predicate = LuxembourgDraftGraphDiscoveryPlan.ReferralDatePredicateIri;
+        var keys = ordered
+            .Select(subject => new[]
+            {
+                RepeatedEnumerationRdfTerm.Literal(subject, null, null),
+                RepeatedEnumerationRdfTerm.Literal(IriKind, null, null),
+                RepeatedEnumerationRdfTerm.Literal(Predicate, null, null),
+                RepeatedEnumerationRdfTerm.Literal(
+                    AbsenceEnumerationProofFixture.DeliveredValueKey("v-" + subject), null, null),
+                RepeatedEnumerationRdfTerm.Literal("literal", null, null),
+                RepeatedEnumerationRdfTerm.Literal(string.Empty, null, null),
+                RepeatedEnumerationRdfTerm.Literal(string.Empty, null, null),
+            })
+            .ToArray();
+        return (proof, keys);
+    }
+
+    /// <summary>
+    /// A draft batch delivery of a given SIZE, which is all most callers need of it.
+    /// </summary>
+    /// <remarks>
+    /// The batch citation derives its delivered row count from the rows it binds, so a caller
+    /// wanting "a proven delivery of n rows" needs the rows to exist and to be this family's, and
+    /// nothing about which drafts they are about. Callers that DO care name their subjects through
+    /// <see cref="DraftGraphBatchDelivery"/>.
+    /// </remarks>
+    public static (AbsenceFamilyEnumerationProof Proof, RepeatedEnumerationRdfTerm[][] Keys)
+        DraftGraphBatchDeliveryOfSize(string partitionKey, int rowCount, int runSeed = 936) =>
+        DraftGraphBatchDelivery(
+            partitionKey,
+            Enumerable.Range(0, rowCount)
+                .Select(index => $"urn:delivered:row-{index:D6}").ToArray(),
+            runSeed);
+
+    /// <summary>
     /// A batch's graph delivery, proven under the request graph plan's own interpretation profile.
     /// </summary>
     /// <remarks>
@@ -314,9 +384,7 @@ internal static class AbsenceFixtures
                 RepeatedEnumerationRdfTerm.Literal(IriKind, null, null),
                 RepeatedEnumerationRdfTerm.Literal(Predicate, null, null),
                 RepeatedEnumerationRdfTerm.Literal(
-                    Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(value))),
-                    null,
-                    null),
+                    AbsenceEnumerationProofFixture.DeliveredValueKey(value), null, null),
                 RepeatedEnumerationRdfTerm.Literal("literal", null, null),
                 RepeatedEnumerationRdfTerm.Literal(string.Empty, null, null),
                 RepeatedEnumerationRdfTerm.Literal(string.Empty, null, null),
@@ -399,6 +467,15 @@ internal static class AbsenceFixtures
         var values = Enumerable.Range(0, rowCount)
             .Select(index => token + "-d" + index.ToString("D6"))
             .ToArray();
+
+        // SAME DISPATCH AS DeliveryOfSubjects. A batch partition key names a graph run, whose
+        // citation door binds the graph plan's profile; one rule for which profile a family key
+        // means, in both entry points, rather than two that can drift apart.
+        if (familyKey.StartsWith(
+                LuxembourgDraftGraphDiscoveryPlan.PartitionMemberKeyPrefix, StringComparison.Ordinal))
+        {
+            return DraftGraphBatchDelivery(familyKey, values, runSeed);
+        }
         var proof = ProofOver(familyKey, string.Join(',', values), runSeed);
         var keys = values
             .Select(static value => new[]

@@ -367,6 +367,52 @@ internal static class LuxembourgProvenDelivery
         }
     }
 
+    /// <summary>The profile a batch's graph delivery is read under.</summary>
+    private static readonly RepeatedEnumerationInterpretationProfile GraphProfile =
+        LuxembourgDraftGraphDiscoveryPlan.Create().CreateDeliveryProfile();
+
+    /// <summary>
+    /// The proof must be of a batch of THIS family's graph, read as this family defines it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// THE PARTITION KEY IS NOT FAMILY AUTHORITY. A batch partition key digests its MEMBERS, so a
+    /// delivery some other query family produced over the same drafts carries the same key:
+    /// <c>FamilyKey</c> agrees while the delivery was read under another dialect, projection,
+    /// keyset and count and page query families. The batch citation beside this checked the rows
+    /// and the partition and nothing else, so such a delivery minted a citation - and a citation is
+    /// what makes an edge row evidence rather than a value someone passed in.
+    /// </para>
+    /// <para>
+    /// Found on the OpinionRequest family's batch door, where a reviewer demonstrated it with a
+    /// right-partition wrong-profile proof, and true here for the same reason: the inventory door
+    /// above already treats the profile as family authority, and this was the one door in this file
+    /// that did not.
+    /// </para>
+    /// <para>
+    /// It is the GRAPH profile and not the inventory's. A batch is a graph run over drafts the
+    /// inventory issued; binding the inventory's profile would refuse every honest batch and prove
+    /// nothing about the delivery in hand. The family NAME cannot be checked here as the inventory
+    /// door checks its own, because a batch partition key is per-batch by construction.
+    /// </para>
+    /// </remarks>
+    internal static void RequireThisFamilysGraphBatch(AbsenceFamilyEnumerationProof proof)
+    {
+        try
+        {
+            RepeatedEnumerationInterpretationProfileIdentity.Validate(
+                proof.InterpretationProfileRef, GraphProfile);
+        }
+        catch (ArgumentException inner)
+        {
+            throw new ArgumentException(
+                "This batch proof was read under another interpretation profile, so it does not "
+                    + "evidence a delivery of this family's graph as this family is defined.",
+                nameof(proof),
+                inner);
+        }
+    }
+
     internal static void Bind(
         AbsenceFamilyEnumerationProof proof,
         IReadOnlyList<RepeatedEnumerationRow> deliveredRows,
@@ -525,6 +571,12 @@ public sealed record LuxembourgDraftBatchCitation
         ArgumentNullException.ThrowIfNull(deliveredRows);
         ArgumentException.ThrowIfNullOrWhiteSpace(selectionDigest);
         ArgumentException.ThrowIfNullOrWhiteSpace(partitionKey);
+
+        // READ UNDER THIS FAMILY'S OWN PROFILE, and asked first. The two checks below establish
+        // that the rows are the proof's own and that the partition matches - neither of which says
+        // the delivery came from this query family at all, because a batch partition key digests
+        // its members rather than naming a family.
+        LuxembourgProvenDelivery.RequireThisFamilysGraphBatch(proof);
 
         // The rows this batch cites must be the ones its proof proves. No subjects are named here -
         // a batch asks about drafts the publisher may hold nothing for, so a draft legitimately
