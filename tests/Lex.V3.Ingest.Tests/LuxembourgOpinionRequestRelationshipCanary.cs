@@ -119,24 +119,35 @@ public sealed class LuxembourgOpinionRequestRelationshipCanary
             + $"operational={start.OperationalReason} deniedPath={start.DeniedRequestPath}");
 
         using var session = start.Session;
-        var measured = new List<Membership>();
+        var measured = new List<LuxembourgMembershipAnswer>();
 
         // REQUESTS 2 AND 3: the two membership checks, first, as authorized.
-        var saceA = await AskAsync(session, store, plan, renderer, measured, "A/hasOpinion→sace", SaceOf(DraftA));
-        var scacA = await AskAsync(session, store, plan, renderer, measured, "A/draftHasTask→scac", ScacOf(DraftA));
+        var saceA = await AskAsync(session, store, plan, renderer, measured, "A/hasOpinion->sace", SaceOf(DraftA));
+        var scacA = await AskAsync(session, store, plan, renderer, measured, "A/draftHasTask->scac", ScacOf(DraftA));
 
-        // THE GATE. Exactly one candidate holding the class is an identification; anything else is
-        // ambiguity and the remaining two requests are never bound, let alone sent.
-        var identified = Identify(saceA, scacA, out var verdict);
-        TestContext?.WriteLine($"gate: {verdict}");
+        // THE GATE, AS DATA. CrossCheckTargets is empty unless exactly one candidate holds the
+        // class, so there is no branch here to invert: forcing this loop to run still sends
+        // nothing. LuxembourgOpinionRequestRelationshipDecisionTests pins that emptiness for every
+        // ambiguous shape without touching a publisher.
+        var decision = LuxembourgOpinionRequestRelationship.DecideFirstPair(
+            saceA, scacA, SaceOf(DraftB), ScacOf(DraftB));
+        TestContext?.WriteLine($"gate: {decision.Verdict}");
 
-        if (identified is not null)
+        // REQUESTS 4 AND 5, if the first pair authorized them: the same question on an independent
+        // draft of a different family, through the identical path.
+        var crossCheck = new List<LuxembourgMembershipAnswer>();
+        foreach (var target in decision.CrossCheckTargets)
         {
-            // REQUESTS 4 AND 5: cross-check the identification on an independent draft of a
-            // different family, through the identical path.
-            await AskAsync(session, store, plan, renderer, measured, "B/hasOpinion→sace", SaceOf(DraftB));
-            await AskAsync(session, store, plan, renderer, measured, "B/draftHasTask→scac", ScacOf(DraftB));
+            crossCheck.Add(await AskAsync(
+                session, store, plan, renderer, measured,
+                target.Contains("/sace/", StringComparison.Ordinal) ? "B/hasOpinion->sace" : "B/draftHasTask->scac",
+                target));
         }
+
+        // AND CONSUMED, NOT ASSUMED. A contradicted or ambiguous cross-check retracts the first
+        // pair's identification instead of sitting beside it.
+        var concluded = LuxembourgOpinionRequestRelationship.Conclude(decision, crossCheck);
+        TestContext?.WriteLine($"conclusion: {concluded.Verdict}");
 
         var index = JsonSerializer.SerializeToUtf8Bytes(new
         {
@@ -148,9 +159,11 @@ public sealed class LuxembourgOpinionRequestRelationshipCanary
             dirtyPaths = Git(checkout, "status", "--porcelain"),
             setId = TypedResourcesSetId,
             keyRange = "[(OpinionRequest, IRI), (OpinionRequest, IRI + \"!\")) over (STR(?type), STR(?resource))",
-            gate = verdict,
-            identifiedPredicate = identified,
-            crossCheckRun = identified is not null,
+            firstPairVerdict = decision.Verdict,
+            conclusion = concluded.Verdict,
+            identifiedPredicate = concluded.IdentifiedPredicate,
+            crossCheckRequested = decision.CrossCheckTargets.Count,
+            crossCheckAnswered = crossCheck.Count,
             root,
             measured,
         }, new JsonSerializerOptions { WriteIndented = true });
@@ -170,53 +183,12 @@ public sealed class LuxembourgOpinionRequestRelationshipCanary
         Assert.IsNotEmpty(measured, $"nothing was measured. Evidence: {indexPath}");
     }
 
-    /// <summary>One membership answer, and the request that produced it.</summary>
-    private sealed record Membership(string Label, string ResourceIri, long? Count, string? Failure);
-
-    /// <summary>Which predicate, if any, this pair identifies. Null means ambiguous.</summary>
-    private static string? Identify(Membership sace, Membership scac, out string verdict)
-    {
-        if (sace.Failure is not null || scac.Failure is not null)
-        {
-            verdict = "AMBIGUOUS: a membership check failed; cross-check withheld.";
-            return null;
-        }
-
-        var saceHolds = sace.Count == 1;
-        var scacHolds = scac.Count == 1;
-        var clean = sace.Count is 0 or 1 && scac.Count is 0 or 1;
-
-        if (!clean)
-        {
-            verdict = $"AMBIGUOUS: a single-resource range answered {sace.Count}/{scac.Count}, "
-                + "which is not 0 or 1; the range does not mean what it should. Cross-check withheld.";
-            return null;
-        }
-
-        if (saceHolds == scacHolds)
-        {
-            verdict = saceHolds
-                ? "AMBIGUOUS: BOTH candidates hold jolux:OpinionRequest; neither predicate is "
-                    + "discriminated. Cross-check withheld."
-                : "AMBIGUOUS: NEITHER candidate holds jolux:OpinionRequest; the relationship is not "
-                    + "among the two candidates retained evidence offered. Cross-check withheld.";
-            return null;
-        }
-
-        var predicate = saceHolds
-            ? LuxembourgOpinionLinkOnlyVocabulary.HasOpinionPredicateIri
-            : "http://data.legilux.public.lu/resource/ontology/jolux#draftHasTask";
-        verdict = $"IDENTIFIED: {(saceHolds ? "hasOpinion→sace" : "draftHasTask→scac")} holds "
-            + "jolux:OpinionRequest and the other does not. Cross-check authorized.";
-        return predicate;
-    }
-
-    private static async Task<Membership> AskAsync(
+    private static async Task<LuxembourgMembershipAnswer> AskAsync(
         RoutedHttpAcquisitionSession session,
         ICustodyStore store,
         LuxembourgQueryPlan plan,
         MachineQueryRendererSource renderer,
-        List<Membership> measured,
+        List<LuxembourgMembershipAnswer> measured,
         string label,
         string resourceIri)
     {
@@ -233,7 +205,7 @@ public sealed class LuxembourgOpinionRequestRelationshipCanary
             failure = error.GetType().Name + ": " + error.Message;
         }
 
-        var row = new Membership(label, resourceIri, count, failure);
+        var row = new LuxembourgMembershipAnswer(label, resourceIri, count, failure);
         measured.Add(row);
         return row;
     }
