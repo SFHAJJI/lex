@@ -7,7 +7,7 @@ using Lex.V3.Contracts.Source.Europe;
 namespace Lex.V3.Ingest.Europe;
 
 /// <summary>
-/// Everything a run needs to ask families P, X, W and M, EXCEPT which objects to ask about.
+/// Everything a run needs to ask the object-batched EU families, EXCEPT which objects to ask about.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -40,7 +40,7 @@ public sealed record EuObjectFactsBatchPolicy(
     BoundMachineRequest SourceWitness);
 
 /// <summary>
-/// Turns one run's own observed object set into the batch requests families P, X, W and M ask.
+/// Turns one run's own observed object set into the batch requests the EU object families ask.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -63,7 +63,7 @@ public sealed record EuObjectFactsBatchPolicy(
 /// choice made here. <c>EuObjectFactsDiscoveryPlan.Bind</c> REFUSES a root-watermark batch
 /// carrying any member outside Appendix A's 82 pack roots, and it is right to: family W reads
 /// each pack root's own <c>lastModificationDate</c>, and a consolidated state is not a pack root
-/// and has no watermark of its own to read. Families P, X and M are asked about O, being the
+/// and has no watermark of its own to read. Families P, X, M, A and L are asked about O, being the
 /// roots together with the states this run's census discovered. Building W over O was tried
 /// first and the plan's own guard rejected it immediately, which is the guard doing exactly its
 /// job.
@@ -83,6 +83,7 @@ internal static class EuObjectFactsBatchFactory
         EuObjectFactsQuerySet.ExpressionFacts,
         EuObjectFactsQuerySet.ManifestationFacts,
         EuObjectFactsQuerySet.ReifiedAxiomFacts,
+        EuObjectFactsQuerySet.LocatedAmendmentFacts,
     ];
 
     /// <summary>
