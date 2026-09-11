@@ -1275,6 +1275,9 @@ public sealed class GuardedConstructionCensusTests
                     + "method public static "
                     + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgReferralDateStep::Resolve, "
                     + "method public static "
+                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgReferralDateStep::TargetNotName"
+                    + "able, "
+                    + "method public static "
                     + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgReferralDateStep::TargetRoleUnp"
                     + "roven",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgRelationRule: constructor internal "
