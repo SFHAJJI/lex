@@ -63,7 +63,7 @@ public sealed class VocabularyRegistryCensusTests
         CollectionAssert.AreEqual(
             new[]
             {
-                "Lex.V3.Ingest.Europe.EuObjectFactsBatchFactory: SetsOverObservedObjects=4, "
+                "Lex.V3.Ingest.Europe.EuObjectFactsBatchFactory: SetsOverObservedObjects=5, "
                     + "SetsOverPackRootsOnly=1",
             },
             ClosedSurfaceCensus.VocabularyRegistries(CensusScope.SweptHere).ToArray());

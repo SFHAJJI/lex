@@ -351,7 +351,10 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Contracts.Source.Core.RepeatedEnumerationObservationIdentity::NewObse"
                     + "rvation",
                 "Lex.V3.Contracts.Source.Core.RepeatedEnumerationRdfTerm: by-ref-method private "
-                    + "static Lex.V3.Contracts.Source.Europe.EuReifiedAxiomDecode::TrySingle, "
+                    + "static "
+                    + "Lex.V3.Contracts.Source.Europe.EuLocatedAmendmentAxiomDecode::TrySingle, "
+                    + "by-ref-method private static "
+                    + "Lex.V3.Contracts.Source.Europe.EuReifiedAxiomDecode::TrySingle, "
                     + "by-ref-method public instance "
                     + "Lex.V3.Contracts.Source.Core.EnumerationDeliveryComparison+CanonicalTupleDoc"
                     + "ument::Deconstruct, "
@@ -390,6 +393,8 @@ public sealed class GuardedConstructionCensusTests
                     + "method private static "
                     + "Lex.V3.Contracts.Source.Europe.EuCellarObjectDecode::Term, "
                     + "method private static "
+                    + "Lex.V3.Contracts.Source.Europe.EuLocatedAmendmentAxiomDecode::Term, "
+                    + "method private static "
                     + "Lex.V3.Contracts.Source.Europe.EuManifestationListingDecode::Term, "
                     + "method private static "
                     + "Lex.V3.Contracts.Source.Europe.EuReifiedAxiomDecode::Term, "
@@ -405,7 +410,7 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Contracts.Source.Core.RepeatedEnumerationRdfTerm::Literal, "
                     + "method public static "
                     + "Lex.V3.Contracts.Source.Core.RepeatedEnumerationRdfTerm::Unbound, "
-                    + "24 compiler-generated",
+                    + "25 compiler-generated",
                 "Lex.V3.Contracts.Source.Corpus.VerifiedCorpusRecord: constructor internal "
                     + "instance Lex.V3.Contracts.Source.Corpus.VerifiedCorpusRecord::.ctor, "
                     + "method public static "
@@ -559,6 +564,21 @@ public sealed class GuardedConstructionCensusTests
                     + "instance Lex.V3.Contracts.Source.Europe.EuLocatedAmendmentAxiom::.ctor, "
                     + "method public static "
                     + "Lex.V3.Contracts.Source.Europe.EuLocatedAmendmentAxiom::Create",
+                "Lex.V3.Contracts.Source.Europe.EuLocatedAmendmentAxiomObservation: constructor "
+                    + "internal instance "
+                    + "Lex.V3.Contracts.Source.Europe.EuLocatedAmendmentAxiomObservation::.ctor, "
+                    + "method private static "
+                    + "Lex.V3.Contracts.Source.Europe.EuLocatedAmendmentAxiomDecode::Conflict, "
+                    + "method private static "
+                    + "Lex.V3.Contracts.Source.Europe.EuLocatedAmendmentAxiomDecode::DecodeOne, "
+                    + "method public static "
+                    + "Lex.V3.Contracts.Source.Europe.EuLocatedAmendmentAxiomDecode::TryDecode",
+                "Lex.V3.Contracts.Source.Europe.EuLocatedAmendmentRawProperty: by-ref-method "
+                    + "public instance "
+                    + "Lex.V3.Contracts.Source.Europe.EuLocatedAmendmentAxiomDecode+RawAxiom::Decon"
+                    + "struct, "
+                    + "constructor internal instance "
+                    + "Lex.V3.Contracts.Source.Europe.EuLocatedAmendmentRawProperty::.ctor",
                 "Lex.V3.Contracts.Source.Europe.EuNalSchemeIdentity: constructor private instance "
                     + "Lex.V3.Contracts.Source.Europe.EuNalSchemeIdentity::.ctor, "
                     + "constructor private instance "
