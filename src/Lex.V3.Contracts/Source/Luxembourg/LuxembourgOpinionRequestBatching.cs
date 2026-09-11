@@ -68,7 +68,7 @@ public sealed record LuxembourgOpinionRequestInventoryCitation
         ArgumentNullException.ThrowIfNull(addressablePopulation);
 
         LuxembourgProvenRequestDelivery.RequireThisFamilysInventory(proof);
-        LuxembourgProvenRequestDelivery.Bind(proof, deliveredRows, addressablePopulation);
+        LuxembourgProvenRequestDelivery.BindPopulation(proof, deliveredRows, addressablePopulation);
 
         // A population repeating a subject digests identically to one naming it once, and only the
         // count separates them.
@@ -141,10 +141,24 @@ internal static class LuxembourgProvenRequestDelivery
         }
     }
 
-    internal static void Bind(
+    /// <summary>
+    /// These rows are the ones this proof proves were delivered. No population is claimed.
+    /// </summary>
+    /// <remarks>
+    /// SEPARATE FROM THE POPULATION CLAIM, and the separation is load-bearing. A BATCH cites a
+    /// delivery without naming subjects: a batch asks about requests the publisher may hold nothing
+    /// for, so a member legitimately appears in no row and requiring an exact population there would
+    /// refuse honest deliveries. An INVENTORY makes the opposite claim - that these rows are the
+    /// whole addressable class - and must prove it exactly.
+    /// <para>
+    /// They were one method taking an optional subject list, with an early return when it was
+    /// empty. That early return is what let an inventory citation be minted over no population at
+    /// all, so collapsing them again would reintroduce it.
+    /// </para>
+    /// </remarks>
+    internal static void BindRows(
         AbsenceFamilyEnumerationProof proof,
-        IReadOnlyList<RepeatedEnumerationRow> deliveredRows,
-        IReadOnlyList<string> namedSubjects)
+        IReadOnlyList<RepeatedEnumerationRow> deliveredRows)
     {
         if (deliveredRows.Count != proof.DeliveredRowCount)
         {
@@ -165,6 +179,17 @@ internal static class LuxembourgProvenRequestDelivery
                     + ". An honest proof of another enumeration authorizes nothing here.",
                 nameof(deliveredRows));
         }
+    }
+
+    /// <summary>
+    /// These rows are the proof's own, AND they are exactly the addressable population named.
+    /// </summary>
+    internal static void BindPopulation(
+        AbsenceFamilyEnumerationProof proof,
+        IReadOnlyList<RepeatedEnumerationRow> deliveredRows,
+        IReadOnlyList<string> namedSubjects)
+    {
+        BindRows(proof, deliveredRows);
 
         // FROM BOTH PROVEN KEYS, AND AS AN EXACT SET. Only the canonical keys are covered by the
         // digest above; Terms is an independently settable list. This family keys on key_1 - the
@@ -239,6 +264,88 @@ internal static class LuxembourgProvenRequestDelivery
                     + ".",
                 nameof(namedSubjects));
         }
+    }
+}
+
+/// <summary>
+/// What one batch's delivery was, cited by the run that delivered it.
+/// </summary>
+/// <remarks>
+/// <para>
+/// A batch citation says: this partition was asked, this many requests were named, this many rows
+/// came back, and this run proved it. It claims no population - a batch asks about requests the
+/// publisher may hold nothing for, so a member legitimately appears in no row.
+/// </para>
+/// <para>
+/// NO OBSERVED-AT, for the reason it was removed from the inventory citation: a caller-supplied
+/// instant copied into a property documented as an observation time is a provenance claim the
+/// caller cannot make, and the proof carries no instant to derive one from. A reader needing the
+/// time takes it from the run's own receipt through <see cref="AcquisitionRunRef"/>.
+/// </para>
+/// </remarks>
+public sealed record LuxembourgOpinionRequestBatchCitation
+{
+    private LuxembourgOpinionRequestBatchCitation(
+        SourceArtifactRef acquisitionRunRef,
+        string selectionDigest,
+        int requestedCount,
+        long deliveredRowCount,
+        string partitionKey)
+    {
+        AcquisitionRunRef = acquisitionRunRef;
+        SelectionDigest = selectionDigest;
+        RequestedCount = requestedCount;
+        DeliveredRowCount = deliveredRowCount;
+        PartitionKey = partitionKey;
+    }
+
+    /// <summary>The run that delivered this batch.</summary>
+    public SourceArtifactRef AcquisitionRunRef { get; }
+
+    /// <summary>The digest of the members this batch asked about.</summary>
+    public string SelectionDigest { get; }
+
+    /// <summary>How many requests this batch named.</summary>
+    public int RequestedCount { get; }
+
+    /// <summary>How many rows came back, derived from the bound delivery.</summary>
+    public long DeliveredRowCount { get; }
+
+    /// <summary>The partition this batch is, which its proof must also name.</summary>
+    public string PartitionKey { get; }
+
+    /// <summary>Cites the delivery a batch run actually produced.</summary>
+    public static LuxembourgOpinionRequestBatchCitation ForDelivery(
+        AbsenceFamilyEnumerationProof proof,
+        IReadOnlyList<RepeatedEnumerationRow> deliveredRows,
+        LuxembourgOpinionRequestBatchAssignment assignment)
+    {
+        ArgumentNullException.ThrowIfNull(proof);
+        ArgumentNullException.ThrowIfNull(deliveredRows);
+        ArgumentNullException.ThrowIfNull(assignment);
+
+        // The rows are the proof's own. No population is claimed: see BindRows.
+        LuxembourgProvenRequestDelivery.BindRows(proof, deliveredRows);
+
+        // AND THE PARTITION THE PROOF ITSELF NAMES. A run proves an enumeration of one partition; a
+        // citation claiming another describes a batch this proof says nothing about.
+        if (!string.Equals(assignment.PartitionKey, proof.FamilyKey, StringComparison.Ordinal))
+        {
+            throw new ArgumentException(
+                "This batch citation names partition " + assignment.PartitionKey
+                    + " and its proof proves " + proof.FamilyKey + ".",
+                nameof(assignment));
+        }
+
+        // THE ASSIGNMENT CARRIES THE MEMBERS, so nothing about them is a caller argument: the
+        // selection digest and the requested count are derived from the batch the inventory issued.
+        // Taking them as parameters is how a citation starts describing a batch nobody ran.
+        return new LuxembourgOpinionRequestBatchCitation(
+            proof.AcquisitionRunRef,
+            LuxembourgOpinionRequestGraphDiscoveryPlan.SelectionDigestFor(assignment.Requests),
+            assignment.Requests.Count,
+            deliveredRows.Count,
+            assignment.PartitionKey);
     }
 }
 
