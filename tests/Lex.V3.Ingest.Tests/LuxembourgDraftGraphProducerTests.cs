@@ -161,7 +161,7 @@ public sealed class LuxembourgDraftGraphProducerTests
             Literal(key1 ?? draft),
             Literal(key2 ?? Marker(draftTerm)),
             Literal(key3 ?? predicateIri),
-            Literal(key4 ?? valueTerm.Value ?? string.Empty),
+            Literal(key4 ?? ValueDigest(valueTerm.Value ?? string.Empty)),
             Literal(key5 ?? Marker(valueTerm)),
             Literal(key6 ?? datatypeColumn),
             Literal(key7 ?? languageColumn),
@@ -248,6 +248,119 @@ public sealed class LuxembourgDraftGraphProducerTests
 
         // And the door still refuses, which is what the mutation above was trying to get past.
         Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => result.For(NotAdmitted));
+    }
+
+    /// <summary>
+    /// The 2,648-byte title that stopped the live run is admitted, keyed by its digest.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// THE ROW THE ACCEPTANCE RUN STOPPED ON. Batch 12 of 156 refused with
+    /// <c>DeliveredKeyNotRepresentable</c>: draft <c>eli/dl/pl/2005/64</c> carries a
+    /// <c>jolux#titleDraft</c> of 2,648 UTF-8 bytes against a shared 2,047-byte key-part ceiling,
+    /// and keyed on the lexical value that row cannot be keyed at all.
+    /// </para>
+    /// <para>
+    /// The owner's ruling is a digest rather than a larger ceiling, a truncation or an exclusion, so
+    /// this asserts the two halves of that: the row is admitted, and the VALUE ARRIVES WHOLE. A
+    /// digest that quietly became the record's value would satisfy the first half and lose the
+    /// instrument's subject matter, which is the thing this family exists to carry.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void ATitleTooLongToKeyIsAdmittedWholeAndKeyedByItsDigest()
+    {
+        var title = LongTitleValue;
+        Assert.AreEqual(
+            2648, System.Text.Encoding.UTF8.GetByteCount(title),
+            "this fixture must stay the measured length, or it no longer exceeds the key ceiling.");
+        Assert.IsGreaterThan(
+            2047, System.Text.Encoding.UTF8.GetByteCount(title),
+            "and it must exceed the shared key-part ceiling, or it proves nothing.");
+
+        const string TitleDraft = "http://data.legilux.public.lu/resource/ontology/jolux#titleDraft";
+        CollectionAssert.DoesNotContain(
+            LuxembourgDraftGraphDiscoveryPlan.AskedAbout.ToArray(), TitleDraft,
+            "titleDraft is retained rather than admitted, which is what the offending row is.");
+
+        var result = Decode(Row(predicate: TitleDraft, value: Literal(title)));
+
+        Assert.AreEqual(
+            LuxembourgDraftGraphProductionRefusal.None, result.Refusal,
+            $"the row the live run stopped on must now be read whole: {result.Refusal} {result.Detail}");
+
+        var retained = result.RetainedNotAdmitted
+            .Where(value => string.Equals(value.PredicateIri, TitleDraft, StringComparison.Ordinal))
+            .ToArray();
+        Assert.HasCount(1, retained, "the row is retained, not dropped and not asserted.");
+        Assert.AreEqual(
+            title, retained[0].Value,
+            "the complete lexical value survives; the digest keys the row, it does not replace it.");
+        Assert.AreEqual(
+            2648, System.Text.Encoding.UTF8.GetByteCount(retained[0].Value!),
+            "and it is not truncated on the way through.");
+    }
+
+    /// <summary>A key that does not digest the value beside it is refused before admission.</summary>
+    /// <remarks>
+    /// The digest is only an identity if it is recomputed. A producer that carried the publisher's
+    /// key through unchecked would admit a row whose key describes some other value entirely, which
+    /// is a worse failure than the one the digest was introduced to fix: the cursor would be stable
+    /// and wrong.
+    /// </remarks>
+    [TestMethod]
+    public void AKeyThatDoesNotDigestItsOwnValueIsRefused()
+    {
+        var result = Decode(Row(
+            value: Literal("the value the row actually carries"),
+            key4: ValueDigest("a different value entirely")));
+
+        Assert.AreEqual(LuxembourgDraftGraphProductionRefusal.RowNotAdmitted, result.Refusal);
+        StringAssert.Contains(result.Detail!, "key_4");
+
+        // And the raw lexical value in that position is refused too: the page keys on the digest
+        // now, so a page still sending the value is describing a query this family does not ask.
+        var lexical = Decode(Row(
+            value: Literal("the value the row actually carries"),
+            key4: "the value the row actually carries"));
+        Assert.AreEqual(LuxembourgDraftGraphProductionRefusal.RowNotAdmitted, lexical.Refusal);
+    }
+
+    /// <summary>
+    /// Two values that differ only in kind, datatype or language stay distinct rows.
+    /// </summary>
+    /// <remarks>
+    /// The digest is over the LEXICAL form alone, so <c>"3"</c> as a typed literal, as a plain
+    /// literal and as a language-tagged literal all digest identically. They are different facts,
+    /// and what keeps them apart is that key_5, key_6 and key_7 carry kind, datatype and language
+    /// independently. Without that separation the digest would collapse them onto one canonical key
+    /// and the delivery would be refused as duplicated - or worse, silently deduplicated.
+    /// </remarks>
+    [TestMethod]
+    public void ValuesDifferingOnlyInKindDatatypeOrLanguageRemainDistinct()
+    {
+        const string Lexical = "3";
+        Assert.AreEqual(
+            ValueDigest(Lexical), ValueDigest(Lexical),
+            "the digest is over the lexical form alone, which is exactly why the other keys matter.");
+
+        var predicate = LuxembourgDraftGraphDiscoveryPlan.StatusDraftPredicateIri;
+        var result = Decode(
+            Row(predicate: predicate, value: Literal(Lexical, XsdInteger)),
+            Row(predicate: predicate, value: Literal(Lexical, null, "fr")));
+
+        Assert.AreEqual(
+            LuxembourgDraftGraphProductionRefusal.None, result.Refusal,
+            $"two facts sharing a lexical form are not a duplicate: {result.Refusal} {result.Detail}");
+
+        var records = result.For(predicate);
+        Assert.HasCount(2, records, "both survive as distinct records.");
+        CollectionAssert.AreEquivalent(
+            new[] { XsdInteger, string.Empty },
+            records.Select(static value => value.ValueDatatypeIri).ToArray());
+        CollectionAssert.AreEquivalent(
+            new[] { string.Empty, "fr" },
+            records.Select(static value => value.ValueLanguageTag).ToArray());
     }
 
     private static LuxembourgDraftGraphProductionResult Decode(params RepeatedEnumerationRow[] rows)
@@ -950,6 +1063,35 @@ public sealed class LuxembourgDraftGraphProducerTests
     /// <summary>
     /// One page answering the draft for all five properties, in the publisher's own wire shape.
     /// </summary>
+    /// <summary>
+    /// The row that stopped the live acceptance run: a title longer than a key part may be.
+    /// </summary>
+    /// <remarks>
+    /// Reconstructed from the retained delivery under <c>artifacts/e8-draft-live-7a07f85b...</c>
+    /// rather than invented. Its opening is the publisher's own text and its length is the measured
+    /// 2,648 UTF-8 bytes, which is what carries it past the shared 2,047-byte key-part ceiling.
+    /// Draft <c>eli/dl/pl/2005/64</c> holds it as <c>jolux#titleDraft</c>. The tail is padding: what
+    /// matters here is the byte length and that the value survives whole, not 2.6KB of HTML pasted
+    /// into a test where nobody would read it.
+    /// </remarks>
+    internal const string LongTitleOpening =
+        "<p>Projet de loi portant 1. approbation de l'Accord sous forme d'échange de lettres relatif à la fiscalité des revenus de l'épargne sous forme de paiements d'in";
+
+    internal static string LongTitleValue => LongTitleOpening + new string('x', 2484);
+
+    /// <summary>
+    /// What the publisher's own <c>SHA256(STR(?value))</c> produces for a lexical value.
+    /// </summary>
+    /// <remarks>
+    /// The fixture digests the same way the page does, because the producer now recomputes the
+    /// digest from the retained value and refuses a row whose key does not describe it. A fixture
+    /// still emitting the raw value would be describing a response this family no longer asks for.
+    /// </remarks>
+    internal static string ValueDigest(string lexical) =>
+        Convert.ToHexStringLower(
+            System.Security.Cryptography.SHA256.HashData(
+                new System.Text.UTF8Encoding(false, true).GetBytes(lexical)));
+
     internal static string PageJson(IReadOnlyList<string> projection)
     {
         static object IriTerm(string value) => new Dictionary<string, string>
@@ -1005,7 +1147,7 @@ public sealed class LuxembourgDraftGraphProducerTests
                 ["key_1"] = LiteralTerm(Draft),
                 ["key_2"] = LiteralTerm("iri"),
                 ["key_3"] = LiteralTerm(predicate),
-                ["key_4"] = LiteralTerm(value),
+                ["key_4"] = LiteralTerm(ValueDigest(value)),
                 ["key_5"] = LiteralTerm(isIri ? "iri" : "literal"),
                 ["key_6"] = LiteralTerm(datatype),
                 ["key_7"] = LiteralTerm(string.Empty),
