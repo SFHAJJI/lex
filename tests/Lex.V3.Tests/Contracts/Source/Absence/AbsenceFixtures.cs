@@ -205,10 +205,20 @@ internal static class AbsenceFixtures
             LuxembourgInitialDraftInventoryDiscoveryPlan.PartitionMemberKeyForFixtures,
             StringComparison.Ordinal);
 
+        // The request inventory is a separate family with its own profile, so a delivery built from
+        // the draft plan evidences nothing at its citation door however alike the rows look.
+        var request = string.Equals(
+            familyKey,
+            LuxembourgOpinionRequestInventoryDiscoveryPlan.PartitionMemberKeyForFixtures,
+            StringComparison.Ordinal);
+
         var delivery = lux
             ? AbsenceEnumerationProofFixture.LuxembourgInventoryDelivery(ordered, runSeed)
-            : AbsenceEnumerationProofFixture.DeliveryOf(
-                familyKey, runSeed, string.Join(',', ordered), rawKeys: true);
+            : request
+                ? AbsenceEnumerationProofFixture.LuxembourgOpinionRequestInventoryDelivery(
+                    ordered, runSeed)
+                : AbsenceEnumerationProofFixture.DeliveryOf(
+                    familyKey, runSeed, string.Join(',', ordered), rawKeys: true);
 
         var proof = AbsenceFamilyEnumerationProof.TryCreate(
             familyKey, delivery, CustodyMembership.Floored, out var refusal);
@@ -219,7 +229,7 @@ internal static class AbsenceFixtures
 
         // The family's own rows key on [key_1, key_2]; the generic ones key on a single id.
         var keys = ordered
-            .Select(subject => lux
+            .Select(subject => lux || request
                 ? new[]
                 {
                     RepeatedEnumerationRdfTerm.Literal(subject, null, null),
