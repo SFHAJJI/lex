@@ -91,6 +91,25 @@ public enum LuxembourgReferralEvidenceRefusal
     /// publisher said it".
     /// </remarks>
     DeliveredTypeRowMissing = 5,
+
+    /// <summary>
+    /// The edge was delivered, and its target carries no lexical form to name.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// THE ONE REFUSAL THAT CANNOT NAME ITS TARGET, and the reason the nameability invariant has an
+    /// exception at all. The broad-predicate acquisition retains whatever the publisher sends, and
+    /// an empty literal is a value RDF permits: the draft DID reach an edge, and that edge's target
+    /// has nothing to call it by.
+    /// </para>
+    /// <para>
+    /// It is not <see cref="LuxembourgReferralDateState.DraftSideGap"/>. A draft with no
+    /// <c>hasOpinion</c> row at all and a draft whose edge led to an unnameable target are different
+    /// facts about the publisher, and collapsing them loses a delivered edge - the conservation
+    /// failure S2-A03 forbids, arriving through a tidy-looking default.
+    /// </para>
+    /// </remarks>
+    TargetCarriesNoLexicalForm = 6,
 }
 
 /// <summary>
@@ -137,18 +156,30 @@ public sealed record LuxembourgReferralDateStep
         // guard on the factory made this unreachable, and deleting this check then left every test
         // green because nothing could get past the outer guard to reach it. A second check that no
         // test can fail is not defence in depth, it is an untested claim.
+        // THE ONE EXCEPTION, AND IT IS NARROW. An edge whose delivered target carries no lexical
+        // form was still reached, so it is not a draft-side gap - but there is nothing to name it
+        // by, and synthesising one would invent a traversal target the publisher never sent. Only
+        // this refusal may leave the target unnamed; a TargetRoleGap with Refusal.None still must
+        // name one, which is the defect this invariant was written for.
+        //
+        // THERE IS NO CONVERSE CHECK, and that is measured rather than assumed. A guard refusing a
+        // NAMED target alongside this refusal was written first and deleted: the only factory that
+        // produces the refusal passes null, so nothing could reach it and no test could fail it.
+        // It becomes necessary again the moment a second door can mint this refusal.
         var namesATarget = state is LuxembourgReferralDateState.TargetRoleGap
             or LuxembourgReferralDateState.Fact
             or LuxembourgReferralDateState.DerivedAbsence;
+        var mayLeaveItUnnamed =
+            refusal is LuxembourgReferralEvidenceRefusal.TargetCarriesNoLexicalForm;
 
-        if (namesATarget && string.IsNullOrEmpty(targetIri))
+        if (namesATarget && !mayLeaveItUnnamed && string.IsNullOrEmpty(targetIri))
         {
             throw new ArgumentException(
                 $"{state} names the target it reached; an unnamed one is a different state.",
                 nameof(targetIri));
         }
 
-        if (!namesATarget && targetIri is not null)
+        if (!namesATarget && !mayLeaveItUnnamed && targetIri is not null)
         {
             throw new ArgumentException(
                 $"{state} reached no target, so naming one would assert a traversal that did not "
@@ -195,6 +226,25 @@ public sealed record LuxembourgReferralDateStep
     /// </remarks>
     public static LuxembourgReferralDateStep TargetRoleUnproven(string draftIri, string targetIri) =>
         Gap(draftIri, targetIri, LuxembourgReferralDateState.TargetRoleGap);
+
+    /// <summary>
+    /// The draft reached an edge whose delivered target carries no lexical form.
+    /// </summary>
+    /// <remarks>
+    /// Reached, and unnameable. The edge is preserved as a typed refusal rather than folded into
+    /// <see cref="DraftReachedNothing"/>, because a draft that reached nothing and a draft whose
+    /// edge led nowhere nameable are different facts and only one of them is a missing edge.
+    /// </remarks>
+    public static LuxembourgReferralDateStep TargetNotNameable(string draftIri)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(draftIri);
+        return new(
+            draftIri,
+            null,
+            LuxembourgReferralDateState.TargetRoleGap,
+            LuxembourgReferralEvidenceRefusal.TargetCarriesNoLexicalForm,
+            []);
+    }
 
     /// <summary>A referral date asserted directly of the draft: retained drift, never a fact.</summary>
     public static LuxembourgReferralDateStep DirectTripleIsDrift(string draftIri) =>
