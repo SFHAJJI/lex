@@ -1,7 +1,9 @@
+using Lex.V3.Contracts;
 using Lex.V3.Contracts.Facts;
 using Lex.V3.Contracts.Source.Core;
+using Lex.V3.Contracts.Source.Europe;
 
-namespace Lex.V3.Contracts.Source.Europe;
+namespace Lex.V3.Ingest.Europe;
 
 /// <summary>Why a proof-bound located-amendment observation could not become its accepted E4 axiom.</summary>
 public enum EuLocatedAmendmentAxiomProjectionRefusal
@@ -28,6 +30,11 @@ public enum EuLocatedAmendmentAxiomProjectionRefusal
 /// </remarks>
 public sealed class EuLocatedAmendmentAxiomProjection
 {
+    private const string AnnotatedSourcePredicateIri =
+        "http://www.w3.org/2002/07/owl#annotatedSource";
+    private const string AnnotatedTargetPredicateIri =
+        "http://www.w3.org/2002/07/owl#annotatedTarget";
+
     private EuLocatedAmendmentAxiomProjection(
         EuLocatedAmendmentAxiom axiom,
         EuLocatedAmendmentAxiomObservation observation)
@@ -62,21 +69,21 @@ public sealed class EuLocatedAmendmentAxiomProjection
         if (observation.AnnotatedTargetIris.Count != 1)
         {
             refusal = EuLocatedAmendmentAxiomProjectionRefusal.PublisherTargetAmbiguous;
-            offendingPredicate = EuObjectFactsDiscoveryPlan.AnnotatedTargetPredicateIri;
+            offendingPredicate = AnnotatedTargetPredicateIri;
             return null;
         }
 
         if (!IdentityNames(source, observation.AnnotatedSourceIri))
         {
             refusal = EuLocatedAmendmentAxiomProjectionRefusal.SourceIdentityDoesNotMatchObservation;
-            offendingPredicate = EuObjectFactsDiscoveryPlan.AnnotatedSourcePredicateIri;
+            offendingPredicate = AnnotatedSourcePredicateIri;
             return null;
         }
 
         if (!IdentityNames(target, observation.AnnotatedTargetIris[0]))
         {
             refusal = EuLocatedAmendmentAxiomProjectionRefusal.TargetIdentityDoesNotMatchObservation;
-            offendingPredicate = EuObjectFactsDiscoveryPlan.AnnotatedTargetPredicateIri;
+            offendingPredicate = AnnotatedTargetPredicateIri;
             return null;
         }
 

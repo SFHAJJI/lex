@@ -2,9 +2,10 @@ using Lex.V3.Contracts;
 using Lex.V3.Contracts.Facts;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Europe;
+using Lex.V3.Ingest.Europe;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
-namespace Lex.V3.Tests.Contracts.Source.Europe;
+namespace Lex.V3.Ingest.Tests;
 
 [TestClass]
 public sealed class EuLocatedAmendmentAxiomProjectionTests
