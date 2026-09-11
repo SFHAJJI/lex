@@ -400,6 +400,95 @@ public sealed record LuxembourgInitialDraftInventoryRunRequest(
     MachineQueryRendererSource RendererSource);
 
 /// <summary>
+/// One bounded enumeration of the OpinionRequest class's own subjects.
+/// </summary>
+/// <remarks>
+/// It carries no selection, for the reason the draft inventory beside it does not: the question is
+/// the class itself, and a caller able to narrow it could narrow what "complete" means. The batching
+/// stage that follows takes its members from this run's proven output.
+/// </remarks>
+public sealed record LuxembourgOpinionRequestInventoryRunRequest(
+    LuxembourgOpinionRequestInventoryDiscoveryPlan Plan,
+    string PlanResourceId,
+    MachineQueryRendererSource RendererSource);
+
+/// <summary>
+/// One batch of a proven OpinionRequest inventory, swept for every predicate the publisher holds.
+/// </summary>
+/// <remarks>
+/// <para>
+/// The members come from the inventory's own assignment and never from a caller. Where the draft
+/// family reaches into a production result for its citation, this one takes the population and the
+/// citation and lets <see cref="LuxembourgOpinionRequestBatchAssignment.Over"/> refuse any pairing
+/// the citation does not digest - the same gate, one door earlier.
+/// </para>
+/// <para>
+/// There is no unproven-inventory branch to write: a
+/// <see cref="LuxembourgOpinionRequestInventoryCitation"/> cannot exist without the proof it was
+/// minted over.
+/// </para>
+/// </remarks>
+public sealed record LuxembourgOpinionRequestGraphRunRequest
+{
+    private LuxembourgOpinionRequestGraphRunRequest(
+        LuxembourgOpinionRequestGraphDiscoveryPlan plan,
+        LuxembourgOpinionRequestBatchAssignment assignment,
+        string planResourceId,
+        MachineQueryRendererSource rendererSource)
+    {
+        Plan = plan;
+        Assignment = assignment;
+        PlanResourceId = planResourceId;
+        RendererSource = rendererSource;
+    }
+
+    /// <summary>The inventory-issued batch this run sweeps.</summary>
+    public LuxembourgOpinionRequestBatchAssignment Assignment { get; }
+
+    public LuxembourgOpinionRequestGraphDiscoveryPlan Plan { get; }
+
+    /// <summary>The batch's members, taken from the inventory rather than from a caller.</summary>
+    public IReadOnlyList<string> BatchRequests => Assignment.Requests;
+
+    public string PlanResourceId { get; }
+
+    public MachineQueryRendererSource RendererSource { get; }
+
+    /// <summary>The proven inventory these requests came out of.</summary>
+    public LuxembourgOpinionRequestInventoryCitation Inventory => Assignment.Inventory;
+
+    /// <summary>Which of the inventory's own batches this run is.</summary>
+    public int BatchOrdinal => Assignment.Ordinal;
+
+    /// <summary>One batch of a proven inventory, by ordinal into that inventory's own assignment.</summary>
+    public static LuxembourgOpinionRequestGraphRunRequest ForBatch(
+        LuxembourgOpinionRequestGraphDiscoveryPlan plan,
+        IReadOnlyList<string> population,
+        LuxembourgOpinionRequestInventoryCitation inventory,
+        int batchOrdinal,
+        string planResourceId,
+        MachineQueryRendererSource rendererSource)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        ArgumentNullException.ThrowIfNull(population);
+        ArgumentNullException.ThrowIfNull(inventory);
+        ArgumentNullException.ThrowIfNull(rendererSource);
+        ArgumentException.ThrowIfNullOrWhiteSpace(planResourceId);
+
+        var batches = LuxembourgOpinionRequestBatchAssignment.Over(population, inventory);
+        if (batchOrdinal < 0 || batchOrdinal >= batches.Count)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(batchOrdinal),
+                $"This inventory assigns {batches.Count} batches.");
+        }
+
+        return new LuxembourgOpinionRequestGraphRunRequest(
+            plan, batches[batchOrdinal], planResourceId, rendererSource);
+    }
+}
+
+/// <summary>
 /// One bounded enumeration of the case-law works pointing at a batch of EU acts.
 /// </summary>
 /// <remarks>
@@ -1075,6 +1164,106 @@ public sealed class EuRepeatedEnumerationExecutor
                         BindLuxembourgInitialDraftInventoryPage(request, pass, cursor, selected, evidenceRef),
                     batchObjects: null,
                     batchMembershipKeyOrdinal: null,
+                    cancellationToken)
+                .ConfigureAwait(false);
+        }
+        finally
+        {
+            session.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// The OpinionRequest inventory, one session and two passes over the whole class.
+    /// </summary>
+    /// <remarks>
+    /// The narrow first stage of this family's staged sweep, for the reason the InitialDraft
+    /// inventory above is one: Virtuoso refused the seven-column graph question at class scope, and
+    /// a bounded batch needs a proven membership list to be bounded BY. Like the family it serves it
+    /// names no selection.
+    /// </remarks>
+    public async Task<EuEnumerationRunResult> RunLuxembourgOpinionRequestInventoryAsync(
+        LuxembourgOpinionRequestInventoryRunRequest request,
+        BoundMachineRequest sourceWitness,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(sourceWitness);
+
+        var session = await StartSessionAsync(sourceWitness, cancellationToken).ConfigureAwait(false);
+        if (session is null)
+        {
+            return EuEnumerationRunResult.Refused(
+                new EuEnumerationRefusalDetail(
+                    EuEnumerationRefusal.RobotsBootstrapRefused, null, null, null, null, null, null, null, null),
+                productRequestCount: 0);
+        }
+
+        try
+        {
+            var profile = request.Plan.CreateDeliveryProfile();
+            var profileRef = RepeatedEnumerationInterpretationProfileIdentity.Create(NewUrn(), profile);
+            return await RunPassesAsync(
+                    session,
+                    profile,
+                    profileRef,
+                    pass => BindLuxembourgOpinionRequestInventoryCount(request, pass),
+                    (pass, cursor, selected, evidenceRef) =>
+                        BindLuxembourgOpinionRequestInventoryPage(request, pass, cursor, selected, evidenceRef),
+                    batchObjects: null,
+                    batchMembershipKeyOrdinal: null,
+                    cancellationToken)
+                .ConfigureAwait(false);
+        }
+        finally
+        {
+            session.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// One OpinionRequest batch's graph, one session and two passes over the batch's own members.
+    /// </summary>
+    /// <remarks>
+    /// BATCHED, so membership is verified rather than assumed. A row naming a request outside the
+    /// batch is a delivery this run never asked for. The membership position is RESOLVED BY NAME
+    /// from the live profile rather than written as an index: <c>key_1</c> is <c>STR(?request)</c>
+    /// today, and an index written here would keep pointing at the first cursor component if the
+    /// keyset ever gained one in front of it - checking membership against whatever now sits there.
+    /// The batch passed is the plan's own canonical form rather than the caller's spelling, because
+    /// the publisher is asked about the canonical batch and answers in it.
+    /// </remarks>
+    public async Task<EuEnumerationRunResult> RunLuxembourgOpinionRequestGraphAsync(
+        LuxembourgOpinionRequestGraphRunRequest request,
+        BoundMachineRequest sourceWitness,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(sourceWitness);
+
+        var session = await StartSessionAsync(sourceWitness, cancellationToken).ConfigureAwait(false);
+        if (session is null)
+        {
+            return EuEnumerationRunResult.Refused(
+                new EuEnumerationRefusalDetail(
+                    EuEnumerationRefusal.RobotsBootstrapRefused, null, null, null, null, null, null, null, null),
+                productRequestCount: 0);
+        }
+
+        try
+        {
+            var profile = request.Plan.CreateDeliveryProfile();
+            var profileRef = RepeatedEnumerationInterpretationProfileIdentity.Create(NewUrn(), profile);
+            return await RunPassesAsync(
+                    session,
+                    profile,
+                    profileRef,
+                    pass => BindLuxembourgOpinionRequestGraphCount(request, pass),
+                    (pass, cursor, selected, evidenceRef) =>
+                        BindLuxembourgOpinionRequestGraphPage(request, pass, cursor, selected, evidenceRef),
+                    batchObjects: LuxembourgOpinionRequestGraphDiscoveryPlan.RequestedPartitionMembers(
+                        request.BatchRequests),
+                    batchMembershipKeyOrdinal: OpinionRequestGraphBatchMembershipKeyOrdinal(profile),
                     cancellationToken)
                 .ConfigureAwait(false);
         }
@@ -2290,6 +2479,103 @@ public sealed class EuRepeatedEnumerationExecutor
     {
         var bound = request.Plan.BindPage(
             (LuxembourgQueryPass)passOrdinal,
+            cursor,
+            selected,
+            countEvidenceRef,
+            request.PlanResourceId,
+            NewUrn(),
+            request.RendererSource);
+        return new EuBoundQueryParts(
+            bound.MachinePlanRef, bound.InputArtifact.ArtifactRef, bound.Request,
+            bound.InputArtifact.PartitionBinding.MemberKey, bound.MachinePlan.ResponseCardinality.RowLimit);
+    }
+
+    /// <summary>
+    /// Which cursor position carries this family's batch member, read from the profile.
+    /// </summary>
+    /// <remarks>
+    /// BY NAME AND FAIL-CLOSED, like the case-law and procedure-event families beside it. The
+    /// selected term is the request, which the plan binds at <c>key_1</c>. Written as an index it
+    /// would survive a keyset change that moved the request elsewhere and would then check batch
+    /// membership against whatever key had taken position zero - a delivery from outside the batch
+    /// admitted because the guard was reading the wrong column. A profile that does not carry the
+    /// request at <c>key_1</c> is refused here rather than run against.
+    /// </remarks>
+    internal static int OpinionRequestGraphBatchMembershipKeyOrdinal(
+        RepeatedEnumerationInterpretationProfile profile)
+    {
+        var cursorVariables = profile.CursorVariables;
+        for (var index = 0; index < cursorVariables.Count; index++)
+        {
+            if (string.Equals(cursorVariables[index], "key_1", StringComparison.Ordinal))
+            {
+                return index;
+            }
+        }
+
+        throw new InvalidOperationException(
+            "The OpinionRequest graph delivery profile must carry its selected request at key_1.");
+    }
+
+    private static EuBoundQueryParts BindLuxembourgOpinionRequestInventoryCount(
+        LuxembourgOpinionRequestInventoryRunRequest request,
+        int passOrdinal)
+    {
+        var bound = request.Plan.BindCount(
+            (LuxembourgQueryPass)passOrdinal,
+            request.PlanResourceId,
+            NewUrn(),
+            request.RendererSource);
+        return new EuBoundQueryParts(
+            bound.MachinePlanRef, bound.InputArtifact.ArtifactRef, bound.Request,
+            bound.InputArtifact.PartitionBinding.MemberKey, null);
+    }
+
+    private static EuBoundQueryParts BindLuxembourgOpinionRequestInventoryPage(
+        LuxembourgOpinionRequestInventoryRunRequest request,
+        int passOrdinal,
+        IReadOnlyList<string>? cursor,
+        long selected,
+        SourceArtifactRef countEvidenceRef)
+    {
+        var bound = request.Plan.BindPage(
+            (LuxembourgQueryPass)passOrdinal,
+            cursor,
+            selected,
+            countEvidenceRef,
+            request.PlanResourceId,
+            NewUrn(),
+            request.RendererSource);
+        return new EuBoundQueryParts(
+            bound.MachinePlanRef, bound.InputArtifact.ArtifactRef, bound.Request,
+            bound.InputArtifact.PartitionBinding.MemberKey, bound.MachinePlan.ResponseCardinality.RowLimit);
+    }
+
+    private static EuBoundQueryParts BindLuxembourgOpinionRequestGraphCount(
+        LuxembourgOpinionRequestGraphRunRequest request,
+        int passOrdinal)
+    {
+        var bound = request.Plan.BindCount(
+            (LuxembourgQueryPass)passOrdinal,
+            request.BatchRequests,
+            request.PlanResourceId,
+            NewUrn(),
+            request.RendererSource);
+        return new EuBoundQueryParts(
+            bound.MachinePlanRef, bound.InputArtifact.ArtifactRef, bound.Request,
+            bound.InputArtifact.PartitionBinding.MemberKey, null);
+    }
+
+    private static EuBoundQueryParts BindLuxembourgOpinionRequestGraphPage(
+        LuxembourgOpinionRequestGraphRunRequest request,
+        int passOrdinal,
+        IReadOnlyList<string>? cursor,
+        long selected,
+        SourceArtifactRef countEvidenceRef)
+    {
+        var bound = request.Plan.BindPage(
+            (LuxembourgQueryPass)passOrdinal,
+            request.BatchRequests,
             cursor,
             selected,
             countEvidenceRef,
