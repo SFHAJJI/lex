@@ -342,7 +342,7 @@ public sealed class ClosedVocabularyCensusTests
                     + "Pass2",
                 "Lex.V3.Contracts.Source.Europe.EuObjectFactsQueryPass: Pass1, Pass2",
                 "Lex.V3.Contracts.Source.Europe.EuObjectFactsQuerySet: ObjectFacts, ExpressionFacts, "
-                    + "RootWatermark, ManifestationFacts, ReifiedAxiomFacts",
+                    + "RootWatermark, ManifestationFacts, ReifiedAxiomFacts, LocatedAmendmentFacts",
                 "Lex.V3.Contracts.Source.Europe.EuPacingBasis: ChosenAbsentPublishedGuidance, "
                     + "PublishedCrawlDelay",
                 "Lex.V3.Contracts.Source.Europe.EuPackRootCanonicalFormRefusal: None, "
