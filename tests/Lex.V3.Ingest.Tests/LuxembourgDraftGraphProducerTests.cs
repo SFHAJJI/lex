@@ -87,6 +87,13 @@ public sealed class LuxembourgDraftGraphProducerTests
         return (proof, bound);
     }
     private const string Draft = "http://data.legilux.public.lu/resource/draft/8357";
+
+    /// <summary>The draft the live-acceptance harness scripts its scan over.</summary>
+    /// <remarks>
+    /// The same one every test here uses, exposed rather than retyped so the scripted page and the
+    /// inventory that issues its batch cannot come to name different drafts.
+    /// </remarks>
+    internal const string DraftForScan = Draft;
     private const string OtherDraft = "http://data.legilux.public.lu/resource/draft/8358";
     private const string Directive = "http://publications.europa.eu/resource/cellar/3e485e15-11bd-11e6-ba9a-01aa75ed71a1";
     private const string DossierPage = "https://www.chd.lu/fr/dossier/8357";
@@ -281,7 +288,15 @@ public sealed class LuxembourgDraftGraphProducerTests
     /// change rather than an inconvenience of it: the pairing this used to allow is what let a run
     /// mint absences for a subject the proven population never contained.
     /// </remarks>
-    private static LuxembourgInitialDraftInventoryResult InventoryOf(params string[] drafts)
+    /// <summary>
+    /// A delivered inventory over exactly these drafts, shared with the live-acceptance harness.
+    /// </summary>
+    /// <remarks>
+    /// Internal for the same reason <c>PageJson</c> and <c>LuxembourgSourceWitness</c> are: the
+    /// acceptance harness needs an inventory-issued batch, and a second builder of its own could
+    /// drift from the one every producer test is written against.
+    /// </remarks>
+    internal static LuxembourgInitialDraftInventoryResult InventoryOf(params string[] drafts)
     {
         var profile = LuxembourgInitialDraftInventoryDiscoveryPlan.Create().CreateDeliveryProfile();
         var rows = drafts.Select(draft =>
@@ -919,7 +934,7 @@ public sealed class LuxembourgDraftGraphProducerTests
             () => result.For(LuxembourgDraftGraphDiscoveryPlan.DraftTransposesPredicateIri));
     }
 
-    private static BoundMachineRequest LuxembourgSourceWitness()
+    internal static BoundMachineRequest LuxembourgSourceWitness()
     {
         var (plan, planResourceId, _) = LuxembourgAcquisitionTestFixture.BuildInvariantPlan(9102);
         return plan.BindCount(
@@ -935,7 +950,7 @@ public sealed class LuxembourgDraftGraphProducerTests
     /// <summary>
     /// One page answering the draft for all five properties, in the publisher's own wire shape.
     /// </summary>
-    private static string PageJson(IReadOnlyList<string> projection)
+    internal static string PageJson(IReadOnlyList<string> projection)
     {
         static object IriTerm(string value) => new Dictionary<string, string>
         {
