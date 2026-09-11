@@ -1225,11 +1225,13 @@ public sealed class EuRepeatedEnumerationExecutor
     /// One OpinionRequest batch's graph, one session and two passes over the batch's own members.
     /// </summary>
     /// <remarks>
-    /// BATCHED, so membership is verified rather than assumed. <c>key_1</c> is <c>STR(?request)</c>,
-    /// the first cursor component, so ordinal 0 is where a delivered row names the request it
-    /// belongs to - and a row naming a request outside the batch is a delivery this run never asked
-    /// for. The batch passed is the plan's own canonical form rather than the caller's spelling,
-    /// because the publisher is asked about the canonical batch and answers in it.
+    /// BATCHED, so membership is verified rather than assumed. A row naming a request outside the
+    /// batch is a delivery this run never asked for. The membership position is RESOLVED BY NAME
+    /// from the live profile rather than written as an index: <c>key_1</c> is <c>STR(?request)</c>
+    /// today, and an index written here would keep pointing at the first cursor component if the
+    /// keyset ever gained one in front of it - checking membership against whatever now sits there.
+    /// The batch passed is the plan's own canonical form rather than the caller's spelling, because
+    /// the publisher is asked about the canonical batch and answers in it.
     /// </remarks>
     public async Task<EuEnumerationRunResult> RunLuxembourgOpinionRequestGraphAsync(
         LuxembourgOpinionRequestGraphRunRequest request,
@@ -1261,7 +1263,7 @@ public sealed class EuRepeatedEnumerationExecutor
                         BindLuxembourgOpinionRequestGraphPage(request, pass, cursor, selected, evidenceRef),
                     batchObjects: LuxembourgOpinionRequestGraphDiscoveryPlan.RequestedPartitionMembers(
                         request.BatchRequests),
-                    batchMembershipKeyOrdinal: 0,
+                    batchMembershipKeyOrdinal: OpinionRequestGraphBatchMembershipKeyOrdinal(profile),
                     cancellationToken)
                 .ConfigureAwait(false);
         }
@@ -2486,6 +2488,33 @@ public sealed class EuRepeatedEnumerationExecutor
         return new EuBoundQueryParts(
             bound.MachinePlanRef, bound.InputArtifact.ArtifactRef, bound.Request,
             bound.InputArtifact.PartitionBinding.MemberKey, bound.MachinePlan.ResponseCardinality.RowLimit);
+    }
+
+    /// <summary>
+    /// Which cursor position carries this family's batch member, read from the profile.
+    /// </summary>
+    /// <remarks>
+    /// BY NAME AND FAIL-CLOSED, like the case-law and procedure-event families beside it. The
+    /// selected term is the request, which the plan binds at <c>key_1</c>. Written as an index it
+    /// would survive a keyset change that moved the request elsewhere and would then check batch
+    /// membership against whatever key had taken position zero - a delivery from outside the batch
+    /// admitted because the guard was reading the wrong column. A profile that does not carry the
+    /// request at <c>key_1</c> is refused here rather than run against.
+    /// </remarks>
+    internal static int OpinionRequestGraphBatchMembershipKeyOrdinal(
+        RepeatedEnumerationInterpretationProfile profile)
+    {
+        var cursorVariables = profile.CursorVariables;
+        for (var index = 0; index < cursorVariables.Count; index++)
+        {
+            if (string.Equals(cursorVariables[index], "key_1", StringComparison.Ordinal))
+            {
+                return index;
+            }
+        }
+
+        throw new InvalidOperationException(
+            "The OpinionRequest graph delivery profile must carry its selected request at key_1.");
     }
 
     private static EuBoundQueryParts BindLuxembourgOpinionRequestInventoryCount(
