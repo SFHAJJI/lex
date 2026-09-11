@@ -199,6 +199,42 @@ public sealed class LuxembourgReferralDateCompositionTests
             LuxembourgReferralEvidenceRefusal.TargetNotABareIri, steps.Single().Refusal);
     }
 
+    /// <summary>
+    /// An edge whose target carries no lexical form is preserved, not turned into a missing edge.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// FOUND IN REVIEW. This returned <c>DraftReachedNothing</c>, which made a draft whose edge led
+    /// nowhere nameable indistinguishable from a draft with no <c>hasOpinion</c> row at all. The
+    /// broad acquisition retains whatever the publisher sends and an empty literal is a value RDF
+    /// permits, so the row is real and the edge was reached - losing it behind a tidy default is the
+    /// conservation failure S2-A03 forbids.
+    /// </para>
+    /// <para>
+    /// It is a reached-edge typed refusal with no target named. Naming one would assert a traversal
+    /// target the publisher never sent, and the accepted step type could not express the case at all
+    /// until its nameability invariant gained this one narrow exception.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void AnEdgeWhoseTargetCarriesNoLexicalFormIsPreserved()
+    {
+        var draft = Draft(1);
+
+        var steps = LuxembourgReferralDateComposition.Over(
+            DraftProduction((draft, HasOpinion, string.Empty, false)),
+            RequestCover([Target(1)], typed: true, date: "2004-03-11"));
+
+        var step = steps.Single();
+        Assert.AreEqual(
+            LuxembourgReferralDateState.TargetRoleGap, step.State,
+            "the draft reached an edge, so this is not a draft-side gap.");
+        Assert.AreEqual(
+            LuxembourgReferralEvidenceRefusal.TargetCarriesNoLexicalForm, step.Refusal,
+            "and the refusal says exactly what was missing.");
+        Assert.IsNull(step.TargetIri, "there is nothing to name it by, and nothing is invented.");
+    }
+
     /// <summary>A refused draft production composes nothing.</summary>
     /// <remarks>
     /// It carries no citation, so nothing it holds is bound to a proven delivery - and an edge that

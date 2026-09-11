@@ -211,6 +211,32 @@ public sealed class LuxembourgReferralDateResolutionTests
     }
 
     /// <summary>
+    /// The unnameable-target exception is narrow: only its own refusal may leave a target unnamed.
+    /// </summary>
+    /// <remarks>
+    /// The invariant exists because <c>TargetRoleUnproven</c> once accepted an empty target and
+    /// minted a gap naming nothing - a draft-side gap wearing the wrong label. An edge whose
+    /// delivered target carries no lexical form is a different case: it WAS reached, and there is
+    /// genuinely nothing to name it by. So exactly one refusal may go unnamed, and it must also not
+    /// name one, or the two cases would be tellable apart only by reading the value.
+    /// </remarks>
+    [TestMethod]
+    public void OnlyTheUnnameableTargetRefusalMayLeaveATargetUnnamed()
+    {
+        var unnameable = LuxembourgReferralDateStep.TargetNotNameable(Draft);
+
+        Assert.AreEqual(LuxembourgReferralDateState.TargetRoleGap, unnameable.State);
+        Assert.AreEqual(
+            LuxembourgReferralEvidenceRefusal.TargetCarriesNoLexicalForm, unnameable.Refusal);
+        Assert.IsNull(unnameable.TargetIri);
+
+        // The exception does not widen: a gap with no refusal still has to name its target.
+        Assert.ThrowsExactly<ArgumentException>(
+            () => LuxembourgReferralDateStep.TargetRoleUnproven(Draft, string.Empty),
+            "an unnamed gap with no reason is a draft-side gap wearing the wrong label.");
+    }
+
+    /// <summary>
     /// A target-role gap without a target is refused, whichever door mints it.
     /// </summary>
     /// <remarks>

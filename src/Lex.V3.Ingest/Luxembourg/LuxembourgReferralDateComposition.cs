@@ -132,13 +132,20 @@ public static class LuxembourgReferralDateComposition
         LuxembourgDraftRetainedEvidenceRow edge,
         Dictionary<string, LuxembourgOpinionRequestCoverage> byRequest)
     {
-        // A TARGET THAT IS NOT A BARE IRI HAS NO NAME TO TRAVERSE TO, so the step is resolved with
-        // the lexical form the publisher did deliver and Resolve refuses it as such. Naming the raw
+        // A TARGET THAT IS NOT A BARE IRI IS STILL A TARGET, so the step is resolved with the
+        // lexical form the publisher did deliver and Resolve refuses it as such. Naming the raw
         // value rather than dropping the edge keeps the refusal readable.
+        //
+        // AN EMPTY LEXICAL FORM IS A DELIVERED VALUE, NOT A MISSING EDGE. The broad acquisition
+        // retains whatever the publisher sends and an empty literal is one of the things it may
+        // send. This returned DraftReachedNothing until a reviewer showed the delivery: that made a
+        // draft whose edge led nowhere nameable indistinguishable from a draft with no hasOpinion
+        // row, which loses a delivered edge - and losing delivered evidence behind a tidy default is
+        // exactly what this family exists to refuse.
         var target = edge.Value ?? string.Empty;
         if (target.Length is 0)
         {
-            return LuxembourgReferralDateStep.DraftReachedNothing(draft);
+            return LuxembourgReferralDateStep.TargetNotNameable(draft);
         }
 
         var coverage = byRequest.GetValueOrDefault(target);
