@@ -251,6 +251,152 @@ public sealed class LuxembourgDraftGraphProducerTests
     }
 
     /// <summary>
+    /// Both passes page across the long row and still deliver the same complete enumeration.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// THE PRODUCTION PATH, not the decoder. The decode-level tests prove the long row is read,
+    /// keyed and retained correctly once; none of them pages, and paging is where the digest could
+    /// break while every one of them still passed. <c>key_4</c> used to order by the value's own
+    /// lexical form and now orders by its hash, so the long row's position in the page ordering
+    /// moves and the two passes cross it at different limits.
+    /// </para>
+    /// <para>
+    /// The delivery has to exceed BOTH limits before either pass continues at all: 953 for pass one
+    /// and 571 for pass two. Fifty drafts - the batch capacity - each answering twenty predicates is
+    /// a thousand rows, paging 953 + 47 and 571 + 429, with the 2,648-byte title landing inside the
+    /// first page of each pass so a continuation genuinely follows it.
+    /// </para>
+    /// <para>
+    /// The two passes are independent enumerations at different page sizes, so agreeing on the same
+    /// thousand rows across different boundaries is the property this family's proof rests on. A
+    /// page chain that reverted <c>key_4</c> to the lexical value would refuse here on the very row
+    /// that stopped the live run, which is the regression the owner's ruling asked for.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public async Task BothPassesPageAcrossTheLongRowAndAgree()
+    {
+        var plan = LuxembourgDraftGraphDiscoveryPlan.Create();
+        var projection = plan.CreateDeliveryProfile().ProjectionVariables;
+
+        var drafts = Enumerable.Range(0, LuxembourgDraftGraphDiscoveryPlan.BatchCapacity)
+            .Select(static index => "http://data.legilux.public.lu/eli/dl/pl/2005/" + index.ToString("D4"))
+            .ToArray();
+
+        var rows = LongDeliveryRows(drafts, out var longRowIndex);
+
+        Assert.AreEqual(1000, rows.Count, "the delivery must exceed both page limits.");
+        Assert.IsGreaterThan(953, rows.Count, "pass one continues only past 953.");
+        Assert.IsGreaterThan(571, rows.Count, "pass two continues only past 571.");
+        Assert.IsLessThan(
+            571, longRowIndex,
+            "the long row must fall inside the FIRST page of both passes, or nothing continues past it.");
+
+        var passOne = new[] { PageJsonFor(projection, rows.Take(953)), PageJsonFor(projection, rows.Skip(953)) };
+        var passTwo = new[] { PageJsonFor(projection, rows.Take(571)), PageJsonFor(projection, rows.Skip(571)) };
+
+        // Two counts and two pages per pass, in the order the executor asks for them.
+        var handler = LuxembourgAcquisitionTestFixture.AllowRobotsThenHandler((ordinal, request) =>
+            LuxembourgAcquisitionTestFixture.JsonResponse(request, ordinal switch
+            {
+                1 => LuxembourgAcquisitionTestFixture.CountJson(rows.Count),
+                2 => passOne[0],
+                3 => passOne[1],
+                4 => LuxembourgAcquisitionTestFixture.CountJson(rows.Count),
+                5 => passTwo[0],
+                6 => passTwo[1],
+                _ => throw new AssertFailedException(
+                    $"request {ordinal} arrived after both passes completed."),
+            }));
+
+        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
+        var producer = new LuxembourgDraftGraphProducer(
+            store, new EuAcquisitionTestFixture.FixedTimeProvider(), handler);
+
+        var result = await producer.RunAsync(
+            LuxembourgDraftGraphRunRequest.ForBatch(
+                plan,
+                InventoryOf(drafts),
+                0,
+                "urn:uuid:6c0f2d18-77a5-4f39-b6c2-9d4e1b8a3057",
+                LuxembourgAcquisitionTestFixture.BuildRendererSource(9107)),
+            LuxembourgSourceWitness(),
+            CancellationToken.None);
+
+        Assert.IsTrue(
+            result.Delivered,
+            $"both passes must cross the long row and agree: {result.Refusal} {result.Detail}");
+
+        // THE VALUE SURVIVES THE WHOLE WAY, through two paginated passes rather than one decode.
+        var longRows = result.RetainedNotAdmitted
+            .Where(static value => value.Value is { Length: > 0 } && value.Value.StartsWith(
+                LongTitleOpening, StringComparison.Ordinal))
+            .ToArray();
+
+        Assert.HasCount(1, longRows, "the row that stopped the live run arrives exactly once.");
+        Assert.AreEqual(
+            2648, System.Text.Encoding.UTF8.GetByteCount(longRows[0].Value!),
+            "and it is not truncated by the page boundary it sits beside.");
+
+        Assert.AreEqual(
+            rows.Count,
+            result.Records!.Count + result.RetainedNotAdmitted.Count,
+            "every delivered row is accounted for as a record or as retained evidence.");
+
+        // AND A DELIVERY THAT STOPPED USING THE DIGEST IS REFUSED, over the same continuation. This
+        // is the half a canned-transport fixture will not give for free: editing the plan's query
+        // changes what this family asks, never what the fixture answers, so the only way to test
+        // "the page reverted key_4 to the lexical value" is to script a page that did.
+        //
+        // The long row is what makes the refusal unambiguous: keyed lexically, its 2,648 bytes
+        // exceed the 2,047-byte key-part ceiling, which is the exact refusal that stopped the live
+        // acceptance run at batch 12.
+        var lexicalOne = new[]
+        {
+            PageJsonFor(projection, rows.Take(953), lexicalKeys: true),
+            PageJsonFor(projection, rows.Skip(953), lexicalKeys: true),
+        };
+        var lexicalTwo = new[]
+        {
+            PageJsonFor(projection, rows.Take(571), lexicalKeys: true),
+            PageJsonFor(projection, rows.Skip(571), lexicalKeys: true),
+        };
+
+        var lexicalHandler = LuxembourgAcquisitionTestFixture.AllowRobotsThenHandler((ordinal, request) =>
+            LuxembourgAcquisitionTestFixture.JsonResponse(request, ordinal switch
+            {
+                1 => LuxembourgAcquisitionTestFixture.CountJson(rows.Count),
+                2 => lexicalOne[0],
+                3 => lexicalOne[1],
+                4 => LuxembourgAcquisitionTestFixture.CountJson(rows.Count),
+                5 => lexicalTwo[0],
+                6 => lexicalTwo[1],
+                _ => throw new AssertFailedException(
+                    $"request {ordinal} arrived after both passes completed."),
+            }));
+
+        var lexicalResult = await new LuxembourgDraftGraphProducer(
+                new EuAcquisitionTestFixture.EuInMemoryCustodyStore(),
+                new EuAcquisitionTestFixture.FixedTimeProvider(),
+                lexicalHandler)
+            .RunAsync(
+                LuxembourgDraftGraphRunRequest.ForBatch(
+                    plan,
+                    InventoryOf(drafts),
+                    0,
+                    "urn:uuid:2f9b6c41-08de-4a77-95b3-1c7e0d5a6482",
+                    LuxembourgAcquisitionTestFixture.BuildRendererSource(9108)),
+                LuxembourgSourceWitness(),
+                CancellationToken.None);
+
+        Assert.IsFalse(
+            lexicalResult.Delivered,
+            "a page keying on the raw lexical value must not deliver: that is the shape that stopped "
+                + "the live run, and this family no longer asks for it.");
+    }
+
+    /// <summary>
     /// The 2,648-byte title that stopped the live run is admitted, keyed by its digest.
     /// </summary>
     /// <remarks>
@@ -1092,29 +1238,129 @@ public sealed class LuxembourgDraftGraphProducerTests
             System.Security.Cryptography.SHA256.HashData(
                 new System.Text.UTF8Encoding(false, true).GetBytes(lexical)));
 
+    /// <summary>The publisher's wire shape for one bound term, shared by both page writers.</summary>
+    /// <remarks>
+    /// Promoted out of <see cref="PageJson"/> rather than copied into the multi-page writer beside
+    /// it: two spellings of one wire shape is how a fixture starts describing a response no engine
+    /// sends, and both writers have to agree exactly for the page chain to verify.
+    /// </remarks>
+    private static object IriTerm(string value) => new Dictionary<string, string>
+    {
+        ["type"] = "uri",
+        ["value"] = value,
+    };
+
+    private static object LiteralTerm(string value, string? datatype = null, string? language = null)
+    {
+        var term = new Dictionary<string, string> { ["type"] = "literal", ["value"] = value };
+        if (datatype is not null)
+        {
+            term["datatype"] = datatype;
+        }
+
+        if (language is not null)
+        {
+            term["xml:lang"] = language;
+        }
+
+        return term;
+    }
+
+    private const string XsdString = "http://www.w3.org/2001/XMLSchema#string";
+
+    /// <summary>
+    /// A delivery large enough to page in both passes, carrying the long title before a boundary.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The page limits are 953 for pass one and 571 for pass two, so a delivery has to exceed both
+    /// before either pass continues at all. Fifty drafts - the batch capacity - each answering
+    /// twenty predicates gives a thousand rows, which pages 953 + 47 and 571 + 429.
+    /// </para>
+    /// <para>
+    /// Rows are emitted in KEY ORDER, because the page chain is verified against cursors that must
+    /// strictly increase, and the key now leads with the draft and orders the value by its DIGEST
+    /// rather than its lexical form. Sorting by the key tuple here is what makes the fixture a
+    /// delivery this plan could actually have produced rather than a plausible-looking one.
+    /// </para>
+    /// </remarks>
+    internal static IReadOnlyList<(string Draft, string Predicate, string Value)> LongDeliveryRows(
+        IReadOnlyList<string> drafts,
+        out int longRowIndex)
+    {
+        var predicates = Enumerable.Range(0, 20)
+            .Select(static index => "http://data.legilux.public.lu/resource/ontology/jolux#probe" + index.ToString("D2"))
+            .ToArray();
+
+        var rows = new List<(string Draft, string Predicate, string Value)>();
+        foreach (var draft in drafts)
+        {
+            foreach (var predicate in predicates)
+            {
+                // The long title rides on the first draft's first predicate, so that after the key
+                // sort it lands early enough to precede a continuation in BOTH passes.
+                var value = ReferenceEquals(draft, drafts[0]) && ReferenceEquals(predicate, predicates[0])
+                    ? LongTitleValue
+                    : "urn:probe:" + draft[^4..] + ":" + predicate[^2..];
+                rows.Add((draft, predicate, value));
+            }
+        }
+
+        var ordered = rows
+            .OrderBy(static row => row.Draft, StringComparer.Ordinal)
+            .ThenBy(static row => row.Predicate, StringComparer.Ordinal)
+            .ThenBy(static row => ValueDigest(row.Value), StringComparer.Ordinal)
+            .ToArray();
+
+        longRowIndex = Array.FindIndex(ordered, row => ReferenceEquals(row.Value, LongTitleValue));
+        return ordered;
+    }
+
+    /// <summary>One page of a delivery, in the publisher's own wire shape.</summary>
+    /// <param name="lexicalKeys">
+    /// Emit <c>key_4</c> as the raw lexical value instead of its digest - a page that stopped using
+    /// the digest. Scripting it is the only way to test the property from outside: the transport is
+    /// canned JSON, so editing the plan's query text changes what this family ASKS and not what this
+    /// fixture answers. A version of this test that hardcoded the digest passed unchanged when the
+    /// plan was reverted to lexical keying, which is precisely the regression it claimed to be.
+    /// </param>
+    internal static string PageJsonFor(
+        IReadOnlyList<string> projection,
+        IEnumerable<(string Draft, string Predicate, string Value)> rows,
+        bool lexicalKeys = false)
+    {
+        var bindings = new List<Dictionary<string, object>>();
+        foreach (var row in rows)
+        {
+            bindings.Add(new Dictionary<string, object>(StringComparer.Ordinal)
+            {
+                ["draft"] = IriTerm(row.Draft),
+                ["draft_kind"] = LiteralTerm("iri"),
+                ["predicate"] = IriTerm(row.Predicate),
+                ["value"] = LiteralTerm(row.Value),
+                ["value_kind"] = LiteralTerm("literal"),
+                ["datatype_iri"] = LiteralTerm(XsdString),
+                ["language_tag"] = LiteralTerm(string.Empty),
+                ["multiplicity"] = LiteralTerm("1", XsdInteger),
+                ["key_1"] = LiteralTerm(row.Draft),
+                ["key_2"] = LiteralTerm("iri"),
+                ["key_3"] = LiteralTerm(row.Predicate),
+                ["key_4"] = LiteralTerm(lexicalKeys ? row.Value : ValueDigest(row.Value)),
+                ["key_5"] = LiteralTerm("literal"),
+                ["key_6"] = LiteralTerm(XsdString),
+                ["key_7"] = LiteralTerm(string.Empty),
+            });
+        }
+
+        return System.Text.Json.JsonSerializer.Serialize(new
+        {
+            head = new { link = Array.Empty<string>(), vars = projection },
+            results = new { distinct = false, ordered = true, bindings = bindings.ToArray() },
+        });
+    }
+
     internal static string PageJson(IReadOnlyList<string> projection)
     {
-        static object IriTerm(string value) => new Dictionary<string, string>
-        {
-            ["type"] = "uri",
-            ["value"] = value,
-        };
-
-        static object LiteralTerm(string value, string? datatype = null, string? language = null)
-        {
-            var term = new Dictionary<string, string> { ["type"] = "literal", ["value"] = value };
-            if (datatype is not null)
-            {
-                term["datatype"] = datatype;
-            }
-
-            if (language is not null)
-            {
-                term["xml:lang"] = language;
-            }
-
-            return term;
-        }
 
         // ORDERED BY THE KEYSET, because that is what the page is ordered by and what the executor
         // advances on. The declaration order of the asked predicates is not their lexical order, and

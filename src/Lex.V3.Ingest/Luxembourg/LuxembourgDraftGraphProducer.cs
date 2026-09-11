@@ -492,6 +492,18 @@ public sealed class LuxembourgDraftGraphProducer
                     // asserted, so a value shape this family makes no claim about must not be able
                     // to refuse a delivery whose admitted half is sound.
                     var retainedValue = Term(row, profile, "value");
+
+                    // THE KEY IS CHECKED EVEN HERE, and only the key. The ruling requires the digest
+                    // recomputed "before admitting or retaining", and that is a different question
+                    // from the value-shape invariants the paragraph above deliberately withholds: it
+                    // asks whether the row's own key describes the value beside it, not whether this
+                    // family approves of the value. A retained row whose key names some other value
+                    // is retained evidence of nothing, and the row that stopped the live acceptance
+                    // run - a 2,648-byte titleDraft - is retained rather than admitted, so leaving
+                    // this out would mean the digest was unchecked on exactly the row it was
+                    // introduced for.
+                    RequireKey(row, profile, "key_4", Sha256Hex(retainedValue.Value ?? string.Empty));
+
                     notAdmitted.Add(new LuxembourgDraftRetainedEvidenceRow(
                         RequireIri(Term(row, profile, "draft"), "draft"),
                         predicateIri,
