@@ -2000,6 +2000,9 @@ public sealed class EuRepeatedEnumerationExecutor
             // Family A binds ?parent exactly as family M does, and its seven-part cursor carries
             // that parent at key_1; ?axiom, the row's own discovered subject, is key_2.
             EuObjectFactsQuerySet.ReifiedAxiomFacts => "key_1",
+            // Family L has the same parent-first natural key as family A. Its selector differs,
+            // but the VALUES-bound partition member remains ?parent at key_1.
+            EuObjectFactsQuerySet.LocatedAmendmentFacts => "key_1",
             _ => throw new ArgumentOutOfRangeException(nameof(set)),
         };
 

@@ -202,6 +202,37 @@ public sealed class EuRepeatedEnumerationExecutorTests
         Assert.IsNotNull(result.Receipt);
     }
 
+    [TestMethod]
+    public async Task LocatedAmendmentRowsAreCheckedAgainstTheirRequestedParentPartition()
+    {
+        var parent = EuPackRootCanonicalForm.TryCanonicalize(
+            EuAppendixASeedMap.SeedsInCelexOrder[0].WorkRoot,
+            out _)!;
+        var scripts = new Dictionary<string, EuAcquisitionTestFixture.FamilyScript>(StringComparer.Ordinal)
+        {
+            ["A"] = EuAcquisitionTestFixture.AxiomAbsenceScriptFor(parent),
+        };
+        var (plan, planResourceId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
+        var request = new EuObjectFactsPartitionRunRequest(
+            plan,
+            planResourceId,
+            EuObjectFactsQuerySet.LocatedAmendmentFacts,
+            [parent],
+            EuAcquisitionTestFixture.BuildRendererSource(2103));
+        var executor = new EuRepeatedEnumerationExecutor(
+            new EuAcquisitionTestFixture.EuInMemoryCustodyStore(),
+            new EuAcquisitionTestFixture.FixedTimeProvider(),
+            new EuAcquisitionTestFixture.ClassifyingHandler(scripts));
+
+        var result = await executor.RunObjectFactsPartitionAsync(
+            request,
+            EuAcquisitionTestFixture.SourceWitness(),
+            CancellationToken.None);
+
+        Assert.IsNull(result.Refusal, result.Refusal?.CoreRefusalDetail);
+        Assert.IsNotNull(result.Receipt);
+    }
+
     /// <summary>
     /// Fold-in from the D1-06c-EU refreeze review (SCOPE_RULING
     /// lex-event-20260904T143553601Z-e6842d729c9b41fc8f5a6e76d5750bc2):
