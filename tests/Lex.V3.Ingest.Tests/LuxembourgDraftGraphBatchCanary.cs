@@ -75,8 +75,25 @@ public sealed class LuxembourgDraftGraphBatchCanary
         "pl/2000/150", "pl/2000/153", "pl/2000/154", "pl/2000/155", "pl/2000/16",
     ];
 
-    private static string[] BatchIris() =>
-        FirstBatch.Select(static suffix => DraftPrefix + suffix).ToArray();
+    /// <summary>
+    /// The batch this canary asks about: the retained first fifty, or a named selection.
+    /// </summary>
+    /// <remarks>
+    /// <c>LEX_E8_BATCH_DRAFTS</c> takes comma-separated suffixes under the shared prefix, so the
+    /// canary can be aimed at a specific subject without inventing one. It exists because the owner
+    /// ruling on the long-value cursor requires a canary over THE OFFENDING batch - the one holding
+    /// <c>pl/2005/64</c>, whose 2,648-byte titleDraft stopped the acceptance run - and that draft is
+    /// not among the ordinal-first fifty this list carries. Unset, the batch is exactly what it was.
+    /// </remarks>
+    private static string[] BatchIris()
+    {
+        var named = Environment.GetEnvironmentVariable("LEX_E8_BATCH_DRAFTS");
+        var suffixes = string.IsNullOrWhiteSpace(named)
+            ? FirstBatch
+            : named.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        return suffixes.Select(static suffix => DraftPrefix + suffix).ToArray();
+    }
 
     public TestContext? TestContext { get; set; }
 
@@ -242,12 +259,19 @@ public sealed class LuxembourgDraftGraphBatchCanary
             return new RepeatedEnumerationRow(terms, terms, terms);
         }).ToArray();
 
-        // The citation door binds the rows to the proof by canonical-key digest, so this
-        // synthesised inventory needs a proof over ITS rows rather than a shared one. Only the
-        // canonical key comes from the delivery; the terms are the ones this canary wrote.
-        var (proof, keys) = AbsenceFixtures.Delivery(InventoryFamily, rows.Length);
-        var bound = rows
-            .Select((row, index) => new RepeatedEnumerationRow(row.Terms, keys[index], row.Cursor))
+        // THE FAMILY'S OWN PROFILE, and keyed on the subjects. The citation door binds a proof to
+        // this family's partition AND to its exact interpretation profile, and derives the proven
+        // population from the first canonical-key component. A proof built under the generic fixture
+        // profile evidences nothing here - which is exactly how this canary broke: it is gated off,
+        // so the authority binding that landed in #540 refused it silently until the owner ordered
+        // it run. Only the canonical key comes from the delivery; the terms stay this canary's own.
+        var ordered = drafts.OrderBy(static value => value, StringComparer.Ordinal).ToArray();
+        var (proof, keys) = AbsenceFixtures.DeliveryOfSubjects(InventoryFamily, ordered);
+        var byDraft = rows.ToDictionary(
+            static row => row.Terms[0].Value ?? string.Empty, static row => row, StringComparer.Ordinal);
+        var bound = ordered
+            .Select((draft, index) => new RepeatedEnumerationRow(
+                byDraft[draft].Terms, keys[index], byDraft[draft].Cursor))
             .ToArray();
 
         return LuxembourgInitialDraftInventoryProducer.DecodeRows(
