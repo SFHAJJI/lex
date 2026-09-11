@@ -391,7 +391,7 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Contracts.Source.Core.RepeatedEnumerationRdfTerm::Literal, "
                     + "method public static "
                     + "Lex.V3.Contracts.Source.Core.RepeatedEnumerationRdfTerm::Unbound, "
-                    + "22 compiler-generated",
+                    + "23 compiler-generated",
                 "Lex.V3.Contracts.Source.Corpus.VerifiedCorpusRecord: constructor internal "
                     + "instance Lex.V3.Contracts.Source.Corpus.VerifiedCorpusRecord::.ctor, "
                     + "method public static "
@@ -944,6 +944,20 @@ public sealed class GuardedConstructionCensusTests
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgDocumentFetchRenderer: constructor "
                     + "internal instance "
                     + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgDocumentFetchRenderer::.ctor",
+                "Lex.V3.Contracts.Source.Luxembourg.LuxembourgDraftBatchAssignment: constructor "
+                    + "private instance "
+                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgDraftBatchAssignment::.ctor, "
+                    + "method public static "
+                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgDraftBatchAssignment::Over",
+                "Lex.V3.Contracts.Source.Luxembourg.LuxembourgDraftBatchCitation: constructor "
+                    + "private instance "
+                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgDraftBatchCitation::.ctor, "
+                    + "constructor private instance "
+                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgDraftBatchCitation::.ctor, "
+                    + "method public instance "
+                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgDraftBatchCitation::<Clone>$, "
+                    + "method public static "
+                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgDraftBatchCitation::ForDelivery",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgDraftGraphDiscoveryPlan: constructor "
                     + "private instance "
                     + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgDraftGraphDiscoveryPlan::.ctor, "
@@ -971,6 +985,19 @@ public sealed class GuardedConstructionCensusTests
                     + "constructor internal instance "
                     + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgDraftPropertyUnresolvedGap::.ct"
                     + "or",
+                "Lex.V3.Contracts.Source.Luxembourg.LuxembourgInitialDraftInventoryCitation: "
+                    + "constructor private instance "
+                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgInitialDraftInventoryCitation::"
+                    + ".ctor, "
+                    + "constructor private instance "
+                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgInitialDraftInventoryCitation::"
+                    + ".ctor, "
+                    + "method public instance "
+                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgInitialDraftInventoryCitation::"
+                    + "<Clone>$, "
+                    + "method public static "
+                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgInitialDraftInventoryCitation::"
+                    + "MintedOver",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgInitialDraftInventoryDiscoveryPlan: "
                     + "constructor private instance "
                     + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgInitialDraftInventoryDiscoveryP"

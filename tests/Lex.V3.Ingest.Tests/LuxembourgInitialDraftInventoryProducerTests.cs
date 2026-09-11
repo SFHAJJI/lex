@@ -1,8 +1,10 @@
 using System.Text.Json;
+using Lex.V3.Contracts.Source.Absence;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Luxembourg;
 using Lex.V3.Ingest.Europe;
 using Lex.V3.Ingest.Luxembourg;
+using Lex.V3.Tests.Contracts.Source.Absence;
 
 namespace Lex.V3.Ingest.Tests;
 
@@ -18,6 +20,81 @@ namespace Lex.V3.Ingest.Tests;
 [TestClass]
 public sealed class LuxembourgInitialDraftInventoryProducerTests
 {
+    private const string InventoryFamily = "legilux-initial-draft-inventory";
+
+    /// <summary>
+    /// Rebinds rows onto the canonical keys of a real delivery, so the proof proves THESE rows.
+    /// </summary>
+    /// <remarks>
+    /// The citation door re-derives the delivered rows' canonical-key digest and requires it to equal
+    /// the proof's, because an honest proof of some other enumeration was found to authorize
+    /// caller-chosen subjects. A fixture therefore cannot build rows and reach for a shared proof.
+    /// Only the canonical key is replaced - the terms, which are all the producer reads, are exactly
+    /// the ones each test wrote.
+    /// </remarks>
+    /// <summary>
+    /// The run reference a delivery of this size carries, rebuilt independently of the decode.
+    /// </summary>
+    /// <remarks>
+    /// Reconstructed rather than read back off the result, so the assertion compares the citation
+    /// against the run the fixture actually proved instead of against another field of the same
+    /// object.
+    /// </remarks>
+    private static SourceArtifactRef RunRefFor(int rowCount) =>
+        AbsenceFixtures.Delivery(InventoryFamily, rowCount).Proof.AcquisitionRunRef;
+
+    private static (AbsenceFamilyEnumerationProof Proof, RepeatedEnumerationRow[] Rows) Bound(
+        string familyKey,
+        IReadOnlyList<RepeatedEnumerationRow> rows)
+    {
+        // The inventory door derives its proven population from the first key component, so the key
+        // must be the subject each row decodes to - which is its first term.
+        var subjects = rows.Select(static row => row.Terms[0].Value ?? string.Empty).ToArray();
+
+        // A delivery that repeats a subject cannot be keyed on subjects at all - canonical keys must
+        // be unique - and it is not an enumeration either: the producer refuses it before any
+        // citation is minted, so the door this keying exists for is never reached. Those fixtures
+        // keep positional keys, which is the honest description of a delivery that proves nothing.
+        // A delivery that repeats a subject, or delivers out of key order, cannot be proven at all:
+        // Source/Core requires canonical keys unique and cursors strictly increasing. Those are
+        // exactly the deliveries the producer refuses before any citation is minted, so they keep
+        // positional keys - an honest description of a delivery that proves nothing about subjects.
+        var sortedUnique = subjects
+            .OrderBy(static value => value, StringComparer.Ordinal)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        if (!subjects.SequenceEqual(sortedUnique, StringComparer.Ordinal))
+        {
+            var (refusedProof, refusedKeys) = AbsenceFixtures.Delivery(familyKey, rows.Count);
+            return (refusedProof, rows
+                .Select((row, index) => new RepeatedEnumerationRow(row.Terms, refusedKeys[index], row.Cursor))
+                .ToArray());
+        }
+
+        // ROW ORDER IS PRESERVED, never rearranged to suit the fixture. An earlier version sorted
+        // the rows to line them up with the keys, which silently changed what a test observed about
+        // delivery order. A proven delivery is necessarily key-ordered - Source/Core requires
+        // cursors to strictly increase - so a fixture wanting a proof must deliver in that order,
+        // and saying so out loud is better than quietly reordering behind the test.
+        var (proof, keys) = AbsenceFixtures.DeliveryOfSubjects(familyKey, subjects);
+        var bound = rows
+            .Select((row, index) => new RepeatedEnumerationRow(row.Terms, keys[index], row.Cursor))
+            .ToArray();
+        return (proof, bound);
+    }
+
+
+    /// <summary>
+    /// A REAL enumeration proof, because the citation doors now require one.
+    /// </summary>
+    /// <remarks>
+    /// The run reference and the family key used to be handed to the producer as loose values, which
+    /// is how a citation could state an identity instead of carrying one. Both now come off the
+    /// proof, whose only door refuses anything but two independently agreeing, custody-verified
+    /// passes. <c>AbsenceFixtures.Proof</c> is the same builder the contract tests use and is
+    /// memoised, so this costs one assembly for the whole run rather than one per test.
+    /// </remarks>
+
     private const string Draft = "http://data.legilux.public.lu/eli/etat/leg/projet/2019/03/14/a123/jo";
     private const string OtherDraft = "http://data.legilux.public.lu/eli/etat/leg/projet/2020/07/02/b456/jo";
     private const string XsdInteger = "http://www.w3.org/2001/XMLSchema#integer";
@@ -77,7 +154,119 @@ public sealed class LuxembourgInitialDraftInventoryProducerTests
     }
 
     private static LuxembourgInitialDraftInventoryResult Decode(params RepeatedEnumerationRow[] rows) =>
-        LuxembourgInitialDraftInventoryProducer.DecodeRows(rows, Profile(), Evidence);
+        DecodeBound(rows);
+
+    private static LuxembourgInitialDraftInventoryResult DecodeBound(RepeatedEnumerationRow[] rows)
+    {
+        var (proof, bound) = Bound(InventoryFamily, rows);
+        return LuxembourgInitialDraftInventoryProducer.DecodeRows(
+            bound, Profile(), proof, "2026-09-10T13:50:31.0000000Z");
+    }
+
+    /// <summary>
+    /// The inventory mints the citation a later batch must carry, from its own run.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A BATCH CITING AN INVENTORY IT ASSEMBLED ITSELF PROVES NOTHING. The citation was passed into
+    /// the batch run by hand - in the canary, out of three environment variables - so nothing
+    /// stopped it naming an inventory no run ever produced. Every field now comes from the run that
+    /// enumerated the class.
+    /// </para>
+    /// <para>
+    /// The digest is taken over the ADDRESSABLE population, which is what
+    /// <c>AddressableInOrder</c> hands the batching stage, so it changes exactly when what the
+    /// batches must cover changes - not when some other part of the delivery moves.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void TheInventoryMintsTheCitationABatchMustCarry()
+    {
+        const string SecondDraft = "http://data.legilux.public.lu/eli/dl/pl/2000/998";
+        // Key order, because a proven delivery is ordered by its own keys and this family keys
+        // on STR(?draft): "/dl/pl/" sorts before "/etat/leg/".
+        var result = Decode(Row(Iri(SecondDraft)), Row());
+
+        Assert.AreEqual(LuxembourgInitialDraftInventoryRefusal.None, result.Refusal, result.Detail);
+
+        var citation = result.Citation!;
+        Assert.IsNotNull(citation, "a delivered inventory carries its own citation.");
+        Assert.AreEqual("legilux-initial-draft-inventory", citation.FamilyKey);
+        Assert.AreEqual(
+            RunRefFor(2), citation.AcquisitionRunRef, "the run's own evidence, not a caller's.");
+        Assert.AreEqual(result.AddressableInOrder().Count, citation.SubjectCount);
+        Assert.IsNotEmpty(citation.ObservedAt, "an inventory a batch relies on must be datable.");
+
+        // The digest is over the population, so a different population is a different citation.
+        var narrower = Decode(Row());
+        Assert.AreNotEqual(
+            citation.SelectionDigest, narrower.Citation!.SelectionDigest,
+            "a smaller inventory must not mint the same selection digest.");
+    }
+
+    /// <summary>
+    /// The proven population cannot be edited through the list the producer built it in.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// CODEX REPRODUCED THIS. <c>Subjects</c> was the producer's own <c>List</c> handed out behind an
+    /// <c>IReadOnlyList</c>, which is a promise the type system does not keep: a caller could cast it
+    /// back, add a draft the publisher never returned, and every batch would then be derived from the
+    /// mutated list while the citation went on carrying the digest of the original. The population a
+    /// cover reconciles against and the digest that identifies it would describe different classes.
+    /// </para>
+    /// <para>
+    /// Asserted through the write path rather than by naming a type, so it stays a statement about
+    /// what a caller can DO. Found unprotected by mutation: replacing the snapshot with the live list
+    /// killed no test in either scope before this one existed.
+    /// </para>
+    /// <para>
+    /// AND BOTH WRITE PATHS, because the first version of this test only closed one. It asked
+    /// whether the collection reported itself writable and mutated it only if so, which made it a
+    /// no-op against correct code and - worse - let the likeliest regression through: a bare
+    /// <c>ToArray()</c> reports <c>IsReadOnly</c> true and refuses <c>Clear</c>, yet assigns happily
+    /// through the <c>IList</c> indexer. That mutant survived. An unconditional refusal on each path
+    /// is both the stronger statement and the shorter one.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void TheProvenPopulationCannotBeEditedThroughTheListItWasBuiltIn()
+    {
+        const string SecondDraft = "http://data.legilux.public.lu/eli/dl/pl/2000/998";
+        // Key order, because a proven delivery is ordered by its own keys and this family keys
+        // on STR(?draft): "/dl/pl/" sorts before "/etat/leg/".
+        var result = Decode(Row(Iri(SecondDraft)), Row());
+
+        Assert.AreEqual(LuxembourgInitialDraftInventoryRefusal.None, result.Refusal, result.Detail);
+        var before = result.AddressableInOrder().Count;
+        var digest = result.Citation!.SelectionDigest;
+
+        Assert.ThrowsExactly<NotSupportedException>(
+            () => ((IList<LuxembourgInitialDraftSubject>)result.Subjects!)[0] = result.Subjects![1],
+            "a member cannot be replaced through the indexer.");
+        Assert.ThrowsExactly<NotSupportedException>(
+            () => ((ICollection<LuxembourgInitialDraftSubject>)result.Subjects!).Clear(),
+            "and the population cannot be emptied.");
+
+        Assert.AreEqual(
+            before, result.AddressableInOrder().Count,
+            "the population a batch is derived from is not editable by whoever holds the result.");
+        Assert.AreEqual(
+            digest, result.Citation!.SelectionDigest,
+            "and the digest still identifies the population the run actually proved.");
+    }
+
+    /// <summary>A refused inventory carries no citation for anyone to lean on.</summary>
+    [TestMethod]
+    public void ARefusedInventoryMintsNoCitation()
+    {
+        var refused = Decode(Row(), Row());
+
+        Assert.AreNotEqual(LuxembourgInitialDraftInventoryRefusal.None, refused.Refusal);
+        Assert.IsNull(
+            refused.Citation,
+            "a batch must not be able to cite an inventory whose own enumeration was refused.");
+    }
 
     [TestMethod]
     public void ADeliveredSubjectBecomesAMemberCarryingItsOwnTerms()
@@ -89,7 +278,7 @@ public sealed class LuxembourgInitialDraftInventoryProducerTests
         Assert.AreEqual(Draft, subject.Value);
         Assert.AreEqual(LuxembourgInitialDraftInventoryDiscoveryPlan.IriKind, subject.Kind);
         Assert.AreEqual(1, subject.Multiplicity);
-        Assert.AreEqual(Evidence.ResourceId, subject.SourceObservationId);
+        Assert.AreEqual(RunRefFor(1).ResourceId, subject.SourceObservationId);
         Assert.IsTrue(subject.IsAddressable);
     }
 
@@ -293,15 +482,19 @@ public sealed class LuxembourgInitialDraftInventoryProducerTests
     public void TheBatchInputIsOrdinalOrderedAndAddressableOnly()
     {
         var result = Decode(
-            Row(draft: Iri(OtherDraft)),
-            Row(draft: Iri(Draft)));
+            Row(draft: Iri(Draft)),
+            Row(draft: Iri(OtherDraft)));
 
         Assert.AreEqual(LuxembourgInitialDraftInventoryRefusal.None, result.Refusal, result.Detail);
 
-        // Delivery order is preserved in Subjects and is NOT what the batch input uses: the batches
-        // must be reproducible from the same inventory, and the publisher's order is not a promise.
+        // WHY THESE TWO ORDERS NOW COINCIDE, rather than contrast as this test once showed. A
+        // delivery only becomes provable if its cursors strictly increase over the delivered order,
+        // and this family's cursor leads with STR(?draft) - so a proven delivery IS in subject
+        // order, and a publisher order that differed could never have been proven in the first
+        // place. What remains assertable is that the batch input is derived rather than echoed: it
+        // is sorted, deduplicated, and carries only what a request can name.
         CollectionAssert.AreEqual(
-            new[] { OtherDraft, Draft },
+            new[] { Draft, OtherDraft },
             result.Subjects!.Select(static value => value.Value).ToArray());
         CollectionAssert.AreEqual(
             new[] { Draft, OtherDraft }.Order(StringComparer.Ordinal).ToArray(),

@@ -1,5 +1,6 @@
 using Lex.V3.Contracts.Source.Absence;
 using Lex.V3.Contracts.Source.Core;
+using Lex.V3.Contracts.Source.Luxembourg;
 
 using Lex.V3.Contracts.Custody;
 
@@ -142,6 +143,177 @@ internal static class AbsenceFixtures
 
             return proof;
         });
+
+    /// <summary>A real proof over a caller-named row set, for a door that binds to the rows.</summary>
+    /// <remarks>
+    /// Not memoized on the row set alone - the family key and seed are part of the identity too, and
+    /// two families sharing one row set must not share one proof.
+    /// </remarks>
+    public static AbsenceFamilyEnumerationProof ProofOver(
+        string familyKey,
+        string rowValues,
+        int runSeed = 930)
+    {
+        var proof = AbsenceFamilyEnumerationProof.TryCreate(
+            familyKey,
+            AbsenceEnumerationProofFixture.DeliveryOf(familyKey, runSeed, rowValues),
+            CustodyMembership.Floored,
+            out var refusal);
+        if (proof is null)
+        {
+            throw new InvalidOperationException($"fixture proof refused as {refusal}");
+        }
+
+        return proof;
+    }
+
+    /// <summary>
+    /// A proof and the canonical keys the rows it proves must carry, for a door that binds the two.
+    /// </summary>
+    /// <remarks>
+    /// A citation may no longer be minted beside just any honest proof: the door re-derives the
+    /// delivered rows' canonical-key digest and requires it to equal the proof's. So a fixture can no
+    /// longer build rows and reach for a shared proof - the rows and the proof have to be one
+    /// delivery. This returns both halves of exactly one. Set each row's canonical key to
+    /// <c>Keys[i]</c> and its terms to whatever the family under test decodes; the producers read
+    /// only the terms, so the two are independent by design.
+    /// </remarks>
+    /// <summary>
+    /// A proof whose canonical keys ARE the supplied subjects, for a family that keys on its subject.
+    /// </summary>
+    /// <remarks>
+    /// The Luxembourg inventory keys on <c>STR(?draft)</c>, so its citation door derives the proven
+    /// population from the first key component rather than from the row terms - which a caller can
+    /// replace while keeping a real proof's keys. A fixture for that door therefore has to prove the
+    /// subjects themselves, not stand-in row values.
+    /// </remarks>
+    public static (AbsenceFamilyEnumerationProof Proof, RepeatedEnumerationRdfTerm[][] Keys) DeliveryOfSubjects(
+        string familyKey,
+        IReadOnlyList<string> subjects,
+        int runSeed = 930)
+    {
+        // Cursors must strictly increase over the delivered order, so the subjects are keyed in
+        // their own sorted order and the caller is told which order that was.
+        var ordered = subjects.OrderBy(static value => value, StringComparer.Ordinal).ToArray();
+
+        // UNDER THIS FAMILY'S OWN PROFILE when it is this family. The inventory citation door binds
+        // a proof to the Luxembourg inventory's exact interpretation profile, so a proof read under
+        // the generic fixture profile evidences nothing there - which is precisely what a reviewer
+        // demonstrated with a same-subject proof of another family.
+        var lux = string.Equals(
+            familyKey,
+            LuxembourgInitialDraftInventoryDiscoveryPlan.PartitionMemberKeyForFixtures,
+            StringComparison.Ordinal);
+
+        var delivery = lux
+            ? AbsenceEnumerationProofFixture.LuxembourgInventoryDelivery(ordered, runSeed)
+            : AbsenceEnumerationProofFixture.DeliveryOf(
+                familyKey, runSeed, string.Join(',', ordered), rawKeys: true);
+
+        var proof = AbsenceFamilyEnumerationProof.TryCreate(
+            familyKey, delivery, CustodyMembership.Floored, out var refusal);
+        if (proof is null)
+        {
+            throw new InvalidOperationException($"fixture proof refused as {refusal}");
+        }
+
+        // The family's own rows key on [key_1, key_2]; the generic ones key on a single id.
+        var keys = ordered
+            .Select(subject => lux
+                ? new[]
+                {
+                    RepeatedEnumerationRdfTerm.Literal(subject, null, null),
+                    RepeatedEnumerationRdfTerm.Literal(
+                        LuxembourgInitialDraftInventoryDiscoveryPlan.IriKind, null, null),
+                }
+                : [RepeatedEnumerationRdfTerm.Iri(subject)])
+            .ToArray();
+        return (proof, keys);
+    }
+
+    /// <summary>
+    /// A proof carrying a family's NAME but read under this fixture's generic profile.
+    /// </summary>
+    /// <remarks>
+    /// The sharpest form of the authority question: the label is right and the subjects are right,
+    /// and the enumeration was still read under another dialect, projection and query family. A door
+    /// that only compares family keys accepts it.
+    /// </remarks>
+    /// <summary>
+    /// A proof read under the Luxembourg inventory's own profile, but OF another family.
+    /// </summary>
+    /// <remarks>
+    /// The mirror of <see cref="ProofNamingFamilyUnderAnotherProfile"/>: right profile, wrong
+    /// family. Without it the citation door's family check has nothing that fails only because of
+    /// it, and a guard nothing exercises is not a guard.
+    /// </remarks>
+    public static AbsenceFamilyEnumerationProof ProofOfAnotherFamilyUnderTheInventoryProfile(
+        string familyKey,
+        IReadOnlyList<string> subjects,
+        int runSeed = 932)
+    {
+        var ordered = subjects.OrderBy(static value => value, StringComparer.Ordinal).ToArray();
+        var proof = AbsenceFamilyEnumerationProof.TryCreate(
+            familyKey,
+            AbsenceEnumerationProofFixture.LuxembourgInventoryDelivery(ordered, runSeed, familyKey),
+            CustodyMembership.Floored,
+            out var refusal);
+        if (proof is null)
+        {
+            throw new InvalidOperationException($"fixture proof refused as {refusal}");
+        }
+
+        return proof;
+    }
+
+    public static AbsenceFamilyEnumerationProof ProofNamingFamilyUnderAnotherProfile(
+        string familyKey,
+        IReadOnlyList<string> subjects,
+        int runSeed = 931)
+    {
+        var ordered = subjects.OrderBy(static value => value, StringComparer.Ordinal).ToArray();
+        var proof = AbsenceFamilyEnumerationProof.TryCreate(
+            familyKey,
+            AbsenceEnumerationProofFixture.DeliveryOf(
+                familyKey, runSeed, string.Join(',', ordered), rawKeys: true),
+            CustodyMembership.Floored,
+            out var refusal);
+        if (proof is null)
+        {
+            throw new InvalidOperationException($"fixture proof refused as {refusal}");
+        }
+
+        return proof;
+    }
+
+    public static (AbsenceFamilyEnumerationProof Proof, RepeatedEnumerationRdfTerm[][] Keys) Delivery(
+        string familyKey,
+        int rowCount,
+        int runSeed = 930)
+    {
+        // KEYED BY FAMILY, not by position alone. Two enumerations of different families deliver
+        // different subjects, so their canonical keys must differ - otherwise a proof of one family
+        // digests identically to a proof of another and a door binding on that digest cannot tell
+        // them apart. Found by the unrelated-proof regression, which passed for the wrong reason
+        // while every family shared one key set.
+        //
+        // Zero-padded after the family token so lexical order still matches emission order: the
+        // delivery proof requires cursors to strictly increase, and "d10" sorts before "d2".
+        var token = Convert.ToHexStringLower(
+            System.Security.Cryptography.SHA256.HashData(
+                System.Text.Encoding.UTF8.GetBytes(familyKey)))[..8];
+        var values = Enumerable.Range(0, rowCount)
+            .Select(index => token + "-d" + index.ToString("D6"))
+            .ToArray();
+        var proof = ProofOver(familyKey, string.Join(',', values), runSeed);
+        var keys = values
+            .Select(static value => new[]
+            {
+                RepeatedEnumerationRdfTerm.Iri(AbsenceEnumerationProofFixture.CanonicalKeyFor(value)),
+            })
+            .ToArray();
+        return (proof, keys);
+    }
 
     public static AbsenceCut Cut(
         string runId,

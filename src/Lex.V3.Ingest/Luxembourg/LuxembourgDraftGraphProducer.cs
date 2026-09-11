@@ -1,5 +1,7 @@
+using System.Collections.Frozen;
 using System.Text.Json.Serialization;
 using Lex.V3.Contracts.Custody;
+using Lex.V3.Contracts.Source.Absence;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Luxembourg;
 using Lex.V3.Ingest.Europe;
@@ -203,9 +205,16 @@ public sealed class LuxembourgDraftGraphProductionResult
         string? detail,
         int productRequestCount)
     {
-        RetainedNotAdmitted = retainedNotAdmitted;
-        Records = records;
-        AdmittedPredicates = admittedPredicates;
+        // SNAPSHOTTED, for the same reason the coverage beside it is. All three are published
+        // through read-only interfaces over collections the caller built and still holds, and For()
+        // reads two of them LIVE. Casting AdmittedPredicates back to its HashSet and adding an
+        // invented predicate does not merely alter a listing: it walks past the
+        // ArgumentOutOfRangeException that exists to say "this family asserts nothing here" and
+        // returns an empty record list instead - a false absence, manufactured after the production
+        // was accepted.
+        RetainedNotAdmitted = Array.AsReadOnly(retainedNotAdmitted.ToArray());
+        Records = records is null ? null : Array.AsReadOnly(records.ToArray());
+        AdmittedPredicates = admittedPredicates?.ToFrozenSet(StringComparer.Ordinal);
         CompletionEvidenceRef = completionEvidenceRef;
         Coverage = coverage;
         Refusal = refusal;
@@ -411,12 +420,13 @@ public sealed class LuxembourgDraftGraphProducer
                 run.ProductRequestCount);
         }
 
+        // THE PROOF ITSELF. The run reference used to travel here detached from the proof it came
+        // from, which is how a batch citation could state an acquisition run rather than carry one.
         return DecodeRows(
             rows,
             profile,
-            proof.AcquisitionRunRef,
-            LuxembourgDraftGraphDiscoveryPlan.RequestedPartitionMembers(request.BatchDrafts),
-            request.Inventory,
+            proof,
+            request.Assignment,
             // FROM THE DELIVERY, NOT FROM THE REQUEST. Both travel back through the retained
             // receipt, so the coverage compares what was actually sent and when it was observed
             // against what this run believes it asked.
@@ -433,18 +443,19 @@ public sealed class LuxembourgDraftGraphProducer
     internal static LuxembourgDraftGraphProductionResult DecodeRows(
         IReadOnlyList<RepeatedEnumerationRow> rows,
         RepeatedEnumerationInterpretationProfile profile,
-        SourceArtifactRef completionEvidenceRef,
-        IReadOnlyList<string> requestedDrafts,
-        LuxembourgInitialDraftInventoryCitation inventory,
+        AbsenceFamilyEnumerationProof proof,
+        LuxembourgDraftBatchAssignment assignment,
         string partitionKey,
         string observedAt,
         int productRequestCount = 0)
     {
+        ArgumentNullException.ThrowIfNull(proof);
+        var completionEvidenceRef = proof.AcquisitionRunRef;
         ArgumentNullException.ThrowIfNull(rows);
         ArgumentNullException.ThrowIfNull(profile);
         ArgumentNullException.ThrowIfNull(completionEvidenceRef);
-        ArgumentNullException.ThrowIfNull(requestedDrafts);
-        ArgumentNullException.ThrowIfNull(inventory);
+        ArgumentNullException.ThrowIfNull(assignment);
+        var requestedDrafts = assignment.Drafts;
 
         // ADMITTED FROM A DRAFT TRIPLE, which is not the same as "in the accepted vocabulary".
         // referralDate is accepted and is declared on OpinionRequest, so a triple asserting it of a
@@ -514,18 +525,17 @@ public sealed class LuxembourgDraftGraphProducer
         // is what makes the exactly-once check mean anything: comparing the decoded list against
         // itself would pass for a decoder that dropped a row and never notice.
         var coverage = LuxembourgDraftPropertyCoverage.TryComplete(
-            requestedDrafts,
+            assignment,
             LuxembourgDraftGraphDiscoveryPlan.AskedAbout,
             records.Select(static value => new LuxembourgDraftPropertyRecordView(
                 value.DraftIri, value.PredicateIri, value.Value, value.ValueKind)).ToArray(),
-            new LuxembourgDraftBatchCitation(
-                completionEvidenceRef,
+            LuxembourgDraftBatchCitation.ForDelivery(
+                proof,
+                rows,
                 LuxembourgDraftPropertyCoverage.SelectionDigestFor(requestedDrafts),
                 requestedDrafts.Count,
-                rows.Count,
                 partitionKey,
                 observedAt),
-            inventory,
             notAdmitted.Count,
             LuxembourgDraftGraphDiscoveryPlan.PredicatesNotDeclaredOnTheDraft,
             out var coverageRefusal,

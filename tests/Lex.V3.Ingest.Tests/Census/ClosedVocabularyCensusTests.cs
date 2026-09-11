@@ -107,6 +107,10 @@ public sealed class ClosedVocabularyCensusTests
                 "Lex.V3.Ingest.Luxembourg.LuxembourgDocumentGetAttemptRefusal: None, "
                     + "RobotsDisallowed, RobotsBootstrapNotCompleted, ObservationNotExecuted",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgDraftAcquiredScope: EveryPredicateOnTheSubject",
+                "Lex.V3.Ingest.Luxembourg.LuxembourgDraftGraphBatchCoverRefusal: None, "
+                    + "InventoryNotProven, BatchOmittedFromSweep, BatchDeliveredTwice, "
+                    + "BatchOutsideTheInventoryCover, BatchesSpanMoreThanOneInventory, "
+                    + "CoveredPairsDoNotEqualTheInventorySum",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgDraftGraphProductionRefusal: None, "
                     + "EnumerationRefused, EnumerationProofRefused, VerifiedRowsRefused, "
                     + "RowNotAdmitted, MatrixCompletionRefused",

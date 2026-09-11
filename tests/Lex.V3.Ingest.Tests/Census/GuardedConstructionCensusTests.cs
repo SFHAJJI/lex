@@ -221,6 +221,14 @@ public sealed class GuardedConstructionCensusTests
                     + "method public static "
                     + "Lex.V3.Ingest.Europe.EuWitnessTraversalResult::Delivered, "
                     + "method public static Lex.V3.Ingest.Europe.EuWitnessTraversalResult::Refused",
+                "Lex.V3.Ingest.Europe.LuxembourgDraftGraphRunRequest: constructor private instance "
+                    + "Lex.V3.Ingest.Europe.LuxembourgDraftGraphRunRequest::.ctor, "
+                    + "constructor private instance "
+                    + "Lex.V3.Ingest.Europe.LuxembourgDraftGraphRunRequest::.ctor, "
+                    + "method public instance "
+                    + "Lex.V3.Ingest.Europe.LuxembourgDraftGraphRunRequest::<Clone>$, "
+                    + "method public static "
+                    + "Lex.V3.Ingest.Europe.LuxembourgDraftGraphRunRequest::ForBatch",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgDocumentGetAttemptResult: constructor private "
                     + "instance Lex.V3.Ingest.Luxembourg.LuxembourgDocumentGetAttemptResult::.ctor, "
                     + "method public instance "
@@ -232,6 +240,10 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgDocumentGetAttemptResult::Refused, "
                     + "method public static "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgDocumentGetAttemptResult::RobotsRefused",
+                "Lex.V3.Ingest.Luxembourg.LuxembourgDraftGraphBatchCover: constructor private "
+                    + "instance Lex.V3.Ingest.Luxembourg.LuxembourgDraftGraphBatchCover::.ctor, "
+                    + "method public static "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgDraftGraphBatchCover::TryCreate",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgDraftGraphProductionResult: constructor "
                     + "private instance "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgDraftGraphProductionResult::.ctor, "

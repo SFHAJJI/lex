@@ -1,5 +1,8 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json.Serialization;
 using Lex.V3.Contracts.Custody;
+using Lex.V3.Contracts.Source.Absence;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Luxembourg;
 using Lex.V3.Ingest.Europe;
@@ -103,14 +106,22 @@ public sealed class LuxembourgInitialDraftInventoryResult
     private LuxembourgInitialDraftInventoryResult(
         IReadOnlyList<LuxembourgInitialDraftSubject>? subjects,
         SourceArtifactRef? completionEvidenceRef,
+        LuxembourgInitialDraftInventoryCitation? citation,
         LuxembourgInitialDraftInventoryRefusal refusal,
         string? detail,
         int productRequestCount,
         IReadOnlyList<LuxembourgInitialDraftSubject>? observedNonAddressable = null)
     {
-        ObservedNonAddressable = observedNonAddressable ?? [];
-        Subjects = subjects;
+        // SNAPSHOTTED, NOT ALIASED. These were the producer's own List, handed out behind an
+        // IReadOnlyList that a caller could cast back to and mutate. Doing so changed the members a
+        // later batch derived while the citation kept the digest of the ORIGINAL population - so the
+        // batch and the citation it claims to come from could describe two different inventories.
+        ObservedNonAddressable = observedNonAddressable is null
+            ? []
+            : Array.AsReadOnly(observedNonAddressable.ToArray());
+        Subjects = subjects is null ? null : Array.AsReadOnly(subjects.ToArray());
         CompletionEvidenceRef = completionEvidenceRef;
+        Citation = citation;
         Refusal = refusal;
         Detail = detail;
         ProductRequestCount = productRequestCount;
@@ -137,6 +148,16 @@ public sealed class LuxembourgInitialDraftInventoryResult
     public IReadOnlyList<LuxembourgInitialDraftSubject> ObservedNonAddressable { get; }
 
     public SourceArtifactRef? CompletionEvidenceRef { get; }
+
+    /// <summary>
+    /// This inventory as a later batch must cite it, minted here from this run's own proof.
+    /// </summary>
+    /// <remarks>
+    /// Non-null exactly when <see cref="Delivered"/>. It exists because a batch citing an inventory
+    /// it assembled itself proves nothing: the fields have to come from the run that enumerated the
+    /// class, or "derived from the proven inventory" is a claim with no evidence behind it.
+    /// </remarks>
+    public LuxembourgInitialDraftInventoryCitation? Citation { get; }
     public LuxembourgInitialDraftInventoryRefusal Refusal { get; }
     public string? Detail { get; }
     public int ProductRequestCount { get; }
@@ -145,15 +166,17 @@ public sealed class LuxembourgInitialDraftInventoryResult
     internal static LuxembourgInitialDraftInventoryResult Success(
         IReadOnlyList<LuxembourgInitialDraftSubject> subjects,
         SourceArtifactRef completionEvidenceRef,
+        LuxembourgInitialDraftInventoryCitation citation,
         int productRequestCount) =>
-        new(subjects, completionEvidenceRef, LuxembourgInitialDraftInventoryRefusal.None, null, productRequestCount);
+        new(subjects, completionEvidenceRef, citation,
+            LuxembourgInitialDraftInventoryRefusal.None, null, productRequestCount);
 
     internal static LuxembourgInitialDraftInventoryResult Refused(
         LuxembourgInitialDraftInventoryRefusal refusal,
         string detail,
         int productRequestCount,
         IReadOnlyList<LuxembourgInitialDraftSubject>? observedNonAddressable = null) =>
-        new(null, null, refusal, detail, productRequestCount, observedNonAddressable);
+        new(null, null, null, refusal, detail, productRequestCount, observedNonAddressable);
 
     /// <summary>
     /// The subjects a later batch can name, deduplicated and in one deterministic order.
@@ -278,8 +301,26 @@ public sealed class LuxembourgInitialDraftInventoryProducer
                 run.ProductRequestCount);
         }
 
-        return DecodeRows(rows, profile, proof.AcquisitionRunRef, run.ProductRequestCount);
+        // THE PROOF ITSELF, not the two fields read off it. This used to hand DecodeRows the run
+        // reference and the family key as separate values, which is how the citation ended up
+        // stating an identity rather than carrying one - and how an outside consumer could state a
+        // different identity entirely. Both are still taken from the proof; they are just no longer
+        // detachable from it on the way.
+        return DecodeRows(
+            rows,
+            profile,
+            proof,
+            receipt.Delivery.ObservationTimes.CountA,
+            run.ProductRequestCount);
     }
+
+    /// <summary>The separator the inventory selection digest joins on.</summary>
+    /// <remarks>
+    /// Named rather than written inline: an escape in this position has been mangled by a shell
+    /// twice in this file's history, and a digest that silently joins on the wrong byte is a
+    /// citation that silently names a different population.
+    /// </remarks>
+    private const char LineFeed = (char)10;
 
     /// <summary>Decodes one delivered page set into subjects.</summary>
     /// <remarks>
@@ -291,12 +332,17 @@ public sealed class LuxembourgInitialDraftInventoryProducer
     internal static LuxembourgInitialDraftInventoryResult DecodeRows(
         IReadOnlyList<RepeatedEnumerationRow> rows,
         RepeatedEnumerationInterpretationProfile profile,
-        SourceArtifactRef completionEvidenceRef,
+        AbsenceFamilyEnumerationProof proof,
+        string observedAt,
         int productRequestCount = 0)
     {
         ArgumentNullException.ThrowIfNull(rows);
         ArgumentNullException.ThrowIfNull(profile);
-        ArgumentNullException.ThrowIfNull(completionEvidenceRef);
+        ArgumentNullException.ThrowIfNull(proof);
+        ArgumentException.ThrowIfNullOrWhiteSpace(observedAt);
+
+        var completionEvidenceRef = proof.AcquisitionRunRef;
+        var familyKey = proof.FamilyKey;
 
         var subjects = new List<LuxembourgInitialDraftSubject>(rows.Count);
         var seen = new HashSet<(string Value, string Kind)>();
@@ -351,8 +397,28 @@ public sealed class LuxembourgInitialDraftInventoryProducer
                 nonAddressable);
         }
 
+        // THE CITATION IS MINTED HERE, over the population this inventory actually hands to
+        // batching. Digesting AddressableInOrder rather than the raw subjects means the digest
+        // changes exactly when what the batches must cover changes.
+        var addressable = subjects
+            .Where(static value => value.IsAddressable)
+            .Select(static value => value.Value)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        // THE ROWS THIS RUN ACTUALLY RECEIVED, so the door can check they are the ones the proof
+        // proves rather than trusting that some proof exists. They came from
+        // VerifiedRepeatedEnumerationRows.TryOpen, which already re-derived their count and
+        // canonical-key digest against this same proof, so the door's check passes here by
+        // construction - and fails for anyone pairing this proof with another delivery.
+        var citation = LuxembourgInitialDraftInventoryCitation.MintedOver(
+            proof,
+            rows,
+            addressable,
+            observedAt);
+
         return LuxembourgInitialDraftInventoryResult.Success(
-            subjects, completionEvidenceRef, productRequestCount);
+            subjects, completionEvidenceRef, citation, productRequestCount);
     }
 
     private static LuxembourgInitialDraftSubject DecodeRow(
