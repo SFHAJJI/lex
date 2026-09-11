@@ -570,10 +570,18 @@ public sealed class LuxembourgDraftGraphProducerTests
         Assert.AreEqual(
             542, System.Text.Encoding.UTF8.GetByteCount(PseudoApostropheTitle),
             "this is the retained 542-byte row, not a paraphrase of it.");
+        // BYTE IDENTITY, PINNED INDEPENDENTLY OF HOW THE ROW IS KEYED. This used to assert against
+        // ValueDigest, which was a plain SHA-256 of the bytes and is now the publisher's codec - so
+        // correcting the codec moved a constant that was only ever describing the fixture's own
+        // content. The conforming digest is the stable statement about these 542 bytes.
         Assert.AreEqual(
             "dc48f19a4db8f58a0b48b4d07733e8c99b1528176fecc0b743346907f774d53b",
+            LuxembourgPublisherCursorCodec.ConformingKeyForDiagnosisOnly(PseudoApostropheTitle),
+            "and it is byte-identical to the value retained from the publisher.");
+        Assert.AreEqual(
+            "2a71a083e81e1f167ec6b3bd8cbaf3566db7aadea689300aca9fce0658f1f832",
             ValueDigest(PseudoApostropheTitle),
-            "and it is byte-identical to what the publisher delivered.");
+            "while the key this publisher delivers for it is the codec's, not the standard's.");
         Assert.Contains(
             '\u0301', PseudoApostropheTitle,
             "the combining acute is the whole point of the row.");
@@ -627,6 +635,88 @@ public sealed class LuxembourgDraftGraphProducerTests
         + "logopédie et de services audiométrique et orthophonique<br/>"
         + "4. modification de la loi du 22 juin 1963 fixant le régime des traitements des "
         + "fonctionnaires de l \u0301Etat.</p>";
+
+    /// <summary>
+    /// The key is this publisher's codec, not SPARQL 1.1 SHA-256, and a conforming digest is refused.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// THE MEASURED PAIR, not an invented one. Draft <c>eli/dl/pl/1989/60</c>'s 542-byte
+    /// <c>titleDraft</c> was delivered live under
+    /// <c>artifacts/e8-batch-8bc575b849c240e6800ab3318cc90c41</c> with <c>key_4</c> =
+    /// <c>2a71a083...</c>, while a conforming <c>SHA256</c> of the same UTF-8 bytes is
+    /// <c>dc48f19a...</c>. Both digests are pinned here so a change to either side of the codec is
+    /// a failing test rather than a silently different key.
+    /// </para>
+    /// <para>
+    /// The second half is what makes this more than a restatement: a row carrying the CONFORMING
+    /// digest is REFUSED. Without it a producer that accepted either spelling would pass, and
+    /// "accepts either" is precisely the state that cannot tell a corrected publisher from a
+    /// corrupted row. This family admits exactly one key for a value.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void TheKeyIsThisPublishersCodecAndAConformingDigestIsRefused()
+    {
+        const string NotAdmissible = "http://data.legilux.public.lu/resource/ontology/jolux#titleDraft";
+        const string Delivered = "2a71a083e81e1f167ec6b3bd8cbaf3566db7aadea689300aca9fce0658f1f832";
+        const string Conforming = "dc48f19a4db8f58a0b48b4d07733e8c99b1528176fecc0b743346907f774d53b";
+
+        Assert.AreEqual(
+            Delivered, LuxembourgPublisherCursorCodec.ComputeKey(PseudoApostropheTitle),
+            "the codec must reproduce what Legilux actually delivered for this exact row.");
+        Assert.AreEqual(
+            Conforming,
+            LuxembourgPublisherCursorCodec.ConformingKeyForDiagnosisOnly(PseudoApostropheTitle),
+            "and the standard's answer must stay available for diagnosis.");
+        // The publisher's own key is admitted.
+        var accepted = Decode(Row(
+            predicate: NotAdmissible, value: Literal(PseudoApostropheTitle), key4: Delivered));
+        Assert.AreEqual(
+            LuxembourgDraftGraphProductionRefusal.None, accepted.Refusal,
+            $"{accepted.Refusal}: {accepted.Detail}");
+        Assert.AreEqual(
+            PseudoApostropheTitle,
+            accepted.RetainedNotAdmitted.Single(
+                value => string.Equals(value.PredicateIri, NotAdmissible, StringComparison.Ordinal)).Value,
+            "and the raw value is retained whole, unchanged by how it was keyed.");
+
+        // THE CONFORMING DIGEST IS NOT A SECOND ACCEPTABLE SPELLING.
+        var refused = Decode(Row(
+            predicate: NotAdmissible, value: Literal(PseudoApostropheTitle), key4: Conforming));
+        Assert.AreEqual(
+            LuxembourgDraftGraphProductionRefusal.RowNotAdmitted, refused.Refusal,
+            "a standard-conforming digest is not what this publisher sends, so it is not a key this "
+                + "family may admit; accepting both is how a corrected endpoint would go unnoticed.");
+        StringAssert.Contains(refused.Detail!, "key_4");
+    }
+
+    /// <summary>
+    /// ASCII is a fixed point of the codec, which is why the defect hid for so long.
+    /// </summary>
+    /// <remarks>
+    /// The transform reinterprets UTF-8 bytes as Latin-1 and re-encodes them; for a value whose
+    /// bytes are all below 0x80 that is the identity, so codec and standard agree exactly. 105 of
+    /// the 115 rows in the retained packet are such values. Pinning it states the boundary of the
+    /// divergence rather than leaving "mostly agrees" as folklore.
+    /// </remarks>
+    [TestMethod]
+    public void AsciiValuesKeyIdenticallyUnderTheCodecAndTheStandard()
+    {
+        foreach (var ascii in new[] { "", "46.992", "publie", "http://data.legilux.public.lu/eli/dl/pl/2005/64" })
+        {
+            Assert.AreEqual(
+                LuxembourgPublisherCursorCodec.ConformingKeyForDiagnosisOnly(ascii),
+                LuxembourgPublisherCursorCodec.ComputeKey(ascii),
+                $"ASCII is a fixed point of the reinterpretation: '{ascii}'.");
+        }
+
+        // And one non-ASCII character is enough to separate them.
+        Assert.AreNotEqual(
+            LuxembourgPublisherCursorCodec.ConformingKeyForDiagnosisOnly("é"),
+            LuxembourgPublisherCursorCodec.ComputeKey("é"),
+            "a single accented character is the whole difference between agreeing and diverging.");
+    }
 
     /// <summary>
     /// Two values that differ only in kind, datatype or language stay distinct rows.
@@ -1382,17 +1472,25 @@ public sealed class LuxembourgDraftGraphProducerTests
     internal static string LongTitleValue => LongTitleOpening + new string('x', 2484);
 
     /// <summary>
-    /// What the publisher's own <c>SHA256(STR(?value))</c> produces for a lexical value.
+    /// What this publisher's own key column actually carries for a lexical value.
     /// </summary>
     /// <remarks>
-    /// The fixture digests the same way the page does, because the producer now recomputes the
-    /// digest from the retained value and refuses a row whose key does not describe it. A fixture
-    /// still emitting the raw value would be describing a response this family no longer asks for.
+    /// <para>
+    /// NOT SHA-256 OF THE VALUE, and this fixture said it was. It computed a strict-UTF-8 SHA-256,
+    /// which is what SPARQL 1.1 defines and what this endpoint does not implement: it hashes the
+    /// value double UTF-8 encoded. ASCII is a fixed point of that transform, so every fixture here
+    /// agreed with the endpoint for as long as every fixture value was ASCII - and the three that
+    /// were not began failing the moment the producer was corrected, which is how a fixture that
+    /// described a response no engine sends gets found.
+    /// </para>
+    /// <para>
+    /// It now digests the way <see cref="LuxembourgPublisherCursorCodec"/> does, because the
+    /// producer recomputes through that codec and refuses a row whose key does not describe its own
+    /// value.
+    /// </para>
     /// </remarks>
     internal static string ValueDigest(string lexical) =>
-        Convert.ToHexStringLower(
-            System.Security.Cryptography.SHA256.HashData(
-                new System.Text.UTF8Encoding(false, true).GetBytes(lexical)));
+        LuxembourgPublisherCursorCodec.ComputeKey(lexical);
 
     /// <summary>The publisher's wire shape for one bound term, shared by both page writers.</summary>
     /// <remarks>
