@@ -18,14 +18,12 @@ public sealed record LuxembourgOpinionRequestInventoryCitation
         string familyKey,
         SourceArtifactRef acquisitionRunRef,
         string selectionDigest,
-        int subjectCount,
-        string observedAt)
+        int subjectCount)
     {
         FamilyKey = familyKey;
         AcquisitionRunRef = acquisitionRunRef;
         SelectionDigest = selectionDigest;
         SubjectCount = subjectCount;
-        ObservedAt = observedAt;
     }
 
     /// <summary>Which family's inventory this is.</summary>
@@ -46,8 +44,11 @@ public sealed record LuxembourgOpinionRequestInventoryCitation
     /// </remarks>
     public int SubjectCount { get; }
 
-    /// <summary>When the enumeration was observed.</summary>
-    public string ObservedAt { get; }
+    // NO OBSERVED-AT HERE, DELIBERATELY. It was a caller-supplied string copied into a property
+    // documented as when the enumeration was observed - a provenance claim the caller is not
+    // entitled to make, since nothing on this door binds it to the run. The proof carries no
+    // instant, so there is no evidence to derive one from. A reader needing the observation time
+    // takes it from the run's own retained receipt through AcquisitionRunRef.
 
     /// <summary>
     /// Mints a citation over a population an inventory run actually enumerated.
@@ -60,13 +61,11 @@ public sealed record LuxembourgOpinionRequestInventoryCitation
     public static LuxembourgOpinionRequestInventoryCitation MintedOver(
         AbsenceFamilyEnumerationProof proof,
         IReadOnlyList<RepeatedEnumerationRow> deliveredRows,
-        IReadOnlyList<string> addressablePopulation,
-        string observedAt)
+        IReadOnlyList<string> addressablePopulation)
     {
         ArgumentNullException.ThrowIfNull(proof);
         ArgumentNullException.ThrowIfNull(deliveredRows);
         ArgumentNullException.ThrowIfNull(addressablePopulation);
-        ArgumentException.ThrowIfNullOrWhiteSpace(observedAt);
 
         LuxembourgProvenRequestDelivery.RequireThisFamilysInventory(proof);
         LuxembourgProvenRequestDelivery.Bind(proof, deliveredRows, addressablePopulation);
@@ -87,8 +86,7 @@ public sealed record LuxembourgOpinionRequestInventoryCitation
             proof.FamilyKey,
             proof.AcquisitionRunRef,
             LuxembourgOpinionRequestGraphDiscoveryPlan.SelectionDigestFor(addressablePopulation),
-            addressablePopulation.Count,
-            observedAt);
+            addressablePopulation.Count);
     }
 }
 
@@ -168,35 +166,77 @@ internal static class LuxembourgProvenRequestDelivery
                 nameof(deliveredRows));
         }
 
-        if (namedSubjects.Count is 0)
-        {
-            return;
-        }
-
-        // FROM THE PROVEN KEY, NOT FROM THE TERMS. Only the canonical keys are covered by the digest
-        // above; Terms is an independently settable list. This family keys on key_1, which the
-        // inventory page derives as STR(?request) - the subject itself. A change to that key layout
-        // must make honest runs refuse here rather than admit a subject nobody enumerated.
-        var proven = new HashSet<string>(StringComparer.Ordinal);
+        // FROM BOTH PROVEN KEYS, AND AS AN EXACT SET. Only the canonical keys are covered by the
+        // digest above; Terms is an independently settable list. This family keys on key_1 - the
+        // subject, as STR(?request) - and key_2, the kind marker.
+        //
+        // Reading only key_1 and checking subset membership proved nothing about COMPLETENESS: a
+        // caller naming three of four proven subjects minted a citation for a population no run
+        // enumerated. There is no early return for an empty caller list either, because an empty
+        // population beside a non-empty delivery is that same defect at its largest.
+        var addressable = new HashSet<string>(StringComparer.Ordinal);
+        var nonAddressable = new List<string>();
         foreach (var row in deliveredRows)
         {
-            if (row.CanonicalKey.Count is 0 || row.CanonicalKey[0].Value is not { } subject)
+            if (row.CanonicalKey.Count < 2 ||
+                row.CanonicalKey[0].Value is not { } subject ||
+                row.CanonicalKey[1].Value is not { } kind)
             {
                 throw new ArgumentException(
-                    "A delivered row carries no subject key, so it names no population member.",
+                    "A delivered row carries no subject and kind key, so it names no population "
+                        + "member.",
                     nameof(deliveredRows));
             }
 
-            proven.Add(subject);
+            // A NON-ADDRESSABLE MEMBER STOPS THE INVENTORY rather than vanishing from it. The plan
+            // reports a blank-node member instead of filtering it precisely so this door can
+            // refuse: its label is scoped to the response that carried it, so no exact membership
+            // list exists over an identity that does not survive its own delivery.
+            if (string.Equals(
+                    kind,
+                    LuxembourgOpinionRequestInventoryDiscoveryPlan.UnsupportedBlankNodeKind,
+                    StringComparison.Ordinal))
+            {
+                nonAddressable.Add(subject);
+                continue;
+            }
+
+            if (!string.Equals(
+                    kind,
+                    LuxembourgOpinionRequestInventoryDiscoveryPlan.IriKind,
+                    StringComparison.Ordinal))
+            {
+                throw new ArgumentException(
+                    "A delivered row carries an unknown subject kind, so its addressability is "
+                        + "undecided.",
+                    nameof(deliveredRows));
+            }
+
+            addressable.Add(subject);
         }
 
-        var invented = namedSubjects.Where(value => !proven.Contains(value)).ToArray();
-        if (invented.Length is not 0)
+        if (nonAddressable.Count is not 0)
         {
             throw new ArgumentException(
-                "These subjects are not in the delivery this proof proves: "
-                    + string.Join(", ", invented.Take(3))
-                    + (invented.Length > 3 ? ", ..." : string.Empty),
+                "This delivery carries a non-addressable member, so no exact membership list exists "
+                    + "over it: " + string.Join(", ", nonAddressable.Take(3))
+                    + (nonAddressable.Count > 3 ? ", ..." : string.Empty),
+                nameof(deliveredRows));
+        }
+
+        var named = new HashSet<string>(namedSubjects, StringComparer.Ordinal);
+        if (named.Count != namedSubjects.Count ||
+            !named.SetEquals(addressable))
+        {
+            var omitted = addressable.Except(named, StringComparer.Ordinal).Take(3).ToArray();
+            var invented = named.Except(addressable, StringComparer.Ordinal).Take(3).ToArray();
+            throw new ArgumentException(
+                "This population is not the addressable inventory this proof proves: it names "
+                    + namedSubjects.Count + " subject(s) against " + addressable.Count
+                    + " delivered"
+                    + (omitted.Length is 0 ? string.Empty : "; omitted " + string.Join(", ", omitted))
+                    + (invented.Length is 0 ? string.Empty : "; invented " + string.Join(", ", invented))
+                    + ".",
                 nameof(namedSubjects));
         }
     }
@@ -271,12 +311,18 @@ public sealed class LuxembourgOpinionRequestBatchAssignment
                 nameof(population));
         }
 
+        // CANONICALIZED ONCE, BEFORE CHUNKING. The citation digests the SET, so it accepts any
+        // permutation of its own population - and chunking the caller's order then gave one proven
+        // inventory as many partitions as there are orderings, each with different batch partition
+        // keys. One inventory has one partition.
+        var ordered = LuxembourgOpinionRequestGraphDiscoveryPlan.RequestedPartitionMembers(population);
+
         var assignments = new List<LuxembourgOpinionRequestBatchAssignment>();
         for (var index = 0;
-             index < population.Count;
+             index < ordered.Count;
              index += LuxembourgOpinionRequestGraphDiscoveryPlan.BatchCapacity)
         {
-            var requests = Array.AsReadOnly(population
+            var requests = Array.AsReadOnly(ordered
                 .Skip(index)
                 .Take(LuxembourgOpinionRequestGraphDiscoveryPlan.BatchCapacity)
                 .ToArray());
@@ -289,8 +335,8 @@ public sealed class LuxembourgOpinionRequestBatchAssignment
         }
 
         var flattened = assignments.SelectMany(static value => value.Requests).ToArray();
-        if (flattened.Length != population.Count ||
-            !flattened.SequenceEqual(population, StringComparer.Ordinal))
+        if (flattened.Length != ordered.Count ||
+            !flattened.SequenceEqual(ordered, StringComparer.Ordinal))
         {
             throw new InvalidOperationException(
                 "The batches do not reassemble the inventory population exactly once, so the sweep "

@@ -20,8 +20,6 @@ public sealed class LuxembourgOpinionRequestBatchingTests
     private const string Family =
         LuxembourgOpinionRequestInventoryDiscoveryPlan.PartitionMemberKeyForFixtures;
 
-    private const string ObservedAt = "2026-09-11T11:57:05.5783842Z";
-
     private static string Request(int index) =>
         $"http://data.legilux.public.lu/eli/dl/pl/2000/{index:D3}/evenement/sace/1";
 
@@ -33,11 +31,10 @@ public sealed class LuxembourgOpinionRequestBatchingTests
         var (proof, rows) = Delivery(subjects);
 
         var citation = LuxembourgOpinionRequestInventoryCitation.MintedOver(
-            proof, rows, subjects, ObservedAt);
+            proof, rows, subjects);
 
         Assert.AreEqual(Family, citation.FamilyKey);
         Assert.AreEqual(subjects.Count, citation.SubjectCount);
-        Assert.AreEqual(ObservedAt, citation.ObservedAt);
         Assert.AreEqual(
             LuxembourgOpinionRequestGraphDiscoveryPlan.SelectionDigestFor(subjects),
             citation.SelectionDigest,
@@ -66,7 +63,7 @@ public sealed class LuxembourgOpinionRequestBatchingTests
 
         Assert.ThrowsExactly<ArgumentException>(
             () => LuxembourgOpinionRequestInventoryCitation.MintedOver(
-                elsewhere, rows, subjects, ObservedAt),
+                elsewhere, rows, subjects),
             "proving these subjects somewhere is not proving this family's inventory.");
     }
 
@@ -94,7 +91,7 @@ public sealed class LuxembourgOpinionRequestBatchingTests
 
         var refusal = Assert.ThrowsExactly<ArgumentException>(
             () => LuxembourgOpinionRequestInventoryCitation.MintedOver(
-                draftProof, rows, ordered, ObservedAt),
+                draftProof, rows, ordered),
             "the other inventory's enumeration is not this one, however alike the rows look.");
         StringAssert.Contains(
             refusal.Message, LuxembourgOpinionRequestInventoryDiscoveryPlan.PartitionMemberKey,
@@ -131,7 +128,7 @@ public sealed class LuxembourgOpinionRequestBatchingTests
 
         var refusal = Assert.ThrowsExactly<ArgumentException>(
             () => LuxembourgOpinionRequestInventoryCitation.MintedOver(
-                wrongProfile, rows, ordered, ObservedAt),
+                wrongProfile, rows, ordered),
             "this family is defined by its own profile, not only by its name.");
 
         // THE MESSAGE, BECAUSE THE EXCEPTION TYPE CANNOT TELL THE GUARDS APART. Every door here
@@ -165,10 +162,10 @@ public sealed class LuxembourgOpinionRequestBatchingTests
 
         var refusal = Assert.ThrowsExactly<ArgumentException>(
             () => LuxembourgOpinionRequestInventoryCitation.MintedOver(
-                proof, termsRewritten, [Unobserved], ObservedAt),
+                proof, termsRewritten, [Unobserved]),
             "the proved keys do not name this subject, whatever the terms beside them say.");
         StringAssert.Contains(
-            refusal.Message, "not in the delivery this proof proves",
+            refusal.Message, "not the addressable inventory this proof proves",
             "the refusal must be about the population, not about the rows or the family.");
     }
 
@@ -185,8 +182,73 @@ public sealed class LuxembourgOpinionRequestBatchingTests
 
         Assert.ThrowsExactly<ArgumentException>(
             () => LuxembourgOpinionRequestInventoryCitation.MintedOver(
-                proof, rows, [.. subjects, subjects[0]], ObservedAt),
+                proof, rows, [.. subjects, subjects[0]]),
             "an inventory population names each subject once.");
+    }
+
+    /// <summary>
+    /// A population omitting a proven subject is refused: subset membership is not completeness.
+    /// </summary>
+    /// <remarks>
+    /// THE DEFECT THIS REPLACES. The binder checked only that each named subject appeared among the
+    /// proven keys, so three of four proven subjects minted a citation over a population no run
+    /// enumerated - and every later batch, coverage and reconciliation would have rested on it.
+    /// </remarks>
+    [TestMethod]
+    public void APopulationOmittingAProvenSubjectIsRefused()
+    {
+        var subjects = Subjects(4);
+        var (proof, rows) = Delivery(subjects);
+
+        var refusal = Assert.ThrowsExactly<ArgumentException>(
+            () => LuxembourgOpinionRequestInventoryCitation.MintedOver(
+                proof, rows, subjects.Take(3).ToArray()),
+            "naming a subset of the delivery is not naming the inventory.");
+        StringAssert.Contains(refusal.Message, "omitted");
+    }
+
+    /// <summary>An empty population beside a non-empty delivery is the same defect at its largest.</summary>
+    [TestMethod]
+    public void AnEmptyPopulationBesideANonEmptyDeliveryIsRefused()
+    {
+        var subjects = Subjects(4);
+        var (proof, rows) = Delivery(subjects);
+
+        var refusal = Assert.ThrowsExactly<ArgumentException>(
+            () => LuxembourgOpinionRequestInventoryCitation.MintedOver(proof, rows, []),
+            "an early return for an empty list let a caller name nothing and mint a citation.");
+        StringAssert.Contains(refusal.Message, "addressable inventory");
+    }
+
+    /// <summary>
+    /// A non-addressable member stops the inventory rather than vanishing from it.
+    /// </summary>
+    /// <remarks>
+    /// The plan reports a blank-node member instead of filtering it, precisely so this door can
+    /// refuse. Reading only the subject key ignored the kind entirely, so the plan's rule was
+    /// unenforced here and such a member would simply have been absent from the population.
+    /// </remarks>
+    [TestMethod]
+    public void ANonAddressableMemberRefusesTheCitation()
+    {
+        var subjects = Subjects(3);
+        var ordered = subjects.OrderBy(static value => value, StringComparer.Ordinal).ToArray();
+
+        // DELIVERED non-addressable, not rewritten afterwards. Editing a canonical key changes the
+        // key digest, so the proof binding refuses first and this rule is never reached - which is
+        // how the first version of this test passed for the wrong reason.
+        var (proof, keys) = AbsenceFixtures.OpinionRequestInventoryWithNonAddressableMember(
+            ordered, nonAddressableAt: 1);
+        var rows = ordered
+            .Select((subject, index) => new RepeatedEnumerationRow(
+                [RepeatedEnumerationRdfTerm.Iri(subject)], keys[index],
+                [RepeatedEnumerationRdfTerm.Iri(subject)]))
+            .ToArray();
+
+        var refusal = Assert.ThrowsExactly<ArgumentException>(
+            () => LuxembourgOpinionRequestInventoryCitation.MintedOver(proof, rows, ordered),
+            "no exact membership list exists over an identity that does not survive its delivery.");
+        StringAssert.Contains(refusal.Message, "non-addressable");
     }
 
     /// <summary>An assignment cannot be built for a population the citation does not name.</summary>
@@ -245,6 +307,35 @@ public sealed class LuxembourgOpinionRequestBatchingTests
         }
     }
 
+    /// <summary>
+    /// One proven inventory has one partition, whatever order its population arrives in.
+    /// </summary>
+    /// <remarks>
+    /// The citation digests the SET, so it accepts any permutation of its own population. Chunking
+    /// the caller's order then gave the same inventory different batches with different partition
+    /// keys - so which batch a subject belonged to, and what any batch citation named, depended on
+    /// an argument order nothing recorded.
+    /// </remarks>
+    [TestMethod]
+    public void OneProvenInventoryHasOnePartitionWhateverOrderItArrivesIn()
+    {
+        var subjects = Subjects(LuxembourgOpinionRequestGraphDiscoveryPlan.BatchCapacity + 1);
+        var citation = Citation(subjects);
+        var reversed = subjects.Reverse().ToArray();
+
+        var forward = LuxembourgOpinionRequestBatchAssignment.Over(subjects, citation);
+        var backward = LuxembourgOpinionRequestBatchAssignment.Over(reversed, citation);
+
+        CollectionAssert.AreEqual(
+            forward.Select(static value => value.PartitionKey).ToArray(),
+            backward.Select(static value => value.PartitionKey).ToArray(),
+            "the same inventory must not partition differently because a caller reversed a list.");
+        CollectionAssert.AreEqual(
+            forward.SelectMany(static value => value.Requests).ToArray(),
+            backward.SelectMany(static value => value.Requests).ToArray(),
+            "and every subject must land in the same batch either way.");
+    }
+
     private static IReadOnlyList<string> Subjects(int count) =>
         Enumerable.Range(0, count).Select(Request)
             .OrderBy(static value => value, StringComparer.Ordinal).ToArray();
@@ -270,6 +361,6 @@ public sealed class LuxembourgOpinionRequestBatchingTests
     private static LuxembourgOpinionRequestInventoryCitation Citation(IReadOnlyList<string> subjects)
     {
         var (proof, rows) = Delivery(subjects);
-        return LuxembourgOpinionRequestInventoryCitation.MintedOver(proof, rows, subjects, ObservedAt);
+        return LuxembourgOpinionRequestInventoryCitation.MintedOver(proof, rows, subjects);
     }
 }

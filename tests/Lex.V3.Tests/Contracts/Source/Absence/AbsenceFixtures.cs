@@ -242,6 +242,43 @@ internal static class AbsenceFixtures
     }
 
     /// <summary>
+    /// An OpinionRequest inventory delivery in which one member is not addressable.
+    /// </summary>
+    /// <remarks>
+    /// The keys carry the blank-node marker as delivered, so the proof covers them. A test cannot
+    /// reach the citation door's blank-node rule by rewriting a key afterwards: that changes the
+    /// canonical-key digest, and the proof binding refuses before the rule is consulted.
+    /// </remarks>
+    public static (AbsenceFamilyEnumerationProof Proof, RepeatedEnumerationRdfTerm[][] Keys)
+        OpinionRequestInventoryWithNonAddressableMember(
+            IReadOnlyList<string> subjects,
+            int nonAddressableAt,
+            int runSeed = 933)
+    {
+        var ordered = subjects.OrderBy(static value => value, StringComparer.Ordinal).ToArray();
+        var familyKey = LuxembourgOpinionRequestInventoryDiscoveryPlan.PartitionMemberKeyForFixtures;
+        var delivery = AbsenceEnumerationProofFixture.LuxembourgOpinionRequestInventoryDelivery(
+            ordered, runSeed, nonAddressableAt: nonAddressableAt);
+
+        var proof = AbsenceFamilyEnumerationProof.TryCreate(
+            familyKey, delivery, CustodyMembership.Floored, out var refusal);
+        if (proof is null)
+        {
+            throw new InvalidOperationException($"fixture proof refused as {refusal}");
+        }
+
+        var keys = ordered
+            .Select((subject, index) => new[]
+            {
+                RepeatedEnumerationRdfTerm.Literal(subject, null, null),
+                RepeatedEnumerationRdfTerm.Literal(
+                    AbsenceEnumerationProofFixture.KindAt(index, nonAddressableAt), null, null),
+            })
+            .ToArray();
+        return (proof, keys);
+    }
+
+    /// <summary>
     /// A proof carrying a family's NAME but read under this fixture's generic profile.
     /// </summary>
     /// <remarks>
