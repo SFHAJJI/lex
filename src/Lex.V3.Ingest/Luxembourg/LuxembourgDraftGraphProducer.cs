@@ -502,7 +502,7 @@ public sealed class LuxembourgDraftGraphProducer
                     // run - a 2,648-byte titleDraft - is retained rather than admitted, so leaving
                     // this out would mean the digest was unchecked on exactly the row it was
                     // introduced for.
-                    RequireKey(row, profile, "key_4", Sha256Hex(retainedValue.Value ?? string.Empty));
+                    RequireKey(row, profile, "key_4", DeliveredKeyFor(retainedValue.Value ?? string.Empty));
 
                     notAdmitted.Add(new LuxembourgDraftRetainedEvidenceRow(
                         RequireIri(Term(row, profile, "draft"), "draft"),
@@ -661,7 +661,7 @@ public sealed class LuxembourgDraftGraphProducer
         RequireKey(row, profile, "key_1", draftIri);
         RequireKey(row, profile, "key_2", MarkerFor(draftTerm));
         RequireKey(row, profile, "key_3", predicateIri);
-        RequireKey(row, profile, "key_4", Sha256Hex(valueTerm.Value ?? string.Empty));
+        RequireKey(row, profile, "key_4", DeliveredKeyFor(valueTerm.Value ?? string.Empty));
         RequireKey(row, profile, "key_5", MarkerFor(valueTerm));
         RequireKey(row, profile, "key_6", datatype);
         RequireKey(row, profile, "key_7", language);
@@ -705,9 +705,18 @@ public sealed class LuxembourgDraftGraphProducer
     /// two different values. Throwing instead surfaces the row as unrepresentable, which is the
     /// refusal this family already has for a key it cannot form.
     /// </remarks>
-    private static string Sha256Hex(string lexical) =>
-        Convert.ToHexStringLower(
-            SHA256.HashData(new UTF8Encoding(false, true).GetBytes(lexical)));
+    /// <summary>
+    /// The key this publisher computes for a value, recomputed locally before the row is believed.
+    /// </summary>
+    /// <remarks>
+    /// This used to be a strict-UTF-8 SHA-256, on the assumption the endpoint implemented SPARQL
+    /// 1.1 §17.4.4.8. It does not: measured against five discriminating drafts it hashes the value
+    /// double UTF-8 encoded, and twenty-one competing algorithms were rejected by the delivered
+    /// keys before Latin-1 survived. See <see cref="LuxembourgPublisherCursorCodec"/> for the
+    /// evidence and for why nothing here may be called SHA-256 of the value.
+    /// </remarks>
+    private static string DeliveredKeyFor(string lexical) =>
+        LuxembourgPublisherCursorCodec.ComputeKey(lexical);
 
     private static void RequireKey(
         RepeatedEnumerationRow row,

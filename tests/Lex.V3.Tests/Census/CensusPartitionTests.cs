@@ -74,6 +74,7 @@ public sealed class CensusPartitionTests
         "Lex.V3.Contracts.Source.Http.RoutedHttpValidation: constant table, not a vocabulary",
         "Lex.V3.Contracts.Source.Luxembourg.LuxembourgBodyJoin: the IRI sets it held moved to LuxembourgScopeResolver, which IS pinned as a registry; what is left is one private static comparer, which is behaviour",
         "Lex.V3.Contracts.Source.Luxembourg.LuxembourgProvenDelivery: stateful static, not a token registry; it holds one cached interpretation profile and the two checks that bind a citation to the enumeration its proof proves",
+        "Lex.V3.Contracts.Source.Luxembourg.LuxembourgPublisherCursorCodec: two pure key functions and one identity constant naming the codec, not a token registry; the constant is what a receipt calls this publisher's digest so nothing records it as SHA-256",
         "Lex.V3.Contracts.Source.Luxembourg.LuxembourgQueryPageBinder: stateful static, not a token registry",
         "Lex.V3.Contracts.Source.Luxembourg.LuxembourgQueryPassPolicy: constant table, not a vocabulary",
         "Lex.V3.Contracts.Source.Luxembourg.LuxembourgQueryPlanIdentity: stateful static, not a token registry",
@@ -115,14 +116,14 @@ public sealed class CensusPartitionTests
     public void ThePartitionTotalsAreExactlyThese()
     {
         Assert.AreEqual(
-            505, ClosedSurfaceCensus.Candidates(CensusScope.SweptHere).Count, "candidates");
+            506, ClosedSurfaceCensus.Candidates(CensusScope.SweptHere).Count, "candidates");
         Assert.AreEqual(
             228, ClosedSurfaceCensus.ClosedVocabularies(CensusScope.SweptHere).Count, "vocabularies");
         Assert.AreEqual(
             165, ClosedSurfaceCensus.GuardedConstruction(CensusScope.SweptHere).Count, "guarded types");
         Assert.AreEqual(
             65, ClosedSurfaceCensus.VocabularyRegistries(CensusScope.SweptHere).Count, "registries");
-        Assert.AreEqual(47, Declined.Length, "declined");
+        Assert.AreEqual(48, Declined.Length, "declined");
     }
 
     private static string NameOf(string row) =>

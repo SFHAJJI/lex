@@ -269,7 +269,13 @@ public sealed class LuxembourgDraftGraphDiscoveryPlan
     /// </para>
     /// <para>
     /// The owner's ruling is a digest and not a larger ceiling, a truncation, an exclusion or an
-    /// absence: <c>SHA256(STR(?value))</c>, lowercase hexadecimal, of the exact UTF-8 lexical value.
+    /// absence. The query asks the endpoint for <c>SHA256(COALESCE(STR(?value), ""))</c>, and what
+    /// comes back is NOT the SPARQL 1.1 function of that name: this publisher hashes the value
+    /// double UTF-8 encoded, agreeing with the standard on ASCII and diverging on everything else.
+    /// The producer therefore recomputes the key through
+    /// <see cref="LuxembourgPublisherCursorCodec"/> - a named publisher-profile codec, measured by
+    /// rejecting twenty-one competing algorithms - and refuses any row whose delivered key does not
+    /// describe its own value. Nothing in this family may call that key a SHA-256 of the value.
     /// The complete raw <c>?value</c> stays projected, retained and decoded whole - the digest keys
     /// the row, it does not replace what the row says. Draft, predicate, value-kind, datatype and
     /// language remain independently keyed beside it, so the keyset is still injective over the
@@ -278,7 +284,9 @@ public sealed class LuxembourgDraftGraphDiscoveryPlan
     /// <para>
     /// A digest is fixed-width, so this bounds the key part by construction rather than by hoping
     /// publisher values stay short. Two distinct full rows colliding onto one canonical key fail
-    /// closed through the existing duplicate refusal; nothing deduplicates silently.
+    /// closed through the existing duplicate refusal; nothing deduplicates silently. And if the
+    /// endpoint is ever corrected to the standard, local recomputation stops matching and the rows
+    /// refuse - drift surfacing as a refusal rather than as a silent change of meaning.
     /// </para>
     /// </remarks>
     /// <remarks>
