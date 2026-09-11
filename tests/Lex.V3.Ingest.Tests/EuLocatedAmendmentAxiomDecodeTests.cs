@@ -1,15 +1,17 @@
 using Lex.V3.Contracts.Facts;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Europe;
+using Lex.V3.Ingest.Europe;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System.Reflection;
 
-namespace Lex.V3.Tests.Contracts.Source.Europe;
+namespace Lex.V3.Ingest.Tests;
 
 [TestClass]
 public sealed class EuLocatedAmendmentAxiomDecodeTests
 {
     private const string Work = "http://publications.europa.eu/resource/cellar/source-work";
+    private const string OtherSource = "http://publications.europa.eu/resource/cellar/other-source-work";
     private const string Target = "http://publications.europa.eu/resource/cellar/target-work";
     private const string OtherTarget = "http://publications.europa.eu/resource/cellar/other-target-work";
     private const string Axiom = "http://publications.europa.eu/.well-known/genid/located-amendment/1";
@@ -36,22 +38,22 @@ public sealed class EuLocatedAmendmentAxiomDecodeTests
         Assert.HasCount(1, observations);
         var observation = observations[0];
         Assert.AreEqual(Axiom, observation.AxiomIri);
-        Assert.AreEqual(Work, observation.AnnotatedSourceIri);
+        CollectionAssert.AreEqual(new[] { Work }, observation.AnnotatedSourceIris.ToArray());
         Assert.AreEqual(EuAmendmentRelationVocabulary.AmendsPredicateUri, observation.AnnotatedPropertyIri);
         CollectionAssert.AreEqual(new[] { Target }, observation.AnnotatedTargetIris.ToArray());
-        Assert.AreSame(Delivery, observation.InterpretationProfileRef);
+        Assert.AreSame(Delivery, observation.InterpretationProfileRefs.Single());
         Assert.HasCount(rows.Count, observation.RawProperties);
         var retained = observation.RawProperties.Single(property => property.PredicateIri == Unknown);
         Assert.AreEqual("publisher bytes", retained.Value.Value);
         Assert.AreEqual("fr", retained.Value.Language);
-        Assert.IsFalse(observation.IsPublisherTargetAmbiguous);
+        Assert.IsFalse(observation.IsPublisherSourceAmbiguous);
         Assert.IsFalse(
             observation.GetType().GetProperties().Any(property => property.PropertyType == typeof(TargetBodyScope)),
             "the pre-corpus decoder must not mint the final body-scope claim");
     }
 
     [TestMethod]
-    public void ContradictoryPublisherTargetsBecomeAmbiguityAndPreserveEveryRawRow()
+    public void MultiplePublisherTargetsAreRetainedButDoNotClaimInstrumentAmbiguity()
     {
         var rows = WellFormed();
         rows.Add(Row(
@@ -64,7 +66,7 @@ public sealed class EuLocatedAmendmentAxiomDecodeTests
         Assert.IsNotNull(observations);
         Assert.HasCount(1, observations);
         var observation = observations[0];
-        Assert.IsTrue(observation.IsPublisherTargetAmbiguous);
+        Assert.IsFalse(observation.IsPublisherSourceAmbiguous);
         CollectionAssert.AreEqual(
             new[] { OtherTarget, Target }.Order(StringComparer.Ordinal).ToArray(),
             observation.AnnotatedTargetIris.ToArray());
@@ -73,18 +75,25 @@ public sealed class EuLocatedAmendmentAxiomDecodeTests
     }
 
     [TestMethod]
-    public void AConflictingNonTargetModelledValueRefusesTheWholeDelivery()
+    public void MultiplePublisherSourcesBecomeInstrumentAmbiguityAndPreserveEveryRawRow()
     {
         var rows = WellFormed();
         rows.Add(Row(
             EuObjectFactsDiscoveryPlan.AnnotatedSourcePredicateIri,
-            RepeatedEnumerationRdfTerm.Iri(OtherTarget)));
+            RepeatedEnumerationRdfTerm.Iri(OtherSource)));
 
         var observations = Decode(rows, out var refusal, out var offendingValue);
 
-        Assert.IsNull(observations);
-        Assert.AreEqual(EuLocatedAmendmentAxiomDecodeRefusal.ModelledPredicateDeliveredMoreThanOnce, refusal);
-        Assert.AreEqual(EuObjectFactsDiscoveryPlan.AnnotatedSourcePredicateIri, offendingValue);
+        Assert.AreEqual(EuLocatedAmendmentAxiomDecodeRefusal.None, refusal);
+        Assert.IsNull(offendingValue);
+        Assert.IsNotNull(observations);
+        var observation = observations.Single();
+        Assert.IsTrue(observation.IsPublisherSourceAmbiguous);
+        CollectionAssert.AreEqual(
+            new[] { OtherSource, Work }.Order(StringComparer.Ordinal).ToArray(),
+            observation.AnnotatedSourceIris.ToArray());
+        Assert.AreEqual(2, observation.RawProperties.Count(property =>
+            property.PredicateIri == EuObjectFactsDiscoveryPlan.AnnotatedSourcePredicateIri));
     }
 
     [TestMethod]
@@ -142,6 +151,8 @@ public sealed class EuLocatedAmendmentAxiomDecodeTests
     [TestMethod]
     public void CallersCannotMintRawPropertiesOrPublisherTargetCandidates()
     {
+        Assert.IsFalse(typeof(EuLocatedAmendmentAxiomDecode).IsPublic,
+            "naked rows and a self-hashed profile must not be a public publisher-evidence door");
         Assert.IsEmpty(typeof(EuLocatedAmendmentRawProperty).GetConstructors());
         Assert.IsEmpty(typeof(EuLocatedAmendmentAxiomObservation).GetConstructors());
 
@@ -229,9 +240,9 @@ public sealed class EuLocatedAmendmentAxiomDecodeTests
         Replace(targetLiteral, EuObjectFactsDiscoveryPlan.AnnotatedTargetPredicateIri,
             RepeatedEnumerationRdfTerm.Literal(Target, null, null));
 
-        var conflictingSource = WellFormed();
-        conflictingSource.Add(Row(EuObjectFactsDiscoveryPlan.AnnotatedSourcePredicateIri,
-            RepeatedEnumerationRdfTerm.Iri(OtherTarget)));
+        var conflictingModelledProperty = WellFormed();
+        conflictingModelledProperty.Add(Row(EuObjectFactsDiscoveryPlan.AnnotatedPropertyPredicateIri,
+            RepeatedEnumerationRdfTerm.Iri(EuDateQualifierVocabulary.DeadlinePredicateUri)));
 
         (EuLocatedAmendmentAxiomDecodeRefusal Expected, IReadOnlyList<RepeatedEnumerationRow> Rows)[] cases =
         [
@@ -246,7 +257,8 @@ public sealed class EuLocatedAmendmentAxiomDecodeTests
             (EuLocatedAmendmentAxiomDecodeRefusal.AnnotatedPropertyMissingOrNotAdmitted, wrongProperty),
             (EuLocatedAmendmentAxiomDecodeRefusal.AxiomTypeMissingOrNotOwlAxiom, noType),
             (EuLocatedAmendmentAxiomDecodeRefusal.AnnotatedTargetMissingOrNotAnIri, targetLiteral),
-            (EuLocatedAmendmentAxiomDecodeRefusal.ModelledPredicateDeliveredMoreThanOnce, conflictingSource),
+            (EuLocatedAmendmentAxiomDecodeRefusal.ModelledPredicateDeliveredMoreThanOnce,
+                conflictingModelledProperty),
         ];
 
         var reached = new List<EuLocatedAmendmentAxiomDecodeRefusal>();
@@ -262,7 +274,8 @@ public sealed class EuLocatedAmendmentAxiomDecodeTests
             Enum.GetValues<EuLocatedAmendmentAxiomDecodeRefusal>()
                 .Where(value => value is not EuLocatedAmendmentAxiomDecodeRefusal.None
                     and not EuLocatedAmendmentAxiomDecodeRefusal.InterpretationProfileDoesNotBindReference
-                    and not EuLocatedAmendmentAxiomDecodeRefusal.InterpretationProfileNotLocatedAmendmentFacts)
+                    and not EuLocatedAmendmentAxiomDecodeRefusal.InterpretationProfileNotLocatedAmendmentFacts
+                    and not EuLocatedAmendmentAxiomDecodeRefusal.BatchDuplicateAxiomDisagrees)
                 .ToArray(),
             reached.Distinct().Order().ToArray());
     }

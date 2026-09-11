@@ -39,22 +39,84 @@ public sealed class EuLocatedAmendmentWiringTests
         Assert.HasCount(2, observations);
         Assert.AreSame(
             proofOne,
-            observations.Single(item => item.AxiomIri == "urn:axiom:one").InterpretationProfileRef);
+            observations.Single(item => item.AxiomIri == "urn:axiom:one").InterpretationProfileRefs.Single());
         Assert.AreSame(
             proofTwo,
-            observations.Single(item => item.AxiomIri == "urn:axiom:two").InterpretationProfileRef);
+            observations.Single(item => item.AxiomIri == "urn:axiom:two").InterpretationProfileRefs.Single());
+    }
+
+    [TestMethod]
+    public void OneAxiomSelectedByTwoSourceBatchesIsOneAmbiguityWithBothProofCoordinates()
+    {
+        var profile = EuObjectFactsDiscoveryPlan.Create()
+            .CreateDeliveryProfile(EuObjectFactsQuerySet.LocatedAmendmentFacts);
+        var proofOne = RepeatedEnumerationInterpretationProfileIdentity.Create(
+            "urn:uuid:00000000-0000-4000-8000-00000000a811", profile);
+        var proofTwo = RepeatedEnumerationInterpretationProfileIdentity.Create(
+            "urn:uuid:00000000-0000-4000-8000-00000000a812", profile);
+        const string axiom = "urn:axiom:shared";
+        var batches = new[]
+        {
+            (Rows: Rows(ParentOne, axiom, [ParentOne, ParentTwo], Target), Profile: profile, Proof: proofOne),
+            (Rows: Rows(ParentTwo, axiom, [ParentOne, ParentTwo], Target), Profile: profile, Proof: proofTwo),
+        };
+
+        var observations = EuQueryExecutionAdapter.DecodeLocatedAmendmentBatches(
+            batches, out var refusal, out var offendingValue);
+
+        Assert.AreEqual(EuLocatedAmendmentAxiomDecodeRefusal.None, refusal);
+        Assert.IsNull(offendingValue);
+        Assert.IsNotNull(observations);
+        var observation = Assert.ContainsSingle(observations);
+        CollectionAssert.AreEqual(new[] { ParentOne, ParentTwo }, observation.AnnotatedSourceIris.ToArray());
+        CollectionAssert.AreEqual(new[] { proofOne, proofTwo }, observation.InterpretationProfileRefs.ToArray());
+        Assert.IsTrue(observation.IsPublisherSourceAmbiguous);
+    }
+
+    [TestMethod]
+    public void DuplicateAxiomPayloadDriftAcrossBatchesRefuses()
+    {
+        var profile = EuObjectFactsDiscoveryPlan.Create()
+            .CreateDeliveryProfile(EuObjectFactsQuerySet.LocatedAmendmentFacts);
+        var proofOne = RepeatedEnumerationInterpretationProfileIdentity.Create(
+            "urn:uuid:00000000-0000-4000-8000-00000000a821", profile);
+        var proofTwo = RepeatedEnumerationInterpretationProfileIdentity.Create(
+            "urn:uuid:00000000-0000-4000-8000-00000000a822", profile);
+        const string axiom = "urn:axiom:drifted";
+        var batches = new[]
+        {
+            (Rows: Rows(ParentOne, axiom, [ParentOne, ParentTwo], Target), Profile: profile, Proof: proofOne),
+            (Rows: Rows(ParentTwo, axiom, [ParentOne, ParentTwo], ParentOne), Profile: profile, Proof: proofTwo),
+        };
+
+        var observations = EuQueryExecutionAdapter.DecodeLocatedAmendmentBatches(
+            batches, out var refusal, out var offendingValue);
+
+        Assert.IsNull(observations);
+        Assert.AreEqual(EuLocatedAmendmentAxiomDecodeRefusal.BatchDuplicateAxiomDisagrees, refusal);
+        Assert.AreEqual(axiom, offendingValue);
     }
 
     private static IReadOnlyList<RepeatedEnumerationRow> Rows(string parent, string axiom) =>
+        Rows(parent, axiom, [parent], Target);
+
+    private static IReadOnlyList<RepeatedEnumerationRow> Rows(
+        string parent,
+        string axiom,
+        IReadOnlyList<string> sources,
+        string target) =>
     [
         Row(parent, axiom, EuObjectFactsDiscoveryPlan.RdfTypePredicateIri,
             RepeatedEnumerationRdfTerm.Iri(EuObjectFactsDiscoveryPlan.OwlAxiomClassIri)),
-        Row(parent, axiom, EuObjectFactsDiscoveryPlan.AnnotatedSourcePredicateIri,
-            RepeatedEnumerationRdfTerm.Iri(parent)),
+        .. sources.Select(source => Row(
+            parent,
+            axiom,
+            EuObjectFactsDiscoveryPlan.AnnotatedSourcePredicateIri,
+            RepeatedEnumerationRdfTerm.Iri(source))),
         Row(parent, axiom, EuObjectFactsDiscoveryPlan.AnnotatedPropertyPredicateIri,
             RepeatedEnumerationRdfTerm.Iri(EuAmendmentRelationVocabulary.AmendsPredicateUri)),
         Row(parent, axiom, EuObjectFactsDiscoveryPlan.AnnotatedTargetPredicateIri,
-            RepeatedEnumerationRdfTerm.Iri(Target)),
+            RepeatedEnumerationRdfTerm.Iri(target)),
     ];
 
     private static RepeatedEnumerationRow Row(

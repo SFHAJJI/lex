@@ -28,19 +28,19 @@ public sealed class EuPublisherMarkedAmendmentAttribution
 
     public EuLocatedAmendmentAxiom Axiom { get; }
     public EuLocatedAmendmentAxiomObservation Observation { get; }
-    public SourceArtifactRef InterpretationProfileRef => Observation.InterpretationProfileRef;
+    public SourceArtifactRef InterpretationProfileRef => Observation.InterpretationProfileRefs[0];
 }
 
-/// <summary>A publisher-marked axiom whose distinct targets prevent one accepted edge.</summary>
+/// <summary>A publisher-marked axiom naming more than one candidate amending instrument.</summary>
 public sealed class EuLocatedAmendmentAmbiguity
 {
     internal EuLocatedAmendmentAmbiguity(EuLocatedAmendmentAxiomObservation observation)
     {
         ArgumentNullException.ThrowIfNull(observation);
-        if (!observation.IsPublisherTargetAmbiguous)
+        if (!observation.IsPublisherSourceAmbiguous)
         {
             throw new ArgumentException(
-                "Publisher ambiguity requires more than one retained annotated target.",
+                "Publisher ambiguity requires more than one retained annotated source.",
                 nameof(observation));
         }
 
@@ -48,7 +48,8 @@ public sealed class EuLocatedAmendmentAmbiguity
     }
 
     public EuLocatedAmendmentAxiomObservation Observation { get; }
-    public IReadOnlyList<string> CandidateTargetIris => Observation.AnnotatedTargetIris;
+    public IReadOnlyList<string> CandidateInstrumentIris => Observation.AnnotatedSourceIris;
+    public IReadOnlyList<SourceArtifactRef> InterpretationProfileRefs => Observation.InterpretationProfileRefs;
 }
 
 /// <summary>A publisher-marked axiom retained with the exact reason it was not admitted.</summary>
@@ -109,7 +110,7 @@ public sealed class EuLocatedAmendmentProduction
     /// <summary>Publisher-marked axioms admitted through the accepted E4 construction boundary.</summary>
     public IReadOnlyList<EuPublisherMarkedAmendmentAttribution> Admitted { get; }
 
-    /// <summary>Publisher-evidenced conflicts retaining every annotated target and raw property.</summary>
+    /// <summary>Publisher-evidenced conflicts retaining every candidate source and raw property.</summary>
     public IReadOnlyList<EuLocatedAmendmentAmbiguity> Ambiguous { get; }
 
     /// <summary>Every remaining publisher observation, retained with its exact refusal.</summary>
@@ -126,10 +127,16 @@ internal static class EuLocatedAmendmentProducer
 {
     internal static EuLocatedAmendmentProduction Produce(
         IReadOnlyList<EuLocatedAmendmentAxiomObservation> observations,
-        VerifiedCorpusRecordSet corpus)
+        CorpusRecordSetWriteResult recordSetResult)
     {
         ArgumentNullException.ThrowIfNull(observations);
-        ArgumentNullException.ThrowIfNull(corpus);
+        ArgumentNullException.ThrowIfNull(recordSetResult);
+        if (!TryGetCompleteCorpus(recordSetResult, out var corpus))
+        {
+            throw new ArgumentException(
+                "Located amendment projection requires the same writer's complete reopened corpus set.",
+                nameof(recordSetResult));
+        }
 
         var records = corpus.Set.Records.ToDictionary(
             static record => record.ObjectRef.PublisherUri,
@@ -140,19 +147,20 @@ internal static class EuLocatedAmendmentProducer
 
         foreach (var observation in observations)
         {
-            if (observation.IsPublisherTargetAmbiguous)
+            if (observation.IsPublisherSourceAmbiguous)
             {
                 ambiguous.Add(new EuLocatedAmendmentAmbiguity(observation));
                 continue;
             }
 
-            if (!records.ContainsKey(observation.AnnotatedSourceIri))
+            var sourceIri = observation.AnnotatedSourceIris[0];
+            if (!records.ContainsKey(sourceIri))
             {
                 excluded.Add(new EuLocatedAmendmentExclusion(
                     observation,
                     EuLocatedAmendmentExclusionKind.SourceOutsideVerifiedCorpus,
                     null,
-                    observation.AnnotatedSourceIri));
+                    sourceIri));
                 continue;
             }
 
@@ -161,7 +169,7 @@ internal static class EuLocatedAmendmentProducer
             OfficialIdentitySet target;
             try
             {
-                source = Work(observation.AnnotatedSourceIri);
+                source = Work(sourceIri);
                 target = Work(targetIri);
             }
             catch (ArgumentException exception)
@@ -196,6 +204,35 @@ internal static class EuLocatedAmendmentProducer
 
         return new EuLocatedAmendmentProduction(
             admitted.AsReadOnly(), ambiguous.AsReadOnly(), excluded.AsReadOnly());
+    }
+
+    internal static bool TryGetCompleteCorpus(
+        CorpusRecordSetWriteResult result,
+        out VerifiedCorpusRecordSet corpus)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+        corpus = result.VerifiedSet!;
+        var completion = result.Completion;
+        var records = result.VerifiedSet?.Set.Records;
+        if (result.Refusal is not null || result.SetRef is null || result.RetainedFloor is null ||
+            completion is not { State: CorpusRecordSetCompletionState.Complete } || records is null ||
+            completion.ExpectedObjectCount != records.Count || completion.Entries.Count != records.Count)
+        {
+            corpus = null!;
+            return false;
+        }
+
+        for (var index = 0; index < records.Count; index++)
+        {
+            if (completion.Entries[index].ObjectRef != records[index].ObjectRef ||
+                completion.Entries[index].ObjectOrdinal != records[index].ObjectOrdinal)
+            {
+                corpus = null!;
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private static OfficialIdentitySet Work(string iri) =>

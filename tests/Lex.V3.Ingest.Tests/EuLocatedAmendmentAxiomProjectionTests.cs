@@ -34,9 +34,9 @@ public sealed class EuLocatedAmendmentAxiomProjectionTests
         Assert.IsNull(offendingPredicate);
         Assert.IsNotNull(projection);
         Assert.AreSame(observation, projection.Observation);
-        Assert.AreEqual(observation.InterpretationProfileRef, projection.InterpretationProfileRef);
+        Assert.AreEqual(observation.InterpretationProfileRefs.Single(), projection.InterpretationProfileRef);
         Assert.AreEqual(TargetBodyScope.BodyInScopeHeld, projection.Axiom.Edge.Fact.TargetBodyScope);
-        Assert.AreEqual(observation.InterpretationProfileRef.ResourceId,
+        Assert.AreEqual(observation.InterpretationProfileRefs.Single().ResourceId,
             projection.Axiom.Edge.Asserted.SourceObservationId);
         Assert.AreEqual(Source, projection.Axiom.Edge.Asserted.Source.Value(FactsIdentifierFamily.CellarWorkUri));
         Assert.AreEqual(Target, projection.Axiom.Edge.Asserted.Target.Value(FactsIdentifierFamily.CellarWorkUri));
@@ -139,8 +139,8 @@ public sealed class EuLocatedAmendmentAxiomProjectionTests
         var profileRef = RepeatedEnumerationInterpretationProfileIdentity.Create(
             "urn:uuid:00000000-0000-4000-8000-00000000a808", profile);
         return new EuLocatedAmendmentAxiomObservation(
-            Axiom, source, EuAmendmentRelationVocabulary.AmendsPredicateUri,
-            targets, properties, profileRef);
+            Axiom, [source], EuAmendmentRelationVocabulary.AmendsPredicateUri,
+            targets, properties, [profileRef]);
     }
 
     private static List<EuLocatedAmendmentRawProperty> Properties() =>

@@ -14,6 +14,7 @@ namespace Lex.V3.Ingest.Tests;
 public sealed class EuLocatedAmendmentProducerTests
 {
     private const string Source = "http://publications.europa.eu/resource/cellar/00000000-0000-4000-8000-000000000011";
+    private const string OtherSource = "http://publications.europa.eu/resource/cellar/00000000-0000-4000-8000-000000000015";
     private const string Held = "http://publications.europa.eu/resource/cellar/00000000-0000-4000-8000-000000000012";
     private const string Pending = "http://publications.europa.eu/resource/cellar/00000000-0000-4000-8000-000000000013";
     private const string Outside = "http://publications.europa.eu/resource/cellar/00000000-0000-4000-8000-000000000014";
@@ -23,7 +24,7 @@ public sealed class EuLocatedAmendmentProducerTests
     {
         var result = EuLocatedAmendmentProducer.Produce(
             [Observation(Held, 1), Observation(Pending, 2), Observation(Outside, 3)],
-            Corpus(Source, Held, Pending));
+            CompleteCorpus(Source, Held, Pending));
 
         Assert.HasCount(3, result.Admitted);
         Assert.IsEmpty(result.Ambiguous);
@@ -41,12 +42,12 @@ public sealed class EuLocatedAmendmentProducerTests
     [TestMethod]
     public void EveryDeliveredObservationIsAdmittedAmbiguousOrExplicitlyExcluded()
     {
-        var ambiguity = Observation([Held, Outside], 4);
+        var ambiguity = Observation(Held, 4, sources: [Source, OtherSource]);
         var sourceOutside = Observation(Held, 5, Outside);
         var malformed = Observation(Held, 6, properties: Properties(includeRole: false));
 
         var result = EuLocatedAmendmentProducer.Produce(
-            [ambiguity, sourceOutside, malformed], Corpus(Source, Held));
+            [ambiguity, sourceOutside, malformed], CompleteCorpus(Source, Held));
 
         Assert.IsEmpty(result.Admitted);
         Assert.HasCount(1, result.Ambiguous);
@@ -65,18 +66,33 @@ public sealed class EuLocatedAmendmentProducerTests
     [TestMethod]
     public void PublisherEvidenceAloneMintsDisclosuresAndCoverageRemainsUnmeasured()
     {
-        var ambiguity = Observation([Held, Outside], 7);
+        var ambiguity = Observation(Held, 7, sources: [Source, OtherSource]);
 
-        var result = EuLocatedAmendmentProducer.Produce([ambiguity], Corpus(Source, Held));
+        var result = EuLocatedAmendmentProducer.Produce([ambiguity], CompleteCorpus(Source, Held));
 
         Assert.AreEqual("unmeasured", result.Coverage.State);
         Assert.AreEqual(
             "complete_textual_change_range_measurement",
             result.Coverage.UnmetPrerequisite);
         CollectionAssert.AreEqual(
-            new[] { Held, Outside },
-            result.Ambiguous.Single().CandidateTargetIris.ToArray());
+            new[] { OtherSource, Source }.Order(StringComparer.Ordinal).ToArray(),
+            result.Ambiguous.Single().CandidateInstrumentIris.ToArray());
         Assert.AreSame(ambiguity, result.Ambiguous.Single().Observation);
+    }
+
+    [TestMethod]
+    public void RecordSetAbsenceCannotClaimOutsideScopeWithoutCompleteWriterEvidence()
+    {
+        var corpus = Corpus(Source, Held);
+        var partial = CorpusResult(
+            corpus,
+            new CorpusRecordSetCompletion(
+                CorpusRecordSetCompletionState.Partial,
+                2,
+                Entries(corpus)));
+
+        Assert.ThrowsExactly<ArgumentException>(() =>
+            EuLocatedAmendmentProducer.Produce([Observation(Outside, 8)], partial));
     }
 
     [TestMethod]
@@ -106,14 +122,16 @@ public sealed class EuLocatedAmendmentProducerTests
         string target,
         int ordinal,
         string source = Source,
-        IReadOnlyList<EuLocatedAmendmentRawProperty>? properties = null) =>
-        Observation([target], ordinal, source, properties);
+        IReadOnlyList<EuLocatedAmendmentRawProperty>? properties = null,
+        IReadOnlyList<string>? sources = null) =>
+        Observation([target], ordinal, source, properties, sources);
 
     private static EuLocatedAmendmentAxiomObservation Observation(
         IReadOnlyList<string> targets,
         int ordinal,
         string source = Source,
-        IReadOnlyList<EuLocatedAmendmentRawProperty>? properties = null)
+        IReadOnlyList<EuLocatedAmendmentRawProperty>? properties = null,
+        IReadOnlyList<string>? sources = null)
     {
         var profile = EuObjectFactsDiscoveryPlan.Create()
             .CreateDeliveryProfile(EuObjectFactsQuerySet.LocatedAmendmentFacts);
@@ -121,11 +139,11 @@ public sealed class EuLocatedAmendmentProducerTests
             $"urn:uuid:00000000-0000-4000-8000-{ordinal:D12}", profile);
         return new EuLocatedAmendmentAxiomObservation(
             $"http://publications.europa.eu/.well-known/genid/located-amendment/{ordinal}",
-            source,
+            sources ?? [source],
             EuAmendmentRelationVocabulary.AmendsPredicateUri,
             targets,
             properties ?? Properties(),
-            profileRef);
+            [profileRef]);
     }
 
     private static IReadOnlyList<EuLocatedAmendmentRawProperty> Properties(bool includeRole = true)
@@ -151,6 +169,34 @@ public sealed class EuLocatedAmendmentProducerTests
         return new VerifiedCorpusRecordSet(new CorpusRecordSet(
             CorpusRecordSetSchemaIds.Set, ManifestRef(), RunRef(), records));
     }
+
+    private static CorpusRecordSetWriteResult CompleteCorpus(params string[] iris)
+    {
+        var corpus = Corpus(iris);
+        var entries = Entries(corpus);
+        return CorpusResult(corpus, new CorpusRecordSetCompletion(
+            CorpusRecordSetCompletionState.Complete, entries.Count, entries));
+    }
+
+    private static IReadOnlyList<CorpusRecordOutcomeEntry> Entries(VerifiedCorpusRecordSet corpus) =>
+        corpus.Set.Records.Select(record => new CorpusRecordOutcomeEntry(
+            record.ObjectRef,
+            record.ObjectOrdinal,
+            record.Body.Kind == CorpusBodyRecordKind.Held
+                ? CorpusRecordOutcomeKind.Held
+                : CorpusRecordOutcomeKind.PendingAcquisition,
+            record.Body.NotHeldReason,
+            record.Body.PendingAcquisitionReason?.Kind,
+            record.Body.PendingAcquisitionReason?.Refusal)).ToArray();
+
+    private static CorpusRecordSetWriteResult CorpusResult(
+        VerifiedCorpusRecordSet corpus,
+        CorpusRecordSetCompletion completion) =>
+        CorpusRecordSetWriteResult.Written(
+            new SourceArtifactRef("urn:uuid:10000000-0000-4000-8000-000000000006", new string('f', 64)),
+            corpus,
+            completion,
+            CustodyMembership.Floored);
 
     private static CorpusRecord Record(string iri, int ordinal, bool held) => new(
         CorpusRecordSchemaIds.Record,

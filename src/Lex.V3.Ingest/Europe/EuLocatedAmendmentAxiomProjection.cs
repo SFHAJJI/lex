@@ -45,7 +45,7 @@ internal sealed class EuLocatedAmendmentAxiomProjection
 
     public EuLocatedAmendmentAxiom Axiom { get; }
     public EuLocatedAmendmentAxiomObservation Observation { get; }
-    public SourceArtifactRef InterpretationProfileRef => Observation.InterpretationProfileRef;
+    public SourceArtifactRef InterpretationProfileRef => Observation.InterpretationProfileRefs[0];
 
     /// <summary>
     /// Reads the accepted typed qualifiers from one decoder-minted observation. The identity sets
@@ -73,7 +73,9 @@ internal sealed class EuLocatedAmendmentAxiomProjection
             return null;
         }
 
-        if (!IdentityNames(source, observation.AnnotatedSourceIri))
+        if (observation.AnnotatedSourceIris.Count != 1 ||
+            observation.InterpretationProfileRefs.Count != 1 ||
+            !IdentityNames(source, observation.AnnotatedSourceIris[0]))
         {
             refusal = EuLocatedAmendmentAxiomProjectionRefusal.SourceIdentityDoesNotMatchObservation;
             offendingPredicate = AnnotatedSourcePredicateIri;
@@ -122,7 +124,7 @@ internal sealed class EuLocatedAmendmentAxiomProjection
                 end,
                 linkTargetType!,
                 observation.AxiomIri,
-                observation.InterpretationProfileRef.ResourceId);
+                observation.InterpretationProfileRefs[0].ResourceId);
             return new EuLocatedAmendmentAxiomProjection(axiom, observation);
         }
         catch (ArgumentException)

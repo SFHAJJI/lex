@@ -71,6 +71,15 @@ public sealed class ClosedVocabularyCensusTests
                     + "DeliveryProofRefused, PageBodyMalformed, PageDecodeFailedOnOurSide",
                 "Lex.V3.Ingest.Europe.EuFamilyEnumerationOutcomeKind: Proven, ExecutorRefused, "
                     + "ProofRefused",
+                "Lex.V3.Ingest.Europe.EuLocatedAmendmentAxiomDecodeRefusal: None, "
+                    + "RowShapeContradictsItsProjectedKind, DeliveryCarriesNoRows, "
+                    + "ParentMissingOrNotAnIri, AxiomNodeNotAnIri, PredicateNotAnIri, "
+                    + "PropertyValueIsANonAddressableBlankNode, AnnotatedSourceMissingOrNotAnIri, "
+                    + "AnnotatedSourceDisagreesWithSelectedParent, "
+                    + "AnnotatedPropertyMissingOrNotAdmitted, AxiomTypeMissingOrNotOwlAxiom, "
+                    + "AnnotatedTargetMissingOrNotAnIri, ModelledPredicateDeliveredMoreThanOnce, "
+                    + "InterpretationProfileDoesNotBindReference, "
+                    + "InterpretationProfileNotLocatedAmendmentFacts, BatchDuplicateAxiomDisagrees",
                 "Lex.V3.Ingest.Europe.EuLocatedAmendmentAxiomProjectionRefusal: None, "
                     + "PublisherTargetAmbiguous, SourceIdentityDoesNotMatchObservation, "
                     + "TargetIdentityDoesNotMatchObservation, RequiredQualifierMissing, "
@@ -94,7 +103,8 @@ public sealed class ClosedVocabularyCensusTests
                     + "WitnessReconciliationRefused, ScopeReductionRefused, WitnessTraversalRefused, "
                     + "DocumentFetchSessionNotStarted, DocumentBodyNotRetained, "
                     + "AcquisitionOutcomeNotRepresentable, RecordSetNotRetained, "
-                    + "ReifiedAxiomDecodeRefused, LocatedAmendmentDecodeRefused",
+                    + "ReifiedAxiomDecodeRefused, LocatedAmendmentDecodeRefused, "
+                    + "LocatedAmendmentCorpusScopeUnproven",
                 "Lex.V3.Ingest.Europe.EuTranspositionBridgePopulationRefusal: None, WorkScopeEmpty, "
                     + "WorkScopeNotUnique, WorkScopeNotAdmitted, SourceNotDelivered, "
                     + "SourceWorkOutsideScope, BridgeRefused, JoinEvidenceNotHeld, "

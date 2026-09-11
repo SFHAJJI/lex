@@ -159,6 +159,16 @@ public sealed class GuardedConstructionCensusTests
                     + "method public static Lex.V3.Ingest.Europe.EuFamilyEnumerationOutcome::Proven",
                 "Lex.V3.Ingest.Europe.EuLocatedAmendmentAmbiguity: constructor internal instance "
                     + "Lex.V3.Ingest.Europe.EuLocatedAmendmentAmbiguity::.ctor",
+                "Lex.V3.Ingest.Europe.EuLocatedAmendmentAxiomObservation: constructor internal "
+                    + "instance Lex.V3.Ingest.Europe.EuLocatedAmendmentAxiomObservation::.ctor, "
+                    + "method internal static "
+                    + "Lex.V3.Ingest.Europe.EuQueryExecutionAdapter::DecodeLocatedAmendmentBatches, "
+                    + "method private static "
+                    + "Lex.V3.Ingest.Europe.EuLocatedAmendmentAxiomDecode::Conflict, "
+                    + "method private static "
+                    + "Lex.V3.Ingest.Europe.EuLocatedAmendmentAxiomDecode::DecodeOne, "
+                    + "method public static "
+                    + "Lex.V3.Ingest.Europe.EuLocatedAmendmentAxiomDecode::TryDecode",
                 "Lex.V3.Ingest.Europe.EuLocatedAmendmentAxiomProjection: constructor private "
                     + "instance Lex.V3.Ingest.Europe.EuLocatedAmendmentAxiomProjection::.ctor, "
                     + "method internal static "
@@ -171,6 +181,10 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Ingest.Europe.EuLocatedAmendmentProduction::.ctor, "
                     + "method internal static "
                     + "Lex.V3.Ingest.Europe.EuLocatedAmendmentProducer::Produce",
+                "Lex.V3.Ingest.Europe.EuLocatedAmendmentRawProperty: by-ref-method public instance "
+                    + "Lex.V3.Ingest.Europe.EuLocatedAmendmentAxiomDecode+RawAxiom::Deconstruct, "
+                    + "constructor internal instance "
+                    + "Lex.V3.Ingest.Europe.EuLocatedAmendmentRawProperty::.ctor",
                 "Lex.V3.Ingest.Europe.EuNationalImplementingMeasureProductionResult: constructor "
                     + "private instance "
                     + "Lex.V3.Ingest.Europe.EuNationalImplementingMeasureProductionResult::.ctor, "

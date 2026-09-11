@@ -39,12 +39,12 @@ public sealed class EuLocatedAmendmentProductionWiringTests
         Assert.AreEqual(Axiom, observation.AxiomIri);
         Assert.AreEqual(
             result.CorpusRecordSet!.Set.Records[0].ObjectRef.PublisherUri,
-            observation.AnnotatedSourceIri);
+            observation.AnnotatedSourceIris.Single());
         Assert.AreEqual(Target, observation.AnnotatedTargetIris.Single());
 
         var locatedOutcome = result.FamilyOutcomes.Single(outcome =>
-            outcome.Proof?.InterpretationProfileRef == observation.InterpretationProfileRef);
-        Assert.AreEqual(Rows(observation.AnnotatedSourceIri).Length, locatedOutcome.DeliveredRowCount);
+            observation.InterpretationProfileRefs.Contains(outcome.Proof!.InterpretationProfileRef));
+        Assert.AreEqual(Rows(observation.AnnotatedSourceIris.Single()).Length, locatedOutcome.DeliveredRowCount);
         Assert.IsNotNull(result.LocatedAmendmentProduction);
         Assert.HasCount(1, result.LocatedAmendmentProduction.Admitted,
             string.Join("; ", result.LocatedAmendmentProduction.Excluded.Select(item =>

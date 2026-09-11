@@ -1,6 +1,7 @@
 using Lex.V3.Contracts.Source.Core;
+using Lex.V3.Contracts.Source.Europe;
 
-namespace Lex.V3.Contracts.Source.Europe;
+namespace Lex.V3.Ingest.Europe;
 
 /// <summary>Why a delivered located-amendment axiom family could not be retained.</summary>
 public enum EuLocatedAmendmentAxiomDecodeRefusal
@@ -20,6 +21,7 @@ public enum EuLocatedAmendmentAxiomDecodeRefusal
     ModelledPredicateDeliveredMoreThanOnce = 12,
     InterpretationProfileDoesNotBindReference = 13,
     InterpretationProfileNotLocatedAmendmentFacts = 14,
+    BatchDuplicateAxiomDisagrees = 15,
 }
 
 /// <summary>One publisher property retained exactly as delivered on an axiom node.</summary>
@@ -47,34 +49,51 @@ public sealed class EuLocatedAmendmentAxiomObservation
 {
     internal EuLocatedAmendmentAxiomObservation(
         string axiomIri,
-        string annotatedSourceIri,
+        IEnumerable<string> annotatedSourceIris,
         string annotatedPropertyIri,
         IEnumerable<string> annotatedTargetIris,
         IEnumerable<EuLocatedAmendmentRawProperty> rawProperties,
-        SourceArtifactRef interpretationProfileRef)
+        IEnumerable<SourceArtifactRef> interpretationProfileRefs)
     {
         AxiomIri = axiomIri;
-        AnnotatedSourceIri = annotatedSourceIri;
+        AnnotatedSourceIris = Array.AsReadOnly(annotatedSourceIris.ToArray());
         AnnotatedPropertyIri = annotatedPropertyIri;
         AnnotatedTargetIris = Array.AsReadOnly(annotatedTargetIris.ToArray());
         RawProperties = Array.AsReadOnly(rawProperties.ToArray());
-        InterpretationProfileRef = interpretationProfileRef;
+        InterpretationProfileRefs = Array.AsReadOnly(interpretationProfileRefs
+            .Distinct()
+            .OrderBy(static value => value.ResourceId, StringComparer.Ordinal)
+            .ToArray());
+        if (InterpretationProfileRefs.Count == 0)
+        {
+            throw new ArgumentException("At least one proof coordinate is required.", nameof(interpretationProfileRefs));
+        }
     }
 
     public string AxiomIri { get; }
-    public string AnnotatedSourceIri { get; }
+    public IReadOnlyList<string> AnnotatedSourceIris { get; }
     public string AnnotatedPropertyIri { get; }
     public IReadOnlyList<string> AnnotatedTargetIris { get; }
     public IReadOnlyList<EuLocatedAmendmentRawProperty> RawProperties { get; }
-    public SourceArtifactRef InterpretationProfileRef { get; }
-    public bool IsPublisherTargetAmbiguous => AnnotatedTargetIris.Count > 1;
+    public IReadOnlyList<SourceArtifactRef> InterpretationProfileRefs { get; }
+    public bool IsPublisherSourceAmbiguous => AnnotatedSourceIris.Count > 1;
 }
 
 /// <summary>
 /// Retains a located-amendment family delivery without guessing the corpus-dependent body scope.
 /// </summary>
-public static class EuLocatedAmendmentAxiomDecode
+internal static class EuLocatedAmendmentAxiomDecode
 {
+    private const string RdfTypePredicateIri =
+        "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
+    private const string OwlAxiomClassIri = "http://www.w3.org/2002/07/owl#Axiom";
+    private const string AnnotatedSourcePredicateIri =
+        "http://www.w3.org/2002/07/owl#annotatedSource";
+    private const string AnnotatedPropertyPredicateIri =
+        "http://www.w3.org/2002/07/owl#annotatedProperty";
+    private const string AnnotatedTargetPredicateIri =
+        "http://www.w3.org/2002/07/owl#annotatedTarget";
+
     public static IReadOnlyList<EuLocatedAmendmentAxiomObservation>? TryDecode(
         IReadOnlyList<RepeatedEnumerationRow> rows,
         RepeatedEnumerationInterpretationProfile profile,
@@ -164,14 +183,12 @@ public static class EuLocatedAmendmentAxiomDecode
 
             if (!byAxiom.TryGetValue(axiom.Value, out var rawAxiom))
             {
-                rawAxiom = new RawAxiom(parent.Value, []);
+                rawAxiom = new RawAxiom(new HashSet<string>(StringComparer.Ordinal) { parent.Value }, []);
                 byAxiom.Add(axiom.Value, rawAxiom);
             }
-            else if (!string.Equals(rawAxiom.ParentIri, parent.Value, StringComparison.Ordinal))
+            else
             {
-                refusal = EuLocatedAmendmentAxiomDecodeRefusal.AnnotatedSourceDisagreesWithSelectedParent;
-                offendingValue = parent.Value;
-                return null;
+                rawAxiom.ParentIris.Add(parent.Value);
             }
 
             rawAxiom.Properties.Add(new EuLocatedAmendmentRawProperty(
@@ -206,26 +223,36 @@ public static class EuLocatedAmendmentAxiomDecode
         offendingValue = null;
         var properties = rawAxiom.Properties;
 
-        if (!TrySingle(properties, EuObjectFactsDiscoveryPlan.AnnotatedSourcePredicateIri, out var source))
-        {
-            return Conflict(EuObjectFactsDiscoveryPlan.AnnotatedSourcePredicateIri, out refusal, out offendingValue);
-        }
-        if (source is not { Kind: RepeatedEnumerationRdfTermKind.Iri, Value: not null })
+        var sourceTerms = properties
+            .Where(static item => string.Equals(
+                item.PredicateIri,
+                AnnotatedSourcePredicateIri,
+                StringComparison.Ordinal))
+            .Select(static item => item.Value)
+            .ToArray();
+        if (sourceTerms.Length == 0 || sourceTerms.Any(static source =>
+                source is not { Kind: RepeatedEnumerationRdfTermKind.Iri, Value: not null }))
         {
             refusal = EuLocatedAmendmentAxiomDecodeRefusal.AnnotatedSourceMissingOrNotAnIri;
             offendingValue = axiomIri;
             return null;
         }
-        if (!string.Equals(source.Value, rawAxiom.ParentIri, StringComparison.Ordinal))
+        var sourceIris = sourceTerms
+            .Select(static source => source.Value!)
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        if (rawAxiom.ParentIris.Any(parent => !sourceIris.Contains(parent, StringComparer.Ordinal)))
         {
             refusal = EuLocatedAmendmentAxiomDecodeRefusal.AnnotatedSourceDisagreesWithSelectedParent;
-            offendingValue = source.Value;
+            offendingValue = rawAxiom.ParentIris.First(parent =>
+                !sourceIris.Contains(parent, StringComparer.Ordinal));
             return null;
         }
 
-        if (!TrySingle(properties, EuObjectFactsDiscoveryPlan.AnnotatedPropertyPredicateIri, out var property))
+        if (!TrySingle(properties, AnnotatedPropertyPredicateIri, out var property))
         {
-            return Conflict(EuObjectFactsDiscoveryPlan.AnnotatedPropertyPredicateIri, out refusal, out offendingValue);
+            return Conflict(AnnotatedPropertyPredicateIri, out refusal, out offendingValue);
         }
         if (property is not { Kind: RepeatedEnumerationRdfTermKind.Iri, Value: not null } ||
             !string.Equals(property.Value, EuAmendmentRelationVocabulary.AmendsPredicateUri, StringComparison.Ordinal))
@@ -235,12 +262,12 @@ public static class EuLocatedAmendmentAxiomDecode
             return null;
         }
 
-        if (!TrySingle(properties, EuObjectFactsDiscoveryPlan.RdfTypePredicateIri, out var type))
+        if (!TrySingle(properties, RdfTypePredicateIri, out var type))
         {
-            return Conflict(EuObjectFactsDiscoveryPlan.RdfTypePredicateIri, out refusal, out offendingValue);
+            return Conflict(RdfTypePredicateIri, out refusal, out offendingValue);
         }
         if (type is not { Kind: RepeatedEnumerationRdfTermKind.Iri, Value: not null } ||
-            !string.Equals(type.Value, EuObjectFactsDiscoveryPlan.OwlAxiomClassIri, StringComparison.Ordinal))
+            !string.Equals(type.Value, OwlAxiomClassIri, StringComparison.Ordinal))
         {
             refusal = EuLocatedAmendmentAxiomDecodeRefusal.AxiomTypeMissingOrNotOwlAxiom;
             offendingValue = type?.Value ?? axiomIri;
@@ -250,7 +277,7 @@ public static class EuLocatedAmendmentAxiomDecode
         var targets = properties
             .Where(static item => string.Equals(
                 item.PredicateIri,
-                EuObjectFactsDiscoveryPlan.AnnotatedTargetPredicateIri,
+                AnnotatedTargetPredicateIri,
                 StringComparison.Ordinal))
             .Select(static item => item.Value)
             .ToArray();
@@ -270,11 +297,11 @@ public static class EuLocatedAmendmentAxiomDecode
             .ToArray();
         return new EuLocatedAmendmentAxiomObservation(
             axiomIri,
-            source.Value,
+            sourceIris,
             property.Value,
             targetIris,
             properties,
-            interpretationProfileRef);
+            [interpretationProfileRef]);
     }
 
     private static EuLocatedAmendmentAxiomObservation? Conflict(
@@ -379,5 +406,7 @@ public static class EuLocatedAmendmentAxiomDecode
         return row.Terms[index];
     }
 
-    private sealed record RawAxiom(string ParentIri, List<EuLocatedAmendmentRawProperty> Properties);
+    private sealed record RawAxiom(
+        HashSet<string> ParentIris,
+        List<EuLocatedAmendmentRawProperty> Properties);
 }

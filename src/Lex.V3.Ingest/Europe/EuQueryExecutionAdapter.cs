@@ -311,6 +311,9 @@ public enum EuQueryExecutionRefusal
 
     [JsonStringEnumMemberName("located_amendment_decode_refused")]
     LocatedAmendmentDecodeRefused = 21,
+
+    [JsonStringEnumMemberName("located_amendment_corpus_scope_unproven")]
+    LocatedAmendmentCorpusScopeUnproven = 22,
 }
 
 public sealed class EuQueryExecutionRefusalDetail
@@ -548,8 +551,7 @@ public sealed class EuQueryExecutionResult
         IReadOnlyDictionary<int, EuMintedRowAccounting> mintedRowsByOrdinal,
         IReadOnlyList<EuDateAxiomBinding> dateAxioms,
         IReadOnlyList<EuLocatedAmendmentAxiomObservation> locatedAmendmentObservations,
-        SourceArtifactRef corpusRecordSetRef,
-        VerifiedCorpusRecordSet corpusRecordSet)
+        CorpusRecordSetWriteResult recordSetResult)
     {
         ArgumentNullException.ThrowIfNull(topology);
         ArgumentNullException.ThrowIfNull(watermarkWitnessPlan);
@@ -565,20 +567,25 @@ public sealed class EuQueryExecutionResult
         ArgumentNullException.ThrowIfNull(mintedRowsByOrdinal);
         ArgumentNullException.ThrowIfNull(dateAxioms);
         ArgumentNullException.ThrowIfNull(locatedAmendmentObservations);
-        ArgumentNullException.ThrowIfNull(corpusRecordSetRef);
-        ArgumentNullException.ThrowIfNull(corpusRecordSet);
+        ArgumentNullException.ThrowIfNull(recordSetResult);
+        if (!EuLocatedAmendmentProducer.TryGetCompleteCorpus(recordSetResult, out var corpusRecordSet))
+        {
+            throw new ArgumentException(
+                "Located amendment completion requires the same writer's complete reopened corpus set.",
+                nameof(recordSetResult));
+        }
         var completion = familyOutcomes.All(static outcome => outcome.Kind == EuFamilyEnumerationOutcomeKind.Proven)
             ? EuQueryExecutionCompletion.AllFamiliesProven
             : EuQueryExecutionCompletion.PartialFamilyRefused;
         var locatedAmendmentProduction = EuLocatedAmendmentProducer.Produce(
-            locatedAmendmentObservations, corpusRecordSet);
+            locatedAmendmentObservations, recordSetResult);
         return new(
             topology, familyOutcomes, observedObjectCount, observedExpressionCount, reductionExclusions,
             watermarkWitnessPlan, rootBinding, witnessReconciliation, witnessTerminations, scopeManifestReceipt,
             scopeManifestCanonicalSha256, documentAcquisitionOutcomesByOrdinal, documentLadderResultsByOrdinal,
             observedManifestationTypesByCelex, observedExpressionsByCelex, mintedRowsByOrdinal,
             dateAxioms, locatedAmendmentObservations, locatedAmendmentProduction,
-            corpusRecordSetRef, corpusRecordSet,
+            recordSetResult.SetRef!, corpusRecordSet,
             completion, null, null, null, null);
     }
 
@@ -1670,6 +1677,15 @@ public sealed class EuQueryExecutionAdapter
                     EuQueryExecutionRefusal.RecordSetNotRetained, recordSetResult.Refusal.Detail));
         }
 
+        if (!EuLocatedAmendmentProducer.TryGetCompleteCorpus(recordSetResult, out _))
+        {
+            return EuQueryExecutionResult.Refused(
+                topology, outcomes,
+                new EuQueryExecutionRefusalDetail(
+                    EuQueryExecutionRefusal.LocatedAmendmentCorpusScopeUnproven,
+                    "the reopened corpus set did not carry complete writer accounting for its manifest."));
+        }
+
         return EuQueryExecutionResult.DeliveredWithLocatedAmendments(
             topology,
             outcomes,
@@ -1689,8 +1705,7 @@ public sealed class EuQueryExecutionAdapter
             documentLadderResultsByOrdinal: documentLadderResultsByOrdinal!,
             dateAxioms: dateAxioms,
             locatedAmendmentObservations: locatedAmendmentObservations,
-            corpusRecordSetRef: recordSetResult.SetRef!,
-            corpusRecordSet: recordSetResult.VerifiedSet!);
+            recordSetResult: recordSetResult);
     }
 
     /// <summary>
@@ -2321,7 +2336,7 @@ public sealed class EuQueryExecutionAdapter
         refusal = EuLocatedAmendmentAxiomDecodeRefusal.None;
         offendingValue = null;
 
-        var decoded = new List<EuLocatedAmendmentAxiomObservation>();
+        var decoded = new Dictionary<string, EuLocatedAmendmentAxiomObservation>(StringComparer.Ordinal);
         foreach (var batch in batches)
         {
             var observations = EuLocatedAmendmentAxiomDecode.TryDecode(
@@ -2331,11 +2346,47 @@ public sealed class EuQueryExecutionAdapter
                 return null;
             }
 
-            decoded.AddRange(observations);
+            foreach (var observation in observations)
+            {
+                if (!decoded.TryGetValue(observation.AxiomIri, out var prior))
+                {
+                    decoded.Add(observation.AxiomIri, observation);
+                    continue;
+                }
+
+                if (!SameLocatedAmendmentObservation(prior, observation))
+                {
+                    refusal = EuLocatedAmendmentAxiomDecodeRefusal.BatchDuplicateAxiomDisagrees;
+                    offendingValue = observation.AxiomIri;
+                    return null;
+                }
+
+                decoded[observation.AxiomIri] = new EuLocatedAmendmentAxiomObservation(
+                    prior.AxiomIri,
+                    prior.AnnotatedSourceIris,
+                    prior.AnnotatedPropertyIri,
+                    prior.AnnotatedTargetIris,
+                    prior.RawProperties,
+                    prior.InterpretationProfileRefs.Concat(observation.InterpretationProfileRefs));
+            }
         }
 
-        return decoded;
+        return decoded.Values.OrderBy(static value => value.AxiomIri, StringComparer.Ordinal).ToArray();
     }
+
+    private static bool SameLocatedAmendmentObservation(
+        EuLocatedAmendmentAxiomObservation left,
+        EuLocatedAmendmentAxiomObservation right) =>
+        left.AnnotatedSourceIris.SequenceEqual(right.AnnotatedSourceIris, StringComparer.Ordinal) &&
+        string.Equals(left.AnnotatedPropertyIri, right.AnnotatedPropertyIri, StringComparison.Ordinal) &&
+        left.AnnotatedTargetIris.SequenceEqual(right.AnnotatedTargetIris, StringComparer.Ordinal) &&
+        left.RawProperties.Count == right.RawProperties.Count &&
+        left.RawProperties.Zip(right.RawProperties).All(static pair =>
+            string.Equals(pair.First.PredicateIri, pair.Second.PredicateIri, StringComparison.Ordinal) &&
+            pair.First.Value.Kind == pair.Second.Value.Kind &&
+            string.Equals(pair.First.Value.Value, pair.Second.Value.Value, StringComparison.Ordinal) &&
+            string.Equals(pair.First.Value.Datatype, pair.Second.Value.Datatype, StringComparison.Ordinal) &&
+            string.Equals(pair.First.Value.Language, pair.Second.Value.Language, StringComparison.Ordinal));
 
     /// <summary>
     /// Every row of <paramref name="rows"/> whose <paramref name="columnVariableName"/> term
