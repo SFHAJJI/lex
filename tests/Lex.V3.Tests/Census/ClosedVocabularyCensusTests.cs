@@ -535,6 +535,11 @@ public sealed class ClosedVocabularyCensusTests
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgQueryRequestKind: Page, Count",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgQuerySetAcquisition: PublisherQuery, "
                     + "LocalMaterialization",
+                "Lex.V3.Contracts.Source.Luxembourg.LuxembourgReferralDateState: Fact, "
+                    + "DerivedAbsence, DraftSideGap, TargetRoleGap, Drift",
+                "Lex.V3.Contracts.Source.Luxembourg.LuxembourgReferralEvidenceRefusal: None, "
+                    + "EdgeRowNotKeyVerified, EdgeNotBoundToItsDraftCitation, TargetNotABareIri, "
+                    + "RequestGraphCitationIncomplete, DeliveredTypeRowMissing",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgRelationAuthority: PublisherAsserted, "
                     + "LocalInboundView",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgRelationDisposition: Accepted, "
