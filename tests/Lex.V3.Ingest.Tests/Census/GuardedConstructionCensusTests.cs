@@ -337,6 +337,14 @@ public sealed class GuardedConstructionCensusTests
                     + "instance Lex.V3.Ingest.Luxembourg.LuxembourgOpinionRequestBatchCover::.ctor, "
                     + "method public static "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgOpinionRequestBatchCover::TryCreate",
+                "Lex.V3.Ingest.Luxembourg.LuxembourgOpinionRequestGraphResult: constructor private "
+                    + "instance Lex.V3.Ingest.Luxembourg.LuxembourgOpinionRequestGraphResult::.ctor, "
+                    + "method internal static "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgOpinionRequestGraphResult::Completed, "
+                    + "method internal static "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgOpinionRequestGraphResult::Refused, "
+                    + "method public instance "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgOpinionRequestGraphProducer::RunAsync",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgPartitionCoverReconciliationDetail: "
                     + "by-ref-method public instance "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionAdapter+CoverReconciliation"
