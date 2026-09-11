@@ -438,6 +438,7 @@ public sealed class EuQueryExecutionResult
         IReadOnlyDictionary<int, EuMintedRowAccounting>? mintedRowsByOrdinal,
         IReadOnlyList<EuDateAxiomBinding> dateAxioms,
         IReadOnlyList<EuLocatedAmendmentAxiomObservation> locatedAmendmentObservations,
+        EuLocatedAmendmentProduction? locatedAmendmentProduction,
         SourceArtifactRef? corpusRecordSetRef,
         VerifiedCorpusRecordSet? corpusRecordSet,
         EuQueryExecutionCompletion? completion,
@@ -466,6 +467,7 @@ public sealed class EuQueryExecutionResult
         MintedRowsByOrdinal = mintedRowsByOrdinal;
         DateAxioms = dateAxioms;
         LocatedAmendmentObservations = locatedAmendmentObservations;
+        LocatedAmendmentProduction = locatedAmendmentProduction;
         CorpusRecordSetRef = corpusRecordSetRef;
         CorpusRecordSet = corpusRecordSet;
         Completion = completion;
@@ -516,12 +518,15 @@ public sealed class EuQueryExecutionResult
         var completion = familyOutcomes.All(static outcome => outcome.Kind == EuFamilyEnumerationOutcomeKind.Proven)
             ? EuQueryExecutionCompletion.AllFamiliesProven
             : EuQueryExecutionCompletion.PartialFamilyRefused;
+        var locatedAmendmentProduction = EuLocatedAmendmentProducer.Produce(
+            locatedAmendmentObservations, corpusRecordSet);
         return new(
             topology, familyOutcomes, observedObjectCount, observedExpressionCount, reductionExclusions,
             watermarkWitnessPlan, rootBinding, witnessReconciliation, witnessTerminations, scopeManifestReceipt,
             scopeManifestCanonicalSha256, documentAcquisitionOutcomesByOrdinal, documentLadderResultsByOrdinal,
             observedManifestationTypesByCelex, observedExpressionsByCelex, mintedRowsByOrdinal,
-            dateAxioms, locatedAmendmentObservations, corpusRecordSetRef, corpusRecordSet,
+            dateAxioms, locatedAmendmentObservations, locatedAmendmentProduction,
+            corpusRecordSetRef, corpusRecordSet,
             completion, null, null, null, null);
     }
 
@@ -538,7 +543,7 @@ public sealed class EuQueryExecutionResult
         ArgumentNullException.ThrowIfNull(refusal);
         return new(
             topology, familyOutcomes, 0, 0, [], null, null, null, null, null, null, null, null, null, null, null,
-            [], [], null, null, null, refusal, decodeRefusal, decodeOffendingIri, decodeSnapshotRefusal,
+            [], [], null, null, null, null, refusal, decodeRefusal, decodeOffendingIri, decodeSnapshotRefusal,
             witnessTraversalRefusal);
     }
 
@@ -561,6 +566,12 @@ public sealed class EuQueryExecutionResult
     /// corpus record set can supply the target-body state required by the accepted E4 type.
     /// </summary>
     public IReadOnlyList<EuLocatedAmendmentAxiomObservation> LocatedAmendmentObservations { get; }
+
+    /// <summary>
+    /// Those same observations partitioned after this result's reopened corpus set determined each
+    /// target's body scope. Null only on a refused run.
+    /// </summary>
+    public EuLocatedAmendmentProduction? LocatedAmendmentProduction { get; }
 
     public SourceProfileTopology Topology { get; }
 

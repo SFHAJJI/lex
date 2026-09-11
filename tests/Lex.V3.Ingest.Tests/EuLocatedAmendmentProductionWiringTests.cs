@@ -1,4 +1,5 @@
 using Lex.V3.Contracts.Source.Europe;
+using Lex.V3.Contracts.Facts;
 using Lex.V3.Ingest.Europe;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
@@ -33,6 +34,15 @@ public sealed class EuLocatedAmendmentProductionWiringTests
         var locatedOutcome = result.FamilyOutcomes.Single(outcome =>
             outcome.Proof?.InterpretationProfileRef == observation.InterpretationProfileRef);
         Assert.AreEqual(Rows(observation.AnnotatedSourceIri).Length, locatedOutcome.DeliveredRowCount);
+        Assert.IsNotNull(result.LocatedAmendmentProduction);
+        Assert.HasCount(1, result.LocatedAmendmentProduction.Admitted,
+            string.Join("; ", result.LocatedAmendmentProduction.Excluded.Select(item =>
+                $"{item.Kind}/{item.ProjectionRefusal}/{item.Detail}")));
+        Assert.IsEmpty(result.LocatedAmendmentProduction.Ambiguous);
+        Assert.IsEmpty(result.LocatedAmendmentProduction.Excluded);
+        Assert.AreEqual(
+            TargetBodyScope.BodyOutsideScope,
+            result.LocatedAmendmentProduction.Admitted[0].Axiom.Edge.Fact.TargetBodyScope);
     }
 
     [TestMethod]
@@ -43,6 +53,10 @@ public sealed class EuLocatedAmendmentProductionWiringTests
 
         Assert.IsNull(result.Refusal, $"code={result.Refusal?.Code} detail={result.Refusal?.Detail}");
         Assert.IsEmpty(result.LocatedAmendmentObservations);
+        Assert.IsNotNull(result.LocatedAmendmentProduction);
+        Assert.IsEmpty(result.LocatedAmendmentProduction.Admitted);
+        Assert.IsEmpty(result.LocatedAmendmentProduction.Ambiguous);
+        Assert.IsEmpty(result.LocatedAmendmentProduction.Excluded);
     }
 
     [TestMethod]
@@ -62,15 +76,21 @@ public sealed class EuLocatedAmendmentProductionWiringTests
     }
 
     private static string[] Rows(string parent, bool targetIsIri = true) =>
-    [
-        EuAcquisitionTestFixture.ReifiedAxiomFactsRow(
-            parent, Axiom, RdfType, Owl + "Axiom", valueIsIri: true),
-        EuAcquisitionTestFixture.ReifiedAxiomFactsRow(
-            parent, Axiom, Owl + "annotatedProperty",
-            EuAmendmentRelationVocabulary.AmendsPredicateUri, valueIsIri: true),
-        EuAcquisitionTestFixture.ReifiedAxiomFactsRow(
-            parent, Axiom, Owl + "annotatedSource", parent, valueIsIri: true),
-        EuAcquisitionTestFixture.ReifiedAxiomFactsRow(
-            parent, Axiom, Owl + "annotatedTarget", Target, valueIsIri: targetIsIri),
-    ];
+        new (string Predicate, string Value, bool IsIri)[]
+        {
+            (RdfType, Owl + "Axiom", true),
+            (Owl + "annotatedProperty", EuAmendmentRelationVocabulary.AmendsPredicateUri, true),
+            (Owl + "annotatedSource", parent, true),
+            (Owl + "annotatedTarget", Target, targetIsIri),
+            (EuAmendmentRelationVocabulary.ReferenceToModifiedLocationUri,
+                "{AN|http://publications.europa.eu/resource/authority/fd_370/AN} 1", false),
+            (EuAmendmentRelationVocabulary.Role2Uri,
+                "{R|http://publications.europa.eu/resource/authority/fd_375/R}", false),
+            (EuAmendmentRelationVocabulary.TypeOfLinkTargetUri, "MS", false),
+        }
+        .OrderBy(static row => row.Predicate, StringComparer.Ordinal)
+        .ThenBy(static row => row.Value, StringComparer.Ordinal)
+        .Select(row => EuAcquisitionTestFixture.ReifiedAxiomFactsRow(
+            parent, Axiom, row.Predicate, row.Value, row.IsIri))
+        .ToArray();
 }
