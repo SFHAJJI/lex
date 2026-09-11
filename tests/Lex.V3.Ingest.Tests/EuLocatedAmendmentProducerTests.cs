@@ -81,6 +81,16 @@ public sealed class EuLocatedAmendmentProducerTests
     }
 
     [TestMethod]
+    public void ADisclosureCannotWrapANonAmbiguousPublisherObservation()
+    {
+        var observation = Observation(Held, 9);
+
+        Assert.ThrowsExactly<ArgumentException>(
+            () => new EuLocatedAmendmentAmbiguity(observation),
+            "one publisher-named source is an attribution, not publisher-evidenced ambiguity.");
+    }
+
+    [TestMethod]
     public void RecordSetAbsenceCannotClaimOutsideScopeWithoutCompleteWriterEvidence()
     {
         var corpus = Corpus(Source, Held);

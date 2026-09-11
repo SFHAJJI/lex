@@ -11,6 +11,7 @@ namespace Lex.V3.Ingest.Tests;
 public sealed class EuLocatedAmendmentAxiomProjectionTests
 {
     private const string Source = "http://publications.europa.eu/resource/cellar/00000000-0000-4000-8000-000000000001";
+    private const string OtherSource = "http://publications.europa.eu/resource/cellar/00000000-0000-4000-8000-000000000004";
     private const string Target = "http://publications.europa.eu/resource/cellar/00000000-0000-4000-8000-000000000002";
     private const string OtherTarget = "http://publications.europa.eu/resource/cellar/00000000-0000-4000-8000-000000000003";
     private const string Axiom = "http://publications.europa.eu/.well-known/genid/located-amendment/projection";
@@ -73,6 +74,35 @@ public sealed class EuLocatedAmendmentAxiomProjectionTests
     }
 
     [TestMethod]
+    public void MultiplePublisherNamedSourcesCannotProjectByChoosingTheFirstSource()
+    {
+        var observation = Observation([Target], Properties(), sources: [Source, OtherSource]);
+
+        var projection = EuLocatedAmendmentAxiomProjection.TryCreate(
+            observation, Identity(Source), Identity(Target), TargetBodyScope.BodyOutsideScope,
+            out var refusal, out var offendingPredicate);
+
+        Assert.IsNull(projection);
+        Assert.AreEqual(EuLocatedAmendmentAxiomProjectionRefusal.SourceIdentityDoesNotMatchObservation, refusal);
+        Assert.AreEqual("http://www.w3.org/2002/07/owl#annotatedSource", offendingPredicate);
+    }
+
+    [TestMethod]
+    public void MultipleInterpretationProfilesCannotProjectByChoosingTheFirstProfile()
+    {
+        var observation = Observation(
+            [Target], Properties(), profileRefs: [ProfileRef(808), ProfileRef(809)]);
+
+        var projection = EuLocatedAmendmentAxiomProjection.TryCreate(
+            observation, Identity(Source), Identity(Target), TargetBodyScope.BodyOutsideScope,
+            out var refusal, out var offendingPredicate);
+
+        Assert.IsNull(projection);
+        Assert.AreEqual(EuLocatedAmendmentAxiomProjectionRefusal.SourceIdentityDoesNotMatchObservation, refusal);
+        Assert.AreEqual("http://www.w3.org/2002/07/owl#annotatedSource", offendingPredicate);
+    }
+
+    [TestMethod]
     public void MissingRepeatedOrNonLiteralKnownQualifiersReachTypedRefusals()
     {
         var missing = Properties();
@@ -132,15 +162,21 @@ public sealed class EuLocatedAmendmentAxiomProjectionTests
     private static EuLocatedAmendmentAxiomObservation Observation(
         IReadOnlyList<string> targets,
         IReadOnlyList<EuLocatedAmendmentRawProperty> properties,
-        string source = Source)
+        string source = Source,
+        IReadOnlyList<string>? sources = null,
+        IReadOnlyList<SourceArtifactRef>? profileRefs = null)
+    {
+        return new EuLocatedAmendmentAxiomObservation(
+            Axiom, sources ?? [source], EuAmendmentRelationVocabulary.AmendsPredicateUri,
+            targets, properties, profileRefs ?? [ProfileRef(808)]);
+    }
+
+    private static SourceArtifactRef ProfileRef(int suffix)
     {
         var profile = EuObjectFactsDiscoveryPlan.Create()
             .CreateDeliveryProfile(EuObjectFactsQuerySet.LocatedAmendmentFacts);
-        var profileRef = RepeatedEnumerationInterpretationProfileIdentity.Create(
-            "urn:uuid:00000000-0000-4000-8000-00000000a808", profile);
-        return new EuLocatedAmendmentAxiomObservation(
-            Axiom, [source], EuAmendmentRelationVocabulary.AmendsPredicateUri,
-            targets, properties, [profileRef]);
+        return RepeatedEnumerationInterpretationProfileIdentity.Create(
+            $"urn:uuid:00000000-0000-4000-8000-{suffix:D12}", profile);
     }
 
     private static List<EuLocatedAmendmentRawProperty> Properties() =>
