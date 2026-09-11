@@ -122,7 +122,7 @@ public sealed class LuxembourgDraftGraphBatchCoverTests
     private static LuxembourgDraftBatchCitation BatchCitation(IReadOnlyList<string> drafts, int rowCount)
     {
         var partitionKey = LuxembourgDraftGraphDiscoveryPlan.PartitionKeyFor(drafts);
-        var (proof, keys) = AbsenceFixtures.Delivery(partitionKey, rowCount);
+        var (proof, keys) = AbsenceFixtures.DraftGraphBatchDeliveryOfSize(partitionKey, rowCount);
         var delivered = keys.Select(static key => new RepeatedEnumerationRow(key, key, key)).ToArray();
         return LuxembourgDraftBatchCitation.ForDelivery(
             proof,

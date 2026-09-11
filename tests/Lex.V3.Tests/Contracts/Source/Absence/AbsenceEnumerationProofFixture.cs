@@ -252,6 +252,92 @@ internal sealed class AbsenceEnumerationProofFixture : IRepeatedEnumerationEvide
     }
 
     /// <summary>
+    /// One batch's graph delivery, read under the DRAFT graph plan's own profile.
+    /// </summary>
+    /// <remarks>
+    /// The sibling of the request graph's, and needed for the same reason: the draft batch citation
+    /// door binds this profile, and every batch proof in these suites was built under the generic
+    /// fixture profile, which is exactly what could mint a citation over another family's delivery.
+    /// </remarks>
+    public static EnumerationDeliveryComparison LuxembourgDraftGraphDelivery(
+        string partitionKey,
+        IReadOnlyList<string> subjects,
+        int runSeed = 936)
+    {
+        var plan = LuxembourgDraftGraphDiscoveryPlan.Create();
+        var profile = plan.CreateDeliveryProfile();
+        var page = LuxembourgDraftGraphRowsJson(subjects);
+        var fixture = new AbsenceEnumerationProofFixture(
+            partitionKey,
+            runSeed,
+            (subjects.Count * 2) + 100,
+            profile,
+            OfficialMachineQuerySourceProfileId.LuxembourgSparql,
+            profile.PassParameterName,
+            profile.HasCursorParameterName,
+            profile.SelectionParameterNames,
+            plan.CountQueryFamilyRef,
+            plan.PageQueryFamilyRef);
+        return fixture.BuildPages(
+            page, page, subjects.Count, subjects.Count + 3, subjects.Count + 1);
+    }
+
+    /// <summary>
+    /// One page of the draft graph's projection, in key order.
+    /// </summary>
+    /// <remarks>
+    /// KEYED ON THE SUBJECT, because <c>key_1</c> is <c>STR(?draft)</c>. A fixture keying on a
+    /// generated token would be a delivery about drafts nobody named, and the inventory door reads
+    /// its proven population out of that first key component.
+    /// </remarks>
+    private static string LuxembourgDraftGraphRowsJson(IReadOnlyList<string> subjects)
+    {
+        const string IriKind = LuxembourgInitialDraftInventoryDiscoveryPlan.IriKind;
+        const string Predicate = LuxembourgDraftGraphDiscoveryPlan.ReferralDatePredicateIri;
+        var bindings = subjects.Select(subject =>
+        {
+            var value = "v-" + subject;
+            return "{\"draft\":{\"type\":\"uri\",\"value\":\"" + subject + "\"},"
+                + "\"draft_kind\":{\"type\":\"literal\",\"value\":\"" + IriKind + "\"},"
+                + "\"predicate\":{\"type\":\"uri\",\"value\":\"" + Predicate + "\"},"
+                + "\"value\":{\"type\":\"literal\",\"value\":\"" + value + "\"},"
+                + "\"value_kind\":{\"type\":\"literal\",\"value\":\"literal\"},"
+                + "\"datatype_iri\":{\"type\":\"literal\",\"value\":\"\"},"
+                + "\"language_tag\":{\"type\":\"literal\",\"value\":\"\"},"
+                + "\"multiplicity\":{\"type\":\"typed-literal\","
+                + "\"datatype\":\"http://www.w3.org/2001/XMLSchema#integer\",\"value\":\"1\"},"
+                + "\"key_1\":{\"type\":\"literal\",\"value\":\"" + subject + "\"},"
+                + "\"key_2\":{\"type\":\"literal\",\"value\":\"" + IriKind + "\"},"
+                + "\"key_3\":{\"type\":\"literal\",\"value\":\"" + Predicate + "\"},"
+                + "\"key_4\":{\"type\":\"literal\",\"value\":\""
+                + DeliveredValueKey(value) + "\"},"
+                + "\"key_5\":{\"type\":\"literal\",\"value\":\"literal\"},"
+                + "\"key_6\":{\"type\":\"literal\",\"value\":\"\"},"
+                + "\"key_7\":{\"type\":\"literal\",\"value\":\"\"}}";
+        });
+
+        return "{\"head\":{\"link\":[],\"vars\":"
+            + "[\"draft\",\"draft_kind\",\"predicate\",\"value\",\"value_kind\","
+            + "\"datatype_iri\",\"language_tag\",\"multiplicity\","
+            + "\"key_1\",\"key_2\",\"key_3\",\"key_4\",\"key_5\",\"key_6\",\"key_7\"]},"
+            + "\"results\":{\"distinct\":false,\"ordered\":true,\"bindings\":["
+            + string.Join(',', bindings) + "]}}";
+    }
+
+    /// <summary>
+    /// The key this publisher actually delivers for a value.
+    /// </summary>
+    /// <remarks>
+    /// THROUGH THE NAMED CODEC, NOT SHA-256 OF THE VALUE. The endpoint answers
+    /// <c>SHA256(STR(?value))</c> with a digest of the value DOUBLE UTF-8 ENCODED; the two agree on
+    /// ASCII and diverge on everything else. Calling the plain hash here would be right only for as
+    /// long as every fixture value stays ASCII, and would teach the next reader the thing this
+    /// family is not allowed to say.
+    /// </remarks>
+    internal static string DeliveredValueKey(string value) =>
+        LuxembourgPublisherCursorCodec.ComputeKey(value);
+
+    /// <summary>
     /// A request graph delivery of NAMED rows, under the request graph plan's own profile.
     /// </summary>
     /// <remarks>
@@ -306,7 +392,7 @@ internal sealed class AbsenceEnumerationProofFixture : IRepeatedEnumerationEvide
                 + "\"key_2\":{\"type\":\"literal\",\"value\":\"" + IriKind + "\"},"
                 + "\"key_3\":{\"type\":\"literal\",\"value\":\"" + row.Predicate + "\"},"
                 + "\"key_4\":{\"type\":\"literal\",\"value\":\""
-                + LuxembourgPublisherCursorCodec.ComputeKey(row.Value ?? string.Empty) + "\"},"
+                + DeliveredValueKey(row.Value ?? string.Empty) + "\"},"
                 + "\"key_5\":{\"type\":\"literal\",\"value\":\"" + valueKind + "\"},"
                 + "\"key_6\":{\"type\":\"literal\",\"value\":\"\"},"
                 + "\"key_7\":{\"type\":\"literal\",\"value\":\"\"}}";
@@ -336,7 +422,7 @@ internal sealed class AbsenceEnumerationProofFixture : IRepeatedEnumerationEvide
         var bindings = rowValues.Select(value =>
         {
             var subject = "urn:delivered:" + value;
-            var digest = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
+            var digest = DeliveredValueKey(value);
             return "{\"request\":{\"type\":\"uri\",\"value\":\"" + subject + "\"},"
                 + "\"request_kind\":{\"type\":\"literal\",\"value\":\"" + IriKind + "\"},"
                 + "\"predicate\":{\"type\":\"uri\",\"value\":\"" + Predicate + "\"},"
