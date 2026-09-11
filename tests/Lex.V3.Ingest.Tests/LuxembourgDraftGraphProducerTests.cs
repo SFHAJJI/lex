@@ -533,6 +533,102 @@ public sealed class LuxembourgDraftGraphProducerTests
     }
 
     /// <summary>
+    /// The publisher's own text is carried verbatim, including what looks like an encoding error.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A REAL ROW, not an invented one. Draft <c>eli/dl/pl/1989/60</c> holds this 542-byte
+    /// <c>jolux#titleDraft</c>, and twice it spells an apostrophe as a SPACE FOLLOWED BY A COMBINING
+    /// ACUTE - <c>d \u0301un</c> where <c>d'un</c> was meant, and <c>l \u0301Etat</c> for
+    /// <c>l'Etat</c>. That is the publisher's data, and it is the text of a law.
+    /// </para>
+    /// <para>
+    /// The hazard this pins is not a normaliser. NFC is a NO-OP here, because a combining mark after
+    /// a space has no precomposed form - measured, after I claimed the opposite in review and had to
+    /// correct it. The hazard is a well-meant cleanup: anything that "fixes" <c>d \u0301un</c> into
+    /// <c>d'un</c> silently rewrites a legal title, and with the value's digest now keying the row,
+    /// it would also change the key and refuse against a publisher that never changed.
+    /// </para>
+    /// <para>
+    /// So the two values are asserted to stay DISTINCT rather than merely preserved. Preservation
+    /// alone passes if something canonicalises both spellings to the same thing and keeps that one;
+    /// distinctness is what says the repaired spelling is a different fact this family never
+    /// received. It is the same statement <see cref="ValuesDifferingOnlyInKindDatatypeOrLanguageRemainDistinct"/>
+    /// makes about datatype and language, for the one axis it does not cover.
+    /// </para>
+    /// <para>
+    /// This constrains what is RETAINED, not how anything is keyed, so it stands whatever the owner
+    /// rules about the cursor.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void PublisherTextThatLooksLikeAnEncodingErrorIsRetainedVerbatimAndNotRepaired()
+    {
+        const string NotAdmissible = "http://data.legilux.public.lu/resource/ontology/jolux#titleDraft";
+
+        // The measurement this fixture stands on, restated so a drifting constant cannot pass.
+        Assert.AreEqual(
+            542, System.Text.Encoding.UTF8.GetByteCount(PseudoApostropheTitle),
+            "this is the retained 542-byte row, not a paraphrase of it.");
+        Assert.AreEqual(
+            "dc48f19a4db8f58a0b48b4d07733e8c99b1528176fecc0b743346907f774d53b",
+            ValueDigest(PseudoApostropheTitle),
+            "and it is byte-identical to what the publisher delivered.");
+        Assert.Contains(
+            '\u0301', PseudoApostropheTitle,
+            "the combining acute is the whole point of the row.");
+        Assert.AreEqual(
+            PseudoApostropheTitle,
+            PseudoApostropheTitle.Normalize(System.Text.NormalizationForm.FormC),
+            "NFC does not move it: the hazard is a cleanup, not a normaliser.");
+
+        // The repaired spelling: exactly what a well-meant fix would produce.
+        var repaired = PseudoApostropheTitle.Replace(" \u0301", "'", StringComparison.Ordinal);
+        Assert.AreNotEqual(
+            PseudoApostropheTitle, repaired, "the two spellings must differ, or this proves nothing.");
+        Assert.AreNotEqual(
+            ValueDigest(PseudoApostropheTitle), ValueDigest(repaired),
+            "and they must key differently, which is how the delivery tells them apart.");
+
+        var result = Decode(
+            Row(predicate: NotAdmissible, value: Literal(PseudoApostropheTitle)),
+            Row(predicate: NotAdmissible, value: Literal(repaired)));
+
+        Assert.AreEqual(
+            LuxembourgDraftGraphProductionRefusal.None, result.Refusal,
+            $"two spellings are two facts, not a duplicate: {result.Refusal} {result.Detail}");
+
+        var retained = result.RetainedNotAdmitted
+            .Where(value => string.Equals(value.PredicateIri, NotAdmissible, StringComparison.Ordinal))
+            .Select(static value => value.Value)
+            .ToArray();
+
+        Assert.HasCount(2, retained, "both spellings survive; neither is folded into the other.");
+        CollectionAssert.AreEquivalent(
+            new[] { PseudoApostropheTitle, repaired }, retained,
+            "and the publisher's spelling is retained as delivered, not as it should have been.");
+    }
+
+    /// <summary>
+    /// The exact <c>jolux#titleDraft</c> of <c>eli/dl/pl/1989/60</c>, from the retained delivery.
+    /// </summary>
+    /// <remarks>
+    /// Reconstructed from <c>artifacts/e8-draft-live-7a07f85b...</c> rather than invented, and
+    /// carried whole rather than padded: at 542 bytes the text IS the fixture, and the two
+    /// <c>\u0301</c> escapes are the reason it exists. Written as escapes so that a reader sees a
+    /// combining acute where an apostrophe belongs instead of an invisible mark they would delete.
+    /// </remarks>
+    internal const string PseudoApostropheTitle =
+        "<p>Projet de loi modifiant et complétant la loi du 10 janvier 1989 portant<br/>"
+        + "1. la reprise des centres et services d'éducation différenciée de certaines communes<br/>"
+        + "2. modification de la loi du 14 mars 1973 portant création d'instituts et de services "
+        + "d'éducation différenciée<br/>"
+        + "3. modification de la loi du 16 août 1968 portant création d \u0301un centre de "
+        + "logopédie et de services audiométrique et orthophonique<br/>"
+        + "4. modification de la loi du 22 juin 1963 fixant le régime des traitements des "
+        + "fonctionnaires de l \u0301Etat.</p>";
+
+    /// <summary>
     /// Two values that differ only in kind, datatype or language stay distinct rows.
     /// </summary>
     /// <remarks>
