@@ -372,20 +372,61 @@ public sealed class LuxembourgOpinionRequestBatchingTests
         var subjects = Subjects(4);
         var assignment = LuxembourgOpinionRequestBatchAssignment.Over(subjects, Citation(subjects))[0];
 
-        // An honest delivery of a DIFFERENT partition: right shape, wrong batch.
-        var (otherProof, otherRows) = AbsenceFixtures.DeliveryOfSubjects(
-            "legilux-opinion-request-graph-batch-elsewhere", assignment.Requests) is var (p, k)
-            ? (p, assignment.Requests
-                .Select((subject, index) => new RepeatedEnumerationRow(
-                    [RepeatedEnumerationRdfTerm.Iri(subject)], k[index],
-                    [RepeatedEnumerationRdfTerm.Iri(subject)]))
-                .ToArray())
-            : default;
+        // An honest delivery of a DIFFERENT partition, under this family's own profile: right
+        // shape, right dialect, wrong batch. Only the partition differs, so only the partition
+        // check can refuse it.
+        var ordered = assignment.Requests.OrderBy(static v => v, StringComparer.Ordinal).ToArray();
+        var (otherProof, otherKeys) = AbsenceFixtures.OpinionRequestGraphBatchDelivery(
+            "legilux-opinion-request-graph-batch-elsewhere", ordered);
+        var otherRows = ordered
+            .Select((value, index) => new RepeatedEnumerationRow(
+                [RepeatedEnumerationRdfTerm.Iri("urn:delivered:" + value)], otherKeys[index],
+                [RepeatedEnumerationRdfTerm.Iri("urn:delivered:" + value)]))
+            .ToArray();
 
         var refusal = Assert.ThrowsExactly<ArgumentException>(
             () => LuxembourgOpinionRequestBatchCitation.ForDelivery(otherProof, otherRows, assignment),
             "a proof of another partition says nothing about this batch.");
         StringAssert.Contains(refusal.Message, "names partition");
+    }
+
+    /// <summary>
+    /// A delivery of this exact partition, read under another profile, mints nothing.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// THE PARTITION KEY IS NOT FAMILY AUTHORITY. It digests the batch's members, so a delivery
+    /// some other query family produced over the same members carries the same key: the partition
+    /// check agrees, the rows bind to their own proof, and until the profile was bound the citation
+    /// minted over a delivery read under another dialect, projection and keyset entirely.
+    /// </para>
+    /// <para>
+    /// The assertion is on the guard's OWN message, not merely on the exception type. Every refusal
+    /// on this door is an ArgumentException, so a case that only asserted the type would pass by
+    /// falling through to the partition or row binding beside it - which is how the interpretation
+    /// check on the inventory door was found to be unexercised.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void ABatchDeliveryReadUnderAnotherProfileMintsNothing()
+    {
+        var subjects = Subjects(4);
+        var assignment = LuxembourgOpinionRequestBatchAssignment.Over(subjects, Citation(subjects))[0];
+        var (honestProof, rows) = BatchDelivery(assignment);
+
+        // Same partition, same delivered rows - and a proof of it read under another profile.
+        var foreignProof = AbsenceFixtures.ProofNamingFamilyUnderAnotherProfile(
+            assignment.PartitionKey, assignment.Requests);
+
+        Assert.AreEqual(
+            honestProof.FamilyKey, foreignProof.FamilyKey,
+            "the partition check cannot tell these apart, which is why the profile must.");
+
+        var refusal = Assert.ThrowsExactly<ArgumentException>(
+            () => LuxembourgOpinionRequestBatchCitation.ForDelivery(foreignProof, rows, assignment),
+            "another query family's delivery does not evidence this family's batch.");
+        StringAssert.Contains(refusal.Message, "another interpretation profile");
+        StringAssert.Contains(refusal.Message, "this family's graph");
     }
 
     /// <summary>
@@ -406,13 +447,7 @@ public sealed class LuxembourgOpinionRequestBatchingTests
 
         // A proven delivery of this partition whose rows are about something else entirely - the
         // publisher held nothing for these members.
-        var unrelated = new[] { "urn:row:a", "urn:row:b" };
-        var (proof, keys) = AbsenceFixtures.DeliveryOfSubjects(assignment.PartitionKey, unrelated);
-        var rows = unrelated
-            .Select((value, index) => new RepeatedEnumerationRow(
-                [RepeatedEnumerationRdfTerm.Iri(value)], keys[index],
-                [RepeatedEnumerationRdfTerm.Iri(value)]))
-            .ToArray();
+        var (proof, rows) = BatchDelivery(assignment, ["row-a", "row-b"]);
 
         var citation = LuxembourgOpinionRequestBatchCitation.ForDelivery(proof, rows, assignment);
 
@@ -424,16 +459,25 @@ public sealed class LuxembourgOpinionRequestBatchingTests
             "and what came back, which may be about none of them.");
     }
 
-    /// <summary>A proven delivery of this batch's own partition, keyed on its members.</summary>
+    /// <summary>
+    /// A proven delivery of this batch's own partition, read under this family's graph profile.
+    /// </summary>
+    /// <remarks>
+    /// UNDER THE GRAPH PLAN'S PROFILE, not the generic fixture one. The citation door binds that
+    /// profile, and it was a generic-profile proof that minted a citation here before the door did.
+    /// </remarks>
     private static (AbsenceFamilyEnumerationProof Proof, RepeatedEnumerationRow[] Rows) BatchDelivery(
-        LuxembourgOpinionRequestBatchAssignment assignment)
+        LuxembourgOpinionRequestBatchAssignment assignment,
+        IReadOnlyList<string>? rowValues = null)
     {
-        var ordered = assignment.Requests.OrderBy(static v => v, StringComparer.Ordinal).ToArray();
-        var (proof, keys) = AbsenceFixtures.DeliveryOfSubjects(assignment.PartitionKey, ordered);
+        var values = rowValues ?? assignment.Requests;
+        var ordered = values.OrderBy(static v => v, StringComparer.Ordinal).ToArray();
+        var (proof, keys) = AbsenceFixtures.OpinionRequestGraphBatchDelivery(
+            assignment.PartitionKey, ordered);
         var rows = ordered
-            .Select((subject, index) => new RepeatedEnumerationRow(
-                [RepeatedEnumerationRdfTerm.Iri(subject)], keys[index],
-                [RepeatedEnumerationRdfTerm.Iri(subject)]))
+            .Select((value, index) => new RepeatedEnumerationRow(
+                [RepeatedEnumerationRdfTerm.Iri("urn:delivered:" + value)], keys[index],
+                [RepeatedEnumerationRdfTerm.Iri("urn:delivered:" + value)]))
             .ToArray();
         return (proof, rows);
     }

@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using Lex.V3.Contracts.Source.Absence;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Luxembourg;
@@ -273,6 +275,51 @@ internal static class AbsenceFixtures
                 RepeatedEnumerationRdfTerm.Literal(subject, null, null),
                 RepeatedEnumerationRdfTerm.Literal(
                     AbsenceEnumerationProofFixture.KindAt(index, nonAddressableAt), null, null),
+            })
+            .ToArray();
+        return (proof, keys);
+    }
+
+    /// <summary>
+    /// A batch's graph delivery, proven under the request graph plan's own interpretation profile.
+    /// </summary>
+    /// <remarks>
+    /// The batch citation door binds that profile, so this is the only shape an honest batch proof
+    /// can have. <see cref="ProofNamingFamilyUnderAnotherProfile"/> is its mirror: same partition,
+    /// same rows, another profile, and the door must refuse it.
+    /// </remarks>
+    public static (AbsenceFamilyEnumerationProof Proof, RepeatedEnumerationRdfTerm[][] Keys)
+        OpinionRequestGraphBatchDelivery(
+            string partitionKey,
+            IReadOnlyList<string> rowValues,
+            int runSeed = 934)
+    {
+        var ordered = rowValues.OrderBy(static value => value, StringComparer.Ordinal).ToArray();
+        var delivery = AbsenceEnumerationProofFixture.LuxembourgOpinionRequestGraphDelivery(
+            partitionKey, ordered, runSeed);
+
+        var proof = AbsenceFamilyEnumerationProof.TryCreate(
+            partitionKey, delivery, CustodyMembership.Floored, out var refusal);
+        if (proof is null)
+        {
+            throw new InvalidOperationException($"fixture proof refused as {refusal}");
+        }
+
+        const string IriKind = LuxembourgOpinionRequestInventoryDiscoveryPlan.IriKind;
+        const string Predicate = LuxembourgOpinionRequestGraphDiscoveryPlan.ReferralDatePredicateIri;
+        var keys = ordered
+            .Select(value => new[]
+            {
+                RepeatedEnumerationRdfTerm.Literal("urn:delivered:" + value, null, null),
+                RepeatedEnumerationRdfTerm.Literal(IriKind, null, null),
+                RepeatedEnumerationRdfTerm.Literal(Predicate, null, null),
+                RepeatedEnumerationRdfTerm.Literal(
+                    Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(value))),
+                    null,
+                    null),
+                RepeatedEnumerationRdfTerm.Literal("literal", null, null),
+                RepeatedEnumerationRdfTerm.Literal(string.Empty, null, null),
+                RepeatedEnumerationRdfTerm.Literal(string.Empty, null, null),
             })
             .ToArray();
         return (proof, keys);

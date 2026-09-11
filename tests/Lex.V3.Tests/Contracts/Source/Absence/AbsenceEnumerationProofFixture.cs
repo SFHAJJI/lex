@@ -217,6 +217,83 @@ internal sealed class AbsenceEnumerationProofFixture : IRepeatedEnumerationEvide
         return fixture.BuildPages(page, page, subjects.Count, subjects.Count + 3, subjects.Count + 1);
     }
 
+    /// <summary>
+    /// One batch's graph delivery, read under the request graph plan's own profile.
+    /// </summary>
+    /// <remarks>
+    /// The batch citation door binds a proof to this profile, so a delivery built from the generic
+    /// fixture profile - or from the inventory plan's - evidences nothing there however alike the
+    /// rows look. That is not hypothetical: the door minted a citation over a generic-profile proof
+    /// until a reviewer showed it, and this fixture is what lets the honest path be built at all.
+    /// </remarks>
+    /// <param name="partitionKey">This batch's own partition key, which the proof will name.</param>
+    /// <param name="rowValues">One delivered row per value, keyed so cursors strictly increase.</param>
+    public static EnumerationDeliveryComparison LuxembourgOpinionRequestGraphDelivery(
+        string partitionKey,
+        IReadOnlyList<string> rowValues,
+        int runSeed = 934)
+    {
+        var plan = LuxembourgOpinionRequestGraphDiscoveryPlan.Create();
+        var profile = plan.CreateDeliveryProfile();
+        var page = LuxembourgOpinionRequestGraphRowsJson(rowValues);
+        var fixture = new AbsenceEnumerationProofFixture(
+            partitionKey,
+            runSeed,
+            (rowValues.Count * 2) + 100,
+            profile,
+            OfficialMachineQuerySourceProfileId.LuxembourgSparql,
+            profile.PassParameterName,
+            profile.HasCursorParameterName,
+            profile.SelectionParameterNames,
+            plan.CountQueryFamilyRef,
+            plan.PageQueryFamilyRef);
+        return fixture.BuildPages(
+            page, page, rowValues.Count, rowValues.Count + 3, rowValues.Count + 1);
+    }
+
+    /// <summary>
+    /// One page of the request graph's projection, in key order.
+    /// </summary>
+    /// <remarks>
+    /// Fifteen columns and seven keys, as the plan projects them. The keys are the plan's own binds:
+    /// the subject, its kind, the predicate, the value's delivered digest, the value's kind, and the
+    /// datatype and language, which are empty for a plain literal exactly as
+    /// <c>COALESCE(?datatype_iri, "")</c> makes them.
+    /// </remarks>
+    private static string LuxembourgOpinionRequestGraphRowsJson(IReadOnlyList<string> rowValues)
+    {
+        const string IriKind = LuxembourgOpinionRequestInventoryDiscoveryPlan.IriKind;
+        const string Predicate = LuxembourgOpinionRequestGraphDiscoveryPlan.ReferralDatePredicateIri;
+        var bindings = rowValues.Select(value =>
+        {
+            var subject = "urn:delivered:" + value;
+            var digest = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
+            return "{\"request\":{\"type\":\"uri\",\"value\":\"" + subject + "\"},"
+                + "\"request_kind\":{\"type\":\"literal\",\"value\":\"" + IriKind + "\"},"
+                + "\"predicate\":{\"type\":\"uri\",\"value\":\"" + Predicate + "\"},"
+                + "\"value\":{\"type\":\"literal\",\"value\":\"" + value + "\"},"
+                + "\"value_kind\":{\"type\":\"literal\",\"value\":\"literal\"},"
+                + "\"datatype_iri\":{\"type\":\"literal\",\"value\":\"\"},"
+                + "\"language_tag\":{\"type\":\"literal\",\"value\":\"\"},"
+                + "\"multiplicity\":{\"type\":\"typed-literal\","
+                + "\"datatype\":\"http://www.w3.org/2001/XMLSchema#integer\",\"value\":\"1\"},"
+                + "\"key_1\":{\"type\":\"literal\",\"value\":\"" + subject + "\"},"
+                + "\"key_2\":{\"type\":\"literal\",\"value\":\"" + IriKind + "\"},"
+                + "\"key_3\":{\"type\":\"literal\",\"value\":\"" + Predicate + "\"},"
+                + "\"key_4\":{\"type\":\"literal\",\"value\":\"" + digest + "\"},"
+                + "\"key_5\":{\"type\":\"literal\",\"value\":\"literal\"},"
+                + "\"key_6\":{\"type\":\"literal\",\"value\":\"\"},"
+                + "\"key_7\":{\"type\":\"literal\",\"value\":\"\"}}";
+        });
+
+        return "{\"head\":{\"link\":[],\"vars\":"
+            + "[\"request\",\"request_kind\",\"predicate\",\"value\",\"value_kind\","
+            + "\"datatype_iri\",\"language_tag\",\"multiplicity\","
+            + "\"key_1\",\"key_2\",\"key_3\",\"key_4\",\"key_5\",\"key_6\",\"key_7\"]},"
+            + "\"results\":{\"distinct\":false,\"ordered\":true,\"bindings\":["
+            + string.Join(',', bindings) + "]}}";
+    }
+
     /// <summary>One page of the request inventory's projection, in key order.</summary>
     private static string LuxembourgOpinionRequestInventoryRowsJson(
         IReadOnlyList<string> subjects,
