@@ -19,14 +19,23 @@ namespace Lex.V3.Ingest.Tests;
 /// assumes. This asks.
 /// </para>
 /// <para>
+/// THE CLASS-SCOPED PREMISE THIS FILE WAS WRITTEN ON IS GONE. An earlier version drove one run whose
+/// question was "every InitialDraft", on the stated ground that the family "carries no selection a
+/// caller could narrow". #417 has since accepted the batched shape, and
+/// <see cref="LuxembourgDraftGraphRunRequest"/>'s constructor is private precisely so no caller can
+/// assemble a batch the inventory never issued - so that version no longer compiles, which is the
+/// membership repair refusing it rather than a port being awkward. Acceptance is now the whole
+/// sequence: enumerate the class, let the inventory issue the batches, sweep every one of them, and
+/// reconcile the terminal cover over the result.
+/// </para>
+/// <para>
 /// SKIPPED BY DEFAULT under <see cref="EnableVariable"/>, and it is the most expensive gate in this
-/// repository, which is worth stating rather than discovering. The family is CLASS-SCOPED by design
-/// — its question is "every InitialDraft" and it carries no selection a caller could narrow — so a
-/// run is the whole class twice. Against the hypothesised 8,164 drafts and five asked properties
-/// that is roughly 41,000 rows, about 43 pages at the pass-one limit of 953 and about 72 at the
-/// pass-two limit of 571, plus a count each pass: on the order of 120 sequential requests under the
-/// executor's own robots handling and shared origin pacing. There is no smaller honest version of
-/// this family's question.
+/// repository, which is worth stating rather than discovering. The projected volume is recorded at
+/// <see cref="ProjectedRequestNote"/> and re-derived from the measured population at run time, so a
+/// reader sees the arithmetic rather than a remembered number. Against the hypothesised 7,753 drafts
+/// it is on the order of 800 sequential requests under the executor's own robots handling and shared
+/// origin pacing - not the 120 the class-scoped version projected. There is no smaller honest
+/// version of this family's question.
 /// </para>
 /// <para>
 /// THE COUNTS ARE MEASURED HERE, NEVER ASSERTED. 31-v3-spec records InitialDraft 8,164 and
@@ -49,6 +58,37 @@ public sealed class LuxembourgDraftGraphLiveAcceptance
     private const string EnableVariable = "LEX_E8_DRAFT_GRAPH_LIVE";
     private const string LegiluxEndpoint = "https://data.legilux.public.lu/sparqlendpoint";
 
+    /// <summary>
+    /// What one full acceptance run costs the publisher, derived rather than remembered.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Both families page under <c>ShortPageTerminal</c>, so a pass ends on the first short page and
+    /// the request count is a function of the delivered row count, not of a ceiling. The inventory
+    /// enumerates N subjects: one count plus <c>ceil(N/907)</c> pages on pass one, one count plus
+    /// <c>ceil(N/613)</c> on pass two. The sweep is <c>ceil(N/50)</c> batches, each one count plus
+    /// <c>ceil(R/953)</c> pages on pass one and one count plus <c>ceil(R/571)</c> on pass two, where
+    /// R is that batch's delivered rows.
+    /// </para>
+    /// <para>
+    /// R is the part no arithmetic settles. The acquisition is broad-predicate - every property the
+    /// publisher holds on the draft, not a closed five - and the only measurement in hand is the
+    /// retained ten-draft delivery under #417, which returned 178 rows. At that rate a 50-draft batch
+    /// is about 890 rows: one page on pass one and two on pass two, so five requests a batch.
+    /// </para>
+    /// <para>
+    /// For the hypothesised N of 7,753 that is 24 requests for the inventory and 156 batches at five,
+    /// so <b>about 804 sequential requests</b>. At the 1.5s start-to-start pacing the E6 run measured
+    /// against its own publisher that is roughly twenty minutes of pacing alone, before any response
+    /// time. The run RECORDS its actual count; nothing here asserts it, because 178 rows over ten
+    /// drafts is a sample and not a promise.
+    /// </para>
+    /// </remarks>
+    private const string ProjectedRequestNote =
+        "inventory: 2 counts + ceil(N/907) + ceil(N/613) pages; sweep: ceil(N/50) batches x "
+        + "(2 counts + ceil(R/953) + ceil(R/571) pages), R measured per batch. N=7753 and R~890 "
+        + "projects ~804 sequential requests.";
+
     [TestMethod]
     public async Task TheAcceptedDraftProvisionsAreAnsweredByThePublisher()
     {
@@ -64,18 +104,62 @@ public sealed class LuxembourgDraftGraphLiveAcceptance
         Directory.CreateDirectory(root);
 
         var store = new FileSystemCustodyStore(root);
+        var witness = LuxembourgDraftGraphProducerTests.LuxembourgSourceWitness();
+        var rendererSource = RendererSource(checkout);
+
+        // 1. THE CLASS, ENUMERATED. Everything after this is derived from what the publisher said
+        //    the class is; nothing below names a draft this run did not first prove exists.
+        var inventory = await new LuxembourgInitialDraftInventoryProducer(store, TimeProvider.System)
+            .RunAsync(
+                new LuxembourgInitialDraftInventoryRunRequest(
+                    LuxembourgInitialDraftInventoryDiscoveryPlan.Create(), NewUrn(), rendererSource),
+                witness,
+                CancellationToken.None);
+
+        Assert.AreEqual(
+            LuxembourgInitialDraftInventoryRefusal.None, inventory.Refusal,
+            $"the inventory must be proven before any batch is swept: {inventory.Refusal} {inventory.Detail}");
+
+        var population = inventory.AddressableInOrder();
+
+        // 2. THE BATCHES, ISSUED BY THAT INVENTORY. Not assembled here: the factory's only input is
+        //    the delivered inventory, which is what makes membership structural.
+        var assignments = LuxembourgDraftGraphBatchFactory.AssignBatches(inventory);
+        var plan = LuxembourgDraftGraphDiscoveryPlan.Create();
         var producer = new LuxembourgDraftGraphProducer(store, TimeProvider.System);
 
-        var result = await producer.RunAsync(
-            new LuxembourgDraftGraphRunRequest(
-                LuxembourgDraftGraphDiscoveryPlan.Create(),
-                NewUrn(),
-                RendererSource(checkout)),
-            LuxembourgDraftGraphProducerTests.LuxembourgSourceWitness(),
-            CancellationToken.None);
+        // 3. EVERY BATCH, SWEPT. A refusal stops the run and names the batch rather than leaving a
+        //    partial sweep to be reconciled as though it were whole.
+        var coverages = new List<LuxembourgDraftPropertyCoverage>(assignments.Count);
+        var productRequests = inventory.ProductRequestCount;
+        var rows = 0L;
+        for (var ordinal = 0; ordinal < assignments.Count; ordinal++)
+        {
+            var batch = await producer.RunAsync(
+                LuxembourgDraftGraphRunRequest.ForBatch(plan, inventory, ordinal, NewUrn(), rendererSource),
+                witness,
+                CancellationToken.None);
 
-        // The negative first, because it holds whether the run completed or refused: a request this
-        // family was never authorized to send is a finding even on a failed run.
+            Assert.AreEqual(
+                LuxembourgDraftGraphProductionRefusal.None, batch.Refusal,
+                $"batch {ordinal} of {assignments.Count} refused: {batch.Refusal} {batch.Detail}");
+
+            coverages.Add(batch.Coverage!);
+            productRequests += batch.ProductRequestCount;
+            rows += batch.Coverage!.PublisherRowCount;
+        }
+
+        // 4. THE TERMINAL COVER. Each batch proved its own matrix; none of them can say the batches
+        //    together are the class. This is where a partial sweep stops being readable as a whole
+        //    one, and it is the reason this run is an acceptance rather than a sample.
+        var cover = LuxembourgDraftGraphBatchCover.TryCreate(
+            inventory, coverages, out var coverRefusal, out var coverDetail);
+        Assert.IsNotNull(
+            cover,
+            $"the sweep must reconcile against the inventory it covers: {coverRefusal} {coverDetail}");
+
+        // The negative, which holds whether the run completed or refused: a request this family was
+        // never authorized to send is a finding even on a failed run.
         var offending = new List<string>();
         foreach (var file in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
         {
@@ -94,71 +178,53 @@ public sealed class LuxembourgDraftGraphLiveAcceptance
             "this run may contact the Legilux SPARQL endpoint and nothing else — CHD draft URLs and "
             + "opinion PDFs stay link-only: " + string.Join("; ", offending.Take(10)));
 
-        Assert.AreEqual(
-            LuxembourgDraftGraphProductionRefusal.None, result.Refusal,
-            $"the live run must complete: {result.Refusal} {result.Detail}");
-        Assert.IsGreaterThan(0, result.ProductRequestCount, "a live run sends real requests.");
-
         var cited = await store.ReadByDigestAsync(
-            result.CompletionEvidenceRef!.Sha256, CancellationToken.None);
+            inventory.CompletionEvidenceRef!.Sha256, CancellationToken.None);
         StringAssert.StartsWith(
             Encoding.UTF8.GetString(cited.Span), "lex-http-acquisition-run/1",
             "the records must cite the acquisition RUN, not one request's HTTP evidence.");
 
-        var records = result.Records!;
-        var asked = LuxembourgDraftGraphDiscoveryPlan.AskedAbout;
-
-        // Every record answers one of the five asked properties, and nothing else arrived.
-        foreach (var record in records)
-        {
-            CollectionAssert.Contains(
-                asked.ToArray(), record.PredicateIri,
-                "a delivered row names a property this family never asked about.");
-        }
-
-        // The accepted E8 provisions name InitialDraft, OpinionConseilEtat and draftTransposes
-        // together. A draft-graph run that swept the class and came back with no transposition
-        // intention at all would satisfy every structural assertion here and answer none of the
-        // provision, so it is called out rather than left to the reader of a number.
-        var transpositions = result.For(LuxembourgDraftGraphDiscoveryPlan.DraftTransposesPredicateIri);
-        var boundTranspositions = transpositions
-            .Where(static value => value.ValueKind != LuxembourgDraftGraphDiscoveryPlan.UnboundKind)
-            .ToArray();
-
-        var drafts = records.Select(static value => value.DraftIri).Distinct(StringComparer.Ordinal).ToArray();
-
-        // THE SHAPE, asserted. Every delivered draft answers for every asked property — the producer
-        // enforces it, and asserting it here is what makes the live delivery prove the invariant
-        // rather than the invariant hide a short delivery.
+        // THE SHAPE, asserted through the cover rather than recounted here. CoveredPairCount is
+        // recomputed from the inventory's own subject count inside TryCreate, so asserting it again
+        // against the same inventory is the one thing that would prove nothing. What is worth
+        // asserting is that the sweep accounted for every subject the enumeration proved.
         Assert.AreEqual(
-            drafts.Length * asked.Count, records.Count,
-            "the absence branch means every draft answers every asked property exactly once.");
+            population.Count, cover.SubjectCount,
+            "the cover must be of the population this run enumerated.");
+        Assert.AreEqual(
+            assignments.Count, cover.Batches.Count,
+            "every batch the inventory issued is in the cover.");
 
-        // THE NUMBERS, recorded. See the class remarks: these are the figures 38-verified-claims
-        // calls a hypothesis, and this run is the first honest measurement of them.
+        // THE NUMBERS, recorded. See the class remarks: 31-v3-spec's figures are a hypothesis that
+        // 38-verified-claims declines to treat as fact, and this run is the first honest measurement.
         var summary = new StringBuilder()
-            .AppendLine("e8-draft-graph-live-acceptance/1")
+            .AppendLine("e8-draft-graph-live-acceptance/2")
             .AppendLine("endpoint=" + LegiluxEndpoint)
-            .AppendLine("product_requests=" + result.ProductRequestCount)
-            .AppendLine("initial_drafts=" + drafts.Length)
-            .AppendLine("rows=" + records.Count)
+            .AppendLine("projection=" + ProjectedRequestNote)
+            .AppendLine("product_requests=" + productRequests)
+            .AppendLine("initial_drafts=" + population.Count)
+            .AppendLine("batches=" + assignments.Count)
+            .AppendLine("publisher_rows=" + rows)
+            .AppendLine("covered_pairs=" + cover.CoveredPairCount)
+            .AppendLine("present_pairs=" + cover.PresentPairCount)
+            .AppendLine("derived_absences=" + cover.DerivedAbsenceCount)
+            .AppendLine("unresolved_gaps=" + cover.UnresolvedGapCount)
+            .AppendLine("unconfirmed_drafts=" + cover.UnconfirmedDraftCount)
             .AppendLine("hypothesis_initial_drafts=8164")
-            .AppendLine("hypothesis_draft_transposes=1735")
-            .AppendLine("draft_transposes_rows=" + transpositions.Count)
-            .AppendLine("draft_transposes_bound=" + boundTranspositions.Length)
-            .AppendLine("completion_evidence=" + result.CompletionEvidenceRef!.Sha256)
+            .AppendLine("inventory_completion_evidence=" + inventory.CompletionEvidenceRef!.Sha256)
+            .AppendLine("inventory_selection_digest=" + inventory.Citation!.SelectionDigest)
             .ToString();
         await File.WriteAllTextAsync(Path.Combine(root, "acceptance-summary.txt"), summary);
         TestContext?.WriteLine(summary);
 
         Assert.IsGreaterThan(
-            0, drafts.Length,
+            0, population.Count,
             "an empty InitialDraft class would be a complete answer and a product finding; it is not "
             + "what the accepted spec describes, so it fails here rather than passing quietly.");
         Assert.IsGreaterThan(
-            0, boundTranspositions.Length,
-            "the accepted E8 provisions name draftTransposes; a sweep answering none of them is a "
-            + "finding, not an acceptance.");
+            0, cover.PresentPairCount,
+            "a sweep of the whole class that found no property at all is a finding, not an "
+            + "acceptance.");
     }
 
     /// <summary>
@@ -197,15 +263,41 @@ public sealed class LuxembourgDraftGraphLiveAcceptance
             var producer = new LuxembourgDraftGraphProducer(
                 store, new EuAcquisitionTestFixture.FixedTimeProvider(), handler);
 
+            // An inventory-issued batch, exactly as the live path takes: the run request has no
+            // other door, which is the membership repair this harness is downstream of.
+            var inventory = LuxembourgDraftGraphProducerTests.InventoryOf(
+                LuxembourgDraftGraphProducerTests.DraftForScan);
+
             var result = await producer.RunAsync(
-                new LuxembourgDraftGraphRunRequest(
-                    plan, NewUrn(), LuxembourgAcquisitionTestFixture.BuildRendererSource(9101)),
+                LuxembourgDraftGraphRunRequest.ForBatch(
+                    plan,
+                    inventory,
+                    0,
+                    NewUrn(),
+                    LuxembourgAcquisitionTestFixture.BuildRendererSource(9101)),
                 LuxembourgDraftGraphProducerTests.LuxembourgSourceWitness(),
                 CancellationToken.None);
 
             Assert.AreEqual(
                 LuxembourgDraftGraphProductionRefusal.None, result.Refusal,
                 $"the scripted run must complete: {result.Refusal} {result.Detail}");
+
+            // AND THE ACCEPTANCE SEQUENCE ITSELF, RECONCILED OFFLINE. The gated body above never
+            // runs in an ordinary suite, so its spine would otherwise be unexercised until someone
+            // spent 800 live requests discovering it had rotted. This drives the same sequence the
+            // live run does - an inventory-issued batch, swept, then reconciled as a terminal cover
+            // over that same inventory - and requires the cover to mint rather than merely not throw.
+            var cover = LuxembourgDraftGraphBatchCover.TryCreate(
+                inventory, [result.Coverage!], out var coverRefusal, out var coverDetail);
+
+            Assert.IsNotNull(
+                cover, $"the swept batch must reconcile against its inventory: {coverRefusal} {coverDetail}");
+            Assert.AreEqual(
+                inventory.AddressableInOrder().Count, cover.SubjectCount,
+                "the cover is of the population the inventory proved.");
+            Assert.AreEqual(
+                LuxembourgDraftGraphBatchFactory.AssignBatches(inventory).Count, cover.Batches.Count,
+                "and it carries every batch that inventory issues.");
 
             var targets = new List<string>();
             foreach (var file in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
