@@ -653,11 +653,15 @@ public sealed class LuxembourgDraftGraphProducer
         // All seven cursor keys. The page's own proof of what it delivered and in what order;
         // checking a subset lets a verified page prove one tuple while this producer emits another.
         //
-        // key_4 IS RECOMPUTED, NOT COMPARED TO ITSELF. The publisher keys on SHA256(STR(?value));
-        // this recomputes that digest here from the exact retained UTF-8 lexical value and requires
-        // the delivered key to equal it. A row whose key does not describe the value beside it is
-        // refused before it is admitted or retained, so the digest cannot become a second, weaker
-        // identity for a value nobody checked.
+        // key_4 IS RECOMPUTED, NOT COMPARED TO ITSELF, and NOT with SHA256(STR(?value)). The
+        // query asks the endpoint for that function, but this endpoint does not implement it: it
+        // hashes the value double UTF-8 encoded, agreeing with the standard on ASCII and diverging
+        // on everything else. LuxembourgPublisherCursorCodec recomputes the key the publisher
+        // actually produces, from the exact retained lexical value, and the delivered key must
+        // equal it. A row whose key does not describe the value beside it is refused before it is
+        // admitted or retained, so the key cannot become a second, weaker identity for a value
+        // nobody checked - and a publisher corrected to the standard stops matching and refuses,
+        // rather than silently re-meaning the column.
         RequireKey(row, profile, "key_1", draftIri);
         RequireKey(row, profile, "key_2", MarkerFor(draftTerm));
         RequireKey(row, profile, "key_3", predicateIri);
@@ -696,24 +700,27 @@ public sealed class LuxembourgDraftGraphProducer
     }
 
     /// <summary>
-    /// The lowercase hexadecimal SHA-256 of a lexical value, as SPARQL 1.1 defines it.
-    /// </summary>
-    /// <remarks>
-    /// STRICT UTF-8, deliberately. SPARQL hashes the lexical form's UTF-8 encoding, so a permissive
-    /// encoder substituting replacement characters for unpaired surrogates would compute a digest of
-    /// bytes the publisher never hashed and refuse an honest row - or worse, agree by accident on
-    /// two different values. Throwing instead surfaces the row as unrepresentable, which is the
-    /// refusal this family already has for a key it cannot form.
-    /// </remarks>
-    /// <summary>
     /// The key this publisher computes for a value, recomputed locally before the row is believed.
     /// </summary>
     /// <remarks>
-    /// This used to be a strict-UTF-8 SHA-256, on the assumption the endpoint implemented SPARQL
-    /// 1.1 §17.4.4.8. It does not: measured against five discriminating drafts it hashes the value
-    /// double UTF-8 encoded, and twenty-one competing algorithms were rejected by the delivered
-    /// keys before Latin-1 survived. See <see cref="LuxembourgPublisherCursorCodec"/> for the
-    /// evidence and for why nothing here may be called SHA-256 of the value.
+    /// <para>
+    /// NOT SHA-256 OF THE VALUE. This was a strict-UTF-8 SHA-256, documented here as "SPARQL 1.1
+    /// defines it", on the assumption the endpoint implements §17.4.4.8. It does not: measured
+    /// against five drafts chosen because each carries a byte in the range where single-byte codecs
+    /// disagree, it hashes the value double UTF-8 encoded, and twenty-one competing algorithms were
+    /// rejected by the delivered keys before Latin-1 survived.
+    /// </para>
+    /// <para>
+    /// The strictness argument the old remark made survives, for a different reason. A permissive
+    /// encoder substituting replacement characters for unpaired surrogates would hash bytes the
+    /// publisher never hashed, refusing an honest row or agreeing by accident on two different
+    /// values; <see cref="LuxembourgPublisherCursorCodec"/> therefore encodes strictly and throws,
+    /// which surfaces the row as unrepresentable rather than mis-keyed.
+    /// </para>
+    /// <para>
+    /// See that type for the evidence, for the rejected alternatives, and for why nothing in this
+    /// family may be called a SHA-256 of the value.
+    /// </para>
     /// </remarks>
     private static string DeliveredKeyFor(string lexical) =>
         LuxembourgPublisherCursorCodec.ComputeKey(lexical);
