@@ -1,3 +1,5 @@
+using Lex.V3.Contracts.Source.Luxembourg;
+
 namespace Lex.V3.Ingest.Tests;
 
 /// <summary>
@@ -198,6 +200,60 @@ public sealed class LuxembourgOpinionRequestRelationshipDecisionTests
         Assert.AreEqual(
             LuxembourgOpinionRequestRelationship.HasOpinionPredicateIri, concluded.IdentifiedPredicate,
             "hasOpinion reaches the resource carrying jolux:OpinionRequest.");
+    }
+
+    /// <summary>
+    /// Both predicates are the ones the retained delivery actually carries, checked against it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// THE CHECK THAT IS NOT WRITTEN IN TERMS OF WHAT IT CHECKS. Every other assertion in this file
+    /// takes its expectation from <see cref="LuxembourgOpinionRequestRelationship"/>'s own
+    /// constants, so none of them can tell whether those constants name the right predicates. That
+    /// is not hypothetical: <c>HasOpinionPredicateIri</c> was its own literal, and changing it to
+    /// <c>jolux#draftHasOpinionConseilEtat</c> - a different, real JOLux predicate - left 18 of 18
+    /// passing while the rule reported the wrong relationship.
+    /// </para>
+    /// <para>
+    /// So this asserts against the ACCEPTED OWNER for the one coordinate that has an owner, and
+    /// against the literal IRI text for the one that does not. Both sides moving independently is
+    /// caught: an alias that drifts fails the literal, and a literal that drifts fails the alias.
+    /// </para>
+    /// <para>
+    /// The IRIs themselves are not invented here either. They are the two predicates the retained
+    /// draft-graph delivery carries to <c>/evenement/</c> targets about once per draft, which is why
+    /// these two and not another pair were the candidates the live diagnostic discriminated between.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void BothPredicatesAreTheOnesTheRetainedDeliveryActuallyCarries()
+    {
+        // ASSERTED ON WHAT THE RULE RETURNS, not on the constants it returns them from. Comparing
+        // the alias to its owner, or either to a literal, is compile-time true and the analyzer
+        // rejects it as known-true - which is the same complaint in compiler form. The identified
+        // predicate is produced at run time, so a changed constant changes it and this fails.
+        var identifiedBySace = First(sace: 1, scac: 0).IdentifiedPredicate;
+        var identifiedByScac = First(sace: 0, scac: 1).IdentifiedPredicate;
+
+        Assert.AreEqual(
+            "http://data.legilux.public.lu/resource/ontology/jolux#hasOpinion", identifiedBySace,
+            "a sace-positive pair identifies the draft-to-opinion edge, by that exact IRI.");
+        Assert.AreEqual(
+            "http://data.legilux.public.lu/resource/ontology/jolux#draftHasTask", identifiedByScac,
+            "and a scac-positive pair identifies the draft-to-task edge.");
+
+        // THE ALIAS, exercised through the same run-time value. If the owning vocabulary moves, the
+        // alias moves with it, the identified predicate changes, and the literal above fails; if
+        // only this family's spelling moves, this one fails. Either side alone is caught.
+        Assert.AreEqual(
+            LuxembourgOpinionLinkOnlyVocabulary.HasOpinionPredicateIri, identifiedBySace,
+            "the draft-to-opinion edge is the coordinate the link-only vocabulary owns.");
+
+        // Two DIFFERENT candidates, which is the premise of discriminating between them at all. A
+        // rule whose candidates collapsed to one would identify either and cross-check itself into
+        // agreement on a single draft.
+        Assert.AreNotEqual(
+            identifiedBySace, identifiedByScac, "the discriminator needs two candidates.");
     }
 
     private static LuxembourgRelationshipDecision First(long sace, long scac) =>

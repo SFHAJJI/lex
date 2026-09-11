@@ -1,3 +1,5 @@
+using Lex.V3.Contracts.Source.Luxembourg;
+
 namespace Lex.V3.Ingest.Tests;
 
 /// <summary>One membership answer: does this exact resource hold the class it was asked about.</summary>
@@ -45,9 +47,25 @@ internal sealed record LuxembourgRelationshipDecision(
 /// </summary>
 internal static class LuxembourgOpinionRequestRelationship
 {
+    /// <summary>The draft-to-opinion edge, aliased from the vocabulary that owns it.</summary>
+    /// <remarks>
+    /// RESTATED ONCE, AND THAT WAS A DEFECT. This was its own literal, and the rule below decides
+    /// the identified relationship by comparing against it, while every test derived its expectation
+    /// from the same constant - so the coordinate was checked against itself. Changing it to
+    /// <c>jolux#draftHasOpinionConseilEtat</c>, a different and real JOLux predicate, left 18 of 18
+    /// tests passing while the rule reported the wrong relationship. It now aliases
+    /// <see cref="LuxembourgOpinionLinkOnlyVocabulary"/>, which owns this coordinate.
+    /// </remarks>
     internal const string HasOpinionPredicateIri =
-        "http://data.legilux.public.lu/resource/ontology/jolux#hasOpinion";
+        LuxembourgOpinionLinkOnlyVocabulary.HasOpinionPredicateIri;
 
+    /// <summary>The draft-to-task edge, which no production type currently owns.</summary>
+    /// <remarks>
+    /// No vocabulary declares it, so it stays a literal here rather than inventing an owner for a
+    /// coordinate this family only needs in order to RULE IT OUT. It is pinned instead against the
+    /// retained draft-graph delivery, which is evidence outside this file - see
+    /// <c>BothPredicatesAreTheOnesTheRetainedDeliveryActuallyCarries</c>.
+    /// </remarks>
     internal const string DraftHasTaskPredicateIri =
         "http://data.legilux.public.lu/resource/ontology/jolux#draftHasTask";
 
