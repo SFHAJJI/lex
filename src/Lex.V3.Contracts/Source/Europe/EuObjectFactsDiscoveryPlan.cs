@@ -8,7 +8,7 @@ namespace Lex.V3.Contracts.Source.Europe;
 /// <summary>
 /// The bounded row-set query-plan families D1-05c-1 adds beyond D1-05a's own closure
 /// (<see cref="EuConsolidationDiscoveryPlan"/>'s <c>Family</c> set, reused unchanged for <c>O</c>),
-/// plus the manifestation-listing family D1-05d adds to the same machinery.
+/// plus the later manifestation, date-axiom and located-amendment families added to the same machinery.
 /// </summary>
 /// <remarks>
 /// <see cref="ObjectFacts"/> ("P" in the design record) asks the nine object-authority
@@ -25,7 +25,9 @@ namespace Lex.V3.Contracts.Source.Europe;
 /// reached from every object in <c>O</c> through <c>expression_belongs_to_work</c> and then
 /// <c>manifestation_manifests_expression</c> - the office's own per-work listing of the formats it
 /// offers. See <see cref="EuManifestationListingDecode"/> for exactly what that listing does and
-/// does not entitle a reader to conclude.
+/// does not entitle a reader to conclude. <see cref="ReifiedAxiomFacts"/> ("A") retains E1 date
+/// axiom properties; <see cref="LocatedAmendmentFacts"/> ("L") separately retains every property
+/// of an axiom publisher-marked with the admitted work-level amendment predicate.
 /// </remarks>
 public enum EuObjectFactsQuerySet
 {
@@ -39,6 +41,13 @@ public enum EuObjectFactsQuerySet
     /// annotated property is one of <see cref="EuDateQualifierVocabulary.DatePredicateUris"/>.
     /// </summary>
     ReifiedAxiomFacts = 5,
+
+    /// <summary>
+    /// Family L: the <c>owl:Axiom</c> reifications whose annotated property is exactly the
+    /// publisher's admitted work-level amendment predicate. Every property on each selected axiom
+    /// is delivered so an unknown annotation reaches typed decode evidence.
+    /// </summary>
+    LocatedAmendmentFacts = 6,
 }
 
 /// <summary>Same two-pass shape as <see cref="EuConsolidationDiscoveryPlan"/>'s own pass enum.</summary>
@@ -152,7 +161,7 @@ public sealed record EuObjectFactsBoundQuery(
 /// <c>MachineQueryValidation.MaximumParameterCount</c> (64, Source/Core, unchanged by this slice) caps
 /// the total ordered parameters one request may carry. Nine of those are always spent on
 /// <c>pass_id</c>, <c>has_cursor</c> and up to seven cursor-continuation parameters -
-/// <see cref="ExpressionFacts"/>'s own seven-part cursor is the widest of the four, wider than
+/// <see cref="ExpressionFacts"/>'s own seven-part cursor is the widest of these families, wider than
 /// <see cref="ObjectFacts"/>'s six and <see cref="RootWatermark"/>'s and
 /// <see cref="ManifestationFacts"/>'s five - leaving 55; 50 keeps a
 /// five-parameter margin rather than sitting on the ceiling, and matches
@@ -241,6 +250,7 @@ public sealed class EuObjectFactsDiscoveryPlan
     private const string RootWatermarkMemberPrefix = "eu-root-watermark";
     private const string ManifestationFactsMemberPrefix = "eu-manifestation-facts";
     private const string ReifiedAxiomFactsMemberPrefix = "eu-axiom-facts";
+    private const string LocatedAmendmentFactsMemberPrefix = "eu-located-amendment-facts";
     private const string ResponseMediaType = "application/sparql-results+json";
     private const string ThresholdDetectorIdentity = "enumeration-row-threshold/1";
 
@@ -408,6 +418,10 @@ public sealed class EuObjectFactsDiscoveryPlan
             "reified_axiom_facts_cursor=" + string.Join(',', sevenKeyCursor),
             "reified_axiom_facts_count_member=" + ReifiedAxiomFactsMemberPrefix + ".count",
             "reified_axiom_facts_page_member=" + ReifiedAxiomFactsMemberPrefix + ".page",
+            "located_amendment_facts_projection=" + string.Join(',', reifiedAxiomFactsProjection),
+            "located_amendment_facts_cursor=" + string.Join(',', sevenKeyCursor),
+            "located_amendment_facts_count_member=" + LocatedAmendmentFactsMemberPrefix + ".count",
+            "located_amendment_facts_page_member=" + LocatedAmendmentFactsMemberPrefix + ".page",
             templates.ObjectFactsCount,
             templates.ObjectFactsPage,
             templates.ExpressionFactsCount,
@@ -418,6 +432,8 @@ public sealed class EuObjectFactsDiscoveryPlan
             templates.ManifestationFactsPage,
             templates.ReifiedAxiomFactsCount,
             templates.ReifiedAxiomFactsPage,
+            templates.LocatedAmendmentFactsCount,
+            templates.LocatedAmendmentFactsPage,
         }));
         ArtifactRef = new SourceArtifactRef(ResourceId, Sha256(identityBytes));
         _canonicalIdentityBytes = identityBytes;
@@ -457,6 +473,13 @@ public sealed class EuObjectFactsDiscoveryPlan
                 ReifiedAxiomFactsMemberPrefix,
                 templates.ReifiedAxiomFactsCount,
                 templates.ReifiedAxiomFactsPage,
+                reifiedAxiomFactsProjection,
+                sevenKeyCursor),
+            [EuObjectFactsQuerySet.LocatedAmendmentFacts] = Definition(
+                EuObjectFactsQuerySet.LocatedAmendmentFacts,
+                LocatedAmendmentFactsMemberPrefix,
+                templates.LocatedAmendmentFactsCount,
+                templates.LocatedAmendmentFactsPage,
                 reifiedAxiomFactsProjection,
                 sevenKeyCursor),
         };
@@ -766,7 +789,8 @@ public sealed class EuObjectFactsDiscoveryPlan
         string ExpressionFactsCount, string ExpressionFactsPage,
         string RootWatermarkCount, string RootWatermarkPage,
         string ManifestationFactsCount, string ManifestationFactsPage,
-        string ReifiedAxiomFactsCount, string ReifiedAxiomFactsPage) BuildTemplates()
+        string ReifiedAxiomFactsCount, string ReifiedAxiomFactsPage,
+        string LocatedAmendmentFactsCount, string LocatedAmendmentFactsPage) BuildTemplates()
     {
         // ---- THE SECOND FILTER ON EVERY PAGE TEMPLATE, AND WHY IT IS NOT REDUNDANT. ----
         //
@@ -1127,12 +1151,77 @@ public sealed class EuObjectFactsDiscoveryPlan
             LIMIT {page_limit:uint}
             """;
 
+        // Family L deliberately has the same row and cursor shape as family A, but a disjoint
+        // selector. The annotated-property triple is fixed to the accepted amendment predicate;
+        // ?predicate remains unconstrained so every property of an admitted axiom is retained.
+        // The absence branch uses the identical selector, preventing a malformed/non-selected
+        // node from suppressing the explicit absence row for its parent.
+        var locatedAmendmentFactsRows = $$"""
+            SELECT ?parent ?axiom ?predicate ?value ?value_kind ?datatype_iri ?language_tag WHERE {
+              VALUES ?lex_pass_id { {pass_id:uint} }
+              VALUES ?parent {
+            {{valuesBlock}}
+              }
+              {
+                ?axiom <{{AnnotatedSourcePredicateIri}}> ?parent .
+                ?axiom <{{AnnotatedPropertyPredicateIri}}> <{{EuAmendmentRelationVocabulary.AmendsPredicateUri}}> .
+                ?axiom ?predicate ?value .
+                BIND(IF(isIRI(?value), "iri", IF(isLiteral(?value), "literal", "unsupported_blank_node")) AS ?value_kind)
+                BIND(IF(isLiteral(?value), STR(DATATYPE(?value)), "") AS ?datatype_iri)
+                BIND(IF(isLiteral(?value), LANG(?value), "") AS ?language_tag)
+              }
+              UNION
+              {
+                FILTER NOT EXISTS {
+                  ?absent_axiom <{{AnnotatedSourcePredicateIri}}> ?parent .
+                  ?absent_axiom <{{AnnotatedPropertyPredicateIri}}> <{{EuAmendmentRelationVocabulary.AmendsPredicateUri}}> .
+                }
+                BIND("unbound" AS ?value_kind)
+                BIND("" AS ?datatype_iri)
+                BIND("" AS ?language_tag)
+              }
+            }
+            GROUP BY ?parent ?axiom ?predicate ?value ?value_kind ?datatype_iri ?language_tag
+            """;
+        var locatedAmendmentFactsCount = Wrap(locatedAmendmentFactsRows);
+        var locatedAmendmentFactsPage = $$"""
+            SELECT ?parent ?axiom ?predicate ?value ?value_kind ?datatype_iri ?language_tag ?key_1 ?key_2 ?key_3 ?key_4 ?key_5 ?key_6 ?key_7 WHERE {
+              {
+            {{Indent(Indent(locatedAmendmentFactsRows))}}
+              }
+              BIND(STR(?parent) AS ?key_1)
+              BIND(COALESCE(STR(?axiom), "") AS ?key_2)
+              BIND(COALESCE(STR(?predicate), "") AS ?key_3)
+              BIND(?value_kind AS ?key_4)
+              BIND(COALESCE(STR(?value), "") AS ?key_5)
+              BIND(COALESCE(?datatype_iri, "") AS ?key_6)
+              BIND(COALESCE(?language_tag, "") AS ?key_7)
+              VALUES (?has_cursor ?last_key_1 ?last_key_2 ?last_key_3 ?last_key_4 ?last_key_5 ?last_key_6 ?last_key_7) {
+                ({has_cursor:uint} {last_key_1:sparql_string} {last_key_2:sparql_string} {last_key_3:sparql_string} {last_key_4:sparql_string} {last_key_5:sparql_string} {last_key_6:sparql_string} {last_key_7:sparql_string})
+              }
+              FILTER(
+                ?has_cursor = 0 || ?key_1 > ?last_key_1 ||
+                (?key_1 = ?last_key_1 && ?key_2 > ?last_key_2) ||
+                (?key_1 = ?last_key_1 && ?key_2 = ?last_key_2 && ?key_3 > ?last_key_3) ||
+                (?key_1 = ?last_key_1 && ?key_2 = ?last_key_2 && ?key_3 = ?last_key_3 && ?key_4 > ?last_key_4) ||
+                (?key_1 = ?last_key_1 && ?key_2 = ?last_key_2 && ?key_3 = ?last_key_3 && ?key_4 = ?last_key_4 && ?key_5 > ?last_key_5) ||
+                (?key_1 = ?last_key_1 && ?key_2 = ?last_key_2 && ?key_3 = ?last_key_3 && ?key_4 = ?last_key_4 && ?key_5 = ?last_key_5 && ?key_6 > ?last_key_6) ||
+                (?key_1 = ?last_key_1 && ?key_2 = ?last_key_2 && ?key_3 = ?last_key_3 && ?key_4 = ?last_key_4 && ?key_5 = ?last_key_5 && ?key_6 = ?last_key_6 && ?key_7 > ?last_key_7)
+              )
+              FILTER(?has_cursor = 0 || !(
+                ?key_1 = ?last_key_1 && ?key_2 = ?last_key_2 && ?key_3 = ?last_key_3 && ?key_4 = ?last_key_4 && ?key_5 = ?last_key_5 && ?key_6 = ?last_key_6 && ?key_7 = ?last_key_7))
+            }
+            ORDER BY ?key_1 ?key_2 ?key_3 ?key_4 ?key_5 ?key_6 ?key_7
+            LIMIT {page_limit:uint}
+            """;
+
         return (
             Normalize(objectFactsCount), Normalize(objectFactsPage),
             Normalize(expressionFactsCount), Normalize(expressionFactsPage),
             Normalize(rootWatermarkCount), Normalize(rootWatermarkPage),
             Normalize(manifestationFactsCount), Normalize(manifestationFactsPage),
-            Normalize(reifiedAxiomFactsCount), Normalize(reifiedAxiomFactsPage));
+            Normalize(reifiedAxiomFactsCount), Normalize(reifiedAxiomFactsPage),
+            Normalize(locatedAmendmentFactsCount), Normalize(locatedAmendmentFactsPage));
     }
 
     private static string Wrap(string rows) => $$"""
