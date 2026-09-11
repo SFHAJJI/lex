@@ -109,8 +109,8 @@ public sealed class EuPlanTemplateGuardTests
         // page carries a single BIND, STR(?state), with no UNION and no FILTER NOT EXISTS, so it has
         // no absence branch and no possibly-unbound variable to totalise. The other seven pages each
         // derive at least one cursor key from a variable their own absence branch leaves unbound,
-        // and each totalises it with COALESCE. Family A joined them: its absence branch leaves
-        // ?axiom, ?predicate and ?value unbound together, so it totalises three.
+        // and each totalises it with COALESCE. Families A and L joined them: each absence branch
+        // leaves ?axiom, ?predicate and ?value unbound together, so each totalises three.
         Assert.AreEqual(
             7,
             templates.Count(static template =>

@@ -111,12 +111,14 @@ public sealed record EuObjectFactsBoundQuery(
 /// </para>
 /// <para>
 /// THE VALUE-DERIVED CURSOR COMPONENT IS TOTALISED WITH COALESCE, and the reason is measured rather
-/// than assumed. Each family binds exactly one key position from <c>?value</c>, which the absence
+/// than assumed. The ordinary families bind one key position from <c>?value</c>, which the absence
 /// branch leaves unbound: <c>key_4</c> for <see cref="EuObjectFactsQuerySet.ObjectFacts"/> and
 /// <see cref="EuObjectFactsQuerySet.ExpressionFacts"/>, <c>key_3</c> for
 /// <see cref="EuObjectFactsQuerySet.RootWatermark"/> and
-/// <see cref="EuObjectFactsQuerySet.ManifestationFacts"/>. Every other position binds from a VALUES
-/// term or from a literal this template BINDs in both UNION branches, so none of them can be unbound.
+/// <see cref="EuObjectFactsQuerySet.ManifestationFacts"/>. The two axiom families also totalise
+/// <c>key_2</c>, <c>key_3</c> and <c>key_5</c>, because their absence branches leave
+/// <c>?axiom</c>, <c>?predicate</c> and <c>?value</c> unbound together. Every remaining position
+/// binds from a VALUES term or from a literal BIND in both UNION branches.
 /// </para>
 /// <para>
 /// That one position used to read <c>IF(BOUND(?value), STR(?value), "")</c>, which is correct under
