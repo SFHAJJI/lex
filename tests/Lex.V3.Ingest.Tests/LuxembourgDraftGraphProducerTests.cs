@@ -55,14 +55,16 @@ public sealed class LuxembourgDraftGraphProducerTests
         // must be the subject each row decodes to - which is its first term.
         var subjects = rows.Select(static row => row.Terms[0].Value ?? string.Empty).ToArray();
 
-        // A delivery that repeats a subject cannot be keyed on subjects at all - canonical keys must
-        // be unique - and it is not an enumeration either: the producer refuses it before any
-        // citation is minted, so the door this keying exists for is never reached. Those fixtures
-        // keep positional keys, which is the honest description of a delivery that proves nothing.
-        // A delivery that repeats a subject, or delivers out of key order, cannot be proven at all:
-        // Source/Core requires canonical keys unique and cursors strictly increasing. Those are
-        // exactly the deliveries the producer refuses before any citation is minted, so they keep
-        // positional keys - an honest description of a delivery that proves nothing about subjects.
+        // A delivery that repeats a subject, or delivers out of key order, cannot be keyed on its
+        // subjects at all: Source/Core requires canonical keys unique and cursors strictly
+        // increasing. Those fixtures keep positional keys, which is the honest description of a
+        // delivery that proves nothing about subjects.
+        //
+        // THE CITATION DOOR IS STILL REACHED FOR THEM, and the comment here said otherwise until
+        // the batch door began binding this family's interpretation profile and three of these
+        // cases refused. The producer's own row refusals come after the citation is minted, not
+        // before it, so these proofs must be this family's too - which is why the builder below
+        // routes them the same way rather than falling back to the generic profile.
         var sortedUnique = subjects
             .OrderBy(static value => value, StringComparer.Ordinal)
             .Distinct(StringComparer.Ordinal)
