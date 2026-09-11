@@ -71,23 +71,33 @@ public sealed class LuxembourgDraftGraphLiveAcceptance
     /// R is that batch's delivered rows.
     /// </para>
     /// <para>
-    /// R is the part no arithmetic settles. The acquisition is broad-predicate - every property the
-    /// publisher holds on the draft, not a closed five - and the only measurement in hand is the
-    /// retained ten-draft delivery under #417, which returned 178 rows. At that rate a 50-draft batch
-    /// is about 890 rows: one page on pass one and two on pass two, so five requests a batch.
+    /// R is the part no arithmetic settles, and this note no longer guesses it. It used to project R
+    /// from the retained ten-draft delivery's 178 rows, which put a 50-draft batch at about 890 rows
+    /// and so at five requests. A real run has since happened and it was more than five.
     /// </para>
     /// <para>
-    /// For the hypothesised N of 7,753 that is 24 requests for the inventory and 156 batches at five,
-    /// so <b>about 804 sequential requests</b>. At the 1.5s start-to-start pacing the E6 run measured
-    /// against its own publisher that is roughly twenty minutes of pacing alone, before any response
-    /// time. The run RECORDS its actual count; nothing here asserts it, because 178 rows over ten
-    /// drafts is a sample and not a promise.
+    /// MEASURED, from the truncated acceptance run retained at
+    /// <c>artifacts/e8-draft-live-7a07f85b5d924787948c6c1150df070b</c>, 2026-09-11 07:30:33Z to
+    /// 07:33:22Z. It issued <b>94 product requests across fourteen producer runs</b>: 24 for the
+    /// inventory - two counts and twenty-two pages, exactly what <c>ceil(7753/907)</c> and
+    /// <c>ceil(7753/613)</c> predict - and 70 across thirteen batch runs. Twelve of those batches
+    /// completed, consuming 68 requests: <b>eight needed six and four needed five</b>, a mean of
+    /// 5.67. The thirteenth refused after two on the long-title row.
+    /// </para>
+    /// <para>
+    /// So N=7,753 is 156 batches and <b>about 910 sequential requests</b>, not 804, and at most 960
+    /// if every batch turns out to need six. The retained run averaged 1.8s start to start, which
+    /// puts a full sweep near <b>twenty-seven minutes</b> of wall clock rather than twenty. The run
+    /// still RECORDS its actual count and nothing here asserts it: twelve batches are a better
+    /// sample than ten drafts, and still a sample.
     /// </para>
     /// </remarks>
     private const string ProjectedRequestNote =
         "inventory: 2 counts + ceil(N/907) + ceil(N/613) pages; sweep: ceil(N/50) batches x "
-        + "(2 counts + ceil(R/953) + ceil(R/571) pages), R measured per batch. N=7753 and R~890 "
-        + "projects ~804 sequential requests.";
+        + "(2 counts + ceil(R/953) + ceil(R/571) pages), R measured per batch. Measured over twelve "
+        + "complete batches of the retained 2026-09-11T07:30:33Z run: 24 inventory requests and "
+        + "5.67 per batch (eight at six, four at five). N=7753 projects ~910 sequential requests, "
+        + "at most 960.";
 
     [TestMethod]
     public async Task TheAcceptedDraftProvisionsAreAnsweredByThePublisher()
@@ -98,6 +108,12 @@ public sealed class LuxembourgDraftGraphLiveAcceptance
                 $"Set {EnableVariable}=1 for E8's live draft-graph acceptance proof. It sweeps the "
                 + "whole InitialDraft class twice, so it is skipped by default.");
         }
+
+        // WHEN, not only how many. The owner ruling of 2026-09-11 07:48 admits the measured
+        // population as this run's observation rather than as a constant, and requires the terminal
+        // receipt to cite the observation AND its time. A receipt carrying a bare count invites the
+        // next reader to treat it as the population, which is exactly what 8,164 became.
+        var startedAt = TimeProvider.System.GetUtcNow();
 
         var checkout = CheckoutRoot();
         var root = Path.Combine(checkout, "artifacts", "e8-draft-live-" + Guid.NewGuid().ToString("N"));
@@ -211,6 +227,10 @@ public sealed class LuxembourgDraftGraphLiveAcceptance
             .AppendLine("unresolved_gaps=" + cover.UnresolvedGapCount)
             .AppendLine("unconfirmed_drafts=" + cover.UnconfirmedDraftCount)
             .AppendLine("hypothesis_initial_drafts=8164")
+            .AppendLine("observed_from=" + startedAt.UtcDateTime.ToString(
+                "O", System.Globalization.CultureInfo.InvariantCulture))
+            .AppendLine("observed_to=" + TimeProvider.System.GetUtcNow().UtcDateTime.ToString(
+                "O", System.Globalization.CultureInfo.InvariantCulture))
             .AppendLine("inventory_completion_evidence=" + inventory.CompletionEvidenceRef!.Sha256)
             .AppendLine("inventory_selection_digest=" + inventory.Citation!.SelectionDigest)
             .ToString();
