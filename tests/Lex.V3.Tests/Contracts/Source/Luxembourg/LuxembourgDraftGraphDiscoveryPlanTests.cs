@@ -218,7 +218,17 @@ public sealed class LuxembourgDraftGraphDiscoveryPlanTests
     {
         var plan = LuxembourgDraftGraphDiscoveryPlan.Create();
 
-        StringAssert.Contains(plan.PageTemplate, "BIND(COALESCE(STR(?value), \"\") AS ?key_4)");
+        // key_4 DIGESTS THE VALUE, and the totalisation is still inside the digest. The live
+        // acceptance run stopped on a 2,648-byte title against a 2,047-byte key-part ceiling, and
+        // the owner's ruling keys on SHA256(STR(?value)) rather than raising the ceiling. COALESCE
+        // still stands between the unbound absence row and the key, which is what this test is
+        // about: hashing an unbound term would raise, the BIND would error, and SPARQL's JSON would
+        // omit the column entirely - the exact failure this family already measured once.
+        StringAssert.Contains(plan.PageTemplate, "BIND(SHA256(COALESCE(STR(?value), \"\")) AS ?key_4)");
+        StringAssert.DoesNotMatch(
+            plan.PageTemplate,
+            new System.Text.RegularExpressions.Regex(@"BIND\(SHA256\(STR\(\?value\)\)"),
+            "hashing the raw term leaves key_4 unbound on every absence row.");
         StringAssert.Contains(plan.PageTemplate, "BIND(COALESCE(?datatype_iri, \"\") AS ?key_6)");
         StringAssert.Contains(plan.PageTemplate, "BIND(COALESCE(?language_tag, \"\") AS ?key_7)");
 

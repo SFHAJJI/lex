@@ -1,4 +1,6 @@
 using System.Collections.Frozen;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json.Serialization;
 using Lex.V3.Contracts.Custody;
 using Lex.V3.Contracts.Source.Absence;
@@ -490,6 +492,18 @@ public sealed class LuxembourgDraftGraphProducer
                     // asserted, so a value shape this family makes no claim about must not be able
                     // to refuse a delivery whose admitted half is sound.
                     var retainedValue = Term(row, profile, "value");
+
+                    // THE KEY IS CHECKED EVEN HERE, and only the key. The ruling requires the digest
+                    // recomputed "before admitting or retaining", and that is a different question
+                    // from the value-shape invariants the paragraph above deliberately withholds: it
+                    // asks whether the row's own key describes the value beside it, not whether this
+                    // family approves of the value. A retained row whose key names some other value
+                    // is retained evidence of nothing, and the row that stopped the live acceptance
+                    // run - a 2,648-byte titleDraft - is retained rather than admitted, so leaving
+                    // this out would mean the digest was unchecked on exactly the row it was
+                    // introduced for.
+                    RequireKey(row, profile, "key_4", Sha256Hex(retainedValue.Value ?? string.Empty));
+
                     notAdmitted.Add(new LuxembourgDraftRetainedEvidenceRow(
                         RequireIri(Term(row, profile, "draft"), "draft"),
                         predicateIri,
@@ -638,10 +652,16 @@ public sealed class LuxembourgDraftGraphProducer
 
         // All seven cursor keys. The page's own proof of what it delivered and in what order;
         // checking a subset lets a verified page prove one tuple while this producer emits another.
+        //
+        // key_4 IS RECOMPUTED, NOT COMPARED TO ITSELF. The publisher keys on SHA256(STR(?value));
+        // this recomputes that digest here from the exact retained UTF-8 lexical value and requires
+        // the delivered key to equal it. A row whose key does not describe the value beside it is
+        // refused before it is admitted or retained, so the digest cannot become a second, weaker
+        // identity for a value nobody checked.
         RequireKey(row, profile, "key_1", draftIri);
         RequireKey(row, profile, "key_2", MarkerFor(draftTerm));
         RequireKey(row, profile, "key_3", predicateIri);
-        RequireKey(row, profile, "key_4", valueTerm.Value ?? string.Empty);
+        RequireKey(row, profile, "key_4", Sha256Hex(valueTerm.Value ?? string.Empty));
         RequireKey(row, profile, "key_5", MarkerFor(valueTerm));
         RequireKey(row, profile, "key_6", datatype);
         RequireKey(row, profile, "key_7", language);
@@ -674,6 +694,20 @@ public sealed class LuxembourgDraftGraphProducer
                 nameof(row));
         }
     }
+
+    /// <summary>
+    /// The lowercase hexadecimal SHA-256 of a lexical value, as SPARQL 1.1 defines it.
+    /// </summary>
+    /// <remarks>
+    /// STRICT UTF-8, deliberately. SPARQL hashes the lexical form's UTF-8 encoding, so a permissive
+    /// encoder substituting replacement characters for unpaired surrogates would compute a digest of
+    /// bytes the publisher never hashed and refuse an honest row - or worse, agree by accident on
+    /// two different values. Throwing instead surfaces the row as unrepresentable, which is the
+    /// refusal this family already has for a key it cannot form.
+    /// </remarks>
+    private static string Sha256Hex(string lexical) =>
+        Convert.ToHexStringLower(
+            SHA256.HashData(new UTF8Encoding(false, true).GetBytes(lexical)));
 
     private static void RequireKey(
         RepeatedEnumerationRow row,

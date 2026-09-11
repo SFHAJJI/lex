@@ -261,6 +261,28 @@ public sealed class LuxembourgDraftGraphDiscoveryPlan
     /// </summary>
     /// <remarks>
     /// <para>
+    /// KEY_4 IS THE VALUE'S DIGEST, NOT THE VALUE. The live acceptance run stopped at batch 12 of
+    /// 156 on a real row: draft <c>eli/dl/pl/2005/64</c> carries a <c>jolux#titleDraft</c> of 2,648
+    /// UTF-8 bytes - an HTML fragment holding the whole subject matter of the instrument - against
+    /// a shared key-part ceiling of 2,047. Keyed on the lexical value, that row cannot be keyed at
+    /// all, and the enumeration refuses rather than paging past it.
+    /// </para>
+    /// <para>
+    /// The owner's ruling is a digest and not a larger ceiling, a truncation, an exclusion or an
+    /// absence: <c>SHA256(STR(?value))</c>, lowercase hexadecimal, of the exact UTF-8 lexical value.
+    /// The complete raw <c>?value</c> stays projected, retained and decoded whole - the digest keys
+    /// the row, it does not replace what the row says. Draft, predicate, value-kind, datatype and
+    /// language remain independently keyed beside it, so the keyset is still injective over the
+    /// grouped row and not merely over the value.
+    /// </para>
+    /// <para>
+    /// A digest is fixed-width, so this bounds the key part by construction rather than by hoping
+    /// publisher values stay short. Two distinct full rows colliding onto one canonical key fail
+    /// closed through the existing duplicate refusal; nothing deduplicates silently.
+    /// </para>
+    /// </remarks>
+    /// <remarks>
+    /// <para>
     /// A draft is not unique on its own and neither is a (draft, predicate) pair: a draft carrying
     /// two transposition targets delivers a row for each, and a cursor naming only the draft could
     /// not advance past the second. So the value participates — and with it the value's OWN
@@ -697,7 +719,7 @@ public sealed class LuxembourgDraftGraphDiscoveryPlan
               BIND(STR(?draft) AS ?key_1)
               BIND(?draft_kind AS ?key_2)
               BIND(STR(?predicate) AS ?key_3)
-              BIND(COALESCE(STR(?value), "") AS ?key_4)
+              BIND(SHA256(COALESCE(STR(?value), "")) AS ?key_4)
               BIND(?value_kind AS ?key_5)
               BIND(COALESCE(?datatype_iri, "") AS ?key_6)
               BIND(COALESCE(?language_tag, "") AS ?key_7)
