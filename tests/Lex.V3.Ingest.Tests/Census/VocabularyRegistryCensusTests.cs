@@ -69,6 +69,8 @@ public sealed class VocabularyRegistryCensusTests
                     + "const RdfTypePredicateIri",
                 "Lex.V3.Ingest.Europe.EuObjectFactsBatchFactory: SetsOverObservedObjects=5, "
                     + "SetsOverPackRootsOnly=1",
+                "Lex.V3.Ingest.Luxembourg.LuxembourgReferralDateComposition: const HasOpinion, "
+                    + "const IriKind, const ReferralDate",
             },
             ClosedSurfaceCensus.VocabularyRegistries(CensusScope.SweptHere).ToArray());
     }
