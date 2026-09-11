@@ -517,6 +517,16 @@ public sealed class ClosedVocabularyCensusTests
                     + "DocumentLocatorIsNotRobotsPermitted, OpinionDateMissingOrNotALiteral, "
                     + "OpinionDateNotADateShape, OpinionDateNotValidAtItsPrecision, "
                     + "DocumentLocatorIsNotAnAdmittedOfficialFamily",
+                "Lex.V3.Contracts.Source.Luxembourg.LuxembourgOpinionRequestAbsenceReason: "
+                    + "TypedByThePublisherEnumeratedAndNotHeld",
+                "Lex.V3.Contracts.Source.Luxembourg.LuxembourgOpinionRequestCoverageRefusal: None, "
+                    + "MatrixCompletionOverUnprovenEnumeration, RequestedBatchNotRetained, "
+                    + "DeliveredRequestNotRequested, DeliveredPredicateNotAskedAbout, "
+                    + "RetainedRowCarriesAnAdmissiblePredicate, DeliveredRowNotAccountedExactlyOnce, "
+                    + "MatrixPairNotRepresented, PairHoldsPresentAndDerivedAbsence, "
+                    + "AbsenceEvidenceNotFromThisRun",
+                "Lex.V3.Contracts.Source.Luxembourg.LuxembourgOpinionRequestGapReason: "
+                    + "RequestRoleNotConfirmedByDelivery",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgPartitionCoverBasis: "
                     + "RootCountVerified, LeafTilingOnly",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgPartitionCoverRefusal: None, "

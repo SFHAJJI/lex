@@ -1073,6 +1073,12 @@ public sealed class GuardedConstructionCensusTests
                     + "method public static "
                     + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgOpinionRequestBatchCitation::Fo"
                     + "rDelivery",
+                "Lex.V3.Contracts.Source.Luxembourg.LuxembourgOpinionRequestCoverage: constructor "
+                    + "private instance "
+                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgOpinionRequestCoverage::.ctor, "
+                    + "method public static "
+                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgOpinionRequestCoverage::TryComp"
+                    + "lete",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgOpinionRequestGraphDiscoveryPlan: "
                     + "constructor private instance "
                     + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgOpinionRequestGraphDiscoveryPla"
@@ -1114,6 +1120,17 @@ public sealed class GuardedConstructionCensusTests
                     + ": constructor internal instance "
                     + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgOpinionRequestInventorySparqlRe"
                     + "nderer::.ctor",
+                "Lex.V3.Contracts.Source.Luxembourg.LuxembourgOpinionRequestObservedAbsence: "
+                    + "constructor internal instance "
+                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgOpinionRequestObservedAbsence::"
+                    + ".ctor, "
+                    + "method public instance "
+                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgOpinionRequestCoverage::Derived"
+                    + "AbsenceFor",
+                "Lex.V3.Contracts.Source.Luxembourg.LuxembourgOpinionRequestUnresolvedGap: "
+                    + "constructor internal instance "
+                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgOpinionRequestUnresolvedGap::.c"
+                    + "tor",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgOpinionSparqlRenderer: constructor "
                     + "internal instance "
                     + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgOpinionSparqlRenderer::.ctor",
