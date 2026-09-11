@@ -10,9 +10,9 @@ namespace Lex.V3.Ingest.Tests;
 /// </summary>
 /// <remarks>
 /// The matrix is where a delivery stops being rows and starts being facts, absences and gaps. These
-/// cases are about the three ways that goes wrong: concluding an absence the delivery did not earn,
-/// losing a delivered row between the page and the matrix, and letting a caller state a role the
-/// publisher never stated.
+/// cases are about the ways that goes wrong: concluding an absence the delivery did not earn,
+/// losing a delivered row between the page and the matrix, and reading a row that says something
+/// its own proof never covered.
 /// </remarks>
 [TestClass]
 public sealed class LuxembourgOpinionRequestCoverageTests
@@ -27,9 +27,6 @@ public sealed class LuxembourgOpinionRequestCoverageTests
 
     private const string IriKind = LuxembourgOpinionRequestInventoryDiscoveryPlan.IriKind;
 
-    private static readonly IReadOnlyList<string> Asked =
-        LuxembourgOpinionRequestGraphDiscoveryPlan.AskedAbout;
-
     /// <summary>
     /// A typed subject that delivered a value keeps it; its typed silent siblings become absences.
     /// </summary>
@@ -38,10 +35,15 @@ public sealed class LuxembourgOpinionRequestCoverageTests
     {
         var requests = Subjects(3);
         var assignment = Assignment(requests);
-        var present = new[] { Value(requests[0], "2004-03-11") };
-        var retained = requests.Select(TypeRow).ToArray();
 
-        var coverage = Complete(assignment, present, retained, out var refusal, out var detail);
+        var coverage = Complete(
+            assignment,
+            out var refusal,
+            out var detail,
+            TypeRow(requests[0]),
+            TypeRow(requests[1]),
+            TypeRow(requests[2]),
+            Value(requests[0], "2004-03-11"));
 
         Assert.AreEqual(LuxembourgOpinionRequestCoverageRefusal.None, refusal, detail);
         Assert.IsNotNull(coverage);
@@ -50,6 +52,7 @@ public sealed class LuxembourgOpinionRequestCoverageTests
         Assert.AreEqual(2, coverage.DerivedAbsences.Count, "the two typed silent subjects.");
         Assert.AreEqual(0, coverage.UnresolvedGaps.Count);
         Assert.AreEqual(0, coverage.RequestsOfUnconfirmedRole.Count);
+        Assert.AreEqual(3, coverage.RetainedRows.Count, "the three type rows are retained, not admitted.");
         Assert.AreEqual(
             LuxembourgOpinionRequestAbsenceReason.TypedByThePublisherEnumeratedAndNotHeld,
             coverage.DerivedAbsences[0].Reason);
@@ -57,6 +60,9 @@ public sealed class LuxembourgOpinionRequestCoverageTests
             new[] { requests[1], requests[2] },
             coverage.DerivedAbsences.Select(static value => value.RequestIri).ToArray(),
             "absences are emitted in the batch's own order, so two runs produce the same records.");
+        CollectionAssert.AreEqual(
+            new[] { "2004-03-11" },
+            coverage.ValuesFor(requests[0], ReferralDate).Select(static v => v.Value).ToArray());
     }
 
     /// <summary>
@@ -66,17 +72,15 @@ public sealed class LuxembourgOpinionRequestCoverageTests
     /// THE RULE THIS FAMILY EXISTS FOR. The query filters on the class, so every delivered row came
     /// from a subject that matched it - and the plan refuses to read that filter as the publisher
     /// having answered. A subject whose type row never arrived is silent in exactly the same way as
-    /// one that holds no referral date, and deriving an absence there is the false absence S2-A03
-    /// forbids.
+    /// one that holds no referral date.
     /// </remarks>
     [TestMethod]
     public void SilenceOverAnUntypedSubjectIsAGapAndNeverAnAbsence()
     {
         var requests = Subjects(2);
         var assignment = Assignment(requests);
-        var retained = new[] { TypeRow(requests[0]) };
 
-        var coverage = Complete(assignment, [], retained, out var refusal, out var detail);
+        var coverage = Complete(assignment, out var refusal, out var detail, TypeRow(requests[0]));
 
         Assert.AreEqual(LuxembourgOpinionRequestCoverageRefusal.None, refusal, detail);
         Assert.IsNotNull(coverage);
@@ -98,13 +102,12 @@ public sealed class LuxembourgOpinionRequestCoverageTests
     {
         var requests = Subjects(1);
         var assignment = Assignment(requests);
-        var retained = new[]
-        {
-            new LuxembourgOpinionRequestRecordView(
-                requests[0], RdfType, LuxembourgDraftGraphDiscoveryPlan.InitialDraftClassIri, IriKind),
-        };
 
-        var coverage = Complete(assignment, [], retained, out var refusal, out var detail);
+        var coverage = Complete(
+            assignment,
+            out var refusal,
+            out var detail,
+            (requests[0], RdfType, LuxembourgDraftGraphDiscoveryPlan.InitialDraftClassIri, true));
 
         Assert.AreEqual(LuxembourgOpinionRequestCoverageRefusal.None, refusal, detail);
         Assert.IsNotNull(coverage);
@@ -117,20 +120,16 @@ public sealed class LuxembourgOpinionRequestCoverageTests
     /// </summary>
     /// <remarks>
     /// The value has to BE the class, not spell it. A literal carrying the class IRI as text is a
-    /// different triple from one whose object is that resource, and admitting it would let a string
-    /// comparison stand in for the publisher having typed the subject.
+    /// different triple from one whose object is that resource.
     /// </remarks>
     [TestMethod]
     public void ATypeRowDeliveredAsALiteralConfirmsNothing()
     {
         var requests = Subjects(1);
         var assignment = Assignment(requests);
-        var retained = new[]
-        {
-            new LuxembourgOpinionRequestRecordView(requests[0], RdfType, RequestClass, "literal"),
-        };
 
-        var coverage = Complete(assignment, [], retained, out var refusal, out var detail);
+        var coverage = Complete(
+            assignment, out var refusal, out var detail, (requests[0], RdfType, RequestClass, false));
 
         Assert.AreEqual(LuxembourgOpinionRequestCoverageRefusal.None, refusal, detail);
         Assert.IsNotNull(coverage);
@@ -153,9 +152,9 @@ public sealed class LuxembourgOpinionRequestCoverageTests
     {
         var requests = Subjects(1);
         var assignment = Assignment(requests);
-        var present = new[] { Value(requests[0], "2004-03-11") };
 
-        var coverage = Complete(assignment, present, [], out var refusal, out var detail);
+        var coverage = Complete(
+            assignment, out var refusal, out var detail, Value(requests[0], "2004-03-11"));
 
         Assert.AreEqual(LuxembourgOpinionRequestCoverageRefusal.None, refusal, detail);
         Assert.IsNotNull(coverage);
@@ -174,145 +173,165 @@ public sealed class LuxembourgOpinionRequestCoverageTests
     {
         var requests = Subjects(1);
         var assignment = Assignment(requests);
-        var present = new[] { Value(requests[0], "2004-03-11"), Value(requests[0], "2004-04-01") };
-        var retained = new[] { TypeRow(requests[0]) };
 
-        var coverage = Complete(assignment, present, retained, out var refusal, out var detail);
+        var coverage = Complete(
+            assignment,
+            out var refusal,
+            out var detail,
+            TypeRow(requests[0]),
+            Value(requests[0], "2004-03-11"),
+            Value(requests[0], "2004-04-01"));
 
         Assert.AreEqual(LuxembourgOpinionRequestCoverageRefusal.None, refusal, detail);
         Assert.IsNotNull(coverage);
         Assert.AreEqual(1, coverage.PresentPairCount, "one pair...");
         Assert.AreEqual(2, coverage.AdmittedRowCount, "...delivered twice.");
-        Assert.AreEqual(2, coverage.ValuesFor(requests[0], ReferralDate).Count);
+        CollectionAssert.AreEquivalent(
+            new[] { "2004-03-11", "2004-04-01" },
+            coverage.ValuesFor(requests[0], ReferralDate).Select(static v => v.Value).ToArray());
         Assert.IsNull(
             coverage.DerivedAbsenceFor(requests[0], ReferralDate),
             "a pair with values is not an absence.");
     }
 
     /// <summary>
-    /// A row that is neither admitted nor retained refuses the matrix.
+    /// A row whose terms were substituted keeps its proof and still says nothing.
     /// </summary>
     /// <remarks>
-    /// WHOLE-DELIVERY CONSERVATION. The acquisition asks for every predicate the publisher holds, so
-    /// a row dropped between the page and this matrix is invisible in every count below - including
-    /// a type row, whose loss silently turns absences into gaps.
+    /// <para>
+    /// THE HOSTILE CASE THE KEY CHECK EXISTS FOR. An enumeration proof digests canonical KEYS, not
+    /// the terms beside them, and the row list is publicly constructible. So a delivery of the right
+    /// COUNT whose terms were replaced by a well-formed <c>rdf:type OpinionRequest</c> row passes
+    /// every count identity: the citation binds, conservation balances, and until the terms were
+    /// bound to their own keys this confirmed a role and minted an absence from evidence that never
+    /// delivered that row.
+    /// </para>
+    /// <para>
+    /// Nothing about the proof is touched here. The keys are the honest delivery's own.
+    /// </para>
     /// </remarks>
     [TestMethod]
-    public void ARowThatIsNeitherAdmittedNorRetainedRefusesTheMatrix()
-    {
-        var requests = Subjects(2);
-        var assignment = Assignment(requests);
-        var retained = new[] { TypeRow(requests[0]), TypeRow(requests[1]) };
-
-        // The citation is minted over a delivery of three rows; only two are accounted for.
-        var citation = Citation(assignment, deliveredRowCount: 3);
-        var coverage = LuxembourgOpinionRequestCoverage.TryComplete(
-            assignment, Asked, [], retained, citation, out var refusal, out _);
-
-        Assert.IsNull(coverage);
-        Assert.AreEqual(
-            LuxembourgOpinionRequestCoverageRefusal.DeliveredRowNotAccountedExactlyOnce, refusal);
-    }
-
-    /// <summary>
-    /// A retained row carrying an admitted predicate means the delivery was split wrongly.
-    /// </summary>
-    /// <remarks>
-    /// Conservation alone would stay balanced: the row is counted, so the totals agree while the
-    /// matrix never sees the value and derives an absence beside it.
-    /// </remarks>
-    [TestMethod]
-    public void ARetainedRowCarryingAnAdmittedPredicateIsRefused()
+    public void ASubstitutedRowOfTheSameCountIsRefused()
     {
         var requests = Subjects(1);
         var assignment = Assignment(requests);
-        var retained = new[] { Value(requests[0], "2004-03-11") };
 
-        Complete(assignment, [], retained, out var refusal, out _);
+        // An honest delivery: one referral-date value, no type row, so no absence is derivable.
+        var (proof, honest) = AbsenceFixtures.OpinionRequestGraphRows(
+            assignment.PartitionKey, [Value(requests[0], "2004-03-11")]);
 
-        Assert.AreEqual(
-            LuxembourgOpinionRequestCoverageRefusal.RetainedRowCarriesAnAdmissiblePredicate, refusal);
-    }
-
-    /// <summary>An admitted row about a subject this batch never asked about is refused.</summary>
-    [TestMethod]
-    public void AnAdmittedRowNamingAnUnrequestedSubjectIsRefused()
-    {
-        var requests = Subjects(1);
-        var assignment = Assignment(requests);
-        var present = new[] { Value(Request(97), "2004-03-11") };
-
-        Complete(assignment, present, [], out var refusal, out _);
-
-        Assert.AreEqual(
-            LuxembourgOpinionRequestCoverageRefusal.DeliveredRequestNotRequested, refusal);
-    }
-
-    /// <summary>
-    /// A retained row about a subject this batch never asked about is refused too.
-    /// </summary>
-    /// <remarks>
-    /// The retained half is where the roles are read from, so a stray subject there is not harmless
-    /// bookkeeping: it is a delivery that is not this batch's being used to type this batch's
-    /// members.
-    /// </remarks>
-    [TestMethod]
-    public void ARetainedRowNamingAnUnrequestedSubjectIsRefused()
-    {
-        var requests = Subjects(1);
-        var assignment = Assignment(requests);
-        var retained = new[] { TypeRow(requests[0]), TypeRow(Request(97)) };
-
-        Complete(assignment, [], retained, out var refusal, out _);
-
-        Assert.AreEqual(
-            LuxembourgOpinionRequestCoverageRefusal.DeliveredRequestNotRequested, refusal);
-    }
-
-    /// <summary>An admitted row carrying a predicate this family never asked about is refused.</summary>
-    [TestMethod]
-    public void AnAdmittedRowCarryingAnUnaskedPredicateIsRefused()
-    {
-        var requests = Subjects(1);
-        var assignment = Assignment(requests);
-        var present = new[]
+        // The forgery: a type row's terms carried on the honest row's proof-covered key.
+        var forged = AbsenceFixtures.OpinionRequestGraphRows(
+            assignment.PartitionKey, [TypeRow(requests[0])], runSeed: 939).Rows;
+        var substituted = new[]
         {
-            new LuxembourgOpinionRequestRecordView(requests[0], RdfType, RequestClass, IriKind),
+            new RepeatedEnumerationRow(forged[0].Terms, honest[0].CanonicalKey, honest[0].Cursor),
         };
 
-        Complete(assignment, present, [], out var refusal, out _);
-
-        Assert.AreEqual(
-            LuxembourgOpinionRequestCoverageRefusal.DeliveredPredicateNotAskedAbout, refusal);
-    }
-
-    /// <summary>Without a citation there is no proven enumeration, so there is no matrix.</summary>
-    [TestMethod]
-    public void AMatrixCannotBeCompletedWithoutTheEnumerationThatProvesIt()
-    {
-        var assignment = Assignment(Subjects(1));
+        Assert.AreEqual(honest.Length, substituted.Length, "the same count, which is the point.");
 
         var coverage = LuxembourgOpinionRequestCoverage.TryComplete(
-            assignment, Asked, [], [], null, out var refusal, out _);
+            proof, substituted, assignment, out var refusal, out var detail);
 
-        Assert.IsNull(coverage);
+        Assert.IsNull(coverage, detail);
         Assert.AreEqual(
-            LuxembourgOpinionRequestCoverageRefusal.MatrixCompletionOverUnprovenEnumeration, refusal);
+            LuxembourgOpinionRequestCoverageRefusal.DeliveredRowNotDescribedByItsOwnKey, refusal);
     }
 
-    /// <summary>A citation minted for another batch does not complete this one.</summary>
+    /// <summary>
+    /// A row whose value was replaced no longer digests to its own key.
+    /// </summary>
+    /// <remarks>
+    /// The narrower half of the same attack: everything about the row is honest except the one
+    /// lexical value a reader would take as the publisher's fact. <c>key_4</c> is the publisher's
+    /// own digest of that value, so the substitution has nowhere to hide.
+    /// </remarks>
     [TestMethod]
-    public void ACitationFromAnotherBatchDoesNotCompleteThisOne()
+    public void ARowWhoseValueWasReplacedIsRefused()
     {
-        var population = Subjects(LuxembourgOpinionRequestGraphDiscoveryPlan.BatchCapacity + 1);
-        var inventory = Inventory(population);
-        var batches = LuxembourgOpinionRequestBatchAssignment.Over(population, inventory);
+        var requests = Subjects(1);
+        var assignment = Assignment(requests);
+        var (proof, honest) = AbsenceFixtures.OpinionRequestGraphRows(
+            assignment.PartitionKey, [TypeRow(requests[0]), Value(requests[0], "2004-03-11")]);
+
+        var valueRow = honest.Single(row =>
+            string.Equals(row.Terms[2].Value, ReferralDate, StringComparison.Ordinal));
+        var rewritten = valueRow.Terms.ToArray();
+        rewritten[3] = RepeatedEnumerationRdfTerm.Literal("1999-01-01", null, null);
+
+        var substituted = honest
+            .Select(row => row == valueRow
+                ? new RepeatedEnumerationRow(rewritten, row.CanonicalKey, row.Cursor)
+                : row)
+            .ToArray();
 
         var coverage = LuxembourgOpinionRequestCoverage.TryComplete(
-            batches[0], Asked, [], [], Citation(batches[1], 1), out var refusal, out _);
+            proof, substituted, assignment, out var refusal, out var detail);
 
-        Assert.IsNull(coverage);
-        Assert.AreEqual(LuxembourgOpinionRequestCoverageRefusal.RequestedBatchNotRetained, refusal);
+        Assert.IsNull(coverage, detail);
+        Assert.AreEqual(
+            LuxembourgOpinionRequestCoverageRefusal.DeliveredRowNotDescribedByItsOwnKey, refusal);
+        StringAssert.Contains(detail ?? string.Empty, "key_4");
+    }
+
+    /// <summary>
+    /// The properties this family asks about come from the plan, and cannot be stated.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// THE SECOND SUBSTITUTION THIS DOOR ONCE ALLOWED. The predicate set was a parameter checked
+    /// only for non-emptiness and uniqueness, so a caller could mint a matrix and its derived
+    /// absences for a property the exact request-graph plan never designated as asked about - an
+    /// absence over a question nobody put to the publisher.
+    /// </para>
+    /// <para>
+    /// It is now underivable from anything a caller holds: the set is the plan's own, and a
+    /// delivered row carrying any other predicate is retained rather than admitted, so no pair and
+    /// no absence can exist for it.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void ThePredicateSetIsThePlansAndNoOtherPredicateEntersTheMatrix()
+    {
+        Assert.AreSame(
+            LuxembourgOpinionRequestGraphDiscoveryPlan.AskedAbout,
+            LuxembourgOpinionRequestCoverage.AskedPredicates,
+            "the matrix asks what the plan asked, and there is no parameter to say otherwise.");
+
+        var requests = Subjects(1);
+        var assignment = Assignment(requests);
+        const string Unasked = "http://data.legilux.public.lu/resource/ontology/jolux#dateDocument";
+
+        var coverage = Complete(
+            assignment,
+            out var refusal,
+            out var detail,
+            TypeRow(requests[0]),
+            (requests[0], Unasked, "2004-03-11", false));
+
+        Assert.AreEqual(LuxembourgOpinionRequestCoverageRefusal.None, refusal, detail);
+        Assert.IsNotNull(coverage);
+        Assert.AreEqual(
+            1, coverage.CoveredPairCount, "one subject, one asked property, whatever else arrived.");
+        Assert.AreEqual(0, coverage.PresentPairCount, "the unasked row is not a pair...");
+        Assert.AreEqual(1, coverage.DerivedAbsences.Count, "...and the asked one is still absent.");
+        Assert.AreEqual(2, coverage.RetainedRows.Count, "both non-admitted rows are kept by name.");
+        Assert.ThrowsExactly<ArgumentException>(
+            () => coverage.ValuesFor(requests[0], Unasked),
+            "and nothing can be read out of the matrix about it.");
+    }
+
+    /// <summary>A delivered row about a subject this batch never asked about is refused.</summary>
+    [TestMethod]
+    public void ADeliveredRowNamingAnUnrequestedSubjectIsRefused()
+    {
+        var requests = Subjects(1);
+        var assignment = Assignment(requests);
+
+        Complete(assignment, out var refusal, out _, TypeRow(Request(97)));
+
+        Assert.AreEqual(
+            LuxembourgOpinionRequestCoverageRefusal.DeliveredRequestNotRequested, refusal);
     }
 
     /// <summary>
@@ -323,7 +342,7 @@ public sealed class LuxembourgOpinionRequestCoverageTests
     {
         var requests = Subjects(1);
         var coverage = Complete(
-            Assignment(requests), [], [TypeRow(requests[0])], out var refusal, out var detail);
+            Assignment(requests), out var refusal, out var detail, TypeRow(requests[0]));
 
         Assert.AreEqual(LuxembourgOpinionRequestCoverageRefusal.None, refusal, detail);
         Assert.IsNotNull(coverage);
@@ -339,71 +358,50 @@ public sealed class LuxembourgOpinionRequestCoverageTests
     }
 
     /// <summary>
-    /// The IRI marker this file reads roles by is the one the query itself binds.
+    /// The kind markers this file compares against are the ones the query itself binds.
     /// </summary>
     /// <remarks>
-    /// The role check compares a delivered value kind against a constant, and the query's own BIND
-    /// is what produces that kind. Pinned against the rendered template rather than against another
-    /// constant, because two constants agreeing with each other proves nothing about the text that
-    /// has to produce the value.
+    /// The key check compares a term's kind against a marker string, and the query's own BIND is
+    /// what produces that marker. Pinned against the rendered template rather than against another
+    /// constant, because two constants agreeing with each other prove nothing about the text that
+    /// has to produce the value. The literal marker has no constant to alias, so this is the only
+    /// thing holding it.
     /// </remarks>
     [TestMethod]
-    public void TheRoleMarkerIsTheOneTheRenderedQueryBinds()
+    public void TheKindMarkersAreTheOnesTheRenderedQueryBinds()
     {
         var plan = LuxembourgOpinionRequestGraphDiscoveryPlan.Create();
+        const string BlankNode =
+            LuxembourgOpinionRequestInventoryDiscoveryPlan.UnsupportedBlankNodeKind;
 
         StringAssert.Contains(
             plan.PageTemplate,
-            $"IF(isIRI(?value), \"{IriKind}\"",
-            "a role read under a marker the query never binds is never confirmed.");
+            $"IF(isIRI(?value), \"{IriKind}\", IF(isLiteral(?value), \"literal\", \"{BlankNode}\"))",
+            "a row read under a marker the query never binds describes a delivery that never happened.");
+        StringAssert.Contains(
+            plan.PageTemplate,
+            $"IF(isIRI(?request), \"{IriKind}\", \"{BlankNode}\")",
+            "and the subject's marker is bound the same way.");
     }
 
     private static LuxembourgOpinionRequestCoverage? Complete(
         LuxembourgOpinionRequestBatchAssignment assignment,
-        IReadOnlyList<LuxembourgOpinionRequestRecordView> present,
-        IReadOnlyList<LuxembourgOpinionRequestRecordView> retained,
         out LuxembourgOpinionRequestCoverageRefusal refusal,
-        out string? detail) =>
-        LuxembourgOpinionRequestCoverage.TryComplete(
-            assignment,
-            Asked,
-            present,
-            retained,
-            Citation(assignment, present.Count + retained.Count),
-            out refusal,
-            out detail);
-
-    private static LuxembourgOpinionRequestRecordView Value(string request, string value) =>
-        new(request, ReferralDate, value, "literal");
-
-    private static LuxembourgOpinionRequestRecordView TypeRow(string request) =>
-        new(request, RdfType, RequestClass, IriKind);
-
-    /// <summary>
-    /// A batch citation over a delivery of exactly this many rows.
-    /// </summary>
-    /// <remarks>
-    /// The rows carry tokens rather than the matrix's own values: what this citation contributes to
-    /// a matrix is its selection, its partition and its delivered row COUNT. That the rows are the
-    /// proof's own, and that the delivery was read under this family's graph profile, are the batch
-    /// citation's own rules, exercised beside it.
-    /// </remarks>
-    private static LuxembourgOpinionRequestBatchCitation Citation(
-        LuxembourgOpinionRequestBatchAssignment assignment,
-        int deliveredRowCount)
+        out string? detail,
+        params (string Subject, string Predicate, string? Value, bool ValueIsIri)[] rows)
     {
-        var tokens = Enumerable.Range(0, deliveredRowCount)
-            .Select(index => $"row-{index:D3}")
-            .ToArray();
-        var (proof, keys) = AbsenceFixtures.OpinionRequestGraphBatchDelivery(
-            assignment.PartitionKey, tokens);
-        var rows = tokens
-            .Select((token, index) => new RepeatedEnumerationRow(
-                [RepeatedEnumerationRdfTerm.Iri("urn:delivered:" + token)], keys[index],
-                [RepeatedEnumerationRdfTerm.Iri("urn:delivered:" + token)]))
-            .ToArray();
-        return LuxembourgOpinionRequestBatchCitation.ForDelivery(proof, rows, assignment);
+        var (proof, delivered) = AbsenceFixtures.OpinionRequestGraphRows(
+            assignment.PartitionKey, rows);
+        return LuxembourgOpinionRequestCoverage.TryComplete(
+            proof, delivered, assignment, out refusal, out detail);
     }
+
+    private static (string Subject, string Predicate, string? Value, bool ValueIsIri) Value(
+        string request,
+        string value) => (request, ReferralDate, value, false);
+
+    private static (string Subject, string Predicate, string? Value, bool ValueIsIri) TypeRow(
+        string request) => (request, RdfType, RequestClass, true);
 
     private static LuxembourgOpinionRequestBatchAssignment Assignment(IReadOnlyList<string> requests) =>
         LuxembourgOpinionRequestBatchAssignment.Over(requests, Inventory(requests))[0];

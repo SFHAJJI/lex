@@ -393,6 +393,8 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Contracts.Source.Europe.EuManifestationListingDecode::Term, "
                     + "method private static "
                     + "Lex.V3.Contracts.Source.Europe.EuReifiedAxiomDecode::Term, "
+                    + "method private static "
+                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgOpinionRequestCoverage::Term, "
                     + "method public instance "
                     + "Lex.V3.Contracts.Source.Core.RepeatedEnumerationRdfTerm::<Clone>$, "
                     + "method public static "
@@ -1076,6 +1078,8 @@ public sealed class GuardedConstructionCensusTests
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgOpinionRequestCoverage: constructor "
                     + "private instance "
                     + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgOpinionRequestCoverage::.ctor, "
+                    + "constructor private static "
+                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgOpinionRequestCoverage::.cctor, "
                     + "method public static "
                     + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgOpinionRequestCoverage::TryComp"
                     + "lete",

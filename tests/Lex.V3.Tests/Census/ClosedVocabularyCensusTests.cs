@@ -520,11 +520,8 @@ public sealed class ClosedVocabularyCensusTests
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgOpinionRequestAbsenceReason: "
                     + "TypedByThePublisherEnumeratedAndNotHeld",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgOpinionRequestCoverageRefusal: None, "
-                    + "MatrixCompletionOverUnprovenEnumeration, RequestedBatchNotRetained, "
-                    + "DeliveredRequestNotRequested, DeliveredPredicateNotAskedAbout, "
-                    + "RetainedRowCarriesAnAdmissiblePredicate, DeliveredRowNotAccountedExactlyOnce, "
-                    + "MatrixPairNotRepresented, PairHoldsPresentAndDerivedAbsence, "
-                    + "AbsenceEvidenceNotFromThisRun",
+                    + "DeliveredRowNotDescribedByItsOwnKey, DeliveredRequestNotRequested, "
+                    + "MatrixPairNotRepresented, PairHoldsPresentAndDerivedAbsence",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgOpinionRequestGapReason: "
                     + "RequestRoleNotConfirmedByDelivery",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgPartitionCoverBasis: "

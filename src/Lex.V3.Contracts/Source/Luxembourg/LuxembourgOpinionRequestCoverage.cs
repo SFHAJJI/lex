@@ -1,4 +1,6 @@
 using System.Text.Json.Serialization;
+using Lex.V3.Contracts.Source.Absence;
+using Lex.V3.Contracts.Source.Core;
 
 namespace Lex.V3.Contracts.Source.Luxembourg;
 
@@ -127,59 +129,46 @@ public sealed record LuxembourgOpinionRequestRecordView(
     string ValueKind);
 
 /// <summary>Why a delivered batch does not complete into a readable matrix.</summary>
+/// <remarks>
+/// SIX MEMBERS WERE REMOVED RATHER THAN LEFT UNREACHABLE, and each is named so nobody adds it back
+/// as protection: a matrix over an unproven enumeration, a batch selection that is not the
+/// citation's, a delivered predicate this family never asked about, a retained row carrying an
+/// admitted predicate, a row accounted other than once, and evidence from another run. Every one of
+/// them described a way a CALLER'S PROJECTION could disagree with the delivery, and there are no
+/// caller projections here any more: the rows are the proof's, the admitted and retained halves are
+/// derived from the plan, and the partition and profile are bound by the citation door, which
+/// throws. A refusal nothing can reach reads as defence and is an untested claim.
+/// </remarks>
 public enum LuxembourgOpinionRequestCoverageRefusal
 {
     [JsonStringEnumMemberName("none")]
     None = 0,
 
-    /// <summary>The stage was reached without a proven, complete enumeration to derive from.</summary>
-    [JsonStringEnumMemberName("matrix_completion_over_unproven_enumeration")]
-    MatrixCompletionOverUnprovenEnumeration = 1,
-
-    /// <summary>The requested batch was not retained in a comparable form.</summary>
-    [JsonStringEnumMemberName("requested_batch_not_retained")]
-    RequestedBatchNotRetained = 2,
-
-    /// <summary>A delivered record names a request this batch never asked about.</summary>
-    [JsonStringEnumMemberName("delivered_request_not_requested")]
-    DeliveredRequestNotRequested = 3,
-
-    /// <summary>An admitted record names a property this family never asked about.</summary>
-    [JsonStringEnumMemberName("delivered_predicate_not_asked_about")]
-    DeliveredPredicateNotAskedAbout = 4,
-
     /// <summary>
-    /// A retained row carries a predicate this family admits, so the delivery was split wrongly.
+    /// A delivered row's terms and its own proof-covered key disagree.
     /// </summary>
     /// <remarks>
-    /// Every predicate this family admits is declared on the class it asks about, so a row carrying
-    /// one is a fact about its subject and belongs in the admitted half. Retaining it would keep
-    /// whole-delivery conservation balanced while the matrix never saw the value - an absence
-    /// derived beside a delivered row nobody counted.
+    /// THE CHECK THAT MAKES THE TERMS EVIDENCE. An enumeration proof digests the canonical KEYS, not
+    /// the terms beside them, so terms alone are a caller's restatement of a delivery - and a
+    /// substituted <c>rdf:type</c> row of the right shape would otherwise confirm a role and mint
+    /// an absence from evidence that never delivered it. The keys carry the subject, its kind, the
+    /// predicate, the value's delivered digest, the value's kind, its datatype and its language, so
+    /// requiring each term to describe its own key leaves nothing in a row unbound.
     /// </remarks>
-    [JsonStringEnumMemberName("retained_row_carries_an_admissible_predicate")]
-    RetainedRowCarriesAnAdmissiblePredicate = 5,
+    [JsonStringEnumMemberName("delivered_row_not_described_by_its_own_key")]
+    DeliveredRowNotDescribedByItsOwnKey = 1,
 
-    /// <summary>A delivered row was folded zero times or more than once.</summary>
-    [JsonStringEnumMemberName("delivered_row_not_accounted_exactly_once")]
-    DeliveredRowNotAccountedExactlyOnce = 6,
+    /// <summary>A delivered row names a request this batch never asked about.</summary>
+    [JsonStringEnumMemberName("delivered_request_not_requested")]
+    DeliveredRequestNotRequested = 2,
 
     /// <summary>Some requested pair ended represented by nothing.</summary>
     [JsonStringEnumMemberName("matrix_pair_not_represented")]
-    MatrixPairNotRepresented = 7,
+    MatrixPairNotRepresented = 3,
 
     /// <summary>One pair carries both delivered values and a derived conclusion about silence.</summary>
     [JsonStringEnumMemberName("pair_holds_present_and_derived_absence")]
-    PairHoldsPresentAndDerivedAbsence = 8,
-
-    /// <summary>The enumeration proof in hand is not this batch's own.</summary>
-    /// <remarks>
-    /// The partition key travels out with the bound request and back through the retained delivery,
-    /// so comparing it against a key recomputed here from the requested members checks that the
-    /// request actually sent named these requests.
-    /// </remarks>
-    [JsonStringEnumMemberName("absence_evidence_not_from_this_run")]
-    AbsenceEvidenceNotFromThisRun = 9,
+    PairHoldsPresentAndDerivedAbsence = 4,
 }
 
 /// <summary>
@@ -187,37 +176,60 @@ public enum LuxembourgOpinionRequestCoverageRefusal
 /// </summary>
 /// <remarks>
 /// <para>
-/// COVERAGE IS COUNTED IN DISTINCT PAIRS AND NEVER IN ROWS. A multi-valued property delivers one row
-/// per value, so rows exceed pairs whenever any subject holds several. Whether <c>referralDate</c>
-/// is multi-valued on this publisher is UNMEASURED - no reviewed template could ask until this
-/// family's - so the shape that survives either answer is the one built here, and the pair identity
-/// is checked as a set difference rather than only as a sum.
+/// EVERYTHING IS DERIVED FROM THE DELIVERY THE PROOF PROVES. The only inputs are that proof, the
+/// rows it proves, and the batch its inventory issued. There is no admitted list, no retained list,
+/// no predicate list and no citation to pass: each was a caller projection that could disagree with
+/// the delivery it claimed to describe, and a matrix built on one is a matrix about nothing.
 /// </para>
 /// <para>
-/// THE ROLE IS DERIVED FROM THE DELIVERY, NOT ACCEPTED FROM THE CALLER. Which subjects the publisher
-/// typed <c>OpinionRequest</c> is read out of the retained <c>rdf:type</c> rows here. A boolean or a
-/// subject list taken as a parameter would let a caller confirm a role no row delivered, which is
-/// precisely the claim this family's plan says the query's class filter may not make on the
-/// publisher's behalf.
+/// THE TERMS ARE MADE EVIDENCE BY THEIR OWN KEYS. A proof digests canonical keys; the terms beside
+/// them are not covered, so every row here must describe its own key before it is read - the same
+/// discipline the draft producer applies at admission, held here because this is the door that
+/// concludes something from a row.
+/// </para>
+/// <para>
+/// COVERAGE IS COUNTED IN DISTINCT PAIRS AND NEVER IN ROWS. A multi-valued property delivers one row
+/// per value, so rows exceed pairs whenever any subject holds several. Whether <c>referralDate</c>
+/// is multi-valued on this publisher is UNMEASURED, so the shape that survives either answer is the
+/// one built here, and the pair identity is checked as a set difference and not only as a sum.
 /// </para>
 /// <para>
 /// THE DRAFT FAMILY'S UNCONFIRMED-SUBJECT ARITHMETIC DOES NOT TRANSFER. There, a subject is
 /// confirmed by delivering any row at all, so an unconfirmed one has no present pairs and its pairs
 /// can be accounted as a multiplication. Here confirmation comes from a PARTICULAR row, so a subject
 /// can carry a delivered value and still be unconfirmed - and multiplying would then count its pairs
-/// twice, once as present and once as unconfirmed. Every pair is therefore classified individually.
+/// twice. Every pair is classified individually.
 /// </para>
 /// </remarks>
 public sealed class LuxembourgOpinionRequestCoverage
 {
+    /// <summary>The profile this family's graph deliveries are read under.</summary>
+    private static readonly RepeatedEnumerationInterpretationProfile GraphProfile =
+        LuxembourgOpinionRequestGraphDiscoveryPlan.Create().CreateDeliveryProfile();
+
+    private const string IriKind = LuxembourgOpinionRequestInventoryDiscoveryPlan.IriKind;
+
+    private const string BlankNodeKind =
+        LuxembourgOpinionRequestInventoryDiscoveryPlan.UnsupportedBlankNodeKind;
+
+    private const string UnboundKind = LuxembourgOpinionRequestGraphDiscoveryPlan.UnboundKind;
+
+    /// <summary>
+    /// The marker the plan's own BIND produces for a literal.
+    /// </summary>
+    /// <remarks>
+    /// The one marker with no constant to alias, so it is pinned against the RENDERED TEMPLATE
+    /// beside its three siblings rather than left to agree with itself.
+    /// </remarks>
+    private const string LiteralKind = "literal";
+
     private readonly Dictionary<(string Request, string Predicate), List<int>> _valueIndexesByPair;
-    private readonly IReadOnlyList<LuxembourgOpinionRequestRecordView> _present;
+    private readonly IReadOnlyList<LuxembourgOpinionRequestRecordView> _admitted;
     private readonly HashSet<string> _roleConfirmed;
 
     private LuxembourgOpinionRequestCoverage(
         IReadOnlyList<string> requestedRequests,
-        IReadOnlyList<string> askedPredicates,
-        IReadOnlyList<LuxembourgOpinionRequestRecordView> present,
+        IReadOnlyList<LuxembourgOpinionRequestRecordView> admitted,
         IReadOnlyList<LuxembourgOpinionRequestRecordView> retained,
         Dictionary<(string, string), List<int>> valueIndexesByPair,
         HashSet<string> roleConfirmed,
@@ -228,11 +240,9 @@ public sealed class LuxembourgOpinionRequestCoverage
         LuxembourgOpinionRequestInventoryCitation inventory)
     {
         // SNAPSHOTTED AGAIN HERE, and not only at the door. Everything below is published through a
-        // public IReadOnlyList, which a caller can cast back to IList and write through; the lists
-        // this file builds itself are no safer than the caller's once handed out under that type.
+        // public IReadOnlyList, which a caller can cast back to IList and write through.
         RequestedRequests = Array.AsReadOnly(requestedRequests.ToArray());
-        AskedPredicates = Array.AsReadOnly(askedPredicates.ToArray());
-        _present = Array.AsReadOnly(present.ToArray());
+        _admitted = Array.AsReadOnly(admitted.ToArray());
         RetainedRows = Array.AsReadOnly(retained.ToArray());
         _valueIndexesByPair = valueIndexesByPair;
         _roleConfirmed = roleConfirmed;
@@ -245,13 +255,22 @@ public sealed class LuxembourgOpinionRequestCoverage
 
     public IReadOnlyList<string> RequestedRequests { get; }
 
-    public IReadOnlyList<string> AskedPredicates { get; }
+    /// <summary>
+    /// The properties this family asked about, from the plan that asked them.
+    /// </summary>
+    /// <remarks>
+    /// NOT A PARAMETER, and it was one. A caller-supplied predicate set let a matrix and its derived
+    /// absences be minted for a property the exact request-graph plan never designated as asked
+    /// about - an absence over a question nobody put to the publisher.
+    /// </remarks>
+    public static IReadOnlyList<string> AskedPredicates =>
+        LuxembourgOpinionRequestGraphDiscoveryPlan.AskedAbout;
 
     /// <summary>Pairs the publisher delivered at least one value for.</summary>
     public int PresentPairCount => _valueIndexesByPair.Count;
 
     /// <summary>Rows the publisher delivered and this family admitted. Never used as a pair count.</summary>
-    public int AdmittedRowCount => _present.Count;
+    public int AdmittedRowCount => _admitted.Count;
 
     /// <summary>
     /// Every delivered row this family asserts nothing from, kept by name.
@@ -285,192 +304,115 @@ public sealed class LuxembourgOpinionRequestCoverage
     /// <summary>Every pair this batch accounts for, present, absent or unresolved.</summary>
     public int CoveredPairCount => RequestedRequests.Count * AskedPredicates.Count;
 
-    /// <summary>The digest of a batch's requested members, over which an absence is meaningful.</summary>
-    public static string SelectionDigestFor(IReadOnlyList<string> requestedRequests) =>
-        LuxembourgOpinionRequestGraphDiscoveryPlan.SelectionDigestFor(requestedRequests);
-
     /// <summary>
-    /// Completes the matrix over a delivered batch, or refuses without minting anything.
+    /// Completes the matrix over a batch's proven delivery, or refuses without minting anything.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Every precondition is asked before the first absence is constructed, so a refusal cannot
-    /// leave half a matrix behind for a caller to read as a whole one.
+    /// The citation is minted HERE, from the proof and the inventory-issued batch, rather than
+    /// accepted: that door binds the delivery to this family's interpretation profile and to the
+    /// partition it claims, and throws when it is neither. So a caller cannot pair a matrix with a
+    /// citation of some other delivery, because there is no citation to pass.
     /// </para>
     /// <para>
-    /// NO OBSERVATION INSTANT IS CHECKED, and its absence is deliberate rather than forgotten. The
-    /// draft family requires one on its batch citation; this family's citation carries none, because
-    /// a caller-supplied instant copied into a property documented as an observation time is a
-    /// provenance claim the caller cannot make. An absence minted here is datable through the run's
-    /// own retained receipt, named by
-    /// <see cref="LuxembourgOpinionRequestBatchCitation.AcquisitionRunRef"/>.
+    /// NO OBSERVATION INSTANT IS CHECKED, and its absence is deliberate. A caller-supplied instant
+    /// copied into a property documented as an observation time is a provenance claim the caller
+    /// cannot make; an absence minted here is datable through the run's own retained receipt, named
+    /// by <see cref="LuxembourgOpinionRequestBatchCitation.AcquisitionRunRef"/>.
     /// </para>
     /// </remarks>
-    /// <param name="assignment">The batch the proven inventory issued, carrying its own members.</param>
-    /// <param name="askedPredicatesInput">The properties this run asked about.</param>
-    /// <param name="presentInput">Delivered rows this family admitted as facts.</param>
-    /// <param name="retainedInput">Delivered rows retained as evidence and asserted nothing from.</param>
-    /// <param name="batch">The citation minted from this batch's own enumeration proof.</param>
+    /// <param name="proof">The batch's own enumeration proof.</param>
+    /// <param name="deliveredRows">The rows that proof proves, terms and keys together.</param>
+    /// <param name="assignment">The batch the proven inventory issued.</param>
     public static LuxembourgOpinionRequestCoverage? TryComplete(
+        AbsenceFamilyEnumerationProof proof,
+        IReadOnlyList<RepeatedEnumerationRow> deliveredRows,
         LuxembourgOpinionRequestBatchAssignment assignment,
-        IReadOnlyList<string> askedPredicatesInput,
-        IReadOnlyList<LuxembourgOpinionRequestRecordView> presentInput,
-        IReadOnlyList<LuxembourgOpinionRequestRecordView> retainedInput,
-        LuxembourgOpinionRequestBatchCitation? batch,
         out LuxembourgOpinionRequestCoverageRefusal refusal,
         out string? detail)
     {
+        ArgumentNullException.ThrowIfNull(proof);
+        ArgumentNullException.ThrowIfNull(deliveredRows);
         ArgumentNullException.ThrowIfNull(assignment);
-        ArgumentNullException.ThrowIfNull(askedPredicatesInput);
-        ArgumentNullException.ThrowIfNull(presentInput);
-        ArgumentNullException.ThrowIfNull(retainedInput);
         detail = null;
 
         var requestedRequests = assignment.Requests;
         var inventory = assignment.Inventory;
 
-        // SNAPSHOT BEFORE ANYTHING READS THEM, which is why these arrive under Input names and are
-        // never touched again. The value index built below is POSITIONAL into the admitted rows, so
-        // a caller who removed a row afterwards would not merely change a count - it would silently
-        // repoint every value lookup past it.
-        var askedPredicates = Array.AsReadOnly(askedPredicatesInput.ToArray());
-        var present = Array.AsReadOnly(presentInput.ToArray());
-        var retained = Array.AsReadOnly(retainedInput.ToArray());
-
-        // AN ABSENCE MAY ONLY BE DERIVED FROM A PROVEN, COMPLETE ENUMERATION. The batch citation is
-        // minted from the enumeration proof and cannot be built without one, so this is the
-        // structural form of "no absence from a refused or incomplete enumeration": the caller has
-        // nothing to pass here unless a proof existed.
-        if (batch is null)
-        {
-            refusal = LuxembourgOpinionRequestCoverageRefusal.MatrixCompletionOverUnprovenEnumeration;
-            detail = "A derived absence means nothing without the enumeration that proves it.";
-            return null;
-        }
-
-        // The requested set must be exactly the canonical form the digest was taken over, or the
-        // citation on every absence would describe a different question from the one asked.
-        if (requestedRequests.Count is 0 ||
-            !string.Equals(
-                SelectionDigestFor(requestedRequests), batch.SelectionDigest, StringComparison.Ordinal) ||
-            requestedRequests.Count != batch.RequestedCount)
-        {
-            refusal = LuxembourgOpinionRequestCoverageRefusal.RequestedBatchNotRetained;
-            detail = "The requested batch does not match the selection its own citation names.";
-            return null;
-        }
-
-        // THE PROOF IN HAND MUST BE THIS BATCH'S OWN.
-        if (!string.Equals(
-                LuxembourgOpinionRequestGraphDiscoveryPlan.PartitionKeyFor(requestedRequests),
-                batch.PartitionKey,
-                StringComparison.Ordinal))
-        {
-            refusal = LuxembourgOpinionRequestCoverageRefusal.AbsenceEvidenceNotFromThisRun;
-            detail = "The delivery's own partition key does not name these requests.";
-            return null;
-        }
+        // THE CITATION IS MINTED, NOT ACCEPTED. Its door binds the rows to the proof by canonical-key
+        // digest, the delivery to this family's interpretation profile, and the partition to the one
+        // the proof proves - and throws rather than refusing, because a delivery that is not this
+        // family's is not a matrix that failed to complete.
+        var batch = LuxembourgOpinionRequestBatchCitation.ForDelivery(proof, deliveredRows, assignment);
 
         var requested = requestedRequests.ToHashSet(StringComparer.Ordinal);
-        var asked = askedPredicates.ToHashSet(StringComparer.Ordinal);
-        if (requested.Count != requestedRequests.Count ||
-            asked.Count != askedPredicates.Count ||
-            askedPredicates.Count is 0)
-        {
-            refusal = LuxembourgOpinionRequestCoverageRefusal.RequestedBatchNotRetained;
-            detail = "A batch names each request once and each property once.";
-            return null;
-        }
+        var admissible = LuxembourgOpinionRequestGraphDiscoveryPlan.DirectlyAdmissiblePredicates
+            .ToHashSet(StringComparer.Ordinal);
 
-        // EVERY ADMITTED ROW IS FOLDED EXACTLY ONCE, tracked per row rather than inferred from a
-        // total. A LIST per pair, never a set: the values ARE the fact, and a subject holding
-        // several must keep all of them.
+        var admitted = new List<LuxembourgOpinionRequestRecordView>();
+        var retained = new List<LuxembourgOpinionRequestRecordView>();
         var byPair = new Dictionary<(string, string), List<int>>();
-        for (var index = 0; index < present.Count; index++)
+        var roleConfirmed = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var row in deliveredRows)
         {
-            var record = present[index];
-            if (!requested.Contains(record.RequestIri))
+            // EVERY TERM DESCRIBES ITS OWN PROOF-COVERED KEY, or the row is not evidence of
+            // anything. Checked before a single field is read.
+            if (!DescribesItsOwnKey(row, out var subject, out var predicate, out var value,
+                    out var valueKind, out var why))
+            {
+                refusal = LuxembourgOpinionRequestCoverageRefusal.DeliveredRowNotDescribedByItsOwnKey;
+                detail = why;
+                return null;
+            }
+
+            if (!requested.Contains(subject))
             {
                 refusal = LuxembourgOpinionRequestCoverageRefusal.DeliveredRequestNotRequested;
-                detail = $"An admitted row names {record.RequestIri}, which this batch never asked "
-                    + "about.";
+                detail = $"A delivered row names {subject}, which this batch never asked about.";
                 return null;
             }
 
-            if (!asked.Contains(record.PredicateIri))
+            var view = new LuxembourgOpinionRequestRecordView(subject, predicate, value, valueKind);
+
+            // ADMITTED OR RETAINED BY THE PLAN, never by which list a caller put the row in.
+            if (!admissible.Contains(predicate))
             {
-                refusal = LuxembourgOpinionRequestCoverageRefusal.DeliveredPredicateNotAskedAbout;
-                detail = $"An admitted row names {record.PredicateIri}, which this family never "
-                    + "asked about.";
-                return null;
+                // THE ROLE IS READ OFF THE DELIVERY. A retained rdf:type row whose value IS the IRI
+                // of this family's class is the publisher answering what the query only asked; one
+                // naming another class, or delivered as a literal spelling the class rather than
+                // being it, answers it the other way and confirms nothing.
+                if (string.Equals(
+                        predicate,
+                        LuxembourgOpinionRequestGraphDiscoveryPlan.RdfTypePredicateIri,
+                        StringComparison.Ordinal) &&
+                    string.Equals(valueKind, IriKind, StringComparison.Ordinal) &&
+                    string.Equals(
+                        value,
+                        LuxembourgOpinionRequestGraphDiscoveryPlan.OpinionRequestClassIri,
+                        StringComparison.Ordinal))
+                {
+                    roleConfirmed.Add(subject);
+                }
+
+                retained.Add(view);
+                continue;
             }
 
-            var key = (record.RequestIri, record.PredicateIri);
+            var key = (subject, predicate);
             if (!byPair.TryGetValue(key, out var bucket))
             {
                 bucket = [];
                 byPair[key] = bucket;
             }
 
-            bucket.Add(index);
+            // A LIST per pair, never a set: the values ARE the fact, and a subject holding several
+            // must keep all of them. The index is into the admitted rows, in delivery order.
+            bucket.Add(admitted.Count);
+            admitted.Add(view);
         }
 
-        // THE ROLE IS READ OFF THE DELIVERY. A retained rdf:type row whose value is the IRI of this
-        // family's class is the publisher answering what the query only asked; a type row naming
-        // some other class answers it the other way and confirms nothing.
-        var admissible = LuxembourgOpinionRequestGraphDiscoveryPlan.DirectlyAdmissiblePredicates
-            .ToHashSet(StringComparer.Ordinal);
-        var roleConfirmed = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var row in retained)
-        {
-            if (!requested.Contains(row.RequestIri))
-            {
-                refusal = LuxembourgOpinionRequestCoverageRefusal.DeliveredRequestNotRequested;
-                detail = $"A retained row names {row.RequestIri}, which this batch never asked about.";
-                return null;
-            }
-
-            if (admissible.Contains(row.PredicateIri))
-            {
-                refusal = LuxembourgOpinionRequestCoverageRefusal.RetainedRowCarriesAnAdmissiblePredicate;
-                detail = $"A retained row carries {row.PredicateIri}, which this family admits, so "
-                    + "the delivery was split wrongly.";
-                return null;
-            }
-
-            if (string.Equals(
-                    row.PredicateIri,
-                    LuxembourgOpinionRequestGraphDiscoveryPlan.RdfTypePredicateIri,
-                    StringComparison.Ordinal) &&
-                string.Equals(
-                    row.ValueKind,
-                    LuxembourgOpinionRequestInventoryDiscoveryPlan.IriKind,
-                    StringComparison.Ordinal) &&
-                string.Equals(
-                    row.Value,
-                    LuxembourgOpinionRequestGraphDiscoveryPlan.OpinionRequestClassIri,
-                    StringComparison.Ordinal))
-            {
-                roleConfirmed.Add(row.RequestIri);
-            }
-        }
-
-        // CONSERVATION OVER THE WHOLE DELIVERY, not just over the admitted half, and over NAMED rows
-        // rather than a number. The broad acquisition carries every predicate the publisher holds
-        // about these subjects, so a delivered row is either admitted here and folded exactly once,
-        // or retained by name as evidence this family asserts nothing about. A row that is neither
-        // has gone missing between the page and this matrix, and would be invisible in every count
-        // below - including the type rows the roles above are read from.
-        var folded = byPair.Values.Sum(static value => value.Count);
-        if (folded != present.Count ||
-            batch.DeliveredRowCount != present.Count + retained.Count)
-        {
-            refusal = LuxembourgOpinionRequestCoverageRefusal.DeliveredRowNotAccountedExactlyOnce;
-            detail = $"The delivery carried {batch.DeliveredRowCount} rows; this matrix folded "
-                + $"{folded} admitted and {retained.Count} were retained.";
-            return null;
-        }
-
+        var askedPredicates = AskedPredicates;
         var unconfirmed = requestedRequests.Where(value => !roleConfirmed.Contains(value)).ToArray();
 
         // EMITTED IN A DETERMINISTIC ORDER so two runs over one batch produce the same records, and
@@ -568,8 +510,109 @@ public sealed class LuxembourgOpinionRequestCoverage
 
         refusal = LuxembourgOpinionRequestCoverageRefusal.None;
         return new LuxembourgOpinionRequestCoverage(
-            requestedRequests, askedPredicates, present, retained, byPair, roleConfirmed, absences,
-            gaps, unconfirmed, batch, inventory);
+            requestedRequests, admitted, retained, byPair, roleConfirmed, absences, gaps, unconfirmed,
+            batch, inventory);
+    }
+
+    /// <summary>
+    /// Reads a row's terms only if every one of them describes its own proof-covered key.
+    /// </summary>
+    /// <remarks>
+    /// The plan binds <c>key_1</c> to <c>STR(?request)</c>, <c>key_2</c> to the subject's kind,
+    /// <c>key_3</c> to <c>STR(?predicate)</c>, <c>key_4</c> to the publisher's own digest of the
+    /// value, <c>key_5</c> to the value's kind, and <c>key_6</c> and <c>key_7</c> to the datatype
+    /// and language or the empty string. Every one is checked, so nothing a row says is outside what
+    /// the proof digested.
+    /// <para>
+    /// <c>key_4</c> IS THE PUBLISHER'S CURSOR CODEC AND NOT SHA-256 OF THE VALUE. This endpoint
+    /// hashes values double UTF-8 encoded; recomputing through the named codec is what lets a
+    /// delivered key be compared to the value beside it at all.
+    /// </para>
+    /// </remarks>
+    private static bool DescribesItsOwnKey(
+        RepeatedEnumerationRow row,
+        out string subject,
+        out string predicate,
+        out string? value,
+        out string valueKind,
+        out string? why)
+    {
+        subject = string.Empty;
+        predicate = string.Empty;
+        value = null;
+        valueKind = string.Empty;
+        why = null;
+
+        if (row is null || row.CanonicalKey.Count != GraphProfile.CanonicalKeyVariables.Count)
+        {
+            why = "A delivered row does not carry this family's keyset.";
+            return false;
+        }
+
+        var subjectTerm = Term(row, "request");
+        var predicateTerm = Term(row, "predicate");
+        var valueTerm = Term(row, "value");
+
+        if (subjectTerm.Kind is not RepeatedEnumerationRdfTermKind.Iri || subjectTerm.Value is null)
+        {
+            why = "A delivered row's subject is not a readable IRI.";
+            return false;
+        }
+
+        if (predicateTerm.Kind is not RepeatedEnumerationRdfTermKind.Iri || predicateTerm.Value is null)
+        {
+            why = "A delivered row's predicate is not a readable IRI.";
+            return false;
+        }
+
+        var expected = new[]
+        {
+            subjectTerm.Value,
+            MarkerFor(subjectTerm),
+            predicateTerm.Value,
+            LuxembourgPublisherCursorCodec.ComputeKey(valueTerm.Value ?? string.Empty),
+            MarkerFor(valueTerm),
+            valueTerm.Datatype ?? string.Empty,
+            valueTerm.Language ?? string.Empty,
+        };
+
+        for (var index = 0; index < expected.Length; index++)
+        {
+            if (!string.Equals(row.CanonicalKey[index].Value, expected[index], StringComparison.Ordinal))
+            {
+                why = $"A delivered row's key_{index + 1} does not describe the term beside it.";
+                return false;
+            }
+        }
+
+        subject = subjectTerm.Value;
+        predicate = predicateTerm.Value;
+        value = valueTerm.Value;
+        valueKind = expected[4];
+        return true;
+    }
+
+    /// <summary>The marker the plan's own BIND must have produced for a term of this kind.</summary>
+    private static string MarkerFor(RepeatedEnumerationRdfTerm term) => term.Kind switch
+    {
+        RepeatedEnumerationRdfTermKind.Iri => IriKind,
+        RepeatedEnumerationRdfTermKind.Literal => LiteralKind,
+        RepeatedEnumerationRdfTermKind.BlankNode => BlankNodeKind,
+        RepeatedEnumerationRdfTermKind.Unbound => UnboundKind,
+        _ => throw new ArgumentOutOfRangeException(nameof(term)),
+    };
+
+    private static RepeatedEnumerationRdfTerm Term(RepeatedEnumerationRow row, string name)
+    {
+        for (var ordinal = 0; ordinal < GraphProfile.ProjectionVariables.Count; ordinal++)
+        {
+            if (string.Equals(GraphProfile.ProjectionVariables[ordinal], name, StringComparison.Ordinal))
+            {
+                return row.Terms[ordinal];
+            }
+        }
+
+        throw new ArgumentException($"The delivery profile does not project {name}.", nameof(name));
     }
 
     /// <summary>
@@ -607,7 +650,7 @@ public sealed class LuxembourgOpinionRequestCoverage
     {
         RequireInMatrix(requestIri, predicateIri);
         return _valueIndexesByPair.TryGetValue((requestIri, predicateIri), out var indexes)
-            ? Array.AsReadOnly(indexes.Select(index => _present[index]).ToArray())
+            ? Array.AsReadOnly(indexes.Select(index => _admitted[index]).ToArray())
             : [];
     }
 
