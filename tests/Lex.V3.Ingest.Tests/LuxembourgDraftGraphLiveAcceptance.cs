@@ -32,9 +32,10 @@ namespace Lex.V3.Ingest.Tests;
 /// SKIPPED BY DEFAULT under <see cref="EnableVariable"/>, and it is the most expensive gate in this
 /// repository, which is worth stating rather than discovering. The projected volume is recorded at
 /// <see cref="ProjectedRequestNote"/> and re-derived from the measured population at run time, so a
-/// reader sees the arithmetic rather than a remembered number. Against the hypothesised 7,753 drafts
-/// it is on the order of 800 sequential requests under the executor's own robots handling and shared
-/// origin pacing - not the 120 the class-scoped version projected. There is no smaller honest
+/// reader sees the arithmetic rather than a remembered number. Against the measured 7,753 drafts it
+/// is on the order of 900 sequential requests under the executor's own robots handling and shared
+/// origin pacing - not the 120 the class-scoped version projected, and not the 800 this paragraph
+/// carried while <see cref="ProjectedRequestNote"/> said otherwise. There is no smaller honest
 /// version of this family's question.
 /// </para>
 /// <para>
@@ -77,27 +78,40 @@ public sealed class LuxembourgDraftGraphLiveAcceptance
     /// </para>
     /// <para>
     /// MEASURED, from the truncated acceptance run retained at
-    /// <c>artifacts/e8-draft-live-7a07f85b5d924787948c6c1150df070b</c>, 2026-09-11 07:30:33Z to
-    /// 07:33:22Z. It issued <b>94 product requests across fourteen producer runs</b>: 24 for the
+    /// <c>artifacts/e8-draft-live-7a07f85b5d924787948c6c1150df070b</c>, request starts
+    /// 2026-09-11T07:30:33.1535703Z through 2026-09-11T07:33:21.9788460Z. It issued
+    /// <b>94 product requests across fourteen producer runs</b>: 24 for the
     /// inventory - two counts and twenty-two pages, exactly what <c>ceil(7753/907)</c> and
     /// <c>ceil(7753/613)</c> predict - and 70 across thirteen batch runs. Twelve of those batches
     /// completed, consuming 68 requests: <b>eight needed six and four needed five</b>, a mean of
     /// 5.67. The thirteenth refused after two on the long-title row.
     /// </para>
     /// <para>
-    /// So N=7,753 is 156 batches and <b>about 910 sequential requests</b>, not 804, and at most 960
-    /// if every batch turns out to need six. The retained run averaged 1.8s start to start, which
-    /// puts a full sweep near <b>twenty-seven minutes</b> of wall clock rather than twenty. The run
-    /// still RECORDS its actual count and nothing here asserts it: twelve batches are a better
-    /// sample than ten drafts, and still a sample.
+    /// So N=7,753 is 156 batches and <b>about 910 sequential requests</b> at the sampled rate, not
+    /// 804. The retained run averaged 1.8s start to start, which puts a full sweep near
+    /// <b>twenty-seven minutes</b> of wall clock rather than twenty.
+    /// </para>
+    /// <para>
+    /// THE SAMPLE BOUNDS NOTHING, and an earlier version of this note said "at most 960" as though
+    /// it did. Six is the largest per-batch count OBSERVED, over twelve batches out of 156. It is
+    /// not a ceiling: 143 batches were never swept at all, the thirteenth stopped after two requests
+    /// before delivering, and what that batch costs once the cursor is repaired is unmeasured. Six
+    /// per batch throughout would be 960 requests - a scenario worth holding in mind when scheduling,
+    /// never a bound to plan against. R is a function of what the publisher holds, and this family
+    /// asks broad-predicate, so a batch of unusually verbose drafts pages more.
+    /// </para>
+    /// <para>
+    /// The run still RECORDS its actual count and nothing here asserts it: twelve batches are a
+    /// better sample than ten drafts, and still a sample.
     /// </para>
     /// </remarks>
     private const string ProjectedRequestNote =
         "inventory: 2 counts + ceil(N/907) + ceil(N/613) pages; sweep: ceil(N/50) batches x "
-        + "(2 counts + ceil(R/953) + ceil(R/571) pages), R measured per batch. Measured over twelve "
-        + "complete batches of the retained 2026-09-11T07:30:33Z run: 24 inventory requests and "
-        + "5.67 per batch (eight at six, four at five). N=7753 projects ~910 sequential requests, "
-        + "at most 960.";
+        + "(2 counts + ceil(R/953) + ceil(R/571) pages), R measured per batch. Sampled over the "
+        + "twelve complete batches of the retained 2026-09-11T07:30:33.1535703Z run: 24 inventory "
+        + "requests and 5.67 per batch (eight at six, four at five). N=7753 projects ~910 sequential "
+        + "requests AT THAT SAMPLED RATE. Six throughout would be 960, a scenario and not a bound: "
+        + "143 batches were never swept and the refused one never delivered.";
 
     [TestMethod]
     public async Task TheAcceptedDraftProvisionsAreAnsweredByThePublisher()
@@ -304,9 +318,10 @@ public sealed class LuxembourgDraftGraphLiveAcceptance
 
             // AND THE ACCEPTANCE SEQUENCE ITSELF, RECONCILED OFFLINE. The gated body above never
             // runs in an ordinary suite, so its spine would otherwise be unexercised until someone
-            // spent 800 live requests discovering it had rotted. This drives the same sequence the
-            // live run does - an inventory-issued batch, swept, then reconciled as a terminal cover
-            // over that same inventory - and requires the cover to mint rather than merely not throw.
+            // spent some nine hundred live requests discovering it had rotted. This drives the same
+            // sequence the live run does - an inventory-issued batch, swept, then reconciled as a
+            // terminal cover over that same inventory - and requires the cover to mint rather than
+            // merely not throw.
             var cover = LuxembourgDraftGraphBatchCover.TryCreate(
                 inventory, [result.Coverage!], out var coverRefusal, out var coverDetail);
 
