@@ -338,6 +338,75 @@ internal sealed class AbsenceEnumerationProofFixture : IRepeatedEnumerationEvide
         LuxembourgPublisherCursorCodec.ComputeKey(value);
 
     /// <summary>
+    /// A request graph delivery of NAMED rows, under the request graph plan's own profile.
+    /// </summary>
+    /// <remarks>
+    /// The coverage door reads a row's terms and requires each to describe its own proof-covered
+    /// key, so a fixture for it cannot deliver placeholder rows and hand the matrix unrelated
+    /// views - which is exactly the shape a reviewer showed could confirm a role from evidence that
+    /// never delivered it. Every row here is the row the matrix will read.
+    /// </remarks>
+    public static EnumerationDeliveryComparison LuxembourgOpinionRequestGraphRowDelivery(
+        string partitionKey,
+        IReadOnlyList<(string Subject, string Predicate, string? Value, bool ValueIsIri)> rows,
+        int runSeed = 938)
+    {
+        var plan = LuxembourgOpinionRequestGraphDiscoveryPlan.Create();
+        var profile = plan.CreateDeliveryProfile();
+        var page = LuxembourgOpinionRequestGraphRowPageJson(rows);
+        var fixture = new AbsenceEnumerationProofFixture(
+            partitionKey,
+            runSeed,
+            (rows.Count * 2) + 100,
+            profile,
+            OfficialMachineQuerySourceProfileId.LuxembourgSparql,
+            profile.PassParameterName,
+            profile.HasCursorParameterName,
+            profile.SelectionParameterNames,
+            plan.CountQueryFamilyRef,
+            plan.PageQueryFamilyRef);
+        return fixture.BuildPages(page, page, rows.Count, rows.Count + 3, rows.Count + 1);
+    }
+
+    /// <summary>One page of named request-graph rows, in key order.</summary>
+    private static string LuxembourgOpinionRequestGraphRowPageJson(
+        IReadOnlyList<(string Subject, string Predicate, string? Value, bool ValueIsIri)> rows)
+    {
+        const string IriKind = LuxembourgOpinionRequestInventoryDiscoveryPlan.IriKind;
+        var bindings = rows.Select(row =>
+        {
+            var valueKind = row.ValueIsIri ? IriKind : "literal";
+            var valueJson = row.ValueIsIri
+                ? "{\"type\":\"uri\",\"value\":\"" + row.Value + "\"}"
+                : "{\"type\":\"literal\",\"value\":\"" + row.Value + "\"}";
+            return "{\"request\":{\"type\":\"uri\",\"value\":\"" + row.Subject + "\"},"
+                + "\"request_kind\":{\"type\":\"literal\",\"value\":\"" + IriKind + "\"},"
+                + "\"predicate\":{\"type\":\"uri\",\"value\":\"" + row.Predicate + "\"},"
+                + "\"value\":" + valueJson + ","
+                + "\"value_kind\":{\"type\":\"literal\",\"value\":\"" + valueKind + "\"},"
+                + "\"datatype_iri\":{\"type\":\"literal\",\"value\":\"\"},"
+                + "\"language_tag\":{\"type\":\"literal\",\"value\":\"\"},"
+                + "\"multiplicity\":{\"type\":\"typed-literal\","
+                + "\"datatype\":\"http://www.w3.org/2001/XMLSchema#integer\",\"value\":\"1\"},"
+                + "\"key_1\":{\"type\":\"literal\",\"value\":\"" + row.Subject + "\"},"
+                + "\"key_2\":{\"type\":\"literal\",\"value\":\"" + IriKind + "\"},"
+                + "\"key_3\":{\"type\":\"literal\",\"value\":\"" + row.Predicate + "\"},"
+                + "\"key_4\":{\"type\":\"literal\",\"value\":\""
+                + DeliveredValueKey(row.Value ?? string.Empty) + "\"},"
+                + "\"key_5\":{\"type\":\"literal\",\"value\":\"" + valueKind + "\"},"
+                + "\"key_6\":{\"type\":\"literal\",\"value\":\"\"},"
+                + "\"key_7\":{\"type\":\"literal\",\"value\":\"\"}}";
+        });
+
+        return "{\"head\":{\"link\":[],\"vars\":"
+            + "[\"request\",\"request_kind\",\"predicate\",\"value\",\"value_kind\","
+            + "\"datatype_iri\",\"language_tag\",\"multiplicity\","
+            + "\"key_1\",\"key_2\",\"key_3\",\"key_4\",\"key_5\",\"key_6\",\"key_7\"]},"
+            + "\"results\":{\"distinct\":false,\"ordered\":true,\"bindings\":["
+            + string.Join(',', bindings) + "]}}";
+    }
+
+    /// <summary>
     /// One page of the request graph's projection, in key order.
     /// </summary>
     /// <remarks>

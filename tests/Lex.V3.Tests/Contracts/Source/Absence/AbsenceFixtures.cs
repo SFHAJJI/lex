@@ -351,6 +351,94 @@ internal static class AbsenceFixtures
             runSeed);
 
     /// <summary>
+    /// A proven request-graph batch delivery of NAMED rows, terms and keys together.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// What the coverage door actually consumes. It reads each row's terms and requires them to
+    /// describe that row's proof-covered key, so the rows a test delivers are the rows the matrix
+    /// reads - there is no second, unbound projection to hand it.
+    /// </para>
+    /// <para>
+    /// SORTED INTO KEY ORDER HERE. A proven delivery is necessarily key-ordered, because Source/Core
+    /// requires cursors to strictly increase, so a fixture wanting a proof has to deliver in that
+    /// order rather than in whatever order a test listed its rows.
+    /// </para>
+    /// </remarks>
+    public static (AbsenceFamilyEnumerationProof Proof, RepeatedEnumerationRow[] Rows)
+        OpinionRequestGraphRows(
+            string partitionKey,
+            IReadOnlyList<(string Subject, string Predicate, string? Value, bool ValueIsIri)> rows,
+            int runSeed = 938)
+    {
+        const string IriKind = LuxembourgOpinionRequestInventoryDiscoveryPlan.IriKind;
+
+        static string Kind(bool isIri) =>
+            isIri ? LuxembourgOpinionRequestInventoryDiscoveryPlan.IriKind : "literal";
+
+        var ordered = rows
+            .OrderBy(static row => row.Subject, StringComparer.Ordinal)
+            .ThenBy(static row => row.Predicate, StringComparer.Ordinal)
+            .ThenBy(
+                static row => AbsenceEnumerationProofFixture.DeliveredValueKey(
+                    row.Value ?? string.Empty),
+                StringComparer.Ordinal)
+            .ThenBy(static row => Kind(row.ValueIsIri), StringComparer.Ordinal)
+            .ToArray();
+
+        var delivery = AbsenceEnumerationProofFixture.LuxembourgOpinionRequestGraphRowDelivery(
+            partitionKey, ordered, runSeed);
+
+        var proof = AbsenceFamilyEnumerationProof.TryCreate(
+            partitionKey, delivery, CustodyMembership.Floored, out var refusal);
+        if (proof is null)
+        {
+            throw new InvalidOperationException($"fixture proof refused as {refusal}");
+        }
+
+        var built = ordered
+            .Select(row =>
+            {
+                var valueKind = Kind(row.ValueIsIri);
+                var valueTerm = row.ValueIsIri
+                    ? RepeatedEnumerationRdfTerm.Iri(row.Value!)
+                    : RepeatedEnumerationRdfTerm.Literal(row.Value ?? string.Empty, null, null);
+                var key = new[]
+                {
+                    RepeatedEnumerationRdfTerm.Literal(row.Subject, null, null),
+                    RepeatedEnumerationRdfTerm.Literal(IriKind, null, null),
+                    RepeatedEnumerationRdfTerm.Literal(row.Predicate, null, null),
+                    RepeatedEnumerationRdfTerm.Literal(
+                        AbsenceEnumerationProofFixture.DeliveredValueKey(
+                            row.Value ?? string.Empty),
+                        null,
+                        null),
+                    RepeatedEnumerationRdfTerm.Literal(valueKind, null, null),
+                    RepeatedEnumerationRdfTerm.Literal(string.Empty, null, null),
+                    RepeatedEnumerationRdfTerm.Literal(string.Empty, null, null),
+                };
+
+                // The projection's own order: the seven keys are projected columns too.
+                var terms = new[]
+                {
+                    RepeatedEnumerationRdfTerm.Iri(row.Subject),
+                    RepeatedEnumerationRdfTerm.Literal(IriKind, null, null),
+                    RepeatedEnumerationRdfTerm.Iri(row.Predicate),
+                    valueTerm,
+                    RepeatedEnumerationRdfTerm.Literal(valueKind, null, null),
+                    RepeatedEnumerationRdfTerm.Literal(string.Empty, null, null),
+                    RepeatedEnumerationRdfTerm.Literal(string.Empty, null, null),
+                    RepeatedEnumerationRdfTerm.Literal("1", "http://www.w3.org/2001/XMLSchema#integer", null),
+                }.Concat(key).ToArray();
+
+                return new RepeatedEnumerationRow(terms, key, key);
+            })
+            .ToArray();
+
+        return (proof, built);
+    }
+
+    /// <summary>
     /// A batch's graph delivery, proven under the request graph plan's own interpretation profile.
     /// </summary>
     /// <remarks>
