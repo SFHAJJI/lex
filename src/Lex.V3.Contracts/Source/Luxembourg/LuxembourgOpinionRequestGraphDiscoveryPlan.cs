@@ -32,14 +32,12 @@ public sealed record LuxembourgOpinionRequestGraphBoundQuery(
 /// </para>
 /// <para>
 /// A DELIBERATE MIRROR OF <see cref="LuxembourgDraftGraphDiscoveryPlan"/>, pinned as one. Its
-/// batched seven-column shape is the only property sweep in this family measured running to
-/// completion against this engine - thirteen batch runs in the retained acceptance packet, and
-/// again in the codec validation of 2026-09-11T15:36:49Z, which delivered 115 rows over five
-/// subjects. What Legilux refused with <c>Virtuoso SR319</c> was the draft graph's UNBOUNDED sweep,
-/// class-wide and seven columns wide, and this is not that: it is bounded by an inventory-issued
-/// batch exactly as the proven runs were. The regression beside this file asserts whole-text
-/// equality with that plan under only the class, subject and batch-parameter substitutions, because
-/// a mirror drifts one fragment at a time while every fragment test still passes.
+/// batched seven-column shape is the only property sweep measured running to completion against
+/// this engine: thirteen batch runs in the retained acceptance packet, and the codec validation of
+/// 2026-09-11T15:36:49Z. What <c>Virtuoso SR319</c> refused was that family's UNBOUNDED sweep,
+/// class-wide and seven columns wide; this is bounded by an inventory-issued batch. The regression
+/// beside this file asserts whole-text equality with that plan under only the class, subject and
+/// batch-parameter substitutions.
 /// </para>
 /// <para>
 /// THE PUBLISHER IS ASKED FOR EVERY PREDICATE IT HOLDS, and admission happens locally afterwards.
@@ -70,10 +68,10 @@ public sealed class LuxembourgOpinionRequestGraphDiscoveryPlan
 
     /// <summary>The class this family reads the properties of.</summary>
     /// <remarks>
-    /// ALIASED, NEVER RESTATED. A near-copy that spelled its own class IRI is how the inventory
-    /// plan was able to name a different, valid class while every one of its guards stayed green.
-    /// The accepted coordinate is owned by <see cref="LuxembourgDraftGraphDiscoveryPlan"/>, which
-    /// established that <c>referralDate</c> is declared here rather than on the draft.
+    /// ALIASED, NEVER RESTATED. The accepted coordinate is owned by
+    /// <see cref="LuxembourgDraftGraphDiscoveryPlan"/>, which established that
+    /// <c>referralDate</c> is declared here rather than on the draft. A family that spelled its own
+    /// copy could name a different valid class while every test derived from that copy agreed.
     /// </remarks>
     public const string OpinionRequestClassIri =
         LuxembourgDraftGraphDiscoveryPlan.OpinionRequestClassIri;
