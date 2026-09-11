@@ -2207,6 +2207,39 @@ public sealed class EuQueryExecutionAdapter
     }
 
     /// <summary>
+    /// Decodes family L one proven batch at a time, retaining the interpretation-profile evidence
+    /// coordinate belonging to the exact rows in that batch. It deliberately stops at raw
+    /// publisher observations; final body scope is unavailable until this run's corpus set has
+    /// been written and reopened.
+    /// </summary>
+    internal static IReadOnlyList<EuLocatedAmendmentAxiomObservation>? DecodeLocatedAmendmentBatches(
+        IReadOnlyList<(IReadOnlyList<RepeatedEnumerationRow> Rows,
+                       RepeatedEnumerationInterpretationProfile Profile,
+                       SourceArtifactRef Proof)> batches,
+        out EuLocatedAmendmentAxiomDecodeRefusal refusal,
+        out string? offendingValue)
+    {
+        ArgumentNullException.ThrowIfNull(batches);
+        refusal = EuLocatedAmendmentAxiomDecodeRefusal.None;
+        offendingValue = null;
+
+        var decoded = new List<EuLocatedAmendmentAxiomObservation>();
+        foreach (var batch in batches)
+        {
+            var observations = EuLocatedAmendmentAxiomDecode.TryDecode(
+                batch.Rows, batch.Profile, batch.Proof, out refusal, out offendingValue);
+            if (observations is null)
+            {
+                return null;
+            }
+
+            decoded.AddRange(observations);
+        }
+
+        return decoded;
+    }
+
+    /// <summary>
     /// Every row of <paramref name="rows"/> whose <paramref name="columnVariableName"/> term
     /// canonicalizes to a member of <paramref name="closure"/> (this seed's own <c>O</c>), plus every
     /// row that canonicalizes to something outside <paramref name="closure"/> but IS a member of
