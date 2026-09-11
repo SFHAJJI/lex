@@ -63,7 +63,11 @@ public sealed class VocabularyRegistryCensusTests
         CollectionAssert.AreEqual(
             new[]
             {
-                "Lex.V3.Ingest.Europe.EuObjectFactsBatchFactory: SetsOverObservedObjects=4, "
+                "Lex.V3.Ingest.Europe.EuLocatedAmendmentAxiomDecode: const "
+                    + "AnnotatedPropertyPredicateIri, const AnnotatedSourcePredicateIri, "
+                    + "const AnnotatedTargetPredicateIri, const OwlAxiomClassIri, "
+                    + "const RdfTypePredicateIri",
+                "Lex.V3.Ingest.Europe.EuObjectFactsBatchFactory: SetsOverObservedObjects=5, "
                     + "SetsOverPackRootsOnly=1",
             },
             ClosedSurfaceCensus.VocabularyRegistries(CensusScope.SweptHere).ToArray());

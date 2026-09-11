@@ -77,6 +77,10 @@ public sealed class GuardedConstructionCensusTests
                     + "method public instance Lex.V3.Ingest.CorpusRecordSetWriter::WriteAsync, "
                     + "method public static Lex.V3.Ingest.CorpusRecordSetWriteResult::Refused, "
                     + "method public static Lex.V3.Ingest.CorpusRecordSetWriteResult::Written",
+                "Lex.V3.Ingest.Europe.EuAmendmentAttributionCoverage: constructor private instance "
+                    + "Lex.V3.Ingest.Europe.EuAmendmentAttributionCoverage::.ctor, "
+                    + "constructor private static "
+                    + "Lex.V3.Ingest.Europe.EuAmendmentAttributionCoverage::.cctor",
                 "Lex.V3.Ingest.Europe.EuCaseLawLinkProductionResult: constructor private instance "
                     + "Lex.V3.Ingest.Europe.EuCaseLawLinkProductionResult::.ctor, "
                     + "method internal static "
@@ -159,6 +163,34 @@ public sealed class GuardedConstructionCensusTests
                     + "method public static "
                     + "Lex.V3.Ingest.Europe.EuFamilyEnumerationOutcome::ProofRefused, "
                     + "method public static Lex.V3.Ingest.Europe.EuFamilyEnumerationOutcome::Proven",
+                "Lex.V3.Ingest.Europe.EuLocatedAmendmentAmbiguity: constructor internal instance "
+                    + "Lex.V3.Ingest.Europe.EuLocatedAmendmentAmbiguity::.ctor",
+                "Lex.V3.Ingest.Europe.EuLocatedAmendmentAxiomObservation: constructor internal "
+                    + "instance Lex.V3.Ingest.Europe.EuLocatedAmendmentAxiomObservation::.ctor, "
+                    + "method internal static "
+                    + "Lex.V3.Ingest.Europe.EuQueryExecutionAdapter::DecodeLocatedAmendmentBatches, "
+                    + "method private static "
+                    + "Lex.V3.Ingest.Europe.EuLocatedAmendmentAxiomDecode::Conflict, "
+                    + "method private static "
+                    + "Lex.V3.Ingest.Europe.EuLocatedAmendmentAxiomDecode::DecodeOne, "
+                    + "method public static "
+                    + "Lex.V3.Ingest.Europe.EuLocatedAmendmentAxiomDecode::TryDecode",
+                "Lex.V3.Ingest.Europe.EuLocatedAmendmentAxiomProjection: constructor private "
+                    + "instance Lex.V3.Ingest.Europe.EuLocatedAmendmentAxiomProjection::.ctor, "
+                    + "method internal static "
+                    + "Lex.V3.Ingest.Europe.EuLocatedAmendmentAxiomProjection::TryCreate, "
+                    + "method private static "
+                    + "Lex.V3.Ingest.Europe.EuLocatedAmendmentAxiomProjection::Refused",
+                "Lex.V3.Ingest.Europe.EuLocatedAmendmentExclusion: constructor internal instance "
+                    + "Lex.V3.Ingest.Europe.EuLocatedAmendmentExclusion::.ctor",
+                "Lex.V3.Ingest.Europe.EuLocatedAmendmentProduction: constructor internal instance "
+                    + "Lex.V3.Ingest.Europe.EuLocatedAmendmentProduction::.ctor, "
+                    + "method internal static "
+                    + "Lex.V3.Ingest.Europe.EuLocatedAmendmentProducer::Produce",
+                "Lex.V3.Ingest.Europe.EuLocatedAmendmentRawProperty: by-ref-method public instance "
+                    + "Lex.V3.Ingest.Europe.EuLocatedAmendmentAxiomDecode+RawAxiom::Deconstruct, "
+                    + "constructor internal instance "
+                    + "Lex.V3.Ingest.Europe.EuLocatedAmendmentRawProperty::.ctor",
                 "Lex.V3.Ingest.Europe.EuNationalImplementingMeasureProductionResult: constructor "
                     + "private instance "
                     + "Lex.V3.Ingest.Europe.EuNationalImplementingMeasureProductionResult::.ctor, "
@@ -180,12 +212,16 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Ingest.Europe.EuProcedureEventProductionResult::Success, "
                     + "method public instance "
                     + "Lex.V3.Ingest.Europe.EuProcedureEventProducer::RunAsync",
+                "Lex.V3.Ingest.Europe.EuPublisherMarkedAmendmentAttribution: constructor internal "
+                    + "instance Lex.V3.Ingest.Europe.EuPublisherMarkedAmendmentAttribution::.ctor",
                 "Lex.V3.Ingest.Europe.EuQueryExecutionRefusalDetail: constructor internal instance "
                     + "Lex.V3.Ingest.Europe.EuQueryExecutionRefusalDetail::.ctor, "
                     + "method internal instance "
                     + "Lex.V3.Ingest.Europe.EuQueryExecutionAdapter::RunDocumentAcquisitionAsync",
                 "Lex.V3.Ingest.Europe.EuQueryExecutionResult: constructor private instance "
                     + "Lex.V3.Ingest.Europe.EuQueryExecutionResult::.ctor, "
+                    + "method internal static "
+                    + "Lex.V3.Ingest.Europe.EuQueryExecutionResult::DeliveredWithLocatedAmendments, "
                     + "method public instance "
                     + "Lex.V3.Ingest.Europe.EuQueryExecutionAdapter::RunAsync, "
                     + "method public static Lex.V3.Ingest.Europe.EuQueryExecutionResult::Delivered, "

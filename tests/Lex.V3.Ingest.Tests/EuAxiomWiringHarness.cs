@@ -32,7 +32,8 @@ internal static class EuAxiomWiringHarness
     /// seed's canonical root and returns family A's script, or null to deliver family A not at all.
     /// </summary>
     internal static async Task<EuQueryExecutionResult> RunAsync(
-        Func<string, EuAcquisitionTestFixture.FamilyScript?> axiomScript)
+        Func<string, EuAcquisitionTestFixture.FamilyScript?> axiomScript,
+        Func<string, EuAcquisitionTestFixture.FamilyScript>? locatedAmendmentScript = null)
     {
         var seed = EuAppendixASeedMap.SeedsInCelexOrder[0];
         var rootIri = EuPackRootCanonicalForm.TryCanonicalize(seed.WorkRoot, out _)
@@ -71,6 +72,10 @@ internal static class EuAxiomWiringHarness
         {
             scripts["A"] = script;
         }
+
+        scripts["L"] = locatedAmendmentScript is null
+            ? EuAcquisitionTestFixture.LocatedAmendmentAbsenceScriptFor(rootIri)
+            : locatedAmendmentScript(rootIri);
 
         var handler = new EuAcquisitionTestFixture.ClassifyingHandler(scripts);
         var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
@@ -160,6 +165,7 @@ internal static class EuAxiomWiringHarness
             ["M"] = EuAcquisitionTestFixture.ScriptFor(
                 "M", mRows.Length, mRows, EuAcquisitionTestFixture.ManifestationFactsProjection),
             ["A"] = axiomScript(roots[0], roots[1]),
+            ["L"] = EuAcquisitionTestFixture.LocatedAmendmentAbsenceScriptFor(roots),
             ["Witness"] = new EuAcquisitionTestFixture.FamilyScript(
                 "Witness",
                 EuAcquisitionTestFixture.WitnessEmptyTraversalScript(roots[1], WatermarkLexical)),

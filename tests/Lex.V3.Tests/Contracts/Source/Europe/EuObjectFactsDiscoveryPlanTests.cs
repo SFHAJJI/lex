@@ -111,6 +111,38 @@ public sealed class EuObjectFactsDiscoveryPlanTests
     }
 
     [TestMethod]
+    public void LocatedAmendmentFactsSelectEveryPropertyOfExactlyThePublisherMarkedAmendmentAxioms()
+    {
+        var plan = EuObjectFactsDiscoveryPlan.Create();
+        var profile = plan.CreateDeliveryProfile(EuObjectFactsQuerySet.LocatedAmendmentFacts);
+        var definition = plan.Definition(EuObjectFactsQuerySet.LocatedAmendmentFacts);
+
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "parent", "axiom", "predicate", "value", "value_kind", "datatype_iri", "language_tag",
+                "key_1", "key_2", "key_3", "key_4", "key_5", "key_6", "key_7",
+            },
+            profile.ProjectionVariables.ToArray());
+        CollectionAssert.AreEqual(
+            new[] { "key_1", "key_2", "key_3", "key_4", "key_5", "key_6", "key_7" },
+            profile.CursorVariables.ToArray());
+
+        StringAssert.Contains(
+            definition.PageTemplate,
+            $"?axiom <{EuObjectFactsDiscoveryPlan.AnnotatedPropertyPredicateIri}> "
+                + $"<{EuAmendmentRelationVocabulary.AmendsPredicateUri}> .");
+        StringAssert.Contains(definition.PageTemplate, "?axiom ?predicate ?value .");
+        StringAssert.Contains(
+            definition.PageTemplate,
+            $"?absent_axiom <{EuObjectFactsDiscoveryPlan.AnnotatedPropertyPredicateIri}> "
+                + $"<{EuAmendmentRelationVocabulary.AmendsPredicateUri}> .");
+        Assert.IsFalse(
+            definition.PageTemplate.Contains("VALUES ?predicate", StringComparison.Ordinal),
+            "unknown publisher properties must reach decode rather than disappear at selection");
+    }
+
+    [TestMethod]
     public void EveryFamilyUsesTheEuropeanUnionVirtuosoDialectAndTheSharedTerminalPagePolicy()
     {
         var plan = EuObjectFactsDiscoveryPlan.Create();
@@ -134,7 +166,7 @@ public sealed class EuObjectFactsDiscoveryPlanTests
     }
 
     /// <summary>
-    /// This plan's own identity, pinned as a literal so a change to any of its EIGHT templates
+    /// This plan's own identity, pinned as a literal so a change to any of its TWELVE templates
     /// reddens a named test instead of silently moving a digest nothing compares.
     /// </summary>
     /// <remarks>
@@ -150,7 +182,7 @@ public sealed class EuObjectFactsDiscoveryPlanTests
     /// failure rather than by computing one by hand.
     /// </para>
     /// <para>
-    /// WHAT THIS CATCHES THAT NOTHING ELSE DOES, measured rather than argued. Three of the four
+    /// WHAT THIS CATCHES THAT NOTHING ELSE DOES, measured rather than argued. Three of the original four
     /// families have a template pinned by exact text, so drift there reddens two tests. The
     /// MANIFESTATION family has no text assertion anywhere in either suite: the count-template loop
     /// in this file deliberately omits it, and every other reference names the enum member, not the
@@ -166,7 +198,7 @@ public sealed class EuObjectFactsDiscoveryPlanTests
     public void TheObjectFactsPlanIdentityIsPinnedSoTemplateDriftCannotPassSilently()
     {
         Assert.AreEqual(
-            "f1859fab584e09e925fe5b95d51f112be14a1ae09d0e51348a38380edd3659c0",
+            "d4f457d130251d57fc39ea5931660c365090944a54f24f4930d7c68da124e2da",
             EuObjectFactsDiscoveryPlan.Create().ArtifactRef.Sha256);
     }
 
@@ -914,7 +946,7 @@ public sealed class EuObjectFactsDiscoveryPlanTests
     }
 
     [TestMethod]
-    public void TheQuerySetEnumHasExactlyFiveMembers()
+    public void TheQuerySetEnumHasExactlySixMembers()
     {
         CollectionAssert.AreEqual(
             new[]
@@ -922,6 +954,8 @@ public sealed class EuObjectFactsDiscoveryPlanTests
                 "base-constructor protected instance System.Enum::.ctor() -> System.Enum",
                 "base-constructor protected instance System.ValueType::.ctor() -> System.ValueType",
                 "field public static " + N + "EuObjectFactsQuerySet::ExpressionFacts -> "
+                    + N + "EuObjectFactsQuerySet",
+                "field public static " + N + "EuObjectFactsQuerySet::LocatedAmendmentFacts -> "
                     + N + "EuObjectFactsQuerySet",
                 "field public static " + N + "EuObjectFactsQuerySet::ManifestationFacts -> "
                     + N + "EuObjectFactsQuerySet",

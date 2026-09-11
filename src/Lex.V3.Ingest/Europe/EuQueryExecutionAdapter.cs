@@ -308,6 +308,12 @@ public enum EuQueryExecutionRefusal
     /// </remarks>
     [JsonStringEnumMemberName("reified_axiom_decode_refused")]
     ReifiedAxiomDecodeRefused = 20,
+
+    [JsonStringEnumMemberName("located_amendment_decode_refused")]
+    LocatedAmendmentDecodeRefused = 21,
+
+    [JsonStringEnumMemberName("located_amendment_corpus_scope_unproven")]
+    LocatedAmendmentCorpusScopeUnproven = 22,
 }
 
 public sealed class EuQueryExecutionRefusalDetail
@@ -434,6 +440,8 @@ public sealed class EuQueryExecutionResult
         IReadOnlyDictionary<string, EuObservedExpressionSplit>? observedExpressionsByCelex,
         IReadOnlyDictionary<int, EuMintedRowAccounting>? mintedRowsByOrdinal,
         IReadOnlyList<EuDateAxiomBinding> dateAxioms,
+        IReadOnlyList<EuLocatedAmendmentAxiomObservation> locatedAmendmentObservations,
+        EuLocatedAmendmentProduction? locatedAmendmentProduction,
         SourceArtifactRef? corpusRecordSetRef,
         VerifiedCorpusRecordSet? corpusRecordSet,
         EuQueryExecutionCompletion? completion,
@@ -461,6 +469,8 @@ public sealed class EuQueryExecutionResult
         ObservedExpressionsByCelex = observedExpressionsByCelex;
         MintedRowsByOrdinal = mintedRowsByOrdinal;
         DateAxioms = dateAxioms;
+        LocatedAmendmentObservations = locatedAmendmentObservations;
+        LocatedAmendmentProduction = locatedAmendmentProduction;
         CorpusRecordSetRef = corpusRecordSetRef;
         CorpusRecordSet = corpusRecordSet;
         Completion = completion;
@@ -514,7 +524,69 @@ public sealed class EuQueryExecutionResult
             watermarkWitnessPlan, rootBinding, witnessReconciliation, witnessTerminations, scopeManifestReceipt,
             scopeManifestCanonicalSha256, documentAcquisitionOutcomesByOrdinal, documentLadderResultsByOrdinal,
             observedManifestationTypesByCelex, observedExpressionsByCelex, mintedRowsByOrdinal,
-            dateAxioms, corpusRecordSetRef, corpusRecordSet, completion, null, null, null, null);
+            dateAxioms, [], null, corpusRecordSetRef, corpusRecordSet,
+            completion, null, null, null, null);
+    }
+
+    /// <summary>
+    /// Adapter-only completion door. Located observations and the reopened corpus meet only here,
+    /// after one execution produced both; callers cannot recombine evidence from different runs.
+    /// </summary>
+    internal static EuQueryExecutionResult DeliveredWithLocatedAmendments(
+        SourceProfileTopology topology,
+        IReadOnlyList<EuFamilyEnumerationOutcome> familyOutcomes,
+        int observedObjectCount,
+        int observedExpressionCount,
+        IReadOnlyList<EuObjectReductionExclusion> reductionExclusions,
+        EuWatermarkWitnessPlan watermarkWitnessPlan,
+        EuPrimaryEnumerationRootBinding rootBinding,
+        EuPrimaryEnumerationWitnessReconciliation witnessReconciliation,
+        IReadOnlyList<EuFeedEntryTermination> witnessTerminations,
+        DurableBlobWriteReceipt scopeManifestReceipt,
+        string scopeManifestCanonicalSha256,
+        IReadOnlyDictionary<int, CorpusAcquisitionOutcome> documentAcquisitionOutcomesByOrdinal,
+        IReadOnlyDictionary<int, EuDocumentLadderResult> documentLadderResultsByOrdinal,
+        IReadOnlyDictionary<string, IReadOnlyList<string>> observedManifestationTypesByCelex,
+        IReadOnlyDictionary<string, EuObservedExpressionSplit> observedExpressionsByCelex,
+        IReadOnlyDictionary<int, EuMintedRowAccounting> mintedRowsByOrdinal,
+        IReadOnlyList<EuDateAxiomBinding> dateAxioms,
+        IReadOnlyList<EuLocatedAmendmentAxiomObservation> locatedAmendmentObservations,
+        CorpusRecordSetWriteResult recordSetResult)
+    {
+        ArgumentNullException.ThrowIfNull(topology);
+        ArgumentNullException.ThrowIfNull(watermarkWitnessPlan);
+        ArgumentNullException.ThrowIfNull(rootBinding);
+        ArgumentNullException.ThrowIfNull(witnessReconciliation);
+        ArgumentNullException.ThrowIfNull(witnessTerminations);
+        ArgumentNullException.ThrowIfNull(scopeManifestReceipt);
+        ArgumentException.ThrowIfNullOrWhiteSpace(scopeManifestCanonicalSha256);
+        ArgumentNullException.ThrowIfNull(documentAcquisitionOutcomesByOrdinal);
+        ArgumentNullException.ThrowIfNull(documentLadderResultsByOrdinal);
+        ArgumentNullException.ThrowIfNull(observedManifestationTypesByCelex);
+        ArgumentNullException.ThrowIfNull(observedExpressionsByCelex);
+        ArgumentNullException.ThrowIfNull(mintedRowsByOrdinal);
+        ArgumentNullException.ThrowIfNull(dateAxioms);
+        ArgumentNullException.ThrowIfNull(locatedAmendmentObservations);
+        ArgumentNullException.ThrowIfNull(recordSetResult);
+        if (!EuLocatedAmendmentProducer.TryGetCompleteCorpus(recordSetResult, out var corpusRecordSet))
+        {
+            throw new ArgumentException(
+                "Located amendment completion requires the same writer's complete reopened corpus set.",
+                nameof(recordSetResult));
+        }
+        var completion = familyOutcomes.All(static outcome => outcome.Kind == EuFamilyEnumerationOutcomeKind.Proven)
+            ? EuQueryExecutionCompletion.AllFamiliesProven
+            : EuQueryExecutionCompletion.PartialFamilyRefused;
+        var locatedAmendmentProduction = EuLocatedAmendmentProducer.Produce(
+            locatedAmendmentObservations, recordSetResult);
+        return new(
+            topology, familyOutcomes, observedObjectCount, observedExpressionCount, reductionExclusions,
+            watermarkWitnessPlan, rootBinding, witnessReconciliation, witnessTerminations, scopeManifestReceipt,
+            scopeManifestCanonicalSha256, documentAcquisitionOutcomesByOrdinal, documentLadderResultsByOrdinal,
+            observedManifestationTypesByCelex, observedExpressionsByCelex, mintedRowsByOrdinal,
+            dateAxioms, locatedAmendmentObservations, locatedAmendmentProduction,
+            recordSetResult.SetRef!, corpusRecordSet,
+            completion, null, null, null, null);
     }
 
     public static EuQueryExecutionResult Refused(
@@ -530,7 +602,7 @@ public sealed class EuQueryExecutionResult
         ArgumentNullException.ThrowIfNull(refusal);
         return new(
             topology, familyOutcomes, 0, 0, [], null, null, null, null, null, null, null, null, null, null, null,
-            [], null, null, null, refusal, decodeRefusal, decodeOffendingIri, decodeSnapshotRefusal,
+            [], [], null, null, null, null, refusal, decodeRefusal, decodeOffendingIri, decodeSnapshotRefusal,
             witnessTraversalRefusal);
     }
 
@@ -547,6 +619,18 @@ public sealed class EuQueryExecutionResult
     /// result, including a refusal after the decode completed.
     /// </remarks>
     public IReadOnlyList<EuDateAxiomBinding> DateAxioms { get; }
+
+    /// <summary>
+    /// Every proven family-L publisher observation. These remain raw until this run's reopened
+    /// corpus record set can supply the target-body state required by the accepted E4 type.
+    /// </summary>
+    public IReadOnlyList<EuLocatedAmendmentAxiomObservation> LocatedAmendmentObservations { get; }
+
+    /// <summary>
+    /// Those same observations partitioned after this result's reopened corpus set determined each
+    /// target's body scope. Null only on a refused run.
+    /// </summary>
+    public EuLocatedAmendmentProduction? LocatedAmendmentProduction { get; }
 
     public SourceProfileTopology Topology { get; }
 
@@ -989,13 +1073,33 @@ public sealed class EuQueryExecutionAdapter
             !objectFactsRows.TryGetValue(EuObjectFactsQuerySet.ExpressionFacts, out var xFamilies) || xFamilies.Count == 0 ||
             !objectFactsRows.TryGetValue(EuObjectFactsQuerySet.RootWatermark, out var wFamilies) || wFamilies.Count == 0 ||
             !objectFactsRows.TryGetValue(EuObjectFactsQuerySet.ManifestationFacts, out var mFamilies) || mFamilies.Count == 0 ||
-            !objectFactsRows.TryGetValue(EuObjectFactsQuerySet.ReifiedAxiomFacts, out var aFamilies) || aFamilies.Count == 0)
+            !objectFactsRows.TryGetValue(EuObjectFactsQuerySet.ReifiedAxiomFacts, out var aFamilies) || aFamilies.Count == 0 ||
+            !objectFactsRows.TryGetValue(EuObjectFactsQuerySet.LocatedAmendmentFacts, out var lFamilies) || lFamilies.Count == 0)
         {
             return EuQueryExecutionResult.Refused(
                 topology, outcomes,
                 new EuQueryExecutionRefusalDetail(
                     EuQueryExecutionRefusal.ObjectFactsFamilyNotProven,
-                    "this run must enumerate at least one proven batch of each of family P, X, W, M and A."));
+                    "this run must enumerate at least one proven batch of each of family P, X, W, M, A and L."));
+        }
+
+        var locatedAmendmentObservations = DecodeLocatedAmendmentBatches(
+            lFamilies.Select(batch => (
+                batch.Rows,
+                batch.Profile,
+                Proof: batch.Proof.InterpretationProfileRef)).ToArray(),
+            out var locatedAmendmentRefusal,
+            out var offendingLocatedAmendmentValue);
+        if (locatedAmendmentObservations is null)
+        {
+            return EuQueryExecutionResult.Refused(
+                topology, outcomes,
+                new EuQueryExecutionRefusalDetail(
+                    EuQueryExecutionRefusal.LocatedAmendmentDecodeRefused,
+                    $"located-amendment decode refused: {locatedAmendmentRefusal}" +
+                    (offendingLocatedAmendmentValue is null
+                        ? "."
+                        : $" at '{offendingLocatedAmendmentValue}'.")));
         }
 
         var pProfile = pFamilies[0].Profile;
@@ -1573,7 +1677,16 @@ public sealed class EuQueryExecutionAdapter
                     EuQueryExecutionRefusal.RecordSetNotRetained, recordSetResult.Refusal.Detail));
         }
 
-        return EuQueryExecutionResult.Delivered(
+        if (!EuLocatedAmendmentProducer.TryGetCompleteCorpus(recordSetResult, out _))
+        {
+            return EuQueryExecutionResult.Refused(
+                topology, outcomes,
+                new EuQueryExecutionRefusalDetail(
+                    EuQueryExecutionRefusal.LocatedAmendmentCorpusScopeUnproven,
+                    "the reopened corpus set did not carry complete writer accounting for its manifest."));
+        }
+
+        return EuQueryExecutionResult.DeliveredWithLocatedAmendments(
             topology,
             outcomes,
             observedObjectCount: allSnapshots.Count,
@@ -1591,8 +1704,8 @@ public sealed class EuQueryExecutionAdapter
             documentAcquisitionOutcomesByOrdinal: documentAcquisitionOutcomesByOrdinal!,
             documentLadderResultsByOrdinal: documentLadderResultsByOrdinal!,
             dateAxioms: dateAxioms,
-            corpusRecordSetRef: recordSetResult.SetRef!,
-            corpusRecordSet: recordSetResult.VerifiedSet!);
+            locatedAmendmentObservations: locatedAmendmentObservations,
+            recordSetResult: recordSetResult);
     }
 
     /// <summary>
@@ -2205,6 +2318,75 @@ public sealed class EuQueryExecutionAdapter
 
         return decoded;
     }
+
+    /// <summary>
+    /// Decodes family L one proven batch at a time, retaining the interpretation-profile evidence
+    /// coordinate belonging to the exact rows in that batch. It deliberately stops at raw
+    /// publisher observations; final body scope is unavailable until this run's corpus set has
+    /// been written and reopened.
+    /// </summary>
+    internal static IReadOnlyList<EuLocatedAmendmentAxiomObservation>? DecodeLocatedAmendmentBatches(
+        IReadOnlyList<(IReadOnlyList<RepeatedEnumerationRow> Rows,
+                       RepeatedEnumerationInterpretationProfile Profile,
+                       SourceArtifactRef Proof)> batches,
+        out EuLocatedAmendmentAxiomDecodeRefusal refusal,
+        out string? offendingValue)
+    {
+        ArgumentNullException.ThrowIfNull(batches);
+        refusal = EuLocatedAmendmentAxiomDecodeRefusal.None;
+        offendingValue = null;
+
+        var decoded = new Dictionary<string, EuLocatedAmendmentAxiomObservation>(StringComparer.Ordinal);
+        foreach (var batch in batches)
+        {
+            var observations = EuLocatedAmendmentAxiomDecode.TryDecode(
+                batch.Rows, batch.Profile, batch.Proof, out refusal, out offendingValue);
+            if (observations is null)
+            {
+                return null;
+            }
+
+            foreach (var observation in observations)
+            {
+                if (!decoded.TryGetValue(observation.AxiomIri, out var prior))
+                {
+                    decoded.Add(observation.AxiomIri, observation);
+                    continue;
+                }
+
+                if (!SameLocatedAmendmentObservation(prior, observation))
+                {
+                    refusal = EuLocatedAmendmentAxiomDecodeRefusal.BatchDuplicateAxiomDisagrees;
+                    offendingValue = observation.AxiomIri;
+                    return null;
+                }
+
+                decoded[observation.AxiomIri] = new EuLocatedAmendmentAxiomObservation(
+                    prior.AxiomIri,
+                    prior.AnnotatedSourceIris,
+                    prior.AnnotatedPropertyIri,
+                    prior.AnnotatedTargetIris,
+                    prior.RawProperties,
+                    prior.InterpretationProfileRefs.Concat(observation.InterpretationProfileRefs));
+            }
+        }
+
+        return decoded.Values.OrderBy(static value => value.AxiomIri, StringComparer.Ordinal).ToArray();
+    }
+
+    private static bool SameLocatedAmendmentObservation(
+        EuLocatedAmendmentAxiomObservation left,
+        EuLocatedAmendmentAxiomObservation right) =>
+        left.AnnotatedSourceIris.SequenceEqual(right.AnnotatedSourceIris, StringComparer.Ordinal) &&
+        string.Equals(left.AnnotatedPropertyIri, right.AnnotatedPropertyIri, StringComparison.Ordinal) &&
+        left.AnnotatedTargetIris.SequenceEqual(right.AnnotatedTargetIris, StringComparer.Ordinal) &&
+        left.RawProperties.Count == right.RawProperties.Count &&
+        left.RawProperties.Zip(right.RawProperties).All(static pair =>
+            string.Equals(pair.First.PredicateIri, pair.Second.PredicateIri, StringComparison.Ordinal) &&
+            pair.First.Value.Kind == pair.Second.Value.Kind &&
+            string.Equals(pair.First.Value.Value, pair.Second.Value.Value, StringComparison.Ordinal) &&
+            string.Equals(pair.First.Value.Datatype, pair.Second.Value.Datatype, StringComparison.Ordinal) &&
+            string.Equals(pair.First.Value.Language, pair.Second.Value.Language, StringComparison.Ordinal));
 
     /// <summary>
     /// Every row of <paramref name="rows"/> whose <paramref name="columnVariableName"/> term

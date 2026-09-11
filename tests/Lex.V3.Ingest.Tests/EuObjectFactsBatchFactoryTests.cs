@@ -106,6 +106,22 @@ public sealed class EuObjectFactsBatchFactoryTests
     }
 
     [TestMethod]
+    public void LocatedAmendmentFactsAreBatchedOverTheRunsWholeObservedObjectSet()
+    {
+        var root = EuPackRootCanonicalForm.TryCanonicalize(
+            EuAppendixASeedMap.SeedsInCelexOrder[0].WorkRoot, out _)!;
+        var state = root + "/state-a";
+
+        var requests = EuObjectFactsBatchFactory.Build(Policy(), [root, state], [root]);
+        var located = requests
+            .Where(static request => request.Set == EuObjectFactsQuerySet.LocatedAmendmentFacts)
+            .ToArray();
+
+        Assert.HasCount(1, located);
+        CollectionAssert.AreEqual(new[] { root, state }, located[0].BatchObjects.ToArray());
+    }
+
+    [TestMethod]
     public void ABatchNeverExceedsTheCapacityTheParameterCeilingAllows()
     {
         var root = EuPackRootCanonicalForm.TryCanonicalize(

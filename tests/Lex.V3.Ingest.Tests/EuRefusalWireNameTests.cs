@@ -117,9 +117,7 @@ public sealed class EuRefusalWireNameTests
             "a wire name changing is a contract change; a number changing is not.");
     }
     /// <summary>
-    /// The query-execution refusal vocabulary, every member. R4 declared a token on 15 of these
-    /// 20; before that the undeclared ones serialized as their CLR member names and nothing
-    /// pinned them.
+    /// The query-execution refusal vocabulary, every member and every exact wire token.
     /// </summary>
     [TestMethod]
     public void TheQueryExecutionRefusalVocabularyKeepsItsExactWireNames()
@@ -151,6 +149,8 @@ public sealed class EuRefusalWireNameTests
                 "acquisition_outcome_not_representable",
                 "record_set_not_retained",
                 "reified_axiom_decode_refused",
+                "located_amendment_decode_refused",
+                "located_amendment_corpus_scope_unproven",
             }),
             string.Join("\n", WireNames<EuQueryExecutionRefusal>()),
             "a wire name changing is a contract change; a number changing is not.");
