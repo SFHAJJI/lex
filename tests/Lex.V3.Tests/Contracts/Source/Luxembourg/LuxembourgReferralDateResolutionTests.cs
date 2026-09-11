@@ -210,6 +210,60 @@ public sealed class LuxembourgReferralDateResolutionTests
         Assert.ThrowsExactly<ArgumentException>(() => Complete(["2000-06-14", ""]));
     }
 
+    /// <summary>
+    /// A target-role gap without a target is refused, whichever door mints it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// THE INVARIANT THIS STATE IS FOR. I argued that the target-role gap exists so the unresolved
+    /// edge stays nameable, then asserted that only on the <c>Resolve</c> path -
+    /// <c>TargetRoleUnproven</c> accepted an empty target and minted a gap naming nothing, which is
+    /// a draft-side gap wearing the wrong label. A reviewer found it by asking the direct door for
+    /// exactly that.
+    /// </para>
+    /// <para>
+    /// It is now held in the constructor rather than at each door, so a door added later cannot
+    /// reintroduce it without also bypassing construction.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void ATargetRoleGapWithoutATargetIsRefused()
+    {
+        Assert.ThrowsExactly<ArgumentException>(
+            () => LuxembourgReferralDateStep.TargetRoleUnproven(Draft, string.Empty),
+            "the state whose point is a nameable edge must not mint one that names nothing.");
+        Assert.ThrowsExactly<ArgumentException>(
+            () => LuxembourgReferralDateStep.TargetRoleUnproven(Draft, null!),
+            "and a missing target is refused the same way, by the same single check.");
+    }
+
+    /// <summary>
+    /// And the dual: a state that reached nothing must not name something.
+    /// </summary>
+    /// <remarks>
+    /// A draft-side gap or a drift row carrying a target would assert a traversal that did not
+    /// happen. The constructor holds both directions, so the two gap states cannot be confused by
+    /// their contents whichever way a caller gets them wrong.
+    /// </remarks>
+    [TestMethod]
+    public void AStateThatReachedNothingNamesNothing()
+    {
+        Assert.IsNull(LuxembourgReferralDateStep.DraftReachedNothing(Draft).TargetIri);
+        Assert.IsNull(LuxembourgReferralDateStep.DirectTripleIsDrift(Draft).TargetIri);
+    }
+
+    /// <summary>Every state that concludes something about a request names that request.</summary>
+    [TestMethod]
+    public void EveryConcludingStateNamesItsRequest()
+    {
+        foreach (var step in new[] { Complete(["2000-06-14"]), Complete([]) })
+        {
+            Assert.AreEqual(
+                Sace, step.TargetIri,
+                $"{step.State} is concluded from a proven request, which must be named.");
+        }
+    }
+
     /// <summary>Every state is reachable, so none of them is decorative.</summary>
     [TestMethod]
     public void EveryDeclaredStateIsReachable()

@@ -120,6 +120,41 @@ public sealed record LuxembourgReferralDateStep
         LuxembourgReferralEvidenceRefusal refusal,
         IReadOnlyList<string> referralDateValues)
     {
+        // THE NAMEABILITY INVARIANT, HELD HERE RATHER THAN AT EACH DOOR. Every state either names a
+        // target or cannot have one, and which it is defines the state:
+        //
+        //   TargetRoleGap   the draft reached something whose role is unproven. Its whole point is
+        //                   that the edge stays nameable, so an unnamed one is not this state - it
+        //                   is a draft-side gap wearing the wrong label.
+        //   DraftSideGap    nothing was reached, so there is nothing to name.
+        //   Drift           asserted of the draft itself; no target was traversed.
+        //   Fact and
+        //   DerivedAbsence  concluded from a proven request, which is named by construction.
+        //
+        // Resolve enforced this for the paths through it and TargetRoleUnproven did not, so a
+        // caller could mint a TargetRoleGap with an empty target and lose the one fact that
+        // separates it from the state beside it. It is enforced HERE and only here: a duplicate
+        // guard on the factory made this unreachable, and deleting this check then left every test
+        // green because nothing could get past the outer guard to reach it. A second check that no
+        // test can fail is not defence in depth, it is an untested claim.
+        var namesATarget = state is LuxembourgReferralDateState.TargetRoleGap
+            or LuxembourgReferralDateState.Fact
+            or LuxembourgReferralDateState.DerivedAbsence;
+
+        if (namesATarget && string.IsNullOrEmpty(targetIri))
+        {
+            throw new ArgumentException(
+                $"{state} names the target it reached; an unnamed one is a different state.",
+                nameof(targetIri));
+        }
+
+        if (!namesATarget && targetIri is not null)
+        {
+            throw new ArgumentException(
+                $"{state} reached no target, so naming one would assert a traversal that did not "
+                + "happen.", nameof(targetIri));
+        }
+
         DraftIri = draftIri;
         TargetIri = targetIri;
         State = state;
@@ -152,6 +187,12 @@ public sealed record LuxembourgReferralDateStep
         Gap(draftIri, null, LuxembourgReferralDateState.DraftSideGap);
 
     /// <summary>The draft reached a target whose request role this run did not prove.</summary>
+    /// <remarks>
+    /// The target is required, and the CONSTRUCTOR is the single place that says so. A guard here as
+    /// well would be unreachable: with both, deleting the constructor's check left every test green,
+    /// because no test could get past this door to reach it. One enforcement point that a test can
+    /// actually exercise beats two where only the outer one is ever proved.
+    /// </remarks>
     public static LuxembourgReferralDateStep TargetRoleUnproven(string draftIri, string targetIri) =>
         Gap(draftIri, targetIri, LuxembourgReferralDateState.TargetRoleGap);
 
