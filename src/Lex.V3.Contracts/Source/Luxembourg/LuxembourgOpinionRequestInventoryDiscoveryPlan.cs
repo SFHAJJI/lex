@@ -84,10 +84,15 @@ public sealed class LuxembourgOpinionRequestInventoryDiscoveryPlan
     /// both proof-bound outputs.
     /// </remarks>
     public const string OpinionRequestClassIri =
-        "http://data.legilux.public.lu/resource/ontology/jolux#OpinionRequest";
+        LuxembourgDraftGraphDiscoveryPlan.OpinionRequestClassIri;
 
     /// <summary>The marker a row carries when its subject is a publisher IRI.</summary>
-    public const string IriKind = "iri";
+    /// <remarks>
+    /// Aliased, not restated. These markers are a producer convention shared across the Luxembourg
+    /// families, and a family that spelled its own would render a template no decoder reads while
+    /// every test derived from the same private spelling and agreed.
+    /// </remarks>
+    public const string IriKind = LuxembourgInitialDraftInventoryDiscoveryPlan.IriKind;
 
     /// <summary>
     /// The marker a row carries when its subject is a blank node.
@@ -99,7 +104,8 @@ public sealed class LuxembourgOpinionRequestInventoryDiscoveryPlan
     /// label are not thereby about the same subject. That is why observing one REFUSES the
     /// inventory instead of merely tagging a row - see the type remarks.
     /// </remarks>
-    public const string UnsupportedBlankNodeKind = "unsupported_blank_node";
+    public const string UnsupportedBlankNodeKind =
+        LuxembourgInitialDraftInventoryDiscoveryPlan.UnsupportedBlankNodeKind;
 
     internal const long PublisherDeliveryCeilingRows = 1_000_000;
 

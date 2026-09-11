@@ -232,6 +232,83 @@ public sealed class LuxembourgOpinionRequestInventoryDiscoveryPlanTests
             "the mirrored template must not still ask about the class it was copied from.");
     }
 
+    /// <summary>
+    /// The class is the ACCEPTED coordinate, pinned so either side moving alone fails.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// THE CIRCULARITY THIS EXISTS TO BREAK. This plan first declared its own literal for the class
+    /// IRI, and every assertion in this file derived its expected value from that same literal. A
+    /// reviewer changed it to <c>OpinionConseilEtat</c> - a different, perfectly valid class - and
+    /// all nine tests still passed. The plan would have enumerated and canonically identified the
+    /// wrong class with every guard in the file green, because the file was comparing the constant
+    /// with itself.
+    /// </para>
+    /// <para>
+    /// So the constant is now an alias of the accepted coordinate on
+    /// <see cref="LuxembourgDraftGraphDiscoveryPlan"/>, which is the family that decided
+    /// <c>referralDate</c> is declared elsewhere and therefore owns the name of "elsewhere". The
+    /// assertions below pin BOTH the alias and the literal text, so changing this side, that side,
+    /// or the aliasing itself each fails: an expectation derived from the thing it checks is not an
+    /// expectation.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void TheClassIsTheAcceptedCoordinateAndNotThisFamilysOwnSpelling()
+    {
+        var plan = LuxembourgOpinionRequestInventoryDiscoveryPlan.Create();
+        var identity = Encoding.UTF8.GetString(plan.CopyCanonicalIdentityBytes());
+
+        // ASSERTED AGAINST WHAT IS RENDERED, not against the constant. Comparing the constant to
+        // itself, or to a literal the compiler folds, is exactly the circularity this test exists
+        // for: the analyzer rejects those as known-true, which is the same complaint in compiler
+        // form. The template and the identity bytes are built at run time, so a changed constant
+        // changes them and this fails.
+        const string Accepted = "http://data.legilux.public.lu/resource/ontology/jolux#OpinionRequest";
+
+        StringAssert.Contains(
+            plan.PageTemplate, "?request a <" + Accepted + "> .",
+            "the question this family actually sends must name the accepted class.");
+        StringAssert.Contains(
+            plan.CountTemplate, "?request a <" + Accepted + "> .",
+            "and so must the count, or the two passes ask about different classes.");
+        StringAssert.Contains(
+            identity, "request_class=" + Accepted,
+            "and the canonical identity must carry it, so widening to another class re-digests.");
+
+        // THE ALIAS, read through the owning family at run time. If that coordinate moves, this
+        // family's constant moves with it and the literal pins above fail; if only this family's
+        // spelling moves, this fails. Either side alone is caught.
+        StringAssert.Contains(
+            plan.PageTemplate,
+            "<" + LuxembourgDraftGraphDiscoveryPlan.OpinionRequestClassIri + ">",
+            "the class is the coordinate owned by the family that named referralDate's home.");
+
+        // Not a valid but wrong neighbour. The reviewer's mutation used the first of these and all
+        // nine tests passed, because every expectation derived from the value under test.
+        foreach (var neighbour in new[]
+        {
+            LuxembourgOpinionLinkOnlyVocabulary.OpinionConseilEtatClassIri,
+            LuxembourgDraftGraphDiscoveryPlan.InitialDraftClassIri,
+        })
+        {
+            Assert.IsFalse(
+                plan.PageTemplate.Contains("<" + neighbour + ">", StringComparison.Ordinal),
+                $"the rendered question must not ask about {neighbour}.");
+            Assert.IsFalse(
+                identity.Contains("request_class=" + neighbour, StringComparison.Ordinal),
+                $"and the identity must not claim {neighbour}.");
+        }
+
+        // The kind markers are the same hazard: a shared producer convention restated privately.
+        StringAssert.Contains(plan.PageTemplate, "\"iri\"");
+        StringAssert.Contains(plan.PageTemplate, "\"unsupported_blank_node\"");
+        StringAssert.Contains(
+            plan.PageTemplate,
+            "\"" + LuxembourgInitialDraftInventoryDiscoveryPlan.IriKind + "\"",
+            "the marker is the convention the producers share, not this family's own spelling.");
+    }
+
     [TestMethod]
     public void ThePlanIdentityCoversTheQuestionItAsks()
     {
