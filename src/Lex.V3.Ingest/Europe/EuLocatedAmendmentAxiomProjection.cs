@@ -28,7 +28,7 @@ public enum EuLocatedAmendmentAxiomProjectionRefusal
 /// target-body scope remains a separate corpus-dependent input and is supplied only after the
 /// corpus record set has been durably reopened.
 /// </remarks>
-public sealed class EuLocatedAmendmentAxiomProjection
+internal sealed class EuLocatedAmendmentAxiomProjection
 {
     private const string AnnotatedSourcePredicateIri =
         "http://www.w3.org/2002/07/owl#annotatedSource";
@@ -52,7 +52,7 @@ public sealed class EuLocatedAmendmentAxiomProjection
     /// must name the exact publisher IRIs in that observation; the source-observation coordinate is
     /// derived from its proof-bound interpretation profile rather than supplied by the caller.
     /// </summary>
-    public static EuLocatedAmendmentAxiomProjection? TryCreate(
+    internal static EuLocatedAmendmentAxiomProjection? TryCreate(
         EuLocatedAmendmentAxiomObservation observation,
         OfficialIdentitySet source,
         OfficialIdentitySet target,

@@ -495,6 +495,58 @@ public sealed class EuQueryExecutionResult
         IReadOnlyDictionary<string, EuObservedExpressionSplit> observedExpressionsByCelex,
         IReadOnlyDictionary<int, EuMintedRowAccounting> mintedRowsByOrdinal,
         IReadOnlyList<EuDateAxiomBinding> dateAxioms,
+        SourceArtifactRef corpusRecordSetRef,
+        VerifiedCorpusRecordSet corpusRecordSet)
+    {
+        ArgumentNullException.ThrowIfNull(topology);
+        ArgumentNullException.ThrowIfNull(watermarkWitnessPlan);
+        ArgumentNullException.ThrowIfNull(rootBinding);
+        ArgumentNullException.ThrowIfNull(witnessReconciliation);
+        ArgumentNullException.ThrowIfNull(witnessTerminations);
+        ArgumentNullException.ThrowIfNull(scopeManifestReceipt);
+        ArgumentException.ThrowIfNullOrWhiteSpace(scopeManifestCanonicalSha256);
+        ArgumentNullException.ThrowIfNull(documentAcquisitionOutcomesByOrdinal);
+        ArgumentNullException.ThrowIfNull(documentLadderResultsByOrdinal);
+        ArgumentNullException.ThrowIfNull(observedManifestationTypesByCelex);
+        ArgumentNullException.ThrowIfNull(observedExpressionsByCelex);
+        ArgumentNullException.ThrowIfNull(mintedRowsByOrdinal);
+        ArgumentNullException.ThrowIfNull(dateAxioms);
+        ArgumentNullException.ThrowIfNull(corpusRecordSetRef);
+        ArgumentNullException.ThrowIfNull(corpusRecordSet);
+        var completion = familyOutcomes.All(static outcome => outcome.Kind == EuFamilyEnumerationOutcomeKind.Proven)
+            ? EuQueryExecutionCompletion.AllFamiliesProven
+            : EuQueryExecutionCompletion.PartialFamilyRefused;
+        return new(
+            topology, familyOutcomes, observedObjectCount, observedExpressionCount, reductionExclusions,
+            watermarkWitnessPlan, rootBinding, witnessReconciliation, witnessTerminations, scopeManifestReceipt,
+            scopeManifestCanonicalSha256, documentAcquisitionOutcomesByOrdinal, documentLadderResultsByOrdinal,
+            observedManifestationTypesByCelex, observedExpressionsByCelex, mintedRowsByOrdinal,
+            dateAxioms, [], null, corpusRecordSetRef, corpusRecordSet,
+            completion, null, null, null, null);
+    }
+
+    /// <summary>
+    /// Adapter-only completion door. Located observations and the reopened corpus meet only here,
+    /// after one execution produced both; callers cannot recombine evidence from different runs.
+    /// </summary>
+    internal static EuQueryExecutionResult DeliveredWithLocatedAmendments(
+        SourceProfileTopology topology,
+        IReadOnlyList<EuFamilyEnumerationOutcome> familyOutcomes,
+        int observedObjectCount,
+        int observedExpressionCount,
+        IReadOnlyList<EuObjectReductionExclusion> reductionExclusions,
+        EuWatermarkWitnessPlan watermarkWitnessPlan,
+        EuPrimaryEnumerationRootBinding rootBinding,
+        EuPrimaryEnumerationWitnessReconciliation witnessReconciliation,
+        IReadOnlyList<EuFeedEntryTermination> witnessTerminations,
+        DurableBlobWriteReceipt scopeManifestReceipt,
+        string scopeManifestCanonicalSha256,
+        IReadOnlyDictionary<int, CorpusAcquisitionOutcome> documentAcquisitionOutcomesByOrdinal,
+        IReadOnlyDictionary<int, EuDocumentLadderResult> documentLadderResultsByOrdinal,
+        IReadOnlyDictionary<string, IReadOnlyList<string>> observedManifestationTypesByCelex,
+        IReadOnlyDictionary<string, EuObservedExpressionSplit> observedExpressionsByCelex,
+        IReadOnlyDictionary<int, EuMintedRowAccounting> mintedRowsByOrdinal,
+        IReadOnlyList<EuDateAxiomBinding> dateAxioms,
         IReadOnlyList<EuLocatedAmendmentAxiomObservation> locatedAmendmentObservations,
         SourceArtifactRef corpusRecordSetRef,
         VerifiedCorpusRecordSet corpusRecordSet)
@@ -1618,7 +1670,7 @@ public sealed class EuQueryExecutionAdapter
                     EuQueryExecutionRefusal.RecordSetNotRetained, recordSetResult.Refusal.Detail));
         }
 
-        return EuQueryExecutionResult.Delivered(
+        return EuQueryExecutionResult.DeliveredWithLocatedAmendments(
             topology,
             outcomes,
             observedObjectCount: allSnapshots.Count,

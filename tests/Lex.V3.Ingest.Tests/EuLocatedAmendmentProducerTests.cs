@@ -6,6 +6,7 @@ using Lex.V3.Contracts.Source.Corpus;
 using Lex.V3.Contracts.Source.Europe;
 using Lex.V3.Contracts.Source.Scope;
 using Lex.V3.Ingest.Europe;
+using System.Reflection;
 
 namespace Lex.V3.Ingest.Tests;
 
@@ -59,6 +60,46 @@ public sealed class EuLocatedAmendmentProducerTests
         Assert.AreEqual(EuLocatedAmendmentAxiomProjectionRefusal.RequiredQualifierMissing,
             qualifier.ProjectionRefusal);
         Assert.AreEqual(EuAmendmentRelationVocabulary.Role2Uri, qualifier.Detail);
+    }
+
+    [TestMethod]
+    public void PublisherEvidenceAloneMintsDisclosuresAndCoverageRemainsUnmeasured()
+    {
+        var ambiguity = Observation([Held, Outside], 7);
+
+        var result = EuLocatedAmendmentProducer.Produce([ambiguity], Corpus(Source, Held));
+
+        Assert.AreEqual("unmeasured", result.Coverage.State);
+        Assert.AreEqual(
+            "complete_textual_change_range_measurement",
+            result.Coverage.UnmetPrerequisite);
+        CollectionAssert.AreEqual(
+            new[] { Held, Outside },
+            result.Ambiguous.Single().CandidateTargetIris.ToArray());
+        Assert.AreSame(ambiguity, result.Ambiguous.Single().Observation);
+    }
+
+    [TestMethod]
+    public void CallersCannotConstructPartitionsCoverageOrAmbiguityCandidates()
+    {
+        var sealedTypes = new[]
+        {
+            typeof(EuLocatedAmendmentProduction),
+            typeof(EuPublisherMarkedAmendmentAttribution),
+            typeof(EuLocatedAmendmentAmbiguity),
+            typeof(EuLocatedAmendmentExclusion),
+            typeof(EuAmendmentAttributionCoverage),
+        };
+
+        foreach (var type in sealedTypes)
+        {
+            Assert.IsEmpty(
+                type.GetConstructors(BindingFlags.Instance | BindingFlags.Public),
+                $"{type.Name} exposes a public constructor.");
+        }
+
+        Assert.IsFalse(typeof(EuLocatedAmendmentAxiomProjection).IsPublic,
+            "the corpus-dependent projection must remain an ingest-internal operation.");
     }
 
     private static EuLocatedAmendmentAxiomObservation Observation(

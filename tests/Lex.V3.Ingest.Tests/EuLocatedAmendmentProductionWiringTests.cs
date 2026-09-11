@@ -2,6 +2,7 @@ using Lex.V3.Contracts.Source.Europe;
 using Lex.V3.Contracts.Facts;
 using Lex.V3.Ingest.Europe;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using System.Reflection;
 
 namespace Lex.V3.Ingest.Tests;
 
@@ -13,6 +14,16 @@ public sealed class EuLocatedAmendmentProductionWiringTests
     private const string Axiom = "http://publications.europa.eu/.well-known/genid/located-production/1";
     private const string Target =
         "http://publications.europa.eu/resource/cellar/cccccccc-0000-0000-0000-00000000000c";
+
+    [TestMethod]
+    public void PublicResultFactoriesCannotPairLocatedEvidenceWithACallerChosenCorpus()
+    {
+        var publicFactories = typeof(EuQueryExecutionResult)
+            .GetMethods(BindingFlags.Public | BindingFlags.Static);
+
+        Assert.IsFalse(publicFactories.Any(method => method.GetParameters().Any(parameter =>
+            parameter.ParameterType == typeof(IReadOnlyList<EuLocatedAmendmentAxiomObservation>))));
+    }
 
     [TestMethod]
     public async Task ProvenLocatedRowsReachTheRunWithTheirExactProfileReference()

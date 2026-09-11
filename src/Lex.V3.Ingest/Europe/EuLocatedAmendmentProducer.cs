@@ -1,5 +1,6 @@
 using Lex.V3.Contracts;
 using Lex.V3.Contracts.Facts;
+using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Corpus;
 using Lex.V3.Contracts.Source.Europe;
 
@@ -12,21 +13,110 @@ public enum EuLocatedAmendmentExclusionKind
     ProjectionRefused = 3,
 }
 
+/// <summary>
+/// One publisher-marked attribution, retaining both the accepted E4 axiom and the exact raw
+/// observation that authorized it. Only the corpus-bound producer can mint one.
+/// </summary>
+public sealed class EuPublisherMarkedAmendmentAttribution
+{
+    internal EuPublisherMarkedAmendmentAttribution(EuLocatedAmendmentAxiomProjection projection)
+    {
+        ArgumentNullException.ThrowIfNull(projection);
+        Axiom = projection.Axiom;
+        Observation = projection.Observation;
+    }
+
+    public EuLocatedAmendmentAxiom Axiom { get; }
+    public EuLocatedAmendmentAxiomObservation Observation { get; }
+    public SourceArtifactRef InterpretationProfileRef => Observation.InterpretationProfileRef;
+}
+
 /// <summary>A publisher-marked axiom whose distinct targets prevent one accepted edge.</summary>
-public sealed record EuLocatedAmendmentAmbiguity(EuLocatedAmendmentAxiomObservation Observation);
+public sealed class EuLocatedAmendmentAmbiguity
+{
+    internal EuLocatedAmendmentAmbiguity(EuLocatedAmendmentAxiomObservation observation)
+    {
+        ArgumentNullException.ThrowIfNull(observation);
+        if (!observation.IsPublisherTargetAmbiguous)
+        {
+            throw new ArgumentException(
+                "Publisher ambiguity requires more than one retained annotated target.",
+                nameof(observation));
+        }
+
+        Observation = observation;
+    }
+
+    public EuLocatedAmendmentAxiomObservation Observation { get; }
+    public IReadOnlyList<string> CandidateTargetIris => Observation.AnnotatedTargetIris;
+}
 
 /// <summary>A publisher-marked axiom retained with the exact reason it was not admitted.</summary>
-public sealed record EuLocatedAmendmentExclusion(
-    EuLocatedAmendmentAxiomObservation Observation,
-    EuLocatedAmendmentExclusionKind Kind,
-    EuLocatedAmendmentAxiomProjectionRefusal? ProjectionRefusal,
-    string? Detail);
+public sealed class EuLocatedAmendmentExclusion
+{
+    internal EuLocatedAmendmentExclusion(
+        EuLocatedAmendmentAxiomObservation observation,
+        EuLocatedAmendmentExclusionKind kind,
+        EuLocatedAmendmentAxiomProjectionRefusal? projectionRefusal,
+        string? detail)
+    {
+        ArgumentNullException.ThrowIfNull(observation);
+        Observation = observation;
+        Kind = kind;
+        ProjectionRefusal = projectionRefusal;
+        Detail = detail;
+    }
+
+    public EuLocatedAmendmentAxiomObservation Observation { get; }
+    public EuLocatedAmendmentExclusionKind Kind { get; }
+    public EuLocatedAmendmentAxiomProjectionRefusal? ProjectionRefusal { get; }
+    public string? Detail { get; }
+}
+
+/// <summary>
+/// The only honest Stage 2 coverage statement while no complete textual change range exists.
+/// It cannot express zero, complete or incomplete coverage, and therefore cannot certify a later
+/// derived-attribution proposal.
+/// </summary>
+public sealed class EuAmendmentAttributionCoverage
+{
+    private EuAmendmentAttributionCoverage()
+    {
+    }
+
+    internal static EuAmendmentAttributionCoverage Unmeasured { get; } = new();
+
+    public string State => "unmeasured";
+    public string UnmetPrerequisite => "complete_textual_change_range_measurement";
+}
 
 /// <summary>Every delivered located axiom partitioned without claiming change-id coverage.</summary>
-public sealed record EuLocatedAmendmentProduction(
-    IReadOnlyList<EuLocatedAmendmentAxiomProjection> Admitted,
-    IReadOnlyList<EuLocatedAmendmentAmbiguity> Ambiguous,
-    IReadOnlyList<EuLocatedAmendmentExclusion> Excluded);
+public sealed class EuLocatedAmendmentProduction
+{
+    internal EuLocatedAmendmentProduction(
+        IReadOnlyList<EuPublisherMarkedAmendmentAttribution> admitted,
+        IReadOnlyList<EuLocatedAmendmentAmbiguity> ambiguous,
+        IReadOnlyList<EuLocatedAmendmentExclusion> excluded)
+    {
+        ArgumentNullException.ThrowIfNull(admitted);
+        ArgumentNullException.ThrowIfNull(ambiguous);
+        ArgumentNullException.ThrowIfNull(excluded);
+        Admitted = admitted;
+        Ambiguous = ambiguous;
+        Excluded = excluded;
+    }
+
+    /// <summary>Publisher-marked axioms admitted through the accepted E4 construction boundary.</summary>
+    public IReadOnlyList<EuPublisherMarkedAmendmentAttribution> Admitted { get; }
+
+    /// <summary>Publisher-evidenced conflicts retaining every annotated target and raw property.</summary>
+    public IReadOnlyList<EuLocatedAmendmentAmbiguity> Ambiguous { get; }
+
+    /// <summary>Every remaining publisher observation, retained with its exact refusal.</summary>
+    public IReadOnlyList<EuLocatedAmendmentExclusion> Excluded { get; }
+
+    public EuAmendmentAttributionCoverage Coverage => EuAmendmentAttributionCoverage.Unmeasured;
+}
 
 /// <summary>
 /// Resolves located-amendment targets only against the corpus set reopened by the same adapter run.
@@ -44,7 +134,7 @@ internal static class EuLocatedAmendmentProducer
         var records = corpus.Set.Records.ToDictionary(
             static record => record.ObjectRef.PublisherUri,
             StringComparer.Ordinal);
-        var admitted = new List<EuLocatedAmendmentAxiomProjection>();
+        var admitted = new List<EuPublisherMarkedAmendmentAttribution>();
         var ambiguous = new List<EuLocatedAmendmentAmbiguity>();
         var excluded = new List<EuLocatedAmendmentExclusion>();
 
@@ -101,7 +191,7 @@ internal static class EuLocatedAmendmentProducer
                 continue;
             }
 
-            admitted.Add(projection);
+            admitted.Add(new EuPublisherMarkedAmendmentAttribution(projection));
         }
 
         return new EuLocatedAmendmentProduction(
