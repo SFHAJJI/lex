@@ -1,5 +1,6 @@
 using Lex.V3.Contracts.Source.Absence;
 using Lex.V3.Contracts.Source.Core;
+using Lex.V3.Contracts.Source.Luxembourg;
 
 using Lex.V3.Contracts.Custody;
 
@@ -194,6 +195,83 @@ internal static class AbsenceFixtures
         // Cursors must strictly increase over the delivered order, so the subjects are keyed in
         // their own sorted order and the caller is told which order that was.
         var ordered = subjects.OrderBy(static value => value, StringComparer.Ordinal).ToArray();
+
+        // UNDER THIS FAMILY'S OWN PROFILE when it is this family. The inventory citation door binds
+        // a proof to the Luxembourg inventory's exact interpretation profile, so a proof read under
+        // the generic fixture profile evidences nothing there - which is precisely what a reviewer
+        // demonstrated with a same-subject proof of another family.
+        var lux = string.Equals(
+            familyKey,
+            LuxembourgInitialDraftInventoryDiscoveryPlan.PartitionMemberKeyForFixtures,
+            StringComparison.Ordinal);
+
+        var delivery = lux
+            ? AbsenceEnumerationProofFixture.LuxembourgInventoryDelivery(ordered, runSeed)
+            : AbsenceEnumerationProofFixture.DeliveryOf(
+                familyKey, runSeed, string.Join(',', ordered), rawKeys: true);
+
+        var proof = AbsenceFamilyEnumerationProof.TryCreate(
+            familyKey, delivery, CustodyMembership.Floored, out var refusal);
+        if (proof is null)
+        {
+            throw new InvalidOperationException($"fixture proof refused as {refusal}");
+        }
+
+        // The family's own rows key on [key_1, key_2]; the generic ones key on a single id.
+        var keys = ordered
+            .Select(subject => lux
+                ? new[]
+                {
+                    RepeatedEnumerationRdfTerm.Literal(subject, null, null),
+                    RepeatedEnumerationRdfTerm.Literal(
+                        LuxembourgInitialDraftInventoryDiscoveryPlan.IriKind, null, null),
+                }
+                : [RepeatedEnumerationRdfTerm.Iri(subject)])
+            .ToArray();
+        return (proof, keys);
+    }
+
+    /// <summary>
+    /// A proof carrying a family's NAME but read under this fixture's generic profile.
+    /// </summary>
+    /// <remarks>
+    /// The sharpest form of the authority question: the label is right and the subjects are right,
+    /// and the enumeration was still read under another dialect, projection and query family. A door
+    /// that only compares family keys accepts it.
+    /// </remarks>
+    /// <summary>
+    /// A proof read under the Luxembourg inventory's own profile, but OF another family.
+    /// </summary>
+    /// <remarks>
+    /// The mirror of <see cref="ProofNamingFamilyUnderAnotherProfile"/>: right profile, wrong
+    /// family. Without it the citation door's family check has nothing that fails only because of
+    /// it, and a guard nothing exercises is not a guard.
+    /// </remarks>
+    public static AbsenceFamilyEnumerationProof ProofOfAnotherFamilyUnderTheInventoryProfile(
+        string familyKey,
+        IReadOnlyList<string> subjects,
+        int runSeed = 932)
+    {
+        var ordered = subjects.OrderBy(static value => value, StringComparer.Ordinal).ToArray();
+        var proof = AbsenceFamilyEnumerationProof.TryCreate(
+            familyKey,
+            AbsenceEnumerationProofFixture.LuxembourgInventoryDelivery(ordered, runSeed, familyKey),
+            CustodyMembership.Floored,
+            out var refusal);
+        if (proof is null)
+        {
+            throw new InvalidOperationException($"fixture proof refused as {refusal}");
+        }
+
+        return proof;
+    }
+
+    public static AbsenceFamilyEnumerationProof ProofNamingFamilyUnderAnotherProfile(
+        string familyKey,
+        IReadOnlyList<string> subjects,
+        int runSeed = 931)
+    {
+        var ordered = subjects.OrderBy(static value => value, StringComparer.Ordinal).ToArray();
         var proof = AbsenceFamilyEnumerationProof.TryCreate(
             familyKey,
             AbsenceEnumerationProofFixture.DeliveryOf(
@@ -205,10 +283,7 @@ internal static class AbsenceFixtures
             throw new InvalidOperationException($"fixture proof refused as {refusal}");
         }
 
-        var keys = ordered
-            .Select(static subject => new[] { RepeatedEnumerationRdfTerm.Iri(subject) })
-            .ToArray();
-        return (proof, keys);
+        return proof;
     }
 
     public static (AbsenceFamilyEnumerationProof Proof, RepeatedEnumerationRdfTerm[][] Keys) Delivery(

@@ -4,6 +4,7 @@ using Lex.V3.Contracts;
 using Lex.V3.Contracts.Custody;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Http;
+using Lex.V3.Contracts.Source.Luxembourg;
 
 namespace Lex.V3.Tests.Contracts.Source.Absence;
 
@@ -39,8 +40,57 @@ internal sealed class AbsenceEnumerationProofFixture : IRepeatedEnumerationEvide
     private readonly string _partitionKey;
     private readonly int _runSeed;
     private readonly long _maximumDeliverableRows;
+
+    /// <summary>
+    /// The profile this delivery is read under, or null for this fixture's own generic one.
+    /// </summary>
+    /// <remarks>
+    /// A door may bind a proof to its family's exact interpretation profile - the Luxembourg
+    /// inventory citation does - and a proof read under this fixture's generic EU profile then
+    /// evidences nothing about that family. So a caller can supply the real profile and the row
+    /// shape that profile projects.
+    /// </remarks>
+    private readonly RepeatedEnumerationInterpretationProfile? _suppliedProfile;
+
+    private readonly OfficialMachineQuerySourceProfileId _sourceProfileId =
+        OfficialMachineQuerySourceProfileId.EuropeanUnionSparql;
+
+    private readonly string _passParameter = PassParameter;
+
+    private readonly string _hasCursorParameter = HasCursorParameter;
+
+    private readonly IReadOnlyList<string> _selectionParameters = ["scope"];
     private readonly SourceRegistryMemberRef _countFamily = new(Artifact(905), "count-query");
     private readonly SourceRegistryMemberRef _pageFamily = new(Artifact(905), "page-query");
+
+    private AbsenceEnumerationProofFixture(
+        string partitionKey,
+        int runSeed,
+        long maximumDeliverableRows,
+        RepeatedEnumerationInterpretationProfile? suppliedProfile,
+        OfficialMachineQuerySourceProfileId sourceProfileId,
+        string passParameter,
+        string hasCursorParameter,
+        IReadOnlyList<string> selectionParameters,
+        SourceRegistryMemberRef? countFamily,
+        SourceRegistryMemberRef? pageFamily)
+        : this(partitionKey, runSeed, maximumDeliverableRows)
+    {
+        _suppliedProfile = suppliedProfile;
+        _sourceProfileId = sourceProfileId;
+        _passParameter = passParameter;
+        _hasCursorParameter = hasCursorParameter;
+        _selectionParameters = selectionParameters;
+        if (countFamily is not null)
+        {
+            _countFamily = countFamily;
+        }
+
+        if (pageFamily is not null)
+        {
+            _pageFamily = pageFamily;
+        }
+    }
 
     private AbsenceEnumerationProofFixture(string partitionKey, int runSeed, long maximumDeliverableRows)
     {
@@ -88,6 +138,67 @@ internal sealed class AbsenceEnumerationProofFixture : IRepeatedEnumerationEvide
     public static string CanonicalKeyFor(string rowValue) => "urn:row:" + rowValue;
 
     /// <summary>
+    /// A real comparison over the Luxembourg initial-draft inventory's own profile and publisher.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The inventory citation door binds a proof to that family's exact interpretation profile, so a
+    /// proof read under this fixture's generic EU profile evidences nothing there - which is exactly
+    /// what a reviewer demonstrated. This proves under the plan's own profile: its dialect, its
+    /// five-variable projection, its two-part key of <c>key_1</c> and <c>key_2</c>, its own count and
+    /// page query families, and the Luxembourg SPARQL source profile.
+    /// </para>
+    /// <para>
+    /// The rows are the family's own shape, so their canonical key is <c>[key_1, key_2]</c> and
+    /// <c>key_1</c> is the subject - which is what the door derives the proven population from.
+    /// </para>
+    /// </remarks>
+    /// <param name="partitionKey">
+    /// Which family this delivery claims. Defaults to the inventory's own; a caller naming another
+    /// gets a delivery read under THIS profile that belongs to a different family, which is how the
+    /// citation door's family check is exercised independently of its profile check.
+    /// </param>
+    public static EnumerationDeliveryComparison LuxembourgInventoryDelivery(
+        IReadOnlyList<string> subjects,
+        int runSeed = 930,
+        string? partitionKey = null)
+    {
+        var plan = LuxembourgInitialDraftInventoryDiscoveryPlan.Create();
+        var profile = plan.CreateDeliveryProfile();
+        var page = LuxembourgInventoryRowsJson(subjects);
+        var fixture = new AbsenceEnumerationProofFixture(
+            partitionKey ?? LuxembourgInitialDraftInventoryDiscoveryPlan.PartitionMemberKeyForFixtures,
+            runSeed,
+            (subjects.Count * 2) + 100,
+            profile,
+            OfficialMachineQuerySourceProfileId.LuxembourgSparql,
+            "pass_id",
+            "has_cursor",
+            [],
+            plan.CountQueryFamilyRef,
+            plan.PageQueryFamilyRef);
+        return fixture.BuildPages(page, page, subjects.Count, subjects.Count + 3, subjects.Count + 1);
+    }
+
+    /// <summary>One page of the inventory's own projection, in key order.</summary>
+    private static string LuxembourgInventoryRowsJson(IReadOnlyList<string> subjects)
+    {
+        const string IriKind = LuxembourgInitialDraftInventoryDiscoveryPlan.IriKind;
+        var bindings = subjects.Select(subject =>
+            "{\"draft\":{\"type\":\"uri\",\"value\":\"" + subject + "\"},"
+            + "\"draft_kind\":{\"type\":\"literal\",\"value\":\"" + IriKind + "\"},"
+            + "\"multiplicity\":{\"type\":\"typed-literal\","
+            + "\"datatype\":\"http://www.w3.org/2001/XMLSchema#integer\",\"value\":\"1\"},"
+            + "\"key_1\":{\"type\":\"literal\",\"value\":\"" + subject + "\"},"
+            + "\"key_2\":{\"type\":\"literal\",\"value\":\"" + IriKind + "\"}}");
+
+        return "{\"head\":{\"link\":[],\"vars\":"
+            + "[\"draft\",\"draft_kind\",\"multiplicity\",\"key_1\",\"key_2\"]},"
+            + "\"results\":{\"distinct\":false,\"ordered\":true,\"bindings\":["
+            + string.Join(',', bindings) + "]}}";
+    }
+
+    /// <summary>
     /// A comparison whose passes disagreed. Both counted two rows and both delivered two rows, so
     /// only the row identities differ and only the digest comparison can refuse it.
     /// </summary>
@@ -117,16 +228,35 @@ internal sealed class AbsenceEnumerationProofFixture : IRepeatedEnumerationEvide
     {
         // An empty delivery is a real shape - a batch may ask about drafts the publisher holds
         // nothing for - and Split would otherwise report one empty row for none.
+        // An empty delivery is a real shape - a batch may ask about drafts the publisher holds
+        // nothing for - and Split would otherwise report one empty row for none.
         var rowCount = rowsA.Length is 0 ? 0 : rowsA.Split(',').Length;
+        return BuildPages(RowsJson(rowsA, rawKeys), RowsJson(rowsB, rawKeys), rowCount, limitA, limitB);
+    }
+
+    /// <summary>The same real tuple, over page bodies a caller has already rendered.</summary>
+    /// <remarks>
+    /// Split out because a family's own page shape is not a list of row values: the Luxembourg
+    /// inventory projects five variables and keys on two of them. Passing its rendered page through
+    /// the row-value path wrapped one JSON document inside another, which the strict parser reported
+    /// as malformed rather than as the fixture mistake it was.
+    /// </remarks>
+    private EnumerationDeliveryComparison BuildPages(
+        string pageJsonA,
+        string pageJsonB,
+        int rowCount,
+        long limitA,
+        long limitB)
+    {
         var countA = Add(1, CountJson(rowCount), rowCount, Artifact(301), DateTimeOffset.UnixEpoch, true, 1);
         var pageA = Add(
-            2, RowsJson(rowsA, rawKeys), rowCount, countA.HttpEvidenceRef,
+            2, pageJsonA, rowCount, countA.HttpEvidenceRef,
             DateTimeOffset.UnixEpoch.AddSeconds(1), false, 1, rowLimit: limitA);
         var countB = Add(
             3, CountJson(rowCount), rowCount, Artifact(303),
             DateTimeOffset.UnixEpoch.AddSeconds(2), true, 2);
         var pageB = Add(
-            4, RowsJson(rowsB, rawKeys), rowCount, countB.HttpEvidenceRef,
+            4, pageJsonB, rowCount, countB.HttpEvidenceRef,
             DateTimeOffset.UnixEpoch.AddSeconds(3), false, 2, rowLimit: limitB);
         var profile = Profile();
         return EnumerationDeliveryComparison.Create(
@@ -139,7 +269,7 @@ internal sealed class AbsenceEnumerationProofFixture : IRepeatedEnumerationEvide
             this);
     }
 
-    private RepeatedEnumerationInterpretationProfile Profile() => new(
+    private RepeatedEnumerationInterpretationProfile Profile() => _suppliedProfile ?? new(
         RepeatedEnumerationInterpretationProfile.SchemaId,
         RepeatedEnumerationSparqlJsonDialect.EuropeanUnionVirtuoso,
         "application/sparql-results+json",
@@ -174,22 +304,25 @@ internal sealed class AbsenceEnumerationProofFixture : IRepeatedEnumerationEvide
             : new MachineResponseCardinality(
                 MachineResponseCardinalityKind.BoundedRowSetPage, rowLimit, count, countRef);
         var family = countQuery ? _countFamily : _pageFamily;
-        var parameters = new List<MachineQueryParameter>
+        var parameters = new List<MachineQueryParameter>();
+        foreach (var selection in _selectionParameters)
         {
-            new("scope", MachineQueryParameterKind.PublisherCursor, null, "all", Artifact(906)),
-            new(PassParameter, MachineQueryParameterKind.BoundedInteger, pass, null, Artifact(906)),
-        };
+            parameters.Add(new(
+                selection, MachineQueryParameterKind.PublisherCursor, null, "all", Artifact(906)));
+        }
+
+        parameters.Add(new(
+            _passParameter, MachineQueryParameterKind.BoundedInteger, pass, null, Artifact(906)));
         if (!countQuery)
         {
             // The single page of each pass is the first page, so it claims no continuation cursor.
             parameters.Add(new(
-                HasCursorParameter, MachineQueryParameterKind.BoundedInteger, 0, null, Artifact(906)));
+                _hasCursorParameter, MachineQueryParameterKind.BoundedInteger, 0, null, Artifact(906)));
         }
 
         var input = MachineQueryInputArtifact.Create(
             Artifact(seed + 100).ResourceId, family, _partitionKey, cardinality, parameters);
-        var sourceProfile = OfficialMachineQuerySourceProfiles.Resolve(
-            OfficialMachineQuerySourceProfileId.EuropeanUnionSparql);
+        var sourceProfile = OfficialMachineQuerySourceProfiles.Resolve(_sourceProfileId);
         var requestTarget = sourceProfile.RequestTarget;
         var target = Encoding.ASCII.GetBytes(new Uri(requestTarget).PathAndQuery);
         var requestBody = Encoding.UTF8.GetBytes("ASK{}");
@@ -283,11 +416,24 @@ internal sealed class AbsenceEnumerationProofFixture : IRepeatedEnumerationEvide
             planRef, input.ArtifactRef, receiptRef, logicalRequestRef, httpEvidenceRef);
     }
 
-    private static string CountJson(long count) =>
+    private string CountJson(long count) =>
         "{\"head\":{\"link\":[],\"vars\":[\"count\"]},\"results\":{\"distinct\":false,\"ordered\":true,"
-        + "\"bindings\":[{\"count\":{\"type\":\"literal\","
+        + "\"bindings\":[{\"count\":{\"type\":\"" + TypedLiteralWireType + "\","
         + "\"datatype\":\"http://www.w3.org/2001/XMLSchema#integer\","
         + $"\"value\":\"{count}\"}}}}]}}}}";
+
+    /// <summary>
+    /// How this delivery's dialect spells a typed literal on the wire.
+    /// </summary>
+    /// <remarks>
+    /// Source/Core requires the Luxembourg Virtuoso dialect to say <c>typed-literal</c> and every
+    /// other to say <c>literal</c>, and refuses the wrong one rather than accepting either. A fixture
+    /// that guessed would be describing a response no engine sends.
+    /// </remarks>
+    private string TypedLiteralWireType =>
+        Profile().Dialect == RepeatedEnumerationSparqlJsonDialect.LuxembourgVirtuoso
+            ? "typed-literal"
+            : "literal";
 
     /// <param name="rawKeys">
     /// When true the row id is the value verbatim rather than <c>urn:row:{value}</c>, so a caller

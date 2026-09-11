@@ -418,7 +418,44 @@ public sealed class LuxembourgDraftPropertyCoverageTests
                 mine, termsRewritten, [unobserved], ObservedAt),
             "the proved keys do not name this draft, whatever the terms beside them say.");
 
-        // 2. Another enumeration's real, admitted proof - of different subjects.
+        // 2. THE SAME SUBJECTS, PROVEN BY ANOTHER FAMILY. Membership was not authority: every
+        //    subject here is genuinely proven, and the run that proved them is simply not this
+        //    family's inventory. The citation minted under that name, with absences, until the door
+        //    required the proof to be OF this family.
+        var (sameSubjectsElsewhere, elsewhereKeys) = AbsenceFixtures.DeliveryOfSubjects(
+            "unrelated-enumeration-family", drafts);
+        var sameSubjectRows = drafts
+            .Select((draft, index) => new RepeatedEnumerationRow(
+                [RepeatedEnumerationRdfTerm.Iri(draft)],
+                elsewhereKeys[index],
+                [RepeatedEnumerationRdfTerm.Iri(draft)]))
+            .ToArray();
+        Assert.ThrowsExactly<ArgumentException>(
+            () => LuxembourgInitialDraftInventoryCitation.MintedOver(
+                sameSubjectsElsewhere, sameSubjectRows, drafts, ObservedAt),
+            "proving these subjects somewhere is not proving this family's inventory.");
+
+        // 3. THE RIGHT FAMILY NAME, READ UNDER ANOTHER PROFILE. Sharper still: the label and the
+        //    subjects both match, and the enumeration was read under a different dialect,
+        //    projection and query family. A door comparing only family keys accepts this.
+        var wrongProfile = AbsenceFixtures.ProofNamingFamilyUnderAnotherProfile(
+            InventoryFamily, drafts);
+        Assert.ThrowsExactly<ArgumentException>(
+            () => LuxembourgInitialDraftInventoryCitation.MintedOver(
+                wrongProfile, sameSubjectRows, drafts, ObservedAt),
+            "this family is defined by its own profile, not only by its name.");
+
+        // 4. THE RIGHT PROFILE, THE WRONG FAMILY. The mirror of the case above, and the one that
+        //    makes the family check independently load bearing: read under this family's own
+        //    profile, over these subjects, and belonging to another family's enumeration.
+        var wrongFamily = AbsenceFixtures.ProofOfAnotherFamilyUnderTheInventoryProfile(
+            "unrelated-enumeration-family", drafts);
+        Assert.ThrowsExactly<ArgumentException>(
+            () => LuxembourgInitialDraftInventoryCitation.MintedOver(
+                wrongFamily, myRows, drafts, ObservedAt),
+            "this family's profile does not make another family's run this family's inventory.");
+
+        // 5. Another enumeration's real, admitted proof - of different subjects.
         var (elsewhere, elsewhereRows) = DeliveryOf("unrelated-enumeration-family", Drafts(4));
         Assert.ThrowsExactly<ArgumentException>(
             () => LuxembourgInitialDraftInventoryCitation.MintedOver(
@@ -429,20 +466,20 @@ public sealed class LuxembourgDraftPropertyCoverageTests
                 elsewhere, elsewhereRows, drafts, ObservedAt),
             "nor does its own delivery prove this population.");
 
-        // 3. This run's own proof and rows, and one subject it never keyed.
+        // 6. This run's own proof and rows, and one subject it never keyed.
         Assert.ThrowsExactly<ArgumentException>(
             () => LuxembourgInitialDraftInventoryCitation.MintedOver(
                 mine, myRows, [.. drafts, unobserved], ObservedAt),
             "a subject the delivery never keyed was never observed.");
 
-        // 4. And a population that drops one the delivery DID key, which would narrow the class
+        // 7. And a population that drops one the delivery DID key, which would narrow the class
         //    every later absence is derived against.
         Assert.ThrowsExactly<ArgumentException>(
             () => LuxembourgInitialDraftInventoryCitation.MintedOver(
                 mine, myRows, drafts.Take(2).ToArray(), ObservedAt),
             "the population is the delivery's own, not a subset a caller chose.");
 
-        // 5. A delivery whose size disagrees with what the proof proves.
+        // 8. A delivery whose size disagrees with what the proof proves.
         Assert.ThrowsExactly<ArgumentException>(
             () => LuxembourgInitialDraftInventoryCitation.MintedOver(
                 mine, myRows[..2], drafts, ObservedAt),

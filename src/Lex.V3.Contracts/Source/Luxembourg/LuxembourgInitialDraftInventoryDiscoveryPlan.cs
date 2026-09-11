@@ -100,6 +100,14 @@ public sealed class LuxembourgInitialDraftInventoryDiscoveryPlan
     internal const uint Pass2PageLimit = 613;
     internal const string PartitionMemberKey = "legilux-initial-draft-inventory";
 
+    /// <summary>The same partition key, reachable by the linked test fixture.</summary>
+    /// <remarks>
+    /// The citation door binds a proof to this family, so a fixture proving that family has to name
+    /// it. Exposed rather than retyped: two spellings of one partition key is how a fixture starts
+    /// proving a family nothing else believes in.
+    /// </remarks>
+    public const string PartitionMemberKeyForFixtures = PartitionMemberKey;
+
     private const string ResourceId = "urn:uuid:2b8f1d47-9c05-4e63-a7f2-40d6e83b19ca";
     private const string MemberPrefix = "lu-initial-draft-inventory";
     private const string ResponseMediaType = "application/sparql-results+json";

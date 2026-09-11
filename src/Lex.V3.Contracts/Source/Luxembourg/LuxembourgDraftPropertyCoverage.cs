@@ -251,6 +251,7 @@ public sealed record LuxembourgInitialDraftInventoryCitation
         ArgumentNullException.ThrowIfNull(addressablePopulation);
         ArgumentException.ThrowIfNullOrWhiteSpace(observedAt);
 
+        LuxembourgProvenDelivery.RequireThisFamilysInventory(proof);
         LuxembourgProvenDelivery.Bind(proof, deliveredRows, addressablePopulation);
 
         var familyKey = proof.FamilyKey;
@@ -308,6 +309,64 @@ public sealed record LuxembourgInitialDraftInventoryCitation
 /// </remarks>
 internal static class LuxembourgProvenDelivery
 {
+    /// <summary>The interpretation profile this family's enumerations are read under.</summary>
+    /// <remarks>
+    /// Built once. Its canonical bytes are what a proof's own profile reference must digest to, so
+    /// this is the authority a proof is checked against rather than anything a caller supplies.
+    /// </remarks>
+    private static readonly RepeatedEnumerationInterpretationProfile InventoryProfile =
+        LuxembourgInitialDraftInventoryDiscoveryPlan.Create().CreateDeliveryProfile();
+
+    /// <summary>
+    /// The proof must be OF this family, read under THIS family's profile.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Membership was not authority. With the population taken from the proven key, a reviewer
+    /// presented a real admitted two-pass proof labelled <c>unrelated-enumeration-family</c> over
+    /// the SAME three subject keys, and the citation, assignment and coverage all minted - carrying
+    /// that family name and three derived absences. Every subject was genuinely proven; the run
+    /// that proved them was simply not this family's inventory. The earlier other-family regression
+    /// changed the subjects too, so it was proving the set guard and not this one.
+    /// </para>
+    /// <para>
+    /// The profile check is the sharper half. A proof's interpretation-profile reference digests the
+    /// profile's own canonical bytes, so validating it against this family's profile establishes
+    /// that the delivery was read under this dialect, this projection and this family's own count
+    /// and page query families - not merely that some enumeration of matching subjects happened
+    /// somewhere. The fixture that exposed this used the generic EU Virtuoso interpretation against
+    /// a Luxembourg door, and nothing objected.
+    /// </para>
+    /// </remarks>
+    internal static void RequireThisFamilysInventory(AbsenceFamilyEnumerationProof proof)
+    {
+        if (!string.Equals(
+                proof.FamilyKey,
+                LuxembourgInitialDraftInventoryDiscoveryPlan.PartitionMemberKey,
+                StringComparison.Ordinal))
+        {
+            throw new ArgumentException(
+                "This proof is of " + proof.FamilyKey + ", not "
+                    + LuxembourgInitialDraftInventoryDiscoveryPlan.PartitionMemberKey
+                    + ", so it proves nothing about this family's inventory.",
+                nameof(proof));
+        }
+
+        try
+        {
+            RepeatedEnumerationInterpretationProfileIdentity.Validate(
+                proof.InterpretationProfileRef, InventoryProfile);
+        }
+        catch (ArgumentException inner)
+        {
+            throw new ArgumentException(
+                "This proof was read under another interpretation profile, so it does not evidence "
+                    + "an enumeration of this family as this family is defined.",
+                nameof(proof),
+                inner);
+        }
+    }
+
     internal static void Bind(
         AbsenceFamilyEnumerationProof proof,
         IReadOnlyList<RepeatedEnumerationRow> deliveredRows,
