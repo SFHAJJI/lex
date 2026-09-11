@@ -473,6 +473,66 @@ public sealed class LuxembourgDraftGraphProducerTests
     }
 
     /// <summary>
+    /// A RETAINED row whose key does not digest its own value is refused before it is retained.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// THE CLAUSE THIS TEST EXISTS FOR, and the one I shipped without a test. The owner's ruling
+    /// requires the digest recomputed "before admitting OR retaining", and the retained branch
+    /// deliberately withholds admission-grade invariants, so the key check there is a separate
+    /// statement that needed its own proof. It had none: the admitted-path test uses an admissible
+    /// predicate and never reaches this branch, and the continuation test's lexically keyed long row
+    /// refuses at the 2,047-byte key-part ceiling before any digest is compared.
+    /// </para>
+    /// <para>
+    /// So this row is built to reach the comparison and nothing else. The predicate is outside the
+    /// accepted vocabulary, so the row is retained rather than admitted. The value is SHORT, so it
+    /// is representable and the ceiling cannot fire first and pass this test for the wrong reason.
+    /// The key digests some other value, which is the only thing left for the refusal to be about.
+    /// </para>
+    /// <para>
+    /// It matters because the row that stopped the live acceptance run is itself retained, not
+    /// admitted: a <c>titleDraft</c>. Without this, the digest was unchecked on exactly the class of
+    /// row it was introduced for.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void ARetainedRowWhoseKeyDigestsAnotherValueIsRefused()
+    {
+        const string NotAdmissible = "http://data.legilux.public.lu/resource/ontology/jolux#titleDraft";
+        const string Delivered = "a short representable title";
+
+        CollectionAssert.DoesNotContain(
+            LuxembourgDraftGraphDiscoveryPlan.AskedAbout.ToArray(), NotAdmissible,
+            "this predicate must be retained rather than admitted, or the retained branch is not reached.");
+        Assert.IsLessThan(
+            2047, System.Text.Encoding.UTF8.GetByteCount(Delivered),
+            "the value must be representable, or the key-part ceiling refuses before the digest is compared.");
+
+        var refused = Decode(Row(
+            predicate: NotAdmissible,
+            value: Literal(Delivered),
+            key4: ValueDigest("some other value entirely")));
+
+        Assert.AreEqual(
+            LuxembourgDraftGraphProductionRefusal.RowNotAdmitted, refused.Refusal,
+            "a retained row whose key names another value is evidence of nothing.");
+        StringAssert.Contains(refused.Detail!, "key_4");
+
+        // The honest retained row still passes, so the refusal above is about the digest and not
+        // about retaining this predicate at all.
+        var admitted = Decode(Row(predicate: NotAdmissible, value: Literal(Delivered)));
+        Assert.AreEqual(
+            LuxembourgDraftGraphProductionRefusal.None, admitted.Refusal,
+            $"{admitted.Refusal}: {admitted.Detail}");
+        Assert.AreEqual(
+            Delivered,
+            admitted.RetainedNotAdmitted.Single(
+                value => string.Equals(value.PredicateIri, NotAdmissible, StringComparison.Ordinal)).Value,
+            "and it is retained with its value intact.");
+    }
+
+    /// <summary>
     /// Two values that differ only in kind, datatype or language stay distinct rows.
     /// </summary>
     /// <remarks>
