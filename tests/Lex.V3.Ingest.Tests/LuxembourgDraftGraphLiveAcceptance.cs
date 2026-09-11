@@ -166,7 +166,7 @@ public sealed class LuxembourgDraftGraphLiveAcceptance
             var text = Encoding.UTF8.GetString(await File.ReadAllBytesAsync(file));
             foreach (var target in HttpTargetsIn(text))
             {
-                if (!target.StartsWith(LegiluxEndpoint, StringComparison.Ordinal))
+                if (!IsTheAuthorizedEndpoint(target))
                 {
                     offending.Add(Path.GetFileName(file)[..12] + " -> " + target);
                 }
@@ -310,9 +310,32 @@ public sealed class LuxembourgDraftGraphLiveAcceptance
                 "the scan must actually find request targets, or the live test's CHD negative is vacuous.");
             foreach (var target in targets)
             {
-                StringAssert.StartsWith(
-                    target, LegiluxEndpoint, "this family asks Legilux and nothing else.");
+                Assert.IsTrue(
+                    IsTheAuthorizedEndpoint(target),
+                    $"this family asks {LegiluxEndpoint} and nothing else, and not a child of it: {target}");
             }
+
+            // AND THE GUARD CAN FAIL, proven on a planted target rather than assumed. A child path
+            // on the authorized host is the shape that slipped through prefix matching: an opinion
+            // body served from the endpoint's own host is still a body this run may not fetch.
+            foreach (var planted in new[]
+                     {
+                         LegiluxEndpoint + "/opinion-body",
+                         LegiluxEndpoint + "-other",
+                         "https://data.legilux.public.lu/other",
+                         "https://www.chd.lu/sparqlendpoint",
+                     })
+            {
+                Assert.IsFalse(
+                    IsTheAuthorizedEndpoint(planted),
+                    $"{planted} is not the authorized endpoint and must be reported as offending.");
+            }
+
+            // The honest shapes still pass, or the negative would fail every real run.
+            Assert.IsTrue(IsTheAuthorizedEndpoint(LegiluxEndpoint));
+            Assert.IsTrue(
+                IsTheAuthorizedEndpoint(LegiluxEndpoint + "?query=SELECT%20*"),
+                "a SPARQL question carried in the query string is still the same endpoint.");
         }
         finally
         {
@@ -330,6 +353,39 @@ public sealed class LuxembourgDraftGraphLiveAcceptance
     /// publisher's data and is exactly what this family is supposed to carry link-only. Confusing
     /// the two would fail the run for doing its job.
     /// </remarks>
+    /// <summary>
+    /// Whether one retained request target is the endpoint this run may contact, and not a child of
+    /// it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// PREFIX MATCHING WAS NOT THE RULE. Both scans asked whether the target STARTED WITH the
+    /// endpoint, which accepts <c>/sparqlendpoint/opinion-body</c> - an opinion body fetched from
+    /// the same host, which is exactly what S2-A07 and the standing authorization forbid and exactly
+    /// what this negative exists to catch. A reviewer planted that target and both checks passed it.
+    /// </para>
+    /// <para>
+    /// The comparison is on the absolute path, ordinal and whole, so a child segment cannot slip
+    /// through. The query string is deliberately not part of it: a SPARQL request may legitimately
+    /// carry its query there, and requiring the whole URI to be equal would fail an honest run for
+    /// asking a question. What is asserted is WHERE the request went, which is the thing the
+    /// authorization bounds.
+    /// </para>
+    /// </remarks>
+    private static bool IsTheAuthorizedEndpoint(string target)
+    {
+        if (!Uri.TryCreate(target, UriKind.Absolute, out var actual) ||
+            !Uri.TryCreate(LegiluxEndpoint, UriKind.Absolute, out var allowed))
+        {
+            return false;
+        }
+
+        return string.Equals(actual.Scheme, allowed.Scheme, StringComparison.Ordinal)
+            && string.Equals(actual.Host, allowed.Host, StringComparison.Ordinal)
+            && actual.Port == allowed.Port
+            && string.Equals(actual.AbsolutePath, allowed.AbsolutePath, StringComparison.Ordinal);
+    }
+
     private static IEnumerable<string> HttpTargetsIn(string artifact)
     {
         const string RequestMarker = "\"request_uri\"";
