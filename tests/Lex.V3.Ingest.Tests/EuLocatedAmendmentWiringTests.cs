@@ -20,10 +20,10 @@ public sealed class EuLocatedAmendmentWiringTests
     {
         var profile = EuObjectFactsDiscoveryPlan.Create()
             .CreateDeliveryProfile(EuObjectFactsQuerySet.LocatedAmendmentFacts);
-        var proofOne = new SourceArtifactRef(
-            "urn:uuid:00000000-0000-4000-8000-00000000a801", new string('a', 64));
-        var proofTwo = new SourceArtifactRef(
-            "urn:uuid:00000000-0000-4000-8000-00000000a802", new string('b', 64));
+        var proofOne = RepeatedEnumerationInterpretationProfileIdentity.Create(
+            "urn:uuid:00000000-0000-4000-8000-00000000a801", profile);
+        var proofTwo = RepeatedEnumerationInterpretationProfileIdentity.Create(
+            "urn:uuid:00000000-0000-4000-8000-00000000a802", profile);
         var batches = new[]
         {
             (Rows: Rows(ParentOne, "urn:axiom:one"), Profile: profile, Proof: proofOne),
@@ -37,8 +37,12 @@ public sealed class EuLocatedAmendmentWiringTests
         Assert.IsNull(offendingValue);
         Assert.IsNotNull(observations);
         Assert.HasCount(2, observations);
-        Assert.AreSame(proofOne, observations.Single(item => item.AxiomIri == "urn:axiom:one").DeliveryRef);
-        Assert.AreSame(proofTwo, observations.Single(item => item.AxiomIri == "urn:axiom:two").DeliveryRef);
+        Assert.AreSame(
+            proofOne,
+            observations.Single(item => item.AxiomIri == "urn:axiom:one").InterpretationProfileRef);
+        Assert.AreSame(
+            proofTwo,
+            observations.Single(item => item.AxiomIri == "urn:axiom:two").InterpretationProfileRef);
     }
 
     private static IReadOnlyList<RepeatedEnumerationRow> Rows(string parent, string axiom) =>

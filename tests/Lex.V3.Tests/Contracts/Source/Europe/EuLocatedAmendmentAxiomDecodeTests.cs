@@ -15,12 +15,11 @@ public sealed class EuLocatedAmendmentAxiomDecodeTests
     private const string Axiom = "http://publications.europa.eu/.well-known/genid/located-amendment/1";
     private const string Unknown = EuAmendmentRelationVocabulary.AnnotationNamespace + "publisher_extension";
 
-    private static readonly SourceArtifactRef Delivery = new(
-        "urn:uuid:00000000-0000-4000-8000-00000000a801",
-        new string('a', 64));
-
     private static readonly RepeatedEnumerationInterpretationProfile Profile =
-        EuObjectFactsDiscoveryPlan.Create().CreateDeliveryProfile(EuObjectFactsQuerySet.ReifiedAxiomFacts);
+        EuObjectFactsDiscoveryPlan.Create().CreateDeliveryProfile(EuObjectFactsQuerySet.LocatedAmendmentFacts);
+    private static readonly SourceArtifactRef Delivery =
+        RepeatedEnumerationInterpretationProfileIdentity.Create(
+            "urn:uuid:00000000-0000-4000-8000-00000000a801", Profile);
 
     [TestMethod]
     public void AProofBoundAxiomRetainsEveryDeliveredPropertyWithoutMintingBodyScope()
@@ -40,7 +39,7 @@ public sealed class EuLocatedAmendmentAxiomDecodeTests
         Assert.AreEqual(Work, observation.AnnotatedSourceIri);
         Assert.AreEqual(EuAmendmentRelationVocabulary.AmendsPredicateUri, observation.AnnotatedPropertyIri);
         CollectionAssert.AreEqual(new[] { Target }, observation.AnnotatedTargetIris.ToArray());
-        Assert.AreSame(Delivery, observation.DeliveryRef);
+        Assert.AreSame(Delivery, observation.InterpretationProfileRef);
         Assert.HasCount(rows.Count, observation.RawProperties);
         var retained = observation.RawProperties.Single(property => property.PredicateIri == Unknown);
         Assert.AreEqual("publisher bytes", retained.Value.Value);
@@ -169,6 +168,31 @@ public sealed class EuLocatedAmendmentAxiomDecodeTests
     }
 
     [TestMethod]
+    public void AnotherFamilyProfileOrAnUnboundProfileReferenceCannotMintLocatedEvidence()
+    {
+        var dateProfile = EuObjectFactsDiscoveryPlan.Create()
+            .CreateDeliveryProfile(EuObjectFactsQuerySet.ReifiedAxiomFacts);
+        var dateProfileRef = RepeatedEnumerationInterpretationProfileIdentity.Create(
+            Delivery.ResourceId, dateProfile);
+
+        var wrongFamily = EuLocatedAmendmentAxiomDecode.TryDecode(
+            WellFormed(), dateProfile, dateProfileRef, out var familyRefusal, out _);
+        var unboundReference = EuLocatedAmendmentAxiomDecode.TryDecode(
+            WellFormed(), Profile,
+            new SourceArtifactRef(Delivery.ResourceId, new string('a', 64)),
+            out var referenceRefusal, out _);
+
+        Assert.IsNull(wrongFamily);
+        Assert.AreEqual(
+            EuLocatedAmendmentAxiomDecodeRefusal.InterpretationProfileNotLocatedAmendmentFacts,
+            familyRefusal);
+        Assert.IsNull(unboundReference);
+        Assert.AreEqual(
+            EuLocatedAmendmentAxiomDecodeRefusal.InterpretationProfileDoesNotBindReference,
+            referenceRefusal);
+    }
+
+    [TestMethod]
     public void EveryDeclaredRefusalIsReachableFromADeliveredShape()
     {
         var markerConflict = WellFormed();
@@ -236,7 +260,9 @@ public sealed class EuLocatedAmendmentAxiomDecodeTests
 
         CollectionAssert.AreEqual(
             Enum.GetValues<EuLocatedAmendmentAxiomDecodeRefusal>()
-                .Where(value => value != EuLocatedAmendmentAxiomDecodeRefusal.None)
+                .Where(value => value is not EuLocatedAmendmentAxiomDecodeRefusal.None
+                    and not EuLocatedAmendmentAxiomDecodeRefusal.InterpretationProfileDoesNotBindReference
+                    and not EuLocatedAmendmentAxiomDecodeRefusal.InterpretationProfileNotLocatedAmendmentFacts)
                 .ToArray(),
             reached.Distinct().Order().ToArray());
     }

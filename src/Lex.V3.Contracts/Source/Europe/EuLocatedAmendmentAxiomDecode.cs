@@ -18,6 +18,8 @@ public enum EuLocatedAmendmentAxiomDecodeRefusal
     AxiomTypeMissingOrNotOwlAxiom = 10,
     AnnotatedTargetMissingOrNotAnIri = 11,
     ModelledPredicateDeliveredMoreThanOnce = 12,
+    InterpretationProfileDoesNotBindReference = 13,
+    InterpretationProfileNotLocatedAmendmentFacts = 14,
 }
 
 /// <summary>One publisher property retained exactly as delivered on an axiom node.</summary>
@@ -49,14 +51,14 @@ public sealed class EuLocatedAmendmentAxiomObservation
         string annotatedPropertyIri,
         IEnumerable<string> annotatedTargetIris,
         IEnumerable<EuLocatedAmendmentRawProperty> rawProperties,
-        SourceArtifactRef deliveryRef)
+        SourceArtifactRef interpretationProfileRef)
     {
         AxiomIri = axiomIri;
         AnnotatedSourceIri = annotatedSourceIri;
         AnnotatedPropertyIri = annotatedPropertyIri;
         AnnotatedTargetIris = Array.AsReadOnly(annotatedTargetIris.ToArray());
         RawProperties = Array.AsReadOnly(rawProperties.ToArray());
-        DeliveryRef = deliveryRef;
+        InterpretationProfileRef = interpretationProfileRef;
     }
 
     public string AxiomIri { get; }
@@ -64,7 +66,7 @@ public sealed class EuLocatedAmendmentAxiomObservation
     public string AnnotatedPropertyIri { get; }
     public IReadOnlyList<string> AnnotatedTargetIris { get; }
     public IReadOnlyList<EuLocatedAmendmentRawProperty> RawProperties { get; }
-    public SourceArtifactRef DeliveryRef { get; }
+    public SourceArtifactRef InterpretationProfileRef { get; }
     public bool IsPublisherTargetAmbiguous => AnnotatedTargetIris.Count > 1;
 }
 
@@ -76,15 +78,37 @@ public static class EuLocatedAmendmentAxiomDecode
     public static IReadOnlyList<EuLocatedAmendmentAxiomObservation>? TryDecode(
         IReadOnlyList<RepeatedEnumerationRow> rows,
         RepeatedEnumerationInterpretationProfile profile,
-        SourceArtifactRef deliveryRef,
+        SourceArtifactRef interpretationProfileRef,
         out EuLocatedAmendmentAxiomDecodeRefusal refusal,
         out string? offendingValue)
     {
         ArgumentNullException.ThrowIfNull(rows);
         ArgumentNullException.ThrowIfNull(profile);
-        ArgumentNullException.ThrowIfNull(deliveryRef);
+        ArgumentNullException.ThrowIfNull(interpretationProfileRef);
         refusal = EuLocatedAmendmentAxiomDecodeRefusal.None;
         offendingValue = null;
+
+        try
+        {
+            RepeatedEnumerationInterpretationProfileIdentity.Validate(interpretationProfileRef, profile);
+        }
+        catch (ArgumentException)
+        {
+            refusal = EuLocatedAmendmentAxiomDecodeRefusal.InterpretationProfileDoesNotBindReference;
+            offendingValue = interpretationProfileRef.ResourceId;
+            return null;
+        }
+
+        var expectedProfile = EuObjectFactsDiscoveryPlan.Create()
+            .CreateDeliveryProfile(EuObjectFactsQuerySet.LocatedAmendmentFacts);
+        var expectedRef = RepeatedEnumerationInterpretationProfileIdentity.Create(
+            interpretationProfileRef.ResourceId, expectedProfile);
+        if (interpretationProfileRef != expectedRef)
+        {
+            refusal = EuLocatedAmendmentAxiomDecodeRefusal.InterpretationProfileNotLocatedAmendmentFacts;
+            offendingValue = interpretationProfileRef.ResourceId;
+            return null;
+        }
 
         if (rows.Count == 0)
         {
@@ -159,7 +183,7 @@ public static class EuLocatedAmendmentAxiomDecode
         foreach (var pair in byAxiom.OrderBy(static pair => pair.Key, StringComparer.Ordinal))
         {
             var observation = DecodeOne(
-                pair.Key, pair.Value, deliveryRef, out refusal, out offendingValue);
+                pair.Key, pair.Value, interpretationProfileRef, out refusal, out offendingValue);
             if (observation is null)
             {
                 return null;
@@ -174,7 +198,7 @@ public static class EuLocatedAmendmentAxiomDecode
     private static EuLocatedAmendmentAxiomObservation? DecodeOne(
         string axiomIri,
         RawAxiom rawAxiom,
-        SourceArtifactRef deliveryRef,
+        SourceArtifactRef interpretationProfileRef,
         out EuLocatedAmendmentAxiomDecodeRefusal refusal,
         out string? offendingValue)
     {
@@ -250,7 +274,7 @@ public static class EuLocatedAmendmentAxiomDecode
             property.Value,
             targetIris,
             properties,
-            deliveryRef);
+            interpretationProfileRef);
     }
 
     private static EuLocatedAmendmentAxiomObservation? Conflict(
