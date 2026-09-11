@@ -180,6 +180,70 @@ internal sealed class AbsenceEnumerationProofFixture : IRepeatedEnumerationEvide
         return fixture.BuildPages(page, page, subjects.Count, subjects.Count + 3, subjects.Count + 1);
     }
 
+    /// <summary>
+    /// The OpinionRequest inventory's own delivery, read under its own profile.
+    /// </summary>
+    /// <remarks>
+    /// A separate fixture rather than a parameter on the draft one, because the citation door binds
+    /// a proof to this family's partition AND its interpretation profile: a delivery built from the
+    /// other family's plan evidences nothing here, however similar the rows look.
+    /// </remarks>
+    /// <param name="nonAddressableAt">
+    /// Deliver this member with the blank-node kind marker. The citation door refuses such a
+    /// delivery, and that path is unreachable without a fixture that genuinely delivers one:
+    /// rewriting a canonical key afterwards changes the key digest, so the proof binding refuses
+    /// first and the blank-node rule is never reached.
+    /// </param>
+    public static EnumerationDeliveryComparison LuxembourgOpinionRequestInventoryDelivery(
+        IReadOnlyList<string> subjects,
+        int runSeed = 931,
+        string? partitionKey = null,
+        int? nonAddressableAt = null)
+    {
+        var plan = LuxembourgOpinionRequestInventoryDiscoveryPlan.Create();
+        var profile = plan.CreateDeliveryProfile();
+        var page = LuxembourgOpinionRequestInventoryRowsJson(subjects, nonAddressableAt);
+        var fixture = new AbsenceEnumerationProofFixture(
+            partitionKey ?? LuxembourgOpinionRequestInventoryDiscoveryPlan.PartitionMemberKeyForFixtures,
+            runSeed,
+            (subjects.Count * 2) + 100,
+            profile,
+            OfficialMachineQuerySourceProfileId.LuxembourgSparql,
+            "pass_id",
+            "has_cursor",
+            [],
+            plan.CountQueryFamilyRef,
+            plan.PageQueryFamilyRef);
+        return fixture.BuildPages(page, page, subjects.Count, subjects.Count + 3, subjects.Count + 1);
+    }
+
+    /// <summary>One page of the request inventory's projection, in key order.</summary>
+    private static string LuxembourgOpinionRequestInventoryRowsJson(
+        IReadOnlyList<string> subjects,
+        int? nonAddressableAt = null)
+    {
+        var bindings = subjects.Select((subject, index) =>
+            "{\"request\":{\"type\":\"uri\",\"value\":\"" + subject + "\"},"
+            + "\"request_kind\":{\"type\":\"literal\",\"value\":\""
+            + KindAt(index, nonAddressableAt) + "\"},"
+            + "\"multiplicity\":{\"type\":\"typed-literal\","
+            + "\"datatype\":\"http://www.w3.org/2001/XMLSchema#integer\",\"value\":\"1\"},"
+            + "\"key_1\":{\"type\":\"literal\",\"value\":\"" + subject + "\"},"
+            + "\"key_2\":{\"type\":\"literal\",\"value\":\""
+            + KindAt(index, nonAddressableAt) + "\"}}");
+
+        return "{\"head\":{\"link\":[],\"vars\":"
+            + "[\"request\",\"request_kind\",\"multiplicity\",\"key_1\",\"key_2\"]},"
+            + "\"results\":{\"distinct\":false,\"ordered\":true,\"bindings\":["
+            + string.Join(',', bindings) + "]}}";
+    }
+
+    /// <summary>The kind marker a delivered member carries.</summary>
+    internal static string KindAt(int index, int? nonAddressableAt) =>
+        index == nonAddressableAt
+            ? LuxembourgOpinionRequestInventoryDiscoveryPlan.UnsupportedBlankNodeKind
+            : LuxembourgOpinionRequestInventoryDiscoveryPlan.IriKind;
+
     /// <summary>One page of the inventory's own projection, in key order.</summary>
     private static string LuxembourgInventoryRowsJson(IReadOnlyList<string> subjects)
     {

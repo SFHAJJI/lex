@@ -205,10 +205,20 @@ internal static class AbsenceFixtures
             LuxembourgInitialDraftInventoryDiscoveryPlan.PartitionMemberKeyForFixtures,
             StringComparison.Ordinal);
 
+        // The request inventory is a separate family with its own profile, so a delivery built from
+        // the draft plan evidences nothing at its citation door however alike the rows look.
+        var request = string.Equals(
+            familyKey,
+            LuxembourgOpinionRequestInventoryDiscoveryPlan.PartitionMemberKeyForFixtures,
+            StringComparison.Ordinal);
+
         var delivery = lux
             ? AbsenceEnumerationProofFixture.LuxembourgInventoryDelivery(ordered, runSeed)
-            : AbsenceEnumerationProofFixture.DeliveryOf(
-                familyKey, runSeed, string.Join(',', ordered), rawKeys: true);
+            : request
+                ? AbsenceEnumerationProofFixture.LuxembourgOpinionRequestInventoryDelivery(
+                    ordered, runSeed)
+                : AbsenceEnumerationProofFixture.DeliveryOf(
+                    familyKey, runSeed, string.Join(',', ordered), rawKeys: true);
 
         var proof = AbsenceFamilyEnumerationProof.TryCreate(
             familyKey, delivery, CustodyMembership.Floored, out var refusal);
@@ -219,7 +229,7 @@ internal static class AbsenceFixtures
 
         // The family's own rows key on [key_1, key_2]; the generic ones key on a single id.
         var keys = ordered
-            .Select(subject => lux
+            .Select(subject => lux || request
                 ? new[]
                 {
                     RepeatedEnumerationRdfTerm.Literal(subject, null, null),
@@ -227,6 +237,43 @@ internal static class AbsenceFixtures
                         LuxembourgInitialDraftInventoryDiscoveryPlan.IriKind, null, null),
                 }
                 : [RepeatedEnumerationRdfTerm.Iri(subject)])
+            .ToArray();
+        return (proof, keys);
+    }
+
+    /// <summary>
+    /// An OpinionRequest inventory delivery in which one member is not addressable.
+    /// </summary>
+    /// <remarks>
+    /// The keys carry the blank-node marker as delivered, so the proof covers them. A test cannot
+    /// reach the citation door's blank-node rule by rewriting a key afterwards: that changes the
+    /// canonical-key digest, and the proof binding refuses before the rule is consulted.
+    /// </remarks>
+    public static (AbsenceFamilyEnumerationProof Proof, RepeatedEnumerationRdfTerm[][] Keys)
+        OpinionRequestInventoryWithNonAddressableMember(
+            IReadOnlyList<string> subjects,
+            int nonAddressableAt,
+            int runSeed = 933)
+    {
+        var ordered = subjects.OrderBy(static value => value, StringComparer.Ordinal).ToArray();
+        var familyKey = LuxembourgOpinionRequestInventoryDiscoveryPlan.PartitionMemberKeyForFixtures;
+        var delivery = AbsenceEnumerationProofFixture.LuxembourgOpinionRequestInventoryDelivery(
+            ordered, runSeed, nonAddressableAt: nonAddressableAt);
+
+        var proof = AbsenceFamilyEnumerationProof.TryCreate(
+            familyKey, delivery, CustodyMembership.Floored, out var refusal);
+        if (proof is null)
+        {
+            throw new InvalidOperationException($"fixture proof refused as {refusal}");
+        }
+
+        var keys = ordered
+            .Select((subject, index) => new[]
+            {
+                RepeatedEnumerationRdfTerm.Literal(subject, null, null),
+                RepeatedEnumerationRdfTerm.Literal(
+                    AbsenceEnumerationProofFixture.KindAt(index, nonAddressableAt), null, null),
+            })
             .ToArray();
         return (proof, keys);
     }

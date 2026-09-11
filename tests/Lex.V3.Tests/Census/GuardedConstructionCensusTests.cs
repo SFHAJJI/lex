@@ -403,7 +403,7 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Contracts.Source.Core.RepeatedEnumerationRdfTerm::Literal, "
                     + "method public static "
                     + "Lex.V3.Contracts.Source.Core.RepeatedEnumerationRdfTerm::Unbound, "
-                    + "23 compiler-generated",
+                    + "24 compiler-generated",
                 "Lex.V3.Contracts.Source.Corpus.VerifiedCorpusRecord: constructor internal "
                     + "instance Lex.V3.Contracts.Source.Corpus.VerifiedCorpusRecord::.ctor, "
                     + "method public static "
@@ -1053,6 +1053,13 @@ public sealed class GuardedConstructionCensusTests
                     + "method public static "
                     + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgOpinionLinkOnlyRecord::TryCreat"
                     + "e",
+                "Lex.V3.Contracts.Source.Luxembourg.LuxembourgOpinionRequestBatchAssignment: "
+                    + "constructor private instance "
+                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgOpinionRequestBatchAssignment::"
+                    + ".ctor, "
+                    + "method public static "
+                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgOpinionRequestBatchAssignment::"
+                    + "Over",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgOpinionRequestGraphDiscoveryPlan: "
                     + "constructor private instance "
                     + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgOpinionRequestGraphDiscoveryPla"
@@ -1067,6 +1074,19 @@ public sealed class GuardedConstructionCensusTests
                     + "constructor internal instance "
                     + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgOpinionRequestGraphSparqlRender"
                     + "er::.ctor",
+                "Lex.V3.Contracts.Source.Luxembourg.LuxembourgOpinionRequestInventoryCitation: "
+                    + "constructor private instance "
+                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgOpinionRequestInventoryCitation"
+                    + "::.ctor, "
+                    + "constructor private instance "
+                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgOpinionRequestInventoryCitation"
+                    + "::.ctor, "
+                    + "method public instance "
+                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgOpinionRequestInventoryCitation"
+                    + "::<Clone>$, "
+                    + "method public static "
+                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgOpinionRequestInventoryCitation"
+                    + "::MintedOver",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgOpinionRequestInventoryDiscoveryPlan:"
                     + " constructor private instance "
                     + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgOpinionRequestInventoryDiscover"
