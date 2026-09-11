@@ -214,7 +214,8 @@ public sealed class LuxembourgOpinionRequestGraphDiscoveryPlan
     /// <para>
     /// <c>key_3</c>, the predicate, needs no kind key - but no longer for the reason this once gave.
     /// It said the predicate is bound from a VALUES block of IRIs and so is an IRI by construction;
-    /// that block is gone, because it was measured dropping rows the publisher holds. The
+    /// that block is gone, because the MIRRORED family measured it dropping rows the publisher
+    /// holds - zero <c>parliamentDraftUrl</c> rows for fifty drafts that hold them. The
     /// conclusion survives on RDF itself, where a predicate is always an IRI, and on the producer,
     /// which requires the delivered predicate term to be a readable IRI before it reads anything
     /// else from the row. The request and the value are whatever the publisher delivered, which is
@@ -582,13 +583,21 @@ public sealed class LuxembourgOpinionRequestGraphDiscoveryPlan
         // pl/2000/119 does exactly that, and those eight extra rows are the whole of the difference
         // between the 103 rows delivered and the 95 distinct pairs they cover.
         //
-        // NO COLUMN HERE IS COALESCEd, AND THAT IS MEASURED ON THIS PUBLISHER RATHER THAN ASSUMED.
+        // NO COLUMN HERE IS COALESCEd, AND THE EVIDENCE FOR THAT IS INHERITED, NOT THIS FAMILY'S.
         // The eager-IF raise this family guards against elsewhere comes from dereferencing an
         // UNBOUND variable; the mandatory triple removes that cause outright. Applying DATATYPE or
-        // LANG to a BOUND term of the wrong type is a different case, and Legilux does not raise on
-        // it: the 103-row delivery retained under #417 was produced by exactly these four BINDs,
-        // un-COALESCEd, and carried datatype_iri and language_tag in every one of its 103 rows -
-        // all of them IRI-valued.
+        // LANG to a BOUND term of the wrong type is a different case, and Legilux was measured not
+        // raising on it - but measured over DRAFT subjects: the 103-row delivery retained under
+        // #417 was produced by exactly these four BINDs, un-COALESCEd, and carried datatype_iri and
+        // language_tag in all 103 rows.
+        //
+        // AND THAT DELIVERY DOES NOT COVER THE CASE THIS FAMILY MOST EXPECTS. Its 103 rows were all
+        // IRI-valued. The one predicate this family accepts is referralDate, which is a date
+        // LITERAL - exactly the branch where DATATYPE and LANG behave differently, and exactly the
+        // branch the next paragraph relies on erroring. So the un-COALESCEd form is carried here on
+        // a same-endpoint, same-BIND-text inference over a value kind the cited run never delivered.
+        // If a literal-valued row from this class raises where a draft row did not, that is a
+        // finding and this comment is where to start.
         //
         // COALESCE here would not merely be redundant, it would DESTROY a fact the decoder needs.
         // This engine will not answer DATATYPE() with rdf:langString, so on a language-tagged
