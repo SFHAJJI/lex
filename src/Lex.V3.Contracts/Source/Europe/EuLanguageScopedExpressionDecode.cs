@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Text.Json.Serialization;
 using Lex.V3.Contracts.Derivation;
 using Lex.V3.Contracts.Source.Absence;
@@ -110,6 +111,29 @@ public enum EuLanguageScopedExpressionDecodeRefusal
     /// </remarks>
     [JsonStringEnumMemberName("page_attribution_unavailable")]
     PageAttributionUnavailable = 11,
+
+    /// <summary>
+    /// A page's custody receipt does not name the bytes that page actually carried, so it cannot be
+    /// cited as where anything came from.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// THIS EXISTS BECAUSE THE REOPEN DOOR DOES NOT CHECK IT.
+    /// <see cref="VerifiedRepeatedEnumerationRows.TryOpen"/> proves the ROWS - it re-derives the row,
+    /// cursor and canonical-key digests from the reopened bytes - but it never reads a page's
+    /// <c>DurableWriteReceipt</c>, and neither does <c>EnumerationDeliveryComparison.VerifyPages</c>.
+    /// The receipt-to-payload binding lives only in that type's private <c>Resolve</c>, which is
+    /// reachable from <c>Create</c> and not from <c>TryOpen</c>.
+    /// </para>
+    /// <para>
+    /// <see cref="RepeatedEnumerationResolvedEvidence"/> is a positional record with no construction
+    /// gate, so every member is init-settable by any caller. Proven rows could therefore be paired
+    /// with a receipt naming bytes nobody wrote - the rows would be honest and the provenance would
+    /// not. This door reads that receipt, so this door checks it.
+    /// </para>
+    /// </remarks>
+    [JsonStringEnumMemberName("page_receipt_does_not_bind_its_bytes")]
+    PageReceiptDoesNotBindItsBytes = 12,
 }
 
 /// <summary>
@@ -177,7 +201,17 @@ public sealed record EuProofBoundDelivery(
 /// OFFLINE, AND EVIDENCE-BOUND BY CONSTRUCTION. This door performs no acquisition, and it does not
 /// accept rows. It takes the inputs <see cref="VerifiedRepeatedEnumerationRows.TryOpen"/> requires,
 /// reopens the delivery through that door, and builds every expression's provenance from the pages
-/// it was proven over. There is no parameter by which a caller asserts provenance.
+/// it was proven over - having first checked that each of those pages' receipts names the bytes that
+/// page carried, because <c>TryOpen</c> proves the rows and does not check the receipts.
+/// </para>
+/// <para>
+/// AN EARLIER VERSION OF THIS PARAGRAPH SAID "there is no parameter by which a caller asserts
+/// provenance" AND THAT WAS STILL NOT TRUE. The rows had been made proof-bound, but
+/// <see cref="RepeatedEnumerationResolvedEvidence"/> has no construction gate, so a caller could pair
+/// genuinely proven rows with a self-minted write receipt and this door would have cited it. That is
+/// what <see cref="EuLanguageScopedExpressionDecodeRefusal.PageReceiptDoesNotBindItsBytes"/> closes.
+/// The lesson is recorded rather than the sentence quietly corrected: a safety claim written in a
+/// comment is worth nothing until the check it describes is pointed at.
 /// </para>
 /// <para>
 /// AN EARLIER HEAD OF THIS FILE DID ACCEPT ROWS, paired with a caller-chosen write receipt, while
@@ -241,7 +275,8 @@ public static class EuLanguageScopedExpressionDecode
         // re-checked against the proof's delivered row count and canonical-key digest and the
         // comparison's row and cursor digests, which is what makes the lineage below a fact about
         // these bytes rather than a caller's pairing of some rows with some receipt.
-        // TryOpen is called here rather than through a local helper on purpose.
+        // The receipts were checked above. TryOpen is called here rather than through a local helper
+        // on purpose.
         // VerifiedRepeatedEnumerationRowsConstructionSurfaceTests pins that exactly three places in
         // Contracts hand out rows parsed from bytes, and a private wrapper returning rows would be a
         // fourth. It would add no safety - it only forwards - so the pin is respected rather than
@@ -284,6 +319,18 @@ public static class EuLanguageScopedExpressionDecode
             }
 
             objectFactRows = openedObjectFacts;
+        }
+
+        // Now that the rows are proven, the receipts this decode will CITE must name the pages that
+        // actually carried them. Deliberately after TryOpen, not before: substituted bytes break the
+        // receipt binding too, so checking first would answer every byte substitution with a receipt
+        // complaint and leave the row-proof refusals with no case that reaches them. Rows first, then
+        // the provenance about those rows.
+        if (!EveryPageReceiptBindsItsBytes(expressionFacts, out offendingIri) ||
+            (objectFacts is not null && !EveryPageReceiptBindsItsBytes(objectFacts, out offendingIri)))
+        {
+            refusal = EuLanguageScopedExpressionDecodeRefusal.PageReceiptDoesNotBindItsBytes;
+            return null;
         }
 
         var belongsToWorkIri = EuObjectFactsDiscoveryPlan.CdmIri(EuCdmPredicate.ExpressionBelongsToWork);
@@ -576,6 +623,34 @@ public static class EuLanguageScopedExpressionDecode
         }
 
         return candidates.AsReadOnly();
+    }
+
+    /// <summary>
+    /// Whether every page's custody receipt names the exact bytes that page carried.
+    /// </summary>
+    /// <remarks>
+    /// The same content-address check <c>EnumerationDeliveryComparison</c>'s private <c>Resolve</c>
+    /// performs when it mints a comparison. It is repeated here rather than relied upon because the
+    /// reopen path this door is given does not go through that private door, and a provenance claim
+    /// that rests on an unchecked field is not a provenance claim.
+    /// </remarks>
+    private static bool EveryPageReceiptBindsItsBytes(
+        EuProofBoundDelivery delivery, out string? offendingDigest)
+    {
+        foreach (var page in delivery.PagesInOrder)
+        {
+            var carried = Convert.ToHexString(
+                SHA256.HashData(page.RetainedPayloadBytes.Span)).ToLowerInvariant();
+            if (!string.Equals(
+                carried, page.DurableWriteReceipt.Reference.ContentSha256, StringComparison.Ordinal))
+            {
+                offendingDigest = page.DurableWriteReceipt.Reference.ContentSha256;
+                return false;
+            }
+        }
+
+        offendingDigest = null;
+        return true;
     }
 
     private static RepeatedEnumerationRdfTerm Term(

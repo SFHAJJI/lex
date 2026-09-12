@@ -452,6 +452,87 @@ public sealed class EuLanguageScopedExpressionDecodeTests
         Assert.AreEqual("2016-05-04", decoded[0].PublisherCorrigendumDate!.RawLexical);
     }
 
+    /// <summary>
+    /// A page whose receipt names bytes it did not carry is refused, even though its rows prove.
+    /// </summary>
+    /// <remarks>
+    /// The residue left by the first repair, found by an adversarial sweep rather than by me.
+    /// <c>TryOpen</c> proves the ROWS - it re-derives the row, cursor and canonical-key digests from
+    /// the reopened bytes - but neither it nor <c>VerifyPages</c> ever reads a page's
+    /// <c>DurableWriteReceipt</c>, and <c>RepeatedEnumerationResolvedEvidence</c> is a positional
+    /// record with no construction gate. So a caller could hand over genuinely proven rows carrying a
+    /// self-minted receipt, and the lineage would have cited bytes nobody wrote.
+    /// <see cref="LineageIsBuiltFromTheReopenedPagesRatherThanAnyCallerChoice"/> cannot see this: it
+    /// compares the lineage against the very field being forged, so it passes either way. Only
+    /// substituting the receipt alone - leaving every byte and every row untouched - can.
+    /// </remarks>
+    [TestMethod]
+    public void APageWhoseReceiptDoesNotNameItsBytesIsRefused()
+    {
+        var rows = Expression(WorkOne, ExprFrench, French);
+        var fixture = XFixture(rows);
+        var delivery = fixture.Create(string.Empty, string.Empty);
+        var proof = AbsenceFamilyEnumerationProof.TryCreate(
+            "laws", delivery, CustodyMembership.Floored, out _);
+        Assert.IsNotNull(proof);
+
+        var honest = fixture.Resolve(delivery.PagesA.Pages[0].Evidence);
+
+        // Every byte and every row is exactly as proven. Only the receipt is swapped.
+        var forged = honest with { DurableWriteReceipt = ForgedReceipt() };
+        CollectionAssert.AreEqual(
+            honest.RetainedPayloadBytes.ToArray(),
+            forged.RetainedPayloadBytes.ToArray(),
+            "the bytes must be untouched, or this test proves something else.");
+
+        var set = new LanguageScopedExpressionSet();
+        var decoded = EuLanguageScopedExpressionDecode.TryDecode(
+            new EuProofBoundDelivery(
+                proof!, delivery, fixture.ProfileForTest, delivery.InterpretationProfileRef,
+                delivery.CountA.HttpEvidenceRef, [forged]),
+            null,
+            SourceObject(),
+            set,
+            out var refusal,
+            out _,
+            out var offending);
+
+        Assert.IsNull(decoded);
+        Assert.AreEqual(
+            EuLanguageScopedExpressionDecodeRefusal.PageReceiptDoesNotBindItsBytes, refusal);
+        Assert.AreEqual(new string('f', 64), offending, "the refusal names the receipt it rejected.");
+        Assert.IsEmpty(set.Expressions);
+    }
+
+    /// <summary>The same check guards the date family's pages.</summary>
+    [TestMethod]
+    public void ADatePageWhoseReceiptDoesNotNameItsBytesIsRefused()
+    {
+        var dateRows = new[] { PRow(WorkOne, WorkDateIri, "2016-05-04", XsdDate) };
+        var body = RowsJson(PProjection, dateRows);
+        var fixture = new RepeatedEnumerationDeliveryProofTests.Fixture(
+            rawRowsA: body, rawRowsB: body, expectedCount: dateRows.Length,
+            projectionVariables: PProjection, canonicalKeyVariables: PKey);
+        var delivery = fixture.Create(string.Empty, string.Empty);
+        var proof = AbsenceFamilyEnumerationProof.TryCreate(
+            "laws", delivery, CustodyMembership.Floored, out _);
+        Assert.IsNotNull(proof);
+
+        var forged = fixture.Resolve(delivery.PagesA.Pages[0].Evidence)
+            with { DurableWriteReceipt = ForgedReceipt() };
+
+        var decoded = EuLanguageScopedExpressionDecode.TryDecode(
+            Bound(Expression(WorkOne, ExprFrench, French)),
+            new EuProofBoundDelivery(
+                proof!, delivery, fixture.ProfileForTest, delivery.InterpretationProfileRef,
+                delivery.CountA.HttpEvidenceRef, [forged]),
+            SourceObject(), new LanguageScopedExpressionSet(), out var refusal, out _, out _);
+
+        Assert.IsNull(decoded);
+        Assert.AreEqual(
+            EuLanguageScopedExpressionDecodeRefusal.PageReceiptDoesNotBindItsBytes, refusal);
+    }
+
     /// <summary>Every expression's lineage is the delivery's own reopened page receipts.</summary>
     [TestMethod]
     public void LineageIsBuiltFromTheReopenedPagesRatherThanAnyCallerChoice()
@@ -1030,6 +1111,7 @@ public sealed class EuLanguageScopedExpressionDecodeTests
                 "\"expression_rows_refused\"",
                 "\"date_rows_refused\"",
                 "\"page_attribution_unavailable\"",
+                "\"page_receipt_does_not_bind_its_bytes\"",
             },
             Enum.GetValues<EuLanguageScopedExpressionDecodeRefusal>()
                 .Select(member => ContractJson.Serialize(member))
@@ -1309,6 +1391,28 @@ public sealed class EuLanguageScopedExpressionDecodeTests
     private static string Json(string value) =>
         "\"" + value.Replace("\\", "\\\\", StringComparison.Ordinal)
             .Replace("\"", "\\\"", StringComparison.Ordinal) + "\"";
+
+    /// <summary>
+    /// A structurally valid write receipt naming bytes that do not exist. Nothing in the custody
+    /// contracts ties a receipt to an actual write, which is precisely why the decode must check it.
+    /// </summary>
+    private static DurableBlobWriteReceipt ForgedReceipt()
+    {
+        var reference = new DurableBlobRef(
+            CustodySchemaIds.DurableBlobRef, new string('f', 64), 4, CustodyClass.NightlyFloor90d);
+        return new DurableBlobWriteReceipt(
+            CustodySchemaIds.DurableBlobWriteReceipt,
+            reference,
+            new CustodyPolicyEvidence(
+                CustodySchemaIds.CustodyPolicyEvidence,
+                reference,
+                CustodyVerificationProfile.FileSystemUnenforced1,
+                policyKey: null,
+                CustodyProtection.NotEnforced,
+                DateTimeOffset.Parse(
+                    "2026-01-02T03:04:05.0000000+00:00", System.Globalization.CultureInfo.InvariantCulture),
+                protectedUntil: null));
+    }
 
     private static SourceObjectRef SourceObject() => new(
         SourceCoreSchemaIds.SourceObjectRef,
