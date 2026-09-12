@@ -597,11 +597,37 @@ public sealed record EuCaseLawRunRequest(
 /// still fixes the two predicates, the batch capacity and both page limits, so the caller chooses
 /// which dossiers are asked about and nothing else.
 /// </remarks>
+/// <param name="WireBudget">
+/// This run's enforced ceiling, counted over robots, counts, pages and every attempt. REQUIRED, and
+/// on the request rather than the entry point, so a run cannot go unbudgeted by omission.
+/// </param>
 public sealed record EuProcedureEventRunRequest(
     EuProcedureEventDiscoveryPlan Plan,
     IReadOnlyList<string> BatchDossiers,
     string PlanResourceId,
-    MachineQueryRendererSource RendererSource);
+    MachineQueryRendererSource RendererSource,
+    WireRequestBudget WireBudget)
+{
+    /// <summary>This run's enforced wire ceiling.</summary>
+    /// <remarks>
+    /// <para>
+    /// REQUIRED, AND REFUSED AT CONSTRUCTION WHEN ABSENT, for the reason the four Luxembourg
+    /// requests beside it are: a positional record checks nothing of its own, so documenting it as
+    /// required would leave <c>new(..., null!)</c> reaching the pass loop as an optional budget that
+    /// was simply not supplied - the ceiling off, and nothing saying so.
+    /// </para>
+    /// <para>
+    /// THIS FAMILY HAD NO CEILING AT ALL UNTIL THIS COMMIT, and the mechanism that hid it is worth
+    /// naming: <c>RunPassesAsync</c> takes its budget as <c>WireRequestBudget? budget = null</c>, so
+    /// the entry point that simply omitted the argument was charged for nothing and refused nothing.
+    /// Four of the eleven entry points passed it and this one did not, which no test could see
+    /// because an absent ceiling behaves exactly like a generous one until a run is large enough to
+    /// need it. Making it required here means the compiler, not a reader, enumerates the call sites.
+    /// </para>
+    /// </remarks>
+    public WireRequestBudget WireBudget { get; } =
+        WireBudget ?? throw new ArgumentNullException(nameof(WireBudget));
+}
 
 /// <summary>
 /// Why <see cref="EuRepeatedEnumerationExecutor.RunWitnessTraversalAsync"/> did not deliver a real
@@ -1439,6 +1465,19 @@ public sealed class EuRepeatedEnumerationExecutor
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(sourceWitness);
 
+        // THE SESSION'S ROBOTS FETCH, RESERVED BEFORE THE SESSION EXISTS. Same position and same
+        // reason as the four Luxembourg doors: StartSessionAsync sends robots as its first act, so
+        // this is the last point at which that request can be stopped rather than merely counted.
+        // Measured on the Luxembourg side before it was fixed there: two runs sharing a budget sent
+        // ten requests and counted nine.
+        if (!request.WireBudget.TryReserveAttempt())
+        {
+            return EuEnumerationRunResult.Refused(
+                new EuEnumerationRefusalDetail(
+                    EuEnumerationRefusal.WireBudgetExhausted, null, null, null, null, null, null, null, null),
+                productRequestCount: 0);
+        }
+
         var session = await StartSessionAsync(sourceWitness, cancellationToken).ConfigureAwait(false);
         if (session is null)
         {
@@ -1461,7 +1500,11 @@ public sealed class EuRepeatedEnumerationExecutor
                         BindEuProcedureEventPage(request, pass, cursor, selected, evidenceRef),
                     batchObjects: EuProcedureEventDiscoveryPlan.RequestedPartitionMembers(request.BatchDossiers),
                     batchMembershipKeyOrdinal: ProcedureEventBatchMembershipKeyOrdinal(profile),
-                    cancellationToken)
+                    cancellationToken,
+                    // FORWARDED, so every count and page attempt is charged to the same ceiling the
+                    // robots fetch was. Omitting this argument is what left the family unbudgeted:
+                    // the parameter is optional and defaults to null.
+                    request.WireBudget)
                 .ConfigureAwait(false);
         }
         finally

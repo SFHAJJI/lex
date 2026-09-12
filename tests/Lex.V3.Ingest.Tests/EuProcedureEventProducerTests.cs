@@ -244,7 +244,8 @@ public sealed class EuProcedureEventProducerTests
                 EuProcedureEventDiscoveryPlan.Create(),
                 [Dossier],
                 "urn:uuid:c17d4e83-2f60-4b95-8a1e-6d9074bf3c52",
-                RendererSource()),
+                RendererSource(),
+                EuAcquisitionTestFixture.TestWireBudget()),
             EuAcquisitionTestFixture.SourceWitness(),
             CancellationToken.None);
 
@@ -327,7 +328,8 @@ public sealed class EuProcedureEventProducerTests
                 EuProcedureEventDiscoveryPlan.Create(),
                 [Dossier],
                 "urn:uuid:c17d4e83-2f60-4b95-8a1e-6d9074bf3c52",
-                RendererSource()),
+                RendererSource(),
+                EuAcquisitionTestFixture.TestWireBudget()),
             EuAcquisitionTestFixture.SourceWitness(),
             CancellationToken.None);
 
@@ -412,7 +414,8 @@ public sealed class EuProcedureEventProducerTests
                 EuProcedureEventDiscoveryPlan.Create(),
                 [RequestedHttps],
                 "urn:uuid:e39f6a05-4b82-4d17-ac30-8f1296de5e74",
-                RendererSource()),
+                RendererSource(),
+                EuAcquisitionTestFixture.TestWireBudget()),
             EuAcquisitionTestFixture.SourceWitness(),
             CancellationToken.None);
 
@@ -453,7 +456,8 @@ public sealed class EuProcedureEventProducerTests
                 EuProcedureEventDiscoveryPlan.Create(),
                 [Dossier],
                 "urn:uuid:f4a07b16-5c93-4e28-bd41-901387ef6f85",
-                RendererSource()),
+                RendererSource(),
+                EuAcquisitionTestFixture.TestWireBudget()),
             EuAcquisitionTestFixture.SourceWitness(),
             CancellationToken.None);
 
