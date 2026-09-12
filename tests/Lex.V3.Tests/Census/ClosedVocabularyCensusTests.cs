@@ -74,6 +74,8 @@ public sealed class ClosedVocabularyCensusTests
                     + "ActiveLegalHold",
                 "Lex.V3.Contracts.Custody.CustodyVerificationProfile: FileSystemUnenforced1, "
                     + "ImmutableObject1",
+                "Lex.V3.Contracts.Derivation.DerivationProfileComparisonOutcome: Comparable, "
+                    + "ProfilesDiffer",
                 "Lex.V3.Contracts.EuActForm: Directive, Regulation, DelegatedRegulation, "
                     + "ImplementingRegulation, Treaty, Corrigendum, DelegatedDirective, "
                     + "ImplementingDecision, Decision, DecisionEntscheid, ImplementingDirective, "
