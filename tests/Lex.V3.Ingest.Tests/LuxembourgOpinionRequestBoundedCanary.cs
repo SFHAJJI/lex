@@ -122,7 +122,7 @@ public sealed class LuxembourgOpinionRequestBoundedCanary
         }
 
         var reconciliation = LuxembourgOpinionRequestCanaryPlan.Reconcile(inventory, batch);
-        var verdict = LuxembourgOpinionRequestCanaryPlan.Conclude(decision, batch, reconciliation);
+        var verdict = LuxembourgOpinionRequestCanaryPlan.Conclude(decision, inventory, batch);
         TestContext?.WriteLine(
             $"reconciliation: spent={reconciliation.FinalBudgetSpent} "
             + $"expected={reconciliation.ExpectedIfEverySessionCompleted} "

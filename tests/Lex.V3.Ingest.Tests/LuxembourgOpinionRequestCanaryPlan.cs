@@ -46,20 +46,47 @@ public sealed record LuxembourgOpinionRequestCanaryDecision(
 /// acceptance gate.
 /// </para>
 /// </remarks>
-/// <param name="SessionsOpened">Sessions the attempt opened, each of which sent one robots fetch.</param>
-/// <param name="RecordedProductRequests">Product attempts the producers recorded across those runs.</param>
-/// <param name="FinalBudgetSpent">Reservations the shared budget granted, robots included.</param>
-/// <param name="ExpectedIfEverySessionCompleted">
-/// What <see cref="FinalBudgetSpent"/> must equal when every reservation was followed by a recorded
-/// attempt: the recorded product attempts plus one robots fetch per session.
-/// </param>
-/// <param name="Reconciles">Whether the two accountings agree.</param>
-public sealed record LuxembourgOpinionRequestCanaryReconciliation(
-    int SessionsOpened,
-    int RecordedProductRequests,
-    int FinalBudgetSpent,
-    int ExpectedIfEverySessionCompleted,
-    bool Reconciles);
+public sealed record LuxembourgOpinionRequestCanaryReconciliation
+{
+    internal LuxembourgOpinionRequestCanaryReconciliation(
+        int sessionsOpened,
+        int recordedProductRequests,
+        int finalBudgetSpent,
+        int expectedIfEverySessionCompleted)
+    {
+        SessionsOpened = sessionsOpened;
+        RecordedProductRequests = recordedProductRequests;
+        FinalBudgetSpent = finalBudgetSpent;
+        ExpectedIfEverySessionCompleted = expectedIfEverySessionCompleted;
+    }
+
+    /// <summary>Sessions the attempt opened, each of which sent one robots fetch.</summary>
+    public int SessionsOpened { get; }
+
+    /// <summary>Product attempts the producers recorded across those runs.</summary>
+    public int RecordedProductRequests { get; }
+
+    /// <summary>Reservations the shared budget granted, robots included.</summary>
+    public int FinalBudgetSpent { get; }
+
+    /// <summary>
+    /// What <see cref="FinalBudgetSpent"/> must equal when every reservation was followed by a
+    /// recorded attempt: the recorded product attempts plus one robots fetch per session.
+    /// </summary>
+    public int ExpectedIfEverySessionCompleted { get; }
+
+    /// <summary>
+    /// Whether the two accountings agree. DERIVED FROM THE COUNTS, never carried beside them.
+    /// </summary>
+    /// <remarks>
+    /// It was a constructor parameter on the first head, which made it a claim a caller could state
+    /// independently of the numbers it was supposed to summarise: a record reading
+    /// <c>(spent 33, expected 32, reconciles true)</c> was expressible, and the verdict believed it.
+    /// A boolean that can disagree with its own evidence is not a check, and the whole point of this
+    /// record is to BE the check.
+    /// </remarks>
+    public bool Reconciles => FinalBudgetSpent == ExpectedIfEverySessionCompleted;
+}
 
 /// <summary>
 /// The frozen bounded canary: one inventory run and at most one inventory-issued batch, under one
@@ -167,28 +194,29 @@ public static class LuxembourgOpinionRequestCanaryPlan
         var expected = recorded + sessions;
 
         return new LuxembourgOpinionRequestCanaryReconciliation(
-            sessions, recorded, spent, expected, spent == expected);
+            sessions, recorded, spent, expected);
     }
 
     public static string Conclude(
         LuxembourgOpinionRequestCanaryDecision decision,
-        LuxembourgOpinionRequestGraphResult? batch,
-        LuxembourgOpinionRequestCanaryReconciliation reconciliation)
+        LuxembourgOpinionRequestInventoryResult inventory,
+        LuxembourgOpinionRequestGraphResult? batch)
     {
         ArgumentNullException.ThrowIfNull(decision);
-
-        // REQUIRED, AND GUARDED. The first head made this optional so existing call sites kept
-        // compiling, which put a default on the exact argument that decides whether the accounting
-        // gate runs: omitting it at the live runner compiled cleanly, passed all ten focused tests,
-        // and returned CanaryCompleted over a drift. A gate with a default is a gate that is off
-        // wherever somebody forgets it. Same reason WireBudgetSnapshot is a required constructor
-        // parameter one layer down - a lesson I had already applied and did not carry across.
-        ArgumentNullException.ThrowIfNull(reconciliation);
+        ArgumentNullException.ThrowIfNull(inventory);
 
         if (decision.BatchOrdinalsToAcquire.Count == 0 || batch is null)
         {
             return decision.Verdict;
         }
+
+        // DERIVED HERE, FROM THE RUNS BEING CONCLUDED. Taking a reconciliation as an argument made
+        // the gate caller-certified twice over: the record could assert agreement its own counts
+        // contradicted, and a record computed over one pair of runs could be handed to a verdict
+        // about another. Both were reachable, and my own test helper demonstrated the second by
+        // pairing an unrelated record with any result. A verdict that accepts its evidence from the
+        // caller is not checking anything; it is repeating what it was told.
+        var reconciliation = Reconcile(inventory, batch);
 
         // EXHAUSTION BEFORE COMPLETION, for the reason AfterInventory checks it first. A batch can
         // deliver on its very last reservation: the reservation is taken before the send, so the

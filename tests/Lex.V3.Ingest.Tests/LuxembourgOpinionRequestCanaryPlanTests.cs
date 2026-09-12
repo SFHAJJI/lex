@@ -109,16 +109,16 @@ public sealed class LuxembourgOpinionRequestCanaryPlanTests
     [TestMethod]
     public void AStoppedCanaryKeepsItsOwnVerdict()
     {
-        var stopped = LuxembourgOpinionRequestCanaryPlan.AfterInventory(
-            LuxembourgOpinionRequestInventoryResult.Refused(
-                LuxembourgOpinionRequestInventoryRefusal.EnumerationRefused,
-                "the publisher refused",
-                productRequestCount: 1,
-                UnspentBudget()));
+        var inventory = LuxembourgOpinionRequestInventoryResult.Refused(
+            LuxembourgOpinionRequestInventoryRefusal.EnumerationRefused,
+            "the publisher refused",
+            productRequestCount: 1,
+            SpentBudget(2));
+        var stopped = LuxembourgOpinionRequestCanaryPlan.AfterInventory(inventory);
 
         Assert.AreEqual(
             "InventoryRefused",
-            LuxembourgOpinionRequestCanaryPlan.Conclude(stopped, batch: null, Agreeing()),
+            LuxembourgOpinionRequestCanaryPlan.Conclude(stopped, inventory, batch: null),
             "a canary that never reached a batch cannot conclude anything about batches.");
     }
 
@@ -133,34 +133,34 @@ public sealed class LuxembourgOpinionRequestCanaryPlanTests
     [TestMethod]
     public void ExhaustionDuringTheBatchIsNotTheSameFindingAsARefusal()
     {
-        var proceed = LuxembourgOpinionRequestCanaryPlan.AfterInventory(
-            DeliveredInventory(Subjects(120), UnspentBudget()));
-
-        var spent = WireRequestBudget.OfWireRequests(2);
-        Assert.IsTrue(spent.TryReserveAttempt());
-        Assert.IsTrue(spent.TryReserveAttempt());
+        // COHERENT COUNTS THROUGHOUT, now that the verdict derives the reconciliation from these
+        // very inputs: 24 inventory attempts + 1 robots = 25 spent, and the batch continues from
+        // there. Incoherent numbers would make every case below an accounting finding instead of
+        // the thing it is named for.
+        var inventory = DeliveredInventory(Subjects(120), SpentBudget(25));
+        var proceed = LuxembourgOpinionRequestCanaryPlan.AfterInventory(inventory);
 
         Assert.AreEqual(
             "BudgetExhaustedDuringBatch",
             LuxembourgOpinionRequestCanaryPlan.Conclude(
                 proceed,
+                inventory,
                 LuxembourgOpinionRequestGraphResult.Refused(
                     LuxembourgOpinionRequestGraphRefusal.EnumerationRefused,
                     "stopped at the ceiling",
-                    productRequestCount: 1,
-                    WireBudgetSnapshot.Of(spent)),
-                Agreeing()));
+                    productRequestCount: 224,
+                    ExhaustedBudget())));
 
         Assert.AreEqual(
             "BatchRefused",
             LuxembourgOpinionRequestCanaryPlan.Conclude(
                 proceed,
+                inventory,
                 LuxembourgOpinionRequestGraphResult.Refused(
                     LuxembourgOpinionRequestGraphRefusal.MatrixNotCompleted,
                     "the rows did not complete a matrix",
                     productRequestCount: 6,
-                    UnspentBudget()),
-                Agreeing()),
+                    SpentBudget(32))),
             "a batch that had budget left refused on its own contents.");
     }
 
@@ -183,22 +183,19 @@ public sealed class LuxembourgOpinionRequestCanaryPlanTests
     [TestMethod]
     public void ABatchDeliveredOnItsLastReservationIsAnExhaustionFinding()
     {
-        var proceed = LuxembourgOpinionRequestCanaryPlan.AfterInventory(
-            DeliveredInventory(Subjects(120), UnspentBudget()));
+        var inventory = DeliveredInventory(Subjects(120), SpentBudget(25));
+        var proceed = LuxembourgOpinionRequestCanaryPlan.AfterInventory(inventory);
 
-        var atTheCeiling = WireRequestBudget.OfWireRequests(2);
-        Assert.IsTrue(atTheCeiling.TryReserveAttempt());
-        Assert.IsTrue(atTheCeiling.TryReserveAttempt());
-        var snapshot = WireBudgetSnapshot.Of(atTheCeiling);
+        var snapshot = ExhaustedBudget();
         Assert.AreEqual(snapshot.Limit, snapshot.Spent, "the batch ended exactly at its ceiling.");
 
         Assert.AreEqual(
             "BudgetExhaustedDuringBatch",
             LuxembourgOpinionRequestCanaryPlan.Conclude(
                 proceed,
+                inventory,
                 LuxembourgOpinionRequestGraphResult.Completed(
-                    DeliveredCoverage(), productRequestCount: 1, snapshot),
-                Agreeing()),
+                    DeliveredCoverage(), productRequestCount: 224, snapshot)),
             "clause 6: a run that reached its ceiling is a magnitude finding even when its rows "
                 + "arrived, because the ceiling is what it actually measured.");
     }
@@ -254,45 +251,78 @@ public sealed class LuxembourgOpinionRequestCanaryPlanTests
     [TestMethod]
     public void AnAccountingDriftOutranksCompletion()
     {
-        var proceed = LuxembourgOpinionRequestCanaryPlan.AfterInventory(
-            DeliveredInventory(Subjects(120), SpentBudget(25)));
+        var inventory = DeliveredInventory(Subjects(120), SpentBudget(25));
+        var proceed = LuxembourgOpinionRequestCanaryPlan.AfterInventory(inventory);
 
         // Agreeing: 24 inventory attempts + 6 batch attempts + 2 robots fetches = 32 reservations.
-        var agreeing = LuxembourgOpinionRequestCanaryPlan.Reconcile(
-            DeliveredInventory(Subjects(120), SpentBudget(25)),
-            LuxembourgOpinionRequestGraphResult.Completed(
-                DeliveredCoverage(), productRequestCount: 6, SpentBudget(32)));
+        var agreeing = LuxembourgOpinionRequestGraphResult.Completed(
+            DeliveredCoverage(), productRequestCount: 6, SpentBudget(32));
 
-        Assert.IsTrue(agreeing.Reconciles, "24 + 6 + 2 == 32.");
-        Assert.AreEqual(2, agreeing.SessionsOpened);
-        Assert.AreEqual(32, agreeing.ExpectedIfEverySessionCompleted);
+        Assert.IsTrue(LuxembourgOpinionRequestCanaryPlan.Reconcile(inventory, agreeing).Reconciles);
         Assert.AreEqual(
             "CanaryCompleted",
-            LuxembourgOpinionRequestCanaryPlan.Conclude(
-                proceed,
-                LuxembourgOpinionRequestGraphResult.Completed(
-                    DeliveredCoverage(), productRequestCount: 6, SpentBudget(32)),
-                agreeing));
+            LuxembourgOpinionRequestCanaryPlan.Conclude(proceed, inventory, agreeing));
 
-        // Drifting: the same recorded attempts against a budget that granted one more reservation
-        // than anything recorded using it.
+        // THE UNEQUAL-COUNT CASE. One more reservation was granted than anything recorded using it.
+        var drifting = LuxembourgOpinionRequestGraphResult.Completed(
+            DeliveredCoverage(), productRequestCount: 6, SpentBudget(33));
+
+        var reconciliation = LuxembourgOpinionRequestCanaryPlan.Reconcile(inventory, drifting);
+        Assert.IsFalse(reconciliation.Reconciles, "33 reservations against 32 accounted-for requests.");
+        Assert.AreEqual(33, reconciliation.FinalBudgetSpent);
+        Assert.AreEqual(32, reconciliation.ExpectedIfEverySessionCompleted);
+
+        Assert.AreEqual(
+            "AccountingDidNotReconcile",
+            LuxembourgOpinionRequestCanaryPlan.Conclude(proceed, inventory, drifting),
+            "a canary whose own numbers disagree has not demonstrated the path, whatever its rows "
+                + "say: the figures that would evidence the run are the figures in dispute.");
+    }
+
+    /// <summary>
+    /// The verdict cannot be told that a drift agrees, because nothing can say so.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// THE HOLE THIS CLOSES. <c>Reconciles</c> was a constructor parameter, so a record reading
+    /// <c>(spent 33, expected 32, reconciles true)</c> was expressible and the verdict believed it;
+    /// and because the record was an argument, one computed over a different pair of runs could be
+    /// handed to a verdict about these. My own test helper did exactly that, which is the part worth
+    /// recording: the suite was demonstrating the hole while passing.
+    /// </para>
+    /// <para>
+    /// Both doors are shut by construction rather than by a check. <c>Reconciles</c> is derived from
+    /// the counts, so it cannot contradict them; and <c>Conclude</c> derives the whole record from
+    /// the runs it is concluding, so there is nowhere to put an unrelated one.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void ADriftCannotBeCertifiedAsAgreementByACaller()
+    {
         var drifting = LuxembourgOpinionRequestCanaryPlan.Reconcile(
             DeliveredInventory(Subjects(120), SpentBudget(25)),
             LuxembourgOpinionRequestGraphResult.Completed(
                 DeliveredCoverage(), productRequestCount: 6, SpentBudget(33)));
 
-        Assert.IsFalse(drifting.Reconciles, "33 reservations against 32 accounted-for requests.");
-        Assert.AreEqual(33, drifting.FinalBudgetSpent);
-        Assert.AreEqual(32, drifting.ExpectedIfEverySessionCompleted);
-        Assert.AreEqual(
-            "AccountingDidNotReconcile",
-            LuxembourgOpinionRequestCanaryPlan.Conclude(
-                proceed,
-                LuxembourgOpinionRequestGraphResult.Completed(
-                    DeliveredCoverage(), productRequestCount: 6, SpentBudget(33)),
-                drifting),
-            "a canary whose own numbers disagree has not demonstrated the path, whatever its rows "
-                + "say: the figures that would evidence the run are the figures in dispute.");
+        Assert.IsFalse(drifting.Reconciles);
+        Assert.IsFalse(
+            typeof(LuxembourgOpinionRequestCanaryReconciliation).GetProperties()
+                .Any(static value => value.Name == "Reconciles" && value.CanWrite),
+            "a settable agreement is an agreement that need not match its own counts.");
+
+        Assert.IsEmpty(
+            typeof(LuxembourgOpinionRequestCanaryReconciliation)
+                .GetConstructors(System.Reflection.BindingFlags.Public
+                    | System.Reflection.BindingFlags.Instance),
+            "no public constructor, so the only way to obtain one is to derive it from real runs.");
+
+        Assert.IsFalse(
+            typeof(LuxembourgOpinionRequestCanaryPlan)
+                .GetMethod(nameof(LuxembourgOpinionRequestCanaryPlan.Conclude))!
+                .GetParameters()
+                .Any(static value =>
+                    value.ParameterType == typeof(LuxembourgOpinionRequestCanaryReconciliation)),
+            "and the verdict takes no reconciliation, so none can be supplied to it at all.");
     }
 
     /// <summary>A stopped canary reconciles over the one session it opened.</summary>
@@ -316,6 +346,10 @@ public sealed class LuxembourgOpinionRequestCanaryPlanTests
         Assert.IsTrue(reconciliation.Reconciles);
     }
 
+    /// <summary>A budget that has granted every reservation its ceiling allows.</summary>
+    private static WireBudgetSnapshot ExhaustedBudget() =>
+        SpentBudget(LuxembourgOpinionRequestCanaryPlan.WireCeiling);
+
     /// <summary>A budget that has granted exactly this many reservations.</summary>
     private static WireBudgetSnapshot SpentBudget(int reservations)
     {
@@ -327,41 +361,6 @@ public sealed class LuxembourgOpinionRequestCanaryPlanTests
         }
 
         return WireBudgetSnapshot.Of(budget);
-    }
-
-    /// <summary>
-    /// A reconciliation that agrees, for the cases that are not about the accounting.
-    /// </summary>
-    /// <remarks>
-    /// Passed explicitly rather than defaulted. The gate must not have a default: the first head
-    /// made it optional so these call sites kept compiling, and omitting it at the live runner then
-    /// returned <c>CanaryCompleted</c> over a drift while all ten of these tests still passed.
-    /// Isolating the variable is what a helper is for; making it disappear is not.
-    /// </remarks>
-    private static LuxembourgOpinionRequestCanaryReconciliation Agreeing() =>
-        LuxembourgOpinionRequestCanaryPlan.Reconcile(
-            DeliveredInventory(Subjects(120), SpentBudget(25)),
-            LuxembourgOpinionRequestGraphResult.Completed(
-                DeliveredCoverage(), productRequestCount: 6, SpentBudget(32)));
-
-    /// <summary>The gate cannot be bypassed by handing it nothing.</summary>
-    /// <remarks>
-    /// The compiler already refuses omission; this refuses an explicit null, which is the other half
-    /// of the same door and the one a caller can still write.
-    /// </remarks>
-    [TestMethod]
-    public void TheAccountingGateRefusesToBeHandedNothing()
-    {
-        var proceed = LuxembourgOpinionRequestCanaryPlan.AfterInventory(
-            DeliveredInventory(Subjects(120), UnspentBudget()));
-
-        Assert.ThrowsExactly<ArgumentNullException>(
-            () => LuxembourgOpinionRequestCanaryPlan.Conclude(
-                proceed,
-                LuxembourgOpinionRequestGraphResult.Completed(
-                    DeliveredCoverage(), productRequestCount: 6, UnspentBudget()),
-                null!),
-            "a verdict reached without the accounting is a verdict that never checked it.");
     }
 
     /// <summary>
