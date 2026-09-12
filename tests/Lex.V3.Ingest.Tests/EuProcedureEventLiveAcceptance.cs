@@ -23,63 +23,66 @@ namespace Lex.V3.Ingest.Tests;
 /// <para>
 /// WHY DISCOVERY EXISTS AT ALL. This family is asked inversely - an event names its dossier, never
 /// the reverse - so a run must be handed dossier IRIs. Every dossier IRI in this repository's tests
-/// is synthetic, the plan's own orientation probe retained none, and no retained evidence anywhere
-/// contains this predicate. A caller-supplied IRI would be a claim with nothing behind it, so the
-/// owner required the run to discover its own subjects and PROVE the discovery.
+/// is synthetic and no retained evidence anywhere contains this predicate, so a caller-supplied IRI
+/// would be a claim with nothing behind it. The owner required the run to discover its own subjects
+/// and PROVE the discovery.
 /// </para>
 /// <para>
 /// THE PREDICATE. The authorizing decision first wrote
-/// <c>cdm:procedure_event_belongs_to_procedure_dossier</c>; the owner has since confirmed that was
+/// <c>cdm:procedure_event_belongs_to_procedure_dossier</c>; the owner has confirmed that was
 /// descriptive wording rather than a vocabulary coordinate, and that the authoritative member is the
-/// accepted contract's <see cref="EuProcedureEventVocabulary.PartOfDossierPredicateUri"/>,
-/// <c>cdm:event_legal_part_of_dossier</c>. Discovery and the producer boundary therefore ask the
-/// same predicate, which is what makes the two halves of this operation coherent.
+/// accepted contract's <see cref="EuProcedureEventVocabulary.PartOfDossierPredicateUri"/>. Discovery
+/// and the producer boundary therefore ask the same predicate.
 /// </para>
 /// <para>
-/// WHAT PROVES THE DISCOVERY, CORRECTED. An earlier head of this harness asserted that the request
-/// body is never retained, and proved only that a digest had been recorded. That was wrong: the
-/// session retains every nonempty outbound body before sending it, and writes, reopens and
-/// byte-compares it. The reviewer showed how weak the earlier claim was by replacing the recorded
-/// digest with sixty-four zeroes - the candidate built and every guard still passed. So the proof is
-/// now the strong form that was available all along: for BOTH windows this run reopens the actual
-/// request bytes out of custody by their content address and requires them to equal, byte for byte,
-/// the exact query it re-derives. What was asked is proved by the bytes themselves; what the
-/// publisher answered is proved by the retained response payload, read back through custody and
-/// never from a constant in this file.
+/// A CONTROLLED STOP IS A FAILURE, NOT A QUIET EXIT. Every stop below used to <c>return</c> out of
+/// the gated method: the terminal index was written by the <c>finally</c> and the method then
+/// returned normally, so MSTest reported green. A refused one-shot operation would have been
+/// retained as <c>DiscoveryBootstrapRefused</c> or <c>AcceptanceRefused</c> and reported as a pass -
+/// the single worst failure available to a run that gets one attempt. The operation is now a local
+/// function whose early returns exit only IT; the retention still runs in a <c>finally</c>, and the
+/// judgement that follows is unconditional, so every stop reaches
+/// <see cref="DeliveredVerdict"/>'s assertion and fails there with its evidence already on disk.
 /// </para>
 /// <para>
-/// TWO WINDOWS, NOT TWO IDENTICAL SENDS. The family two-pass enumeration proof
-/// (<c>EnumerationDeliveryComparison</c>) is bound to the typed plan families and their cursors, and
-/// a two-row bounded discovery has no such partition. So equality here is proved across DIFFERENT
-/// WINDOWS of the same ordered result set - <c>LIMIT 2</c> and then <c>LIMIT 3</c>, with the first
-/// two required to agree. That catches the real risk, an unordered result set handing back different
-/// rows on a second look, which two identical sends would not.
+/// WHAT PROVES THE DISCOVERY. The session retains every nonempty outbound body before sending it,
+/// and writes, reopens and byte-compares it. An earlier head claimed the opposite and recorded only
+/// a digest, which the reviewer showed was vacuous by replacing that digest with sixty-four zeroes.
+/// Both windows now reopen the actual request bytes out of custody by content address and require
+/// them to equal, byte for byte, the query this run re-derives. What was asked is proved by the
+/// bytes; what the publisher answered is proved by the retained payload.
 /// </para>
 /// <para>
-/// NOTHING UNPROVED REACHES THE PUBLISHER TWICE. Strict URI-term decoding, distinctness and window
-/// agreement are all established BEFORE the acceptance session is opened. An earlier head invoked
-/// the producer as soon as two nonempty strings had been parsed and checked their kind and
-/// distinctness afterwards, so a literal, a duplicate pair or an unstable second window could cause
-/// traffic - or throw inside the producer's canonicalization - before this run had proved it had two
-/// dossiers at all.
+/// AND THE PROOF SURVIVES A FAULT. Each window is attached to the outcome BEFORE the operations that
+/// can throw, and populated in place, so a fault inside the reopen or the parse still retains the
+/// asked identity and digest gathered up to that point. Filling a local and assigning it on return
+/// meant a throw serialized that window as null while the repair claimed otherwise.
 /// </para>
 /// <para>
-/// THE BOUND, AND THE TWO PARTS OF IT THE BUDGET CANNOT ENFORCE. The owner fixed 34 charged
-/// requests and 36 actual sends. Verified from source: the query channel registers
-/// <c>NoRedirect</c>, admitting only the request target, so a product request is exactly one send;
-/// and the EU robots route declares exactly two steps as a closed pre-declared URI list, so a third
-/// hop is inadmissible. Each bootstrap therefore costs one charge and up to two sends.
+/// TWO WINDOWS, NOT TWO IDENTICAL SENDS. Equality is proved across different windows of one ordered
+/// result set - <c>LIMIT 2</c> then <c>LIMIT 3</c>, first two required to agree - which catches an
+/// unordered result set handing back different rows. The family two-pass proof is bound to the typed
+/// plan families and their cursors, and a two-row bounded discovery has no such partition.
 /// </para>
 /// <para>
-/// Two consequences, each needing its own guard. First, the send ceiling is not enforced by the
-/// charge ceiling: at 34 charged, a third bootstrap would put sends at 37 while the charged bound
-/// still read as satisfied - so bootstraps are bounded at <see cref="BootstrapCeiling"/>. Second, a
-/// REFUSED bootstrap still sends: <c>StartAsync</c> can return no session after the two-hop robots
-/// exchange has already happened, for publisher denial, unsafe policy, server failure or a
-/// source-profile refusal. An earlier head counted only sessions that opened, so a refusal packet
-/// understated the traffic it had caused. Bootstraps are therefore counted BEFORE they are
-/// attempted, the enforced upper bound is charged plus bootstraps attempted, and the observed
-/// session count is reported separately rather than standing in for it.
+/// NOTHING UNPROVED REACHES THE PUBLISHER, AND "PROVED" MEANS THE PRODUCER'S OWN TEST. A SPARQL
+/// <c>"type":"uri"</c> label is the publisher's claim, not proof that the value is an IRI: the
+/// reviewer's probe showed <c>{"type":"uri","value":"not an iri"}</c> was admitted. Worse, the
+/// producer opens its robots bootstrap BEFORE canonicalizing its batch, so a raw-distinct
+/// <c>http</c>/<c>https</c> pair that reduces to one member would have caused the acceptance
+/// bootstrap and then thrown. Both discovered values are therefore reduced through
+/// <see cref="EuPackRootCanonicalForm.TryCanonicalize"/> - the producer's own boundary - and proved
+/// distinct in that canonical form, before the acceptance bootstrap is counted or opened.
+/// </para>
+/// <para>
+/// THE BOUND. The owner fixed 34 charged requests and 36 actual sends. The query channel registers
+/// <c>NoRedirect</c> and admits only the request target, so a product request is exactly one send;
+/// the EU robots route declares exactly two steps as a closed pre-declared list, so a third hop is
+/// inadmissible. Each bootstrap therefore costs one charge and up to two sends. The send ceiling is
+/// consequently not enforced by the charge ceiling - at 34 charged a third bootstrap would make 37
+/// sends - so bootstraps are bounded at <see cref="BootstrapCeiling"/>; and because a REFUSED
+/// bootstrap has already sent, they are counted before they are attempted rather than when a session
+/// comes back.
 /// </para>
 /// </remarks>
 [TestClass]
@@ -88,20 +91,16 @@ public sealed class EuProcedureEventLiveAcceptance
 {
     private const string EnableVariable = "LEX_E8_EU_PROCEDURE_LIVE";
 
+    /// <summary>The one verdict that is a pass. Every other outcome fails the judgement.</summary>
+    internal const string DeliveredVerdict = "AcceptanceDelivered";
+
     /// <summary>The owner-fixed charged-request ceiling for the whole operation.</summary>
     private const int SharedWireCeiling = 34;
 
     /// <summary>The owner-fixed actual-send ceiling for the whole operation.</summary>
     private const int SendCeiling = 36;
 
-    /// <summary>
-    /// Robots bootstraps: one for discovery, one the producer opens for acceptance.
-    /// </summary>
-    /// <remarks>
-    /// Derived, not chosen, and counted rather than inferred from success. Each bootstrap costs one
-    /// charge and up to two sends on this origin, so the send ceiling is only binding while the
-    /// bootstrap count is - and a bootstrap that was refused has already sent.
-    /// </remarks>
+    /// <summary>Robots bootstraps: one for discovery, one the producer opens for acceptance.</summary>
     private const int BootstrapCeiling = 2;
 
     private const string EuQueryUri = "https://publications.europa.eu/webapi/rdf/sparql";
@@ -142,29 +141,25 @@ public sealed class EuProcedureEventLiveAcceptance
         Directory.CreateDirectory(root);
         var store = new FileSystemCustodyStore(root);
 
-        // ONE BUDGET FOR THE WHOLE OPERATION, discovery and acceptance alike.
         var budget = WireRequestBudget.OfWireRequests(SharedWireCeiling);
         var accounting = new Accounting();
         var outcome = new Outcome();
         var startedAt = DateTimeOffset.UtcNow;
 
-        // The three artifacts a governed send reopens by reference and no renderer produces. Seeded
-        // before the first send so the reopen path finds them in this run's own store.
         foreach (var bytes in new[] { ContentTypeRegistryBytes, QueryRegistryBytes, ParameterProvenanceBytes })
         {
             await store.CreateAsync(bytes, CustodyClass.NightlyFloor90d, CancellationToken.None);
         }
 
-        // THE RENDERER'S SOURCE IS THE FILE THAT IMPLEMENTS IT. An earlier head attributed this
-        // bespoke renderer to EuProcedureEventDiscoveryPlan.cs, which does not contain it, so the
-        // retained plan named a source that could not account for the query actually sent.
         var rendererSourceBytes = await File.ReadAllBytesAsync(Path.Combine(
             checkout, "tests", "Lex.V3.Ingest.Tests", HarnessFileName));
-
         var narrow = DiscoveryRequest(limit: 2, rendererSourceBytes);
         var wide = DiscoveryRequest(limit: 3, rendererSourceBytes);
 
-        try
+        // THE OPERATION IS A LOCAL FUNCTION SO ITS STOPS CANNOT SKIP THE JUDGEMENT. An early return
+        // here leaves only this function; the finally below still retains, and the judgement after
+        // it always runs.
+        async Task RunOperationAsync()
         {
             if (!budget.TryReserveAttempt())
             {
@@ -172,7 +167,6 @@ public sealed class EuProcedureEventLiveAcceptance
                 return;
             }
 
-            // COUNTED BEFORE IT IS ATTEMPTED. The hops happen whether or not a session results.
             accounting.BootstrapsAttempted++;
             var start = await RoutedHttpAcquisitionSession.StartAsync(
                 narrow.Request, store, CancellationToken.None);
@@ -193,8 +187,10 @@ public sealed class EuProcedureEventLiveAcceptance
                 var membership = new Dictionary<string, CustodyMembership>(StringComparer.Ordinal);
                 var counted = 0;
 
-                outcome.Narrow = await ObserveWindowAsync(
-                    glue, session, store, narrow, membership,
+                // ATTACHED BEFORE THE OPERATIONS THAT CAN THROW, then populated in place.
+                outcome.Narrow = new Window();
+                await ObserveWindowAsync(
+                    outcome.Narrow, glue, session, store, narrow, membership,
                     () => counted, value => counted = value, budget);
                 if (outcome.Narrow.Refusal is not null)
                 {
@@ -203,8 +199,9 @@ public sealed class EuProcedureEventLiveAcceptance
                     return;
                 }
 
-                outcome.Wide = await ObserveWindowAsync(
-                    glue, session, store, wide, membership,
+                outcome.Wide = new Window();
+                await ObserveWindowAsync(
+                    outcome.Wide, glue, session, store, wide, membership,
                     () => counted, value => counted = value, budget);
                 if (outcome.Wide.Refusal is not null)
                 {
@@ -214,42 +211,24 @@ public sealed class EuProcedureEventLiveAcceptance
                 }
             }
 
-            // ---- THE DISCOVERY IS PROVED BEFORE ANYTHING ELSE IS ASKED ------------------------
-            var narrowIris = outcome.Narrow!.Dossiers;
-            var wideIris = outcome.Wide!.Dossiers;
-
-            if (!outcome.Narrow.RequestBytesReopenedAndEqual
-                || !outcome.Wide.RequestBytesReopenedAndEqual)
+            if (!outcome.Narrow!.RequestBytesReopenedAndEqual
+                || !outcome.Wide!.RequestBytesReopenedAndEqual)
             {
                 outcome.Verdict = "AskedBytesDidNotReopenEqual";
                 return;
             }
 
-            if (narrowIris.Count != 2)
+            var proof = ProveTwoDistinctDossiers(outcome.Narrow.Dossiers, outcome.Wide.Dossiers);
+            outcome.Verdict = proof.Verdict;
+            outcome.Refusal = proof.Detail;
+            outcome.CanonicalDiscovered = proof.Canonical;
+            if (proof.Canonical is null)
             {
-                outcome.Verdict = "DiscoveryDidNotYieldTwoDossiers";
-                outcome.Refusal = $"the narrow window returned {narrowIris.Count} URI term(s).";
                 return;
             }
 
-            if (string.Equals(narrowIris[0], narrowIris[1], StringComparison.Ordinal))
-            {
-                outcome.Verdict = "DiscoveryReturnedADuplicatePair";
-                outcome.Refusal = narrowIris[0];
-                return;
-            }
+            outcome.Discovered = proof.Raw;
 
-            if (!WindowsAgree(narrowIris, wideIris))
-            {
-                outcome.Verdict = "DiscoveryWindowsDisagree";
-                outcome.Refusal =
-                    $"narrow=[{string.Join(", ", narrowIris)}] wide=[{string.Join(", ", wideIris)}]";
-                return;
-            }
-
-            outcome.Discovered = [narrowIris[0], narrowIris[1]];
-
-            // ---- ACCEPTANCE -------------------------------------------------------------------
             if (accounting.BootstrapsAttempted >= BootstrapCeiling)
             {
                 outcome.Verdict = "BootstrapCeilingReachedBeforeAcceptance";
@@ -261,7 +240,7 @@ public sealed class EuProcedureEventLiveAcceptance
             var production = await new EuProcedureEventProducer(store, TimeProvider.System).RunAsync(
                 new EuProcedureEventRunRequest(
                     EuProcedureEventDiscoveryPlan.Create(),
-                    outcome.Discovered,
+                    outcome.Discovered!,
                     NewUrn(),
                     MachineQueryRendererSource.Open(
                         new SourceArtifactRef(NewUrn(), Sha256(rendererSourceBytes)),
@@ -280,18 +259,16 @@ public sealed class EuProcedureEventLiveAcceptance
             outcome.ObservationCount = production.Observations?.Count;
             outcome.ExcludedEventCount = production.ExcludedEvents?.Count;
             outcome.DossiersAskedAbout = production.DossiersAskedAbout?.ToArray();
-            outcome.Verdict = production.Delivered ? "AcceptanceDelivered" : "AcceptanceRefused";
             if (!production.Delivered)
             {
+                outcome.Verdict = "AcceptanceRefused";
                 outcome.Refusal = production.Refusal + " " + production.Detail;
                 return;
             }
 
-            // INTERPRETATION IS LAST, AND IT CAN THROW. EventsOf throws when the delivered result
-            // does not carry a dossier this run asked about, which is exactly the material mismatch
-            // a terminal packet most needs to record. An earlier head interpreted before retaining
-            // and left no index at all on that path; the finally below now covers it.
-            foreach (var dossier in outcome.Discovered)
+            // INTERPRETATION IS LAST, AND IT CAN THROW: EventsOf throws on a dossier the delivered
+            // result does not carry, which is exactly the mismatch a packet most needs to record.
+            foreach (var dossier in outcome.Discovered!)
             {
                 var candidate = production.EventsOf(dossier).FirstOrDefault(
                     static observation => observation.ObservedTypeIris.Count > 0
@@ -306,10 +283,16 @@ public sealed class EuProcedureEventLiveAcceptance
                     break;
                 }
             }
+
+            outcome.Verdict = DeliveredVerdict;
+        }
+
+        try
+        {
+            await RunOperationAsync();
         }
         catch (Exception error)
         {
-            // A THROW IS AN OUTCOME, AND ITS COST STILL HAS TO BE REPORTED.
             outcome.Verdict = "Faulted";
             outcome.Refusal = error.GetType().Name + ": " + error.Message;
             throw;
@@ -320,15 +303,16 @@ public sealed class EuProcedureEventLiveAcceptance
             TestContext?.WriteLine("terminal evidence: " + Path.Combine(root, "terminal-index.json"));
         }
 
-        // ---- JUDGEMENT, ENTIRELY AFTER THE TERMINAL WRITE ------------------------------------
+        // ---- JUDGEMENT, UNCONDITIONAL AND ENTIRELY AFTER THE TERMINAL WRITE ------------------
         var offenders = OffendingHosts(root);
         Assert.IsEmpty(
             offenders,
             "this operation may contact the SPARQL endpoint and its robots redirect target and "
             + "nothing else: " + string.Join("; ", offenders.Take(10)));
 
+        // EVERY CONTROLLED STOP FAILS HERE. This is the assertion an early return used to skip.
         Assert.AreEqual(
-            "AcceptanceDelivered", outcome.Verdict,
+            DeliveredVerdict, outcome.Verdict,
             $"the operation did not deliver: {outcome.Verdict} {outcome.Refusal}. "
             + $"Evidence retained under {root}.");
 
@@ -360,7 +344,6 @@ public sealed class EuProcedureEventLiveAcceptance
                 "the producer must have asked about exactly the discovered dossiers.");
         }
 
-        // ---- THE BOUNDS ----------------------------------------------------------------------
         Assert.IsLessThanOrEqualTo(
             BootstrapCeiling, accounting.BootstrapsAttempted,
             $"bootstraps are bounded at {BootstrapCeiling} because the send ceiling depends on it.");
@@ -374,15 +357,70 @@ public sealed class EuProcedureEventLiveAcceptance
     }
 
     /// <summary>
+    /// Two discovered values proved to be two distinct dossiers on the producer's own terms.
+    /// </summary>
+    /// <remarks>
+    /// A PURE FUNCTION SO IT CAN BE EXERCISED OFFLINE, and it applies the producer's boundary rather
+    /// than an approximation of it: <see cref="EuPackRootCanonicalForm.TryCanonicalize"/> is what
+    /// <c>CanonicalizeBatch</c> itself uses, and the producer runs it only AFTER opening its robots
+    /// bootstrap. A SPARQL <c>"type":"uri"</c> label is the publisher's claim, so a non-IRI or a
+    /// raw-distinct pair reducing to one member would otherwise have caused that bootstrap and then
+    /// thrown.
+    /// </remarks>
+    internal static (string Verdict, string? Detail, string[]? Raw, string[]? Canonical)
+        ProveTwoDistinctDossiers(IReadOnlyList<string> narrow, IReadOnlyList<string> wide)
+    {
+        ArgumentNullException.ThrowIfNull(narrow);
+        ArgumentNullException.ThrowIfNull(wide);
+
+        if (narrow.Count != 2)
+        {
+            return ("DiscoveryDidNotYieldTwoDossiers",
+                $"the narrow window returned {narrow.Count} URI term(s).", null, null);
+        }
+
+        if (string.Equals(narrow[0], narrow[1], StringComparison.Ordinal))
+        {
+            return ("DiscoveryReturnedADuplicatePair", narrow[0], null, null);
+        }
+
+        if (!WindowsAgree(narrow, wide))
+        {
+            return ("DiscoveryWindowsDisagree",
+                $"narrow=[{string.Join(", ", narrow)}] wide=[{string.Join(", ", wide)}]", null, null);
+        }
+
+        var canonical = new string[2];
+        for (var index = 0; index < 2; index++)
+        {
+            var reduced = EuPackRootCanonicalForm.TryCanonicalize(narrow[index], out var refusal);
+            if (reduced is null)
+            {
+                return ("DiscoveryValueIsNotCanonical",
+                    $"'{narrow[index]}' does not reduce: {refusal}", null, null);
+            }
+
+            canonical[index] = reduced;
+        }
+
+        if (string.Equals(canonical[0], canonical[1], StringComparison.Ordinal))
+        {
+            return ("DiscoveryReturnedACanonicalDuplicate",
+                $"both reduce to '{canonical[0]}'", null, null);
+        }
+
+        return (DeliveredVerdict, null, [narrow[0], narrow[1]], canonical);
+    }
+
+    /// <summary>
     /// One discovery window: sent, its request bytes reopened and compared, its answer parsed.
     /// </summary>
     /// <remarks>
-    /// THE REQUEST BYTES ARE REOPENED, NOT TRUSTED. The session retains every nonempty outbound
-    /// body before sending it, so the exact question is recoverable by content address. Recording
-    /// its digest alone proves nothing - a recorded digest of sixty-four zeroes passed every guard
-    /// an earlier head had.
+    /// The window is supplied by the caller and populated IN PLACE, so evidence gathered before a
+    /// throw is still attached to the outcome when the terminal index is written.
     /// </remarks>
-    private static async Task<Window> ObserveWindowAsync(
+    private static async Task ObserveWindowAsync(
+        Window window,
         RepeatedEnumerationDeliveryReopenGlue glue,
         RoutedHttpAcquisitionSession session,
         ICustodyStore store,
@@ -392,14 +430,13 @@ public sealed class EuProcedureEventLiveAcceptance
         Action<int> setCount,
         WireRequestBudget budget)
     {
-        var window = new Window();
         var observed = await glue.ObserveAsync(
             session, bound.Request, "application/sparql-results+json", membership,
             currentCount, setCount, CancellationToken.None, budget);
         if (observed.Transport is not { } transport)
         {
             window.Refusal = observed.Failure?.Kind.ToString() ?? "no transport and no failure";
-            return window;
+            return;
         }
 
         window.AskedBodySha256 = transport.LogicalRequest.Body.Sha256;
@@ -413,18 +450,9 @@ public sealed class EuProcedureEventLiveAcceptance
             && reopened.Span.SequenceEqual(bound.Body);
 
         window.Dossiers = ParseDossiers(transport.RetainedPayloadBytes.Span);
-        return window;
     }
 
-    /// <summary>
-    /// One bounded discovery window: the distinct dossiers some event declares itself part of.
-    /// </summary>
-    /// <remarks>
-    /// ORDERED, so two windows of the same result set are comparable at all, and LIMITED, so the
-    /// question is bounded by this harness rather than by what the publisher happens to hold. The
-    /// predicate is the one the frozen contract declares, so discovery and acceptance ask the same
-    /// thing.
-    /// </remarks>
+    /// <summary>One bounded discovery window over the contract's dossier predicate.</summary>
     private static (BoundMachineRequest Request, byte[] Body) DiscoveryRequest(
         int limit, byte[] rendererSourceBytes)
     {
@@ -485,15 +513,12 @@ public sealed class EuProcedureEventLiveAcceptance
         return (request, body);
     }
 
-    /// <summary>
-    /// Whether the wider window agrees with the narrow one on the rows they share.
-    /// </summary>
+    /// <summary>Whether the wider window agrees with the narrow one on the rows they share.</summary>
     /// <remarks>
-    /// LIFTED OUT OF THE GATED BODY SO IT CAN BE EXERCISED. Inline, this comparison was the whole
-    /// two-window equality claim and nothing offline ever ran it - the instrument stood unchecked
-    /// behind a guard that only proved it was wired up. Agreement is prefix equality in order: a
-    /// wider window of a stably ordered result set begins with the narrower one. A wide window
-    /// SHORTER than the narrow one is disagreement, not a pass by vacuity.
+    /// Prefix equality in order: a wider window of a stably ordered result set begins with the
+    /// narrower one. A wide window SHORTER than the narrow one is disagreement, and two empty
+    /// windows do not agree - prefix equality over empty sequences is trivially true, which would
+    /// let a run that discovered nothing twice satisfy its own check.
     /// </remarks>
     internal static bool WindowsAgree(IReadOnlyList<string> narrow, IReadOnlyList<string> wide)
     {
@@ -516,13 +541,12 @@ public sealed class EuProcedureEventLiveAcceptance
     }
 
     /// <summary>
-    /// Every <c>?dossier</c> URI TERM the publisher returned, in the order it returned them.
+    /// Every <c>?dossier</c> URI-labelled term the publisher returned, in delivery order.
     /// </summary>
     /// <remarks>
-    /// THE TERM TYPE IS PART OF THE ANSWER. An earlier head accepted any nonempty value, so a
-    /// literal or a blank node would have been handed to the producer as though it were a dossier
-    /// IRI - and the producer would then have honestly reported finding no events for it. Only
-    /// <c>"type":"uri"</c> becomes a subject.
+    /// The term label is checked here because a literal or blank node must not even be considered;
+    /// but a label is the publisher's claim and not proof, so whether a value is really an IRI is
+    /// settled by <see cref="ProveTwoDistinctDossiers"/> against the producer's own canonical form.
     /// </remarks>
     internal static IReadOnlyList<string> ParseDossiers(ReadOnlySpan<byte> payload)
     {
@@ -550,16 +574,7 @@ public sealed class EuProcedureEventLiveAcceptance
         return rows;
     }
 
-    /// <summary>
-    /// One terminal index, written in a <c>finally</c> so no outcome can escape without it.
-    /// </summary>
-    /// <remarks>
-    /// Mirrors the integrated draft sweep and then goes further, because the reviewer showed that
-    /// "every outcome" was not true of an earlier head: interpretation that throws, malformed JSON
-    /// and a dossier mismatch all left no index. This runs in a <c>finally</c>, so a fault is
-    /// reported rather than silently having cost traffic, and it distinguishes the ENFORCED send
-    /// upper bound from the observed session count.
-    /// </remarks>
+    /// <summary>One terminal index, written in a finally so no outcome escapes without it.</summary>
     private static async Task RetainAsync(
         string root,
         FileSystemCustodyStore store,
@@ -574,6 +589,7 @@ public sealed class EuProcedureEventLiveAcceptance
                 purpose = "E8 EU procedure-event bounded discovery and live acceptance: terminal "
                     + "accounting, retained on every outcome including safety stops and faults.",
                 verdict = outcome.Verdict,
+                verdictIsPass = string.Equals(outcome.Verdict, DeliveredVerdict, StringComparison.Ordinal),
                 refusal = outcome.Refusal,
                 observedFromUtc = startedAt.UtcDateTime.ToString("O"),
                 observedToUtc = DateTimeOffset.UtcNow.UtcDateTime.ToString("O"),
@@ -585,6 +601,7 @@ public sealed class EuProcedureEventLiveAcceptance
                 narrowWindow = Describe(outcome.Narrow),
                 wideWindow = Describe(outcome.Wide),
                 discovered = outcome.Discovered,
+                canonicalDiscovered = outcome.CanonicalDiscovered,
                 dossiersAskedAbout = outcome.DossiersAskedAbout,
                 positive = outcome.PositiveDossier is null ? null : new
                 {
@@ -605,9 +622,7 @@ public sealed class EuProcedureEventLiveAcceptance
                 sendCeiling = SendCeiling,
                 sendDerivation = "One send per charged product request, plus up to one uncharged "
                     + "robots redirect hop per bootstrap ATTEMPTED - counted before the attempt, "
-                    + "because a refused bootstrap has already sent. The query channel admits no "
-                    + "product redirect and the robots route declares exactly two steps, so this "
-                    + "is an upper bound rather than an estimate.",
+                    + "because a refused bootstrap has already sent.",
                 productRequestCount = outcome.ProductRequestCount,
                 delivered = outcome.Delivered,
                 observationCount = outcome.ObservationCount,
@@ -694,7 +709,7 @@ public sealed class EuProcedureEventLiveAcceptance
     }
 
     /// <summary>One discovery window's retained identities and its answer.</summary>
-    private sealed class Window
+    internal sealed class Window
     {
         internal string? AskedBodySha256 { get; set; }
 
@@ -721,6 +736,8 @@ public sealed class EuProcedureEventLiveAcceptance
         internal Window? Wide { get; set; }
 
         internal string[]? Discovered { get; set; }
+
+        internal string[]? CanonicalDiscovered { get; set; }
 
         internal string[]? DossiersAskedAbout { get; set; }
 
@@ -749,10 +766,9 @@ public sealed class EuProcedureEventLiveAcceptance
     /// The renderer for this run's discovery question.
     /// </summary>
     /// <remarks>
-    /// Its renderer SOURCE is this harness's own file bytes, because this file is what implements
-    /// it. An earlier head pointed the source reference at the frozen procedure-event plan, which
-    /// does not contain this renderer, so the retained plan attributed the query to a file that
-    /// could not account for it.
+    /// Its renderer SOURCE is this harness's own file bytes, because this file implements it. An
+    /// earlier head pointed the source reference at the frozen procedure-event plan, which does not
+    /// contain this renderer.
     /// </remarks>
     private sealed class DiscoveryRenderer(
         SourceArtifactRef rendererProfileRef,

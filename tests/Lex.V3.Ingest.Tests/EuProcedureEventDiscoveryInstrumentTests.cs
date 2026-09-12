@@ -165,6 +165,95 @@ public sealed class EuProcedureEventDiscoveryInstrumentTests
             EuProcedureEventLiveAcceptance.WindowsAgree([], []),
             "discovering nothing twice is not agreement.");
 
+    /// <summary>A well-formed distinct pair is proved, and its canonical form is carried.</summary>
+    [TestMethod]
+    public void ATwoDistinctCanonicalPairIsProved()
+    {
+        var proof = EuProcedureEventLiveAcceptance.ProveTwoDistinctDossiers(
+            [FirstDossier, SecondDossier],
+            [FirstDossier, SecondDossier, ThirdDossier]);
+
+        Assert.AreEqual(EuProcedureEventLiveAcceptance.DeliveredVerdict, proof.Verdict);
+        Assert.IsNotNull(proof.Raw);
+        Assert.IsNotNull(proof.Canonical);
+        Assert.HasCount(2, proof.Canonical);
+        Assert.AreNotEqual(proof.Canonical[0], proof.Canonical[1]);
+    }
+
+    /// <summary>
+    /// A value the publisher labelled a URI but which is not one is refused.
+    /// </summary>
+    /// <remarks>
+    /// THE REVIEWER'S OWN PROBE. He sent <c>{"type":"uri","value":"not an iri"}</c> through the
+    /// parser and it came back as a row, because the SPARQL term label is the publisher's claim and
+    /// not proof. The producer would have opened its robots bootstrap and only then refused, so this
+    /// has to be settled before the bootstrap is counted.
+    /// </remarks>
+    [TestMethod]
+    public void AValueLabelledUriThatIsNotAnIriIsRefused()
+    {
+        var proof = EuProcedureEventLiveAcceptance.ProveTwoDistinctDossiers(
+            [FirstDossier, "not an iri"],
+            [FirstDossier, "not an iri"]);
+
+        Assert.AreEqual("DiscoveryValueIsNotCanonical", proof.Verdict);
+        Assert.IsNull(proof.Raw, "nothing may be handed on when a value does not reduce.");
+        Assert.IsNull(proof.Canonical);
+    }
+
+    /// <summary>
+    /// A raw-distinct pair that reduces to one dossier is refused before the producer sees it.
+    /// </summary>
+    /// <remarks>
+    /// The canonical form normalises <c>https</c> to <c>http</c>, so these two strings are distinct
+    /// as text and are ONE member to the producer. Raw distinctness is therefore weaker than the
+    /// producer's boundary, which is why distinctness is proved in canonical form.
+    /// </remarks>
+    [TestMethod]
+    public void ARawDistinctPairThatCanonicalizesToOneIsRefused()
+    {
+        var httpsTwin = "https" + FirstDossier["http".Length..];
+        var proof = EuProcedureEventLiveAcceptance.ProveTwoDistinctDossiers(
+            [FirstDossier, httpsTwin],
+            [FirstDossier, httpsTwin]);
+
+        Assert.AreEqual("DiscoveryReturnedACanonicalDuplicate", proof.Verdict);
+        Assert.IsNull(proof.Canonical);
+    }
+
+    /// <summary>Fewer or more than two URI terms is refused.</summary>
+    [TestMethod]
+    public void AWindowThatIsNotExactlyTwoIsRefused()
+    {
+        Assert.AreEqual(
+            "DiscoveryDidNotYieldTwoDossiers",
+            EuProcedureEventLiveAcceptance.ProveTwoDistinctDossiers(
+                [FirstDossier], [FirstDossier]).Verdict);
+        Assert.AreEqual(
+            "DiscoveryDidNotYieldTwoDossiers",
+            EuProcedureEventLiveAcceptance.ProveTwoDistinctDossiers([], []).Verdict);
+    }
+
+    /// <summary>A textually identical pair is refused before canonicalization is even reached.</summary>
+    [TestMethod]
+    public void ATextuallyDuplicatePairIsRefused() =>
+        Assert.AreEqual(
+            "DiscoveryReturnedADuplicatePair",
+            EuProcedureEventLiveAcceptance.ProveTwoDistinctDossiers(
+                [FirstDossier, FirstDossier], [FirstDossier, FirstDossier]).Verdict);
+
+    /// <summary>Disagreeing windows are refused, and nothing is handed on.</summary>
+    [TestMethod]
+    public void DisagreeingWindowsAreRefused()
+    {
+        var proof = EuProcedureEventLiveAcceptance.ProveTwoDistinctDossiers(
+            [FirstDossier, SecondDossier],
+            [ThirdDossier, FirstDossier, SecondDossier]);
+
+        Assert.AreEqual("DiscoveryWindowsDisagree", proof.Verdict);
+        Assert.IsNull(proof.Raw);
+    }
+
     private static byte[] Payload(params string[] dossiers)
     {
         var builder = new StringBuilder("{\"head\":{\"vars\":[\"dossier\"]},\"results\":{\"bindings\":[");

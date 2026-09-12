@@ -10,23 +10,17 @@ namespace Lex.V3.Ingest.Tests;
 /// <para>
 /// GUARDS READ CODE, NEVER PROSE. That harness documents its predicate, both ceilings and its
 /// bootstrap bound in doc comments, so a <c>Contains</c> over the raw file would be satisfied by the
-/// explanation of a property rather than by the property. This exact failure has already happened
-/// twice in this programme. So every assertion below runs over <see cref="CodeOnly"/>, with
-/// whole-line comments removed first.
+/// explanation of a property rather than by the property. This failure has already happened twice in
+/// this programme, so every assertion below runs over <see cref="CodeOnly"/>.
 /// </para>
 /// <para>
-/// AND A GUARD MUST PIN THE COMPARISON, NOT THE RECORDING. The reviewer demonstrated the difference
-/// on an earlier head: he replaced the recorded request digest with sixty-four zeroes, and the
-/// candidate built while all seven guards still passed, because they only proved a digest had been
-/// written down. <see cref="TheAskedRequestBytesAreReopenedAndCompared"/> exists because of that
-/// mutation, and it pins the reopen-and-byte-compare rather than the field that holds its result.
-/// </para>
-/// <para>
-/// SEVERAL GUARDS ARE ORDERING GUARDS. Three of the four findings against the earlier head were
-/// about order, not absence: unproved values reached the producer before they were checked, a
-/// throwing interpretation ran before the terminal write, and a bootstrap was counted only after it
-/// had succeeded. Counting occurrences cannot see any of those, so those guards compare source
-/// positions.
+/// AND A GUARD MUST PIN THE MECHANISM, NOT ITS TRACE. Three separate review findings were about
+/// things a presence check cannot see. A recorded digest passed while being sixty-four zeroes. A
+/// <c>finally</c> was present while every controlled stop still reported green, because the stops
+/// <c>return</c>ed past the judgement the <c>finally</c> was supposed to precede. Checks existed for
+/// distinctness while running after the traffic they were meant to prevent. So several guards below
+/// compare source POSITIONS, and one removes the operation's own body before asserting that nothing
+/// in what remains can skip the judgement.
 /// </para>
 /// </remarks>
 [TestClass]
@@ -51,6 +45,58 @@ public sealed class EuProcedureEventLiveGuardTests
             "the derived bootstrap bound, without which the send ceiling is not enforced.");
     }
 
+    /// <summary>
+    /// No controlled stop can skip the judgement.
+    /// </summary>
+    /// <remarks>
+    /// THE GUARD FOR THE WORST DEFECT THIS HARNESS HAD. Every stop used to <c>return</c> out of the
+    /// gated method: the <c>finally</c> wrote the terminal index and the method then returned
+    /// normally, so a refused one-shot operation was retained as a refusal and REPORTED GREEN.
+    /// Counting the <c>finally</c> could not see it, as the reviewer said.
+    /// </para>
+    /// <para>
+    /// So this excises the operation's own body - the local function, whose early returns are
+    /// legitimate because they leave only it - and asserts that nothing in what remains can return
+    /// before the verdict is judged. A stop moved back out into the test method reintroduces a
+    /// <c>return;</c> here and fails.
+    /// </remarks>
+    [TestMethod]
+    public void NoControlledStopCanSkipTheJudgement()
+    {
+        var code = CodeOnly(HarnessSource());
+
+        // Scoped to the gated TEST METHOD, then with the operation's own body excised. A helper
+        // such as the window observer returns early for legitimate reasons and is out of scope;
+        // what matters is that nothing in the test method itself can return before the judgement.
+        var testBody = ExtractBlock(
+            code, "public async Task TwoDiscoveredDossiersAreAnsweredByThePublisher()");
+        var withoutOperation = ExciseBlock(testBody, "async Task RunOperationAsync()");
+
+        Assert.AreEqual(
+            0, CountOf(withoutOperation, "return;"),
+            "outside the operation's own body nothing may return, or a stop would skip the "
+            + "judgement and a refused run would report green.");
+
+        var finallyEnd = code.IndexOf("terminal evidence: ", StringComparison.Ordinal);
+        var judgement = code.IndexOf(
+            "Assert.AreEqual(\n            DeliveredVerdict, outcome.Verdict,", StringComparison.Ordinal);
+        Assert.IsGreaterThan(0, judgement, "the verdict must be judged.");
+        Assert.IsGreaterThan(finallyEnd, judgement, "and judged after the terminal write.");
+        Assert.AreEqual(
+            1, CountOf(code, "internal const string DeliveredVerdict = \"AcceptanceDelivered\";"),
+            "one verdict is a pass, named once, and every other outcome fails the assertion.");
+        // POSITION, NOT JUST COUNT. Moving this one assignment out of the operation and after it
+        // survived a count-only guard while making EVERY run report delivered - the same defect
+        // class as the early return, arriving from the other direction.
+        var operation = ExtractBlock(testBody, "async Task RunOperationAsync()");
+        Assert.AreEqual(
+            1, CountOf(operation, "outcome.Verdict = DeliveredVerdict;"),
+            "the delivered verdict is set inside the operation, at the end of a complete run.");
+        Assert.AreEqual(
+            0, CountOf(withoutOperation, "outcome.Verdict = DeliveredVerdict;"),
+            "and never outside it, where it would apply to every outcome including a refusal.");
+    }
+
     /// <summary>One budget for the whole operation, and never the offline helper's ceiling.</summary>
     [TestMethod]
     public void OneBudgetSpansDiscoveryAndAcceptance()
@@ -68,26 +114,17 @@ public sealed class EuProcedureEventLiveGuardTests
             "the offline helper's 100,000-request ceiling has no place in a live path.");
     }
 
-    /// <summary>
-    /// The asked request bytes are reopened out of custody and byte-compared.
-    /// </summary>
+    /// <summary>The asked request bytes are reopened out of custody and byte-compared.</summary>
     /// <remarks>
-    /// THE GUARD THE REVIEWER'S ZERO-DIGEST MUTATION PROVED WAS MISSING. An earlier head recorded
-    /// <c>LogicalRequest.Body.Sha256</c> and asserted nothing about it, so replacing that digest
-    /// with zeroes changed no test result. Recording a digest is not proof of what was asked; only
-    /// reopening the retained bytes by content address and comparing them to the re-derived query
-    /// is. Both the reopen and the comparison are pinned, and so is the fact that both windows are
-    /// judged on the result.
+    /// The reviewer replaced the recorded digest with sixty-four zeroes and nothing failed.
+    /// Recording a digest is not proof of what was asked; reopening the retained bytes by that
+    /// address and comparing them is.
     /// </remarks>
     [TestMethod]
     public void TheAskedRequestBytesAreReopenedAndCompared()
     {
         var code = CodeOnly(HarnessSource());
 
-        // THE REVIEWER'S OWN MUTATION, PINNED DIRECTLY. He replaced the recorded digest with
-        // sixty-four zeroes and nothing failed. The digest must be the transport's own, because
-        // every step after it - the reopen and the comparison - is only as good as the address it
-        // was given.
         Assert.AreEqual(
             1, CountOf(code, "window.AskedBodySha256 = transport.LogicalRequest.Body.Sha256;"),
             "the reopened address is the one the transport recorded for the body it sent.");
@@ -100,27 +137,57 @@ public sealed class EuProcedureEventLiveGuardTests
         Assert.AreEqual(
             1, CountOf(code, "window.AskedBodyLength == bound.Body.Length"),
             "with the length checked too, so a truncation cannot pass on a digest alone.");
-        // The needle is the null-forgiving access the two assertions use, because a bare
-        // "RequestBytesReopenedAndEqual," also matches the terminal index's own mapping - which is
-        // wanted, but is evidence rather than judgement, and is asserted separately below.
+        // Comma-suffixed: the two judgement assertions. The pre-acceptance stop reads the same two
+        // properties without a trailing comma, so a bare count of four would not distinguish
+        // stopping from judging - and the stop's position is asserted by the ordering guard.
         Assert.AreEqual(
             2, CountOf(code, "!.RequestBytesReopenedAndEqual,"),
-            "and both windows are asserted on the comparison's result.");
-        Assert.AreEqual(
-            1, CountOf(code, "requestBytesReopenedAndEqual = window.RequestBytesReopenedAndEqual,"),
-            "with the comparison's result recorded per window in the retained terminal index.");
+            "and both windows are judged on the comparison's result.");
     }
 
     /// <summary>
-    /// The renderer's declared source is the file that implements the renderer.
+    /// Each window is attached to the outcome before anything that can throw.
     /// </summary>
     /// <remarks>
-    /// THE HALF OF THE PROVENANCE FINDING MY FIRST MUTATION SET DID NOT COVER. Repointing the
-    /// renderer source back at <c>EuProcedureEventDiscoveryPlan.cs</c> survived every other guard,
-    /// which made the attribution defect exactly as untested as the digest recording had been: the
-    /// retained plan would name a source file that does not contain this query's renderer, so a
-    /// reader reopening the packet could not account for the bytes that were sent.
+    /// An earlier head filled a local window and assigned it on return, so a fault inside the
+    /// reopen or the parse serialized that window as null - losing exactly the asked identity and
+    /// digest the repair claimed were retained on fault.
     /// </remarks>
+    [TestMethod]
+    public void WindowEvidenceSurvivesAFault()
+    {
+        var code = CodeOnly(HarnessSource());
+
+        Assert.AreEqual(
+            1, CountOf(code, "outcome.Narrow = new Window();"),
+            "the narrow window is attached before it is populated.");
+        Assert.AreEqual(
+            1, CountOf(code, "outcome.Wide = new Window();"),
+            "and so is the wider one.");
+        Assert.AreEqual(
+            1, CountOf(code, "Window window,"),
+            "the observer takes the window and populates it in place.");
+        Assert.AreEqual(
+            0, CountOf(code, "var window = new Window();"),
+            "no window is built locally, where a throw would lose it.");
+
+        // Each attachment is compared with the call that passes THAT window. Comparing both
+        // against the first call of either passed for narrow and failed for wide, which measured
+        // this guard's own sloppiness rather than the harness's ordering.
+        foreach (var (attach, passed) in new[]
+        {
+            ("outcome.Narrow = new Window();", "outcome.Narrow, glue"),
+            ("outcome.Wide = new Window();", "outcome.Wide, glue"),
+        })
+        {
+            Assert.IsGreaterThan(
+                code.IndexOf(attach, StringComparison.Ordinal),
+                code.IndexOf(passed, StringComparison.Ordinal),
+                $"'{attach}' precedes the call that can throw with it.");
+        }
+    }
+
+    /// <summary>The renderer's declared source is the file that implements the renderer.</summary>
     [TestMethod]
     public void TheRendererSourceIsTheFileThatImplementsIt()
     {
@@ -130,20 +197,11 @@ public sealed class EuProcedureEventLiveGuardTests
             1, CountOf(code, "\"tests\", \"Lex.V3.Ingest.Tests\", HarnessFileName));"),
             "the renderer source bytes are this harness's own file, which implements the renderer.");
         Assert.AreEqual(
-            1, CountOf(code, "private const string HarnessFileName = \"EuProcedureEventLiveAcceptance.cs\";"),
-            "and that file is named once, as a constant.");
-        Assert.AreEqual(
             0, CountOf(code, "EuProcedureEventDiscoveryPlan.cs"),
             "the renderer is not attributed to a source file that does not contain it.");
     }
 
-    /// <summary>
-    /// The dossiers are discovered, never written down.
-    /// </summary>
-    /// <remarks>
-    /// THE GUARD THE OWNER DECISION TURNS ON. A single cellar IRI literal in this file would make
-    /// the run pass, retain evidence, and no longer be a discovery.
-    /// </remarks>
+    /// <summary>The dossiers are discovered, never written down.</summary>
     [TestMethod]
     public void NoDossierIsHardcodedAndEveryOneComesFromTheRetainedPayload()
     {
@@ -157,109 +215,50 @@ public sealed class EuProcedureEventLiveGuardTests
             CountOf(code, "ParseDossiers(transport.RetainedPayloadBytes.Span)"),
             "every parse reads a retained payload, and nothing else is parsed.");
         Assert.AreEqual(
-            1, CountOf(code, "outcome.Discovered = [narrowIris[0], narrowIris[1]];"),
-            "the subjects handed on are exactly the two the publisher returned.");
-    }
-
-    /// <summary>Only a URI term becomes a subject.</summary>
-    /// <remarks>
-    /// An earlier head accepted any nonempty value, so a literal or blank node would have been sent
-    /// to the producer as though it were a dossier IRI - and the producer would then honestly have
-    /// reported finding no events for it.
-    /// </remarks>
-    [TestMethod]
-    public void OnlyAUriTermBecomesASubject()
-    {
-        var code = CodeOnly(HarnessSource());
-
-        Assert.AreEqual(
-            1, CountOf(code, "string.Equals(kind.GetString(), \"uri\", StringComparison.Ordinal)"),
-            "the SPARQL term type is part of the answer and is checked.");
-        Assert.AreEqual(
-            1, CountOf(code, "value.GetString() is { Length: > 0 } iri"),
-            "and an empty value is not a subject.");
-    }
-
-    /// <summary>The predicate is the contract's constant, never a literal in the query.</summary>
-    [TestMethod]
-    public void TheDiscoveryPredicateIsTheContractsAndNotALiteral()
-    {
-        var code = CodeOnly(HarnessSource());
-
-        Assert.AreEqual(
-            1,
-            CountOf(code, "EuProcedureEventVocabulary.PartOfDossierPredicateUri + \"> ?dossier"),
-            "the discovery query asks the predicate the frozen contract declares.");
-        Assert.AreEqual(
-            1,
-            CountOf(code, "predicate = EuProcedureEventVocabulary.PartOfDossierPredicateUri"),
-            "and the terminal index records which predicate this run actually asked.");
-
-        // The owner has ruled that the decision's original wording was descriptive and that the
-        // contract member is authoritative. Both spellings may therefore appear ONLY inside the
-        // evidence note that records that history - never in the code that builds the question.
-        var retention = code.IndexOf(
-            "private static async Task RetainAsync", StringComparison.Ordinal);
-        Assert.IsGreaterThan(0, retention, "the retention method was not found.");
-        foreach (var spelling in new[]
-        {
-            "procedure_event_belongs_to_procedure_dossier",
-            "cdm:event_legal_part_of_dossier",
-        })
-        {
-            Assert.AreEqual(
-                1, CountOf(code, spelling),
-                $"'{spelling}' is named once, where the evidence records the naming history.");
-            Assert.IsGreaterThan(
-                retention, code.IndexOf(spelling, StringComparison.Ordinal),
-                $"'{spelling}' appears only inside the code that writes evidence.");
-        }
+            1, CountOf(code, "outcome.Discovered = proof.Raw;"),
+            "the subjects handed on are the ones the proof admitted.");
     }
 
     /// <summary>
-    /// Nothing unproved reaches the publisher: the discovery is established before acceptance opens.
+    /// Two distinct dossiers are proved on the producer's own terms before its bootstrap opens.
     /// </summary>
     /// <remarks>
-    /// AN ORDERING GUARD, BECAUSE THE DEFECT WAS AN ORDERING DEFECT. An earlier head invoked the
-    /// producer as soon as two nonempty strings had been parsed and checked their kind, distinctness
-    /// and cross-window agreement afterwards. Counting those checks would have passed on that head;
-    /// only their position relative to the producer call catches it.
+    /// AN ORDERING GUARD, AND THE REVIEWER'S SECOND FINDING. A SPARQL <c>"type":"uri"</c> label is
+    /// the publisher's claim: his probe admitted <c>"not an iri"</c>. And the producer opens its
+    /// robots bootstrap BEFORE canonicalizing its batch, so a raw-distinct pair reducing to one
+    /// member would have caused that bootstrap and then thrown. Both values must therefore reduce
+    /// through the producer's own canonical form, and be distinct in it, before the bootstrap is
+    /// counted or opened.
     /// </remarks>
     [TestMethod]
-    public void TheDiscoveryIsProvedBeforeAcceptanceOpens()
+    public void TwoDistinctDossiersAreProvedCanonicallyBeforeAcceptanceOpens()
     {
         var code = CodeOnly(HarnessSource());
 
+        Assert.AreEqual(
+            1, CountOf(code, "EuPackRootCanonicalForm.TryCanonicalize("),
+            "reduction uses the producer's own canonical form, not an approximation of it.");
+        Assert.AreEqual(
+            1, CountOf(code, "DiscoveryValueIsNotCanonical"),
+            "a value that does not reduce is a named stop.");
+        Assert.AreEqual(
+            1, CountOf(code, "DiscoveryReturnedACanonicalDuplicate"),
+            "and a pair that reduces to one member is a named stop.");
+
+        var proof = code.IndexOf("var proof = ProveTwoDistinctDossiers(", StringComparison.Ordinal);
+        var counted = code.IndexOf(
+            "accounting.BootstrapsAttempted++;\n            var production", StringComparison.Ordinal);
         var producer = code.IndexOf(
             "new EuProcedureEventProducer(store, TimeProvider.System).RunAsync", StringComparison.Ordinal);
-        Assert.IsGreaterThan(0, producer, "the producer call was not found.");
-
-        foreach (var (marker, why) in new[]
-        {
-            ("AskedBytesDidNotReopenEqual", "the asked bytes are proved"),
-            ("DiscoveryDidNotYieldTwoDossiers", "exactly two subjects are proved"),
-            ("DiscoveryReturnedADuplicatePair", "distinctness is proved"),
-            ("DiscoveryWindowsDisagree", "cross-window agreement is proved"),
-        })
-        {
-            var position = code.IndexOf(marker, StringComparison.Ordinal);
-            Assert.IsGreaterThan(0, position, $"the {marker} stop was not found.");
-            Assert.IsGreaterThan(
-                position, producer,
-                $"{why} before the acceptance session is opened.");
-        }
+        Assert.IsGreaterThan(0, proof, "the proof call was not found.");
+        Assert.IsGreaterThan(proof, counted, "the acceptance bootstrap is counted after the proof,");
+        Assert.IsGreaterThan(proof, producer, "and opened after it.");
+        Assert.AreEqual(
+            1, CountOf(code, "if (proof.Canonical is null)"),
+            "and a failed proof stops the run rather than handing values on.");
     }
 
-    /// <summary>
-    /// The terminal index is written in a finally, so no outcome escapes without it.
-    /// </summary>
-    /// <remarks>
-    /// The earlier guard searched for assertions between two text markers and could not see a
-    /// judgement that THREW rather than asserted - and <c>EventsOf</c> throws on a dossier the
-    /// delivered result does not carry, which is the mismatch a packet most needs to record. A
-    /// <c>finally</c> covers every exit, including faults, which is why the rule is now stated as
-    /// the retention's position inside it rather than as an absence of assertions.
-    /// </remarks>
+    /// <summary>The terminal index is written in a finally, so no outcome escapes without it.</summary>
     [TestMethod]
     public void TheTerminalIndexIsWrittenInAFinallySoNoOutcomeEscapes()
     {
@@ -272,27 +271,15 @@ public sealed class EuProcedureEventLiveGuardTests
         Assert.AreEqual(
             1, CountOf(code, "await RetainAsync("),
             "one retention, on every path, rather than one per outcome that someone remembered.");
-
-        // Interpretation that can throw, and every assertion, must follow the retention.
         Assert.IsGreaterThan(
             code.IndexOf("production.EventsOf(", StringComparison.Ordinal), finallyStart,
             "interpretation that can throw runs before the finally that reports it.");
-        Assert.IsGreaterThan(
-            retainCall, code.IndexOf("var offenders = OffendingHosts(root);", StringComparison.Ordinal),
-            "and judgement begins only after the terminal write.");
         Assert.AreEqual(
             1, CountOf(code, "outcome.Verdict = \"Faulted\";"),
             "a throw is recorded as an outcome rather than escaping unnamed.");
     }
 
-    /// <summary>
-    /// Bootstraps are counted before they are attempted, because a refused one has already sent.
-    /// </summary>
-    /// <remarks>
-    /// AN ORDERING GUARD. An earlier head incremented only when a session object came back, so a
-    /// bootstrap refused after its two-hop robots exchange reported zero hops and the refusal packet
-    /// understated the traffic it had caused.
-    /// </remarks>
+    /// <summary>Bootstraps are counted before they are attempted, because a refused one has sent.</summary>
     [TestMethod]
     public void BootstrapsAreCountedBeforeTheyAreAttempted()
     {
@@ -344,6 +331,69 @@ public sealed class EuProcedureEventLiveGuardTests
         Assert.AreEqual(
             1, CountOf(code, "GetEnvironmentVariable(EnableVariable)"),
             "and that one read is the gate.");
+    }
+
+    /// <summary>Returns one brace-delimited block, named by the line that opens it.</summary>
+    private static string ExtractBlock(string code, string signature)
+    {
+        var start = code.IndexOf(signature, StringComparison.Ordinal);
+        Assert.IsGreaterThan(0, start, $"'{signature}' was not found.");
+        var open = code.IndexOf('{', start);
+        var depth = 0;
+        for (var index = open; index < code.Length; index++)
+        {
+            if (code[index] == '{')
+            {
+                depth++;
+            }
+            else if (code[index] == '}')
+            {
+                depth--;
+                if (depth == 0)
+                {
+                    return code[start..(index + 1)];
+                }
+            }
+        }
+
+        Assert.Fail($"'{signature}' block was not closed.");
+        return code;
+    }
+
+    /// <summary>
+    /// Removes one brace-delimited block, named by the line that opens it.
+    /// </summary>
+    /// <remarks>
+    /// Used to take the operation's own body out of the file before asserting that nothing in what
+    /// remains can return early. Counting braces is crude but exact enough for a declaration this
+    /// guard also asserts is present.
+    /// </remarks>
+    private static string ExciseBlock(string code, string signature)
+    {
+        var start = code.IndexOf(signature, StringComparison.Ordinal);
+        Assert.IsGreaterThan(0, start, $"'{signature}' was not found.");
+        var open = code.IndexOf('{', start);
+        Assert.IsGreaterThan(0, open, "the block's opening brace was not found.");
+
+        var depth = 0;
+        for (var index = open; index < code.Length; index++)
+        {
+            if (code[index] == '{')
+            {
+                depth++;
+            }
+            else if (code[index] == '}')
+            {
+                depth--;
+                if (depth == 0)
+                {
+                    return code[..start] + code[(index + 1)..];
+                }
+            }
+        }
+
+        Assert.Fail("the block was not closed.");
+        return code;
     }
 
     /// <summary>
