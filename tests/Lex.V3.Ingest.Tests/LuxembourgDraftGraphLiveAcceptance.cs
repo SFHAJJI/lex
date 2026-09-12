@@ -59,23 +59,44 @@ public sealed class LuxembourgDraftGraphLiveAcceptance
     private const string EnableVariable = "LEX_E8_DRAFT_GRAPH_LIVE";
 
     /// <summary>
-    /// The whole-run wire ceiling for this acceptance sweep. **Not yet dispositioned.**
+    /// The whole-run wire ceiling for this acceptance sweep: 2,000 requests.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// ONE CEILING FOR THE WHOLE RUN, OR NONE AT ALL. This harness previously built a fresh budget
-    /// for the inventory and another inside every batch iteration, so a 156-batch run received 157
-    /// independent ceilings - and each was the offline test helper's 100,000. The enforced ceiling
-    /// existed and the acceptance path went around it, which is precisely the unbounded sweep the
-    /// budget work exists to prevent.
+    /// ONE CEILING FOR THE WHOLE RUN. The inventory and every batch it issues share one
+    /// <see cref="WireRequestBudget"/>, and every robots fetch, product attempt and retry is charged
+    /// to it. An earlier head of this harness built a fresh budget per batch, each the offline test
+    /// helper's 100,000, so a 156-batch run had 157 independent ceilings and no bound at all.
     /// </para>
     /// <para>
-    /// It is null because the number has not been agreed. Choosing one here is what the plan step
-    /// exists to prevent: a ceiling picked by the code that spends it is not a ceiling. Until the
-    /// separately presented full-draft plan supplies a reviewed figure, this run refuses to start.
+    /// WHAT 2,000 IS BUILT FROM. 157 robots fetches, one per producer run and never retried; the
+    /// inventory's 24 measured product requests; and 156 batches at up to 8 product requests each -
+    /// 2 counts plus 3 and 3 pages, which is the <c>MaximumPagesFor</c> page budget at the measured
+    /// row band rather than the 6 the canary actually spent. The reviewer's projections on that one
+    /// basis: 1,065 at measured density, 1,973 with one retry on every projected product request,
+    /// 1,429 with every batch at 8, 1,741 with every batch at 10.
+    /// </para>
+    /// <para>
+    /// IT IS A BINDING STOP, NOT A COMPLETION GUARANTEE AND NOT A STRUCTURAL BOUND. It survives
+    /// either a density surprise or a retry on every request, and not both. A run that reaches it
+    /// stops, retains what it has, and is a dated partial finding - never a completed sweep.
+    /// </para>
+    /// <para>
+    /// THE EVIDENCE UNDER IT IS THIN, AND THAT IS WHY THE HEADROOM IS SPENT ON DENSITY RATHER THAN
+    /// RETRIES. The retained draft sample is 650 of 7,753 drafts - 8.38%, and 19.60% of the two
+    /// families it touches. The inventory's own census is <c>pr</c> 4,091, <c>pl</c> 3,306,
+    /// <c>ppl</c> 295, <c>ppc</c> 51, <c>pc</c> 10; the sample holds only <c>pl</c> and <c>pc</c>,
+    /// so <c>pr</c>, <c>ppl</c> and <c>ppc</c> - 4,437 drafts, 57.23% - have no observations at all,
+    /// and the sample's median year is 2003 against the population's 2015. Every rows-per-draft
+    /// figure anyone has quoted measures the oldest <c>pl</c>-dominated head.
+    /// </para>
+    /// <para>
+    /// Retries, by contrast, were observed zero times in 100 live product requests. Reserving for a
+    /// never-observed multiplier would make the ceiling non-binding on the one dimension that has
+    /// actually varied.
     /// </para>
     /// </remarks>
-    private static readonly int? SharedWireCeiling = null;
+    private static readonly int? SharedWireCeiling = 2_000;
     private const string LegiluxEndpoint = "https://data.legilux.public.lu/sparqlendpoint";
 
     /// <summary>
