@@ -339,7 +339,7 @@ try {
 finally {
     $cleanupError = $null
     try {
-        if ($Mode -eq 'Mutation') {
+        if ($ownsMutex -and $Mode -eq 'Mutation') {
             Remove-WorktreeBuildOutputs
         }
     }
