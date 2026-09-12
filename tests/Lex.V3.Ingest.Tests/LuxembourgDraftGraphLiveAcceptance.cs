@@ -173,6 +173,14 @@ public sealed class LuxembourgDraftGraphLiveAcceptance
 
         // 1. THE CLASS, ENUMERATED. Everything after this is derived from what the publisher said
         //    the class is; nothing below names a draft this run did not first prove exists.
+        // SESSIONS ARE COUNTED BY OBSERVATION, NOT BY ARITHMETIC. A producer call does not always
+        // open a session: the doors reserve robots BEFORE StartSessionAsync, so an exhausted budget
+        // returns with no session, no request and no spend. Counting attempted calls instead put one
+        // phantom robots fetch into the expected total and made `reconciles` false on exactly the
+        // pre-session safety stop the index exists to describe.
+        var sessionsOpened = 0;
+        var spentBeforeRun = budget.Spent;
+
         var inventory = await new LuxembourgInitialDraftInventoryProducer(store, TimeProvider.System)
             .RunAsync(
                 new LuxembourgInitialDraftInventoryRunRequest(
@@ -180,6 +188,11 @@ public sealed class LuxembourgDraftGraphLiveAcceptance
                     budget),
                 witness,
                 CancellationToken.None);
+
+        if (budget.Spent > spentBeforeRun)
+        {
+            sessionsOpened++;
+        }
 
         // RETAINED BEFORE IT IS JUDGED. A refusal here is a safety stop, and a stop is exactly the
         // outcome a bounded run most needs evidence for: what it spent, how far it got and why. The
@@ -190,7 +203,7 @@ public sealed class LuxembourgDraftGraphLiveAcceptance
             await RetainTerminalIndexAsync(
                 root, store, "InventoryRefused", inventory.Refusal.ToString(), inventory.Detail,
                 stoppedOrdinal: null, batchesDelivered: 0, batchesIssued: null,
-                productRequests: inventory.ProductRequestCount, sessionsOpened: 1,
+                productRequests: inventory.ProductRequestCount, sessionsOpened: sessionsOpened,
                 terminal: inventory.WireBudget);
             Assert.Fail(
                 $"the inventory must be proven before any batch is swept: {inventory.Refusal} "
@@ -213,11 +226,17 @@ public sealed class LuxembourgDraftGraphLiveAcceptance
         var rows = 0L;
         for (var ordinal = 0; ordinal < assignments.Count; ordinal++)
         {
+            var spentBeforeBatch = budget.Spent;
             var batch = await producer.RunAsync(
                 LuxembourgDraftGraphRunRequest.ForBatch(
                     plan, inventory, ordinal, NewUrn(), rendererSource, budget),
                 witness,
                 CancellationToken.None);
+
+            if (budget.Spent > spentBeforeBatch)
+            {
+                sessionsOpened++;
+            }
 
             // TOTALS FIRST, DECISION SECOND. This batch's cost is part of the run's cost whether it
             // delivered or refused, so it is folded in before anything is judged. Assigning after
@@ -232,7 +251,7 @@ public sealed class LuxembourgDraftGraphLiveAcceptance
                     root, store, "BatchRefused", batch.Refusal.ToString(), batch.Detail,
                     stoppedOrdinal: ordinal, batchesDelivered: coverages.Count,
                     batchesIssued: assignments.Count, productRequests: productRequests,
-                    sessionsOpened: 2 + ordinal, terminal: terminal);
+                    sessionsOpened: sessionsOpened, terminal: terminal);
                 Assert.Fail(
                     $"batch {ordinal} of {assignments.Count} refused: {batch.Refusal} "
                     + $"{batch.Detail}. Terminal evidence retained under {root}.");
@@ -247,7 +266,6 @@ public sealed class LuxembourgDraftGraphLiveAcceptance
         // reservations the shared budget granted must equal the attempts the producers recorded plus
         // one robots fetch each. A mismatch is a finding about the accounting itself, and a cover
         // read over accounting that does not add up is a conclusion drawn from disputed figures.
-        var sessionsOpened = 1 + assignments.Count;
         var expectedSpend = productRequests + sessionsOpened;
         await RetainTerminalIndexAsync(
             root, store, "SweepCompleted", refusal: null, detail: null,
@@ -321,7 +339,7 @@ public sealed class LuxembourgDraftGraphLiveAcceptance
             .AppendLine("endpoint=" + LegiluxEndpoint)
             .AppendLine("projection=" + ProjectedRequestNote)
             .AppendLine("product_requests=" + productRequests)
-            .AppendLine("sessions_opened=" + (1 + assignments.Count))
+            .AppendLine("sessions_opened=" + sessionsOpened)
             .AppendLine("actual_http_requests=" + terminal.Spent)
             .AppendLine("wire_ceiling=" + terminal.Limit)
             .AppendLine("initial_drafts=" + population.Count)

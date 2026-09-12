@@ -260,6 +260,94 @@ public sealed class LuxembourgDraftBudgetEvidenceTests
     }
 
     /// <summary>
+    /// A batch stopped BEFORE its session opens counts no session, and the index still reconciles.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// THE CASE MY PREVIOUS REGRESSION COULD NOT REACH. It drove a 503, which arrives after a
+    /// session has opened, so it could not see a count that assumed a session per producer CALL.
+    /// The doors reserve robots before <c>StartSessionAsync</c>: an exhausted budget returns with no
+    /// session, no request and no spend, and counting the attempt would put one phantom robots fetch
+    /// into the expected total - making the accounting disagree with itself on exactly the
+    /// pre-session safety stop the index exists to describe.
+    /// </para>
+    /// <para>
+    /// The inventory is allowed to consume the whole ceiling first, so the batch meets a genuinely
+    /// spent budget rather than a contrived one.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public async Task ABatchStoppedBeforeItsSessionCountsNoSessionAndStillReconciles()
+    {
+        var handler = new CountingHandler(_ => LuxembourgAcquisitionTestFixture.CountJson(2));
+        var budget = WireRequestBudget.OfWireRequests(2);
+
+        // 1. The inventory spends the whole ceiling: robots, then the count it could afford.
+        var inventory = await InventoryProducer(handler).RunAsync(
+            InventoryRequest(budget), LuxembourgSourceWitness(), CancellationToken.None);
+
+        var sessionsOpened = 1;
+        Assert.IsTrue(inventory.WireBudget.Exhausted, "the inventory reached the ceiling.");
+        var sendsAfterInventory = handler.SendCount;
+        Assert.AreEqual(sendsAfterInventory, inventory.WireBudget.Spent);
+
+        // 2. The batch meets a spent budget and never opens a session.
+        var spentBefore = budget.Spent;
+        var batch = await GraphProducer(handler).RunAsync(
+            GraphRequest(budget), LuxembourgSourceWitness(), CancellationToken.None);
+
+        Assert.AreEqual(
+            sendsAfterInventory, handler.SendCount, "not one further request, not even robots.");
+        Assert.AreEqual(spentBefore, batch.WireBudget.Spent, "and not one further reservation.");
+        Assert.AreEqual(0, batch.ProductRequestCount);
+        Assert.IsFalse(batch.Delivered);
+
+        // THE RULE: a session is counted only when the spend advanced.
+        if (batch.WireBudget.Spent > spentBefore)
+        {
+            sessionsOpened++;
+        }
+
+        Assert.AreEqual(1, sessionsOpened, "one session opened across both producer calls.");
+
+        var root = Path.Combine(Path.GetTempPath(), "e8-exhausted-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            await LuxembourgDraftGraphLiveAcceptance.RetainTerminalIndexAsync(
+                root,
+                new Lex.V3.Artifacts.FileSystemCustodyStore(root),
+                "BatchRefused",
+                batch.Refusal.ToString(),
+                batch.Detail,
+                stoppedOrdinal: 0,
+                batchesDelivered: 0,
+                batchesIssued: 3,
+                productRequests: inventory.ProductRequestCount + batch.ProductRequestCount,
+                sessionsOpened: sessionsOpened,
+                terminal: batch.WireBudget);
+
+            var written = await File.ReadAllTextAsync(Path.Combine(root, "terminal-index.json"));
+
+            StringAssert.Contains(
+                written,
+                "\"actualHttpRequests\": " + handler.SendCount,
+                "the retained count is the transport's, unchanged by an attempt that sent nothing.");
+            StringAssert.Contains(written, "\"sessionsOpened\": 1");
+            StringAssert.Contains(
+                written,
+                "\"reconciles\": true",
+                "THE DEFECT THIS CLOSES. Counting the attempted call made this false on exactly the "
+                    + "pre-session stop, so the one path that most needs trustworthy evidence "
+                    + "reported an accounting that disagreed with itself.");
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    /// <summary>
     /// The gated live harness builds exactly one budget, and never the offline helper's.
     /// </summary>
     /// <remarks>
@@ -323,6 +411,28 @@ public sealed class LuxembourgDraftBudgetEvidenceTests
             decideStop,
             foldTotals,
             "totals first, decision second: the batch that stopped the run still cost what it cost.");
+
+        // Sessions are counted by observing the spend, never by arithmetic over attempted calls.
+        Assert.AreEqual(
+            0,
+            CountOf(sweep, "sessionsOpened: 2 + ordinal"),
+            "an attempted producer call is not a session: an exhausted budget opens none.");
+        Assert.AreEqual(
+            2,
+            CountOf(sweep, "sessionsOpened++"),
+            "one increment for the inventory and one for each batch that opened.");
+
+        // CONDITIONAL, not merely present. Counting increments alone passed when the guard around
+        // them was deleted, which is the mutation that produced the defect in the first place: an
+        // unconditional increment IS "count the attempted call". The condition is the rule.
+        Assert.AreEqual(
+            1,
+            CountOf(sweep, "budget.Spent > spentBeforeRun"),
+            "the inventory's session counts only if its robots reservation succeeded.");
+        Assert.AreEqual(
+            1,
+            CountOf(sweep, "budget.Spent > spentBeforeBatch"),
+            "and each batch's session counts only if its own reservation succeeded.");
     }
 
     /// <summary>The live sweep method's own text, from its signature to the next member.</summary>
