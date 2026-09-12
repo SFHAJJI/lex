@@ -130,6 +130,17 @@ internal static class EuAcquisitionTestFixture
     /// (<c>OfficialMachineQuerySourceProfiles.ResolveFor</c>), and robots negotiation depends only on
     /// that profile, never on which family the caller is about to enumerate.
     /// </summary>
+    /// <summary>
+    /// A budget no offline test can exhaust, for the scripted transports below.
+    /// </summary>
+    /// <remarks>
+    /// OFFLINE ONLY, AND DELIBERATELY NOT A CEILING. These tests assert decode and refusal shapes
+    /// rather than accounting, so a generous budget keeps them from refusing for the wrong reason.
+    /// A LIVE path must never borrow it: an earlier head put this helper's Luxembourg twin into a
+    /// live sweep and gave a 156-batch run 157 independent 100,000-request ceilings.
+    /// </remarks>
+    internal static WireRequestBudget TestWireBudget() => WireRequestBudget.OfWireRequests(100_000);
+
     internal static BoundMachineRequest SourceWitness() => MachineRequestTestFixture.EuropeanUnionRequest();
 
     /// <summary>

@@ -72,7 +72,8 @@ public sealed class EuProcedureEventExecutorEntryPointTests
                 EuProcedureEventDiscoveryPlan.Create(),
                 batch,
                 inputResourceId,
-                Source()),
+                Source(),
+                EuAcquisitionTestFixture.TestWireBudget()),
             EuAcquisitionTestFixture.SourceWitness(),
             CancellationToken.None);
 
