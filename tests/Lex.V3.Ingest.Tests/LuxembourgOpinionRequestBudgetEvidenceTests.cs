@@ -151,6 +151,72 @@ public sealed class LuxembourgOpinionRequestBudgetEvidenceTests
             "and a refusal reconciles to the transport exactly as a delivery does.");
     }
 
+    /// <summary>
+    /// A run stopped BY the ceiling says so, in the snapshot Item 7 will read.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// THE SIGNAL CLAUSE 6 DEPENDS ON. "Any exhaustion or incomplete run is a dated
+    /// magnitude/refusal finding" is a question the canary receipt has to be able to answer, and
+    /// before this regression <c>Exhausted</c> could be replaced with a constant false and the whole
+    /// suite still passed - so the one flag a finding would rest on had never been shown capable of
+    /// failing.
+    /// </para>
+    /// <para>
+    /// Driven to the EXACT ceiling rather than past it: a budget of two covers this run's robots
+    /// fetch and its count, and the page the count implies is the request that has nothing left to
+    /// reserve. So the stop lands on a request the run genuinely wanted to send, which is the only
+    /// arrangement where Spent == Limit means the ceiling was reached rather than merely quoted.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public async Task ARunStoppedByTheCeilingCarriesASnapshotThatSaysSo()
+    {
+        var subjects = new[] { Request(1), Request(2) };
+        var handler = CanaryTransport(subjects);
+        var budget = WireRequestBudget.OfWireRequests(2);
+
+        var inventory = await new LuxembourgOpinionRequestInventoryProducer(
+                new EuAcquisitionTestFixture.EuInMemoryCustodyStore(),
+                new LuxembourgAcquisitionTestFixture.FixedTimeProvider(),
+                handler)
+            .RunAsync(
+                new LuxembourgOpinionRequestInventoryRunRequest(
+                    LuxembourgOpinionRequestInventoryDiscoveryPlan.Create(), NewUrn(), Source(), budget),
+                Witness(),
+                CancellationToken.None);
+
+        Assert.IsFalse(inventory.Delivered, "the run could not afford the page its count implied.");
+        StringAssert.Contains(
+            inventory.Detail!,
+            nameof(EuEnumerationRefusal.WireBudgetExhausted),
+            "and it must have stopped on the CEILING, not on something else that also refuses.");
+
+        Assert.AreEqual(
+            budget.Limit, inventory.WireBudget.Spent, "every wire request the ceiling allowed.");
+        Assert.IsTrue(
+            inventory.WireBudget.Exhausted,
+            "THE FLAG A FINDING RESTS ON. A run that stopped at its ceiling and reports otherwise "
+                + "would be recorded as an ordinary refusal, and the magnitude nobody measured would "
+                + "go unnoticed.");
+        Assert.AreEqual(
+            handler.SendCount,
+            inventory.WireBudget.Spent,
+            "reconciled to the transport like every other snapshot: reservations are taken "
+                + "immediately before send, so at the ceiling they are exactly the sends.");
+    }
+
+    /// <summary>The public door refuses a null budget rather than reading one.</summary>
+    /// <remarks>
+    /// Kept where the result constructors' guards were removed, because the difference is
+    /// reachability: a caller compiling without nullable annotations reaches this without ever
+    /// writing <c>null!</c>. Asserted directly at the boundary, so the guard is a claim a test can
+    /// falsify rather than a line nothing drives.
+    /// </remarks>
+    [TestMethod]
+    public void TheSnapshotDoorRefusesANullBudget() =>
+        Assert.ThrowsExactly<ArgumentNullException>(() => WireBudgetSnapshot.Of(null!));
+
     /// <summary>A snapshot is a reading, not a handle on the budget it was read from.</summary>
     /// <remarks>
     /// Pinned on the type rather than only through a run: a result exposing

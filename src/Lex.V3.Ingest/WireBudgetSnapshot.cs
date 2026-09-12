@@ -57,6 +57,11 @@ public sealed record WireBudgetSnapshot
     /// </remarks>
     public static WireBudgetSnapshot Of(WireRequestBudget budget)
     {
+        // KEPT WHERE THE SIBLING GUARDS WERE REMOVED, and the difference is reachability rather
+        // than taste. This is the public door: a caller compiling without nullable annotations
+        // reaches it with a null nobody had to write `null!` for. The result constructors' guards
+        // went because their only callers are internal factories with non-nullable parameters, so
+        // nothing supported could ever drive them - a check no test can fail is an untested claim.
         ArgumentNullException.ThrowIfNull(budget);
         return new WireBudgetSnapshot(budget.Limit, budget.Spent);
     }

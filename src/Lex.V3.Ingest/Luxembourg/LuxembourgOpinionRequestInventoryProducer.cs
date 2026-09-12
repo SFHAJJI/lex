@@ -111,7 +111,7 @@ public sealed class LuxembourgOpinionRequestInventoryResult
         WireBudgetSnapshot wireBudget,
         IReadOnlyList<LuxembourgOpinionRequestSubject>? observedNonAddressable = null)
     {
-        WireBudget = wireBudget ?? throw new ArgumentNullException(nameof(wireBudget));
+        WireBudget = wireBudget;
         // SNAPSHOTTED, NOT ALIASED. A list handed out behind IReadOnlyList can be cast back and
         // mutated, which would change the members a later batch derives while the citation kept the
         // digest of the ORIGINAL population - so the batch and the citation it claims to come from
@@ -355,7 +355,6 @@ public sealed class LuxembourgOpinionRequestInventoryProducer
         int productRequestCount,
         WireBudgetSnapshot wireBudget)
     {
-        ArgumentNullException.ThrowIfNull(wireBudget);
         ArgumentNullException.ThrowIfNull(rows);
         ArgumentNullException.ThrowIfNull(profile);
         ArgumentNullException.ThrowIfNull(proof);
