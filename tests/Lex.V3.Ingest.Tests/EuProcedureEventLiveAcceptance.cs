@@ -292,8 +292,7 @@ public sealed class EuProcedureEventLiveAcceptance
             discovered.Length, discovered.Distinct(StringComparer.Ordinal).Count(),
             "the two discovered dossiers must be distinct.");
         Assert.IsTrue(
-            wideDossiers.Count >= discovered.Length
-                && wideDossiers.Take(discovered.Length).SequenceEqual(discovered, StringComparer.Ordinal),
+            WindowsAgree(discovered, wideDossiers),
             "the wider window must agree with the narrow one on its first rows, or the result set is "
             + "not stably ordered and neither window discovered anything: "
             + $"narrow=[{string.Join(", ", discovered)}] wide=[{string.Join(", ", wideDossiers)}]");
@@ -414,8 +413,39 @@ public sealed class EuProcedureEventLiveAcceptance
         return (request, body);
     }
 
+    /// <summary>
+    /// Whether the wider window agrees with the narrow one on the rows they share.
+    /// </summary>
+    /// <remarks>
+    /// LIFTED OUT OF THE GATED BODY SO IT CAN BE EXERCISED. Inline, this comparison was the whole
+    /// two-window equality claim and nothing offline ever ran it - the instrument stood unchecked
+    /// behind a guard that only proved it was wired up. Agreement is prefix equality in order: a
+    /// wider window of a stably ordered result set begins with the narrower one. A wide window
+    /// SHORTER than the narrow one is disagreement, not a pass by vacuity.
+    /// </remarks>
+    internal static bool WindowsAgree(
+        IReadOnlyList<string> narrow, IReadOnlyList<string> wide)
+    {
+        ArgumentNullException.ThrowIfNull(narrow);
+        ArgumentNullException.ThrowIfNull(wide);
+        if (narrow.Count == 0 || wide.Count < narrow.Count)
+        {
+            return false;
+        }
+
+        for (var index = 0; index < narrow.Count; index++)
+        {
+            if (!string.Equals(narrow[index], wide[index], StringComparison.Ordinal))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     /// <summary>Every <c>?dossier</c> IRI the publisher returned, in the order it returned them.</summary>
-    private static IReadOnlyList<string> ParseDossiers(ReadOnlySpan<byte> payload)
+    internal static IReadOnlyList<string> ParseDossiers(ReadOnlySpan<byte> payload)
     {
         using var document = JsonDocument.Parse(payload.ToArray());
         var rows = new List<string>();
