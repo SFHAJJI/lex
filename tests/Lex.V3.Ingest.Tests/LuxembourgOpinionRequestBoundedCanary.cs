@@ -121,7 +121,12 @@ public sealed class LuxembourgOpinionRequestBoundedCanary
                 + $"spent={batch.WireBudget.Spent}/{batch.WireBudget.Limit}");
         }
 
-        var verdict = LuxembourgOpinionRequestCanaryPlan.Conclude(decision, batch);
+        var reconciliation = LuxembourgOpinionRequestCanaryPlan.Reconcile(inventory, batch);
+        var verdict = LuxembourgOpinionRequestCanaryPlan.Conclude(decision, inventory, batch);
+        TestContext?.WriteLine(
+            $"reconciliation: spent={reconciliation.FinalBudgetSpent} "
+            + $"expected={reconciliation.ExpectedIfEverySessionCompleted} "
+            + $"reconciles={reconciliation.Reconciles}");
 
         var index = JsonSerializer.SerializeToUtf8Bytes(
             new
@@ -167,19 +172,12 @@ public sealed class LuxembourgOpinionRequestBoundedCanary
                         batch.WireBudget.Exhausted,
                     },
 
-                // RECONCILED, NOT ASSERTED. Spent counts reservations taken immediately before send,
-                // so for completed sessions it equals both runs' recorded requests plus one robots
-                // fetch per session. A mismatch here is a finding about the accounting itself.
-                reconciliation = new
-                {
-                    sessionsOpened = batch is null ? 1 : 2,
-                    recordedProductRequests = inventory.ProductRequestCount
-                        + (batch?.ProductRequestCount ?? 0),
-                    finalBudgetSpent = batch?.WireBudget.Spent ?? inventory.WireBudget.Spent,
-                    expectedIfEverySessionCompleted = inventory.ProductRequestCount
-                        + (batch?.ProductRequestCount ?? 0)
-                        + (batch is null ? 1 : 2),
-                },
+                // RECONCILED, AND THE COMPARISON IS COMPUTED RATHER THAN LEFT AS ARITHMETIC FOR A
+                // READER. Spent counts reservations taken immediately before send; the recorded
+                // count is incremented after each attempt by different code for a different reason.
+                // Their agreement is evidence exactly because two mechanisms produced it, and a
+                // mismatch is a finding about the accounting itself - so it is stated, not implied.
+                reconciliation,
                 root,
             },
             new JsonSerializerOptions { WriteIndented = true });

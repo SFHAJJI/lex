@@ -29,6 +29,66 @@ public sealed record LuxembourgOpinionRequestCanaryDecision(
     string Reason);
 
 /// <summary>
+/// The two independent accountings of what the canary sent, and whether they agree.
+/// </summary>
+/// <remarks>
+/// <para>
+/// TWO MECHANISMS, CHECKED AGAINST EACH OTHER. <see cref="FinalBudgetSpent"/> comes from the
+/// reservations the budget granted; <see cref="RecordedProductRequests"/> comes from the counter the
+/// glue increments after each attempt, plus one robots fetch per session opened. They are produced
+/// by different code for different reasons, which is the only thing that makes their agreement
+/// evidence rather than a restatement.
+/// </para>
+/// <para>
+/// <see cref="Reconciles"/> IS COMPUTED, NOT LEFT TO THE READER. The first head of this canary put
+/// both numbers in the evidence index side by side and said nothing about whether they matched, so
+/// noticing a drift required doing arithmetic in JSON - which is how a drift goes unnoticed at an
+/// acceptance gate.
+/// </para>
+/// </remarks>
+public sealed record LuxembourgOpinionRequestCanaryReconciliation
+{
+    internal LuxembourgOpinionRequestCanaryReconciliation(
+        int sessionsOpened,
+        int recordedProductRequests,
+        int finalBudgetSpent,
+        int expectedIfEverySessionCompleted)
+    {
+        SessionsOpened = sessionsOpened;
+        RecordedProductRequests = recordedProductRequests;
+        FinalBudgetSpent = finalBudgetSpent;
+        ExpectedIfEverySessionCompleted = expectedIfEverySessionCompleted;
+    }
+
+    /// <summary>Sessions the attempt opened, each of which sent one robots fetch.</summary>
+    public int SessionsOpened { get; }
+
+    /// <summary>Product attempts the producers recorded across those runs.</summary>
+    public int RecordedProductRequests { get; }
+
+    /// <summary>Reservations the shared budget granted, robots included.</summary>
+    public int FinalBudgetSpent { get; }
+
+    /// <summary>
+    /// What <see cref="FinalBudgetSpent"/> must equal when every reservation was followed by a
+    /// recorded attempt: the recorded product attempts plus one robots fetch per session.
+    /// </summary>
+    public int ExpectedIfEverySessionCompleted { get; }
+
+    /// <summary>
+    /// Whether the two accountings agree. DERIVED FROM THE COUNTS, never carried beside them.
+    /// </summary>
+    /// <remarks>
+    /// It was a constructor parameter on the first head, which made it a claim a caller could state
+    /// independently of the numbers it was supposed to summarise: a record reading
+    /// <c>(spent 33, expected 32, reconciles true)</c> was expressible, and the verdict believed it.
+    /// A boolean that can disagree with its own evidence is not a check, and the whole point of this
+    /// record is to BE the check.
+    /// </remarks>
+    public bool Reconciles => FinalBudgetSpent == ExpectedIfEverySessionCompleted;
+}
+
+/// <summary>
 /// The frozen bounded canary: one inventory run and at most one inventory-issued batch, under one
 /// shared ceiling.
 /// </summary>
@@ -120,16 +180,43 @@ public static class LuxembourgOpinionRequestCanaryPlan
     /// ran out is a different finding from a batch that refused on its own contents, and collapsing
     /// them would lose the only thing an under-budgeted attempt actually measured.
     /// </remarks>
+    public static LuxembourgOpinionRequestCanaryReconciliation Reconcile(
+        LuxembourgOpinionRequestInventoryResult inventory,
+        LuxembourgOpinionRequestGraphResult? batch)
+    {
+        ArgumentNullException.ThrowIfNull(inventory);
+
+        // ONE SESSION PER RUN THAT HAPPENED. The inventory always opens one; the batch opens one
+        // only if it ran at all, and the gate guarantees it had a reservation left to open it with.
+        var sessions = batch is null ? 1 : 2;
+        var recorded = inventory.ProductRequestCount + (batch?.ProductRequestCount ?? 0);
+        var spent = batch?.WireBudget.Spent ?? inventory.WireBudget.Spent;
+        var expected = recorded + sessions;
+
+        return new LuxembourgOpinionRequestCanaryReconciliation(
+            sessions, recorded, spent, expected);
+    }
+
     public static string Conclude(
         LuxembourgOpinionRequestCanaryDecision decision,
+        LuxembourgOpinionRequestInventoryResult inventory,
         LuxembourgOpinionRequestGraphResult? batch)
     {
         ArgumentNullException.ThrowIfNull(decision);
+        ArgumentNullException.ThrowIfNull(inventory);
 
         if (decision.BatchOrdinalsToAcquire.Count == 0 || batch is null)
         {
             return decision.Verdict;
         }
+
+        // DERIVED HERE, FROM THE RUNS BEING CONCLUDED. Taking a reconciliation as an argument made
+        // the gate caller-certified twice over: the record could assert agreement its own counts
+        // contradicted, and a record computed over one pair of runs could be handed to a verdict
+        // about another. Both were reachable, and my own test helper demonstrated the second by
+        // pairing an unrelated record with any result. A verdict that accepts its evidence from the
+        // caller is not checking anything; it is repeating what it was told.
+        var reconciliation = Reconcile(inventory, batch);
 
         // EXHAUSTION BEFORE COMPLETION, for the reason AfterInventory checks it first. A batch can
         // deliver on its very last reservation: the reservation is taken before the send, so the
@@ -141,6 +228,16 @@ public static class LuxembourgOpinionRequestCanaryPlan
         if (batch.WireBudget.Exhausted)
         {
             return "BudgetExhaustedDuringBatch";
+        }
+
+        // A MISMATCH OUTRANKS COMPLETION. A canary whose own two accountings disagree has not
+        // demonstrated the path, whatever its rows say: the numbers that would evidence the run are
+        // the numbers in dispute. Deliberately ranked BELOW exhaustion rather than above it - a
+        // reader of an exhausted run still sees Reconciles on the retained record, so nothing is
+        // hidden either way, and the reviewer asked for precedence over completion specifically.
+        if (!reconciliation.Reconciles)
+        {
+            return "AccountingDidNotReconcile";
         }
 
         return batch.Delivered ? "CanaryCompleted" : "BatchRefused";
