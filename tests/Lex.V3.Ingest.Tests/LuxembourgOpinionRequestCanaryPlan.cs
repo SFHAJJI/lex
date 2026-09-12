@@ -170,13 +170,20 @@ public static class LuxembourgOpinionRequestCanaryPlan
             sessions, recorded, spent, expected, spent == expected);
     }
 
-    /// <inheritdoc cref="Conclude(LuxembourgOpinionRequestCanaryDecision, LuxembourgOpinionRequestGraphResult?, LuxembourgOpinionRequestCanaryReconciliation?)"/>
     public static string Conclude(
         LuxembourgOpinionRequestCanaryDecision decision,
         LuxembourgOpinionRequestGraphResult? batch,
-        LuxembourgOpinionRequestCanaryReconciliation? reconciliation = null)
+        LuxembourgOpinionRequestCanaryReconciliation reconciliation)
     {
         ArgumentNullException.ThrowIfNull(decision);
+
+        // REQUIRED, AND GUARDED. The first head made this optional so existing call sites kept
+        // compiling, which put a default on the exact argument that decides whether the accounting
+        // gate runs: omitting it at the live runner compiled cleanly, passed all ten focused tests,
+        // and returned CanaryCompleted over a drift. A gate with a default is a gate that is off
+        // wherever somebody forgets it. Same reason WireBudgetSnapshot is a required constructor
+        // parameter one layer down - a lesson I had already applied and did not carry across.
+        ArgumentNullException.ThrowIfNull(reconciliation);
 
         if (decision.BatchOrdinalsToAcquire.Count == 0 || batch is null)
         {
@@ -200,7 +207,7 @@ public static class LuxembourgOpinionRequestCanaryPlan
         // the numbers in dispute. Deliberately ranked BELOW exhaustion rather than above it - a
         // reader of an exhausted run still sees Reconciles on the retained record, so nothing is
         // hidden either way, and the reviewer asked for precedence over completion specifically.
-        if (reconciliation is { Reconciles: false })
+        if (!reconciliation.Reconciles)
         {
             return "AccountingDidNotReconcile";
         }

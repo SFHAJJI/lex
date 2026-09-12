@@ -118,7 +118,7 @@ public sealed class LuxembourgOpinionRequestCanaryPlanTests
 
         Assert.AreEqual(
             "InventoryRefused",
-            LuxembourgOpinionRequestCanaryPlan.Conclude(stopped, batch: null),
+            LuxembourgOpinionRequestCanaryPlan.Conclude(stopped, batch: null, Agreeing()),
             "a canary that never reached a batch cannot conclude anything about batches.");
     }
 
@@ -148,7 +148,8 @@ public sealed class LuxembourgOpinionRequestCanaryPlanTests
                     LuxembourgOpinionRequestGraphRefusal.EnumerationRefused,
                     "stopped at the ceiling",
                     productRequestCount: 1,
-                    WireBudgetSnapshot.Of(spent))));
+                    WireBudgetSnapshot.Of(spent)),
+                Agreeing()));
 
         Assert.AreEqual(
             "BatchRefused",
@@ -158,7 +159,8 @@ public sealed class LuxembourgOpinionRequestCanaryPlanTests
                     LuxembourgOpinionRequestGraphRefusal.MatrixNotCompleted,
                     "the rows did not complete a matrix",
                     productRequestCount: 6,
-                    UnspentBudget())),
+                    UnspentBudget()),
+                Agreeing()),
             "a batch that had budget left refused on its own contents.");
     }
 
@@ -195,7 +197,8 @@ public sealed class LuxembourgOpinionRequestCanaryPlanTests
             LuxembourgOpinionRequestCanaryPlan.Conclude(
                 proceed,
                 LuxembourgOpinionRequestGraphResult.Completed(
-                    DeliveredCoverage(), productRequestCount: 1, snapshot)),
+                    DeliveredCoverage(), productRequestCount: 1, snapshot),
+                Agreeing()),
             "clause 6: a run that reached its ceiling is a magnitude finding even when its rows "
                 + "arrived, because the ceiling is what it actually measured.");
     }
@@ -324,6 +327,41 @@ public sealed class LuxembourgOpinionRequestCanaryPlanTests
         }
 
         return WireBudgetSnapshot.Of(budget);
+    }
+
+    /// <summary>
+    /// A reconciliation that agrees, for the cases that are not about the accounting.
+    /// </summary>
+    /// <remarks>
+    /// Passed explicitly rather than defaulted. The gate must not have a default: the first head
+    /// made it optional so these call sites kept compiling, and omitting it at the live runner then
+    /// returned <c>CanaryCompleted</c> over a drift while all ten of these tests still passed.
+    /// Isolating the variable is what a helper is for; making it disappear is not.
+    /// </remarks>
+    private static LuxembourgOpinionRequestCanaryReconciliation Agreeing() =>
+        LuxembourgOpinionRequestCanaryPlan.Reconcile(
+            DeliveredInventory(Subjects(120), SpentBudget(25)),
+            LuxembourgOpinionRequestGraphResult.Completed(
+                DeliveredCoverage(), productRequestCount: 6, SpentBudget(32)));
+
+    /// <summary>The gate cannot be bypassed by handing it nothing.</summary>
+    /// <remarks>
+    /// The compiler already refuses omission; this refuses an explicit null, which is the other half
+    /// of the same door and the one a caller can still write.
+    /// </remarks>
+    [TestMethod]
+    public void TheAccountingGateRefusesToBeHandedNothing()
+    {
+        var proceed = LuxembourgOpinionRequestCanaryPlan.AfterInventory(
+            DeliveredInventory(Subjects(120), UnspentBudget()));
+
+        Assert.ThrowsExactly<ArgumentNullException>(
+            () => LuxembourgOpinionRequestCanaryPlan.Conclude(
+                proceed,
+                LuxembourgOpinionRequestGraphResult.Completed(
+                    DeliveredCoverage(), productRequestCount: 6, UnspentBudget()),
+                null!),
+            "a verdict reached without the accounting is a verdict that never checked it.");
     }
 
     /// <summary>
