@@ -142,7 +142,8 @@ public sealed class LuxembourgDraftGraphLiveAcceptance
         var inventory = await new LuxembourgInitialDraftInventoryProducer(store, TimeProvider.System)
             .RunAsync(
                 new LuxembourgInitialDraftInventoryRunRequest(
-                    LuxembourgInitialDraftInventoryDiscoveryPlan.Create(), NewUrn(), rendererSource),
+                    LuxembourgInitialDraftInventoryDiscoveryPlan.Create(), NewUrn(), rendererSource,
+            LuxembourgAcquisitionTestFixture.TestWireBudget()),
                 witness,
                 CancellationToken.None);
 
@@ -166,7 +167,8 @@ public sealed class LuxembourgDraftGraphLiveAcceptance
         for (var ordinal = 0; ordinal < assignments.Count; ordinal++)
         {
             var batch = await producer.RunAsync(
-                LuxembourgDraftGraphRunRequest.ForBatch(plan, inventory, ordinal, NewUrn(), rendererSource),
+                LuxembourgDraftGraphRunRequest.ForBatch(plan, inventory, ordinal, NewUrn(), rendererSource,
+            LuxembourgAcquisitionTestFixture.TestWireBudget()),
                 witness,
                 CancellationToken.None);
 
@@ -308,7 +310,8 @@ public sealed class LuxembourgDraftGraphLiveAcceptance
                     inventory,
                     0,
                     NewUrn(),
-                    LuxembourgAcquisitionTestFixture.BuildRendererSource(9101)),
+                    LuxembourgAcquisitionTestFixture.BuildRendererSource(9101),
+            LuxembourgAcquisitionTestFixture.TestWireBudget()),
                 LuxembourgDraftGraphProducerTests.LuxembourgSourceWitness(),
                 CancellationToken.None);
 

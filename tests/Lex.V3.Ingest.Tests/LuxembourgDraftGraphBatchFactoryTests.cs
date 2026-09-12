@@ -68,7 +68,8 @@ public sealed class LuxembourgDraftGraphBatchFactoryTests
     {
         var (proof, bound) = Bound(InventoryFamily, rows);
         return LuxembourgInitialDraftInventoryProducer.DecodeRows(
-            bound, Profile, proof, "2026-09-10T07:29:37.8950843Z");
+            bound, Profile, proof, "2026-09-10T07:29:37.8950843Z",
+            LuxembourgAcquisitionTestFixture.TestBudgetSnapshot());
     }
 
 

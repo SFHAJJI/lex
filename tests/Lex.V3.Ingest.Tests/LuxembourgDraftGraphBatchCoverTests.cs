@@ -73,7 +73,8 @@ public sealed class LuxembourgDraftGraphBatchCoverTests
             [Subject(Prefix + "00001", keys[0]), Subject(Prefix + "00001", keys[1])],
             Profile,
             proof,
-            ObservedAt);
+            ObservedAt,
+            LuxembourgAcquisitionTestFixture.TestBudgetSnapshot());
     }
 
     private static LuxembourgInitialDraftInventoryResult Inventory(int subjects)
@@ -87,7 +88,8 @@ public sealed class LuxembourgDraftGraphBatchCoverTests
             .ToArray();
         var (proof, keys) = AbsenceFixtures.DeliveryOfSubjects(InventoryFamily, drafts);
         var rows = drafts.Select((draft, index) => Subject(draft, keys[index])).ToArray();
-        return LuxembourgInitialDraftInventoryProducer.DecodeRows(rows, Profile, proof, ObservedAt);
+        return LuxembourgInitialDraftInventoryProducer.DecodeRows(rows, Profile, proof, ObservedAt,
+            LuxembourgAcquisitionTestFixture.TestBudgetSnapshot());
     }
 
     /// <summary>One delivered batch: every draft answers statusDraft and nothing else.</summary>
@@ -182,7 +184,8 @@ public sealed class LuxembourgDraftGraphBatchCoverTests
         for (var ordinal = 0; ordinal < assigned.Count; ordinal++)
         {
             var request = LuxembourgDraftGraphRunRequest.ForBatch(
-                plan, inventory, ordinal, "urn:uuid:5c2f1a08-7d63-4e91-bf20-9a4c8e3d7016", source);
+                plan, inventory, ordinal, "urn:uuid:5c2f1a08-7d63-4e91-bf20-9a4c8e3d7016", source,
+            LuxembourgAcquisitionTestFixture.TestWireBudget());
 
             CollectionAssert.AreEqual(
                 assigned[ordinal].Drafts.ToArray(), request.BatchDrafts.ToArray());
@@ -192,10 +195,12 @@ public sealed class LuxembourgDraftGraphBatchCoverTests
         // And there is no ordinal that names drafts the inventory never contained.
         Assert.ThrowsExactly<ArgumentOutOfRangeException>(
             () => LuxembourgDraftGraphRunRequest.ForBatch(
-                plan, inventory, assigned.Count, "urn:uuid:5c2f1a08-7d63-4e91-bf20-9a4c8e3d7016", source));
+                plan, inventory, assigned.Count, "urn:uuid:5c2f1a08-7d63-4e91-bf20-9a4c8e3d7016", source,
+            LuxembourgAcquisitionTestFixture.TestWireBudget()));
         Assert.ThrowsExactly<ArgumentOutOfRangeException>(
             () => LuxembourgDraftGraphRunRequest.ForBatch(
-                plan, inventory, -1, "urn:uuid:5c2f1a08-7d63-4e91-bf20-9a4c8e3d7016", source));
+                plan, inventory, -1, "urn:uuid:5c2f1a08-7d63-4e91-bf20-9a4c8e3d7016", source,
+            LuxembourgAcquisitionTestFixture.TestWireBudget()));
     }
 
     /// <summary>A refused inventory cannot be swept, so it mints no conclusions either.</summary>
@@ -210,7 +215,8 @@ public sealed class LuxembourgDraftGraphBatchCoverTests
                 refused,
                 0,
                 "urn:uuid:5c2f1a08-7d63-4e91-bf20-9a4c8e3d7016",
-                LuxembourgAcquisitionTestFixture.BuildRendererSource(9702)));
+                LuxembourgAcquisitionTestFixture.BuildRendererSource(9702),
+            LuxembourgAcquisitionTestFixture.TestWireBudget()));
     }
 
     /// <summary>A complete sweep covers every subject's every property exactly once.</summary>

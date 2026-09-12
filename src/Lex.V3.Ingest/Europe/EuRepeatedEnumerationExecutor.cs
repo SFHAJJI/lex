@@ -341,8 +341,10 @@ public sealed record LuxembourgDraftGraphRunRequest
         LuxembourgDraftGraphDiscoveryPlan plan,
         LuxembourgDraftBatchAssignment assignment,
         string planResourceId,
-        MachineQueryRendererSource rendererSource)
+        MachineQueryRendererSource rendererSource,
+        WireRequestBudget wireBudget)
     {
+        WireBudget = wireBudget;
         Plan = plan;
         Assignment = assignment;
         PlanResourceId = planResourceId;
@@ -351,6 +353,15 @@ public sealed record LuxembourgDraftGraphRunRequest
 
     /// <summary>The inventory-issued batch this run sweeps.</summary>
     public LuxembourgDraftBatchAssignment Assignment { get; }
+
+    /// <summary>
+    /// This run's enforced ceiling, counted over robots, counts, pages and every attempt.
+    /// </summary>
+    /// <remarks>
+    /// Required, and carried on the request rather than at the entry point, so a batch cannot be run
+    /// unbudgeted by omission. <see cref="ForBatch"/> is the only construction door and refuses null.
+    /// </remarks>
+    public WireRequestBudget WireBudget { get; }
 
     public LuxembourgDraftGraphDiscoveryPlan Plan { get; }
 
@@ -379,9 +390,11 @@ public sealed record LuxembourgDraftGraphRunRequest
         LuxembourgInitialDraftInventoryResult inventory,
         int batchOrdinal,
         string planResourceId,
-        MachineQueryRendererSource rendererSource)
+        MachineQueryRendererSource rendererSource,
+        WireRequestBudget wireBudget)
     {
         ArgumentNullException.ThrowIfNull(plan);
+        ArgumentNullException.ThrowIfNull(wireBudget);
         ArgumentNullException.ThrowIfNull(inventory);
         ArgumentNullException.ThrowIfNull(rendererSource);
         ArgumentException.ThrowIfNullOrWhiteSpace(planResourceId);
@@ -403,7 +416,7 @@ public sealed record LuxembourgDraftGraphRunRequest
 
         _ = citation;
         return new LuxembourgDraftGraphRunRequest(
-            plan, batches[batchOrdinal], planResourceId, rendererSource);
+            plan, batches[batchOrdinal], planResourceId, rendererSource, wireBudget);
     }
 }
 
@@ -418,7 +431,21 @@ public sealed record LuxembourgDraftGraphRunRequest
 public sealed record LuxembourgInitialDraftInventoryRunRequest(
     LuxembourgInitialDraftInventoryDiscoveryPlan Plan,
     string PlanResourceId,
-    MachineQueryRendererSource RendererSource);
+    MachineQueryRendererSource RendererSource,
+    WireRequestBudget WireBudget)
+{
+    /// <summary>
+    /// This run's enforced ceiling, counted over robots, counts, pages and every attempt.
+    /// </summary>
+    /// <remarks>
+    /// REQUIRED, AND REFUSED AT CONSTRUCTION WHEN ABSENT. A positional record checks nothing of its
+    /// own, so documenting it as required would leave <c>new(..., null!)</c> reaching the pass loop
+    /// as an optional budget that was simply not supplied - the ceiling off, and nothing saying so.
+    /// The OpinionRequest inventory carried exactly that defect until it was repaired.
+    /// </remarks>
+    public WireRequestBudget WireBudget { get; } =
+        WireBudget ?? throw new ArgumentNullException(nameof(WireBudget));
+}
 
 /// <summary>
 /// One bounded enumeration of the OpinionRequest class's own subjects.
@@ -1144,6 +1171,17 @@ public sealed class EuRepeatedEnumerationExecutor
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(sourceWitness);
 
+        // THE SESSION'S ROBOTS FETCH, RESERVED BEFORE THE SESSION EXISTS. Same position and same
+        // reason as the OpinionRequest doors: StartSessionAsync sends robots as its first act, so
+        // this is the last point at which that request can be stopped rather than merely counted.
+        if (!request.WireBudget.TryReserveAttempt())
+        {
+            return EuEnumerationRunResult.Refused(
+                new EuEnumerationRefusalDetail(
+                    EuEnumerationRefusal.WireBudgetExhausted, null, null, null, null, null, null, null, null),
+                productRequestCount: 0);
+        }
+
         var session = await StartSessionAsync(sourceWitness, cancellationToken).ConfigureAwait(false);
         if (session is null)
         {
@@ -1171,7 +1209,8 @@ public sealed class EuRepeatedEnumerationExecutor
                     batchObjects: LuxembourgDraftGraphDiscoveryPlan.RequestedPartitionMembers(
                         request.BatchDrafts),
                     batchMembershipKeyOrdinal: 0,
-                    cancellationToken)
+                    cancellationToken,
+                    request.WireBudget)
                 .ConfigureAwait(false);
         }
         finally
@@ -1196,6 +1235,17 @@ public sealed class EuRepeatedEnumerationExecutor
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(sourceWitness);
 
+        // THE SESSION'S ROBOTS FETCH, RESERVED BEFORE THE SESSION EXISTS. Same position and same
+        // reason as the OpinionRequest doors: StartSessionAsync sends robots as its first act, so
+        // this is the last point at which that request can be stopped rather than merely counted.
+        if (!request.WireBudget.TryReserveAttempt())
+        {
+            return EuEnumerationRunResult.Refused(
+                new EuEnumerationRefusalDetail(
+                    EuEnumerationRefusal.WireBudgetExhausted, null, null, null, null, null, null, null, null),
+                productRequestCount: 0);
+        }
+
         var session = await StartSessionAsync(sourceWitness, cancellationToken).ConfigureAwait(false);
         if (session is null)
         {
@@ -1218,7 +1268,8 @@ public sealed class EuRepeatedEnumerationExecutor
                         BindLuxembourgInitialDraftInventoryPage(request, pass, cursor, selected, evidenceRef),
                     batchObjects: null,
                     batchMembershipKeyOrdinal: null,
-                    cancellationToken)
+                    cancellationToken,
+                    request.WireBudget)
                 .ConfigureAwait(false);
         }
         finally

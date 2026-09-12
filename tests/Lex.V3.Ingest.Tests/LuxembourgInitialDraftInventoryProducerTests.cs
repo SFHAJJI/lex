@@ -160,7 +160,8 @@ public sealed class LuxembourgInitialDraftInventoryProducerTests
     {
         var (proof, bound) = Bound(InventoryFamily, rows);
         return LuxembourgInitialDraftInventoryProducer.DecodeRows(
-            bound, Profile(), proof, "2026-09-10T13:50:31.0000000Z");
+            bound, Profile(), proof, "2026-09-10T13:50:31.0000000Z",
+            LuxembourgAcquisitionTestFixture.TestBudgetSnapshot());
     }
 
     /// <summary>
@@ -353,7 +354,8 @@ public sealed class LuxembourgInitialDraftInventoryProducerTests
             new LuxembourgInitialDraftInventoryRunRequest(
                 plan,
                 "urn:uuid:7c05e91a-2d38-4b64-8f17-90a3d51e6b2c",
-                LuxembourgAcquisitionTestFixture.BuildRendererSource(9302)),
+                LuxembourgAcquisitionTestFixture.BuildRendererSource(9302),
+            LuxembourgAcquisitionTestFixture.TestWireBudget()),
             LuxembourgSourceWitness(),
             CancellationToken.None);
 
@@ -562,7 +564,8 @@ public sealed class LuxembourgInitialDraftInventoryProducerTests
             new LuxembourgInitialDraftInventoryRunRequest(
                 plan,
                 "urn:uuid:5e1a9c37-84b0-4d26-9f75-3c60817ae4d2",
-                LuxembourgAcquisitionTestFixture.BuildRendererSource(9301)),
+                LuxembourgAcquisitionTestFixture.BuildRendererSource(9301),
+            LuxembourgAcquisitionTestFixture.TestWireBudget()),
             LuxembourgSourceWitness(),
             CancellationToken.None);
 

@@ -630,6 +630,8 @@ public sealed class GuardedConstructionCensusTests
                     + "method public instance Lex.V3.Ingest.WireBudgetSnapshot::<Clone>$, "
                     + "method public static Lex.V3.Ingest.WireBudgetSnapshot::Of",
                 "Lex.V3.Ingest.WireRequestBudget: by-ref-method public instance "
+                    + "Lex.V3.Ingest.Europe.LuxembourgInitialDraftInventoryRunRequest::Deconstruct, "
+                    + "by-ref-method public instance "
                     + "Lex.V3.Ingest.Europe.LuxembourgOpinionRequestInventoryRunRequest::Deconstruc"
                     + "t, constructor private instance Lex.V3.Ingest.WireRequestBudget::.ctor, "
                     + "method public static Lex.V3.Ingest.WireRequestBudget::OfWireRequests",
