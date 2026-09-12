@@ -195,6 +195,71 @@ public sealed class LuxembourgDraftBudgetEvidenceTests
     }
 
     /// <summary>
+    /// A refused batch's cost is retained before anything concludes.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// THE SAFETY-STOP PATH IS THE ONE THAT MOST NEEDS EVIDENCE, and the first version of the live
+    /// harness asserted delivery before assigning the stopped batch's attempts or snapshot to the
+    /// run totals - so on exactly the outcomes a bounded run exists to report, it retained no
+    /// terminal index at all.
+    /// </para>
+    /// <para>
+    /// Driven by a genuinely refused batch rather than a hand-made snapshot: the refusal comes from
+    /// a real producer run against a publisher that answers 503, so the numbers written here are the
+    /// ones a stopped run would actually carry.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public async Task ARefusedBatchHasItsCostRetainedBeforeAnythingConcludes()
+    {
+        var handler = new CountingHandler(_ => null);
+        var budget = WireRequestBudget.OfWireRequests(64);
+
+        var batch = await GraphProducer(handler).RunAsync(
+            GraphRequest(budget), LuxembourgSourceWitness(), CancellationToken.None);
+        Assert.IsFalse(batch.Delivered, "this publisher answered 503 to every product request.");
+
+        var root = Path.Combine(Path.GetTempPath(), "e8-terminal-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            await LuxembourgDraftGraphLiveAcceptance.RetainTerminalIndexAsync(
+                root,
+                new Lex.V3.Artifacts.FileSystemCustodyStore(root),
+                "BatchRefused",
+                batch.Refusal.ToString(),
+                batch.Detail,
+                stoppedOrdinal: 0,
+                batchesDelivered: 0,
+                batchesIssued: 3,
+                productRequests: batch.ProductRequestCount,
+                sessionsOpened: 1,
+                terminal: batch.WireBudget);
+
+            var written = await File.ReadAllTextAsync(Path.Combine(root, "terminal-index.json"));
+
+            StringAssert.Contains(written, "\"verdict\": \"BatchRefused\"");
+            StringAssert.Contains(written, "\"stoppedOrdinal\": 0", "the reader must not infer where it stopped.");
+            StringAssert.Contains(
+                written,
+                "\"actualHttpRequests\": " + batch.WireBudget.Spent,
+                "the count a stopped run exists to report.");
+            StringAssert.Contains(written, "\"wireCeiling\": " + batch.WireBudget.Limit);
+            StringAssert.Contains(written, "\"productRequests\": " + batch.ProductRequestCount);
+            StringAssert.Contains(written, "\"reconciles\":");
+            Assert.AreEqual(
+                handler.SendCount,
+                batch.WireBudget.Spent,
+                "and the retained figure is the transport's, not an invented one.");
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    /// <summary>
     /// The gated live harness builds exactly one budget, and never the offline helper's.
     /// </summary>
     /// <remarks>
@@ -235,6 +300,29 @@ public sealed class LuxembourgDraftBudgetEvidenceTests
             1,
             CountOf(sweep, "rendererSource, budget)"),
             "every batch takes the one instance the run created.");
+
+        // ORDERING AND COVERAGE, NOT MERELY PRESENCE. The first version of this guard compared the
+        // FIRST retain against the FIRST Assert.Fail, which passes while any earlier branch retains
+        // - so deleting the retain from the batch-refusal branch survived it. Mutants caught the
+        // guard, which is what they are for.
+        Assert.AreEqual(
+            3,
+            CountOf(sweep, "RetainTerminalIndexAsync("),
+            "one terminal index per outcome: inventory refusal, batch refusal, completed sweep. A "
+                + "missing one is a path that concludes without reporting what it spent.");
+
+        // The stopped batch's own cost is folded into the totals BEFORE the branch that stops on it,
+        // or a stopped run reports the cost of every batch except the one that stopped it.
+        var foldTotals = sweep.IndexOf(
+            "productRequests += batch.ProductRequestCount", StringComparison.Ordinal);
+        var decideStop = sweep.IndexOf(
+            "if (batch.Refusal !=", StringComparison.Ordinal);
+        Assert.IsGreaterThanOrEqualTo(0, foldTotals, "the sweep must total its product attempts.");
+        Assert.IsGreaterThanOrEqualTo(0, decideStop, "the sweep must stop on a refused batch.");
+        Assert.IsLessThan(
+            decideStop,
+            foldTotals,
+            "totals first, decision second: the batch that stopped the run still cost what it cost.");
     }
 
     /// <summary>The live sweep method's own text, from its signature to the next member.</summary>
