@@ -334,6 +334,28 @@ public sealed class LanguageScopedExpressionTests
             "and retained date bytes need a date to witness.");
     }
 
+    /// <summary>Every null argument on the lineage and set doors is a caller contract violation.</summary>
+    /// <remarks>
+    /// A mechanical sweep found all three of these guards undefended: dropping any of them survived
+    /// every test, because nothing here ever passed null to them.
+    /// </remarks>
+    [TestMethod]
+    public void EveryNullArgumentOnTheLineageAndSetDoorsIsRejected()
+    {
+        Assert.ThrowsExactly<ArgumentNullException>(
+            () => LanguageScopedExpressionLineage.FromContributions(null!),
+            "the lineage door takes no null sequence.");
+
+        Assert.ThrowsExactly<ArgumentNullException>(
+            () => LanguageScopedExpressionLineage.FromContributions(
+                [new(LanguageScopedExpressionContribution.IdentityAndLanguage, Receipt('1')), null!]),
+            "nor a null entry inside one.");
+
+        Assert.ThrowsExactly<ArgumentNullException>(
+            () => new LanguageScopedExpressionSet().TryAppend(null!, out _),
+            "and the set appends no null expression.");
+    }
+
     /// <summary>A caller cannot mutate the exposed collection, by any cast.</summary>
     /// <remarks>
     /// The reviewer's finding on the first head: exposing the backing <c>List</c> behind an

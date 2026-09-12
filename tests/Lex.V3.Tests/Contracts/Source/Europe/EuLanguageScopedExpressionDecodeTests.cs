@@ -230,6 +230,228 @@ public sealed class EuLanguageScopedExpressionDecodeTests
         Assert.IsEmpty(set.Expressions);
     }
 
+    /// <summary>
+    /// The date family failing to reopen refuses by its OWN name, carrying the door's reason.
+    /// </summary>
+    /// <remarks>
+    /// The mirror of <see cref="SubstitutedPageBytesRefuseRatherThanDecoding"/> for family P. It was
+    /// missing: a mechanical sweep found that replacing <c>DateRowsRefused</c> with <c>None</c>
+    /// survived every test, so the whole branch where the object-facts delivery will not reopen was
+    /// uncovered while its family-X twin was covered.
+    /// </remarks>
+    [TestMethod]
+    public void SubstitutedDatePageBytesRefuseByTheirOwnName()
+    {
+        var dateRows = new[] { PRow(WorkOne, WorkDateIri, "2016-05-04", XsdDate) };
+        var body = RowsJson(PProjection, dateRows);
+        var fixture = new RepeatedEnumerationDeliveryProofTests.Fixture(
+            rawRowsA: body, rawRowsB: body, expectedCount: dateRows.Length,
+            projectionVariables: PProjection, canonicalKeyVariables: PKey);
+        var delivery = fixture.Create(string.Empty, string.Empty);
+        var proof = AbsenceFamilyEnumerationProof.TryCreate(
+            "laws", delivery, CustodyMembership.Floored, out _);
+        Assert.IsNotNull(proof);
+
+        var substituted = fixture.Resolve(delivery.PagesA.Pages[0].Evidence) with
+        {
+            RetainedPayloadBytes = Encoding.UTF8.GetBytes(
+                RowsJson(PProjection, [PRow(WorkOne, WorkDateIri, "1999-01-01", XsdDate)])),
+        };
+
+        var set = new LanguageScopedExpressionSet();
+        var decoded = EuLanguageScopedExpressionDecode.TryDecode(
+            Bound(Expression(WorkOne, ExprFrench, French)),
+            new EuProofBoundDelivery(
+                proof!, delivery, fixture.ProfileForTest, delivery.InterpretationProfileRef,
+                delivery.CountA.HttpEvidenceRef, [substituted]),
+            SourceObject(), set, out var refusal, out var refusalDetail, out _);
+
+        Assert.IsNull(decoded);
+        Assert.AreEqual(
+            EuLanguageScopedExpressionDecodeRefusal.DateRowsRefused,
+            refusal,
+            "the date family's own refusal, not the expression family's and not None.");
+        Assert.IsNotNull(refusalDetail);
+        Assert.IsEmpty(set.Expressions);
+    }
+
+    /// <summary>
+    /// A null source object is a caller contract violation even when the delivery would refuse.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="EveryNullArgumentIsACallerContractViolation"/> cannot see this door's own guard: it
+    /// supplies a decodable delivery, so <c>FromRetainedSource</c>'s downstream guard throws the same
+    /// exception type and the test passes either way. Here the delivery refuses before any expression
+    /// is constructed, so the downstream guard never runs.
+    /// </remarks>
+    [TestMethod]
+    public void ANullSourceObjectThrowsEvenWhenTheDeliveryWouldRefuse() =>
+        Assert.ThrowsExactly<ArgumentNullException>(() => EuLanguageScopedExpressionDecode.TryDecode(
+            Bound([XRow(WorkOne, ExprEnglish, UsesLanguageIri, English)]),
+            null, null!, new LanguageScopedExpressionSet(), out _, out _, out _));
+
+    /// <summary>A family-X row whose parent is not an IRI breaks the shape family X promises.</summary>
+    /// <remarks>
+    /// This test existed on the first head and the rewrite onto proof-bound deliveries dropped it,
+    /// leaving <c>ExpressionRowTermKindMismatch</c> uncovered at its main raise-site.
+    /// </remarks>
+    [TestMethod]
+    public void AFamilyXRowWhoseShapeBreaksItsProfileRefuses()
+    {
+        var decoded = Decode(
+            new LanguageScopedExpressionSet(),
+            [XRowWithLiteralParent(WorkOne, ExprEnglish, BelongsToWorkIri, WorkOne)],
+            out var refusal,
+            out _);
+
+        Assert.IsNull(decoded);
+        Assert.AreEqual(
+            EuLanguageScopedExpressionDecodeRefusal.ExpressionRowTermKindMismatch, refusal);
+    }
+
+    /// <summary>A parent IRI the pack-root form cannot canonicalize refuses, naming it.</summary>
+    [TestMethod]
+    public void AParentIriThatCannotBeCanonicalizedRefuses()
+    {
+        const string Unusable = WorkOne + "?version=2";
+        var decoded = Decode(
+            new LanguageScopedExpressionSet(),
+            [XRow(Unusable, ExprEnglish, BelongsToWorkIri, Unusable)],
+            out var refusal,
+            out var offending);
+
+        Assert.IsNull(decoded);
+        Assert.AreEqual(
+            EuLanguageScopedExpressionDecodeRefusal.ExpressionRowTermKindMismatch, refusal);
+        Assert.AreEqual(Unusable, offending, "the refusal must name the IRI it could not use.");
+    }
+
+    /// <summary>
+    /// A belongs-to-work value differing from the parent only in case is a different IRI.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="ABelongsToWorkValueDisagreeingWithTheParentColumnRefuses"/> uses two entirely
+    /// different works, so it cannot see whether the comparison is case-sensitive. IRI paths are.
+    /// </remarks>
+    [TestMethod]
+    public void ABelongsToWorkValueDifferingOnlyByCaseIsADifferentWork()
+    {
+        var shouted = WorkOne.Replace("3e485e15", "3E485E15", StringComparison.Ordinal);
+        Assert.AreNotEqual(WorkOne, shouted);
+
+        var decoded = Decode(
+            new LanguageScopedExpressionSet(),
+            [
+                XRow(WorkOne, ExprEnglish, BelongsToWorkIri, shouted),
+                XRow(WorkOne, ExprEnglish, UsesLanguageIri, English),
+            ],
+            out var refusal,
+            out _);
+
+        Assert.IsNull(decoded);
+        Assert.AreEqual(
+            EuLanguageScopedExpressionDecodeRefusal.ExpressionWorkDisagreesWithBelongsToWork, refusal);
+    }
+
+    /// <summary>A language delivered as a literal is not a language authority IRI.</summary>
+    [TestMethod]
+    public void ALanguageValueDeliveredAsALiteralRefuses()
+    {
+        var decoded = Decode(
+            new LanguageScopedExpressionSet(),
+            [
+                XRow(WorkOne, ExprEnglish, BelongsToWorkIri, WorkOne),
+                XLiteralRow(WorkOne, ExprEnglish, UsesLanguageIri, "ENG", XsdString),
+            ],
+            out var refusal,
+            out var offending);
+
+        Assert.IsNull(decoded);
+        Assert.AreEqual(
+            EuLanguageScopedExpressionDecodeRefusal.ExpressionRowTermKindMismatch, refusal);
+        Assert.AreEqual(ExprEnglish, offending);
+    }
+
+    /// <summary>One language stated twice identically is idempotent, not a conflict.</summary>
+    /// <remarks>Dropped by the rewrite; its absence left the idempotence path uncovered.</remarks>
+    [TestMethod]
+    public void RepresentingOneLanguageTwiceIsNotAConflict()
+    {
+        var decoded = Decode(
+            new LanguageScopedExpressionSet(),
+            [
+                .. Expression(WorkOne, ExprEnglish, English),
+                XRow(WorkOne, ExprEnglish, UsesLanguageIri, English),
+            ],
+            out var refusal,
+            out _,
+            canonicalKey: ["parent", "object", "predicate", "value", "cursor"]);
+
+        Assert.AreEqual(EuLanguageScopedExpressionDecodeRefusal.None, refusal);
+        Assert.IsNotNull(decoded);
+        Assert.HasCount(1, decoded, "the same language stated twice is one expression.");
+    }
+
+    /// <summary>The date family's page policy is guarded exactly as the expression family's is.</summary>
+    [TestMethod]
+    public void ADateFamilyWhosePagePolicyHidesBoundariesRefusesRatherThanGuessing()
+    {
+        var decoded = EuLanguageScopedExpressionDecode.TryDecode(
+            Bound(Expression(WorkOne, ExprFrench, French)),
+            BoundPagedObjectFacts(
+                [
+                    PRow(WorkOne, CelexIri, "32016R0679", XsdString),
+                    PRow(WorkOne, WorkDateIri, "2016-05-04", XsdDate),
+                ],
+                rowLimitA: 1,
+                rowLimitB: 2,
+                RepeatedEnumerationTerminalPagePolicy.EmptySuccessorAfterShortPage),
+            SourceObject(), new LanguageScopedExpressionSet(), out var refusal, out _, out _);
+
+        Assert.IsNull(decoded);
+        Assert.AreEqual(EuLanguageScopedExpressionDecodeRefusal.PageAttributionUnavailable, refusal);
+    }
+
+    /// <summary>An object-facts row whose subject is not an IRI breaks its promised shape.</summary>
+    /// <remarks>
+    /// <see cref="ADateBoundToAnIriRefusesRatherThanBeingCoerced"/> reaches a different raise-site of
+    /// the same refusal member, which is why this one was uncovered.
+    /// </remarks>
+    [TestMethod]
+    public void AnObjectFactRowWhoseShapeBreaksItsProfileRefuses()
+    {
+        var decoded = DecodeWithDates(
+            Expression(WorkOne, ExprFrench, French),
+            [PRowWithLiteralObject(WorkOne, WorkDateIri, "2016-05-04", XsdDate)],
+            out var refusal);
+
+        Assert.IsNull(decoded);
+        Assert.AreEqual(EuLanguageScopedExpressionDecodeRefusal.WorkDateRowTermKindMismatch, refusal);
+    }
+
+    /// <summary>One date stated twice identically is idempotent, not a conflict.</summary>
+    /// <remarks>
+    /// Dropped by the rewrite. The canonical key here includes the cursor, because two rows agreeing
+    /// on subject, predicate and value cannot otherwise be delivered - <c>VerifyPages</c> requires
+    /// canonical keys to be unique, which is itself why this case needs saying out loud.
+    /// </remarks>
+    [TestMethod]
+    public void OneDateRepeatedIdenticallyIsNotAConflict()
+    {
+        var decoded = DecodeWithDates(
+            Expression(WorkOne, ExprFrench, French),
+            [
+                PRow(WorkOne, WorkDateIri, "2016-05-04", XsdDate),
+                PRow(WorkOne, WorkDateIri, "2016-05-04", XsdDate),
+            ],
+            out var refusal,
+            objectFactsKey: ["object", "predicate", "value", "cursor"]);
+
+        Assert.AreEqual(EuLanguageScopedExpressionDecodeRefusal.None, refusal);
+        Assert.IsNotNull(decoded);
+        Assert.AreEqual("2016-05-04", decoded[0].PublisherCorrigendumDate!.RawLexical);
+    }
+
     /// <summary>Every expression's lineage is the delivery's own reopened page receipts.</summary>
     [TestMethod]
     public void LineageIsBuiltFromTheReopenedPagesRatherThanAnyCallerChoice()
@@ -820,9 +1042,11 @@ public sealed class EuLanguageScopedExpressionDecodeTests
         LanguageScopedExpressionSet into,
         IReadOnlyList<string> expressionRows,
         out EuLanguageScopedExpressionDecodeRefusal refusal,
-        out string? offendingIri) =>
+        out string? offendingIri,
+        IReadOnlyList<string>? canonicalKey = null) =>
         EuLanguageScopedExpressionDecode.TryDecode(
-            Bound(expressionRows), null, SourceObject(), into, out refusal, out _, out offendingIri);
+            Bound(expressionRows, canonicalKey), null, SourceObject(), into,
+            out refusal, out _, out offendingIri);
 
     private static IReadOnlyList<LanguageScopedExpression>? DecodeWithDates(
         IReadOnlyList<string> expressionRows,
@@ -888,11 +1112,16 @@ public sealed class EuLanguageScopedExpressionDecodeTests
     }
 
     private static EuProofBoundDelivery BoundPagedObjectFacts(
-        IReadOnlyList<string> rows, int rowLimitA, int rowLimitB)
+        IReadOnlyList<string> rows,
+        int rowLimitA,
+        int rowLimitB,
+        RepeatedEnumerationTerminalPagePolicy terminalPagePolicy =
+            RepeatedEnumerationTerminalPagePolicy.ShortPageTerminal)
     {
         var fixture = new RepeatedEnumerationDeliveryProofTests.Fixture(
             expectedCount: rows.Count,
             maximumDeliverableRows: 999,
+            terminalPagePolicy: terminalPagePolicy,
             projectionVariables: PProjection,
             canonicalKeyVariables: PKey);
         var delivery = fixture.CreatePagedRaw(
@@ -909,9 +1138,10 @@ public sealed class EuLanguageScopedExpressionDecodeTests
             delivery.CountA.HttpEvidenceRef, Pages(fixture, delivery));
     }
 
-    private static EuProofBoundDelivery Bound(IReadOnlyList<string> rows)
+    private static EuProofBoundDelivery Bound(
+        IReadOnlyList<string> rows, IReadOnlyList<string>? canonicalKey = null)
     {
-        var fixture = XFixture(rows);
+        var fixture = XFixture(rows, canonicalKey);
         var delivery = fixture.Create(string.Empty, string.Empty);
         var proof = AbsenceFamilyEnumerationProof.TryCreate(
             "laws", delivery, CustodyMembership.Floored, out var proofRefusal);
@@ -946,7 +1176,13 @@ public sealed class EuLanguageScopedExpressionDecodeTests
             delivery.CountA.HttpEvidenceRef, Pages(fixture, delivery));
     }
 
-    private static RepeatedEnumerationDeliveryProofTests.Fixture XFixture(IReadOnlyList<string> rows)
+    /// <param name="canonicalKey">
+    /// Defaults to parent/object/predicate/value. A delivery that repeats a row identically on all
+    /// four cannot be minted under that key - <c>VerifyPages</c> requires canonical keys to be
+    /// unique - so tests about idempotent repetition widen it to include the cursor.
+    /// </param>
+    private static RepeatedEnumerationDeliveryProofTests.Fixture XFixture(
+        IReadOnlyList<string> rows, IReadOnlyList<string>? canonicalKey = null)
     {
         var body = RowsJson(XProjection, rows);
         return new RepeatedEnumerationDeliveryProofTests.Fixture(
@@ -954,7 +1190,7 @@ public sealed class EuLanguageScopedExpressionDecodeTests
             rawRowsB: body,
             expectedCount: rows.Count,
             projectionVariables: XProjection,
-            canonicalKeyVariables: XKey);
+            canonicalKeyVariables: canonicalKey ?? XKey);
     }
 
     private static IReadOnlyList<RepeatedEnumerationResolvedEvidence> Pages(
@@ -1008,6 +1244,27 @@ public sealed class EuLanguageScopedExpressionDecodeTests
             ("object", Uri(objectIri)),
             ("predicate", Uri(predicateIri)),
             ("value_kind", Literal("unbound", null)));
+
+    /// <summary>A family-X row whose parent arrives as a literal: not the shape X promises.</summary>
+    private static string XRowWithLiteralParent(
+        string parentIri, string expressionIri, string predicateIri, string valueIri) =>
+        Binding(
+            ("parent", Literal(parentIri, XsdString)),
+            ("object", Uri(expressionIri)),
+            ("predicate", Uri(predicateIri)),
+            ("value", Uri(valueIri)),
+            ("value_kind", Literal("iri", null)),
+            ("datatype_iri", Literal(string.Empty, null)),
+            ("language_tag", Literal(string.Empty, null)));
+
+    /// <summary>An object-facts row whose subject arrives as a literal.</summary>
+    private static string PRowWithLiteralObject(
+        string objectIri, string predicateIri, string value, string datatype) =>
+        Binding(
+            ("object", Literal(objectIri, XsdString)),
+            ("predicate", Uri(predicateIri)),
+            ("value", Literal(value, datatype)),
+            ("value_kind", Literal("literal", null)));
 
     private static string PIriRow(string objectIri, string predicateIri, string valueIri) =>
         Binding(
