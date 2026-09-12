@@ -98,6 +98,82 @@ public sealed class EuAnnexBodyDispositionTests
     }
 
     [TestMethod]
+    public void AnOfficialRedirectRetainsItsStartAndEffectiveAddresses()
+    {
+        var fixture = Fixture();
+        var terminalUri = fixture.Address.ResourceUri + "?download=1";
+        var terminalRequest = HttpLogicalRequest.Create(
+            terminalUri,
+            HttpRequestMethod.Get,
+            [
+                new HttpLogicalRequestHeader("accept", fixture.Address.Accept),
+                new HttpLogicalRequestHeader("accept-language", fixture.Address.AcceptLanguage),
+            ],
+            new HttpLogicalRequestBody(0, EmptyDigest),
+            Digest('1'),
+            Digest('2'));
+        var requestDigest = Sha256(terminalRequest.CopyCanonicalBytes());
+        var firstReceipt = Receipt(EmptyDigest, 0);
+        const string firstHopId = "urn:uuid:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+        var first = RoutedHttpHop.Create(
+            0,
+            firstHopId,
+            null,
+            requestDigest,
+            fixture.Address.ResourceUri,
+            301,
+            RedirectHeaders(terminalUri),
+            "2026-09-12T20:00:00.0000000Z",
+            "2026-09-12T20:00:01.0000000Z",
+            new DeclaredContentLengthHttpCompletion(0),
+            0,
+            EmptyDigest,
+            DurableBlobWriteReceiptDigest.Of(firstReceipt),
+            0,
+            EmptyDigest);
+        var terminal = RoutedHttpHop.Create(
+            1,
+            "urn:uuid:cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+            firstHopId,
+            requestDigest,
+            terminalUri,
+            200,
+            Headers(),
+            "2026-09-12T20:00:02.0000000Z",
+            "2026-09-12T20:00:03.0000000Z",
+            new DeclaredContentLengthHttpCompletion(3),
+            3,
+            Digest('a'),
+            DurableBlobWriteReceiptDigest.Of(fixture.Receipt),
+            3,
+            Digest('a'));
+        var evidence = RoutedHttpEvidence.Create(
+            ArtifactRef('5', '6'),
+            1,
+            0,
+            [first, terminal],
+            new CompleteHttpRouteOutcome(),
+            new Dictionary<string, DurableBlobWriteReceipt>
+            {
+                [first.ObservationId] = firstReceipt,
+                [terminal.ObservationId] = fixture.Receipt,
+            });
+
+        var disposition = EuAnnexBodyDisposition.Create(
+            fixture.SourceObject,
+            fixture.Location,
+            fixture.Address,
+            terminalRequest,
+            evidence,
+            fixture.Receipt,
+            fixture.ProfileRef,
+            EuAnnexBodyDispositionOutcome.TextNotAvailable);
+
+        Assert.AreEqual(fixture.Address.ResourceUri, disposition.SourceObservation.RequestedUri);
+        Assert.AreEqual(terminalUri, disposition.SourceObservation.EffectiveUri);
+    }
+
+    [TestMethod]
     public void AnAddressWithAnUnrequestedLanguageHeaderIsRejected()
     {
         var fixture = Fixture();
@@ -337,6 +413,25 @@ public sealed class EuAnnexBodyDispositionTests
             absent,
             absent,
             absent,
+            absent,
+            absent,
+            absent,
+            absent,
+            absent);
+    }
+
+    private static RoutedHttpResponseHeaders RedirectHeaders(string location)
+    {
+        var absent = new RoutedHttpAbsentHeader();
+        return new RoutedHttpResponseHeaders(
+            absent,
+            new RoutedHttpSingleHeader("0"),
+            absent,
+            absent,
+            absent,
+            absent,
+            absent,
+            new RoutedHttpSingleHeader(location),
             absent,
             absent,
             absent,
