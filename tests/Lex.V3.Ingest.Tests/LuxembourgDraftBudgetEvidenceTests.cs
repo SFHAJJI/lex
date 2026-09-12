@@ -419,6 +419,21 @@ public sealed class LuxembourgDraftBudgetEvidenceTests
                 + "why this batch is the distinguishing one.");
 
         // Terminal accounting is written BEFORE the run can conclude, so a refusal reports its cost.
+        // NOTHING CONCLUDES BETWEEN THE RUN AND THE RECORD. Stated as the mechanism rather than as
+        // a list of the exits I happened to find: the endpoint restriction was asserted above the
+        // summary and no guard saw it, because the guards named the refusal exit specifically. Any
+        // assertion in this window can fail the run before its cost is on disk, so the window must
+        // contain none.
+        var runCall = source.IndexOf("await producer.RunAsync(", StringComparison.Ordinal);
+        var evidenceWrite = source.IndexOf("WriteAllTextAsync(", StringComparison.Ordinal);
+        Assert.IsGreaterThanOrEqualTo(0, runCall, "the canary must run the producer.");
+        Assert.IsGreaterThanOrEqualTo(0, evidenceWrite, "the canary must retain a summary.");
+        Assert.IsLessThan(evidenceWrite, runCall, "the record is written after the run.");
+        Assert.AreEqual(
+            0,
+            CountOf(source[runCall..evidenceWrite], "Assert."),
+            "no assertion may stand between the producer returning and its cost being retained.");
+
         // The LAST Inconclusive is the refusal exit; the first is the enable gate at the top of the
         // method, which every gated harness has and which proves nothing about ordering.
         var summary = source.IndexOf("actual_http_requests=", StringComparison.Ordinal);
