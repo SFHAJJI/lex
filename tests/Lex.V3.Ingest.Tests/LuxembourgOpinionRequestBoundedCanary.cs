@@ -121,8 +121,11 @@ public sealed class LuxembourgOpinionRequestBoundedCanary
                 + $"spent={batch.WireBudget.Spent}/{batch.WireBudget.Limit}");
         }
 
-        var reconciliation = LuxembourgOpinionRequestCanaryPlan.Reconcile(inventory, batch);
-        var verdict = LuxembourgOpinionRequestCanaryPlan.Conclude(decision, inventory, batch);
+        // N = 1 OR 0. The canary acquires at most one batch, and passes exactly what it acquired
+        // to the same accounting the full sweep uses.
+        LuxembourgOpinionRequestGraphResult[] acquired = batch is null ? [] : [batch];
+        var reconciliation = LuxembourgOpinionRequestCanaryPlan.Reconcile(inventory, acquired);
+        var verdict = LuxembourgOpinionRequestCanaryPlan.Conclude(decision, inventory, acquired);
         TestContext?.WriteLine(
             $"reconciliation: spent={reconciliation.FinalBudgetSpent} "
             + $"expected={reconciliation.ExpectedIfEverySessionCompleted} "
