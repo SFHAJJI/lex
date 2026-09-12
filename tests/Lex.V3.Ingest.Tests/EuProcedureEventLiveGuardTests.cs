@@ -319,6 +319,100 @@ public sealed class EuProcedureEventLiveGuardTests
             "the send bound must not be derived from sessions that opened.");
     }
 
+    /// <summary>
+    /// The endpoint negative is over requests this run made, and it cannot pass vacuously.
+    /// </summary>
+    /// <remarks>
+    /// BOTH HALVES WERE WRONG AND I FOUND IT MYSELF, measured against the integrated draft packet.
+    /// An earlier head scanned every <c>http(s)://</c> occurrence in every retained file, which
+    /// conflates quoting a URL with contacting it: that packet records 924 request URIs, all of them
+    /// the one authorized endpoint, while MENTIONING <c>purl.org</c>, <c>github.com</c> and
+    /// <c>www.chd.lu</c> as data in retained payloads. The scan would have failed this run after the
+    /// traffic was spent, on a host a response body quoted - and the allowlist I had bolted on named
+    /// exactly the three hosts I happened to have seen.
+    /// </remarks>
+    /// <remarks>
+    /// The second half: an empty offender list proves nothing if the scan found no requests at all,
+    /// which is the same vacuity as a recorded digest nobody compared. The integrated harness guards
+    /// it explicitly and I had not copied that assertion.
+    /// </remarks>
+    [TestMethod]
+    public void TheEndpointNegativeIsOverRequestsAndIsNotVacuous()
+    {
+        var code = CodeOnly(HarnessSource());
+
+        Assert.AreEqual(
+            1, CountOf(code, "const string RequestMarker = \"" + "\\" + "\"request_uri" + "\\" + "\"\";"),
+            "the negative reads recorded request URIs, not every URL in the packet.");
+        Assert.AreEqual(
+            1, CountOf(code, "the scan must actually find request targets"),
+            "and it refuses to pass on a scan that found nothing.");
+        Assert.AreEqual(
+            1, CountOf(code, "Assert.IsNotEmpty(\n            targets,"),
+            "that refusal is an assertion, not a comment.");
+
+        Assert.AreEqual(
+            1, CountOf(code, "profile.RobotsRoute.Steps.Select(static step => step.RequestedUri)"),
+            "the admitted set derives from the profile's declared robots route.");
+
+        // THE WHOLE SET, NOT JUST ITS SOURCE. Deriving the robots steps from the profile and then
+        // adding a fourth entry would satisfy every assertion above, so the returned set is pinned
+        // exactly: the endpoint this run posts to, and those declared steps, and nothing else.
+        Assert.AreEqual(
+            1, CountOf(code, "return [EuQueryUri, .. steps];"),
+            "the admitted set is exactly the endpoint and the declared route steps.");
+        Assert.AreEqual(
+            1, CountOf(code, "2, steps,"),
+            "and the route is required to still be the two steps the send bound rests on.");
+        Assert.AreEqual(
+            0, CountOf(code, "AdmittedHosts"),
+            "no hand-listed host allowlist survives, which is what made the old scan fragile.");
+        Assert.AreEqual(
+            0, CountOf(code, "text.IndexOfAny(['/', '\\\"',"),
+            "and nothing scans for bare host substrings any more.");
+
+        var targetsFound = code.IndexOf("Assert.IsNotEmpty(\n            targets,", StringComparison.Ordinal);
+        var offendingJudged = code.IndexOf("Assert.IsEmpty(\n            offending,", StringComparison.Ordinal);
+        Assert.IsGreaterThan(0, targetsFound, "the non-vacuity assertion was not found.");
+        Assert.IsGreaterThan(
+            targetsFound, offendingJudged,
+            "non-vacuity is established before the negative it qualifies is believed.");
+    }
+
+    /// <summary>
+    /// The request keeps the raw spellings; interpretation and judgement use the canonical ones.
+    /// </summary>
+    /// <remarks>
+    /// The producer publishes and answers under the canonical HTTP spelling, so interpreting or
+    /// judging with the publisher's raw spelling would fault a valid noncanonical discovery after
+    /// acquisition had already completed. Both lists exist precisely so each is used where it
+    /// belongs, and a guard that only checked one of them would not notice them being swapped.
+    /// </remarks>
+    [TestMethod]
+    public void RawSpellingsAreRequestedAndCanonicalOnesAreInterpreted()
+    {
+        var code = CodeOnly(HarnessSource());
+
+        Assert.AreEqual(
+            1, CountOf(code, "outcome.Discovered!,"),
+            "the producer request carries the exact discovered spellings.");
+        Assert.AreEqual(
+            2, CountOf(code, "foreach (var dossier in outcome.CanonicalDiscovered!)"),
+            "and both the interpretation and the coverage judgement use the canonical list.");
+        Assert.AreEqual(
+            0, CountOf(code, "foreach (var dossier in outcome.Discovered!)"),
+            "neither iterates the raw list, which the producer does not key its answer by.");
+        Assert.AreEqual(
+            1, CountOf(code, "production.EventsOf(dossier)"),
+            "interpretation asks EventsOf once, inside the canonical loop.");
+
+        var interpretation = code.IndexOf("production.EventsOf(dossier)", StringComparison.Ordinal);
+        var canonicalLoop = code.IndexOf(
+            "foreach (var dossier in outcome.CanonicalDiscovered!)", StringComparison.Ordinal);
+        Assert.IsGreaterThan(0, canonicalLoop, "the canonical loop was not found.");
+        Assert.IsGreaterThan(canonicalLoop, interpretation, "and EventsOf sits inside it.");
+    }
+
     /// <summary>One environment read, and it is the gate.</summary>
     [TestMethod]
     public void ExactlyOneEnvironmentReadAndItIsTheGate()

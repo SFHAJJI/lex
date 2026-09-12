@@ -107,9 +107,6 @@ public sealed class EuProcedureEventLiveAcceptance
     private const string CdmPrefix = "http://publications.europa.eu/ontology/cdm#";
     private const string HarnessFileName = "EuProcedureEventLiveAcceptance.cs";
 
-    /// <summary>The hosts this operation may contact: the endpoint and its robots redirect target.</summary>
-    private static readonly string[] AdmittedHosts = ["publications.europa.eu", "op.europa.eu"];
-
     private static readonly byte[] ContentTypeRegistryBytes = Encoding.UTF8.GetBytes(
         "{\"schema\":\"e8-eu-discovery-content-type-registry/1\","
         + "\"members\":[\"application/sparql-query\"]}\n");
@@ -268,7 +265,15 @@ public sealed class EuProcedureEventLiveAcceptance
 
             // INTERPRETATION IS LAST, AND IT CAN THROW: EventsOf throws on a dossier the delivered
             // result does not carry, which is exactly the mismatch a packet most needs to record.
-            foreach (var dossier in outcome.Discovered!)
+            //
+            // AND IT IS ASKED IN CANONICAL FORM. The producer publishes and answers under the
+            // canonical HTTP spelling - the integrated contract
+            // ADossierRequestedNonCanonicallyIsAnsweredUnderItsCanonicalForm proves exactly that -
+            // so interpreting with the publisher's raw spelling would throw on any valid
+            // noncanonical discovery, such as an https or trailing-slash IRI. That would be
+            // recorded Faulted for a discovery this run had correctly admitted. The request keeps
+            // the exact discovered spellings; the interpretation uses the canonical ones.
+            foreach (var dossier in outcome.CanonicalDiscovered!)
             {
                 var candidate = production.EventsOf(dossier).FirstOrDefault(
                     static observation => observation.ObservedTypeIris.Count > 0
@@ -304,11 +309,37 @@ public sealed class EuProcedureEventLiveAcceptance
         }
 
         // ---- JUDGEMENT, UNCONDITIONAL AND ENTIRELY AFTER THE TERMINAL WRITE ------------------
-        var offenders = OffendingHosts(root);
+        // THE NEGATIVE IS OVER REQUESTS, NOT OVER MENTIONS. An earlier head scanned every
+        // http(s):// occurrence in every retained file, which conflates quoting a URL with
+        // contacting it. Measured against the integrated draft packet, that scan would have flagged
+        // purl.org, github.com and www.chd.lu - all present as DATA in retained payloads, with
+        // every one of the 924 recorded request URIs being the single authorized endpoint. It would
+        // have failed this run after the traffic was spent, on a host a response body quoted.
+        var admitted = AdmittedRequestTargets();
+        var targets = new List<string>();
+        var offending = new List<string>();
+        foreach (var file in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
+        {
+            var text = Encoding.UTF8.GetString(await File.ReadAllBytesAsync(file));
+            foreach (var target in RequestTargetsIn(text))
+            {
+                targets.Add(target);
+                if (!admitted.Contains(target, StringComparer.Ordinal))
+                {
+                    offending.Add(Path.GetFileName(file)[..12] + " -> " + target);
+                }
+            }
+        }
+
+        // NON-VACUOUS. An empty offender list is only evidence if the scan found requests at all;
+        // a changed evidence layout would otherwise satisfy this negative by finding nothing.
+        Assert.IsNotEmpty(
+            targets,
+            "the scan must actually find request targets, or this endpoint negative is vacuous.");
         Assert.IsEmpty(
-            offenders,
-            "this operation may contact the SPARQL endpoint and its robots redirect target and "
-            + "nothing else: " + string.Join("; ", offenders.Take(10)));
+            offending,
+            "this operation may request the SPARQL endpoint and its declared robots route steps and "
+            + "nothing else: " + string.Join("; ", offending.Take(10)));
 
         // EVERY CONTROLLED STOP FAILS HERE. This is the assertion an early return used to skip.
         Assert.AreEqual(
@@ -337,11 +368,13 @@ public sealed class EuProcedureEventLiveAcceptance
             outcome.CompletionEvidenceSha256,
             "provenance: a delivered run cites the acquisition run that produced it.");
         Assert.IsNotNull(outcome.DossiersAskedAbout);
-        foreach (var dossier in outcome.Discovered!)
+        foreach (var dossier in outcome.CanonicalDiscovered!)
         {
             Assert.Contains(
                 dossier, outcome.DossiersAskedAbout!,
-                "the producer must have asked about exactly the discovered dossiers.");
+                "the producer must have asked about exactly the discovered dossiers, compared in "
+                + "the canonical form it publishes them under rather than the raw spelling the "
+                + "publisher happened to return.");
         }
 
         Assert.IsLessThanOrEqualTo(
@@ -646,38 +679,61 @@ public sealed class EuProcedureEventLiveAcceptance
         refusal = window.Refusal,
     };
 
-    /// <summary>Any host in the retained evidence that this operation was not permitted to contact.</summary>
-    private static IReadOnlyList<string> OffendingHosts(string root)
+    /// <summary>
+    /// Every request URI the retained evidence records, in the order it records them.
+    /// </summary>
+    /// <remarks>
+    /// The mechanism the integrated draft harness uses, adopted here rather than reinvented: a
+    /// recorded <c>request_uri</c> is a request this run made. Any other URL in the packet is
+    /// something the publisher said, and a negative built over those cannot distinguish data from
+    /// traffic.
+    /// </remarks>
+    internal static IReadOnlyList<string> RequestTargetsIn(string artifact)
     {
-        var offenders = new List<string>();
-        foreach (var file in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
+        ArgumentNullException.ThrowIfNull(artifact);
+        const string RequestMarker = "\"request_uri\"";
+        var targets = new List<string>();
+        var index = artifact.IndexOf(RequestMarker, StringComparison.Ordinal);
+        while (index >= 0)
         {
-            var text = File.ReadAllText(file);
-            foreach (var token in new[] { "https://", "http://" })
+            var open = artifact.IndexOf('"', index + RequestMarker.Length);
+            if (open < 0)
             {
-                var index = text.IndexOf(token, StringComparison.Ordinal);
-                while (index >= 0)
-                {
-                    var end = text.IndexOfAny(['/', '"', '\n', '\t', ' '], index + token.Length);
-                    var host = end < 0
-                        ? text[(index + token.Length)..]
-                        : text[(index + token.Length)..end];
-                    if (host.Length > 0
-                        && !AdmittedHosts.Contains(host, StringComparer.OrdinalIgnoreCase)
-                        && !host.StartsWith("www.w3.org", StringComparison.OrdinalIgnoreCase)
-                        && !host.StartsWith("data.europa.eu", StringComparison.OrdinalIgnoreCase)
-                        && !host.StartsWith("lex.invalid", StringComparison.OrdinalIgnoreCase)
-                        && !offenders.Contains(host, StringComparer.OrdinalIgnoreCase))
-                    {
-                        offenders.Add(host);
-                    }
-
-                    index = text.IndexOf(token, index + token.Length, StringComparison.Ordinal);
-                }
+                break;
             }
+
+            var close = artifact.IndexOf('"', open + 1);
+            if (close < 0)
+            {
+                break;
+            }
+
+            targets.Add(artifact[(open + 1)..close]);
+            index = artifact.IndexOf(RequestMarker, close, StringComparison.Ordinal);
         }
 
-        return offenders;
+        return targets;
+    }
+
+    /// <summary>
+    /// The only URIs this operation may request: the endpoint, and the profile's declared robots
+    /// route steps.
+    /// </summary>
+    /// <remarks>
+    /// DERIVED FROM THE PROFILE, NOT LISTED HERE. The robots route is the session's own frozen
+    /// two-step declaration, so deriving the admitted set from it means a route change fails this
+    /// negative instead of silently diverging from what the session actually follows. The step count
+    /// is asserted because the same two steps are what the send bound's arithmetic rests on.
+    /// </remarks>
+    internal static IReadOnlyList<string> AdmittedRequestTargets()
+    {
+        var profile = OfficialMachineQuerySourceProfiles.Resolve(
+            OfficialMachineQuerySourceProfileId.EuropeanUnionSparql);
+        var steps = profile.RobotsRoute.Steps.Select(static step => step.RequestedUri).ToArray();
+        Assert.HasCount(
+            2, steps,
+            "the send bound assumes a two-step robots route; a changed route changes that bound.");
+        return [EuQueryUri, .. steps];
     }
 
     private static string Sha256(ReadOnlySpan<byte> bytes) =>

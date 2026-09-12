@@ -221,6 +221,41 @@ public sealed class EuProcedureEventDiscoveryInstrumentTests
         Assert.IsNull(proof.Canonical);
     }
 
+    /// <summary>
+    /// A valid noncanonical member is admitted, and its canonical form is what the producer answers
+    /// under.
+    /// </summary>
+    /// <remarks>
+    /// THE CASE THAT WOULD HAVE FAULTED A CORRECT DISCOVERY. The integrated contract
+    /// <c>ADossierRequestedNonCanonicallyIsAnsweredUnderItsCanonicalForm</c> proves the producer
+    /// publishes and answers under the canonical HTTP spelling. So an <c>https</c> or
+    /// trailing-slash dossier is a perfectly good discovery that this proof must admit - and
+    /// interpreting the delivered result with the raw spelling would then throw, recording
+    /// <c>Faulted</c> for a run that had done nothing wrong. Raw and canonical are therefore both
+    /// carried, and they are deliberately different here.
+    /// </remarks>
+    [TestMethod]
+    public void AValidNoncanonicalMemberIsAdmittedAndCarriesItsCanonicalForm()
+    {
+        var noncanonical = "https" + FirstDossier["http".Length..] + "/";
+        var proof = EuProcedureEventLiveAcceptance.ProveTwoDistinctDossiers(
+            [noncanonical, SecondDossier],
+            [noncanonical, SecondDossier]);
+
+        Assert.AreEqual(EuProcedureEventLiveAcceptance.DeliveredVerdict, proof.Verdict);
+        Assert.IsNotNull(proof.Raw);
+        Assert.IsNotNull(proof.Canonical);
+        Assert.AreEqual(
+            noncanonical, proof.Raw[0],
+            "the request keeps the exact spelling the publisher returned.");
+        Assert.AreEqual(
+            FirstDossier, proof.Canonical[0],
+            "and the canonical form drops the scheme difference and the trailing slash.");
+        Assert.AreNotEqual(
+            proof.Raw[0], proof.Canonical[0],
+            "these must differ here, or this test is not exercising the mismatch at all.");
+    }
+
     /// <summary>Fewer or more than two URI terms is refused.</summary>
     [TestMethod]
     public void AWindowThatIsNotExactlyTwoIsRefused()
