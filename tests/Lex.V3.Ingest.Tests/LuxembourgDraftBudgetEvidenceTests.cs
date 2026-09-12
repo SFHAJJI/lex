@@ -131,36 +131,154 @@ public sealed class LuxembourgDraftBudgetEvidenceTests
         Assert.IsTrue(result.WireBudget.Exhausted);
     }
 
-    /// <summary>One budget across an inventory and a batch accounts cumulatively.</summary>
+    /// <summary>
+    /// One budget spans an inventory run and a graph batch, and the batch inherits what is left.
+    /// </summary>
     /// <remarks>
-    /// The identity the whole ceiling argument rests on: reservations equal recorded product
-    /// attempts plus one robots fetch per session opened. Checked against the transport, which is
-    /// the only witness not part of the accounting being checked.
+    /// <para>
+    /// THIS REPLACES A TEST THAT CLAIMED THIS AND DID NOT DO IT. The first version ran the INVENTORY
+    /// producer twice and never touched the graph producer, so it proved only that a spent budget
+    /// refuses a second inventory session. It could not have failed when the live harness gave the
+    /// inventory and every batch their own budget, which is the defect it was supposed to guard.
+    /// A test named for a boundary it does not cross is worse than no test, because the name is what
+    /// gets read.
+    /// </para>
+    /// <para>
+    /// The inventory is allowed to succeed and the batch then runs on the remainder of the SAME
+    /// instance. Giving the batch a fresh budget makes the transport outrun the terminal snapshot,
+    /// which is exactly the shape the live path had.
+    /// </para>
     /// </remarks>
     [TestMethod]
-    public async Task OneBudgetAcrossInventoryAndBatchAccountsCumulatively()
+    public async Task OneBudgetSpansTheInventoryAndTheBatchItIssues()
     {
         var handler = new CountingHandler(_ => LuxembourgAcquisitionTestFixture.CountJson(2));
-        var budget = WireRequestBudget.OfWireRequests(4);
+        var budget = WireRequestBudget.OfWireRequests(64);
 
-        var first = await InventoryProducer(handler).RunAsync(
+        // The inventory's own outcome is immaterial here: what is under test is whether a SECOND
+        // producer run continues this instance's spend or starts its own. Letting it refuse keeps
+        // the case small and still spends real reservations.
+        var inventory = await InventoryProducer(handler).RunAsync(
             InventoryRequest(budget), LuxembourgSourceWitness(), CancellationToken.None);
-        var firstSpent = first.WireBudget.Spent;
 
-        var second = await InventoryProducer(handler).RunAsync(
-            InventoryRequest(budget), LuxembourgSourceWitness(), CancellationToken.None);
-
+        var afterInventory = inventory.WireBudget.Spent;
+        Assert.IsGreaterThan(0, afterInventory, "the inventory reached the publisher.");
         Assert.AreEqual(
-            4, second.WireBudget.Spent, "the shared ceiling, reached across the two runs together.");
-        Assert.IsGreaterThanOrEqualTo(
-            firstSpent, second.WireBudget.Spent, "a reservation is never returned.");
+            handler.SendCount, afterInventory, "the inventory's own spend reconciles first.");
+
+        var batch = await GraphProducer(handler).RunAsync(
+            LuxembourgDraftGraphRunRequest.ForBatch(
+                LuxembourgDraftGraphDiscoveryPlan.Create(),
+                LuxembourgDraftGraphProducerTests.InventoryOf(
+                    "http://data.legilux.public.lu/eli/dl/pl/2000/0001"),
+                0,
+                "urn:uuid:0c5b83e7-19d4-4a26-9f38-6b2e7d015c4a",
+                LuxembourgAcquisitionTestFixture.BuildRendererSource(9308),
+                budget),
+            LuxembourgSourceWitness(),
+            CancellationToken.None);
+
+        // THE BATCH CONTINUES THE INVENTORY'S SPEND RATHER THAN RESTARTING IT.
+        Assert.IsGreaterThan(
+            afterInventory,
+            batch.WireBudget.Spent,
+            "a batch on a fresh budget would report only its own handful of requests.");
         Assert.AreEqual(
             handler.SendCount,
-            second.WireBudget.Spent,
-            "THE WITNESS OUTSIDE THE ACCOUNTING. A second run receiving a fresh budget would send "
-                + "another robots fetch this figure never charged.");
-        Assert.IsLessThanOrEqualTo(
-            budget.Limit, handler.SendCount, "the ceiling held across both runs.");
+            batch.WireBudget.Spent,
+            "THE WITNESS OUTSIDE THE ACCOUNTING. The transport counted both runs' sends, including "
+                + "both robots fetches; a second budget would leave one of them uncharged.");
+        Assert.AreEqual(
+            inventory.ProductRequestCount + batch.ProductRequestCount + 2,
+            batch.WireBudget.Spent,
+            "reservations are both runs' product attempts plus one robots fetch per session.");
+    }
+
+    /// <summary>
+    /// The gated live harness builds exactly one budget, and never the offline helper's.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A STRUCTURAL GUARD, BECAUSE NO BEHAVIOURAL ONE CAN REACH IT. The acceptance harness is gated
+    /// off by default, so a budget constructed per batch inside it cannot fail any offline test -
+    /// which is exactly how a 100,000-request test helper came to be constructed 157 times in the
+    /// live path while every offline suite stayed green. Mutating that harness back to a per-batch
+    /// budget survives every other case in this class.
+    /// </para>
+    /// <para>
+    /// So this reads the harness itself. Crude, and the crudeness is the point: the property that
+    /// matters - ONE ceiling for the whole run - is a property of the source, and nothing else in
+    /// the suite can observe it.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void TheLiveDraftHarnessBuildsExactlyOneWholeRunBudget()
+    {
+        // SCOPED TO THE LIVE SWEEP, not the whole file. That file also holds an offline scripted
+        // case whose transport is a fake, and the ceiling is immaterial there; a whole-file rule
+        // would force an unrelated change and say something the property does not mean.
+        var sweep = LiveSweepBody();
+
+        Assert.AreEqual(
+            1,
+            CountOf(sweep, "WireRequestBudget.OfWireRequests("),
+            "one budget for the whole run, or the inventory and every batch get their own ceiling.");
+        Assert.AreEqual(
+            0,
+            CountOf(sweep, "TestWireBudget()"),
+            "the offline helper's 100,000-request ceiling has no place in a live path.");
+        StringAssert.Contains(
+            sweep,
+            "SharedWireCeiling is not { } ceiling",
+            "and the run must refuse to start until a reviewed ceiling exists.");
+        Assert.AreEqual(
+            1,
+            CountOf(sweep, "rendererSource, budget)"),
+            "every batch takes the one instance the run created.");
+    }
+
+    /// <summary>The live sweep method's own text, from its signature to the next member.</summary>
+    private static string LiveSweepBody()
+    {
+        var source = File.ReadAllText(HarnessPath("LuxembourgDraftGraphLiveAcceptance.cs"));
+        const string Signature = "public async Task TheAcceptedDraftProvisionsAreAnsweredByThePublisher()";
+        var start = source.IndexOf(Signature, StringComparison.Ordinal);
+        Assert.IsGreaterThanOrEqualTo(
+            0, start, "the live sweep method was renamed; this guard must be re-aimed, not deleted.");
+
+        var end = source.IndexOf("\n    [TestMethod]", start, StringComparison.Ordinal);
+        if (end < 0)
+        {
+            end = source.IndexOf("\n    private ", start, StringComparison.Ordinal);
+        }
+
+        return end < 0 ? source[start..] : source[start..end];
+    }
+
+    private static int CountOf(string text, string needle)
+    {
+        var count = 0;
+        var index = text.IndexOf(needle, StringComparison.Ordinal);
+        while (index >= 0)
+        {
+            count++;
+            index = text.IndexOf(needle, index + needle.Length, StringComparison.Ordinal);
+        }
+
+        return count;
+    }
+
+    private static string HarnessPath(string fileName)
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "Lex.V3.slnx")))
+        {
+            directory = directory.Parent;
+        }
+
+        var root = directory?.FullName
+            ?? throw new InvalidOperationException("Checkout root not found.");
+        return Path.Combine(root, "tests", "Lex.V3.Ingest.Tests", fileName);
     }
 
     /// <summary>The draft graph's only construction door refuses a null budget.</summary>
