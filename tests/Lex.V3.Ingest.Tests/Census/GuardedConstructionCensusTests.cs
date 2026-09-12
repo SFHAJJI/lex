@@ -624,6 +624,10 @@ public sealed class GuardedConstructionCensusTests
                     + "tHandlerAsync, "
                     + "method private instance "
                     + "Lex.V3.Ingest.RoutedHttpAcquisitionSession::BootstrapRobotsAsync",
+                "Lex.V3.Ingest.WireRequestBudget: by-ref-method public instance "
+                    + "Lex.V3.Ingest.Europe.LuxembourgOpinionRequestInventoryRunRequest::Deconstruc"
+                    + "t, constructor private instance Lex.V3.Ingest.WireRequestBudget::.ctor, "
+                    + "method public static Lex.V3.Ingest.WireRequestBudget::OfWireRequests",
             },
             ClosedSurfaceCensus.GuardedConstruction(CensusScope.SweptHere).ToArray());
     }

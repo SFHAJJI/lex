@@ -94,6 +94,18 @@ public enum LuxembourgEnumerationRefusal
     /// </summary>
     [JsonStringEnumMemberName("page_decode_failed_on_our_side")]
     PageDecodeFailedOnOurSide = 14,
+
+    /// <summary>
+    /// The run reached its wire budget, counted over robots, counts, pages and every attempt.
+    /// </summary>
+    /// <remarks>
+    /// MIRRORED WITH THE EU EXECUTOR DELIBERATELY. The declared mirror's own reason says a condition
+    /// present in one executor and absent from the other is a gap in that executor rather than a
+    /// difference between publishers - so a ceiling the EU path enforces and this one did not was a
+    /// gap here, not grounds to weaken the mirror.
+    /// </remarks>
+    [JsonStringEnumMemberName("wire_budget_exhausted")]
+    WireBudgetExhausted = 15,
 }
 
 public sealed class LuxembourgEnumerationRefusalDetail
@@ -419,7 +431,8 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
     public async Task<LuxembourgEnumerationRunResult> RunPartitionAsync(
         LuxembourgPartitionRunRequest request,
         BoundMachineRequest sourceWitness,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        WireRequestBudget? wireBudget = null)
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(sourceWitness);
@@ -440,7 +453,8 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
         var runner = start.Session;
         try
         {
-            return await RunPartitionOnSessionAsync(request, runner, sharedProfileRef: null, cancellationToken)
+            return await RunPartitionOnSessionAsync(
+                    request, runner, sharedProfileRef: null, cancellationToken, wireBudget)
                 .ConfigureAwait(false);
         }
         finally
@@ -478,7 +492,8 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
         LuxembourgPartitionRunRequest request,
         RoutedHttpAcquisitionSession runner,
         SourceArtifactRef? sharedProfileRef,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        WireRequestBudget? wireBudget = null)
     {
         var budget = LuxembourgEnumerationBudget.FromPlan(request.InvariantPlan);
         var profile = request.InvariantPlan.CreateDeliveryProfile(request.InvariantPlanResourceId, request.SetId);
@@ -537,7 +552,7 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
                 var passResult = await RunPassAsync(
                         runner, request, profile, pass, budget, executorWrittenMembership,
                         () => productRequestCount, count => productRequestCount = count,
-                        cancellationToken)
+                        cancellationToken, wireBudget)
                     .ConfigureAwait(false);
                 if (passResult.Refusal is not null)
                 {
@@ -813,7 +828,8 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
         Dictionary<string, CustodyMembership> executorWrittenMembership,
         Func<int> currentCount,
         Action<int> setCount,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        WireRequestBudget? wireBudget)
     {
         var countBound = request.InvariantPlan.BindCount(
             request.InvariantPlanResourceId, NewUrn(), NewUrn(), request.SetId, pass, request.Partition,
@@ -821,7 +837,7 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
         var countIdentity = RepeatedEnumerationObservationIdentity.NewObservation();
         var countOutcome = ToObserveOutcome(await _reopenGlue.ObserveAsync(
                 session, countBound.Request, profile, executorWrittenMembership, currentCount, setCount,
-                cancellationToken)
+                cancellationToken, wireBudget)
             .ConfigureAwait(false));
         if (countOutcome.Refusal is not null)
         {
@@ -884,7 +900,7 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
                 cursor, selected, countObservation.HttpEvidenceRef, request.RendererSource);
             var pageOutcome = ToObserveOutcome(await _reopenGlue.ObserveAsync(
                     session, pageBound.Request, profile, executorWrittenMembership, currentCount, setCount,
-                    cancellationToken)
+                    cancellationToken, wireBudget)
                 .ConfigureAwait(false));
             if (pageOutcome.Refusal is not null)
             {
@@ -994,6 +1010,7 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
             ObservationAttemptFailureKind.NotExecuted => LuxembourgEnumerationRefusal.ObservationNotExecuted,
             ObservationAttemptFailureKind.StatusNotAdmitted => LuxembourgEnumerationRefusal.StatusNotAdmitted,
             ObservationAttemptFailureKind.MediaTypeNotAdmitted => LuxembourgEnumerationRefusal.MediaTypeNotAdmitted,
+            ObservationAttemptFailureKind.WireBudgetExhausted => LuxembourgEnumerationRefusal.WireBudgetExhausted,
             _ => throw new ArgumentOutOfRangeException(
                 nameof(outcome), $"Unreachable: an unhandled {nameof(ObservationAttemptFailureKind)} '{failure.Kind}'."),
         };

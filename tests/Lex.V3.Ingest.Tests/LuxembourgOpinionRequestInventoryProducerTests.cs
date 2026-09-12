@@ -121,7 +121,8 @@ public sealed class LuxembourgOpinionRequestInventoryProducerTests
 
         var result = await ProducerFor(handler).RunAsync(
             new LuxembourgOpinionRequestInventoryRunRequest(
-                LuxembourgOpinionRequestInventoryDiscoveryPlan.Create(), NewUrn(), Source()),
+                LuxembourgOpinionRequestInventoryDiscoveryPlan.Create(), NewUrn(), Source(),
+                WireRequestBudget.OfWireRequests(1000)),
             LuxembourgSourceWitness(),
             CancellationToken.None);
 
@@ -268,7 +269,8 @@ public sealed class LuxembourgOpinionRequestInventoryProducerTests
 
         return await ProducerFor(handler).RunAsync(
             new LuxembourgOpinionRequestInventoryRunRequest(
-                LuxembourgOpinionRequestInventoryDiscoveryPlan.Create(), NewUrn(), Source()),
+                LuxembourgOpinionRequestInventoryDiscoveryPlan.Create(), NewUrn(), Source(),
+                WireRequestBudget.OfWireRequests(1000)),
             LuxembourgSourceWitness(),
             CancellationToken.None);
     }

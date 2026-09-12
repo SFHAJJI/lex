@@ -270,7 +270,8 @@ public sealed class LuxembourgOpinionRequestGraphProducerTests
             Inventory(batch),
             0,
             NewUrn(),
-            Source());
+            Source(),
+            WireRequestBudget.OfWireRequests(1000));
 
     private static LuxembourgOpinionRequestGraphProducer ProducerFor(
         LuxembourgAcquisitionTestFixture.SequencedHandler handler) =>

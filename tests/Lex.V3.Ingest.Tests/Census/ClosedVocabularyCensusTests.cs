@@ -68,7 +68,8 @@ public sealed class ClosedVocabularyCensusTests
                     + "CountNotOneNonNegativeInteger, PartitionRequired, "
                     + "DeliveredKeyNotRepresentable, DeliveredRowOutsidePartition, "
                     + "CursorDidNotAdvance, PageBudgetExhausted, CustodyMemberMissing, "
-                    + "DeliveryProofRefused, PageBodyMalformed, PageDecodeFailedOnOurSide",
+                    + "DeliveryProofRefused, PageBodyMalformed, PageDecodeFailedOnOurSide, "
+                    + "WireBudgetExhausted",
                 "Lex.V3.Ingest.Europe.EuFamilyEnumerationOutcomeKind: Proven, ExecutorRefused, "
                     + "ProofRefused",
                 "Lex.V3.Ingest.Europe.EuLocatedAmendmentAxiomDecodeRefusal: None, "
@@ -137,7 +138,8 @@ public sealed class ClosedVocabularyCensusTests
                     + "MediaTypeNotAdmitted, CountNotOneNonNegativeInteger, PartitionRequired, "
                     + "DeliveredKeyNotRepresentable, DeliveredRowOutsidePartition, "
                     + "CursorDidNotAdvance, PageBudgetExhausted, CustodyMemberMissing, "
-                    + "DeliveryProofRefused, PageBodyMalformed, PageDecodeFailedOnOurSide",
+                    + "DeliveryProofRefused, PageBodyMalformed, PageDecodeFailedOnOurSide, "
+                    + "WireBudgetExhausted",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgFamilyEnumerationOutcomeKind: Proven, "
                     + "ExecutorRefused, ProofRefused, CoverProven, CoverRefused",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgInFileRightsReadStatus: Observed, "
@@ -184,7 +186,7 @@ public sealed class ClosedVocabularyCensusTests
                     + "QueryExecutionRefused, TransposesFamilyNotComplete, "
                     + "TransposesFamilyEvidenceNotSingular, RelationNotAdmitted",
                 "Lex.V3.Ingest.ObservationAttemptFailureKind: NotExecuted, StatusNotAdmitted, "
-                    + "MediaTypeNotAdmitted",
+                    + "MediaTypeNotAdmitted, WireBudgetExhausted",
                 "Lex.V3.Ingest.OfficialMachineQueryLocalSafetyReason: "
                     + "ApplicableRobotsGroupUninterpretable, RobotsPolicyUnavailable",
                 "Lex.V3.Ingest.RoutedHttpAcquisitionSession+BodyCaptureEvent: DeclaredLengthReached, "

@@ -56,6 +56,7 @@ public sealed class LuxembourgRefusalWireNameTests
                 "delivery_proof_refused",
                 "page_body_malformed",
                 "page_decode_failed_on_our_side",
+                "wire_budget_exhausted",
             }),
             string.Join("\n", WireNames<LuxembourgEnumerationRefusal>()),
             "a wire name changing is a contract change; a number changing is not.");

@@ -43,7 +43,8 @@ public sealed class LuxembourgOpinionRequestExecutorEntryPointTests
 
         var result = await executor.RunLuxembourgOpinionRequestInventoryAsync(
             new LuxembourgOpinionRequestInventoryRunRequest(
-                LuxembourgOpinionRequestInventoryDiscoveryPlan.Create(), NewUrn(), Source()),
+                LuxembourgOpinionRequestInventoryDiscoveryPlan.Create(), NewUrn(), Source(),
+                WireRequestBudget.OfWireRequests(1000)),
             LuxembourgSourceWitness(),
             CancellationToken.None);
 
@@ -101,6 +102,67 @@ public sealed class LuxembourgOpinionRequestExecutorEntryPointTests
             stranger,
             result.Refusal.OffendingKey,
             "the refusal must name the request that did not belong, not merely count it.");
+    }
+
+    /// <summary>
+    /// A run stops at its budget, and the transport confirms nothing further was sent.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// THE CEILING IS THE PATH'S, NOT A PLAN'S. The executor reads the publisher's count and then
+    /// continues paging on its own until a short page or its page bound, so a figure derived outside
+    /// the run bounds nothing - which is how I came to publish 120 as a ceiling when the structural
+    /// worst case for the same packet is 22,276.
+    /// </para>
+    /// <para>
+    /// Asserted on the TRANSPORT's own send count, not on the refusal alone. A stop that refuses
+    /// while the requests still went out is a receipt, and the whole point is that they do not go.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public async Task ARunStopsAtItsBudgetAndSendsNothingFurther()
+    {
+        var batch = new[] { Request(1), Request(2) };
+
+        // Two wire requests: the robots fetch, then one product request. The second product request
+        // this run would make has no budget left to reserve.
+        var handler = GraphTransport(
+            GraphRow(batch[0], ReferralDate, "2004-03-11"),
+            GraphRow(batch[1], ReferralDate, "2004-04-01"));
+        var executor = ExecutorFor(handler);
+
+        var result = await executor.RunLuxembourgOpinionRequestGraphAsync(
+            LuxembourgOpinionRequestGraphRunRequest.ForBatch(
+                LuxembourgOpinionRequestGraphDiscoveryPlan.Create(),
+                batch,
+                InventoryOver(batch),
+                0,
+                NewUrn(),
+                Source(),
+                WireRequestBudget.OfWireRequests(2)),
+            LuxembourgSourceWitness(),
+            CancellationToken.None);
+
+        Assert.IsNotNull(result.Refusal);
+        Assert.AreEqual(EuEnumerationRefusal.WireBudgetExhausted, result.Refusal.Code);
+        Assert.AreEqual(
+            2, handler.SendCount,
+            "the budget is a stop: robots plus one product request, and nothing after it.");
+    }
+
+    /// <summary>A budget that cannot cover robots and one product request is refused outright.</summary>
+    /// <remarks>
+    /// A ceiling of one would refuse every run before it began, which is a configuration error
+    /// rather than a delivery outcome - so it is rejected where it is written, not where it fires.
+    /// </remarks>
+    [TestMethod]
+    public void ABudgetTooSmallToSendAnythingIsRefusedWhereItIsWritten()
+    {
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(
+            () => WireRequestBudget.OfWireRequests(1));
+        Assert.AreEqual(
+            1, WireRequestBudget.OfWireRequests(2).Spent,
+            "the robots fetch is spent at construction, not hoped to be free.");
     }
 
     /// <summary>
@@ -168,7 +230,8 @@ public sealed class LuxembourgOpinionRequestExecutorEntryPointTests
                 InventoryOver(batch),
                 0,
                 NewUrn(),
-                Source()),
+                Source(),
+                WireRequestBudget.OfWireRequests(1000)),
             LuxembourgSourceWitness(),
             CancellationToken.None);
     }
