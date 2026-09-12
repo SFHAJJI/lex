@@ -31,6 +31,9 @@ public enum EuAnnexBodyDispositionOutcome
 /// </remarks>
 public sealed record EuAnnexBodyDisposition
 {
+    private const string PublisherAnnexMemberUri =
+        "http://publications.europa.eu/resource/authority/fd_370/AN";
+
     private EuAnnexBodyDisposition(
         SourceObjectRef sourceObject,
         EuStructuralLocation annexLocation,
@@ -120,7 +123,8 @@ public sealed record EuAnnexBodyDisposition
         }
 
         if (!annexLocation.Tokens.Any(static token =>
-                string.Equals(token.Code, "AN", StringComparison.Ordinal)))
+                string.Equals(token.Code, "AN", StringComparison.Ordinal) &&
+                string.Equals(token.AuthorityUri, PublisherAnnexMemberUri, StringComparison.Ordinal)))
         {
             throw new ArgumentException(
                 "The structural location carries no publisher annex token.",

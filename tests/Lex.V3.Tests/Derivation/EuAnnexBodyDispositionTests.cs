@@ -193,6 +193,26 @@ public sealed class EuAnnexBodyDispositionTests
     }
 
     [TestMethod]
+    public void AnAnnexCodeFromAnUnrelatedAuthorityListIsRejected()
+    {
+        var fixture = Fixture();
+        const string foreignAuthority = "https://example.invalid/authority/fd_370";
+        var foreignAnnex = EuStructuralLocation.Parse(
+            "{AN|" + foreignAuthority + "/AN} III",
+            foreignAuthority);
+
+        Assert.ThrowsExactly<ArgumentException>(() => EuAnnexBodyDisposition.Create(
+            fixture.SourceObject,
+            foreignAnnex,
+            fixture.Address,
+            fixture.Request,
+            fixture.Evidence,
+            fixture.Receipt,
+            fixture.ProfileRef,
+            EuAnnexBodyDispositionOutcome.TextNotAvailable));
+    }
+
+    [TestMethod]
     public void RepeatingTheDispositionOverTheSameEvidenceIsStable()
     {
         var fixture = Fixture();
