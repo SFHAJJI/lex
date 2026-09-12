@@ -231,6 +231,102 @@ public sealed class LuxembourgOpinionRequestCanaryPlanTests
     }
 
     /// <summary>
+    /// A canary whose two accountings agree completes; one whose accountings drift does not.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// THE TWO MECHANISMS ARE INDEPENDENT, WHICH IS THE WHOLE POINT. The budget grants reservations;
+    /// the glue increments a counter after each attempt. Clause 5 exists so those two are checked
+    /// against each other and fail closed if they drift - side-by-side arithmetic in an evidence
+    /// index does not implement that check, it only makes it available to someone who thinks to do
+    /// it.
+    /// </para>
+    /// <para>
+    /// The mismatching case fabricates the drift deliberately. I could not produce one through the
+    /// real path - an exception escaping the attempt aborts the producer before any result exists -
+    /// and that is precisely why the guard is not allowed to depend on being reachable today: it is
+    /// a cross-check between two mechanisms, and it has to hold if either one ever changes.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void AnAccountingDriftOutranksCompletion()
+    {
+        var proceed = LuxembourgOpinionRequestCanaryPlan.AfterInventory(
+            DeliveredInventory(Subjects(120), SpentBudget(25)));
+
+        // Agreeing: 24 inventory attempts + 6 batch attempts + 2 robots fetches = 32 reservations.
+        var agreeing = LuxembourgOpinionRequestCanaryPlan.Reconcile(
+            DeliveredInventory(Subjects(120), SpentBudget(25)),
+            LuxembourgOpinionRequestGraphResult.Completed(
+                DeliveredCoverage(), productRequestCount: 6, SpentBudget(32)));
+
+        Assert.IsTrue(agreeing.Reconciles, "24 + 6 + 2 == 32.");
+        Assert.AreEqual(2, agreeing.SessionsOpened);
+        Assert.AreEqual(32, agreeing.ExpectedIfEverySessionCompleted);
+        Assert.AreEqual(
+            "CanaryCompleted",
+            LuxembourgOpinionRequestCanaryPlan.Conclude(
+                proceed,
+                LuxembourgOpinionRequestGraphResult.Completed(
+                    DeliveredCoverage(), productRequestCount: 6, SpentBudget(32)),
+                agreeing));
+
+        // Drifting: the same recorded attempts against a budget that granted one more reservation
+        // than anything recorded using it.
+        var drifting = LuxembourgOpinionRequestCanaryPlan.Reconcile(
+            DeliveredInventory(Subjects(120), SpentBudget(25)),
+            LuxembourgOpinionRequestGraphResult.Completed(
+                DeliveredCoverage(), productRequestCount: 6, SpentBudget(33)));
+
+        Assert.IsFalse(drifting.Reconciles, "33 reservations against 32 accounted-for requests.");
+        Assert.AreEqual(33, drifting.FinalBudgetSpent);
+        Assert.AreEqual(32, drifting.ExpectedIfEverySessionCompleted);
+        Assert.AreEqual(
+            "AccountingDidNotReconcile",
+            LuxembourgOpinionRequestCanaryPlan.Conclude(
+                proceed,
+                LuxembourgOpinionRequestGraphResult.Completed(
+                    DeliveredCoverage(), productRequestCount: 6, SpentBudget(33)),
+                drifting),
+            "a canary whose own numbers disagree has not demonstrated the path, whatever its rows "
+                + "say: the figures that would evidence the run are the figures in dispute.");
+    }
+
+    /// <summary>A stopped canary reconciles over the one session it opened.</summary>
+    /// <remarks>
+    /// Counting two sessions here would invent a robots fetch nobody sent, and turn every stopped
+    /// canary into a false accounting finding.
+    /// </remarks>
+    [TestMethod]
+    public void AStoppedCanaryReconcilesOverOneSession()
+    {
+        var reconciliation = LuxembourgOpinionRequestCanaryPlan.Reconcile(
+            LuxembourgOpinionRequestInventoryResult.Refused(
+                LuxembourgOpinionRequestInventoryRefusal.EnumerationRefused,
+                "the publisher refused",
+                productRequestCount: 4,
+                SpentBudget(5)),
+            batch: null);
+
+        Assert.AreEqual(1, reconciliation.SessionsOpened);
+        Assert.AreEqual(5, reconciliation.ExpectedIfEverySessionCompleted, "4 attempts + 1 robots.");
+        Assert.IsTrue(reconciliation.Reconciles);
+    }
+
+    /// <summary>A budget that has granted exactly this many reservations.</summary>
+    private static WireBudgetSnapshot SpentBudget(int reservations)
+    {
+        var budget = WireRequestBudget.OfWireRequests(
+            LuxembourgOpinionRequestCanaryPlan.WireCeiling);
+        for (var taken = 0; taken < reservations; taken++)
+        {
+            Assert.IsTrue(budget.TryReserveAttempt(), "the canary ceiling covers this many.");
+        }
+
+        return WireBudgetSnapshot.Of(budget);
+    }
+
+    /// <summary>
     /// A real completed matrix over one typed request.
     /// </summary>
     /// <remarks>
