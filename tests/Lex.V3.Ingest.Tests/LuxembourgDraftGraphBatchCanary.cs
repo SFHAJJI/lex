@@ -188,11 +188,6 @@ public sealed class LuxembourgDraftGraphBatchCanary
             }
         }
 
-        Assert.IsEmpty(
-            offending,
-            "this canary may contact the Legilux SPARQL endpoint and nothing else: "
-            + string.Join("; ", offending.Take(10)));
-
         var summary = new StringBuilder()
             .AppendLine("e8-batch-canary/1")
             .AppendLine("endpoint=" + LegiluxEndpoint)
@@ -218,6 +213,15 @@ public sealed class LuxembourgDraftGraphBatchCanary
             .ToString();
         await File.WriteAllTextAsync(Path.Combine(root, "canary-summary.txt"), summary);
         TestContext?.WriteLine(summary);
+
+        // NOW the run may be judged. The endpoint restriction used to be asserted ABOVE the summary,
+        // so a canary that reached a host it should not have failed while retaining none of what it
+        // spent - and an endpoint escape is the single outcome where the actual request count and
+        // the budget position matter most. The check is unchanged; only its position is.
+        Assert.IsEmpty(
+            offending,
+            "this canary may contact the Legilux SPARQL endpoint and nothing else: "
+            + string.Join("; ", offending.Take(10)));
 
         Assert.IsTrue(
             result.Delivered || result.Refusal != LuxembourgDraftGraphProductionRefusal.None,
