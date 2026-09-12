@@ -121,6 +121,17 @@ public sealed class EuAnnexBodyDispositionTests
     }
 
     [TestMethod]
+    public void ACallerClaimingCellarForAnUnrelatedPublisherUriIsRejected()
+    {
+        var fixture = Fixture(
+            sourcePublisherUri: "https://example.invalid/resource/cellar/" + CellarKey);
+
+        Assert.ThrowsExactly<ArgumentException>(() => Create(
+            fixture,
+            EuAnnexBodyDispositionOutcome.TextNotAvailable));
+    }
+
+    [TestMethod]
     public void AReceiptForDifferentBytesIsRejected()
     {
         var fixture = Fixture();
@@ -229,13 +240,14 @@ public sealed class EuAnnexBodyDispositionTests
         EuManifestationMediaType mediaType = EuManifestationMediaType.ApplicationPdf,
         string annexValue = "III",
         char byteFill = 'a',
-        char profileFill = '8')
+        char profileFill = '8',
+        string? sourcePublisherUri = null)
     {
         var sourceObject = new SourceObjectRef(
             SourceCoreSchemaIds.SourceObjectRef,
             SourceAuthority.Cellar,
             new SourceRegistryMemberRef(ArtifactRef('1', '2'), "manifestation"),
-            "http://publications.europa.eu/resource/cellar/" + CellarKey,
+            sourcePublisherUri ?? "http://publications.europa.eu/resource/cellar/" + CellarKey,
             CellarKey,
             Sha256(CellarKey),
             ArtifactRef('3', '4'),

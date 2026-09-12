@@ -113,7 +113,8 @@ public sealed record EuAnnexBodyDisposition
             throw new ArgumentOutOfRangeException(nameof(outcome));
         }
 
-        if (sourceObject.Authority != SourceAuthority.Cellar)
+        if (sourceObject.Authority != SourceAuthority.Cellar ||
+            !IsOfficialCellarObjectUri(sourceObject.PublisherUri, sourceObject.CanonicalKey))
         {
             throw new ArgumentException("An EU annex must retain a Cellar source identity.", nameof(sourceObject));
         }
@@ -200,6 +201,16 @@ public sealed record EuAnnexBodyDisposition
         request.Headers.Any(header =>
             string.Equals(header.Name, name, StringComparison.Ordinal) &&
             string.Equals(header.Value, value, StringComparison.Ordinal));
+
+    private static bool IsOfficialCellarObjectUri(string publisherUri, string canonicalKey) =>
+        string.Equals(
+            publisherUri,
+            "http://publications.europa.eu/resource/cellar/" + canonicalKey,
+            StringComparison.Ordinal) ||
+        string.Equals(
+            publisherUri,
+            "https://publications.europa.eu/resource/cellar/" + canonicalKey,
+            StringComparison.Ordinal);
 
     private static string ComputeIdentitySha256(
         SourceObjectRef sourceObject,
