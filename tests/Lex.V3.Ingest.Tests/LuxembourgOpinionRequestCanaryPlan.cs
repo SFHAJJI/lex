@@ -1,3 +1,4 @@
+using Lex.V3.Contracts.Source.Luxembourg;
 using Lex.V3.Ingest.Luxembourg;
 
 namespace Lex.V3.Ingest.Tests;
@@ -182,15 +183,23 @@ public static class LuxembourgOpinionRequestCanaryPlan
     /// </remarks>
     public static LuxembourgOpinionRequestCanaryReconciliation Reconcile(
         LuxembourgOpinionRequestInventoryResult inventory,
-        LuxembourgOpinionRequestGraphResult? batch)
+        IReadOnlyList<LuxembourgOpinionRequestGraphResult> batches)
     {
         ArgumentNullException.ThrowIfNull(inventory);
+        ArgumentNullException.ThrowIfNull(batches);
 
-        // ONE SESSION PER RUN THAT HAPPENED. The inventory always opens one; the batch opens one
-        // only if it ran at all, and the gate guarantees it had a reservation left to open it with.
-        var sessions = batch is null ? 1 : 2;
-        var recorded = inventory.ProductRequestCount + (batch?.ProductRequestCount ?? 0);
-        var spent = batch?.WireBudget.Spent ?? inventory.WireBudget.Spent;
+        // ONE SESSION PER RUN THAT HAPPENED. The inventory always opens one; each batch that ran
+        // opens one more, and the gate guarantees each had a reservation left to open it with.
+        //
+        // GENERALISED TO N RATHER THAN DUPLICATED FOR THE SWEEP. A second reconciliation for the
+        // many-batch case would be a second accounting that has to agree with this one, and every
+        // defect found in this slice has been two things that were supposed to agree and did not.
+        // The canary is simply N = 1.
+        var sessions = 1 + batches.Count;
+        var recorded = inventory.ProductRequestCount + batches.Sum(static b => b.ProductRequestCount);
+        var spent = batches.Count == 0
+            ? inventory.WireBudget.Spent
+            : batches[^1].WireBudget.Spent;
         var expected = recorded + sessions;
 
         return new LuxembourgOpinionRequestCanaryReconciliation(
@@ -200,15 +209,26 @@ public static class LuxembourgOpinionRequestCanaryPlan
     public static string Conclude(
         LuxembourgOpinionRequestCanaryDecision decision,
         LuxembourgOpinionRequestInventoryResult inventory,
-        LuxembourgOpinionRequestGraphResult? batch)
+        IReadOnlyList<LuxembourgOpinionRequestGraphResult> batches)
     {
         ArgumentNullException.ThrowIfNull(decision);
         ArgumentNullException.ThrowIfNull(inventory);
+        ArgumentNullException.ThrowIfNull(batches);
 
-        if (decision.BatchOrdinalsToAcquire.Count == 0 || batch is null)
+        if (decision.BatchOrdinalsToAcquire.Count == 0 || batches.Count == 0)
         {
             return decision.Verdict;
         }
+
+        // THE SWEEP STOPPED SHORT OF WHAT IT WAS CLEARED FOR. Fewer batches came back than the gate
+        // authorised, which means the ceiling ran out partway. Reported before any per-batch verdict
+        // because a cover built over a truncated set is not a cover, whatever the batches say.
+        if (batches.Count < decision.BatchOrdinalsToAcquire.Count)
+        {
+            return "SweepStoppedBeforeEveryBatch";
+        }
+
+        var batch = batches[^1];
 
         // DERIVED HERE, FROM THE RUNS BEING CONCLUDED. Taking a reconciliation as an argument made
         // the gate caller-certified twice over: the record could assert agreement its own counts
@@ -216,7 +236,7 @@ public static class LuxembourgOpinionRequestCanaryPlan
         // about another. Both were reachable, and my own test helper demonstrated the second by
         // pairing an unrelated record with any result. A verdict that accepts its evidence from the
         // caller is not checking anything; it is repeating what it was told.
-        var reconciliation = Reconcile(inventory, batch);
+        var reconciliation = Reconcile(inventory, batches);
 
         // EXHAUSTION BEFORE COMPLETION, for the reason AfterInventory checks it first. A batch can
         // deliver on its very last reservation: the reservation is taken before the send, so the
@@ -241,6 +261,40 @@ public static class LuxembourgOpinionRequestCanaryPlan
         }
 
         return batch.Delivered ? "CanaryCompleted" : "BatchRefused";
+    }
+
+    /// <summary>
+    /// Every batch the inventory issues, when the same conditions that clear one batch are met.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// DELEGATES TO <see cref="AfterInventory"/> RATHER THAN RESTATING ITS RULES. Every refusal,
+    /// exhaustion, empty-class and missing-citation stop is inherited, so the two gates cannot come
+    /// to different conclusions about the same inventory. The only thing that differs is how many
+    /// ordinals come back once it opens, which is the only thing that should differ.
+    /// </para>
+    /// <para>
+    /// The ordinals come from the assignment the citation issues, never from a count the caller
+    /// supplies or from what a sweep managed to return.
+    /// </para>
+    /// </remarks>
+    public static LuxembourgOpinionRequestCanaryDecision EveryBatchAfterInventory(
+        LuxembourgOpinionRequestInventoryResult inventory)
+    {
+        var gated = AfterInventory(inventory);
+        if (gated.BatchOrdinalsToAcquire.Count == 0)
+        {
+            return gated;
+        }
+
+        var issued = LuxembourgOpinionRequestBatchAssignment
+            .Over(inventory.AddressableInOrder(), inventory.Citation!).Count;
+
+        return gated with
+        {
+            BatchOrdinalsToAcquire = [.. Enumerable.Range(0, issued)],
+            Reason = gated.Reason + $" The full sweep acquires all {issued} issued batches.",
+        };
     }
 
     private static LuxembourgOpinionRequestCanaryDecision Stop(string verdict, string reason) =>

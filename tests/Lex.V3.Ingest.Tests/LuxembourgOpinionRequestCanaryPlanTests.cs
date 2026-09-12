@@ -118,7 +118,7 @@ public sealed class LuxembourgOpinionRequestCanaryPlanTests
 
         Assert.AreEqual(
             "InventoryRefused",
-            LuxembourgOpinionRequestCanaryPlan.Conclude(stopped, inventory, batch: null),
+            LuxembourgOpinionRequestCanaryPlan.Conclude(stopped, inventory, []),
             "a canary that never reached a batch cannot conclude anything about batches.");
     }
 
@@ -145,22 +145,26 @@ public sealed class LuxembourgOpinionRequestCanaryPlanTests
             LuxembourgOpinionRequestCanaryPlan.Conclude(
                 proceed,
                 inventory,
-                LuxembourgOpinionRequestGraphResult.Refused(
-                    LuxembourgOpinionRequestGraphRefusal.EnumerationRefused,
-                    "stopped at the ceiling",
-                    productRequestCount: 224,
-                    ExhaustedBudget())));
+                [
+                    LuxembourgOpinionRequestGraphResult.Refused(
+                        LuxembourgOpinionRequestGraphRefusal.EnumerationRefused,
+                        "stopped at the ceiling",
+                        productRequestCount: 224,
+                        ExhaustedBudget()),
+                ]));
 
         Assert.AreEqual(
             "BatchRefused",
             LuxembourgOpinionRequestCanaryPlan.Conclude(
                 proceed,
                 inventory,
-                LuxembourgOpinionRequestGraphResult.Refused(
-                    LuxembourgOpinionRequestGraphRefusal.MatrixNotCompleted,
-                    "the rows did not complete a matrix",
-                    productRequestCount: 6,
-                    SpentBudget(32))),
+                [
+                    LuxembourgOpinionRequestGraphResult.Refused(
+                        LuxembourgOpinionRequestGraphRefusal.MatrixNotCompleted,
+                        "the rows did not complete a matrix",
+                        productRequestCount: 6,
+                        SpentBudget(32)),
+                ]),
             "a batch that had budget left refused on its own contents.");
     }
 
@@ -194,8 +198,10 @@ public sealed class LuxembourgOpinionRequestCanaryPlanTests
             LuxembourgOpinionRequestCanaryPlan.Conclude(
                 proceed,
                 inventory,
-                LuxembourgOpinionRequestGraphResult.Completed(
-                    DeliveredCoverage(), productRequestCount: 224, snapshot)),
+                [
+                    LuxembourgOpinionRequestGraphResult.Completed(
+                        DeliveredCoverage(), productRequestCount: 224, snapshot),
+                ]),
             "clause 6: a run that reached its ceiling is a magnitude finding even when its rows "
                 + "arrived, because the ceiling is what it actually measured.");
     }
@@ -258,23 +264,23 @@ public sealed class LuxembourgOpinionRequestCanaryPlanTests
         var agreeing = LuxembourgOpinionRequestGraphResult.Completed(
             DeliveredCoverage(), productRequestCount: 6, SpentBudget(32));
 
-        Assert.IsTrue(LuxembourgOpinionRequestCanaryPlan.Reconcile(inventory, agreeing).Reconciles);
+        Assert.IsTrue(LuxembourgOpinionRequestCanaryPlan.Reconcile(inventory, [agreeing]).Reconciles);
         Assert.AreEqual(
             "CanaryCompleted",
-            LuxembourgOpinionRequestCanaryPlan.Conclude(proceed, inventory, agreeing));
+            LuxembourgOpinionRequestCanaryPlan.Conclude(proceed, inventory, [agreeing]));
 
         // THE UNEQUAL-COUNT CASE. One more reservation was granted than anything recorded using it.
         var drifting = LuxembourgOpinionRequestGraphResult.Completed(
             DeliveredCoverage(), productRequestCount: 6, SpentBudget(33));
 
-        var reconciliation = LuxembourgOpinionRequestCanaryPlan.Reconcile(inventory, drifting);
+        var reconciliation = LuxembourgOpinionRequestCanaryPlan.Reconcile(inventory, [drifting]);
         Assert.IsFalse(reconciliation.Reconciles, "33 reservations against 32 accounted-for requests.");
         Assert.AreEqual(33, reconciliation.FinalBudgetSpent);
         Assert.AreEqual(32, reconciliation.ExpectedIfEverySessionCompleted);
 
         Assert.AreEqual(
             "AccountingDidNotReconcile",
-            LuxembourgOpinionRequestCanaryPlan.Conclude(proceed, inventory, drifting),
+            LuxembourgOpinionRequestCanaryPlan.Conclude(proceed, inventory, [drifting]),
             "a canary whose own numbers disagree has not demonstrated the path, whatever its rows "
                 + "say: the figures that would evidence the run are the figures in dispute.");
     }
@@ -301,8 +307,10 @@ public sealed class LuxembourgOpinionRequestCanaryPlanTests
     {
         var drifting = LuxembourgOpinionRequestCanaryPlan.Reconcile(
             DeliveredInventory(Subjects(120), SpentBudget(25)),
-            LuxembourgOpinionRequestGraphResult.Completed(
-                DeliveredCoverage(), productRequestCount: 6, SpentBudget(33)));
+            [
+                LuxembourgOpinionRequestGraphResult.Completed(
+                    DeliveredCoverage(), productRequestCount: 6, SpentBudget(33)),
+            ]);
 
         Assert.IsFalse(drifting.Reconciles);
         Assert.IsFalse(
@@ -339,7 +347,7 @@ public sealed class LuxembourgOpinionRequestCanaryPlanTests
                 "the publisher refused",
                 productRequestCount: 4,
                 SpentBudget(5)),
-            batch: null);
+            []);
 
         Assert.AreEqual(1, reconciliation.SessionsOpened);
         Assert.AreEqual(5, reconciliation.ExpectedIfEverySessionCompleted, "4 attempts + 1 robots.");
@@ -361,6 +369,121 @@ public sealed class LuxembourgOpinionRequestCanaryPlanTests
         }
 
         return WireBudgetSnapshot.Of(budget);
+    }
+
+    /// <summary>
+    /// The full sweep acquires every batch the citation issues, and no more.
+    /// </summary>
+    /// <remarks>
+    /// The ordinals come from the assignment the inventory's own citation issues, so a sweep cannot
+    /// be aimed at a batch the class never had. 120 members at capacity 50 is three batches.
+    /// </remarks>
+    [TestMethod]
+    public void TheFullSweepAcquiresEveryBatchTheCitationIssues()
+    {
+        var inventory = DeliveredInventory(Subjects(120), SpentBudget(25));
+
+        CollectionAssert.AreEqual(
+            new[] { 0, 1, 2 },
+            LuxembourgOpinionRequestCanaryPlan.EveryBatchAfterInventory(inventory)
+                .BatchOrdinalsToAcquire.ToArray(),
+            "three batches for 120 members at capacity 50.");
+    }
+
+    /// <summary>
+    /// The full-sweep gate inherits every stop the one-batch gate applies.
+    /// </summary>
+    /// <remarks>
+    /// THE POINT OF DELEGATING RATHER THAN RESTATING. Two gates that each decided when traffic is
+    /// allowed would be two rules that must agree, and every defect in this slice has been two
+    /// things that were supposed to agree and did not. Checked against <c>AfterInventory</c> itself
+    /// across every refusal the family can express, plus exhaustion and the empty class, so the two
+    /// cannot diverge without this failing.
+    /// </remarks>
+    [TestMethod]
+    public void TheFullSweepGateInheritsEveryStop()
+    {
+        var exhausted = WireRequestBudget.OfWireRequests(2);
+        Assert.IsTrue(exhausted.TryReserveAttempt());
+        Assert.IsTrue(exhausted.TryReserveAttempt());
+
+        var stopped = new List<LuxembourgOpinionRequestInventoryResult>
+        {
+            DeliveredInventory(Subjects(3), WireBudgetSnapshot.Of(exhausted)),
+            DeliveredInventory([], UnspentBudget()),
+        };
+        foreach (var refusal in Enum.GetValues<LuxembourgOpinionRequestInventoryRefusal>()
+                     .Where(static value => value != LuxembourgOpinionRequestInventoryRefusal.None))
+        {
+            stopped.Add(LuxembourgOpinionRequestInventoryResult.Refused(
+                refusal, "refused for this case", productRequestCount: 3, UnspentBudget()));
+        }
+
+        foreach (var inventory in stopped)
+        {
+            var one = LuxembourgOpinionRequestCanaryPlan.AfterInventory(inventory);
+            var every = LuxembourgOpinionRequestCanaryPlan.EveryBatchAfterInventory(inventory);
+
+            Assert.AreEqual(0, every.BatchOrdinalsToAcquire.Count, every.Verdict);
+            Assert.AreEqual(
+                one.Verdict, every.Verdict,
+                "the two gates must reach the same verdict on the same inventory.");
+        }
+    }
+
+    /// <summary>
+    /// A sweep that returned fewer batches than it was cleared for is not a completed sweep.
+    /// </summary>
+    /// <remarks>
+    /// Reported BEFORE any per-batch verdict, because a cover built over a truncated set is not a
+    /// cover whatever the batches say. The batch handed in below is a clean delivery with agreeing
+    /// accounting, so nothing except the shortfall can be what produces the verdict.
+    /// </remarks>
+    [TestMethod]
+    public void ASweepThatStoppedShortIsNotACompletedSweep()
+    {
+        var inventory = DeliveredInventory(Subjects(120), SpentBudget(25));
+        var cleared = LuxembourgOpinionRequestCanaryPlan.EveryBatchAfterInventory(inventory);
+        Assert.AreEqual(3, cleared.BatchOrdinalsToAcquire.Count);
+
+        var onlyOne = new[]
+        {
+            LuxembourgOpinionRequestGraphResult.Completed(
+                DeliveredCoverage(), productRequestCount: 3, SpentBudget(30)),
+        };
+
+        Assert.AreEqual(
+            "SweepStoppedBeforeEveryBatch",
+            LuxembourgOpinionRequestCanaryPlan.Conclude(cleared, inventory, onlyOne),
+            "one batch back out of three cleared is a stopped sweep, not a completed one.");
+    }
+
+    /// <summary>The accounting is one mechanism over N batches, not a second one for sweeps.</summary>
+    /// <remarks>
+    /// A sweep of three batches opens four sessions: the inventory's and one per batch. Counting
+    /// them any other way would invent or lose a robots fetch per batch.
+    /// </remarks>
+    [TestMethod]
+    public void TheAccountingGeneralisesToManyBatches()
+    {
+        var inventory = DeliveredInventory(Subjects(120), SpentBudget(25));
+        var batches = new[]
+        {
+            LuxembourgOpinionRequestGraphResult.Completed(
+                DeliveredCoverage(), productRequestCount: 4, SpentBudget(30)),
+            LuxembourgOpinionRequestGraphResult.Completed(
+                DeliveredCoverage(), productRequestCount: 4, SpentBudget(35)),
+            LuxembourgOpinionRequestGraphResult.Completed(
+                DeliveredCoverage(), productRequestCount: 4, SpentBudget(40)),
+        };
+
+        var reconciliation = LuxembourgOpinionRequestCanaryPlan.Reconcile(inventory, batches);
+
+        Assert.AreEqual(4, reconciliation.SessionsOpened, "one inventory session plus three batches.");
+        Assert.AreEqual(36, reconciliation.RecordedProductRequests, "24 + 4 + 4 + 4.");
+        Assert.AreEqual(40, reconciliation.FinalBudgetSpent, "the last batch's cumulative reading.");
+        Assert.AreEqual(40, reconciliation.ExpectedIfEverySessionCompleted, "36 + 4.");
+        Assert.IsTrue(reconciliation.Reconciles);
     }
 
     /// <summary>
