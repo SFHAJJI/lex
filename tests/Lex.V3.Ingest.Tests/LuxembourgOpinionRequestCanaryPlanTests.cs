@@ -487,6 +487,88 @@ public sealed class LuxembourgOpinionRequestCanaryPlanTests
     }
 
     /// <summary>
+    /// The two scopes never share a name a reader would act on.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// THE DEFECT THIS CLOSES. The retained evidence index of a completed 156-batch sweep read
+    /// <c>gate: ProceedToOneBatch</c> and <c>verdict: CanaryCompleted</c>. Every measured field in
+    /// that artifact was correct; the two words a reader starts from were not, and both named the
+    /// one-batch canary. Accurate data under a false heading is worse than missing data, because
+    /// nobody goes looking for what they have already been told.
+    /// </para>
+    /// <para>
+    /// Checked as a pair, not individually: the requirement is that the labels DIFFER by scope, so
+    /// asserting each in isolation would still pass if both were renamed to the same thing.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void TheOneBatchAndFullSweepPathsCarryDistinctTruthfulNames()
+    {
+        var inventory = DeliveredInventory(Subjects(120), SpentBudget(25));
+
+        var one = LuxembourgOpinionRequestCanaryPlan.AfterInventory(inventory);
+        var every = LuxembourgOpinionRequestCanaryPlan.EveryBatchAfterInventory(inventory);
+
+        Assert.AreEqual("ProceedToOneBatch", one.Verdict);
+        Assert.AreEqual("ProceedToEveryBatch", every.Verdict);
+        Assert.AreNotEqual(one.Verdict, every.Verdict, "a widened gate must say so in its own name.");
+        Assert.AreEqual(LuxembourgOpinionRequestAcquisitionScope.OneBatch, one.Scope);
+        Assert.AreEqual(LuxembourgOpinionRequestAcquisitionScope.EveryBatch, every.Scope);
+
+        // One batch back for the canary; three for the sweep it cleared.
+        var oneBatch = new[]
+        {
+            LuxembourgOpinionRequestGraphResult.Completed(
+                DeliveredCoverage(), productRequestCount: 4, SpentBudget(30)),
+        };
+        var threeBatches = new[]
+        {
+            LuxembourgOpinionRequestGraphResult.Completed(
+                DeliveredCoverage(), productRequestCount: 4, SpentBudget(30)),
+            LuxembourgOpinionRequestGraphResult.Completed(
+                DeliveredCoverage(), productRequestCount: 4, SpentBudget(35)),
+            LuxembourgOpinionRequestGraphResult.Completed(
+                DeliveredCoverage(), productRequestCount: 4, SpentBudget(40)),
+        };
+
+        var canaryVerdict = LuxembourgOpinionRequestCanaryPlan.Conclude(one, inventory, oneBatch);
+        var sweepVerdict = LuxembourgOpinionRequestCanaryPlan.Conclude(every, inventory, threeBatches);
+
+        Assert.AreEqual("CanaryCompleted", canaryVerdict, "the one-batch name is kept, not reused.");
+        Assert.AreEqual("SweepCompleted", sweepVerdict, "a completed sweep is not a completed canary.");
+        Assert.AreNotEqual(
+            canaryVerdict, sweepVerdict,
+            "the two completed paths must not report the same word to a reader of the evidence.");
+    }
+
+    /// <summary>A stop keeps its shared name, and still reports the scope it was asked for.</summary>
+    /// <remarks>
+    /// The stop verdicts are true of either scope - a refused inventory issues no batch whatever was
+    /// asked for - so renaming them per scope would invent a distinction the evidence does not have.
+    /// Only the scope moves, which is what a reader needs to know what was attempted.
+    /// </remarks>
+    [TestMethod]
+    public void AStopKeepsItsSharedNameButReportsTheScopeAttempted()
+    {
+        var refused = LuxembourgOpinionRequestInventoryResult.Refused(
+            LuxembourgOpinionRequestInventoryRefusal.EnumerationRefused,
+            "the publisher refused",
+            productRequestCount: 1,
+            SpentBudget(2));
+
+        var one = LuxembourgOpinionRequestCanaryPlan.AfterInventory(refused);
+        var every = LuxembourgOpinionRequestCanaryPlan.EveryBatchAfterInventory(refused);
+
+        Assert.AreEqual("InventoryRefused", one.Verdict);
+        Assert.AreEqual("InventoryRefused", every.Verdict, "the stop is true of either scope.");
+        Assert.AreEqual(LuxembourgOpinionRequestAcquisitionScope.OneBatch, one.Scope);
+        Assert.AreEqual(
+            LuxembourgOpinionRequestAcquisitionScope.EveryBatch, every.Scope,
+            "but the reader still learns which was attempted.");
+    }
+
+    /// <summary>
     /// A real completed matrix over one typed request.
     /// </summary>
     /// <remarks>
