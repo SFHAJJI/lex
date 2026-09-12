@@ -27,7 +27,25 @@ namespace Lex.V3.Ingest.Tests;
 public sealed record LuxembourgOpinionRequestCanaryDecision(
     string Verdict,
     IReadOnlyList<int> BatchOrdinalsToAcquire,
-    string Reason);
+    string Reason,
+    LuxembourgOpinionRequestAcquisitionScope Scope);
+
+/// <summary>
+/// How much of the class an attempt was cleared to acquire.
+/// </summary>
+/// <remarks>
+/// CARRIED, NOT INFERRED FROM THE VERDICT STRING. The completed-run name differs by scope, and
+/// deriving it by matching on another label would make two strings that have to agree - the shape of
+/// defect this slice has produced repeatedly. The scope is set by whichever gate issued the decision.
+/// </remarks>
+public enum LuxembourgOpinionRequestAcquisitionScope
+{
+    /// <summary>One inventory-issued batch: the bounded canary.</summary>
+    OneBatch = 0,
+
+    /// <summary>Every batch the inventory's citation issues: the full sweep.</summary>
+    EveryBatch = 1,
+}
 
 /// <summary>
 /// The two independent accountings of what the canary sent, and whether they agree.
@@ -170,7 +188,8 @@ public static class LuxembourgOpinionRequestCanaryPlan
             [FirstBatch],
             $"the inventory proved {inventory.AddressableInOrder().Count} addressable members "
                 + $"within {inventory.WireBudget.Spent} of {inventory.WireBudget.Limit} wire "
-                + "requests, so one batch may be acquired with the remainder.");
+                + "requests, so one batch may be acquired with the remainder.",
+            LuxembourgOpinionRequestAcquisitionScope.OneBatch);
     }
 
     /// <summary>
@@ -260,7 +279,18 @@ public static class LuxembourgOpinionRequestCanaryPlan
             return "AccountingDidNotReconcile";
         }
 
-        return batch.Delivered ? "CanaryCompleted" : "BatchRefused";
+        if (!batch.Delivered)
+        {
+            return "BatchRefused";
+        }
+
+        // THE NAME FOLLOWS THE SCOPE THE GATE ISSUED. A completed 156-batch sweep reported
+        // "CanaryCompleted" in its own retained evidence, which reads as the one-batch canary to
+        // anyone opening the artifact later - accurate in every field except the one word a reader
+        // starts from.
+        return decision.Scope == LuxembourgOpinionRequestAcquisitionScope.EveryBatch
+            ? "SweepCompleted"
+            : "CanaryCompleted";
     }
 
     /// <summary>
@@ -284,19 +314,26 @@ public static class LuxembourgOpinionRequestCanaryPlan
         var gated = AfterInventory(inventory);
         if (gated.BatchOrdinalsToAcquire.Count == 0)
         {
-            return gated;
+            // The stop verdicts are true of either scope - a refused inventory issues no batch
+            // whatever was asked for - so they keep their shared names, and only the scope moves.
+            return gated with { Scope = LuxembourgOpinionRequestAcquisitionScope.EveryBatch };
         }
 
         var issued = LuxembourgOpinionRequestBatchAssignment
             .Over(inventory.AddressableInOrder(), inventory.Citation!).Count;
 
+        // RENAMED, NOT REUSED. The retained index of a 156-batch run said "ProceedToOneBatch",
+        // which is false about the run it describes. A gate that widens what it clears has to say so
+        // in the word a reader sees, not only in the ordinal count they would have to go and count.
         return gated with
         {
+            Verdict = "ProceedToEveryBatch",
             BatchOrdinalsToAcquire = [.. Enumerable.Range(0, issued)],
             Reason = gated.Reason + $" The full sweep acquires all {issued} issued batches.",
+            Scope = LuxembourgOpinionRequestAcquisitionScope.EveryBatch,
         };
     }
 
     private static LuxembourgOpinionRequestCanaryDecision Stop(string verdict, string reason) =>
-        new(verdict, [], reason);
+        new(verdict, [], reason, LuxembourgOpinionRequestAcquisitionScope.OneBatch);
 }
