@@ -1784,6 +1784,71 @@ public sealed class LuxembourgRepeatedEnumerationExecutorTests
     /// executor, so every test drives one of the two production entry points, RunPartitionAsync or
     /// RunCoverAsync, with a fake transport substituted underneath it.
     /// </summary>
+    /// <summary>
+    /// The mirrored ceiling holds across runs, because this side charges robots per session too.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// THE MIRROR HAD THE VOCABULARY AND NOT THE BEHAVIOUR. <c>WireBudgetExhausted</c> was threaded
+    /// into this executor and pinned by the closed-vocabulary census, but nothing here ever drove a
+    /// run to it - so the census proved the name existed and no test proved the stop did. A mirror
+    /// that only agrees on spelling is the thing the mirror exists to prevent.
+    /// </para>
+    /// <para>
+    /// Robots is served BY PATH, not by send ordinal, so a second session's robots fetch is not
+    /// answered with a count body. Otherwise a regression about a ceiling would fail on parsing.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public async Task AReusedBudgetStillBoundsTheWireOnTheMirror()
+    {
+        var (request, witness) = BuildRequest();
+        var store = new RoutedHttpAcquisitionSessionAuditTests.RecordingCustodyStore { RefuseFallback = true };
+        var handler = new LuxembourgAcquisitionTestFixture.SequencedHandler((_, req) =>
+            req.RequestUri!.AbsolutePath.EndsWith("robots.txt", StringComparison.Ordinal)
+                ? new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Version = HttpVersion.Version11,
+                    RequestMessage = req,
+                    Content = RobotsContent(),
+                }
+                : JsonResponse(req, LuxembourgAcquisitionTestFixture.CountJson(2)));
+        var executor = new LuxembourgRepeatedEnumerationExecutor(
+            store, new LuxembourgAcquisitionTestFixture.FixedTimeProvider(), handler);
+        var budget = WireRequestBudget.OfWireRequests(2);
+
+        var codes = new List<LuxembourgEnumerationRefusal?>();
+        for (var run = 0; run < 2; run++)
+        {
+            var result = await executor.RunPartitionAsync(
+                request, witness, CancellationToken.None, budget);
+            codes.Add(result.Refusal?.Code);
+        }
+
+        Assert.IsLessThanOrEqualTo(
+            budget.Limit,
+            handler.SendCount,
+            "a second partition run reusing a spent budget must not put another robots fetch out.");
+        CollectionAssert.AreEqual(
+            new LuxembourgEnumerationRefusal?[]
+            {
+                LuxembourgEnumerationRefusal.WireBudgetExhausted,
+                LuxembourgEnumerationRefusal.WireBudgetExhausted,
+            },
+            codes.ToArray(),
+            "and the mirror must say so in its own vocabulary, not report a bootstrap failure.");
+    }
+
+    private static ByteArrayContent RobotsContent()
+    {
+        var bytes = System.Text.Encoding.UTF8.GetBytes("User-agent: *\nAllow: /\n");
+        var content = new ByteArrayContent(bytes);
+        content.Headers.TryAddWithoutValidation("Content-Type", "text/plain");
+        content.Headers.TryAddWithoutValidation(
+            "Content-Length", bytes.Length.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        return content;
+    }
+
     private static Task<LuxembourgEnumerationRunResult> Run(
         ICustodyStore store,
         LuxembourgPartitionRunRequest request,

@@ -437,7 +437,21 @@ public sealed record LuxembourgOpinionRequestInventoryRunRequest(
     LuxembourgOpinionRequestInventoryDiscoveryPlan Plan,
     string PlanResourceId,
     MachineQueryRendererSource RendererSource,
-    WireRequestBudget WireBudget);
+    WireRequestBudget WireBudget)
+{
+    /// <summary>
+    /// This run's enforced ceiling. Required, and refused at construction when it is absent.
+    /// </summary>
+    /// <remarks>
+    /// A POSITIONAL RECORD DOES NOT CHECK ITS OWN PARAMETERS. The first head of this slice
+    /// documented this as required and stopped there, so <c>new(..., null!)</c> threw nothing and
+    /// reached the pass loop as an optional budget that was simply absent - the ceiling was off and
+    /// nothing said so. The sibling graph request refuses null in <c>ForBatch</c>; this one had no
+    /// factory to refuse it in, which is exactly how the two came to disagree.
+    /// </remarks>
+    public WireRequestBudget WireBudget { get; } =
+        WireBudget ?? throw new ArgumentNullException(nameof(WireBudget));
+}
 
 /// <summary>
 /// One batch of a proven OpinionRequest inventory, swept for every predicate the publisher holds.
@@ -1230,6 +1244,24 @@ public sealed class EuRepeatedEnumerationExecutor
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(sourceWitness);
 
+        // THE SESSION'S ROBOTS FETCH, RESERVED BEFORE THE SESSION EXISTS. StartSessionAsync sends
+        // robots as its first act, so this is the last position from which that request can still
+        // be stopped rather than merely counted. Reserving inside the budget's construction instead
+        // charged one robots fetch however many sessions were opened against it.
+        //
+        // The null check is not decoration: the run request's WireBudget is documented as required,
+        // but a positional record accepts null positionally, and a null budget here would reach the
+        // pass loop as "no budget" and disable the ceiling silently - the one failure mode a
+        // ceiling must not have.
+        ArgumentNullException.ThrowIfNull(request.WireBudget);
+        if (!request.WireBudget.TryReserveAttempt())
+        {
+            return EuEnumerationRunResult.Refused(
+                new EuEnumerationRefusalDetail(
+                    EuEnumerationRefusal.WireBudgetExhausted, null, null, null, null, null, null, null, null),
+                productRequestCount: 0);
+        }
+
         var session = await StartSessionAsync(sourceWitness, cancellationToken).ConfigureAwait(false);
         if (session is null)
         {
@@ -1281,6 +1313,19 @@ public sealed class EuRepeatedEnumerationExecutor
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(sourceWitness);
+
+        // The session's robots fetch, reserved before the session exists. See the inventory entry
+        // point above for why this sits here rather than in the budget's constructor. ForBatch
+        // already refuses a null budget, so this door cannot be reached with one - but the pass
+        // loop takes an optional budget, so a run that lost it would silently run unbounded.
+        ArgumentNullException.ThrowIfNull(request.WireBudget);
+        if (!request.WireBudget.TryReserveAttempt())
+        {
+            return EuEnumerationRunResult.Refused(
+                new EuEnumerationRefusalDetail(
+                    EuEnumerationRefusal.WireBudgetExhausted, null, null, null, null, null, null, null, null),
+                productRequestCount: 0);
+        }
 
         var session = await StartSessionAsync(sourceWitness, cancellationToken).ConfigureAwait(false);
         if (session is null)

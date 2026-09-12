@@ -437,6 +437,18 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(sourceWitness);
 
+        // This partition's robots fetch, reserved before the session that sends it. The mirror has
+        // to charge robots the same way the EU side does or the two ceilings mean different things
+        // while sharing a name, which is the reason the mirror exists at all.
+        if (wireBudget is not null && !wireBudget.TryReserveAttempt())
+        {
+            return LuxembourgEnumerationRunResult.Refused(
+                new LuxembourgEnumerationRefusalDetail(
+                    LuxembourgEnumerationRefusal.WireBudgetExhausted,
+                    null, null, null, null, null, null, [], null),
+                productRequestCount: 0);
+        }
+
         var start = _testHandlerOverride is null
             ? await RoutedHttpAcquisitionSession.StartAsync(sourceWitness, _custodyStore, cancellationToken)
                 .ConfigureAwait(false)
