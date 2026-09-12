@@ -334,6 +334,11 @@ public sealed class ClosedVocabularyCensusTests
                     + "ExpectedWorkNotABaseAct",
                 "Lex.V3.Contracts.Source.Europe.EuJudgmentBodyDisposition: "
                     + "LinkOnlyNeverHeldOrFetched",
+                "Lex.V3.Contracts.Source.Europe.EuLanguageScopedExpressionDecodeRefusal: None, "
+                    + "ExpressionRowTermKindMismatch, ExpressionSubjectNotSelfClosed, "
+                    + "ExpressionWorkDisagreesWithBelongsToWork, ExpressionLanguageMissing, "
+                    + "ConflictingExpressionLanguage, WorkDateRowTermKindMismatch, "
+                    + "ConflictingWorkDate, AppendConflictsWithHeldExpression",
                 "Lex.V3.Contracts.Source.Europe.EuManifestationFormat: Formex4, Xhtml, Xhtml5, Html, "
                     + "Pdf, PdfA1a, PdfA1b, PdfA2a, Print, NoneAdmitted",
                 "Lex.V3.Contracts.Source.Europe.EuManifestationListingRefusal: None, "
