@@ -28,26 +28,24 @@ namespace Lex.V3.Ingest.Tests;
 /// owner required the run to discover its own subjects and PROVE the discovery.
 /// </para>
 /// <para>
-/// THE PREDICATE, AND A CORRECTION TO THE DECISION THAT AUTHORIZED THIS. The decision names
-/// <c>cdm:procedure_event_belongs_to_procedure_dossier</c>. That string occurs exactly once in this
-/// repository and it is prose inside a doc comment on
-/// <c>EuRepeatedEnumerationExecutor</c>; it is not an identifier any code uses. The predicate the
-/// frozen contract asks is <see cref="EuProcedureEventVocabulary.PartOfDossierPredicateUri"/>,
-/// <c>cdm:event_legal_part_of_dossier</c>, which the contract records from the authority's own
-/// description. Discovery MUST ask the same predicate the producer asks, or it hands the producer
-/// dossiers it cannot find events for and the one authorized run comes back empty for a reason that
-/// has nothing to do with the publisher. This is reported on #417 rather than resolved silently, and
-/// it is not an inference from a similar-looking identifier: it is the identifier the contract
-/// declares.
+/// THE PREDICATE. The authorizing decision first wrote
+/// <c>cdm:procedure_event_belongs_to_procedure_dossier</c>; the owner has since confirmed that was
+/// descriptive wording rather than a vocabulary coordinate, and that the authoritative member is the
+/// accepted contract's <see cref="EuProcedureEventVocabulary.PartOfDossierPredicateUri"/>,
+/// <c>cdm:event_legal_part_of_dossier</c>. Discovery and the producer boundary therefore ask the
+/// same predicate, which is what makes the two halves of this operation coherent.
 /// </para>
 /// <para>
-/// WHAT PROVES THE DISCOVERY. The request body is never retained as a custody artifact - the session
-/// records only <c>body={length}\t{sha256}</c> in the request policy - so the proof is digest-bound
-/// rather than a text read-back, which is stronger because it binds the exact bytes: this harness
-/// re-derives the query bytes and shows their SHA-256 equals the digest the retained logical request
-/// carries, and the two dossier IRIs are parsed out of the RETAINED RESPONSE PAYLOAD read back
-/// through custody, never from a constant in this file. What was asked is proved by digest; what the
-/// publisher answered is proved by the retained payload.
+/// WHAT PROVES THE DISCOVERY, CORRECTED. An earlier head of this harness asserted that the request
+/// body is never retained, and proved only that a digest had been recorded. That was wrong: the
+/// session retains every nonempty outbound body before sending it, and writes, reopens and
+/// byte-compares it. The reviewer showed how weak the earlier claim was by replacing the recorded
+/// digest with sixty-four zeroes - the candidate built and every guard still passed. So the proof is
+/// now the strong form that was available all along: for BOTH windows this run reopens the actual
+/// request bytes out of custody by their content address and requires them to equal, byte for byte,
+/// the exact query it re-derives. What was asked is proved by the bytes themselves; what the
+/// publisher answered is proved by the retained response payload, read back through custody and
+/// never from a constant in this file.
 /// </para>
 /// <para>
 /// TWO WINDOWS, NOT TWO IDENTICAL SENDS. The family two-pass enumeration proof
@@ -58,15 +56,30 @@ namespace Lex.V3.Ingest.Tests;
 /// rows on a second look, which two identical sends would not.
 /// </para>
 /// <para>
-/// THE BOUND, AND THE PART OF IT THE BUDGET CANNOT ENFORCE. The owner fixed 34 charged requests and
-/// 36 actual sends. Verified from source: the query channel registers <c>NoRedirect</c>, admitting
-/// only the request target, so a product request is exactly one send; and the EU robots route
-/// declares exactly two steps as a closed pre-declared URI list, so a third hop is inadmissible.
-/// Therefore <c>sends = charged + sessionsOpened</c> exactly. The 36-send ceiling is consequently
-/// NOT enforced by the 34-charge ceiling alone: at 34 charged, a third session would put sends at 37
-/// while the charged bound still read as satisfied. This harness therefore bounds sessions at
-/// <see cref="SessionCeiling"/> as its own guard, counts them by observation, and reports charged,
-/// sessions and derived sends separately.
+/// NOTHING UNPROVED REACHES THE PUBLISHER TWICE. Strict URI-term decoding, distinctness and window
+/// agreement are all established BEFORE the acceptance session is opened. An earlier head invoked
+/// the producer as soon as two nonempty strings had been parsed and checked their kind and
+/// distinctness afterwards, so a literal, a duplicate pair or an unstable second window could cause
+/// traffic - or throw inside the producer's canonicalization - before this run had proved it had two
+/// dossiers at all.
+/// </para>
+/// <para>
+/// THE BOUND, AND THE TWO PARTS OF IT THE BUDGET CANNOT ENFORCE. The owner fixed 34 charged
+/// requests and 36 actual sends. Verified from source: the query channel registers
+/// <c>NoRedirect</c>, admitting only the request target, so a product request is exactly one send;
+/// and the EU robots route declares exactly two steps as a closed pre-declared URI list, so a third
+/// hop is inadmissible. Each bootstrap therefore costs one charge and up to two sends.
+/// </para>
+/// <para>
+/// Two consequences, each needing its own guard. First, the send ceiling is not enforced by the
+/// charge ceiling: at 34 charged, a third bootstrap would put sends at 37 while the charged bound
+/// still read as satisfied - so bootstraps are bounded at <see cref="BootstrapCeiling"/>. Second, a
+/// REFUSED bootstrap still sends: <c>StartAsync</c> can return no session after the two-hop robots
+/// exchange has already happened, for publisher denial, unsafe policy, server failure or a
+/// source-profile refusal. An earlier head counted only sessions that opened, so a refusal packet
+/// understated the traffic it had caused. Bootstraps are therefore counted BEFORE they are
+/// attempted, the enforced upper bound is charged plus bootstraps attempted, and the observed
+/// session count is reported separately rather than standing in for it.
 /// </para>
 /// </remarks>
 [TestClass]
@@ -82,17 +95,18 @@ public sealed class EuProcedureEventLiveAcceptance
     private const int SendCeiling = 36;
 
     /// <summary>
-    /// Two sessions: one for discovery, one the producer opens for acceptance.
+    /// Robots bootstraps: one for discovery, one the producer opens for acceptance.
     /// </summary>
     /// <remarks>
-    /// Derived, not chosen. Sends exceed charges by exactly one per session on this origin, so the
-    /// send ceiling is only binding while the session count is. A third session would satisfy the
-    /// charged ceiling and breach the send ceiling at the same time.
+    /// Derived, not chosen, and counted rather than inferred from success. Each bootstrap costs one
+    /// charge and up to two sends on this origin, so the send ceiling is only binding while the
+    /// bootstrap count is - and a bootstrap that was refused has already sent.
     /// </remarks>
-    private const int SessionCeiling = 2;
+    private const int BootstrapCeiling = 2;
 
     private const string EuQueryUri = "https://publications.europa.eu/webapi/rdf/sparql";
     private const string CdmPrefix = "http://publications.europa.eu/ontology/cdm#";
+    private const string HarnessFileName = "EuProcedureEventLiveAcceptance.cs";
 
     /// <summary>The hosts this operation may contact: the endpoint and its robots redirect target.</summary>
     private static readonly string[] AdmittedHosts = ["publications.europa.eu", "op.europa.eu"];
@@ -130,7 +144,8 @@ public sealed class EuProcedureEventLiveAcceptance
 
         // ONE BUDGET FOR THE WHOLE OPERATION, discovery and acceptance alike.
         var budget = WireRequestBudget.OfWireRequests(SharedWireCeiling);
-        var sessionsOpened = 0;
+        var accounting = new Accounting();
+        var outcome = new Outcome();
         var startedAt = DateTimeOffset.UtcNow;
 
         // The three artifacts a governed send reopens by reference and no renderer produces. Seeded
@@ -140,208 +155,265 @@ public sealed class EuProcedureEventLiveAcceptance
             await store.CreateAsync(bytes, CustodyClass.NightlyFloor90d, CancellationToken.None);
         }
 
+        // THE RENDERER'S SOURCE IS THE FILE THAT IMPLEMENTS IT. An earlier head attributed this
+        // bespoke renderer to EuProcedureEventDiscoveryPlan.cs, which does not contain it, so the
+        // retained plan named a source that could not account for the query actually sent.
         var rendererSourceBytes = await File.ReadAllBytesAsync(Path.Combine(
-            checkout, "src/Lex.V3.Contracts/Source/Europe/EuProcedureEventDiscoveryPlan.cs"));
+            checkout, "tests", "Lex.V3.Ingest.Tests", HarnessFileName));
 
-        // ---- DISCOVERY ------------------------------------------------------------------------
         var narrow = DiscoveryRequest(limit: 2, rendererSourceBytes);
         var wide = DiscoveryRequest(limit: 3, rendererSourceBytes);
 
-        // The robots plan item, reserved before the session exists: two sends, charged once.
-        if (!budget.TryReserveAttempt())
+        try
         {
-            await RetainAsync(
-                root, store, "BudgetExhaustedBeforeDiscovery", null, budget, sessionsOpened,
-                null, null, startedAt);
-            Assert.Fail("the budget was spent before discovery opened a session.");
-        }
-
-        var spentBeforeDiscovery = budget.Spent;
-        var start = await RoutedHttpAcquisitionSession.StartAsync(
-            narrow.Request, store, CancellationToken.None);
-        if (budget.Spent > spentBeforeDiscovery || start.Session is not null)
-        {
-            sessionsOpened++;
-        }
-
-        if (start.Session is null)
-        {
-            await RetainAsync(
-                root, store, "DiscoverySessionRefused",
-                $"{start.Kind} safety={start.LocalSafetyReason} operational={start.OperationalReason}",
-                budget, sessionsOpened, null, null, startedAt);
-            Assert.Fail(
-                $"the governed session did not start: {start.Kind}. Evidence retained under {root}.");
-        }
-
-        IReadOnlyList<string> narrowDossiers;
-        IReadOnlyList<string> wideDossiers;
-        string? narrowBodySha;
-        using (var session = start.Session)
-        {
-            var glue = new RepeatedEnumerationDeliveryReopenGlue(store);
-            var membership = new Dictionary<string, CustodyMembership>(StringComparer.Ordinal);
-            var counted = 0;
-
-            var narrowOutcome = await glue.ObserveAsync(
-                session, narrow.Request, "application/sparql-results+json", membership,
-                () => counted, value => counted = value, CancellationToken.None, budget);
-            if (narrowOutcome.Transport is not { } narrowTransport)
+            if (!budget.TryReserveAttempt())
             {
-                await RetainAsync(
-                    root, store, "DiscoveryRefused", narrowOutcome.Failure?.Kind.ToString(),
-                    budget, sessionsOpened, null, null, startedAt);
-                Assert.Fail(
-                    $"the narrow discovery window was refused: {narrowOutcome.Failure?.Kind}. "
-                    + $"Evidence retained under {root}.");
+                outcome.Verdict = "BudgetExhaustedBeforeDiscovery";
                 return;
             }
 
-            var wideOutcome = await glue.ObserveAsync(
-                session, wide.Request, "application/sparql-results+json", membership,
-                () => counted, value => counted = value, CancellationToken.None, budget);
-            if (wideOutcome.Transport is not { } wideTransport)
+            // COUNTED BEFORE IT IS ATTEMPTED. The hops happen whether or not a session results.
+            accounting.BootstrapsAttempted++;
+            var start = await RoutedHttpAcquisitionSession.StartAsync(
+                narrow.Request, store, CancellationToken.None);
+            accounting.DiscoveryBootstrapEvidencePresent = start.Evidence is not null;
+
+            if (start.Session is null)
             {
-                await RetainAsync(
-                    root, store, "DiscoveryWideWindowRefused", wideOutcome.Failure?.Kind.ToString(),
-                    budget, sessionsOpened, null, null, startedAt);
-                Assert.Fail(
-                    $"the wide discovery window was refused: {wideOutcome.Failure?.Kind}. "
-                    + $"Evidence retained under {root}.");
+                outcome.Verdict = "DiscoveryBootstrapRefused";
+                outcome.Refusal = $"{start.Kind} safety={start.LocalSafetyReason} "
+                    + $"operational={start.OperationalReason}";
                 return;
             }
 
-            // WHAT WAS ASKED, PROVED BY DIGEST. The body is not on disk; its length and SHA-256 are.
-            narrowBodySha = narrowTransport.LogicalRequest.Body.Sha256;
-            wideDossiers = ParseDossiers(wideTransport.RetainedPayloadBytes.Span);
-            narrowDossiers = ParseDossiers(narrowTransport.RetainedPayloadBytes.Span);
-        }
+            accounting.SessionsOpened++;
+            using (var session = start.Session)
+            {
+                var glue = new RepeatedEnumerationDeliveryReopenGlue(store);
+                var membership = new Dictionary<string, CustodyMembership>(StringComparer.Ordinal);
+                var counted = 0;
 
-        // ---- ACCEPTANCE ----------------------------------------------------------------------
-        // The producer opens its own session, so discovery's is disposed above first.
-        string? acceptanceRefusal = null;
-        EuProcedureEventProductionResult? production = null;
-        var discovered = narrowDossiers.Take(2).ToArray();
+                outcome.Narrow = await ObserveWindowAsync(
+                    glue, session, store, narrow, membership,
+                    () => counted, value => counted = value, budget);
+                if (outcome.Narrow.Refusal is not null)
+                {
+                    outcome.Verdict = "DiscoveryWindowRefused";
+                    outcome.Refusal = "narrow: " + outcome.Narrow.Refusal;
+                    return;
+                }
 
-        if (discovered.Length == 2 && sessionsOpened < SessionCeiling)
-        {
+                outcome.Wide = await ObserveWindowAsync(
+                    glue, session, store, wide, membership,
+                    () => counted, value => counted = value, budget);
+                if (outcome.Wide.Refusal is not null)
+                {
+                    outcome.Verdict = "DiscoveryWindowRefused";
+                    outcome.Refusal = "wide: " + outcome.Wide.Refusal;
+                    return;
+                }
+            }
+
+            // ---- THE DISCOVERY IS PROVED BEFORE ANYTHING ELSE IS ASKED ------------------------
+            var narrowIris = outcome.Narrow!.Dossiers;
+            var wideIris = outcome.Wide!.Dossiers;
+
+            if (!outcome.Narrow.RequestBytesReopenedAndEqual
+                || !outcome.Wide.RequestBytesReopenedAndEqual)
+            {
+                outcome.Verdict = "AskedBytesDidNotReopenEqual";
+                return;
+            }
+
+            if (narrowIris.Count != 2)
+            {
+                outcome.Verdict = "DiscoveryDidNotYieldTwoDossiers";
+                outcome.Refusal = $"the narrow window returned {narrowIris.Count} URI term(s).";
+                return;
+            }
+
+            if (string.Equals(narrowIris[0], narrowIris[1], StringComparison.Ordinal))
+            {
+                outcome.Verdict = "DiscoveryReturnedADuplicatePair";
+                outcome.Refusal = narrowIris[0];
+                return;
+            }
+
+            if (!WindowsAgree(narrowIris, wideIris))
+            {
+                outcome.Verdict = "DiscoveryWindowsDisagree";
+                outcome.Refusal =
+                    $"narrow=[{string.Join(", ", narrowIris)}] wide=[{string.Join(", ", wideIris)}]";
+                return;
+            }
+
+            outcome.Discovered = [narrowIris[0], narrowIris[1]];
+
+            // ---- ACCEPTANCE -------------------------------------------------------------------
+            if (accounting.BootstrapsAttempted >= BootstrapCeiling)
+            {
+                outcome.Verdict = "BootstrapCeilingReachedBeforeAcceptance";
+                return;
+            }
+
             var spentBeforeAcceptance = budget.Spent;
-            production = await new EuProcedureEventProducer(store, TimeProvider.System).RunAsync(
+            accounting.BootstrapsAttempted++;
+            var production = await new EuProcedureEventProducer(store, TimeProvider.System).RunAsync(
                 new EuProcedureEventRunRequest(
                     EuProcedureEventDiscoveryPlan.Create(),
-                    discovered,
+                    outcome.Discovered,
                     NewUrn(),
                     MachineQueryRendererSource.Open(
-                        new SourceArtifactRef(
-                            NewUrn(), Convert.ToHexStringLower(SHA256.HashData(rendererSourceBytes))),
+                        new SourceArtifactRef(NewUrn(), Sha256(rendererSourceBytes)),
                         rendererSourceBytes),
                     budget),
                 EuAcquisitionTestFixture.SourceWitness(),
                 CancellationToken.None);
             if (budget.Spent > spentBeforeAcceptance)
             {
-                sessionsOpened++;
+                accounting.SessionsOpened++;
             }
 
-            acceptanceRefusal = production.Delivered ? null : production.Refusal.ToString();
-        }
+            outcome.ProductRequestCount = production.ProductRequestCount;
+            outcome.Delivered = production.Delivered;
+            outcome.CompletionEvidenceSha256 = production.CompletionEvidenceRef?.Sha256;
+            outcome.ObservationCount = production.Observations?.Count;
+            outcome.ExcludedEventCount = production.ExcludedEvents?.Count;
+            outcome.DossiersAskedAbout = production.DossiersAskedAbout?.ToArray();
+            outcome.Verdict = production.Delivered ? "AcceptanceDelivered" : "AcceptanceRefused";
+            if (!production.Delivered)
+            {
+                outcome.Refusal = production.Refusal + " " + production.Detail;
+                return;
+            }
 
-        // ---- RETAINED BEFORE IT IS JUDGED ----------------------------------------------------
-        // A POSITIVE OBSERVATION, FOUND THROUGH THE RESULT'S OWN ACCESSOR. EventsOf is how the
-        // contract answers "what did this dossier hold", and it distinguishes an evidenced empty
-        // answer from a dossier never asked about. Every delivered observation carries a date by
-        // construction - an undated event refuses the row by name rather than arriving null - so
-        // "positive" is checked as typed AND dated rather than as non-null.
-        EuProcedureEventObservation? positive = null;
-        string? positiveDossier = null;
-        if (production is { Delivered: true })
-        {
-            foreach (var dossier in discovered)
+            // INTERPRETATION IS LAST, AND IT CAN THROW. EventsOf throws when the delivered result
+            // does not carry a dossier this run asked about, which is exactly the material mismatch
+            // a terminal packet most needs to record. An earlier head interpreted before retaining
+            // and left no index at all on that path; the finally below now covers it.
+            foreach (var dossier in outcome.Discovered)
             {
                 var candidate = production.EventsOf(dossier).FirstOrDefault(
                     static observation => observation.ObservedTypeIris.Count > 0
                         && observation.RawDateLexical.Length > 0);
                 if (candidate is not null)
                 {
-                    positive = candidate;
-                    positiveDossier = dossier;
+                    outcome.PositiveDossier = dossier;
+                    outcome.PositiveEventIri = candidate.EventIri;
+                    outcome.PositiveRawDate = candidate.RawDateLexical;
+                    outcome.PositiveDateDatatypeIri = candidate.DateDatatypeIri;
+                    outcome.PositiveTypeIris = [.. candidate.ObservedTypeIris];
                     break;
                 }
             }
         }
-        await RetainAsync(
-            root, store,
-            production is null ? "AcceptanceNotAttempted"
-                : production.Delivered ? "AcceptanceDelivered" : "AcceptanceRefused",
-            acceptanceRefusal, budget, sessionsOpened, discovered, production, startedAt,
-            narrowBodySha, narrowDossiers, wideDossiers);
+        catch (Exception error)
+        {
+            // A THROW IS AN OUTCOME, AND ITS COST STILL HAS TO BE REPORTED.
+            outcome.Verdict = "Faulted";
+            outcome.Refusal = error.GetType().Name + ": " + error.Message;
+            throw;
+        }
+        finally
+        {
+            await RetainAsync(root, store, outcome, accounting, budget, startedAt);
+            TestContext?.WriteLine("terminal evidence: " + Path.Combine(root, "terminal-index.json"));
+        }
 
+        // ---- JUDGEMENT, ENTIRELY AFTER THE TERMINAL WRITE ------------------------------------
         var offenders = OffendingHosts(root);
-
-        // ---- JUDGEMENT -----------------------------------------------------------------------
         Assert.IsEmpty(
             offenders,
             "this operation may contact the SPARQL endpoint and its robots redirect target and "
             + "nothing else: " + string.Join("; ", offenders.Take(10)));
 
-        Assert.HasCount(
-            2, discovered,
-            "the decision requires exactly two distinct discovered dossiers; the publisher returned "
-            + $"{narrowDossiers.Count}. Evidence retained under {root}.");
         Assert.AreEqual(
-            discovered.Length, discovered.Distinct(StringComparer.Ordinal).Count(),
-            "the two discovered dossiers must be distinct.");
+            "AcceptanceDelivered", outcome.Verdict,
+            $"the operation did not deliver: {outcome.Verdict} {outcome.Refusal}. "
+            + $"Evidence retained under {root}.");
+
         Assert.IsTrue(
-            WindowsAgree(discovered, wideDossiers),
-            "the wider window must agree with the narrow one on its first rows, or the result set is "
-            + "not stably ordered and neither window discovered anything: "
-            + $"narrow=[{string.Join(", ", discovered)}] wide=[{string.Join(", ", wideDossiers)}]");
+            outcome.Narrow!.RequestBytesReopenedAndEqual,
+            "the narrow window's request bytes must reopen from custody and equal, byte for byte, "
+            + "the exact query this run re-derived.");
+        Assert.IsTrue(
+            outcome.Wide!.RequestBytesReopenedAndEqual,
+            "and so must the wider window's.");
 
         Assert.IsNotNull(
-            production,
-            $"acceptance was never attempted. Evidence retained under {root}.");
-        Assert.IsTrue(
-            production.Delivered,
-            $"the producer refused: {production.Refusal} {production.Detail}. "
-            + $"Evidence retained under {root}.");
-        Assert.IsNotNull(
-            positive,
-            "the decision requires at least one POSITIVE typed observation carrying its date; the run "
-            + $"delivered {production.Observations?.Count ?? 0} observation(s), "
-            + $"{production.ExcludedEvents?.Count ?? 0} excluded, and none was both typed and dated. "
-            + $"Evidence retained under {root}.");
+            outcome.PositiveDossier,
+            "the decision requires at least one POSITIVE typed observation carrying its date; the "
+            + $"run delivered {outcome.ObservationCount ?? 0} observation(s) and "
+            + $"{outcome.ExcludedEventCount ?? 0} excluded. Evidence retained under {root}.");
+        Assert.IsNotEmpty(outcome.PositiveEventIri!, "a positive observation names its event node.");
         Assert.IsNotEmpty(
-            positive.EventIri,
-            "a positive observation names the event node it is about.");
-        Assert.IsNotEmpty(
-            positive.DateDatatypeIri,
+            outcome.PositiveDateDatatypeIri!,
             "the date arrives with the datatype the publisher gave it, never widened or guessed.");
-        Assert.IsNotNull(positiveDossier);
-        Assert.Contains(
-            positiveDossier, discovered,
-            "the observation was reached through a dossier this run discovered.");
-        Assert.IsNotNull(production.DossiersAskedAbout);
-        foreach (var dossier in discovered)
+        Assert.IsNotNull(
+            outcome.CompletionEvidenceSha256,
+            "provenance: a delivered run cites the acquisition run that produced it.");
+        Assert.IsNotNull(outcome.DossiersAskedAbout);
+        foreach (var dossier in outcome.Discovered!)
         {
             Assert.Contains(
-                dossier, production.DossiersAskedAbout,
+                dossier, outcome.DossiersAskedAbout!,
                 "the producer must have asked about exactly the discovered dossiers.");
         }
-        Assert.IsNotNull(
-            production.CompletionEvidenceRef,
-            "provenance: a delivered run cites the acquisition run that produced it.");
 
         // ---- THE BOUNDS ----------------------------------------------------------------------
         Assert.IsLessThanOrEqualTo(
-            SessionCeiling, sessionsOpened,
-            $"sessions are bounded at {SessionCeiling} because the send ceiling depends on it.");
+            BootstrapCeiling, accounting.BootstrapsAttempted,
+            $"bootstraps are bounded at {BootstrapCeiling} because the send ceiling depends on it.");
         Assert.IsLessThanOrEqualTo(
             SharedWireCeiling, budget.Spent,
             $"charged requests are bounded at {SharedWireCeiling}.");
         Assert.IsLessThanOrEqualTo(
-            SendCeiling, budget.Spent + sessionsOpened,
-            $"actual sends are charged plus one robots redirect hop per session, bounded at "
-            + $"{SendCeiling}.");
+            SendCeiling, budget.Spent + accounting.BootstrapsAttempted,
+            "actual sends are charged plus one robots redirect hop per bootstrap ATTEMPTED, "
+            + $"bounded at {SendCeiling}.");
+    }
+
+    /// <summary>
+    /// One discovery window: sent, its request bytes reopened and compared, its answer parsed.
+    /// </summary>
+    /// <remarks>
+    /// THE REQUEST BYTES ARE REOPENED, NOT TRUSTED. The session retains every nonempty outbound
+    /// body before sending it, so the exact question is recoverable by content address. Recording
+    /// its digest alone proves nothing - a recorded digest of sixty-four zeroes passed every guard
+    /// an earlier head had.
+    /// </remarks>
+    private static async Task<Window> ObserveWindowAsync(
+        RepeatedEnumerationDeliveryReopenGlue glue,
+        RoutedHttpAcquisitionSession session,
+        ICustodyStore store,
+        (BoundMachineRequest Request, byte[] Body) bound,
+        Dictionary<string, CustodyMembership> membership,
+        Func<int> currentCount,
+        Action<int> setCount,
+        WireRequestBudget budget)
+    {
+        var window = new Window();
+        var observed = await glue.ObserveAsync(
+            session, bound.Request, "application/sparql-results+json", membership,
+            currentCount, setCount, CancellationToken.None, budget);
+        if (observed.Transport is not { } transport)
+        {
+            window.Refusal = observed.Failure?.Kind.ToString() ?? "no transport and no failure";
+            return window;
+        }
+
+        window.AskedBodySha256 = transport.LogicalRequest.Body.Sha256;
+        window.AskedBodyLength = (long)transport.LogicalRequest.Body.Length;
+        window.PayloadSha256 = transport.DurableWriteReceipt.Reference.ContentSha256;
+
+        var reopened = await store.ReadByDigestAsync(
+            window.AskedBodySha256, CancellationToken.None);
+        window.RequestBytesReopenedAndEqual =
+            window.AskedBodyLength == bound.Body.Length
+            && reopened.Span.SequenceEqual(bound.Body);
+
+        window.Dossiers = ParseDossiers(transport.RetainedPayloadBytes.Span);
+        return window;
     }
 
     /// <summary>
@@ -423,8 +495,7 @@ public sealed class EuProcedureEventLiveAcceptance
     /// wider window of a stably ordered result set begins with the narrower one. A wide window
     /// SHORTER than the narrow one is disagreement, not a pass by vacuity.
     /// </remarks>
-    internal static bool WindowsAgree(
-        IReadOnlyList<string> narrow, IReadOnlyList<string> wide)
+    internal static bool WindowsAgree(IReadOnlyList<string> narrow, IReadOnlyList<string> wide)
     {
         ArgumentNullException.ThrowIfNull(narrow);
         ArgumentNullException.ThrowIfNull(wide);
@@ -444,13 +515,22 @@ public sealed class EuProcedureEventLiveAcceptance
         return true;
     }
 
-    /// <summary>Every <c>?dossier</c> IRI the publisher returned, in the order it returned them.</summary>
+    /// <summary>
+    /// Every <c>?dossier</c> URI TERM the publisher returned, in the order it returned them.
+    /// </summary>
+    /// <remarks>
+    /// THE TERM TYPE IS PART OF THE ANSWER. An earlier head accepted any nonempty value, so a
+    /// literal or a blank node would have been handed to the producer as though it were a dossier
+    /// IRI - and the producer would then have honestly reported finding no events for it. Only
+    /// <c>"type":"uri"</c> becomes a subject.
+    /// </remarks>
     internal static IReadOnlyList<string> ParseDossiers(ReadOnlySpan<byte> payload)
     {
         using var document = JsonDocument.Parse(payload.ToArray());
         var rows = new List<string>();
         if (!document.RootElement.TryGetProperty("results", out var results)
-            || !results.TryGetProperty("bindings", out var bindings))
+            || !results.TryGetProperty("bindings", out var bindings)
+            || bindings.ValueKind != JsonValueKind.Array)
         {
             return rows;
         }
@@ -458,6 +538,8 @@ public sealed class EuProcedureEventLiveAcceptance
         foreach (var binding in bindings.EnumerateArray())
         {
             if (binding.TryGetProperty("dossier", out var dossier)
+                && dossier.TryGetProperty("type", out var kind)
+                && string.Equals(kind.GetString(), "uri", StringComparison.Ordinal)
                 && dossier.TryGetProperty("value", out var value)
                 && value.GetString() is { Length: > 0 } iri)
             {
@@ -469,65 +551,68 @@ public sealed class EuProcedureEventLiveAcceptance
     }
 
     /// <summary>
-    /// One terminal index, written on every outcome before any of it is judged.
+    /// One terminal index, written in a <c>finally</c> so no outcome can escape without it.
     /// </summary>
     /// <remarks>
-    /// Mirrors the integrated draft sweep. A run that stopped is the run whose cost most needs
-    /// stating, so this is written for refusals exactly as for success, and it reports charged
-    /// requests, sessions and DERIVED SENDS separately because the two ceilings are different
-    /// promises.
+    /// Mirrors the integrated draft sweep and then goes further, because the reviewer showed that
+    /// "every outcome" was not true of an earlier head: interpretation that throws, malformed JSON
+    /// and a dossier mismatch all left no index. This runs in a <c>finally</c>, so a fault is
+    /// reported rather than silently having cost traffic, and it distinguishes the ENFORCED send
+    /// upper bound from the observed session count.
     /// </remarks>
     private static async Task RetainAsync(
         string root,
         FileSystemCustodyStore store,
-        string verdict,
-        string? refusal,
+        Outcome outcome,
+        Accounting accounting,
         WireRequestBudget budget,
-        int sessionsOpened,
-        IReadOnlyList<string>? discovered,
-        EuProcedureEventProductionResult? production,
-        DateTimeOffset startedAt,
-        string? askedBodySha256 = null,
-        IReadOnlyList<string>? narrowWindow = null,
-        IReadOnlyList<string>? wideWindow = null)
+        DateTimeOffset startedAt)
     {
         var index = JsonSerializer.SerializeToUtf8Bytes(
             new
             {
                 purpose = "E8 EU procedure-event bounded discovery and live acceptance: terminal "
-                    + "accounting, retained on every outcome including safety stops.",
-                verdict,
-                refusal,
+                    + "accounting, retained on every outcome including safety stops and faults.",
+                verdict = outcome.Verdict,
+                refusal = outcome.Refusal,
                 observedFromUtc = startedAt.UtcDateTime.ToString("O"),
                 observedToUtc = DateTimeOffset.UtcNow.UtcDateTime.ToString("O"),
                 predicate = EuProcedureEventVocabulary.PartOfDossierPredicateUri,
-                predicateNote = "The owner decision named "
-                    + "cdm:procedure_event_belongs_to_procedure_dossier, which exists nowhere in "
-                    + "this repository except one prose doc comment. This run asked the predicate "
-                    + "the frozen contract declares, so that discovery and acceptance ask the same "
-                    + "thing. Reported on #417.",
-                askedBodySha256,
-                narrowWindow,
-                wideWindow,
-                discovered,
+                predicateNote = "The authorizing decision first wrote "
+                    + "cdm:procedure_event_belongs_to_procedure_dossier; the owner confirmed that "
+                    + "was descriptive wording and that the authoritative member is the accepted "
+                    + "contract's cdm:event_legal_part_of_dossier, which is what this run asked.",
+                narrowWindow = Describe(outcome.Narrow),
+                wideWindow = Describe(outcome.Wide),
+                discovered = outcome.Discovered,
+                dossiersAskedAbout = outcome.DossiersAskedAbout,
+                positive = outcome.PositiveDossier is null ? null : new
+                {
+                    dossier = outcome.PositiveDossier,
+                    eventIri = outcome.PositiveEventIri,
+                    rawDateLexical = outcome.PositiveRawDate,
+                    dateDatatypeIri = outcome.PositiveDateDatatypeIri,
+                    typeIris = outcome.PositiveTypeIris,
+                },
                 chargedRequests = budget.Spent,
                 chargedCeiling = budget.Limit,
                 exhausted = budget.Exhausted,
-                sessionsOpened,
-                sessionCeiling = SessionCeiling,
-                derivedActualSends = budget.Spent + sessionsOpened,
+                bootstrapsAttempted = accounting.BootstrapsAttempted,
+                bootstrapCeiling = BootstrapCeiling,
+                sessionsOpened = accounting.SessionsOpened,
+                discoveryBootstrapEvidencePresent = accounting.DiscoveryBootstrapEvidencePresent,
+                enforcedSendUpperBound = budget.Spent + accounting.BootstrapsAttempted,
                 sendCeiling = SendCeiling,
-                sendDerivation = "One send per charged product request, plus one uncharged robots "
-                    + "redirect hop per session: the query channel admits no product redirect and "
-                    + "the robots route declares exactly two steps.",
-                productRequestCount = production?.ProductRequestCount,
-                delivered = production?.Delivered,
-                observationCount = production?.Observations?.Count,
-                typedAndDatedObservationCount = production?.Observations?.Count(
-                    static observation => observation.ObservedTypeIris.Count > 0
-                        && observation.RawDateLexical.Length > 0),
-                excludedEventCount = production?.ExcludedEvents?.Count,
-                completionEvidenceSha256 = production?.CompletionEvidenceRef?.Sha256,
+                sendDerivation = "One send per charged product request, plus up to one uncharged "
+                    + "robots redirect hop per bootstrap ATTEMPTED - counted before the attempt, "
+                    + "because a refused bootstrap has already sent. The query channel admits no "
+                    + "product redirect and the robots route declares exactly two steps, so this "
+                    + "is an upper bound rather than an estimate.",
+                productRequestCount = outcome.ProductRequestCount,
+                delivered = outcome.Delivered,
+                observationCount = outcome.ObservationCount,
+                excludedEventCount = outcome.ExcludedEventCount,
+                completionEvidenceSha256 = outcome.CompletionEvidenceSha256,
                 root,
             },
             new JsonSerializerOptions { WriteIndented = true });
@@ -535,6 +620,16 @@ public sealed class EuProcedureEventLiveAcceptance
         await store.CreateAsync(index, CustodyClass.NightlyFloor90d, CancellationToken.None);
         await File.WriteAllBytesAsync(Path.Combine(root, "terminal-index.json"), index);
     }
+
+    private static object? Describe(Window? window) => window is null ? null : new
+    {
+        askedBodySha256 = window.AskedBodySha256,
+        askedBodyLength = window.AskedBodyLength,
+        requestBytesReopenedAndEqual = window.RequestBytesReopenedAndEqual,
+        payloadSha256 = window.PayloadSha256,
+        dossiers = window.Dossiers,
+        refusal = window.Refusal,
+    };
 
     /// <summary>Any host in the retained evidence that this operation was not permitted to contact.</summary>
     private static IReadOnlyList<string> OffendingHosts(string root)
@@ -548,7 +643,7 @@ public sealed class EuProcedureEventLiveAcceptance
                 var index = text.IndexOf(token, StringComparison.Ordinal);
                 while (index >= 0)
                 {
-                    var end = text.IndexOfAny(['/', '\"', '\n', '\t', ' '], index + token.Length);
+                    var end = text.IndexOfAny(['/', '"', '\n', '\t', ' '], index + token.Length);
                     var host = end < 0
                         ? text[(index + token.Length)..]
                         : text[(index + token.Length)..end];
@@ -556,6 +651,7 @@ public sealed class EuProcedureEventLiveAcceptance
                         && !AdmittedHosts.Contains(host, StringComparer.OrdinalIgnoreCase)
                         && !host.StartsWith("www.w3.org", StringComparison.OrdinalIgnoreCase)
                         && !host.StartsWith("data.europa.eu", StringComparison.OrdinalIgnoreCase)
+                        && !host.StartsWith("lex.invalid", StringComparison.OrdinalIgnoreCase)
                         && !offenders.Contains(host, StringComparer.OrdinalIgnoreCase))
                     {
                         offenders.Add(host);
@@ -587,13 +683,76 @@ public sealed class EuProcedureEventLiveAcceptance
         return directory.FullName;
     }
 
+    /// <summary>What this run spent, counted rather than inferred from success.</summary>
+    private sealed class Accounting
+    {
+        internal int BootstrapsAttempted { get; set; }
+
+        internal int SessionsOpened { get; set; }
+
+        internal bool DiscoveryBootstrapEvidencePresent { get; set; }
+    }
+
+    /// <summary>One discovery window's retained identities and its answer.</summary>
+    private sealed class Window
+    {
+        internal string? AskedBodySha256 { get; set; }
+
+        internal long AskedBodyLength { get; set; }
+
+        internal bool RequestBytesReopenedAndEqual { get; set; }
+
+        internal string? PayloadSha256 { get; set; }
+
+        internal IReadOnlyList<string> Dossiers { get; set; } = [];
+
+        internal string? Refusal { get; set; }
+    }
+
+    /// <summary>Everything the terminal index reports, filled in as the run proceeds.</summary>
+    private sealed class Outcome
+    {
+        internal string Verdict { get; set; } = "NotStarted";
+
+        internal string? Refusal { get; set; }
+
+        internal Window? Narrow { get; set; }
+
+        internal Window? Wide { get; set; }
+
+        internal string[]? Discovered { get; set; }
+
+        internal string[]? DossiersAskedAbout { get; set; }
+
+        internal int? ProductRequestCount { get; set; }
+
+        internal bool? Delivered { get; set; }
+
+        internal int? ObservationCount { get; set; }
+
+        internal int? ExcludedEventCount { get; set; }
+
+        internal string? CompletionEvidenceSha256 { get; set; }
+
+        internal string? PositiveDossier { get; set; }
+
+        internal string? PositiveEventIri { get; set; }
+
+        internal string? PositiveRawDate { get; set; }
+
+        internal string? PositiveDateDatatypeIri { get; set; }
+
+        internal string[]? PositiveTypeIris { get; set; }
+    }
+
     /// <summary>
     /// The renderer for this run's discovery question.
     /// </summary>
     /// <remarks>
-    /// Its renderer SOURCE is the frozen procedure-event plan's own file bytes, as the integrated
-    /// live harnesses do, so the retained provenance names the reviewed source this question was
-    /// written against rather than a fixture label.
+    /// Its renderer SOURCE is this harness's own file bytes, because this file is what implements
+    /// it. An earlier head pointed the source reference at the frozen procedure-event plan, which
+    /// does not contain this renderer, so the retained plan attributed the query to a file that
+    /// could not account for it.
     /// </remarks>
     private sealed class DiscoveryRenderer(
         SourceArtifactRef rendererProfileRef,

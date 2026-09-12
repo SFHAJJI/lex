@@ -9,18 +9,24 @@ namespace Lex.V3.Ingest.Tests;
 /// <remarks>
 /// <para>
 /// GUARDS READ CODE, NEVER PROSE. That harness documents its predicate, both ceilings and its
-/// session bound in doc comments, so a <c>Contains</c> over the raw file would be satisfied by the
+/// bootstrap bound in doc comments, so a <c>Contains</c> over the raw file would be satisfied by the
 /// explanation of a property rather than by the property. This exact failure has already happened
-/// twice in this programme - once where a guard passed while the array entry it guarded was mutated
-/// away, because the comment beside it named the same draft. So every assertion below runs over
-/// <see cref="CodeOnly"/>, with whole-line comments removed first.
+/// twice in this programme. So every assertion below runs over <see cref="CodeOnly"/>, with
+/// whole-line comments removed first.
 /// </para>
 /// <para>
-/// THE PROPERTIES THAT MATTER HERE ARE DIFFERENT FROM THE DRAFT SWEEP'S. That one had to be stopped
-/// from substituting its subjects; this one has no subjects to substitute, because it discovers
-/// them. What it must instead be stopped from doing is SHORT-CIRCUITING the discovery: a hardcoded
-/// dossier IRI, or a predicate literal that could drift from the contract, would turn a proved
-/// discovery back into the caller guess the owner decision exists to forbid.
+/// AND A GUARD MUST PIN THE COMPARISON, NOT THE RECORDING. The reviewer demonstrated the difference
+/// on an earlier head: he replaced the recorded request digest with sixty-four zeroes, and the
+/// candidate built while all seven guards still passed, because they only proved a digest had been
+/// written down. <see cref="TheAskedRequestBytesAreReopenedAndCompared"/> exists because of that
+/// mutation, and it pins the reopen-and-byte-compare rather than the field that holds its result.
+/// </para>
+/// <para>
+/// SEVERAL GUARDS ARE ORDERING GUARDS. Three of the four findings against the earlier head were
+/// about order, not absence: unproved values reached the producer before they were checked, a
+/// throwing interpretation ran before the terminal write, and a bootstrap was counted only after it
+/// had succeeded. Counting occurrences cannot see any of those, so those guards compare source
+/// positions.
 /// </para>
 /// </remarks>
 [TestClass]
@@ -28,13 +34,7 @@ public sealed class EuProcedureEventLiveGuardTests
 {
     private const string HarnessFile = "EuProcedureEventLiveAcceptance.cs";
 
-    /// <summary>The two owner-fixed ceilings and the session bound are the numbers in the code.</summary>
-    /// <remarks>
-    /// The owner decision fixed 34 charged requests and 36 actual sends. The session bound is
-    /// derived rather than granted: sends exceed charges by one per session on this origin, so 36 is
-    /// only binding while sessions are. All three are asserted as declarations, because a number in
-    /// a doc comment enforces nothing.
-    /// </remarks>
+    /// <summary>The two owner-fixed ceilings and the bootstrap bound are the numbers in the code.</summary>
     [TestMethod]
     public void TheOwnerFixedCeilingsAreTheNumbersTheRunEnforces()
     {
@@ -47,16 +47,11 @@ public sealed class EuProcedureEventLiveGuardTests
             1, CountOf(code, "private const int SendCeiling = 36;"),
             "the owner-fixed actual-send ceiling.");
         Assert.AreEqual(
-            1, CountOf(code, "private const int SessionCeiling = 2;"),
-            "the derived session bound, without which the send ceiling is not enforced.");
+            1, CountOf(code, "private const int BootstrapCeiling = 2;"),
+            "the derived bootstrap bound, without which the send ceiling is not enforced.");
     }
 
     /// <summary>One budget for the whole operation, and never the offline helper's ceiling.</summary>
-    /// <remarks>
-    /// The precedent this guards against is concrete: an earlier head put the offline fixture's
-    /// 100,000-request helper into a live sweep, giving a 156-batch run 157 independent ceilings and
-    /// no bound at all. A per-half budget here would do the same thing to a two-half operation.
-    /// </remarks>
     [TestMethod]
     public void OneBudgetSpansDiscoveryAndAcceptance()
     {
@@ -74,15 +69,80 @@ public sealed class EuProcedureEventLiveGuardTests
     }
 
     /// <summary>
+    /// The asked request bytes are reopened out of custody and byte-compared.
+    /// </summary>
+    /// <remarks>
+    /// THE GUARD THE REVIEWER'S ZERO-DIGEST MUTATION PROVED WAS MISSING. An earlier head recorded
+    /// <c>LogicalRequest.Body.Sha256</c> and asserted nothing about it, so replacing that digest
+    /// with zeroes changed no test result. Recording a digest is not proof of what was asked; only
+    /// reopening the retained bytes by content address and comparing them to the re-derived query
+    /// is. Both the reopen and the comparison are pinned, and so is the fact that both windows are
+    /// judged on the result.
+    /// </remarks>
+    [TestMethod]
+    public void TheAskedRequestBytesAreReopenedAndCompared()
+    {
+        var code = CodeOnly(HarnessSource());
+
+        // THE REVIEWER'S OWN MUTATION, PINNED DIRECTLY. He replaced the recorded digest with
+        // sixty-four zeroes and nothing failed. The digest must be the transport's own, because
+        // every step after it - the reopen and the comparison - is only as good as the address it
+        // was given.
+        Assert.AreEqual(
+            1, CountOf(code, "window.AskedBodySha256 = transport.LogicalRequest.Body.Sha256;"),
+            "the reopened address is the one the transport recorded for the body it sent.");
+        Assert.AreEqual(
+            1, CountOf(code, "store.ReadByDigestAsync("),
+            "the asked bytes are reopened from custody by their content address.");
+        Assert.AreEqual(
+            1, CountOf(code, "reopened.Span.SequenceEqual(bound.Body)"),
+            "and compared byte for byte against the query this run re-derived.");
+        Assert.AreEqual(
+            1, CountOf(code, "window.AskedBodyLength == bound.Body.Length"),
+            "with the length checked too, so a truncation cannot pass on a digest alone.");
+        // The needle is the null-forgiving access the two assertions use, because a bare
+        // "RequestBytesReopenedAndEqual," also matches the terminal index's own mapping - which is
+        // wanted, but is evidence rather than judgement, and is asserted separately below.
+        Assert.AreEqual(
+            2, CountOf(code, "!.RequestBytesReopenedAndEqual,"),
+            "and both windows are asserted on the comparison's result.");
+        Assert.AreEqual(
+            1, CountOf(code, "requestBytesReopenedAndEqual = window.RequestBytesReopenedAndEqual,"),
+            "with the comparison's result recorded per window in the retained terminal index.");
+    }
+
+    /// <summary>
+    /// The renderer's declared source is the file that implements the renderer.
+    /// </summary>
+    /// <remarks>
+    /// THE HALF OF THE PROVENANCE FINDING MY FIRST MUTATION SET DID NOT COVER. Repointing the
+    /// renderer source back at <c>EuProcedureEventDiscoveryPlan.cs</c> survived every other guard,
+    /// which made the attribution defect exactly as untested as the digest recording had been: the
+    /// retained plan would name a source file that does not contain this query's renderer, so a
+    /// reader reopening the packet could not account for the bytes that were sent.
+    /// </remarks>
+    [TestMethod]
+    public void TheRendererSourceIsTheFileThatImplementsIt()
+    {
+        var code = CodeOnly(HarnessSource());
+
+        Assert.AreEqual(
+            1, CountOf(code, "\"tests\", \"Lex.V3.Ingest.Tests\", HarnessFileName));"),
+            "the renderer source bytes are this harness's own file, which implements the renderer.");
+        Assert.AreEqual(
+            1, CountOf(code, "private const string HarnessFileName = \"EuProcedureEventLiveAcceptance.cs\";"),
+            "and that file is named once, as a constant.");
+        Assert.AreEqual(
+            0, CountOf(code, "EuProcedureEventDiscoveryPlan.cs"),
+            "the renderer is not attributed to a source file that does not contain it.");
+    }
+
+    /// <summary>
     /// The dossiers are discovered, never written down.
     /// </summary>
     /// <remarks>
-    /// THE GUARD THE OWNER DECISION ACTUALLY TURNS ON. Clause 2 requires the discovery to be proved
-    /// rather than the subjects accepted as caller guesses, and clause 5 forbids inferring them from
-    /// similar identifiers. A single cellar IRI literal in this file would satisfy neither, and it
-    /// is the cheapest possible way for this harness to stop being what it claims: the run would
-    /// still pass, still retain evidence, and no longer be a discovery. So the absence of a literal
-    /// is asserted, and the read-back from the retained payload is asserted present.
+    /// THE GUARD THE OWNER DECISION TURNS ON. A single cellar IRI literal in this file would make
+    /// the run pass, retain evidence, and no longer be a discovery.
     /// </remarks>
     [TestMethod]
     public void NoDossierIsHardcodedAndEveryOneComesFromTheRetainedPayload()
@@ -92,37 +152,40 @@ public sealed class EuProcedureEventLiveGuardTests
         Assert.AreEqual(
             0, CountOf(code, "resource/cellar/"),
             "a dossier IRI literal would make this a caller guess rather than a discovery.");
-        // THE MECHANISM, NOT A HEADCOUNT. One of these occurrences is the declaration, so a bare
-        // total would have to be revised every time the method moved and would assert nothing. What
-        // matters is that every CALL parses a payload read back out of custody: if a call were added
-        // that parsed an in-memory buffer instead, these two counts would diverge.
         Assert.AreEqual(
             CountOf(code, "ParseDossiers(") - 1,
-            CountOf(code, "RetainedPayloadBytes.Span)"),
+            CountOf(code, "ParseDossiers(transport.RetainedPayloadBytes.Span)"),
             "every parse reads a retained payload, and nothing else is parsed.");
         Assert.AreEqual(
-            1, CountOf(code, "ParseDossiers(narrowTransport.RetainedPayloadBytes.Span)"),
-            "the narrow window's subjects are read back out of custody.");
-        Assert.AreEqual(
-            1, CountOf(code, "ParseDossiers(wideTransport.RetainedPayloadBytes.Span)"),
-            "and so are the wider window's.");
+            1, CountOf(code, "outcome.Discovered = [narrowIris[0], narrowIris[1]];"),
+            "the subjects handed on are exactly the two the publisher returned.");
     }
 
-    /// <summary>The predicate is the contract's constant, never a string in this harness.</summary>
+    /// <summary>Only a URI term becomes a subject.</summary>
     /// <remarks>
-    /// A literal would let discovery and acceptance drift apart silently: the producer asks
-    /// <c>EuProcedureEventVocabulary.PartOfDossierPredicateUri</c>, and if this file spelled the
-    /// same IRI out by hand, a change to the contract would leave the discovery asking the old
-    /// predicate while every test still passed.
+    /// An earlier head accepted any nonempty value, so a literal or blank node would have been sent
+    /// to the producer as though it were a dossier IRI - and the producer would then honestly have
+    /// reported finding no events for it.
     /// </remarks>
+    [TestMethod]
+    public void OnlyAUriTermBecomesASubject()
+    {
+        var code = CodeOnly(HarnessSource());
+
+        Assert.AreEqual(
+            1, CountOf(code, "string.Equals(kind.GetString(), \"uri\", StringComparison.Ordinal)"),
+            "the SPARQL term type is part of the answer and is checked.");
+        Assert.AreEqual(
+            1, CountOf(code, "value.GetString() is { Length: > 0 } iri"),
+            "and an empty value is not a subject.");
+    }
+
+    /// <summary>The predicate is the contract's constant, never a literal in the query.</summary>
     [TestMethod]
     public void TheDiscoveryPredicateIsTheContractsAndNotALiteral()
     {
         var code = CodeOnly(HarnessSource());
 
-        // Two occurrences are correct and each is asserted where it belongs: the query has to ASK
-        // the contract's predicate, and the terminal index has to RECORD which predicate was asked.
-        // A single total would be satisfied by either one alone.
         Assert.AreEqual(
             1,
             CountOf(code, "EuProcedureEventVocabulary.PartOfDossierPredicateUri + \"> ?dossier"),
@@ -131,73 +194,126 @@ public sealed class EuProcedureEventLiveGuardTests
             1,
             CountOf(code, "predicate = EuProcedureEventVocabulary.PartOfDossierPredicateUri"),
             "and the terminal index records which predicate this run actually asked.");
-        Assert.AreEqual(
-            0, CountOf(code, "event_legal_part_of_dossier"),
-            "and it never spells that predicate out, which could drift from the contract.");
-        // RECORDED, NOT ASKED - and the difference is the whole point. The predicate the owner
-        // decision named exists nowhere in this codebase outside one prose comment, so this run
-        // cannot ask it. It MUST still say so in its own evidence, or a reader of the retained
-        // packet would have no way to know the run asked something other than what was ordered.
-        // So the literal is required to appear exactly once, inside the terminal index's note, and
-        // nowhere else - a guard of "zero occurrences" would have forced the discrepancy to go
-        // unrecorded, and a guard of "one occurrence" alone would not care where it was.
-        Assert.AreEqual(
-            1, CountOf(code, "procedure_event_belongs_to_procedure_dossier"),
-            "the decision's predicate is named once, where the evidence records the discrepancy.");
 
-        // Bracketed by the retention method, not by the fields around the note: askedBodySha256
-        // first occurs in RetainAsync's own signature, so bracketing on it put the window in the
-        // wrong place and the guard failed for a reason that had nothing to do with the property.
+        // The owner has ruled that the decision's original wording was descriptive and that the
+        // contract member is authoritative. Both spellings may therefore appear ONLY inside the
+        // evidence note that records that history - never in the code that builds the question.
         var retention = code.IndexOf(
             "private static async Task RetainAsync", StringComparison.Ordinal);
-        var named = code.IndexOf(
-            "procedure_event_belongs_to_procedure_dossier", StringComparison.Ordinal);
         Assert.IsGreaterThan(0, retention, "the retention method was not found.");
-        Assert.IsGreaterThan(
-            retention, named,
-            "the decision's predicate is mentioned only inside the code that writes evidence, "
-            + "never in the code that builds the question this run sends.");
-        Assert.AreEqual(
-            1, CountOf(code, "predicateNote"),
-            "and the note carrying it is part of the retained terminal index.");
+        foreach (var spelling in new[]
+        {
+            "procedure_event_belongs_to_procedure_dossier",
+            "cdm:event_legal_part_of_dossier",
+        })
+        {
+            Assert.AreEqual(
+                1, CountOf(code, spelling),
+                $"'{spelling}' is named once, where the evidence records the naming history.");
+            Assert.IsGreaterThan(
+                retention, code.IndexOf(spelling, StringComparison.Ordinal),
+                $"'{spelling}' appears only inside the code that writes evidence.");
+        }
     }
 
-    /// <summary>Nothing concludes the operation before its cost is on disk.</summary>
+    /// <summary>
+    /// Nothing unproved reaches the publisher: the discovery is established before acceptance opens.
+    /// </summary>
     /// <remarks>
-    /// STATES THE MECHANISM, NOT THE INSTANCE. A stopped run is the one whose cost most needs
-    /// reporting, so the terminal index is written on every outcome before anything is judged. The
-    /// rule is that no assertion may stand between the producer returning and the retention of what
-    /// it spent; asserting on the presence of one named call would pass on a file that had added a
-    /// second, earlier judgement.
+    /// AN ORDERING GUARD, BECAUSE THE DEFECT WAS AN ORDERING DEFECT. An earlier head invoked the
+    /// producer as soon as two nonempty strings had been parsed and checked their kind, distinctness
+    /// and cross-window agreement afterwards. Counting those checks would have passed on that head;
+    /// only their position relative to the producer call catches it.
     /// </remarks>
     [TestMethod]
-    public void TheTerminalIndexIsRetainedBeforeAnythingIsJudged()
+    public void TheDiscoveryIsProvedBeforeAcceptanceOpens()
     {
         var code = CodeOnly(HarnessSource());
 
-        var producerReturn = code.IndexOf("acceptanceRefusal = production.Delivered", StringComparison.Ordinal);
-        Assert.IsGreaterThan(0, producerReturn, "the producer call was not found.");
-        var retain = code.IndexOf("await RetainAsync(\n            root, store,", StringComparison.Ordinal);
-        if (retain < 0)
-        {
-            retain = code.IndexOf("await RetainAsync(", producerReturn, StringComparison.Ordinal);
-        }
+        var producer = code.IndexOf(
+            "new EuProcedureEventProducer(store, TimeProvider.System).RunAsync", StringComparison.Ordinal);
+        Assert.IsGreaterThan(0, producer, "the producer call was not found.");
 
-        Assert.IsGreaterThan(producerReturn, retain, "the retention must follow the producer call.");
-        Assert.AreEqual(
-            0, CountOf(code[producerReturn..retain], "Assert."),
-            "no assertion may stand between the producer returning and its cost being retained.");
+        foreach (var (marker, why) in new[]
+        {
+            ("AskedBytesDidNotReopenEqual", "the asked bytes are proved"),
+            ("DiscoveryDidNotYieldTwoDossiers", "exactly two subjects are proved"),
+            ("DiscoveryReturnedADuplicatePair", "distinctness is proved"),
+            ("DiscoveryWindowsDisagree", "cross-window agreement is proved"),
+        })
+        {
+            var position = code.IndexOf(marker, StringComparison.Ordinal);
+            Assert.IsGreaterThan(0, position, $"the {marker} stop was not found.");
+            Assert.IsGreaterThan(
+                position, producer,
+                $"{why} before the acceptance session is opened.");
+        }
     }
 
-    /// <summary>Both ceilings are asserted, and sessions are counted rather than assumed.</summary>
+    /// <summary>
+    /// The terminal index is written in a finally, so no outcome escapes without it.
+    /// </summary>
     /// <remarks>
-    /// The charged ceiling is enforced by the budget itself; the send ceiling is not, so it has to
-    /// be asserted from the arithmetic. Sessions are counted by observation for the reason the draft
-    /// sweep learned the hard way: a producer call does not always open a session, and counting
-    /// attempted calls put a phantom robots fetch into the expected total.
+    /// The earlier guard searched for assertions between two text markers and could not see a
+    /// judgement that THREW rather than asserted - and <c>EventsOf</c> throws on a dossier the
+    /// delivered result does not carry, which is the mismatch a packet most needs to record. A
+    /// <c>finally</c> covers every exit, including faults, which is why the rule is now stated as
+    /// the retention's position inside it rather than as an absence of assertions.
     /// </remarks>
     [TestMethod]
-    public void BothCeilingsAreAssertedAndSessionsAreObserved()
+    public void TheTerminalIndexIsWrittenInAFinallySoNoOutcomeEscapes()
+    {
+        var code = CodeOnly(HarnessSource());
+
+        var finallyStart = code.IndexOf("\n        finally\n", StringComparison.Ordinal);
+        Assert.IsGreaterThan(0, finallyStart, "the gated run must retain its cost in a finally.");
+        var retainCall = code.IndexOf("await RetainAsync(", finallyStart, StringComparison.Ordinal);
+        Assert.IsGreaterThan(finallyStart, retainCall, "and the retention is inside that finally.");
+        Assert.AreEqual(
+            1, CountOf(code, "await RetainAsync("),
+            "one retention, on every path, rather than one per outcome that someone remembered.");
+
+        // Interpretation that can throw, and every assertion, must follow the retention.
+        Assert.IsGreaterThan(
+            code.IndexOf("production.EventsOf(", StringComparison.Ordinal), finallyStart,
+            "interpretation that can throw runs before the finally that reports it.");
+        Assert.IsGreaterThan(
+            retainCall, code.IndexOf("var offenders = OffendingHosts(root);", StringComparison.Ordinal),
+            "and judgement begins only after the terminal write.");
+        Assert.AreEqual(
+            1, CountOf(code, "outcome.Verdict = \"Faulted\";"),
+            "a throw is recorded as an outcome rather than escaping unnamed.");
+    }
+
+    /// <summary>
+    /// Bootstraps are counted before they are attempted, because a refused one has already sent.
+    /// </summary>
+    /// <remarks>
+    /// AN ORDERING GUARD. An earlier head incremented only when a session object came back, so a
+    /// bootstrap refused after its two-hop robots exchange reported zero hops and the refusal packet
+    /// understated the traffic it had caused.
+    /// </remarks>
+    [TestMethod]
+    public void BootstrapsAreCountedBeforeTheyAreAttempted()
+    {
+        var code = CodeOnly(HarnessSource());
+
+        var counted = code.IndexOf("accounting.BootstrapsAttempted++;", StringComparison.Ordinal);
+        var started = code.IndexOf(
+            "RoutedHttpAcquisitionSession.StartAsync(", StringComparison.Ordinal);
+        Assert.IsGreaterThan(0, counted, "the bootstrap count was not found.");
+        Assert.IsGreaterThan(counted, started, "the count precedes the attempt it accounts for.");
+        Assert.AreEqual(
+            2, CountOf(code, "accounting.BootstrapsAttempted++;"),
+            "both bootstraps are counted: discovery's and the producer's.");
+        Assert.AreEqual(
+            1, CountOf(code, "accounting.DiscoveryBootstrapEvidencePresent = start.Evidence is not null;"),
+            "and a refused bootstrap records whether it carried response evidence.");
+    }
+
+    /// <summary>Both ceilings are asserted, and the send bound uses attempts rather than successes.</summary>
+    [TestMethod]
+    public void BothCeilingsAreAssertedFromWhatWasCounted()
     {
         var code = CodeOnly(HarnessSource());
 
@@ -205,25 +321,18 @@ public sealed class EuProcedureEventLiveGuardTests
             1, CountOf(code, "SharedWireCeiling, budget.Spent"),
             "the charged ceiling is asserted against what was actually charged.");
         Assert.AreEqual(
-            1, CountOf(code, "SendCeiling, budget.Spent + sessionsOpened"),
-            "the send ceiling is asserted from the derivation, since the budget cannot enforce it.");
+            1, CountOf(code, "SendCeiling, budget.Spent + accounting.BootstrapsAttempted"),
+            "the send ceiling is asserted from attempts, since the budget cannot enforce it and a "
+            + "refused bootstrap still sent.");
         Assert.AreEqual(
-            1, CountOf(code, "SessionCeiling, sessionsOpened"),
-            "and the session bound the send ceiling depends on is asserted too.");
+            1, CountOf(code, "BootstrapCeiling, accounting.BootstrapsAttempted"),
+            "and the bootstrap bound the send ceiling depends on is asserted too.");
         Assert.AreEqual(
-            2, CountOf(code, "sessionsOpened++"),
-            "two sessions, each counted where it is observed to have opened.");
-        Assert.AreEqual(
-            0, CountOf(code, "sessionsOpened = 2"),
-            "the session count is observed, never asserted into existence.");
+            0, CountOf(code, "budget.Spent + accounting.SessionsOpened"),
+            "the send bound must not be derived from sessions that opened.");
     }
 
     /// <summary>One environment read, and it is the gate.</summary>
-    /// <remarks>
-    /// Exactly one read, because a second is how a subject or a ceiling gets substituted at run time
-    /// in a way the reviewed candidate never showed. This harness has no subjects to substitute, but
-    /// it does have two ceilings worth protecting from an environment override.
-    /// </remarks>
     [TestMethod]
     public void ExactlyOneEnvironmentReadAndItIsTheGate()
     {
