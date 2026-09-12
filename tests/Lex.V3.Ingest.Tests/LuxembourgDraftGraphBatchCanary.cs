@@ -144,17 +144,18 @@ public sealed class LuxembourgDraftGraphBatchCanary
                 + "over one bounded batch. Skipped by default so the suite sends no unasked traffic.");
         }
 
-        // DISTINCT DRAFTS, not parameters. The plan pads every batch to capacity, so a shorter
-        // batch binds the same fifty parameters and asks the publisher about fewer subjects - which
-        // is what makes this a measurement of query cost rather than of input shape.
-        var distinct = int.TryParse(
-            Environment.GetEnvironmentVariable("LEX_E8_BATCH_DISTINCT"), out var requested)
-            ? requested
-            : LuxembourgDraftGraphDiscoveryPlan.BatchCapacity;
-        Assert.IsTrue(
-            distinct is > 0 && distinct <= LuxembourgDraftGraphDiscoveryPlan.BatchCapacity,
-            "a batch names one to capacity drafts.");
-        var batch = BatchIris().Take(distinct).ToArray();
+        // THE COMPLETE PINNED BATCH. No prefix, no count parameter.
+        //
+        // Removing LEX_E8_BATCH_DRAFTS was not enough: this selector substituted the batch by
+        // TRUNCATION instead of by naming, and any value below 17 drops pl/1989/60 - so a run could
+        // avoid the one raw value the canary exists to exercise while producing evidence of exactly
+        // the same shape. Two doors to the same substitution, and closing the one I had noticed left
+        // the other open.
+        var batch = BatchIris();
+        Assert.AreEqual(
+            LuxembourgDraftGraphDiscoveryPlan.BatchCapacity,
+            batch.Length,
+            "the governed invocation asks about the complete pinned batch.");
 
         var checkout = CheckoutRoot();
         var root = Path.Combine(checkout, "artifacts", "e8-batch-" + Guid.NewGuid().ToString("N"));

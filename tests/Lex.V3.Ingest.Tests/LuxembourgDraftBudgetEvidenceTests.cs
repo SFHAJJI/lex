@@ -369,13 +369,32 @@ public sealed class LuxembourgDraftBudgetEvidenceTests
     {
         var source = File.ReadAllText(HarnessPath("LuxembourgDraftGraphBatchCanary.cs"));
 
-        // The CODE form, not the bare name: the surviving mentions are the doc comment recording
-        // why the selector was removed and where the long-value case is covered instead. Banning the
-        // string would have deleted that record to satisfy a guard.
+        // NO ENVIRONMENT-VARIABLE PATH AT ALL, except the one gate that decides whether the run
+        // happens. Naming the selectors I knew about was not enough: the first version banned
+        // LEX_E8_BATCH_DRAFTS and left LEX_E8_BATCH_DISTINCT, which substituted the batch by
+        // TRUNCATION - any value below 17 drops the distinguishing draft while the evidence keeps
+        // its shape. The property is "the subjects are not a parameter", so the guard has to be
+        // about the mechanism, not about the names of the doors I happened to find.
         Assert.AreEqual(
-            0,
-            CountOf(source, "GetEnvironmentVariable(\"LEX_E8_BATCH_DRAFTS\")"),
-            "no caller-selected substitution for a governed invocation.");
+            1,
+            CountOf(source, "GetEnvironmentVariable("),
+            "exactly one environment read - the enable gate - and nothing that selects subjects.");
+        StringAssert.Contains(
+            source,
+            "GetEnvironmentVariable(EnableVariable)",
+            "and that one read is the gate.");
+
+        // The complete batch reaches the run: a prefix is substitution by another name. Aimed at the
+        // batch specifically - the file also truncates a diagnostic list with Take, which is not
+        // this property and should not be collateral.
+        Assert.AreEqual(
+            0, CountOf(source, "BatchIris().Take("), "no prefix of the pinned batch.");
+        Assert.AreEqual(
+            0, CountOf(source, "batch.Take("), "and none taken from it afterwards.");
+        StringAssert.Contains(
+            source,
+            "var batch = BatchIris();",
+            "the run takes the complete pinned batch.");
         Assert.AreEqual(
             0,
             CountOf(source, "TestWireBudget()"),
