@@ -50,6 +50,25 @@ public sealed class LuxembourgDraftGraphBatchCanary
     /// </remarks>
     private const string InventoryFamily = "legilux-initial-draft-inventory";
     private const string EnableVariable = "LEX_E8_BATCH_CANARY";
+
+    /// <summary>
+    /// The hard ceiling for this canary: 25 actual HTTP requests.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// DERIVED FROM THE RETAINED BATCH, NOT FORECAST FROM AN AGGREGATE. The retained run measured
+    /// this exact batch at 956 rows on each completed pass - <c>953 + 3</c> at the pass-1 limit and
+    /// <c>571 + 385</c> at the pass-2 limit - which is six logical product requests: two counts and
+    /// two pages per pass. With <c>OfficialMachineQuerySourceProfile.MaximumAttempts == 4</c> the
+    /// bound is <c>1 robots + (6 x 4) = 25</c>.
+    /// </para>
+    /// <para>
+    /// It replaced the offline test helper's 100,000, which is not a ceiling in a live path. And it
+    /// is a CEILING, not a forecast: a changed publisher shape or retries may exhaust it, and the
+    /// run then stops and reports rather than continuing to a number nobody agreed.
+    /// </para>
+    /// </remarks>
+    private const int WireCeiling = 25;
     private const string LegiluxEndpoint = "https://data.legilux.public.lu/sparqlendpoint";
     private const string DraftPrefix = "http://data.legilux.public.lu/eli/dl/";
 
@@ -76,24 +95,42 @@ public sealed class LuxembourgDraftGraphBatchCanary
     ];
 
     /// <summary>
-    /// The batch this canary asks about: the retained first fifty, or a named selection.
+    /// WHERE THE LONG-VALUE CASE WENT, since removing the selector removed the way to reach it live.
     /// </summary>
     /// <remarks>
-    /// <c>LEX_E8_BATCH_DRAFTS</c> takes comma-separated suffixes under the shared prefix, so the
-    /// canary can be aimed at a specific subject without inventing one. It exists because the owner
-    /// ruling on the long-value cursor requires a canary over THE OFFENDING batch - the one holding
-    /// <c>pl/2005/64</c>, whose 2,648-byte titleDraft stopped the acceptance run - and that draft is
-    /// not among the ordinal-first fifty this list carries. Unset, the batch is exactly what it was.
+    /// The selector existed for the owner ruling on the long-value cursor, which wanted a canary over
+    /// the batch holding <c>pl/2005/64</c> - a 2,648-byte <c>titleDraft</c> that stopped an
+    /// acceptance run - and that draft is NOT among the ordinal-first fifty below. Pinning this
+    /// invocation therefore takes away the only mechanism that reached it, so the requirement is
+    /// recorded here rather than dropped.
+    /// <para>
+    /// It is covered offline: <c>LuxembourgDraftGraphProducerTests</c> exercises that exact draft's
+    /// length through <c>DeliveredKeyNotRepresentable</c> and through the padded-tail case, and
+    /// <c>LuxembourgDraftGraphDiscoveryPlan</c> records the measured 2,648 bytes against the cursor
+    /// bound. If a LIVE canary over it is still required, it needs its own pinned batch and its own
+    /// disposition - not an environment variable that lets any run become that run silently.
+    /// </para>
     /// </remarks>
-    private static string[] BatchIris()
-    {
-        var named = Environment.GetEnvironmentVariable("LEX_E8_BATCH_DRAFTS");
-        var suffixes = string.IsNullOrWhiteSpace(named)
-            ? FirstBatch
-            : named.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-
-        return suffixes.Select(static suffix => DraftPrefix + suffix).ToArray();
-    }
+    /// <summary>
+    /// The pinned batch. No caller substitution.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// THIS RUN IS GOVERNED, SO ITS SUBJECTS ARE NOT A PARAMETER. The batch was previously
+    /// selectable through <c>LEX_E8_BATCH_DRAFTS</c>, which meant the reviewed plan named one set of
+    /// drafts and the executed run could carry another - and the evidence would look identical
+    /// either way. A dispositioned canary whose subjects an environment variable can change is not
+    /// the canary that was dispositioned.
+    /// </para>
+    /// <para>
+    /// The pinned set is the ordinal-first fifty of the retained inventory run, and it includes
+    /// <c>pl/1989/60</c>, whose non-ASCII <c>titleDraft</c> is where a conforming UTF-8 SHA-256 and
+    /// the publisher's own cursor codec diverged. That draft is the reason this batch is the
+    /// distinguishing one rather than merely the first.
+    /// </para>
+    /// </remarks>
+    private static string[] BatchIris() =>
+        FirstBatch.Select(static suffix => DraftPrefix + suffix).ToArray();
 
     public TestContext? TestContext { get; set; }
 
@@ -107,17 +144,18 @@ public sealed class LuxembourgDraftGraphBatchCanary
                 + "over one bounded batch. Skipped by default so the suite sends no unasked traffic.");
         }
 
-        // DISTINCT DRAFTS, not parameters. The plan pads every batch to capacity, so a shorter
-        // batch binds the same fifty parameters and asks the publisher about fewer subjects - which
-        // is what makes this a measurement of query cost rather than of input shape.
-        var distinct = int.TryParse(
-            Environment.GetEnvironmentVariable("LEX_E8_BATCH_DISTINCT"), out var requested)
-            ? requested
-            : LuxembourgDraftGraphDiscoveryPlan.BatchCapacity;
-        Assert.IsTrue(
-            distinct is > 0 && distinct <= LuxembourgDraftGraphDiscoveryPlan.BatchCapacity,
-            "a batch names one to capacity drafts.");
-        var batch = BatchIris().Take(distinct).ToArray();
+        // THE COMPLETE PINNED BATCH. No prefix, no count parameter.
+        //
+        // Removing LEX_E8_BATCH_DRAFTS was not enough: this selector substituted the batch by
+        // TRUNCATION instead of by naming, and any value below 17 drops pl/1989/60 - so a run could
+        // avoid the one raw value the canary exists to exercise while producing evidence of exactly
+        // the same shape. Two doors to the same substitution, and closing the one I had noticed left
+        // the other open.
+        var batch = BatchIris();
+        Assert.AreEqual(
+            LuxembourgDraftGraphDiscoveryPlan.BatchCapacity,
+            batch.Length,
+            "the governed invocation asks about the complete pinned batch.");
 
         var checkout = CheckoutRoot();
         var root = Path.Combine(checkout, "artifacts", "e8-batch-" + Guid.NewGuid().ToString("N"));
@@ -127,10 +165,11 @@ public sealed class LuxembourgDraftGraphBatchCanary
         var producer = new LuxembourgDraftGraphProducer(store, TimeProvider.System);
         var plan = LuxembourgDraftGraphDiscoveryPlan.Create();
 
+        var budget = WireRequestBudget.OfWireRequests(WireCeiling);
+
         var result = await producer.RunAsync(
             LuxembourgDraftGraphRunRequest.ForBatch(
-                plan, InventoryOver(batch), 0, NewUrn(), RendererSource(checkout),
-            LuxembourgAcquisitionTestFixture.TestWireBudget()),
+                plan, InventoryOver(batch), 0, NewUrn(), RendererSource(checkout), budget),
             LuxembourgSourceWitness(),
             CancellationToken.None);
 
@@ -162,6 +201,18 @@ public sealed class LuxembourgDraftGraphBatchCanary
             .AppendLine("refusal=" + result.Refusal)
             .AppendLine("detail=" + (result.Detail ?? string.Empty))
             .AppendLine("product_requests=" + result.ProductRequestCount)
+
+            // TERMINAL ACCOUNTING, ON EITHER OUTCOME. A refused run is the one whose cost most needs
+            // stating, and this block is written before the run concludes - above the Inconclusive
+            // that a refusal takes - so a stop reports what it spent instead of reporting nothing.
+            // Sessions are not counted by arithmetic here: this door opens exactly one, and it
+            // opened it if and only if the spend advanced past zero.
+            .AppendLine("actual_http_requests=" + result.WireBudget.Spent)
+            .AppendLine("wire_ceiling=" + result.WireBudget.Limit)
+            .AppendLine("budget_exhausted=" + result.WireBudget.Exhausted)
+            .AppendLine("sessions_opened=" + (result.WireBudget.Spent > 0 ? 1 : 0))
+            .AppendLine("reconciles=" + (result.WireBudget.Spent
+                == result.ProductRequestCount + (result.WireBudget.Spent > 0 ? 1 : 0)))
             .AppendLine("records=" + (result.Records?.Count.ToString() ?? "none"))
             .AppendLine("coverage=" + (result.Coverage?.Describe() ?? "none"))
             .ToString();
@@ -171,6 +222,18 @@ public sealed class LuxembourgDraftGraphBatchCanary
         Assert.IsTrue(
             result.Delivered || result.Refusal != LuxembourgDraftGraphProductionRefusal.None,
             "a run reports a delivery or a typed refusal, never neither.");
+
+        // ASSERTED ON EITHER OUTCOME, AFTER THE SUMMARY IS ON DISK. The ceiling is the one promise
+        // made to the owner, so breaching it fails the canary whether or not the publisher answered.
+        Assert.IsLessThanOrEqualTo(
+            WireCeiling,
+            result.WireBudget.Spent,
+            $"the canary sent {result.WireBudget.Spent} requests against a ceiling of {WireCeiling}. "
+                + $"Evidence retained under {root}.");
+        Assert.AreEqual(
+            result.ProductRequestCount + (result.WireBudget.Spent > 0 ? 1 : 0),
+            result.WireBudget.Spent,
+            "reservations are this run's product attempts plus its one robots fetch.");
 
         if (!result.Delivered)
         {

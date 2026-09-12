@@ -348,6 +348,91 @@ public sealed class LuxembourgDraftBudgetEvidenceTests
     }
 
     /// <summary>
+    /// The batch canary is pinned to its dispositioned subjects and its named 25-request ceiling.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// STRUCTURAL, for the reason the sweep guard is: this canary is gated off by default, so a
+    /// substituted batch or a borrowed ceiling inside it fails nothing offline. The properties that
+    /// matter here — which drafts it asks about, and how many requests it may send — are properties
+    /// of the source.
+    /// </para>
+    /// <para>
+    /// The batch was previously selectable through an environment variable. That meant the reviewed
+    /// plan could name one set of drafts and the executed run carry another, with identical-looking
+    /// evidence either way: a dispositioned canary whose subjects a variable can change is not the
+    /// canary that was dispositioned.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void TheBatchCanaryIsPinnedToItsDispositionedBatchAndCeiling()
+    {
+        var source = File.ReadAllText(HarnessPath("LuxembourgDraftGraphBatchCanary.cs"));
+
+        // NO ENVIRONMENT-VARIABLE PATH AT ALL, except the one gate that decides whether the run
+        // happens. Naming the selectors I knew about was not enough: the first version banned
+        // LEX_E8_BATCH_DRAFTS and left LEX_E8_BATCH_DISTINCT, which substituted the batch by
+        // TRUNCATION - any value below 17 drops the distinguishing draft while the evidence keeps
+        // its shape. The property is "the subjects are not a parameter", so the guard has to be
+        // about the mechanism, not about the names of the doors I happened to find.
+        Assert.AreEqual(
+            1,
+            CountOf(source, "GetEnvironmentVariable("),
+            "exactly one environment read - the enable gate - and nothing that selects subjects.");
+        StringAssert.Contains(
+            source,
+            "GetEnvironmentVariable(EnableVariable)",
+            "and that one read is the gate.");
+
+        // The complete batch reaches the run: a prefix is substitution by another name. Aimed at the
+        // batch specifically - the file also truncates a diagnostic list with Take, which is not
+        // this property and should not be collateral.
+        Assert.AreEqual(
+            0, CountOf(source, "BatchIris().Take("), "no prefix of the pinned batch.");
+        Assert.AreEqual(
+            0, CountOf(source, "batch.Take("), "and none taken from it afterwards.");
+        StringAssert.Contains(
+            source,
+            "var batch = BatchIris();",
+            "the run takes the complete pinned batch.");
+        Assert.AreEqual(
+            0,
+            CountOf(source, "TestWireBudget()"),
+            "the offline helper's 100,000-request ceiling has no place in a live path.");
+        Assert.AreEqual(
+            1,
+            CountOf(source, "WireRequestBudget.OfWireRequests(WireCeiling)"),
+            "one named ceiling, built once for the run.");
+        StringAssert.Contains(
+            source, "private const int WireCeiling = 25;", "the dispositioned number, named.");
+
+        // The distinguishing draft is the reason this batch was chosen; losing it silently would
+        // leave a canary that runs and answers a different question.
+        // THE ARRAY ENTRY, NOT THE PROSE. A bare Contains passed while the entry was mutated away,
+        // because the doc comment beside it names the same draft - the third time in this slice that
+        // a guard of mine was satisfied by a comment rather than by the code it was guarding.
+        Assert.AreEqual(
+            1,
+            CountOf(source, "\"pl/1989/60\""),
+            "the non-ASCII titleDraft draft must be IN the batch array, not merely mentioned near "
+                + "it: it separates the publisher codec from a conforming UTF-8 SHA-256, and it is "
+                + "why this batch is the distinguishing one.");
+
+        // Terminal accounting is written BEFORE the run can conclude, so a refusal reports its cost.
+        // The LAST Inconclusive is the refusal exit; the first is the enable gate at the top of the
+        // method, which every gated harness has and which proves nothing about ordering.
+        var summary = source.IndexOf("actual_http_requests=", StringComparison.Ordinal);
+        var refusalExit = source.LastIndexOf("Assert.Inconclusive(", StringComparison.Ordinal);
+
+        Assert.IsGreaterThanOrEqualTo(0, summary, "the canary must report its actual request count.");
+        Assert.IsGreaterThanOrEqualTo(0, refusalExit, "the canary must have a refusal exit.");
+        Assert.IsLessThan(
+            refusalExit,
+            summary,
+            "the terminal accounting is written before a refusal concludes the run.");
+    }
+
+    /// <summary>
     /// The gated live harness builds exactly one budget, and never the offline helper's.
     /// </summary>
     /// <remarks>
