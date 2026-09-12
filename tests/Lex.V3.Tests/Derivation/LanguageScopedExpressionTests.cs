@@ -67,20 +67,45 @@ public sealed class LanguageScopedExpressionTests
         Assert.HasCount(1, set.Expressions, "and it must not grow the store.");
     }
 
-    /// <summary>The same identity with different retained bytes refuses by name.</summary>
+    /// <summary>
+    /// One identity stating one thing, carried by different bytes, converges. It used to refuse.
+    /// </summary>
+    /// <remarks>
+    /// THIS TEST'S ASSERTION WAS INVERTED, AND THE INVERSION IS THE FIX. While the canonical digest
+    /// was the retained page body's own content address, the same publisher statement re-fetched
+    /// under a different page limit landed in a different body and read as a conflict - two
+    /// equivalent executions disagreeing about a work neither of them had observed differently.
+    /// Semantic equality is now over what the publisher said, so transport structure cannot
+    /// manufacture a conflict.
+    /// </remarks>
     [TestMethod]
-    public void RepresentingOneIdentityWithDifferentBytesRefusesByName()
+    public void OneIdentityCarriedByDifferentBytesConvergesRatherThanConflicting()
     {
         var set = new LanguageScopedExpressionSet();
         var held = Expression("rect/1", "en", 'a');
         Assert.IsTrue(set.TryAppend(held, out _));
 
-        Assert.IsFalse(set.TryAppend(Expression("rect/1", "en", 'b'), out var refusal));
-        Assert.AreEqual(LanguageScopedExpressionAppendRefusal.ConflictingCanonicalBytes, refusal);
+        Assert.IsTrue(set.TryAppend(Expression("rect/1", "en", 'b'), out var refusal));
+        Assert.AreEqual(LanguageScopedExpressionAppendRefusal.None, refusal);
         Assert.HasCount(1, set.Expressions);
         Assert.AreSame(
-            held, set.Expressions[0],
-            "an append-only store never replaces what it already admitted.");
+            held,
+            set.Expressions[0],
+            "an append-only store never rewrites the provenance it already admitted.");
+    }
+
+    /// <summary>The same identity saying something different refuses by name.</summary>
+    [TestMethod]
+    public void RepresentingOneIdentitySayingSomethingDifferentRefusesByName()
+    {
+        var set = new LanguageScopedExpressionSet();
+        var held = Expression("rect/1", "en", 'a');
+        Assert.IsTrue(set.TryAppend(held, out _));
+
+        Assert.IsFalse(set.TryAppend(Expression("rect/1", "de", 'a'), out var refusal));
+        Assert.AreEqual(LanguageScopedExpressionAppendRefusal.ConflictingCanonicalContent, refusal);
+        Assert.HasCount(1, set.Expressions);
+        Assert.AreSame(held, set.Expressions[0]);
     }
 
     /// <summary>An absent publisher date stays absent, and nothing stands in for it.</summary>
@@ -126,7 +151,7 @@ public sealed class LanguageScopedExpressionTests
                 typeof(string),
                 typeof(PublisherCorrigendumDate),
                 typeof(SourceObjectRef),
-                typeof(DurableBlobWriteReceipt),
+                typeof(LanguageScopedExpressionLineage),
             },
             door.GetParameters().Select(static parameter => parameter.ParameterType).ToArray(),
             "a bool asserting publisher backing would be a caller's claim about evidence, "
@@ -173,7 +198,7 @@ public sealed class LanguageScopedExpressionTests
                 invalid,
                 null,
                 SourceObject(),
-                Receipt('1')));
+                Lineage('1', withDate: false)));
     }
 
     /// <summary>Absent evidence is refused rather than defaulted.</summary>
@@ -184,10 +209,10 @@ public sealed class LanguageScopedExpressionTests
 
         Assert.ThrowsExactly<ArgumentNullException>(
             () => LanguageScopedExpression.FromRetainedSource(
-                null!, "fr", null, SourceObject(), Receipt('1')));
+                null!, "fr", null, SourceObject(), Lineage('1', withDate: false)));
         Assert.ThrowsExactly<ArgumentNullException>(
             () => LanguageScopedExpression.FromRetainedSource(
-                identity, "fr", null, null!, Receipt('1')));
+                identity, "fr", null, null!, Lineage('1', withDate: false)));
         Assert.ThrowsExactly<ArgumentNullException>(
             () => LanguageScopedExpression.FromRetainedSource(
                 identity, "fr", null, SourceObject(), null!));
@@ -197,27 +222,116 @@ public sealed class LanguageScopedExpressionTests
     [TestMethod]
     public void TheConflictRefusalHasTheExactWireToken() =>
         Assert.AreEqual(
-            "\"conflicting_canonical_bytes\"",
+            "\"conflicting_canonical_content\"",
             ContractJson.Serialize(
-                LanguageScopedExpressionAppendRefusal.ConflictingCanonicalBytes));
+                LanguageScopedExpressionAppendRefusal.ConflictingCanonicalContent));
 
     /// <summary>The set compares on the retained bytes, not on anything a caller states.</summary>
     /// <remarks>
-    /// Two expressions differing ONLY in their retained content address must conflict. If the set
-    /// compared on anything else - identity alone, or a caller-supplied digest - this would pass by
-    /// admitting the second silently.
+    /// Conflict must follow what the publisher said, not which bytes carried it. Two presentations
+    /// differing only in retained bytes agree; one differing in an observed date does not, and a
+    /// digest that ignored the date would let a dated and an undated observation of one expression
+    /// silently overwrite each other's meaning.
     /// </remarks>
     [TestMethod]
-    public void ConflictIsDecidedByTheRetainedContentAddress()
+    public void ConflictIsDecidedByAdmittedContentRatherThanByCarryingBytes()
     {
         var set = new LanguageScopedExpressionSet();
         var first = Expression("rect/1", "fr", 'c');
-        var second = Expression("rect/1", "fr", 'd');
+        var sameContentOtherBytes = Expression("rect/1", "fr", 'e');
 
-        Assert.AreNotEqual(first.CanonicalBytesSha256, second.CanonicalBytesSha256);
+        Assert.AreEqual(
+            first.CanonicalContentSha256,
+            sameContentOtherBytes.CanonicalContentSha256,
+            "different carrying bytes are not a different statement.");
+        Assert.AreNotEqual(
+            first.Lineage.Entries[0].ContentSha256,
+            sameContentOtherBytes.Lineage.Entries[0].ContentSha256,
+            "and this test is only meaningful while those bytes really do differ.");
+
+        var dated = Expression(
+            "rect/1", "fr", 'c',
+            new PublisherCorrigendumDate("2026-01-02", "http://www.w3.org/2001/XMLSchema#date"));
+        Assert.AreNotEqual(
+            first.CanonicalContentSha256,
+            dated.CanonicalContentSha256,
+            "an observed date is part of what was said.");
+
         Assert.IsTrue(set.TryAppend(first, out _));
-        Assert.IsFalse(set.TryAppend(second, out var refusal));
-        Assert.AreEqual(LanguageScopedExpressionAppendRefusal.ConflictingCanonicalBytes, refusal);
+        Assert.IsTrue(set.TryAppend(sameContentOtherBytes, out var convergence));
+        Assert.AreEqual(LanguageScopedExpressionAppendRefusal.None, convergence);
+        Assert.IsFalse(set.TryAppend(dated, out var refusal));
+        Assert.AreEqual(LanguageScopedExpressionAppendRefusal.ConflictingCanonicalContent, refusal);
+    }
+
+    /// <summary>
+    /// Page regrouping, as a property of the lineage itself: the same contributing artifacts
+    /// presented in a different order, or repeated, are the same lineage.
+    /// </summary>
+    /// <remarks>
+    /// This is what keeps transport structure out of a value that gets compared and read. A delivery
+    /// that arrived over four pages and the same delivery re-fetched over two must not produce two
+    /// different provenance claims about identical bytes.
+    /// </remarks>
+    [TestMethod]
+    public void ALineageIsTheSameWhicheverOrderItsArtifactsArriveIn()
+    {
+        var first = new LanguageScopedExpressionLineageEntry(
+            LanguageScopedExpressionContribution.IdentityAndLanguage, Receipt('1'));
+        var second = new LanguageScopedExpressionLineageEntry(
+            LanguageScopedExpressionContribution.IdentityAndLanguage, Receipt('2'));
+
+        var forwards = LanguageScopedExpressionLineage.FromContributions([first, second]);
+        var backwards = LanguageScopedExpressionLineage.FromContributions([second, first, second]);
+
+        CollectionAssert.AreEqual(
+            forwards.Entries.Select(static entry => entry.ContentSha256).ToArray(),
+            backwards.Entries.Select(static entry => entry.ContentSha256).ToArray(),
+            "order of arrival, and a repeat, are not different provenance.");
+        Assert.HasCount(2, backwards.Entries, "a repeated artifact is one artifact.");
+    }
+
+    /// <summary>Every contributing artifact is kept. A lineage is complete or it is a guess.</summary>
+    [TestMethod]
+    public void ALineageKeepsEveryDistinctContributingArtifact()
+    {
+        var lineage = LanguageScopedExpressionLineage.FromContributions([
+            new(LanguageScopedExpressionContribution.IdentityAndLanguage, Receipt('1')),
+            new(LanguageScopedExpressionContribution.IdentityAndLanguage, Receipt('2')),
+            new(LanguageScopedExpressionContribution.PublisherDate, Receipt('3')),
+        ]);
+
+        Assert.HasCount(3, lineage.Entries);
+        Assert.IsTrue(lineage.CarriesDateContribution);
+    }
+
+    /// <summary>An expression nothing witnessed the identity of is not an observation.</summary>
+    [TestMethod]
+    public void ALineageWithoutAnIdentityContributionIsRejected() =>
+        Assert.ThrowsExactly<ArgumentException>(() =>
+            LanguageScopedExpressionLineage.FromContributions([
+                new(LanguageScopedExpressionContribution.PublisherDate, Receipt('1')),
+            ]));
+
+    /// <summary>
+    /// Date-lineage loss, refused at the contract's own door: a date with no bytes behind it, and
+    /// date bytes behind an expression claiming no date, are both provenance this cannot state.
+    /// </summary>
+    [TestMethod]
+    public void ADateAndItsWitnessingBytesMustBePresentTogether()
+    {
+        var date = new PublisherCorrigendumDate("2026-01-02", "http://www.w3.org/2001/XMLSchema#date");
+        var identity = new LanguageScopedExpressionIdentity(Work, "rect/1");
+
+        Assert.ThrowsExactly<ArgumentException>(
+            () => LanguageScopedExpression.FromRetainedSource(
+                identity, "fr", date, SourceObject(), Lineage('1', withDate: false)),
+            "a date needs the retained bytes that stated it.");
+
+        Assert.ThrowsExactly<ArgumentException>(
+            () => LanguageScopedExpression.FromRetainedSource(
+                identity, "fr", null, SourceObject(), Lineage('1', withDate: true)),
+            "and retained date bytes need a date to witness.");
     }
 
     /// <summary>A caller cannot mutate the exposed collection, by any cast.</summary>
@@ -279,7 +393,21 @@ public sealed class LanguageScopedExpressionTests
             language,
             publisherCorrigendumDate,
             SourceObject(),
-            Receipt(bytesFill));
+            Lineage(bytesFill, publisherCorrigendumDate is not null));
+
+    private static LanguageScopedExpressionLineage Lineage(char bytesFill, bool withDate)
+    {
+        var entries = new List<LanguageScopedExpressionLineageEntry>
+        {
+            new(LanguageScopedExpressionContribution.IdentityAndLanguage, Receipt(bytesFill)),
+        };
+        if (withDate)
+        {
+            entries.Add(new(LanguageScopedExpressionContribution.PublisherDate, Receipt('d')));
+        }
+
+        return LanguageScopedExpressionLineage.FromContributions(entries);
+    }
 
     private static SourceObjectRef SourceObject() => new(
         SourceCoreSchemaIds.SourceObjectRef,

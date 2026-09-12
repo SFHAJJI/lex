@@ -127,6 +127,11 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Contracts.Derivation.LanguageScopedExpression::FromRetainedSource, "
                     + "method public static "
                     + "Lex.V3.Contracts.Source.Europe.EuLanguageScopedExpressionDecode::TryDecode",
+                "Lex.V3.Contracts.Derivation.LanguageScopedExpressionLineage: constructor private "
+                    + "instance Lex.V3.Contracts.Derivation.LanguageScopedExpressionLineage::.ctor, "
+                    + "method public static "
+                    + "Lex.V3.Contracts.Derivation.LanguageScopedExpressionLineage::FromContributio"
+                    + "ns",
                 "Lex.V3.Contracts.EuPlainLiteralDriftProbePlan: constructor internal instance "
                     + "Lex.V3.Contracts.EuPlainLiteralDriftProbePlan::.ctor, "
                     + "constructor private instance "
@@ -164,8 +169,10 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Contracts.Source.Absence.AbsenceCut::TryCreateComplete, "
                     + "method public static "
                     + "Lex.V3.Contracts.Source.Absence.AbsenceCut::TryCreatePartial",
-                "Lex.V3.Contracts.Source.Absence.AbsenceFamilyEnumerationProof: constructor "
-                    + "private instance "
+                "Lex.V3.Contracts.Source.Absence.AbsenceFamilyEnumerationProof: by-ref-method "
+                    + "public instance "
+                    + "Lex.V3.Contracts.Source.Europe.EuProofBoundDelivery::Deconstruct, "
+                    + "constructor private instance "
                     + "Lex.V3.Contracts.Source.Absence.AbsenceFamilyEnumerationProof::.ctor, "
                     + "method public instance "
                     + "Lex.V3.Contracts.Source.Core.RepeatedEnumerationDeliveryReceipt::TryProveFam"
@@ -267,8 +274,10 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Contracts.Source.Core.CutReleaseGate::.ctor, "
                     + "method public static "
                     + "Lex.V3.Contracts.Source.Core.CutReleaseGate::TryEvaluate",
-                "Lex.V3.Contracts.Source.Core.EnumerationDeliveryComparison: constructor private "
-                    + "instance Lex.V3.Contracts.Source.Core.EnumerationDeliveryComparison::.ctor, "
+                "Lex.V3.Contracts.Source.Core.EnumerationDeliveryComparison: by-ref-method public "
+                    + "instance Lex.V3.Contracts.Source.Europe.EuProofBoundDelivery::Deconstruct, "
+                    + "constructor private instance "
+                    + "Lex.V3.Contracts.Source.Core.EnumerationDeliveryComparison::.ctor, "
                     + "method public static "
                     + "Lex.V3.Contracts.Source.Core.EnumerationDeliveryComparison::Create",
                 "Lex.V3.Contracts.Source.Core.GlobalBlockerCountVector: constructor private "

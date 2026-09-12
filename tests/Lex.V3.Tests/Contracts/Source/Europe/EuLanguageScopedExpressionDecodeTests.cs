@@ -1,24 +1,47 @@
-using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using Lex.V3.Contracts;
 using Lex.V3.Contracts.Custody;
 using Lex.V3.Contracts.Derivation;
+using Lex.V3.Contracts.Source.Absence;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Europe;
+using Lex.V3.Tests.Contracts.Source.Core;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace Lex.V3.Tests.Contracts.Source.Europe;
 
 /// <summary>
 /// The EU language-scoped expression decode: the representation B31-L0071 says the corpus lacks, and
-/// the ways a decoder could quietly reacquire the merge it exists to remove.
+/// the ways a decoder could quietly reacquire the merge - or the unproven provenance - it exists to
+/// remove.
 /// </summary>
 /// <remarks>
-/// The tests that matter most here are not the happy paths. They are the ones that fail if language
-/// is ever folded into identity, if an unmappable language is ever defaulted, if a date is ever
-/// attached to an expression whose Work the publisher did not state it for, or if a refused delivery
-/// ever leaves an append-only store half written.
+/// <para>
+/// EVERY DELIVERY HERE IS PROVEN, NOT HANDED IN. The first head of this slice took bare row lists
+/// and a caller-chosen write receipt, which let a caller pair any well-shaped rows with any valid
+/// custody receipt. That door is closed: rows reach the decode only through
+/// <see cref="VerifiedRepeatedEnumerationRows.TryOpen"/>, and the provenance it records is built
+/// from the reopened pages themselves. These tests therefore mint real deliveries, real proofs and
+/// real page evidence; there is no shortcut left that would let them do otherwise.
+/// </para>
+/// <para>
+/// TWO RETRACTIONS, KEPT RATHER THAN QUIETLY DELETED. First, an earlier version of this comment said
+/// every delivery here had to be single-page because the shared fixture minted one page per pass,
+/// and recorded a first-page-only lineage mutation as equivalent-through-this-door on that basis.
+/// That was simply wrong: the fixture already chains pages (<c>CreateTwoPage</c>), and
+/// <c>CreatePagedRaw</c> builds multi-page deliveries over caller-built bodies.
+/// </para>
+/// <para>
+/// Second, the multi-page tests that replaced it asserted DELIVERY-WIDE lineage - every page of the
+/// family cited by every expression, including an empty terminal page labelled
+/// <c>identity_and_language</c>. That contradicted the contribution vocabulary those tests were
+/// written against: the role means "bytes that stated the expression's identity and its language",
+/// and a page carrying none of an expression's rows stated neither. The assertions were written to
+/// match the implementation instead of the design, which is the wrong direction, and they were green
+/// the whole time. The expectations below now follow the design: an expression cites the pages that
+/// carried its own rows, and completion evidence stays with the proof-bound delivery.
+/// </para>
 /// </remarks>
 [TestClass]
 public sealed class EuLanguageScopedExpressionDecodeTests
@@ -41,9 +64,7 @@ public sealed class EuLanguageScopedExpressionDecodeTests
     private const string Norwegian = LanguageBase + "NOR";
 
     private const string XsdString = "http://www.w3.org/2001/XMLSchema#string";
-    private const string XsdInteger = "http://www.w3.org/2001/XMLSchema#integer";
     private const string XsdDate = "http://www.w3.org/2001/XMLSchema#date";
-    private const string ObservedAtText = "2026-01-02T03:04:05.0000000+00:00";
 
     private static readonly string BelongsToWorkIri =
         EuObjectFactsDiscoveryPlan.CdmIri(EuCdmPredicate.ExpressionBelongsToWork);
@@ -56,10 +77,48 @@ public sealed class EuLanguageScopedExpressionDecodeTests
     private static readonly string CelexIri =
         EuObjectFactsDiscoveryPlan.CdmIri(EuCdmPredicate.ResourceLegalIdCelex);
 
-    private static readonly RepeatedEnumerationInterpretationProfile ObjectFactsProfile =
-        EuObjectFactsDiscoveryPlan.Create().CreateDeliveryProfile(EuObjectFactsQuerySet.ObjectFacts);
-    private static readonly RepeatedEnumerationInterpretationProfile ExpressionFactsProfile =
-        EuObjectFactsDiscoveryPlan.Create().CreateDeliveryProfile(EuObjectFactsQuerySet.ExpressionFacts);
+    private static readonly string[] XProjection =
+        ["parent", "object", "predicate", "value", "value_kind", "datatype_iri", "language_tag", "cursor"];
+    private static readonly string[] XKey = ["parent", "object", "predicate", "value"];
+    private static readonly string[] PProjection =
+        ["object", "predicate", "value", "value_kind", "cursor"];
+    private static readonly string[] PKey = ["object", "predicate", "value"];
+
+    // ---- The binding between these fixtures and the publisher's real family. ----
+
+    /// <summary>
+    /// The fixtures below mint deliveries under a projection of this file's own making, which proves
+    /// nothing unless the real family actually projects the variables this decode reads. This is
+    /// that check, and it is why a fixture-shaped profile is honest here rather than convenient.
+    /// </summary>
+    [TestMethod]
+    public void TheRealExpressionFactsProfileProjectsEveryVariableThisDecodeReads()
+    {
+        var real = EuObjectFactsDiscoveryPlan.Create()
+            .CreateDeliveryProfile(EuObjectFactsQuerySet.ExpressionFacts);
+
+        foreach (var variable in new[]
+            { "parent", "object", "predicate", "value", "value_kind", "datatype_iri", "language_tag" })
+        {
+            Assert.Contains(
+                variable,
+                real.ProjectionVariables,
+                $"the decode reads '{variable}' and the real family must project it.");
+        }
+    }
+
+    /// <summary>The same, for the family the publisher's date is read from.</summary>
+    [TestMethod]
+    public void TheRealObjectFactsProfileProjectsEveryVariableThisDecodeReads()
+    {
+        var real = EuObjectFactsDiscoveryPlan.Create()
+            .CreateDeliveryProfile(EuObjectFactsQuerySet.ObjectFacts);
+
+        foreach (var variable in new[] { "object", "predicate", "value", "value_kind" })
+        {
+            Assert.Contains(variable, real.ProjectionVariables);
+        }
+    }
 
     // ---- The defect B31-L0071 names, stated as properties that must hold. ----
 
@@ -73,7 +132,7 @@ public sealed class EuLanguageScopedExpressionDecodeTests
         var set = new LanguageScopedExpressionSet();
         var decoded = Decode(
             set,
-            [.. ExpressionRows(WorkOne, ExprEnglish, English), .. ExpressionRows(WorkOne, ExprFrench, French)],
+            [.. Expression(WorkOne, ExprEnglish, English), .. Expression(WorkOne, ExprFrench, French)],
             out var refusal,
             out _);
 
@@ -82,8 +141,7 @@ public sealed class EuLanguageScopedExpressionDecodeTests
         Assert.HasCount(2, decoded, "the older fold reports one observation for this delivery.");
         CollectionAssert.AreEqual(
             new[] { English, French },
-            decoded.Select(static expression => expression.OfficialLanguage).ToArray(),
-            "both languages, each as itself.");
+            decoded.Select(static expression => expression.OfficialLanguage).ToArray());
     }
 
     /// <summary>The exact defect: a second same-language expression of one Work.</summary>
@@ -94,17 +152,15 @@ public sealed class EuLanguageScopedExpressionDecodeTests
         var decoded = Decode(
             set,
             [
-                .. ExpressionRows(WorkOne, ExprFrench, French),
-                .. ExpressionRows(WorkOne, ExprFrenchCorrigendumTwo, French),
+                .. Expression(WorkOne, ExprFrench, French),
+                .. Expression(WorkOne, ExprFrenchCorrigendumTwo, French),
             ],
             out var refusal,
             out _);
 
         Assert.AreEqual(EuLanguageScopedExpressionDecodeRefusal.None, refusal);
         Assert.IsNotNull(decoded);
-        Assert.HasCount(
-            2, decoded, "a language-keyed identity would have folded the second corrigendum away.");
-        Assert.HasCount(2, set.Expressions);
+        Assert.HasCount(2, decoded, "a language-keyed identity would have folded the second away.");
     }
 
     /// <summary>
@@ -115,33 +171,427 @@ public sealed class EuLanguageScopedExpressionDecodeTests
     public void ALanguageOutsideTheClosedScopeEnumSurvivesVerbatim()
     {
         Assert.IsFalse(
-            Enum.GetNames<EuOfficialLanguage>().Any(name => name.Contains("Norwegian", StringComparison.Ordinal)),
+            Enum.GetNames<EuOfficialLanguage>().Any(static name =>
+                name.Contains("Norwegian", StringComparison.Ordinal)),
             "this test is only meaningful while NOR is outside the closed twenty-four.");
 
         var set = new LanguageScopedExpressionSet();
-        var decoded = Decode(set, ExpressionRows(WorkOne, ExprNorwegian, Norwegian), out var refusal, out _);
+        var decoded = Decode(set, Expression(WorkOne, ExprNorwegian, Norwegian), out var refusal, out _);
 
         Assert.AreEqual(EuLanguageScopedExpressionDecodeRefusal.None, refusal);
         Assert.IsNotNull(decoded);
-        Assert.AreEqual(
-            Norwegian,
-            decoded[0].OfficialLanguage,
-            "mapping onto the closed enum would have defaulted or dropped this.");
+        Assert.AreEqual(Norwegian, decoded[0].OfficialLanguage);
     }
 
-    /// <summary>Identity is the publisher's Work and Expression, and neither is the language.</summary>
+    // ---- Provenance: proven, never handed in. ----
+
+    /// <summary>
+    /// The finding that sank the first head, stated as a test. Rows cannot be supplied; they are
+    /// reopened from retained bytes and checked against the proof. Substituted page bytes are
+    /// refused at that door, so no expression can cite custody nobody established.
+    /// </summary>
     [TestMethod]
-    public void IdentityIsThePublisherWorkAndExpressionAndCarriesNoLanguage()
+    public void SubstitutedPageBytesRefuseRatherThanDecoding()
     {
+        var rows = Expression(WorkOne, ExprFrench, French);
+        var honest = XFixture(rows);
+        var delivery = honest.Create(string.Empty, string.Empty);
+        var proof = AbsenceFamilyEnumerationProof.TryCreate(
+            "laws", delivery, CustodyMembership.Floored, out _);
+        Assert.IsNotNull(proof);
+
+        // Bytes that are perfectly well-formed for a DIFFERENT expression, standing in for the page
+        // this proof was minted over. A caller-supplied row list would have accepted them.
+        var substituted = honest.Resolve(delivery.PagesA.Pages[0].Evidence) with
+        {
+            RetainedPayloadBytes = Encoding.UTF8.GetBytes(
+                RowsJson(XProjection, Expression(WorkOne, ExprEnglish, English))),
+        };
+
         var set = new LanguageScopedExpressionSet();
-        var decoded = Decode(set, ExpressionRows(WorkOne, ExprFrench, French), out _, out _);
+        var decoded = EuLanguageScopedExpressionDecode.TryDecode(
+            new EuProofBoundDelivery(
+                proof!, delivery, honest.ProfileForTest, delivery.InterpretationProfileRef,
+                delivery.CountA.HttpEvidenceRef, [substituted]),
+            null,
+            SourceObject(),
+            set,
+            out var refusal,
+            out var refusalDetail,
+            out _);
+
+        Assert.IsNull(decoded);
+        Assert.AreEqual(EuLanguageScopedExpressionDecodeRefusal.ExpressionRowsRefused, refusal);
+        Assert.IsNotNull(refusalDetail);
+        Assert.AreNotEqual(
+            RepeatedEnumerationRowsOpenRefusal.None.ToString(),
+            refusalDetail,
+            "the refusal must carry the reopen door's own reason rather than a summary of it.");
+        Assert.IsEmpty(set.Expressions);
+    }
+
+    /// <summary>Every expression's lineage is the delivery's own reopened page receipts.</summary>
+    [TestMethod]
+    public void LineageIsBuiltFromTheReopenedPagesRatherThanAnyCallerChoice()
+    {
+        var rows = Expression(WorkOne, ExprFrench, French);
+        var fixture = XFixture(rows);
+        var delivery = fixture.Create(string.Empty, string.Empty);
+        var proof = AbsenceFamilyEnumerationProof.TryCreate(
+            "laws", delivery, CustodyMembership.Floored, out _);
+        var pages = Pages(fixture, delivery);
+
+        var decoded = EuLanguageScopedExpressionDecode.TryDecode(
+            new EuProofBoundDelivery(
+                proof!, delivery, fixture.ProfileForTest, delivery.InterpretationProfileRef,
+                delivery.CountA.HttpEvidenceRef, pages),
+            null,
+            SourceObject(),
+            new LanguageScopedExpressionSet(),
+            out _,
+            out _,
+            out _);
 
         Assert.IsNotNull(decoded);
-        Assert.AreEqual(WorkOne, decoded[0].Identity.PublisherWorkId);
-        Assert.AreEqual(ExprFrench, decoded[0].Identity.PublisherExpressionId);
+        CollectionAssert.AreEquivalent(
+            pages.Select(static page => page.DurableWriteReceipt.Reference.ContentSha256).ToArray(),
+            decoded[0].Lineage.Entries.Select(static entry => entry.ContentSha256).ToArray(),
+            "the lineage must name exactly the bytes this delivery was reopened from.");
+        Assert.IsTrue(decoded[0].Lineage.Entries.All(static entry =>
+            entry.Contribution == LanguageScopedExpressionContribution.IdentityAndLanguage));
+    }
+
+    /// <summary>
+    /// The same rows, delivered over one page and over three, decode to the same expressions - and
+    /// each cites every page it was decoded from.
+    /// </summary>
+    /// <remarks>
+    /// Two of the coordinator's invariants meet here. Semantic identity must not depend on which
+    /// page held a row, so the content digests must match across the two pagings. And the lineage
+    /// must be complete, so the three-page delivery must cite three retained bodies rather than the
+    /// first one: a decoder that recorded only <c>PagesInOrder[0]</c> passes every single-page test
+    /// in this file and dies here.
+    /// </remarks>
+    [TestMethod]
+    public void TheSameRowsPagedDifferentlyDecodeIdenticallyAndCiteEveryPage()
+    {
+        var rows = new List<string>();
+        rows.AddRange(Expression(WorkOne, ExprEnglish, English));
+        rows.AddRange(Expression(WorkOne, ExprFrench, French));
+        rows.AddRange(Expression(WorkOne, ExprNorwegian, Norwegian));
+
+        var wide = DecodePaged(rows, rowLimitA: 9, rowLimitB: 4);
+        var narrow = DecodePaged(rows, rowLimitA: 3, rowLimitB: 5);
+
+        Assert.IsNotNull(wide);
+        Assert.IsNotNull(narrow);
+        CollectionAssert.AreEqual(
+            wide.Select(static expression => expression.CanonicalContentSha256).ToArray(),
+            narrow.Select(static expression => expression.CanonicalContentSha256).ToArray(),
+            "how the publisher paged its answer is not part of what it said.");
+
+        Assert.HasCount(1, wide[0].Lineage.Entries, "six rows under a limit of nine is one page.");
+
+        // At a limit of three, rows 0-2 are on page 0 and rows 3-5 on page 1, and a third, empty
+        // page terminates the pass. The first expression's rows are both on page 0 and the third's
+        // both on page 1, so each cites one page. The second expression's rows are 2 and 3, which
+        // fall either side of the boundary: it is the one that legitimately cites two. Nothing
+        // cites the empty terminal page.
+        Assert.HasCount(1, narrow[0].Lineage.Entries, "its rows are both on the first page.");
+        Assert.HasCount(2, narrow[1].Lineage.Entries, "this one straddles the page boundary.");
+        Assert.HasCount(1, narrow[2].Lineage.Entries, "and this one is wholly on the second page.");
+        Assert.AreNotEqual(
+            narrow[0].Lineage.Entries[0].ContentSha256,
+            narrow[2].Lineage.Entries[0].ContentSha256,
+            "two expressions on different pages must not cite the same body.");
+    }
+
+    /// <summary>
+    /// A delivery whose row count divides evenly by its page limit ends on an empty page, and no
+    /// expression cites it.
+    /// </summary>
+    /// <remarks>
+    /// An empty page stated no identity and no language, so labelling it with either role would be a
+    /// claim about bytes that carried nothing. What it does establish - that the enumeration
+    /// finished - is a property of the delivery, and the proof-bound delivery already carries it.
+    /// </remarks>
+    [TestMethod]
+    public void ATerminatingEmptyPageIsCitedByNoExpression()
+    {
+        var rows = new List<string>();
+        rows.AddRange(Expression(WorkOne, ExprEnglish, English));
+        rows.AddRange(Expression(WorkOne, ExprFrench, French));
+
+        var decoded = DecodePaged(rows, rowLimitA: 2, rowLimitB: 3);
+
+        Assert.IsNotNull(decoded);
+        Assert.HasCount(1, decoded[0].Lineage.Entries, "its two rows are both on the first page.");
+        Assert.HasCount(1, decoded[1].Lineage.Entries, "and its two on the second.");
+        Assert.AreNotEqual(
+            decoded[0].Lineage.Entries[0].ContentSha256,
+            decoded[1].Lineage.Entries[0].ContentSha256);
+    }
+
+    /// <summary>
+    /// Under a policy that lets a page before the last be short, page boundaries cannot be derived
+    /// from the row limit, and this refuses rather than attributing rows to the wrong bytes.
+    /// </summary>
+    /// <remarks>
+    /// <c>ShortPageTerminal</c> is what makes the arithmetic exact: <c>RequireContinuation</c>
+    /// enforces that every page before the last holds exactly the limit.
+    /// <c>EmptySuccessorAfterShortPage</c> requires only that a prior page be non-empty and within
+    /// the limit, so row <c>i</c> is no longer necessarily on page <c>i / limit</c>. Guessing there
+    /// would omit a contributing body, and an incomplete provenance claim is worse than none.
+    /// </remarks>
+    [TestMethod]
+    public void ADeliveryWhosePagePolicyHidesBoundariesRefusesRatherThanGuessing()
+    {
+        var rows = new List<string>();
+        rows.AddRange(Expression(WorkOne, ExprEnglish, English));
+        rows.AddRange(Expression(WorkOne, ExprFrench, French));
+
+        var decoded = DecodePaged(
+            rows,
+            rowLimitA: 3,
+            rowLimitB: 5,
+            RepeatedEnumerationTerminalPagePolicy.EmptySuccessorAfterShortPage,
+            out var refusal);
+
+        Assert.IsNull(decoded);
+        Assert.AreEqual(EuLanguageScopedExpressionDecodeRefusal.PageAttributionUnavailable, refusal);
+    }
+
+    // ---- The publisher's date, and its own lineage. ----
+
+    [TestMethod]
+    public void ThePublisherWorkDateIsCarriedWithItsOwnLexicalFormAndDatatype()
+    {
+        var decoded = DecodeWithDates(
+            Expression(WorkOne, ExprFrench, French),
+            [PRow(WorkOne, WorkDateIri, "2016-05-04", XsdDate)],
+            out var refusal);
+
+        Assert.AreEqual(EuLanguageScopedExpressionDecodeRefusal.None, refusal);
+        Assert.IsNotNull(decoded);
+        Assert.AreEqual("2016-05-04", decoded[0].PublisherCorrigendumDate!.RawLexical);
+        Assert.AreEqual(XsdDate, decoded[0].PublisherCorrigendumDate!.DatatypeIri);
+    }
+
+    /// <summary>
+    /// The datatype is the publisher's, not this build's guess. A test asserting <c>xsd:date</c>
+    /// cannot see a substituted <c>xsd:date</c>, so this one uses a datatype nothing here would pick.
+    /// </summary>
+    [TestMethod]
+    public void ThePublisherDateDatatypeIsCarriedRatherThanAssumed()
+    {
+        const string GYearMonth = "http://www.w3.org/2001/XMLSchema#gYearMonth";
+        var decoded = DecodeWithDates(
+            Expression(WorkOne, ExprFrench, French),
+            [PRow(WorkOne, WorkDateIri, "2016-05", GYearMonth)],
+            out _);
+
+        Assert.IsNotNull(decoded);
+        Assert.AreEqual(GYearMonth, decoded[0].PublisherCorrigendumDate!.DatatypeIri);
+    }
+
+    /// <summary>
+    /// A dated expression cites the date family's own retained bytes, distinguished by role. This is
+    /// the multi-family lineage the carrier was amended to express: one receipt could not say it.
+    /// </summary>
+    [TestMethod]
+    public void ADatedExpressionCitesTheDateFamilysOwnRetainedBytes()
+    {
+        var decoded = DecodeWithDates(
+            Expression(WorkOne, ExprFrench, French),
+            [PRow(WorkOne, WorkDateIri, "2016-05-04", XsdDate)],
+            out _);
+
+        Assert.IsNotNull(decoded);
+        var lineage = decoded[0].Lineage;
+        Assert.IsTrue(lineage.CarriesDateContribution);
+        Assert.HasCount(
+            1,
+            lineage.Entries.Where(static entry =>
+                entry.Contribution == LanguageScopedExpressionContribution.PublisherDate),
+            "the date's own bytes, cited as the date's.");
+        Assert.HasCount(
+            1,
+            lineage.Entries.Where(static entry =>
+                entry.Contribution == LanguageScopedExpressionContribution.IdentityAndLanguage));
+        Assert.AreNotEqual(
+            lineage.Entries[0].ContentSha256,
+            lineage.Entries[1].ContentSha256,
+            "two families, two retained bodies.");
+    }
+
+    /// <summary>
+    /// Date-lineage loss, as a test. An expression whose Work the publisher dated nothing for must
+    /// cite no date bytes, even though the date family was delivered and read.
+    /// </summary>
+    [TestMethod]
+    public void AnUndatedExpressionCitesNoDateBytesEvenWhenTheDateFamilyWasRead()
+    {
+        var decoded = DecodeWithDates(
+            [.. Expression(WorkOne, ExprFrench, French), .. Expression(WorkTwo, ExprOfWorkTwo, English)],
+            [PRow(WorkOne, WorkDateIri, "2016-05-04", XsdDate)],
+            out _);
+
+        Assert.IsNotNull(decoded);
+        Assert.IsNotNull(decoded[0].PublisherCorrigendumDate);
+        Assert.IsTrue(decoded[0].Lineage.CarriesDateContribution);
+
+        Assert.IsNull(
+            decoded[1].PublisherCorrigendumDate,
+            "the other Work's date must not have been attached to this one.");
         Assert.IsFalse(
-            decoded[0].Identity.ToString()!.Contains(French, StringComparison.Ordinal),
-            "the language must not have reached the identity.");
+            decoded[1].Lineage.CarriesDateContribution,
+            "and it must not cite the bytes of a family that did not date it.");
+    }
+
+    [TestMethod]
+    public void EachExpressionTakesTheDateOfItsOwnWorkAndNoOther()
+    {
+        var decoded = DecodeWithDates(
+            [.. Expression(WorkOne, ExprFrench, French), .. Expression(WorkTwo, ExprOfWorkTwo, English)],
+            [
+                PRow(WorkOne, WorkDateIri, "2016-05-04", XsdDate),
+                PRow(WorkTwo, WorkDateIri, "2018-11-21", XsdDate),
+            ],
+            out _);
+
+        Assert.IsNotNull(decoded);
+        Assert.AreEqual("2016-05-04", decoded[0].PublisherCorrigendumDate!.RawLexical);
+        Assert.AreEqual("2018-11-21", decoded[1].PublisherCorrigendumDate!.RawLexical);
+    }
+
+    [TestMethod]
+    public void AnAbsentWorkDateStaysAbsentRatherThanDefaulting()
+    {
+        var decoded = Decode(
+            new LanguageScopedExpressionSet(),
+            Expression(WorkOne, ExprFrench, French),
+            out _,
+            out _);
+
+        Assert.IsNotNull(decoded);
+        Assert.IsNull(decoded[0].PublisherCorrigendumDate);
+        Assert.IsFalse(decoded[0].Lineage.CarriesDateContribution);
+    }
+
+    /// <summary>
+    /// An unbound date row is the publisher's typed absence, not a date.
+    /// </summary>
+    /// <remarks>
+    /// This test existed before the provenance repair and was lost when this file was rewritten onto
+    /// proof-bound deliveries. The mutation pass caught its absence - "an unbound date row treated as
+    /// a date" survived - which is the only reason it is back. Dropping a guard while rewriting the
+    /// file around it is exactly the failure a deletion-grade pass is for.
+    /// </remarks>
+    [TestMethod]
+    public void AnUnboundWorkDateRowIsAnAbsenceRatherThanADate()
+    {
+        var decoded = DecodeWithDates(
+            Expression(WorkOne, ExprFrench, French),
+            [PUnboundRow(WorkOne, WorkDateIri)],
+            out var refusal,
+            objectFactsKey: ["object", "predicate"]);
+
+        Assert.AreEqual(EuLanguageScopedExpressionDecodeRefusal.None, refusal);
+        Assert.IsNotNull(decoded);
+        Assert.IsNull(decoded[0].PublisherCorrigendumDate);
+        Assert.IsFalse(
+            decoded[0].Lineage.CarriesDateContribution,
+            "an absence cites no bytes as having stated a date.");
+    }
+
+    [TestMethod]
+    public void TwoDifferentDatesForOneWorkRefuseRatherThanPickingOne()
+    {
+        var decoded = DecodeWithDates(
+            Expression(WorkOne, ExprFrench, French),
+            [
+                PRow(WorkOne, WorkDateIri, "2016-05-04", XsdDate),
+                PRow(WorkOne, WorkDateIri, "2016-05-05", XsdDate),
+            ],
+            out var refusal);
+
+        Assert.IsNull(decoded);
+        Assert.AreEqual(EuLanguageScopedExpressionDecodeRefusal.ConflictingWorkDate, refusal);
+    }
+
+    [TestMethod]
+    public void ADateBoundToAnIriRefusesRatherThanBeingCoerced()
+    {
+        var decoded = DecodeWithDates(
+            Expression(WorkOne, ExprFrench, French),
+            [PIriRow(WorkOne, WorkDateIri, WorkTwo)],
+            out var refusal);
+
+        Assert.IsNull(decoded);
+        Assert.AreEqual(EuLanguageScopedExpressionDecodeRefusal.WorkDateRowTermKindMismatch, refusal);
+    }
+
+    /// <summary>
+    /// Family P legitimately describes objects this delivery has no Expression of. Refusing those
+    /// would refuse correct publisher data, so they are out of scope rather than dropped.
+    /// </summary>
+    [TestMethod]
+    public void ObjectFactRowsAboutOtherSubjectsAndOtherPredicatesAreNotRefused()
+    {
+        var decoded = DecodeWithDates(
+            Expression(WorkOne, ExprFrench, French),
+            [
+                PRow(WorkTwo, WorkDateIri, "2018-11-21", XsdDate),
+                PRow(WorkOne, CelexIri, "32016R0679", XsdString),
+            ],
+            out var refusal);
+
+        Assert.AreEqual(EuLanguageScopedExpressionDecodeRefusal.None, refusal);
+        Assert.IsNotNull(decoded);
+        Assert.IsNull(decoded[0].PublisherCorrigendumDate, "the other Work's date is not this one's.");
+        Assert.IsFalse(decoded[0].Lineage.CarriesDateContribution);
+    }
+
+    /// <summary>
+    /// The date cites the page that actually stated it, not the date family's first page.
+    /// </summary>
+    /// <remarks>
+    /// Every other date test here delivers a single-page date family, where citing "the first page"
+    /// and citing "the page that stated it" are the same bytes and no test can tell them apart. The
+    /// date row below is deliberately on the second page.
+    /// </remarks>
+    [TestMethod]
+    public void TheDateCitesThePageThatStatedItRatherThanTheFirst()
+    {
+        // Two rows this door does not read, then the date. At a limit of two the date is on page 1.
+        var objectRows = new[]
+        {
+            PRow(WorkTwo, CelexIri, "32018R1725", XsdString),
+            PRow(WorkOne, CelexIri, "32016R0679", XsdString),
+            PRow(WorkOne, WorkDateIri, "2016-05-04", XsdDate),
+        };
+
+        var dateFacts = BoundPagedObjectFacts(objectRows, rowLimitA: 2, rowLimitB: 3);
+        var decoded = EuLanguageScopedExpressionDecode.TryDecode(
+            Bound(Expression(WorkOne, ExprFrench, French)),
+            dateFacts,
+            SourceObject(),
+            new LanguageScopedExpressionSet(),
+            out var refusal,
+            out _,
+            out _);
+
+        Assert.AreEqual(EuLanguageScopedExpressionDecodeRefusal.None, refusal);
+        Assert.IsNotNull(decoded);
+        var dateEntry = decoded[0].Lineage.Entries.Single(static entry =>
+            entry.Contribution == LanguageScopedExpressionContribution.PublisherDate);
+        Assert.AreEqual(
+            dateFacts.PagesInOrder[1].DurableWriteReceipt.Reference.ContentSha256,
+            dateEntry.ContentSha256,
+            "the date was stated on the second page, and that is the body that stated it.");
+        Assert.AreNotEqual(
+            dateFacts.PagesInOrder[0].DurableWriteReceipt.Reference.ContentSha256,
+            dateEntry.ContentSha256);
     }
 
     // ---- Language: never defaulted, never merged. ----
@@ -149,64 +599,58 @@ public sealed class EuLanguageScopedExpressionDecodeTests
     [TestMethod]
     public void AnExpressionWithNoLanguageRefusesRatherThanDefaulting()
     {
-        var set = new LanguageScopedExpressionSet();
         var decoded = Decode(
-            set,
-            [XBoundRow(WorkOne, ExprEnglish, BelongsToWorkIri, new PValue(WorkOne))],
+            new LanguageScopedExpressionSet(),
+            [XRow(WorkOne, ExprEnglish, BelongsToWorkIri, WorkOne)],
             out var refusal,
             out var offending);
 
         Assert.IsNull(decoded);
         Assert.AreEqual(EuLanguageScopedExpressionDecodeRefusal.ExpressionLanguageMissing, refusal);
         Assert.AreEqual(ExprEnglish, offending);
-        Assert.IsEmpty(set.Expressions);
     }
 
     [TestMethod]
     public void TwoLanguagesForOneExpressionRefuseRatherThanMerging()
     {
-        var set = new LanguageScopedExpressionSet();
         var decoded = Decode(
-            set,
+            new LanguageScopedExpressionSet(),
             [
-                .. ExpressionRows(WorkOne, ExprEnglish, English),
-                XBoundRow(WorkOne, ExprEnglish, UsesLanguageIri, new PValue(French)),
-            ],
-            out var refusal,
-            out var offending);
-
-        Assert.IsNull(decoded);
-        Assert.AreEqual(EuLanguageScopedExpressionDecodeRefusal.ConflictingExpressionLanguage, refusal);
-        Assert.AreEqual(ExprEnglish, offending);
-    }
-
-    [TestMethod]
-    public void RepresentingOneLanguageTwiceIsNotAConflict()
-    {
-        var set = new LanguageScopedExpressionSet();
-        var decoded = Decode(
-            set,
-            [
-                .. ExpressionRows(WorkOne, ExprEnglish, English),
-                XBoundRow(WorkOne, ExprEnglish, UsesLanguageIri, new PValue(English)),
+                .. Expression(WorkOne, ExprEnglish, English),
+                XRow(WorkOne, ExprEnglish, UsesLanguageIri, French),
             ],
             out var refusal,
             out _);
 
-        Assert.AreEqual(EuLanguageScopedExpressionDecodeRefusal.None, refusal);
-        Assert.IsNotNull(decoded);
-        Assert.HasCount(1, decoded);
+        Assert.IsNull(decoded);
+        Assert.AreEqual(EuLanguageScopedExpressionDecodeRefusal.ConflictingExpressionLanguage, refusal);
     }
 
-    // ---- Closure: X proves its own, and the two columns must agree. ----
+    /// <summary>Two language IRIs differing only in case are two different IRIs.</summary>
+    [TestMethod]
+    public void TwoLanguageIrisDifferingOnlyByCaseAreNotOneLanguage()
+    {
+        var decoded = Decode(
+            new LanguageScopedExpressionSet(),
+            [
+                .. Expression(WorkOne, ExprEnglish, English),
+                XRow(WorkOne, ExprEnglish, UsesLanguageIri, LanguageBase + "eng"),
+            ],
+            out var refusal,
+            out _);
+
+        Assert.IsNull(decoded);
+        Assert.AreEqual(EuLanguageScopedExpressionDecodeRefusal.ConflictingExpressionLanguage, refusal);
+    }
+
+    // ---- Closure. ----
 
     [TestMethod]
     public void AnExpressionWithoutItsOwnBelongsToWorkRowRefuses()
     {
-        var set = new LanguageScopedExpressionSet();
         var decoded = Decode(
-            set,
-            [XBoundRow(WorkOne, ExprEnglish, UsesLanguageIri, new PValue(English))],
+            new LanguageScopedExpressionSet(),
+            [XRow(WorkOne, ExprEnglish, UsesLanguageIri, English)],
             out var refusal,
             out var offending);
 
@@ -218,12 +662,11 @@ public sealed class EuLanguageScopedExpressionDecodeTests
     [TestMethod]
     public void ABelongsToWorkValueDisagreeingWithTheParentColumnRefuses()
     {
-        var set = new LanguageScopedExpressionSet();
         var decoded = Decode(
-            set,
+            new LanguageScopedExpressionSet(),
             [
-                XBoundRow(WorkOne, ExprEnglish, BelongsToWorkIri, new PValue(WorkTwo)),
-                XBoundRow(WorkOne, ExprEnglish, UsesLanguageIri, new PValue(English)),
+                XRow(WorkOne, ExprEnglish, BelongsToWorkIri, WorkTwo),
+                XRow(WorkOne, ExprEnglish, UsesLanguageIri, English),
             ],
             out var refusal,
             out var offending);
@@ -235,346 +678,13 @@ public sealed class EuLanguageScopedExpressionDecodeTests
     }
 
     [TestMethod]
-    public void AFamilyXRowWhoseShapeBreaksItsProfileRefuses()
-    {
-        var terms = new[]
-        {
-            RepeatedEnumerationRdfTerm.Literal(WorkOne, XsdString, null),
-            RepeatedEnumerationRdfTerm.Iri(ExprEnglish),
-            RepeatedEnumerationRdfTerm.Iri(BelongsToWorkIri),
-            RepeatedEnumerationRdfTerm.Iri(WorkOne),
-            RepeatedEnumerationRdfTerm.Literal("iri", null, null),
-            RepeatedEnumerationRdfTerm.Literal(string.Empty, null, null),
-            RepeatedEnumerationRdfTerm.Literal(string.Empty, null, null),
-            RepeatedEnumerationRdfTerm.Literal("1", XsdInteger, null),
-            RepeatedEnumerationRdfTerm.Literal(ExprEnglish, null, null),
-            RepeatedEnumerationRdfTerm.Literal(BelongsToWorkIri, null, null),
-            RepeatedEnumerationRdfTerm.Literal("iri", null, null),
-            RepeatedEnumerationRdfTerm.Literal(WorkOne, null, null),
-            RepeatedEnumerationRdfTerm.Literal(string.Empty, null, null),
-            RepeatedEnumerationRdfTerm.Literal(string.Empty, null, null),
-        };
-        var row = new RepeatedEnumerationRow(
-            Array.AsReadOnly(terms), Array.AsReadOnly(terms[0..4]), Array.AsReadOnly(terms[8..14]));
-
-        var set = new LanguageScopedExpressionSet();
-        var decoded = Decode(set, [row], out var refusal, out _);
-
-        Assert.IsNull(decoded);
-        Assert.AreEqual(
-            EuLanguageScopedExpressionDecodeRefusal.ExpressionRowTermKindMismatch,
-            refusal,
-            "a parent bound to a literal is not the shape family X promises.");
-    }
-
-    // ---- The publisher's date: carried, attributed to its own Work, never invented. ----
-
-    [TestMethod]
-    public void ThePublisherWorkDateIsCarriedWithItsOwnLexicalFormAndDatatype()
-    {
-        var set = new LanguageScopedExpressionSet();
-        var decoded = Decode(
-            set,
-            ExpressionRows(WorkOne, ExprFrench, French),
-            [PBoundRow(WorkOne, WorkDateIri, new PValue("2016-05-04", IsIri: false, Datatype: XsdDate))],
-            out var refusal,
-            out _);
-
-        Assert.AreEqual(EuLanguageScopedExpressionDecodeRefusal.None, refusal);
-        Assert.IsNotNull(decoded);
-        Assert.IsNotNull(decoded[0].PublisherCorrigendumDate);
-        Assert.AreEqual("2016-05-04", decoded[0].PublisherCorrigendumDate!.RawLexical);
-        Assert.AreEqual(XsdDate, decoded[0].PublisherCorrigendumDate!.DatatypeIri);
-    }
-
-    /// <summary>
-    /// The guard that stops a date wandering: each expression takes the date of its own Work, and
-    /// a decoder that took "the date" rather than "this Work's date" dies here.
-    /// </summary>
-    [TestMethod]
-    public void EachExpressionTakesTheDateOfItsOwnWorkAndNoOther()
-    {
-        var set = new LanguageScopedExpressionSet();
-        var decoded = Decode(
-            set,
-            [.. ExpressionRows(WorkOne, ExprFrench, French), .. ExpressionRows(WorkTwo, ExprOfWorkTwo, English)],
-            [
-                PBoundRow(WorkOne, WorkDateIri, new PValue("2016-05-04", IsIri: false, Datatype: XsdDate)),
-                PBoundRow(WorkTwo, WorkDateIri, new PValue("2018-11-21", IsIri: false, Datatype: XsdDate)),
-            ],
-            out var refusal,
-            out _);
-
-        Assert.AreEqual(EuLanguageScopedExpressionDecodeRefusal.None, refusal);
-        Assert.IsNotNull(decoded);
-        Assert.AreEqual("2016-05-04", decoded[0].PublisherCorrigendumDate!.RawLexical);
-        Assert.AreEqual("2018-11-21", decoded[1].PublisherCorrigendumDate!.RawLexical);
-    }
-
-    /// <summary>A Work the publisher dated nothing for keeps no date, and borrows none.</summary>
-    [TestMethod]
-    public void AnExpressionWhoseWorkHasNoDateKeepsNoneAndBorrowsNone()
-    {
-        var set = new LanguageScopedExpressionSet();
-        var decoded = Decode(
-            set,
-            [.. ExpressionRows(WorkOne, ExprFrench, French), .. ExpressionRows(WorkTwo, ExprOfWorkTwo, English)],
-            [PBoundRow(WorkOne, WorkDateIri, new PValue("2016-05-04", IsIri: false, Datatype: XsdDate))],
-            out _,
-            out _);
-
-        Assert.IsNotNull(decoded);
-        Assert.IsNotNull(decoded[0].PublisherCorrigendumDate);
-        Assert.IsNull(
-            decoded[1].PublisherCorrigendumDate,
-            "the other Work's date must not have been attached to this one.");
-    }
-
-    [TestMethod]
-    public void AnAbsentWorkDateStaysAbsentRatherThanDefaulting()
-    {
-        var set = new LanguageScopedExpressionSet();
-        var decoded = Decode(set, ExpressionRows(WorkOne, ExprFrench, French), out _, out _);
-
-        Assert.IsNotNull(decoded);
-        Assert.IsNull(decoded[0].PublisherCorrigendumDate);
-    }
-
-    [TestMethod]
-    public void AnUnboundWorkDateRowIsAnAbsenceRatherThanADate()
-    {
-        var set = new LanguageScopedExpressionSet();
-        var decoded = Decode(
-            set,
-            ExpressionRows(WorkOne, ExprFrench, French),
-            [PUnboundRow(WorkOne, WorkDateIri)],
-            out var refusal,
-            out _);
-
-        Assert.AreEqual(EuLanguageScopedExpressionDecodeRefusal.None, refusal);
-        Assert.IsNotNull(decoded);
-        Assert.IsNull(decoded[0].PublisherCorrigendumDate);
-    }
-
-    [TestMethod]
-    public void TwoDifferentDatesForOneWorkRefuseRatherThanPickingOne()
-    {
-        var set = new LanguageScopedExpressionSet();
-        var decoded = Decode(
-            set,
-            ExpressionRows(WorkOne, ExprFrench, French),
-            [
-                PBoundRow(WorkOne, WorkDateIri, new PValue("2016-05-04", IsIri: false, Datatype: XsdDate)),
-                PBoundRow(WorkOne, WorkDateIri, new PValue("2016-05-05", IsIri: false, Datatype: XsdDate)),
-            ],
-            out var refusal,
-            out var offending);
-
-        Assert.IsNull(decoded);
-        Assert.AreEqual(EuLanguageScopedExpressionDecodeRefusal.ConflictingWorkDate, refusal);
-        Assert.AreEqual(WorkOne, offending);
-    }
-
-    [TestMethod]
-    public void OneDateRepeatedIdenticallyIsNotAConflict()
-    {
-        var set = new LanguageScopedExpressionSet();
-        var decoded = Decode(
-            set,
-            ExpressionRows(WorkOne, ExprFrench, French),
-            [
-                PBoundRow(WorkOne, WorkDateIri, new PValue("2016-05-04", IsIri: false, Datatype: XsdDate)),
-                PBoundRow(WorkOne, WorkDateIri, new PValue("2016-05-04", IsIri: false, Datatype: XsdDate)),
-            ],
-            out var refusal,
-            out _);
-
-        Assert.AreEqual(EuLanguageScopedExpressionDecodeRefusal.None, refusal);
-        Assert.IsNotNull(decoded);
-    }
-
-    [TestMethod]
-    public void ADateBoundToAnIriRefusesRatherThanBeingCoerced()
-    {
-        var set = new LanguageScopedExpressionSet();
-        var decoded = Decode(
-            set,
-            ExpressionRows(WorkOne, ExprFrench, French),
-            [PBoundRow(WorkOne, WorkDateIri, new PValue(WorkTwo))],
-            out var refusal,
-            out var offending);
-
-        Assert.IsNull(decoded);
-        Assert.AreEqual(EuLanguageScopedExpressionDecodeRefusal.WorkDateRowTermKindMismatch, refusal);
-        Assert.AreEqual(WorkOne, offending);
-    }
-
-    /// <summary>
-    /// Family P legitimately describes objects this delivery has no Expression of. Refusing those
-    /// would refuse correct publisher data, so they are out of scope rather than dropped.
-    /// </summary>
-    [TestMethod]
-    public void ObjectFactRowsAboutOtherSubjectsAndOtherPredicatesAreNotRefused()
-    {
-        var set = new LanguageScopedExpressionSet();
-        var decoded = Decode(
-            set,
-            ExpressionRows(WorkOne, ExprFrench, French),
-            [
-                PBoundRow(WorkTwo, WorkDateIri, new PValue("2018-11-21", IsIri: false, Datatype: XsdDate)),
-                PBoundRow(WorkOne, CelexIri, new PValue("32016R0679", IsIri: false, Datatype: XsdString)),
-            ],
-            out var refusal,
-            out _);
-
-        Assert.AreEqual(EuLanguageScopedExpressionDecodeRefusal.None, refusal);
-        Assert.IsNotNull(decoded);
-        Assert.IsNull(decoded[0].PublisherCorrigendumDate, "the other Work's date is not this one's.");
-    }
-
-    // ---- Provenance, atomicity and replay. ----
-
-    [TestMethod]
-    public void EveryDecodedExpressionCarriesTheExactRetainedReceiptAndSourceObject()
-    {
-        var set = new LanguageScopedExpressionSet();
-        var receipt = Receipt('a');
-        var sourceObject = SourceObject();
-        var decoded = EuLanguageScopedExpressionDecode.TryDecode(
-            [.. ExpressionRows(WorkOne, ExprEnglish, English), .. ExpressionRows(WorkOne, ExprFrench, French)],
-            ExpressionFactsProfile,
-            [],
-            ObjectFactsProfile,
-            sourceObject,
-            receipt,
-            set,
-            out _,
-            out _);
-
-        Assert.IsNotNull(decoded);
-        foreach (var expression in decoded)
-        {
-            Assert.AreSame(receipt, expression.RetainedTransportBytes);
-            Assert.AreSame(sourceObject, expression.SourceObject);
-            Assert.AreEqual(receipt.Reference.ContentSha256, expression.CanonicalBytesSha256);
-        }
-    }
-
-    /// <summary>A refused delivery must leave an append-only store exactly as it was found.</summary>
-    [TestMethod]
-    public void ARefusedDeliveryLeavesTheDestinationSetUntouched()
-    {
-        var set = new LanguageScopedExpressionSet();
-        Decode(set, ExpressionRows(WorkOne, ExprEnglish, English), out _, out _);
-        Assert.HasCount(1, set.Expressions);
-
-        var decoded = Decode(
-            set,
-            [
-                .. ExpressionRows(WorkOne, ExprFrench, French),
-                XBoundRow(WorkOne, ExprNorwegian, UsesLanguageIri, new PValue(Norwegian)),
-            ],
-            out var refusal,
-            out _);
-
-        Assert.IsNull(decoded);
-        Assert.AreEqual(EuLanguageScopedExpressionDecodeRefusal.ExpressionSubjectNotSelfClosed, refusal);
-        Assert.HasCount(
-            1, set.Expressions, "the admissible French expression must not have been appended.");
-        Assert.AreEqual(ExprEnglish, set.Expressions[0].Identity.PublisherExpressionId);
-    }
-
-    /// <summary>
-    /// A conflict with what the set already holds is found before the first append, not halfway
-    /// through one.
-    /// </summary>
-    [TestMethod]
-    public void AConflictWithAHeldExpressionRefusesWithoutAppendingTheAdmissibleOnes()
-    {
-        var set = new LanguageScopedExpressionSet();
-        EuLanguageScopedExpressionDecode.TryDecode(
-            ExpressionRows(WorkOne, ExprFrench, French),
-            ExpressionFactsProfile,
-            [],
-            ObjectFactsProfile,
-            SourceObject(),
-            Receipt('a'),
-            set,
-            out _,
-            out _);
-        Assert.HasCount(1, set.Expressions);
-
-        // The same identity, from a different retained transport: different bytes, same identity.
-        var decoded = EuLanguageScopedExpressionDecode.TryDecode(
-            [.. ExpressionRows(WorkOne, ExprEnglish, English), .. ExpressionRows(WorkOne, ExprFrench, French)],
-            ExpressionFactsProfile,
-            [],
-            ObjectFactsProfile,
-            SourceObject(),
-            Receipt('b'),
-            set,
-            out var refusal,
-            out var offending);
-
-        Assert.IsNull(decoded);
-        Assert.AreEqual(
-            EuLanguageScopedExpressionDecodeRefusal.AppendConflictsWithHeldExpression, refusal);
-        Assert.AreEqual(ExprFrench, offending);
-        Assert.HasCount(
-            1,
-            set.Expressions,
-            "the English expression preceded the conflicting French one and must not have landed.");
-    }
-
-    [TestMethod]
-    public void ReplayingOneDeliveryConvergesRatherThanGrowingTheStore()
-    {
-        var set = new LanguageScopedExpressionSet();
-        var rows = ExpressionRows(WorkOne, ExprFrench, French);
-
-        Assert.IsNotNull(Decode(set, rows, out _, out _));
-        Assert.IsNotNull(Decode(set, rows, out var refusal, out _));
-
-        Assert.AreEqual(EuLanguageScopedExpressionDecodeRefusal.None, refusal);
-        Assert.HasCount(1, set.Expressions);
-    }
-
-    [TestMethod]
-    public void ExpressionsAreAppendedInTheOrderThePublisherStatedThem()
-    {
-        var set = new LanguageScopedExpressionSet();
-        Decode(
-            set,
-            [
-                .. ExpressionRows(WorkOne, ExprFrench, French),
-                .. ExpressionRows(WorkOne, ExprEnglish, English),
-                .. ExpressionRows(WorkOne, ExprNorwegian, Norwegian),
-            ],
-            out _,
-            out _);
-
-        CollectionAssert.AreEqual(
-            new[] { ExprFrench, ExprEnglish, ExprNorwegian },
-            set.Expressions.Select(static expression => expression.Identity.PublisherExpressionId).ToArray());
-    }
-
-    /// <summary>
-    /// A non-identity predicate does not create an expression of its own, but it does have to belong
-    /// to one that exists.
-    /// </summary>
-    [TestMethod]
     public void ATitleRowOnAnAdmittedExpressionAddsNoSecondExpression()
     {
-        var set = new LanguageScopedExpressionSet();
         var decoded = Decode(
-            set,
+            new LanguageScopedExpressionSet(),
             [
-                .. ExpressionRows(WorkOne, ExprFrench, French),
-                XBoundRow(
-                    WorkOne,
-                    ExprFrench,
-                    TitleIri,
-                    new PValue("Rectificatif", IsIri: false, Datatype: XsdString)),
+                .. Expression(WorkOne, ExprFrench, French),
+                XLiteralRow(WorkOne, ExprFrench, TitleIri, "Rectificatif", XsdString),
             ],
             out var refusal,
             out _);
@@ -584,23 +694,67 @@ public sealed class EuLanguageScopedExpressionDecodeTests
         Assert.HasCount(1, decoded);
     }
 
-    // ---- Surface. ----
+    // ---- Atomicity and replay. ----
+
+    [TestMethod]
+    public void ARefusedDeliveryLeavesTheDestinationSetUntouched()
+    {
+        var set = new LanguageScopedExpressionSet();
+        Decode(set, Expression(WorkOne, ExprEnglish, English), out _, out _);
+        Assert.HasCount(1, set.Expressions);
+
+        var decoded = Decode(
+            set,
+            [
+                .. Expression(WorkOne, ExprFrench, French),
+                XRow(WorkOne, ExprNorwegian, UsesLanguageIri, Norwegian),
+            ],
+            out var refusal,
+            out _);
+
+        Assert.IsNull(decoded);
+        Assert.AreEqual(EuLanguageScopedExpressionDecodeRefusal.ExpressionSubjectNotSelfClosed, refusal);
+        Assert.HasCount(
+            1, set.Expressions, "the admissible French expression must not have been appended.");
+    }
+
+    [TestMethod]
+    public void ReplayingOneDeliveryConvergesRatherThanGrowingTheStore()
+    {
+        var set = new LanguageScopedExpressionSet();
+        var rows = Expression(WorkOne, ExprFrench, French);
+
+        Assert.IsNotNull(Decode(set, rows, out _, out _));
+        Assert.IsNotNull(Decode(set, rows, out var refusal, out _));
+
+        Assert.AreEqual(EuLanguageScopedExpressionDecodeRefusal.None, refusal);
+        Assert.HasCount(1, set.Expressions);
+    }
 
     /// <summary>
-    /// There is no parameter by which a caller asserts that a decode is publisher-backed. The
-    /// contract accepts no such claim, and neither does the door that feeds it.
+    /// A conflicting re-presentation is found before the first append, so nothing lands halfway.
+    /// The second delivery says the same expression is in a different language.
     /// </summary>
     [TestMethod]
-    public void TheDecodeSurfaceTakesNoProvenanceOrOverrideAssertion()
+    public void AConflictWithAHeldExpressionRefusesWithoutAppendingTheAdmissibleOnes()
     {
-        var methods = typeof(EuLanguageScopedExpressionDecode)
-            .GetMethods(BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly);
+        var set = new LanguageScopedExpressionSet();
+        Decode(set, Expression(WorkOne, ExprFrench, French), out _, out _);
+        Assert.HasCount(1, set.Expressions);
 
-        Assert.HasCount(1, methods, "one door.");
-        Assert.IsEmpty(
-            methods[0].GetParameters().Where(static parameter =>
-                parameter.ParameterType == typeof(bool) || parameter.HasDefaultValue),
-            "a boolean or defaulted parameter here would be a caller's claim about evidence.");
+        var decoded = Decode(
+            set,
+            [.. Expression(WorkOne, ExprEnglish, English), .. Expression(WorkOne, ExprFrench, Norwegian)],
+            out var refusal,
+            out _);
+
+        Assert.IsNull(decoded);
+        Assert.AreEqual(
+            EuLanguageScopedExpressionDecodeRefusal.AppendConflictsWithHeldExpression, refusal);
+        Assert.HasCount(
+            1,
+            set.Expressions,
+            "the English expression preceded the conflicting one and must not have landed.");
     }
 
     [TestMethod]
@@ -608,109 +762,34 @@ public sealed class EuLanguageScopedExpressionDecodeTests
     {
         var set = new LanguageScopedExpressionSet();
         Assert.ThrowsExactly<ArgumentNullException>(() => EuLanguageScopedExpressionDecode.TryDecode(
-            null!, ExpressionFactsProfile, [], ObjectFactsProfile, SourceObject(), Receipt('a'), set,
-            out _, out _));
+            null!, null, SourceObject(), set, out _, out _, out _));
         Assert.ThrowsExactly<ArgumentNullException>(() => EuLanguageScopedExpressionDecode.TryDecode(
-            [], null!, [], ObjectFactsProfile, SourceObject(), Receipt('a'), set, out _, out _));
+            Bound(Expression(WorkOne, ExprFrench, French)), null, null!, set, out _, out _, out _));
         Assert.ThrowsExactly<ArgumentNullException>(() => EuLanguageScopedExpressionDecode.TryDecode(
-            [], ExpressionFactsProfile, null!, ObjectFactsProfile, SourceObject(), Receipt('a'), set,
-            out _, out _));
-        Assert.ThrowsExactly<ArgumentNullException>(() => EuLanguageScopedExpressionDecode.TryDecode(
-            [], ExpressionFactsProfile, [], null!, SourceObject(), Receipt('a'), set, out _, out _));
-        Assert.ThrowsExactly<ArgumentNullException>(() => EuLanguageScopedExpressionDecode.TryDecode(
-            [], ExpressionFactsProfile, [], ObjectFactsProfile, null!, Receipt('a'), set, out _, out _));
-        Assert.ThrowsExactly<ArgumentNullException>(() => EuLanguageScopedExpressionDecode.TryDecode(
-            [], ExpressionFactsProfile, [], ObjectFactsProfile, SourceObject(), null!, set, out _, out _));
-        Assert.ThrowsExactly<ArgumentNullException>(() => EuLanguageScopedExpressionDecode.TryDecode(
-            [], ExpressionFactsProfile, [], ObjectFactsProfile, SourceObject(), Receipt('a'), null!,
-            out _, out _));
-    }
-
-    [TestMethod]
-    public void AnEmptyDeliveryAppendsNothingAndRefusesNothing()
-    {
-        var set = new LanguageScopedExpressionSet();
-        var decoded = Decode(set, [], out var refusal, out var offending);
-
-        Assert.IsNotNull(decoded);
-        Assert.IsEmpty(decoded);
-        Assert.AreEqual(EuLanguageScopedExpressionDecodeRefusal.None, refusal);
-        Assert.IsNull(offending);
+            Bound(Expression(WorkOne, ExprFrench, French)), null, SourceObject(), null!,
+            out _, out _, out _));
     }
 
     /// <summary>
-    /// Two language IRIs differing only in case are two different IRIs. Merging them would be the
-    /// same silent fold this door exists to remove, in a subtler spelling.
+    /// There is no parameter by which a caller asserts provenance. On the first head this claim was
+    /// written in the source while the door stood open; it is asserted here instead.
     /// </summary>
     [TestMethod]
-    public void TwoLanguageIrisDifferingOnlyByCaseAreNotOneLanguage()
+    public void TheDecodeSurfaceTakesNoRowsNoReceiptAndNoProvenanceAssertion()
     {
-        var set = new LanguageScopedExpressionSet();
-        var decoded = Decode(
-            set,
-            [
-                .. ExpressionRows(WorkOne, ExprEnglish, English),
-                XBoundRow(WorkOne, ExprEnglish, UsesLanguageIri, new PValue(LanguageBase + "eng")),
-            ],
-            out var refusal,
-            out _);
+        var parameters = typeof(EuLanguageScopedExpressionDecode)
+            .GetMethod(nameof(EuLanguageScopedExpressionDecode.TryDecode))!
+            .GetParameters();
 
-        Assert.IsNull(decoded);
-        Assert.AreEqual(
-            EuLanguageScopedExpressionDecodeRefusal.ConflictingExpressionLanguage, refusal);
+        Assert.IsEmpty(
+            parameters.Where(static parameter =>
+                parameter.ParameterType == typeof(bool) ||
+                parameter.ParameterType == typeof(DurableBlobWriteReceipt) ||
+                parameter.ParameterType == typeof(IReadOnlyList<RepeatedEnumerationRow>) ||
+                parameter.HasDefaultValue),
+            "rows, a receipt, a boolean or a defaulted parameter would each be a caller's claim.");
     }
 
-    /// <summary>
-    /// The datatype is the publisher's, not this build's guess.
-    /// <see cref="ThePublisherWorkDateIsCarriedWithItsOwnLexicalFormAndDatatype"/> cannot see a
-    /// substituted <c>xsd:date</c>, because it asserts that exact constant. This one uses a datatype
-    /// nothing in this build would ever choose, so a substitution has nowhere to hide.
-    /// </summary>
-    [TestMethod]
-    public void ThePublisherDateDatatypeIsCarriedRatherThanAssumed()
-    {
-        const string GYearMonth = "http://www.w3.org/2001/XMLSchema#gYearMonth";
-        var set = new LanguageScopedExpressionSet();
-        var decoded = Decode(
-            set,
-            ExpressionRows(WorkOne, ExprFrench, French),
-            [PBoundRow(WorkOne, WorkDateIri, new PValue("2016-05", IsIri: false, Datatype: GYearMonth))],
-            out var refusal,
-            out _);
-
-        Assert.AreEqual(EuLanguageScopedExpressionDecodeRefusal.None, refusal);
-        Assert.IsNotNull(decoded);
-        Assert.AreEqual("2016-05", decoded[0].PublisherCorrigendumDate!.RawLexical);
-        Assert.AreEqual(
-            GYearMonth,
-            decoded[0].PublisherCorrigendumDate!.DatatypeIri,
-            "an assumed datatype claims a precision the publisher never stated.");
-    }
-
-    /// <summary>
-    /// A date literal the publisher gave no datatype refuses rather than being assigned one. Until
-    /// this existed the only thing stopping that guard's removal was the compiler.
-    /// </summary>
-    [TestMethod]
-    public void ADateLiteralWithNoDatatypeRefusesRatherThanBeingGivenOne()
-    {
-        var set = new LanguageScopedExpressionSet();
-        var decoded = Decode(
-            set,
-            ExpressionRows(WorkOne, ExprFrench, French),
-            [PBoundRow(WorkOne, WorkDateIri, new PValue("2016-05-04", IsIri: false))],
-            out var refusal,
-            out var offending);
-
-        Assert.IsNull(decoded);
-        Assert.AreEqual(EuLanguageScopedExpressionDecodeRefusal.WorkDateRowTermKindMismatch, refusal);
-        Assert.AreEqual(WorkOne, offending);
-    }
-
-    /// <summary>
-    /// Every refusal's wire token is exactly what a reader will see. The closed-vocabulary census
-    /// pins member names rather than tokens, so without this a token rename is invisible.
-    /// </summary>
     [TestMethod]
     public void EveryRefusalHasItsExactWireToken()
     {
@@ -726,125 +805,253 @@ public sealed class EuLanguageScopedExpressionDecodeTests
                 "\"work_date_row_term_kind_mismatch\"",
                 "\"conflicting_work_date\"",
                 "\"append_conflicts_with_held_expression\"",
+                "\"expression_rows_refused\"",
+                "\"date_rows_refused\"",
+                "\"page_attribution_unavailable\"",
             },
             Enum.GetValues<EuLanguageScopedExpressionDecodeRefusal>()
                 .Select(member => ContractJson.Serialize(member))
                 .ToArray());
     }
 
-    // ---- Fixtures. ----
+    // ---- Fixtures. Every delivery below is minted, proven and reopened. ----
 
     private static IReadOnlyList<LanguageScopedExpression>? Decode(
         LanguageScopedExpressionSet into,
-        IReadOnlyList<RepeatedEnumerationRow> expressionRows,
-        out EuLanguageScopedExpressionDecodeRefusal refusal,
-        out string? offendingIri) =>
-        Decode(into, expressionRows, [], out refusal, out offendingIri);
-
-    private static IReadOnlyList<LanguageScopedExpression>? Decode(
-        LanguageScopedExpressionSet into,
-        IReadOnlyList<RepeatedEnumerationRow> expressionRows,
-        IReadOnlyList<RepeatedEnumerationRow> objectRows,
+        IReadOnlyList<string> expressionRows,
         out EuLanguageScopedExpressionDecodeRefusal refusal,
         out string? offendingIri) =>
         EuLanguageScopedExpressionDecode.TryDecode(
-            expressionRows,
-            ExpressionFactsProfile,
-            objectRows,
-            ObjectFactsProfile,
-            SourceObject(),
-            Receipt('a'),
-            into,
-            out refusal,
-            out offendingIri);
+            Bound(expressionRows), null, SourceObject(), into, out refusal, out _, out offendingIri);
 
-    private sealed record PValue(string Value, bool IsIri = true, string? Datatype = null, string? Lang = null);
+    private static IReadOnlyList<LanguageScopedExpression>? DecodeWithDates(
+        IReadOnlyList<string> expressionRows,
+        IReadOnlyList<string> objectRows,
+        out EuLanguageScopedExpressionDecodeRefusal refusal,
+        IReadOnlyList<string>? objectFactsKey = null) =>
+        EuLanguageScopedExpressionDecode.TryDecode(
+            Bound(expressionRows),
+            BoundObjectFacts(objectRows, objectFactsKey),
+            SourceObject(),
+            new LanguageScopedExpressionSet(),
+            out refusal,
+            out _,
+            out _);
+
+    private static IReadOnlyList<LanguageScopedExpression>? DecodePaged(
+        IReadOnlyList<string> rows,
+        int rowLimitA,
+        int rowLimitB,
+        RepeatedEnumerationTerminalPagePolicy terminalPagePolicy,
+        out EuLanguageScopedExpressionDecodeRefusal refusal) =>
+        DecodePagedCore(rows, rowLimitA, rowLimitB, terminalPagePolicy, out refusal);
+
+    private static IReadOnlyList<LanguageScopedExpression>? DecodePaged(
+        IReadOnlyList<string> rows, int rowLimitA, int rowLimitB) =>
+        DecodePagedCore(
+            rows, rowLimitA, rowLimitB,
+            RepeatedEnumerationTerminalPagePolicy.ShortPageTerminal, out _);
+
+    private static IReadOnlyList<LanguageScopedExpression>? DecodePagedCore(
+        IReadOnlyList<string> rows,
+        int rowLimitA,
+        int rowLimitB,
+        RepeatedEnumerationTerminalPagePolicy terminalPagePolicy,
+        out EuLanguageScopedExpressionDecodeRefusal refusal)
+    {
+        var fixture = new RepeatedEnumerationDeliveryProofTests.Fixture(
+            expectedCount: rows.Count,
+            maximumDeliverableRows: 999,
+            terminalPagePolicy: terminalPagePolicy,
+            projectionVariables: XProjection,
+            canonicalKeyVariables: XKey);
+        var delivery = fixture.CreatePagedRaw(
+            rows.Count,
+            rowLimitA,
+            rowLimitB,
+            (first, take) => RowsJson(XProjection, [.. rows.Skip(first).Take(take)], first),
+            Cursor);
+        var proof = AbsenceFamilyEnumerationProof.TryCreate(
+            "laws", delivery, CustodyMembership.Floored, out var proofRefusal);
+        Assert.IsNotNull(proof, $"the fixture must mint an admitting proof: {proofRefusal}");
+
+        return EuLanguageScopedExpressionDecode.TryDecode(
+            new EuProofBoundDelivery(
+                proof!, delivery, fixture.ProfileForTest, delivery.InterpretationProfileRef,
+                delivery.CountA.HttpEvidenceRef, Pages(fixture, delivery)),
+            null,
+            SourceObject(),
+            new LanguageScopedExpressionSet(),
+            out refusal,
+            out _,
+            out _);
+    }
+
+    private static EuProofBoundDelivery BoundPagedObjectFacts(
+        IReadOnlyList<string> rows, int rowLimitA, int rowLimitB)
+    {
+        var fixture = new RepeatedEnumerationDeliveryProofTests.Fixture(
+            expectedCount: rows.Count,
+            maximumDeliverableRows: 999,
+            projectionVariables: PProjection,
+            canonicalKeyVariables: PKey);
+        var delivery = fixture.CreatePagedRaw(
+            rows.Count,
+            rowLimitA,
+            rowLimitB,
+            (first, take) => RowsJson(PProjection, [.. rows.Skip(first).Take(take)], first),
+            Cursor);
+        var proof = AbsenceFamilyEnumerationProof.TryCreate(
+            "laws", delivery, CustodyMembership.Floored, out var proofRefusal);
+        Assert.IsNotNull(proof, $"the fixture must mint an admitting proof: {proofRefusal}");
+        return new EuProofBoundDelivery(
+            proof!, delivery, fixture.ProfileForTest, delivery.InterpretationProfileRef,
+            delivery.CountA.HttpEvidenceRef, Pages(fixture, delivery));
+    }
+
+    private static EuProofBoundDelivery Bound(IReadOnlyList<string> rows)
+    {
+        var fixture = XFixture(rows);
+        var delivery = fixture.Create(string.Empty, string.Empty);
+        var proof = AbsenceFamilyEnumerationProof.TryCreate(
+            "laws", delivery, CustodyMembership.Floored, out var proofRefusal);
+        Assert.IsNotNull(proof, $"the fixture must mint an admitting proof: {proofRefusal}");
+        return new EuProofBoundDelivery(
+            proof!, delivery, fixture.ProfileForTest, delivery.InterpretationProfileRef,
+            delivery.CountA.HttpEvidenceRef, Pages(fixture, delivery));
+    }
+
+    /// <param name="canonicalKey">
+    /// Defaults to a key including <c>value</c>, which is what lets two rows share a subject and
+    /// predicate while stating different dates. A delivery carrying an UNBOUND value cannot key on
+    /// it - <c>VerifyPages</c> requires canonical-key components to be bound - so the unbound-date
+    /// test passes a narrower key.
+    /// </param>
+    private static EuProofBoundDelivery BoundObjectFacts(
+        IReadOnlyList<string> rows, IReadOnlyList<string>? canonicalKey = null)
+    {
+        var body = RowsJson(PProjection, rows);
+        var fixture = new RepeatedEnumerationDeliveryProofTests.Fixture(
+            rawRowsA: body,
+            rawRowsB: body,
+            expectedCount: rows.Count,
+            projectionVariables: PProjection,
+            canonicalKeyVariables: canonicalKey ?? PKey);
+        var delivery = fixture.Create(string.Empty, string.Empty);
+        var proof = AbsenceFamilyEnumerationProof.TryCreate(
+            "laws", delivery, CustodyMembership.Floored, out var proofRefusal);
+        Assert.IsNotNull(proof, $"the fixture must mint an admitting proof: {proofRefusal}");
+        return new EuProofBoundDelivery(
+            proof!, delivery, fixture.ProfileForTest, delivery.InterpretationProfileRef,
+            delivery.CountA.HttpEvidenceRef, Pages(fixture, delivery));
+    }
+
+    private static RepeatedEnumerationDeliveryProofTests.Fixture XFixture(IReadOnlyList<string> rows)
+    {
+        var body = RowsJson(XProjection, rows);
+        return new RepeatedEnumerationDeliveryProofTests.Fixture(
+            rawRowsA: body,
+            rawRowsB: body,
+            expectedCount: rows.Count,
+            projectionVariables: XProjection,
+            canonicalKeyVariables: XKey);
+    }
+
+    private static IReadOnlyList<RepeatedEnumerationResolvedEvidence> Pages(
+        RepeatedEnumerationDeliveryProofTests.Fixture fixture,
+        EnumerationDeliveryComparison delivery) =>
+        [.. delivery.PagesA.Pages
+            .OrderBy(static page => page.Ordinal)
+            .Select(page => fixture.Resolve(page.Evidence))];
+
+    // ---- Row bodies. ----
 
     /// <summary>One Expression's complete family-X rows: belongs-to-work plus a language.</summary>
-    private static IReadOnlyList<RepeatedEnumerationRow> ExpressionRows(
+    private static IReadOnlyList<string> Expression(
         string parentIri, string expressionIri, string languageAuthorityIri) =>
         [
-            XBoundRow(parentIri, expressionIri, BelongsToWorkIri, new PValue(parentIri)),
-            XBoundRow(parentIri, expressionIri, UsesLanguageIri, new PValue(languageAuthorityIri)),
+            XRow(parentIri, expressionIri, BelongsToWorkIri, parentIri),
+            XRow(parentIri, expressionIri, UsesLanguageIri, languageAuthorityIri),
         ];
 
-    private static RepeatedEnumerationRow XBoundRow(
-        string parentIri, string expressionIri, string predicateIri, PValue value)
-    {
-        var kind = value.IsIri ? "iri" : "literal";
-        var datatype = value.IsIri ? string.Empty : value.Datatype ?? string.Empty;
-        var lang = value.IsIri ? string.Empty : value.Lang ?? string.Empty;
-        var terms = new[]
-        {
-            RepeatedEnumerationRdfTerm.Iri(parentIri),
-            RepeatedEnumerationRdfTerm.Iri(expressionIri),
-            RepeatedEnumerationRdfTerm.Iri(predicateIri),
-            value.IsIri
-                ? RepeatedEnumerationRdfTerm.Iri(value.Value)
-                : RepeatedEnumerationRdfTerm.Literal(value.Value, value.Datatype, value.Lang),
-            RepeatedEnumerationRdfTerm.Literal(kind, null, null),
-            RepeatedEnumerationRdfTerm.Literal(datatype, null, null),
-            RepeatedEnumerationRdfTerm.Literal(lang, null, null),
-            RepeatedEnumerationRdfTerm.Literal("1", XsdInteger, null),
-            RepeatedEnumerationRdfTerm.Literal(expressionIri, null, null),
-            RepeatedEnumerationRdfTerm.Literal(predicateIri, null, null),
-            RepeatedEnumerationRdfTerm.Literal(kind, null, null),
-            RepeatedEnumerationRdfTerm.Literal(value.Value, null, null),
-            RepeatedEnumerationRdfTerm.Literal(datatype, null, null),
-            RepeatedEnumerationRdfTerm.Literal(lang, null, null),
-        };
-        return new RepeatedEnumerationRow(
-            Array.AsReadOnly(terms), Array.AsReadOnly(terms[0..4]), Array.AsReadOnly(terms[8..14]));
-    }
+    private static string XRow(string parentIri, string expressionIri, string predicateIri, string valueIri) =>
+        Binding(
+            ("parent", Uri(parentIri)),
+            ("object", Uri(expressionIri)),
+            ("predicate", Uri(predicateIri)),
+            ("value", Uri(valueIri)),
+            ("value_kind", Literal("iri", null)),
+            ("datatype_iri", Literal(string.Empty, null)),
+            ("language_tag", Literal(string.Empty, null)));
 
-    private static RepeatedEnumerationRow PBoundRow(string objectIri, string predicateIri, PValue value)
-    {
-        var kind = value.IsIri ? "iri" : "literal";
-        var datatype = value.IsIri ? string.Empty : value.Datatype ?? string.Empty;
-        var lang = value.IsIri ? string.Empty : value.Lang ?? string.Empty;
-        var terms = new[]
-        {
-            RepeatedEnumerationRdfTerm.Iri(objectIri),
-            RepeatedEnumerationRdfTerm.Iri(predicateIri),
-            value.IsIri
-                ? RepeatedEnumerationRdfTerm.Iri(value.Value)
-                : RepeatedEnumerationRdfTerm.Literal(value.Value, value.Datatype, value.Lang),
-            RepeatedEnumerationRdfTerm.Literal(kind, null, null),
-            RepeatedEnumerationRdfTerm.Literal(datatype, null, null),
-            RepeatedEnumerationRdfTerm.Literal(lang, null, null),
-            RepeatedEnumerationRdfTerm.Literal("1", XsdInteger, null),
-            RepeatedEnumerationRdfTerm.Literal(objectIri, null, null),
-            RepeatedEnumerationRdfTerm.Literal(predicateIri, null, null),
-            RepeatedEnumerationRdfTerm.Literal(kind, null, null),
-            RepeatedEnumerationRdfTerm.Literal(value.Value, null, null),
-            RepeatedEnumerationRdfTerm.Literal(datatype, null, null),
-            RepeatedEnumerationRdfTerm.Literal(lang, null, null),
-        };
-        return new RepeatedEnumerationRow(
-            Array.AsReadOnly(terms), Array.AsReadOnly(terms[0..3]), Array.AsReadOnly(terms[7..13]));
-    }
+    private static string XLiteralRow(
+        string parentIri, string expressionIri, string predicateIri, string value, string datatype) =>
+        Binding(
+            ("parent", Uri(parentIri)),
+            ("object", Uri(expressionIri)),
+            ("predicate", Uri(predicateIri)),
+            ("value", Literal(value, datatype)),
+            ("value_kind", Literal("literal", null)),
+            ("datatype_iri", Literal(datatype, null)),
+            ("language_tag", Literal(string.Empty, null)));
 
-    private static RepeatedEnumerationRow PUnboundRow(string objectIri, string predicateIri)
-    {
-        var terms = new[]
-        {
-            RepeatedEnumerationRdfTerm.Iri(objectIri),
-            RepeatedEnumerationRdfTerm.Iri(predicateIri),
-            RepeatedEnumerationRdfTerm.Unbound(),
-            RepeatedEnumerationRdfTerm.Literal("unbound", null, null),
-            RepeatedEnumerationRdfTerm.Literal(string.Empty, null, null),
-            RepeatedEnumerationRdfTerm.Literal(string.Empty, null, null),
-            RepeatedEnumerationRdfTerm.Literal("0", XsdInteger, null),
-            RepeatedEnumerationRdfTerm.Literal(objectIri, null, null),
-            RepeatedEnumerationRdfTerm.Literal(predicateIri, null, null),
-            RepeatedEnumerationRdfTerm.Literal("unbound", null, null),
-            RepeatedEnumerationRdfTerm.Literal(string.Empty, null, null),
-            RepeatedEnumerationRdfTerm.Literal(string.Empty, null, null),
-            RepeatedEnumerationRdfTerm.Literal(string.Empty, null, null),
-        };
-        return new RepeatedEnumerationRow(
-            Array.AsReadOnly(terms), Array.AsReadOnly(terms[0..3]), Array.AsReadOnly(terms[7..13]));
-    }
+    private static string PRow(string objectIri, string predicateIri, string value, string datatype) =>
+        Binding(
+            ("object", Uri(objectIri)),
+            ("predicate", Uri(predicateIri)),
+            ("value", Literal(value, datatype)),
+            ("value_kind", Literal("literal", null)));
+
+    /// <summary>An asked-and-unanswered object-facts row: the value variable is simply absent.</summary>
+    private static string PUnboundRow(string objectIri, string predicateIri) =>
+        Binding(
+            ("object", Uri(objectIri)),
+            ("predicate", Uri(predicateIri)),
+            ("value_kind", Literal("unbound", null)));
+
+    private static string PIriRow(string objectIri, string predicateIri, string valueIri) =>
+        Binding(
+            ("object", Uri(objectIri)),
+            ("predicate", Uri(predicateIri)),
+            ("value", Uri(valueIri)),
+            ("value_kind", Literal("iri", null)));
+
+    private static string Uri(string value) => $"{{\"type\":\"uri\",\"value\":{Json(value)}}}";
+
+    private static string Literal(string value, string? datatype) =>
+        datatype is null
+            ? $"{{\"type\":\"literal\",\"value\":{Json(value)}}}"
+            : $"{{\"type\":\"literal\",\"datatype\":{Json(datatype)},\"value\":{Json(value)}}}";
+
+    private static string Binding(params (string Name, string Term)[] terms) =>
+        string.Join(',', terms.Select(static term => $"{Json(term.Name)}:{term.Term}"));
+
+    /// <summary>
+    /// The delivered page body. The cursor is appended per row here rather than by each row builder,
+    /// so it is unique by construction and no fixture row can accidentally share one.
+    /// </summary>
+    private static string RowsJson(
+        IReadOnlyList<string> projection, IReadOnlyList<string> rows, int firstRowIndex = 0) =>
+        "{\"head\":{\"link\":[],\"vars\":[" +
+        string.Join(',', projection.Select(Json)) +
+        "]},\"results\":{\"distinct\":false,\"ordered\":true,\"bindings\":[" +
+        string.Join(
+            ',',
+            rows.Select((row, index) =>
+                "{" + row + ",\"cursor\":{\"type\":\"literal\",\"value\":\""
+                + Cursor(firstRowIndex + index) + "\"}}")) +
+        "]}}";
+
+    /// <summary>
+    /// Zero-padded on purpose. Cursors are compared as text, so unpadded ordinals put "10" before
+    /// "9" from the tenth row on and the delivery refuses for a reason that has nothing to do with
+    /// what is being tested.
+    /// </summary>
+    private static string Cursor(int rowIndex) => rowIndex.ToString("D4");
+
+    private static string Json(string value) =>
+        "\"" + value.Replace("\\", "\\\\", StringComparison.Ordinal)
+            .Replace("\"", "\\\"", StringComparison.Ordinal) + "\"";
 
     private static SourceObjectRef SourceObject() => new(
         SourceCoreSchemaIds.SourceObjectRef,
@@ -855,26 +1062,6 @@ public sealed class EuLanguageScopedExpressionDecodeTests
         Sha256("cellar|work|32016R0679"),
         ArtifactRef('a', '1'),
         parentKeyRef: null);
-
-    private static DurableBlobWriteReceipt Receipt(char contentFill)
-    {
-        var reference = new DurableBlobRef(
-            CustodySchemaIds.DurableBlobRef,
-            new string(contentFill, 64),
-            4,
-            CustodyClass.NightlyFloor90d);
-        return new DurableBlobWriteReceipt(
-            CustodySchemaIds.DurableBlobWriteReceipt,
-            reference,
-            new CustodyPolicyEvidence(
-                CustodySchemaIds.CustodyPolicyEvidence,
-                reference,
-                CustodyVerificationProfile.FileSystemUnenforced1,
-                policyKey: null,
-                CustodyProtection.NotEnforced,
-                DateTimeOffset.Parse(ObservedAtText, System.Globalization.CultureInfo.InvariantCulture),
-                protectedUntil: null));
-    }
 
     private static SourceArtifactRef ArtifactRef(char resourceFill, char digestFill) => new(
         $"urn:uuid:{new string(resourceFill, 8)}-{new string(resourceFill, 4)}-4{new string(resourceFill, 3)}-8{new string(resourceFill, 3)}-{new string(resourceFill, 12)}",

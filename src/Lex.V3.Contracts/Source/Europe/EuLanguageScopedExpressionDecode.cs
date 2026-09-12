@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
-using Lex.V3.Contracts.Custody;
 using Lex.V3.Contracts.Derivation;
+using Lex.V3.Contracts.Source.Absence;
 using Lex.V3.Contracts.Source.Core;
 
 namespace Lex.V3.Contracts.Source.Europe;
@@ -82,7 +82,66 @@ public enum EuLanguageScopedExpressionDecodeRefusal
     /// </summary>
     [JsonStringEnumMemberName("append_conflicts_with_held_expression")]
     AppendConflictsWithHeldExpression = 8,
+
+    /// <summary>
+    /// The Expression-facts delivery would not reopen through
+    /// <see cref="VerifiedRepeatedEnumerationRows.TryOpen"/>. The door's own reason is reported
+    /// alongside; nothing is read from rows that did not survive it.
+    /// </summary>
+    [JsonStringEnumMemberName("expression_rows_refused")]
+    ExpressionRowsRefused = 9,
+
+    /// <summary>The object-facts delivery would not reopen. Same door, same discipline.</summary>
+    [JsonStringEnumMemberName("date_rows_refused")]
+    DateRowsRefused = 10,
+
+    /// <summary>
+    /// Which page carried which row cannot be established for this delivery, so no expression can
+    /// honestly cite the bytes it came from.
+    /// </summary>
+    /// <remarks>
+    /// Only <see cref="RepeatedEnumerationTerminalPagePolicy.ShortPageTerminal"/> makes page
+    /// boundaries derivable: <c>RequireContinuation</c> enforces that every page before the last
+    /// holds exactly the row limit, so row <c>i</c> is on page <c>i / limit</c>. Under
+    /// <see cref="RepeatedEnumerationTerminalPagePolicy.EmptySuccessorAfterShortPage"/> a prior page
+    /// may be short, and the same arithmetic would attribute rows to the wrong page - omitting a
+    /// contributing body, which is the worse error, because completeness is what a provenance claim
+    /// must have. So it refuses here instead of guessing.
+    /// </remarks>
+    [JsonStringEnumMemberName("page_attribution_unavailable")]
+    PageAttributionUnavailable = 11,
 }
+
+/// <summary>
+/// One query family's delivery, in the exact form
+/// <see cref="VerifiedRepeatedEnumerationRows.TryOpen"/> requires to prove it.
+/// </summary>
+/// <remarks>
+/// <para>
+/// THIS CARRIES ARGUMENTS, NOT AUTHORITY, AND THE DISTINCTION IS THE WHOLE POINT. Holding one of
+/// these proves nothing: every field is re-checked by <c>TryOpen</c>, which re-derives the row,
+/// cursor and canonical-key digests from the reopened page bytes and compares them against the
+/// proof's and the comparison's own claims. A caller who substitutes pages, or pairs a genuine proof
+/// with an unrelated comparison, is refused there rather than believed here.
+/// </para>
+/// <para>
+/// No smaller "already verified" envelope is offered on purpose. A type this file could mint from
+/// bare parts would just relocate the substitution door it exists to close, whereas
+/// <see cref="EnumerationDeliveryComparison"/> has a private constructor whose only door is its own
+/// <c>Create</c>.
+/// </para>
+/// </remarks>
+/// <param name="PagesInOrder">
+/// The delivery's reopened pages, in page order. These are also the provenance: the lineage this
+/// decode records is built from their write receipts, never from a caller-chosen receipt.
+/// </param>
+public sealed record EuProofBoundDelivery(
+    AbsenceFamilyEnumerationProof Proof,
+    EnumerationDeliveryComparison Comparison,
+    RepeatedEnumerationInterpretationProfile Profile,
+    SourceArtifactRef ProfileRef,
+    SourceArtifactRef CountHttpEvidenceRef,
+    IReadOnlyList<RepeatedEnumerationResolvedEvidence> PagesInOrder);
 
 /// <summary>
 /// Turns one retained EU publisher delivery into language-scoped expressions, one per Expression the
@@ -115,10 +174,25 @@ public enum EuLanguageScopedExpressionDecodeRefusal
 /// build has no enum member for survives decode intact.
 /// </para>
 /// <para>
-/// OFFLINE, AND EVIDENCE-BOUND BY CONSTRUCTION. This door performs no acquisition. It reads rows
-/// that were already retained and the custody receipt for the exact bytes they came from, and every
-/// expression it builds carries that receipt. There is no parameter by which a caller asserts
-/// provenance, because the contract it builds into accepts none.
+/// OFFLINE, AND EVIDENCE-BOUND BY CONSTRUCTION. This door performs no acquisition, and it does not
+/// accept rows. It takes the inputs <see cref="VerifiedRepeatedEnumerationRows.TryOpen"/> requires,
+/// reopens the delivery through that door, and builds every expression's provenance from the pages
+/// it was proven over. There is no parameter by which a caller asserts provenance.
+/// </para>
+/// <para>
+/// AN EARLIER HEAD OF THIS FILE DID ACCEPT ROWS, paired with a caller-chosen write receipt, while
+/// its own remarks claimed no caller could assert provenance. That claim was false in effect: any
+/// well-shaped rows could be presented beside any valid receipt. The same defect had already been
+/// found and repaired once in this repository - <c>EuProcedureEventProducer</c>'s remarks record
+/// that its <c>DecodeRows</c> was public and took "a caller-supplied row list and a caller-supplied
+/// evidence reference, so observations could be minted from rows nobody had proven, citing custody
+/// nobody had established" - and it was reintroduced here by not reading that precedent first.
+/// </para>
+/// <para>
+/// WHAT THIS DOES NOT YET DO, so the next slice does not assume it. Nothing here removes or
+/// supersedes <see cref="EuCellarObjectDecode"/>'s one-language fold. When this set is wired into
+/// production, that fold must not stand in for it or suppress any expression it admits: the two
+/// read the same family and only one of them can represent more than a single expression per work.
 /// </para>
 /// </remarks>
 public static class EuLanguageScopedExpressionDecode
@@ -147,35 +221,87 @@ public static class EuLanguageScopedExpressionDecode
     /// A caller contract violation, not a reviewable data disagreement.
     /// </exception>
     public static IReadOnlyList<LanguageScopedExpression>? TryDecode(
-        IReadOnlyList<RepeatedEnumerationRow> expressionFactRows,
-        RepeatedEnumerationInterpretationProfile expressionFactProfile,
-        IReadOnlyList<RepeatedEnumerationRow> objectFactRows,
-        RepeatedEnumerationInterpretationProfile objectFactProfile,
+        EuProofBoundDelivery expressionFacts,
+        EuProofBoundDelivery? objectFacts,
         SourceObjectRef sourceObject,
-        DurableBlobWriteReceipt retainedTransportBytes,
         LanguageScopedExpressionSet into,
         out EuLanguageScopedExpressionDecodeRefusal refusal,
+        out string? refusalDetail,
         out string? offendingIri)
     {
-        ArgumentNullException.ThrowIfNull(expressionFactRows);
-        ArgumentNullException.ThrowIfNull(expressionFactProfile);
-        ArgumentNullException.ThrowIfNull(objectFactRows);
-        ArgumentNullException.ThrowIfNull(objectFactProfile);
+        ArgumentNullException.ThrowIfNull(expressionFacts);
         ArgumentNullException.ThrowIfNull(sourceObject);
-        ArgumentNullException.ThrowIfNull(retainedTransportBytes);
         ArgumentNullException.ThrowIfNull(into);
 
         refusal = EuLanguageScopedExpressionDecodeRefusal.None;
+        refusalDetail = null;
         offendingIri = null;
+
+        // Rows are never taken from a caller. They are reopened from the retained page bytes and
+        // re-checked against the proof's delivered row count and canonical-key digest and the
+        // comparison's row and cursor digests, which is what makes the lineage below a fact about
+        // these bytes rather than a caller's pairing of some rows with some receipt.
+        // TryOpen is called here rather than through a local helper on purpose.
+        // VerifiedRepeatedEnumerationRowsConstructionSurfaceTests pins that exactly three places in
+        // Contracts hand out rows parsed from bytes, and a private wrapper returning rows would be a
+        // fourth. It would add no safety - it only forwards - so the pin is respected rather than
+        // amended, and the inner reason travels as a detail string exactly as EuProcedureEventProducer
+        // reports its own refused reopen.
+        var expressionFactProfile = expressionFacts.Profile;
+        var expressionFactRows = VerifiedRepeatedEnumerationRows.TryOpen(
+            expressionFacts.Proof,
+            expressionFacts.Comparison,
+            expressionFactProfile,
+            expressionFacts.ProfileRef,
+            expressionFacts.CountHttpEvidenceRef,
+            expressionFacts.PagesInOrder,
+            out var expressionRowsRefusal);
+        if (expressionFactRows is null)
+        {
+            refusal = EuLanguageScopedExpressionDecodeRefusal.ExpressionRowsRefused;
+            refusalDetail = expressionRowsRefusal.ToString();
+            return null;
+        }
+
+        IReadOnlyList<RepeatedEnumerationRow> objectFactRows = [];
+        RepeatedEnumerationInterpretationProfile? objectFactProfile = null;
+        if (objectFacts is not null)
+        {
+            objectFactProfile = objectFacts.Profile;
+            var openedObjectFacts = VerifiedRepeatedEnumerationRows.TryOpen(
+                objectFacts.Proof,
+                objectFacts.Comparison,
+                objectFactProfile,
+                objectFacts.ProfileRef,
+                objectFacts.CountHttpEvidenceRef,
+                objectFacts.PagesInOrder,
+                out var dateRowsRefusal);
+            if (openedObjectFacts is null)
+            {
+                refusal = EuLanguageScopedExpressionDecodeRefusal.DateRowsRefused;
+                refusalDetail = dateRowsRefusal.ToString();
+                return null;
+            }
+
+            objectFactRows = openedObjectFacts;
+        }
 
         var belongsToWorkIri = EuObjectFactsDiscoveryPlan.CdmIri(EuCdmPredicate.ExpressionBelongsToWork);
         var usesLanguageIri = EuObjectFactsDiscoveryPlan.CdmIri(EuCdmPredicate.ExpressionUsesLanguage);
         var workDateIri = EuObjectFactsDiscoveryPlan.CdmIri(EuCdmPredicate.WorkDateDocument);
 
         // ---- Family X, shape-checked exactly as the reviewed object decode checks it. ----
+        var expressionPages = PageOfEachRow(expressionFacts, expressionFactRows.Count);
+        if (expressionPages is null)
+        {
+            refusal = EuLanguageScopedExpressionDecodeRefusal.PageAttributionUnavailable;
+            return null;
+        }
+
         var rows = new List<XRow>(expressionFactRows.Count);
         foreach (var row in expressionFactRows)
         {
+            var rowPageIndex = expressionPages[rows.Count];
             var parentTerm = Term(row, expressionFactProfile, "parent");
             var objectTerm = Term(row, expressionFactProfile, "object");
             var predicateTerm = Term(row, expressionFactProfile, "predicate");
@@ -208,7 +334,8 @@ public static class EuLanguageScopedExpressionDecode
                 objectTerm.Value,
                 predicateTerm.Value,
                 valueTerm,
-                valueKindTerm.Value!));
+                valueKindTerm.Value!,
+                rowPageIndex));
         }
 
         // ---- Self closure: an Expression is admitted only where X itself says it belongs. ----
@@ -302,13 +429,26 @@ public static class EuLanguageScopedExpressionDecode
         // ---- The publisher's own work_date_document, for these Works only. ----
         var works = new HashSet<string>(
             identities.Select(static identity => identity.PublisherWorkId), StringComparer.Ordinal);
-        var dates = new Dictionary<string, PublisherCorrigendumDate>(StringComparer.Ordinal);
-        foreach (var row in objectFactRows)
+        var dates = new Dictionary<string, (PublisherCorrigendumDate Date, int PageIndex)>(
+            StringComparer.Ordinal);
+        int[]? datePages = null;
+        if (objectFacts is not null)
         {
-            var objectTerm = Term(row, objectFactProfile, "object");
-            var predicateTerm = Term(row, objectFactProfile, "predicate");
-            var valueTerm = Term(row, objectFactProfile, "value");
-            var valueKindTerm = Term(row, objectFactProfile, "value_kind");
+            datePages = PageOfEachRow(objectFacts, objectFactRows.Count);
+            if (datePages is null)
+            {
+                refusal = EuLanguageScopedExpressionDecodeRefusal.PageAttributionUnavailable;
+                return null;
+            }
+        }
+
+        for (var dateRowIndex = 0; dateRowIndex < objectFactRows.Count; dateRowIndex++)
+        {
+            var row = objectFactRows[dateRowIndex];
+            var objectTerm = Term(row, objectFactProfile!, "object");
+            var predicateTerm = Term(row, objectFactProfile!, "predicate");
+            var valueTerm = Term(row, objectFactProfile!, "value");
+            var valueKindTerm = Term(row, objectFactProfile!, "value_kind");
 
             if (objectTerm.Kind != RepeatedEnumerationRdfTermKind.Iri || objectTerm.Value is null ||
                 predicateTerm.Kind != RepeatedEnumerationRdfTermKind.Iri || predicateTerm.Value is null ||
@@ -341,8 +481,9 @@ public static class EuLanguageScopedExpressionDecode
             }
 
             var observed = new PublisherCorrigendumDate(valueTerm.Value, valueTerm.Datatype);
-            if (dates.TryGetValue(canonicalWork, out var heldDate))
+            if (dates.TryGetValue(canonicalWork, out var held))
             {
+                var heldDate = held.Date;
                 if (heldDate != observed)
                 {
                     refusal = EuLanguageScopedExpressionDecodeRefusal.ConflictingWorkDate;
@@ -353,31 +494,68 @@ public static class EuLanguageScopedExpressionDecode
                 continue;
             }
 
-            dates.Add(canonicalWork, observed);
+            dates.Add(canonicalWork, (observed, datePages![dateRowIndex]));
         }
 
         // ---- Built, then checked against the destination, then appended. Never halfway. ----
+        // An expression cites the pages that carried ITS OWN rows, and nothing else. A page that
+        // delivered none of this expression's rows did not state its identity or its language, and
+        // the contribution vocabulary says that is what the role means - so a delivery-wide lineage
+        // would attach a role to bytes that never carried the thing it names. The terminating empty
+        // page is therefore cited by nothing: it witnesses that the enumeration finished, which is a
+        // property of the proof-bound delivery and is already carried there.
+        var pagesByIdentity = new Dictionary<LanguageScopedExpressionIdentity, SortedSet<int>>();
+        foreach (var row in rows)
+        {
+            var identity = new LanguageScopedExpressionIdentity(row.Parent, row.Expression);
+            if (!pagesByIdentity.TryGetValue(identity, out var pages))
+            {
+                pages = [];
+                pagesByIdentity.Add(identity, pages);
+            }
+
+            pages.Add(row.PageIndex);
+        }
+
         var candidates = new List<LanguageScopedExpression>(identities.Count);
         foreach (var identity in identities)
         {
+            var entries = pagesByIdentity[identity]
+                .Select(page => new LanguageScopedExpressionLineageEntry(
+                    LanguageScopedExpressionContribution.IdentityAndLanguage,
+                    expressionFacts.PagesInOrder[page].DurableWriteReceipt))
+                .ToList();
+
+            // Date lineage attaches only where a date was actually observed, and names only the page
+            // that stated it. An expression whose work the publisher dated nothing for must not cite
+            // the date family at all, and the contract refuses that pairing at its own door.
+            PublisherCorrigendumDate? observedDate = null;
+            if (dates.TryGetValue(identity.PublisherWorkId, out var dated))
+            {
+                observedDate = dated.Date;
+                entries.Add(new LanguageScopedExpressionLineageEntry(
+                    LanguageScopedExpressionContribution.PublisherDate,
+                    objectFacts!.PagesInOrder[dated.PageIndex].DurableWriteReceipt));
+            }
+
             candidates.Add(LanguageScopedExpression.FromRetainedSource(
                 identity,
                 languages[identity],
-                dates.GetValueOrDefault(identity.PublisherWorkId),
+                observedDate,
                 sourceObject,
-                retainedTransportBytes));
+                LanguageScopedExpressionLineage.FromContributions(entries)));
         }
 
-        var heldBytes = new Dictionary<LanguageScopedExpressionIdentity, string>();
+        var heldContent = new Dictionary<LanguageScopedExpressionIdentity, string>();
         foreach (var held in into.Expressions)
         {
-            heldBytes[held.Identity] = held.CanonicalBytesSha256;
+            heldContent[held.Identity] = held.CanonicalContentSha256;
         }
 
         foreach (var candidate in candidates)
         {
-            if (heldBytes.TryGetValue(candidate.Identity, out var bytes) &&
-                !string.Equals(bytes, candidate.CanonicalBytesSha256, StringComparison.Ordinal))
+            if (heldContent.TryGetValue(candidate.Identity, out var content) &&
+                !string.Equals(content, candidate.CanonicalContentSha256, StringComparison.Ordinal))
             {
                 refusal = EuLanguageScopedExpressionDecodeRefusal.AppendConflictsWithHeldExpression;
                 offendingIri = candidate.Identity.PublisherExpressionId;
@@ -456,5 +634,43 @@ public static class EuLanguageScopedExpressionDecode
         string Expression,
         string PredicateIri,
         RepeatedEnumerationRdfTerm Value,
-        string ValueKind);
+        string ValueKind,
+        int PageIndex);
+
+    /// <summary>
+    /// Which page delivered each row, or <see langword="null"/> when that cannot be established.
+    /// </summary>
+    /// <remarks>
+    /// Returns indices, never rows. A helper handing back rows would be a fourth place in Contracts
+    /// that produces them, and <c>VerifiedRepeatedEnumerationRowsConstructionSurfaceTests</c> pins
+    /// that there are exactly three.
+    /// </remarks>
+    private static int[]? PageOfEachRow(EuProofBoundDelivery delivery, int rowCount)
+    {
+        if (delivery.Profile.TerminalPagePolicy
+            != RepeatedEnumerationTerminalPagePolicy.ShortPageTerminal)
+        {
+            return null;
+        }
+
+        var limit = delivery.PagesInOrder[0].QueryPlan.ResponseCardinality.RowLimit;
+        if (limit is not > 0)
+        {
+            return null;
+        }
+
+        var pages = new int[rowCount];
+        for (var index = 0; index < rowCount; index++)
+        {
+            var page = (int)(index / limit.Value);
+            if (page >= delivery.PagesInOrder.Count)
+            {
+                return null;
+            }
+
+            pages[index] = page;
+        }
+
+        return pages;
+    }
 }

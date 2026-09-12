@@ -77,7 +77,9 @@ public sealed class ClosedVocabularyCensusTests
                 "Lex.V3.Contracts.Derivation.DerivationProfileComparisonOutcome: Comparable, "
                     + "ProfilesDiffer",
                 "Lex.V3.Contracts.Derivation.LanguageScopedExpressionAppendRefusal: None, "
-                    + "ConflictingCanonicalBytes",
+                    + "ConflictingCanonicalContent",
+                "Lex.V3.Contracts.Derivation.LanguageScopedExpressionContribution: "
+                    + "IdentityAndLanguage, PublisherDate",
                 "Lex.V3.Contracts.EuActForm: Directive, Regulation, DelegatedRegulation, "
                     + "ImplementingRegulation, Treaty, Corrigendum, DelegatedDirective, "
                     + "ImplementingDecision, Decision, DecisionEntscheid, ImplementingDirective, "
@@ -338,7 +340,8 @@ public sealed class ClosedVocabularyCensusTests
                     + "ExpressionRowTermKindMismatch, ExpressionSubjectNotSelfClosed, "
                     + "ExpressionWorkDisagreesWithBelongsToWork, ExpressionLanguageMissing, "
                     + "ConflictingExpressionLanguage, WorkDateRowTermKindMismatch, "
-                    + "ConflictingWorkDate, AppendConflictsWithHeldExpression",
+                    + "ConflictingWorkDate, AppendConflictsWithHeldExpression, "
+                    + "ExpressionRowsRefused, DateRowsRefused, PageAttributionUnavailable",
                 "Lex.V3.Contracts.Source.Europe.EuManifestationFormat: Formex4, Xhtml, Xhtml5, Html, "
                     + "Pdf, PdfA1a, PdfA1b, PdfA2a, Print, NoneAdmitted",
                 "Lex.V3.Contracts.Source.Europe.EuManifestationListingRefusal: None, "
