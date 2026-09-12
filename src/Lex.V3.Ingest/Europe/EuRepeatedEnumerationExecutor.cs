@@ -1249,11 +1249,10 @@ public sealed class EuRepeatedEnumerationExecutor
         // be stopped rather than merely counted. Reserving inside the budget's construction instead
         // charged one robots fetch however many sessions were opened against it.
         //
-        // The null check is not decoration: the run request's WireBudget is documented as required,
-        // but a positional record accepts null positionally, and a null budget here would reach the
-        // pass loop as "no budget" and disable the ceiling silently - the one failure mode a
-        // ceiling must not have.
-        ArgumentNullException.ThrowIfNull(request.WireBudget);
+        // NO NULL CHECK HERE. The record's own initializer rejects a null budget, so no supported
+        // door can deliver one; a check that no test can drive is an untested claim wearing the
+        // costume of a guard. If a construction door is ever added that can admit null, this check
+        // returns WITH a regression that reaches it - not before.
         if (!request.WireBudget.TryReserveAttempt())
         {
             return EuEnumerationRunResult.Refused(
@@ -1315,10 +1314,8 @@ public sealed class EuRepeatedEnumerationExecutor
         ArgumentNullException.ThrowIfNull(sourceWitness);
 
         // The session's robots fetch, reserved before the session exists. See the inventory entry
-        // point above for why this sits here rather than in the budget's constructor. ForBatch
-        // already refuses a null budget, so this door cannot be reached with one - but the pass
-        // loop takes an optional budget, so a run that lost it would silently run unbounded.
-        ArgumentNullException.ThrowIfNull(request.WireBudget);
+        // point above, including why no null check stands here: ForBatch refuses a null budget
+        // before this door can be reached.
         if (!request.WireBudget.TryReserveAttempt())
         {
             return EuEnumerationRunResult.Refused(

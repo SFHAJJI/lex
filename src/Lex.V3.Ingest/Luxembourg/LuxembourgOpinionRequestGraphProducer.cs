@@ -60,12 +60,14 @@ public sealed class LuxembourgOpinionRequestGraphResult
         LuxembourgOpinionRequestCoverage? coverage,
         LuxembourgOpinionRequestGraphRefusal refusal,
         string? detail,
-        int productRequestCount)
+        int productRequestCount,
+        WireBudgetSnapshot wireBudget)
     {
         Coverage = coverage;
         Refusal = refusal;
         Detail = detail;
         ProductRequestCount = productRequestCount;
+        WireBudget = wireBudget ?? throw new ArgumentNullException(nameof(wireBudget));
     }
 
     /// <summary>This batch's completed matrix, non-null exactly when <see cref="Delivered"/>.</summary>
@@ -78,18 +80,31 @@ public sealed class LuxembourgOpinionRequestGraphResult
 
     public int ProductRequestCount { get; }
 
+    /// <summary>
+    /// What the shared wire budget stood at when this run ended. Always present.
+    /// </summary>
+    /// <remarks>
+    /// REQUIRED ON EVERY OUTCOME, delivered or refused, which is why it is a constructor parameter
+    /// rather than something a caller may set. A refused run still sent requests - often it refused
+    /// BECAUSE it had - and a ceiling whose evidence only survives success cannot be reconciled on
+    /// the runs that most need reconciling.
+    /// </remarks>
+    public WireBudgetSnapshot WireBudget { get; }
+
     public bool Delivered => Refusal == LuxembourgOpinionRequestGraphRefusal.None;
 
     internal static LuxembourgOpinionRequestGraphResult Completed(
         LuxembourgOpinionRequestCoverage coverage,
-        int productRequestCount) =>
-        new(coverage, LuxembourgOpinionRequestGraphRefusal.None, null, productRequestCount);
+        int productRequestCount,
+        WireBudgetSnapshot wireBudget) =>
+        new(coverage, LuxembourgOpinionRequestGraphRefusal.None, null, productRequestCount, wireBudget);
 
     internal static LuxembourgOpinionRequestGraphResult Refused(
         LuxembourgOpinionRequestGraphRefusal refusal,
         string detail,
-        int productRequestCount) =>
-        new(null, refusal, detail, productRequestCount);
+        int productRequestCount,
+        WireBudgetSnapshot wireBudget) =>
+        new(null, refusal, detail, productRequestCount, wireBudget);
 }
 
 /// <summary>
@@ -148,6 +163,11 @@ public sealed class LuxembourgOpinionRequestGraphProducer
 
         var run = await _executor.RunLuxembourgOpinionRequestGraphAsync(
             request, sourceWitness, cancellationToken).ConfigureAwait(false);
+
+        // READ ONCE, HERE. Everything below this line reads custody, not the wire, so this is the
+        // last moment the budget changes on this run's account and the first moment it is complete.
+        // Reading it at each return instead would be the same number by luck rather than by rule.
+        var wireBudget = WireBudgetSnapshot.Of(request.WireBudget);
         if (run.Receipt is not { } receipt)
         {
             // THE PUBLISHER'S OWN REASON IS CARRIED, not just this seat's word for it. A refusal
@@ -160,7 +180,8 @@ public sealed class LuxembourgOpinionRequestGraphProducer
                         ? ": " + detail
                         : string.Empty)
                     : "enumeration returned neither a receipt nor a refusal",
-                run.ProductRequestCount);
+                run.ProductRequestCount,
+                wireBudget);
         }
 
         var proof = receipt.TryProveFamilyEnumeration(receipt.Delivery.PartitionKey, out var proofRefusal);
@@ -169,7 +190,8 @@ public sealed class LuxembourgOpinionRequestGraphProducer
             return LuxembourgOpinionRequestGraphResult.Refused(
                 LuxembourgOpinionRequestGraphRefusal.EnumerationProofRefused,
                 proofRefusal.ToString(),
-                run.ProductRequestCount);
+                run.ProductRequestCount,
+                wireBudget);
         }
 
         var pages = new List<RepeatedEnumerationResolvedEvidence>(receipt.Delivery.PagesA.Pages.Count);
@@ -193,7 +215,8 @@ public sealed class LuxembourgOpinionRequestGraphProducer
             return LuxembourgOpinionRequestGraphResult.Refused(
                 LuxembourgOpinionRequestGraphRefusal.VerifiedRowsRefused,
                 rowRefusal.ToString(),
-                run.ProductRequestCount);
+                run.ProductRequestCount,
+                wireBudget);
         }
 
         // THE PROOF, THE ROWS IT PROVES, AND THE BATCH THE INVENTORY ISSUED. Nothing else is passed
@@ -208,7 +231,9 @@ public sealed class LuxembourgOpinionRequestGraphProducer
                 coverageRefusal + (coverageDetail is { Length: > 0 }
                     ? ": " + coverageDetail
                     : string.Empty),
-                run.ProductRequestCount)
-            : LuxembourgOpinionRequestGraphResult.Completed(coverage, run.ProductRequestCount);
+                run.ProductRequestCount,
+                wireBudget)
+            : LuxembourgOpinionRequestGraphResult.Completed(
+                coverage, run.ProductRequestCount, wireBudget);
     }
 }

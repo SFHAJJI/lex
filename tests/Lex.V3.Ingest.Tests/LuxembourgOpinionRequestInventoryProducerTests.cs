@@ -150,7 +150,8 @@ public sealed class LuxembourgOpinionRequestInventoryProducerTests
         var (proof, profile) = ProofAndProfile([subject]);
 
         var result = LuxembourgOpinionRequestInventoryProducer.DecodeRows(
-            [DecodedRow(subject, IriKind), DecodedRow(subject, IriKind)], profile, proof);
+            [DecodedRow(subject, IriKind), DecodedRow(subject, IriKind)], profile, proof,
+            productRequestCount: 0, UnusedBudget());
 
         Assert.AreEqual(
             LuxembourgOpinionRequestInventoryRefusal.SubjectDeliveredTwice, result.Refusal);
@@ -207,7 +208,8 @@ public sealed class LuxembourgOpinionRequestInventoryProducerTests
         var (proof, profile) = ProofAndProfile([subject]);
 
         var result = LuxembourgOpinionRequestInventoryProducer.DecodeRows(
-            [DecodedRow(subject, BlankNodeKind)], profile, proof);
+            [DecodedRow(subject, BlankNodeKind)], profile, proof,
+            productRequestCount: 0, UnusedBudget());
 
         Assert.AreEqual(LuxembourgOpinionRequestInventoryRefusal.RowNotAdmitted, result.Refusal);
         StringAssert.Contains(result.Detail ?? string.Empty, "request_kind");
@@ -230,7 +232,8 @@ public sealed class LuxembourgOpinionRequestInventoryProducerTests
             row.Cursor);
 
         var result = LuxembourgOpinionRequestInventoryProducer.DecodeRows(
-            [rekeyed], profile, proof);
+            [rekeyed], profile, proof,
+            productRequestCount: 0, UnusedBudget());
 
         Assert.AreEqual(LuxembourgOpinionRequestInventoryRefusal.RowNotAdmitted, result.Refusal);
         StringAssert.Contains(result.Detail ?? string.Empty, "key_1");
@@ -249,10 +252,22 @@ public sealed class LuxembourgOpinionRequestInventoryProducerTests
             row.Cursor);
 
         var result = LuxembourgOpinionRequestInventoryProducer.DecodeRows(
-            [literalSubject], profile, proof);
+            [literalSubject], profile, proof,
+            productRequestCount: 0, UnusedBudget());
 
         Assert.AreEqual(LuxembourgOpinionRequestInventoryRefusal.RowNotAdmitted, result.Refusal);
     }
+
+    /// <summary>
+    /// A budget nothing has been reserved against, for the decode seam that sends nothing.
+    /// </summary>
+    /// <remarks>
+    /// These cases reach the decoder directly and open no session, so the honest snapshot is of an
+    /// untouched budget. Fabricating a plausible-looking Spent here would put a number into retained
+    /// evidence that no request ever justified.
+    /// </remarks>
+    private static WireBudgetSnapshot UnusedBudget() =>
+        WireBudgetSnapshot.Of(WireRequestBudget.OfWireRequests(250));
 
     private static async Task<LuxembourgOpinionRequestInventoryResult> RunAsync(string[] rows)
     {
