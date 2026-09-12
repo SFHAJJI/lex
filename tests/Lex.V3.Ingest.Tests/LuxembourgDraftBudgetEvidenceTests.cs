@@ -348,6 +348,46 @@ public sealed class LuxembourgDraftBudgetEvidenceTests
     }
 
     /// <summary>
+    /// The sweep carries the dispositioned ceiling, and it is still one shared budget.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// THE NUMBER IS NOW LIVE-AFFECTING, so it is pinned where a change is a failing test rather
+    /// than a diff nobody reads. 2,000 was dispositioned as a binding whole-run stop: it covers the
+    /// measured-density projection of 1,065 and the one-retry-per-product projection of 1,973, and
+    /// it refuses well before the conditional maximum.
+    /// </para>
+    /// <para>
+    /// Widening it is not a code change to be made quietly - it is a new disposition. Narrowing it
+    /// below the one-retry projection would make the sweep abort on ordinary publisher behaviour.
+    /// Either direction should fail here first.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void TheSweepCarriesItsDispositionedCeilingAsOneSharedBudget()
+    {
+        var source = File.ReadAllText(HarnessPath("LuxembourgDraftGraphLiveAcceptance.cs"));
+
+        StringAssert.Contains(
+            source,
+            "private static readonly int? SharedWireCeiling = 2_000;",
+            "the dispositioned whole-run ceiling, named and pinned.");
+
+        // Still one instance for the whole run: the property the ceiling depends on.
+        Assert.AreEqual(
+            1,
+            CountOf(LiveSweepBody(), "WireRequestBudget.OfWireRequests("),
+            "one budget for the whole run, or the number means nothing.");
+
+        // And the fail-closed shape survives the value being set: if the ceiling is ever cleared
+        // again, the run must still refuse rather than default to something.
+        StringAssert.Contains(
+            source,
+            "SharedWireCeiling is not { } ceiling",
+            "the run still refuses to start without a ceiling.");
+    }
+
+    /// <summary>
     /// The batch canary is pinned to its dispositioned subjects and its named 25-request ceiling.
     /// </summary>
     /// <remarks>
