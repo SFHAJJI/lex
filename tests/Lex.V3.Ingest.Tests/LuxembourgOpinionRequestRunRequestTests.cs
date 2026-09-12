@@ -41,7 +41,7 @@ public sealed class LuxembourgOpinionRequestRunRequestTests
         for (var ordinal = 0; ordinal < assigned.Count; ordinal++)
         {
             var request = LuxembourgOpinionRequestGraphRunRequest.ForBatch(
-                plan, population, inventory, ordinal, PlanResourceId, source);
+                plan, population, inventory, ordinal, PlanResourceId, source, Budget());
 
             CollectionAssert.AreEqual(
                 assigned[ordinal].Requests.ToArray(), request.BatchRequests.ToArray());
@@ -62,10 +62,10 @@ public sealed class LuxembourgOpinionRequestRunRequestTests
 
         Assert.ThrowsExactly<ArgumentOutOfRangeException>(
             () => LuxembourgOpinionRequestGraphRunRequest.ForBatch(
-                plan, population, inventory, assigned.Count, PlanResourceId, source));
+                plan, population, inventory, assigned.Count, PlanResourceId, source, Budget()));
         Assert.ThrowsExactly<ArgumentOutOfRangeException>(
             () => LuxembourgOpinionRequestGraphRunRequest.ForBatch(
-                plan, population, inventory, -1, PlanResourceId, source));
+                plan, population, inventory, -1, PlanResourceId, source, Budget()));
     }
 
     /// <summary>
@@ -90,7 +90,8 @@ public sealed class LuxembourgOpinionRequestRunRequestTests
                 inventory,
                 0,
                 PlanResourceId,
-                RendererSource()),
+                RendererSource(),
+                Budget()),
             "a population with a member the citation never digested is not this inventory's.");
     }
 
@@ -113,7 +114,8 @@ public sealed class LuxembourgOpinionRequestRunRequestTests
             inventory,
             0,
             PlanResourceId,
-            RendererSource());
+            RendererSource(),
+            Budget());
 
         CollectionAssert.AreEqual(
             LuxembourgOpinionRequestGraphDiscoveryPlan
@@ -157,16 +159,24 @@ public sealed class LuxembourgOpinionRequestRunRequestTests
     public void TheInventoryRunCarriesNoSelection()
     {
         var request = new LuxembourgOpinionRequestInventoryRunRequest(
-            LuxembourgOpinionRequestInventoryDiscoveryPlan.Create(), PlanResourceId, RendererSource());
+            LuxembourgOpinionRequestInventoryDiscoveryPlan.Create(), PlanResourceId, RendererSource(),
+            Budget());
 
-        Assert.AreEqual(
-            3,
-            typeof(LuxembourgOpinionRequestInventoryRunRequest).GetProperties().Length,
-            "a fourth property on this record is a selection arriving by another name.");
+        // THE CHECK IS "NO SELECTION", NOT A PROPERTY COUNT. It was written as a count, which then
+        // read as a rule against the enforced wire budget that had to be added to this record - a
+        // budget narrows how much is SENT, never which subjects are asked about, and conflating the
+        // two would have argued against the one stop that makes a ceiling real.
+        CollectionAssert.AreEquivalent(
+            new[] { "Plan", "PlanResourceId", "RendererSource", "WireBudget" },
+            typeof(LuxembourgOpinionRequestInventoryRunRequest).GetProperties()
+                .Select(static value => value.Name).ToArray(),
+            "a property naming subjects here is a selection arriving under another name.");
         Assert.IsNotNull(request.Plan);
     }
 
     private const int Capacity = LuxembourgOpinionRequestGraphDiscoveryPlan.BatchCapacity;
+
+    private static WireRequestBudget Budget() => WireRequestBudget.OfWireRequests(1000);
 
     private static MachineQueryRendererSource RendererSource() =>
         LuxembourgAcquisitionTestFixture.BuildRendererSource(9801);

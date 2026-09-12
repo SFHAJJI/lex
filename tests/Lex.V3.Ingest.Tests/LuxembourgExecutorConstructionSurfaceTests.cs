@@ -138,11 +138,14 @@ public sealed class LuxembourgExecutorConstructionSurfaceTests
                 "method internal instance " + N + "LuxembourgRepeatedEnumerationExecutor+<>c"
                 + "::<RunCoverAsync>b__11_0(" + Contracts + "LuxembourgQueryPartitionRange) -> "
                 + N + "LuxembourgEnumerationRunResult",
+                // Both signatures below gained a trailing WireRequestBudget?, the enforced wire
+                // ceiling. Re-printed after the change rather than guessed, and it is not a new way
+                // to build a run result: the two factories above are still the only ones.
                 "method private instance " + N + "LuxembourgRepeatedEnumerationExecutor"
                 + "::RunPartitionOnSessionAsync(" + N + "LuxembourgPartitionRunRequest, "
                 + "Lex.V3.Ingest.RoutedHttpAcquisitionSession, " + Core + "SourceArtifactRef?, "
-                + "System.Threading.CancellationToken) -> System.Threading.Tasks.Task<"
-                + N + "LuxembourgEnumerationRunResult>",
+                + "System.Threading.CancellationToken, Lex.V3.Ingest.WireRequestBudget?) -> "
+                + "System.Threading.Tasks.Task<" + N + "LuxembourgEnumerationRunResult>",
                 "method public instance " + N + "LuxembourgRepeatedEnumerationExecutor::RunCoverAsync("
                 + N + "LuxembourgPartitionRunRequest, " + Contracts + "LuxembourgPartitionChain, "
                 + Core + "BoundMachineRequest, System.Threading.CancellationToken) -> "
@@ -150,8 +153,8 @@ public sealed class LuxembourgExecutorConstructionSurfaceTests
                 + N + "LuxembourgEnumerationRunResult>>",
                 "method public instance " + N + "LuxembourgRepeatedEnumerationExecutor::RunPartitionAsync("
                 + N + "LuxembourgPartitionRunRequest, " + Core + "BoundMachineRequest, "
-                + "System.Threading.CancellationToken) -> System.Threading.Tasks.Task<"
-                + N + "LuxembourgEnumerationRunResult>",
+                + "System.Threading.CancellationToken, Lex.V3.Ingest.WireRequestBudget?) -> "
+                + "System.Threading.Tasks.Task<" + N + "LuxembourgEnumerationRunResult>",
             },
             ConstructionSurface.ProducersIn(
                 typeof(LuxembourgEnumerationRunResult).Assembly,

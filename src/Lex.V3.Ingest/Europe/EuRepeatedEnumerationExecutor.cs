@@ -124,6 +124,27 @@ public enum EuEnumerationRefusal
     [JsonStringEnumMemberName("page_decode_failed_on_our_side")]
     PageDecodeFailedOnOurSide = 14,
 
+    /// <summary>
+    /// The run reached its wire budget, counted over robots, counts, pages and every attempt.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// AN ENFORCED CEILING, WHICH IS THE ONLY KIND WORTH STATING. <see cref="PageBudgetExhausted"/>
+    /// bounds pages within one pass from the count the publisher reported, so it scales with what
+    /// the publisher says it holds - it is not a bound on the wire. Between reading a count and
+    /// sending the pages that count implies, nothing previously stopped a run, so a plan could only
+    /// ever offer an arithmetic estimate and call it a ceiling.
+    /// </para>
+    /// <para>
+    /// It counts ATTEMPTS, not bound requests, because the source profile permits four attempts per
+    /// request and a ceiling that ignores retries is three quarters wrong at its own limit. Robots
+    /// is counted as the run's first request, since a session issues exactly one before any product
+    /// request and a failure there refuses the session outright.
+    /// </para>
+    /// </remarks>
+    [JsonStringEnumMemberName("wire_budget_exhausted")]
+    WireBudgetExhausted = 15,
+
     // WHEN A REFUSAL LOOKS WRONG, GO TO THE RETAINED BYTES, NOT THE CODE THAT PRODUCED THE MESSAGE.
     //
     // Every refusal in this vocabulary is honest about what it OBSERVED, and that is exactly what
@@ -407,10 +428,30 @@ public sealed record LuxembourgInitialDraftInventoryRunRequest(
 /// the class itself, and a caller able to narrow it could narrow what "complete" means. The batching
 /// stage that follows takes its members from this run's proven output.
 /// </remarks>
+/// <param name="WireBudget">
+/// This run's enforced ceiling, counted over robots, counts, pages and every attempt. REQUIRED, and
+/// on the request rather than the entry point, so a run cannot go unbudgeted by omission - a plan's
+/// arithmetic is a prediction and only a stop in the path is a ceiling.
+/// </param>
 public sealed record LuxembourgOpinionRequestInventoryRunRequest(
     LuxembourgOpinionRequestInventoryDiscoveryPlan Plan,
     string PlanResourceId,
-    MachineQueryRendererSource RendererSource);
+    MachineQueryRendererSource RendererSource,
+    WireRequestBudget WireBudget)
+{
+    /// <summary>
+    /// This run's enforced ceiling. Required, and refused at construction when it is absent.
+    /// </summary>
+    /// <remarks>
+    /// A POSITIONAL RECORD DOES NOT CHECK ITS OWN PARAMETERS. The first head of this slice
+    /// documented this as required and stopped there, so <c>new(..., null!)</c> threw nothing and
+    /// reached the pass loop as an optional budget that was simply absent - the ceiling was off and
+    /// nothing said so. The sibling graph request refuses null in <c>ForBatch</c>; this one had no
+    /// factory to refuse it in, which is exactly how the two came to disagree.
+    /// </remarks>
+    public WireRequestBudget WireBudget { get; } =
+        WireBudget ?? throw new ArgumentNullException(nameof(WireBudget));
+}
 
 /// <summary>
 /// One batch of a proven OpinionRequest inventory, swept for every predicate the publisher holds.
@@ -434,13 +475,24 @@ public sealed record LuxembourgOpinionRequestGraphRunRequest
         LuxembourgOpinionRequestGraphDiscoveryPlan plan,
         LuxembourgOpinionRequestBatchAssignment assignment,
         string planResourceId,
-        MachineQueryRendererSource rendererSource)
+        MachineQueryRendererSource rendererSource,
+        WireRequestBudget wireBudget)
     {
         Plan = plan;
         Assignment = assignment;
         PlanResourceId = planResourceId;
         RendererSource = rendererSource;
+        WireBudget = wireBudget;
     }
+
+    /// <summary>
+    /// This run's enforced ceiling, counted over robots, counts, pages and every attempt.
+    /// </summary>
+    /// <remarks>
+    /// Required, and carried here rather than at the entry point, so a batch cannot be run
+    /// unbudgeted by omission. A figure computed outside the path is a prediction; this is the stop.
+    /// </remarks>
+    public WireRequestBudget WireBudget { get; }
 
     /// <summary>The inventory-issued batch this run sweeps.</summary>
     public LuxembourgOpinionRequestBatchAssignment Assignment { get; }
@@ -467,12 +519,14 @@ public sealed record LuxembourgOpinionRequestGraphRunRequest
         LuxembourgOpinionRequestInventoryCitation inventory,
         int batchOrdinal,
         string planResourceId,
-        MachineQueryRendererSource rendererSource)
+        MachineQueryRendererSource rendererSource,
+        WireRequestBudget wireBudget)
     {
         ArgumentNullException.ThrowIfNull(plan);
         ArgumentNullException.ThrowIfNull(population);
         ArgumentNullException.ThrowIfNull(inventory);
         ArgumentNullException.ThrowIfNull(rendererSource);
+        ArgumentNullException.ThrowIfNull(wireBudget);
         ArgumentException.ThrowIfNullOrWhiteSpace(planResourceId);
 
         var batches = LuxembourgOpinionRequestBatchAssignment.Over(population, inventory);
@@ -484,7 +538,7 @@ public sealed record LuxembourgOpinionRequestGraphRunRequest
         }
 
         return new LuxembourgOpinionRequestGraphRunRequest(
-            plan, batches[batchOrdinal], planResourceId, rendererSource);
+            plan, batches[batchOrdinal], planResourceId, rendererSource, wireBudget);
     }
 }
 
@@ -1190,6 +1244,24 @@ public sealed class EuRepeatedEnumerationExecutor
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(sourceWitness);
 
+        // THE SESSION'S ROBOTS FETCH, RESERVED BEFORE THE SESSION EXISTS. StartSessionAsync sends
+        // robots as its first act, so this is the last position from which that request can still
+        // be stopped rather than merely counted. Reserving inside the budget's construction instead
+        // charged one robots fetch however many sessions were opened against it.
+        //
+        // The null check is not decoration: the run request's WireBudget is documented as required,
+        // but a positional record accepts null positionally, and a null budget here would reach the
+        // pass loop as "no budget" and disable the ceiling silently - the one failure mode a
+        // ceiling must not have.
+        ArgumentNullException.ThrowIfNull(request.WireBudget);
+        if (!request.WireBudget.TryReserveAttempt())
+        {
+            return EuEnumerationRunResult.Refused(
+                new EuEnumerationRefusalDetail(
+                    EuEnumerationRefusal.WireBudgetExhausted, null, null, null, null, null, null, null, null),
+                productRequestCount: 0);
+        }
+
         var session = await StartSessionAsync(sourceWitness, cancellationToken).ConfigureAwait(false);
         if (session is null)
         {
@@ -1212,7 +1284,8 @@ public sealed class EuRepeatedEnumerationExecutor
                         BindLuxembourgOpinionRequestInventoryPage(request, pass, cursor, selected, evidenceRef),
                     batchObjects: null,
                     batchMembershipKeyOrdinal: null,
-                    cancellationToken)
+                    cancellationToken,
+                    request.WireBudget)
                 .ConfigureAwait(false);
         }
         finally
@@ -1241,6 +1314,19 @@ public sealed class EuRepeatedEnumerationExecutor
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(sourceWitness);
 
+        // The session's robots fetch, reserved before the session exists. See the inventory entry
+        // point above for why this sits here rather than in the budget's constructor. ForBatch
+        // already refuses a null budget, so this door cannot be reached with one - but the pass
+        // loop takes an optional budget, so a run that lost it would silently run unbounded.
+        ArgumentNullException.ThrowIfNull(request.WireBudget);
+        if (!request.WireBudget.TryReserveAttempt())
+        {
+            return EuEnumerationRunResult.Refused(
+                new EuEnumerationRefusalDetail(
+                    EuEnumerationRefusal.WireBudgetExhausted, null, null, null, null, null, null, null, null),
+                productRequestCount: 0);
+        }
+
         var session = await StartSessionAsync(sourceWitness, cancellationToken).ConfigureAwait(false);
         if (session is null)
         {
@@ -1264,7 +1350,8 @@ public sealed class EuRepeatedEnumerationExecutor
                     batchObjects: LuxembourgOpinionRequestGraphDiscoveryPlan.RequestedPartitionMembers(
                         request.BatchRequests),
                     batchMembershipKeyOrdinal: OpinionRequestGraphBatchMembershipKeyOrdinal(profile),
-                    cancellationToken)
+                    cancellationToken,
+                    request.WireBudget)
                 .ConfigureAwait(false);
         }
         finally
@@ -1890,7 +1977,8 @@ public sealed class EuRepeatedEnumerationExecutor
         Func<int, IReadOnlyList<string>?, long, SourceArtifactRef, EuBoundQueryParts> bindPage,
         IReadOnlyList<string>? batchObjects,
         int? batchMembershipKeyOrdinal,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        WireRequestBudget? budget = null)
     {
         var productRequestCount = 0;
         try
@@ -1926,7 +2014,7 @@ public sealed class EuRepeatedEnumerationExecutor
                         batchObjects, batchMembershipKeyOrdinal,
                         executorWrittenMembership,
                         () => productRequestCount, count => productRequestCount = count,
-                        cancellationToken)
+                        cancellationToken, budget)
                     .ConfigureAwait(false);
                 if (passResult.Refusal is not null)
                 {
@@ -1985,12 +2073,14 @@ public sealed class EuRepeatedEnumerationExecutor
         Dictionary<string, CustodyMembership> executorWrittenMembership,
         Func<int> currentCount,
         Action<int> setCount,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        WireRequestBudget? budget = null)
     {
         var countBound = bindCount(passOrdinal);
         var partitionKey = countBound.PartitionKey;
         var countOutcome = ToObserveOutcome(await _reopenGlue.ObserveAsync(
-                session, countBound.Request, profile, executorWrittenMembership, currentCount, setCount, cancellationToken)
+                session, countBound.Request, profile, executorWrittenMembership, currentCount, setCount,
+                cancellationToken, budget)
             .ConfigureAwait(false));
         if (countOutcome.Refusal is not null)
         {
@@ -2057,7 +2147,8 @@ public sealed class EuRepeatedEnumerationExecutor
             pageLimit ??= pageBound.PageRowLimit
                 ?? throw new InvalidOperationException("A page-shaped bound query must carry a row limit.");
             var pageOutcome = ToObserveOutcome(await _reopenGlue.ObserveAsync(
-                    session, pageBound.Request, profile, executorWrittenMembership, currentCount, setCount, cancellationToken)
+                    session, pageBound.Request, profile, executorWrittenMembership, currentCount, setCount,
+                    cancellationToken, budget)
                 .ConfigureAwait(false));
             if (pageOutcome.Refusal is not null)
             {
@@ -2726,6 +2817,7 @@ public sealed class EuRepeatedEnumerationExecutor
             ObservationAttemptFailureKind.NotExecuted => EuEnumerationRefusal.ObservationNotExecuted,
             ObservationAttemptFailureKind.StatusNotAdmitted => EuEnumerationRefusal.StatusNotAdmitted,
             ObservationAttemptFailureKind.MediaTypeNotAdmitted => EuEnumerationRefusal.MediaTypeNotAdmitted,
+            ObservationAttemptFailureKind.WireBudgetExhausted => EuEnumerationRefusal.WireBudgetExhausted,
             _ => throw new ArgumentOutOfRangeException(
                 nameof(outcome), $"Unreachable: an unhandled {nameof(ObservationAttemptFailureKind)} '{failure.Kind}'."),
         };

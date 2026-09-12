@@ -25,6 +25,17 @@ public enum ObservationAttemptFailureKind
 
     /// <summary>The terminal hop's media type did not equal the profile's expected media type.</summary>
     MediaTypeNotAdmitted = 3,
+
+    /// <summary>
+    /// The run reached its wire budget before this attempt could be sent.
+    /// </summary>
+    /// <remarks>
+    /// The one failure here that is not about what a publisher did. It is raised BEFORE the attempt,
+    /// so nothing was sent - which is why it carries no status, body digest or media type: there is
+    /// no observation to describe, and inventing empty fields would read as a publisher answering
+    /// badly rather than as this seat stopping.
+    /// </remarks>
+    WireBudgetExhausted = 4,
 }
 
 /// <summary>
@@ -110,12 +121,13 @@ public sealed class RepeatedEnumerationDeliveryReopenGlue
         Dictionary<string, CustodyMembership> executorWrittenMembership,
         Func<int> currentCount,
         Action<int> setCount,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        WireRequestBudget? budget = null)
     {
         ArgumentNullException.ThrowIfNull(profile);
         return ObserveAsync(
             session, request, profile.ExpectedMediaType, executorWrittenMembership, currentCount, setCount,
-            cancellationToken);
+            cancellationToken, budget);
     }
 
     /// <summary>
@@ -137,7 +149,8 @@ public sealed class RepeatedEnumerationDeliveryReopenGlue
         Dictionary<string, CustodyMembership> executorWrittenMembership,
         Func<int> currentCount,
         Action<int> setCount,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        WireRequestBudget? budget = null)
     {
         ArgumentNullException.ThrowIfNull(session);
         ArgumentNullException.ThrowIfNull(request);
@@ -152,6 +165,25 @@ public sealed class RepeatedEnumerationDeliveryReopenGlue
         RoutedHttpAcquisitionSession.AttemptResult attempt;
         while (true)
         {
+            // BEFORE THE ATTEMPT, NOT AFTER IT. This is the only position that lands between the
+            // executor learning a count and sending the pages that count implies, and the only one
+            // where an exhausted budget stops traffic rather than reporting it. A retry is an
+            // attempt like any other: the profile permits several per bound request, and a ceiling
+            // that only counted bound requests would be wrong by that factor at its own limit.
+            if (budget is not null && !budget.TryReserveAttempt())
+            {
+                return new ObservationAttemptOutcome(
+                    null,
+                    item.RequestOrdinal,
+                    new ObservationAttemptFailure(
+                        ObservationAttemptFailureKind.WireBudgetExhausted,
+                        (ulong)attemptOrdinal,
+                        null,
+                        null,
+                        null,
+                        $"budget {budget.Limit} reached after {budget.Spent} wire request(s)"));
+            }
+
             attempt = await item.ExecuteNextAttemptAsync(cancellationToken).ConfigureAwait(false);
             attemptOrdinal++;
             setCount(currentCount() + 1);

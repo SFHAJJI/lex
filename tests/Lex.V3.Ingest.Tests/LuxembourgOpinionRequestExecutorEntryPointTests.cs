@@ -43,7 +43,8 @@ public sealed class LuxembourgOpinionRequestExecutorEntryPointTests
 
         var result = await executor.RunLuxembourgOpinionRequestInventoryAsync(
             new LuxembourgOpinionRequestInventoryRunRequest(
-                LuxembourgOpinionRequestInventoryDiscoveryPlan.Create(), NewUrn(), Source()),
+                LuxembourgOpinionRequestInventoryDiscoveryPlan.Create(), NewUrn(), Source(),
+                WireRequestBudget.OfWireRequests(1000)),
             LuxembourgSourceWitness(),
             CancellationToken.None);
 
@@ -104,6 +105,199 @@ public sealed class LuxembourgOpinionRequestExecutorEntryPointTests
     }
 
     /// <summary>
+    /// A run stops at its budget, and the transport confirms nothing further was sent.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// THE CEILING IS THE PATH'S, NOT A PLAN'S. The executor reads the publisher's count and then
+    /// continues paging on its own until a short page or its page bound, so a figure derived outside
+    /// the run bounds nothing - which is how I came to publish 120 as a ceiling when the structural
+    /// worst case for the same packet is 22,276.
+    /// </para>
+    /// <para>
+    /// Asserted on the TRANSPORT's own send count, not on the refusal alone. A stop that refuses
+    /// while the requests still went out is a receipt, and the whole point is that they do not go.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public async Task ARunStopsAtItsBudgetAndSendsNothingFurther()
+    {
+        var batch = new[] { Request(1), Request(2) };
+
+        // Two wire requests: the robots fetch, then one product request. The second product request
+        // this run would make has no budget left to reserve.
+        var handler = GraphTransport(
+            GraphRow(batch[0], ReferralDate, "2004-03-11"),
+            GraphRow(batch[1], ReferralDate, "2004-04-01"));
+        var executor = ExecutorFor(handler);
+
+        var result = await executor.RunLuxembourgOpinionRequestGraphAsync(
+            LuxembourgOpinionRequestGraphRunRequest.ForBatch(
+                LuxembourgOpinionRequestGraphDiscoveryPlan.Create(),
+                batch,
+                InventoryOver(batch),
+                0,
+                NewUrn(),
+                Source(),
+                WireRequestBudget.OfWireRequests(2)),
+            LuxembourgSourceWitness(),
+            CancellationToken.None);
+
+        Assert.IsNotNull(result.Refusal);
+        Assert.AreEqual(EuEnumerationRefusal.WireBudgetExhausted, result.Refusal.Code);
+        Assert.AreEqual(
+            2, handler.SendCount,
+            "the budget is a stop: robots plus one product request, and nothing after it.");
+    }
+
+    /// <summary>A budget that cannot cover robots and one product request is refused outright.</summary>
+    /// <remarks>
+    /// A ceiling of one would refuse every run before it began, which is a configuration error
+    /// rather than a delivery outcome - so it is rejected where it is written, not where it fires.
+    /// </remarks>
+    [TestMethod]
+    public void ABudgetTooSmallToSendAnythingIsRefusedWhereItIsWritten()
+    {
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(
+            () => WireRequestBudget.OfWireRequests(1));
+
+        // NOTHING IS SPENT UNTIL SOMETHING IS ABOUT TO BE SENT. This pinned 1 on the first head,
+        // because robots was charged in the constructor. That is right for one session and wrong by
+        // one for every session after it, which is what let a reused budget under-count.
+        Assert.AreEqual(
+            0, WireRequestBudget.OfWireRequests(2).Spent,
+            "a budget that has been built has not yet sent anything.");
+    }
+
+    /// <summary>
+    /// A budget reused across runs still holds, because robots is charged per session.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// THE DEFECT THIS REPLACES. Robots was spent once at construction, but a session sends one
+    /// robots fetch and every entry-point call opens its own session - so N runs sharing a budget
+    /// put N robots fetches on the wire while charging one. Measured on the transport at the time:
+    /// two runs sent 10 and the budget counted 9.
+    /// </para>
+    /// <para>
+    /// Asserted against <see cref="WireRequestBudget.Limit"/> itself rather than a hand-written
+    /// number, because the claim is not "two sends happened", it is "the ceiling was never
+    /// exceeded". A literal would keep agreeing with itself if the limit later moved.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public async Task AReusedBudgetStillBoundsTheWire()
+    {
+        var batch = new[] { Request(1), Request(2) };
+        var handler = GraphTransportServingRobotsByPath(
+            GraphRow(batch[0], ReferralDate, "2004-03-11"),
+            GraphRow(batch[1], ReferralDate, "2004-04-01"));
+        var executor = ExecutorFor(handler);
+        var budget = WireRequestBudget.OfWireRequests(2);
+
+        var outcomes = new List<EuEnumerationRefusal?>();
+        for (var run = 0; run < 2; run++)
+        {
+            var result = await executor.RunLuxembourgOpinionRequestGraphAsync(
+                LuxembourgOpinionRequestGraphRunRequest.ForBatch(
+                    LuxembourgOpinionRequestGraphDiscoveryPlan.Create(),
+                    batch,
+                    InventoryOver(batch),
+                    0,
+                    NewUrn(),
+                    Source(),
+                    budget),
+                LuxembourgSourceWitness(),
+                CancellationToken.None);
+            outcomes.Add(result.Refusal?.Code);
+        }
+
+        Assert.IsLessThanOrEqualTo(
+            budget.Limit,
+            handler.SendCount,
+            "a second run reusing a spent budget must not put another robots fetch on the wire.");
+        CollectionAssert.AreEqual(
+            new EuEnumerationRefusal?[]
+            {
+                EuEnumerationRefusal.WireBudgetExhausted,
+                EuEnumerationRefusal.WireBudgetExhausted,
+            },
+            outcomes.ToArray(),
+            "the second run is refused before it opens a session, not after it has sent robots.");
+    }
+
+    /// <summary>
+    /// The inventory door charges its own session's robots too.
+    /// </summary>
+    /// <remarks>
+    /// Written separately from the graph door rather than folded into it. A single test that ran
+    /// inventory and then graph under one budget would pass with either reservation present, so it
+    /// could not say which door was holding - and this is the door a canary opens first.
+    /// </remarks>
+    [TestMethod]
+    public async Task AReusedBudgetStillBoundsTheWireOnTheInventoryDoor()
+    {
+        var subjects = new[] { Request(1), Request(2) };
+        var handler = TransportServingRobotsByPath(
+            InventoryProjection, subjects.Select(InventoryRow).ToArray());
+        var executor = ExecutorFor(handler);
+        var budget = WireRequestBudget.OfWireRequests(2);
+
+        var codes = new List<EuEnumerationRefusal?>();
+        for (var run = 0; run < 2; run++)
+        {
+            var result = await executor.RunLuxembourgOpinionRequestInventoryAsync(
+                new LuxembourgOpinionRequestInventoryRunRequest(
+                    LuxembourgOpinionRequestInventoryDiscoveryPlan.Create(), NewUrn(), Source(), budget),
+                LuxembourgSourceWitness(),
+                CancellationToken.None);
+            codes.Add(result.Refusal?.Code);
+        }
+
+        Assert.IsLessThanOrEqualTo(
+            budget.Limit,
+            handler.SendCount,
+            "the inventory door must not open a second session on a spent budget.");
+        CollectionAssert.AreEqual(
+            new EuEnumerationRefusal?[]
+            {
+                EuEnumerationRefusal.WireBudgetExhausted,
+                EuEnumerationRefusal.WireBudgetExhausted,
+            },
+            codes.ToArray());
+    }
+
+    /// <summary>
+    /// A run request cannot be built without the budget it documents as required.
+    /// </summary>
+    /// <remarks>
+    /// A POSITIONAL RECORD CHECKS NOTHING. This one documented the budget as required and then
+    /// accepted null positionally; the null reached the shared pass loop, whose budget parameter is
+    /// optional by type, and was read there as "no ceiling asked for". The ceiling was off and
+    /// nothing said so, which is the one failure mode a ceiling must not have. Proven on the
+    /// constructor rather than on a run, because a run that cannot be built cannot send.
+    /// </remarks>
+    [TestMethod]
+    public void ARunRequestCannotBeBuiltWithoutItsBudget()
+    {
+        Assert.ThrowsExactly<ArgumentNullException>(
+            () => new LuxembourgOpinionRequestInventoryRunRequest(
+                LuxembourgOpinionRequestInventoryDiscoveryPlan.Create(), NewUrn(), Source(), null!),
+            "the inventory door accepted null here.");
+
+        Assert.ThrowsExactly<ArgumentNullException>(
+            () => LuxembourgOpinionRequestGraphRunRequest.ForBatch(
+                LuxembourgOpinionRequestGraphDiscoveryPlan.Create(),
+                [Request(1)],
+                InventoryOver([Request(1)]),
+                0,
+                NewUrn(),
+                Source(),
+                null!),
+            "and the graph door must keep refusing it, or the two disagree again.");
+    }
+
+    /// <summary>
     /// The membership position is resolved by name, so a keyset change cannot silently rewire it.
     /// </summary>
     /// <remarks>
@@ -156,6 +350,47 @@ public sealed class LuxembourgOpinionRequestExecutorEntryPointTests
             profile.TerminalPagePolicy);
     }
 
+    /// <summary>
+    /// Robots by PATH, not by send ordinal.
+    /// </summary>
+    /// <remarks>
+    /// <c>AllowRobotsThenHandler</c> answers robots for send ordinal 0 only, which leaves a second
+    /// session's robots fetch answered with a product body. That would make a reuse test fail on
+    /// robots parsing rather than on the ceiling it is measuring.
+    /// </remarks>
+    private static LuxembourgAcquisitionTestFixture.SequencedHandler GraphTransportServingRobotsByPath(
+        params string[] rows) =>
+        TransportServingRobotsByPath(GraphProjection, rows);
+
+    private static LuxembourgAcquisitionTestFixture.SequencedHandler TransportServingRobotsByPath(
+        string[] projection,
+        string[] rows)
+    {
+        var scripted = new[] { CountJson(rows.Length), RowsJson(projection, rows) };
+        var product = 0;
+        return new LuxembourgAcquisitionTestFixture.SequencedHandler((_, request) =>
+            request.RequestUri!.AbsolutePath.EndsWith("robots.txt", StringComparison.Ordinal)
+                ? RobotsAllowAll(request)
+                : LuxembourgAcquisitionTestFixture.JsonResponse(
+                    request, scripted[Interlocked.Increment(ref product) - 1 & 1]));
+    }
+
+    private static System.Net.Http.HttpResponseMessage RobotsAllowAll(
+        System.Net.Http.HttpRequestMessage request)
+    {
+        var bytes = System.Text.Encoding.UTF8.GetBytes("User-agent: *\nAllow: /\n");
+        var content = new System.Net.Http.ByteArrayContent(bytes);
+        content.Headers.TryAddWithoutValidation("Content-Type", "text/plain");
+        content.Headers.TryAddWithoutValidation(
+            "Content-Length", bytes.Length.ToString(CultureInfo.InvariantCulture));
+        return new System.Net.Http.HttpResponseMessage(System.Net.HttpStatusCode.OK)
+        {
+            Version = System.Net.HttpVersion.Version11,
+            RequestMessage = request,
+            Content = content,
+        };
+    }
+
     private static Task<EuEnumerationRunResult> RunGraphAsync(
         LuxembourgAcquisitionTestFixture.SequencedHandler handler,
         IReadOnlyList<string> batch)
@@ -168,7 +403,8 @@ public sealed class LuxembourgOpinionRequestExecutorEntryPointTests
                 InventoryOver(batch),
                 0,
                 NewUrn(),
-                Source()),
+                Source(),
+                WireRequestBudget.OfWireRequests(1000)),
             LuxembourgSourceWitness(),
             CancellationToken.None);
     }
