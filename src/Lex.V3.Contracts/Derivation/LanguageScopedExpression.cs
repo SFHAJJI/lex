@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using System.Text.Json.Serialization;
 using Lex.V3.Contracts.Custody;
 using Lex.V3.Contracts.Source.Core;
@@ -205,9 +206,27 @@ public sealed class LanguageScopedExpressionSet
 {
     private readonly List<LanguageScopedExpression> _expressions = [];
     private readonly Dictionary<LanguageScopedExpressionIdentity, string> _bytesByIdentity = [];
+    private readonly ReadOnlyCollection<LanguageScopedExpression> _exposedExpressions;
+
+    public LanguageScopedExpressionSet() => _exposedExpressions = _expressions.AsReadOnly();
 
     /// <summary>Every admitted expression, in the order it was admitted.</summary>
-    public IReadOnlyList<LanguageScopedExpression> Expressions => _expressions;
+    /// <remarks>
+    /// <para>
+    /// A GENUINE READ-ONLY WRAPPER, NOT THE BACKING LIST BEHIND A READ-ONLY INTERFACE. Returning
+    /// <c>_expressions</c> directly would change only the compile-time view: a caller could cast the
+    /// result back to <c>List&lt;T&gt;</c> or <c>ICollection&lt;T&gt;</c> and add, remove or clear
+    /// entries. That would defeat the append-only guarantee this type exists for, and worse, leave
+    /// the list disagreeing with the identity index that decides idempotence and conflict - so a
+    /// removed expression's identity would still refuse a later, different presentation.
+    /// </para>
+    /// <para>
+    /// The wrapper is built once in the constructor rather than per access, and it is a live view
+    /// rather than a snapshot: appends appear through it, which is what a reader of an append-only
+    /// store expects, and what a defensive copy would silently take away.
+    /// </para>
+    /// </remarks>
+    public IReadOnlyList<LanguageScopedExpression> Expressions => _exposedExpressions;
 
     /// <summary>
     /// Appends one expression, or refuses by name. Never removes, replaces or edits.

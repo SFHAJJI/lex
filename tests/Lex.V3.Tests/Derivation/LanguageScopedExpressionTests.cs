@@ -220,6 +220,55 @@ public sealed class LanguageScopedExpressionTests
         Assert.AreEqual(LanguageScopedExpressionAppendRefusal.ConflictingCanonicalBytes, refusal);
     }
 
+    /// <summary>A caller cannot mutate the exposed collection, by any cast.</summary>
+    /// <remarks>
+    /// The reviewer's finding on the first head: exposing the backing <c>List</c> behind an
+    /// <c>IReadOnlyList</c> changes only the compile-time view, so a cast back to <c>List</c> or
+    /// <c>ICollection</c> could add, remove or clear. That would break the append-only guarantee
+    /// and desynchronize the list from the identity index, leaving a removed expression's identity
+    /// still refusing a later, different presentation. Asserting the declared return type proves
+    /// nothing here; only attempting the mutation does.
+    /// </remarks>
+    [TestMethod]
+    public void TheExposedCollectionCannotBeMutatedByACaller()
+    {
+        var set = new LanguageScopedExpressionSet();
+        Assert.IsTrue(set.TryAppend(Expression("rect/1", "fr", '1'), out _));
+        var exposed = set.Expressions;
+        var intruder = Expression("rect/9", "fr", '9');
+
+        Assert.IsFalse(
+            exposed is List<LanguageScopedExpression>,
+            "the backing list must not be handed out behind a read-only interface.");
+
+        var asCollection = exposed as ICollection<LanguageScopedExpression>;
+        Assert.IsNotNull(asCollection);
+        Assert.IsTrue(asCollection.IsReadOnly);
+        Assert.ThrowsExactly<NotSupportedException>(() => asCollection.Add(intruder));
+        Assert.ThrowsExactly<NotSupportedException>(() => asCollection.Remove(set.Expressions[0]));
+        Assert.ThrowsExactly<NotSupportedException>(asCollection.Clear);
+
+        Assert.HasCount(1, set.Expressions, "and none of that reached the store.");
+    }
+
+    /// <summary>The exposed collection is a live view, not a snapshot taken at first access.</summary>
+    /// <remarks>
+    /// Pinned because the obvious over-correction for the finding above - returning a defensive copy
+    /// - would silently make a held reference stale, and a reader of an append-only store reasonably
+    /// expects later appends to appear.
+    /// </remarks>
+    [TestMethod]
+    public void TheExposedCollectionIsALiveViewOfLaterAppends()
+    {
+        var set = new LanguageScopedExpressionSet();
+        var exposed = set.Expressions;
+        Assert.IsEmpty(exposed);
+
+        Assert.IsTrue(set.TryAppend(Expression("rect/1", "de", '1'), out _));
+
+        Assert.HasCount(1, exposed, "a reference taken before the append must see it.");
+    }
+
     private static LanguageScopedExpression Expression(
         string expressionId,
         string language,
