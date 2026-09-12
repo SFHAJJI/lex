@@ -76,6 +76,8 @@ public sealed class ClosedVocabularyCensusTests
                     + "ImmutableObject1",
                 "Lex.V3.Contracts.Derivation.DerivationProfileComparisonOutcome: Comparable, "
                     + "ProfilesDiffer",
+                "Lex.V3.Contracts.Derivation.LanguageScopedExpressionAppendRefusal: None, "
+                    + "ConflictingCanonicalBytes",
                 "Lex.V3.Contracts.EuActForm: Directive, Regulation, DelegatedRegulation, "
                     + "ImplementingRegulation, Treaty, Corrigendum, DelegatedDirective, "
                     + "ImplementingDecision, Decision, DecisionEntscheid, ImplementingDirective, "
