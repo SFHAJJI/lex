@@ -67,7 +67,7 @@ public sealed class LuxembourgOpinionRequestGraphResult
         Refusal = refusal;
         Detail = detail;
         ProductRequestCount = productRequestCount;
-        WireBudget = wireBudget ?? throw new ArgumentNullException(nameof(wireBudget));
+        WireBudget = wireBudget;
     }
 
     /// <summary>This batch's completed matrix, non-null exactly when <see cref="Delivered"/>.</summary>
