@@ -110,8 +110,10 @@ public sealed class LuxembourgInitialDraftInventoryResult
         LuxembourgInitialDraftInventoryRefusal refusal,
         string? detail,
         int productRequestCount,
+        WireBudgetSnapshot wireBudget,
         IReadOnlyList<LuxembourgInitialDraftSubject>? observedNonAddressable = null)
     {
+        WireBudget = wireBudget;
         // SNAPSHOTTED, NOT ALIASED. These were the producer's own List, handed out behind an
         // IReadOnlyList that a caller could cast back to and mutate. Doing so changed the members a
         // later batch derived while the citation kept the digest of the ORIGINAL population - so the
@@ -161,22 +163,36 @@ public sealed class LuxembourgInitialDraftInventoryResult
     public LuxembourgInitialDraftInventoryRefusal Refusal { get; }
     public string? Detail { get; }
     public int ProductRequestCount { get; }
+
+    /// <summary>
+    /// What the shared wire budget stood at when this run ended. Always present.
+    /// </summary>
+    /// <remarks>
+    /// REQUIRED ON EVERY OUTCOME, delivered or refused. A refused run still sent requests - often it
+    /// refused BECAUSE it had - and a ceiling whose evidence only survives success cannot be
+    /// reconciled on the runs that most need reconciling.
+    /// </remarks>
+    public WireBudgetSnapshot WireBudget { get; }
+
     public bool Delivered => Refusal == LuxembourgInitialDraftInventoryRefusal.None;
 
     internal static LuxembourgInitialDraftInventoryResult Success(
         IReadOnlyList<LuxembourgInitialDraftSubject> subjects,
         SourceArtifactRef completionEvidenceRef,
         LuxembourgInitialDraftInventoryCitation citation,
-        int productRequestCount) =>
+        int productRequestCount,
+        WireBudgetSnapshot wireBudget) =>
         new(subjects, completionEvidenceRef, citation,
-            LuxembourgInitialDraftInventoryRefusal.None, null, productRequestCount);
+            LuxembourgInitialDraftInventoryRefusal.None, null, productRequestCount, wireBudget);
 
     internal static LuxembourgInitialDraftInventoryResult Refused(
         LuxembourgInitialDraftInventoryRefusal refusal,
         string detail,
         int productRequestCount,
+        WireBudgetSnapshot wireBudget,
         IReadOnlyList<LuxembourgInitialDraftSubject>? observedNonAddressable = null) =>
-        new(null, null, null, refusal, detail, productRequestCount, observedNonAddressable);
+        new(null, null, null, refusal, detail, productRequestCount, wireBudget,
+            observedNonAddressable);
 
     /// <summary>
     /// The subjects a later batch can name, deduplicated and in one deterministic order.
@@ -253,6 +269,9 @@ public sealed class LuxembourgInitialDraftInventoryProducer
 
         var run = await _executor.RunLuxembourgInitialDraftInventoryAsync(
             request, sourceWitness, cancellationToken).ConfigureAwait(false);
+        // READ ONCE, HERE. Everything below this line reads custody, not the wire, so this is the
+        // last moment the budget changes on this run's account and the first moment it is complete.
+        var wireBudget = WireBudgetSnapshot.Of(request.WireBudget);
         if (run.Receipt is not { } receipt)
         {
             // THE PUBLISHER'S OWN REASON IS CARRIED, not just this seat's word for it. A refusal
@@ -265,7 +284,8 @@ public sealed class LuxembourgInitialDraftInventoryProducer
                         ? ": " + detail
                         : string.Empty)
                     : "enumeration returned neither a receipt nor a refusal",
-                run.ProductRequestCount);
+                run.ProductRequestCount,
+                wireBudget);
         }
 
         var proof = receipt.TryProveFamilyEnumeration(receipt.Delivery.PartitionKey, out var proofRefusal);
@@ -274,7 +294,8 @@ public sealed class LuxembourgInitialDraftInventoryProducer
             return LuxembourgInitialDraftInventoryResult.Refused(
                 LuxembourgInitialDraftInventoryRefusal.EnumerationProofRefused,
                 proofRefusal.ToString(),
-                run.ProductRequestCount);
+                run.ProductRequestCount,
+                wireBudget);
         }
 
         var pages = new List<RepeatedEnumerationResolvedEvidence>(receipt.Delivery.PagesA.Pages.Count);
@@ -298,7 +319,8 @@ public sealed class LuxembourgInitialDraftInventoryProducer
             return LuxembourgInitialDraftInventoryResult.Refused(
                 LuxembourgInitialDraftInventoryRefusal.VerifiedRowsRefused,
                 rowRefusal.ToString(),
-                run.ProductRequestCount);
+                run.ProductRequestCount,
+                wireBudget);
         }
 
         // THE PROOF ITSELF, not the two fields read off it. This used to hand DecodeRows the run
@@ -311,6 +333,7 @@ public sealed class LuxembourgInitialDraftInventoryProducer
             profile,
             proof,
             receipt.Delivery.ObservationTimes.CountA,
+            wireBudget,
             run.ProductRequestCount);
     }
 
@@ -334,6 +357,7 @@ public sealed class LuxembourgInitialDraftInventoryProducer
         RepeatedEnumerationInterpretationProfile profile,
         AbsenceFamilyEnumerationProof proof,
         string observedAt,
+        WireBudgetSnapshot wireBudget,
         int productRequestCount = 0)
     {
         ArgumentNullException.ThrowIfNull(rows);
@@ -359,7 +383,8 @@ public sealed class LuxembourgInitialDraftInventoryProducer
                 return LuxembourgInitialDraftInventoryResult.Refused(
                     LuxembourgInitialDraftInventoryRefusal.RowNotAdmitted,
                     exception.Message,
-                    productRequestCount);
+                    productRequestCount,
+                    wireBudget);
             }
 
             if (!seen.Add((subject.Value, subject.Kind)))
@@ -368,7 +393,8 @@ public sealed class LuxembourgInitialDraftInventoryProducer
                     LuxembourgInitialDraftInventoryRefusal.SubjectDeliveredTwice,
                     $"The delivery names {subject.Value} more than once, and the query groups by "
                         + "subject, so an honest answer names each exactly once.",
-                    productRequestCount);
+                    productRequestCount,
+                    wireBudget);
             }
 
             subjects.Add(subject);
@@ -394,6 +420,7 @@ public sealed class LuxembourgInitialDraftInventoryProducer
                     + " member(s) no request can name, so no exact inventory exists over them: "
                     + string.Join(", ", nonAddressable.Select(static value => value.Value)) + ".",
                 productRequestCount,
+                wireBudget,
                 nonAddressable);
         }
 
@@ -418,7 +445,7 @@ public sealed class LuxembourgInitialDraftInventoryProducer
             observedAt);
 
         return LuxembourgInitialDraftInventoryResult.Success(
-            subjects, completionEvidenceRef, citation, productRequestCount);
+            subjects, completionEvidenceRef, citation, productRequestCount, wireBudget);
     }
 
     private static LuxembourgInitialDraftSubject DecodeRow(

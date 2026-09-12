@@ -205,8 +205,10 @@ public sealed class LuxembourgDraftGraphProductionResult
         IReadOnlyList<LuxembourgDraftRetainedEvidenceRow> retainedNotAdmitted,
         LuxembourgDraftGraphProductionRefusal refusal,
         string? detail,
+        WireBudgetSnapshot wireBudget,
         int productRequestCount)
     {
+        WireBudget = wireBudget;
         // SNAPSHOTTED, for the same reason the coverage beside it is. All three are published
         // through read-only interfaces over collections the caller built and still holds, and For()
         // reads two of them LIVE. Casting AdmittedPredicates back to its HashSet and adding an
@@ -274,6 +276,16 @@ public sealed class LuxembourgDraftGraphProductionResult
 
     public int ProductRequestCount { get; }
 
+    /// <summary>
+    /// What the shared wire budget stood at when this run ended. Always present.
+    /// </summary>
+    /// <remarks>
+    /// REQUIRED ON EVERY OUTCOME, delivered or refused. A refused run still sent requests - often it
+    /// refused BECAUSE it had - and a ceiling whose evidence only survives success cannot be
+    /// reconciled on the runs that most need reconciling.
+    /// </remarks>
+    public WireBudgetSnapshot WireBudget { get; }
+
     public bool Delivered => Refusal == LuxembourgDraftGraphProductionRefusal.None;
 
     internal static LuxembourgDraftGraphProductionResult Success(
@@ -282,13 +294,17 @@ public sealed class LuxembourgDraftGraphProductionResult
         SourceArtifactRef completionEvidenceRef,
         LuxembourgDraftPropertyCoverage coverage,
         IReadOnlyList<LuxembourgDraftRetainedEvidenceRow> retainedNotAdmitted,
+        WireBudgetSnapshot wireBudget,
         int productRequestCount = 0) =>
         new(records, admittedPredicates, completionEvidenceRef, coverage, retainedNotAdmitted,
-            LuxembourgDraftGraphProductionRefusal.None, null, productRequestCount);
+            LuxembourgDraftGraphProductionRefusal.None, null, wireBudget, productRequestCount);
 
     internal static LuxembourgDraftGraphProductionResult Refused(
-        LuxembourgDraftGraphProductionRefusal refusal, string? detail, int productRequestCount = 0) =>
-        new(null, null, null, null, [], refusal, detail, productRequestCount);
+        LuxembourgDraftGraphProductionRefusal refusal,
+        string? detail,
+        WireBudgetSnapshot wireBudget,
+        int productRequestCount = 0) =>
+        new(null, null, null, null, [], refusal, detail, wireBudget, productRequestCount);
 
     /// <summary>Every delivered value of one property this run asked about.</summary>
     /// <remarks>
@@ -381,11 +397,15 @@ public sealed class LuxembourgDraftGraphProducer
 
         var run = await _executor.RunLuxembourgDraftGraphAsync(
             request, sourceWitness, cancellationToken).ConfigureAwait(false);
+        // READ ONCE, HERE. Everything below this line reads custody, not the wire, so this is the
+        // last moment the budget changes on this run's account and the first moment it is complete.
+        var wireBudget = WireBudgetSnapshot.Of(request.WireBudget);
         if (run.Receipt is not { } receipt)
         {
             return LuxembourgDraftGraphProductionResult.Refused(
                 LuxembourgDraftGraphProductionRefusal.EnumerationRefused,
                 run.Refusal?.Code.ToString() ?? "enumeration returned neither a receipt nor a refusal",
+                wireBudget,
                 run.ProductRequestCount);
         }
 
@@ -395,6 +415,7 @@ public sealed class LuxembourgDraftGraphProducer
             return LuxembourgDraftGraphProductionResult.Refused(
                 LuxembourgDraftGraphProductionRefusal.EnumerationProofRefused,
                 proofRefusal.ToString(),
+                wireBudget,
                 run.ProductRequestCount);
         }
 
@@ -419,6 +440,7 @@ public sealed class LuxembourgDraftGraphProducer
             return LuxembourgDraftGraphProductionResult.Refused(
                 LuxembourgDraftGraphProductionRefusal.VerifiedRowsRefused,
                 rowRefusal.ToString(),
+                wireBudget,
                 run.ProductRequestCount);
         }
 
@@ -434,6 +456,7 @@ public sealed class LuxembourgDraftGraphProducer
             // against what this run believes it asked.
             proof.FamilyKey,
             receipt.Delivery.ObservationTimes.CountA,
+            wireBudget,
             run.ProductRequestCount);
     }
 
@@ -449,6 +472,7 @@ public sealed class LuxembourgDraftGraphProducer
         LuxembourgDraftBatchAssignment assignment,
         string partitionKey,
         string observedAt,
+        WireBudgetSnapshot wireBudget,
         int productRequestCount = 0)
     {
         ArgumentNullException.ThrowIfNull(proof);
@@ -525,6 +549,7 @@ public sealed class LuxembourgDraftGraphProducer
                 return LuxembourgDraftGraphProductionResult.Refused(
                     LuxembourgDraftGraphProductionRefusal.RowNotAdmitted,
                     exception.Message,
+                    wireBudget,
                     productRequestCount);
             }
 
@@ -559,11 +584,13 @@ public sealed class LuxembourgDraftGraphProducer
             return LuxembourgDraftGraphProductionResult.Refused(
                 LuxembourgDraftGraphProductionRefusal.MatrixCompletionRefused,
                 coverageRefusal + ": " + coverageDetail,
+                wireBudget,
                 productRequestCount);
         }
 
         return LuxembourgDraftGraphProductionResult.Success(
-            records, admissible, completionEvidenceRef, coverage, notAdmitted, productRequestCount);
+            records, admissible, completionEvidenceRef, coverage, notAdmitted, wireBudget,
+            productRequestCount);
     }
 
     /// <summary>RDF 1.1: a simple literal is an xsd:string, and this engine's DATATYPE says so.</summary>

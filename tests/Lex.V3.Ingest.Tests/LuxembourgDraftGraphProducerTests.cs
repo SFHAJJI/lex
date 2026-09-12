@@ -322,7 +322,8 @@ public sealed class LuxembourgDraftGraphProducerTests
                 InventoryOf(drafts),
                 0,
                 "urn:uuid:6c0f2d18-77a5-4f39-b6c2-9d4e1b8a3057",
-                LuxembourgAcquisitionTestFixture.BuildRendererSource(9107)),
+                LuxembourgAcquisitionTestFixture.BuildRendererSource(9107),
+            LuxembourgAcquisitionTestFixture.TestWireBudget()),
             LuxembourgSourceWitness(),
             CancellationToken.None);
 
@@ -388,7 +389,8 @@ public sealed class LuxembourgDraftGraphProducerTests
                     InventoryOf(drafts),
                     0,
                     "urn:uuid:2f9b6c41-08de-4a77-95b3-1c7e0d5a6482",
-                    LuxembourgAcquisitionTestFixture.BuildRendererSource(9108)),
+                    LuxembourgAcquisitionTestFixture.BuildRendererSource(9108),
+            LuxembourgAcquisitionTestFixture.TestWireBudget()),
                 LuxembourgSourceWitness(),
                 CancellationToken.None);
 
@@ -771,7 +773,8 @@ public sealed class LuxembourgDraftGraphProducerTests
         return LuxembourgDraftGraphProducer.DecodeRows(
             bound, Profile(), proof, assignment,
             assignment.PartitionKey,
-            "2026-09-10T13:50:31.0000000Z");
+            "2026-09-10T13:50:31.0000000Z",
+            LuxembourgAcquisitionTestFixture.TestBudgetSnapshot());
     }
 
     /// <summary>The drafts a fixture delivery names, as the set it asked about.</summary>
@@ -824,7 +827,8 @@ public sealed class LuxembourgDraftGraphProducerTests
 
         var (proof, bound) = Bound(InventoryFamily, rows);
         return LuxembourgInitialDraftInventoryProducer.DecodeRows(
-            bound, profile, proof, "2026-09-10T07:29:37.8950843Z");
+            bound, profile, proof, "2026-09-10T07:29:37.8950843Z",
+            LuxembourgAcquisitionTestFixture.TestBudgetSnapshot());
     }
 
 
@@ -871,7 +875,8 @@ public sealed class LuxembourgDraftGraphProducerTests
                 InventoryOf(Draft),
                 0,
                 "urn:uuid:1a7c5e39-4b62-4d80-9f13-6e025ac84b71",
-                LuxembourgAcquisitionTestFixture.BuildRendererSource(9101)),
+                LuxembourgAcquisitionTestFixture.BuildRendererSource(9101),
+            LuxembourgAcquisitionTestFixture.TestWireBudget()),
             LuxembourgSourceWitness(),
             CancellationToken.None);
 
@@ -1394,7 +1399,8 @@ public sealed class LuxembourgDraftGraphProducerTests
                 boundRow, profile, cursorProof,
                 LuxembourgDraftGraphBatchFactory.AssignBatches(InventoryOf(Draft))[0],
                 partitionKey,
-                "2026-09-10T13:50:31.0000000Z");
+                "2026-09-10T13:50:31.0000000Z",
+            LuxembourgAcquisitionTestFixture.TestBudgetSnapshot());
 
             Assert.AreEqual(
                 LuxembourgDraftGraphProductionRefusal.RowNotAdmitted, result.Refusal,

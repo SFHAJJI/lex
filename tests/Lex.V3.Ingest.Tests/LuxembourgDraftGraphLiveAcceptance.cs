@@ -57,6 +57,25 @@ namespace Lex.V3.Ingest.Tests;
 public sealed class LuxembourgDraftGraphLiveAcceptance
 {
     private const string EnableVariable = "LEX_E8_DRAFT_GRAPH_LIVE";
+
+    /// <summary>
+    /// The whole-run wire ceiling for this acceptance sweep. **Not yet dispositioned.**
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// ONE CEILING FOR THE WHOLE RUN, OR NONE AT ALL. This harness previously built a fresh budget
+    /// for the inventory and another inside every batch iteration, so a 156-batch run received 157
+    /// independent ceilings - and each was the offline test helper's 100,000. The enforced ceiling
+    /// existed and the acceptance path went around it, which is precisely the unbounded sweep the
+    /// budget work exists to prevent.
+    /// </para>
+    /// <para>
+    /// It is null because the number has not been agreed. Choosing one here is what the plan step
+    /// exists to prevent: a ceiling picked by the code that spends it is not a ceiling. Until the
+    /// separately presented full-draft plan supplies a reviewed figure, this run refuses to start.
+    /// </para>
+    /// </remarks>
+    private static readonly int? SharedWireCeiling = null;
     private const string LegiluxEndpoint = "https://data.legilux.public.lu/sparqlendpoint";
 
     /// <summary>
@@ -123,6 +142,21 @@ public sealed class LuxembourgDraftGraphLiveAcceptance
                 + "whole InitialDraft class twice, so it is skipped by default.");
         }
 
+        // FAIL CLOSED ON A MISSING CEILING, before a store, a witness or a plan is built. A sweep
+        // that reached the publisher and then discovered it had no agreed bound would already have
+        // spent the requests the bound exists to limit.
+        if (SharedWireCeiling is not { } ceiling)
+        {
+            Assert.Inconclusive(
+                "The whole-run wire ceiling for the full draft sweep has not been dispositioned. "
+                + "This harness will not choose one: set SharedWireCeiling from the reviewed "
+                + "full-draft plan before running it.");
+            return;
+        }
+
+        // ONE INSTANCE, SHARED BY THE INVENTORY AND EVERY BATCH IT ISSUES.
+        var budget = WireRequestBudget.OfWireRequests(ceiling);
+
         // WHEN, not only how many. The owner ruling of 2026-09-11 07:48 admits the measured
         // population as this run's observation rather than as a constant, and requires the terminal
         // receipt to cite the observation AND its time. A receipt carrying a bare count invites the
@@ -139,16 +173,42 @@ public sealed class LuxembourgDraftGraphLiveAcceptance
 
         // 1. THE CLASS, ENUMERATED. Everything after this is derived from what the publisher said
         //    the class is; nothing below names a draft this run did not first prove exists.
+        // SESSIONS ARE COUNTED BY OBSERVATION, NOT BY ARITHMETIC. A producer call does not always
+        // open a session: the doors reserve robots BEFORE StartSessionAsync, so an exhausted budget
+        // returns with no session, no request and no spend. Counting attempted calls instead put one
+        // phantom robots fetch into the expected total and made `reconciles` false on exactly the
+        // pre-session safety stop the index exists to describe.
+        var sessionsOpened = 0;
+        var spentBeforeRun = budget.Spent;
+
         var inventory = await new LuxembourgInitialDraftInventoryProducer(store, TimeProvider.System)
             .RunAsync(
                 new LuxembourgInitialDraftInventoryRunRequest(
-                    LuxembourgInitialDraftInventoryDiscoveryPlan.Create(), NewUrn(), rendererSource),
+                    LuxembourgInitialDraftInventoryDiscoveryPlan.Create(), NewUrn(), rendererSource,
+                    budget),
                 witness,
                 CancellationToken.None);
 
-        Assert.AreEqual(
-            LuxembourgInitialDraftInventoryRefusal.None, inventory.Refusal,
-            $"the inventory must be proven before any batch is swept: {inventory.Refusal} {inventory.Detail}");
+        if (budget.Spent > spentBeforeRun)
+        {
+            sessionsOpened++;
+        }
+
+        // RETAINED BEFORE IT IS JUDGED. A refusal here is a safety stop, and a stop is exactly the
+        // outcome a bounded run most needs evidence for: what it spent, how far it got and why. The
+        // first version asserted delivery first, so on every stopped path the terminal index was
+        // never written at all.
+        if (inventory.Refusal != LuxembourgInitialDraftInventoryRefusal.None)
+        {
+            await RetainTerminalIndexAsync(
+                root, store, "InventoryRefused", inventory.Refusal.ToString(), inventory.Detail,
+                stoppedOrdinal: null, batchesDelivered: 0, batchesIssued: null,
+                productRequests: inventory.ProductRequestCount, sessionsOpened: sessionsOpened,
+                terminal: inventory.WireBudget);
+            Assert.Fail(
+                $"the inventory must be proven before any batch is swept: {inventory.Refusal} "
+                + $"{inventory.Detail}. Terminal evidence retained under {root}.");
+        }
 
         var population = inventory.AddressableInOrder();
 
@@ -162,26 +222,73 @@ public sealed class LuxembourgDraftGraphLiveAcceptance
         //    partial sweep to be reconciled as though it were whole.
         var coverages = new List<LuxembourgDraftPropertyCoverage>(assignments.Count);
         var productRequests = inventory.ProductRequestCount;
+        var terminal = inventory.WireBudget;
         var rows = 0L;
         for (var ordinal = 0; ordinal < assignments.Count; ordinal++)
         {
+            var spentBeforeBatch = budget.Spent;
             var batch = await producer.RunAsync(
-                LuxembourgDraftGraphRunRequest.ForBatch(plan, inventory, ordinal, NewUrn(), rendererSource),
+                LuxembourgDraftGraphRunRequest.ForBatch(
+                    plan, inventory, ordinal, NewUrn(), rendererSource, budget),
                 witness,
                 CancellationToken.None);
 
-            Assert.AreEqual(
-                LuxembourgDraftGraphProductionRefusal.None, batch.Refusal,
-                $"batch {ordinal} of {assignments.Count} refused: {batch.Refusal} {batch.Detail}");
+            if (budget.Spent > spentBeforeBatch)
+            {
+                sessionsOpened++;
+            }
+
+            // TOTALS FIRST, DECISION SECOND. This batch's cost is part of the run's cost whether it
+            // delivered or refused, so it is folded in before anything is judged. Assigning after
+            // the assertion lost the stopped batch's own attempts and its terminal snapshot, which
+            // are the two numbers a stopped run exists to report.
+            productRequests += batch.ProductRequestCount;
+            terminal = batch.WireBudget;
+
+            if (batch.Refusal != LuxembourgDraftGraphProductionRefusal.None)
+            {
+                await RetainTerminalIndexAsync(
+                    root, store, "BatchRefused", batch.Refusal.ToString(), batch.Detail,
+                    stoppedOrdinal: ordinal, batchesDelivered: coverages.Count,
+                    batchesIssued: assignments.Count, productRequests: productRequests,
+                    sessionsOpened: sessionsOpened, terminal: terminal);
+                Assert.Fail(
+                    $"batch {ordinal} of {assignments.Count} refused: {batch.Refusal} "
+                    + $"{batch.Detail}. Terminal evidence retained under {root}.");
+            }
 
             coverages.Add(batch.Coverage!);
-            productRequests += batch.ProductRequestCount;
             rows += batch.Coverage!.PublisherRowCount;
         }
+
+        // THE WHOLE RUN'S ACCOUNTING, RECONCILED BEFORE ANY COVER IS READ. One session opened per
+        // run - the inventory's and one per batch - and every product attempt reserved, so the
+        // reservations the shared budget granted must equal the attempts the producers recorded plus
+        // one robots fetch each. A mismatch is a finding about the accounting itself, and a cover
+        // read over accounting that does not add up is a conclusion drawn from disputed figures.
+        var expectedSpend = productRequests + sessionsOpened;
+        await RetainTerminalIndexAsync(
+            root, store, "SweepCompleted", refusal: null, detail: null,
+            stoppedOrdinal: null, batchesDelivered: coverages.Count,
+            batchesIssued: assignments.Count, productRequests: productRequests,
+            sessionsOpened: sessionsOpened, terminal: terminal);
+        Assert.AreEqual(
+            expectedSpend,
+            terminal.Spent,
+            $"the shared budget granted {terminal.Spent} reservations against {productRequests} "
+                + $"recorded product attempts and {sessionsOpened} robots fetches.");
+        Assert.IsLessThanOrEqualTo(
+            terminal.Limit, terminal.Spent, "the whole-run ceiling was exceeded.");
 
         // 4. THE TERMINAL COVER. Each batch proved its own matrix; none of them can say the batches
         //    together are the class. This is where a partial sweep stops being readable as a whole
         //    one, and it is the reason this run is an acceptance rather than a sample.
+        Assert.AreEqual(
+            assignments.Count,
+            coverages.Count,
+            "the cover is attempted only after every inventory-issued batch delivered; a cover over "
+                + "a truncated set would agree with itself about a class it never finished reading.");
+
         var cover = LuxembourgDraftGraphBatchCover.TryCreate(
             inventory, coverages, out var coverRefusal, out var coverDetail);
         Assert.IsNotNull(
@@ -232,6 +339,9 @@ public sealed class LuxembourgDraftGraphLiveAcceptance
             .AppendLine("endpoint=" + LegiluxEndpoint)
             .AppendLine("projection=" + ProjectedRequestNote)
             .AppendLine("product_requests=" + productRequests)
+            .AppendLine("sessions_opened=" + sessionsOpened)
+            .AppendLine("actual_http_requests=" + terminal.Spent)
+            .AppendLine("wire_ceiling=" + terminal.Limit)
             .AppendLine("initial_drafts=" + population.Count)
             .AppendLine("batches=" + assignments.Count)
             .AppendLine("publisher_rows=" + rows)
@@ -308,7 +418,8 @@ public sealed class LuxembourgDraftGraphLiveAcceptance
                     inventory,
                     0,
                     NewUrn(),
-                    LuxembourgAcquisitionTestFixture.BuildRendererSource(9101)),
+                    LuxembourgAcquisitionTestFixture.BuildRendererSource(9101),
+            LuxembourgAcquisitionTestFixture.TestWireBudget()),
                 LuxembourgDraftGraphProducerTests.LuxembourgSourceWitness(),
                 CancellationToken.None);
 
@@ -453,6 +564,55 @@ public sealed class LuxembourgDraftGraphLiveAcceptance
                 NewUrn(),
                 Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(bytes))),
             bytes);
+    }
+
+    /// <summary>
+    /// One terminal index, written on every outcome before any of it is judged.
+    /// </summary>
+    /// <remarks>
+    /// Mirrors the integrated OpinionRequest sweep. A run that stopped is the run whose cost most
+    /// needs stating, so the index is written for refusals and exhaustion exactly as for success,
+    /// and it names the ordinal the sweep stopped at rather than leaving a reader to infer it.
+    /// </remarks>
+    internal static async Task RetainTerminalIndexAsync(
+        string root,
+        FileSystemCustodyStore store,
+        string verdict,
+        string? refusal,
+        string? detail,
+        int? stoppedOrdinal,
+        int batchesDelivered,
+        int? batchesIssued,
+        int productRequests,
+        int sessionsOpened,
+        WireBudgetSnapshot terminal)
+    {
+        var expected = productRequests + sessionsOpened;
+        var index = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(
+            new
+            {
+                purpose = "E8 full draft-graph acceptance: terminal accounting, retained on every "
+                    + "outcome including safety stops.",
+                observedAtUtc = DateTimeOffset.UtcNow.UtcDateTime.ToString("O"),
+                verdict,
+                refusal,
+                detail,
+                stoppedOrdinal,
+                batchesDelivered,
+                batchesIssued,
+                productRequests,
+                sessionsOpened,
+                actualHttpRequests = terminal.Spent,
+                wireCeiling = terminal.Limit,
+                terminal.Exhausted,
+                expectedIfEverySessionCompleted = expected,
+                reconciles = terminal.Spent == expected,
+                root,
+            },
+            new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+
+        await store.CreateAsync(index, CustodyClass.NightlyFloor90d, CancellationToken.None);
+        await File.WriteAllBytesAsync(Path.Combine(root, "terminal-index.json"), index);
     }
 
     private static string NewUrn() => "urn:uuid:" + Guid.NewGuid().ToString("D");

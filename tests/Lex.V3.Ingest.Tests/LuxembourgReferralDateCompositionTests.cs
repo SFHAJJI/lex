@@ -244,7 +244,10 @@ public sealed class LuxembourgReferralDateCompositionTests
     public void ARefusedDraftProductionComposesNothing()
     {
         var refused = LuxembourgDraftGraphProductionResult.Refused(
-            LuxembourgDraftGraphProductionRefusal.EnumerationRefused, "refused", 0);
+            LuxembourgDraftGraphProductionRefusal.EnumerationRefused,
+            "refused",
+            LuxembourgAcquisitionTestFixture.TestBudgetSnapshot(),
+            productRequestCount: 0);
 
         Assert.ThrowsExactly<ArgumentException>(
             () => LuxembourgReferralDateComposition.Over(
@@ -316,7 +319,8 @@ public sealed class LuxembourgReferralDateCompositionTests
             proof,
             assignment,
             assignment.PartitionKey,
-            "2026-09-11T12:00:00.0000000Z");
+            "2026-09-11T12:00:00.0000000Z",
+            LuxembourgAcquisitionTestFixture.TestBudgetSnapshot());
 
         Assert.IsNotNull(result.Coverage, $"{result.Refusal}: {result.Detail}");
         return result;
@@ -372,7 +376,8 @@ public sealed class LuxembourgReferralDateCompositionTests
             rows,
             LuxembourgInitialDraftInventoryDiscoveryPlan.Create().CreateDeliveryProfile(),
             proof,
-            "2026-09-11T12:00:00.0000000Z");
+            "2026-09-11T12:00:00.0000000Z",
+            LuxembourgAcquisitionTestFixture.TestBudgetSnapshot());
         Assert.IsTrue(result.Delivered, $"{result.Refusal}: {result.Detail}");
         return result;
     }

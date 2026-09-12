@@ -109,6 +109,20 @@ internal static class LuxembourgAcquisitionTestFixture
     /// A wide range that contains every single-lowercase-letter key_1 value the fixture's row
     /// builders use ("a", "b", "c", ...), so fixture rows never trip the partition-bound check.
     /// </summary>
+    /// <summary>
+    /// A ceiling wide enough that offline cases never reach it.
+    /// </summary>
+    /// <remarks>
+    /// These cases are about what the doors REFUSE, not about the ceiling, so a budget that could
+    /// bind would make them fail for a reason they are not testing. The cases that are about the
+    /// ceiling construct their own narrow budgets and say so.
+    /// </remarks>
+    internal static WireRequestBudget TestWireBudget() => WireRequestBudget.OfWireRequests(100_000);
+
+    /// <summary>A reading of an untouched budget, for decode seams that send nothing.</summary>
+    internal static WireBudgetSnapshot TestBudgetSnapshot() =>
+        WireBudgetSnapshot.Of(TestWireBudget());
+
     internal static LuxembourgQueryPartitionRange FullRange(string partitionId = "subjects-fixture") => new(
         partitionId,
         new LuxembourgQueryCursor("", "", "", "", "", ""),

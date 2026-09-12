@@ -129,7 +129,8 @@ public sealed class LuxembourgDraftGraphBatchCanary
 
         var result = await producer.RunAsync(
             LuxembourgDraftGraphRunRequest.ForBatch(
-                plan, InventoryOver(batch), 0, NewUrn(), RendererSource(checkout)),
+                plan, InventoryOver(batch), 0, NewUrn(), RendererSource(checkout),
+            LuxembourgAcquisitionTestFixture.TestWireBudget()),
             LuxembourgSourceWitness(),
             CancellationToken.None);
 
@@ -275,7 +276,8 @@ public sealed class LuxembourgDraftGraphBatchCanary
             .ToArray();
 
         return LuxembourgInitialDraftInventoryProducer.DecodeRows(
-            bound, profile, proof, "2026-09-10T07:29:37.8950843Z");
+            bound, profile, proof, "2026-09-10T07:29:37.8950843Z",
+            LuxembourgAcquisitionTestFixture.TestBudgetSnapshot());
     }
 
     private static BoundMachineRequest LuxembourgSourceWitness()
