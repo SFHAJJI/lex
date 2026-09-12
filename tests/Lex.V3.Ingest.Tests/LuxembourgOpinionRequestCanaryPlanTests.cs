@@ -162,6 +162,114 @@ public sealed class LuxembourgOpinionRequestCanaryPlanTests
             "a batch that had budget left refused on its own contents.");
     }
 
+    /// <summary>
+    /// A batch that DELIVERED on its last reservation is an exhaustion finding, not a completion.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// THE REVIEWER'S CASE, AND IT IS REACHABLE. A reservation is taken immediately before its send,
+    /// so a final attempt that succeeds leaves <c>Spent == Limit</c> and <c>Delivered</c> true at the
+    /// same instant. Reading completion first called that <c>CanaryCompleted</c> and discarded the
+    /// only thing it measured: the class sits exactly at the ceiling, so the next batch would have
+    /// had nothing to spend.
+    /// </para>
+    /// <para>
+    /// I had already written the same shape one function up, for a delivered inventory that spent
+    /// the ceiling, and did not carry the reasoning down to the batch.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void ABatchDeliveredOnItsLastReservationIsAnExhaustionFinding()
+    {
+        var proceed = LuxembourgOpinionRequestCanaryPlan.AfterInventory(
+            DeliveredInventory(Subjects(120), UnspentBudget()));
+
+        var atTheCeiling = WireRequestBudget.OfWireRequests(2);
+        Assert.IsTrue(atTheCeiling.TryReserveAttempt());
+        Assert.IsTrue(atTheCeiling.TryReserveAttempt());
+        var snapshot = WireBudgetSnapshot.Of(atTheCeiling);
+        Assert.AreEqual(snapshot.Limit, snapshot.Spent, "the batch ended exactly at its ceiling.");
+
+        Assert.AreEqual(
+            "BudgetExhaustedDuringBatch",
+            LuxembourgOpinionRequestCanaryPlan.Conclude(
+                proceed,
+                LuxembourgOpinionRequestGraphResult.Completed(
+                    DeliveredCoverage(), productRequestCount: 1, snapshot)),
+            "clause 6: a run that reached its ceiling is a magnitude finding even when its rows "
+                + "arrived, because the ceiling is what it actually measured.");
+    }
+
+    /// <summary>
+    /// An inventory refused BY the ceiling is an exhaustion finding, not an ordinary refusal.
+    /// </summary>
+    /// <remarks>
+    /// The same precedence defect the reviewer found in <c>Conclude</c>, sitting one function up and
+    /// not named in the review. A run stopped by the budget refuses like any other run, so checking
+    /// refusal first reported the magnitude as though the publisher or the data were at fault.
+    /// </remarks>
+    [TestMethod]
+    public void AnInventoryRefusedByTheCeilingIsAnExhaustionFinding()
+    {
+        var atTheCeiling = WireRequestBudget.OfWireRequests(2);
+        Assert.IsTrue(atTheCeiling.TryReserveAttempt());
+        Assert.IsTrue(atTheCeiling.TryReserveAttempt());
+
+        var decision = LuxembourgOpinionRequestCanaryPlan.AfterInventory(
+            LuxembourgOpinionRequestInventoryResult.Refused(
+                LuxembourgOpinionRequestInventoryRefusal.EnumerationRefused,
+                "WireBudgetExhausted: budget 2 reached after 2 wire request(s)",
+                productRequestCount: 1,
+                WireBudgetSnapshot.Of(atTheCeiling)));
+
+        Assert.AreEqual(0, decision.BatchOrdinalsToAcquire.Count);
+        Assert.AreEqual("BudgetExhaustedDuringInventory", decision.Verdict);
+        StringAssert.Contains(
+            decision.Reason,
+            "magnitude finding",
+            "a run stopped by its own ceiling measured the ceiling, not a publisher failure.");
+    }
+
+    /// <summary>
+    /// A real completed matrix over one typed request.
+    /// </summary>
+    /// <remarks>
+    /// Built through <c>TryComplete</c> rather than faked, because the case under test is a
+    /// DELIVERED batch: a stand-in that never satisfied the coverage door would prove the verdict
+    /// for a result the producers could not return.
+    /// </remarks>
+    private static LuxembourgOpinionRequestCoverage DeliveredCoverage()
+    {
+        var requests = Subjects(1);
+        var assignment = LuxembourgOpinionRequestBatchAssignment.Over(requests, Citation(requests))[0];
+        var (proof, delivered) = AbsenceFixtures.OpinionRequestGraphRows(
+            assignment.PartitionKey,
+            [(requests[0], RdfType, RequestClass, true)]);
+
+        var coverage = LuxembourgOpinionRequestCoverage.TryComplete(
+            proof, delivered, assignment, out var refusal, out var detail);
+        Assert.IsNotNull(coverage, $"{refusal}: {detail}");
+        return coverage;
+    }
+
+    private static LuxembourgOpinionRequestInventoryCitation Citation(IReadOnlyList<string> subjects)
+    {
+        var ordered = subjects.OrderBy(static value => value, StringComparer.Ordinal).ToArray();
+        var (proof, keys) = AbsenceFixtures.DeliveryOfSubjects(
+            LuxembourgOpinionRequestInventoryDiscoveryPlan.PartitionMemberKeyForFixtures, ordered);
+        var rows = ordered
+            .Select((subject, index) => new RepeatedEnumerationRow(
+                [RepeatedEnumerationRdfTerm.Iri(subject)], keys[index],
+                [RepeatedEnumerationRdfTerm.Iri(subject)]))
+            .ToArray();
+        return LuxembourgOpinionRequestInventoryCitation.MintedOver(proof, rows, ordered);
+    }
+
+    private const string RdfType = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
+
+    private static readonly string RequestClass =
+        LuxembourgOpinionRequestGraphDiscoveryPlan.OpinionRequestClassIri;
+
     private static WireBudgetSnapshot UnspentBudget() =>
         WireBudgetSnapshot.Of(
             WireRequestBudget.OfWireRequests(LuxembourgOpinionRequestCanaryPlan.WireCeiling));

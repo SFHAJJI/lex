@@ -66,25 +66,26 @@ public static class LuxembourgOpinionRequestCanaryPlan
     {
         ArgumentNullException.ThrowIfNull(inventory);
 
+        // EXHAUSTION IS CHECKED FIRST, BEFORE REFUSAL AND BEFORE DELIVERY. A run that reached the
+        // ceiling measured a magnitude whichever way it ended, and both other outcomes hide it: a
+        // run refused BY the ceiling reads as an ordinary refusal, and a run that delivered its
+        // rows on its last reservation reads as a clean inventory that simply has no batch. Clause
+        // 6 wants the magnitude, so the magnitude wins the verdict.
+        if (inventory.WireBudget.Exhausted)
+        {
+            return Stop(
+                "BudgetExhaustedDuringInventory",
+                $"the inventory reached the whole ceiling of {inventory.WireBudget.Limit} wire "
+                    + "requests, so no batch can be acquired. This is a magnitude finding: the "
+                    + "class is larger than this ceiling was set for.");
+        }
+
         if (!inventory.Delivered)
         {
             return Stop(
                 "InventoryRefused",
                 $"the inventory refused with {inventory.Refusal}, so no batch it would have issued "
                     + "exists to acquire.");
-        }
-
-        // CHECKED EVEN THOUGH THE INVENTORY DELIVERED. A run can deliver its rows and still have
-        // reached the ceiling on its last reservation; the batch would then start with nothing to
-        // spend and refuse on its own robots fetch, turning a clean inventory into a confusing
-        // failure instead of a stated one.
-        if (inventory.WireBudget.Exhausted)
-        {
-            return Stop(
-                "BudgetExhaustedDuringInventory",
-                $"the inventory spent the whole ceiling of {inventory.WireBudget.Limit} wire "
-                    + "requests, so the batch has none. This is a magnitude finding: the class is "
-                    + "larger than this ceiling was set for.");
         }
 
         if (inventory.Citation is null)
@@ -130,14 +131,19 @@ public static class LuxembourgOpinionRequestCanaryPlan
             return decision.Verdict;
         }
 
-        if (batch.Delivered)
+        // EXHAUSTION BEFORE COMPLETION, for the reason AfterInventory checks it first. A batch can
+        // deliver on its very last reservation: the reservation is taken before the send, so the
+        // final attempt succeeding leaves Spent == Limit and Delivered true at the same moment.
+        // Reading completion first reported that as CanaryCompleted and threw away the finding -
+        // the class sits exactly at the ceiling, so the next batch would have had nothing. I had
+        // already handled this shape one function up for the inventory and did not carry the
+        // reasoning down.
+        if (batch.WireBudget.Exhausted)
         {
-            return "CanaryCompleted";
+            return "BudgetExhaustedDuringBatch";
         }
 
-        return batch.WireBudget.Exhausted
-            ? "BudgetExhaustedDuringBatch"
-            : "BatchRefused";
+        return batch.Delivered ? "CanaryCompleted" : "BatchRefused";
     }
 
     private static LuxembourgOpinionRequestCanaryDecision Stop(string verdict, string reason) =>
