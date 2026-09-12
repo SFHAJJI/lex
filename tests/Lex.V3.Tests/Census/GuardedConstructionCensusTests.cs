@@ -121,6 +121,10 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Artifacts.SyntheticSliceArtifactVerifier::Rejected, "
                     + "method public instance "
                     + "Lex.V3.Artifacts.SyntheticSliceArtifactVerifier::VerifyAsync",
+                "Lex.V3.Contracts.Derivation.LanguageScopedExpression: constructor private "
+                    + "instance Lex.V3.Contracts.Derivation.LanguageScopedExpression::.ctor, "
+                    + "method public static "
+                    + "Lex.V3.Contracts.Derivation.LanguageScopedExpression::FromRetainedSource",
                 "Lex.V3.Contracts.EuPlainLiteralDriftProbePlan: constructor internal instance "
                     + "Lex.V3.Contracts.EuPlainLiteralDriftProbePlan::.ctor, "
                     + "constructor private instance "
