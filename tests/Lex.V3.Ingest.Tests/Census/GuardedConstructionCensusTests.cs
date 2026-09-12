@@ -624,6 +624,11 @@ public sealed class GuardedConstructionCensusTests
                     + "tHandlerAsync, "
                     + "method private instance "
                     + "Lex.V3.Ingest.RoutedHttpAcquisitionSession::BootstrapRobotsAsync",
+                "Lex.V3.Ingest.WireBudgetSnapshot: constructor private instance "
+                    + "Lex.V3.Ingest.WireBudgetSnapshot::.ctor, "
+                    + "constructor private instance Lex.V3.Ingest.WireBudgetSnapshot::.ctor, "
+                    + "method public instance Lex.V3.Ingest.WireBudgetSnapshot::<Clone>$, "
+                    + "method public static Lex.V3.Ingest.WireBudgetSnapshot::Of",
                 "Lex.V3.Ingest.WireRequestBudget: by-ref-method public instance "
                     + "Lex.V3.Ingest.Europe.LuxembourgOpinionRequestInventoryRunRequest::Deconstruc"
                     + "t, constructor private instance Lex.V3.Ingest.WireRequestBudget::.ctor, "

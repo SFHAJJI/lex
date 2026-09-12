@@ -108,8 +108,10 @@ public sealed class LuxembourgOpinionRequestInventoryResult
         LuxembourgOpinionRequestInventoryRefusal refusal,
         string? detail,
         int productRequestCount,
+        WireBudgetSnapshot wireBudget,
         IReadOnlyList<LuxembourgOpinionRequestSubject>? observedNonAddressable = null)
     {
+        WireBudget = wireBudget ?? throw new ArgumentNullException(nameof(wireBudget));
         // SNAPSHOTTED, NOT ALIASED. A list handed out behind IReadOnlyList can be cast back and
         // mutated, which would change the members a later batch derives while the citation kept the
         // digest of the ORIGINAL population - so the batch and the citation it claims to come from
@@ -163,6 +165,17 @@ public sealed class LuxembourgOpinionRequestInventoryResult
 
     public int ProductRequestCount { get; }
 
+    /// <summary>
+    /// What the shared wire budget stood at when this run ended. Always present.
+    /// </summary>
+    /// <remarks>
+    /// REQUIRED ON EVERY OUTCOME, delivered or refused, which is why it is a constructor parameter
+    /// rather than something a caller may set. A refused run still sent requests - often it refused
+    /// BECAUSE it had - and a ceiling whose evidence only survives success cannot be reconciled on
+    /// the runs that most need reconciling.
+    /// </remarks>
+    public WireBudgetSnapshot WireBudget { get; }
+
     public bool Delivered => Refusal == LuxembourgOpinionRequestInventoryRefusal.None;
 
     internal static LuxembourgOpinionRequestInventoryResult Success(
@@ -170,16 +183,19 @@ public sealed class LuxembourgOpinionRequestInventoryResult
         IReadOnlyList<string> addressableInOrder,
         SourceArtifactRef completionEvidenceRef,
         LuxembourgOpinionRequestInventoryCitation citation,
-        int productRequestCount) =>
+        int productRequestCount,
+        WireBudgetSnapshot wireBudget) =>
         new(subjects, addressableInOrder, completionEvidenceRef, citation,
-            LuxembourgOpinionRequestInventoryRefusal.None, null, productRequestCount);
+            LuxembourgOpinionRequestInventoryRefusal.None, null, productRequestCount, wireBudget);
 
     internal static LuxembourgOpinionRequestInventoryResult Refused(
         LuxembourgOpinionRequestInventoryRefusal refusal,
         string detail,
         int productRequestCount,
+        WireBudgetSnapshot wireBudget,
         IReadOnlyList<LuxembourgOpinionRequestSubject>? observedNonAddressable = null) =>
-        new(null, null, null, null, refusal, detail, productRequestCount, observedNonAddressable);
+        new(null, null, null, null, refusal, detail, productRequestCount, wireBudget,
+            observedNonAddressable);
 
     /// <summary>
     /// The subjects a later batch must cover exactly once, in one deterministic order.
@@ -265,6 +281,10 @@ public sealed class LuxembourgOpinionRequestInventoryProducer
 
         var run = await _executor.RunLuxembourgOpinionRequestInventoryAsync(
             request, sourceWitness, cancellationToken).ConfigureAwait(false);
+
+        // READ ONCE, HERE. Everything below this line reads custody, not the wire, so this is the
+        // last moment the budget changes on this run's account and the first moment it is complete.
+        var wireBudget = WireBudgetSnapshot.Of(request.WireBudget);
         if (run.Receipt is not { } receipt)
         {
             // THE PUBLISHER'S OWN REASON IS CARRIED, not just this seat's word for it. A refusal
@@ -277,7 +297,8 @@ public sealed class LuxembourgOpinionRequestInventoryProducer
                         ? ": " + detail
                         : string.Empty)
                     : "enumeration returned neither a receipt nor a refusal",
-                run.ProductRequestCount);
+                run.ProductRequestCount,
+                wireBudget);
         }
 
         var proof = receipt.TryProveFamilyEnumeration(receipt.Delivery.PartitionKey, out var proofRefusal);
@@ -286,7 +307,8 @@ public sealed class LuxembourgOpinionRequestInventoryProducer
             return LuxembourgOpinionRequestInventoryResult.Refused(
                 LuxembourgOpinionRequestInventoryRefusal.EnumerationProofRefused,
                 proofRefusal.ToString(),
-                run.ProductRequestCount);
+                run.ProductRequestCount,
+                wireBudget);
         }
 
         var pages = new List<RepeatedEnumerationResolvedEvidence>(receipt.Delivery.PagesA.Pages.Count);
@@ -310,12 +332,13 @@ public sealed class LuxembourgOpinionRequestInventoryProducer
             return LuxembourgOpinionRequestInventoryResult.Refused(
                 LuxembourgOpinionRequestInventoryRefusal.VerifiedRowsRefused,
                 rowRefusal.ToString(),
-                run.ProductRequestCount);
+                run.ProductRequestCount,
+                wireBudget);
         }
 
         // THE PROOF ITSELF, not the two fields read off it: the run reference and the family key
         // stay attached to the evidence they came from on the way to the citation door.
-        return DecodeRows(rows, profile, proof, run.ProductRequestCount);
+        return DecodeRows(rows, profile, proof, run.ProductRequestCount, wireBudget);
     }
 
     /// <summary>Decodes one delivered page set into subjects.</summary>
@@ -329,8 +352,10 @@ public sealed class LuxembourgOpinionRequestInventoryProducer
         IReadOnlyList<RepeatedEnumerationRow> rows,
         RepeatedEnumerationInterpretationProfile profile,
         AbsenceFamilyEnumerationProof proof,
-        int productRequestCount = 0)
+        int productRequestCount,
+        WireBudgetSnapshot wireBudget)
     {
+        ArgumentNullException.ThrowIfNull(wireBudget);
         ArgumentNullException.ThrowIfNull(rows);
         ArgumentNullException.ThrowIfNull(profile);
         ArgumentNullException.ThrowIfNull(proof);
@@ -352,7 +377,8 @@ public sealed class LuxembourgOpinionRequestInventoryProducer
                 return LuxembourgOpinionRequestInventoryResult.Refused(
                     LuxembourgOpinionRequestInventoryRefusal.RowNotAdmitted,
                     exception.Message,
-                    productRequestCount);
+                    productRequestCount,
+                    wireBudget);
             }
 
             if (!seen.Add((subject.Value, subject.Kind)))
@@ -361,7 +387,8 @@ public sealed class LuxembourgOpinionRequestInventoryProducer
                     LuxembourgOpinionRequestInventoryRefusal.SubjectDeliveredTwice,
                     $"The delivery names {subject.Value} more than once, and the query groups by "
                         + "subject, so an honest answer names each exactly once.",
-                    productRequestCount);
+                    productRequestCount,
+                    wireBudget);
             }
 
             subjects.Add(subject);
@@ -384,6 +411,7 @@ public sealed class LuxembourgOpinionRequestInventoryProducer
                     + " member(s) no request can name, so no exact inventory exists over them: "
                     + string.Join(", ", nonAddressable.Select(static value => value.Value)) + ".",
                 productRequestCount,
+                wireBudget,
                 nonAddressable);
         }
 
@@ -406,7 +434,8 @@ public sealed class LuxembourgOpinionRequestInventoryProducer
         var citation = LuxembourgOpinionRequestInventoryCitation.MintedOver(proof, rows, addressable);
 
         return LuxembourgOpinionRequestInventoryResult.Success(
-            subjects, addressable, completionEvidenceRef, citation, productRequestCount);
+            subjects, addressable, completionEvidenceRef, citation, productRequestCount,
+            wireBudget);
     }
 
     private static LuxembourgOpinionRequestSubject DecodeRow(

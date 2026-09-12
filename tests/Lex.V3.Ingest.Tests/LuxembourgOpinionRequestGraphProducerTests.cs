@@ -190,7 +190,13 @@ public sealed class LuxembourgOpinionRequestGraphProducerTests
             .ToArray();
 
         CollectionAssert.AreEquivalent(
-            new[] { "Coverage", "Refusal", "Detail", "ProductRequestCount", "Delivered" },
+            // WireBudget is admitted here deliberately: it records what the run COST, which is a
+            // fact about this stage's own execution, not a claim about how much of the class it
+            // reached. The clause this pin exists for is completeness, and a cost cannot assert one.
+            new[]
+            {
+                "Coverage", "Refusal", "Detail", "ProductRequestCount", "Delivered", "WireBudget",
+            },
             names,
             "a property beyond these is a claim this stage is not entitled to make.");
         Assert.IsFalse(
