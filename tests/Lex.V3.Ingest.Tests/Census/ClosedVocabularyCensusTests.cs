@@ -126,6 +126,9 @@ public sealed class ClosedVocabularyCensusTests
                     + "BindRefused, ObservationNotExecuted, StatusNotAdmitted, MediaTypeNotAdmitted, "
                     + "PageBodyMalformed, CrossingRefused, StepRefused, EntrySetRefused, "
                     + "PageBudgetExhausted, PageDecodeFailedOnOurSide",
+                "Lex.V3.Ingest.Luxembourg.LuxembourgConsolidationByActRefusal: None, "
+                    + "EnumerationRefused, EnumerationProofRefused, VerifiedRowsRefused, "
+                    + "RowNotAdmitted, RowNamesAnotherAct, ConsolidationDeliveredTwice",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgDocumentGetAttemptRefusal: None, "
                     + "RobotsDisallowed, RobotsBootstrapNotCompleted, ObservationNotExecuted, "
                     + "WireBudgetExhausted",
