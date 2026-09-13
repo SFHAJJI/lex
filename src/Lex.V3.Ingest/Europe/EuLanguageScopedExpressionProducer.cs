@@ -49,6 +49,22 @@ public enum EuLanguageScopedExpressionProductionRefusal
     DerivationRefused = 6,
 
     /// <summary>
+    /// The two requests carry different <c>WireRequestBudget</c> instances, so this production has
+    /// two ceilings and therefore none.
+    /// </summary>
+    /// <remarks>
+    /// FOUND BY #579's REBASE ONTO THIS FILE, not by review. Making the object-facts request carry a
+    /// required ceiling gave this door TWO of them, one per family, and a budget is a mutable
+    /// counter rather than a number: two instances both reading 500 bound 500 requests EACH, so a
+    /// production whose families carry different counters can spend both allowances and stay inside
+    /// both. <see cref="EuQueryExecutionAdapter"/> refuses exactly this shape for its census seeds
+    /// and the reasoning is unchanged here - the only thing that makes "this production may send at
+    /// most N requests" a true sentence is that every family charges the SAME counter.
+    /// </remarks>
+    [JsonStringEnumMemberName("families_carry_different_wire_budgets")]
+    FamiliesCarryDifferentWireBudgets = 9,
+
+    /// <summary>
     /// The object-facts batch does not cover every object the Expression-facts batch asks about, so
     /// a missing date would be indistinguishable from a date nobody asked for.
     /// </summary>
@@ -295,6 +311,18 @@ public sealed class EuLanguageScopedExpressionProducer
             return EuLanguageScopedExpressionProductionResult.Refused(
                 EuLanguageScopedExpressionProductionRefusal.ObjectFactsRequestIsNotTheObjectFamily,
                 $"the object-facts slot was given family {objectFactsRequest.Set}.",
+                productRequestCount: 0);
+        }
+
+        // ONE PRODUCTION, ONE CEILING. Reference equality rather than equal limits, for the reason
+        // the member's own remarks give: two counters reading one number bound that number twice.
+        if (objectFactsRequest is not null &&
+            !ReferenceEquals(objectFactsRequest.WireBudget, expressionFactsRequest.WireBudget))
+        {
+            return EuLanguageScopedExpressionProductionResult.Refused(
+                EuLanguageScopedExpressionProductionRefusal.FamiliesCarryDifferentWireBudgets,
+                "the two families carry different budget instances, so neither limit bounds this "
+                + "production.",
                 productRequestCount: 0);
         }
 

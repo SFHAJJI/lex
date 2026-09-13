@@ -261,9 +261,10 @@ public sealed class EuLanguageScopedExpressionProducerTests
         var producer = new EuLanguageScopedExpressionProducer(
             store, new EuAcquisitionTestFixture.FixedTimeProvider(), handler);
 
+        var budget = EuAcquisitionTestFixture.TestWireBudget();
         var result = await producer.RunAsync(
-            Request(EuObjectFactsQuerySet.ExpressionFacts),
-            Request(EuObjectFactsQuerySet.RootWatermark),
+            Request(EuObjectFactsQuerySet.ExpressionFacts, budget),
+            Request(EuObjectFactsQuerySet.RootWatermark, budget),
             EuAcquisitionTestFixture.SourceWitness(),
             CancellationToken.None);
 
@@ -271,6 +272,51 @@ public sealed class EuLanguageScopedExpressionProducerTests
             EuLanguageScopedExpressionProductionRefusal.ObjectFactsRequestIsNotTheObjectFamily,
             result.Refusal);
         Assert.AreEqual(0, handler.SendCount, "refused before any traffic.");
+    }
+
+    /// <summary>
+    /// Two families carrying different budget instances refuse before any traffic.
+    /// </summary>
+    /// <remarks>
+    /// FOUND BY #579's REBASE ONTO THIS FILE, not by review. Making the object-facts request carry a
+    /// required ceiling handed this door two of them, one per family. A budget is a mutable counter,
+    /// so two instances both reading 100,000 bound 100,000 requests EACH and the production is
+    /// bounded by neither.
+    /// <para>
+    /// The two budgets here are given EQUAL limits deliberately: a check comparing <c>Limit</c> would
+    /// pass this test while the defect shipped, so only identity can tell them apart.
+    /// <see cref="EuQueryExecutionAdapter"/> refuses the same shape for its census seeds.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public async Task TwoFamiliesCarryingDifferentBudgetInstancesRefuseBeforeAnyTraffic()
+    {
+        var handler = new EuAcquisitionTestFixture.ClassifyingHandler(ScriptsWithEmptyObjectFacts());
+        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
+        var producer = new EuLanguageScopedExpressionProducer(
+            store, new EuAcquisitionTestFixture.FixedTimeProvider(), handler);
+
+        var expressionBudget = EuAcquisitionTestFixture.TestWireBudget();
+        var objectBudget = EuAcquisitionTestFixture.TestWireBudget();
+        Assert.AreEqual(
+            expressionBudget.Limit, objectBudget.Limit,
+            "the premise: equal limits, so only identity can tell these apart.");
+
+        var result = await producer.RunAsync(
+            Request(EuObjectFactsQuerySet.ExpressionFacts, expressionBudget),
+            Request(EuObjectFactsQuerySet.ObjectFacts, objectBudget),
+            EuAcquisitionTestFixture.SourceWitness(),
+            CancellationToken.None);
+
+        Assert.AreEqual(
+            EuLanguageScopedExpressionProductionRefusal.FamiliesCarryDifferentWireBudgets,
+            result.Refusal,
+            "a production with two ceilings has none, and must say so.");
+        Assert.AreEqual(
+            0, handler.SendCount,
+            "refused before either family is asked, not after both have spent their own allowance.");
+        Assert.AreEqual(0, expressionBudget.Spent);
+        Assert.AreEqual(0, objectBudget.Spent);
     }
 
     /// <summary>
@@ -293,9 +339,12 @@ public sealed class EuLanguageScopedExpressionProducerTests
         var producer = new EuLanguageScopedExpressionProducer(
             store, new EuAcquisitionTestFixture.FixedTimeProvider(), handler);
 
+        // ONE budget across both families, or this would refuse for the other reason and say
+        // nothing about coverage.
+        var budget = EuAcquisitionTestFixture.TestWireBudget();
         var result = await producer.RunAsync(
-            Request(EuObjectFactsQuerySet.ExpressionFacts),
-            RequestOver(EuObjectFactsQuerySet.ObjectFacts, OtherWork),
+            Request(EuObjectFactsQuerySet.ExpressionFacts, budget),
+            RequestOver(EuObjectFactsQuerySet.ObjectFacts, OtherWork, budget),
             EuAcquisitionTestFixture.SourceWitness(),
             CancellationToken.None);
 
@@ -527,15 +576,21 @@ public sealed class EuLanguageScopedExpressionProducerTests
                 "X", xRows.Count, xRows, EuAcquisitionTestFixture.ExpressionFactsProjection),
         };
 
-    private static EuObjectFactsPartitionRunRequest Request(EuObjectFactsQuerySet set) =>
-        RequestOver(set, Work);
+    private static EuObjectFactsPartitionRunRequest Request(
+        EuObjectFactsQuerySet set, WireRequestBudget? budget = null) =>
+        RequestOver(set, Work, budget);
 
+    /// <summary>
+    /// One partition request. Both families of a production must share ONE budget instance, so the
+    /// default mints a shared one per test rather than a fresh one per request.
+    /// </summary>
     private static EuObjectFactsPartitionRunRequest RequestOver(
-        EuObjectFactsQuerySet set, string objectIri)
+        EuObjectFactsQuerySet set, string objectIri, WireRequestBudget? budget = null)
     {
         var (plan, planId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         return new EuObjectFactsPartitionRunRequest(
-            plan, planId, set, [objectIri], EuAcquisitionTestFixture.BuildRendererSource(4180));
+            plan, planId, set, [objectIri], EuAcquisitionTestFixture.BuildRendererSource(4180),
+            budget ?? EuAcquisitionTestFixture.TestWireBudget());
     }
 
     private static Dictionary<string, EuAcquisitionTestFixture.FamilyScript>

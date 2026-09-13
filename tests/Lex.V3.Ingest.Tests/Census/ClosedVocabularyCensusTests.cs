@@ -76,7 +76,8 @@ public sealed class ClosedVocabularyCensusTests
                     + "ExpressionFactsRequestIsNotTheExpressionFamily, "
                     + "ObjectFactsRequestIsNotTheObjectFamily, ExpressionFactsEnumerationRefused, "
                     + "ObjectFactsEnumerationRefused, EnumerationProofRefused, DerivationRefused, "
-                    + "DerivationNotRetained, ObjectFactsBatchDoesNotCoverTheExpressionBatch",
+                    + "DerivationNotRetained, ObjectFactsBatchDoesNotCoverTheExpressionBatch, "
+                    + "FamiliesCarryDifferentWireBudgets",
                 "Lex.V3.Ingest.Europe.EuLocatedAmendmentAxiomDecodeRefusal: None, "
                     + "RowShapeContradictsItsProjectedKind, DeliveryCarriesNoRows, "
                     + "ParentMissingOrNotAnIri, AxiomNodeNotAnIri, PredicateNotAnIri, "
