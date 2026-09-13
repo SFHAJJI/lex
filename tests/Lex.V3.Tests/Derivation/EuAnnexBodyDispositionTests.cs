@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using Lex.V3.Contracts;
@@ -63,16 +64,67 @@ public sealed class EuAnnexBodyDispositionTests
     [TestMethod]
     public void TheContractHasNoDoorForOcrOrReconstructedWording()
     {
-        var forbidden = typeof(EuAnnexBodyDisposition)
-            .GetMembers()
-            .Select(member => member.Name)
-            .Where(name => name.Contains("Text", StringComparison.OrdinalIgnoreCase)
-                || name.Contains("Ocr", StringComparison.OrdinalIgnoreCase)
-                || name.Contains("Wording", StringComparison.OrdinalIgnoreCase)
-                || name.Contains("Reconstruct", StringComparison.OrdinalIgnoreCase))
+        var surface = typeof(EuAnnexBodyDisposition)
+            .GetMembers(
+                BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static |
+                BindingFlags.DeclaredOnly)
+            .Select(member =>
+                $"{member.MemberType} {(IsStaticMember(member) ? "static" : "instance")} {member}")
+            .OrderBy(signature => signature, StringComparer.Ordinal)
             .ToArray();
 
-        Assert.IsEmpty(forbidden);
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "Method instance Boolean Equals(Lex.V3.Contracts.Derivation.EuAnnexBodyDisposition)",
+                "Method instance Boolean Equals(System.Object)",
+                "Method instance Int32 GetHashCode()",
+                "Method instance Lex.V3.Contracts.Custody.DurableBlobWriteReceipt "
+                    + "get_RetainedTransportBytes()",
+                "Method instance Lex.V3.Contracts.Derivation.EuAnnexBodyDisposition <Clone>$()",
+                "Method instance Lex.V3.Contracts.Derivation.EuAnnexBodyDispositionOutcome get_Outcome()",
+                "Method instance Lex.V3.Contracts.Source.Core.SourceArtifactRef get_ProfileRef()",
+                "Method instance Lex.V3.Contracts.Source.Core.SourceObjectRef get_SourceObject()",
+                "Method instance Lex.V3.Contracts.Source.Europe.EuDocumentFetchAddress "
+                    + "get_OfficialAddress()",
+                "Method instance Lex.V3.Contracts.Source.Europe.EuStructuralLocation get_AnnexLocation()",
+                "Method instance Lex.V3.Contracts.Source.Http.RepresentationChainObservation "
+                    + "get_SourceObservation()",
+                "Method instance System.String ToString()",
+                "Method instance System.String get_IdentitySha256()",
+                "Method instance System.String get_ReasonCode()",
+                "Method instance System.String get_TransportByteSha256()",
+                "Method static Boolean op_Equality(Lex.V3.Contracts.Derivation.EuAnnexBodyDisposition, "
+                    + "Lex.V3.Contracts.Derivation.EuAnnexBodyDisposition)",
+                "Method static Boolean op_Inequality(Lex.V3.Contracts.Derivation.EuAnnexBodyDisposition, "
+                    + "Lex.V3.Contracts.Derivation.EuAnnexBodyDisposition)",
+                "Method static Lex.V3.Contracts.Derivation.EuAnnexBodyDisposition Create("
+                    + "Lex.V3.Contracts.Source.Core.SourceObjectRef, "
+                    + "Lex.V3.Contracts.Source.Europe.EuStructuralLocation, "
+                    + "Lex.V3.Contracts.Source.Europe.EuDocumentFetchAddress, "
+                    + "Lex.V3.Contracts.Source.Http.HttpLogicalRequest, "
+                    + "Lex.V3.Contracts.Source.Http.HttpLogicalRequest, "
+                    + "Lex.V3.Contracts.Source.Http.RoutedHttpEvidence, "
+                    + "Lex.V3.Contracts.Custody.DurableBlobWriteReceipt, "
+                    + "Lex.V3.Contracts.Source.Core.SourceArtifactRef, "
+                    + "Lex.V3.Contracts.Derivation.EuAnnexBodyDispositionOutcome)",
+                "Property instance Lex.V3.Contracts.Custody.DurableBlobWriteReceipt "
+                    + "RetainedTransportBytes",
+                "Property instance Lex.V3.Contracts.Derivation.EuAnnexBodyDispositionOutcome Outcome",
+                "Property instance Lex.V3.Contracts.Source.Core.SourceArtifactRef ProfileRef",
+                "Property instance Lex.V3.Contracts.Source.Core.SourceObjectRef SourceObject",
+                "Property instance Lex.V3.Contracts.Source.Europe.EuDocumentFetchAddress OfficialAddress",
+                "Property instance Lex.V3.Contracts.Source.Europe.EuStructuralLocation AnnexLocation",
+                "Property instance Lex.V3.Contracts.Source.Http.RepresentationChainObservation "
+                    + "SourceObservation",
+                "Property instance System.String IdentitySha256",
+                "Property instance System.String ReasonCode",
+                "Property instance System.String TransportByteSha256",
+            },
+            surface,
+            "the disposition's declared public surface changed; it may retain evidence and a typed "
+            + "outcome, but no OCR output or reconstructed wording. Observed: "
+            + string.Join(" | ", surface));
     }
 
     [TestMethod]
@@ -418,6 +470,11 @@ public sealed class EuAnnexBodyDispositionTests
         var baselineFixture = Fixture();
         var baseline = Create(baselineFixture, EuAnnexBodyDispositionOutcome.TextNotAvailable);
 
+        Assert.AreEqual(
+            "1202090e93ab268aa1389adc001d66c94ef538819bda238078ad09ab419eadb4",
+            baseline.IdentitySha256,
+            "the golden identity pins every canonical component, including the structurally bound "
+            + "source and address contributions, so deleting either cannot be masked by the other.");
         Assert.AreNotEqual(
             baseline.IdentitySha256,
             Create(baselineFixture, EuAnnexBodyDispositionOutcome.Rejected).IdentitySha256);
@@ -430,6 +487,20 @@ public sealed class EuAnnexBodyDispositionTests
         Assert.AreNotEqual(
             baseline.IdentitySha256,
             Create(Fixture(profileFill: '9'), EuAnnexBodyDispositionOutcome.TextNotAvailable).IdentitySha256);
+        Assert.AreNotEqual(
+            baseline.IdentitySha256,
+            Create(
+                Fixture(cellarKey: "11234567-89ab-cdef-0123-456789abcdef"),
+                EuAnnexBodyDispositionOutcome.TextNotAvailable)
+                .IdentitySha256,
+            "a second valid source identity and its necessarily matching official address must move "
+            + "the disposition identity.");
+        Assert.AreNotEqual(
+            baseline.IdentitySha256,
+            Create(
+                Fixture(mediaType: EuManifestationMediaType.PdfTypePdfa2a),
+                EuAnnexBodyDispositionOutcome.TextNotAvailable)
+                .IdentitySha256);
     }
 
     private static EuAnnexBodyDisposition Create(
@@ -451,24 +522,25 @@ public sealed class EuAnnexBodyDispositionTests
         string annexValue = "III",
         char byteFill = 'a',
         char profileFill = '8',
+        string cellarKey = CellarKey,
         string? sourcePublisherUri = null,
-        string responseMediaType = "application/pdf",
+        string? responseMediaType = null,
         bool includeExtraRequestHeader = false)
     {
         var sourceObject = new SourceObjectRef(
             SourceCoreSchemaIds.SourceObjectRef,
             SourceAuthority.Cellar,
             new SourceRegistryMemberRef(ArtifactRef('1', '2'), "manifestation"),
-            sourcePublisherUri ?? "http://publications.europa.eu/resource/cellar/" + CellarKey,
-            CellarKey,
-            Sha256(CellarKey),
+            sourcePublisherUri ?? "http://publications.europa.eu/resource/cellar/" + cellarKey,
+            cellarKey,
+            Sha256(cellarKey),
             ArtifactRef('3', '4'),
             parentKeyRef: null);
         var location = EuStructuralLocation.Parse(
             "{AN|http://publications.europa.eu/resource/authority/fd_370/AN} " + annexValue,
             AnnexAuthority);
         var address = EuDocumentFetchAddress.TryCreate(
-            "cellar", CellarKey, mediaType, EuDocumentLanguage.Eng, out var refusal);
+            "cellar", cellarKey, mediaType, EuDocumentLanguage.Eng, out var refusal);
         Assert.AreEqual(EuDocumentFetchAddressRefusal.None, refusal);
         var admittedAddress = address!;
 
@@ -498,7 +570,7 @@ public sealed class EuAnnexBodyDispositionTests
             requestDigest,
             admittedAddress.ResourceUri,
             200,
-            Headers(responseMediaType),
+            Headers(responseMediaType ?? admittedAddress.Accept),
             "2026-09-12T20:00:00.0000000Z",
             "2026-09-12T20:00:01.0000000Z",
             new DeclaredContentLengthHttpCompletion(3),
@@ -596,6 +668,14 @@ public sealed class EuAnnexBodyDispositionTests
 
     private static string Sha256(byte[] value) =>
         Convert.ToHexString(SHA256.HashData(value)).ToLowerInvariant();
+
+    private static bool IsStaticMember(MemberInfo member) => member switch
+    {
+        MethodBase method => method.IsStatic,
+        PropertyInfo property => (property.GetMethod ?? property.SetMethod)!.IsStatic,
+        FieldInfo field => field.IsStatic,
+        _ => false,
+    };
 
     private sealed record FixtureValues(
         SourceObjectRef SourceObject,
