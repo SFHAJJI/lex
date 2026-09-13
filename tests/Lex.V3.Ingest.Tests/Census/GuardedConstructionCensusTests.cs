@@ -378,6 +378,15 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgFamilyEnumerationOutcome::ProofRefused, "
                     + "method public static "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgFamilyEnumerationOutcome::Proven",
+                "Lex.V3.Ingest.Luxembourg.LuxembourgGazetteBodyProductionResult: constructor "
+                    + "private instance "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgGazetteBodyProductionResult::.ctor, "
+                    + "method internal static "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgGazetteBodyProductionResult::Refused, "
+                    + "method internal static "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgGazetteBodyProductionResult::Success, "
+                    + "method public instance "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgGazetteBodyProducer::RunAsync",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgInitialDraftInventoryResult: constructor "
                     + "private instance "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgInitialDraftInventoryResult::.ctor, "
