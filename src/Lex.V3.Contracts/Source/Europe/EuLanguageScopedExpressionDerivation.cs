@@ -281,25 +281,43 @@ public sealed class EuLanguageScopedExpressionDerivation
         string FamilyKey,
         long DeliveredRowCount,
         string CanonicalKeyDigest,
-        string RetainedFloor)
+        string RetainedFloor,
+        string InterpretationProfileSha256,
+        string SourceProfileSha256)
     {
         public static CanonicalProofDocument Of(AbsenceFamilyEnumerationProof proof) =>
             new(
                 proof.FamilyKey,
                 proof.DeliveredRowCount,
                 proof.CanonicalKeyDigest,
-                proof.RetainedFloor.ToString());
+                proof.RetainedFloor.ToString(),
+                proof.InterpretationProfileRef.Sha256,
+                proof.SourceProfileRef.Sha256);
     }
 
     /// <summary>The half of a proof that names the execution. Varies between runs, by design.</summary>
+    /// <remarks>
+    /// THE SPLIT IS PER COMPONENT, NOT PER REFERENCE, AND THE SECOND REVIEW ROUND IS WHY. A
+    /// <see cref="SourceArtifactRef"/> is a compound of a per-run <c>ResourceId</c> and a content
+    /// <c>Sha256</c>, and moving a whole reference here moved its STABLE half out of the derivation
+    /// identity too. Review constructed two deliveries over identical rows whose only difference was
+    /// an interpretation profile of <c>MaximumDeliverableRows</c> 100 versus 101: their profile
+    /// digests differed and their derivation digests did not, so two different sets of interpretation
+    /// rules claimed one content address. That is worse than the instability it was fixing - an
+    /// unstable address is a nuisance, a colliding one is a wrong answer.
+    /// <para>
+    /// So the profile DIGESTS live in <see cref="CanonicalProofDocument"/>, where different rules
+    /// make a different derivation, and only the per-run resource IDs remain here.
+    /// <c>AcquisitionRunRef</c> is wholly here because both of its components are per-run: its digest
+    /// covers a fresh resource id and the run's start timestamp.
+    /// </para>
+    /// </remarks>
     private sealed record CanonicalEpisodeProofDocument(
         string FamilyKey,
         string AcquisitionRunResourceId,
         string AcquisitionRunSha256,
         string InterpretationProfileResourceId,
-        string InterpretationProfileSha256,
-        string SourceProfileResourceId,
-        string SourceProfileSha256)
+        string SourceProfileResourceId)
     {
         public static CanonicalEpisodeProofDocument Of(AbsenceFamilyEnumerationProof proof) =>
             new(
@@ -307,9 +325,7 @@ public sealed class EuLanguageScopedExpressionDerivation
                 proof.AcquisitionRunRef.ResourceId,
                 proof.AcquisitionRunRef.Sha256,
                 proof.InterpretationProfileRef.ResourceId,
-                proof.InterpretationProfileRef.Sha256,
-                proof.SourceProfileRef.ResourceId,
-                proof.SourceProfileRef.Sha256);
+                proof.SourceProfileRef.ResourceId);
     }
 
     /// <summary>

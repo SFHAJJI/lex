@@ -361,35 +361,36 @@ public sealed class EuLanguageScopedExpressionProducerTests
     }
 
     /// <summary>
-    /// Every field a proof publishes is read by one of the two canonical documents, and none by both.
+    /// Every COMPONENT a proof publishes is read by exactly one of the two canonical documents.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// ADDED BECAUSE A MUTANT SURVIVED, NOT BECAUSE IT LOOKED TIDY. Hard-coding <c>RetainedFloor</c>
-    /// to a literal in the derivation identity changed nothing that any test observed: the
-    /// byte-stability test runs two productions whose floors are equal, so a field that stopped
-    /// being read still produced agreeing digests. #584's review found the identical omission one
-    /// type over - a comparison reading four of this proof's seven fields, so a proof retained under
-    /// the weaker custody class replayed as identical to a floored one - and its conclusion applies
-    /// unchanged: a behavioural test per field says nothing about a field nobody has added yet, so
-    /// the surface is pinned against the documents' own source.
+    /// COMPONENTS, NOT PROPERTIES, AND THE DIFFERENCE COST A REVIEW ROUND. The first version of this
+    /// test read each property whole, so a <see cref="SourceArtifactRef"/> counted as one thing. That
+    /// reading was satisfied by "the interpretation profile reference is in the episode" - and hid
+    /// that the reference is a COMPOUND of a per-run <c>ResourceId</c> and a content <c>Sha256</c>,
+    /// so moving it whole had moved a stable digest out of the derivation identity. Two deliveries
+    /// differing only in their interpretation rules then shared one derivation address.
     /// </para>
     /// <para>
-    /// The partition is asserted as well as the coverage. A field read by BOTH documents would be
-    /// carried into the derivation identity as well as the episode, which is how a run-specific
-    /// reference would creep back into the stable half - the defect review found. A field read by
-    /// NEITHER is evidence silently dropped.
+    /// A pin that reads a compound value as indivisible cannot see a split that has to happen inside
+    /// it. So each reference is decomposed here, and each half has to be placed deliberately.
+    /// </para>
+    /// <para>
+    /// Two earlier lessons are kept: the test exists at all because a mutant survived
+    /// (<c>RetainedFloor</c> hard-coded to a literal changed nothing any behavioural test observed),
+    /// and it pins a LIST because #584's review found the same class of omission one type over - a
+    /// behavioural test per field says nothing about a field nobody has added yet.
     /// </para>
     /// </remarks>
     [TestMethod]
-    public void EveryProofFieldIsReadByExactlyOneOfTheTwoCanonicalDocuments()
+    public void EveryProofComponentIsReadByExactlyOneOfTheTwoCanonicalDocuments()
     {
-        var fields = typeof(Lex.V3.Contracts.Source.Absence.AbsenceFamilyEnumerationProof)
+        var properties = typeof(Lex.V3.Contracts.Source.Absence.AbsenceFamilyEnumerationProof)
             .GetProperties(System.Reflection.BindingFlags.Public
                 | System.Reflection.BindingFlags.Instance
                 | System.Reflection.BindingFlags.DeclaredOnly)
-            .Select(property => property.Name)
-            .OrderBy(name => name, StringComparer.Ordinal)
+            .OrderBy(property => property.Name, StringComparer.Ordinal)
             .ToArray();
 
         CollectionAssert.AreEqual(
@@ -403,33 +404,51 @@ public sealed class EuLanguageScopedExpressionProducerTests
                 "RetainedFloor",
                 "SourceProfileRef",
             },
-            fields,
-            "a proof that grew a field must be placed in one of the two documents deliberately, "
-            + "rather than silently belonging to neither.");
+            properties.Select(property => property.Name).ToArray(),
+            "a proof that grew a field must be placed in one of the two documents deliberately.");
+
+        // A COMPOUND TYPE THIS TEST DOES NOT KNOW HOW TO DECOMPOSE WOULD MASK THE SAME DEFECT AGAIN,
+        // so the set of compound types is itself pinned rather than assumed.
+        CollectionAssert.AreEqual(
+            new[] { "AcquisitionRunRef", "InterpretationProfileRef", "SourceProfileRef" },
+            properties
+                .Where(property => property.PropertyType == typeof(SourceArtifactRef))
+                .Select(property => property.Name)
+                .ToArray(),
+            "SourceArtifactRef is the only compound this test decomposes; a new compound type needs "
+            + "its own decomposition here before it can be placed.");
+
+        var components = properties
+            .SelectMany(property => property.PropertyType == typeof(SourceArtifactRef)
+                ? new[]
+                {
+                    $"proof.{property.Name}.ResourceId",
+                    $"proof.{property.Name}.Sha256",
+                }
+                : [$"proof.{property.Name}"])
+            .ToArray();
 
         var source = ReadSource(
             "src/Lex.V3.Contracts/Source/Europe/EuLanguageScopedExpressionDerivation.cs");
         var derivation = MethodBody(source, "private sealed record CanonicalProofDocument(");
         var episode = MethodBody(source, "private sealed record CanonicalEpisodeProofDocument(");
 
-        foreach (var field in fields)
+        foreach (var component in components)
         {
-            var inDerivation = derivation.Contains("proof." + field, StringComparison.Ordinal);
-            var inEpisode = episode.Contains("proof." + field, StringComparison.Ordinal);
+            var inDerivation = derivation.Contains(component, StringComparison.Ordinal);
+            var inEpisode = episode.Contains(component, StringComparison.Ordinal);
 
             Assert.IsTrue(
                 inDerivation || inEpisode,
-                $"no canonical document reads {field}, so it is evidence this record drops.");
+                $"no canonical document reads {component}, so it is evidence this record drops.");
 
-            // FamilyKey is the one field both halves carry, and deliberately: it is a LABEL saying
-            // which family each half is about, not evidence either half owns. Every other field
-            // belongs to exactly one, because a run-specific reference appearing in the derivation
-            // identity is precisely what made it unstable.
-            if (!string.Equals(field, "FamilyKey", StringComparison.Ordinal))
+            // FamilyKey is the one component both halves carry, and deliberately: it is a LABEL
+            // saying which family each half is about, not evidence either half owns.
+            if (!string.Equals(component, "proof.FamilyKey", StringComparison.Ordinal))
             {
                 Assert.IsFalse(
                     inDerivation && inEpisode,
-                    $"{field} is read by both documents; a run-specific reference in the derivation "
+                    $"{component} is read by both documents; a per-run value in the derivation "
                     + "identity is what makes it unstable.");
             }
         }
@@ -439,6 +458,19 @@ public sealed class EuLanguageScopedExpressionProducerTests
                 && episode.Contains("proof.FamilyKey", StringComparison.Ordinal),
             "the exception is that BOTH halves label themselves with the family, and it is an "
             + "exception this test states rather than tolerates silently.");
+
+        // AND THE PLACEMENT ITSELF, not merely that each component landed somewhere. A content
+        // digest in the episode is the exact defect review found; a per-run resource id in the
+        // derivation is the one before it.
+        Assert.IsTrue(
+            derivation.Contains("proof.InterpretationProfileRef.Sha256", StringComparison.Ordinal)
+                && derivation.Contains("proof.SourceProfileRef.Sha256", StringComparison.Ordinal),
+            "the profile CONTENT digests belong to the derivation identity: different rules are a "
+            + "different derivation.");
+        Assert.IsTrue(
+            episode.Contains("proof.AcquisitionRunRef.Sha256", StringComparison.Ordinal),
+            "the acquisition run's digest is per-run - it covers a fresh resource id and the run's "
+            + "start time - so it belongs to the episode, both components of it.");
     }
 
     /// <summary>One brace-matched declaration body, so a mention elsewhere cannot satisfy the pin.</summary>
