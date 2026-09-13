@@ -82,15 +82,31 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
     private bool _requestOrdinalsExhausted;
     private bool _disposed;
 
+    /// <summary>
+    /// The run's wire ceiling, reserved by this session for every redirect hop it sends.
+    /// </summary>
+    /// <remarks>
+    /// THE SPLIT, STATED ONCE. The FIRST send of every attempt - and of the robots bootstrap - is
+    /// reserved by whoever asks for it, before the session or the attempt exists, because that is
+    /// the last point at which it can be stopped rather than merely counted. Every redirect hop
+    /// that follows is sent by this session from inside its own route loop, where no caller can
+    /// reach, so this session reserves those. The invariant that results is the only one worth
+    /// having: reservations equal sends.
+    /// </remarks>
+    private readonly WireRequestBudget _wireBudget;
+
     private RoutedHttpAcquisitionSession(
         BoundMachineRequest sourceWitness,
         ICustodyStore custodyStore,
         HttpMessageHandler handler,
         TimeProvider timeProvider,
-        bool usesPinnedHandler)
+        bool usesPinnedHandler,
+        WireRequestBudget wireBudget)
     {
         ArgumentNullException.ThrowIfNull(sourceWitness);
         ArgumentNullException.ThrowIfNull(custodyStore);
+        ArgumentNullException.ThrowIfNull(wireBudget);
+        _wireBudget = wireBudget;
         ArgumentNullException.ThrowIfNull(handler);
         ArgumentNullException.ThrowIfNull(timeProvider);
         _sourceWitnessIdentity = MachineQueryBinder.OpenIdentity(sourceWitness);
@@ -140,11 +156,12 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
     internal static Task<StartResult> StartAsync(
         BoundMachineRequest sourceWitness,
         ICustodyStore custodyStore,
+        WireRequestBudget wireBudget,
         CancellationToken cancellationToken)
     {
         var session = new RoutedHttpAcquisitionSession(
             sourceWitness, custodyStore, CreatePinnedHandler(), TimeProvider.System,
-            usesPinnedHandler: true);
+            usesPinnedHandler: true, wireBudget);
         return session.BootstrapRobotsAsync(cancellationToken);
     }
 
@@ -171,10 +188,11 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
         ICustodyStore custodyStore,
         HttpMessageHandler handler,
         TimeProvider timeProvider,
+        WireRequestBudget wireBudget,
         CancellationToken cancellationToken)
     {
         var session = new RoutedHttpAcquisitionSession(
-            sourceWitness, custodyStore, handler, timeProvider, usesPinnedHandler: false);
+            sourceWitness, custodyStore, handler, timeProvider, usesPinnedHandler: false, wireBudget);
         return session.BootstrapRobotsAsync(cancellationToken);
     }
 
@@ -3823,6 +3841,33 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
                         attemptOrdinal,
                         hops,
                         new IncompleteHttpRouteOutcome(HttpRouteIncompleteReason.SourceProfileStale),
+                        BuildHopWriteReceipts(requestOrdinal, attemptOrdinal, hops)),
+                    custodyKey,
+                    null,
+                    null);
+            }
+
+            // MAY THE NEXT HOP BE SENT? Every gate above this line is the ROUTE's: the loop, the
+            // limit, the target's shape, its origin, the publisher's robots answer. This one is the
+            // RUN's. A redirect hop is a wire request the publisher answers, and #579's review
+            // measured the session sending one that nothing had reserved - three sends against two
+            // reservations on a document fetch whose robots answered 301.
+            //
+            // LAST, DELIBERATELY. It sits after every admission check because a reservation is a
+            // promise that a send follows; reserving a hop the route would then have refused on
+            // its own grounds would charge the ceiling for a request that never went out, and the
+            // invariant this gate exists to hold is that reservations equal sends. Refused, the
+            // route ends with every hop already sent retained and the unsent one named.
+            if (!_wireBudget.TryReserveAttempt())
+            {
+                return new RouteExecution(
+                    RoutedHttpEvidence.Create(
+                        _runIdentity,
+                        requestOrdinal,
+                        attemptOrdinal,
+                        hops,
+                        new IncompleteHttpRouteOutcome(
+                            HttpRouteIncompleteReason.RedirectTargetNotSentWireBudgetExhausted),
                         BuildHopWriteReceipts(requestOrdinal, attemptOrdinal, hops)),
                     custodyKey,
                     null,

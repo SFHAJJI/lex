@@ -26,6 +26,15 @@ namespace Lex.V3.Ingest;
 /// sent 10 and counted 9.
 /// </para>
 /// <para>
+/// EVERY REDIRECT HOP IS RESERVED BY THE SESSION, AT ITS OWN GATE, BEFORE IT IS SENT. The caller
+/// reserves the first send of every attempt - it is the one that knows an attempt is about to be
+/// made - and cannot see the hops a route grows after that. #579's review measured the gap: a
+/// document fetch whose robots answered 301 made three sends against two reservations. So the
+/// session reserves each successor hop after every admission check of its own and immediately
+/// before the send, and when the reservation fails it ends the route with that hop named as unsent.
+/// The invariant this leaves is the only one a ceiling can be trusted on: reservations equal sends.
+/// </para>
+/// <para>
 /// SO THIS COUNTS WIRE REQUESTS AND KNOWS NOTHING ELSE. It does not know which request is robots,
 /// which is a count, which is a page, or which run is asking. A counter that had to be told a role
 /// would have to be told the truth, and the defect above was a role assumed rather than observed.
@@ -87,7 +96,8 @@ public sealed class WireRequestBudget
     /// <remarks>
     /// Reserved BEFORE the request is sent. Counting afterwards would record that too much was sent
     /// rather than stop it being sent, which is the difference between a receipt and a ceiling. The
-    /// same call reserves a session's robots fetch: to this type they are one wire request each.
+    /// same call reserves a session's robots fetch and every redirect hop a route grows: to this
+    /// type they are one wire request each.
     /// </remarks>
     internal bool TryReserveAttempt()
     {

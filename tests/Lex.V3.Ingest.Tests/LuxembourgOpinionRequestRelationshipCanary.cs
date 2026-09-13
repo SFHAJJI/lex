@@ -74,6 +74,20 @@ public sealed class LuxembourgOpinionRequestRelationshipCanary
 
     public TestContext? TestContext { get; set; }
 
+    /// <summary>
+    /// The whole-canary wire ceiling: the five requests this canary has always declared.
+    /// </summary>
+    /// <remarks>
+    /// ENFORCED RATHER THAN PRINTED. This canary has written "budget=5 wire requests" into its own
+    /// evidence header since it was reviewed and merged, and enforced nothing - which is exactly
+    /// the gap #579 is about: a number in a plan is a prediction, and only a stop in the path is a
+    /// ceiling. The five is the harness's own declared bound, not a number chosen here; it is now
+    /// the counter every send this canary makes is reserved against, robots and any redirect hop
+    /// included. If five proves too tight against the real publisher, the run stops and reports
+    /// that, which is the intended failure, and the owner re-dispositions the number.
+    /// </remarks>
+    private const int SharedWireCeiling = 5;
+
     [TestMethod]
     public async Task TheEventADraftReachesIsAskedWhetherItHoldsTheOpinionRequestClass()
     {
@@ -111,8 +125,17 @@ public sealed class LuxembourgOpinionRequestRelationshipCanary
         var witness = plan.BindCount(
             NewUrn(), NewUrn(), NewUrn(), TypedResourcesSetId, LuxembourgQueryPass.Pass1,
             RangeFor(SaceOf(DraftA)), renderer);
+        // ONE INSTANCE FOR THE WHOLE CANARY, reserved for robots before the session exists, so the
+        // last point at which that request can be stopped is the point at which it is stopped.
+        var wireBudget = WireRequestBudget.OfWireRequests(SharedWireCeiling);
+        if (!wireBudget.TryReserveAttempt())
+        {
+            Assert.Inconclusive("The declared ceiling cannot cover the robots fetch.");
+            return;
+        }
+
         var start = await RoutedHttpAcquisitionSession.StartAsync(
-            witness.Request, store, CancellationToken.None);
+            witness.Request, store, wireBudget, CancellationToken.None);
         Assert.IsNotNull(
             start.Session,
             $"the governed session did not start: {start.Kind} safety={start.LocalSafetyReason} "

@@ -35,6 +35,11 @@ internal static class EuAxiomWiringHarness
         Func<string, EuAcquisitionTestFixture.FamilyScript?> axiomScript,
         Func<string, EuAcquisitionTestFixture.FamilyScript>? locatedAmendmentScript = null)
     {
+        // ONE BUDGET FOR THE WHOLE RUN. The adapter refuses a census request
+        // carrying a different instance, because two counters reading the same
+        // limit bound that many requests each and neither bounds the run.
+        var runWireBudget = EuAcquisitionTestFixture.TestWireBudget();
+
         var seed = EuAppendixASeedMap.SeedsInCelexOrder[0];
         var rootIri = EuPackRootCanonicalForm.TryCanonicalize(seed.WorkRoot, out _)
             ?? throw new AssertFailedException("Appendix A's own seed root failed to canonicalize.");
@@ -85,7 +90,8 @@ internal static class EuAxiomWiringHarness
 
         var (censusPlan, censusPlanId) = EuAcquisitionTestFixture.BuildCensusPlan();
         var censusRequest = new EuCensusPartitionRunRequest(
-            censusPlan, censusPlanId, seed.Celex, EuAcquisitionTestFixture.BuildRendererSource(1));
+            censusPlan, censusPlanId, seed.Celex, EuAcquisitionTestFixture.BuildRendererSource(1),
+            runWireBudget);
 
         var (pPlan, pPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
 
@@ -99,6 +105,7 @@ internal static class EuAxiomWiringHarness
             EuAcquisitionTestFixture.BuildRendererSource(1009),
             EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
             new PermissiveEvidenceResolver(CompleteEnumerationRef),
+            runWireBudget,
             CancellationToken.None);
     }
 
@@ -114,6 +121,11 @@ internal static class EuAxiomWiringHarness
     internal static async Task<EuQueryExecutionResult> RunTwoSeedAsync(
         Func<string, string, EuAcquisitionTestFixture.FamilyScript> axiomScript)
     {
+        // ONE BUDGET FOR THE WHOLE RUN. The adapter refuses a census request
+        // carrying a different instance, because two counters reading the same
+        // limit bound that many requests each and neither bounds the run.
+        var runWireBudget = EuAcquisitionTestFixture.TestWireBudget();
+
         var seedOne = EuAppendixASeedMap.SeedsInCelexOrder[0];
         var seedTwo = EuAppendixASeedMap.SeedsInCelexOrder[1];
         var rootOne = EuPackRootCanonicalForm.TryCanonicalize(seedOne.WorkRoot, out _)!;
@@ -184,11 +196,13 @@ internal static class EuAxiomWiringHarness
             [
                 (new EuCensusPartitionRunRequest(
                     censusPlan, censusPlanId, seedOne.Celex,
-                    EuAcquisitionTestFixture.BuildRendererSource(1)),
+                    EuAcquisitionTestFixture.BuildRendererSource(1),
+                    runWireBudget),
                     EuAcquisitionTestFixture.SourceWitness()),
                 (new EuCensusPartitionRunRequest(
                     censusPlan, censusPlanId, seedTwo.Celex,
-                    EuAcquisitionTestFixture.BuildRendererSource(11)),
+                    EuAcquisitionTestFixture.BuildRendererSource(11),
+                    runWireBudget),
                     EuAcquisitionTestFixture.SourceWitness()),
             ],
             new EuObjectFactsBatchPolicy(
@@ -199,6 +213,7 @@ internal static class EuAxiomWiringHarness
             EuAcquisitionTestFixture.BuildRendererSource(1009),
             EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
             new PermissiveEvidenceResolver(CompleteEnumerationRef),
+            runWireBudget,
             CancellationToken.None);
     }
 

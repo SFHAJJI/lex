@@ -119,6 +119,30 @@ public enum HttpRouteIncompleteReason
     /// be read at all. This member is the publisher's own answer about the path actually requested.
     /// </summary>
     RedirectTargetRobotsDenied = 10,
+
+    /// <summary>
+    /// The route's next redirect hop was not sent because the run's wire ceiling could not afford
+    /// it. Every hop before it was sent and is retained; this one was never put on the wire.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// #579's review found the ceiling and the transport disagreeing: a document fetch recorded
+    /// three sends against two reservations, because the robots negotiation is answered with a
+    /// 301 and the second hop was sent by the session with nothing reserving it. The type
+    /// <c>WireRequestBudget</c> says it reserves "every wire request", the issue defines request
+    /// ceilings as bounding requests, and the owner's accepted ceiling is recorded as a wire
+    /// ceiling - so the hop had to be reserved, and a hop the ceiling cannot afford has to be a
+    /// named outcome rather than a send the ceiling did not see.
+    /// </para>
+    /// <para>
+    /// Distinct from every other member here: <see cref="RedirectLimitExceeded"/> is the route's
+    /// own hop bound, <see cref="RedirectRefused"/> and <see cref="RedirectTargetOriginNotAdmitted"/>
+    /// are about the target, and <see cref="RedirectTargetUnobserved"/> means the target WAS sent
+    /// and failed before headers. This member means the target was not sent at all, for a reason
+    /// that is the run's and not the route's.
+    /// </para>
+    /// </remarks>
+    RedirectTargetNotSentWireBudgetExhausted = 11,
 }
 
 public abstract class RoutedHttpRouteOutcome
@@ -717,6 +741,24 @@ public sealed class RoutedHttpEvidence
                 {
                     throw new ArgumentException(
                         "A redirect-limit outcome requires six observed hops and one further admissible transition.",
+                        nameof(outcome));
+                }
+
+                return;
+            case HttpRouteIncompleteReason.RedirectTargetNotSentWireBudgetExhausted:
+                // The same visible facts as RedirectTargetUnobserved, for the same reason: the
+                // evidence must show one admissible transition that was not sent, below the route's
+                // own redirect ceiling, or the reason is attachable to a route whose hops do not
+                // show a hop the ceiling could have refused. The two differ only in WHY the target
+                // was not observed: there the transport failed before headers on a send that went
+                // out; here nothing went out at all, because the run's ceiling would not afford it.
+                if (!finalIsRedirect || hops.Count >= 6 ||
+                    !TryGetAdmittedRedirectTarget(terminal, hops[0].RequestUri, out var unaffordedTarget) ||
+                    hops.Any(hop => string.Equals(hop.RequestUri, unaffordedTarget, StringComparison.Ordinal)))
+                {
+                    throw new ArgumentException(
+                        "A wire-budget-exhausted redirect outcome requires one admissible unsent "
+                        + "transition below the redirect ceiling.",
                         nameof(outcome));
                 }
 
@@ -1755,6 +1797,8 @@ internal static partial class RoutedHttpValidation
         HttpRouteIncompleteReason.PublisherServerFailure => "publisher_server_failure",
         HttpRouteIncompleteReason.RedirectTargetOriginNotAdmitted => "redirect_target_origin_not_admitted",
         HttpRouteIncompleteReason.RedirectTargetRobotsDenied => "redirect_target_robots_denied",
+        HttpRouteIncompleteReason.RedirectTargetNotSentWireBudgetExhausted =>
+            "redirect_target_not_sent_wire_budget_exhausted",
         _ => throw new ArgumentOutOfRangeException(nameof(value)),
     };
 
@@ -1771,6 +1815,8 @@ internal static partial class RoutedHttpValidation
             "publisher_server_failure" => HttpRouteIncompleteReason.PublisherServerFailure,
             "redirect_target_origin_not_admitted" => HttpRouteIncompleteReason.RedirectTargetOriginNotAdmitted,
             "redirect_target_robots_denied" => HttpRouteIncompleteReason.RedirectTargetRobotsDenied,
+            "redirect_target_not_sent_wire_budget_exhausted" =>
+                HttpRouteIncompleteReason.RedirectTargetNotSentWireBudgetExhausted,
             _ => throw new ArgumentException("The HTTP route reason is not closed.", parameterName),
         };
 

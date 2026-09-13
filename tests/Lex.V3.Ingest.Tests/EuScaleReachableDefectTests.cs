@@ -128,6 +128,7 @@ public sealed class EuScaleReachableDefectTests
             [Freeze([boundaryRoot], boundary), Freeze([otherRoot], boundary)],
             EuAcquisitionTestFixture.BuildRendererSource(8201),
             EuAcquisitionTestFixture.SourceWitness(),
+            EuAcquisitionTestFixture.TestWireBudget(),
             System.Threading.CancellationToken.None);
 
         Assert.IsNull(

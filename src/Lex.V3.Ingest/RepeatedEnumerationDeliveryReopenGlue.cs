@@ -122,7 +122,7 @@ public sealed class RepeatedEnumerationDeliveryReopenGlue
         Func<int> currentCount,
         Action<int> setCount,
         CancellationToken cancellationToken,
-        WireRequestBudget? budget = null)
+        WireRequestBudget budget)
     {
         ArgumentNullException.ThrowIfNull(profile);
         return ObserveAsync(
@@ -150,7 +150,7 @@ public sealed class RepeatedEnumerationDeliveryReopenGlue
         Func<int> currentCount,
         Action<int> setCount,
         CancellationToken cancellationToken,
-        WireRequestBudget? budget = null)
+        WireRequestBudget budget)
     {
         ArgumentNullException.ThrowIfNull(session);
         ArgumentNullException.ThrowIfNull(request);
@@ -158,6 +158,7 @@ public sealed class RepeatedEnumerationDeliveryReopenGlue
         ArgumentNullException.ThrowIfNull(executorWrittenMembership);
         ArgumentNullException.ThrowIfNull(currentCount);
         ArgumentNullException.ThrowIfNull(setCount);
+        ArgumentNullException.ThrowIfNull(budget);
 
         var item = session.OpenPlanItem(request);
         var maximumAttempts = session.SourceProfile.MaximumAttempts;
@@ -170,7 +171,13 @@ public sealed class RepeatedEnumerationDeliveryReopenGlue
             // where an exhausted budget stops traffic rather than reporting it. A retry is an
             // attempt like any other: the profile permits several per bound request, and a ceiling
             // that only counted bound requests would be wrong by that factor at its own limit.
-            if (budget is not null && !budget.TryReserveAttempt())
+            //
+            // THE `budget is not null` GUARD IS GONE, AND ITS ABSENCE IS THE POINT. While the
+            // parameter was optional, every caller that simply forgot it compiled, ran, and sent
+            // whatever it liked -- which is exactly how #579 found four EU doors sending unbounded.
+            // Now the type system asks the question at every call site, so "is there a ceiling on
+            // this path" is answered by the compiler rather than by reading five executors.
+            if (!budget.TryReserveAttempt())
             {
                 return new ObservationAttemptOutcome(
                     null,

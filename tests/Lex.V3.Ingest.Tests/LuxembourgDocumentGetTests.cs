@@ -969,6 +969,16 @@ public sealed class LuxembourgDocumentGetTests
     /// have caught it itself.
     /// </para>
     /// </remarks>
+    /// <summary>
+    /// A document get stopped at a redirect hop refuses as the ceiling, not as a transport failure.
+    /// </summary>
+    /// <remarks>
+    /// The Luxembourg mirror of the EU document-fetch mapping, tested rather than assumed to be a
+    /// faithful copy. Legilux answers robots without a redirect, so the budget here affords robots
+    /// and the GET; the GET's own same-origin 303 successor is the request the ceiling cannot
+    /// afford, and the session ends the route with that hop named. Without the mapping this door
+    /// would either classify the 303 as the document or report the transport failed.
+    /// </remarks>
     [TestMethod]
     public async Task ADocumentSucceedingOnItsLastReservationIsStillComplete()
     {

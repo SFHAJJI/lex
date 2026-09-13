@@ -438,7 +438,8 @@ public sealed class ClosedVocabularyCensusTests
                 "Lex.V3.Contracts.Source.Http.HttpRouteIncompleteReason: HopIncomplete, "
                     + "SourceProfileStale, RedirectRefused, RedirectLoop, RedirectLimitExceeded, "
                     + "RedirectTargetUnobserved, RobotsPolicyUnavailable, PublisherServerFailure, "
-                    + "RedirectTargetOriginNotAdmitted, RedirectTargetRobotsDenied",
+                    + "RedirectTargetOriginNotAdmitted, RedirectTargetRobotsDenied, "
+                    + "RedirectTargetNotSentWireBudgetExhausted",
                 "Lex.V3.Contracts.Source.Http.HttpStatusDisposition: DerivableStatus, "
                     + "RedirectObserved, RevalidationReferenceOnly, SemanticNoEntityStatus, "
                     + "RangeNotApproved, NonDerivableStatus, NegotiationChoiceOffered",

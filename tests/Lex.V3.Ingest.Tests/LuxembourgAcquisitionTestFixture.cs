@@ -53,7 +53,7 @@ internal static class LuxembourgAcquisitionTestFixture
         TimeProvider timeProvider)
     {
         var started = await RoutedHttpAcquisitionSession.StartWithTestTransportAsync(
-                sourceWitness, custodyStore, handler, timeProvider, CancellationToken.None)
+                sourceWitness, custodyStore, handler, timeProvider, TestWireBudget(), CancellationToken.None)
             .ConfigureAwait(false);
         if (started.Kind != OfficialHttpAcquisitionOutcomeKind.ExecutedObservation || started.Session is null)
         {
