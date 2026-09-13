@@ -139,7 +139,8 @@ public sealed record EuAnnexBodyDisposition
                 nameof(officialAddress));
         }
 
-        if (!string.Equals(officialAddress.ResourceUri, sourceObservation.RequestedUri, StringComparison.Ordinal) ||
+        if (logicalRequest.Headers.Count != 2 ||
+            !string.Equals(officialAddress.ResourceUri, sourceObservation.RequestedUri, StringComparison.Ordinal) ||
             !HasExactHeader(logicalRequest, "accept", officialAddress.Accept) ||
             !HasExactHeader(logicalRequest, "accept-language", officialAddress.AcceptLanguage))
         {

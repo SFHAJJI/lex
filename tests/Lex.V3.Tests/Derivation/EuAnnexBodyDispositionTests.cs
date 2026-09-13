@@ -197,6 +197,16 @@ public sealed class EuAnnexBodyDispositionTests
     }
 
     [TestMethod]
+    public void AnExtraRequestHeaderCannotBeFoldedIntoTheOfficialAddress()
+    {
+        var fixture = Fixture(includeExtraRequestHeader: true);
+
+        Assert.ThrowsExactly<ArgumentException>(() => Create(
+            fixture,
+            EuAnnexBodyDispositionOutcome.TextNotAvailable));
+    }
+
+    [TestMethod]
     public void ACallerClaimingCellarForAnUnrelatedPublisherUriIsRejected()
     {
         var fixture = Fixture(
@@ -348,7 +358,8 @@ public sealed class EuAnnexBodyDispositionTests
         char byteFill = 'a',
         char profileFill = '8',
         string? sourcePublisherUri = null,
-        string responseMediaType = "application/pdf")
+        string responseMediaType = "application/pdf",
+        bool includeExtraRequestHeader = false)
     {
         var sourceObject = new SourceObjectRef(
             SourceCoreSchemaIds.SourceObjectRef,
@@ -365,15 +376,23 @@ public sealed class EuAnnexBodyDispositionTests
         var address = EuDocumentFetchAddress.TryCreate(
             "cellar", CellarKey, mediaType, EuDocumentLanguage.Eng, out var refusal);
         Assert.AreEqual(EuDocumentFetchAddressRefusal.None, refusal);
+        var admittedAddress = address!;
 
         var receipt = Receipt(Digest(byteFill), 3);
+        var requestHeaders = new List<HttpLogicalRequestHeader>
+        {
+            new("accept", admittedAddress.Accept),
+            new("accept-language", admittedAddress.AcceptLanguage),
+        };
+        if (includeExtraRequestHeader)
+        {
+            requestHeaders.Add(new HttpLogicalRequestHeader("x-extra", "not-part-of-the-address"));
+        }
+
         var request = HttpLogicalRequest.Create(
-            address!.ResourceUri,
+            admittedAddress.ResourceUri,
             HttpRequestMethod.Get,
-            [
-                new HttpLogicalRequestHeader("accept", address.Accept),
-                new HttpLogicalRequestHeader("accept-language", address.AcceptLanguage),
-            ],
+            requestHeaders,
             new HttpLogicalRequestBody(0, EmptyDigest),
             Digest('1'),
             Digest('2'));
@@ -383,7 +402,7 @@ public sealed class EuAnnexBodyDispositionTests
             "urn:uuid:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
             null,
             requestDigest,
-            address.ResourceUri,
+            admittedAddress.ResourceUri,
             200,
             Headers(responseMediaType),
             "2026-09-12T20:00:00.0000000Z",
@@ -405,7 +424,7 @@ public sealed class EuAnnexBodyDispositionTests
         return new FixtureValues(
             sourceObject,
             location,
-            address,
+            admittedAddress,
             request,
             evidence,
             receipt,
