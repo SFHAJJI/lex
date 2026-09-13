@@ -134,7 +134,11 @@ public sealed class RepresentationChainConstructionSurfaceTests
         CollectionAssert.AreEqual(
             new[]
             {
+                "field private instance Lex.V3.Contracts.Derivation.EuAnnexBodyDisposition::<SourceObservation>k__BackingField -> "
+                + N + "RepresentationChainObservation",
                 "field private instance " + N + "RepresentationChain+AppendedObservation::<Observation>k__BackingField -> "
+                + N + "RepresentationChainObservation",
+                "property public instance Lex.V3.Contracts.Derivation.EuAnnexBodyDisposition::SourceObservation() -> "
                 + N + "RepresentationChainObservation",
                 "property public instance " + N + "RepresentationChain+AppendedObservation::Observation() -> "
                 + N + "RepresentationChainObservation",
