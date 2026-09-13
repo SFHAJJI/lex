@@ -57,7 +57,7 @@ public sealed partial class LuxembourgQueryExecutionAdapterTests
             profile);
 
         var result = await adapter.RunAsync(
-            [], null, null, null, new PermissiveEvidenceResolver(enumerationRef), DocumentFetchRendererSource(), CancellationToken.None);
+            [], null, null, null, new PermissiveEvidenceResolver(enumerationRef), DocumentFetchRendererSource(), LuxembourgAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
 
         Assert.IsNotNull(result.Topology);
         Assert.AreEqual(
@@ -143,6 +143,7 @@ public sealed partial class LuxembourgQueryExecutionAdapterTests
         var exception = await Assert.ThrowsExactlyAsync<ArgumentException>(() => adapter.RunAsync(
             [], null, ResourceFamilyKey, null, new PermissiveEvidenceResolver(enumerationRef),
             DocumentFetchRendererSource(),
+            LuxembourgAcquisitionTestFixture.TestWireBudget(),
             CancellationToken.None));
         StringAssert.Contains(exception.Message, "both");
     }
@@ -159,6 +160,7 @@ public sealed partial class LuxembourgQueryExecutionAdapterTests
         var exception = await Assert.ThrowsExactlyAsync<ArgumentException>(() => adapter.RunAsync(
             [], null, null, AssertionFamilyKey, new PermissiveEvidenceResolver(enumerationRef),
             DocumentFetchRendererSource(),
+            LuxembourgAcquisitionTestFixture.TestWireBudget(),
             CancellationToken.None));
         StringAssert.Contains(exception.Message, "both");
     }
@@ -172,7 +174,7 @@ public sealed partial class LuxembourgQueryExecutionAdapterTests
             store, NewExecutor(store, NoSendHandler()), profile);
 
         var result = await adapter.RunAsync(
-            [], null, null, null, new PermissiveEvidenceResolver(enumerationRef), DocumentFetchRendererSource(), CancellationToken.None);
+            [], null, null, null, new PermissiveEvidenceResolver(enumerationRef), DocumentFetchRendererSource(), LuxembourgAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
 
         Assert.AreEqual(18, result.RelationFamilyAcquisitions.Count);
         foreach (var acquisition in result.RelationFamilyAcquisitions)
@@ -194,6 +196,7 @@ public sealed partial class LuxembourgQueryExecutionAdapterTests
         var result = await adapter.RunAsync(
             [], RelationFamilyKey, null, null, new PermissiveEvidenceResolver(enumerationRef),
             DocumentFetchRendererSource(),
+            LuxembourgAcquisitionTestFixture.TestWireBudget(),
             CancellationToken.None);
 
         Assert.AreEqual(18, result.RelationFamilyAcquisitions.Count);
@@ -218,7 +221,7 @@ public sealed partial class LuxembourgQueryExecutionAdapterTests
 
         var result = await adapter.RunAsync(
             [(partitionRequest, witness, null)], RelationFamilyKey, null, null,
-            new PermissiveEvidenceResolver(enumerationRef), DocumentFetchRendererSource(), CancellationToken.None);
+            new PermissiveEvidenceResolver(enumerationRef), DocumentFetchRendererSource(), LuxembourgAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
 
         Assert.AreEqual(1, result.FamilyOutcomes.Count);
         Assert.AreEqual(LuxembourgFamilyEnumerationOutcomeKind.ExecutorRefused, result.FamilyOutcomes[0].Kind);
@@ -244,7 +247,7 @@ public sealed partial class LuxembourgQueryExecutionAdapterTests
 
         var result = await adapter.RunAsync(
             [(partitionRequest, witness, null)], RelationFamilyKey, null, null,
-            new PermissiveEvidenceResolver(enumerationRef), DocumentFetchRendererSource(), CancellationToken.None);
+            new PermissiveEvidenceResolver(enumerationRef), DocumentFetchRendererSource(), LuxembourgAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
 
         Assert.AreEqual(1, result.FamilyOutcomes.Count);
         Assert.AreEqual(
@@ -288,6 +291,7 @@ public sealed partial class LuxembourgQueryExecutionAdapterTests
         var result = await adapter.RunAsync(
             [(partitionRequest, witness, null)], RelationFamilyKey, null, null,
             new PermissiveEvidenceResolver(enumerationRef), DocumentFetchRendererSource(),
+            LuxembourgAcquisitionTestFixture.TestWireBudget(),
             CancellationToken.None);
 
         Assert.AreEqual(
@@ -364,6 +368,7 @@ public sealed partial class LuxembourgQueryExecutionAdapterTests
         var result = await adapter.RunAsync(
             [(partitionRequest, witness, null)], RelationFamilyKey, null, null,
             new PermissiveEvidenceResolver(enumerationRef), DocumentFetchRendererSource(),
+            LuxembourgAcquisitionTestFixture.TestWireBudget(),
             CancellationToken.None);
 
         Assert.AreEqual(expectedRefusal, result.Refusal?.Code, $"shape={shape}");
@@ -397,7 +402,7 @@ public sealed partial class LuxembourgQueryExecutionAdapterTests
         {
             var result = await adapter.RunAsync([(partition, witness, null), (partition, witness, null)],
                 RelationFamilyKey, null, null, new PermissiveEvidenceResolver(enumerationRef),
-                DocumentFetchRendererSource(), CancellationToken.None);
+                DocumentFetchRendererSource(), LuxembourgAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
             Console.WriteLine($"Duplicate-id result: completion={result.Completion}; " +
                 $"outcomes={string.Join(',', result.FamilyOutcomes.Select(value => value.Kind))}; " +
                 $"relations={string.Join(',', result.RelationFamilyAcquisitions.Select(value => value.State).Distinct())}");
@@ -429,7 +434,7 @@ public sealed partial class LuxembourgQueryExecutionAdapterTests
 
         var result = await adapter.RunAsync(
             [(partitionRequest, witness, null)], RelationFamilyKey, null, null,
-            new PermissiveEvidenceResolver(enumerationRef), DocumentFetchRendererSource(), CancellationToken.None);
+            new PermissiveEvidenceResolver(enumerationRef), DocumentFetchRendererSource(), LuxembourgAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
 
         Assert.AreEqual(1, result.FamilyOutcomes.Count);
         Assert.AreEqual(LuxembourgFamilyEnumerationOutcomeKind.ProofRefused, result.FamilyOutcomes[0].Kind);
@@ -460,7 +465,7 @@ public sealed partial class LuxembourgQueryExecutionAdapterTests
 
         var result = await adapter.RunAsync(
             [(partitionRequest, witness, null)], null, null, null,
-            new PermissiveEvidenceResolver(enumerationRef), DocumentFetchRendererSource(), CancellationToken.None);
+            new PermissiveEvidenceResolver(enumerationRef), DocumentFetchRendererSource(), LuxembourgAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
 
         Assert.IsNull(result.Refusal, $"code={result.Refusal?.Code} detail={result.Refusal?.Detail}");
         Assert.IsNotNull(result.ScopeManifestReceipt, "a refused family does not stop the manifest write");
@@ -485,6 +490,7 @@ public sealed partial class LuxembourgQueryExecutionAdapterTests
         var result = await adapter.RunAsync(
             [], null, ResourceFamilyKey, AssertionFamilyKey, new PermissiveEvidenceResolver(enumerationRef),
             DocumentFetchRendererSource(),
+            LuxembourgAcquisitionTestFixture.TestWireBudget(),
             CancellationToken.None);
 
         Assert.IsNull(result.ScopeManifestReceipt);
@@ -513,7 +519,7 @@ public sealed partial class LuxembourgQueryExecutionAdapterTests
 
         var result = await adapter.RunAsync(
             [(partitionRequest, witness, null)], null, ResourceFamilyKey, AssertionFamilyKey,
-            new PermissiveEvidenceResolver(enumerationRef), DocumentFetchRendererSource(), CancellationToken.None);
+            new PermissiveEvidenceResolver(enumerationRef), DocumentFetchRendererSource(), LuxembourgAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
 
         Assert.AreEqual(LuxembourgFamilyEnumerationOutcomeKind.ProofRefused, result.FamilyOutcomes.Single().Kind);
         Assert.IsNull(result.ScopeManifestReceipt);
@@ -576,7 +582,7 @@ public sealed partial class LuxembourgQueryExecutionAdapterTests
             [(relationRequest, relationWitness, null), (resourceRequest, resourceWitness, null),
                 (assertionRequest, assertionWitness, null)],
             RelationFamilyKey, ResourceFamilyKey, AssertionFamilyKey,
-            new PermissiveEvidenceResolver(enumerationRef), DocumentFetchRendererSource(), CancellationToken.None);
+            new PermissiveEvidenceResolver(enumerationRef), DocumentFetchRendererSource(), LuxembourgAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
 
         Assert.AreEqual(3, result.FamilyOutcomes.Count);
         Assert.IsTrue(
@@ -675,6 +681,7 @@ public sealed partial class LuxembourgQueryExecutionAdapterTests
                 (assertionRequest, assertionWitness, null)],
             RelationFamilyKey, ResourceFamilyKey, AssertionFamilyKey,
             new PermissiveEvidenceResolver(enumerationRef), DocumentFetchRendererSource(),
+            LuxembourgAcquisitionTestFixture.TestWireBudget(),
             CancellationToken.None);
 
         if (expectedRefusal == LuxembourgQueryExecutionRefusal.None)
@@ -742,7 +749,7 @@ public sealed partial class LuxembourgQueryExecutionAdapterTests
         var result = await adapter.RunAsync(
             [(resourceRequest, resourceWitness, null), (assertionRequest, assertionWitness, null)],
             null, ResourceFamilyKey, AssertionFamilyKey,
-            new PermissiveEvidenceResolver(enumerationRef), DocumentFetchRendererSource(), CancellationToken.None);
+            new PermissiveEvidenceResolver(enumerationRef), DocumentFetchRendererSource(), LuxembourgAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
 
         Assert.IsNull(result.Refusal, $"code={result.Refusal?.Code} detail={result.Refusal?.Detail}");
         Assert.IsNotNull(result.ScopeManifestReceipt);
@@ -793,7 +800,7 @@ public sealed partial class LuxembourgQueryExecutionAdapterTests
         var result = await adapter.RunAsync(
             [(resourceRequest, resourceWitness, null), (assertionRequest, assertionWitness, null)],
             null, ResourceFamilyKey, AssertionFamilyKey,
-            new PermissiveEvidenceResolver(enumerationRef), DocumentFetchRendererSource(), CancellationToken.None);
+            new PermissiveEvidenceResolver(enumerationRef), DocumentFetchRendererSource(), LuxembourgAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
 
         Assert.IsNull(result.Refusal, $"code={result.Refusal?.Code} detail={result.Refusal?.Detail}");
         CollectionAssert.AreEqual(new[] { subjectUri }, result.ResourceObservationSubjects.ToArray());
@@ -826,7 +833,7 @@ public sealed partial class LuxembourgQueryExecutionAdapterTests
         var result = await adapter.RunAsync(
             [(resourceRequest, resourceWitness, null), (assertionRequest, assertionWitness, null)],
             null, ResourceFamilyKey, AssertionFamilyKey,
-            new PermissiveEvidenceResolver(enumerationRef), DocumentFetchRendererSource(), CancellationToken.None);
+            new PermissiveEvidenceResolver(enumerationRef), DocumentFetchRendererSource(), LuxembourgAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
 
         Assert.IsNull(result.Refusal, $"code={result.Refusal?.Code} detail={result.Refusal?.Detail}");
         Assert.HasCount(5, result.TypedAssertions);
@@ -912,7 +919,7 @@ public sealed partial class LuxembourgQueryExecutionAdapterTests
         var result = await adapter.RunAsync(
             [(resourceRequest, resourceWitness, null), (assertionRequest, assertionWitness, null)],
             null, ResourceFamilyKey, AssertionFamilyKey,
-            new PermissiveEvidenceResolver(enumerationRef), DocumentFetchRendererSource(), CancellationToken.None);
+            new PermissiveEvidenceResolver(enumerationRef), DocumentFetchRendererSource(), LuxembourgAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
 
         Assert.IsNotNull(result.Refusal);
         Assert.AreEqual(LuxembourgQueryExecutionRefusal.AssertionFactNotRepresentable, result.Refusal!.Code);
@@ -940,7 +947,7 @@ public sealed partial class LuxembourgQueryExecutionAdapterTests
         var result = await adapter.RunAsync(
             [(resourceRequest, resourceWitness, null), (assertionRequest, assertionWitness, null)],
             null, ResourceFamilyKey, AssertionFamilyKey,
-            new PermissiveEvidenceResolver(enumerationRef), DocumentFetchRendererSource(), CancellationToken.None);
+            new PermissiveEvidenceResolver(enumerationRef), DocumentFetchRendererSource(), LuxembourgAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
 
         Assert.IsNotNull(result.Refusal);
         Assert.AreEqual(LuxembourgQueryExecutionRefusal.AssertionFactNotRepresentable, result.Refusal!.Code);
@@ -974,7 +981,7 @@ public sealed partial class LuxembourgQueryExecutionAdapterTests
 
             var result = await adapter.RunAsync(
                 [], null, null, null, new PermissiveEvidenceResolver(enumerationRef),
-                DocumentFetchRendererSource(), CancellationToken.None);
+                DocumentFetchRendererSource(), LuxembourgAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
 
             Assert.IsNotNull(result.Refusal);
             Assert.AreEqual(
@@ -1021,7 +1028,7 @@ public sealed partial class LuxembourgQueryExecutionAdapterTests
             {
                 result = await adapter.RunAsync(
                     [], null, null, null, new PermissiveEvidenceResolver(enumerationRef),
-                    DocumentFetchRendererSource(), CancellationToken.None);
+                    DocumentFetchRendererSource(), LuxembourgAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
             }
             catch (CustodyIntegrityException exception)
             {
@@ -1129,7 +1136,7 @@ public sealed partial class LuxembourgQueryExecutionAdapterTests
                 store, NewExecutor(store, NoSendHandler()), profile);
 
             var result = await adapter.RunAsync(
-                [], null, null, null, new PermissiveEvidenceResolver(enumerationRef), DocumentFetchRendererSource(), CancellationToken.None);
+                [], null, null, null, new PermissiveEvidenceResolver(enumerationRef), DocumentFetchRendererSource(), LuxembourgAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
 
             // BOTH GATES ARE PASSED NOW, and the test finally delivers what its name promises.
             // It asserted a residual RecordSetNotRetained because the shared CorpusRecordSetWriter
@@ -1204,7 +1211,7 @@ public sealed partial class LuxembourgQueryExecutionAdapterTests
         var result = await adapter.RunAsync(
             [(resourceRequest, resourceWitness, null), (assertionRequest, assertionWitness, null)],
             null, ResourceFamilyKey, AssertionFamilyKey,
-            new PermissiveEvidenceResolver(enumerationRef), DocumentFetchRendererSource(), CancellationToken.None);
+            new PermissiveEvidenceResolver(enumerationRef), DocumentFetchRendererSource(), LuxembourgAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
 
         Assert.IsNull(result.Refusal, $"code={result.Refusal?.Code} detail={result.Refusal?.Detail}");
         Assert.IsNotNull(result.ScopeManifestReceipt);
@@ -1234,7 +1241,7 @@ public sealed partial class LuxembourgQueryExecutionAdapterTests
         var result = await adapter.RunAsync(
             [(resourceRequest, resourceWitness, null), (assertionRequest, assertionWitness, null)],
             null, ResourceFamilyKey, AssertionFamilyKey,
-            new PermissiveEvidenceResolver(enumerationRef), DocumentFetchRendererSource(), CancellationToken.None);
+            new PermissiveEvidenceResolver(enumerationRef), DocumentFetchRendererSource(), LuxembourgAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
 
         Assert.IsNull(result.Refusal, $"code={result.Refusal?.Code} detail={result.Refusal?.Detail}");
         Assert.IsNotNull(result.ScopeManifestReceipt);
@@ -1263,7 +1270,7 @@ public sealed partial class LuxembourgQueryExecutionAdapterTests
         var result = await adapter.RunAsync(
             [(resourceRequest, resourceWitness, null), (assertionRequest, assertionWitness, null)],
             null, ResourceFamilyKey, AssertionFamilyKey,
-            new PermissiveEvidenceResolver(enumerationRef), DocumentFetchRendererSource(), CancellationToken.None);
+            new PermissiveEvidenceResolver(enumerationRef), DocumentFetchRendererSource(), LuxembourgAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
 
         Assert.IsNull(result.Refusal, $"code={result.Refusal?.Code} detail={result.Refusal?.Detail}");
         Assert.IsNotNull(result.ScopeManifestReceipt);
@@ -1327,7 +1334,7 @@ public sealed partial class LuxembourgQueryExecutionAdapterTests
         var result = await adapter.RunAsync(
             [(resourceRequest, resourceWitness, null), (assertionRequest, assertionWitness, null)],
             null, ResourceFamilyKey, AssertionFamilyKey,
-            new PermissiveEvidenceResolver(enumerationRef), DocumentFetchRendererSource(), CancellationToken.None);
+            new PermissiveEvidenceResolver(enumerationRef), DocumentFetchRendererSource(), LuxembourgAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
 
         Assert.IsNull(result.Refusal, $"code={result.Refusal?.Code} detail={result.Refusal?.Detail}");
         Assert.IsNotNull(result.ScopeManifestReceipt);
@@ -1365,7 +1372,7 @@ public sealed partial class LuxembourgQueryExecutionAdapterTests
         var result = await adapter.RunAsync(
             [(resourceRequest, resourceWitness, null), (assertionRequest, assertionWitness, null)],
             null, ResourceFamilyKey, AssertionFamilyKey,
-            new PermissiveEvidenceResolver(enumerationRef), DocumentFetchRendererSource(), CancellationToken.None);
+            new PermissiveEvidenceResolver(enumerationRef), DocumentFetchRendererSource(), LuxembourgAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
 
         Assert.IsNull(result.Refusal, $"code={result.Refusal?.Code} detail={result.Refusal?.Detail}");
         Assert.IsNotNull(result.ScopeManifestReceipt);
@@ -1492,7 +1499,7 @@ public sealed partial class LuxembourgQueryExecutionAdapterTests
         var result = await adapter.RunAsync(
             [(assertionRequest, assertionWitness, null), (resourceRequest, resourceWitness, chain)],
             null, ResourceFamilyKey, AssertionFamilyKey,
-            new PermissiveEvidenceResolver(enumerationRef), DocumentFetchRendererSource(), CancellationToken.None);
+            new PermissiveEvidenceResolver(enumerationRef), DocumentFetchRendererSource(), LuxembourgAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
 
         Assert.IsNull(result.Refusal, $"code={result.Refusal?.Code} detail={result.Refusal?.Detail}");
         Assert.IsNotNull(result.ScopeManifestReceipt);
@@ -1563,7 +1570,7 @@ public sealed partial class LuxembourgQueryExecutionAdapterTests
         var result = await adapter.RunAsync(
             [(assertionRequest, assertionWitness, null), (resourceRequest, resourceWitness, chain)],
             null, ResourceFamilyKey, AssertionFamilyKey,
-            new PermissiveEvidenceResolver(enumerationRef), DocumentFetchRendererSource(), CancellationToken.None);
+            new PermissiveEvidenceResolver(enumerationRef), DocumentFetchRendererSource(), LuxembourgAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
 
         // Refused with a typed detail naming which resource-observation family family key was not
         // proven -- the same refusal shape an unproven single-partition census produces, not a raw
@@ -1605,7 +1612,7 @@ public sealed partial class LuxembourgQueryExecutionAdapterTests
         var result = await adapter.RunAsync(
             [(resourceRequest, resourceWitness, null), (assertionRequest, assertionWitness, null)],
             null, ResourceFamilyKey, AssertionFamilyKey,
-            new PermissiveEvidenceResolver(enumerationRef), DocumentFetchRendererSource(), CancellationToken.None);
+            new PermissiveEvidenceResolver(enumerationRef), DocumentFetchRendererSource(), LuxembourgAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
 
         Assert.IsNull(result.ScopeManifestReceipt);
         Assert.IsNotNull(result.Refusal);
@@ -1640,7 +1647,7 @@ public sealed partial class LuxembourgQueryExecutionAdapterTests
         var result = await adapter.RunAsync(
             [(resourceRequest, resourceWitness, null), (assertionRequest, assertionWitness, null)],
             null, ResourceFamilyKey, AssertionFamilyKey,
-            new PermissiveEvidenceResolver(enumerationRef), DocumentFetchRendererSource(), CancellationToken.None);
+            new PermissiveEvidenceResolver(enumerationRef), DocumentFetchRendererSource(), LuxembourgAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
 
         Assert.IsNull(result.ScopeManifestReceipt);
         Assert.IsNotNull(result.Refusal);
@@ -1693,7 +1700,7 @@ public sealed partial class LuxembourgQueryExecutionAdapterTests
         var result = await adapter.RunAsync(
             [(resourceRequest, resourceWitness, null), (assertionRequest, assertionWitness, null)],
             null, ResourceFamilyKey, AssertionFamilyKey,
-            new PermissiveEvidenceResolver(enumerationRef), DocumentFetchRendererSource(), CancellationToken.None);
+            new PermissiveEvidenceResolver(enumerationRef), DocumentFetchRendererSource(), LuxembourgAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
 
         Assert.IsNull(result.ScopeManifestReceipt);
         Assert.IsNotNull(result.Refusal);
@@ -1727,7 +1734,7 @@ public sealed partial class LuxembourgQueryExecutionAdapterTests
         var exception = await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => adapter.RunAsync(
             [(resourceRequest, resourceWitness, null), (assertionRequest, assertionWitness, null)],
             null, ResourceFamilyKey, AssertionFamilyKey,
-            new AlwaysRefusingEvidenceResolver(enumerationRef), DocumentFetchRendererSource(), CancellationToken.None));
+            new AlwaysRefusingEvidenceResolver(enumerationRef), DocumentFetchRendererSource(), LuxembourgAcquisitionTestFixture.TestWireBudget(), CancellationToken.None));
         StringAssert.Contains(exception.Message, "not admitted");
     }
 
@@ -1772,7 +1779,7 @@ public sealed partial class LuxembourgQueryExecutionAdapterTests
             var (assertionRequest, assertionWitness) = BuildPartitionRequest(AssertionSetId, AssertionFamilyKey);
             return await adapter.RunAsync(
                 [(resourceRequest, resourceWitness, null), (assertionRequest, assertionWitness, null)],
-                null, ResourceFamilyKey, AssertionFamilyKey, resolver, DocumentFetchRendererSource(), CancellationToken.None);
+                null, ResourceFamilyKey, AssertionFamilyKey, resolver, DocumentFetchRendererSource(), LuxembourgAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
         }
 
         var missingOne = await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => RunWithAsync(
@@ -1827,7 +1834,7 @@ public sealed partial class LuxembourgQueryExecutionAdapterTests
 
         var exception = await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => adapter.RunAsync(
             [(resourceRequest, resourceWitness, null), (assertionRequest, assertionWitness, null)],
-            null, ResourceFamilyKey, AssertionFamilyKey, DocumentFetchRendererSource(), CancellationToken.None));
+            null, ResourceFamilyKey, AssertionFamilyKey, DocumentFetchRendererSource(), LuxembourgAcquisitionTestFixture.TestWireBudget(), CancellationToken.None));
         StringAssert.Contains(exception.Message, "not admitted");
     }
 
@@ -1869,7 +1876,7 @@ public sealed partial class LuxembourgQueryExecutionAdapterTests
 
         var exception = await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => adapter.RunAsync(
             [(resourceRequest, resourceWitness, null), (assertionRequest, assertionWitness, null)],
-            null, ResourceFamilyKey, AssertionFamilyKey, DocumentFetchRendererSource(), CancellationToken.None));
+            null, ResourceFamilyKey, AssertionFamilyKey, DocumentFetchRendererSource(), LuxembourgAcquisitionTestFixture.TestWireBudget(), CancellationToken.None));
         StringAssert.Contains(exception.Message, "not admitted");
     }
 
@@ -1946,7 +1953,7 @@ public sealed partial class LuxembourgQueryExecutionAdapterTests
 
             var result = await adapter.RunAsync(
                 [(partitionRequest, witness, null)], RelationFamilyKey, null, null,
-                new PermissiveEvidenceResolver(enumerationRef), DocumentFetchRendererSource(), CancellationToken.None);
+                new PermissiveEvidenceResolver(enumerationRef), DocumentFetchRendererSource(), LuxembourgAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
 
             Assert.IsNull(result.Refusal, $"code={result.Refusal?.Code} detail={result.Refusal?.Detail}");
             Assert.IsNotNull(result.ScopeManifestReceipt);
@@ -1973,6 +1980,32 @@ public sealed partial class LuxembourgQueryExecutionAdapterTests
         {
             Directory.Delete(root, recursive: true);
         }
+    }
+
+    /// <summary>Both public adapter doors refuse a null run ceiling.</summary>
+    /// <remarks>
+    /// The executor's own three are covered by
+    /// <see cref="LuxembourgUnbudgetedEntryPointClosureTests.EveryLuxembourgDoorRefusesANullCeiling"/>.
+    /// This is the layer above them: #579 measured the adapter as holding no reference to
+    /// <c>WireRequestBudget</c> at all, so there was nothing in the call chain to pass even if a
+    /// caller had wanted to. Making the parameter required is what the compiler enforces; this is
+    /// the other half, because <c>null!</c> compiles.
+    /// </remarks>
+    [TestMethod]
+    public async Task TheAdapterRefusesANullCeiling()
+    {
+        var (profile, _, _) = BuildProfile();
+        var store = new InMemoryCustodyStore();
+        var adapter = new LuxembourgQueryExecutionAdapter(
+            store, NewExecutor(store, NoSendHandler()), profile);
+
+        await Assert.ThrowsExactlyAsync<ArgumentNullException>(
+            () => adapter.RunAsync(
+                [], null, null, null, DocumentFetchRendererSource(), null!, CancellationToken.None));
+
+        await Assert.ThrowsExactlyAsync<ArgumentNullException>(
+            () => adapter.RunScopedAsync(
+                [], [], DocumentFetchRendererSource(), null!, CancellationToken.None));
     }
 
     private static (VerifiedLuxembourgSourceProfile Profile, SourceArtifactRef ObservationRef, SourceArtifactRef EnumerationRef)

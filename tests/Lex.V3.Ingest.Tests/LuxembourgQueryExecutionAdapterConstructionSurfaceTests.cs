@@ -563,6 +563,7 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
                     + "System.String?, System.String?, System.String?, "
                     + "Lex.V3.Contracts.Source.Scope.IScopeReductionEvidenceResolver?, "
                     + "Lex.V3.Contracts.Source.Core.MachineQueryRendererSource, "
+                    + "Lex.V3.Ingest.WireRequestBudget, "
                     + "System.Threading.CancellationToken) -> "
                     + "System.Threading.Tasks.Task<Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutio"
                     + "nResult>",
@@ -576,6 +577,7 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
                     + "ScopePartitionFamilies>, "
                     + "Lex.V3.Contracts.Source.Scope.IScopeReductionEvidenceResolver?, "
                     + "Lex.V3.Contracts.Source.Core.MachineQueryRendererSource, "
+                    + "Lex.V3.Ingest.WireRequestBudget, "
                     + "System.Threading.CancellationToken) -> "
                     + "System.Threading.Tasks.Task<Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutio"
                     + "nResult>",
@@ -590,6 +592,7 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
                     + "System.Collections.Generic.IReadOnlyList<System.String>, "
                     + "Lex.V3.Contracts.Source.Scope.IScopeReductionEvidenceResolver?, "
                     + "Lex.V3.Contracts.Source.Core.MachineQueryRendererSource, System.Boolean, "
+                    + "Lex.V3.Ingest.WireRequestBudget, "
                     + "System.Threading.CancellationToken) -> "
                     + "System.Threading.Tasks.Task<Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutio"
                     + "nResult>",
@@ -601,6 +604,7 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
                     + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgPartitionChain>>, "
                     + "System.String?, System.String?, System.String?, "
                     + "Lex.V3.Contracts.Source.Core.MachineQueryRendererSource, "
+                    + "Lex.V3.Ingest.WireRequestBudget, "
                     + "System.Threading.CancellationToken) -> "
                     + "System.Threading.Tasks.Task<Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutio"
                     + "nResult>",
@@ -613,6 +617,7 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
                     + "System.Collections.Generic.IReadOnlyList<Lex.V3.Ingest.Luxembourg.Luxembourg"
                     + "ScopePartitionFamilies>, "
                     + "Lex.V3.Contracts.Source.Core.MachineQueryRendererSource, "
+                    + "Lex.V3.Ingest.WireRequestBudget, "
                     + "System.Threading.CancellationToken) -> "
                     + "System.Threading.Tasks.Task<Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutio"
                     + "nResult>",

@@ -124,37 +124,40 @@ public sealed class LuxembourgExecutorConstructionSurfaceTests
         CollectionAssert.AreEqual(
             new[]
             {
-                // The three places a run result is returned, and the RunCoverAsync closure that
-                // reports one bootstrap refusal per intended leaf. All of them go through the two
-                // factories above; none is another way to build one. The closure's own ordinal
-                // shifted from b__8_0 to b__9_0 when queue item 19 replaced ObserveAsync's body with
-                // a call into the shared glue plus the ToObserveOutcome mapping method, which moved
-                // where the compiler numbers this generated method -- not a new way to build a run
-                // result, confirmed by re-printing this exact list after the change. It shifted
-                // again, from b__9_0 to b__11_0, when D1-06c-LU-2 added RunDocumentGetAsync and
-                // IsRetryableStatus ahead of RunCoverAsync in this type: same reason, the compiler
-                // numbers generated methods by declaration position, and this is still not a new
-                // way to build a run result. Re-printed after the change rather than guessed.
-                "method internal instance " + N + "LuxembourgRepeatedEnumerationExecutor+<>c"
-                + "::<RunCoverAsync>b__11_0(" + Contracts + "LuxembourgQueryPartitionRange) -> "
-                + N + "LuxembourgEnumerationRunResult",
-                // Both signatures below gained a trailing WireRequestBudget?, the enforced wire
-                // ceiling. Re-printed after the change rather than guessed, and it is not a new way
-                // to build a run result: the two factories above are still the only ones.
-                "method private instance " + N + "LuxembourgRepeatedEnumerationExecutor"
-                + "::RunPartitionOnSessionAsync(" + N + "LuxembourgPartitionRunRequest, "
-                + "Lex.V3.Ingest.RoutedHttpAcquisitionSession, " + Core + "SourceArtifactRef?, "
-                + "System.Threading.CancellationToken, Lex.V3.Ingest.WireRequestBudget?) -> "
-                + "System.Threading.Tasks.Task<" + N + "LuxembourgEnumerationRunResult>",
-                "method public instance " + N + "LuxembourgRepeatedEnumerationExecutor::RunCoverAsync("
-                + N + "LuxembourgPartitionRunRequest, " + Contracts + "LuxembourgPartitionChain, "
-                + Core + "BoundMachineRequest, System.Threading.CancellationToken) -> "
-                + "System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<"
-                + N + "LuxembourgEnumerationRunResult>>",
-                "method public instance " + N + "LuxembourgRepeatedEnumerationExecutor::RunPartitionAsync("
-                + N + "LuxembourgPartitionRunRequest, " + Core + "BoundMachineRequest, "
-                + "System.Threading.CancellationToken, Lex.V3.Ingest.WireRequestBudget?) -> "
-                + "System.Threading.Tasks.Task<" + N + "LuxembourgEnumerationRunResult>",
+                "method internal instance "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgRepeatedEnumerationExecutor+<>c::<RunCove"
+                    + "rAsync>b__11_0(Lex.V3.Contracts.Source.Luxembourg.LuxembourgQueryPartitionRa"
+                    + "nge) -> Lex.V3.Ingest.Luxembourg.LuxembourgEnumerationRunResult",
+                "method internal instance "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgRepeatedEnumerationExecutor+<>c::<RunCove"
+                    + "rAsync>b__11_1(Lex.V3.Contracts.Source.Luxembourg.LuxembourgQueryPartitionRa"
+                    + "nge) -> Lex.V3.Ingest.Luxembourg.LuxembourgEnumerationRunResult",
+                "method private instance "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgRepeatedEnumerationExecutor::RunPartition"
+                    + "OnSessionAsync(Lex.V3.Ingest.Luxembourg.LuxembourgPartitionRunRequest, "
+                    + "Lex.V3.Ingest.RoutedHttpAcquisitionSession, "
+                    + "Lex.V3.Contracts.Source.Core.SourceArtifactRef?, "
+                    + "Lex.V3.Ingest.WireRequestBudget, "
+                    + "System.Threading.CancellationToken) -> "
+                    + "System.Threading.Tasks.Task<Lex.V3.Ingest.Luxembourg.LuxembourgEnumerationRu"
+                    + "nResult>",
+                "method public instance "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgRepeatedEnumerationExecutor::RunCoverAsyn"
+                    + "c(Lex.V3.Ingest.Luxembourg.LuxembourgPartitionRunRequest, "
+                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgPartitionChain, "
+                    + "Lex.V3.Contracts.Source.Core.BoundMachineRequest, "
+                    + "Lex.V3.Ingest.WireRequestBudget, "
+                    + "System.Threading.CancellationToken) -> "
+                    + "System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Lex.V3."
+                    + "Ingest.Luxembourg.LuxembourgEnumerationRunResult>>",
+                "method public instance "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgRepeatedEnumerationExecutor::RunPartition"
+                    + "Async(Lex.V3.Ingest.Luxembourg.LuxembourgPartitionRunRequest, "
+                    + "Lex.V3.Contracts.Source.Core.BoundMachineRequest, "
+                    + "Lex.V3.Ingest.WireRequestBudget, "
+                    + "System.Threading.CancellationToken) -> "
+                    + "System.Threading.Tasks.Task<Lex.V3.Ingest.Luxembourg.LuxembourgEnumerationRu"
+                    + "nResult>",
             },
             ConstructionSurface.ProducersIn(
                 typeof(LuxembourgEnumerationRunResult).Assembly,

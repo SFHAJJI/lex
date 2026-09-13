@@ -15,6 +15,19 @@ namespace Lex.V3.Ingest.Tests;
 [DoNotParallelize]
 public sealed class LuxembourgLiveEnumerationCanary
 {
+    /// <summary>The whole-canary charged-request ceiling. Null until the owner dispositions one.</summary>
+    /// <remarks>
+    /// THE SHAPE IS DERIVABLE, THE NUMBER IS NOT. This canary runs three families, each its own
+    /// session: one robots fetch, then two passes of one count and however many pages that count
+    /// implies. Under <c>ShortPageTerminal</c> the page count is a function of the rows the
+    /// publisher returns for a two-day Code Civil range, and the profile allows four attempts per
+    /// request. So the floor is 3 x (1 + 2 x 2) = 15 requests if every page is the only page and
+    /// nothing is retried, and the ceiling is that times the retry allowance — 60 — if everything
+    /// is. Both are projections of a row count nobody here has measured, which is why a number is
+    /// asked for rather than computed. 60 is the arithmetic, not a recommendation.
+    /// </remarks>
+    private static readonly int? SharedWireCeiling = null;
+
     [TestMethod]
     public async Task CodeCivilFamiliesAreEnumeratedTwiceThroughThePublisherRoute()
     {
@@ -22,6 +35,19 @@ public sealed class LuxembourgLiveEnumerationCanary
         {
             Assert.Inconclusive("Set LEX_LU_ENUMERATION_CANARY=1 for the live bounded enumeration proof.");
         }
+
+        // FAIL CLOSED ON A MISSING CEILING, before a root, a store or an executor is built.
+        if (SharedWireCeiling is not { } ceiling)
+        {
+            Assert.Inconclusive(
+                "The whole-canary wire ceiling has not been dispositioned. This harness will not "
+                + "choose one: set SharedWireCeiling before running it.");
+            return;
+        }
+
+        // ONE INSTANCE FOR ALL THREE FAMILIES. Three sessions share it, so three robots fetches are
+        // charged as three; a budget per family would bound each and leave the canary unbounded.
+        var budget = WireRequestBudget.OfWireRequests(ceiling);
 
         var checkout = CheckoutRoot();
         var root = Path.Combine(checkout, "artifacts", "lu-enumeration-" + Guid.NewGuid().ToString("N"));
@@ -52,7 +78,8 @@ public sealed class LuxembourgLiveEnumerationCanary
             var request = new LuxembourgPartitionRunRequest(plan, planId, family, partition, renderer);
             var witness = plan.BindCount(planId, NewUrn(), NewUrn(), family,
                 LuxembourgQueryPass.Pass1, partition, renderer);
-            var outcome = await executor.RunPartitionAsync(request, witness.Request, CancellationToken.None);
+            var outcome = await executor.RunPartitionAsync(
+                request, witness.Request, budget, CancellationToken.None);
             measured.Add(new
             {
                 family,

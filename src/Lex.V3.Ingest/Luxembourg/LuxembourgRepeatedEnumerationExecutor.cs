@@ -318,6 +318,16 @@ public enum LuxembourgDocumentGetAttemptRefusal
 
     [JsonStringEnumMemberName("observation_not_executed")]
     ObservationNotExecuted = 3,
+
+    /// <summary>The run's ceiling was reached before this request could be sent.</summary>
+    /// <remarks>
+    /// Distinct from <see cref="ObservationNotExecuted"/> on purpose. That name says the publisher
+    /// was asked and did not answer usefully; this one says nothing was asked at all, because this
+    /// run had already spent what it was given. Collapsing the two would make a refusal this
+    /// codebase chose indistinguishable from a failure the publisher caused.
+    /// </remarks>
+    [JsonStringEnumMemberName("wire_budget_exhausted")]
+    WireBudgetExhausted = 4,
 }
 
 /// <summary>Executed for real (whatever the office answered), or refused before it ever sent. Never both, never neither.</summary>
@@ -428,19 +438,26 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
     }
 
     /// <summary>One partition, one session, two passes.</summary>
+    /// <param name="wireBudget">
+    /// This run's enforced ceiling, charged for the session's robots fetch and every attempt under
+    /// it. REQUIRED, and deliberately no longer optional with a null default: an optional ceiling
+    /// is absent by omission, and every caller of this door except one unit test omitted it. A
+    /// parameter that has to be remembered is not a bound.
+    /// </param>
     public async Task<LuxembourgEnumerationRunResult> RunPartitionAsync(
         LuxembourgPartitionRunRequest request,
         BoundMachineRequest sourceWitness,
-        CancellationToken cancellationToken,
-        WireRequestBudget? wireBudget = null)
+        WireRequestBudget wireBudget,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(sourceWitness);
+        ArgumentNullException.ThrowIfNull(wireBudget);
 
         // This partition's robots fetch, reserved before the session that sends it. The mirror has
         // to charge robots the same way the EU side does or the two ceilings mean different things
         // while sharing a name, which is the reason the mirror exists at all.
-        if (wireBudget is not null && !wireBudget.TryReserveAttempt())
+        if (!wireBudget.TryReserveAttempt())
         {
             return LuxembourgEnumerationRunResult.Refused(
                 new LuxembourgEnumerationRefusalDetail(
@@ -466,7 +483,7 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
         try
         {
             return await RunPartitionOnSessionAsync(
-                    request, runner, sharedProfileRef: null, cancellationToken, wireBudget)
+                    request, runner, sharedProfileRef: null, wireBudget, cancellationToken)
                 .ConfigureAwait(false);
         }
         finally
@@ -504,9 +521,11 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
         LuxembourgPartitionRunRequest request,
         RoutedHttpAcquisitionSession runner,
         SourceArtifactRef? sharedProfileRef,
-        CancellationToken cancellationToken,
-        WireRequestBudget? wireBudget = null)
+        WireRequestBudget wireBudget,
+        CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(wireBudget);
+
         var budget = LuxembourgEnumerationBudget.FromPlan(request.InvariantPlan);
         var profile = request.InvariantPlan.CreateDeliveryProfile(request.InvariantPlanResourceId, request.SetId);
         SourceArtifactRef profileRef;
@@ -564,7 +583,7 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
                 var passResult = await RunPassAsync(
                         runner, request, profile, pass, budget, executorWrittenMembership,
                         () => productRequestCount, count => productRequestCount = count,
-                        cancellationToken, wireBudget)
+                        wireBudget, cancellationToken)
                     .ConfigureAwait(false);
                 if (passResult.Refusal is not null)
                 {
@@ -663,11 +682,30 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
     /// Sends one document GET through its own routed session, with robots evaluated against
     /// the requested URL under Decision 83 and every received body retained.
     /// </summary>
+    /// <param name="wireBudget">
+    /// This fetch's enforced ceiling, charged for the session's robots fetch and for every attempt
+    /// including retries. REQUIRED. #579 singled this door out from the six metadata doors it
+    /// measured as unbudgeted because it is a BODY fetch: one request here can cost orders of
+    /// magnitude more bytes than a SPARQL page, so an unbounded run costs more here than anywhere
+    /// else in this file.
+    /// </param>
     public async Task<LuxembourgDocumentGetAttemptResult> RunDocumentGetAsync(
         BoundMachineRequest boundRequest,
+        WireRequestBudget wireBudget,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(boundRequest);
+        ArgumentNullException.ThrowIfNull(wireBudget);
+
+        // THE SESSION'S ROBOTS FETCH, RESERVED BEFORE THE SESSION EXISTS. Starting a session sends
+        // robots as its first act, so this is the last point at which that request can be stopped
+        // rather than merely counted after it has already gone out.
+        if (!wireBudget.TryReserveAttempt())
+        {
+            return LuxembourgDocumentGetAttemptResult.Refused(
+                LuxembourgDocumentGetAttemptRefusal.WireBudgetExhausted,
+                "the ceiling was reached before this fetch's robots request.");
+        }
 
         var start = _testHandlerOverride is null
             ? await RoutedHttpAcquisitionSession.StartAsync(
@@ -699,6 +737,17 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
             RoutedHttpAcquisitionSession.AttemptResult attempt;
             while (true)
             {
+                // EVERY ATTEMPT, NOT ONLY THE FIRST. This door re-attempts a COMPLETED response at a
+                // retryable status - the one place this driver deliberately differs from the EU one,
+                // documented below - so the retry loop is exactly where a body-fetch ceiling would
+                // otherwise be lost. That the first request was charged says nothing about the sixth.
+                if (!wireBudget.TryReserveAttempt())
+                {
+                    return LuxembourgDocumentGetAttemptResult.Refused(
+                        LuxembourgDocumentGetAttemptRefusal.WireBudgetExhausted,
+                        $"the ceiling was reached after {attemptCount} attempt(s).");
+                }
+
                 attempt = await item.ExecuteNextAttemptAsync(cancellationToken).ConfigureAwait(false);
                 attemptCount++;
                 if (attempt.Kind == OfficialHttpAcquisitionOutcomeKind.ExecutedObservation)
@@ -772,15 +821,40 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
     /// Every leaf of one chain in ONE session, so the cover's one-run requirement holds by
     /// construction rather than by a check across results.
     /// </summary>
+    /// <param name="wireBudget">
+    /// The ceiling for the WHOLE cover, not one per leaf. Every leaf of a chain runs inside the one
+    /// session this method opens, so a per-leaf budget would bound each leaf and leave the cover -
+    /// whose leaf count is the caller's chain, not a constant - unbounded.
+    /// </param>
     public async Task<IReadOnlyList<LuxembourgEnumerationRunResult>> RunCoverAsync(
         LuxembourgPartitionRunRequest rootRequest,
         LuxembourgPartitionChain chain,
         BoundMachineRequest sourceWitness,
+        WireRequestBudget wireBudget,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(rootRequest);
         ArgumentNullException.ThrowIfNull(chain);
         ArgumentNullException.ThrowIfNull(sourceWitness);
+        ArgumentNullException.ThrowIfNull(wireBudget);
+
+        // THE COVER'S ROBOTS FETCH, RESERVED BEFORE THE SESSION THAT SENDS IT. One session serves
+        // every leaf, so this is charged once here rather than once per leaf - charging it per leaf
+        // would report N robots fetches for one, which is the mirror image of the defect
+        // WireRequestBudget's own remarks record for a budget reused across sessions.
+        //
+        // Reported once per intended leaf, for the same reason the bootstrap refusal below is:
+        // results.Count == chain.Leaves.Count has to hold on every path, including this one.
+        if (!wireBudget.TryReserveAttempt())
+        {
+            return chain.Leaves
+                .Select(static _ => LuxembourgEnumerationRunResult.Refused(
+                    new LuxembourgEnumerationRefusalDetail(
+                        LuxembourgEnumerationRefusal.WireBudgetExhausted,
+                        null, null, null, null, null, null, [], null),
+                    productRequestCount: 0))
+                .ToArray();
+        }
 
         // One session for every leaf (see RunPartitionOnSessionAsync's doc comment for why): the
         // bootstrap itself is not per leaf, so a bootstrap refusal here is reported once per
@@ -817,7 +891,8 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
             foreach (var leaf in chain.Leaves)
             {
                 var leafRequest = rootRequest with { Partition = leaf };
-                results.Add(await RunPartitionOnSessionAsync(leafRequest, runner, sharedProfileRef, cancellationToken)
+                results.Add(await RunPartitionOnSessionAsync(
+                        leafRequest, runner, sharedProfileRef, wireBudget, cancellationToken)
                     .ConfigureAwait(false));
             }
 
@@ -840,8 +915,8 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
         Dictionary<string, CustodyMembership> executorWrittenMembership,
         Func<int> currentCount,
         Action<int> setCount,
-        CancellationToken cancellationToken,
-        WireRequestBudget? wireBudget)
+        WireRequestBudget wireBudget,
+        CancellationToken cancellationToken)
     {
         var countBound = request.InvariantPlan.BindCount(
             request.InvariantPlanResourceId, NewUrn(), NewUrn(), request.SetId, pass, request.Partition,
