@@ -106,8 +106,8 @@ public sealed class LuxembourgNeverConsolidatedFrameTests
     {
         foreach (var disposition in new[]
         {
-            LuxembourgNeverConsolidatedDisposition.CitedEnumerationDeliveredNoConsolidation,
-            LuxembourgNeverConsolidatedDisposition.CitedEnumerationDeliveredConsolidations,
+            LuxembourgNeverConsolidatedDisposition.CitedEnumerationDeliveredNoRows,
+            LuxembourgNeverConsolidatedDisposition.CitedEnumerationDeliveredRows,
         })
         {
             Assert.ThrowsExactly<ArgumentException>(
@@ -131,9 +131,9 @@ public sealed class LuxembourgNeverConsolidatedFrameTests
     /// A disposition that contradicts its own proof is refused at construction, not recorded.
     /// </summary>
     /// <remarks>
-    /// The proof decides which of the two enumerated dispositions this is: rows delivered means the
-    /// act WAS consolidated, none delivered is the absence claim. A caller stating the opposite of
-    /// what its own evidence says is contradicting itself inside one argument list.
+    /// The proof decides which of the two cited-enumeration members this is, and only that: it says
+    /// how many rows came back. A caller naming the member that contradicts its own proof's row
+    /// count is contradicting itself inside one argument list.
     /// </remarks>
     [TestMethod]
     public void ADispositionThatContradictsItsOwnProofIsRejected()
@@ -142,17 +142,17 @@ public sealed class LuxembourgNeverConsolidatedFrameTests
             () => new LuxembourgNeverConsolidatedEntry(
                 ActOne,
                 new LuxembourgActClassRef(Loi),
-                LuxembourgNeverConsolidatedDisposition.CitedEnumerationDeliveredNoConsolidation,
+                LuxembourgNeverConsolidatedDisposition.CitedEnumerationDeliveredNoRows,
                 Proof(2)),
-            "never consolidated, beside a proof that delivered two consolidations.");
+            "delivered no rows, beside a proof that delivered two.");
 
         Assert.ThrowsExactly<ArgumentException>(
             () => new LuxembourgNeverConsolidatedEntry(
                 ActOne,
                 new LuxembourgActClassRef(Loi),
-                LuxembourgNeverConsolidatedDisposition.CitedEnumerationDeliveredConsolidations,
+                LuxembourgNeverConsolidatedDisposition.CitedEnumerationDeliveredRows,
                 Proof(0)),
-            "consolidated, beside a proof that delivered nothing.");
+            "delivered rows, beside a proof that delivered none.");
     }
 
     // ---- The publisher owns the class vocabulary. ----
@@ -286,7 +286,7 @@ public sealed class LuxembourgNeverConsolidatedFrameTests
         var other = new LuxembourgNeverConsolidatedEntry(
             ActOne,
             new LuxembourgActClassRef(Loi),
-            LuxembourgNeverConsolidatedDisposition.CitedEnumerationDeliveredNoConsolidation,
+            LuxembourgNeverConsolidatedDisposition.CitedEnumerationDeliveredNoRows,
             Proof(0, runIdentitySeed: 931));
 
         Assert.IsFalse(frame.TryAdmit(other, out var refusal));
@@ -338,12 +338,12 @@ public sealed class LuxembourgNeverConsolidatedFrameTests
         var floored = new LuxembourgNeverConsolidatedEntry(
             ActOne,
             new LuxembourgActClassRef(Loi),
-            LuxembourgNeverConsolidatedDisposition.CitedEnumerationDeliveredNoConsolidation,
+            LuxembourgNeverConsolidatedDisposition.CitedEnumerationDeliveredNoRows,
             Proof(0, floor: CustodyMembership.Floored));
         var unenforced = new LuxembourgNeverConsolidatedEntry(
             ActOne,
             new LuxembourgActClassRef(Loi),
-            LuxembourgNeverConsolidatedDisposition.CitedEnumerationDeliveredNoConsolidation,
+            LuxembourgNeverConsolidatedDisposition.CitedEnumerationDeliveredNoRows,
             Proof(0, floor: CustodyMembership.RetainedUnenforced));
 
         // The premise: the two proofs differ in EXACTLY this one field, or the test proves nothing
@@ -534,8 +534,8 @@ public sealed class LuxembourgNeverConsolidatedFrameTests
         CollectionAssert.AreEqual(
             new[]
             {
-                "\"cited_enumeration_delivered_no_consolidation\"",
-                "\"cited_enumeration_delivered_consolidations\"",
+                "\"cited_enumeration_delivered_no_rows\"",
+                "\"cited_enumeration_delivered_rows\"",
                 "\"no_enumeration_cited\"",
             },
             Enum.GetValues<LuxembourgNeverConsolidatedDisposition>()
@@ -561,13 +561,13 @@ public sealed class LuxembourgNeverConsolidatedFrameTests
     private static LuxembourgNeverConsolidatedEntry NeverConsolidated(string act, string actClass) =>
         new(act,
             new LuxembourgActClassRef(actClass),
-            LuxembourgNeverConsolidatedDisposition.CitedEnumerationDeliveredNoConsolidation,
+            LuxembourgNeverConsolidatedDisposition.CitedEnumerationDeliveredNoRows,
             Proof(0));
 
     private static LuxembourgNeverConsolidatedEntry Consolidated(string act, string actClass) =>
         new(act,
             new LuxembourgActClassRef(actClass),
-            LuxembourgNeverConsolidatedDisposition.CitedEnumerationDeliveredConsolidations,
+            LuxembourgNeverConsolidatedDisposition.CitedEnumerationDeliveredRows,
             Proof(2));
 
     private static LuxembourgNeverConsolidatedEntry Unproven(string act, string actClass) =>

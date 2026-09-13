@@ -11,14 +11,25 @@ namespace Lex.V3.Contracts.Source.Luxembourg;
 /// </summary>
 /// <remarks>
 /// <para>
-/// THESE MEMBERS NAME THE RECORD, NOT A PROVEN FACT ABOUT THE ACT, AND THE RENAME IS THE WHOLE
-/// POINT. They used to read <c>EnumeratedAndNeverConsolidated</c> / <c>EnumeratedAndConsolidated</c>,
+/// THESE MEMBERS NAME WHAT A PROOF ESTABLISHES, AND NOTHING ELSE. That took two passes and both
+/// corrections are worth keeping visible.
+/// </para>
+/// <para>
+/// They first read <c>EnumeratedAndNeverConsolidated</c> / <c>EnumeratedAndConsolidated</c>,
 /// documented as "a proven-whole consolidation enumeration FOR THIS ACT delivered nothing". Nothing
-/// in this build can establish that: an <see cref="AbsenceFamilyEnumerationProof"/> carries a
+/// in this build can establish the act: an <see cref="AbsenceFamilyEnumerationProof"/> carries a
 /// caller-chosen <c>FamilyKey</c> and no partition bounds, so a zero-row proof of an unrelated
-/// family satisfies every check here. Recording that limitation in remarks - which an earlier head
-/// did - does not unmake a claim the member name is still making. The names now say exactly what is
-/// established: an enumeration was cited, and it delivered this many rows.
+/// family satisfies every check here. A limitation written in remarks does not unmake a claim the
+/// member name keeps making.
+/// </para>
+/// <para>
+/// The second pass renamed them to "delivered no consolidation" / "delivered consolidations", which
+/// stopped claiming WHICH enumeration and went on claiming WHAT ITS ROWS MEAN. A proof carries a
+/// family key, profile and run references, a row count, a key digest and a retention class. It
+/// carries no row vocabulary and no query-family type, so nothing in it says a row is a
+/// consolidation. The members now say the literal supported fact: the cited enumeration delivered
+/// this many rows. Consolidation-specific outcomes belong with #419's query family, where the row
+/// semantics are structurally bound.
 /// </para>
 /// <para>
 /// NEVER-CONSOLIDATED IS AN ABSENCE CLAIM, AND THIS REPOSITORY ALREADY KNOWS WHAT ABSENCE COSTS.
@@ -41,18 +52,18 @@ namespace Lex.V3.Contracts.Source.Luxembourg;
 public enum LuxembourgNeverConsolidatedDisposition
 {
     /// <summary>
-    /// The enumeration cited for this act delivered no consolidation. This says what that
-    /// enumeration returned; it does not establish that the enumeration was scoped to this act.
+    /// The enumeration cited for this act delivered no rows. It does not establish that the
+    /// enumeration was scoped to this act, nor that a row would have been a consolidation.
     /// </summary>
-    [JsonStringEnumMemberName("cited_enumeration_delivered_no_consolidation")]
-    CitedEnumerationDeliveredNoConsolidation = 1,
+    [JsonStringEnumMemberName("cited_enumeration_delivered_no_rows")]
+    CitedEnumerationDeliveredNoRows = 1,
 
     /// <summary>
-    /// The enumeration cited for this act delivered at least one consolidation. Same limit as
-    /// above: it says what came back, not what it was asked about.
+    /// The enumeration cited for this act delivered at least one row. Same two limits as above: it
+    /// says how many rows came back, not what they were about.
     /// </summary>
-    [JsonStringEnumMemberName("cited_enumeration_delivered_consolidations")]
-    CitedEnumerationDeliveredConsolidations = 2,
+    [JsonStringEnumMemberName("cited_enumeration_delivered_rows")]
+    CitedEnumerationDeliveredRows = 2,
 
     /// <summary>
     /// No enumeration is cited for this act at all. Supports nothing, and is how a reader tells a
@@ -116,11 +127,11 @@ public sealed record LuxembourgActClassRef
 /// which is what makes it a proof rather than a claim. And once it is a proof it says how many rows
 /// that enumeration delivered, so the disposition becomes a statement the evidence either supports
 /// or contradicts:
-/// <see cref="LuxembourgNeverConsolidatedDisposition.CitedEnumerationDeliveredNoConsolidation"/>
+/// <see cref="LuxembourgNeverConsolidatedDisposition.CitedEnumerationDeliveredNoRows"/>
 /// requires a delivered row count of zero and
-/// <see cref="LuxembourgNeverConsolidatedDisposition.CitedEnumerationDeliveredConsolidations"/> at
-/// least one. A member that names what the cited enumeration returned, beside a proof that returned
-/// something else, is a contradiction inside one argument list and refuses here.
+/// <see cref="LuxembourgNeverConsolidatedDisposition.CitedEnumerationDeliveredRows"/> at least one.
+/// A member that names what the cited enumeration returned, beside a proof that returned something
+/// else, is a contradiction inside one argument list and refuses here.
 /// </para>
 /// <para>
 /// WHAT THIS DOES NOT ESTABLISH, AND WHY THE MEMBER NAMES WERE CHANGED RATHER THAN ANNOTATED: that
@@ -151,8 +162,8 @@ public sealed record LuxembourgNeverConsolidatedEntry
         Disposition = ContractValidation.RequireDefined(disposition, nameof(disposition));
 
         var enumerated =
-            disposition is LuxembourgNeverConsolidatedDisposition.CitedEnumerationDeliveredNoConsolidation
-                or LuxembourgNeverConsolidatedDisposition.CitedEnumerationDeliveredConsolidations;
+            disposition is LuxembourgNeverConsolidatedDisposition.CitedEnumerationDeliveredNoRows
+                or LuxembourgNeverConsolidatedDisposition.CitedEnumerationDeliveredRows;
         if (enumerated != (enumerationCompletionProof is not null))
         {
             throw new ArgumentException(
@@ -162,19 +173,20 @@ public sealed record LuxembourgNeverConsolidatedEntry
                 nameof(enumerationCompletionProof));
         }
 
-        // THE PROOF DECIDES WHICH OF THE TWO ENUMERATED DISPOSITIONS THIS IS. A proof that delivered
-        // rows is a proof that this act WAS consolidated; a proof that delivered none is the absence
-        // claim. A caller that states the opposite of what its own evidence says is not reporting a
-        // disagreement between sources - it is contradicting itself in one argument list.
+        // THE PROOF DECIDES WHICH OF THE TWO CITED-ENUMERATION MEMBERS THIS IS, AND THAT IS ALL IT
+        // DECIDES. It says how many rows came back - not what they were about, and not what they
+        // were asked about. A caller naming the member that contradicts its own proof's row count is
+        // not reporting a disagreement between sources; it is contradicting itself in one argument
+        // list.
         if (enumerationCompletionProof is { } proof)
         {
             var deliveredNone =
-                disposition == LuxembourgNeverConsolidatedDisposition.CitedEnumerationDeliveredNoConsolidation;
+                disposition == LuxembourgNeverConsolidatedDisposition.CitedEnumerationDeliveredNoRows;
             if (deliveredNone != (proof.DeliveredRowCount == 0))
             {
                 throw new ArgumentException(
                     deliveredNone
-                        ? "This member says the cited enumeration delivered nothing; its proof delivered rows."
+                        ? "This member says the cited enumeration delivered no rows; its proof delivered rows."
                         : "This member says the cited enumeration delivered rows; its proof delivered none.",
                     nameof(enumerationCompletionProof));
             }
@@ -193,8 +205,8 @@ public sealed record LuxembourgNeverConsolidatedEntry
     public LuxembourgNeverConsolidatedDisposition Disposition { get; }
 
     /// <summary>
-    /// The proof that the consolidation enumeration completed, present exactly for the two
-    /// enumerated dispositions and agreeing with the one that is stated.
+    /// The proof that the cited enumeration completed, present exactly for the two cited-enumeration
+    /// members and agreeing with the row count the stated member names.
     /// </summary>
     public AbsenceFamilyEnumerationProof? EnumerationCompletionProof { get; }
 }
@@ -225,8 +237,8 @@ public enum LuxembourgNeverConsolidatedAdmitRefusal
 }
 
 /// <summary>
-/// An append-only record of what was found about each act's consolidation history. It counts no
-/// population and claims no scope.
+/// An append-only record of which enumeration was cited for each act and how many rows it returned.
+/// It counts no population, claims no scope, and says nothing about what the rows mean.
 /// </summary>
 /// <remarks>
 /// <para>
