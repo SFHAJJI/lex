@@ -78,11 +78,14 @@ namespace Lex.V3.Ingest.Tests;
 /// THE BOUND. The owner fixed 34 charged requests and 36 actual sends. The query channel registers
 /// <c>NoRedirect</c> and admits only the request target, so a product request is exactly one send;
 /// the EU robots route declares exactly two steps as a closed pre-declared list, so a third hop is
-/// inadmissible. Each bootstrap therefore costs one charge and up to two sends. The send ceiling is
-/// consequently not enforced by the charge ceiling - at 34 charged a third bootstrap would make 37
-/// sends - so bootstraps are bounded at <see cref="BootstrapCeiling"/>; and because a REFUSED
-/// bootstrap has already sent, they are counted before they are attempted rather than when a session
-/// comes back.
+/// inadmissible. Every send is reserved before it goes out - the door reserves a session's first
+/// robots send, the session reserves the 301 hop at its own gate, the pass loop reserves each
+/// product request - so the charge ceiling bounds sends by itself: 34 charged is at most 34 sends,
+/// inside the 36 the owner fixed. (The first head of #579 left the hop uncharged and bounded sends
+/// as charges plus one per bootstrap; that arithmetic is gone with the gap it described.) Bootstraps
+/// stay bounded at <see cref="BootstrapCeiling"/> because a session is the unit the owner sized this
+/// operation in; and because a REFUSED bootstrap may already have sent its first hop, they are
+/// counted before they are attempted rather than when a session comes back.
 /// </para>
 /// </remarks>
 [TestClass]
@@ -166,7 +169,7 @@ public sealed class EuProcedureEventLiveAcceptance
 
             accounting.BootstrapsAttempted++;
             var start = await RoutedHttpAcquisitionSession.StartAsync(
-                narrow.Request, store, CancellationToken.None);
+                narrow.Request, store, budget, CancellationToken.None);
             accounting.DiscoveryBootstrapEvidencePresent = start.Evidence is not null;
 
             if (start.Session is null)
@@ -384,9 +387,9 @@ public sealed class EuProcedureEventLiveAcceptance
             SharedWireCeiling, budget.Spent,
             $"charged requests are bounded at {SharedWireCeiling}.");
         Assert.IsLessThanOrEqualTo(
-            SendCeiling, budget.Spent + accounting.BootstrapsAttempted,
-            "actual sends are charged plus one robots redirect hop per bootstrap ATTEMPTED, "
-            + $"bounded at {SendCeiling}.");
+            SendCeiling, budget.Spent,
+            "every send is reserved before it goes out, the robots redirect hop included, so the "
+            + $"spend is the send count and is bounded at {SendCeiling}.");
     }
 
     /// <summary>
@@ -651,11 +654,11 @@ public sealed class EuProcedureEventLiveAcceptance
                 bootstrapCeiling = BootstrapCeiling,
                 sessionsOpened = accounting.SessionsOpened,
                 discoveryBootstrapEvidencePresent = accounting.DiscoveryBootstrapEvidencePresent,
-                enforcedSendUpperBound = budget.Spent + accounting.BootstrapsAttempted,
+                enforcedSendUpperBound = budget.Spent,
                 sendCeiling = SendCeiling,
-                sendDerivation = "One send per charged product request, plus up to one uncharged "
-                    + "robots redirect hop per bootstrap ATTEMPTED - counted before the attempt, "
-                    + "because a refused bootstrap has already sent.",
+                sendDerivation = "One send per charged wire request. Every send is reserved before "
+                    + "it goes out - the robots 301 hop by the session at its own gate - so the "
+                    + "charged count is the send count.",
                 productRequestCount = outcome.ProductRequestCount,
                 delivered = outcome.Delivered,
                 observationCount = outcome.ObservationCount,

@@ -169,6 +169,7 @@ public sealed class EuWitnessBatchPaddingTests
             [Freeze([root], Cursor(BoundaryWatermark, root))],
             EuAcquisitionTestFixture.BuildRendererSource(8301),
             EuAcquisitionTestFixture.SourceWitness(),
+            EuAcquisitionTestFixture.TestWireBudget(),
             System.Threading.CancellationToken.None);
 
         Assert.IsNotNull(

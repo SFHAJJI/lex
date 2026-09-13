@@ -128,18 +128,20 @@ public sealed class EuProcedureEventBudgetEvidenceTests
             "this guard needs a delivered run, and got " + result.Refusal?.Code);
         Assert.IsGreaterThan(0, result.ProductRequestCount);
         Assert.AreEqual(
-            result.ProductRequestCount + 1, budget.Spent,
-            "the spend is this run's product attempts plus its one robots fetch.");
-        // MEASURED, AND NOT WHAT I FIRST ASSERTED. I wrote SendCount == Spent here and it failed at
-        // 6 against 5. The EU profile's robots route is TWO HOPS - a 301 from
-        // publications.europa.eu/robots.txt to op.europa.eu/robots.txt - and the reservation above
-        // charges the robots PLAN ITEM once, so one real send goes uncharged per session. Legilux is
-        // single-hop, which is why the integrated Luxembourg accounting reconciles exactly and this
-        // one cannot. Pinned rather than relaxed: if the publisher's route changes, this fails and
-        // says so.
+            result.ProductRequestCount + 2, budget.Spent,
+            "the spend is this run's product attempts plus its robots route: the policy item "
+            + "reserved at the door and the 301 hop reserved by the session before it was sent.");
+        // MEASURED TWICE, AND THE SECOND MEASUREMENT IS THE ONE THAT HOLDS. The first head of #579
+        // asserted SendCount == Spent here and it failed at 6 against 5: the EU profile's robots
+        // route is TWO HOPS - a 301 from publications.europa.eu/robots.txt to
+        // op.europa.eu/robots.txt - and only the plan item was reserved, so one real send per
+        // session went uncharged. That head pinned the gap as "two sends charged as one" instead of
+        // closing it, and review named it as the defect it was. The session now reserves every
+        // redirect hop at its own gate before sending it, so the transport and the budget agree
+        // exactly - on this origin as on single-hop Legilux.
         Assert.AreEqual(
-            budget.Spent + 1, handler.SendCount,
-            "the EU robots route is two sends charged as one, so the transport runs one ahead.");
+            budget.Spent, handler.SendCount,
+            "every send is reserved before it goes out, the robots redirect hop included.");
     }
 
     /// <summary>The door stops mid-run at its ceiling instead of finishing the family.</summary>
@@ -163,13 +165,14 @@ public sealed class EuProcedureEventBudgetEvidenceTests
         Assert.AreEqual(3, budget.Spent, "the ceiling is spent exactly, never exceeded.");
         Assert.IsTrue(budget.Exhausted);
 
-        // THE CEILING BOUNDS CHARGES, AND ON THIS ORIGIN THAT IS ONE FEWER THAN SENDS. A ceiling of
-        // three let four requests reach the transport, because the two-hop robots route is charged
-        // once. Stated as the arithmetic rather than as a literal so it cannot drift: a live ceiling
-        // for this family has to budget sessions at two sends each, not one.
+        // THE CEILING BOUNDS SENDS, NOT ONLY CHARGES. The first head of #579 measured four sends
+        // against a ceiling of three here, because the robots redirect hop went uncharged, and
+        // wrote down that a live ceiling would have to budget two sends per session by hand. The
+        // session now reserves the hop itself, so three is three: robots, its 301 hop, and one
+        // product request - with the second product request refused before it is sent.
         Assert.AreEqual(
-            budget.Spent + 1, handler.SendCount,
-            "a ceiling of three admitted four sends: the robots redirect hop is uncharged.");
+            budget.Spent, handler.SendCount,
+            "a ceiling of three admits exactly three sends.");
     }
 
     /// <summary>A refused run still reports its own terminal accounting.</summary>
@@ -189,31 +192,35 @@ public sealed class EuProcedureEventBudgetEvidenceTests
 
         Assert.IsNotNull(result.Refusal);
         Assert.AreEqual(
-            budget.Spent - 1, result.ProductRequestCount,
-            "a refused run reports every product attempt it made, excluding only its robots fetch.");
+            budget.Spent - 2, result.ProductRequestCount,
+            "a refused run reports every product attempt it made, excluding only its robots "
+            + "route: the policy item and the redirect hop that item needs on this origin.");
     }
 
     /// <summary>
-    /// This origin's robots bootstrap costs two sends and is charged as one.
+    /// This origin's robots bootstrap costs two sends and is charged as two.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// THE FINDING, ISOLATED SO IT HAS ITS OWN GUARD. The two guards above observe it as an
-    /// off-by-one between charges and sends; this one states the fact directly, separating the
-    /// bootstrap from the product requests so neither number can absorb a change in the other.
+    /// THE FINDING, ISOLATED SO IT HAS ITS OWN GUARD. The two guards above observe the accounting
+    /// as a relationship between charges and sends; this one states the bootstrap's own cost,
+    /// separating it from the product requests so neither number can absorb a change in the other.
     /// </para>
     /// <para>
     /// It is a property of the EU profile's route, not of this family: the robots policy request is
     /// one PLAN ITEM - <c>RobotsRequestOrdinal</c> 0, product from 1 - and the 301 to op.europa.eu
     /// is a second HTTP send inside that single item. The reservation before
-    /// <c>StartSessionAsync</c> is the established invariant and charges the item once, which is
-    /// exact on single-hop Legilux and one short here. A live ceiling for this family must therefore
-    /// budget two sends per session; that is recorded in the live plan rather than papered over by
-    /// reserving a hardcoded two, which would be wrong again the moment a hop is added or removed.
+    /// <c>StartSessionAsync</c> charges the item's first send; the session charges the hop at its
+    /// own gate, immediately before sending it, so the count is right however many hops the
+    /// publisher's route grows or loses. The first head of #579 charged only the item and pinned the
+    /// difference as "two sends charged as one"; review named that as the defect it was, because a
+    /// ceiling that undercounts by one per session on one publisher is not a ceiling. This guard
+    /// fails if either reservation is deleted, and fails the other way if the session ever reserves
+    /// a hop it then does not send.
     /// </para>
     /// </remarks>
     [TestMethod]
-    public async Task TheRobotsBootstrapCostsTwoSendsAndIsChargedAsOne()
+    public async Task TheRobotsBootstrapCostsTwoSendsAndIsChargedAsTwo()
     {
         var (executor, handler) = Harness(
             EuAcquisitionTestFixture.ProcedureEventRow(Event, Dossier, FirstType, "2021-11-24"));
@@ -226,8 +233,8 @@ public sealed class EuProcedureEventBudgetEvidenceTests
             2, handler.SendCount - result.ProductRequestCount,
             "the bootstrap sends robots twice on this origin: a 301 and then the policy itself.");
         Assert.AreEqual(
-            1, budget.Spent - result.ProductRequestCount,
-            "and the budget charges that bootstrap once, as a single plan item.");
+            2, budget.Spent - result.ProductRequestCount,
+            "and the budget charges both sends: the item at the door, the hop at the session's gate.");
     }
 
     /// <summary>The request refuses a null budget at construction.</summary>

@@ -118,6 +118,37 @@ public enum EuQueryExecutionRefusal
     [JsonStringEnumMemberName("census_family_not_proven")]
     CensusFamilyNotProven = 1,
 
+    /// <summary>
+    /// A census request handed to this run carries a DIFFERENT <c>WireRequestBudget</c> instance
+    /// than the run itself was given, so the run has two ceilings and therefore none.
+    /// </summary>
+    /// <remarks>
+    /// ONE RUN, ONE CEILING, AND REFERENCE EQUALITY IS WHAT SAYS SO. A budget is a mutable counter,
+    /// not a number: two instances both reading "500" bound 500 requests EACH, so a run driven with
+    /// one of them while its census seeds carry another can spend the seeds' allowance and the run's
+    /// allowance and stay inside both. Comparing <c>Limit</c> would admit exactly that case. The only
+    /// thing that makes "this run may send at most N requests" a true sentence is that every door it
+    /// drives charges the SAME counter, which is what this refusal checks and nothing else does.
+    /// </remarks>
+    [JsonStringEnumMemberName("census_request_carries_a_different_wire_budget")]
+    CensusRequestCarriesADifferentWireBudget = 23,
+
+    /// <summary>
+    /// The run's wire ceiling was reached during document acquisition, so the ladder stopped.
+    /// </summary>
+    /// <remarks>
+    /// NOT <see cref="DocumentFetchSessionNotStarted"/>, AND THE DIFFERENCE IS THE WHOLE REASON THIS
+    /// MEMBER EXISTS. Found in review of #579's own candidate. That slice made
+    /// <c>EuDocumentFetchAttemptRefusal.WireBudgetExhausted</c> reachable, including from INSIDE the
+    /// retry loop after robots and a product attempt have already gone out. The mapping below
+    /// special-cased robots and sent everything else to "the session never started", which was true
+    /// while <c>ObservationNotExecuted</c> was the only other value and became false the moment it
+    /// was not. Evidence saying a session never started, written after that session started and
+    /// sent, is worse than no evidence.
+    /// </remarks>
+    [JsonStringEnumMemberName("document_fetch_wire_budget_exhausted")]
+    DocumentFetchWireBudgetExhausted = 24,
+
     /// <summary>A requested object-facts family (P, X, W or M) batch did not prove.</summary>
     [JsonStringEnumMemberName("object_facts_family_not_proven")]
     ObjectFactsFamilyNotProven = 2,
@@ -915,6 +946,23 @@ public sealed class EuQueryExecutionAdapter
     /// cannot be the same kind of witness the other parameters here use.
     /// </param>
     /// <param name="evidenceResolver">The evidence resolver the scope reduction requires.</param>
+    /// <param name="wireBudget">
+    /// THIS RUN'S ONE CEILING, charged for every request every door below sends: each census and
+    /// object-facts session's robots fetch, its counts, its pages and every retry; the witness
+    /// traversal's whole walk; and every rung of every object's document-fetch ladder. REQUIRED.
+    /// <para>
+    /// #579 measured this adapter as the widest unbudgeted path in the build. Four of the executor
+    /// doors it drives took no ceiling at all, and the document ladder is per object per media type,
+    /// so a run over a real pack had no bound of any kind on what it would send. A plan's arithmetic
+    /// is a prediction; only a stop in the path is a ceiling.
+    /// </para>
+    /// <para>
+    /// Every request in <paramref name="censusFamilies"/> must carry THIS SAME INSTANCE, not merely
+    /// an equal limit -- see
+    /// <see cref="EuQueryExecutionRefusal.CensusRequestCarriesADifferentWireBudget"/> for why an
+    /// equal limit is not the same promise.
+    /// </para>
+    /// </param>
     public async Task<EuQueryExecutionResult> RunAsync(
         IReadOnlyList<(EuCensusPartitionRunRequest Request, BoundMachineRequest SourceWitness)> censusFamilies,
         EuObjectFactsBatchPolicy objectFactsPolicy,
@@ -923,6 +971,7 @@ public sealed class EuQueryExecutionAdapter
         MachineQueryRendererSource documentFetchRendererSource,
         BoundMachineRequest documentFetchSourceWitness,
         IScopeReductionEvidenceResolver evidenceResolver,
+        WireRequestBudget wireBudget,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(censusFamilies);
@@ -932,15 +981,43 @@ public sealed class EuQueryExecutionAdapter
         ArgumentNullException.ThrowIfNull(documentFetchRendererSource);
         ArgumentNullException.ThrowIfNull(documentFetchSourceWitness);
         ArgumentNullException.ThrowIfNull(evidenceResolver);
+        ArgumentNullException.ThrowIfNull(wireBudget);
 
         var topology = MintTopology();
-        var outcomes = new List<EuFamilyEnumerationOutcome>(censusFamilies.Count * 5);
+
+        // ONE VIEW OF THE CALLER'S LIST, TAKEN ONCE. IReadOnlyList promises nothing about
+        // immutability, and #579's review built a list whose indexer showed a request carrying the
+        // run's budget while its enumerator showed an equal-shaped request carrying another - so
+        // the preflight below passed on one view and the run then executed the other, sending on a
+        // counter the preflight never saw. Everything after this line reads the snapshot, never the
+        // parameter: the check, the execution, and the count compared at the end are all about the
+        // same tuples.
+        var seeds = censusFamilies.ToArray();
+
+        // BEFORE THE FIRST REQUEST, NOT AFTER THE RUN. A seed carrying a second budget is refused
+        // here rather than reported at the end, because by the end it has already spent it.
+        for (var seedOrdinal = 0; seedOrdinal < seeds.Length; seedOrdinal++)
+        {
+            if (!ReferenceEquals(seeds[seedOrdinal].Request.WireBudget, wireBudget))
+            {
+                return EuQueryExecutionResult.Refused(
+                    topology,
+                    Array.Empty<EuFamilyEnumerationOutcome>(),
+                    new EuQueryExecutionRefusalDetail(
+                        EuQueryExecutionRefusal.CensusRequestCarriesADifferentWireBudget,
+                        $"census seed {seedOrdinal} " +
+                        $"({seeds[seedOrdinal].Request.RequestedCelex}) carries a different " +
+                        "budget instance than this run, so neither limit bounds the run."));
+            }
+        }
+
+        var outcomes = new List<EuFamilyEnumerationOutcome>(seeds.Length * 5);
 
         // ---- Run and prove every census-family seed. ----
         var censusByFamilyKey = new Dictionary<
             string, (AbsenceFamilyEnumerationProof Proof, RepeatedEnumerationDeliveryReceipt Receipt, string RequestedCelex)>(
             StringComparer.Ordinal);
-        foreach (var (request, sourceWitness) in censusFamilies)
+        foreach (var (request, sourceWitness) in seeds)
         {
             var runResult = await _executor.RunCensusPartitionAsync(request, sourceWitness, cancellationToken)
                 .ConfigureAwait(false);
@@ -955,7 +1032,7 @@ public sealed class EuQueryExecutionAdapter
             }
         }
 
-        if (censusByFamilyKey.Count != censusFamilies.Count)
+        if (censusByFamilyKey.Count != seeds.Length)
         {
             return EuQueryExecutionResult.Refused(
                 topology, outcomes,
@@ -1008,7 +1085,8 @@ public sealed class EuQueryExecutionAdapter
         var objectFactsRequests = EuObjectFactsBatchFactory.Build(
             objectFactsPolicy,
             allRequestedSeedsClosure,
-            closuresByCelex.Values.Select(static entry => entry.RootIri).ToArray());
+            closuresByCelex.Values.Select(static entry => entry.RootIri).ToArray(),
+            wireBudget);
 
         // ---- Run and prove every object-facts batch (P, X, W, M). ----
         // Keyed by (Set, familyKey) rather than familyKey alone: EuObjectFactsDiscoveryPlan.PartitionKeyFor
@@ -1458,7 +1536,7 @@ public sealed class EuQueryExecutionAdapter
                 mintedRowAccounting, acquisitionRefusal) =
             await RunDocumentAcquisitionAsync(
                 reopenedManifest, mintedAddressesByObjectRef, documentFetchRendererSource,
-                documentFetchSourceWitness, cancellationToken)
+                documentFetchSourceWitness, wireBudget, cancellationToken)
             .ConfigureAwait(false);
         if (acquisitionRefusal is not null)
         {
@@ -1544,7 +1622,7 @@ public sealed class EuQueryExecutionAdapter
         // startPosition from -- still has to run the witness's own traversal from that bound; it is
         // simply likely, not guaranteed, to observe few or zero rows beyond it.
         var traversal = await _executor.RunWitnessTraversalAsync(
-                witnessBatches, witnessRendererSource, witnessSourceWitness, cancellationToken)
+                witnessBatches, witnessRendererSource, witnessSourceWitness, wireBudget, cancellationToken)
             .ConfigureAwait(false);
         if (traversal.Entries is null)
         {
@@ -1761,12 +1839,14 @@ public sealed class EuQueryExecutionAdapter
         IReadOnlyDictionary<SourceObjectRef, IReadOnlyList<EuDocumentFetchAddress>> mintedAddressesByObjectRef,
         MachineQueryRendererSource documentFetchRendererSource,
         BoundMachineRequest documentFetchSourceWitness,
+        WireRequestBudget wireBudget,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(reopenedManifest);
         ArgumentNullException.ThrowIfNull(mintedAddressesByObjectRef);
         ArgumentNullException.ThrowIfNull(documentFetchRendererSource);
         ArgumentNullException.ThrowIfNull(documentFetchSourceWitness);
+        ArgumentNullException.ThrowIfNull(wireBudget);
 
         // Defect nine's own fix: the accepted-ordinal set is computed once, here, before the loop,
         // and gates iteration directly -- it no longer only narrows what gets handed to
@@ -1838,7 +1918,7 @@ public sealed class EuQueryExecutionAdapter
                     $"urn:uuid:{Guid.NewGuid():D}",
                     documentFetchRendererSource);
                 var attempt = await _executor.RunDocumentFetchAsync(
-                        bound.Request, documentFetchSourceWitness, cancellationToken)
+                        bound.Request, documentFetchSourceWitness, wireBudget, cancellationToken)
                     .ConfigureAwait(false);
                 if (attempt.Evidence is null)
                 {
@@ -1854,11 +1934,33 @@ public sealed class EuQueryExecutionAdapter
                         break;
                     }
 
-                    // Every other attempt-level refusal (today, only ObservationNotExecuted) stays a
-                    // whole-run refusal: this run's own document-fetch session never started at all,
-                    // which is not a fact about any one object's own document.
+                    // EXHAUSTIVE BY SWITCH RATHER THAN BY FALLTHROUGH, because the fallthrough has
+                    // already been wrong once. Its comment used to read "today, only
+                    // ObservationNotExecuted" and that parenthetical was load-bearing: #579 added a
+                    // reachable WireBudgetExhausted and the fallthrough kept reporting a session
+                    // that never started, after the session had started and sent. A new member now
+                    // forces a decision here instead of inheriting a name that has stopped being
+                    // true.
+                    //
+                    // Both remaining cases are whole-run refusals rather than one object's own
+                    // PendingAcquisition: a spent run ceiling and an unstartable session are facts
+                    // about the run, and continuing the ladder would mark every later object pending
+                    // while hiding which of the two happened.
+                    var runRefusal = attempt.Refusal switch
+                    {
+                        EuDocumentFetchAttemptRefusal.WireBudgetExhausted =>
+                            EuQueryExecutionRefusal.DocumentFetchWireBudgetExhausted,
+                        EuDocumentFetchAttemptRefusal.ObservationNotExecuted =>
+                            EuQueryExecutionRefusal.DocumentFetchSessionNotStarted,
+                        _ => throw new ArgumentOutOfRangeException(
+                            nameof(attempt),
+                            $"Unreachable: a null-evidence attempt carrying '{attempt.Refusal}'. "
+                            + "Every refusal this door can return needs a run-level meaning chosen "
+                            + "here, not inherited."),
+                    };
+
                     return (null, null, null, new EuQueryExecutionRefusalDetail(
-                        EuQueryExecutionRefusal.DocumentFetchSessionNotStarted,
+                        runRefusal,
                         $"manifest row {rowOrdinal} ('{mintedObjectRef.CanonicalKey}'): code=" +
                         $"{attempt.Refusal} detail={attempt.Detail}."));
                 }

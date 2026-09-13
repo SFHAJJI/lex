@@ -25,8 +25,30 @@ public sealed class LuxembourgLiveEnumerationCanary
     /// nothing is retried, and the ceiling is that times the retry allowance — 60 — if everything
     /// is. Both are projections of a row count nobody here has measured, which is why a number is
     /// asked for rather than computed. 60 is the arithmetic, not a recommendation.
+    /// </para>
+    /// <para>
+    /// EVERY SEND IS CHARGED, REDIRECT HOPS INCLUDED, since #579's repair: the session reserves each
+    /// hop at its own gate before sending it. The Luxembourg profile declares its robots route as a
+    /// single step and the SPARQL channel admits no redirect, so every session here is one robots
+    /// send and the arithmetic above still holds send for send. If the declared route ever gains a
+    /// step, each session charges that hop too and the run stops one product attempt earlier - the
+    /// fail-closed direction - and the number below is the owner's to re-derive, not this file's
+    /// to grow.
+    /// </para>
+    /// <para>
+    /// DISPOSITIONED BY THE OWNER ON 2026-09-13 AT 60, and the wording of that disposition is the
+    /// reason it is safe to write a number here: 60 was accepted as the fail-closed wire ceiling
+    /// "because the recorded plan derives it as the exact structural retry maximum", not because it
+    /// looked roomy. Setting it bounds a run; it does not authorize one. This harness still refuses
+    /// to move without its own enable variable, and the governed traffic gate is unchanged.
+    /// </para>
+    /// <para>
+    /// A CEILING IS NOT A FORECAST. If a real Code Civil two-day range needs more than one page per
+    /// count, this run stops at 60 with a WireBudgetExhausted refusal rather than quietly spending
+    /// what the arithmetic above did not predict. That is the intended failure: an honest stop that
+    /// reports the measurement, against which the next disposition can be made.
     /// </remarks>
-    private static readonly int? SharedWireCeiling = null;
+    private static readonly int? SharedWireCeiling = 60;
 
     [TestMethod]
     public async Task CodeCivilFamiliesAreEnumeratedTwiceThroughThePublisherRoute()

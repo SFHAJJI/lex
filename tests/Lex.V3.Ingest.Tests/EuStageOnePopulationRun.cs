@@ -90,6 +90,36 @@ public sealed class EuStageOnePopulationRun
     /// </summary>
     private static readonly (string Celex, EuQueryExecutionRefusal Refusal)[] ExpectedRefusals = [];
 
+    /// <summary>
+    /// The whole-run wire ceiling, or <c>null</c> while nobody has dispositioned one.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// UNSET, AND THE HARNESS REFUSES TO RUN RATHER THAN CHOOSE. #579 made a ceiling required on
+    /// every door this run drives, which is what made the question unavoidable here: a live run now
+    /// has to name a number.
+    /// </para>
+    /// <para>
+    /// THE SHAPE IS DERIVABLE, THE NUMBER IS NOT. This run drives all eighty two Appendix A seeds,
+    /// each through census, four object-facts families, one witness traversal and a document ladder
+    /// per accepted object. Nothing here has measured what a single seed costs, and eighty two times
+    /// an unmeasured number is not an arithmetic anybody can check.
+    /// </para>
+    /// <para>
+    /// AND THE RUN IT WOULD BOUND IS NOT CLEARED TO SEND. The owner has separately stated that E10
+    /// live population traffic is not authorized yet, so this field is not merely awaiting a
+    /// measurement. Setting it would not authorize the run either: the ceiling and the authorization
+    /// are two different decisions and only one of them lives in this file.
+    /// </para>
+    /// <para>
+    /// So this stays null and the run stops at the gate below. That is the house rule for an
+    /// undispositioned live ceiling -- the same position the other live harnesses hold -- and it is
+    /// deliberately the opposite of inheriting the offline helper's 100,000, which would bound
+    /// nothing a publisher would notice.
+    /// </para>
+    /// </remarks>
+    private static readonly int? SharedWireCeiling = null;
+
     [TestMethod]
     public async Task EverySeedOfAppendixASOwnEightyTwoIsRunAndCarriesOneTypedDisposition()
     {
@@ -101,6 +131,21 @@ public sealed class EuStageOnePopulationRun
                 + "worth of unasked traffic.");
             return;
         }
+
+        // FAIL CLOSED ON A MISSING CEILING, before a root, a store or an executor is built.
+        if (SharedWireCeiling is not { } ceiling)
+        {
+            Assert.Inconclusive(
+                "The whole-run wire ceiling has not been dispositioned. This harness will not "
+                + "choose one: set SharedWireCeiling before running it.");
+            return;
+        }
+
+        // ONE INSTANCE FOR THE WHOLE RUN. All eighty two seeds charge this one counter. A budget
+        // per seed would bound each seed and leave the population run unbounded, which is the
+        // shape the ceiling exists to prevent.
+        var wireBudget = WireRequestBudget.OfWireRequests(ceiling);
+
 
         // ---- The population is Appendix A's own, proven by its own digest before anything runs. ----
         //
@@ -160,7 +205,8 @@ public sealed class EuStageOnePopulationRun
         var records = new List<SeedRecord>(seeds.Length);
         foreach (var (seed, ordinal) in seeds.Select(static (seed, ordinal) => (seed, ordinal)))
         {
-            records.Add(await RunSeedAsync(seed, ordinal, seeds.Length, 1, null, root, seedDirectory, faults)
+            records.Add(await RunSeedAsync(
+                    seed, ordinal, seeds.Length, 1, null, root, seedDirectory, faults, wireBudget)
                 .ConfigureAwait(false));
         }
 
@@ -195,7 +241,7 @@ public sealed class EuStageOnePopulationRun
                 SelectDeferredIndices(records.ToArray()),
                 (record, _) => RunSeedAsync(
                     record.Seed, record.Ordinal, seeds.Length, 2, record.Index,
-                    root, seedDirectory, faults))
+                    root, seedDirectory, faults, wireBudget))
             .ConfigureAwait(false);
 
         populationStopwatch.Stop();
@@ -321,7 +367,8 @@ public sealed class EuStageOnePopulationRun
     /// <see cref="EuStageOneAcquisitionCanary"/> drives, with its own custody sub-root so every
     /// retained byte is attributable to the seed that fetched it.
     /// </summary>
-    private static async Task<EuQueryExecutionResult> RunOneSeedAsync(string celex, string custodyRoot)
+    private static async Task<EuQueryExecutionResult> RunOneSeedAsync(
+        string celex, string custodyRoot, WireRequestBudget wireBudget)
     {
         Directory.CreateDirectory(custodyRoot);
         var store = new FileSystemCustodyStore(custodyRoot);
@@ -333,7 +380,8 @@ public sealed class EuStageOnePopulationRun
         {
             (
                 Request: new EuCensusPartitionRunRequest(
-                    censusPlan, censusPlanId, celex, EuAcquisitionTestFixture.BuildRendererSource(7100)),
+                    censusPlan, censusPlanId, celex, EuAcquisitionTestFixture.BuildRendererSource(7100),
+                    wireBudget),
                 Witness: EuAcquisitionTestFixture.SourceWitness()),
         };
 
@@ -358,6 +406,7 @@ public sealed class EuStageOnePopulationRun
             EuAcquisitionTestFixture.BuildRendererSource(7400),
             EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
             new PopulationPermissiveEvidenceResolver(completeEnumerationRef),
+            wireBudget,
             CancellationToken.None).ConfigureAwait(false);
     }
 
@@ -723,7 +772,8 @@ public sealed class EuStageOnePopulationRun
         JsonObject? firstAttemptIndex,
         string root,
         string seedDirectory,
-        List<string> faults)
+        List<string> faults,
+        WireRequestBudget wireBudget)
     {
         var stopwatch = Stopwatch.StartNew();
         JsonObject index;
@@ -733,7 +783,7 @@ public sealed class EuStageOnePopulationRun
             root, "custody", FileNameFor(seed.Celex) + (attempt == 1 ? string.Empty : $"-attempt-{attempt}"));
         try
         {
-            result = await RunOneSeedAsync(seed.Celex, custodyRoot).ConfigureAwait(false);
+            result = await RunOneSeedAsync(seed.Celex, custodyRoot, wireBudget).ConfigureAwait(false);
             index = EuStageOneAcquisitionCanary.BuildEvidenceIndex(result);
         }
         catch (Exception exception)

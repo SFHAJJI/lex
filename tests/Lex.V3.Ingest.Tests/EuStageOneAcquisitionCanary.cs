@@ -128,6 +128,31 @@ public sealed class EuStageOneAcquisitionCanary
             [("fmx4", 1), ("html", 20), ("pdf", 22), ("pdfa1a", 1), ("print", 23), ("xhtml", 4)]),
     ];
 
+    /// <summary>
+    /// The whole-run wire ceiling, or <c>null</c> while nobody has dispositioned one.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// UNSET, AND THE HARNESS REFUSES TO RUN RATHER THAN CHOOSE. #579 made a ceiling required on
+    /// every door this run drives, which is what made the question unavoidable here: a live run now
+    /// has to name a number.
+    /// </para>
+    /// <para>
+    /// THE SHAPE IS DERIVABLE, THE NUMBER IS NOT. This canary drives two seeds through census, four
+    /// object-facts families, one witness traversal and a document ladder per accepted object. The
+    /// census table above predicts 143 manifestations between the two seeds, and that is the only
+    /// measured quantity here: a REQUEST count also needs pages per count, retries actually taken
+    /// and ladder rungs actually walked, none of which this canary has ever been run to observe.
+    /// </para>
+    /// <para>
+    /// So this stays null and the run stops at the gate below. That is the house rule for an
+    /// undispositioned live ceiling -- the same position the other live harnesses hold -- and it is
+    /// deliberately the opposite of inheriting the offline helper's 100,000, which would bound
+    /// nothing a publisher would notice.
+    /// </para>
+    /// </remarks>
+    private static readonly int? SharedWireCeiling = null;
+
     [TestMethod]
     public async Task TheCensusFamiliesProveAndTheRunEitherReachesTheManifestOrFailsNamingWhy()
     {
@@ -138,6 +163,19 @@ public sealed class EuStageOneAcquisitionCanary
                 + "so the suite does not depend on a third party's uptime or send unasked traffic.");
             return;
         }
+
+        // FAIL CLOSED ON A MISSING CEILING, before a root, a store or an executor is built.
+        if (SharedWireCeiling is not { } ceiling)
+        {
+            Assert.Inconclusive(
+                "The whole-run wire ceiling has not been dispositioned. This harness will not "
+                + "choose one: set SharedWireCeiling before running it.");
+            return;
+        }
+
+        // ONE INSTANCE FOR THE WHOLE RUN. Census, object facts, the witness traversal and every
+        // document-ladder rung share it, so the ceiling bounds the canary rather than each door.
+        var wireBudget = WireRequestBudget.OfWireRequests(ceiling);
 
         foreach (var (celex, expressions, manifestations, types) in Census)
         {
@@ -186,7 +224,8 @@ public sealed class EuStageOneAcquisitionCanary
                 var (plan, planId) = EuAcquisitionTestFixture.BuildCensusPlan();
                 return (
                     Request: new EuCensusPartitionRunRequest(
-                        plan, planId, seed.Celex, EuAcquisitionTestFixture.BuildRendererSource(6100)),
+                        plan, planId, seed.Celex, EuAcquisitionTestFixture.BuildRendererSource(6100),
+                        wireBudget),
                     Witness: EuAcquisitionTestFixture.SourceWitness());
             })
             .ToArray();
@@ -215,6 +254,7 @@ public sealed class EuStageOneAcquisitionCanary
             EuAcquisitionTestFixture.BuildRendererSource(6400),
             EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
             new CanaryPermissiveEvidenceResolver(completeEnumerationRef),
+            wireBudget,
             CancellationToken.None);
 
         Console.WriteLine($"CANARY|refusal|{result.Refusal?.Code}|{result.Refusal?.Detail}");

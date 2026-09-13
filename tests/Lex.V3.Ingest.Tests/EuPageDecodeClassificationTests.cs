@@ -550,7 +550,8 @@ public sealed class EuPageDecodeClassificationTests
         return await executor.RunObjectFactsPartitionAsync(
             new EuObjectFactsPartitionRunRequest(
                 plan, planId, EuObjectFactsQuerySet.ObjectFacts, [rootIri],
-                EuAcquisitionTestFixture.BuildRendererSource(5100)),
+                EuAcquisitionTestFixture.BuildRendererSource(5100),
+                EuAcquisitionTestFixture.TestWireBudget()),
             EuAcquisitionTestFixture.SourceWitness(),
             CancellationToken.None);
     }

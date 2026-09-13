@@ -60,6 +60,20 @@ public sealed class LuxembourgOpinionRequestCountCanary
 
     public TestContext? TestContext { get; set; }
 
+    /// <summary>
+    /// The whole-canary wire ceiling, or <c>null</c> while nobody has dispositioned one.
+    /// </summary>
+    /// <remarks>
+    /// UNSET, AND THE CANARY REFUSES TO RUN RATHER THAN CHOOSE. #579 made a ceiling required on
+    /// every session this build opens, which is what made the question unavoidable here: this
+    /// canary started a session with no bound at all. Its shape is derivable - one robots fetch
+    /// and one count, times the profile's retry allowance, plus one more per session if Legilux
+    /// answers robots with a redirect - but the number is asked for rather than computed, which is
+    /// the house rule for an undispositioned live ceiling and the position every other unmeasured
+    /// live harness holds. Setting it would not authorize the run; the enable variable does that.
+    /// </remarks>
+    private static readonly int? SharedWireCeiling = null;
+
     [TestMethod]
     public async Task LegiluxIsAskedHowManyOpinionRequestsItHolds()
     {
@@ -106,8 +120,26 @@ public sealed class LuxembourgOpinionRequestCountCanary
         var witness = plan.BindCount(
             NewUrn(), NewUrn(), NewUrn(), TypedResourcesSetId, LuxembourgQueryPass.Pass1,
             witnessPartition, renderer);
+        // FAIL CLOSED ON A MISSING CEILING, at the last offline point: nothing above this line
+        // has sent anything, and nothing below it may without a dispositioned number.
+        if (SharedWireCeiling is not { } ceiling)
+        {
+            Assert.Inconclusive(
+                "The whole-canary wire ceiling has not been dispositioned. This harness will not "
+                + "choose one: set SharedWireCeiling before running it.");
+            return;
+        }
+
+        // ONE INSTANCE FOR THE WHOLE CANARY, reserved for robots before the session exists.
+        var wireBudget = WireRequestBudget.OfWireRequests(ceiling);
+        if (!wireBudget.TryReserveAttempt())
+        {
+            Assert.Inconclusive("The dispositioned ceiling cannot cover the robots fetch.");
+            return;
+        }
+
         var start = await RoutedHttpAcquisitionSession.StartAsync(
-            witness.Request, store, CancellationToken.None);
+            witness.Request, store, wireBudget, CancellationToken.None);
         Assert.IsNotNull(
             start.Session,
             $"the governed session did not start: {start.Kind} safety={start.LocalSafetyReason} "

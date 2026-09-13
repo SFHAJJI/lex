@@ -58,6 +58,7 @@ public sealed class EuDocumentFetchBoundUrlRobotsTests
         var result = await executor.RunDocumentFetchAsync(
             BoundFor(Gdpr),
             EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
+            EuAcquisitionTestFixture.TestWireBudget(),
             CancellationToken.None);
 
         Assert.AreEqual(
@@ -90,6 +91,7 @@ public sealed class EuDocumentFetchBoundUrlRobotsTests
         var result = await executor.RunDocumentFetchAsync(
             BoundFor("32003L0088"),
             EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
+            EuAcquisitionTestFixture.TestWireBudget(),
             CancellationToken.None);
 
         Assert.AreNotEqual(
