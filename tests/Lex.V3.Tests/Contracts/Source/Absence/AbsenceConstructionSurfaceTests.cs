@@ -185,6 +185,14 @@ public sealed class AbsenceConstructionSurfaceTests
                     + "System.Collections.Generic.IReadOnlyList<Lex.V3.Contracts.Source.Absence.Abs"
                     + "enceFamilyEnumerationProof>",
                 "field private instance "
+                    + "Lex.V3.Contracts.Source.Europe.EuLanguageScopedExpressionDerivation::<Expres"
+                    + "sionFactsProof>k__BackingField -> "
+                    + "Lex.V3.Contracts.Source.Absence.AbsenceFamilyEnumerationProof",
+                "field private instance "
+                    + "Lex.V3.Contracts.Source.Europe.EuLanguageScopedExpressionDerivation::<Object"
+                    + "FactsProof>k__BackingField -> "
+                    + "Lex.V3.Contracts.Source.Absence.AbsenceFamilyEnumerationProof?",
+                "field private instance "
                     + "Lex.V3.Contracts.Source.Europe.EuProofBoundDelivery::<Proof>k__BackingField "
                     + "-> Lex.V3.Contracts.Source.Absence.AbsenceFamilyEnumerationProof",
                 "field private instance "
@@ -218,6 +226,14 @@ public sealed class AbsenceConstructionSurfaceTests
                     + "Lex.V3.Contracts.Source.Absence.AbsenceCut::EnumerationProofs() -> "
                     + "System.Collections.Generic.IReadOnlyList<Lex.V3.Contracts.Source.Absence.Abs"
                     + "enceFamilyEnumerationProof>",
+                "property public instance "
+                    + "Lex.V3.Contracts.Source.Europe.EuLanguageScopedExpressionDerivation::Express"
+                    + "ionFactsProof() -> "
+                    + "Lex.V3.Contracts.Source.Absence.AbsenceFamilyEnumerationProof",
+                "property public instance "
+                    + "Lex.V3.Contracts.Source.Europe.EuLanguageScopedExpressionDerivation::ObjectF"
+                    + "actsProof() -> "
+                    + "Lex.V3.Contracts.Source.Absence.AbsenceFamilyEnumerationProof?",
                 "property public instance "
                     + "Lex.V3.Contracts.Source.Europe.EuProofBoundDelivery::Proof() -> "
                     + "Lex.V3.Contracts.Source.Absence.AbsenceFamilyEnumerationProof",

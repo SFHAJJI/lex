@@ -53,6 +53,13 @@ public sealed class DurableBlobReceiptFamilyIngestSurfaceTests
     /// </summary>
     private const string CorpusAcquisitionOutcome = "Lex.V3.Ingest.CorpusAcquisitionOutcome";
 
+    /// <summary>
+    /// #418's third slice adds the fifth holder: the governed expression-production path retains its
+    /// derivation and carries the store's receipt for it.
+    /// </summary>
+    private const string ExpressionProductionResult =
+        "Lex.V3.Ingest.Europe.EuLanguageScopedExpressionProductionResult";
+
     [TestMethod]
     public void EveryHolderOfReceiptInIngestIsPinnedAndNoneIsAConstructor()
     {
@@ -64,6 +71,13 @@ public sealed class DurableBlobReceiptFamilyIngestSurfaceTests
                 "by-ref-method public instance " + Session + "+ResolvedHeldBody::Deconstruct(out " + Receipt
                 + "&, out System.ReadOnlyMemory<System.Byte>&, out System.String&) -> System.Void",
                 "field private instance " + CorpusAcquisitionOutcome + "::<Receipt>k__BackingField -> " + Receipt + "?",
+                // #418's third slice adds the fifth holder: the language-scoped expression
+                // production result carries the custody receipt for the derivation it retained.
+                // It HOLDS that receipt and never constructs one -- the only path onto the property
+                // is the internal Success factory, which requires an already-real receipt that came
+                // from CustodyHold.TryHoldAsync and therefore from ICustodyStore.CreateAsync.
+                "field private instance " + ExpressionProductionResult + "::<RetainedDerivation>k__BackingField -> "
+                + Receipt + "?",
                 "field private instance " + EuQueryExecutionResult + "::<ScopeManifestReceipt>k__BackingField -> " + Receipt + "?",
                 "field private instance " + TranspositionPopulationRow + "::<NormalisedEliJoinEvidenceReceipts>k__BackingField -> "
                 + "System.Collections.Generic.IReadOnlyList<" + Receipt + ">",
@@ -89,6 +103,7 @@ public sealed class DurableBlobReceiptFamilyIngestSurfaceTests
                 + "System.Collections.Generic.IReadOnlyList<Lex.V3.Contracts.Source.Http.RoutedHttpHop>) "
                 + "-> System.Collections.Generic.Dictionary<System.String, " + Receipt + ">",
                 "property public instance " + CorpusAcquisitionOutcome + "::Receipt() -> " + Receipt + "?",
+                "property public instance " + ExpressionProductionResult + "::RetainedDerivation() -> " + Receipt + "?",
                 "property public instance " + EuQueryExecutionResult + "::ScopeManifestReceipt() -> " + Receipt + "?",
                 "property public instance " + TranspositionPopulationRow + "::NormalisedEliJoinEvidenceReceipts() -> "
                 + "System.Collections.Generic.IReadOnlyList<" + Receipt + ">",

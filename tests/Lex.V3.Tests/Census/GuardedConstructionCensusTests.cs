@@ -573,6 +573,12 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Contracts.Source.Europe.EuFormexStreamName::.cctor, "
                     + "method public static "
                     + "Lex.V3.Contracts.Source.Europe.EuFormexStreamName::TryParse",
+                "Lex.V3.Contracts.Source.Europe.EuLanguageScopedExpressionDerivation: constructor "
+                    + "private instance "
+                    + "Lex.V3.Contracts.Source.Europe.EuLanguageScopedExpressionDerivation::.ctor, "
+                    + "method public static "
+                    + "Lex.V3.Contracts.Source.Europe.EuLanguageScopedExpressionDerivation::TryDeri"
+                    + "ve",
                 "Lex.V3.Contracts.Source.Europe.EuLegalNoticeEvidence: constructor private "
                     + "instance Lex.V3.Contracts.Source.Europe.EuLegalNoticeEvidence::.ctor, "
                     + "method public static "
