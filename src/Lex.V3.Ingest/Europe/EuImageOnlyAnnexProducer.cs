@@ -80,8 +80,9 @@ public sealed class EuImageOnlyAnnexProductionResult
 /// <remarks>
 /// The profile bytes bind the annex location and the one-based page selection. The producer does
 /// not OCR, extract, return or reconstruct wording. A PDF address is not itself evidence that an
-/// annex is image-only. This bounded producer accepts traditional cross-reference tables only,
-/// after checking every live entry against its object header; cross-reference streams refuse.
+/// annex is image-only. This bounded producer accepts one complete traditional cross-reference
+/// table only: one contiguous 0..Size-1 subsection, no previous table or xref stream, every live
+/// entry checked against its object header, and no object header outside those entries.
 /// </remarks>
 public sealed class EuImageOnlyAnnexProducer
 {
@@ -373,62 +374,140 @@ public sealed class EuImageOnlyAnnexProducer
             return false;
         }
 
-        var sawInUseEntry = false;
-        while (reader.ReadLine() is { } header)
+        var header = reader.ReadLine();
+        var subsection = header?.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (subsection is not { Length: 2 } || subsection[0] != "0" ||
+            !int.TryParse(subsection[1], System.Globalization.NumberStyles.None,
+                System.Globalization.CultureInfo.InvariantCulture, out var count) || count <= 1)
         {
-            if (string.Equals(header, "trailer", StringComparison.Ordinal))
-            {
-                return sawInUseEntry;
-            }
+            return false;
+        }
 
-            var subsection = header.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            if (subsection.Length != 2 ||
-                !int.TryParse(subsection[0], System.Globalization.NumberStyles.None,
-                    System.Globalization.CultureInfo.InvariantCulture, out var firstObject) ||
-                !int.TryParse(subsection[1], System.Globalization.NumberStyles.None,
-                    System.Globalization.CultureInfo.InvariantCulture, out var count) ||
-                firstObject < 0 || count <= 0)
+        var liveEntries = new Dictionary<(int ObjectNumber, int Generation), int>();
+        for (var objectNumber = 0; objectNumber < count; objectNumber++)
+        {
+            var entry = reader.ReadLine()?.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (entry is not { Length: 3 } || entry[2] is not ("n" or "f") ||
+                entry[0].Length != 10 || entry[1].Length != 5 ||
+                !long.TryParse(entry[0], System.Globalization.NumberStyles.None,
+                    System.Globalization.CultureInfo.InvariantCulture, out var objectOffset) ||
+                !int.TryParse(entry[1], System.Globalization.NumberStyles.None,
+                    System.Globalization.CultureInfo.InvariantCulture, out var generation) ||
+                objectOffset < 0 || generation < 0)
             {
                 return false;
             }
 
-            for (var index = 0; index < count; index++)
+            if (objectNumber == 0)
             {
-                var entry = reader.ReadLine()?.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-                if (entry is not { Length: 3 } || entry[2] is not ("n" or "f") ||
-                    !long.TryParse(entry[0], System.Globalization.NumberStyles.None,
-                        System.Globalization.CultureInfo.InvariantCulture, out var objectOffset) ||
-                    !int.TryParse(entry[1], System.Globalization.NumberStyles.None,
-                        System.Globalization.CultureInfo.InvariantCulture, out var generation) ||
-                    objectOffset < 0 || generation < 0)
+                if (entry[2] != "f" || objectOffset != 0 || generation != 65535)
                 {
                     return false;
                 }
 
-                var objectNumber = firstObject + index;
-                if (objectNumber == 0)
-                {
-                    if (entry[2] != "f" || objectOffset != 0 || generation != 65535)
-                    {
-                        return false;
-                    }
+                continue;
+            }
 
-                }
-                else if (entry[2] == "n")
+            if (entry[2] == "n")
+            {
+                if (objectOffset >= document.Length ||
+                    !ObjectHeaderMatches(document[(int)objectOffset..], objectNumber, generation) ||
+                    !liveEntries.TryAdd((objectNumber, generation), (int)objectOffset))
                 {
-                    sawInUseEntry = true;
-                    if (objectOffset >= document.Length ||
-                        !ObjectHeaderMatches(
-                            document[(int)objectOffset..], objectNumber, generation))
-                    {
-                        return false;
-                    }
+                    return false;
                 }
             }
         }
 
-        return false;
+        if (!string.Equals(reader.ReadLine(), "trailer", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var trailer = reader.ReadToEnd();
+        if (trailer.Contains("/Prev", StringComparison.Ordinal) ||
+            trailer.Contains("/XRefStm", StringComparison.Ordinal) ||
+            !TryReadTrailerSize(trailer, out var size) || size != count)
+        {
+            return false;
+        }
+
+        return liveEntries.Count > 0 && EveryObjectHeaderIsDeclared(document, liveEntries);
     }
+
+    private static bool TryReadTrailerSize(string trailer, out int size)
+    {
+        size = 0;
+        var marker = trailer.IndexOf("/Size", StringComparison.Ordinal);
+        if (marker < 0 || trailer.IndexOf("/Size", marker + 1, StringComparison.Ordinal) >= 0)
+        {
+            return false;
+        }
+
+        var cursor = marker + "/Size".Length;
+        if (cursor >= trailer.Length || !char.IsWhiteSpace(trailer[cursor]))
+        {
+            return false;
+        }
+
+        while (cursor < trailer.Length && char.IsWhiteSpace(trailer[cursor]))
+        {
+            cursor++;
+        }
+
+        var start = cursor;
+        while (cursor < trailer.Length && trailer[cursor] is >= '0' and <= '9')
+        {
+            cursor++;
+        }
+
+        return cursor > start &&
+            (cursor == trailer.Length || IsPdfTokenBoundary((byte)trailer[cursor])) &&
+            int.TryParse(
+            trailer.AsSpan(start, cursor - start),
+            System.Globalization.NumberStyles.None,
+            System.Globalization.CultureInfo.InvariantCulture,
+            out size) && size > 1;
+    }
+
+    private static bool EveryObjectHeaderIsDeclared(
+        ReadOnlySpan<byte> document,
+        IReadOnlyDictionary<(int ObjectNumber, int Generation), int> liveEntries)
+    {
+        for (var offset = 0; offset < document.Length; offset++)
+        {
+            if (document[offset] is not (>= (byte)'0' and <= (byte)'9') ||
+                offset > 0 && !IsPdfTokenBoundary(document[offset - 1]))
+            {
+                continue;
+            }
+
+            var cursor = offset;
+            if (!TryReadNonNegativeInt(document, ref cursor, out var objectNumber) ||
+                !SkipRequiredPdfWhitespace(document, ref cursor) ||
+                !TryReadNonNegativeInt(document, ref cursor, out var generation) ||
+                !SkipRequiredPdfWhitespace(document, ref cursor) ||
+                !document[cursor..].StartsWith("obj"u8) ||
+                cursor + 3 < document.Length && !IsPdfTokenBoundary(document[cursor + 3]))
+            {
+                continue;
+            }
+
+            if (!liveEntries.TryGetValue((objectNumber, generation), out var declaredOffset) ||
+                declaredOffset != offset)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool IsPdfTokenBoundary(byte value) =>
+        value is 0 or 9 or 10 or 12 or 13 or 32 or
+            (byte)'(' or (byte)')' or (byte)'<' or (byte)'>' or
+            (byte)'[' or (byte)']' or (byte)'{' or (byte)'}' or
+            (byte)'/' or (byte)'%';
 
     private static bool ObjectHeaderMatches(
         ReadOnlySpan<byte> bytes,

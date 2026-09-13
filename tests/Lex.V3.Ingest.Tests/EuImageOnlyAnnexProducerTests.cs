@@ -79,7 +79,11 @@ public sealed class EuImageOnlyAnnexProducerTests
             fixture.Request, fixture.Request, fixture.Evidence, fixture.Receipt,
             profile.Bytes, profile.Reference, CancellationToken.None);
 
-        Assert.AreEqual(EuImageOnlyAnnexProductionRefusal.AnnexContainsText, result.Refusal);
+        Assert.AreEqual(
+            EuImageOnlyAnnexProductionRefusal.PdfUnreadable,
+            result.Refusal,
+            "the retained official PDF uses a sparse chained xref with /Prev, outside this "
+            + "producer's deliberately single-table supported subset; it still cannot yield a gap");
         Assert.IsNull(result.Disposition);
     }
 
@@ -244,6 +248,170 @@ public sealed class EuImageOnlyAnnexProducerTests
 
         var result = await RunAsync(
             new EuImageOnlyAnnexProducer(store), fixture, profile);
+
+        Assert.AreEqual(EuImageOnlyAnnexProductionRefusal.PdfUnreadable, result.Refusal);
+        Assert.IsNull(result.Disposition);
+    }
+
+    [TestMethod]
+    public async Task AParserRecoverablePdfWithNonFixedWidthCrossReferenceEntriesIsRefused()
+    {
+        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
+        var complete = Encoding.ASCII.GetString(MinimalPdf(image: true, text: false));
+        var malformed = System.Text.RegularExpressions.Regex.Replace(
+            complete,
+            @"(?m)^0+(\d+) 00000 n $",
+            "$1 00000 n ");
+        Assert.AreNotEqual(complete, malformed);
+        var fixture = await FixtureAsync(store, Encoding.ASCII.GetBytes(malformed));
+        var profile = Profile(fixture, 1);
+
+        var result = await RunAsync(new EuImageOnlyAnnexProducer(store), fixture, profile);
+
+        Assert.AreEqual(EuImageOnlyAnnexProductionRefusal.PdfUnreadable, result.Refusal);
+        Assert.IsNull(result.Disposition);
+    }
+
+    [TestMethod]
+    public async Task ATraditionalTableMustBeginWithObjectZero()
+    {
+        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
+        var complete = Encoding.ASCII.GetString(MinimalPdf(image: true, text: false));
+        var malformed = complete.Replace("xref\n0 6", "xref\n1 6", StringComparison.Ordinal);
+        Assert.AreNotEqual(complete, malformed);
+        var fixture = await FixtureAsync(store, Encoding.ASCII.GetBytes(malformed));
+        var profile = Profile(fixture, 1);
+
+        var result = await RunAsync(new EuImageOnlyAnnexProducer(store), fixture, profile);
+
+        Assert.AreEqual(EuImageOnlyAnnexProductionRefusal.PdfUnreadable, result.Refusal);
+        Assert.IsNull(result.Disposition);
+    }
+
+    [TestMethod]
+    public async Task AnIncrementalUpdateCannotHideACorruptPreviousCrossReferenceTable()
+    {
+        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
+        var complete = Encoding.ASCII.GetString(MinimalPdf(image: true, text: false));
+        var originalXrefOffset = complete.IndexOf("xref\n", StringComparison.Ordinal);
+        var objectOneOffset = complete.IndexOf("1 0 obj", StringComparison.Ordinal);
+        var corruptBase = System.Text.RegularExpressions.Regex.Replace(
+            complete,
+            @"(?m)^\d{10} 00000 n $",
+            "0000000001 00000 n ");
+        var updateXrefOffset = Encoding.ASCII.GetByteCount(corruptBase);
+        var update = "xref\n0 2\n0000000000 65535 f \n"
+            + objectOneOffset.ToString("D10", System.Globalization.CultureInfo.InvariantCulture)
+            + " 00000 n \ntrailer\n<< /Size 6 /Root 1 0 R /Prev "
+            + originalXrefOffset.ToString(System.Globalization.CultureInfo.InvariantCulture)
+            + " >>\nstartxref\n"
+            + updateXrefOffset.ToString(System.Globalization.CultureInfo.InvariantCulture)
+            + "\n%%EOF\n";
+        var fixture = await FixtureAsync(store, Encoding.ASCII.GetBytes(corruptBase + update));
+        var profile = Profile(fixture, 1);
+
+        var result = await RunAsync(new EuImageOnlyAnnexProducer(store), fixture, profile);
+
+        Assert.AreEqual(EuImageOnlyAnnexProductionRefusal.PdfUnreadable, result.Refusal);
+        Assert.IsNull(result.Disposition);
+    }
+
+    [TestMethod]
+    public async Task ATableThatOmitsPageObjectsCannotAuthorizeParserRecovery()
+    {
+        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
+        var complete = Encoding.ASCII.GetString(MinimalPdf(image: true, text: false));
+        var xrefStart = complete.IndexOf("xref\n", StringComparison.Ordinal);
+        var trailerStart = complete.IndexOf("trailer\n", xrefStart, StringComparison.Ordinal);
+        var lines = complete[xrefStart..trailerStart].Split('\n');
+        var kept = "xref\n0 2\n" + lines[2] + "\n" + lines[3] + "\n";
+        var malformed = complete[..xrefStart] + kept + complete[trailerStart..];
+        var fixture = await FixtureAsync(store, Encoding.ASCII.GetBytes(malformed));
+        var profile = Profile(fixture, 1);
+
+        var result = await RunAsync(new EuImageOnlyAnnexProducer(store), fixture, profile);
+
+        Assert.AreEqual(EuImageOnlyAnnexProductionRefusal.PdfUnreadable, result.Refusal);
+        Assert.IsNull(result.Disposition);
+    }
+
+    [TestMethod]
+    public async Task ATrailerSizeLargerThanTheCompleteTableIsRefused()
+    {
+        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
+        var complete = Encoding.ASCII.GetString(MinimalPdf(image: true, text: false));
+        var malformed = complete.Replace("<< /Size 6", "<< /Size 7", StringComparison.Ordinal);
+        Assert.AreNotEqual(complete, malformed);
+        var fixture = await FixtureAsync(store, Encoding.ASCII.GetBytes(malformed));
+        var profile = Profile(fixture, 1);
+
+        var result = await RunAsync(new EuImageOnlyAnnexProducer(store), fixture, profile);
+
+        Assert.AreEqual(EuImageOnlyAnnexProductionRefusal.PdfUnreadable, result.Refusal);
+        Assert.IsNull(result.Disposition);
+    }
+
+    [TestMethod]
+    public async Task AMatchingSizeCannotHideObjectHeadersTheTableDoesNotDeclare()
+    {
+        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
+        var complete = Encoding.ASCII.GetString(MinimalPdf(image: true, text: false));
+        var xrefStart = complete.IndexOf("xref\n", StringComparison.Ordinal);
+        var trailerStart = complete.IndexOf("trailer\n", xrefStart, StringComparison.Ordinal);
+        var lines = complete[xrefStart..trailerStart].Split('\n');
+        var kept = "xref\n0 2\n" + lines[2] + "\n" + lines[3] + "\n";
+        var malformed = (complete[..xrefStart] + kept + complete[trailerStart..])
+            .Replace("<< /Size 6", "<< /Size 2", StringComparison.Ordinal);
+        var fixture = await FixtureAsync(store, Encoding.ASCII.GetBytes(malformed));
+        var profile = Profile(fixture, 1);
+
+        var result = await RunAsync(new EuImageOnlyAnnexProducer(store), fixture, profile);
+
+        Assert.AreEqual(EuImageOnlyAnnexProductionRefusal.PdfUnreadable, result.Refusal);
+        Assert.IsNull(result.Disposition);
+    }
+
+    [TestMethod]
+    public async Task ACompleteIncrementalTableStillRefusesItsPreviousTableChain()
+    {
+        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
+        var complete = Encoding.ASCII.GetString(MinimalPdf(image: true, text: false));
+        var originalXrefOffset = complete.IndexOf("xref\n", StringComparison.Ordinal);
+        var trailerStart = complete.IndexOf("trailer\n", originalXrefOffset, StringComparison.Ordinal);
+        var currentTable = complete[originalXrefOffset..trailerStart];
+        var corruptBase = System.Text.RegularExpressions.Regex.Replace(
+            complete,
+            @"(?m)^\d{10} 00000 n $",
+            "0000000001 00000 n ");
+        var updateXrefOffset = Encoding.ASCII.GetByteCount(corruptBase);
+        var update = currentTable + "trailer\n<< /Size 6 /Root 1 0 R /Prev "
+            + originalXrefOffset.ToString(System.Globalization.CultureInfo.InvariantCulture)
+            + " >>\nstartxref\n"
+            + updateXrefOffset.ToString(System.Globalization.CultureInfo.InvariantCulture)
+            + "\n%%EOF\n";
+        var fixture = await FixtureAsync(store, Encoding.ASCII.GetBytes(corruptBase + update));
+        var profile = Profile(fixture, 1);
+
+        var result = await RunAsync(new EuImageOnlyAnnexProducer(store), fixture, profile);
+
+        Assert.AreEqual(EuImageOnlyAnnexProductionRefusal.PdfUnreadable, result.Refusal);
+        Assert.IsNull(result.Disposition);
+    }
+
+    [TestMethod]
+    public async Task AHybridCrossReferenceStreamPointerIsOutsideTheSupportedSubset()
+    {
+        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
+        var complete = Encoding.ASCII.GetString(MinimalPdf(image: true, text: false));
+        var hybrid = complete.Replace(
+            "<< /Size 6 /Root 1 0 R >>",
+            "<< /Size 6 /Root 1 0 R /XRefStm 1 >>",
+            StringComparison.Ordinal);
+        Assert.AreNotEqual(complete, hybrid);
+        var fixture = await FixtureAsync(store, Encoding.ASCII.GetBytes(hybrid));
+        var profile = Profile(fixture, 1);
+
+        var result = await RunAsync(new EuImageOnlyAnnexProducer(store), fixture, profile);
 
         Assert.AreEqual(EuImageOnlyAnnexProductionRefusal.PdfUnreadable, result.Refusal);
         Assert.IsNull(result.Disposition);
