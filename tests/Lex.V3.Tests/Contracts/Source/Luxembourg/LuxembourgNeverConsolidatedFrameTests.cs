@@ -1,6 +1,9 @@
 using Lex.V3.Contracts;
+using Lex.V3.Contracts.Custody;
+using Lex.V3.Contracts.Source.Absence;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Luxembourg;
+using Lex.V3.Tests.Contracts.Source.Core;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace Lex.V3.Tests.Contracts.Source.Luxembourg;
@@ -214,7 +217,7 @@ public sealed class LuxembourgNeverConsolidatedFrameTests
         {
             Assert.ThrowsExactly<ArgumentException>(
                 () => new LuxembourgNeverConsolidatedEntry(
-                    ActOne, new LuxembourgActClassRef(Loi), disposition, Evidence()),
+                    ActOne, new LuxembourgActClassRef(Loi), disposition, Proof(0)),
                 $"{disposition} is not an enumeration outcome and must not look like one.");
         }
     }
@@ -315,11 +318,14 @@ public sealed class LuxembourgNeverConsolidatedFrameTests
         var frame = new LuxembourgNeverConsolidatedFrame(Manifest((ActOne, Loi)));
         Assert.IsTrue(frame.TryAdmit(NeverConsolidated(ActOne, Loi), out _));
 
+        // A DIFFERENT RUN over the same rows, not a second object describing the same one: two
+        // proofs of one enumeration are one claim, and refusing those would turn an honest replay
+        // into a disagreement.
         var other = new LuxembourgNeverConsolidatedEntry(
             ActOne,
             new LuxembourgActClassRef(Loi),
             LuxembourgNeverConsolidatedDisposition.EnumeratedAndNeverConsolidated,
-            OtherEvidence());
+            Proof(0, runIdentitySeed: 931));
 
         Assert.IsFalse(frame.TryAdmit(other, out var refusal));
         Assert.AreEqual(
@@ -425,7 +431,7 @@ public sealed class LuxembourgNeverConsolidatedFrameTests
         Assert.IsNull(LuxembourgActClassManifest.TryCreate(
             [],
             [new LuxembourgActClassManifestMember(ActOne, new LuxembourgActClassRef(Loi))],
-            Evidence(),
+            Proof(1),
             out var refusal));
         Assert.AreEqual(LuxembourgActClassManifestRefusal.NoAdmittedClass, refusal);
     }
@@ -434,7 +440,7 @@ public sealed class LuxembourgNeverConsolidatedFrameTests
     public void AManifestWithNoMemberIsRefused()
     {
         Assert.IsNull(LuxembourgActClassManifest.TryCreate(
-            [new LuxembourgActClassRef(Loi)], [], Evidence(), out var refusal));
+            [new LuxembourgActClassRef(Loi)], [], Proof(0), out var refusal));
         Assert.AreEqual(LuxembourgActClassManifestRefusal.NoMember, refusal);
     }
 
@@ -445,7 +451,7 @@ public sealed class LuxembourgNeverConsolidatedFrameTests
         Assert.IsNull(LuxembourgActClassManifest.TryCreate(
             [new LuxembourgActClassRef(Loi)],
             [new LuxembourgActClassManifestMember(ActTwo, new LuxembourgActClassRef(Rgd))],
-            Evidence(),
+            Proof(1),
             out var refusal));
         Assert.AreEqual(LuxembourgActClassManifestRefusal.MemberClassNotAdmitted, refusal);
     }
@@ -459,7 +465,7 @@ public sealed class LuxembourgNeverConsolidatedFrameTests
                 new LuxembourgActClassManifestMember(ActOne, new LuxembourgActClassRef(Loi)),
                 new LuxembourgActClassManifestMember(ActOne, new LuxembourgActClassRef(Loi)),
             ],
-            Evidence(),
+            Proof(2),
             out var refusal));
         Assert.AreEqual(LuxembourgActClassManifestRefusal.DuplicateMember, refusal);
     }
@@ -470,9 +476,87 @@ public sealed class LuxembourgNeverConsolidatedFrameTests
         Assert.IsNull(LuxembourgActClassManifest.TryCreate(
             [new LuxembourgActClassRef(Loi), new LuxembourgActClassRef(Loi)],
             [new LuxembourgActClassManifestMember(ActOne, new LuxembourgActClassRef(Loi))],
-            Evidence(),
+            Proof(1),
             out var refusal));
         Assert.AreEqual(LuxembourgActClassManifestRefusal.DuplicateAdmittedClass, refusal);
+    }
+
+    // ---- The evidence is a proof, and it is checked against what it is offered for. ----
+
+    /// <summary>
+    /// A member set that is not the size the proof says the enumeration delivered is refused.
+    /// </summary>
+    /// <remarks>
+    /// The manifest's evidence used to be a bare <see cref="SourceArtifactRef"/> - the same unbound
+    /// gesture the review found on the entry, one level up. A proof says how many rows its
+    /// enumeration delivered, so a caller can no longer hand a proof of a whole-class sweep beside
+    /// three acts and call the three a population.
+    /// </remarks>
+    [TestMethod]
+    public void AMemberSetThatIsNotTheSizeTheProofDeliveredIsRefused()
+    {
+        Assert.IsNull(LuxembourgActClassManifest.TryCreate(
+            [new LuxembourgActClassRef(Loi)],
+            [new LuxembourgActClassManifestMember(ActOne, new LuxembourgActClassRef(Loi))],
+            Proof(2),
+            out var refusal));
+        Assert.AreEqual(LuxembourgActClassManifestRefusal.MemberCountDisagreesWithProof, refusal);
+    }
+
+    /// <summary>
+    /// A disposition that contradicts its own proof is refused at construction, not recorded.
+    /// </summary>
+    /// <remarks>
+    /// The proof decides which of the two enumerated dispositions this is: rows delivered means the
+    /// act WAS consolidated, none delivered is the absence claim. A caller stating the opposite of
+    /// what its own evidence says is not reporting a disagreement between sources - it is
+    /// contradicting itself inside one argument list, and no frame should have to adjudicate that.
+    /// </remarks>
+    [TestMethod]
+    public void ADispositionThatContradictsItsOwnProofIsRejected()
+    {
+        Assert.ThrowsExactly<ArgumentException>(
+            () => new LuxembourgNeverConsolidatedEntry(
+                ActOne,
+                new LuxembourgActClassRef(Loi),
+                LuxembourgNeverConsolidatedDisposition.EnumeratedAndNeverConsolidated,
+                Proof(2)),
+            "never consolidated, beside a proof that delivered two consolidations.");
+
+        Assert.ThrowsExactly<ArgumentException>(
+            () => new LuxembourgNeverConsolidatedEntry(
+                ActOne,
+                new LuxembourgActClassRef(Loi),
+                LuxembourgNeverConsolidatedDisposition.EnumeratedAndConsolidated,
+                Proof(0)),
+            "consolidated, beside a proof that delivered nothing.");
+    }
+
+    /// <summary>
+    /// Two proofs of ONE enumeration are one claim, so re-presenting an act with its own evidence
+    /// freshly minted is still idempotent.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="AbsenceFamilyEnumerationProof"/> is a class with no value equality, so comparing
+    /// the objects would make an honest replay a refusal. What is compared is what a proof is about:
+    /// its family, its acquisition run, its delivered row count and its canonical-key digest.
+    /// </remarks>
+    [TestMethod]
+    public void TwoProofsOfOneEnumerationAreOneClaim()
+    {
+        var frame = new LuxembourgNeverConsolidatedFrame(Manifest((ActOne, Loi)));
+        var first = NeverConsolidated(ActOne, Loi);
+        var second = NeverConsolidated(ActOne, Loi);
+
+        Assert.AreNotSame(
+            first.EnumerationCompletionProof,
+            second.EnumerationCompletionProof,
+            "the two entries must hold different proof OBJECTS for this to test anything.");
+
+        Assert.IsTrue(frame.TryAdmit(first, out _));
+        Assert.IsTrue(frame.TryAdmit(second, out var refusal));
+        Assert.AreEqual(LuxembourgNeverConsolidatedAdmitRefusal.None, refusal);
+        Assert.HasCount(1, frame.Entries);
     }
 
     // ---- Surface. ----
@@ -520,10 +604,10 @@ public sealed class LuxembourgNeverConsolidatedFrameTests
         Assert.ThrowsExactly<ArgumentNullException>(() => LuxembourgActClassManifest.TryCreate(
             null!,
             [new LuxembourgActClassManifestMember(ActOne, new LuxembourgActClassRef(Loi))],
-            Evidence(),
+            Proof(1),
             out _));
         Assert.ThrowsExactly<ArgumentNullException>(() => LuxembourgActClassManifest.TryCreate(
-            [new LuxembourgActClassRef(Loi)], null!, Evidence(), out _));
+            [new LuxembourgActClassRef(Loi)], null!, Proof(1), out _));
         Assert.ThrowsExactly<ArgumentNullException>(() => LuxembourgActClassManifest.TryCreate(
             [new LuxembourgActClassRef(Loi)],
             [new LuxembourgActClassManifestMember(ActOne, new LuxembourgActClassRef(Loi))],
@@ -595,6 +679,7 @@ public sealed class LuxembourgNeverConsolidatedFrameTests
                 "\"member_class_not_admitted\"",
                 "\"duplicate_member\"",
                 "\"duplicate_admitted_class\"",
+                "\"member_count_disagrees_with_proof\"",
             },
             Enum.GetValues<LuxembourgActClassManifestRefusal>()
                 .Select(member => ContractJson.Serialize(member))
@@ -619,23 +704,28 @@ public sealed class LuxembourgNeverConsolidatedFrameTests
                 .Select(static value => new LuxembourgActClassRef(value))],
             [.. members.Select(static member => new LuxembourgActClassManifestMember(
                 member.Act, new LuxembourgActClassRef(member.Class)))],
-            Evidence(),
+            Proof(members.Length),
             out var refusal);
         Assert.IsNotNull(manifest, $"the fixture must mint an admitting manifest: {refusal}");
         return manifest!;
     }
 
+    /// <summary>
+    /// "Enumerated and never consolidated" requires a proof that delivered NOTHING, which is what
+    /// makes it an absence claim rather than an assertion.
+    /// </summary>
     private static LuxembourgNeverConsolidatedEntry NeverConsolidated(string act, string actClass) =>
         new(act,
             new LuxembourgActClassRef(actClass),
             LuxembourgNeverConsolidatedDisposition.EnumeratedAndNeverConsolidated,
-            Evidence());
+            Proof(0));
 
+    /// <summary>And "enumerated and consolidated" requires a proof that delivered at least one.</summary>
     private static LuxembourgNeverConsolidatedEntry Consolidated(string act, string actClass) =>
         new(act,
             new LuxembourgActClassRef(actClass),
             LuxembourgNeverConsolidatedDisposition.EnumeratedAndConsolidated,
-            Evidence());
+            Proof(2));
 
     private static LuxembourgNeverConsolidatedEntry Unproven(string act, string actClass) =>
         new(act,
@@ -649,9 +739,46 @@ public sealed class LuxembourgNeverConsolidatedFrameTests
             LuxembourgNeverConsolidatedDisposition.OutsideClassManifest,
             null);
 
-    private static SourceArtifactRef Evidence() => new(
-        "urn:uuid:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", new string('a', 64));
+    /// <summary>
+    /// A real <see cref="AbsenceFamilyEnumerationProof"/> over a delivery of exactly
+    /// <paramref name="rows"/> rows.
+    /// </summary>
+    /// <remarks>
+    /// These used to be two hand-written <see cref="SourceArtifactRef"/> literals, which is exactly
+    /// the defect the review found: a structurally valid reference that no enumeration stands behind.
+    /// A proof can only be minted from an <see cref="EnumerationDeliveryComparison"/> whose two
+    /// independent passes agreed, so the fixture now pays the same price a caller does.
+    /// <para>
+    /// <paramref name="runIdentitySeed"/> mints an independent run over the same rows, which is the
+    /// only way to build two proofs that are genuinely different claims rather than two objects
+    /// describing one enumeration.
+    /// </para>
+    /// </remarks>
+    private static AbsenceFamilyEnumerationProof Proof(int rows, int runIdentitySeed = 930)
+    {
+        var fixture = rows == 0
+            ? new RepeatedEnumerationDeliveryProofTests.Fixture(
+                terminalPagePolicy:
+                    RepeatedEnumerationTerminalPagePolicy.EmptySuccessorAfterShortPage,
+                expectedCount: 0,
+                rawRows: EmptyRows,
+                runIdentitySeed: runIdentitySeed)
+            : new RepeatedEnumerationDeliveryProofTests.Fixture(
+                expectedCount: rows, runIdentitySeed: runIdentitySeed);
 
-    private static SourceArtifactRef OtherEvidence() => new(
-        "urn:uuid:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", new string('b', 64));
+        var cursors = rows == 0
+            ? "ignored"
+            : string.Join(',', Enumerable.Range(0, rows).Select(static index =>
+                ((char)('a' + index)).ToString()));
+
+        var delivery = fixture.Create(cursors, cursors);
+        var proof = AbsenceFamilyEnumerationProof.TryCreate(
+            "laws", delivery, CustodyMembership.Floored, out var refusal);
+        Assert.IsNotNull(proof, $"the fixture must mint an admitting proof: {refusal}");
+        return proof!;
+    }
+
+    private const string EmptyRows =
+        "{\"head\":{\"link\":[],\"vars\":[\"id\",\"cursor\",\"value\"]},"
+        + "\"results\":{\"distinct\":false,\"ordered\":true,\"bindings\":[]}}";
 }

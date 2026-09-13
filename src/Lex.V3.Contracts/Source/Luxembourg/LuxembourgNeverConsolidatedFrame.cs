@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Text.Json.Serialization;
+using Lex.V3.Contracts.Source.Absence;
 using Lex.V3.Contracts.Source.Core;
 
 namespace Lex.V3.Contracts.Source.Luxembourg;
@@ -116,10 +117,35 @@ public sealed record LuxembourgActClassRef
 /// One act's place in the never-consolidated frame, bound to the evidence that put it there.
 /// </summary>
 /// <remarks>
-/// The completion evidence is required for the two enumerated dispositions and forbidden for the two
+/// <para>
+/// The completion proof is required for the two enumerated dispositions and forbidden for the two
 /// that are not enumeration outcomes. That asymmetry is the contract: a claim that an enumeration
-/// completed must name the evidence that it did, and a claim that nobody enumerated must not carry
+/// completed must name the proof that it did, and a claim that nobody enumerated must not carry
 /// evidence suggesting somebody had.
+/// </para>
+/// <para>
+/// A PROOF, NOT A REFERENCE, AND THE DISPOSITION MUST AGREE WITH IT. This field used to be a bare
+/// <see cref="SourceArtifactRef"/>, so any structurally valid reference at all satisfied it and
+/// nothing tied it to an enumeration of this act. <see cref="AbsenceFamilyEnumerationProof"/> can
+/// only be minted from an <see cref="EnumerationDeliveryComparison"/> whose two independent passes
+/// agreed below the row cap, which is what makes it a proof rather than a claim.
+/// </para>
+/// <para>
+/// And once it is a proof it says how many consolidations that enumeration delivered, so the
+/// disposition stops being an assertion beside the evidence and becomes a statement the evidence
+/// either supports or contradicts: <see cref="LuxembourgNeverConsolidatedDisposition.EnumeratedAndNeverConsolidated"/>
+/// requires a delivered row count of zero, and
+/// <see cref="LuxembourgNeverConsolidatedDisposition.EnumeratedAndConsolidated"/> requires at least
+/// one. "Enumerated and never consolidated" beside a proof that delivered four consolidations is not
+/// a disagreement to record; it is a contradiction, and it refuses here.
+/// </para>
+/// <para>
+/// WHAT THIS STILL DOES NOT BIND, stated rather than left for a reader to assume: that the supplied
+/// proof enumerated THIS act rather than some other. Its <c>FamilyKey</c> is a partition key whose
+/// shape is the acquisition plan's to choose, and this build has no Luxembourg consolidation query
+/// family to derive one from yet. Binding that needs the acquisition half E10 has not built, not a
+/// stricter check here.
+/// </para>
 /// </remarks>
 public sealed record LuxembourgNeverConsolidatedEntry
 {
@@ -127,7 +153,7 @@ public sealed record LuxembourgNeverConsolidatedEntry
         string publisherActIri,
         LuxembourgActClassRef actClass,
         LuxembourgNeverConsolidatedDisposition disposition,
-        SourceArtifactRef? enumerationCompletionEvidence)
+        AbsenceFamilyEnumerationProof? enumerationCompletionProof)
     {
         // See LuxembourgActClassRef's own remark: this is a publisher IRI, and RequireIdentifier
         // admitted values the publisher cannot emit. There is no narrower LU-specific canonical form
@@ -142,16 +168,34 @@ public sealed record LuxembourgNeverConsolidatedEntry
         var enumerated =
             disposition is LuxembourgNeverConsolidatedDisposition.EnumeratedAndNeverConsolidated
                 or LuxembourgNeverConsolidatedDisposition.EnumeratedAndConsolidated;
-        if (enumerated != (enumerationCompletionEvidence is not null))
+        if (enumerated != (enumerationCompletionProof is not null))
         {
             throw new ArgumentException(
                 enumerated
-                    ? "An enumerated disposition must name the evidence that the enumeration completed."
-                    : "A disposition that is not an enumeration outcome must carry no completion evidence.",
-                nameof(enumerationCompletionEvidence));
+                    ? "An enumerated disposition must name the proof that the enumeration completed."
+                    : "A disposition that is not an enumeration outcome must carry no completion proof.",
+                nameof(enumerationCompletionProof));
         }
 
-        EnumerationCompletionEvidence = enumerationCompletionEvidence;
+        // THE PROOF DECIDES WHICH OF THE TWO ENUMERATED DISPOSITIONS THIS IS. A proof that delivered
+        // rows is a proof that this act WAS consolidated; a proof that delivered none is the absence
+        // claim. A caller that states the opposite of what its own evidence says is not reporting a
+        // disagreement between sources - it is contradicting itself in one argument list.
+        if (enumerationCompletionProof is { } proof)
+        {
+            var neverConsolidated =
+                disposition == LuxembourgNeverConsolidatedDisposition.EnumeratedAndNeverConsolidated;
+            if (neverConsolidated != (proof.DeliveredRowCount == 0))
+            {
+                throw new ArgumentException(
+                    neverConsolidated
+                        ? "A never-consolidated disposition requires a proof that delivered no consolidation."
+                        : "A consolidated disposition requires a proof that delivered at least one consolidation.",
+                    nameof(enumerationCompletionProof));
+            }
+        }
+
+        EnumerationCompletionProof = enumerationCompletionProof;
     }
 
     /// <summary>The act, as the publisher identifies it.</summary>
@@ -164,10 +208,10 @@ public sealed record LuxembourgNeverConsolidatedEntry
     public LuxembourgNeverConsolidatedDisposition Disposition { get; }
 
     /// <summary>
-    /// The evidence that the consolidation enumeration completed, present exactly for the two
-    /// enumerated dispositions.
+    /// The proof that the consolidation enumeration completed, present exactly for the two
+    /// enumerated dispositions and agreeing with the one that is stated.
     /// </summary>
-    public SourceArtifactRef? EnumerationCompletionEvidence { get; }
+    public AbsenceFamilyEnumerationProof? EnumerationCompletionProof { get; }
 }
 
 /// <summary>Why a class manifest could not be built. Closed.</summary>
@@ -188,6 +232,7 @@ public enum LuxembourgActClassManifestRefusal
     [JsonStringEnumMemberName("member_class_not_admitted")]
     MemberClassNotAdmitted = 3,
 
+
     /// <summary>One act appears twice, so the manifest states two classes for it.</summary>
     [JsonStringEnumMemberName("duplicate_member")]
     DuplicateMember = 4,
@@ -195,6 +240,12 @@ public enum LuxembourgActClassManifestRefusal
     /// <summary>One class appears twice in the admitted set.</summary>
     [JsonStringEnumMemberName("duplicate_admitted_class")]
     DuplicateAdmittedClass = 5,
+    /// <summary>
+    /// The supplied member set is not the size the proof says that enumeration delivered, so one of
+    /// the two is not about the other.
+    /// </summary>
+    [JsonStringEnumMemberName("member_count_disagrees_with_proof")]
+    MemberCountDisagreesWithProof = 6,
 }
 
 /// <summary>One act in the manifest, with the class the publisher gave it.</summary>
@@ -255,12 +306,12 @@ public sealed class LuxembourgActClassManifest
         IList<LuxembourgActClassRef> admittedClasses,
         IList<LuxembourgActClassManifestMember> members,
         Dictionary<string, LuxembourgActClassRef> classByAct,
-        SourceArtifactRef completionEvidence)
+        AbsenceFamilyEnumerationProof enumerationProof)
     {
         _admittedClasses = new ReadOnlyCollection<LuxembourgActClassRef>(admittedClasses);
         _members = new ReadOnlyCollection<LuxembourgActClassManifestMember>(members);
         _classByAct = classByAct;
-        CompletionEvidence = completionEvidence;
+        EnumerationProof = enumerationProof;
     }
 
     /// <summary>The classes this manifest covers, in the order supplied.</summary>
@@ -269,8 +320,26 @@ public sealed class LuxembourgActClassManifest
     /// <summary>Every act in scope, in the order supplied.</summary>
     public IReadOnlyList<LuxembourgActClassManifestMember> Members => _members;
 
-    /// <summary>The evidence that the enumeration establishing this member set completed.</summary>
-    public SourceArtifactRef CompletionEvidence { get; }
+    /// <summary>
+    /// The proof that the enumeration establishing this member set completed, bound to the member
+    /// count below.
+    /// </summary>
+    /// <remarks>
+    /// A PROOF RATHER THAN A REFERENCE, FOR THE REASON THE ENTRY'S IS. A bare
+    /// <see cref="SourceArtifactRef"/> here would have been the same unbound gesture this whole type
+    /// exists to replace: something that looks like evidence and is checked against nothing.
+    /// <para>
+    /// WHAT IT BINDS, AND WHAT IT DOES NOT. It binds CARDINALITY: a member set of a different size
+    /// than the proof says that enumeration delivered is refused, so a caller cannot hand a proof of
+    /// a 23,370-row sweep alongside three acts. It does NOT bind IDENTITY - that these particular
+    /// act IRIs are the rows that enumeration delivered - because doing so means decoding the member
+    /// set out of the delivery's own retained rows rather than accepting it, and the Luxembourg
+    /// act-class query family that would be decoded does not exist in this build yet. That is a real
+    /// remaining gap and it is named here rather than papered over: what stands today is that the
+    /// count is a fact about a proven-whole enumeration instead of a number nobody checked.
+    /// </para>
+    /// </remarks>
+    public AbsenceFamilyEnumerationProof EnumerationProof { get; }
 
     /// <summary>The class this manifest holds for one act, or nothing when it holds no such act.</summary>
     public bool TryGetMemberClass(string publisherActIri, out LuxembourgActClassRef actClass)
@@ -283,12 +352,12 @@ public sealed class LuxembourgActClassManifest
     public static LuxembourgActClassManifest? TryCreate(
         IReadOnlyList<LuxembourgActClassRef> admittedClasses,
         IReadOnlyList<LuxembourgActClassManifestMember> members,
-        SourceArtifactRef completionEvidence,
+        AbsenceFamilyEnumerationProof enumerationProof,
         out LuxembourgActClassManifestRefusal refusal)
     {
         ArgumentNullException.ThrowIfNull(admittedClasses);
         ArgumentNullException.ThrowIfNull(members);
-        ArgumentNullException.ThrowIfNull(completionEvidence);
+        ArgumentNullException.ThrowIfNull(enumerationProof);
 
         var admitted = admittedClasses.ToArray();
         var memberList = members.ToArray();
@@ -332,8 +401,17 @@ public sealed class LuxembourgActClassManifest
             }
         }
 
+        // THE MEMBER SET IS THE SIZE THE PROOF SAYS IT IS. Checked after the per-member checks so
+        // a self-contradictory manifest is named by its own contradiction first, and last because it
+        // is the only check here that compares the supplied set against something outside it.
+        if (memberList.Length != enumerationProof.DeliveredRowCount)
+        {
+            refusal = LuxembourgActClassManifestRefusal.MemberCountDisagreesWithProof;
+            return null;
+        }
+
         refusal = LuxembourgActClassManifestRefusal.None;
-        return new LuxembourgActClassManifest(admitted, memberList, classByAct, completionEvidence);
+        return new LuxembourgActClassManifest(admitted, memberList, classByAct, enumerationProof);
     }
 }
 
@@ -480,7 +558,7 @@ public sealed class LuxembourgNeverConsolidatedFrame
                 return false;
             }
 
-            if (held.EnumerationCompletionEvidence != entry.EnumerationCompletionEvidence)
+            if (!SameEnumeration(held.EnumerationCompletionProof, entry.EnumerationCompletionProof))
             {
                 refusal = LuxembourgNeverConsolidatedAdmitRefusal.CompletionEvidenceDisagrees;
                 return false;
@@ -494,6 +572,38 @@ public sealed class LuxembourgNeverConsolidatedFrame
         _entries.Add(entry);
         refusal = LuxembourgNeverConsolidatedAdmitRefusal.None;
         return true;
+    }
+
+    /// <summary>
+    /// Whether two completion proofs are the same claim about the same enumeration.
+    /// </summary>
+    /// <remarks>
+    /// NOT REFERENCE EQUALITY, AND THE DIFFERENCE IS NOT ACADEMIC.
+    /// <see cref="AbsenceFamilyEnumerationProof"/> is a class with no value equality, so two proofs
+    /// minted from one enumeration by two callers are different objects. Comparing the objects would
+    /// make re-presenting an act with its own evidence a DISAGREEMENT, which turns an idempotent
+    /// replay into a refusal for no reason a reader could defend.
+    /// <para>
+    /// What makes two proofs the same claim is what a proof is about: the family it enumerated, the
+    /// acquisition run that produced it, how many rows that run delivered, and the digest over those
+    /// rows' canonical keys. Two proofs agreeing on all four cannot be about different enumerations;
+    /// two differing on any one of them are two claims, and this set does not choose between them.
+    /// </para>
+    /// </remarks>
+    private static bool SameEnumeration(
+        AbsenceFamilyEnumerationProof? left, AbsenceFamilyEnumerationProof? right)
+    {
+        if (ReferenceEquals(left, right))
+        {
+            return true;
+        }
+
+        return left is not null
+            && right is not null
+            && string.Equals(left.FamilyKey, right.FamilyKey, StringComparison.Ordinal)
+            && left.AcquisitionRunRef == right.AcquisitionRunRef
+            && left.DeliveredRowCount == right.DeliveredRowCount
+            && string.Equals(left.CanonicalKeyDigest, right.CanonicalKeyDigest, StringComparison.Ordinal);
     }
 
     /// <summary>

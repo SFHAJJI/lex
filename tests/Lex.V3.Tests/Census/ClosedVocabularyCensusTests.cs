@@ -459,7 +459,7 @@ public sealed class ClosedVocabularyCensusTests
                 "Lex.V3.Contracts.Source.Http.RobotsRevalidationMode: FullGetWithoutValidators",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgActClassManifestRefusal: None, "
                     + "NoAdmittedClass, NoMember, MemberClassNotAdmitted, DuplicateMember, "
-                    + "DuplicateAdmittedClass",
+                    + "DuplicateAdmittedClass, MemberCountDisagreesWithProof",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgActForceDatePredicate: "
                     + "DateEntryInForce, DateNoLongerInForce",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgAssertionDisposition: Accepted, "
