@@ -138,6 +138,27 @@ public static class LuxembourgActClassManifest
     }
 
     /// <summary>Whether a classified scope is one E10 counts. Exactly LOI and RGD.</summary>
-    public static bool IsCounted(LuxembourgActClassScope scope) =>
-        scope is LuxembourgActClassScope.InScopeLoi or LuxembourgActClassScope.InScopeRgd;
+    /// <remarks>
+    /// FAILS CLOSED ON AN UNDEFINED SCOPE. This is a public counting boundary, separate from
+    /// <see cref="TryClassify"/>, and its whole promise is that an unrecognized code cannot be
+    /// counted. <c>TryClassify</c> leaves <c>scope</c> at <c>default</c> (an unnamed 0) on a miss, so
+    /// a caller that passed that default straight here - ignoring the <c>bool</c> - would otherwise
+    /// get the same "not counted" answer as a genuine <see cref="LuxembourgActClassScope.RecognizedOutOfScope"/>,
+    /// collapsing the distinction the manifest exists to keep. An undefined scope is refused rather
+    /// than answered, so a miss cannot be silently read as "not counted".
+    /// </remarks>
+    /// <exception cref="ArgumentOutOfRangeException">The scope is not a declared member.</exception>
+    public static bool IsCounted(LuxembourgActClassScope scope)
+    {
+        if (!Enum.IsDefined(scope))
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(scope),
+                scope,
+                "An undefined scope is not a counting answer; an unrecognized code must be caught at "
+                + "Classify/TryClassify and fail closed, not read as not-counted here.");
+        }
+
+        return scope is LuxembourgActClassScope.InScopeLoi or LuxembourgActClassScope.InScopeRgd;
+    }
 }

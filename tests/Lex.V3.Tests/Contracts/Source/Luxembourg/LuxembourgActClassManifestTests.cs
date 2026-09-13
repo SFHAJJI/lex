@@ -105,6 +105,30 @@ public sealed class LuxembourgActClassManifestTests
         }
     }
 
+    /// <summary>
+    /// The counting boundary refuses an undefined scope, so a TryClassify miss cannot be read as
+    /// "not counted".
+    /// </summary>
+    /// <remarks>
+    /// Codex's round-1 finding: TryClassify leaves scope at default(0) on a miss, and IsCounted
+    /// returned false for it - the same answer as RecognizedOutOfScope. A consumer that ignored the
+    /// bool would silently exclude an unrecognized legal-type from the claimed complete population.
+    /// IsCounted now fails closed on the undefined value.
+    /// </remarks>
+    [TestMethod]
+    public void TheCountingBoundaryRefusesAnUndefinedScope()
+    {
+        var undefined = default(LuxembourgActClassScope);
+        Assert.IsFalse(Enum.IsDefined(undefined), "the premise: default(0) is not a named member.");
+
+        LuxembourgActClassManifest.TryClassify("http://data.legilux.public.lu/x", out var missScope);
+        Assert.AreEqual(undefined, missScope, "a miss leaves scope at the undefined default.");
+
+        var thrown = Assert.ThrowsExactly<ArgumentOutOfRangeException>(
+            () => LuxembourgActClassManifest.IsCounted(undefined));
+        Assert.AreEqual("scope", thrown.ParamName);
+    }
+
     [TestMethod]
     public void ClassifyingANullIriIsACallerContractViolation() =>
         Assert.ThrowsExactly<ArgumentNullException>(
