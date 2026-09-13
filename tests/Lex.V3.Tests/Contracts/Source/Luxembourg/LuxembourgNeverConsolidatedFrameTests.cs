@@ -31,8 +31,8 @@ public sealed class LuxembourgNeverConsolidatedFrameTests
     private const string Unknown =
         "http://data.legilux.public.lu/resource/authority/legal-type/ARRETE-MINISTERIEL";
 
-    private const string ActOne = "https://data.legilux.public.lu/eli/etat/leg/loi/2026/01/01/a1";
-    private const string ActTwo = "https://data.legilux.public.lu/eli/etat/leg/rgd/2026/02/02/a2";
+    private const string ActOne = "http://data.legilux.public.lu/eli/etat/leg/loi/2026/01/01/a1/jo";
+    private const string ActTwo = "http://data.legilux.public.lu/eli/etat/leg/rgd/2026/02/02/a2/jo";
 
     // ---- The population claim is gone, and must not come back. ----
 
@@ -124,7 +124,7 @@ public sealed class LuxembourgNeverConsolidatedFrameTests
                 ActOne,
                 new LuxembourgActClassRef(Loi),
                 LuxembourgNeverConsolidatedDisposition.NoEnumerationCited,
-                Proof(0)),
+                Proof(ActOne, 0)),
             "'nobody enumerated this' must not carry evidence suggesting somebody had.");
 
     /// <summary>
@@ -143,7 +143,7 @@ public sealed class LuxembourgNeverConsolidatedFrameTests
                 ActOne,
                 new LuxembourgActClassRef(Loi),
                 LuxembourgNeverConsolidatedDisposition.CitedEnumerationDeliveredNoRows,
-                Proof(2)),
+                Proof(ActOne, 2)),
             "delivered no rows, beside a proof that delivered two.");
 
         Assert.ThrowsExactly<ArgumentException>(
@@ -151,7 +151,7 @@ public sealed class LuxembourgNeverConsolidatedFrameTests
                 ActOne,
                 new LuxembourgActClassRef(Loi),
                 LuxembourgNeverConsolidatedDisposition.CitedEnumerationDeliveredRows,
-                Proof(0)),
+                Proof(ActOne, 0)),
             "delivered rows, beside a proof that delivered none.");
     }
 
@@ -287,7 +287,7 @@ public sealed class LuxembourgNeverConsolidatedFrameTests
             ActOne,
             new LuxembourgActClassRef(Loi),
             LuxembourgNeverConsolidatedDisposition.CitedEnumerationDeliveredNoRows,
-            Proof(0, runIdentitySeed: 931));
+            Proof(ActOne, 0, runIdentitySeed: 931));
 
         Assert.IsFalse(frame.TryAdmit(other, out var refusal));
         Assert.AreEqual(
@@ -339,12 +339,12 @@ public sealed class LuxembourgNeverConsolidatedFrameTests
             ActOne,
             new LuxembourgActClassRef(Loi),
             LuxembourgNeverConsolidatedDisposition.CitedEnumerationDeliveredNoRows,
-            Proof(0, floor: CustodyMembership.Floored));
+            Proof(ActOne, 0, floor: CustodyMembership.Floored));
         var unenforced = new LuxembourgNeverConsolidatedEntry(
             ActOne,
             new LuxembourgActClassRef(Loi),
             LuxembourgNeverConsolidatedDisposition.CitedEnumerationDeliveredNoRows,
-            Proof(0, floor: CustodyMembership.RetainedUnenforced));
+            Proof(ActOne, 0, floor: CustodyMembership.RetainedUnenforced));
 
         // The premise: the two proofs differ in EXACTLY this one field, or the test proves nothing
         // about the field it names.
@@ -556,19 +556,95 @@ public sealed class LuxembourgNeverConsolidatedFrameTests
                 .Select(member => ContractJson.Serialize(member))
                 .ToArray());
 
+    // ---- Slice 3: the proof must be THIS act's own enumeration. ----
+
+    /// <summary>
+    /// A cited enumeration whose proof is keyed to another act refuses: the family key is not this
+    /// act's per-act consolidation key.
+    /// </summary>
+    /// <remarks>
+    /// The #584 defect, closed. Before slice 3 a zero-row proof of an unrelated family satisfied
+    /// every construction check; now the proof's <c>FamilyKey</c> must equal
+    /// <c>PartitionKeyFor</c> of this entry's act, and another act's key is refused by name.
+    /// </remarks>
+    [TestMethod]
+    public void ACitedEnumerationWhoseProofNamesAnotherActRefuses()
+    {
+        var thrown = Assert.ThrowsExactly<ArgumentException>(() => new LuxembourgNeverConsolidatedEntry(
+            ActOne,
+            new LuxembourgActClassRef(Loi),
+            LuxembourgNeverConsolidatedDisposition.CitedEnumerationDeliveredNoRows,
+            Proof(ActTwo, 0)));
+        Assert.AreEqual("enumerationCompletionProof", thrown.ParamName);
+    }
+
+    /// <summary>The generic inventory family key - the pre-slice-1 default - is refused.</summary>
+    /// <remarks>
+    /// <c>laws</c> is the family key the never-consolidated frame's own earlier fixtures minted
+    /// under, and #584 established such a key paired with an act proves nothing. It is not this act's
+    /// per-act key, so it refuses.
+    /// </remarks>
+    [TestMethod]
+    public void ACitedEnumerationWhoseProofCarriesTheGenericFamilyRefuses()
+    {
+        var thrown = Assert.ThrowsExactly<ArgumentException>(() => new LuxembourgNeverConsolidatedEntry(
+            ActOne,
+            new LuxembourgActClassRef(Loi),
+            LuxembourgNeverConsolidatedDisposition.CitedEnumerationDeliveredNoRows,
+            ProofKeyed("laws", 0)));
+        Assert.AreEqual("enumerationCompletionProof", thrown.ParamName);
+    }
+
+    /// <summary>
+    /// A cited enumeration for an act spelled a way the per-act family cannot key refuses at the act,
+    /// not merely at the family key.
+    /// </summary>
+    /// <remarks>
+    /// The act must be the one admitted spelling <c>PartitionKeyFor</c> digests (slice 1's condition
+    /// 1). An https spelling of the same act is a publisher URI the frame's general act field admits,
+    /// but a cited enumeration cannot be keyed under it, so it refuses with the act as the offender.
+    /// </remarks>
+    [TestMethod]
+    public void ACitedEnumerationForANonAdmittedActSpellingRefuses()
+    {
+        const string HttpsSpelling = "https://data.legilux.public.lu/eli/etat/leg/loi/2026/01/01/a1/jo";
+        var thrown = Assert.ThrowsExactly<ArgumentException>(() => new LuxembourgNeverConsolidatedEntry(
+            HttpsSpelling,
+            new LuxembourgActClassRef(Loi),
+            LuxembourgNeverConsolidatedDisposition.CitedEnumerationDeliveredNoRows,
+            Proof(ActOne, 0)));
+        Assert.AreEqual("publisherActIri", thrown.ParamName);
+    }
+
+    /// <summary>A proof keyed to this act's own per-act key is admitted, and the entry carries it.</summary>
+    [TestMethod]
+    public void ACitedEnumerationKeyedToThisActsPerActKeyIsAdmitted()
+    {
+        var entry = new LuxembourgNeverConsolidatedEntry(
+            ActOne,
+            new LuxembourgActClassRef(Loi),
+            LuxembourgNeverConsolidatedDisposition.CitedEnumerationDeliveredNoRows,
+            Proof(ActOne, 0));
+
+        Assert.AreEqual(
+            LuxembourgConsolidationByActDiscoveryPlan.PartitionKeyFor(ActOne),
+            entry.EnumerationCompletionProof!.FamilyKey,
+            "the admitted proof is bound to this act's per-act consolidation key.");
+    }
+
     // ---- Fixtures. ----
 
     private static LuxembourgNeverConsolidatedEntry NeverConsolidated(string act, string actClass) =>
         new(act,
             new LuxembourgActClassRef(actClass),
             LuxembourgNeverConsolidatedDisposition.CitedEnumerationDeliveredNoRows,
-            Proof(0));
+            Proof(act, 0));
 
     private static LuxembourgNeverConsolidatedEntry Consolidated(string act, string actClass) =>
         new(act,
             new LuxembourgActClassRef(actClass),
             LuxembourgNeverConsolidatedDisposition.CitedEnumerationDeliveredRows,
-            Proof(2));
+            Proof(act, 2));
 
     private static LuxembourgNeverConsolidatedEntry Unproven(string act, string actClass) =>
         new(act,
@@ -587,6 +663,21 @@ public sealed class LuxembourgNeverConsolidatedFrameTests
     /// passes agreed, so the fixture now pays the same price a caller does.
     /// </remarks>
     private static AbsenceFamilyEnumerationProof Proof(
+        string act,
+        int rows,
+        int runIdentitySeed = 930,
+        CustodyMembership floor = CustodyMembership.Floored) =>
+        ProofKeyed(
+            LuxembourgConsolidationByActDiscoveryPlan.PartitionKeyFor(act), rows, runIdentitySeed, floor);
+
+    /// <summary>
+    /// A real proof over a delivery whose partition - and so the proof's <c>FamilyKey</c> - is
+    /// exactly <paramref name="familyKey"/>. Slice 3 binds a cited-enumeration entry to
+    /// <c>PartitionKeyFor(act)</c>, so an honest fixture mints its proof under that key; the hostile
+    /// cases mint under another key to prove the binding refuses.
+    /// </summary>
+    private static AbsenceFamilyEnumerationProof ProofKeyed(
+        string familyKey,
         int rows,
         int runIdentitySeed = 930,
         CustodyMembership floor = CustodyMembership.Floored)
@@ -597,9 +688,10 @@ public sealed class LuxembourgNeverConsolidatedFrameTests
                     RepeatedEnumerationTerminalPagePolicy.EmptySuccessorAfterShortPage,
                 expectedCount: 0,
                 rawRows: EmptyRows,
-                runIdentitySeed: runIdentitySeed)
+                runIdentitySeed: runIdentitySeed,
+                partitionKey: familyKey)
             : new RepeatedEnumerationDeliveryProofTests.Fixture(
-                expectedCount: rows, runIdentitySeed: runIdentitySeed);
+                expectedCount: rows, runIdentitySeed: runIdentitySeed, partitionKey: familyKey);
 
         var cursors = rows == 0
             ? "ignored"
@@ -608,7 +700,7 @@ public sealed class LuxembourgNeverConsolidatedFrameTests
 
         var delivery = fixture.Create(cursors, cursors);
         var proof = AbsenceFamilyEnumerationProof.TryCreate(
-            "laws", delivery, floor, out var refusal);
+            familyKey, delivery, floor, out var refusal);
         Assert.IsNotNull(proof, $"the fixture must mint an admitting proof: {refusal}");
         return proof!;
     }
