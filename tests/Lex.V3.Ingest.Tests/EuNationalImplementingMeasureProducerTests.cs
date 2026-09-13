@@ -42,7 +42,8 @@ public sealed class EuNationalImplementingMeasureProducerTests
             new EuNationalImplementingMeasureRunRequest(
                 plan,
                 "urn:uuid:fc8a5082-9008-48b2-a9b6-a396e2351911",
-                EuAcquisitionTestFixture.BuildRendererSource(414)),
+                EuAcquisitionTestFixture.BuildRendererSource(414),
+                EuAcquisitionTestFixture.TestWireBudget()),
             EuAcquisitionTestFixture.SourceWitness(),
             CancellationToken.None);
 
@@ -75,7 +76,8 @@ public sealed class EuNationalImplementingMeasureProducerTests
             new EuNationalImplementingMeasureRunRequest(
                 plan,
                 "urn:uuid:7f56656f-a46d-40e1-be0a-75ed12ce879a",
-                EuAcquisitionTestFixture.BuildRendererSource(415)),
+                EuAcquisitionTestFixture.BuildRendererSource(415),
+                EuAcquisitionTestFixture.TestWireBudget()),
             EuAcquisitionTestFixture.SourceWitness(),
             CancellationToken.None);
 

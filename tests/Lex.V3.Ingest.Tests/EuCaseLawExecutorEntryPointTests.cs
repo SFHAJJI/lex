@@ -108,7 +108,8 @@ public sealed class EuCaseLawExecutorEntryPointTests
             plan,
             ["http://publications.europa.eu/resource/cellar/3e485e15-11bd-11e6-ba9a-01aa75ed71a1"],
             "urn:uuid:6b1f0e2d-84a7-4c39-b5de-90f3a7c21e46",
-            Source());
+            Source(),
+            EuAcquisitionTestFixture.TestWireBudget());
 
         Assert.HasCount(1, request.BatchWorks);
         Assert.AreSame(plan, request.Plan);
@@ -119,9 +120,13 @@ public sealed class EuCaseLawExecutorEntryPointTests
             .Order()
             .ToArray();
         CollectionAssert.AreEqual(
-            new[] { "BatchWorks", "Plan", "PlanResourceId", "RendererSource" },
+            new[] { "BatchWorks", "Plan", "PlanResourceId", "RendererSource", "WireBudget" },
             properties,
-            "the request names the batch and the plan, and carries no second way to widen scope.");
+            "the request names the batch and the plan, and carries no second way to WIDEN scope. "
+            + "WireBudget is admitted here deliberately and is not an exception to that: a ceiling "
+            + "narrows what a run may do and cannot enlarge it, and #579 measured this door as one "
+            + "of seven that enforced none. It sits on the request rather than the entry point so a "
+            + "run cannot go unbudgeted by omission.");
     }
 
     /// <summary>
@@ -172,7 +177,8 @@ public sealed class EuCaseLawExecutorEntryPointTests
                 EuCaseLawDiscoveryPlan.Create(),
                 [Requested],
                 "urn:uuid:b06e5d72-d9fc-4b8e-a02d-45e8fc276d9b",
-                Source()),
+                Source(),
+                EuAcquisitionTestFixture.TestWireBudget()),
             EuAcquisitionTestFixture.SourceWitness(),
             CancellationToken.None);
 
@@ -213,7 +219,8 @@ public sealed class EuCaseLawExecutorEntryPointTests
                 EuCaseLawDiscoveryPlan.Create(),
                 [Requested],
                 "urn:uuid:30bd64e8-bd1b-42c5-93d8-f527981682b3",
-                Source()),
+                Source(),
+                EuAcquisitionTestFixture.TestWireBudget()),
             EuAcquisitionTestFixture.SourceWitness(),
             CancellationToken.None);
 
@@ -278,7 +285,8 @@ public sealed class EuCaseLawExecutorEntryPointTests
                 EuCaseLawDiscoveryPlan.Create(),
                 [RequestedHttps],
                 "urn:uuid:c17f6e83-2a45-4d91-b8e0-56f9ad381c72",
-                Source()),
+                Source(),
+                EuAcquisitionTestFixture.TestWireBudget()),
             EuAcquisitionTestFixture.SourceWitness(),
             CancellationToken.None);
 
@@ -341,7 +349,8 @@ public sealed class EuCaseLawExecutorEntryPointTests
                 EuCaseLawDiscoveryPlan.Create(),
                 [Requested],
                 "urn:uuid:9f2c48ad-6b31-4e7f-8c05-2d71ba6e3948",
-                Source()),
+                Source(),
+                EuAcquisitionTestFixture.TestWireBudget()),
             EuAcquisitionTestFixture.SourceWitness(),
             CancellationToken.None);
 

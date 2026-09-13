@@ -544,7 +544,8 @@ public sealed class LuxembourgOpinionProducerTests
             store, new EuAcquisitionTestFixture.FixedTimeProvider(), handler);
         var request = new LuxembourgOpinionRunRequest(
             plan, "urn:uuid:5d2b9e14-6f37-4a80-b1c5-83e0da476f29",
-            LuxembourgAcquisitionTestFixture.BuildRendererSource(8801));
+            LuxembourgAcquisitionTestFixture.BuildRendererSource(8801),
+            EuAcquisitionTestFixture.TestWireBudget());
 
         var result = await producer.RunAsync(request, LuxembourgSourceWitness(), CancellationToken.None);
 

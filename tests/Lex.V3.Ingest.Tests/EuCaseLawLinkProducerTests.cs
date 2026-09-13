@@ -140,7 +140,8 @@ public sealed class EuCaseLawLinkProducerTests
                 EuCaseLawDiscoveryPlan.Create(),
                 [Act],
                 "urn:uuid:6c81af29-3d47-4e50-9b12-8f0a5e2c7d63",
-                RendererSource()),
+                RendererSource(),
+                EuAcquisitionTestFixture.TestWireBudget()),
             Scopes(),
             EuAcquisitionTestFixture.SourceWitness(),
             CancellationToken.None);
@@ -199,7 +200,8 @@ public sealed class EuCaseLawLinkProducerTests
                 EuCaseLawDiscoveryPlan.Create(),
                 [Act],
                 "urn:uuid:7d92b03a-4e58-4f61-ac23-901b6f3d8e74",
-                RendererSource()),
+                RendererSource(),
+                EuAcquisitionTestFixture.TestWireBudget()),
             scopes,
             EuAcquisitionTestFixture.SourceWitness(),
             CancellationToken.None);
@@ -254,7 +256,8 @@ public sealed class EuCaseLawLinkProducerTests
                 EuCaseLawDiscoveryPlan.Create(),
                 [RequestedHttps],
                 "urn:uuid:9fb4d25c-6a70-4183-ce45-b23d8f5a0096",
-                RendererSource()),
+                RendererSource(),
+                EuAcquisitionTestFixture.TestWireBudget()),
             Scopes(),
             EuAcquisitionTestFixture.SourceWitness(),
             CancellationToken.None);
@@ -299,7 +302,8 @@ public sealed class EuCaseLawLinkProducerTests
                 EuCaseLawDiscoveryPlan.Create(),
                 [Act],
                 "urn:uuid:a0c5e36d-7b81-4294-df56-c34e906b1107",
-                RendererSource()),
+                RendererSource(),
+                EuAcquisitionTestFixture.TestWireBudget()),
             Scopes(),
             EuAcquisitionTestFixture.SourceWitness(),
             CancellationToken.None);
@@ -345,7 +349,8 @@ public sealed class EuCaseLawLinkProducerTests
                 EuCaseLawDiscoveryPlan.Create(),
                 [Act],
                 "urn:uuid:b1d6f24e-8c92-43a5-e067-d45f017c2218",
-                RendererSource()),
+                RendererSource(),
+                EuAcquisitionTestFixture.TestWireBudget()),
             new Dictionary<string, TargetBodyScope>(StringComparer.OrdinalIgnoreCase)
             {
                 [DifferentCoordinate] = TargetBodyScope.BodyInScopeHeld,
@@ -734,7 +739,8 @@ public sealed class EuCaseLawLinkProducerTests
                 EuCaseLawDiscoveryPlan.Create(),
                 [Act],
                 "urn:uuid:6c81af29-3d47-4e50-9b12-8f0a5e2c7d63",
-                RendererSource()),
+                RendererSource(),
+                EuAcquisitionTestFixture.TestWireBudget()),
             Scopes(),
             EuAcquisitionTestFixture.SourceWitness(),
             CancellationToken.None);
@@ -788,7 +794,8 @@ public sealed class EuCaseLawLinkProducerTests
                 EuCaseLawDiscoveryPlan.Create(),
                 [Act],
                 "urn:uuid:8ea3c14b-5f69-4072-bd34-a12c7e4f9f85",
-                RendererSource()),
+                RendererSource(),
+                EuAcquisitionTestFixture.TestWireBudget()),
             new Dictionary<string, TargetBodyScope>(StringComparer.Ordinal),
             EuAcquisitionTestFixture.SourceWitness(),
             CancellationToken.None);

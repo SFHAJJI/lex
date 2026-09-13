@@ -38,7 +38,8 @@ public sealed class LuxembourgTranspositionIdentityProducerTests
             store, new EuAcquisitionTestFixture.FixedTimeProvider(), handler);
         var renderer = LuxembourgAcquisitionTestFixture.BuildRendererSource(4141);
         const string planResourceId = "urn:uuid:69a68d18-fbb0-4624-aa56-615142034de5";
-        var request = new LuxembourgTranspositionIdentityRunRequest(plan, [EuEli], planResourceId, renderer);
+        var request = new LuxembourgTranspositionIdentityRunRequest(plan, [EuEli], planResourceId, renderer,
+        EuAcquisitionTestFixture.TestWireBudget());
         var witness = LuxembourgSourceWitness();
 
         var result = await producer.RunAsync(request, witness, CancellationToken.None);
@@ -71,7 +72,8 @@ public sealed class LuxembourgTranspositionIdentityProducerTests
             store, new EuAcquisitionTestFixture.FixedTimeProvider(), handler);
         var renderer = LuxembourgAcquisitionTestFixture.BuildRendererSource(4142);
         const string planResourceId = "urn:uuid:5a42b133-ebf0-4937-98fd-e65df71e89f7";
-        var request = new LuxembourgTranspositionIdentityRunRequest(plan, [EuEli], planResourceId, renderer);
+        var request = new LuxembourgTranspositionIdentityRunRequest(plan, [EuEli], planResourceId, renderer,
+        EuAcquisitionTestFixture.TestWireBudget());
         var witness = LuxembourgSourceWitness();
 
         var result = await producer.RunAsync(request, witness, CancellationToken.None);
