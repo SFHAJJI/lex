@@ -174,6 +174,79 @@ public sealed class LuxembourgGazetteBodyTests
         Assert.AreNotEqual(admitted.IdentitySha256, notRetained.IdentitySha256, "other outcome, other identity.");
     }
 
+    /// <summary>
+    /// Codex's pre-freeze correction: the rights resolution is material to which disposition was
+    /// retained, so it is bound into the identity. Same act, listing, bytes and admitted outcome;
+    /// only the rights state (a) or its evidence (b) differs; the identities must differ.
+    /// </summary>
+    [TestMethod]
+    public void TheIdentityBindsTheRightsResolutionNotJustTheBytes()
+    {
+        var pdf = Candidate(ActLoi1, "fr", "pdf");
+        var agreed = Body(JoinAgreedCcBy(ActLoi1, pdf));
+        var secondChannelQuarantined = Body(JoinSecondChannelCannotReadPdf(ActLoi1, pdf));
+        var agreedOnOtherEvidence = Body(JoinAgreedCcByWith(ActLoi1, OtherSparqlEvidence, [CcBy40], [CcBy40], pdf));
+
+        foreach (var body in new[] { agreed, secondChannelQuarantined, agreedOnOtherEvidence })
+        {
+            Assert.AreEqual(LuxembourgGazetteBodyOutcome.Admitted, body.Outcome, "the premise: all three are admitted.");
+            Assert.AreEqual(agreed.TransportByteSha256, body.TransportByteSha256, "the premise: same bytes.");
+        }
+
+        Assert.AreNotEqual(agreed.RightsResolution.Disposition, secondChannelQuarantined.RightsResolution.Disposition);
+        Assert.AreNotEqual(agreed.RightsIdentitySha256, secondChannelQuarantined.RightsIdentitySha256, "(a) another rights state.");
+        Assert.AreNotEqual(agreed.IdentitySha256, secondChannelQuarantined.IdentitySha256);
+
+        Assert.AreEqual(agreed.RightsResolution.Disposition, agreedOnOtherEvidence.RightsResolution.Disposition);
+        Assert.AreNotEqual(agreed.RightsIdentitySha256, agreedOnOtherEvidence.RightsIdentitySha256, "(b) same state, other evidence.");
+        Assert.AreNotEqual(agreed.IdentitySha256, agreedOnOtherEvidence.IdentitySha256);
+
+        static LuxembourgGazetteBodyDisposition Body(LuxembourgBodyJoinResolution join) =>
+            LuxembourgGazetteBodyDisposition.Create(
+                LuxembourgGazetteBodySet.GazetteCandidatesOf(join).Single(), Receipt('a'), FetchEvidence);
+    }
+
+    /// <summary>
+    /// Semantically identical rights observations, delivered in another order, share one identity.
+    /// The order that can vary is the channels' observation collections (several manifestations,
+    /// listed in any order); an observation's own licence list cannot vary, because its constructor
+    /// requires it ordinal-sorted and unique - pinned here as the premise the identity relies on.
+    /// </summary>
+    [TestMethod]
+    public void SemanticallyIdenticalRightsObservationsInAnotherOrderShareOneIdentity()
+    {
+        const string Other = "http://creativecommons.org/licenses/by-sa/4.0/";
+        Assert.ThrowsExactly<ArgumentException>(
+            () => new LuxembourgRightsChannelObservation(ManifestationOf(ActLoi1, "fr", "pdf"), Run, SparqlEvidence, [CcBy40, Other]),
+            "the premise: a licence list is canonical by construction (by-sa sorts before by), so it cannot be a source of order.");
+
+        var pdf = Candidate(ActLoi1, "fr", "pdf");
+        var pdfa = Candidate(ActLoi1, "fr", "pdfa");
+        LuxembourgBodyJoinResolution Join(params LuxembourgWemiCandidate[] listedAs) =>
+            LuxembourgBodyJoin.Resolve(
+                ActLoi1,
+                Run,
+                Topology(pdf, pdfa),
+                new LuxembourgSparqlRightsChannelObservations(
+                    Run, SparqlEnumeration, listedAs.Select(c => Sparql(c.ManifestationIri, Other, CcBy40)).ToArray()),
+                new LuxembourgInFileRightsChannelObservations(
+                    Run, InFileEnumeration, listedAs.Select(c => InFileRead(c.ManifestationIri, Other, CcBy40)).ToArray()));
+
+        var first = PdfBody(Join(pdf, pdfa));
+        var second = PdfBody(Join(pdfa, pdf));
+
+        Assert.AreEqual(LuxembourgRightsChannelDisposition.Multiple, first.RightsResolution.Disposition,
+            "the premise: two licences on a channel is the Multiple state, recorded and not withholding.");
+        Assert.AreEqual(LuxembourgGazetteBodyOutcome.Admitted, first.Outcome);
+        Assert.AreEqual(first.RightsIdentitySha256, second.RightsIdentitySha256);
+        Assert.AreEqual(first.IdentitySha256, second.IdentitySha256);
+
+        static LuxembourgGazetteBodyDisposition PdfBody(LuxembourgBodyJoinResolution join) =>
+            LuxembourgGazetteBodyDisposition.Create(
+                LuxembourgGazetteBodySet.GazetteCandidatesOf(join).Single(static c => c.WemiCandidate.FormatIri == FormatPdf),
+                Receipt('a'), FetchEvidence);
+    }
+
     // ---- the set ----
 
     [TestMethod]

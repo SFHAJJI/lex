@@ -32,6 +32,7 @@ internal static class LuxembourgGazetteBodyFixtures
     public static SourceArtifactRef SparqlEvidence { get; } = Artifact("5f4c1a2e-0b7d-4e7f-9c1a-2b3c4d5e6f70", '5');
     public static SourceArtifactRef InFileEvidence { get; } = Artifact("6a5b2c3d-1e8f-4a0b-8d2c-3e4f5a6b7c81", '6');
     public static SourceArtifactRef FetchEvidence { get; } = Artifact("7b6c3d4e-2f90-4b1c-9e3d-4f5a6b7c8d92", '7');
+    public static SourceArtifactRef OtherSparqlEvidence { get; } = Artifact("8c7d4e5f-3a01-4c2d-af4e-5a6b7c8d9ea3", '8');
 
     public static string ManifestationOf(string act, string language, string format) =>
         act + "/" + language + "/" + format;
@@ -118,6 +119,27 @@ internal static class LuxembourgGazetteBodyFixtures
                 [],
                 acquisitionCompleted: true,
                 rejectedManifestationIris: candidates.Select(static c => c.ManifestationIri).ToArray()));
+
+    /// <summary>
+    /// Agreed CC BY on both channels, with the SPARQL channel's evidence ref and licence order chosen
+    /// by the caller: the same claim on other evidence, or the same evidence in another order.
+    /// </summary>
+    public static LuxembourgBodyJoinResolution JoinAgreedCcByWith(
+        string act,
+        SourceArtifactRef sparqlEvidence,
+        IReadOnlyList<string> sparqlLicences,
+        IReadOnlyList<string> inFileLicences,
+        params LuxembourgWemiCandidate[] candidates) =>
+        LuxembourgBodyJoin.Resolve(
+            act,
+            Run,
+            Topology(candidates),
+            new LuxembourgSparqlRightsChannelObservations(
+                Run, SparqlEnumeration,
+                candidates.Select(c => new LuxembourgRightsChannelObservation(c.ManifestationIri, Run, sparqlEvidence, sparqlLicences)).ToArray()),
+            new LuxembourgInFileRightsChannelObservations(
+                Run, InFileEnumeration,
+                candidates.Select(c => new LuxembourgRightsChannelObservation(c.ManifestationIri, Run, InFileEvidence, inFileLicences)).ToArray()));
 
     /// <summary>A custody receipt for bytes whose digest is <paramref name="digestCharacter"/> x 64.</summary>
     public static DurableBlobWriteReceipt Receipt(char digestCharacter, long length = 1234)

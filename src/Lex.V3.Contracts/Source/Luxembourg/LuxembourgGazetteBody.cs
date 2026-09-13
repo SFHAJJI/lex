@@ -78,12 +78,17 @@ public enum LuxembourgGazetteActGapReason
 /// publisher marked about this act.
 /// </para>
 /// <para>
-/// PER-FILE RIGHTS, CARRIED UNCHANGED. <see cref="RightsResolution"/> is the dual-channel resolution
-/// exactly as the join produced it. Stated limitation: the in-file channel reads XML/AKN only, so a
-/// PDF's second channel resolves to a typed quarantine or a pending state, never to
-/// <c>agreed_same_run_cc_by</c>, until a second channel can read a PDF. Under the settled rule that
-/// state does not withhold holding; whether the body may be served is the downstream rights gate's
-/// question and is not widened here.
+/// PER-FILE RIGHTS, CARRIED UNCHANGED AND BOUND INTO IDENTITY. <see cref="RightsResolution"/> is the
+/// dual-channel resolution exactly as the join produced it, and <see cref="IdentitySha256"/> binds
+/// its canonical digest (<see cref="RightsIdentitySha256"/>): several rights states deliberately do
+/// not withhold holding, so two admitted dispositions with one act, one listing and one byte sha
+/// can differ only in what the rights channels said - and an identity that did not say which was
+/// retained would make the per-file rights lineage unauditable (Codex's pre-freeze correction; the
+/// merged EU annex disposition binds its outcome-producing profile digest for the same reason).
+/// Stated limitation: the in-file channel reads XML/AKN only, so a PDF's second channel resolves to
+/// a typed quarantine or a pending state, never to <c>agreed_same_run_cc_by</c>, until a second
+/// channel can read a PDF. Under the settled rule that state does not withhold holding; whether the
+/// body may be served is the downstream rights gate's question and is not widened here.
 /// </para>
 /// </remarks>
 public sealed record LuxembourgGazetteBodyDisposition
@@ -113,6 +118,7 @@ public sealed record LuxembourgGazetteBodyDisposition
                 _ => "gazette_gap_body_not_retained",
             },
         };
+        RightsIdentitySha256 = RightsResolutionIdentitySha256(candidate.RightsResolution);
         IdentitySha256 = ComputeIdentitySha256(this);
     }
 
@@ -135,6 +141,15 @@ public sealed record LuxembourgGazetteBodyDisposition
 
     public string ReasonCode { get; }
 
+    /// <summary>
+    /// The canonical digest of the carried rights resolution: its disposition, the selected
+    /// manifestation, the bound run identity, both channel enumeration refs, and for each present
+    /// observation its evidence ref, unrepresentable-assertion count and licence IRIs in ordinal
+    /// order. Same claim, same digest, whatever order the channels listed the licences in.
+    /// </summary>
+    public string RightsIdentitySha256 { get; }
+
+    /// <summary>Binds act, manifestation, item, byte sha, outcome, gap reason and the rights identity.</summary>
     public string IdentitySha256 { get; }
 
     public string PublisherActIri => Candidate.WemiCandidate.RootIri;
@@ -245,6 +260,36 @@ public sealed record LuxembourgGazetteBodyDisposition
             _ => null,
         };
 
+    /// <summary>
+    /// The canonical identity of one dual-channel rights resolution. Every evidence-bound input the
+    /// resolution exposes is bound, and nothing order-dependent is: an observation's licence IRIs are
+    /// already ordinal-sorted and unique by its own constructor, the channel collections are
+    /// canonical by theirs, and an absent observation is a fixed marker rather than an omission.
+    /// </summary>
+    public static string RightsResolutionIdentitySha256(LuxembourgRightsChannelResolution rights)
+    {
+        ArgumentNullException.ThrowIfNull(rights);
+        var canonical = string.Join(
+            '\n',
+            ((int)rights.Disposition).ToString(System.Globalization.CultureInfo.InvariantCulture),
+            rights.SelectedManifestationIri,
+            Ref(rights.BoundRunIdentity),
+            Ref(rights.SparqlObservations.EnumerationRef),
+            Ref(rights.InFileObservations.EnumerationRef),
+            Observation(rights.SparqlObservation),
+            Observation(rights.InFileObservation));
+        return Digest(canonical);
+
+        static string Ref(SourceArtifactRef reference) => reference.ResourceId + "|" + reference.Sha256;
+
+        static string Observation(LuxembourgRightsChannelObservation? observation) =>
+            observation is null
+                ? "-"
+                : Ref(observation.EvidenceRef)
+                    + "|" + observation.UnrepresentableLicenceAssertions.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                    + "|" + string.Join(' ', observation.LicenceIris);
+    }
+
     private static string ComputeIdentitySha256(LuxembourgGazetteBodyDisposition disposition)
     {
         var canonical = string.Join(
@@ -256,9 +301,13 @@ public sealed record LuxembourgGazetteBodyDisposition
             ((int)disposition.Outcome).ToString(System.Globalization.CultureInfo.InvariantCulture),
             disposition.GapReason is { } reason
                 ? ((int)reason).ToString(System.Globalization.CultureInfo.InvariantCulture)
-                : string.Empty);
-        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(canonical))).ToLowerInvariant();
+                : string.Empty,
+            disposition.RightsIdentitySha256);
+        return Digest(canonical);
     }
+
+    private static string Digest(string canonical) =>
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(canonical))).ToLowerInvariant();
 }
 
 /// <summary>
