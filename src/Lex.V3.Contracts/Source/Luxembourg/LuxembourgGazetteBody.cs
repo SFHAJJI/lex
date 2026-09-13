@@ -57,6 +57,44 @@ public enum LuxembourgGazetteActGapReason
 }
 
 /// <summary>
+/// The typed evidence that one Gazette-PDF body was fetched from the publisher's own address and
+/// retained under custody: the address, the exact first and terminal requests, the observed route,
+/// and the receipt. Verified, not trusted, by <see cref="LuxembourgGazetteBodyDisposition.Create"/>.
+/// </summary>
+public sealed record LuxembourgGazetteBodyRetention
+{
+    public LuxembourgGazetteBodyRetention(
+        LuxembourgDocumentFetchAddress officialAddress,
+        HttpLogicalRequest officialRequest,
+        HttpLogicalRequest terminalRequest,
+        RoutedHttpEvidence sourceEvidence,
+        DurableBlobWriteReceipt retainedTransportBytes)
+    {
+        OfficialAddress = officialAddress ?? throw new ArgumentNullException(nameof(officialAddress));
+        OfficialRequest = officialRequest ?? throw new ArgumentNullException(nameof(officialRequest));
+        TerminalRequest = terminalRequest ?? throw new ArgumentNullException(nameof(terminalRequest));
+        SourceEvidence = sourceEvidence ?? throw new ArgumentNullException(nameof(sourceEvidence));
+        RetainedTransportBytes = retainedTransportBytes
+            ?? throw new ArgumentNullException(nameof(retainedTransportBytes));
+    }
+
+    /// <summary>The publisher's file address: the store file URI, its fetch URI, format, legal value and act page path.</summary>
+    public LuxembourgDocumentFetchAddress OfficialAddress { get; }
+
+    /// <summary>The exact request the first hop sent to the address's fetch URI.</summary>
+    public HttpLogicalRequest OfficialRequest { get; }
+
+    /// <summary>The exact request the terminal hop sent (the same one unless the publisher redirected).</summary>
+    public HttpLogicalRequest TerminalRequest { get; }
+
+    /// <summary>The observed route, hop by hop, each hop naming its custody receipt by digest.</summary>
+    public RoutedHttpEvidence SourceEvidence { get; }
+
+    /// <summary>The custody receipt for the terminal hop's transport bytes.</summary>
+    public DurableBlobWriteReceipt RetainedTransportBytes { get; }
+}
+
+/// <summary>
 /// One Gazette-PDF body of one as-published act, with its typed outcome and its per-file rights.
 /// #419 slice 6a.
 /// </summary>
@@ -72,39 +110,64 @@ public enum LuxembourgGazetteActGapReason
 /// that a quarantined or root-mismatched tuple is an unservable listing and that the ONLY rights
 /// state withholding a body is the publisher marking it not reusable; every other rights state is
 /// recorded on the resolution for the answer layer's Decision 58(a) disclosure and withholds
-/// nothing. This type adds one requirement the join cannot see: an admitted body has its transport
-/// bytes retained under custody, with the fetch evidence that produced them. Structural blockers
-/// outrank the rights statement, because a listing that is not this act's body is not something the
-/// publisher marked about this act.
+/// nothing. Structural blockers outrank the rights statement, because a listing that is not this
+/// act's body is not something the publisher marked about this act.
 /// </para>
 /// <para>
-/// PER-FILE RIGHTS, CARRIED UNCHANGED AND BOUND INTO IDENTITY. <see cref="RightsResolution"/> is the
-/// dual-channel resolution exactly as the join produced it, and <see cref="IdentitySha256"/> binds
-/// its canonical digest (<see cref="RightsIdentitySha256"/>): several rights states deliberately do
-/// not withhold holding, so two admitted dispositions with one act, one listing and one byte sha
-/// can differ only in what the rights channels said - and an identity that did not say which was
-/// retained would make the per-file rights lineage unauditable (Codex's pre-freeze correction; the
-/// merged EU annex disposition binds its outcome-producing profile digest for the same reason).
-/// Stated limitation: the in-file channel reads XML/AKN only, so a PDF's second channel resolves to
-/// a typed quarantine or a pending state, never to <c>agreed_same_run_cc_by</c>, until a second
-/// channel can read a PDF. Under the settled rule that state does not withhold holding; whether the
-/// body may be served is the downstream rights gate's question and is not widened here.
+/// ADMITTED MEANS THE BYTES WERE FETCHED FROM THE PUBLISHER'S ADDRESS AND RETAINED, ESTABLISHED,
+/// NOT ASSERTED. The first head of this type admitted on a receipt plus any artifact reference;
+/// review found that established nothing about where the bytes came from. <see cref="Create"/> now
+/// takes the typed retention (<see cref="LuxembourgGazetteBodyRetention"/>) and verifies, the way
+/// <c>EuAnnexBodyDisposition</c> does: the address names this listing's item, format and act; the
+/// first hop sent the official request to the address's fetch URI; the terminal request is the one
+/// the terminal hop actually sent; the observation is a complete derivable transfer of
+/// <c>application/pdf</c>; and the terminal hop's receipt digest is the exact retained receipt,
+/// whose content digest is the transport bytes' own. The observation is retained after
+/// verification.
+/// </para>
+/// <para>
+/// IDENTITY IS WHAT THE PUBLISHER SAID; LINEAGE IS WHEN IT WAS ASKED. S3-A04 requires both halves:
+/// byte-stable identity across two independent executions, and retained source-observation and
+/// transport-byte lineage. The second head of this type failed the first half the way this
+/// repository had already learned once in <c>EuLanguageScopedExpressionDerivation</c>: it bound
+/// run-minted references (the bound run identity, the channel enumeration refs, the observation
+/// evidence refs) into the rights identity, so two runs over identical publisher facts addressed
+/// one body two ways. Now <see cref="RightsClaimSha256"/> binds only the semantic claim - the
+/// disposition, the manifestation, each channel's licence values and unrepresentable count, and
+/// the licence rules that give those values their meaning - and that is what
+/// <see cref="IdentitySha256"/> carries beside act, listing, byte sha and outcome. Every run-minted
+/// reference lives in <see cref="RightsLineageSha256"/> and <see cref="EpisodeSha256"/>, retained
+/// beside the identity, where varying is what they are for.
+/// </para>
+/// <para>
+/// PER-FILE RIGHTS, CARRIED UNCHANGED. <see cref="RightsResolution"/> is the dual-channel resolution
+/// exactly as the join produced it. Stated limitation: the in-file channel reads XML/AKN only, so a
+/// PDF's second channel resolves to a typed quarantine or a pending state, never to
+/// <c>agreed_same_run_cc_by</c>, until a second channel can read a PDF. Under the settled rule that
+/// state does not withhold holding; whether the body may be served is the downstream rights gate's
+/// question and is not widened here.
 /// </para>
 /// </remarks>
 public sealed record LuxembourgGazetteBodyDisposition
 {
+    private const string GazetteMediaType = "application/pdf";
+
     private LuxembourgGazetteBodyDisposition(
         LuxembourgBodyCandidateResolution candidate,
         LuxembourgUserFormatToken format,
+        LuxembourgDocumentFetchAddress? officialAddress,
+        RepresentationChainObservation? sourceObservation,
+        SourceArtifactRef? sourceEvidenceRunIdentity,
         DurableBlobWriteReceipt? retainedTransportBytes,
-        SourceArtifactRef? fetchEvidenceRef,
         LuxembourgGazetteBodyOutcome outcome,
         LuxembourgGazetteBodyGapReason? gapReason)
     {
         Candidate = candidate;
         Format = format;
+        OfficialAddress = officialAddress;
+        SourceObservation = sourceObservation;
+        SourceEvidenceRunIdentity = sourceEvidenceRunIdentity;
         RetainedTransportBytes = retainedTransportBytes;
-        FetchEvidenceRef = fetchEvidenceRef;
         Outcome = outcome;
         GapReason = gapReason;
         // A TYPED GAP CARRIES ITS REASON, AND NOTHING ELSE DOES. Every caller is consistent today;
@@ -127,8 +190,22 @@ public sealed record LuxembourgGazetteBodyDisposition
                 _ => "gazette_gap_body_not_retained",
             },
         };
-        RightsIdentitySha256 = RightsResolutionIdentitySha256(candidate.RightsResolution);
-        IdentitySha256 = ComputeIdentitySha256(this);
+        RightsClaimSha256 = RightsClaimDigest(candidate.RightsResolution);
+        RightsLineageSha256 = RightsLineageDigest(candidate.RightsResolution);
+        IdentitySha256 = Digest(string.Join(
+            '\n',
+            PublisherActIri,
+            ManifestationIri,
+            ItemIri,
+            TransportByteSha256 ?? string.Empty,
+            Invariant((int)outcome),
+            gapReason is { } reason ? Invariant((int)reason) : string.Empty,
+            RightsClaimSha256));
+        EpisodeSha256 = Digest(string.Join(
+            '\n',
+            RightsLineageSha256,
+            sourceObservation?.ObservationId ?? string.Empty,
+            sourceEvidenceRunIdentity is null ? string.Empty : Ref(sourceEvidenceRunIdentity)));
     }
 
     /// <summary>The listing: the WEMI tuple and the dual-channel rights resolution, as the join produced them.</summary>
@@ -137,11 +214,17 @@ public sealed record LuxembourgGazetteBodyDisposition
     /// <summary>The Gazette-PDF format token the listing parses to: <c>pdfa</c> or <c>pdf</c>.</summary>
     public LuxembourgUserFormatToken Format { get; }
 
+    /// <summary>The publisher's file address the bytes were fetched from. Present exactly when admitted.</summary>
+    public LuxembourgDocumentFetchAddress? OfficialAddress { get; }
+
+    /// <summary>The verified terminal observation of the fetch. Present exactly when admitted.</summary>
+    public RepresentationChainObservation? SourceObservation { get; }
+
+    /// <summary>The run that produced the route evidence. Present exactly when admitted; lineage, not identity.</summary>
+    public SourceArtifactRef? SourceEvidenceRunIdentity { get; }
+
     /// <summary>The custody receipt for the transport bytes. Present exactly when admitted.</summary>
     public DurableBlobWriteReceipt? RetainedTransportBytes { get; }
-
-    /// <summary>The fetch evidence that produced the retained bytes. Present exactly when admitted.</summary>
-    public SourceArtifactRef? FetchEvidenceRef { get; }
 
     public LuxembourgGazetteBodyOutcome Outcome { get; }
 
@@ -151,15 +234,30 @@ public sealed record LuxembourgGazetteBodyDisposition
     public string ReasonCode { get; }
 
     /// <summary>
-    /// The canonical digest of the carried rights resolution: its disposition, the selected
-    /// manifestation, the bound run identity, both channel enumeration refs, and for each present
-    /// observation its evidence ref, unrepresentable-assertion count and licence IRIs in ordinal
-    /// order. Same claim, same digest, whatever order the channels listed the licences in.
+    /// The stable digest of the semantic rights claim: the disposition, the selected manifestation,
+    /// each channel's licence values and unrepresentable count, and the licence rules that give the
+    /// values their meaning. Two executions over one publisher fact agree.
     /// </summary>
-    public string RightsIdentitySha256 { get; }
+    public string RightsClaimSha256 { get; }
 
-    /// <summary>Binds act, manifestation, item, byte sha, outcome, gap reason and the rights identity.</summary>
+    /// <summary>
+    /// The digest of which execution observed the rights: the bound run identity, both channel
+    /// enumeration refs, and each present observation's run and evidence refs. Two executions
+    /// differ, by design.
+    /// </summary>
+    public string RightsLineageSha256 { get; }
+
+    /// <summary>
+    /// What was disposed: act, manifestation, item, transport-byte digest, outcome, gap reason and
+    /// the rights claim. Byte-stable across two independent executions over one publisher fact.
+    /// </summary>
     public string IdentitySha256 { get; }
+
+    /// <summary>
+    /// Which execution disposed it: the rights lineage, the source observation and the evidence run.
+    /// Retained beside the identity; two executions differ, by design.
+    /// </summary>
+    public string EpisodeSha256 { get; }
 
     public string PublisherActIri => Candidate.WemiCandidate.RootIri;
 
@@ -180,17 +278,17 @@ public sealed record LuxembourgGazetteBodyDisposition
     }
 
     /// <summary>
-    /// Disposes one Gazette-PDF listing. Bytes and evidence are required together for an admissible
-    /// body and forbidden for a body that is not held.
+    /// Disposes one Gazette-PDF listing. A retention is required for an admitted body, verified
+    /// against the listing and the route, and forbidden for a body that is not held.
     /// </summary>
     /// <exception cref="ArgumentException">
-    /// The candidate is not a Gazette-PDF listing; or bytes and evidence were given one without the
-    /// other; or bytes were given for a body that is not held.
+    /// The candidate is not a Gazette-PDF listing; a retention was given for a body that is not
+    /// held; or the retention does not establish that these bytes were fetched from this listing's
+    /// publisher address and retained.
     /// </exception>
     public static LuxembourgGazetteBodyDisposition Create(
         LuxembourgBodyCandidateResolution candidate,
-        DurableBlobWriteReceipt? retainedTransportBytes,
-        SourceArtifactRef? fetchEvidenceRef)
+        LuxembourgGazetteBodyRetention? retention)
     {
         ArgumentNullException.ThrowIfNull(candidate);
         var format = TryParseGazetteFormat(candidate)
@@ -198,16 +296,6 @@ public sealed record LuxembourgGazetteBodyDisposition
                 $"{candidate.WemiCandidate.FormatIri} is not a Gazette-PDF listing; only pdfa and pdf bodies are disposed here.",
                 nameof(candidate));
 
-        // BOTH OR NEITHER. A receipt without the evidence that produced it, or evidence without the
-        // bytes it claims to have produced, is a malformed claim rather than a partial one.
-        if ((retainedTransportBytes is null) != (fetchEvidenceRef is null))
-        {
-            throw new ArgumentException(
-                "Retained bytes and their fetch evidence are asserted together or not at all.",
-                nameof(fetchEvidenceRef));
-        }
-
-        var retained = retainedTransportBytes is not null;
         var blockers = candidate.BlockerCodes;
 
         // STRUCTURE FIRST. A quarantined or root-mismatched tuple is not this act's body, so
@@ -239,27 +327,141 @@ public sealed record LuxembourgGazetteBodyDisposition
                 nameof(candidate));
         }
 
-        return retained
-            ? new LuxembourgGazetteBodyDisposition(
-                candidate, format, retainedTransportBytes, fetchEvidenceRef,
-                LuxembourgGazetteBodyOutcome.Admitted, null)
-            : new LuxembourgGazetteBodyDisposition(
-                candidate, format, null, null,
+        if (retention is null)
+        {
+            return new LuxembourgGazetteBodyDisposition(
+                candidate, format, null, null, null, null,
                 LuxembourgGazetteBodyOutcome.TypedGap, LuxembourgGazetteBodyGapReason.BodyNotRetained);
+        }
+
+        var observation = VerifyRetention(candidate, format, retention);
+        return new LuxembourgGazetteBodyDisposition(
+            candidate,
+            format,
+            retention.OfficialAddress,
+            observation,
+            retention.SourceEvidence.RunIdentity,
+            retention.RetainedTransportBytes,
+            LuxembourgGazetteBodyOutcome.Admitted,
+            null);
 
         LuxembourgGazetteBodyDisposition NotHeld(
             LuxembourgGazetteBodyOutcome outcome, LuxembourgGazetteBodyGapReason? reason)
         {
-            if (retained)
+            if (retention is not null)
             {
                 throw new ArgumentException(
                     "A body that is not held carries no retained bytes; retaining it would hold what the rule withholds.",
-                    nameof(retainedTransportBytes));
+                    nameof(retention));
             }
 
-            return new LuxembourgGazetteBodyDisposition(candidate, format, null, null, outcome, reason);
+            return new LuxembourgGazetteBodyDisposition(candidate, format, null, null, null, null, outcome, reason);
         }
     }
+
+    /// <summary>
+    /// Establishes that the retention's bytes were fetched from this listing's publisher address
+    /// and retained. Every relation is checked; none is taken on the caller's word.
+    /// </summary>
+    private static RepresentationChainObservation VerifyRetention(
+        LuxembourgBodyCandidateResolution candidate,
+        LuxembourgUserFormatToken format,
+        LuxembourgGazetteBodyRetention retention)
+    {
+        var address = retention.OfficialAddress;
+        var wemi = candidate.WemiCandidate;
+
+        // THE ADDRESS IS THIS LISTING'S: its store file URI is the listed item, its format is the
+        // listed format, and its act page path is this act's. An address for another file, another
+        // format of the same file, or another act's page is not evidence about this body.
+        if (!string.Equals(address.StoreFileUri.Value.AbsoluteUri, wemi.ItemIri, StringComparison.Ordinal))
+        {
+            throw new ArgumentException(
+                $"The address names {address.StoreFileUri.Value.AbsoluteUri}, not this listing's item {wemi.ItemIri}.",
+                nameof(retention));
+        }
+
+        if (address.UserFormatToken != format)
+        {
+            throw new ArgumentException(
+                $"The address names format {address.UserFormatToken}, not this listing's {format}.",
+                nameof(retention));
+        }
+
+        if (!string.Equals(address.ActEliPagePath, ActEliPagePathOf(wemi.RootIri), StringComparison.Ordinal))
+        {
+            throw new ArgumentException(
+                $"The address names act page {address.ActEliPagePath}, not this act's.",
+                nameof(retention));
+        }
+
+        // THE OFFICIAL REQUEST IS THE ADDRESS'S NON-NEGOTIATING FETCH, AND THE FIRST HOP SENT IT.
+        // The address mints host and path with no Accept; a request that negotiated is not the
+        // address's request. The hop binds by digest, so a request object that merely looks right
+        // is not enough.
+        var official = retention.OfficialRequest;
+        var evidence = retention.SourceEvidence;
+        var fetchUri = address.FetchUri.AbsoluteUri;
+        if (official.Method != HttpRequestMethod.Get ||
+            !string.Equals(official.Uri, fetchUri, StringComparison.Ordinal) ||
+            HasHeader(official, "accept") ||
+            HasHeader(retention.TerminalRequest, "accept") ||
+            !string.Equals(evidence.Hops[0].RequestUri, fetchUri, StringComparison.Ordinal) ||
+            !string.Equals(
+                evidence.Hops[0].LogicalRequestSha256,
+                Digest(official.CopyCanonicalBytes()),
+                StringComparison.Ordinal))
+        {
+            throw new ArgumentException(
+                "The official request is not the address's non-negotiating fetch, or the first hop did not send it.",
+                nameof(retention));
+        }
+
+        // THE TERMINAL REQUEST IS THE ONE THE TERMINAL HOP SENT: FromRoute binds it by digest and
+        // refuses anything but a GET. Then the route must start at the address and the observation
+        // must be a complete derivable transfer of the Gazette media type.
+        var observation = RepresentationChainObservation.FromRoute(evidence, retention.TerminalRequest);
+        if (!string.Equals(observation.RequestedUri, fetchUri, StringComparison.Ordinal) ||
+            !string.Equals(observation.EffectiveUri, retention.TerminalRequest.Uri, StringComparison.Ordinal))
+        {
+            throw new ArgumentException(
+                "The observed route does not start at the address and end at the terminal request.",
+                nameof(retention));
+        }
+
+        if (!observation.QualifiesAsTrustedBaselineCandidate())
+        {
+            throw new ArgumentException(
+                "The source observation is not a complete derivable body transfer.", nameof(retention));
+        }
+
+        var terminalHop = evidence.Hops[^1];
+        if (terminalHop.Headers.ContentType is not RoutedHttpSingleHeader contentType ||
+            !string.Equals(contentType.Value, GazetteMediaType, StringComparison.Ordinal))
+        {
+            throw new ArgumentException(
+                "The terminal response is not application/pdf; a page that is not the Gazette PDF is not the body.",
+                nameof(retention));
+        }
+
+        // THE RECEIPT IS THE TERMINAL HOP'S. The hop names its receipt by digest, and the exact
+        // retained receipt must be that one. That the receipt names the bytes the hop transferred is
+        // RoutedHttpEvidence's own invariant - it refuses a hop whose receipt names other bytes at
+        // construction - so it is not re-checked here.
+        var receipt = retention.RetainedTransportBytes;
+        if (!string.Equals(terminalHop.DurableWriteReceiptSha256, DurableBlobWriteReceiptDigest.Of(receipt), StringComparison.Ordinal))
+        {
+            throw new ArgumentException(
+                "The retained receipt is not the exact receipt bound to the terminal hop.", nameof(retention));
+        }
+
+        return observation;
+    }
+
+    private static string ActEliPagePathOf(string actIri) => new Uri(actIri, UriKind.Absolute).AbsolutePath;
+
+    private static bool HasHeader(HttpLogicalRequest request, string name) =>
+        request.Headers.Any(header => string.Equals(header.Name, name, StringComparison.OrdinalIgnoreCase));
 
     private static LuxembourgUserFormatToken? TryParseGazetteFormat(LuxembourgBodyCandidateResolution candidate) =>
         LuxembourgAuthorityIri.TryParseUserFormat(candidate.WemiCandidate.FormatIri) switch
@@ -270,53 +472,51 @@ public sealed record LuxembourgGazetteBodyDisposition
         };
 
     /// <summary>
-    /// The canonical identity of one dual-channel rights resolution. Every evidence-bound input the
-    /// resolution exposes is bound, and nothing order-dependent is: an observation's licence IRIs are
-    /// already ordinal-sorted and unique by its own constructor, the channel collections are
-    /// canonical by theirs, and an absent observation is a fixed marker rather than an omission.
+    /// The semantic rights claim, canonical: nothing run-minted, nothing order-dependent. An
+    /// observation's licence IRIs are already ordinal-sorted and unique by its own constructor; an
+    /// absent observation is a fixed marker rather than an omission; and the two licence rules that
+    /// give a value its meaning are bound so a rule change is an identity change.
     /// </summary>
-    public static string RightsResolutionIdentitySha256(LuxembourgRightsChannelResolution rights)
+    public static string RightsClaimSha256Of(LuxembourgRightsChannelResolution rights)
     {
         ArgumentNullException.ThrowIfNull(rights);
-        var canonical = string.Join(
+        return RightsClaimDigest(rights);
+    }
+
+    private static string RightsClaimDigest(LuxembourgRightsChannelResolution rights) =>
+        Digest(string.Join(
             '\n',
-            ((int)rights.Disposition).ToString(System.Globalization.CultureInfo.InvariantCulture),
+            Invariant((int)rights.Disposition),
             rights.SelectedManifestationIri,
+            Claim(rights.SparqlObservation),
+            Claim(rights.InFileObservation),
+            VerifiedLuxembourgSourceProfile.AdmittingLicence,
+            VerifiedLuxembourgSourceProfile.NonAdmittingLicenceScl));
+
+    private static string Claim(LuxembourgRightsChannelObservation? observation) =>
+        observation is null
+            ? "-"
+            : Invariant(observation.UnrepresentableLicenceAssertions) + "|" + string.Join(' ', observation.LicenceIris);
+
+    private static string RightsLineageDigest(LuxembourgRightsChannelResolution rights) =>
+        Digest(string.Join(
+            '\n',
             Ref(rights.BoundRunIdentity),
             Ref(rights.SparqlObservations.EnumerationRef),
             Ref(rights.InFileObservations.EnumerationRef),
-            Observation(rights.SparqlObservation),
-            Observation(rights.InFileObservation));
-        return Digest(canonical);
+            Lineage(rights.SparqlObservation),
+            Lineage(rights.InFileObservation)));
 
-        static string Ref(SourceArtifactRef reference) => reference.ResourceId + "|" + reference.Sha256;
+    private static string Lineage(LuxembourgRightsChannelObservation? observation) =>
+        observation is null ? "-" : Ref(observation.RunIdentity) + "|" + Ref(observation.EvidenceRef);
 
-        static string Observation(LuxembourgRightsChannelObservation? observation) =>
-            observation is null
-                ? "-"
-                : Ref(observation.EvidenceRef)
-                    + "|" + observation.UnrepresentableLicenceAssertions.ToString(System.Globalization.CultureInfo.InvariantCulture)
-                    + "|" + string.Join(' ', observation.LicenceIris);
-    }
+    private static string Ref(SourceArtifactRef reference) => reference.ResourceId + "|" + reference.Sha256;
 
-    private static string ComputeIdentitySha256(LuxembourgGazetteBodyDisposition disposition)
-    {
-        var canonical = string.Join(
-            '\n',
-            disposition.PublisherActIri,
-            disposition.ManifestationIri,
-            disposition.ItemIri,
-            disposition.TransportByteSha256 ?? string.Empty,
-            ((int)disposition.Outcome).ToString(System.Globalization.CultureInfo.InvariantCulture),
-            disposition.GapReason is { } reason
-                ? ((int)reason).ToString(System.Globalization.CultureInfo.InvariantCulture)
-                : string.Empty,
-            disposition.RightsIdentitySha256);
-        return Digest(canonical);
-    }
+    private static string Invariant(int value) => value.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
-    private static string Digest(string canonical) =>
-        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(canonical))).ToLowerInvariant();
+    private static string Digest(string canonical) => Digest(Encoding.UTF8.GetBytes(canonical));
+
+    private static string Digest(byte[] bytes) => Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
 }
 
 /// <summary>

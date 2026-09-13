@@ -834,6 +834,9 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Contracts.Source.Http.RepresentationChainKey::Create",
                 "Lex.V3.Contracts.Source.Http.RepresentationChainObservation: constructor private "
                     + "instance Lex.V3.Contracts.Source.Http.RepresentationChainObservation::.ctor, "
+                    + "method private static "
+                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgGazetteBodyDisposition::VerifyR"
+                    + "etention, "
                     + "method public static "
                     + "Lex.V3.Contracts.Source.Http.RepresentationChainObservation::FromRoute",
                 "Lex.V3.Contracts.Source.Http.RobotsPolicyRoute: constructor internal instance "
@@ -1076,7 +1079,7 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgGazetteBodyDisposition::.ctor, "
                     + "method internal static "
                     + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgGazetteBodyDisposition::<Create"
-                    + ">g__NotHeld|41_0, "
+                    + ">g__NotHeld|54_0, "
                     + "method public instance "
                     + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgGazetteBodyDisposition::<Clone>"
                     + "$, "

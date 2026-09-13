@@ -8,20 +8,25 @@ namespace Lex.V3.Tests.Contracts.Source.Luxembourg;
 
 /// <summary>
 /// #419 slice 6a: the Gazette channel. Every Gazette-PDF listing of an as-published act gets one
-/// typed outcome - admitted only with retained bytes, rejected only on the publisher's licenceSCL,
-/// typed gaps otherwise - with its dual-channel rights carried unchanged; and an act's set is
-/// complete over its join or refused.
+/// typed outcome - admitted only when its bytes are established to have been fetched from the
+/// publisher's address and retained, rejected only on the publisher's licenceSCL, typed gaps
+/// otherwise - with its dual-channel rights carried unchanged and bound into a byte-stable
+/// identity; and an act's set is complete over its join or refused.
 /// </summary>
 [TestClass]
 public sealed class LuxembourgGazetteBodyTests
 {
+    private const string Other = "http://creativecommons.org/licenses/by-sa/4.0/";
+    private const string Another = "http://creativecommons.org/licenses/by-nc/4.0/";
+
     [TestMethod]
-    public void AnAcceptedPdfListingWithRetainedBytesIsAdmitted()
+    public void AnAcceptedPdfListingFetchedFromItsAddressAndRetainedIsAdmitted()
     {
         var join = JoinAgreedCcBy(ActLoi1, Candidate(ActLoi1, "fr", "pdfa"));
-        var listing = LuxembourgGazetteBodySet.GazetteCandidatesOf(join).Single();
+        var listing = Listing(join);
+        var retention = Retention(listing);
 
-        var body = LuxembourgGazetteBodyDisposition.Create(listing, Receipt('a'), FetchEvidence);
+        var body = LuxembourgGazetteBodyDisposition.Create(listing, retention);
 
         Assert.AreEqual(LuxembourgGazetteBodyOutcome.Admitted, body.Outcome);
         Assert.IsNull(body.GapReason);
@@ -30,57 +35,51 @@ public sealed class LuxembourgGazetteBodyTests
         Assert.AreEqual(ActLoi1, body.PublisherActIri);
         Assert.AreEqual(ManifestationOf(ActLoi1, "fr", "pdfa"), body.ManifestationIri);
         Assert.AreEqual(ItemOf(ActLoi1, "fr", "pdfa"), body.ItemIri);
-        Assert.AreEqual(new string('a', 64), body.TransportByteSha256);
-        Assert.AreEqual(FetchEvidence, body.FetchEvidenceRef);
+        Assert.AreEqual(Digest('a'), body.TransportByteSha256);
+        Assert.AreSame(retention.OfficialAddress, body.OfficialAddress);
+        Assert.AreSame(retention.RetainedTransportBytes, body.RetainedTransportBytes);
+        Assert.AreEqual(retention.SourceEvidence.RunIdentity, body.SourceEvidenceRunIdentity);
+        Assert.IsNotNull(body.SourceObservation);
+        Assert.AreEqual(retention.OfficialAddress.FetchUri.AbsoluteUri, body.SourceObservation!.RequestedUri);
+        Assert.AreEqual(Digest('a'), body.SourceObservation.TransportByteSha256);
         Assert.AreEqual(LuxembourgRightsChannelDisposition.AgreedSameRunCcBy, body.RightsResolution.Disposition);
         Assert.AreEqual(64, body.IdentitySha256.Length);
+        Assert.AreEqual(64, body.EpisodeSha256.Length);
     }
 
     [TestMethod]
-    public void AnAcceptedListingWithoutBytesIsTheTypedGapBodyNotRetained()
+    public void AnAcceptedListingWithoutARetentionIsTheTypedGapBodyNotRetained()
     {
-        var join = JoinAgreedCcBy(ActLoi1, Candidate(ActLoi1, "fr", "pdf"));
-        var listing = LuxembourgGazetteBodySet.GazetteCandidatesOf(join).Single();
+        var listing = Listing(JoinAgreedCcBy(ActLoi1, Candidate(ActLoi1, "fr", "pdf")));
 
-        var body = LuxembourgGazetteBodyDisposition.Create(listing, null, null);
+        var body = LuxembourgGazetteBodyDisposition.Create(listing, null);
 
         Assert.AreEqual(LuxembourgGazetteBodyOutcome.TypedGap, body.Outcome);
         Assert.AreEqual(LuxembourgGazetteBodyGapReason.BodyNotRetained, body.GapReason);
         Assert.AreEqual("gazette_gap_body_not_retained", body.ReasonCode);
         Assert.IsNull(body.RetainedTransportBytes);
+        Assert.IsNull(body.OfficialAddress);
+        Assert.IsNull(body.SourceObservation);
         Assert.IsNull(body.TransportByteSha256);
-    }
-
-    [TestMethod]
-    public void BytesAndTheirEvidenceAreAssertedTogetherOrNotAtAll()
-    {
-        var join = JoinAgreedCcBy(ActLoi1, Candidate(ActLoi1, "fr", "pdf"));
-        var listing = LuxembourgGazetteBodySet.GazetteCandidatesOf(join).Single();
-
-        Assert.ThrowsExactly<ArgumentException>(
-            () => LuxembourgGazetteBodyDisposition.Create(listing, Receipt('a'), null));
-        Assert.ThrowsExactly<ArgumentException>(
-            () => LuxembourgGazetteBodyDisposition.Create(listing, null, FetchEvidence));
     }
 
     /// <summary>The one rights state that withholds: the publisher's licenceSCL. Never held, so never with bytes.</summary>
     [TestMethod]
     public void APublisherMarkedNotReusableListingIsRejectedAndNeverHeld()
     {
-        var join = JoinLicenceScl(ActLoi1, Candidate(ActLoi1, "fr", "pdfa"));
-        var listing = LuxembourgGazetteBodySet.GazetteCandidatesOf(join).Single();
+        var listing = Listing(JoinLicenceScl(ActLoi1, Candidate(ActLoi1, "fr", "pdfa")));
         CollectionAssert.AreEqual(
             new[] { LuxembourgBodyBlockerCode.PublisherMarkedNotReusable }, listing.BlockerCodes.ToArray(),
             "the premise: the join withholds on exactly the rights blocker.");
 
-        var body = LuxembourgGazetteBodyDisposition.Create(listing, null, null);
+        var body = LuxembourgGazetteBodyDisposition.Create(listing, null);
 
         Assert.AreEqual(LuxembourgGazetteBodyOutcome.Rejected, body.Outcome);
         Assert.IsNull(body.GapReason);
         Assert.AreEqual("gazette_body_publisher_marked_not_reusable", body.ReasonCode);
         Assert.AreEqual(LuxembourgRightsChannelDisposition.NonAdmittingLicenceScl, body.RightsResolution.Disposition);
         Assert.ThrowsExactly<ArgumentException>(
-            () => LuxembourgGazetteBodyDisposition.Create(listing, Receipt('a'), FetchEvidence),
+            () => LuxembourgGazetteBodyDisposition.Create(listing, Retention(listing)),
             "retaining a withheld body would hold what the rule withholds.");
     }
 
@@ -92,28 +91,26 @@ public sealed class LuxembourgGazetteBodyTests
             ActLoi1, "fr", "pdf",
             disposition: LuxembourgWemiCandidateDisposition.TypedQuarantine,
             blockers: [LuxembourgWemiBlockerCode.ObservationMismatch]);
-        var join = JoinLicenceScl(ActLoi1, quarantined);
-        var listing = LuxembourgGazetteBodySet.GazetteCandidatesOf(join).Single();
+        var listing = Listing(JoinLicenceScl(ActLoi1, quarantined));
         CollectionAssert.Contains(listing.BlockerCodes.ToArray(), LuxembourgBodyBlockerCode.PublisherMarkedNotReusable,
             "the premise: the publisher's statement is also there, and loses.");
 
-        var body = LuxembourgGazetteBodyDisposition.Create(listing, null, null);
+        var body = LuxembourgGazetteBodyDisposition.Create(listing, null);
 
         Assert.AreEqual(LuxembourgGazetteBodyOutcome.TypedGap, body.Outcome);
         Assert.AreEqual(LuxembourgGazetteBodyGapReason.WemiTupleTypedQuarantine, body.GapReason);
         Assert.AreEqual("gazette_gap_wemi_tuple_typed_quarantine", body.ReasonCode);
         Assert.ThrowsExactly<ArgumentException>(
-            () => LuxembourgGazetteBodyDisposition.Create(listing, Receipt('a'), FetchEvidence));
+            () => LuxembourgGazetteBodyDisposition.Create(listing, Retention(listing)));
     }
 
     [TestMethod]
     public void ATupleReachedFromAnotherRootIsNotThisActsBody()
     {
         var foreign = Candidate(ActLoi1, "fr", "pdf", rootOverride: ActRgd2);
-        var join = JoinAgreedCcBy(ActLoi1, foreign);
-        var listing = LuxembourgGazetteBodySet.GazetteCandidatesOf(join).Single();
+        var listing = Listing(JoinAgreedCcBy(ActLoi1, foreign));
 
-        var body = LuxembourgGazetteBodyDisposition.Create(listing, null, null);
+        var body = LuxembourgGazetteBodyDisposition.Create(listing, null);
 
         Assert.AreEqual(LuxembourgGazetteBodyOutcome.TypedGap, body.Outcome);
         Assert.AreEqual(LuxembourgGazetteBodyGapReason.WemiRootMismatch, body.GapReason);
@@ -128,7 +125,7 @@ public sealed class LuxembourgGazetteBodyTests
         Assert.IsFalse(LuxembourgGazetteBodyDisposition.IsGazettePdf(xml));
         Assert.AreEqual(1, LuxembourgGazetteBodySet.GazetteCandidatesOf(join).Count, "only the pdf listing is a Gazette body.");
         var thrown = Assert.ThrowsExactly<ArgumentException>(
-            () => LuxembourgGazetteBodyDisposition.Create(xml, null, null));
+            () => LuxembourgGazetteBodyDisposition.Create(xml, null));
         Assert.AreEqual("candidate", thrown.ParamName);
     }
 
@@ -140,8 +137,7 @@ public sealed class LuxembourgGazetteBodyTests
     [TestMethod]
     public void TheRightsResolutionIsCarriedUnchangedWhenTheSecondChannelCannotReadThePdf()
     {
-        var join = JoinSecondChannelCannotReadPdf(ActLoi1, Candidate(ActLoi1, "fr", "pdf"));
-        var listing = LuxembourgGazetteBodySet.GazetteCandidatesOf(join).Single();
+        var listing = Listing(JoinSecondChannelCannotReadPdf(ActLoi1, Candidate(ActLoi1, "fr", "pdf")));
         Assert.AreEqual(
             LuxembourgRightsChannelDisposition.TypedQuarantineInFileReadingRejected,
             listing.RightsResolution.Disposition,
@@ -149,7 +145,7 @@ public sealed class LuxembourgGazetteBodyTests
         Assert.AreEqual(LuxembourgBodyCandidateDisposition.AcceptedCandidate, listing.Disposition,
             "the premise: the join withholds on licenceSCL only.");
 
-        var body = LuxembourgGazetteBodyDisposition.Create(listing, Receipt('b'), FetchEvidence);
+        var body = LuxembourgGazetteBodyDisposition.Create(listing, Retention(listing, 'b'));
 
         Assert.AreEqual(LuxembourgGazetteBodyOutcome.Admitted, body.Outcome);
         Assert.AreEqual(
@@ -158,64 +154,78 @@ public sealed class LuxembourgGazetteBodyTests
             "recorded for the serving gate, unchanged.");
     }
 
+    // ---- identity: what the publisher said; lineage: when it was asked ----
+
+    /// <summary>
+    /// S3-A04's first half, measured the way review measured its failure: two INDEPENDENT executions
+    /// over one publisher fact - every run-minted reference differs, the act, listing, bytes,
+    /// outcome, rights state and licence values do not - address one disposition one way. The
+    /// lineage differs, by design.
+    /// </summary>
     [TestMethod]
-    public void TheIdentityDigestBindsActManifestationItemBytesAndOutcome()
+    public void TwoIndependentExecutionsOverOnePublisherFactShareOneIdentity()
     {
-        var join = JoinAgreedCcBy(ActLoi1, Candidate(ActLoi1, "fr", "pdf"));
-        var listing = LuxembourgGazetteBodySet.GazetteCandidatesOf(join).Single();
+        var first = AdmittedFromRun('1');
+        var second = AdmittedFromRun('2');
 
-        var admitted = LuxembourgGazetteBodyDisposition.Create(listing, Receipt('a'), FetchEvidence);
-        var again = LuxembourgGazetteBodyDisposition.Create(listing, Receipt('a'), FetchEvidence);
-        var otherBytes = LuxembourgGazetteBodyDisposition.Create(listing, Receipt('c'), FetchEvidence);
-        var notRetained = LuxembourgGazetteBodyDisposition.Create(listing, null, null);
+        Assert.AreNotEqual(first.RightsResolution.BoundRunIdentity, second.RightsResolution.BoundRunIdentity, "the premise: two runs.");
+        Assert.AreNotEqual(first.SourceEvidenceRunIdentity, second.SourceEvidenceRunIdentity, "the premise: two fetches.");
+        Assert.AreEqual(first.RightsResolution.Disposition, second.RightsResolution.Disposition);
+        Assert.AreEqual(first.TransportByteSha256, second.TransportByteSha256);
 
-        Assert.AreEqual(admitted.IdentitySha256, again.IdentitySha256, "same claim, same identity.");
-        Assert.AreNotEqual(admitted.IdentitySha256, otherBytes.IdentitySha256, "other bytes, other identity.");
-        Assert.AreNotEqual(admitted.IdentitySha256, notRetained.IdentitySha256, "other outcome, other identity.");
+        Assert.AreEqual(first.RightsClaimSha256, second.RightsClaimSha256, "what the publisher said is one fact.");
+        Assert.AreEqual(first.IdentitySha256, second.IdentitySha256, "one disposition, addressed one way.");
+        Assert.AreNotEqual(first.RightsLineageSha256, second.RightsLineageSha256, "each time it was asked is another.");
+        Assert.AreNotEqual(first.EpisodeSha256, second.EpisodeSha256);
     }
 
     /// <summary>
-    /// Codex's pre-freeze correction: the rights resolution is material to which disposition was
-    /// retained, so it is bound into the identity. Same act, listing, bytes and admitted outcome;
-    /// only the rights state (a) or its evidence (b) differs; the identities must differ.
+    /// The rights claim is material to identity: the same act, listing, bytes and admitted outcome
+    /// with (a) another rights state, or (b) the same state on other licence values, is another
+    /// disposition. The same state on other EVIDENCE is not: that is lineage.
     /// </summary>
     [TestMethod]
-    public void TheIdentityBindsTheRightsResolutionNotJustTheBytes()
+    public void ASemanticRightsChangeMovesTheIdentityAndAnEvidenceChangeDoesNot()
     {
         var pdf = Candidate(ActLoi1, "fr", "pdf");
-        var agreed = Body(JoinAgreedCcBy(ActLoi1, pdf));
-        var secondChannelQuarantined = Body(JoinSecondChannelCannotReadPdf(ActLoi1, pdf));
-        var agreedOnOtherEvidence = Body(JoinAgreedCcByWith(ActLoi1, OtherSparqlEvidence, [CcBy40], [CcBy40], pdf));
+        var agreed = Admit(JoinAgreedCcBy(ActLoi1, pdf));
+        var quarantined = Admit(JoinSecondChannelCannotReadPdf(ActLoi1, pdf));
+        var multipleA = Admit(JoinAgreedCcByWith(ActLoi1, SparqlEvidence, [Other, CcBy40], [Other, CcBy40], pdf));
+        var multipleB = Admit(JoinAgreedCcByWith(ActLoi1, SparqlEvidence, [Another, CcBy40], [Another, CcBy40], pdf));
+        var agreedOnOtherEvidence = Admit(JoinAgreedCcByWith(ActLoi1, OtherSparqlEvidence, [CcBy40], [CcBy40], pdf));
 
-        foreach (var body in new[] { agreed, secondChannelQuarantined, agreedOnOtherEvidence })
+        foreach (var body in new[] { agreed, quarantined, multipleA, multipleB, agreedOnOtherEvidence })
         {
-            Assert.AreEqual(LuxembourgGazetteBodyOutcome.Admitted, body.Outcome, "the premise: all three are admitted.");
-            Assert.AreEqual(agreed.TransportByteSha256, body.TransportByteSha256, "the premise: same bytes.");
+            Assert.AreEqual(LuxembourgGazetteBodyOutcome.Admitted, body.Outcome, "the premise: all admitted, same bytes.");
+            Assert.AreEqual(agreed.TransportByteSha256, body.TransportByteSha256);
         }
 
-        Assert.AreNotEqual(agreed.RightsResolution.Disposition, secondChannelQuarantined.RightsResolution.Disposition);
-        Assert.AreNotEqual(agreed.RightsIdentitySha256, secondChannelQuarantined.RightsIdentitySha256, "(a) another rights state.");
-        Assert.AreNotEqual(agreed.IdentitySha256, secondChannelQuarantined.IdentitySha256);
+        // (a) another rights state
+        Assert.AreNotEqual(agreed.RightsResolution.Disposition, quarantined.RightsResolution.Disposition);
+        Assert.AreNotEqual(agreed.IdentitySha256, quarantined.IdentitySha256);
 
+        // (b) the same state - Multiple - on other licence values
+        Assert.AreEqual(LuxembourgRightsChannelDisposition.Multiple, multipleA.RightsResolution.Disposition);
+        Assert.AreEqual(multipleA.RightsResolution.Disposition, multipleB.RightsResolution.Disposition);
+        Assert.AreNotEqual(multipleA.RightsClaimSha256, multipleB.RightsClaimSha256);
+        Assert.AreNotEqual(multipleA.IdentitySha256, multipleB.IdentitySha256);
+
+        // the same state on other evidence: lineage, not identity
         Assert.AreEqual(agreed.RightsResolution.Disposition, agreedOnOtherEvidence.RightsResolution.Disposition);
-        Assert.AreNotEqual(agreed.RightsIdentitySha256, agreedOnOtherEvidence.RightsIdentitySha256, "(b) same state, other evidence.");
-        Assert.AreNotEqual(agreed.IdentitySha256, agreedOnOtherEvidence.IdentitySha256);
-
-        static LuxembourgGazetteBodyDisposition Body(LuxembourgBodyJoinResolution join) =>
-            LuxembourgGazetteBodyDisposition.Create(
-                LuxembourgGazetteBodySet.GazetteCandidatesOf(join).Single(), Receipt('a'), FetchEvidence);
+        Assert.AreEqual(agreed.RightsClaimSha256, agreedOnOtherEvidence.RightsClaimSha256);
+        Assert.AreEqual(agreed.IdentitySha256, agreedOnOtherEvidence.IdentitySha256);
+        Assert.AreNotEqual(agreed.RightsLineageSha256, agreedOnOtherEvidence.RightsLineageSha256);
     }
 
     /// <summary>
     /// Semantically identical rights observations, delivered in another order, share one identity.
-    /// The order that can vary is the channels' observation collections (several manifestations,
-    /// listed in any order); an observation's own licence list cannot vary, because its constructor
-    /// requires it ordinal-sorted and unique - pinned here as the premise the identity relies on.
+    /// The order that can vary is the channels' observation collections; an observation's own
+    /// licence list cannot, because its constructor requires it ordinal-sorted and unique - pinned
+    /// here as the premise the claim digest relies on.
     /// </summary>
     [TestMethod]
     public void SemanticallyIdenticalRightsObservationsInAnotherOrderShareOneIdentity()
     {
-        const string Other = "http://creativecommons.org/licenses/by-sa/4.0/";
         Assert.ThrowsExactly<ArgumentException>(
             () => new LuxembourgRightsChannelObservation(ManifestationOf(ActLoi1, "fr", "pdf"), Run, SparqlEvidence, [CcBy40, Other]),
             "the premise: a licence list is canonical by construction (by-sa sorts before by), so it cannot be a source of order.");
@@ -237,14 +247,187 @@ public sealed class LuxembourgGazetteBodyTests
 
         Assert.AreEqual(LuxembourgRightsChannelDisposition.Multiple, first.RightsResolution.Disposition,
             "the premise: two licences on a channel is the Multiple state, recorded and not withholding.");
-        Assert.AreEqual(LuxembourgGazetteBodyOutcome.Admitted, first.Outcome);
-        Assert.AreEqual(first.RightsIdentitySha256, second.RightsIdentitySha256);
+        Assert.AreEqual(first.RightsClaimSha256, second.RightsClaimSha256);
         Assert.AreEqual(first.IdentitySha256, second.IdentitySha256);
 
-        static LuxembourgGazetteBodyDisposition PdfBody(LuxembourgBodyJoinResolution join) =>
-            LuxembourgGazetteBodyDisposition.Create(
-                LuxembourgGazetteBodySet.GazetteCandidatesOf(join).Single(static c => c.WemiCandidate.FormatIri == FormatPdf),
-                Receipt('a'), FetchEvidence);
+        static LuxembourgGazetteBodyDisposition PdfBody(LuxembourgBodyJoinResolution join)
+        {
+            var listing = LuxembourgGazetteBodySet.GazetteCandidatesOf(join).Single(static c => c.WemiCandidate.FormatIri == FormatPdf);
+            return LuxembourgGazetteBodyDisposition.Create(listing, Retention(listing));
+        }
+    }
+
+    [TestMethod]
+    public void TheIdentityBindsTheBytesAndTheOutcome()
+    {
+        var listing = Listing(JoinAgreedCcBy(ActLoi1, Candidate(ActLoi1, "fr", "pdf")));
+
+        var admitted = LuxembourgGazetteBodyDisposition.Create(listing, Retention(listing, 'a'));
+        var again = LuxembourgGazetteBodyDisposition.Create(listing, Retention(listing, 'a'));
+        var otherBytes = LuxembourgGazetteBodyDisposition.Create(listing, Retention(listing, 'c'));
+        var notRetained = LuxembourgGazetteBodyDisposition.Create(listing, null);
+
+        Assert.AreEqual(admitted.IdentitySha256, again.IdentitySha256, "same claim, same identity.");
+        Assert.AreNotEqual(admitted.IdentitySha256, otherBytes.IdentitySha256, "other bytes, other identity.");
+        Assert.AreNotEqual(admitted.IdentitySha256, notRetained.IdentitySha256, "other outcome, other identity.");
+    }
+
+    // ---- admitted is established, not asserted ----
+
+    [TestMethod]
+    public void ARetentionWhoseTerminalHopNamesAnotherReceiptIsRefused()
+    {
+        var listing = Listing(JoinAgreedCcBy(ActLoi1, Candidate(ActLoi1, "fr", "pdf")));
+        var address = AddressOf(listing);
+        var request = Request(address.FetchUri.AbsoluteUri);
+        // The route names receipt 'a'; the caller hands over receipt 'b' for the same length.
+        var route = Route(request, address.FetchUri.AbsoluteUri, Receipt('a'));
+
+        var thrown = Assert.ThrowsExactly<ArgumentException>(() => LuxembourgGazetteBodyDisposition.Create(
+            listing, new LuxembourgGazetteBodyRetention(address, request, request, route, Receipt('b'))));
+
+        StringAssert.Contains(thrown.Message, "not the exact receipt bound to the terminal hop");
+    }
+
+    /// <summary>
+    /// The premise the disposition relies on rather than re-checking: route evidence cannot even be
+    /// built with a hop whose receipt names other bytes than the hop transferred. So binding the
+    /// exact receipt to the terminal hop binds the bytes too.
+    /// </summary>
+    [TestMethod]
+    public void AHopCannotNameAReceiptForOtherBytesThanItTransferred()
+    {
+        var listing = Listing(JoinAgreedCcBy(ActLoi1, Candidate(ActLoi1, "fr", "pdf")));
+        var address = AddressOf(listing);
+        var request = Request(address.FetchUri.AbsoluteUri);
+
+        var thrown = Assert.ThrowsExactly<ArgumentException>(
+            () => Route(request, address.FetchUri.AbsoluteUri, Receipt('a'), transportedSha256: Digest('b')));
+
+        StringAssert.Contains(thrown.Message, "names other bytes");
+    }
+
+    [TestMethod]
+    public void AnUnrelatedRouteIsRefused()
+    {
+        var pdf = Listing(JoinAgreedCcBy(ActLoi1, Candidate(ActLoi1, "fr", "pdf")));
+        var other = Listing(JoinAgreedCcBy(ActRgd2, Candidate(ActRgd2, "fr", "pdf")));
+        var address = AddressOf(pdf);
+        var request = Request(address.FetchUri.AbsoluteUri);
+        var receipt = Receipt('a');
+        // A perfectly good route - for the other act's file.
+        var otherAddress = AddressOf(other);
+        var otherRequest = Request(otherAddress.FetchUri.AbsoluteUri);
+        var unrelated = Route(otherRequest, otherAddress.FetchUri.AbsoluteUri, receipt);
+
+        Assert.ThrowsExactly<ArgumentException>(() => LuxembourgGazetteBodyDisposition.Create(
+            pdf, new LuxembourgGazetteBodyRetention(address, request, request, unrelated, receipt)));
+    }
+
+    /// <summary>The address must be this listing's: its item, its format, its act - each broken alone refuses.</summary>
+    [TestMethod]
+    public void AnAddressForAnotherItemFormatOrActIsRefused()
+    {
+        var listing = Listing(JoinAgreedCcBy(ActLoi1, Candidate(ActLoi1, "fr", "pdfa")));
+        var wrong = new[]
+        {
+            (label: "item", address: AddressOf(listing, itemOverride: ItemOf(ActLoi1, "de", "pdfa")), expect: "not this listing's item"),
+            (label: "format", address: AddressOf(listing, formatOverride: LuxembourgUserFormatToken.Pdf), expect: "not this listing's PdfA"),
+            (label: "act", address: AddressOf(listing, actOverride: ActRgd2), expect: "not this act's"),
+        };
+
+        foreach (var (label, address, expect) in wrong)
+        {
+            // The route is built for the wrong address itself, so only the address-listing binding can catch it.
+            var request = Request(address.FetchUri.AbsoluteUri);
+            var receipt = Receipt('a');
+            var route = Route(request, address.FetchUri.AbsoluteUri, receipt);
+
+            var thrown = Assert.ThrowsExactly<ArgumentException>(() => LuxembourgGazetteBodyDisposition.Create(
+                listing, new LuxembourgGazetteBodyRetention(address, request, request, route, receipt)), label);
+            StringAssert.Contains(thrown.Message, expect, label);
+        }
+    }
+
+    [TestMethod]
+    public void ANegotiatingRequestIsNotTheAddressesFetch()
+    {
+        var listing = Listing(JoinAgreedCcBy(ActLoi1, Candidate(ActLoi1, "fr", "pdf")));
+        var address = AddressOf(listing);
+        var negotiating = Request(address.FetchUri.AbsoluteUri, [new HttpLogicalRequestHeader("accept", GazetteMediaType)]);
+        var receipt = Receipt('a');
+        var route = Route(negotiating, address.FetchUri.AbsoluteUri, receipt);
+
+        var thrown = Assert.ThrowsExactly<ArgumentException>(() => LuxembourgGazetteBodyDisposition.Create(
+            listing, new LuxembourgGazetteBodyRetention(address, negotiating, negotiating, route, receipt)));
+
+        StringAssert.Contains(thrown.Message, "non-negotiating fetch");
+    }
+
+    [TestMethod]
+    public void ASubstitutedOfficialRequestIsRefused()
+    {
+        var listing = Listing(JoinAgreedCcBy(ActLoi1, Candidate(ActLoi1, "fr", "pdf")));
+        var address = AddressOf(listing);
+        var official = Request(address.FetchUri.AbsoluteUri);
+        var sentInstead = Request(
+            address.FetchUri.AbsoluteUri,
+            [new HttpLogicalRequestHeader("user-agent", "lex-v3-tests"), new HttpLogicalRequestHeader("x-extra", "not-the-official")]);
+        var receipt = Receipt('a');
+        // The hop's digest is of the request actually sent, not the one the caller presents as official.
+        var route = Route(sentInstead, address.FetchUri.AbsoluteUri, receipt);
+
+        Assert.ThrowsExactly<ArgumentException>(() => LuxembourgGazetteBodyDisposition.Create(
+            listing, new LuxembourgGazetteBodyRetention(address, official, sentInstead, route, receipt)));
+    }
+
+    [TestMethod]
+    public void AResponseThatIsNotApplicationPdfIsRefused()
+    {
+        var listing = Listing(JoinAgreedCcBy(ActLoi1, Candidate(ActLoi1, "fr", "pdf")));
+        var address = AddressOf(listing);
+        var request = Request(address.FetchUri.AbsoluteUri);
+        var receipt = Receipt('a');
+        var route = Route(request, address.FetchUri.AbsoluteUri, receipt, mediaType: "text/html");
+
+        var thrown = Assert.ThrowsExactly<ArgumentException>(() => LuxembourgGazetteBodyDisposition.Create(
+            listing, new LuxembourgGazetteBodyRetention(address, request, request, route, receipt)));
+
+        StringAssert.Contains(thrown.Message, "not application/pdf");
+    }
+
+    [TestMethod]
+    public void ACompleteResponseWithNoEntityBytesIsNotADerivableBodyTransfer()
+    {
+        var listing = Listing(JoinAgreedCcBy(ActLoi1, Candidate(ActLoi1, "fr", "pdf")));
+        var address = AddressOf(listing);
+        var request = Request(address.FetchUri.AbsoluteUri);
+        var empty = Receipt('0', 0);
+        var route = Route(request, address.FetchUri.AbsoluteUri, empty, length: 0);
+
+        var thrown = Assert.ThrowsExactly<ArgumentException>(() => LuxembourgGazetteBodyDisposition.Create(
+            listing, new LuxembourgGazetteBodyRetention(address, request, request, route, empty)));
+
+        StringAssert.Contains(thrown.Message, "not a complete derivable body transfer");
+    }
+
+    [TestMethod]
+    public void ARedirectRetainsItsStartAndEffectiveAddresses()
+    {
+        var listing = Listing(JoinAgreedCcBy(ActLoi1, Candidate(ActLoi1, "fr", "pdf")));
+        var address = AddressOf(listing);
+        var official = Request(address.FetchUri.AbsoluteUri);
+        var terminalUri = address.FetchUri.AbsoluteUri + "?download=1";
+        var terminal = Request(terminalUri);
+        var receipt = Receipt('a');
+        var route = RedirectRoute(official, address.FetchUri.AbsoluteUri, terminal, terminalUri, receipt);
+
+        var body = LuxembourgGazetteBodyDisposition.Create(
+            listing, new LuxembourgGazetteBodyRetention(address, official, terminal, route, receipt));
+
+        Assert.AreEqual(LuxembourgGazetteBodyOutcome.Admitted, body.Outcome);
+        Assert.AreEqual(address.FetchUri.AbsoluteUri, body.SourceObservation!.RequestedUri);
+        Assert.AreEqual(terminalUri, body.SourceObservation.EffectiveUri);
     }
 
     // ---- the set ----
@@ -258,8 +441,7 @@ public sealed class LuxembourgGazetteBodyTests
         var listings = LuxembourgGazetteBodySet.GazetteCandidatesOf(join);
         Assert.AreEqual(2, listings.Count);
         var bodies = listings.Select(l => LuxembourgGazetteBodyDisposition.Create(
-            l, l.WemiCandidate.FormatIri == FormatPdfA ? Receipt('a') : null,
-            l.WemiCandidate.FormatIri == FormatPdfA ? FetchEvidence : null)).ToArray();
+            l, l.WemiCandidate.FormatIri == FormatPdfA ? Retention(l) : null)).ToArray();
 
         var forward = LuxembourgGazetteBodySet.Create(join, bodies);
         var reversed = LuxembourgGazetteBodySet.Create(join, bodies.Reverse().ToArray());
@@ -352,11 +534,6 @@ public sealed class LuxembourgGazetteBodyTests
         Assert.AreEqual(2, LuxembourgGazetteBodySet.Create(join, bodies).Bodies.Count);
     }
 
-    private static LuxembourgGazetteBodyDisposition[] Bodies(LuxembourgBodyJoinResolution join) =>
-        LuxembourgGazetteBodySet.GazetteCandidatesOf(join)
-            .Select(static l => LuxembourgGazetteBodyDisposition.Create(l, null, null))
-            .ToArray();
-
     [TestMethod]
     public void AnActWithTuplesButNoPdfHasTheActGapNoGazettePdfCandidate()
     {
@@ -383,8 +560,7 @@ public sealed class LuxembourgGazetteBodyTests
             () => LuxembourgGazetteBodySet.Create(
                 join,
                 [LuxembourgGazetteBodyDisposition.Create(
-                    LuxembourgGazetteBodySet.GazetteCandidatesOf(JoinAgreedCcBy(ActLoi1, Candidate(ActLoi1, "fr", "pdf"))).Single(),
-                    null, null)]),
+                    Listing(JoinAgreedCcBy(ActLoi1, Candidate(ActLoi1, "fr", "pdf"))), null)]),
             "a disposition for a listing this join does not hold.");
         StringAssert.Contains(thrown.Message, "not minted from one of this join's own listings");
     }
@@ -406,11 +582,41 @@ public sealed class LuxembourgGazetteBodyTests
     [TestMethod]
     public void NullsAreCallerContractViolations()
     {
-        Assert.ThrowsExactly<ArgumentNullException>(() => LuxembourgGazetteBodyDisposition.Create(null!, null, null));
+        var listing = Listing(JoinAgreedCcBy(ActLoi1, Candidate(ActLoi1, "fr", "pdf")));
+        var retention = Retention(listing);
+        Assert.ThrowsExactly<ArgumentNullException>(() => LuxembourgGazetteBodyDisposition.Create(null!, null));
         Assert.ThrowsExactly<ArgumentNullException>(() => LuxembourgGazetteBodyDisposition.IsGazettePdf(null!));
+        Assert.ThrowsExactly<ArgumentNullException>(() => LuxembourgGazetteBodyDisposition.RightsClaimSha256Of(null!));
+        Assert.ThrowsExactly<ArgumentNullException>(() => new LuxembourgGazetteBodyRetention(
+            null!, retention.OfficialRequest, retention.TerminalRequest, retention.SourceEvidence, retention.RetainedTransportBytes));
+        Assert.ThrowsExactly<ArgumentNullException>(() => new LuxembourgGazetteBodyRetention(
+            retention.OfficialAddress, retention.OfficialRequest, retention.TerminalRequest, retention.SourceEvidence, null!));
         Assert.ThrowsExactly<ArgumentNullException>(() => LuxembourgGazetteBodySet.GazetteCandidatesOf(null!));
         Assert.ThrowsExactly<ArgumentNullException>(() => LuxembourgGazetteBodySet.Create(null!, []));
         Assert.ThrowsExactly<ArgumentNullException>(
             () => LuxembourgGazetteBodySet.Create(JoinAgreedCcBy(ActLoi1), null!));
     }
+
+    // ---- helpers ----
+
+    private static LuxembourgBodyCandidateResolution Listing(LuxembourgBodyJoinResolution join) =>
+        LuxembourgGazetteBodySet.GazetteCandidatesOf(join).Single();
+
+    private static LuxembourgGazetteBodyDisposition Admit(LuxembourgBodyJoinResolution join)
+    {
+        var listing = Listing(join);
+        return LuxembourgGazetteBodyDisposition.Create(listing, Retention(listing));
+    }
+
+    /// <summary>One admitted pdf body of a1, observed and fetched by the execution <paramref name="seed"/> names.</summary>
+    private static LuxembourgGazetteBodyDisposition AdmittedFromRun(char seed)
+    {
+        var listing = Listing(JoinAgreedCcByFromRun(ActLoi1, seed, ("fr", "pdf")));
+        return LuxembourgGazetteBodyDisposition.Create(listing, Retention(listing, routeRun: ArtifactOf(seed, 'e')));
+    }
+
+    private static LuxembourgGazetteBodyDisposition[] Bodies(LuxembourgBodyJoinResolution join) =>
+        LuxembourgGazetteBodySet.GazetteCandidatesOf(join)
+            .Select(static l => LuxembourgGazetteBodyDisposition.Create(l, null))
+            .ToArray();
 }

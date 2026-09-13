@@ -188,13 +188,13 @@ public sealed class LuxembourgNeverConsolidatedBodyLedgerTests
     {
         var pdfa = Candidate(act, "fr", "pdfa");
         var admittedJoin = JoinAgreedCcBy(act, pdfa);
-        var admitted = LuxembourgGazetteBodyDisposition.Create(
-            LuxembourgGazetteBodySet.GazetteCandidatesOf(admittedJoin).Single(), Receipt('a'), FetchEvidence);
+        var admittedListing = LuxembourgGazetteBodySet.GazetteCandidatesOf(admittedJoin).Single();
+        var admitted = LuxembourgGazetteBodyDisposition.Create(admittedListing, Retention(admittedListing));
 
         var pdf = Candidate(act, "fr", "pdf");
         var rejectedJoin = JoinLicenceScl(act, pdf);
         var rejected = LuxembourgGazetteBodyDisposition.Create(
-            LuxembourgGazetteBodySet.GazetteCandidatesOf(rejectedJoin).Single(), null, null);
+            LuxembourgGazetteBodySet.GazetteCandidatesOf(rejectedJoin).Single(), null);
 
         // One join listing both, so the set is complete over it. Rights are per manifestation, so
         // the two channels' observations name each listing with its own licence.
@@ -208,8 +208,8 @@ public sealed class LuxembourgNeverConsolidatedBodyLedgerTests
                 Run, InFileEnumeration, [InFileRead(pdfa.ManifestationIri, CcBy40), InFileRead(pdf.ManifestationIri, LicenceScl)]));
         var listings = LuxembourgGazetteBodySet.GazetteCandidatesOf(join);
         var bodies = listings.Select(l => l.WemiCandidate.FormatIri == FormatPdfA
-            ? LuxembourgGazetteBodyDisposition.Create(l, Receipt('a'), FetchEvidence)
-            : LuxembourgGazetteBodyDisposition.Create(l, null, null)).ToArray();
+            ? LuxembourgGazetteBodyDisposition.Create(l, Retention(l))
+            : LuxembourgGazetteBodyDisposition.Create(l, null)).ToArray();
         Assert.AreEqual(admitted.Outcome, bodies.Single(static b => b.Format == Lex.V3.Contracts.Source.Http.LuxembourgUserFormatToken.PdfA).Outcome);
         Assert.AreEqual(rejected.Outcome, bodies.Single(static b => b.Format == Lex.V3.Contracts.Source.Http.LuxembourgUserFormatToken.Pdf).Outcome);
         return LuxembourgGazetteBodySet.Create(join, bodies);

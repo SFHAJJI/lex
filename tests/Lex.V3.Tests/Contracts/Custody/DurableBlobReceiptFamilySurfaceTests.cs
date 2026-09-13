@@ -131,6 +131,7 @@ public sealed class DurableBlobReceiptFamilySurfaceTests
                 "field private instance " + Core + "RepeatedEnumerationResolvedEvidence::<DurableWriteReceipt>k__BackingField -> " + Receipt,
                 "field private instance " + Corpus + "CorpusBodyRecord::<Receipt>k__BackingField -> " + Receipt + "?",
                 "field private instance Lex.V3.Contracts.Source.Luxembourg.LuxembourgGazetteBodyDisposition::<RetainedTransportBytes>k__BackingField -> " + Receipt + "?",
+                "field private instance Lex.V3.Contracts.Source.Luxembourg.LuxembourgGazetteBodyRetention::<RetainedTransportBytes>k__BackingField -> " + Receipt,
                 "method public instance " + Custody + "ICustodyStore::CreateAsync(System.ReadOnlyMemory<System.Byte>, "
                 + Custody + "CustodyClass, System.Threading.CancellationToken) -> System.Threading.Tasks.Task<" + Receipt + ">",
                 "property public instance " + Custody + "CustodiedDecode<T>::Receipt() -> " + Receipt,
@@ -142,6 +143,7 @@ public sealed class DurableBlobReceiptFamilySurfaceTests
                 "property public instance " + Core + "RepeatedEnumerationResolvedEvidence::DurableWriteReceipt() -> " + Receipt,
                 "property public instance " + Corpus + "CorpusBodyRecord::Receipt() -> " + Receipt + "?",
                 "property public instance Lex.V3.Contracts.Source.Luxembourg.LuxembourgGazetteBodyDisposition::RetainedTransportBytes() -> " + Receipt + "?",
+                "property public instance Lex.V3.Contracts.Source.Luxembourg.LuxembourgGazetteBodyRetention::RetainedTransportBytes() -> " + Receipt,
             },
             ConstructionSurface.ProducersIn(typeof(DurableBlobWriteReceipt).Assembly, typeof(DurableBlobWriteReceipt), true).ToArray());
     }
