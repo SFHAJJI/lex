@@ -170,6 +170,9 @@ public sealed class VocabularyRegistryCensusTests
                     + "const UserFormatPrefix",
                 "Lex.V3.Contracts.Source.Http.OutboundCrawlerIdentity: static property Schema, "
                     + "static property Token",
+                "Lex.V3.Contracts.Source.Luxembourg.LuxembourgActClassManifest: Recognized=29, "
+                    + "RecognizedClassIris=29, const Authority, static readonly LoiClassIri, "
+                    + "static readonly RgdClassIri",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgAssertionVocabulary: "
                     + "ActForceDatePredicates=2, ConsolidationApplicabilityDatePredicates=2, "
                     + "Predicates=26",
