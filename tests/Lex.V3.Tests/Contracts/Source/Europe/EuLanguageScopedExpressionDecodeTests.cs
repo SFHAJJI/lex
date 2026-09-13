@@ -875,6 +875,80 @@ public sealed class EuLanguageScopedExpressionDecodeTests
             dateEntry.ContentSha256);
     }
 
+    /// <summary>
+    /// Every page that stated the date is cited, not only the first one that did.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The carrier's contract is COMPLETE, NOT REPRESENTATIVE, and the date half was neither. The
+    /// decode held one <c>(date, page)</c> pair per Work and treated a later row stating the SAME
+    /// date as an idempotent repeat - correct about the value, wrong about the witness. Two distinct
+    /// retained bodies had both stated the admitted date and only the first was retained as lineage.
+    /// </para>
+    /// <para>
+    /// The value stays single: <see cref="TwoDifferentWorkDatesForOneWorkRefuseRatherThanMerging"/>
+    /// still refuses two different literals. What accumulates is the page set, exactly as the
+    /// identity-and-language attribution already accumulated one.
+    /// </para>
+    /// <para>
+    /// The canonical key is widened to include the cursor because two rows identical on
+    /// object/predicate/value cannot otherwise be minted into one delivery at all - the door that
+    /// would refuse them is the uniqueness rule, not this one, and a probe that never reaches the
+    /// code it is about proves nothing.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void EveryPageThatStatedTheSameDateIsCitedRatherThanTheFirst()
+    {
+        // One row per page at a limit of one, so the same date arrives on two distinct bodies.
+        var objectRows = new[]
+        {
+            PRow(WorkOne, WorkDateIri, "2016-05-04", XsdDate),
+            PRow(WorkOne, WorkDateIri, "2016-05-04", XsdDate),
+        };
+
+        var dateFacts = BoundPagedObjectFacts(
+            objectRows,
+            rowLimitA: 1,
+            rowLimitB: 2,
+            canonicalKey: ["object", "predicate", "value", "cursor"]);
+
+        var decoded = EuLanguageScopedExpressionDecode.TryDecode(
+            Bound(Expression(WorkOne, ExprFrench, French)),
+            dateFacts,
+            new LanguageScopedExpressionSet(),
+            out var refusal,
+            out _,
+            out _);
+
+        Assert.AreEqual(EuLanguageScopedExpressionDecodeRefusal.None, refusal);
+        Assert.IsNotNull(decoded);
+        Assert.AreEqual("2016-05-04", decoded[0].PublisherCorrigendumDate!.RawLexical,
+            "one date, whatever the page count.");
+
+        var dateBodies = decoded[0].Lineage.Entries
+            .Where(static entry =>
+                entry.Contribution == LanguageScopedExpressionContribution.PublisherDate)
+            .Select(static entry => entry.ContentSha256)
+            .ToArray();
+
+        // The premise, asserted rather than assumed: two distinct retained bodies, or this probe
+        // would pass on a lineage that cited one page twice and deduped it back to one.
+        Assert.AreNotEqual(
+            dateFacts.PagesInOrder[0].DurableWriteReceipt.Reference.ContentSha256,
+            dateFacts.PagesInOrder[1].DurableWriteReceipt.Reference.ContentSha256,
+            "the two pages must carry different bytes for this to test completeness.");
+
+        CollectionAssert.AreEquivalent(
+            new[]
+            {
+                dateFacts.PagesInOrder[0].DurableWriteReceipt.Reference.ContentSha256,
+                dateFacts.PagesInOrder[1].DurableWriteReceipt.Reference.ContentSha256,
+            },
+            dateBodies,
+            "both bodies stated the admitted date, so both are lineage.");
+    }
+
     // ---- Language: never defaulted, never merged. ----
 
     [TestMethod]
@@ -1327,19 +1401,26 @@ public sealed class EuLanguageScopedExpressionDecodeTests
             out _);
     }
 
+    /// <param name="canonicalKey">
+    /// Defaults to object/predicate/value. A delivery that repeats one row identically on all three
+    /// cannot be minted under that key - <c>VerifyPages</c> requires canonical keys to be unique -
+    /// so the identical-date-on-two-pages probe widens it to include the cursor, exactly as
+    /// <c>Bound</c>'s own parameter does for the family-X side.
+    /// </param>
     private static EuProofBoundDelivery BoundPagedObjectFacts(
         IReadOnlyList<string> rows,
         int rowLimitA,
         int rowLimitB,
         RepeatedEnumerationTerminalPagePolicy terminalPagePolicy =
-            RepeatedEnumerationTerminalPagePolicy.ShortPageTerminal)
+            RepeatedEnumerationTerminalPagePolicy.ShortPageTerminal,
+        IReadOnlyList<string>? canonicalKey = null)
     {
         var fixture = new RepeatedEnumerationDeliveryProofTests.Fixture(
             expectedCount: rows.Count,
             maximumDeliverableRows: 999,
             terminalPagePolicy: terminalPagePolicy,
             projectionVariables: PProjection,
-            canonicalKeyVariables: PKey);
+            canonicalKeyVariables: canonicalKey ?? PKey);
         var delivery = fixture.CreatePagedRaw(
             rows.Count,
             rowLimitA,

@@ -476,7 +476,13 @@ public static class EuLanguageScopedExpressionDecode
         // ---- The publisher's own work_date_document, for these Works only. ----
         var works = new HashSet<string>(
             identities.Select(static identity => identity.PublisherWorkId), StringComparer.Ordinal);
-        var dates = new Dictionary<string, (PublisherCorrigendumDate Date, int PageIndex)>(
+        // ONE DATE, EVERY PAGE THAT STATED IT. The value is single - two different literals for
+        // one Work refuse below - but the pages that carried it are a set, exactly as the
+        // identity-and-language attribution is. A publisher may deliver the same
+        // work_date_document row on more than one retained page, and the carrier's own contract is
+        // COMPLETE, NOT REPRESENTATIVE: keeping only the page that happened to state it first drops
+        // retained bodies that really did carry the admitted date.
+        var dates = new Dictionary<string, (PublisherCorrigendumDate Date, SortedSet<int> Pages)>(
             StringComparer.Ordinal);
         int[]? datePages = null;
         if (objectFacts is not null)
@@ -538,10 +544,15 @@ public static class EuLanguageScopedExpressionDecode
                     return null;
                 }
 
+                // AGREEING, NOT REDUNDANT. A second row stating the same date adds no new value and
+                // does add a new witness: the page it arrived on carried the admitted date too, and
+                // the set is what makes the lineage complete rather than first-seen. A SortedSet
+                // also means a repeat on a page already recorded changes nothing.
+                held.Pages.Add(datePages![dateRowIndex]);
                 continue;
             }
 
-            dates.Add(canonicalWork, (observed, datePages![dateRowIndex]));
+            dates.Add(canonicalWork, (observed, [datePages![dateRowIndex]]));
         }
 
         // ---- Built, then checked against the destination, then appended. Never halfway. ----
@@ -606,16 +617,19 @@ public static class EuLanguageScopedExpressionDecode
                     expressionFacts.PagesInOrder[page].DurableWriteReceipt))
                 .ToList();
 
-            // Date lineage attaches only where a date was actually observed, and names only the page
+            // Date lineage attaches only where a date was actually observed, and names EVERY page
             // that stated it. An expression whose work the publisher dated nothing for must not cite
             // the date family at all, and the contract refuses that pairing at its own door.
             PublisherCorrigendumDate? observedDate = null;
             if (dates.TryGetValue(identity.PublisherWorkId, out var dated))
             {
                 observedDate = dated.Date;
-                entries.Add(new LanguageScopedExpressionLineageEntry(
-                    LanguageScopedExpressionContribution.PublisherDate,
-                    objectFacts!.PagesInOrder[dated.PageIndex].DurableWriteReceipt));
+                foreach (var page in dated.Pages)
+                {
+                    entries.Add(new LanguageScopedExpressionLineageEntry(
+                        LanguageScopedExpressionContribution.PublisherDate,
+                        objectFacts!.PagesInOrder[page].DurableWriteReceipt));
+                }
             }
 
             candidates.Add(LanguageScopedExpression.FromRetainedSource(
