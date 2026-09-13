@@ -196,15 +196,26 @@ public sealed class LuxembourgCodeCivilAcquisitionCanary
         Assert.IsNull(refusal, $"whole-run refusal: {refusal?.Code} {refusal?.Detail}");
         Assert.IsNotNull(outcomes);
 
-        // The ceiling is reported, not merely held: a canary that stopped because it ran out of
-        // requests and a canary that finished look the same in the accepted fraction below.
+        // The ceiling is REPORTED, and deliberately not asserted on.
+        //
+        // An earlier head asserted IsFalse(budget.Exhausted) here, reasoning that a canary which ran
+        // out of requests and one that finished look alike in the accepted fraction below. The
+        // reasoning was right and the test for it was wrong: Exhausted means only Spent >= Limit,
+        // and this ceiling is the run's EXACT worst case, so a COMPLETE run whose final row needs
+        // its fourth attempt spends the last reservation and ends exhausted. The review reproduced
+        // that boundary with one manifest row, robots plus three 503s plus a fourth-attempt 200:
+        // five sends, body retained, no refusal, budget exhausted. The assertion would have failed a
+        // complete measurement, which is the opposite of what it was for.
+        //
+        // What actually separates the two is already above: a ceiling that stops a fetch refuses the
+        // whole run (LuxembourgQueryExecutionRefusal.DocumentFetchSessionNotStarted), because a
+        // WireBudgetExhausted document GET is not mapped to a per-row outcome the way a robots
+        // denial is. So Assert.IsNull(refusal) is the completeness check, and it was the whole time.
+        // The boundary itself is pinned offline by
+        // LuxembourgDocumentGetTests.ADocumentSucceedingOnItsLastReservationIsStillComplete.
         Console.WriteLine(
             $"CANARY wire requests: {budget.Spent} of {budget.Limit} "
             + $"({manifest.Rows.Count} rows x {AttemptsPerDocument})");
-        Assert.IsFalse(
-            budget.Exhausted,
-            "the canary reached its derived ceiling, so the accepted fraction below is a partial "
-            + "run rather than a measurement of what the publisher holds.");
 
         // THE ACCEPTED FRACTION, AS A NUMBER.
         var held = outcomes!.Count(pair => pair.Value.Receipt is not null);
