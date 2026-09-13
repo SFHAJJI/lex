@@ -333,7 +333,7 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgEnumerationRunResult::Delivered, "
                     + "method public static "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgEnumerationRunResult::Refused, "
-                    + "1 compiler-generated",
+                    + "2 compiler-generated",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgFamilyEnumerationOutcome: constructor private "
                     + "instance Lex.V3.Ingest.Luxembourg.LuxembourgFamilyEnumerationOutcome::.ctor, "
                     + "method private static "

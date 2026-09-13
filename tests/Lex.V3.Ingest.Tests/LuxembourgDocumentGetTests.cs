@@ -285,6 +285,7 @@ public sealed class LuxembourgDocumentGetTests
             manifest.Manifest,
             new Dictionary<SourceObjectRef, LuxembourgDocumentFetchAddress> { [ObjectRef()] = Address() },
             LuxembourgAcquisitionTestFixture.DocumentFetchRendererSource(3101),
+            LuxembourgAcquisitionTestFixture.TestWireBudget(),
             CancellationToken.None);
 
         Assert.IsNull(refusal, refusal?.Detail);
@@ -371,6 +372,7 @@ public sealed class LuxembourgDocumentGetTests
             manifest,
             addresses,
             LuxembourgAcquisitionTestFixture.DocumentFetchRendererSource(4242),
+            LuxembourgAcquisitionTestFixture.TestWireBudget(),
             CancellationToken.None);
 
         Assert.IsNull(refusal, $"one object's 404 must not refuse the run: {refusal?.Detail}");
@@ -948,6 +950,108 @@ public sealed class LuxembourgDocumentGetTests
     // Helpers.
     // ---------------------------------------------------------------------------------------
 
+    /// <summary>
+    /// Spending the last reservation is not the same as being stopped by the ceiling.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <c>WireRequestBudget.Exhausted</c> means only <c>Spent &gt;= Limit</c>. Against a ceiling set
+    /// to a run's exact worst case - robots plus the profile's four attempts - a document that
+    /// succeeds on its fourth attempt consumes the final reservation and finishes. Exhausted and
+    /// incomplete are therefore different properties, and a test that reads one as the other fails
+    /// good runs.
+    /// </para>
+    /// <para>
+    /// This existed as a review finding rather than a test: an earlier head of #588 asserted
+    /// <c>IsFalse(budget.Exhausted)</c> in the Code Civil canary as a completeness check, and the
+    /// reviewer reproduced exactly this shape to show it would fail a complete measurement. Pinned
+    /// here, offline, because the canary that made the mistake is environment-gated and could never
+    /// have caught it itself.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public async Task ADocumentSucceedingOnItsLastReservationIsStillComplete()
+    {
+        var body = "<akomaNtoso/>"u8.ToArray();
+        // The handler's ordinal is 1-based and counts robots, so the document's four attempts are
+        // ordinals 2 through 5: three retryable answers and then the one that succeeds.
+        var handler = new RobotsThenDocumentHandler((request, ordinal) => ordinal < 5
+            ? BinaryResponse(request, HttpStatusCode.ServiceUnavailable, "unavailable"u8.ToArray())
+            : BinaryResponse(request, HttpStatusCode.OK, body));
+        var store = new FlooringCustodyStore();
+        var executor = new LuxembourgRepeatedEnumerationExecutor(
+            store, new LuxembourgAcquisitionTestFixture.FixedTimeProvider(), handler);
+        var budget = WireRequestBudget.OfWireRequests(5);
+
+        var attempt = await SendAsync(executor, Address(), budget, CancellationToken.None);
+
+        Assert.IsNull(attempt.Refusal, attempt.Detail);
+        Assert.IsNotNull(attempt.Evidence);
+        Assert.AreEqual(
+            200,
+            attempt.Evidence!.Hops[^1].Status,
+            "the fourth attempt answered, so this run is complete.");
+        Assert.IsTrue(
+            budget.Exhausted,
+            "and it spent its last reservation doing so - which is the whole point: a complete run "
+            + "can end exhausted, so exhaustion cannot be read as incompleteness.");
+        Assert.AreEqual(budget.Limit, budget.Spent);
+        Assert.AreEqual(
+            5,
+            handler.SendCount,
+            "robots plus four attempts is exactly the ceiling, and nothing went out beyond it.");
+    }
+
+    /// <summary>
+    /// No gated canary reads exhaustion as incompleteness, because none of them can test themselves.
+    /// </summary>
+    /// <remarks>
+    /// Structural, and the reason is the finding that produced it. The Code Civil canary is
+    /// environment-gated, so the false completeness check it carried ran in no suite and was caught
+    /// only by a reviewer reasoning about the boundary. The test above pins what is TRUE about
+    /// exhaustion; this pins that the gated files do not restate what was false, which is the half
+    /// the offline suite can actually enforce for code it never executes.
+    /// </remarks>
+    [TestMethod]
+    public void NoGatedCanaryTreatsExhaustionAsAnIncompleteRun()
+    {
+        foreach (var file in new[]
+                 {
+                     "LuxembourgCodeCivilAcquisitionCanary.cs",
+                     "LuxembourgLiveAdapterCanary.cs",
+                     "LuxembourgLiveEnumerationCanary.cs",
+                 })
+        {
+            // Comments stripped first, then whitespace. Both are needed and each was learned the
+            // hard way in the same minute: the assertion this forbids shipped across two lines, so
+            // a one-line literal match misses it - and the comment explaining its removal quotes
+            // the call, so a check that reads comments fails on the very file it just repaired.
+            var source = string.Concat(
+                File.ReadAllLines(Path.Combine(HarnessDirectory(), file))
+                    .Where(static line => !line.TrimStart().StartsWith("//", StringComparison.Ordinal))
+                    .SelectMany(static line => line)
+                    .Where(static character => !char.IsWhiteSpace(character)));
+            Assert.IsFalse(
+                source.Contains("IsFalse(budget.Exhausted", StringComparison.Ordinal),
+                $"{file} reads Exhausted as incompleteness. Exhausted means Spent >= Limit, and a "
+                + "complete run against an exact worst-case ceiling ends exhausted - see "
+                + nameof(ADocumentSucceedingOnItsLastReservationIsStillComplete) + ".");
+        }
+    }
+
+    private static string HarnessDirectory()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "Lex.V3.slnx")))
+        {
+            directory = directory.Parent;
+        }
+
+        var root = directory?.FullName
+            ?? throw new InvalidOperationException("Checkout root not found.");
+        return Path.Combine(root, "tests", "Lex.V3.Ingest.Tests");
+    }
+
     private static async Task<LuxembourgDocumentGetAttemptResult> SendAsync(
         LuxembourgRepeatedEnumerationExecutor executor,
         LuxembourgDocumentFetchAddress address,
@@ -958,7 +1062,21 @@ public sealed class LuxembourgDocumentGetTests
             $"urn:uuid:{Guid.NewGuid():D}",
             LuxembourgAcquisitionTestFixture.DocumentFetchRendererSource(3001));
         return await executor.RunDocumentGetAsync(
-            bound.Request, cancellationToken);
+            bound.Request, LuxembourgAcquisitionTestFixture.TestWireBudget(), cancellationToken);
+    }
+
+    /// <summary>The same door with a caller-chosen ceiling, for the tests that are about the ceiling.</summary>
+    private static async Task<LuxembourgDocumentGetAttemptResult> SendAsync(
+        LuxembourgRepeatedEnumerationExecutor executor,
+        LuxembourgDocumentFetchAddress address,
+        WireRequestBudget budget,
+        CancellationToken cancellationToken)
+    {
+        var bound = new LuxembourgDocumentFetchPlan(address).Bind(
+            $"urn:uuid:{Guid.NewGuid():D}",
+            $"urn:uuid:{Guid.NewGuid():D}",
+            LuxembourgAcquisitionTestFixture.DocumentFetchRendererSource(3001));
+        return await executor.RunDocumentGetAsync(bound.Request, budget, cancellationToken);
     }
 
     private static Task<(
@@ -1005,6 +1123,7 @@ public sealed class LuxembourgDocumentGetTests
             verified.Manifest,
             new Dictionary<SourceObjectRef, LuxembourgDocumentFetchAddress> { [ObjectRef()] = address },
             LuxembourgAcquisitionTestFixture.DocumentFetchRendererSource(3201),
+            LuxembourgAcquisitionTestFixture.TestWireBudget(),
             CancellationToken.None);
         return (
             outcomes ?? new Dictionary<int, CorpusAcquisitionOutcome>(),

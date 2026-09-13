@@ -607,6 +607,8 @@ public sealed class RepeatedEnumerationDeliveryProofTests
         private readonly RepeatedEnumerationTerminalPagePolicy _terminalPagePolicy;
         private readonly OfficialMachineQuerySourceProfileId? _sourceProfileId;
         private readonly int _runIdentitySeed;
+        private readonly IReadOnlyList<string> _projectionVariables;
+        private readonly IReadOnlyList<string> _canonicalKeyVariables;
         private List<RepeatedEnumerationPageRef>? _passToMutate;
         private readonly SourceRegistryMemberRef _countFamily = new(Artifact(905), "count-query");
         private readonly SourceRegistryMemberRef _pageFamily = new(Artifact(905), "page-query");
@@ -656,8 +658,16 @@ public sealed class RepeatedEnumerationDeliveryProofTests
             // that differ in exactly one respect (their run), which one comparison alone cannot do:
             // Core's own RequireSameRun refuses a single comparison spanning two runs before it is
             // ever returned.
-            int runIdentitySeed = 930)
+            int runIdentitySeed = 930,
+            // The projected shape. Defaulted to this file's own three-variable delivery so every
+            // existing caller is untouched; overridden by callers that must mint a delivery under a
+            // different family's projection (the language-scoped expression decode does). Only the
+            // shape is borrowed - nothing here claims to be a publisher's real query family.
+            IReadOnlyList<string>? projectionVariables = null,
+            IReadOnlyList<string>? canonicalKeyVariables = null)
         {
+            _projectionVariables = projectionVariables ?? ["id", "cursor", "value"];
+            _canonicalKeyVariables = canonicalKeyVariables ?? ["id"];
             _badRequestRef = badRequestRef;
             _mutatePayload = mutatePayload;
             _mutation = mutation;
@@ -733,6 +743,93 @@ public sealed class RepeatedEnumerationDeliveryProofTests
             return EnumerationDeliveryComparison.Create(
                 profile, RepeatedEnumerationInterpretationProfileIdentity.Create(Artifact(920).ResourceId, profile), countA, new([new(0, pageA1), new(1, pageA2)]),
                 countB, new([new(0, pageB1), new(1, pageB2)]), this);
+        }
+
+        /// <summary>
+        /// A delivery over caller-built page bodies, paged at a different row limit in each pass, for
+        /// callers whose projection is not this file's own three-variable shape.
+        /// </summary>
+        /// <remarks>
+        /// Each pass splits the same ordered rows at its own limit and chains its pages exactly as
+        /// <c>VerifyPages</c> requires under this fixture's terminal-page policy: every page after the
+        /// first names the previous page's last row as its continuation cursor, and the pass ends on a
+        /// short page (<c>ShortPageTerminal</c>) or on an empty page (<c>EmptySuccessorAfterShortPage</c>).
+        /// Seeds are chosen so no two observations can share a seed-derived reference: <c>Add</c> derives
+        /// references at fixed offsets of 100 to 170 from its seed, so seeds must never differ by a
+        /// multiple of ten below a hundred. Counts keep seeds 1 and 3, pass A pages start at 501 and pass
+        /// B pages at 701, and a pass is capped at nine pages.
+        /// </remarks>
+        /// <param name="totalRows">The number of rows both passes deliver.</param>
+        /// <param name="rowLimitA">Pass A's row limit.</param>
+        /// <param name="rowLimitB">Pass B's row limit; must differ from pass A's.</param>
+        /// <param name="pageBody">Maps a first row index and a row count to that page's SPARQL Results JSON.</param>
+        /// <param name="cursorOf">Maps a row index to the cursor literal <paramref name="pageBody"/> gave that row.</param>
+        public EnumerationDeliveryComparison CreatePagedRaw(
+            int totalRows,
+            int rowLimitA,
+            int rowLimitB,
+            Func<int, int, string> pageBody,
+            Func<int, string> cursorOf)
+        {
+            ArgumentNullException.ThrowIfNull(pageBody);
+            ArgumentNullException.ThrowIfNull(cursorOf);
+            if (rowLimitA == rowLimitB)
+            {
+                throw new ArgumentException("The two passes must page at different row limits.");
+            }
+
+            var clock = 0;
+            DateTimeOffset NextTime() => DateTimeOffset.UnixEpoch.AddSeconds(clock++);
+
+            (RepeatedEnumerationEvidenceRefs Count, List<RepeatedEnumerationPageRef> Pages) Pass(
+                int countSeed, int countArtifact, int firstPageSeed, int rowLimit, long passId)
+            {
+                var count = Add(
+                    countSeed, CountJson(totalRows), totalRows, Artifact(countArtifact), NextTime(), true,
+                    passId: passId);
+                var pages = new List<RepeatedEnumerationPageRef>();
+                var first = 0;
+                while (true)
+                {
+                    if (pages.Count == 9)
+                    {
+                        throw new ArgumentException("At most nine pages per pass keep the seeds collision-free.");
+                    }
+
+                    var take = Math.Min(rowLimit, totalRows - first);
+                    pages.Add(new(
+                        pages.Count,
+                        Add(
+                            firstPageSeed + pages.Count,
+                            pageBody(first, take),
+                            totalRows,
+                            count.HttpEvidenceRef,
+                            NextTime(),
+                            false,
+                            first == 0 ? "start" : cursorOf(first - 1),
+                            rowLimit,
+                            passId)));
+                    first += take;
+                    if (_terminalPagePolicy == RepeatedEnumerationTerminalPagePolicy.ShortPageTerminal
+                        ? take < rowLimit
+                        : take == 0)
+                    {
+                        return (count, pages);
+                    }
+                }
+            }
+
+            var passA = Pass(1, 301, 501, rowLimitA, 1);
+            var passB = Pass(3, 303, 701, rowLimitB, 2);
+            var profile = Profile();
+            return EnumerationDeliveryComparison.Create(
+                profile,
+                RepeatedEnumerationInterpretationProfileIdentity.Create(Artifact(920).ResourceId, profile),
+                passA.Count,
+                new(passA.Pages),
+                passB.Count,
+                new(passB.Pages),
+                this);
         }
 
         public EnumerationDeliveryComparison CreateShortThenEmpty(bool pageAfterEmpty = false)
@@ -1116,7 +1213,7 @@ public sealed class RepeatedEnumerationDeliveryProofTests
         }
 
         private RepeatedEnumerationInterpretationProfile Profile() => new(
-            RepeatedEnumerationInterpretationProfile.SchemaId, _dialect, "application/sparql-results+json", EnumerationCursorEnvelope.Identity, _maximumDeliverableRows, "enumeration-row-threshold/1", _countFamily, _pageFamily, "count", ["id", "cursor", "value"], ["id"], ["cursor"], ["scope"], "pass_id", ["cursor"], "has_cursor", _terminalPagePolicy);
+            RepeatedEnumerationInterpretationProfile.SchemaId, _dialect, "application/sparql-results+json", EnumerationCursorEnvelope.Identity, _maximumDeliverableRows, "enumeration-row-threshold/1", _countFamily, _pageFamily, "count", _projectionVariables, _canonicalKeyVariables, ["cursor"], ["scope"], "pass_id", ["cursor"], "has_cursor", _terminalPagePolicy);
 
         private OfficialMachineQuerySourceProfile SourceProfile() =>
             OfficialMachineQuerySourceProfiles.Resolve(

@@ -175,14 +175,47 @@ public sealed class LuxembourgCodeCivilAcquisitionCanary
 
         var (manifest, manifestRef) = BuildAcceptedBodyManifest(objectRefs);
 
+        // DERIVED, NOT DISPOSITIONED, AND THE DIFFERENCE IS WHY. WireRequestBudget's own remarks
+        // warn that a number computed outside the executor is a prediction, because an enumeration
+        // keeps paging on the publisher's own row count after the plan was drawn. Nothing here
+        // pages: the manifest is fixed before the first request, every row is one document GET, and
+        // the source profile allows AttemptsPerDocument attempts for it including its robots fetch.
+        // So this is the run's exact worst case over its own declared inputs, not a projection of a
+        // figure the publisher has yet to state — and a ceiling that tracks the manifest cannot go
+        // stale when the manifest changes, which a pinned number would.
+        const int AttemptsPerDocument = 1 + 4;
+        var budget = WireRequestBudget.OfWireRequests(manifest.Rows.Count * AttemptsPerDocument);
+
         var (outcomes, refusal) = await adapter.RunDocumentAcquisitionAsync(
             manifest,
             addresses,
             LuxembourgAcquisitionTestFixture.DocumentFetchRendererSource(9101),
+            budget,
             CancellationToken.None);
 
         Assert.IsNull(refusal, $"whole-run refusal: {refusal?.Code} {refusal?.Detail}");
         Assert.IsNotNull(outcomes);
+
+        // The ceiling is REPORTED, and deliberately not asserted on.
+        //
+        // An earlier head asserted IsFalse(budget.Exhausted) here, reasoning that a canary which ran
+        // out of requests and one that finished look alike in the accepted fraction below. The
+        // reasoning was right and the test for it was wrong: Exhausted means only Spent >= Limit,
+        // and this ceiling is the run's EXACT worst case, so a COMPLETE run whose final row needs
+        // its fourth attempt spends the last reservation and ends exhausted. The review reproduced
+        // that boundary with one manifest row, robots plus three 503s plus a fourth-attempt 200:
+        // five sends, body retained, no refusal, budget exhausted. The assertion would have failed a
+        // complete measurement, which is the opposite of what it was for.
+        //
+        // What actually separates the two is already above: a ceiling that stops a fetch refuses the
+        // whole run (LuxembourgQueryExecutionRefusal.DocumentFetchSessionNotStarted), because a
+        // WireBudgetExhausted document GET is not mapped to a per-row outcome the way a robots
+        // denial is. So Assert.IsNull(refusal) is the completeness check, and it was the whole time.
+        // The boundary itself is pinned offline by
+        // LuxembourgDocumentGetTests.ADocumentSucceedingOnItsLastReservationIsStillComplete.
+        Console.WriteLine(
+            $"CANARY wire requests: {budget.Spent} of {budget.Limit} "
+            + $"({manifest.Rows.Count} rows x {AttemptsPerDocument})");
 
         // THE ACCEPTED FRACTION, AS A NUMBER.
         var held = outcomes!.Count(pair => pair.Value.Receipt is not null);

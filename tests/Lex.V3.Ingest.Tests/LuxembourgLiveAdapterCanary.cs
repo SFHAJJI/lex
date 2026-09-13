@@ -24,6 +24,17 @@ public sealed class LuxembourgLiveAdapterCanary
     private const string CivilOriginal = "http://data.legilux.public.lu/eli/etat/leg/loi/1804/03/21/n1/jo";
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
 
+    /// <summary>The whole-canary charged-request ceiling. Null until the owner dispositions one.</summary>
+    /// <remarks>
+    /// THE LARGEST ASK IN THIS FILE IS AN UNBOUNDED ONE. Three of the four vocabulary partitions
+    /// are opened over <c>Range(..., "", "\uffff")</c> — the whole class, not a range — so their
+    /// page counts are whatever the publisher holds, and no arithmetic here can bound them. The
+    /// adapter run that follows then enumerates every declared family again and fetches a document
+    /// per admitted object. A number for this canary is a decision about how much traffic one
+    /// acceptance run may cost, which is the owner's to make and not this file's to assume.
+    /// </remarks>
+    private static readonly int? SharedWireCeiling = null;
+
     [TestMethod]
     public async Task AnActRunsThroughThePublicAdapterWithObservedVocabularyAndSameRunRights()
     {
@@ -44,6 +55,19 @@ public sealed class LuxembourgLiveAdapterCanary
 
     private static async Task RunCanaryAsync(bool plainXml)
     {
+        // FAIL CLOSED ON A MISSING CEILING, before a range, a store or an executor is built.
+        if (SharedWireCeiling is not { } ceiling)
+        {
+            Assert.Inconclusive(
+                "The whole-canary wire ceiling has not been dispositioned. This harness will not "
+                + "choose one: set SharedWireCeiling before running it.");
+            return;
+        }
+
+        // ONE INSTANCE FOR THE WHOLE CANARY: the four vocabulary partitions and the adapter run
+        // that follows them all charge it, so the number bounds the run and not each of its legs.
+        var budget = WireRequestBudget.OfWireRequests(ceiling);
+
         var declaredRanges = plainXml
             ? new[] { (Name: "civil-state", Start: CivilState, End: "http://data.legilux.public.lu/eli/etat/leg/code/civil/20251227"),
                 (Name: "civil-original", Start: CivilOriginal, End: CivilOriginal + "!") }
@@ -99,7 +123,8 @@ public sealed class LuxembourgLiveAdapterCanary
                     : Range("vocabulary-" + family.ToLowerInvariant(), "", "\uffff");
                 var request = new LuxembourgPartitionRunRequest(plan, planId, family, range, queryRenderer);
                 var witness = plan.BindCount(planId, NewUrn(), NewUrn(), family, LuxembourgQueryPass.Pass1, range, queryRenderer);
-                var outcome = await executor.RunPartitionAsync(request, witness.Request, CancellationToken.None);
+                var outcome = await executor.RunPartitionAsync(
+                    request, witness.Request, budget, CancellationToken.None);
                 measured.Add(new { family, outcome.ProductRequestCount, outcome.Refusal, outcome.Receipt?.Delivery,
                     retention = outcome.Receipt?.RetainedFloor.ToString() });
                 Assert.IsNotNull(outcome.Receipt, $"Vocabulary {family} refused: {JsonSerializer.Serialize(outcome.Refusal)}");
@@ -152,9 +177,9 @@ public sealed class LuxembourgLiveAdapterCanary
             var result = plainXml
                 ? await adapter.RunScopedAsync(families, declaredRanges.Select(range =>
                     new LuxembourgScopePartitionFamilies(range.Name + "-s", range.Name + "-a", range.Name + "-g")).ToArray(),
-                    documentRenderer, CancellationToken.None)
+                    documentRenderer, budget, CancellationToken.None)
                 : await adapter.RunAsync(families, "act-2017-g", "act-2017-s", "act-2017-a",
-                    documentRenderer, CancellationToken.None);
+                    documentRenderer, budget, CancellationToken.None);
             finalResult = new { result.Refusal, result.Completion, result.FamilyOutcomes,
                 result.ResourceObservationSubjects, result.ResourceObservationExclusions,
                 result.ScopeManifestReceipt, result.ScopeManifestCanonicalSha256, result.CorpusRecordSetRef,

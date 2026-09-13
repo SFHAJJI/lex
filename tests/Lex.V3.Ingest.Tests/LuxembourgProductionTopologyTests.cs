@@ -108,6 +108,7 @@ public sealed class LuxembourgProductionTopologyTests
         var result = await adapter.RunAsync(
             [(censusRequest, censusWitness, null), (assertionRequest, assertionWitness, null)],
             null, "census", "assertions", LuxembourgAcquisitionTestFixture.DocumentFetchRendererSource(420),
+            LuxembourgAcquisitionTestFixture.TestWireBudget(),
             CancellationToken.None);
 
         Assert.IsNull(result.Refusal, $"{result.Refusal?.Code}: {result.Refusal?.Detail}; families: " +
@@ -315,7 +316,7 @@ public sealed class LuxembourgProductionTopologyTests
         var (assertionRequest, assertionWitness) = Partition("A", "assertions");
         var result = await adapter.RunAsync(
             [(censusRequest, censusWitness, null), (assertionRequest, assertionWitness, null)],
-            null, "census", "assertions", LuxembourgAcquisitionTestFixture.DocumentFetchRendererSource(421), CancellationToken.None);
+            null, "census", "assertions", LuxembourgAcquisitionTestFixture.DocumentFetchRendererSource(421), LuxembourgAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
         Assert.IsNull(result.Refusal, JsonSerializer.Serialize(result.Refusal));
         Assert.AreEqual(LuxembourgQueryExecutionCompletion.AllFamiliesProven, result.Completion);
         Assert.IsNotNull(result.CorpusRecordSet);

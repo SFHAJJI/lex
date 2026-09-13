@@ -169,11 +169,24 @@ public sealed class AbsenceConstructionSurfaceTests
         CollectionAssert.AreEqual(
             new[]
             {
+                "by-ref-method public instance "
+                    + "Lex.V3.Contracts.Source.Europe.EuProofBoundDelivery::Deconstruct(out "
+                    + "Lex.V3.Contracts.Source.Absence.AbsenceFamilyEnumerationProof&, "
+                    + "out Lex.V3.Contracts.Source.Core.EnumerationDeliveryComparison&, "
+                    + "out Lex.V3.Contracts.Source.Core.RepeatedEnumerationInterpretationProfile&, "
+                    + "out Lex.V3.Contracts.Source.Core.SourceArtifactRef&, "
+                    + "out Lex.V3.Contracts.Source.Core.SourceArtifactRef&, "
+                    + "out "
+                    + "System.Collections.Generic.IReadOnlyList<Lex.V3.Contracts.Source.Core.Repeat"
+                    + "edEnumerationResolvedEvidence>&) -> System.Void",
                 "field private instance "
                     + "Lex.V3.Contracts.Source.Absence.AbsenceCut::<EnumerationProofs>k__BackingFie"
                     + "ld -> "
                     + "System.Collections.Generic.IReadOnlyList<Lex.V3.Contracts.Source.Absence.Abs"
                     + "enceFamilyEnumerationProof>",
+                "field private instance "
+                    + "Lex.V3.Contracts.Source.Europe.EuProofBoundDelivery::<Proof>k__BackingField "
+                    + "-> Lex.V3.Contracts.Source.Absence.AbsenceFamilyEnumerationProof",
                 "field private instance "
                     + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgActClassManifest::<EnumerationP"
                     + "roof>k__BackingField -> "
@@ -209,6 +222,9 @@ public sealed class AbsenceConstructionSurfaceTests
                     + "Lex.V3.Contracts.Source.Absence.AbsenceCut::EnumerationProofs() -> "
                     + "System.Collections.Generic.IReadOnlyList<Lex.V3.Contracts.Source.Absence.Abs"
                     + "enceFamilyEnumerationProof>",
+                "property public instance "
+                    + "Lex.V3.Contracts.Source.Europe.EuProofBoundDelivery::Proof() -> "
+                    + "Lex.V3.Contracts.Source.Absence.AbsenceFamilyEnumerationProof",
                 "property public instance "
                     + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgActClassManifest::EnumerationPr"
                     + "oof() -> Lex.V3.Contracts.Source.Absence.AbsenceFamilyEnumerationProof",
@@ -282,20 +298,28 @@ public sealed class AbsenceConstructionSurfaceTests
         CollectionAssert.AreEqual(
             new[]
             {
-                // Both are the publisher-neutral delivery receipt (queue item 19: moved and
-                // renamed from Lex.V3.Contracts.Source.Luxembourg.LuxembourgEnumerationDeliveryReceipt)
-                // holding the comparison it was minted from. None of them is a second way to OBTAIN
-                // one: the receipt's only door takes a comparison as a parameter, so nothing here
-                // can exist without EnumerationDeliveryComparison.Create having already run above.
-                // Delivery hands it back asserting nothing. There were three: a RequireFlooredRun
-                // accessor handed the same object back only when every custody member was floored,
-                // and RULING
-                // lex-event-20260904T215906714Z-6dadaf27829d4a3aa3c355063754ccd6 took its last caller
-                // away. It was removed rather than left unreferenced, so this pin is down to two.
-                "field private instance " + Core + "RepeatedEnumerationDeliveryReceipt"
-                + "::<Delivery>k__BackingField -> " + Core + "EnumerationDeliveryComparison",
-                "property public instance " + Core + "RepeatedEnumerationDeliveryReceipt"
-                + "::Delivery() -> " + Core + "EnumerationDeliveryComparison",
+                "by-ref-method public instance "
+                    + "Lex.V3.Contracts.Source.Europe.EuProofBoundDelivery::Deconstruct(out "
+                    + "Lex.V3.Contracts.Source.Absence.AbsenceFamilyEnumerationProof&, "
+                    + "out Lex.V3.Contracts.Source.Core.EnumerationDeliveryComparison&, "
+                    + "out Lex.V3.Contracts.Source.Core.RepeatedEnumerationInterpretationProfile&, "
+                    + "out Lex.V3.Contracts.Source.Core.SourceArtifactRef&, "
+                    + "out Lex.V3.Contracts.Source.Core.SourceArtifactRef&, "
+                    + "out "
+                    + "System.Collections.Generic.IReadOnlyList<Lex.V3.Contracts.Source.Core.Repeat"
+                    + "edEnumerationResolvedEvidence>&) -> System.Void",
+                "field private instance "
+                    + "Lex.V3.Contracts.Source.Core.RepeatedEnumerationDeliveryReceipt::<Delivery>k"
+                    + "__BackingField -> Lex.V3.Contracts.Source.Core.EnumerationDeliveryComparison",
+                "field private instance "
+                    + "Lex.V3.Contracts.Source.Europe.EuProofBoundDelivery::<Comparison>k__BackingF"
+                    + "ield -> Lex.V3.Contracts.Source.Core.EnumerationDeliveryComparison",
+                "property public instance "
+                    + "Lex.V3.Contracts.Source.Core.RepeatedEnumerationDeliveryReceipt::Delivery() "
+                    + "-> Lex.V3.Contracts.Source.Core.EnumerationDeliveryComparison",
+                "property public instance "
+                    + "Lex.V3.Contracts.Source.Europe.EuProofBoundDelivery::Comparison() -> "
+                    + "Lex.V3.Contracts.Source.Core.EnumerationDeliveryComparison",
             },
             ConstructionSurface.ProducersIn(
                 typeof(AbsenceCut).Assembly, typeof(EnumerationDeliveryComparison), true).ToArray(),

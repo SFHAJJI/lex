@@ -98,13 +98,15 @@ public sealed class DurableBlobReceiptFamilySurfaceTests
         // receipt's own policy evidence proves, so it is a plain field-and-property holder, never a
         // positional record (it declares no primary constructor for the compiler to generate a
         // Deconstruct from), which is why only two new lines appear here rather than three.
-        // LanguageScopedExpression (Lex.V3.Contracts.Derivation, E9 first slice) joined with the
-        // language-scoped expression contract: it binds each admitted expression to the exact
-        // retained transport bytes it was derived from, so it holds the write receipt rather than
-        // a caller-supplied digest - which is the point of the binding, and the reason this pin
-        // fires for it. Two new lines, not three: it declares no primary constructor, so there is
-        // no compiler-generated Deconstruct, and its receipt is non-nullable because an expression
-        // with no retained bytes is refused at construction rather than admitted with an absent one.
+        // LanguageScopedExpressionLineageEntry (Lex.V3.Contracts.Derivation) holds the receipt.
+        // The E9 first slice put it on LanguageScopedExpression itself, one receipt per expression.
+        // That was wrong twice over and the review of #583 is what found it: an expression is
+        // decoded from a delivery that may span several retained bodies, and a dated one is decoded
+        // from two query families with separate bodies, so one receipt could not name what it came
+        // from. The receipt now sits on one entry of a complete lineage, and the expression holds
+        // the lineage. Still two lines, not three: this record's receipt is non-nullable, and its
+        // own Deconstruct returns a contribution role beside the receipt rather than a receipt
+        // alone, so it is not a hand-out path for one.
         CollectionAssert.AreEqual(
             new[]
             {
@@ -120,7 +122,8 @@ public sealed class DurableBlobReceiptFamilySurfaceTests
                 + "out System.ReadOnlyMemory<System.Byte>&) -> System.Void",
                 "field private instance " + Custody + "CustodiedDecode<T>::<Receipt>k__BackingField -> " + Receipt,
                 "field private instance " + Derivation
-                    + "LanguageScopedExpression::<RetainedTransportBytes>k__BackingField -> " + Receipt,
+                    + "LanguageScopedExpressionLineageEntry::<RetainedTransportBytes>k__BackingField -> "
+                    + Receipt,
                 "field private instance " + Core + "RepeatedEnumerationObservedTransport::<DurableWriteReceipt>k__BackingField -> " + Receipt,
                 "field private instance " + Core + "RepeatedEnumerationResolvedEvidence::<DurableWriteReceipt>k__BackingField -> " + Receipt,
                 "field private instance " + Corpus + "CorpusBodyRecord::<Receipt>k__BackingField -> " + Receipt + "?",
@@ -128,7 +131,7 @@ public sealed class DurableBlobReceiptFamilySurfaceTests
                 + Custody + "CustodyClass, System.Threading.CancellationToken) -> System.Threading.Tasks.Task<" + Receipt + ">",
                 "property public instance " + Custody + "CustodiedDecode<T>::Receipt() -> " + Receipt,
                 "property public instance " + Derivation
-                    + "LanguageScopedExpression::RetainedTransportBytes() -> " + Receipt,
+                    + "LanguageScopedExpressionLineageEntry::RetainedTransportBytes() -> " + Receipt,
                 "property public instance " + Core + "RepeatedEnumerationObservedTransport::DurableWriteReceipt() -> " + Receipt,
                 "property public instance " + Core + "RepeatedEnumerationResolvedEvidence::DurableWriteReceipt() -> " + Receipt,
                 "property public instance " + Corpus + "CorpusBodyRecord::Receipt() -> " + Receipt + "?",
