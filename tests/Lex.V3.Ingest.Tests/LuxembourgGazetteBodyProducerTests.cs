@@ -89,6 +89,29 @@ public sealed class LuxembourgGazetteBodyProducerTests
             "ordinal: .../de/pdfa| before .../de/pdf|.");
     }
 
+    /// <summary>
+    /// The lens's note: a first head named only the first kind of offender. One refusal now names
+    /// both kinds - the graver kind is the refusal, the detail carries both lists.
+    /// </summary>
+    [TestMethod]
+    public async Task AStrayAndADoubledAcquisitionInOneCallAreBothNamed()
+    {
+        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
+        var join = JoinAgreedCcBy(ActLoi1, Candidate(ActLoi1, "fr", "pdf"));
+        var listing = Listing(join, FormatPdf);
+        var (first, _) = await HeldAcquisitionAsync(store, listing, "first");
+        var (second, _) = await HeldAcquisitionAsync(store, listing, "second");
+        var other = JoinAgreedCcBy(ActLoi1, Candidate(ActLoi1, "de", "pdf"), Candidate(ActLoi1, "fr", "pdf"));
+        var (stray, _) = await HeldAcquisitionAsync(store, other.Candidates.Single(c => c.WemiCandidate.LanguageIri == LanguageDeu), "stray");
+
+        var result = await new LuxembourgGazetteBodyProducer(store).RunAsync(join, [second, stray, first], CancellationToken.None);
+
+        Assert.AreEqual(LuxembourgGazetteBodyProductionRefusal.AcquisitionForUnlistedBody, result.Refusal, "the graver kind is the refusal.");
+        StringAssert.Contains(result.Detail, stray.ManifestationIri, "the stray is named.");
+        StringAssert.Contains(result.Detail, "two acquisitions name one listing", "and so is the double, in the same detail.");
+        StringAssert.Contains(result.Detail, listing.WemiCandidate.ManifestationIri);
+    }
+
     [TestMethod]
     public async Task TwoAcquisitionsForOneListingRefuse()
     {
@@ -211,6 +234,9 @@ public sealed class LuxembourgGazetteBodyProducerTests
         Assert.ThrowsExactly<ArgumentNullException>(() => new LuxembourgGazetteBodyAcquisition(
             acquisition.ManifestationIri, acquisition.ItemIri, acquisition.OfficialAddress, acquisition.OfficialRequest,
             acquisition.TerminalRequest, acquisition.SourceEvidence, null!));
+        // A null ELEMENT inside a non-null list, which the lens noted no test pinned.
+        await Assert.ThrowsExactlyAsync<ArgumentNullException>(
+            () => producer.RunAsync(join, [acquisition, null!], CancellationToken.None));
     }
 
     // ---- fixtures (the 6a recipes, with receipts minted by the custody store under test) ----

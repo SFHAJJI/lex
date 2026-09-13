@@ -123,8 +123,9 @@ public sealed class LuxembourgGazetteBodyProductionResult
 /// EVERY LISTING GETS ITS OUTCOME; EVERY ACQUISITION MUST BE ONE OF THEM. A listing without an
 /// acquisition is typed by the disposition (not retained, rejected, or a structural gap). An
 /// acquisition naming a body the join does not list as a Gazette PDF, or a second one for one
-/// listing, refuses the whole act - naming every offender in ordinal order - because a set of
-/// bodies with a stray or doubled body in it is not this act's set.
+/// listing, refuses the whole act - one refusal, the graver kind when both occur, its detail naming
+/// every offender of both kinds in ordinal order - because a set of bodies with a stray or doubled
+/// body in it is not this act's set.
 /// </para>
 /// <para>
 /// THE BYTES ARE IN CUSTODY BEFORE THE CLAIM IS MINTED. Each acquisition's receipt is read back
@@ -184,18 +185,23 @@ public sealed class LuxembourgGazetteBodyProducer
             }
         }
 
-        if (unlisted.Count > 0)
+        // ONE REFUSAL, EVERY OFFENDER OF BOTH KINDS. The refusal is the graver kind when both occur
+        // (a body outside this act's join outranks a doubled one), but the detail names both lists:
+        // the lens showed a first head naming only the first kind, so a caller fixing the strays
+        // would have met the doubles on the next run rather than in this one.
+        if (unlisted.Count > 0 || twice.Count > 0)
         {
+            var strays = unlisted.Count > 0
+                ? $"acquisitions name bodies {join.RootIri} does not list as Gazette PDFs: " + string.Join("; ", unlisted)
+                : null;
+            var doubles = twice.Count > 0
+                ? "two acquisitions name one listing: " + string.Join("; ", twice)
+                : null;
             return LuxembourgGazetteBodyProductionResult.Refused(
-                LuxembourgGazetteBodyProductionRefusal.AcquisitionForUnlistedBody,
-                $"Acquisitions name bodies {join.RootIri} does not list as Gazette PDFs: " + string.Join("; ", unlisted));
-        }
-
-        if (twice.Count > 0)
-        {
-            return LuxembourgGazetteBodyProductionResult.Refused(
-                LuxembourgGazetteBodyProductionRefusal.AcquisitionDeliveredTwice,
-                "Two acquisitions name one listing: " + string.Join("; ", twice));
+                unlisted.Count > 0
+                    ? LuxembourgGazetteBodyProductionRefusal.AcquisitionForUnlistedBody
+                    : LuxembourgGazetteBodyProductionRefusal.AcquisitionDeliveredTwice,
+                string.Join(" | ", new[] { strays, doubles }.Where(static part => part is not null)));
         }
 
         var dispositions = new List<LuxembourgGazetteBodyDisposition>(listings.Count);
