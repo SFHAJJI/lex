@@ -134,13 +134,14 @@ public sealed record LuxembourgActClassRef
 /// else, is a contradiction inside one argument list and refuses here.
 /// </para>
 /// <para>
-/// WHAT THIS DOES NOT ESTABLISH, AND WHY THE MEMBER NAMES WERE CHANGED RATHER THAN ANNOTATED: that
-/// the supplied proof enumerated THIS act. A proof carries <c>FamilyKey</c> - a caller-chosen
-/// partition key - and no partition bounds, so nothing in this build can tie an enumeration's scope
-/// to an act identity, and a zero-row proof of an unrelated family satisfies every check above. An
-/// earlier head said exactly this in remarks while the members still read
-/// "enumerated and never consolidated", which is an act-specific legal claim. A limitation written
-/// beside a claim does not retract the claim; the names had to stop making it.
+/// AND THE PROOF IS BOUND TO THIS ACT, since #419 slice 3. For the two cited-enumeration members the
+/// proof's <c>FamilyKey</c> must equal
+/// <see cref="LuxembourgConsolidationByActDiscoveryPlan.PartitionKeyFor"/> of this entry's act, which
+/// slices 1-2 made a pure function of the one admitted act spelling. A zero-row proof of an unrelated
+/// family - the exact #584 defect - no longer satisfies the checks here: its family key is not this
+/// act's key and it refuses. An earlier head recorded, in this same place, that the build COULD not
+/// make this binding; it can now, so the member names carry their act-specific meaning honestly
+/// rather than being softened to avoid a claim the evidence could not support.
 /// </para>
 /// </remarks>
 public sealed record LuxembourgNeverConsolidatedEntry
@@ -188,6 +189,52 @@ public sealed record LuxembourgNeverConsolidatedEntry
                     deliveredNone
                         ? "This member says the cited enumeration delivered no rows; its proof delivered rows."
                         : "This member says the cited enumeration delivered rows; its proof delivered none.",
+                    nameof(enumerationCompletionProof));
+            }
+
+            // AND THE PROOF MUST BE THIS ACT'S OWN ENUMERATION. Until #419 slices 1-2 there was no way
+            // to tie a proof's scope to an act: AbsenceFamilyEnumerationProof carries a caller-chosen
+            // FamilyKey and no partition bounds, so a zero-row proof of an unrelated family satisfied
+            // every check above - the #584 defect this whole frame exists to close. Slice 1 made the
+            // per-act family key a pure function of the act (PartitionKeyFor digests the one admitted
+            // act spelling), and slice 2 carried the exact proof out of the decoder, so the key the
+            // proof was minted under can now be recomputed from the act and required to match.
+            //
+            // A cited enumeration therefore requires the act in that one admitted spelling: an act
+            // PartitionKeyFor cannot key is not one this per-act family enumerated, and a proof whose
+            // family key is any other key - another act's, the generic laws inventory's, a batch's -
+            // is a proof of another enumeration and refuses. This is the check that turns
+            // "never consolidated" from a claim beside a proof into a claim the proof is bound to.
+            string expectedFamilyKey;
+            try
+            {
+                expectedFamilyKey =
+                    LuxembourgConsolidationByActDiscoveryPlan.PartitionKeyFor(PublisherActIri);
+            }
+            catch (ArgumentException inner)
+            {
+                // FORWARD CONSTRAINT FOR THE SLICE 4-5 GLUE, stated where it fires: the act recorded
+                // here MUST be the exact string the enumeration was keyed under (the per-act plan's
+                // one admitted http spelling, i.e. LuxembourgConsolidationByActResult.Act), never an
+                // identity re-spelled by a WEMI or class-manifest decoder. This build's general act
+                // vocabulary (RequirePublisherUri, FactsCommon.EliMintedBy) admits an https spelling
+                // of the same real act; feeding that here for a cited enumeration refuses LOUDLY
+                // rather than silently mis-recording - a genuine enumeration would be forced to
+                // NoEnumerationCited, a false gap - so the glue must carry the enumerated spelling
+                // through, and this refusal is the tripwire if it does not.
+                throw new ArgumentException(
+                    "A cited enumeration requires the act in the per-act consolidation family's one "
+                    + "admitted spelling; this act is not one that family can be keyed under. Record "
+                    + "the exact act string the enumeration was keyed under, not a re-spelled identity.",
+                    nameof(publisherActIri),
+                    inner);
+            }
+
+            if (!string.Equals(proof.FamilyKey, expectedFamilyKey, StringComparison.Ordinal))
+            {
+                throw new ArgumentException(
+                    "The cited enumeration's family key is not this act's per-act consolidation key, "
+                    + "so the proof does not evidence an enumeration of this act.",
                     nameof(enumerationCompletionProof));
             }
         }
@@ -263,10 +310,10 @@ public enum LuxembourgNeverConsolidatedAdmitRefusal
 /// rediscover it: an exact LOI/RGD class enumeration and a per-act consolidation enumeration, with
 /// the members DECODED from the retained proof-bound rows instead of accepted alongside them - the
 /// shape <c>Lex.V3.Contracts.Source.Europe.EuLanguageScopedExpressionDecode</c> already uses on the
-/// EU side. That also needs something this build does not have: a way for a proof to carry the scope
-/// it enumerated. <see cref="AbsenceFamilyEnumerationProof"/> exposes a caller-chosen
-/// <c>FamilyKey</c> and no partition bounds, so today an enumeration's scope cannot be tied to an act
-/// identity at all.
+/// EU side. The proof-to-act binding that needed exists as of slice 3: a cited enumeration's
+/// <c>FamilyKey</c> must be the per-act consolidation key for this entry's act, so an enumeration's
+/// scope is now tied to an act identity here. What remains for a full count is the class-manifest
+/// population and counting rules over many acts, which slices 4-5 build.
 /// </para>
 /// <para>
 /// APPEND-ONLY, AND ONE DISPOSITION PER ACT. Re-presenting an act with the same entry is idempotent;
