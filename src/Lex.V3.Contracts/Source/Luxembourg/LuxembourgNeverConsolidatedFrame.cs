@@ -60,9 +60,19 @@ public enum LuxembourgNeverConsolidatedCountRefusal
     [JsonStringEnumMemberName("enumeration_incomplete")]
     EnumerationIncomplete = 1,
 
-    /// <summary>The frame holds no act at all, so there is no population to report.</summary>
-    [JsonStringEnumMemberName("frame_empty")]
-    FrameEmpty = 2,
+    /// <summary>
+    /// At least one act in this frame's manifest has no disposition at all, so the sweep is
+    /// incomplete in a way no entry in the frame can show.
+    /// </summary>
+    /// <remarks>
+    /// This replaced <c>frame_empty</c>, which reported that the frame held nothing. That member
+    /// existed only because the frame had no manifest to be measured against: with one, a manifest
+    /// requires at least one member, so an empty frame is simply the case where every member is
+    /// undispositioned and this name says so more precisely. A refusal that could only ever fire
+    /// when there was nothing to compare against was not carrying its weight.
+    /// </remarks>
+    [JsonStringEnumMemberName("manifest_member_not_dispositioned")]
+    ManifestMemberNotDispositioned = 2,
 }
 
 /// <summary>
@@ -87,7 +97,14 @@ public sealed record LuxembourgActClassRef
 {
     public LuxembourgActClassRef(string publisherClassIri)
     {
-        PublisherClassIri = ContractValidation.RequireIdentifier(
+        // AN IRI, NOT AN IDENTIFIER. RequireIdentifier admits any bounded printable ASCII, so
+        // "LOI" and "act-1" passed it while the public contract above says this field carries the
+        // class IRI exactly as the publisher states it. Those are not near-misses; they are values
+        // the publisher never emits, and admitting them makes the verbatim-carriage promise
+        // unfalsifiable. RequirePublisherUri is the bound this repository already uses for every
+        // other publisher identity: an exact absolute HTTP(S) URI with no userinfo, query or
+        // fragment.
+        PublisherClassIri = SourceCoreValidation.RequirePublisherUri(
             publisherClassIri, nameof(publisherClassIri));
     }
 
@@ -112,7 +129,12 @@ public sealed record LuxembourgNeverConsolidatedEntry
         LuxembourgNeverConsolidatedDisposition disposition,
         SourceArtifactRef? enumerationCompletionEvidence)
     {
-        PublisherActIri = ContractValidation.RequireIdentifier(
+        // See LuxembourgActClassRef's own remark: this is a publisher IRI, and RequireIdentifier
+        // admitted values the publisher cannot emit. There is no narrower LU-specific canonical form
+        // to apply here - LuxembourgFileUri pins the Legilux DATA host for manifestation file URIs,
+        // which is a different axis from an act's ELI identity, and nothing in this build canonicalises
+        // act IRIs - so the exact absolute publisher URI is the honest bound rather than an invented one.
+        PublisherActIri = SourceCoreValidation.RequirePublisherUri(
             publisherActIri, nameof(publisherActIri));
         ActClass = actClass ?? throw new ArgumentNullException(nameof(actClass));
         Disposition = ContractValidation.RequireDefined(disposition, nameof(disposition));
@@ -148,6 +170,211 @@ public sealed record LuxembourgNeverConsolidatedEntry
     public SourceArtifactRef? EnumerationCompletionEvidence { get; }
 }
 
+/// <summary>Why a class manifest could not be built. Closed.</summary>
+public enum LuxembourgActClassManifestRefusal
+{
+    [JsonStringEnumMemberName("none")]
+    None = 0,
+
+    /// <summary>No class was admitted, so the manifest admits nothing and scopes nothing.</summary>
+    [JsonStringEnumMemberName("no_admitted_class")]
+    NoAdmittedClass = 1,
+
+    /// <summary>No member act, so there is no population for anything to be counted over.</summary>
+    [JsonStringEnumMemberName("no_member")]
+    NoMember = 2,
+
+    /// <summary>A member's class is not one this manifest admits, so the two contradict.</summary>
+    [JsonStringEnumMemberName("member_class_not_admitted")]
+    MemberClassNotAdmitted = 3,
+
+    /// <summary>One act appears twice, so the manifest states two classes for it.</summary>
+    [JsonStringEnumMemberName("duplicate_member")]
+    DuplicateMember = 4,
+
+    /// <summary>One class appears twice in the admitted set.</summary>
+    [JsonStringEnumMemberName("duplicate_admitted_class")]
+    DuplicateAdmittedClass = 5,
+}
+
+/// <summary>One act in the manifest, with the class the publisher gave it.</summary>
+public sealed record LuxembourgActClassManifestMember
+{
+    public LuxembourgActClassManifestMember(string publisherActIri, LuxembourgActClassRef actClass)
+    {
+        PublisherActIri = SourceCoreValidation.RequirePublisherUri(
+            publisherActIri, nameof(publisherActIri));
+        ActClass = actClass ?? throw new ArgumentNullException(nameof(actClass));
+    }
+
+    /// <summary>The act, as the publisher identifies it.</summary>
+    public string PublisherActIri { get; }
+
+    /// <summary>The publisher's class for this act, as the manifest's own enumeration found it.</summary>
+    public LuxembourgActClassRef ActClass { get; }
+}
+
+/// <summary>
+/// The maximum-scope class manifest: which classes are in scope, which acts they contain, and the
+/// evidence that this enumeration of them completed.
+/// </summary>
+/// <remarks>
+/// <para>
+/// WITHOUT THIS, "EVERY ENTRY HAS A TERMINAL DISPOSITION" WAS BEING READ AS "THE POPULATION WAS
+/// SWEPT". Those are different claims and the frame could not tell them apart: it counted whatever
+/// it had been handed, so one caller-minted never-consolidated entry made the population 1 while the
+/// rest of the LOI/RGD universe was never supplied. The per-entry completion evidence did not close
+/// that either - any structurally valid artifact reference satisfied it, and neither the entry nor
+/// the frame bound it to an enumeration of that act or of the scope.
+/// </para>
+/// <para>
+/// So the population is a property of THIS manifest, and a count is refused until every one of its
+/// members has been dispositioned. The frame knows nothing about live acquisition; it knows the
+/// exact member set it is answerable for.
+/// </para>
+/// <para>
+/// MEMBERSHIP DECIDES INSIDE AND OUTSIDE, NOT A CALLER'S CHOICE OF DISPOSITION. Before this,
+/// <c>OutsideClassManifest</c> was a freely chosen member independent of the act's own class, so a
+/// LOI could be labelled outside and dropped from the count while an act of an unrecognised class
+/// could be counted as part of the never-consolidated population. The type therefore could not state
+/// which population its number described. It can now: the number describes exactly this manifest.
+/// </para>
+/// <para>
+/// The raw class vocabulary stays open - Luxembourg decides what classes exist and E10 asks for the
+/// maximum scope, so a class this build has no member for still travels verbatim. What is closed is
+/// membership IN ONE COUNT, which is a different thing and must not be open-ended.
+/// </para>
+/// </remarks>
+public sealed class LuxembourgActClassManifest
+{
+    private readonly ReadOnlyCollection<LuxembourgActClassRef> _admittedClasses;
+    private readonly ReadOnlyCollection<LuxembourgActClassManifestMember> _members;
+    private readonly Dictionary<string, LuxembourgActClassRef> _classByAct;
+
+    private LuxembourgActClassManifest(
+        IList<LuxembourgActClassRef> admittedClasses,
+        IList<LuxembourgActClassManifestMember> members,
+        Dictionary<string, LuxembourgActClassRef> classByAct,
+        SourceArtifactRef completionEvidence)
+    {
+        _admittedClasses = new ReadOnlyCollection<LuxembourgActClassRef>(admittedClasses);
+        _members = new ReadOnlyCollection<LuxembourgActClassManifestMember>(members);
+        _classByAct = classByAct;
+        CompletionEvidence = completionEvidence;
+    }
+
+    /// <summary>The classes this manifest covers, in the order supplied.</summary>
+    public IReadOnlyList<LuxembourgActClassRef> AdmittedClasses => _admittedClasses;
+
+    /// <summary>Every act in scope, in the order supplied.</summary>
+    public IReadOnlyList<LuxembourgActClassManifestMember> Members => _members;
+
+    /// <summary>The evidence that the enumeration establishing this member set completed.</summary>
+    public SourceArtifactRef CompletionEvidence { get; }
+
+    /// <summary>The class this manifest holds for one act, or nothing when it holds no such act.</summary>
+    public bool TryGetMemberClass(string publisherActIri, out LuxembourgActClassRef actClass)
+    {
+        ArgumentNullException.ThrowIfNull(publisherActIri);
+        return _classByAct.TryGetValue(publisherActIri, out actClass!);
+    }
+
+    /// <summary>Builds a manifest, or refuses by name. Never builds a partial one.</summary>
+    public static LuxembourgActClassManifest? TryCreate(
+        IReadOnlyList<LuxembourgActClassRef> admittedClasses,
+        IReadOnlyList<LuxembourgActClassManifestMember> members,
+        SourceArtifactRef completionEvidence,
+        out LuxembourgActClassManifestRefusal refusal)
+    {
+        ArgumentNullException.ThrowIfNull(admittedClasses);
+        ArgumentNullException.ThrowIfNull(members);
+        ArgumentNullException.ThrowIfNull(completionEvidence);
+
+        var admitted = admittedClasses.ToArray();
+        var memberList = members.ToArray();
+        if (admitted.Length == 0)
+        {
+            refusal = LuxembourgActClassManifestRefusal.NoAdmittedClass;
+            return null;
+        }
+
+        if (memberList.Length == 0)
+        {
+            refusal = LuxembourgActClassManifestRefusal.NoMember;
+            return null;
+        }
+
+        var admittedByIri = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var actClass in admitted)
+        {
+            ArgumentNullException.ThrowIfNull(actClass);
+            if (!admittedByIri.Add(actClass.PublisherClassIri))
+            {
+                refusal = LuxembourgActClassManifestRefusal.DuplicateAdmittedClass;
+                return null;
+            }
+        }
+
+        var classByAct = new Dictionary<string, LuxembourgActClassRef>(StringComparer.Ordinal);
+        foreach (var member in memberList)
+        {
+            ArgumentNullException.ThrowIfNull(member);
+            if (!admittedByIri.Contains(member.ActClass.PublisherClassIri))
+            {
+                refusal = LuxembourgActClassManifestRefusal.MemberClassNotAdmitted;
+                return null;
+            }
+
+            if (!classByAct.TryAdd(member.PublisherActIri, member.ActClass))
+            {
+                refusal = LuxembourgActClassManifestRefusal.DuplicateMember;
+                return null;
+            }
+        }
+
+        refusal = LuxembourgActClassManifestRefusal.None;
+        return new LuxembourgActClassManifest(admitted, memberList, classByAct, completionEvidence);
+    }
+}
+
+/// <summary>Why one act's disposition was not admitted to a frame. Closed.</summary>
+/// <remarks>
+/// A single boolean could not carry this. Before, <c>TryAdmit</c> reported only "disagreed", which
+/// conflated two answers about one act with the two ways an entry can contradict the manifest it is
+/// being admitted against - and it compared only the disposition, so re-presenting the same act with
+/// its class changed returned success and silently kept the old class. Since class decides
+/// membership, that was a material contradictory fact reported as an idempotent replay.
+/// </remarks>
+public enum LuxembourgNeverConsolidatedAdmitRefusal
+{
+    [JsonStringEnumMemberName("none")]
+    None = 0,
+
+    /// <summary>This act is already held with a different disposition.</summary>
+    [JsonStringEnumMemberName("disposition_disagrees")]
+    DispositionDisagrees = 1,
+
+    /// <summary>This act is already held with a different class.</summary>
+    [JsonStringEnumMemberName("act_class_disagrees")]
+    ActClassDisagrees = 2,
+
+    /// <summary>This act is already held citing different completion evidence.</summary>
+    [JsonStringEnumMemberName("completion_evidence_disagrees")]
+    CompletionEvidenceDisagrees = 3,
+
+    /// <summary>The manifest gives this act a different class than the entry states.</summary>
+    [JsonStringEnumMemberName("act_class_contradicts_manifest")]
+    ActClassContradictsManifest = 4,
+
+    /// <summary>An act the manifest holds cannot be dispositioned as outside it.</summary>
+    [JsonStringEnumMemberName("member_dispositioned_outside")]
+    MemberDispositionedOutside = 5,
+
+    /// <summary>An act the manifest does not hold can only be dispositioned as outside it.</summary>
+    [JsonStringEnumMemberName("non_member_dispositioned_inside")]
+    NonMemberDispositionedInside = 6,
+}
+
 /// <summary>
 /// The never-consolidated frame: every act considered, what was found, and whether a population can
 /// honestly be counted yet.
@@ -179,46 +406,119 @@ public sealed class LuxembourgNeverConsolidatedFrame
         new(StringComparer.Ordinal);
     private readonly ReadOnlyCollection<LuxembourgNeverConsolidatedEntry> _exposed;
 
-    public LuxembourgNeverConsolidatedFrame() => _exposed = _entries.AsReadOnly();
+    /// <param name="manifest">
+    /// The exact population this frame answers for. Required, and the reason a count from this frame
+    /// is a claim about a scope rather than a tally of whatever arrived.
+    /// </param>
+    public LuxembourgNeverConsolidatedFrame(LuxembourgActClassManifest manifest)
+    {
+        Manifest = manifest ?? throw new ArgumentNullException(nameof(manifest));
+        _exposed = _entries.AsReadOnly();
+    }
+
+    /// <summary>The population this frame's count describes.</summary>
+    public LuxembourgActClassManifest Manifest { get; }
 
     /// <summary>Every act considered, in the order it was admitted.</summary>
     public IReadOnlyList<LuxembourgNeverConsolidatedEntry> Entries => _exposed;
 
     /// <summary>
-    /// Admits one act's disposition, or refuses. Never replaces an admitted disposition.
+    /// Admits one act's disposition, or refuses by name. Never replaces an admitted disposition.
     /// </summary>
     /// <returns>
-    /// <see langword="true"/> when the frame holds this act with this disposition afterwards,
-    /// including when it already did. <see langword="false"/> only on a genuine disagreement.
+    /// <see langword="true"/> when the frame holds this act with this entry afterwards, including
+    /// when it already did. <see langword="false"/> only on a named refusal.
     /// </returns>
-    public bool TryAdmit(LuxembourgNeverConsolidatedEntry entry, out bool disagreed)
+    public bool TryAdmit(
+        LuxembourgNeverConsolidatedEntry entry, out LuxembourgNeverConsolidatedAdmitRefusal refusal)
     {
         ArgumentNullException.ThrowIfNull(entry);
 
+        // INSIDE AND OUTSIDE ARE DERIVED FROM THE MANIFEST, NEVER CHOSEN BY THE CALLER. An act the
+        // manifest holds is in this population and its class is whatever the manifest's own
+        // enumeration found; an act the manifest does not hold is outside it and can be recorded as
+        // nothing else. Before this, both directions were a free choice, so the frame could not say
+        // which population its number described.
+        var isMember = Manifest.TryGetMemberClass(entry.PublisherActIri, out var manifestClass);
+        var claimsOutside =
+            entry.Disposition == LuxembourgNeverConsolidatedDisposition.OutsideClassManifest;
+        if (isMember && claimsOutside)
+        {
+            refusal = LuxembourgNeverConsolidatedAdmitRefusal.MemberDispositionedOutside;
+            return false;
+        }
+
+        if (!isMember && !claimsOutside)
+        {
+            refusal = LuxembourgNeverConsolidatedAdmitRefusal.NonMemberDispositionedInside;
+            return false;
+        }
+
+        if (isMember && manifestClass != entry.ActClass)
+        {
+            refusal = LuxembourgNeverConsolidatedAdmitRefusal.ActClassContradictsManifest;
+            return false;
+        }
+
         if (_byAct.TryGetValue(entry.PublisherActIri, out var held))
         {
-            disagreed = held.Disposition != entry.Disposition;
-            return !disagreed;
+            // EVERY ADMITTED FIELD, NOT THE DISPOSITION ALONE. Comparing only the disposition made
+            // "the same act, reclassified" an idempotent replay that silently kept the old class -
+            // and since class decides membership, a changed class is a material contradictory fact,
+            // not a repeat. The completion evidence is compared for the same reason: two runs citing
+            // different evidence for one act are two claims, and this set does not choose between
+            // them.
+            if (held.ActClass != entry.ActClass)
+            {
+                refusal = LuxembourgNeverConsolidatedAdmitRefusal.ActClassDisagrees;
+                return false;
+            }
+
+            if (held.Disposition != entry.Disposition)
+            {
+                refusal = LuxembourgNeverConsolidatedAdmitRefusal.DispositionDisagrees;
+                return false;
+            }
+
+            if (held.EnumerationCompletionEvidence != entry.EnumerationCompletionEvidence)
+            {
+                refusal = LuxembourgNeverConsolidatedAdmitRefusal.CompletionEvidenceDisagrees;
+                return false;
+            }
+
+            refusal = LuxembourgNeverConsolidatedAdmitRefusal.None;
+            return true;
         }
 
         _byAct.Add(entry.PublisherActIri, entry);
         _entries.Add(entry);
-        disagreed = false;
+        refusal = LuxembourgNeverConsolidatedAdmitRefusal.None;
         return true;
     }
 
     /// <summary>
-    /// The never-consolidated population, or a refusal naming why no count can be made.
+    /// The never-consolidated population of this frame's manifest, or a refusal naming why no count
+    /// can be made.
     /// </summary>
+    /// <remarks>
+    /// The count is over MANIFEST MEMBERS, not over admitted entries. An act outside the manifest is
+    /// held so the frame records that it was considered, and contributes to nothing.
+    /// </remarks>
     public bool TryCountNeverConsolidated(
         out int count, out LuxembourgNeverConsolidatedCountRefusal refusal)
     {
         count = 0;
 
-        if (_entries.Count == 0)
+        // EVERY MEMBER, NOT EVERY ENTRY. "All entries in this list have a terminal disposition" was
+        // being read as "the complete population was swept"; those are different claims, and only
+        // this one is about the scope the number names.
+        foreach (var member in Manifest.Members)
         {
-            refusal = LuxembourgNeverConsolidatedCountRefusal.FrameEmpty;
-            return false;
+            if (!_byAct.ContainsKey(member.PublisherActIri))
+            {
+                refusal = LuxembourgNeverConsolidatedCountRefusal.ManifestMemberNotDispositioned;
+                return false;
+            }
         }
 
         if (_entries.Any(static entry =>
@@ -228,8 +528,9 @@ public sealed class LuxembourgNeverConsolidatedFrame
             return false;
         }
 
-        count = _entries.Count(static entry =>
-            entry.Disposition == LuxembourgNeverConsolidatedDisposition.EnumeratedAndNeverConsolidated);
+        count = Manifest.Members.Count(member =>
+            _byAct[member.PublisherActIri].Disposition
+                == LuxembourgNeverConsolidatedDisposition.EnumeratedAndNeverConsolidated);
         refusal = LuxembourgNeverConsolidatedCountRefusal.None;
         return true;
     }
