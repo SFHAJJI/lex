@@ -93,7 +93,8 @@ public sealed record EuAnnexBodyDisposition
         SourceObjectRef sourceObject,
         EuStructuralLocation annexLocation,
         EuDocumentFetchAddress officialAddress,
-        HttpLogicalRequest logicalRequest,
+        HttpLogicalRequest officialRequest,
+        HttpLogicalRequest terminalRequest,
         RoutedHttpEvidence sourceEvidence,
         DurableBlobWriteReceipt retainedTransportBytes,
         SourceArtifactRef profileRef,
@@ -102,14 +103,15 @@ public sealed record EuAnnexBodyDisposition
         ArgumentNullException.ThrowIfNull(sourceObject);
         ArgumentNullException.ThrowIfNull(annexLocation);
         ArgumentNullException.ThrowIfNull(officialAddress);
-        ArgumentNullException.ThrowIfNull(logicalRequest);
+        ArgumentNullException.ThrowIfNull(officialRequest);
+        ArgumentNullException.ThrowIfNull(terminalRequest);
         ArgumentNullException.ThrowIfNull(sourceEvidence);
         ArgumentNullException.ThrowIfNull(retainedTransportBytes);
         ArgumentNullException.ThrowIfNull(profileRef);
 
         var sourceObservation = RepresentationChainObservation.FromRoute(
             sourceEvidence,
-            logicalRequest);
+            terminalRequest);
 
         if (!Enum.IsDefined(outcome))
         {
@@ -139,14 +141,26 @@ public sealed record EuAnnexBodyDisposition
                 nameof(officialAddress));
         }
 
-        if (logicalRequest.Headers.Count != 2 ||
+        var officialRequestDigest = Convert.ToHexString(
+            SHA256.HashData(officialRequest.CopyCanonicalBytes())).ToLowerInvariant();
+        if (officialRequest.Method != HttpRequestMethod.Get ||
+            officialRequest.Headers.Count != 2 ||
+            terminalRequest.Headers.Count != 2 ||
+            !string.Equals(officialRequest.Uri, officialAddress.ResourceUri, StringComparison.Ordinal) ||
+            !string.Equals(terminalRequest.Uri, sourceObservation.EffectiveUri, StringComparison.Ordinal) ||
+            !string.Equals(
+                officialRequestDigest,
+                sourceEvidence.Hops[0].LogicalRequestSha256,
+                StringComparison.Ordinal) ||
             !string.Equals(officialAddress.ResourceUri, sourceObservation.RequestedUri, StringComparison.Ordinal) ||
-            !HasExactHeader(logicalRequest, "accept", officialAddress.Accept) ||
-            !HasExactHeader(logicalRequest, "accept-language", officialAddress.AcceptLanguage))
+            !HasExactHeader(officialRequest, "accept", officialAddress.Accept) ||
+            !HasExactHeader(officialRequest, "accept-language", officialAddress.AcceptLanguage) ||
+            !HasExactHeader(terminalRequest, "accept", officialAddress.Accept) ||
+            !HasExactHeader(terminalRequest, "accept-language", officialAddress.AcceptLanguage))
         {
             throw new ArgumentException(
-                "The official address is not the exact URI and header set the observed route requested.",
-                nameof(logicalRequest));
+                "The official address is not the exact first and terminal request of the observed route.",
+                nameof(officialRequest));
         }
 
         if (!sourceObservation.QualifiesAsTrustedBaselineCandidate())

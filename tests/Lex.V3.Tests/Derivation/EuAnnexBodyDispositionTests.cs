@@ -27,6 +27,7 @@ public sealed class EuAnnexBodyDispositionTests
             fixture.Location,
             fixture.Address,
             fixture.Request,
+            fixture.Request,
             fixture.Evidence,
             fixture.Receipt,
             fixture.ProfileRef,
@@ -91,6 +92,7 @@ public sealed class EuAnnexBodyDispositionTests
             fixture.Location,
             other!,
             fixture.Request,
+            fixture.Request,
             fixture.Evidence,
             fixture.Receipt,
             fixture.ProfileRef,
@@ -112,6 +114,7 @@ public sealed class EuAnnexBodyDispositionTests
             new HttpLogicalRequestBody(0, EmptyDigest),
             Digest('1'),
             Digest('2'));
+        var officialRequest = fixture.Request;
         var requestDigest = Sha256(terminalRequest.CopyCanonicalBytes());
         var firstReceipt = Receipt(EmptyDigest, 0);
         const string firstHopId = "urn:uuid:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
@@ -119,7 +122,7 @@ public sealed class EuAnnexBodyDispositionTests
             0,
             firstHopId,
             null,
-            requestDigest,
+            Sha256(officialRequest.CopyCanonicalBytes()),
             fixture.Address.ResourceUri,
             301,
             RedirectHeaders(terminalUri),
@@ -163,6 +166,7 @@ public sealed class EuAnnexBodyDispositionTests
             fixture.SourceObject,
             fixture.Location,
             fixture.Address,
+            officialRequest,
             terminalRequest,
             evidence,
             fixture.Receipt,
@@ -171,6 +175,90 @@ public sealed class EuAnnexBodyDispositionTests
 
         Assert.AreEqual(fixture.Address.ResourceUri, disposition.SourceObservation.RequestedUri);
         Assert.AreEqual(terminalUri, disposition.SourceObservation.EffectiveUri);
+    }
+
+    [TestMethod]
+    public void ARedirectCannotSubstituteTheOfficialFirstHopRequest()
+    {
+        var fixture = Fixture();
+        var terminalUri = fixture.Address.ResourceUri + "?download=1";
+        var substitutedFirstRequest = HttpLogicalRequest.Create(
+            fixture.Address.ResourceUri,
+            HttpRequestMethod.Get,
+            [
+                new HttpLogicalRequestHeader("accept", fixture.Address.Accept),
+                new HttpLogicalRequestHeader("accept-language", fixture.Address.AcceptLanguage),
+                new HttpLogicalRequestHeader("x-extra", "not-part-of-the-address"),
+            ],
+            new HttpLogicalRequestBody(0, EmptyDigest),
+            Digest('1'),
+            Digest('2'));
+        var terminalRequest = HttpLogicalRequest.Create(
+            terminalUri,
+            HttpRequestMethod.Get,
+            [
+                new HttpLogicalRequestHeader("accept", fixture.Address.Accept),
+                new HttpLogicalRequestHeader("accept-language", fixture.Address.AcceptLanguage),
+            ],
+            new HttpLogicalRequestBody(0, EmptyDigest),
+            Digest('1'),
+            Digest('2'));
+        var firstReceipt = Receipt(EmptyDigest, 0);
+        const string firstHopId = "urn:uuid:dddddddd-dddd-4ddd-8ddd-dddddddddddd";
+        var first = RoutedHttpHop.Create(
+            0,
+            firstHopId,
+            null,
+            Sha256(substitutedFirstRequest.CopyCanonicalBytes()),
+            fixture.Address.ResourceUri,
+            301,
+            RedirectHeaders(terminalUri),
+            "2026-09-12T20:00:00.0000000Z",
+            "2026-09-12T20:00:01.0000000Z",
+            new DeclaredContentLengthHttpCompletion(0),
+            0,
+            EmptyDigest,
+            DurableBlobWriteReceiptDigest.Of(firstReceipt),
+            0,
+            EmptyDigest);
+        var terminal = RoutedHttpHop.Create(
+            1,
+            "urn:uuid:eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+            firstHopId,
+            Sha256(terminalRequest.CopyCanonicalBytes()),
+            terminalUri,
+            200,
+            Headers(),
+            "2026-09-12T20:00:02.0000000Z",
+            "2026-09-12T20:00:03.0000000Z",
+            new DeclaredContentLengthHttpCompletion(3),
+            3,
+            Digest('a'),
+            DurableBlobWriteReceiptDigest.Of(fixture.Receipt),
+            3,
+            Digest('a'));
+        var evidence = RoutedHttpEvidence.Create(
+            ArtifactRef('5', '6'),
+            1,
+            0,
+            [first, terminal],
+            new CompleteHttpRouteOutcome(),
+            new Dictionary<string, DurableBlobWriteReceipt>
+            {
+                [first.ObservationId] = firstReceipt,
+                [terminal.ObservationId] = fixture.Receipt,
+            });
+
+        Assert.ThrowsExactly<ArgumentException>(() => EuAnnexBodyDisposition.Create(
+            fixture.SourceObject,
+            fixture.Location,
+            fixture.Address,
+            fixture.Request,
+            terminalRequest,
+            evidence,
+            fixture.Receipt,
+            fixture.ProfileRef,
+            EuAnnexBodyDispositionOutcome.TextNotAvailable));
     }
 
     [TestMethod]
@@ -189,6 +277,7 @@ public sealed class EuAnnexBodyDispositionTests
             fixture.SourceObject,
             fixture.Location,
             other!,
+            fixture.Request,
             fixture.Request,
             fixture.Evidence,
             fixture.Receipt,
@@ -227,6 +316,7 @@ public sealed class EuAnnexBodyDispositionTests
             fixture.Location,
             fixture.Address,
             fixture.Request,
+            fixture.Request,
             fixture.Evidence,
             Receipt(Digest('b'), 3),
             fixture.ProfileRef,
@@ -242,6 +332,7 @@ public sealed class EuAnnexBodyDispositionTests
             fixture.SourceObject,
             fixture.Location,
             fixture.Address,
+            fixture.Request,
             fixture.Request,
             fixture.Evidence,
             Receipt(Digest('a'), 3, "2026-09-12T20:00:02Z"),
@@ -282,6 +373,7 @@ public sealed class EuAnnexBodyDispositionTests
             article,
             fixture.Address,
             fixture.Request,
+            fixture.Request,
             fixture.Evidence,
             fixture.Receipt,
             fixture.ProfileRef,
@@ -301,6 +393,7 @@ public sealed class EuAnnexBodyDispositionTests
             fixture.SourceObject,
             foreignAnnex,
             fixture.Address,
+            fixture.Request,
             fixture.Request,
             fixture.Evidence,
             fixture.Receipt,
@@ -346,6 +439,7 @@ public sealed class EuAnnexBodyDispositionTests
             fixture.SourceObject,
             fixture.Location,
             fixture.Address,
+            fixture.Request,
             fixture.Request,
             fixture.Evidence,
             fixture.Receipt,
