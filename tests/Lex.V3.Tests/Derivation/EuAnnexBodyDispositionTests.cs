@@ -155,6 +155,25 @@ public sealed class EuAnnexBodyDispositionTests
     }
 
     [TestMethod]
+    public void AnOfficialAddressForASecondCellarObjectCannotBeFiledUnderThisSource()
+    {
+        var source = Fixture();
+        var otherRoute = Fixture(cellarKey: "11234567-89ab-cdef-0123-456789abcdef");
+
+        Assert.ThrowsExactly<ArgumentException>(() => EuAnnexBodyDisposition.Create(
+            source.SourceObject,
+            otherRoute.Location,
+            otherRoute.Address,
+            otherRoute.Request,
+            otherRoute.Request,
+            otherRoute.Evidence,
+            otherRoute.Receipt,
+            otherRoute.ProfileBytes,
+            otherRoute.ProfileRef,
+            EuAnnexBodyDispositionOutcome.TextNotAvailable));
+    }
+
+    [TestMethod]
     public void AnOfficialRedirectRetainsItsStartAndEffectiveAddresses()
     {
         var fixture = Fixture();
@@ -401,6 +420,16 @@ public sealed class EuAnnexBodyDispositionTests
     }
 
     [TestMethod]
+    public void ACompleteResponseWithNoEntityBytesIsNotADerivableBodyTransfer()
+    {
+        var fixture = Fixture(responseLength: 0);
+
+        Assert.ThrowsExactly<ArgumentException>(() => Create(
+            fixture,
+            EuAnnexBodyDispositionOutcome.TextNotAvailable));
+    }
+
+    [TestMethod]
     public void ProfileBytesMustCarryTheDigestNamedByTheProfileReference()
     {
         var fixture = Fixture();
@@ -605,7 +634,8 @@ public sealed class EuAnnexBodyDispositionTests
         string cellarKey = CellarKey,
         string? sourcePublisherUri = null,
         string? responseMediaType = null,
-        bool includeExtraRequestHeader = false)
+        bool includeExtraRequestHeader = false,
+        int responseLength = 3)
     {
         var sourceObject = new SourceObjectRef(
             SourceCoreSchemaIds.SourceObjectRef,
@@ -624,7 +654,8 @@ public sealed class EuAnnexBodyDispositionTests
         Assert.AreEqual(EuDocumentFetchAddressRefusal.None, refusal);
         var admittedAddress = address!;
 
-        var receipt = Receipt(Digest(byteFill), 3);
+        var responseDigest = responseLength == 0 ? EmptyDigest : Digest(byteFill);
+        var receipt = Receipt(responseDigest, responseLength);
         var requestHeaders = new List<HttpLogicalRequestHeader>
         {
             new("accept", admittedAddress.Accept),
@@ -650,15 +681,15 @@ public sealed class EuAnnexBodyDispositionTests
             requestDigest,
             admittedAddress.ResourceUri,
             200,
-            Headers(responseMediaType ?? admittedAddress.Accept),
+            Headers(responseMediaType ?? admittedAddress.Accept, checked((ulong)responseLength)),
             "2026-09-12T20:00:00.0000000Z",
             "2026-09-12T20:00:01.0000000Z",
-            new DeclaredContentLengthHttpCompletion(3),
-            3,
-            Digest(byteFill),
+            new DeclaredContentLengthHttpCompletion(checked((ulong)responseLength)),
+            checked((ulong)responseLength),
+            responseDigest,
             DurableBlobWriteReceiptDigest.Of(receipt),
-            3,
-            Digest(byteFill));
+            checked((ulong)responseLength),
+            responseDigest);
         var evidence = RoutedHttpEvidence.Create(
             ArtifactRef('5', '6'),
             1,
@@ -749,12 +780,14 @@ public sealed class EuAnnexBodyDispositionTests
             });
     }
 
-    private static RoutedHttpResponseHeaders Headers(string mediaType = "application/pdf")
+    private static RoutedHttpResponseHeaders Headers(
+        string mediaType = "application/pdf",
+        ulong contentLength = 3)
     {
         var absent = new RoutedHttpAbsentHeader();
         return new RoutedHttpResponseHeaders(
             new RoutedHttpSingleHeader(mediaType),
-            new RoutedHttpSingleHeader("3"),
+            new RoutedHttpSingleHeader(contentLength.ToString(System.Globalization.CultureInfo.InvariantCulture)),
             absent,
             absent,
             absent,
