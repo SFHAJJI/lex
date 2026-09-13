@@ -159,6 +159,9 @@ public sealed class EuRefusalWireNameTests
                 // #579: a census request carrying a budget instance the run was not given. Two
                 // counters reading one limit bound that many requests each.
                 "census_request_carries_a_different_wire_budget",
+                // #579 review: a ceiling reached DURING document acquisition, which used to be
+                // reported as a session that never started.
+                "document_fetch_wire_budget_exhausted",
             }),
             string.Join("\n", WireNames<EuQueryExecutionRefusal>()),
             "a wire name changing is a contract change; a number changing is not.");

@@ -133,6 +133,22 @@ public enum EuQueryExecutionRefusal
     [JsonStringEnumMemberName("census_request_carries_a_different_wire_budget")]
     CensusRequestCarriesADifferentWireBudget = 23,
 
+    /// <summary>
+    /// The run's wire ceiling was reached during document acquisition, so the ladder stopped.
+    /// </summary>
+    /// <remarks>
+    /// NOT <see cref="DocumentFetchSessionNotStarted"/>, AND THE DIFFERENCE IS THE WHOLE REASON THIS
+    /// MEMBER EXISTS. Found in review of #579's own candidate. That slice made
+    /// <c>EuDocumentFetchAttemptRefusal.WireBudgetExhausted</c> reachable, including from INSIDE the
+    /// retry loop after robots and a product attempt have already gone out. The mapping below
+    /// special-cased robots and sent everything else to "the session never started", which was true
+    /// while <c>ObservationNotExecuted</c> was the only other value and became false the moment it
+    /// was not. Evidence saying a session never started, written after that session started and
+    /// sent, is worse than no evidence.
+    /// </remarks>
+    [JsonStringEnumMemberName("document_fetch_wire_budget_exhausted")]
+    DocumentFetchWireBudgetExhausted = 24,
+
     /// <summary>A requested object-facts family (P, X, W or M) batch did not prove.</summary>
     [JsonStringEnumMemberName("object_facts_family_not_proven")]
     ObjectFactsFamilyNotProven = 2,
@@ -1909,11 +1925,33 @@ public sealed class EuQueryExecutionAdapter
                         break;
                     }
 
-                    // Every other attempt-level refusal (today, only ObservationNotExecuted) stays a
-                    // whole-run refusal: this run's own document-fetch session never started at all,
-                    // which is not a fact about any one object's own document.
+                    // EXHAUSTIVE BY SWITCH RATHER THAN BY FALLTHROUGH, because the fallthrough has
+                    // already been wrong once. Its comment used to read "today, only
+                    // ObservationNotExecuted" and that parenthetical was load-bearing: #579 added a
+                    // reachable WireBudgetExhausted and the fallthrough kept reporting a session
+                    // that never started, after the session had started and sent. A new member now
+                    // forces a decision here instead of inheriting a name that has stopped being
+                    // true.
+                    //
+                    // Both remaining cases are whole-run refusals rather than one object's own
+                    // PendingAcquisition: a spent run ceiling and an unstartable session are facts
+                    // about the run, and continuing the ladder would mark every later object pending
+                    // while hiding which of the two happened.
+                    var runRefusal = attempt.Refusal switch
+                    {
+                        EuDocumentFetchAttemptRefusal.WireBudgetExhausted =>
+                            EuQueryExecutionRefusal.DocumentFetchWireBudgetExhausted,
+                        EuDocumentFetchAttemptRefusal.ObservationNotExecuted =>
+                            EuQueryExecutionRefusal.DocumentFetchSessionNotStarted,
+                        _ => throw new ArgumentOutOfRangeException(
+                            nameof(attempt),
+                            $"Unreachable: a null-evidence attempt carrying '{attempt.Refusal}'. "
+                            + "Every refusal this door can return needs a run-level meaning chosen "
+                            + "here, not inherited."),
+                    };
+
                     return (null, null, null, new EuQueryExecutionRefusalDetail(
-                        EuQueryExecutionRefusal.DocumentFetchSessionNotStarted,
+                        runRefusal,
                         $"manifest row {rowOrdinal} ('{mintedObjectRef.CanonicalKey}'): code=" +
                         $"{attempt.Refusal} detail={attempt.Detail}."));
                 }

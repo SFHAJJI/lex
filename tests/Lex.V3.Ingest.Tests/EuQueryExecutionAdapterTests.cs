@@ -378,7 +378,10 @@ public sealed class EuQueryExecutionAdapterTests
         IReadOnlyDictionary<int, EuDocumentLadderResult>? LadderResults,
         IReadOnlyDictionary<int, EuMintedRowAccounting>? MintedRows,
         EuQueryExecutionRefusalDetail? Refusal)>
-        RunOneAcceptedBodyFetchAsync(EuAcquisitionTestFixture.EuInMemoryCustodyStore store)
+        RunOneAcceptedBodyFetchAsync(
+            EuAcquisitionTestFixture.EuInMemoryCustodyStore store,
+            EuAcquisitionTestFixture.ClassifyingHandler? documentFetchHandler = null,
+            WireRequestBudget? wireBudget = null)
     {
         var seed = EuAppendixASeedMap.SeedsInCelexOrder[0];
         var rootIri = EuPackRootCanonicalForm.TryCanonicalize(seed.WorkRoot, out _)
@@ -397,7 +400,7 @@ public sealed class EuQueryExecutionAdapterTests
             [input.ObjectRef] = new[] { address },
         };
 
-        var handler = new EuAcquisitionTestFixture.ClassifyingHandler(
+        var handler = documentFetchHandler ?? new EuAcquisitionTestFixture.ClassifyingHandler(
             new Dictionary<string, EuAcquisitionTestFixture.FamilyScript>(StringComparer.Ordinal));
         var executor = new EuRepeatedEnumerationExecutor(
             store, new EuAcquisitionTestFixture.FixedTimeProvider(), handler);
@@ -408,8 +411,57 @@ public sealed class EuQueryExecutionAdapterTests
             mintedAddressesByObjectRef,
             EuAcquisitionTestFixture.BuildRendererSource(801),
             EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
-            EuAcquisitionTestFixture.TestWireBudget(),
+            wireBudget ?? EuAcquisitionTestFixture.TestWireBudget(),
             CancellationToken.None);
+    }
+
+    /// <summary>
+    /// A ceiling reached during document acquisition says so, rather than saying the session never
+    /// started.
+    /// </summary>
+    /// <remarks>
+    /// FOUND IN REVIEW OF #579's OWN CANDIDATE, AND IT IS THE DEFECT THAT SLICE EXISTS TO PREVENT,
+    /// ONE LAYER UP. Making the document-fetch ceiling required made
+    /// <c>EuDocumentFetchAttemptRefusal.WireBudgetExhausted</c> reachable, including from inside the
+    /// retry loop - after robots and a product attempt have already gone out. The adapter's mapping
+    /// special-cased robots and sent everything else to <c>DocumentFetchSessionNotStarted</c>, whose
+    /// own comment read "today, only ObservationNotExecuted". That parenthetical was load-bearing
+    /// and stopped being true in the same change that made the refusal reachable.
+    /// <para>
+    /// So the run would have recorded that its document-fetch session never started, after that
+    /// session started and sent. Evidence that is false is worse than evidence that is missing,
+    /// which is why the ceiling now has its own run-level member and the mapping is exhaustive.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public async Task ACeilingReachedDuringDocumentAcquisitionIsNotReportedAsAnUnstartedSession()
+    {
+        var handler = new EuAcquisitionTestFixture.ClassifyingHandler(
+            new Dictionary<string, EuAcquisitionTestFixture.FamilyScript>(StringComparer.Ordinal),
+            _ => throw new HttpRequestException("transport failed before headers"));
+
+        // Robots and exactly one product attempt. The pre-header failure makes the profile want a
+        // retry; the ceiling is what stops it, from INSIDE the loop rather than at the door.
+        var budget = WireRequestBudget.OfWireRequests(2);
+
+        var (outcomes, _, _, refusal) = await RunOneAcceptedBodyFetchAsync(
+            new EuAcquisitionTestFixture.EuInMemoryCustodyStore(), handler, budget);
+
+        Assert.IsNull(outcomes, "a run that hit its ceiling delivers no acquisition outcomes.");
+        Assert.AreEqual(
+            EuQueryExecutionRefusal.DocumentFetchWireBudgetExhausted,
+            refusal?.Code,
+            "the run must report the ceiling it actually hit, not a session that actually started.");
+        StringAssert.Contains(
+            refusal!.Detail!, "WireBudgetExhausted",
+            "and the attempt-level code travels in the detail rather than being flattened away.");
+
+        // The premise: this is the after-the-session path, not the door. A door refusal would have
+        // sent nothing at all, and the test would then say nothing about the mapping under review.
+        Assert.IsGreaterThan(
+            0, handler.SendCount,
+            "the session started and sent before the ceiling was reached.");
+        Assert.IsTrue(budget.Exhausted);
     }
 
     /// <summary>

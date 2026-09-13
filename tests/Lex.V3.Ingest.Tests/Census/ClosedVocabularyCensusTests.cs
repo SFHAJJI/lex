@@ -111,7 +111,7 @@ public sealed class ClosedVocabularyCensusTests
                     + "AcquisitionOutcomeNotRepresentable, RecordSetNotRetained, "
                     + "ReifiedAxiomDecodeRefused, LocatedAmendmentDecodeRefused, "
                     + "LocatedAmendmentCorpusScopeUnproven, "
-                    + "CensusRequestCarriesADifferentWireBudget",
+                    + "CensusRequestCarriesADifferentWireBudget, DocumentFetchWireBudgetExhausted",
                 "Lex.V3.Ingest.Europe.EuTranspositionBridgePopulationRefusal: None, WorkScopeEmpty, "
                     + "WorkScopeNotUnique, WorkScopeNotAdmitted, SourceNotDelivered, "
                     + "SourceWorkOutsideScope, BridgeRefused, JoinEvidenceNotHeld, "
