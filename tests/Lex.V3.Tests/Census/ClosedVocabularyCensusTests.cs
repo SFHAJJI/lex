@@ -457,6 +457,9 @@ public sealed class ClosedVocabularyCensusTests
                     + "ObservationIdReused, EffectiveUriMismatch, RequestedUriMismatch",
                 "Lex.V3.Contracts.Source.Http.RobotsPolicyFreshness: Current, Expired",
                 "Lex.V3.Contracts.Source.Http.RobotsRevalidationMode: FullGetWithoutValidators",
+                "Lex.V3.Contracts.Source.Luxembourg.LuxembourgActClassManifestRefusal: None, "
+                    + "NoAdmittedClass, NoMember, MemberClassNotAdmitted, DuplicateMember, "
+                    + "DuplicateAdmittedClass",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgActForceDatePredicate: "
                     + "DateEntryInForce, DateNoLongerInForce",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgAssertionDisposition: Accepted, "
@@ -514,6 +517,15 @@ public sealed class ClosedVocabularyCensusTests
                     + "AcceptedXsdStringIdentity, AcceptedRdfLangStringIdentity, "
                     + "AcceptedXsdDateCanonical, TypedQuarantineUnsupportedDatatype, "
                     + "TypedQuarantineContextDependentDatatype, TypedQuarantineIllTyped",
+                "Lex.V3.Contracts.Source.Luxembourg.LuxembourgNeverConsolidatedAdmitRefusal: None, "
+                    + "DispositionDisagrees, ActClassDisagrees, CompletionEvidenceDisagrees, "
+                    + "ActClassContradictsManifest, MemberDispositionedOutside, "
+                    + "NonMemberDispositionedInside",
+                "Lex.V3.Contracts.Source.Luxembourg.LuxembourgNeverConsolidatedCountRefusal: None, "
+                    + "EnumerationIncomplete, ManifestMemberNotDispositioned",
+                "Lex.V3.Contracts.Source.Luxembourg.LuxembourgNeverConsolidatedDisposition: "
+                    + "EnumeratedAndNeverConsolidated, EnumeratedAndConsolidated, "
+                    + "EnumerationUnproven, OutsideClassManifest",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgOpinionHostRobotsState: "
                     + "PermittedByStatedPolicy, NoStatedPolicy",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgOpinionLocatorRefusal: None, "

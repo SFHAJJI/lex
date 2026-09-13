@@ -882,6 +882,11 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Contracts.Source.Http.RedirectTargetUnobservedHttpRouteOutcome::.ctor, "
                     + "method private static "
                     + "Lex.V3.Contracts.Source.Http.RoutedHttpCanonicalJson::ParseOutcome",
+                "Lex.V3.Contracts.Source.Luxembourg.LuxembourgActClassManifest: constructor "
+                    + "private instance "
+                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgActClassManifest::.ctor, "
+                    + "method public static "
+                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgActClassManifest::TryCreate",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgBodyCandidateResolution: constructor "
                     + "internal instance "
                     + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgBodyCandidateResolution::.ctor, "
