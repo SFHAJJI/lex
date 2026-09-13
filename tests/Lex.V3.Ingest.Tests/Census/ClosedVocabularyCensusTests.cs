@@ -157,6 +157,9 @@ public sealed class ClosedVocabularyCensusTests
                     + "WireBudgetExhausted",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgFamilyEnumerationOutcomeKind: Proven, "
                     + "ExecutorRefused, ProofRefused, CoverProven, CoverRefused",
+                "Lex.V3.Ingest.Luxembourg.LuxembourgGazetteBodyProductionRefusal: None, "
+                    + "AcquisitionForUnlistedBody, AcquisitionDeliveredTwice, "
+                    + "RetainedBytesUnavailable, RetentionNotEstablished",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgInFileRightsReadStatus: Observed, "
                     + "UnsupportedRepresentation, MalformedXml, ManifestationIdentityMismatch, "
                     + "InvalidLicenceIri",

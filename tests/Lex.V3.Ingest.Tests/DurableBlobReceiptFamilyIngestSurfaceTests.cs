@@ -86,6 +86,10 @@ public sealed class DurableBlobReceiptFamilyIngestSurfaceTests
                 "field private instance " + EuQueryExecutionResult + "::<ScopeManifestReceipt>k__BackingField -> " + Receipt + "?",
                 "field private instance " + TranspositionPopulationRow + "::<NormalisedEliJoinEvidenceReceipts>k__BackingField -> "
                 + "System.Collections.Generic.IReadOnlyList<" + Receipt + ">",
+                // #419 slice 6b: LuxembourgGazetteBodyAcquisition carries the receipt the document-fetch
+                // loop held for one Gazette-PDF body, beside its address, requests and route evidence, for
+                // the producer to verify. It HOLDS that receipt and never constructs one.
+                "field private instance Lex.V3.Ingest.Luxembourg.LuxembourgGazetteBodyAcquisition::<RetainedTransportBytes>k__BackingField -> " + Receipt,
                 "field private instance " + QueryExecutionResult + "::<ScopeManifestReceipt>k__BackingField -> " + Receipt + "?",
                 "field private instance " + Session + "+HeldBodyReceipt::<Receipt>k__BackingField -> " + Receipt,
                 "field private instance " + Session + "+ResolvedHeldBody::<Receipt>k__BackingField -> " + Receipt,
@@ -113,6 +117,7 @@ public sealed class DurableBlobReceiptFamilyIngestSurfaceTests
                 "property public instance " + EuQueryExecutionResult + "::ScopeManifestReceipt() -> " + Receipt + "?",
                 "property public instance " + TranspositionPopulationRow + "::NormalisedEliJoinEvidenceReceipts() -> "
                 + "System.Collections.Generic.IReadOnlyList<" + Receipt + ">",
+                "property public instance Lex.V3.Ingest.Luxembourg.LuxembourgGazetteBodyAcquisition::RetainedTransportBytes() -> " + Receipt,
                 "property public instance " + QueryExecutionResult + "::ScopeManifestReceipt() -> " + Receipt + "?",
                 "property public instance " + Session + "+HeldBodyReceipt::Receipt() -> " + Receipt,
                 "property public instance " + Session + "+ResolvedHeldBody::Receipt() -> " + Receipt,
