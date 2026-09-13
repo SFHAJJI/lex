@@ -122,6 +122,9 @@ public sealed class DurableBlobReceiptFamilySurfaceTests
                 + "out System.ReadOnlyMemory<System.Byte>&) -> System.Void",
                 "field private instance " + Custody + "CustodiedDecode<T>::<Receipt>k__BackingField -> " + Receipt,
                 "field private instance " + Derivation
+                    + "EuAnnexBodyDisposition::<RetainedTransportBytes>k__BackingField -> "
+                    + Receipt,
+                "field private instance " + Derivation
                     + "LanguageScopedExpressionLineageEntry::<RetainedTransportBytes>k__BackingField -> "
                     + Receipt,
                 "field private instance " + Core + "RepeatedEnumerationObservedTransport::<DurableWriteReceipt>k__BackingField -> " + Receipt,
@@ -130,6 +133,8 @@ public sealed class DurableBlobReceiptFamilySurfaceTests
                 "method public instance " + Custody + "ICustodyStore::CreateAsync(System.ReadOnlyMemory<System.Byte>, "
                 + Custody + "CustodyClass, System.Threading.CancellationToken) -> System.Threading.Tasks.Task<" + Receipt + ">",
                 "property public instance " + Custody + "CustodiedDecode<T>::Receipt() -> " + Receipt,
+                "property public instance " + Derivation
+                    + "EuAnnexBodyDisposition::RetainedTransportBytes() -> " + Receipt,
                 "property public instance " + Derivation
                     + "LanguageScopedExpressionLineageEntry::RetainedTransportBytes() -> " + Receipt,
                 "property public instance " + Core + "RepeatedEnumerationObservedTransport::DurableWriteReceipt() -> " + Receipt,

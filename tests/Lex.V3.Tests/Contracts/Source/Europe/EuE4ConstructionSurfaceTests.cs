@@ -297,9 +297,13 @@ public sealed class EuE4ConstructionSurfaceTests
         CollectionAssert.AreEqual(
             new[]
             {
+                "field private instance Lex.V3.Contracts.Derivation.EuAnnexBodyDisposition::<AnnexLocation>k__BackingField -> "
+                    + N + "EuStructuralLocation",
                 "field private instance " + N
                     + "EuLocatedAmendmentAxiom::<Location>k__BackingField -> " + N
                     + "EuStructuralLocation",
+                "property public instance Lex.V3.Contracts.Derivation.EuAnnexBodyDisposition::AnnexLocation() -> "
+                    + N + "EuStructuralLocation",
                 "property public instance " + N + "EuLocatedAmendmentAxiom::Location() -> " + N
                     + "EuStructuralLocation",
             },
