@@ -113,6 +113,10 @@ public sealed class EuRefusalWireNameTests
                 "entry_set_refused",
                 "page_budget_exhausted",
                 "page_decode_failed_on_our_side",
+                // #579. NOT a second spelling of page_budget_exhausted: that one bounds how many
+                // PAGES one batch may walk, this one bounds how many REQUESTS the whole run may
+                // send. A reader told only "exhausted" could not tell which limit to raise.
+                "wire_budget_exhausted",
             }),
             string.Join("\n", WireNames<EuWitnessTraversalRefusal>()),
             "a wire name changing is a contract change; a number changing is not.");
@@ -152,6 +156,9 @@ public sealed class EuRefusalWireNameTests
                 "reified_axiom_decode_refused",
                 "located_amendment_decode_refused",
                 "located_amendment_corpus_scope_unproven",
+                // #579: a census request carrying a budget instance the run was not given. Two
+                // counters reading one limit bound that many requests each.
+                "census_request_carries_a_different_wire_budget",
             }),
             string.Join("\n", WireNames<EuQueryExecutionRefusal>()),
             "a wire name changing is a contract change; a number changing is not.");

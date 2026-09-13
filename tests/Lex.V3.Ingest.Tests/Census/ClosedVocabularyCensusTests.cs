@@ -62,7 +62,7 @@ public sealed class ClosedVocabularyCensusTests
                     + "VerifiedRowsRefused, RequestedActBodyScopeNotSupplied, "
                     + "DeliveredRowNotAccountedFor",
                 "Lex.V3.Ingest.Europe.EuDocumentFetchAttemptRefusal: None, RobotsBootstrapRefused, "
-                    + "ObservationNotExecuted",
+                    + "ObservationNotExecuted, WireBudgetExhausted",
                 "Lex.V3.Ingest.Europe.EuEnumerationRefusal: None, RobotsBootstrapRefused, "
                     + "ObservationNotExecuted, StatusNotAdmitted, MediaTypeNotAdmitted, "
                     + "CountNotOneNonNegativeInteger, PartitionRequired, "
@@ -110,7 +110,8 @@ public sealed class ClosedVocabularyCensusTests
                     + "DocumentFetchSessionNotStarted, DocumentBodyNotRetained, "
                     + "AcquisitionOutcomeNotRepresentable, RecordSetNotRetained, "
                     + "ReifiedAxiomDecodeRefused, LocatedAmendmentDecodeRefused, "
-                    + "LocatedAmendmentCorpusScopeUnproven",
+                    + "LocatedAmendmentCorpusScopeUnproven, "
+                    + "CensusRequestCarriesADifferentWireBudget",
                 "Lex.V3.Ingest.Europe.EuTranspositionBridgePopulationRefusal: None, WorkScopeEmpty, "
                     + "WorkScopeNotUnique, WorkScopeNotAdmitted, SourceNotDelivered, "
                     + "SourceWorkOutsideScope, BridgeRefused, JoinEvidenceNotHeld, "
@@ -125,7 +126,7 @@ public sealed class ClosedVocabularyCensusTests
                 "Lex.V3.Ingest.Europe.EuWitnessTraversalRefusal: None, RobotsBootstrapRefused, "
                     + "BindRefused, ObservationNotExecuted, StatusNotAdmitted, MediaTypeNotAdmitted, "
                     + "PageBodyMalformed, CrossingRefused, StepRefused, EntrySetRefused, "
-                    + "PageBudgetExhausted, PageDecodeFailedOnOurSide",
+                    + "PageBudgetExhausted, PageDecodeFailedOnOurSide, WireBudgetExhausted",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgDocumentGetAttemptRefusal: None, "
                     + "RobotsDisallowed, RobotsBootstrapNotCompleted, ObservationNotExecuted, "
                     + "WireBudgetExhausted",

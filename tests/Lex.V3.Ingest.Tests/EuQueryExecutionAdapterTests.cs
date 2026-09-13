@@ -31,6 +31,11 @@ public sealed class EuQueryExecutionAdapterTests
     [TestMethod]
     public async Task AFullRunOverOneSeedWithNoDiscoveredStatesDeliversWithRealMeasuredCounts()
     {
+        // ONE BUDGET FOR THE WHOLE RUN. The adapter refuses a census request
+        // carrying a different instance, because two counters reading the same
+        // limit bound that many requests each and neither bounds the run.
+        var runWireBudget = EuAcquisitionTestFixture.TestWireBudget();
+
         var seed = EuAppendixASeedMap.SeedsInCelexOrder[0];
         var rootIri = EuPackRootCanonicalForm.TryCanonicalize(seed.WorkRoot, out _)
             ?? throw new AssertFailedException("Appendix A's own seed root failed to canonicalize.");
@@ -93,31 +98,31 @@ public sealed class EuQueryExecutionAdapterTests
         var (censusPlan, censusPlanId) = EuAcquisitionTestFixture.BuildCensusPlan();
         var censusRequest = new EuCensusPartitionRunRequest(
             censusPlan, censusPlanId, seed.Celex, EuAcquisitionTestFixture.BuildRendererSource(1),
-            EuAcquisitionTestFixture.TestWireBudget());
+            runWireBudget);
 
         var (pPlan, pPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var pRequest = new EuObjectFactsPartitionRunRequest(
             pPlan, pPlanId, EuObjectFactsQuerySet.ObjectFacts, [rootIri],
             EuAcquisitionTestFixture.BuildRendererSource(2),
-            EuAcquisitionTestFixture.TestWireBudget());
+            runWireBudget);
 
         var (xPlan, xPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var xRequest = new EuObjectFactsPartitionRunRequest(
             xPlan, xPlanId, EuObjectFactsQuerySet.ExpressionFacts, [rootIri],
             EuAcquisitionTestFixture.BuildRendererSource(3),
-            EuAcquisitionTestFixture.TestWireBudget());
+            runWireBudget);
 
         var (wPlan, wPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var wRequest = new EuObjectFactsPartitionRunRequest(
             wPlan, wPlanId, EuObjectFactsQuerySet.RootWatermark, [rootIri],
             EuAcquisitionTestFixture.BuildRendererSource(4),
-            EuAcquisitionTestFixture.TestWireBudget());
+            runWireBudget);
 
         var (mPlan, mPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var mRequest = new EuObjectFactsPartitionRunRequest(
             mPlan, mPlanId, EuObjectFactsQuerySet.ManifestationFacts, [rootIri],
             EuAcquisitionTestFixture.BuildRendererSource(104),
-            EuAcquisitionTestFixture.TestWireBudget());
+            runWireBudget);
 
         var evidenceResolver = new PermissiveEvidenceResolver(CompleteEnumerationRef);
 
@@ -131,7 +136,7 @@ public sealed class EuQueryExecutionAdapterTests
             EuAcquisitionTestFixture.BuildRendererSource(1009),
             EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
             evidenceResolver,
-            EuAcquisitionTestFixture.TestWireBudget(),
+            runWireBudget,
             CancellationToken.None);
 
         Assert.IsNull(result.Refusal, $"code={result.Refusal?.Code} detail={result.Refusal?.Detail} " +
@@ -896,6 +901,11 @@ public sealed class EuQueryExecutionAdapterTests
 
         async Task<EuQueryExecutionResult> RunOnceAsync(EuAcquisitionTestFixture.EuInMemoryCustodyStore store)
         {
+            // ONE BUDGET FOR THE WHOLE RUN. The adapter refuses a census request
+            // carrying a different instance, because two counters reading the same
+            // limit bound that many requests each and neither bounds the run.
+            var runWireBudget = EuAcquisitionTestFixture.TestWireBudget();
+
             var handler = new EuAcquisitionTestFixture.ClassifyingHandler(scripts);
             var executor = new EuRepeatedEnumerationExecutor(
                 store, new EuAcquisitionTestFixture.FixedTimeProvider(), handler);
@@ -904,28 +914,28 @@ public sealed class EuQueryExecutionAdapterTests
             var (censusPlan, censusPlanId) = EuAcquisitionTestFixture.BuildCensusPlan();
             var censusRequest = new EuCensusPartitionRunRequest(
                 censusPlan, censusPlanId, seed.Celex, EuAcquisitionTestFixture.BuildRendererSource(941),
-                EuAcquisitionTestFixture.TestWireBudget());
+                runWireBudget);
             var (pPlan, pPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
             var pRequest = new EuObjectFactsPartitionRunRequest(
                 pPlan, pPlanId, EuObjectFactsQuerySet.ObjectFacts, [rootIri],
                 EuAcquisitionTestFixture.BuildRendererSource(942),
-                EuAcquisitionTestFixture.TestWireBudget());
+                runWireBudget);
             var (xPlan, xPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
             var xRequest = new EuObjectFactsPartitionRunRequest(
                 xPlan, xPlanId, EuObjectFactsQuerySet.ExpressionFacts, [rootIri],
                 EuAcquisitionTestFixture.BuildRendererSource(943),
-                EuAcquisitionTestFixture.TestWireBudget());
+                runWireBudget);
             var (wPlan, wPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
             var wRequest = new EuObjectFactsPartitionRunRequest(
                 wPlan, wPlanId, EuObjectFactsQuerySet.RootWatermark, [rootIri],
                 EuAcquisitionTestFixture.BuildRendererSource(944),
-                EuAcquisitionTestFixture.TestWireBudget());
+                runWireBudget);
 
             var (mPlan, mPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
             var mRequest = new EuObjectFactsPartitionRunRequest(
                 mPlan, mPlanId, EuObjectFactsQuerySet.ManifestationFacts, [rootIri],
                 EuAcquisitionTestFixture.BuildRendererSource(1044),
-                EuAcquisitionTestFixture.TestWireBudget());
+                runWireBudget);
 
             return await adapter.RunAsync(
                 [(censusRequest, EuAcquisitionTestFixture.SourceWitness())],
@@ -937,7 +947,7 @@ public sealed class EuQueryExecutionAdapterTests
                 EuAcquisitionTestFixture.BuildRendererSource(1945),
                 EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
                 new PermissiveEvidenceResolver(CompleteEnumerationRef),
-                EuAcquisitionTestFixture.TestWireBudget(),
+                runWireBudget,
                 CancellationToken.None);
         }
 
@@ -1282,6 +1292,11 @@ public sealed class EuQueryExecutionAdapterTests
     [TestMethod]
     public async Task AnUnresolvableRecordFormRefusesTheSeedRatherThanGuessing()
     {
+        // ONE BUDGET FOR THE WHOLE RUN. The adapter refuses a census request
+        // carrying a different instance, because two counters reading the same
+        // limit bound that many requests each and neither bounds the run.
+        var runWireBudget = EuAcquisitionTestFixture.TestWireBudget();
+
         // D1-05c-2's own filled gap: EuCellarObjectDecode.TryDecode requires a caller-resolved
         // EuActForm it does not derive itself. This proves the adapter refuses honestly, naming the
         // seed, rather than defaulting to any one closed member, when family P's own
@@ -1333,28 +1348,28 @@ public sealed class EuQueryExecutionAdapterTests
         var (censusPlan, censusPlanId) = EuAcquisitionTestFixture.BuildCensusPlan();
         var censusRequest = new EuCensusPartitionRunRequest(
             censusPlan, censusPlanId, seed.Celex, EuAcquisitionTestFixture.BuildRendererSource(5),
-            EuAcquisitionTestFixture.TestWireBudget());
+            runWireBudget);
         var (pPlan, pPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var pRequest = new EuObjectFactsPartitionRunRequest(
             pPlan, pPlanId, EuObjectFactsQuerySet.ObjectFacts, [rootIri],
             EuAcquisitionTestFixture.BuildRendererSource(6),
-            EuAcquisitionTestFixture.TestWireBudget());
+            runWireBudget);
         var (xPlan, xPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var xRequest = new EuObjectFactsPartitionRunRequest(
             xPlan, xPlanId, EuObjectFactsQuerySet.ExpressionFacts, [rootIri],
             EuAcquisitionTestFixture.BuildRendererSource(7),
-            EuAcquisitionTestFixture.TestWireBudget());
+            runWireBudget);
         var (wPlan, wPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var wRequest = new EuObjectFactsPartitionRunRequest(
             wPlan, wPlanId, EuObjectFactsQuerySet.RootWatermark, [rootIri],
             EuAcquisitionTestFixture.BuildRendererSource(8),
-            EuAcquisitionTestFixture.TestWireBudget());
+            runWireBudget);
 
         var (mPlan, mPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var mRequest = new EuObjectFactsPartitionRunRequest(
             mPlan, mPlanId, EuObjectFactsQuerySet.ManifestationFacts, [rootIri],
             EuAcquisitionTestFixture.BuildRendererSource(108),
-            EuAcquisitionTestFixture.TestWireBudget());
+            runWireBudget);
 
         var result = await adapter.RunAsync(
             [(censusRequest, EuAcquisitionTestFixture.SourceWitness())],
@@ -1366,7 +1381,7 @@ public sealed class EuQueryExecutionAdapterTests
             EuAcquisitionTestFixture.BuildRendererSource(1080),
             EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
             new PermissiveEvidenceResolver(CompleteEnumerationRef),
-            EuAcquisitionTestFixture.TestWireBudget(),
+            runWireBudget,
             CancellationToken.None);
 
         Assert.IsNull(result.ScopeManifestReceipt);
@@ -1393,6 +1408,11 @@ public sealed class EuQueryExecutionAdapterTests
     [TestMethod]
     public async Task AClosureWithDiscoveredStatesIsComputedFromThisFixturesOwnRowsNotAppendixA()
     {
+        // ONE BUDGET FOR THE WHOLE RUN. The adapter refuses a census request
+        // carrying a different instance, because two counters reading the same
+        // limit bound that many requests each and neither bounds the run.
+        var runWireBudget = EuAcquisitionTestFixture.TestWireBudget();
+
         var seed = EuAppendixASeedMap.SeedsInCelexOrder[0];
         var rootIri = EuPackRootCanonicalForm.TryCanonicalize(seed.WorkRoot, out _)!;
         var state1Iri = rootIri + "/state-1";
@@ -1473,32 +1493,32 @@ public sealed class EuQueryExecutionAdapterTests
         var (censusPlan, censusPlanId) = EuAcquisitionTestFixture.BuildCensusPlan();
         var censusRequest = new EuCensusPartitionRunRequest(
             censusPlan, censusPlanId, seed.Celex, EuAcquisitionTestFixture.BuildRendererSource(21),
-            EuAcquisitionTestFixture.TestWireBudget());
+            runWireBudget);
 
         var closureObjects = new[] { rootIri, state1Iri, state2Iri };
         var (pPlan, pPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var pRequest = new EuObjectFactsPartitionRunRequest(
             pPlan, pPlanId, EuObjectFactsQuerySet.ObjectFacts, closureObjects,
             EuAcquisitionTestFixture.BuildRendererSource(22),
-            EuAcquisitionTestFixture.TestWireBudget());
+            runWireBudget);
 
         var (xPlan, xPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var xRequest = new EuObjectFactsPartitionRunRequest(
             xPlan, xPlanId, EuObjectFactsQuerySet.ExpressionFacts, closureObjects,
             EuAcquisitionTestFixture.BuildRendererSource(23),
-            EuAcquisitionTestFixture.TestWireBudget());
+            runWireBudget);
 
         var (wPlan, wPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var wRequest = new EuObjectFactsPartitionRunRequest(
             wPlan, wPlanId, EuObjectFactsQuerySet.RootWatermark, [rootIri],
             EuAcquisitionTestFixture.BuildRendererSource(24),
-            EuAcquisitionTestFixture.TestWireBudget());
+            runWireBudget);
 
         var (mPlan, mPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var mRequest = new EuObjectFactsPartitionRunRequest(
             mPlan, mPlanId, EuObjectFactsQuerySet.ManifestationFacts, [rootIri],
             EuAcquisitionTestFixture.BuildRendererSource(124),
-            EuAcquisitionTestFixture.TestWireBudget());
+            runWireBudget);
 
         var result = await adapter.RunAsync(
             [(censusRequest, EuAcquisitionTestFixture.SourceWitness())],
@@ -1510,7 +1530,7 @@ public sealed class EuQueryExecutionAdapterTests
             EuAcquisitionTestFixture.BuildRendererSource(1029),
             EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
             new PermissiveEvidenceResolver(CompleteEnumerationRef),
-            EuAcquisitionTestFixture.TestWireBudget(),
+            runWireBudget,
             CancellationToken.None);
 
         Assert.IsNull(result.Refusal, $"code={result.Refusal?.Code} detail={result.Refusal?.Detail} " +
@@ -1564,6 +1584,11 @@ public sealed class EuQueryExecutionAdapterTests
     [TestMethod]
     public async Task AStateTheCensusDiscoveredIsAskedAboutInThePBatchAndYieldsItsOwnRecord()
     {
+        // ONE BUDGET FOR THE WHOLE RUN. The adapter refuses a census request
+        // carrying a different instance, because two counters reading the same
+        // limit bound that many requests each and neither bounds the run.
+        var runWireBudget = EuAcquisitionTestFixture.TestWireBudget();
+
         var seed = EuAppendixASeedMap.SeedsInCelexOrder[0];
         var rootIri = EuPackRootCanonicalForm.TryCanonicalize(seed.WorkRoot, out _)!;
         var state1Iri = rootIri + "/state-1";
@@ -1644,32 +1669,32 @@ public sealed class EuQueryExecutionAdapterTests
         var (censusPlan, censusPlanId) = EuAcquisitionTestFixture.BuildCensusPlan();
         var censusRequest = new EuCensusPartitionRunRequest(
             censusPlan, censusPlanId, seed.Celex, EuAcquisitionTestFixture.BuildRendererSource(21),
-            EuAcquisitionTestFixture.TestWireBudget());
+            runWireBudget);
 
         var closureObjects = new[] { rootIri, state1Iri, state2Iri };
         var (pPlan, pPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var pRequest = new EuObjectFactsPartitionRunRequest(
             pPlan, pPlanId, EuObjectFactsQuerySet.ObjectFacts, closureObjects,
             EuAcquisitionTestFixture.BuildRendererSource(22),
-            EuAcquisitionTestFixture.TestWireBudget());
+            runWireBudget);
 
         var (xPlan, xPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var xRequest = new EuObjectFactsPartitionRunRequest(
             xPlan, xPlanId, EuObjectFactsQuerySet.ExpressionFacts, closureObjects,
             EuAcquisitionTestFixture.BuildRendererSource(23),
-            EuAcquisitionTestFixture.TestWireBudget());
+            runWireBudget);
 
         var (wPlan, wPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var wRequest = new EuObjectFactsPartitionRunRequest(
             wPlan, wPlanId, EuObjectFactsQuerySet.RootWatermark, [rootIri],
             EuAcquisitionTestFixture.BuildRendererSource(24),
-            EuAcquisitionTestFixture.TestWireBudget());
+            runWireBudget);
 
         var (mPlan, mPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var mRequest = new EuObjectFactsPartitionRunRequest(
             mPlan, mPlanId, EuObjectFactsQuerySet.ManifestationFacts, [rootIri],
             EuAcquisitionTestFixture.BuildRendererSource(124),
-            EuAcquisitionTestFixture.TestWireBudget());
+            runWireBudget);
 
         var result = await adapter.RunAsync(
             [(censusRequest, EuAcquisitionTestFixture.SourceWitness())],
@@ -1681,7 +1706,7 @@ public sealed class EuQueryExecutionAdapterTests
             EuAcquisitionTestFixture.BuildRendererSource(1029),
             EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
             new PermissiveEvidenceResolver(CompleteEnumerationRef),
-            EuAcquisitionTestFixture.TestWireBudget(),
+            runWireBudget,
             CancellationToken.None);
 
         Assert.IsNull(result.Refusal, $"code={result.Refusal?.Code} detail={result.Refusal?.Detail} " +
@@ -1767,6 +1792,11 @@ public sealed class EuQueryExecutionAdapterTests
     [TestMethod]
     public async Task AnOutOfClosurePRowIsRefusedRatherThanSilentlyDropped()
     {
+        // ONE BUDGET FOR THE WHOLE RUN. The adapter refuses a census request
+        // carrying a different instance, because two counters reading the same
+        // limit bound that many requests each and neither bounds the run.
+        var runWireBudget = EuAcquisitionTestFixture.TestWireBudget();
+
         var seed = EuAppendixASeedMap.SeedsInCelexOrder[0];
         var rootIri = EuPackRootCanonicalForm.TryCanonicalize(seed.WorkRoot, out _)!;
         var outOfClosureIri = rootIri + "/zzz-out-of-closure";
@@ -1815,31 +1845,31 @@ public sealed class EuQueryExecutionAdapterTests
         var (censusPlan, censusPlanId) = EuAcquisitionTestFixture.BuildCensusPlan();
         var censusRequest = new EuCensusPartitionRunRequest(
             censusPlan, censusPlanId, seed.Celex, EuAcquisitionTestFixture.BuildRendererSource(31),
-            EuAcquisitionTestFixture.TestWireBudget());
+            runWireBudget);
 
         var (pPlan, pPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var pRequest = new EuObjectFactsPartitionRunRequest(
             pPlan, pPlanId, EuObjectFactsQuerySet.ObjectFacts, [rootIri, outOfClosureIri],
             EuAcquisitionTestFixture.BuildRendererSource(32),
-            EuAcquisitionTestFixture.TestWireBudget());
+            runWireBudget);
 
         var (xPlan, xPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var xRequest = new EuObjectFactsPartitionRunRequest(
             xPlan, xPlanId, EuObjectFactsQuerySet.ExpressionFacts, [rootIri],
             EuAcquisitionTestFixture.BuildRendererSource(33),
-            EuAcquisitionTestFixture.TestWireBudget());
+            runWireBudget);
 
         var (wPlan, wPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var wRequest = new EuObjectFactsPartitionRunRequest(
             wPlan, wPlanId, EuObjectFactsQuerySet.RootWatermark, [rootIri],
             EuAcquisitionTestFixture.BuildRendererSource(34),
-            EuAcquisitionTestFixture.TestWireBudget());
+            runWireBudget);
 
         var (mPlan, mPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var mRequest = new EuObjectFactsPartitionRunRequest(
             mPlan, mPlanId, EuObjectFactsQuerySet.ManifestationFacts, [rootIri],
             EuAcquisitionTestFixture.BuildRendererSource(134),
-            EuAcquisitionTestFixture.TestWireBudget());
+            runWireBudget);
 
         var result = await adapter.RunAsync(
             [(censusRequest, EuAcquisitionTestFixture.SourceWitness())],
@@ -1851,7 +1881,7 @@ public sealed class EuQueryExecutionAdapterTests
             EuAcquisitionTestFixture.BuildRendererSource(1035),
             EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
             new PermissiveEvidenceResolver(CompleteEnumerationRef),
-            EuAcquisitionTestFixture.TestWireBudget(),
+            runWireBudget,
             CancellationToken.None);
 
         Assert.IsNull(result.ScopeManifestReceipt);
@@ -1880,6 +1910,11 @@ public sealed class EuQueryExecutionAdapterTests
     [TestMethod]
     public async Task AWRowNamingARootOutsideOIsRefusedBeforeDecode()
     {
+        // ONE BUDGET FOR THE WHOLE RUN. The adapter refuses a census request
+        // carrying a different instance, because two counters reading the same
+        // limit bound that many requests each and neither bounds the run.
+        var runWireBudget = EuAcquisitionTestFixture.TestWireBudget();
+
         var seed = EuAppendixASeedMap.SeedsInCelexOrder[0];
         var rootIri = EuPackRootCanonicalForm.TryCanonicalize(seed.WorkRoot, out _)!;
         var otherSeed = EuAppendixASeedMap.SeedsInCelexOrder[1];
@@ -1941,31 +1976,31 @@ public sealed class EuQueryExecutionAdapterTests
         var (censusPlan, censusPlanId) = EuAcquisitionTestFixture.BuildCensusPlan();
         var censusRequest = new EuCensusPartitionRunRequest(
             censusPlan, censusPlanId, seed.Celex, EuAcquisitionTestFixture.BuildRendererSource(41),
-            EuAcquisitionTestFixture.TestWireBudget());
+            runWireBudget);
 
         var (pPlan, pPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var pRequest = new EuObjectFactsPartitionRunRequest(
             pPlan, pPlanId, EuObjectFactsQuerySet.ObjectFacts, [rootIri],
             EuAcquisitionTestFixture.BuildRendererSource(42),
-            EuAcquisitionTestFixture.TestWireBudget());
+            runWireBudget);
 
         var (xPlan, xPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var xRequest = new EuObjectFactsPartitionRunRequest(
             xPlan, xPlanId, EuObjectFactsQuerySet.ExpressionFacts, [rootIri],
             EuAcquisitionTestFixture.BuildRendererSource(43),
-            EuAcquisitionTestFixture.TestWireBudget());
+            runWireBudget);
 
         var (wPlan, wPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var wRequest = new EuObjectFactsPartitionRunRequest(
             wPlan, wPlanId, EuObjectFactsQuerySet.RootWatermark, [rootIri, otherRootIri],
             EuAcquisitionTestFixture.BuildRendererSource(44),
-            EuAcquisitionTestFixture.TestWireBudget());
+            runWireBudget);
 
         var (mPlan, mPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var mRequest = new EuObjectFactsPartitionRunRequest(
             mPlan, mPlanId, EuObjectFactsQuerySet.ManifestationFacts, [rootIri, otherRootIri],
             EuAcquisitionTestFixture.BuildRendererSource(144),
-            EuAcquisitionTestFixture.TestWireBudget());
+            runWireBudget);
 
         var result = await adapter.RunAsync(
             [(censusRequest, EuAcquisitionTestFixture.SourceWitness())],
@@ -1977,7 +2012,7 @@ public sealed class EuQueryExecutionAdapterTests
             EuAcquisitionTestFixture.BuildRendererSource(1045),
             EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
             new PermissiveEvidenceResolver(CompleteEnumerationRef),
-            EuAcquisitionTestFixture.TestWireBudget(),
+            runWireBudget,
             CancellationToken.None);
 
         Assert.IsNull(result.ScopeManifestReceipt);
@@ -1999,6 +2034,11 @@ public sealed class EuQueryExecutionAdapterTests
     [TestMethod]
     public async Task APassBThatDiffersFromPassAIsRefusedAsPassesDeliveredDifferentSelections()
     {
+        // ONE BUDGET FOR THE WHOLE RUN. The adapter refuses a census request
+        // carrying a different instance, because two counters reading the same
+        // limit bound that many requests each and neither bounds the run.
+        var runWireBudget = EuAcquisitionTestFixture.TestWireBudget();
+
         var seed = EuAppendixASeedMap.SeedsInCelexOrder[0];
         var rootIri = EuPackRootCanonicalForm.TryCanonicalize(seed.WorkRoot, out _)!;
         var state1Iri = rootIri + "/state-1";
@@ -2028,7 +2068,7 @@ public sealed class EuQueryExecutionAdapterTests
         var (censusPlan, censusPlanId) = EuAcquisitionTestFixture.BuildCensusPlan();
         var censusRequest = new EuCensusPartitionRunRequest(
             censusPlan, censusPlanId, seed.Celex, EuAcquisitionTestFixture.BuildRendererSource(51),
-            EuAcquisitionTestFixture.TestWireBudget());
+            runWireBudget);
 
         // The census refuses before any object-facts batch runs, so this policy is
         // never exercised; it exists because the run derives its own batches now and
@@ -2044,7 +2084,7 @@ public sealed class EuQueryExecutionAdapterTests
             EuAcquisitionTestFixture.BuildRendererSource(1052),
             EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
             new PermissiveEvidenceResolver(CompleteEnumerationRef),
-            EuAcquisitionTestFixture.TestWireBudget(),
+            runWireBudget,
             CancellationToken.None);
 
         Assert.IsNotNull(result.Refusal);
@@ -2065,6 +2105,11 @@ public sealed class EuQueryExecutionAdapterTests
     [TestMethod]
     public async Task AnAdapterLevelPartitionRequiredBatchIsReportedAsARefusedFamily()
     {
+        // ONE BUDGET FOR THE WHOLE RUN. The adapter refuses a census request
+        // carrying a different instance, because two counters reading the same
+        // limit bound that many requests each and neither bounds the run.
+        var runWireBudget = EuAcquisitionTestFixture.TestWireBudget();
+
         var seed = EuAppendixASeedMap.SeedsInCelexOrder[0];
 
         var scripts = new Dictionary<string, EuAcquisitionTestFixture.FamilyScript>(StringComparer.Ordinal)
@@ -2081,7 +2126,7 @@ public sealed class EuQueryExecutionAdapterTests
         var (censusPlan, censusPlanId) = EuAcquisitionTestFixture.BuildCensusPlan();
         var censusRequest = new EuCensusPartitionRunRequest(
             censusPlan, censusPlanId, seed.Celex, EuAcquisitionTestFixture.BuildRendererSource(61),
-            EuAcquisitionTestFixture.TestWireBudget());
+            runWireBudget);
 
         // The census refuses before any object-facts batch runs, so this policy is
         // never exercised; it exists because the run derives its own batches now and
@@ -2097,7 +2142,7 @@ public sealed class EuQueryExecutionAdapterTests
             EuAcquisitionTestFixture.BuildRendererSource(1062),
             EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
             new PermissiveEvidenceResolver(CompleteEnumerationRef),
-            EuAcquisitionTestFixture.TestWireBudget(),
+            runWireBudget,
             CancellationToken.None);
 
         Assert.IsNotNull(result.Refusal);
@@ -2126,6 +2171,11 @@ public sealed class EuQueryExecutionAdapterTests
     [TestMethod]
     public async Task TheWitnessQueryIsActuallyDispatchedOverHttpRatherThanAssumedEmpty()
     {
+        // ONE BUDGET FOR THE WHOLE RUN. The adapter refuses a census request
+        // carrying a different instance, because two counters reading the same
+        // limit bound that many requests each and neither bounds the run.
+        var runWireBudget = EuAcquisitionTestFixture.TestWireBudget();
+
         var seed = EuAppendixASeedMap.SeedsInCelexOrder[0];
         var rootIri = EuPackRootCanonicalForm.TryCanonicalize(seed.WorkRoot, out _)!;
         const string expressionIri = "http://publications.europa.eu/resource/cellar/00000000-0000-0000-0000-000000000071.0001.01/DOC_1";
@@ -2171,28 +2221,28 @@ public sealed class EuQueryExecutionAdapterTests
         var (censusPlan, censusPlanId) = EuAcquisitionTestFixture.BuildCensusPlan();
         var censusRequest = new EuCensusPartitionRunRequest(
             censusPlan, censusPlanId, seed.Celex, EuAcquisitionTestFixture.BuildRendererSource(701),
-            EuAcquisitionTestFixture.TestWireBudget());
+            runWireBudget);
         var (pPlan, pPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var pRequest = new EuObjectFactsPartitionRunRequest(
             pPlan, pPlanId, EuObjectFactsQuerySet.ObjectFacts, [rootIri],
             EuAcquisitionTestFixture.BuildRendererSource(702),
-            EuAcquisitionTestFixture.TestWireBudget());
+            runWireBudget);
         var (xPlan, xPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var xRequest = new EuObjectFactsPartitionRunRequest(
             xPlan, xPlanId, EuObjectFactsQuerySet.ExpressionFacts, [rootIri],
             EuAcquisitionTestFixture.BuildRendererSource(703),
-            EuAcquisitionTestFixture.TestWireBudget());
+            runWireBudget);
         var (wPlan, wPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var wRequest = new EuObjectFactsPartitionRunRequest(
             wPlan, wPlanId, EuObjectFactsQuerySet.RootWatermark, [rootIri],
             EuAcquisitionTestFixture.BuildRendererSource(704),
-            EuAcquisitionTestFixture.TestWireBudget());
+            runWireBudget);
 
         var (mPlan, mPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var mRequest = new EuObjectFactsPartitionRunRequest(
             mPlan, mPlanId, EuObjectFactsQuerySet.ManifestationFacts, [rootIri],
             EuAcquisitionTestFixture.BuildRendererSource(804),
-            EuAcquisitionTestFixture.TestWireBudget());
+            runWireBudget);
 
         Assert.AreEqual(0, handler.OccurrenceCountFor("Witness"), "no witness request should have been sent before the run.");
 
@@ -2206,7 +2256,7 @@ public sealed class EuQueryExecutionAdapterTests
             EuAcquisitionTestFixture.BuildRendererSource(1705),
             EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
             new PermissiveEvidenceResolver(CompleteEnumerationRef),
-            EuAcquisitionTestFixture.TestWireBudget(),
+            runWireBudget,
             CancellationToken.None);
 
         Assert.IsNull(result.Refusal, $"code={result.Refusal?.Code} detail={result.Refusal?.Detail}");
@@ -2230,6 +2280,11 @@ public sealed class EuQueryExecutionAdapterTests
     [TestMethod]
     public async Task ADeliveredWitnessRowWithNoIdentityResolutionReconcilesAsHonestlyUnresolved()
     {
+        // ONE BUDGET FOR THE WHOLE RUN. The adapter refuses a census request
+        // carrying a different instance, because two counters reading the same
+        // limit bound that many requests each and neither bounds the run.
+        var runWireBudget = EuAcquisitionTestFixture.TestWireBudget();
+
         var seed = EuAppendixASeedMap.SeedsInCelexOrder[0];
         var rootIri = EuPackRootCanonicalForm.TryCanonicalize(seed.WorkRoot, out _)!;
         const string expressionIri = "http://publications.europa.eu/resource/cellar/00000000-0000-0000-0000-000000000072.0001.01/DOC_1";
@@ -2278,28 +2333,28 @@ public sealed class EuQueryExecutionAdapterTests
         var (censusPlan, censusPlanId) = EuAcquisitionTestFixture.BuildCensusPlan();
         var censusRequest = new EuCensusPartitionRunRequest(
             censusPlan, censusPlanId, seed.Celex, EuAcquisitionTestFixture.BuildRendererSource(711),
-            EuAcquisitionTestFixture.TestWireBudget());
+            runWireBudget);
         var (pPlan, pPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var pRequest = new EuObjectFactsPartitionRunRequest(
             pPlan, pPlanId, EuObjectFactsQuerySet.ObjectFacts, [rootIri],
             EuAcquisitionTestFixture.BuildRendererSource(712),
-            EuAcquisitionTestFixture.TestWireBudget());
+            runWireBudget);
         var (xPlan, xPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var xRequest = new EuObjectFactsPartitionRunRequest(
             xPlan, xPlanId, EuObjectFactsQuerySet.ExpressionFacts, [rootIri],
             EuAcquisitionTestFixture.BuildRendererSource(713),
-            EuAcquisitionTestFixture.TestWireBudget());
+            runWireBudget);
         var (wPlan, wPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var wRequest = new EuObjectFactsPartitionRunRequest(
             wPlan, wPlanId, EuObjectFactsQuerySet.RootWatermark, [rootIri],
             EuAcquisitionTestFixture.BuildRendererSource(714),
-            EuAcquisitionTestFixture.TestWireBudget());
+            runWireBudget);
 
         var (mPlan, mPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var mRequest = new EuObjectFactsPartitionRunRequest(
             mPlan, mPlanId, EuObjectFactsQuerySet.ManifestationFacts, [rootIri],
             EuAcquisitionTestFixture.BuildRendererSource(814),
-            EuAcquisitionTestFixture.TestWireBudget());
+            runWireBudget);
 
         var result = await adapter.RunAsync(
             [(censusRequest, EuAcquisitionTestFixture.SourceWitness())],
@@ -2311,7 +2366,7 @@ public sealed class EuQueryExecutionAdapterTests
             EuAcquisitionTestFixture.BuildRendererSource(1715),
             EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
             new PermissiveEvidenceResolver(CompleteEnumerationRef),
-            EuAcquisitionTestFixture.TestWireBudget(),
+            runWireBudget,
             CancellationToken.None);
 
         Assert.IsNull(result.Refusal, $"code={result.Refusal?.Code} detail={result.Refusal?.Detail}");
@@ -2339,6 +2394,11 @@ public sealed class EuQueryExecutionAdapterTests
     [TestMethod]
     public async Task AWRowWithANonLiteralValueKindIsRefusedRatherThanSilentlyDropped()
     {
+        // ONE BUDGET FOR THE WHOLE RUN. The adapter refuses a census request
+        // carrying a different instance, because two counters reading the same
+        // limit bound that many requests each and neither bounds the run.
+        var runWireBudget = EuAcquisitionTestFixture.TestWireBudget();
+
         var seed = EuAppendixASeedMap.SeedsInCelexOrder[0];
         var rootIri = EuPackRootCanonicalForm.TryCanonicalize(seed.WorkRoot, out _)!;
         const string expressionIri = "http://publications.europa.eu/resource/cellar/00000000-0000-0000-0000-000000000073.0001.01/DOC_1";
@@ -2382,28 +2442,28 @@ public sealed class EuQueryExecutionAdapterTests
         var (censusPlan, censusPlanId) = EuAcquisitionTestFixture.BuildCensusPlan();
         var censusRequest = new EuCensusPartitionRunRequest(
             censusPlan, censusPlanId, seed.Celex, EuAcquisitionTestFixture.BuildRendererSource(721),
-            EuAcquisitionTestFixture.TestWireBudget());
+            runWireBudget);
         var (pPlan, pPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var pRequest = new EuObjectFactsPartitionRunRequest(
             pPlan, pPlanId, EuObjectFactsQuerySet.ObjectFacts, [rootIri],
             EuAcquisitionTestFixture.BuildRendererSource(722),
-            EuAcquisitionTestFixture.TestWireBudget());
+            runWireBudget);
         var (xPlan, xPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var xRequest = new EuObjectFactsPartitionRunRequest(
             xPlan, xPlanId, EuObjectFactsQuerySet.ExpressionFacts, [rootIri],
             EuAcquisitionTestFixture.BuildRendererSource(723),
-            EuAcquisitionTestFixture.TestWireBudget());
+            runWireBudget);
         var (wPlan, wPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var wRequest = new EuObjectFactsPartitionRunRequest(
             wPlan, wPlanId, EuObjectFactsQuerySet.RootWatermark, [rootIri],
             EuAcquisitionTestFixture.BuildRendererSource(724),
-            EuAcquisitionTestFixture.TestWireBudget());
+            runWireBudget);
 
         var (mPlan, mPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var mRequest = new EuObjectFactsPartitionRunRequest(
             mPlan, mPlanId, EuObjectFactsQuerySet.ManifestationFacts, [rootIri],
             EuAcquisitionTestFixture.BuildRendererSource(824),
-            EuAcquisitionTestFixture.TestWireBudget());
+            runWireBudget);
 
         var result = await adapter.RunAsync(
             [(censusRequest, EuAcquisitionTestFixture.SourceWitness())],
@@ -2415,7 +2475,7 @@ public sealed class EuQueryExecutionAdapterTests
             EuAcquisitionTestFixture.BuildRendererSource(1725),
             EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
             new PermissiveEvidenceResolver(CompleteEnumerationRef),
-            EuAcquisitionTestFixture.TestWireBudget(),
+            runWireBudget,
             CancellationToken.None);
 
         Assert.IsNull(result.ScopeManifestReceipt);
@@ -3079,6 +3139,11 @@ public sealed class EuQueryExecutionAdapterTests
             EuAcquisitionTestFixture.EuInMemoryCustodyStore? custodyStore = null,
             IReadOnlyList<string>? witnessBodies = null)
     {
+        // ONE BUDGET FOR THE WHOLE RUN. The adapter refuses a census request
+        // carrying a different instance, because two counters reading the same
+        // limit bound that many requests each and neither bounds the run.
+        var runWireBudget = EuAcquisitionTestFixture.TestWireBudget();
+
         var seed = EuAppendixASeedMap.SeedsInCelexOrder.Single(entry => entry.Celex == WorkingTimeCelex);
         var rootIri = EuPackRootCanonicalForm.TryCanonicalize(seed.WorkRoot, out _)
             ?? throw new AssertFailedException("Appendix A's own seed root failed to canonicalize.");
@@ -3127,28 +3192,28 @@ public sealed class EuQueryExecutionAdapterTests
         var (censusPlan, censusPlanId) = EuAcquisitionTestFixture.BuildCensusPlan();
         var censusRequest = new EuCensusPartitionRunRequest(
             censusPlan, censusPlanId, seed.Celex, EuAcquisitionTestFixture.BuildRendererSource(1501),
-            EuAcquisitionTestFixture.TestWireBudget());
+            runWireBudget);
 
         var (pPlan, pPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var pRequest = new EuObjectFactsPartitionRunRequest(
             pPlan, pPlanId, EuObjectFactsQuerySet.ObjectFacts, [rootIri],
             EuAcquisitionTestFixture.BuildRendererSource(1502),
-            EuAcquisitionTestFixture.TestWireBudget());
+            runWireBudget);
         var (xPlan, xPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var xRequest = new EuObjectFactsPartitionRunRequest(
             xPlan, xPlanId, EuObjectFactsQuerySet.ExpressionFacts, [rootIri],
             EuAcquisitionTestFixture.BuildRendererSource(1503),
-            EuAcquisitionTestFixture.TestWireBudget());
+            runWireBudget);
         var (wPlan, wPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var wRequest = new EuObjectFactsPartitionRunRequest(
             wPlan, wPlanId, EuObjectFactsQuerySet.RootWatermark, [rootIri],
             EuAcquisitionTestFixture.BuildRendererSource(1504),
-            EuAcquisitionTestFixture.TestWireBudget());
+            runWireBudget);
         var (mPlan, mPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var mRequest = new EuObjectFactsPartitionRunRequest(
             mPlan, mPlanId, EuObjectFactsQuerySet.ManifestationFacts, [rootIri],
             EuAcquisitionTestFixture.BuildRendererSource(1505),
-            EuAcquisitionTestFixture.TestWireBudget());
+            runWireBudget);
 
         var result = await adapter.RunAsync(
             [(censusRequest, EuAcquisitionTestFixture.SourceWitness())],
@@ -3160,7 +3225,7 @@ public sealed class EuQueryExecutionAdapterTests
             EuAcquisitionTestFixture.BuildRendererSource(2509),
             EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
             new PermissiveEvidenceResolver(CompleteEnumerationRef),
-            EuAcquisitionTestFixture.TestWireBudget(),
+            runWireBudget,
             CancellationToken.None);
 
         return (result, handler, store);
@@ -3406,6 +3471,11 @@ public sealed class EuQueryExecutionAdapterTests
     private static async System.Threading.Tasks.Task<EuQueryExecutionResult> RunWithObjectRowsAsync(
         string celex, string rootIri, IReadOnlyList<string> pRows)
     {
+        // ONE BUDGET FOR THE WHOLE RUN. The adapter refuses a census request
+        // carrying a different instance, because two counters reading the same
+        // limit bound that many requests each and neither bounds the run.
+        var runWireBudget = EuAcquisitionTestFixture.TestWireBudget();
+
         var xRows = new[]
         {
             EuAcquisitionTestFixture.ExpressionFactRow(
@@ -3454,7 +3524,7 @@ public sealed class EuQueryExecutionAdapterTests
         return await adapter.RunAsync(
             [(new EuCensusPartitionRunRequest(
                 censusPlan, censusPlanId, celex, EuAcquisitionTestFixture.BuildRendererSource(8101),
-                EuAcquisitionTestFixture.TestWireBudget()),
+                runWireBudget),
               EuAcquisitionTestFixture.SourceWitness())],
             new EuObjectFactsBatchPolicy(
                 objectFactsPlan, objectFactsPlanId,
@@ -3465,7 +3535,7 @@ public sealed class EuQueryExecutionAdapterTests
             EuAcquisitionTestFixture.BuildRendererSource(8104),
             EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
             new PermissiveEvidenceResolver(CompleteEnumerationRef),
-            EuAcquisitionTestFixture.TestWireBudget(),
+            runWireBudget,
             System.Threading.CancellationToken.None);
     }
 

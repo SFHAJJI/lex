@@ -985,6 +985,7 @@ public sealed class EuQueryExecutionAdapter
                         "budget instance than this run, so neither limit bounds the run."));
             }
         }
+
         var outcomes = new List<EuFamilyEnumerationOutcome>(censusFamilies.Count * 5);
 
         // ---- Run and prove every census-family seed. ----
