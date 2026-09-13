@@ -138,10 +138,14 @@ public sealed class RepresentationChainConstructionSurfaceTests
                 + N + "RepresentationChainObservation",
                 "field private instance " + N + "RepresentationChain+AppendedObservation::<Observation>k__BackingField -> "
                 + N + "RepresentationChainObservation",
+                // LuxembourgGazetteBodyDisposition (#419 slice 6a) retains the verified terminal observation of an admitted Gazette-PDF body, as EuAnnexBodyDisposition does; minted only by FromRoute.
+                "field private instance Lex.V3.Contracts.Source.Luxembourg.LuxembourgGazetteBodyDisposition::<SourceObservation>k__BackingField -> " + N + "RepresentationChainObservation" + "?",
+                "method private static Lex.V3.Contracts.Source.Luxembourg.LuxembourgGazetteBodyDisposition::VerifyRetention(Lex.V3.Contracts.Source.Luxembourg.LuxembourgBodyCandidateResolution, " + N + "LuxembourgUserFormatToken, Lex.V3.Contracts.Source.Luxembourg.LuxembourgGazetteBodyRetention) -> " + N + "RepresentationChainObservation",
                 "property public instance Lex.V3.Contracts.Derivation.EuAnnexBodyDisposition::SourceObservation() -> "
                 + N + "RepresentationChainObservation",
                 "property public instance " + N + "RepresentationChain+AppendedObservation::Observation() -> "
                 + N + "RepresentationChainObservation",
+                "property public instance Lex.V3.Contracts.Source.Luxembourg.LuxembourgGazetteBodyDisposition::SourceObservation() -> " + N + "RepresentationChainObservation" + "?",
             },
             ConstructionSurface.ProducersIn(
                 typeof(RepresentationChain).Assembly,
