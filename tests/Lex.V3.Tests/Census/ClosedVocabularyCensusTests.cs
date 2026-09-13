@@ -525,6 +525,11 @@ public sealed class ClosedVocabularyCensusTests
                     + "AcceptedXsdStringIdentity, AcceptedRdfLangStringIdentity, "
                     + "AcceptedXsdDateCanonical, TypedQuarantineUnsupportedDatatype, "
                     + "TypedQuarantineContextDependentDatatype, TypedQuarantineIllTyped",
+                "Lex.V3.Contracts.Source.Luxembourg.LuxembourgNeverConsolidatedAdmitRefusal: None, "
+                    + "DispositionDisagrees, ActClassDisagrees, CompletionEvidenceDisagrees",
+                "Lex.V3.Contracts.Source.Luxembourg.LuxembourgNeverConsolidatedDisposition: "
+                    + "CitedEnumerationDeliveredNoRows, CitedEnumerationDeliveredRows, "
+                    + "NoEnumerationCited",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgOpinionHostRobotsState: "
                     + "PermittedByStatedPolicy, NoStatedPolicy",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgOpinionLocatorRefusal: None, "
