@@ -467,9 +467,9 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
         }
 
         var start = _testHandlerOverride is null
-            ? await RoutedHttpAcquisitionSession.StartAsync(sourceWitness, _custodyStore, cancellationToken)
+            ? await RoutedHttpAcquisitionSession.StartAsync(sourceWitness, _custodyStore, wireBudget, cancellationToken)
                 .ConfigureAwait(false)
-            : await StartWithTestHandlerAsync(sourceWitness, cancellationToken).ConfigureAwait(false);
+            : await StartWithTestHandlerAsync(sourceWitness, wireBudget, cancellationToken).ConfigureAwait(false);
         if (start.Kind != OfficialHttpAcquisitionOutcomeKind.ExecutedObservation || start.Session is null)
         {
             return LuxembourgEnumerationRunResult.Refused(
@@ -674,9 +674,10 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
     /// </summary>
     private Task<RoutedHttpAcquisitionSession.StartResult> StartWithTestHandlerAsync(
         BoundMachineRequest sourceWitness,
+        WireRequestBudget wireBudget,
         CancellationToken cancellationToken) =>
         RoutedHttpAcquisitionSession.StartWithTestTransportAsync(
-            sourceWitness, _custodyStore, _testHandlerOverride!, _timeProvider, cancellationToken);
+            sourceWitness, _custodyStore, _testHandlerOverride!, _timeProvider, wireBudget, cancellationToken);
 
     /// <summary>
     /// Sends one document GET through its own routed session, with robots evaluated against
@@ -709,10 +710,10 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
 
         var start = _testHandlerOverride is null
             ? await RoutedHttpAcquisitionSession.StartAsync(
-                    boundRequest, _custodyStore, cancellationToken)
+                    boundRequest, _custodyStore, wireBudget, cancellationToken)
                 .ConfigureAwait(false)
             : await RoutedHttpAcquisitionSession.StartWithTestTransportAsync(
-                    boundRequest, _custodyStore, _testHandlerOverride, _timeProvider,
+                    boundRequest, _custodyStore, _testHandlerOverride, _timeProvider, wireBudget,
                     cancellationToken)
                 .ConfigureAwait(false);
         if (start.Kind != OfficialHttpAcquisitionOutcomeKind.ExecutedObservation || start.Session is null)
@@ -750,6 +751,15 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
 
                 attempt = await item.ExecuteNextAttemptAsync(cancellationToken).ConfigureAwait(false);
                 attemptCount++;
+
+                // NO REDIRECT-HOP CEILING MAPPING HERE, AND THE ASYMMETRY WITH THE EU DOCUMENT
+                // FETCH IS DELIBERATE. That door maps the session's own RedirectTargetNotSentWire-
+                // BudgetExhausted outcome because the EU document profile admits a same-origin 303
+                // chain. This publisher's document profile expects no redirect on this route at
+                // all: a 303 here ends the route as SourceProfileStale before any successor could
+                // be considered, so the session's hop gate is unreachable from this door. A mapping
+                // for a case that cannot occur was drafted, measured against the profile, and
+                // removed rather than left to claim a path that does not exist.
                 if (attempt.Kind == OfficialHttpAcquisitionOutcomeKind.ExecutedObservation)
                 {
                     // The one place this driver deliberately differs from the EU one: a completed
@@ -861,9 +871,9 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
         // intended leaf rather than as a single result, keeping results.Count == chain.Leaves.Count
         // true on every path, not only the delivered one.
         var start = _testHandlerOverride is null
-            ? await RoutedHttpAcquisitionSession.StartAsync(sourceWitness, _custodyStore, cancellationToken)
+            ? await RoutedHttpAcquisitionSession.StartAsync(sourceWitness, _custodyStore, wireBudget, cancellationToken)
                 .ConfigureAwait(false)
-            : await StartWithTestHandlerAsync(sourceWitness, cancellationToken).ConfigureAwait(false);
+            : await StartWithTestHandlerAsync(sourceWitness, wireBudget, cancellationToken).ConfigureAwait(false);
         if (start.Kind != OfficialHttpAcquisitionOutcomeKind.ExecutedObservation || start.Session is null)
         {
             return chain.Leaves

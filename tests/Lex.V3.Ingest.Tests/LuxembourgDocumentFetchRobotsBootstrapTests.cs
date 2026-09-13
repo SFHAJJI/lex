@@ -170,6 +170,7 @@ public sealed class LuxembourgDocumentFetchRobotsBootstrapTests
             new InMemoryCustodyStore(),
             handler,
             TimeProvider.System,
+            LuxembourgAcquisitionTestFixture.TestWireBudget(),
             CancellationToken.None);
     }
 

@@ -298,7 +298,13 @@ public sealed class EuProcedureEventLiveGuardTests
             "and a refused bootstrap records whether it carried response evidence.");
     }
 
-    /// <summary>Both ceilings are asserted, and the send bound uses attempts rather than successes.</summary>
+    /// <summary>Both ceilings are asserted, and the send bound is the spend itself.</summary>
+    /// <remarks>
+    /// The first head of #579 bounded sends as the spend plus one uncharged robots redirect hop per
+    /// bootstrap attempted, and this guard pinned that text. The repair charges every hop at the
+    /// session's own gate, so the spend IS the send count; the old term is now pinned ABSENT, so a
+    /// harness that re-added an allowance for a hop nothing leaves uncharged would fail here.
+    /// </remarks>
     [TestMethod]
     public void BothCeilingsAreAssertedFromWhatWasCounted()
     {
@@ -308,12 +314,15 @@ public sealed class EuProcedureEventLiveGuardTests
             1, CountOf(code, "SharedWireCeiling, budget.Spent"),
             "the charged ceiling is asserted against what was actually charged.");
         Assert.AreEqual(
-            1, CountOf(code, "SendCeiling, budget.Spent + accounting.BootstrapsAttempted"),
-            "the send ceiling is asserted from attempts, since the budget cannot enforce it and a "
-            + "refused bootstrap still sent.");
+            1, CountOf(code, "SendCeiling, budget.Spent,"),
+            "the send ceiling is asserted from the spend, because every send - the robots "
+            + "redirect hop included - is reserved before it goes out.");
+        Assert.AreEqual(
+            0, CountOf(code, "budget.Spent + accounting.BootstrapsAttempted"),
+            "the send bound must not add an allowance for an uncharged hop: no hop is uncharged.");
         Assert.AreEqual(
             1, CountOf(code, "BootstrapCeiling, accounting.BootstrapsAttempted"),
-            "and the bootstrap bound the send ceiling depends on is asserted too.");
+            "and the bootstrap bound is asserted too.");
         Assert.AreEqual(
             0, CountOf(code, "budget.Spent + accounting.SessionsOpened"),
             "the send bound must not be derived from sessions that opened.");

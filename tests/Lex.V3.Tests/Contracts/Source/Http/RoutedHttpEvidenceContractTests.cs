@@ -706,6 +706,10 @@ public sealed class RoutedHttpEvidenceContractTests
                 new IncompleteHttpRouteOutcome(HttpRouteIncompleteReason.RedirectLimitExceeded)),
             Evidence(
                 [admissibleRedirect],
+                new IncompleteHttpRouteOutcome(
+                    HttpRouteIncompleteReason.RedirectTargetNotSentWireBudgetExhausted)),
+            Evidence(
+                [admissibleRedirect],
                 new RedirectTargetUnobservedHttpRouteOutcome(
                     Digest('d'),
                     "2026-09-02T20:00:02.0000000Z")),
@@ -722,6 +726,7 @@ public sealed class RoutedHttpEvidenceContractTests
                 "{\"kind\":\"incomplete\",\"reason\":\"redirect_refused\"}",
                 "{\"kind\":\"incomplete\",\"reason\":\"redirect_loop\"}",
                 "{\"kind\":\"incomplete\",\"reason\":\"redirect_limit_exceeded\"}",
+                "{\"kind\":\"incomplete\",\"reason\":\"redirect_target_not_sent_wire_budget_exhausted\"}",
                 $"{{\"kind\":\"incomplete\",\"reason\":\"redirect_target_unobserved\"," +
                 $"\"logical_request_sha256\":\"{Digest('d')}\"," +
                 "\"request_started_at\":\"2026-09-02T20:00:02.0000000Z\"}",
@@ -1088,6 +1093,84 @@ public sealed class RoutedHttpEvidenceContractTests
             [offRoute],
             new RedirectTargetUnobservedHttpRouteOutcome(Digest('4'), "2026-09-02T20:00:00.0000000Z"),
             requestOrdinal: 7);
+    }
+
+    /// <summary>
+    /// A ceiling stop at a redirect hop needs one admissible transition that was not sent.
+    /// </summary>
+    /// <remarks>
+    /// #579's repair introduced
+    /// <see cref="HttpRouteIncompleteReason.RedirectTargetNotSentWireBudgetExhausted"/> for the
+    /// session's own refusal to send a redirect hop the run's budget cannot afford. The reason is
+    /// attachable only where the evidence shows the hop the ceiling refused: a terminal redirect,
+    /// with an admitted target, that target not already in the route, and the route still below
+    /// its own redirect ceiling. Each refusal below removes exactly one of those facts. A validator
+    /// that accepted any of them would let a route with nothing left to send claim that the
+    /// ceiling stopped it - which is the difference between an honest stop and an alibi.
+    /// </remarks>
+    [TestMethod]
+    public void AWireBudgetStopRequiresOneAdmissibleUnsentTransitionBelowTheRedirectCeiling()
+    {
+        var unaffordedHop = CompleteHop(
+            status: 301,
+            headers: Headers(contentLength: "0", location: "https://op.europa.eu/next"),
+            length: 0,
+            digest: EmptyDigest,
+            completion: new DeclaredContentLengthHttpCompletion(0));
+        var stop = new IncompleteHttpRouteOutcome(
+            HttpRouteIncompleteReason.RedirectTargetNotSentWireBudgetExhausted);
+
+        var evidence = Evidence([unaffordedHop], stop);
+        var reopened = RoutedHttpEvidence.ParseAndVerify(evidence.CopyCanonicalBytes());
+        Assert.AreEqual(
+            "{\"kind\":\"incomplete\",\"reason\":\"redirect_target_not_sent_wire_budget_exhausted\"}",
+            OutcomeJson(reopened));
+
+        // The terminal hop is not a redirect: nothing was left unsent.
+        Assert.ThrowsExactly<ArgumentException>(
+            () => Evidence([CompleteHop()], stop),
+            "a completed terminal has no unsent successor for a ceiling to refuse");
+        // A non-redirect terminal that nonetheless carries an admissible Location. Only the
+        // terminal-redirect clause refuses this one: the target check reads the header alone, so
+        // without the clause a 200 with a Location would pass as "one admissible unsent transition".
+        Assert.ThrowsExactly<ArgumentException>(
+            () => Evidence(
+                [CompleteHop(
+                    status: 200,
+                    headers: Headers(contentLength: "0", location: "https://op.europa.eu/next"),
+                    length: 0,
+                    digest: EmptyDigest,
+                    completion: new DeclaredContentLengthHttpCompletion(0))],
+                stop),
+            "a Location on a completed, non-redirect terminal is not a transition the route would take");
+        // A redirect with no admitted target: the route would have refused it on its own grounds.
+        Assert.ThrowsExactly<ArgumentException>(
+            () => Evidence(
+                [CompleteHop(
+                    status: 301,
+                    headers: Headers(contentLength: "0"),
+                    length: 0,
+                    digest: EmptyDigest,
+                    completion: new DeclaredContentLengthHttpCompletion(0))],
+                stop),
+            "a redirect without an admitted target is refused, not unaffordable");
+        // The target was already visited: that is a loop, not an unaffordable hop.
+        Assert.ThrowsExactly<ArgumentException>(
+            () => Evidence(
+                [CompleteHop(
+                    status: 301,
+                    headers: Headers(
+                        contentLength: "0",
+                        location: "https://publications.europa.eu/resource/cellar"),
+                    length: 0,
+                    digest: EmptyDigest,
+                    completion: new DeclaredContentLengthHttpCompletion(0))],
+                stop),
+            "a target already in the route is a loop, not an unaffordable hop");
+        // Six hops already sent: the route's own ceiling refuses the seventh before the budget can.
+        Assert.ThrowsExactly<ArgumentException>(
+            () => Evidence(RedirectCeilingRoute(), stop),
+            "at the redirect ceiling the route refuses the hop itself; the budget never sees it");
     }
 
     private static RoutedHttpEvidence Evidence(

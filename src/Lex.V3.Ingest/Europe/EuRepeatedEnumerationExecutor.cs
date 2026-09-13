@@ -1056,7 +1056,8 @@ public sealed class EuRepeatedEnumerationExecutor
                 productRequestCount: 0);
         }
 
-        var session = await StartSessionAsync(sourceWitness, cancellationToken).ConfigureAwait(false);
+        var session = await StartSessionAsync(sourceWitness, request.WireBudget, cancellationToken)
+            .ConfigureAwait(false);
         if (session is null)
         {
             return EuEnumerationRunResult.Refused(
@@ -1107,7 +1108,8 @@ public sealed class EuRepeatedEnumerationExecutor
                 productRequestCount: 0);
         }
 
-        var session = await StartSessionAsync(sourceWitness, cancellationToken).ConfigureAwait(false);
+        var session = await StartSessionAsync(sourceWitness, request.WireBudget, cancellationToken)
+            .ConfigureAwait(false);
         if (session is null)
         {
             return EuEnumerationRunResult.Refused(
@@ -1159,7 +1161,8 @@ public sealed class EuRepeatedEnumerationExecutor
                 productRequestCount: 0);
         }
 
-        var session = await StartSessionAsync(sourceWitness, cancellationToken).ConfigureAwait(false);
+        var session = await StartSessionAsync(sourceWitness, request.WireBudget, cancellationToken)
+            .ConfigureAwait(false);
         if (session is null)
         {
             return EuEnumerationRunResult.Refused(
@@ -1226,7 +1229,8 @@ public sealed class EuRepeatedEnumerationExecutor
                 productRequestCount: 0);
         }
 
-        var session = await StartSessionAsync(sourceWitness, cancellationToken).ConfigureAwait(false);
+        var session = await StartSessionAsync(sourceWitness, request.WireBudget, cancellationToken)
+            .ConfigureAwait(false);
         if (session is null)
         {
             return EuEnumerationRunResult.Refused(
@@ -1282,7 +1286,8 @@ public sealed class EuRepeatedEnumerationExecutor
                 productRequestCount: 0);
         }
 
-        var session = await StartSessionAsync(sourceWitness, cancellationToken).ConfigureAwait(false);
+        var session = await StartSessionAsync(sourceWitness, request.WireBudget, cancellationToken)
+            .ConfigureAwait(false);
         if (session is null)
         {
             return EuEnumerationRunResult.Refused(
@@ -1342,7 +1347,8 @@ public sealed class EuRepeatedEnumerationExecutor
                 productRequestCount: 0);
         }
 
-        var session = await StartSessionAsync(sourceWitness, cancellationToken).ConfigureAwait(false);
+        var session = await StartSessionAsync(sourceWitness, request.WireBudget, cancellationToken)
+            .ConfigureAwait(false);
         if (session is null)
         {
             return EuEnumerationRunResult.Refused(
@@ -1409,7 +1415,8 @@ public sealed class EuRepeatedEnumerationExecutor
                 productRequestCount: 0);
         }
 
-        var session = await StartSessionAsync(sourceWitness, cancellationToken).ConfigureAwait(false);
+        var session = await StartSessionAsync(sourceWitness, request.WireBudget, cancellationToken)
+            .ConfigureAwait(false);
         if (session is null)
         {
             return EuEnumerationRunResult.Refused(
@@ -1473,7 +1480,8 @@ public sealed class EuRepeatedEnumerationExecutor
                 productRequestCount: 0);
         }
 
-        var session = await StartSessionAsync(sourceWitness, cancellationToken).ConfigureAwait(false);
+        var session = await StartSessionAsync(sourceWitness, request.WireBudget, cancellationToken)
+            .ConfigureAwait(false);
         if (session is null)
         {
             return EuEnumerationRunResult.Refused(
@@ -1539,7 +1547,8 @@ public sealed class EuRepeatedEnumerationExecutor
                 productRequestCount: 0);
         }
 
-        var session = await StartSessionAsync(sourceWitness, cancellationToken).ConfigureAwait(false);
+        var session = await StartSessionAsync(sourceWitness, request.WireBudget, cancellationToken)
+            .ConfigureAwait(false);
         if (session is null)
         {
             return EuEnumerationRunResult.Refused(
@@ -1602,7 +1611,8 @@ public sealed class EuRepeatedEnumerationExecutor
                 productRequestCount: 0);
         }
 
-        var session = await StartSessionAsync(sourceWitness, cancellationToken).ConfigureAwait(false);
+        var session = await StartSessionAsync(sourceWitness, request.WireBudget, cancellationToken)
+            .ConfigureAwait(false);
         if (session is null)
         {
             return EuEnumerationRunResult.Refused(
@@ -1679,7 +1689,8 @@ public sealed class EuRepeatedEnumerationExecutor
                 productRequestCount: 0);
         }
 
-        var session = await StartSessionAsync(sourceWitness, cancellationToken).ConfigureAwait(false);
+        var session = await StartSessionAsync(sourceWitness, request.WireBudget, cancellationToken)
+            .ConfigureAwait(false);
         if (session is null)
         {
             return EuEnumerationRunResult.Refused(
@@ -1816,7 +1827,7 @@ public sealed class EuRepeatedEnumerationExecutor
                 productRequestCount: 0);
         }
 
-        var session = await StartSessionAsync(sourceWitness, cancellationToken).ConfigureAwait(false);
+        var session = await StartSessionAsync(sourceWitness, wireBudget, cancellationToken).ConfigureAwait(false);
         if (session is null)
         {
             return EuWitnessTraversalResult.Refused(
@@ -2102,7 +2113,7 @@ public sealed class EuRepeatedEnumerationExecutor
         // the robots URL is derived from the profile origin rather than the path, so the same robots
         // document is negotiated either way. Only the path the verdict is computed against changes.
         // It matches what Luxembourg's own document-get route already does.
-        var session = await StartSessionAsync(boundRequest, cancellationToken).ConfigureAwait(false);
+        var session = await StartSessionAsync(boundRequest, wireBudget, cancellationToken).ConfigureAwait(false);
         if (session is null)
         {
             return EuDocumentFetchAttemptResult.Refused(
@@ -2130,6 +2141,26 @@ public sealed class EuRepeatedEnumerationExecutor
 
                 attempt = await item.ExecuteNextAttemptAsync(cancellationToken).ConfigureAwait(false);
                 attemptOrdinal++;
+
+                // THE SESSION'S OWN CEILING STOP, named as what it is, and checked BEFORE the
+                // executed branch: a route that sent its first hop and was stopped at its
+                // successor produced evidence, so the session reports it as executed - the hops
+                // it did send are real observations - and only the outcome inside that evidence
+                // says the ceiling held. This channel allows a same-origin redirect, so a document
+                // can need a second hop the run cannot afford. Reporting that as an executed fetch
+                // would hand a redirect response to the classifier as if it were the document;
+                // reporting it as "observation not executed" would say the transport failed. The
+                // SPARQL channels never reach this: their policy refuses any redirect before a hop.
+                if (attempt.Evidence?.Outcome is IncompleteHttpRouteOutcome
+                    {
+                        Reason: HttpRouteIncompleteReason.RedirectTargetNotSentWireBudgetExhausted,
+                    })
+                {
+                    return EuDocumentFetchAttemptResult.Refused(
+                        EuDocumentFetchAttemptRefusal.WireBudgetExhausted,
+                        $"the ceiling was reached at a redirect hop after {attemptOrdinal} attempt(s).");
+                }
+
                 if (attempt.Kind == OfficialHttpAcquisitionOutcomeKind.ExecutedObservation)
                 {
                     break;
@@ -2303,13 +2334,15 @@ public sealed class EuRepeatedEnumerationExecutor
     }
 
     private async Task<RoutedHttpAcquisitionSession?> StartSessionAsync(
-        BoundMachineRequest sourceWitness, CancellationToken cancellationToken)
+        BoundMachineRequest sourceWitness, WireRequestBudget wireBudget, CancellationToken cancellationToken)
     {
         var start = _testHandlerOverride is null
-            ? await RoutedHttpAcquisitionSession.StartAsync(sourceWitness, _custodyStore, cancellationToken)
+            ? await RoutedHttpAcquisitionSession.StartAsync(
+                    sourceWitness, _custodyStore, wireBudget, cancellationToken)
                 .ConfigureAwait(false)
             : await RoutedHttpAcquisitionSession.StartWithTestTransportAsync(
-                    sourceWitness, _custodyStore, _testHandlerOverride, _timeProvider, cancellationToken)
+                    sourceWitness, _custodyStore, _testHandlerOverride, _timeProvider, wireBudget,
+                    cancellationToken)
                 .ConfigureAwait(false);
         return start.Kind == OfficialHttpAcquisitionOutcomeKind.ExecutedObservation ? start.Session : null;
     }

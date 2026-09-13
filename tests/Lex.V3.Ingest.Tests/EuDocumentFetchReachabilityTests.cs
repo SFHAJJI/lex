@@ -761,7 +761,8 @@ public sealed class EuDocumentFetchReachabilityTests
         var constructor = typeof(RoutedHttpAcquisitionSession).GetConstructors(
             BindingFlags.Instance | BindingFlags.NonPublic).Single();
         return (RoutedHttpAcquisitionSession)constructor.Invoke(
-            [request, custody, handler, timeProvider, usesPinnedHandler]);
+            [request, custody, handler, timeProvider, usesPinnedHandler,
+                EuAcquisitionTestFixture.TestWireBudget()]);
     }
 
     private static Task<RoutedHttpAcquisitionSession.StartResult> BootstrapAsync(

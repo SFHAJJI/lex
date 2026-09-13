@@ -985,11 +985,20 @@ public sealed class EuQueryExecutionAdapter
 
         var topology = MintTopology();
 
+        // ONE VIEW OF THE CALLER'S LIST, TAKEN ONCE. IReadOnlyList promises nothing about
+        // immutability, and #579's review built a list whose indexer showed a request carrying the
+        // run's budget while its enumerator showed an equal-shaped request carrying another - so
+        // the preflight below passed on one view and the run then executed the other, sending on a
+        // counter the preflight never saw. Everything after this line reads the snapshot, never the
+        // parameter: the check, the execution, and the count compared at the end are all about the
+        // same tuples.
+        var seeds = censusFamilies.ToArray();
+
         // BEFORE THE FIRST REQUEST, NOT AFTER THE RUN. A seed carrying a second budget is refused
         // here rather than reported at the end, because by the end it has already spent it.
-        for (var seedOrdinal = 0; seedOrdinal < censusFamilies.Count; seedOrdinal++)
+        for (var seedOrdinal = 0; seedOrdinal < seeds.Length; seedOrdinal++)
         {
-            if (!ReferenceEquals(censusFamilies[seedOrdinal].Request.WireBudget, wireBudget))
+            if (!ReferenceEquals(seeds[seedOrdinal].Request.WireBudget, wireBudget))
             {
                 return EuQueryExecutionResult.Refused(
                     topology,
@@ -997,18 +1006,18 @@ public sealed class EuQueryExecutionAdapter
                     new EuQueryExecutionRefusalDetail(
                         EuQueryExecutionRefusal.CensusRequestCarriesADifferentWireBudget,
                         $"census seed {seedOrdinal} " +
-                        $"({censusFamilies[seedOrdinal].Request.RequestedCelex}) carries a different " +
+                        $"({seeds[seedOrdinal].Request.RequestedCelex}) carries a different " +
                         "budget instance than this run, so neither limit bounds the run."));
             }
         }
 
-        var outcomes = new List<EuFamilyEnumerationOutcome>(censusFamilies.Count * 5);
+        var outcomes = new List<EuFamilyEnumerationOutcome>(seeds.Length * 5);
 
         // ---- Run and prove every census-family seed. ----
         var censusByFamilyKey = new Dictionary<
             string, (AbsenceFamilyEnumerationProof Proof, RepeatedEnumerationDeliveryReceipt Receipt, string RequestedCelex)>(
             StringComparer.Ordinal);
-        foreach (var (request, sourceWitness) in censusFamilies)
+        foreach (var (request, sourceWitness) in seeds)
         {
             var runResult = await _executor.RunCensusPartitionAsync(request, sourceWitness, cancellationToken)
                 .ConfigureAwait(false);
@@ -1023,7 +1032,7 @@ public sealed class EuQueryExecutionAdapter
             }
         }
 
-        if (censusByFamilyKey.Count != censusFamilies.Count)
+        if (censusByFamilyKey.Count != seeds.Length)
         {
             return EuQueryExecutionResult.Refused(
                 topology, outcomes,

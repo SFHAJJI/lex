@@ -27,6 +27,15 @@ public sealed class LuxembourgLiveEnumerationCanary
     /// asked for rather than computed. 60 is the arithmetic, not a recommendation.
     /// </para>
     /// <para>
+    /// EVERY SEND IS CHARGED, REDIRECT HOPS INCLUDED, since #579's repair: the session reserves each
+    /// hop at its own gate before sending it. The Luxembourg profile declares its robots route as a
+    /// single step and the SPARQL channel admits no redirect, so every session here is one robots
+    /// send and the arithmetic above still holds send for send. If the declared route ever gains a
+    /// step, each session charges that hop too and the run stops one product attempt earlier - the
+    /// fail-closed direction - and the number below is the owner's to re-derive, not this file's
+    /// to grow.
+    /// </para>
+    /// <para>
     /// DISPOSITIONED BY THE OWNER ON 2026-09-13 AT 60, and the wording of that disposition is the
     /// reason it is safe to write a number here: 60 was accepted as the fail-closed wire ceiling
     /// "because the recorded plan derives it as the exact structural retry maximum", not because it

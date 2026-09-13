@@ -771,12 +771,20 @@ public sealed class RoutedHttpAcquisitionSessionTests
         HttpMessageHandler handler,
         ICustodyStore custody,
         TimeProvider timeProvider,
-        bool usesPinnedHandler)
+        bool usesPinnedHandler,
+        WireRequestBudget? wireBudget = null)
     {
+        // The constructor is reached by reflection, so a widened signature is a run-time surprise
+        // here rather than a compile error - which is exactly what happened when #579 made the
+        // session reserve every redirect hop against a required ceiling. The budget defaults to
+        // the offline helper because these tests are about the session's own mechanics, not its
+        // ceiling; the ceiling's own tests live in UnbudgetedEntryPointClosureTests and pass a
+        // real one.
         var constructor = typeof(RoutedHttpAcquisitionSession).GetConstructors(
             BindingFlags.Instance | BindingFlags.NonPublic).Single();
         return (RoutedHttpAcquisitionSession)constructor.Invoke(
-            [request, custody, handler, timeProvider, usesPinnedHandler]);
+            [request, custody, handler, timeProvider, usesPinnedHandler,
+                wireBudget ?? EuAcquisitionTestFixture.TestWireBudget()]);
     }
 
     private static Task<RoutedHttpAcquisitionSession.StartResult> BootstrapAsync(
