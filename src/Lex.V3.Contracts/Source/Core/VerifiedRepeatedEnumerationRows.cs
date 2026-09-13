@@ -254,6 +254,56 @@ public static class VerifiedRepeatedEnumerationRows
             throw new ArgumentException("At least one page is required.", nameof(pagesInOrder));
         }
 
+        // THE PAGES AND THE COUNT EVIDENCE MUST BE THIS COMPARISON'S OWN FIRST PASS, IN ITS ORDER.
+        //
+        // Everything below re-derives digests from bytes a caller supplies. Two independently valid
+        // deliveries of the same rows produce the SAME delivered count, canonical-key digest, cursor
+        // digest and row digest, and DIFFERENT acquisition runs. So run B's pages handed in against
+        // run A's proof satisfy every check below, and the rows this door returns are then cited by
+        // callers as having been carried by bytes that belong to another run. The rows are right and
+        // the provenance is not, which is the harder half to notice.
+        //
+        // A page receipt naming its own bytes does not close this. That is a statement about the
+        // substituted page - it says the substitution was internally honest, not that the page
+        // belongs here. The binding that answers "belongs here" is this one, and it compares the
+        // complete ordered evidence identity rather than payload hashes.
+        //
+        // Costless for every honest caller: all thirteen production callers already build
+        // pagesInOrder by reopening comparison.PagesA in ordinal order and already pass
+        // comparison.CountA.HttpEvidenceRef. This makes the convention every one of them follows
+        // into the contract none of them could break.
+        if (countHttpEvidenceRef != comparison.CountA.HttpEvidenceRef)
+        {
+            throw new ArgumentException(
+                "The supplied count evidence is not this comparison's own first-pass count.",
+                nameof(countHttpEvidenceRef));
+        }
+
+        var expectedPages = comparison.PagesA.Pages;
+        if (pagesInOrder.Count != expectedPages.Count)
+        {
+            throw new ArgumentException(
+                "The supplied page chain is not the length of this comparison's own first pass.",
+                nameof(pagesInOrder));
+        }
+
+        for (var index = 0; index < expectedPages.Count; index++)
+        {
+            // Contiguous from zero, exactly as EnumerationDeliveryComparison's own ResolvePages
+            // already requires when the comparison is minted. Re-asserted rather than assumed
+            // because this loop pairs by POSITION, so a non-contiguous ordinal would silently pair
+            // page 2's reference with page 1's bytes.
+            if (expectedPages[index].Ordinal != index)
+            {
+                throw new ArgumentException(
+                    "This comparison's first-pass pages are not contiguously ordered.",
+                    nameof(comparison));
+            }
+
+            EnumerationDeliveryComparison.RequirePageEvidenceIdentity(
+                expectedPages[index].Evidence, pagesInOrder[index], nameof(pagesInOrder));
+        }
+
         IReadOnlyList<RepeatedEnumerationRow> rows;
         try
         {
