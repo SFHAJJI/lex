@@ -93,7 +93,7 @@ public sealed class LuxembourgNeverConsolidatedCoverageTests
     }
 
     /// <summary>
-    /// Each disposition has its bucket, in admission order, and
+    /// Each disposition has its bucket, emitted by ordinal act IRI, and
     /// population == never-consolidated + consolidated + gaps.
     /// </summary>
     [TestMethod]
@@ -112,7 +112,7 @@ public sealed class LuxembourgNeverConsolidatedCoverageTests
                 LuxembourgNeverConsolidatedMembership.EnumerationNotCited,
             },
             coverage.Placements.Select(static p => p.Membership).ToArray(),
-            "buckets follow dispositions, in admission order.");
+            "buckets follow dispositions; the emitted order is ordinal act IRI (loi/.../a1, loi/.../a3, rgd/.../a2).");
 
         Assert.AreEqual(1, coverage.NeverConsolidatedCount);
         Assert.AreEqual(1, coverage.NeverConsolidatedLoiCount);
@@ -188,29 +188,102 @@ public sealed class LuxembourgNeverConsolidatedCoverageTests
         }
     }
 
-    /// <summary>Two folds of one frame are the same coverage, member for member.</summary>
+    /// <summary>
+    /// S3-A04 in its two-independent-executions form: two frames holding one act set, admitted in
+    /// permuted orders, fold to one coverage member for member, because every exposed collection is
+    /// emitted by ordinal act IRI rather than admission order.
+    /// </summary>
+    /// <remarks>
+    /// Codex's pre-freeze correction. The frame exposes entries in admission order and two
+    /// enumerations can deliver one act set in two orders, so a same-object replay proved only that
+    /// one list traversal repeats.
+    /// </remarks>
     [TestMethod]
-    public void TwoFoldsOfOneFrameAreIdentical()
+    public void TwoFramesAdmittedInPermutedOrdersFoldIdentically()
     {
-        var frame = Frame(
+        var forward = Fold(Frame(OneActSet()));
+        var reversed = Fold(Frame(OneActSet().Reverse().ToArray()));
+        var rotated = Fold(Frame(OneActSet().Skip(2).Concat(OneActSet().Take(2)).ToArray()));
+
+        Assert.AreEqual(1, forward.NeverConsolidatedCount);
+        Assert.AreEqual(1, forward.ConsolidatedCount);
+        Assert.AreEqual(2, forward.UnresolvedGaps.Count);
+        Assert.AreEqual(1, forward.NamedExclusionCount);
+
+        foreach (var other in new[] { reversed, rotated })
+        {
+            Assert.AreEqual(forward.Describe(), other.Describe());
+            CollectionAssert.AreEqual(
+                forward.Placements.Select(PlacementKey).ToArray(), other.Placements.Select(PlacementKey).ToArray(),
+                "placements: same members in the same order, whatever order admitted them.");
+            CollectionAssert.AreEqual(
+                forward.UnresolvedGaps.Select(GapKey).ToArray(), other.UnresolvedGaps.Select(GapKey).ToArray(),
+                "gaps: same members in the same order.");
+        }
+
+        // THE KEY IS EXPLICIT: ordinal PublisherActIri, for every exposed collection.
+        var acts = forward.Placements.Select(static p => p.PublisherActIri).ToArray();
+        CollectionAssert.AreEqual(acts.OrderBy(static a => a, StringComparer.Ordinal).ToArray(), acts);
+        var gapActs = forward.UnresolvedGaps.Select(static g => g.PublisherActIri).ToArray();
+        CollectionAssert.AreEqual(gapActs.OrderBy(static a => a, StringComparer.Ordinal).ToArray(), gapActs);
+
+        static LuxembourgNeverConsolidatedEntry[] OneActSet() =>
+        [
             Entry(ActLoiPath1, LoiClass, LuxembourgNeverConsolidatedDisposition.CitedEnumerationDeliveredNoRows),
             Entry(ActRgdPath2, RgdClass, LuxembourgNeverConsolidatedDisposition.NoEnumerationCited),
             Entry(ActLoiPath3, LoiClass, LuxembourgNeverConsolidatedDisposition.CitedEnumerationDeliveredRows),
-            Entry(ActAminPath5, AminClass, LuxembourgNeverConsolidatedDisposition.CitedEnumerationDeliveredNoRows));
-
-        var first = Fold(frame);
-        var second = Fold(frame);
-
-        Assert.AreEqual(first.Describe(), second.Describe());
-        CollectionAssert.AreEqual(
-            first.Placements.Select(Key).ToArray(), second.Placements.Select(Key).ToArray());
-        CollectionAssert.AreEqual(
-            first.UnresolvedGaps.Select(static g => $"{g.PublisherActIri}|{g.Scope}|{g.Reason}").ToArray(),
-            second.UnresolvedGaps.Select(static g => $"{g.PublisherActIri}|{g.Scope}|{g.Reason}").ToArray());
-
-        static string Key(LuxembourgNeverConsolidatedPlacement p) =>
-            $"{p.PublisherActIri}|{p.PublisherClassIri}|{p.Scope}|{p.Membership}";
+            Entry(ActAminPath5, AminClass, LuxembourgNeverConsolidatedDisposition.CitedEnumerationDeliveredNoRows),
+            Entry(ActRgdPath4, RgdClass, LuxembourgNeverConsolidatedDisposition.NoEnumerationCited),
+        ];
     }
+
+    /// <summary>The key is ordinal: an order a culture would flip does not flip here.</summary>
+    [TestMethod]
+    public void TheEmittedOrderIsOrdinalNotCultural()
+    {
+        // Ordinal puts "B2" before "b1" (66 < 98); a culture-aware compare puts "b1" first.
+        const string Lower = "http://data.legilux.public.lu/eli/etat/leg/loi/2026/06/06/b1/jo";
+        const string Upper = "http://data.legilux.public.lu/eli/etat/leg/loi/2026/06/06/B2/jo";
+        Assert.IsTrue(
+            string.Compare(Lower, Upper, StringComparison.InvariantCulture) < 0,
+            "the premise: a culture orders these the other way round.");
+
+        var coverage = Fold(Frame(
+            Entry(Lower, LoiClass, LuxembourgNeverConsolidatedDisposition.CitedEnumerationDeliveredNoRows),
+            Entry(Upper, LoiClass, LuxembourgNeverConsolidatedDisposition.CitedEnumerationDeliveredNoRows)));
+
+        CollectionAssert.AreEqual(
+            new[] { Upper, Lower },
+            coverage.Placements.Select(static p => p.PublisherActIri).ToArray());
+    }
+
+    /// <summary>A refusal names every unrecognized act, in ordinal order, whatever order admitted them.</summary>
+    [TestMethod]
+    public void ARefusalNamesEveryUnrecognizedActInOrdinalOrder()
+    {
+        var forward = Frame(
+            Entry(ActRgdPath2, UnknownClass, LuxembourgNeverConsolidatedDisposition.CitedEnumerationDeliveredNoRows),
+            Entry(ActLoiPath1, StandInClass, LuxembourgNeverConsolidatedDisposition.CitedEnumerationDeliveredNoRows));
+        var reversed = Frame(
+            Entry(ActLoiPath1, StandInClass, LuxembourgNeverConsolidatedDisposition.CitedEnumerationDeliveredNoRows),
+            Entry(ActRgdPath2, UnknownClass, LuxembourgNeverConsolidatedDisposition.CitedEnumerationDeliveredNoRows));
+
+        Assert.IsNull(LuxembourgNeverConsolidatedCoverage.TryComplete(forward, out _, out var first));
+        Assert.IsNull(LuxembourgNeverConsolidatedCoverage.TryComplete(reversed, out _, out var second));
+
+        Assert.AreEqual(first, second);
+        Assert.IsTrue(
+            first!.IndexOf(ActLoiPath1, StringComparison.Ordinal) < first.IndexOf(ActRgdPath2, StringComparison.Ordinal),
+            "ordinal: the /loi/ act before the /rgd/ act.");
+        StringAssert.Contains(first, UnknownClass);
+        StringAssert.Contains(first, StandInClass);
+    }
+
+    private static string PlacementKey(LuxembourgNeverConsolidatedPlacement p) =>
+        $"{p.PublisherActIri}|{p.PublisherClassIri}|{p.Scope}|{p.Membership}";
+
+    private static string GapKey(LuxembourgNeverConsolidatedUnresolvedGap g) =>
+        $"{g.PublisherActIri}|{g.Scope}|{g.Reason}";
 
     [TestMethod]
     public void PlacementForAnswersOnlyForHeldActs()

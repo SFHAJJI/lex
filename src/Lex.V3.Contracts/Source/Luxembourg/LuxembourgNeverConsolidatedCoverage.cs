@@ -139,8 +139,12 @@ public sealed class LuxembourgNeverConsolidatedUnresolvedGap
 /// acceptance figure lives on this type, and its tests pin that none does.
 /// </para>
 /// <para>
-/// DETERMINISTIC. Placements and gaps are emitted in the frame's admission order, and two folds of
-/// one frame render the same <see cref="Describe"/>.
+/// DETERMINISTIC ACROSS ADMISSION ORDER. The frame exposes its entries as they were admitted, and
+/// two independent enumerations can deliver one act set in two orders. A coverage that preserved
+/// that order in its placements, gaps or refusal would make two executions disagree over identical
+/// publisher facts, so every exposed collection is emitted by ordinal <c>PublisherActIri</c> - the
+/// one key the frame guarantees unique - and two frames holding one act set render the same
+/// <see cref="Describe"/> and the same member sequences whatever order admitted them.
 /// </para>
 /// </remarks>
 public sealed class LuxembourgNeverConsolidatedCoverage
@@ -179,10 +183,10 @@ public sealed class LuxembourgNeverConsolidatedCoverage
         }
     }
 
-    /// <summary>Every act the frame holds, in admission order, including the named exclusions.</summary>
+    /// <summary>Every act the frame holds, by ordinal act IRI, including the named exclusions.</summary>
     public IReadOnlyList<LuxembourgNeverConsolidatedPlacement> Placements { get; }
 
-    /// <summary>The population acts whose disposition is unproven, in admission order.</summary>
+    /// <summary>The population acts whose disposition is unproven, by ordinal act IRI.</summary>
     public IReadOnlyList<LuxembourgNeverConsolidatedUnresolvedGap> UnresolvedGaps { get; }
 
     /// <summary>Every act the frame holds, population or not.</summary>
@@ -210,8 +214,8 @@ public sealed class LuxembourgNeverConsolidatedCoverage
     public bool AllHeldActsSettled => UnresolvedGaps.Count == 0;
 
     /// <summary>
-    /// Folds a frame, or refuses by name. Refuses on the first act whose class the manifest does not
-    /// recognize, in admission order.
+    /// Folds a frame, or refuses by name. A frame holding any act whose class the manifest does not
+    /// recognize refuses as a whole, naming every such act in ordinal order.
     /// </summary>
     public static LuxembourgNeverConsolidatedCoverage? TryComplete(
         LuxembourgNeverConsolidatedFrame frame,
@@ -223,18 +227,19 @@ public sealed class LuxembourgNeverConsolidatedCoverage
 
         var placements = new List<LuxembourgNeverConsolidatedPlacement>(frame.Entries.Count);
         var gaps = new List<LuxembourgNeverConsolidatedUnresolvedGap>();
+        var unrecognized = new List<string>();
         foreach (var entry in frame.Entries)
         {
             var classIri = entry.ActClass.PublisherClassIri;
 
             // THE MANIFEST DECIDES, AND AN UNKNOWN CODE STOPS THE FOLD. Not "skip it", not "call it
             // out of scope": the ruling's fail-closed direction, applied where a count would
-            // otherwise absorb the unknown silently.
+            // otherwise absorb the unknown silently. Every offender is collected so the refusal
+            // names the same set in the same order whichever way the frame was filled.
             if (!LuxembourgActClassManifest.TryClassify(classIri, out var scope))
             {
-                refusal = LuxembourgNeverConsolidatedCoverageRefusal.UnrecognizedActClass;
-                detail = $"{entry.PublisherActIri} carries class {classIri}, which the manifest does not recognize.";
-                return null;
+                unrecognized.Add($"{entry.PublisherActIri} carries class {classIri}");
+                continue;
             }
 
             if (!LuxembourgActClassManifest.IsCounted(scope))
@@ -266,6 +271,19 @@ public sealed class LuxembourgNeverConsolidatedCoverage
             placements.Add(new LuxembourgNeverConsolidatedPlacement(
                 entry.PublisherActIri, classIri, scope, membership));
         }
+
+        if (unrecognized.Count > 0)
+        {
+            unrecognized.Sort(StringComparer.Ordinal);
+            refusal = LuxembourgNeverConsolidatedCoverageRefusal.UnrecognizedActClass;
+            detail = string.Join("; ", unrecognized) + ", which the manifest does not recognize.";
+            return null;
+        }
+
+        // CANONICAL ORDER, NOT ADMISSION ORDER. See the type remark: ordinal act IRI, for every
+        // exposed collection, so two frames holding one act set fold to one coverage.
+        placements.Sort(static (a, b) => string.CompareOrdinal(a.PublisherActIri, b.PublisherActIri));
+        gaps.Sort(static (a, b) => string.CompareOrdinal(a.PublisherActIri, b.PublisherActIri));
 
         refusal = LuxembourgNeverConsolidatedCoverageRefusal.None;
         return new LuxembourgNeverConsolidatedCoverage(placements, gaps);
