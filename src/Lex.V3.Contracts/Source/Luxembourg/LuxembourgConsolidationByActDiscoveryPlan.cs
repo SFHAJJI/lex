@@ -6,11 +6,35 @@ using Lex.V3.Contracts.Source.Core;
 
 namespace Lex.V3.Contracts.Source.Luxembourg;
 
-public sealed record LuxembourgConsolidationByActBoundQuery(
-    MachineQueryPlan MachinePlan,
-    SourceArtifactRef MachinePlanRef,
-    MachineQueryInputArtifact InputArtifact,
-    BoundMachineRequest Request);
+/// <summary>One bound count or page request of the per-act family, assembled only by the plan.</summary>
+/// <remarks>
+/// THE CONSTRUCTOR IS INTERNAL, AND THAT DIVERGES FROM EVERY SIBLING BOUND-QUERY RECORD ON PURPOSE.
+/// The siblings are plain public positional records, which is fine for them: their partition key
+/// is a constant. Here the key IS the claim - it names which act was asked about - so a record that
+/// could be assembled from one act's input artifact beside another act's request would carry a key
+/// that lies about the traffic it sits next to. Preflight review constructed exactly that from the
+/// public constructor. Now only <see cref="LuxembourgConsolidationByActDiscoveryPlan"/>'s own
+/// <c>Bind</c> assembles one, from one act, in one call.
+/// </remarks>
+public sealed record LuxembourgConsolidationByActBoundQuery
+{
+    internal LuxembourgConsolidationByActBoundQuery(
+        MachineQueryPlan machinePlan,
+        SourceArtifactRef machinePlanRef,
+        MachineQueryInputArtifact inputArtifact,
+        BoundMachineRequest request)
+    {
+        MachinePlan = machinePlan ?? throw new ArgumentNullException(nameof(machinePlan));
+        MachinePlanRef = machinePlanRef ?? throw new ArgumentNullException(nameof(machinePlanRef));
+        InputArtifact = inputArtifact ?? throw new ArgumentNullException(nameof(inputArtifact));
+        Request = request ?? throw new ArgumentNullException(nameof(request));
+    }
+
+    public MachineQueryPlan MachinePlan { get; }
+    public SourceArtifactRef MachinePlanRef { get; }
+    public MachineQueryInputArtifact InputArtifact { get; }
+    public BoundMachineRequest Request { get; }
+}
 
 /// <summary>
 /// Asks Legilux which coordinated texts consolidate ONE named act, and nothing else.
@@ -39,9 +63,13 @@ public sealed record LuxembourgConsolidationByActBoundQuery(
 /// deleting it:
 /// <list type="number">
 /// <item>one function derives the key from the exact validated act IRI, and nothing else spells it;</item>
-/// <item>the same act IRI is a REQUIRED typed selection parameter in the canonical input, so the
-/// key and the parameter cannot disagree - the key is derived from the parameter rather than
-/// supplied beside it;</item>
+/// <item>the same act IRI is a REQUIRED typed selection parameter in the canonical input; the
+/// plan's own door derives the key from it, and the RENDERER - the one choke point every send
+/// passes through - recomputes the key from the bound parameter and refuses to render an input
+/// whose partition names a different act. Preflight review built such an input through the
+/// public <c>MachineQueryInputArtifact.Create</c>, which validates a partition key and a
+/// parameter list independently; the renderer check is what closes that path, and it is the
+/// design review's condition 2 stated as code rather than as a property of one constructor;</item>
 /// <item>both templates restrict the consolidation relation to that bound parameter, so a family
 /// name is never asked to supply the restriction;</item>
 /// <item>the interpretation profile binds the exact families, projection, canonical keys, cursors
@@ -66,12 +94,35 @@ public sealed record LuxembourgConsolidationByActBoundQuery(
 /// consolidations of an act are found by asking what points AT it.
 /// </para>
 /// <para>
+/// NO CLASS IS REQUIRED OF THE SUBJECT, AND THE FIRST HEAD OF THIS FILE GOT THAT WRONG IN THE ONE
+/// DIRECTION THAT MATTERS. It required <c>?consolidation a jolux:Consolidation</c>, on the reading
+/// that a coordinated text is classed as a Consolidation. The resolver's own accepted shape says
+/// the opposite: <c>LuxembourgConsolidatesShape</c> admits
+/// <see cref="LuxembourgConsolidatesShapeState.AcceptedTcToCompatibleAct"/> only when the subject's
+/// class set is EXACTLY <c>{jolux:Act}</c>, with type-document TC. A real, accepted consolidation
+/// would therefore have matched the relation and failed the class pattern, and the family would have
+/// returned zero rows for a consolidated act - a false "never consolidated", which is the single
+/// defect this whole programme exists to close. A preflight lens found it by reading the resolver;
+/// the restriction is gone, and <c>ANoClassIsRequiredOfTheSubject</c> pins its absence against the
+/// resolver's invariant so the two cannot drift apart again. Classifying what came back is the
+/// decoder's job, downstream, where a wrong class becomes a typed row disposition rather than a
+/// silent absence.
+/// </para>
+/// <para>
+/// THE ACT IS A PROJECTED COLUMN, NOT ONLY A BOUND CONSTANT. Design review condition 4 requires the
+/// decoder to check that EVERY delivered row names the selected act before assigning it meaning,
+/// and explicitly forbids consuming only the row count or key digest. A row can only be checked
+/// against a column it carries, so the act is bound through <c>VALUES ?act { ... }</c> and
+/// <c>?act</c> is projected. Each returned row's <c>act</c> is then the value the publisher's own
+/// triple joined against, not an echo of the request - and the decoder can require it row by row.
+/// </para>
+/// <para>
 /// WHAT A ZERO-ROW DELIVERY FROM THIS FAMILY MEANS, STATED EXACTLY. It means the publisher returned
-/// no coordinated text asserting <c>jolux:consolidates</c> against this act, in this run, under this
-/// profile. It does not mean the act is unconsolidated in law, and nothing here may be read as the
-/// terminal population count - that remains unbuilt, and the bounded live acceptance that would
-/// let this family be believed against the real publisher is a separate disposition that has not
-/// been taken.
+/// no subject asserting <c>jolux:consolidates</c> against this act, in this run, under this
+/// profile, with no class or type restriction narrowing "subject". It does not mean the act is
+/// unconsolidated in law, and nothing here may be read as the terminal population count - that
+/// remains unbuilt, and the bounded live acceptance that would let this family be believed against
+/// the real publisher is a separate disposition that has not been taken.
 /// </para>
 /// <para>
 /// OFFLINE. This plan renders requests; it sends none. No ceiling is dispositioned here and no
@@ -109,9 +160,6 @@ public sealed class LuxembourgConsolidationByActDiscoveryPlan
     /// <summary>The relation a coordinated text asserts against the act it consolidates.</summary>
     public const string ConsolidatesPredicateIri = Jolux + "consolidates";
 
-    /// <summary>The class a coordinated text belongs to.</summary>
-    public const string ConsolidationClassIri = Jolux + "Consolidation";
-
     /// <summary>The marker a row carries when its subject is a publisher IRI.</summary>
     /// <remarks>Aliased rather than restated, per the Luxembourg families' shared convention.</remarks>
     public const string IriKind = LuxembourgInitialDraftInventoryDiscoveryPlan.IriKind;
@@ -133,7 +181,7 @@ public sealed class LuxembourgConsolidationByActDiscoveryPlan
     private static readonly UTF8Encoding StrictUtf8 = new(false, true);
 
     private static readonly string[] Projection =
-        ["consolidation", "consolidation_kind", "multiplicity", "key_1", "key_2"];
+        ["consolidation", "consolidation_kind", "act", "multiplicity", "key_1", "key_2"];
 
     /// <summary>
     /// The keyset: the coordinated text, and its kind.
@@ -160,7 +208,7 @@ public sealed class LuxembourgConsolidationByActDiscoveryPlan
             "request_media_type=application/x-www-form-urlencoded",
             "response_media_type=" + ResponseMediaType,
             "consolidates=" + ConsolidatesPredicateIri,
-            "consolidation_class=" + ConsolidationClassIri,
+            "subject_class_restriction=none",
             "iri_kind=" + IriKind,
             "unsupported_blank_node_kind=" + UnsupportedBlankNodeKind,
             "partition_key_prefix=" + PartitionKeyPrefix,
@@ -232,28 +280,31 @@ public sealed class LuxembourgConsolidationByActDiscoveryPlan
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(publisherActIri);
 
-        // ONE ADMITTED SPELLING, AND THE OTHER IS REFUSED RATHER THAN NORMALIZED.
-        // SourceObservation.EliMintedBy admits two Legilux shapes: the relative "eli/..." path
-        // expression and an absolute ELI on a Legilux host. Both name the same act, so admitting
-        // both here would give one act TWO family keys and silently split its evidence in half.
+        // EXACTLY ONE RAW SPELLING, CHECKED ON THE BYTES AND NOT ON A PARSED URI. The first head of
+        // this method refused only the relative "eli/..." form and let OfficialIdentifier.EliMintedBy
+        // plus System.Uri decide the rest. Preflight review found three more spellings of one act
+        // that passed and minted three different keys: the alias host legilux.public.lu (EliMintedBy
+        // maps both hosts to the same publisher), an upper-case host (System.Uri lowercases .Host
+        // before the lookup, then the raw mixed-case string was digested), and https for http (both
+        // schemes admitted). Each one silently split an act's evidence across two families.
         //
-        // Normalizing one into the other is the obvious alternative and it is the wrong one: the
-        // design review requires the key derived "with no normalization or alternate spelling
-        // introduced elsewhere", and a normalizer is exactly an alternate-spelling rule that then
-        // has to be kept in step with whatever the publisher does next. Refusing costs a caller one
-        // conversion at the boundary and keeps the key a function of the bytes it digests.
+        // Normalizing them together is the obvious alternative and it is the one the design review
+        // forbids - "no normalization or alternate spelling introduced elsewhere" - because a
+        // normalizer is an alternate-spelling rule that then has to track whatever the publisher
+        // does next. So the raw string must begin with the one exact prefix Legilux mints act ELIs
+        // under, byte for byte, and everything else is refused. This is the same discipline
+        // FactsCommon applies to Cellar authorities for the same reason: System.Uri's own
+        // case-folding is what makes a parsed check the wrong tool for a spelling decision.
         //
-        // The absolute form is the admitted one because it is the only one that can be RENDERED: a
-        // SPARQL IRI term needs an absolute IRI, and a relative path would produce a query matching
-        // nothing while carrying a perfectly well-formed key - a false absence with a valid-looking
-        // name on it, which is the whole defect class #419 exists to close.
-        if (OfficialIdentifier.EliMintedBy(publisherActIri) != PublisherId.LuLegilux ||
-            !Uri.TryCreate(publisherActIri, UriKind.Absolute, out var uri) ||
-            !uri.AbsolutePath.StartsWith(AdmittedActPathPrefix, StringComparison.Ordinal))
+        // EliMintedBy is still consulted afterwards so that a string with the right prefix but a
+        // shape that function would not mint (a space, for instance) is still refused by the
+        // build's one authority on what an ELI is.
+        if (!publisherActIri.StartsWith(AdmittedActIriPrefix, StringComparison.Ordinal) ||
+            OfficialIdentifier.EliMintedBy(publisherActIri) != PublisherId.LuLegilux)
         {
             throw new ArgumentException(
-                $"'{publisherActIri}' is not an exact absolute Legilux act ELI under "
-                + $"'{AdmittedActPathPrefix}'.",
+                $"'{publisherActIri}' is not a Legilux act ELI in the one admitted spelling, "
+                + $"beginning '{AdmittedActIriPrefix}'.",
                 nameof(publisherActIri));
         }
 
@@ -261,15 +312,16 @@ public sealed class LuxembourgConsolidationByActDiscoveryPlan
     }
 
     /// <summary>
-    /// The path every Legilux act ELI this family admits begins with.
+    /// The exact raw prefix every act IRI this family admits begins with, byte for byte.
     /// </summary>
     /// <remarks>
-    /// <c>/eli/etat/leg/</c> is the state-legislation branch that carries the LOI and RGD classes
-    /// this programme is about. It is deliberately narrower than <c>EliMintedBy</c>'s own
-    /// <c>/eli/</c> test: that function answers "which publisher minted this", and this one answers
-    /// "is this an act this family can be asked about", which is a smaller question.
+    /// Scheme, host and the state-legislation branch together. <c>/eli/etat/leg/</c> carries the
+    /// LOI and RGD classes this programme is about, and is narrower than <c>EliMintedBy</c>'s own
+    /// <c>/eli/</c> test: that answers "which publisher minted this", this answers "is this an act
+    /// this family can be asked about, spelled the one way it keys". Public so the frame and the
+    /// decoder can state the same admission rather than a second opinion of it.
     /// </remarks>
-    private const string AdmittedActPathPrefix = "/eli/etat/leg/";
+    public const string AdmittedActIriPrefix = "http://data.legilux.public.lu/eli/etat/leg/";
 
     public RepeatedEnumerationInterpretationProfile CreateDeliveryProfile() => new(
         RepeatedEnumerationInterpretationProfile.SchemaId,
@@ -403,20 +455,32 @@ public sealed class LuxembourgConsolidationByActDiscoveryPlan
     private static (string Count, string Page) BuildTemplates()
     {
         // THE ACT RESTRICTION IS IN BOTH TEMPLATES AND IT IS THE ONLY THING THAT MAKES THEM ABOUT AN
-        // ACT. The family key is a name; delete `{act_iri:iri}` from either template and that
-        // template enumerates every coordinated text the publisher holds while its key still claims
-        // one act. Both deletions are mutation-killed independently, because a count restricted to
-        // the act beside a page that is not would deliver a page the count never described.
+        // ACT. The family key is a name; delete the act from either template and that template
+        // enumerates every subject that consolidates anything, while its key still claims one act.
+        // Both deletions are mutation-killed independently, because a count restricted to the act
+        // beside a page that is not would deliver a page the count never described.
+        //
+        // The act is bound through VALUES into ?act and PROJECTED rather than written into the
+        // triple as a constant, so every returned row carries the act the publisher's own triple
+        // joined against and the decoder can check it row by row. And the SUBJECT of the
+        // consolidates triple is ?consolidation - the variable that is selected, grouped and keyed.
+        // A preflight lens showed that renaming that subject alone cross-joins "something
+        // consolidates the act" with "every subject there is" while every test stayed green; the
+        // test now asserts the whole triple, subject included.
+        //
+        // NO CLASS PATTERN ON THE SUBJECT. See the type remarks: the resolver's accepted shape
+        // classes a coordinated text as exactly jolux:Act, and a jolux:Consolidation restriction
+        // here returned zero rows for a consolidated act.
         var graphPattern = $$"""
               VALUES ?lex_pass_id { {pass_id:uint} }
-              ?consolidation <{{ConsolidatesPredicateIri}}> {act_iri:iri} .
-              ?consolidation a <{{ConsolidationClassIri}}> .
+              VALUES ?act { {act_iri:iri} }
+              ?consolidation <{{ConsolidatesPredicateIri}}> ?act .
             """;
         var rows = $$"""
-            SELECT ?consolidation (COUNT(*) AS ?multiplicity) WHERE {
+            SELECT ?consolidation ?act (COUNT(*) AS ?multiplicity) WHERE {
             {{Indent(graphPattern)}}
             }
-            GROUP BY ?consolidation
+            GROUP BY ?consolidation ?act
             """;
         var count = $$"""
             SELECT (COUNT(*) AS ?count) WHERE {
@@ -426,7 +490,7 @@ public sealed class LuxembourgConsolidationByActDiscoveryPlan
             }
             """;
         var pageRows = $$"""
-            SELECT ?consolidation ?consolidation_kind (COUNT(*) AS ?multiplicity) ?key_1 ?key_2 WHERE {
+            SELECT ?consolidation ?consolidation_kind ?act (COUNT(*) AS ?multiplicity) ?key_1 ?key_2 WHERE {
             {{Indent(graphPattern)}}
               BIND(COALESCE(
                 IF(isIRI(?consolidation), "{{IriKind}}", "{{UnsupportedBlankNodeKind}}"),
@@ -439,7 +503,7 @@ public sealed class LuxembourgConsolidationByActDiscoveryPlan
               FILTER(?has_cursor = 0 || (?key_1 > ?last_key_1)
                 || (?key_1 = ?last_key_1 && ?key_2 > ?last_key_2))
             }
-            GROUP BY ?consolidation ?consolidation_kind ?key_1 ?key_2
+            GROUP BY ?consolidation ?consolidation_kind ?act ?key_1 ?key_2
             ORDER BY ?key_1 ?key_2
             LIMIT {page_limit:uint}
             """;
@@ -488,13 +552,29 @@ internal sealed class LuxembourgConsolidationByActSparqlRenderer : IMachineQuery
         // EXACTLY ONCE. That is what makes deleting the restriction from a template a build-visible
         // act rather than a silent widening: a template missing `{act_iri:iri}` throws here on the
         // first render instead of quietly enumerating every coordinated text the publisher holds.
+        // A VALID KEY PAIRED WITH ANOTHER ACT MUST NOT RENDER - design review condition 2, enforced
+        // at the one place every send passes through rather than only in the plan's own Bind.
+        // MachineQueryInputArtifact.Create is public and validates a partition key and a parameter
+        // list independently, so an input naming act A in its partition and act B in its selection
+        // is constructible; preflight review constructed one. Recomputing the key from the bound
+        // parameter here is what makes "the key names the act the query asks about" true of every
+        // request that reaches the wire, whatever built the input.
+        var act = Literal(parameters, LuxembourgConsolidationByActDiscoveryPlan.ActSelectionParameterName);
+        var recomputed = LuxembourgConsolidationByActDiscoveryPlan.PartitionKeyFor(act);
+        if (!string.Equals(input.PartitionBinding.MemberKey, recomputed, StringComparison.Ordinal))
+        {
+            throw new ArgumentException(
+                "The input's partition key is not the key for the act it selects; a valid key paired "
+                + "with another act must not render.",
+                nameof(input));
+        }
+
         var query = Replace(_isPage ? _plan.PageTemplate : _plan.CountTemplate,
             "{pass_id:uint}", ((int)pass).ToString(CultureInfo.InvariantCulture));
         query = Replace(
             query,
             "{" + LuxembourgConsolidationByActDiscoveryPlan.ActSelectionParameterName + ":iri}",
-            SparqlIriTerm(Literal(
-                parameters, LuxembourgConsolidationByActDiscoveryPlan.ActSelectionParameterName)));
+            SparqlIriTerm(act));
 
         if (!_isPage)
         {

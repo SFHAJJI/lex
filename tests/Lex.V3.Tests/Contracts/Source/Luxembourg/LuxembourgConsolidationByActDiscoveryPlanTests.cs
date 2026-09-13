@@ -165,20 +165,33 @@ public sealed class LuxembourgConsolidationByActDiscoveryPlanTests
 
     /// <summary>
     /// HOSTILE CASE: the act restriction is in the count template and in the page template, each
-    /// exactly once.
+    /// exactly once - and it is the SELECTED subject that is restricted, not some other variable.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// Asserted on BOTH independently because they are deleted independently in mutation. A count
     /// restricted to the act beside a page that is not would deliver a page the count never
     /// described, and the two-pass comparison would then be reconciling two different questions.
+    /// </para>
+    /// <para>
+    /// THE WHOLE TRIPLE, SUBJECT INCLUDED. The first version of this test asserted only
+    /// <c>&lt;consolidates&gt; {act}</c>, and a preflight lens showed what that misses: rename the
+    /// triple's subject to <c>?__unused</c> and the query becomes "something consolidates the act"
+    /// cross-joined with "every subject there is" - the unrelated-family defect #419 exists to close,
+    /// with every test green. So this asserts the exact triple whose subject is
+    /// <c>?consolidation</c>, and that <c>?consolidation</c> is the variable each template selects
+    /// and groups.
+    /// </para>
     /// </remarks>
     [TestMethod]
-    public void BothTemplatesRestrictTheRelationToTheSelectedAct()
+    public void BothTemplatesRestrictTheSelectedSubjectToTheBoundAct()
     {
         var plan = LuxembourgConsolidationByActDiscoveryPlan.Create();
         var slot = "{" + LuxembourgConsolidationByActDiscoveryPlan.ActSelectionParameterName + ":iri}";
-        var restriction =
-            "<" + LuxembourgConsolidationByActDiscoveryPlan.ConsolidatesPredicateIri + "> " + slot;
+        var binding = "VALUES ?act { " + slot + " }";
+        var triple =
+            "?consolidation <" + LuxembourgConsolidationByActDiscoveryPlan.ConsolidatesPredicateIri
+            + "> ?act .";
 
         foreach (var (name, template) in new[]
         {
@@ -187,14 +200,190 @@ public sealed class LuxembourgConsolidationByActDiscoveryPlanTests
         })
         {
             Assert.AreEqual(
-                1,
-                template.Split(slot, StringSplitOptions.None).Length - 1,
+                1, Occurrences(template, slot),
                 $"the {name} template must bind the act exactly once.");
-            StringAssert.Contains(
-                template, restriction,
-                $"the {name} template must restrict the consolidation relation itself to the bound "
-                + "act - a family name cannot supply that meaning.");
+            Assert.AreEqual(
+                1, Occurrences(template, binding),
+                $"the {name} template must bind the act into ?act through VALUES, so the row carries "
+                + "what the publisher's triple joined against.");
+            Assert.AreEqual(
+                1, Occurrences(template, triple),
+                $"the {name} template must restrict ?consolidation itself - the selected, grouped, "
+                + "keyed subject - to the bound act. A family name cannot supply that meaning.");
+
+            // AND THAT SUBJECT IS THE ONE SELECTED AND GROUPED, in the SELECT that produces rows.
+            var rowSelect = template
+                .Split('\n')
+                .First(line => line.TrimStart().StartsWith("SELECT ?consolidation", StringComparison.Ordinal));
+            StringAssert.Contains(rowSelect, "?consolidation", "the restricted subject is selected.");
+            StringAssert.Contains(rowSelect, "?act", "and the bound act is projected beside it.");
+            var groupBy = template
+                .Split('\n')
+                .First(line => line.TrimStart().StartsWith("GROUP BY", StringComparison.Ordinal));
+            StringAssert.Contains(groupBy, "?consolidation");
+            StringAssert.Contains(groupBy, "?act");
         }
+    }
+
+    /// <summary>
+    /// No class is required of the subject, and the reason is pinned against the resolver's own
+    /// accepted shape so the two cannot drift apart.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// FOUND BY A PREFLIGHT LENS BEFORE SUBMISSION, AND IT WAS THE WORST CLASS OF DEFECT THIS
+    /// FAMILY CAN HAVE. The first head required <c>?consolidation a jolux:Consolidation</c>. The
+    /// resolver's accepted consolidates shape (<c>LuxembourgConsolidatesShape</c>,
+    /// <c>AcceptedTcToCompatibleAct</c>) admits a subject only when its class set is EXACTLY
+    /// <c>{jolux:Act}</c>. So a real, accepted consolidation would have matched the relation and
+    /// failed the class pattern, and this family would have returned zero rows for a consolidated act
+    /// - a false "never consolidated".
+    /// </para>
+    /// <para>
+    /// Two things are pinned. First, that neither template carries any class pattern on the
+    /// subject. Second, that the resolver still says what this test relies on: if the accepted
+    /// shape's subject class ever changes, this fails and the template gets revisited rather than
+    /// silently disagreeing with the resolver again.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void ANoClassIsRequiredOfTheSubject()
+    {
+        var plan = LuxembourgConsolidationByActDiscoveryPlan.Create();
+        foreach (var (name, template) in new[]
+        {
+            ("count", plan.CountTemplate),
+            ("page", plan.PageTemplate),
+        })
+        {
+            Assert.IsFalse(
+                template.Contains("?consolidation a <", StringComparison.Ordinal)
+                    || template.Contains("rdf:type", StringComparison.Ordinal)
+                    || template.Contains("rdf-syntax-ns#type", StringComparison.Ordinal),
+                $"the {name} template must not require a class of the subject: the resolver classes a "
+                + "coordinated text as exactly jolux:Act, and a jolux:Consolidation pattern returned "
+                + "zero rows for a consolidated act.");
+        }
+
+        var resolution = ReadSource("src/Lex.V3.Contracts/Source/Luxembourg/LuxembourgScopeResolution.cs");
+        var accepted = resolution.IndexOf(
+            "State == LuxembourgConsolidatesShapeState.AcceptedTcToCompatibleAct", StringComparison.Ordinal);
+        Assert.IsGreaterThanOrEqualTo(0, accepted, "the accepted consolidates shape is where expected.");
+        var invariant = resolution.Substring(accepted, 400);
+        StringAssert.Contains(
+            invariant,
+            "SubjectClasses.SequenceEqual(",
+            "the resolver constrains the subject's class set exactly...");
+        StringAssert.Contains(
+            invariant,
+            "JoluxPrefix + \"Act\"",
+            "...to jolux:Act. If this ever changes, the template's class handling must be revisited.");
+    }
+
+    /// <summary>
+    /// HOSTILE CASE: an input whose partition names one act while its selection names another
+    /// does not render.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Design review condition 2, verbatim: "a valid key paired with another act must not render".
+    /// The plan's own <c>Bind</c> derives the key from the act and cannot produce this input. But
+    /// <c>MachineQueryInputArtifact.Create</c> is public and validates a partition key and a
+    /// parameter list independently, so a preflight lens built exactly this input and showed it
+    /// rendered. Every request reaches the wire through the renderer, so the renderer recomputes
+    /// the key from the bound parameter and refuses.
+    /// </para>
+    /// <para>
+    /// The consistent input is rendered first as the premise, so the refusal below is about the
+    /// mismatch and not about some other shape defect in the hand-built artifact.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void AnInputWhosePartitionNamesAnotherActDoesNotRender()
+    {
+        var plan = LuxembourgConsolidationByActDiscoveryPlan.Create();
+        var renderer = new LuxembourgConsolidationByActSparqlRenderer(plan, isPage: false, RendererSource());
+        var opaque = new MachineResponseCardinality(MachineResponseCardinalityKind.OpaqueBody, null, null, null);
+
+        MachineQueryInputArtifact Input(string partitionFor, string selects) =>
+            MachineQueryInputArtifact.Create(
+                NewUrn(),
+                plan.CountQueryFamilyRef,
+                LuxembourgConsolidationByActDiscoveryPlan.PartitionKeyFor(partitionFor),
+                opaque,
+                new MachineQueryParameter[]
+                {
+                    new(LuxembourgConsolidationByActDiscoveryPlan.ActSelectionParameterName,
+                        MachineQueryParameterKind.PublisherLiteral, null, selects, plan.ArtifactRef),
+                    new("pass_id", MachineQueryParameterKind.BoundedInteger,
+                        (int)LuxembourgQueryPass.Pass1, null, plan.ArtifactRef),
+                });
+
+        // The premise: a consistent hand-built input renders, so what refuses below is the mismatch.
+        var consistent = renderer.RenderInput(Input(Act, Act), opaque);
+        StringAssert.Contains(
+            Uri.UnescapeDataString(Encoding.UTF8.GetString(consistent.CopyRequestBody())),
+            "<" + Act + ">");
+
+        var mismatched = Input(partitionFor: Act, selects: OtherAct);
+        Assert.AreEqual(
+            LuxembourgConsolidationByActDiscoveryPlan.PartitionKeyFor(Act),
+            mismatched.PartitionBinding.MemberKey,
+            "the premise: the artifact really carries this act's key beside another act's selection.");
+
+        var thrown = Assert.ThrowsExactly<ArgumentException>(() => renderer.RenderInput(mismatched, opaque));
+        StringAssert.Contains(thrown.Message, "must not render");
+    }
+
+    /// <summary>
+    /// Three more spellings of one act, all of which the build's own ELI authority admits, are
+    /// refused rather than keyed.
+    /// </summary>
+    /// <remarks>
+    /// The first head refused only the relative form. A preflight lens found that
+    /// <c>OfficialIdentifier.EliMintedBy</c> maps both <c>legilux.public.lu</c> and
+    /// <c>data.legilux.public.lu</c> to the same publisher, that <c>System.Uri</c> lowercases the
+    /// host before that lookup while the raw string was digested, and that both schemes are
+    /// admitted - so one act minted three further keys. Each variant is premised on being a Legilux
+    /// ELI, so each refusal below is a decision about spelling and not about malformation.
+    /// </remarks>
+    [TestMethod]
+    public void EveryOtherAdmittedSpellingOfTheActIsRefusedRatherThanKeyed()
+    {
+        foreach (var (label, variant) in new[]
+        {
+            ("alias host", "http://legilux.public.lu/eli/etat/leg/loi/2017/03/14/a439/jo"),
+            ("upper-case host", "http://DATA.legilux.public.lu/eli/etat/leg/loi/2017/03/14/a439/jo"),
+            ("https scheme", "https://data.legilux.public.lu/eli/etat/leg/loi/2017/03/14/a439/jo"),
+        })
+        {
+            Assert.AreEqual(
+                PublisherId.LuLegilux,
+                OfficialIdentifier.EliMintedBy(variant),
+                $"the premise for '{label}': the build's own authority admits this as a Legilux ELI, "
+                + "which is exactly why refusing it here is a decision.");
+            Assert.ThrowsExactly<ArgumentException>(
+                () => LuxembourgConsolidationByActDiscoveryPlan.PartitionKeyFor(variant),
+                $"'{label}' would mint a second key for one act.");
+        }
+
+        // And the one admitted spelling is exactly the prefix the plan publishes.
+        Assert.StartsWith(LuxembourgConsolidationByActDiscoveryPlan.AdmittedActIriPrefix, Act);
+    }
+
+    /// <summary>The bound-query record cannot be assembled from parts by anyone but the plan.</summary>
+    /// <remarks>
+    /// A preflight lens assembled one from one act's input artifact beside another act's request,
+    /// and nothing raised. The siblings are plain public records because their keys are constants;
+    /// this family's key is the claim, so the record is guarded and the guard is pinned here.
+    /// </remarks>
+    [TestMethod]
+    public void TheBoundQueryRecordHasNoPublicConstructor()
+    {
+        Assert.IsEmpty(
+            typeof(LuxembourgConsolidationByActBoundQuery).GetConstructors(
+                System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance),
+            "only the plan's own Bind may assemble a bound query, from one act, in one call.");
     }
 
     /// <summary>
@@ -219,7 +408,9 @@ public sealed class LuxembourgConsolidationByActDiscoveryPlanTests
             var body = Uri.UnescapeDataString(
                 Encoding.UTF8.GetString(bound.Request.CopyRequestBody()));
 
-            StringAssert.Contains(body, "<" + Act + ">", "the selected act reaches the wire.");
+            StringAssert.Contains(
+                body, "VALUES ?act { <" + Act + "> }",
+                "the selected act reaches the wire as the VALUES binding the triple joins against.");
             Assert.IsFalse(
                 body.Contains(OtherAct, StringComparison.Ordinal),
                 "and no other act does.");
@@ -227,6 +418,28 @@ public sealed class LuxembourgConsolidationByActDiscoveryPlanTests
                 body.Contains(":iri}", StringComparison.Ordinal),
                 "no unsubstituted selection slot may reach the wire.");
         }
+
+        // AND THE PAGE PROJECTS THE ACT, so a delivered row carries what the decoder must check.
+        var pageBody = Uri.UnescapeDataString(Encoding.UTF8.GetString(page.Request.CopyRequestBody()));
+        StringAssert.Contains(pageBody, "SELECT ?consolidation ?consolidation_kind ?act ");
+    }
+
+    private static int Occurrences(string text, string token) =>
+        text.Split(token, StringSplitOptions.None).Length - 1;
+
+    private static string ReadSource(string repositoryRelativePath)
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "Lex.V3.slnx")))
+        {
+            directory = directory.Parent;
+        }
+
+        var root = directory?.FullName
+            ?? throw new InvalidOperationException("Checkout root not found.");
+        return File.ReadAllText(
+            Path.Combine(root, repositoryRelativePath.Replace('/', Path.DirectorySeparatorChar)),
+            Encoding.UTF8);
     }
 
     /// <summary>
