@@ -470,6 +470,8 @@ public sealed class ClosedVocabularyCensusTests
                     + "ObservationIdReused, EffectiveUriMismatch, RequestedUriMismatch",
                 "Lex.V3.Contracts.Source.Http.RobotsPolicyFreshness: Current, Expired",
                 "Lex.V3.Contracts.Source.Http.RobotsRevalidationMode: FullGetWithoutValidators",
+                "Lex.V3.Contracts.Source.Luxembourg.LuxembourgActClassScope: InScopeLoi, InScopeRgd, "
+                    + "RecognizedOutOfScope",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgActForceDatePredicate: "
                     + "DateEntryInForce, DateNoLongerInForce",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgAssertionDisposition: Accepted, "

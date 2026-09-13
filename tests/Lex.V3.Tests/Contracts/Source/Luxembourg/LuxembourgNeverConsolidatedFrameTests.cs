@@ -78,25 +78,51 @@ public sealed class LuxembourgNeverConsolidatedFrameTests
             + "would be the claim review found unevidenced, arriving again.");
     }
 
-    /// <summary>No class-manifest type survives to carry the retired population scope.</summary>
+    /// <summary>
+    /// The class manifest classifies without carrying a population claim, and the retired
+    /// count-refusal type does not return.
+    /// </summary>
     /// <remarks>
-    /// The manifest was the wrapper the substitution travelled in: caller-supplied members bound to
-    /// a proof by cardinality alone. Deleting the count while leaving the manifest would have left
-    /// the same unevidenced scope one call away.
+    /// #584 removed a class-manifest that WAS the wrapper for an unevidenced population scope -
+    /// caller-supplied members bound to a proof by cardinality alone - and banned the name to keep it
+    /// from returning. The owner's #419 slice-4 ruling authorizes a manifest of the opposite kind: a
+    /// pure legal-type classification that publishes no count and no population. So the ban becomes a
+    /// shape check. The only <c>ActClassManifest</c> type is <see cref="LuxembourgActClassManifest"/>;
+    /// its public surface classifies IRIs and exposes no act-population count; and
+    /// <c>NeverConsolidatedCountRefusal</c>, which only a count surface would need, stays retired.
     /// </remarks>
     [TestMethod]
-    public void NoClassManifestTypeSurvivesInTheContractAssembly()
+    public void TheClassManifestClassifiesWithoutCarryingAPopulationClaim()
     {
-        var retired = typeof(LuxembourgNeverConsolidatedFrame).Assembly
-            .GetTypes()
+        var assembly = typeof(LuxembourgNeverConsolidatedFrame).Assembly;
+
+        var manifestTypes = assembly.GetTypes()
             .Select(type => type.FullName ?? type.Name)
-            .Where(name =>
-                name.Contains("ActClassManifest", StringComparison.Ordinal)
-                || name.Contains("NeverConsolidatedCountRefusal", StringComparison.Ordinal))
+            .Where(name => name.Contains("ActClassManifest", StringComparison.Ordinal))
             .OrderBy(name => name, StringComparer.Ordinal)
             .ToArray();
+        CollectionAssert.AreEqual(
+            new[] { typeof(LuxembourgActClassManifest).FullName! },
+            manifestTypes,
+            "the only class-manifest type is the owner-authorized classification manifest.");
 
-        Assert.IsEmpty(retired);
+        Assert.IsEmpty(
+            assembly.GetTypes()
+                .Select(type => type.FullName ?? type.Name)
+                .Where(name => name.Contains("NeverConsolidatedCountRefusal", StringComparison.Ordinal))
+                .ToArray(),
+            "the retired count-refusal type, which only a count surface would need, does not return.");
+
+        var surface = typeof(LuxembourgActClassManifest)
+            .GetMembers(BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly)
+            .Where(member => member is not MethodInfo { IsSpecialName: true })
+            .Select(member => member.Name)
+            .OrderBy(name => name, StringComparer.Ordinal)
+            .ToArray();
+        CollectionAssert.AreEqual(
+            new[] { "Classify", "IsCounted", "LoiClassIri", "RecognizedClassIris", "RgdClassIri", "TryClassify" },
+            surface,
+            "the manifest classifies legal-types; it exposes no population or act-count surface.");
     }
 
     // ---- Absence needs evidence; non-absence must not carry it. ----
