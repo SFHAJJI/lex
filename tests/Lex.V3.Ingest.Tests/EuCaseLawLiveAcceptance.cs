@@ -84,7 +84,8 @@ public sealed class EuCaseLawLiveAcceptance
                 EuCaseLawDiscoveryPlan.Create(),
                 acts,
                 NewUrn(),
-                RendererSource(checkout)),
+                RendererSource(checkout),
+                EuAcquisitionTestFixture.TestWireBudget()),
             scopes,
             EuAcquisitionTestFixture.SourceWitness(),
             CancellationToken.None);
@@ -191,7 +192,8 @@ public sealed class EuCaseLawLiveAcceptance
                     EuCaseLawDiscoveryPlan.Create(),
                     [ScanAct],
                     NewUrn(),
-                    RendererSource(CheckoutRoot())),
+                    RendererSource(CheckoutRoot()),
+                    EuAcquisitionTestFixture.TestWireBudget()),
                 new Dictionary<string, TargetBodyScope>(StringComparer.Ordinal)
                 {
                     [ScanAct] = TargetBodyScope.BodyInScopeHeld,

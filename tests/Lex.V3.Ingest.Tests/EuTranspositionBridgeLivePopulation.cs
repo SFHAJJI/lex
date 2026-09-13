@@ -45,7 +45,8 @@ public sealed class EuTranspositionBridgeLivePopulation
             new EuNationalImplementingMeasureRunRequest(
                 nimPlan,
                 NewUrn(),
-                nimRenderer),
+                nimRenderer,
+                EuAcquisitionTestFixture.TestWireBudget()),
             EuAcquisitionTestFixture.SourceWitness(),
             CancellationToken.None);
         Assert.IsTrue(nim.Delivered, $"NIM refused: {nim.Refusal}: {nim.Detail}");
@@ -106,7 +107,8 @@ public sealed class EuTranspositionBridgeLivePopulation
                     identityPlan,
                     selection,
                     NewUrn(),
-                    identityRenderer),
+                    identityRenderer,
+                    EuAcquisitionTestFixture.TestWireBudget()),
                 LuxembourgSourceWitness(),
                 CancellationToken.None);
             Assert.IsTrue(
