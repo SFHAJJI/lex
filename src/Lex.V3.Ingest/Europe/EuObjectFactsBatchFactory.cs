@@ -102,14 +102,22 @@ internal static class EuObjectFactsBatchFactory
     /// This run's observed object set O: every seed's root together with every consolidated state
     /// that run's own census actually delivered. Sorted and deduplicated here rather than trusted.
     /// </param>
+    /// <param name="wireBudget">
+    /// The run's one ceiling, stamped onto every request this builds. Passed in rather than read off
+    /// the policy so that the adapter driving the run and the batches it mints charge the same
+    /// counter by construction: a batch minted here with a budget of its own would bound itself and
+    /// leave the run unbounded, which is the exact shape #579 was opened about.
+    /// </param>
     internal static IReadOnlyList<EuObjectFactsPartitionRunRequest> Build(
         EuObjectFactsBatchPolicy policy,
         IReadOnlyCollection<string> observedObjects,
-        IReadOnlyCollection<string> packRoots)
+        IReadOnlyCollection<string> packRoots,
+        WireRequestBudget wireBudget)
     {
         ArgumentNullException.ThrowIfNull(policy);
         ArgumentNullException.ThrowIfNull(observedObjects);
         ArgumentNullException.ThrowIfNull(packRoots);
+        ArgumentNullException.ThrowIfNull(wireBudget);
         if (observedObjects.Count == 0)
         {
             throw new ArgumentException(
@@ -127,12 +135,12 @@ internal static class EuObjectFactsBatchFactory
         var requests = new List<EuObjectFactsPartitionRunRequest>();
         foreach (var set in SetsOverObservedObjects)
         {
-            AddBatches(requests, policy, set, observedObjects);
+            AddBatches(requests, policy, set, observedObjects, wireBudget);
         }
 
         foreach (var set in SetsOverPackRootsOnly)
         {
-            AddBatches(requests, policy, set, packRoots);
+            AddBatches(requests, policy, set, packRoots, wireBudget);
         }
 
         return requests;
@@ -142,7 +150,8 @@ internal static class EuObjectFactsBatchFactory
         List<EuObjectFactsPartitionRunRequest> into,
         EuObjectFactsBatchPolicy policy,
         EuObjectFactsQuerySet set,
-        IReadOnlyCollection<string> objects)
+        IReadOnlyCollection<string> objects,
+        WireRequestBudget wireBudget)
     {
         // Sorted and deduplicated HERE rather than trusted from the caller: the partition key is a
         // digest over the batch's own sorted members, so two runs observing the same objects in a
@@ -160,7 +169,8 @@ internal static class EuObjectFactsBatchFactory
                 policy.PlanResourceId,
                 set,
                 ordered.Skip(offset).Take(EuObjectFactsDiscoveryPlan.BatchCapacity).ToArray(),
-                policy.RendererSource));
+                policy.RendererSource,
+                wireBudget));
         }
     }
 }

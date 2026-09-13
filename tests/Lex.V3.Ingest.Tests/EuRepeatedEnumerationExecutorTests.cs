@@ -27,7 +27,8 @@ public sealed class EuRepeatedEnumerationExecutorTests
         var seed = EuAppendixASeedMap.SeedsInCelexOrder[0];
         var (plan, planResourceId) = EuAcquisitionTestFixture.BuildCensusPlan();
         var rendererSource = EuAcquisitionTestFixture.BuildRendererSource(1);
-        var request = new EuCensusPartitionRunRequest(plan, planResourceId, seed.Celex, rendererSource);
+        var request = new EuCensusPartitionRunRequest(
+            plan, planResourceId, seed.Celex, rendererSource, EuAcquisitionTestFixture.TestWireBudget());
 
         const string luShapedCount =
             "{\"head\":{\"link\":[],\"vars\":[\"count\"]},\"results\":{\"distinct\":false,\"ordered\":true," +
@@ -57,7 +58,8 @@ public sealed class EuRepeatedEnumerationExecutorTests
         var seed = EuAppendixASeedMap.SeedsInCelexOrder[0];
         var (plan, planResourceId) = EuAcquisitionTestFixture.BuildCensusPlan();
         var rendererSource = EuAcquisitionTestFixture.BuildRendererSource(2);
-        var request = new EuCensusPartitionRunRequest(plan, planResourceId, seed.Celex, rendererSource);
+        var request = new EuCensusPartitionRunRequest(
+            plan, planResourceId, seed.Celex, rendererSource, EuAcquisitionTestFixture.TestWireBudget());
 
         var handler = new SingleFamilyHandler(EuAcquisitionTestFixture.EuCountJson(1_000_000));
         var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
@@ -86,7 +88,8 @@ public sealed class EuRepeatedEnumerationExecutorTests
         var seed = EuAppendixASeedMap.SeedsInCelexOrder[0];
         var (plan, planResourceId) = EuAcquisitionTestFixture.BuildCensusPlan();
         var rendererSource = EuAcquisitionTestFixture.BuildRendererSource(3);
-        var request = new EuCensusPartitionRunRequest(plan, planResourceId, seed.Celex, rendererSource);
+        var request = new EuCensusPartitionRunRequest(
+            plan, planResourceId, seed.Celex, rendererSource, EuAcquisitionTestFixture.TestWireBudget());
 
         var rootIri = EuPackRootCanonicalForm.TryCanonicalize(seed.WorkRoot, out _)!;
         // Well past the 2047 UTF-8 byte bound RequireRepresentableKeyPart enforces.
@@ -147,7 +150,8 @@ public sealed class EuRepeatedEnumerationExecutorTests
             planResourceId,
             EuObjectFactsQuerySet.ObjectFacts,
             [requested],
-            EuAcquisitionTestFixture.BuildRendererSource(2101));
+            EuAcquisitionTestFixture.BuildRendererSource(2101),
+            EuAcquisitionTestFixture.TestWireBudget());
         var executor = new EuRepeatedEnumerationExecutor(
             new EuAcquisitionTestFixture.EuInMemoryCustodyStore(),
             new EuAcquisitionTestFixture.FixedTimeProvider(),
@@ -187,7 +191,8 @@ public sealed class EuRepeatedEnumerationExecutorTests
             planResourceId,
             EuObjectFactsQuerySet.ObjectFacts,
             [admittedAlias],
-            EuAcquisitionTestFixture.BuildRendererSource(2102));
+            EuAcquisitionTestFixture.BuildRendererSource(2102),
+            EuAcquisitionTestFixture.TestWireBudget());
         var executor = new EuRepeatedEnumerationExecutor(
             new EuAcquisitionTestFixture.EuInMemoryCustodyStore(),
             new EuAcquisitionTestFixture.FixedTimeProvider(),
@@ -218,7 +223,8 @@ public sealed class EuRepeatedEnumerationExecutorTests
             planResourceId,
             EuObjectFactsQuerySet.LocatedAmendmentFacts,
             [parent],
-            EuAcquisitionTestFixture.BuildRendererSource(2103));
+            EuAcquisitionTestFixture.BuildRendererSource(2103),
+            EuAcquisitionTestFixture.TestWireBudget());
         var executor = new EuRepeatedEnumerationExecutor(
             new EuAcquisitionTestFixture.EuInMemoryCustodyStore(),
             new EuAcquisitionTestFixture.FixedTimeProvider(),
@@ -257,7 +263,8 @@ public sealed class EuRepeatedEnumerationExecutorTests
             store, new EuAcquisitionTestFixture.FixedTimeProvider(), handler);
 
         var witness = EuAcquisitionTestFixture.DocumentFetchSourceWitness();
-        var result = await executor.RunDocumentFetchAsync(witness, witness, CancellationToken.None);
+        var result = await executor.RunDocumentFetchAsync(
+            witness, witness, EuAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
 
         Assert.IsNull(result.Evidence);
         Assert.AreEqual(EuDocumentFetchAttemptRefusal.RobotsBootstrapRefused, result.Refusal);

@@ -25,8 +25,21 @@ public sealed class LuxembourgLiveEnumerationCanary
     /// nothing is retried, and the ceiling is that times the retry allowance — 60 — if everything
     /// is. Both are projections of a row count nobody here has measured, which is why a number is
     /// asked for rather than computed. 60 is the arithmetic, not a recommendation.
+    /// </para>
+    /// <para>
+    /// DISPOSITIONED BY THE OWNER ON 2026-09-13 AT 60, and the wording of that disposition is the
+    /// reason it is safe to write a number here: 60 was accepted as the fail-closed wire ceiling
+    /// "because the recorded plan derives it as the exact structural retry maximum", not because it
+    /// looked roomy. Setting it bounds a run; it does not authorize one. This harness still refuses
+    /// to move without its own enable variable, and the governed traffic gate is unchanged.
+    /// </para>
+    /// <para>
+    /// A CEILING IS NOT A FORECAST. If a real Code Civil two-day range needs more than one page per
+    /// count, this run stops at 60 with a WireBudgetExhausted refusal rather than quietly spending
+    /// what the arithmetic above did not predict. That is the intended failure: an honest stop that
+    /// reports the measurement, against which the next disposition can be made.
     /// </remarks>
-    private static readonly int? SharedWireCeiling = null;
+    private static readonly int? SharedWireCeiling = 60;
 
     [TestMethod]
     public async Task CodeCivilFamiliesAreEnumeratedTwiceThroughThePublisherRoute()

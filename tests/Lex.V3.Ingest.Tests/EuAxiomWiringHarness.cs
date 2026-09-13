@@ -85,7 +85,8 @@ internal static class EuAxiomWiringHarness
 
         var (censusPlan, censusPlanId) = EuAcquisitionTestFixture.BuildCensusPlan();
         var censusRequest = new EuCensusPartitionRunRequest(
-            censusPlan, censusPlanId, seed.Celex, EuAcquisitionTestFixture.BuildRendererSource(1));
+            censusPlan, censusPlanId, seed.Celex, EuAcquisitionTestFixture.BuildRendererSource(1),
+            EuAcquisitionTestFixture.TestWireBudget());
 
         var (pPlan, pPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
 
@@ -99,6 +100,7 @@ internal static class EuAxiomWiringHarness
             EuAcquisitionTestFixture.BuildRendererSource(1009),
             EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
             new PermissiveEvidenceResolver(CompleteEnumerationRef),
+            EuAcquisitionTestFixture.TestWireBudget(),
             CancellationToken.None);
     }
 
@@ -184,11 +186,13 @@ internal static class EuAxiomWiringHarness
             [
                 (new EuCensusPartitionRunRequest(
                     censusPlan, censusPlanId, seedOne.Celex,
-                    EuAcquisitionTestFixture.BuildRendererSource(1)),
+                    EuAcquisitionTestFixture.BuildRendererSource(1),
+                    EuAcquisitionTestFixture.TestWireBudget()),
                     EuAcquisitionTestFixture.SourceWitness()),
                 (new EuCensusPartitionRunRequest(
                     censusPlan, censusPlanId, seedTwo.Celex,
-                    EuAcquisitionTestFixture.BuildRendererSource(11)),
+                    EuAcquisitionTestFixture.BuildRendererSource(11),
+                    EuAcquisitionTestFixture.TestWireBudget()),
                     EuAcquisitionTestFixture.SourceWitness()),
             ],
             new EuObjectFactsBatchPolicy(
@@ -199,6 +203,7 @@ internal static class EuAxiomWiringHarness
             EuAcquisitionTestFixture.BuildRendererSource(1009),
             EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
             new PermissiveEvidenceResolver(CompleteEnumerationRef),
+            EuAcquisitionTestFixture.TestWireBudget(),
             CancellationToken.None);
     }
 

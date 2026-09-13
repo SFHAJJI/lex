@@ -37,8 +37,10 @@ public sealed class EuObjectFactsBatchFactoryTests
         var forward = new[] { root, root + "/state-a", root + "/state-b" };
         var reversed = forward.Reverse().ToArray();
 
-        var first = EuObjectFactsBatchFactory.Build(Policy(), forward, [root]);
-        var second = EuObjectFactsBatchFactory.Build(Policy(), reversed, [root]);
+        var first = EuObjectFactsBatchFactory.Build(
+            Policy(), forward, [root], EuAcquisitionTestFixture.TestWireBudget());
+        var second = EuObjectFactsBatchFactory.Build(
+            Policy(), reversed, [root], EuAcquisitionTestFixture.TestWireBudget());
 
         Assert.AreEqual(
             Render(first),
@@ -69,8 +71,10 @@ public sealed class EuObjectFactsBatchFactoryTests
             EuAppendixASeedMap.SeedsInCelexOrder[0].WorkRoot, out _)!;
         var state = root + "/state-a";
 
-        var once = EuObjectFactsBatchFactory.Build(Policy(), [root, state], [root]);
-        var twice = EuObjectFactsBatchFactory.Build(Policy(), [root, state, state, root], [root]);
+        var once = EuObjectFactsBatchFactory.Build(
+            Policy(), [root, state], [root], EuAcquisitionTestFixture.TestWireBudget());
+        var twice = EuObjectFactsBatchFactory.Build(
+            Policy(), [root, state, state, root], [root], EuAcquisitionTestFixture.TestWireBudget());
 
         Assert.AreEqual(Render(once), Render(twice), "a repeated object is one member, not two.");
     }
@@ -82,7 +86,8 @@ public sealed class EuObjectFactsBatchFactoryTests
             EuAppendixASeedMap.SeedsInCelexOrder[0].WorkRoot, out _)!;
         var state = root + "/state-a";
 
-        var requests = EuObjectFactsBatchFactory.Build(Policy(), [root, state], [root]);
+        var requests = EuObjectFactsBatchFactory.Build(
+            Policy(), [root, state], [root], EuAcquisitionTestFixture.TestWireBudget());
 
         var watermark = requests
             .Where(static request => request.Set == EuObjectFactsQuerySet.RootWatermark)
@@ -112,7 +117,8 @@ public sealed class EuObjectFactsBatchFactoryTests
             EuAppendixASeedMap.SeedsInCelexOrder[0].WorkRoot, out _)!;
         var state = root + "/state-a";
 
-        var requests = EuObjectFactsBatchFactory.Build(Policy(), [root, state], [root]);
+        var requests = EuObjectFactsBatchFactory.Build(
+            Policy(), [root, state], [root], EuAcquisitionTestFixture.TestWireBudget());
         var located = requests
             .Where(static request => request.Set == EuObjectFactsQuerySet.LocatedAmendmentFacts)
             .ToArray();
@@ -131,7 +137,8 @@ public sealed class EuObjectFactsBatchFactoryTests
             .Append(root)
             .ToArray();
 
-        var requests = EuObjectFactsBatchFactory.Build(Policy(), many, [root]);
+        var requests = EuObjectFactsBatchFactory.Build(
+            Policy(), many, [root], EuAcquisitionTestFixture.TestWireBudget());
 
         foreach (var request in requests)
         {

@@ -258,22 +258,58 @@ public sealed class EuEnumerationRunResult
 /// for exactly one admitted Appendix A seed CELEX. Reused unchanged, never re-queried, per D1-05c-1's
 /// own decode contract.
 /// </summary>
+/// <param name="WireBudget">
+/// This run's enforced ceiling, counted over robots, counts, pages and every attempt. REQUIRED, and
+/// on the request rather than the entry point, so a run cannot go unbudgeted by omission - a plan's
+/// arithmetic is a prediction and only a stop in the path is a ceiling.
+/// </param>
 public sealed record EuCensusPartitionRunRequest(
     EuConsolidationDiscoveryPlan Plan,
     string PlanResourceId,
     string RequestedCelex,
-    MachineQueryRendererSource RendererSource);
+    MachineQueryRendererSource RendererSource,
+    WireRequestBudget WireBudget)
+{
+    /// <summary>
+    /// This run's enforced ceiling. Required, and refused at construction when it is absent.
+    /// </summary>
+    /// <remarks>
+    /// A POSITIONAL RECORD DOES NOT CHECK ITS OWN PARAMETERS, which is how a sibling request came to
+    /// document this as required while <c>new(..., null!)</c> threw nothing and reached the pass loop
+    /// with the ceiling simply off. The property is therefore guarded here rather than described.
+    /// </remarks>
+    public WireRequestBudget WireBudget { get; } =
+        WireBudget ?? throw new ArgumentNullException(nameof(WireBudget));
+}
 
 /// <summary>
 /// One request to enumerate one of the three D1-05c-1 object-facts families
 /// (<see cref="EuObjectFactsQuerySet"/>) for exactly one VALUES-bound batch of canonical object IRIs.
 /// </summary>
+/// <param name="WireBudget">
+/// This run's enforced ceiling, counted over robots, counts, pages and every attempt. REQUIRED, and
+/// on the request rather than the entry point, so a run cannot go unbudgeted by omission - a plan's
+/// arithmetic is a prediction and only a stop in the path is a ceiling.
+/// </param>
 public sealed record EuObjectFactsPartitionRunRequest(
     EuObjectFactsDiscoveryPlan Plan,
     string PlanResourceId,
     EuObjectFactsQuerySet Set,
     IReadOnlyList<string> BatchObjects,
-    MachineQueryRendererSource RendererSource);
+    MachineQueryRendererSource RendererSource,
+    WireRequestBudget WireBudget)
+{
+    /// <summary>
+    /// This run's enforced ceiling. Required, and refused at construction when it is absent.
+    /// </summary>
+    /// <remarks>
+    /// A POSITIONAL RECORD DOES NOT CHECK ITS OWN PARAMETERS, which is how a sibling request came to
+    /// document this as required while <c>new(..., null!)</c> threw nothing and reached the pass loop
+    /// with the ceiling simply off. The property is therefore guarded here rather than described.
+    /// </remarks>
+    public WireRequestBudget WireBudget { get; } =
+        WireBudget ?? throw new ArgumentNullException(nameof(WireBudget));
+}
 
 /// <summary>One bounded enumeration of the plan-fixed Luxembourg sector-7 NIM family.</summary>
 /// <param name="WireBudget">
@@ -777,6 +813,20 @@ public enum EuWitnessTraversalRefusal
     /// </summary>
     [JsonStringEnumMemberName("page_budget_exhausted")]
     PageBudgetExhausted = 10,
+
+    /// <summary>
+    /// The RUN's own wire ceiling was reached, so the traversal stopped rather than sending.
+    /// </summary>
+    /// <remarks>
+    /// NOT THE SAME BOUND AS <see cref="PageBudgetExhausted"/>, and kept apart deliberately. That one
+    /// is a per-batch safety bound on how many PAGES one traversal may walk
+    /// (<see cref="EuRepeatedEnumerationExecutor.MaximumWitnessPageRequests"/>); this one is the
+    /// caller's ceiling on how many REQUESTS the whole run may send, retries and robots included.
+    /// A traversal can hit either without being anywhere near the other, and a reader told only
+    /// "exhausted" could not tell which limit to raise.
+    /// </remarks>
+    [JsonStringEnumMemberName("wire_budget_exhausted")]
+    WireBudgetExhausted = 12,
 }
 
 public sealed class EuWitnessTraversalRefusalDetail
@@ -905,6 +955,13 @@ public enum EuDocumentFetchAttemptRefusal
 
     [JsonStringEnumMemberName("observation_not_executed")]
     ObservationNotExecuted = 2,
+
+    /// <summary>
+    /// The run's wire ceiling was reached, so this fetch stopped rather than sending. Raised before
+    /// the session's robots request and again before every attempt, retries included.
+    /// </summary>
+    [JsonStringEnumMemberName("wire_budget_exhausted")]
+    WireBudgetExhausted = 3,
 }
 
 /// <summary>Executed for real (whatever the office answered), or refused before it ever sent. Never both, never neither.</summary>
@@ -988,6 +1045,17 @@ public sealed class EuRepeatedEnumerationExecutor
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(sourceWitness);
 
+        // THE SESSION'S ROBOTS FETCH, RESERVED BEFORE THE SESSION EXISTS. StartSessionAsync sends
+        // robots as its first act, so this is the last point at which that request can be stopped
+        // rather than merely counted after the fact.
+        if (!request.WireBudget.TryReserveAttempt())
+        {
+            return EuEnumerationRunResult.Refused(
+                new EuEnumerationRefusalDetail(
+                    EuEnumerationRefusal.WireBudgetExhausted, null, null, null, null, null, null, null, null),
+                productRequestCount: 0);
+        }
+
         var session = await StartSessionAsync(sourceWitness, cancellationToken).ConfigureAwait(false);
         if (session is null)
         {
@@ -1009,7 +1077,8 @@ public sealed class EuRepeatedEnumerationExecutor
                     (pass, cursor, selected, evidenceRef) => BindCensusPage(request, pass, cursor, selected, evidenceRef),
                     batchObjects: null,
                     batchMembershipKeyOrdinal: null,
-                    cancellationToken)
+                    cancellationToken,
+                    request.WireBudget)
                 .ConfigureAwait(false);
         }
         finally
@@ -1026,6 +1095,17 @@ public sealed class EuRepeatedEnumerationExecutor
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(sourceWitness);
+
+        // THE SESSION'S ROBOTS FETCH, RESERVED BEFORE THE SESSION EXISTS. StartSessionAsync sends
+        // robots as its first act, so this is the last point at which that request can be stopped
+        // rather than merely counted after the fact.
+        if (!request.WireBudget.TryReserveAttempt())
+        {
+            return EuEnumerationRunResult.Refused(
+                new EuEnumerationRefusalDetail(
+                    EuEnumerationRefusal.WireBudgetExhausted, null, null, null, null, null, null, null, null),
+                productRequestCount: 0);
+        }
 
         var session = await StartSessionAsync(sourceWitness, cancellationToken).ConfigureAwait(false);
         if (session is null)
@@ -1049,7 +1129,8 @@ public sealed class EuRepeatedEnumerationExecutor
                     (pass, cursor, selected, evidenceRef) => BindObjectFactsPage(request, pass, cursor, selected, evidenceRef),
                     batchObjects: EuObjectFactsDiscoveryPlan.RequestedPartitionMembers(request.BatchObjects),
                     batchMembershipKeyOrdinal: batchMembershipOrdinal,
-                    cancellationToken)
+                    cancellationToken,
+                    request.WireBudget)
                 .ConfigureAwait(false);
         }
         finally
@@ -1698,19 +1779,40 @@ public sealed class EuRepeatedEnumerationExecutor
     /// one-plan invariant is satisfied by construction rather than by an exemption.
     /// </para>
     /// </remarks>
+    /// <param name="wireBudget">
+    /// This traversal's enforced ceiling, charged for the session's robots fetch and for every page
+    /// attempt including retries. REQUIRED. #579 measured this door as unbudgeted, and it is the one
+    /// with the least predictable cost in this file: <see cref="MaximumWitnessPageRequests"/> bounds
+    /// EACH BATCH rather than the run, so a pack of eighty two batches could walk eighty two times
+    /// that many pages with nothing counting the total.
+    /// </param>
     public async Task<EuWitnessTraversalResult> RunWitnessTraversalAsync(
         IReadOnlyList<EuWatermarkWitnessPlan> batchPlans,
         MachineQueryRendererSource rendererSource,
         BoundMachineRequest sourceWitness,
+        WireRequestBudget wireBudget,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(batchPlans);
         ArgumentNullException.ThrowIfNull(rendererSource);
         ArgumentNullException.ThrowIfNull(sourceWitness);
+        ArgumentNullException.ThrowIfNull(wireBudget);
         if (batchPlans.Count == 0)
         {
             return EuWitnessTraversalResult.Refused(
                 new EuWitnessTraversalRefusalDetail(EuWitnessTraversalRefusal.EntrySetRefused, "no witness batch"),
+                productRequestCount: 0);
+        }
+
+        // THE SESSION'S ROBOTS FETCH, RESERVED BEFORE THE SESSION EXISTS. StartSessionAsync sends
+        // robots as its first act, so this is the last point at which that request can be stopped
+        // rather than merely counted after the fact.
+        if (!wireBudget.TryReserveAttempt())
+        {
+            return EuWitnessTraversalResult.Refused(
+                new EuWitnessTraversalRefusalDetail(
+                    EuWitnessTraversalRefusal.WireBudgetExhausted,
+                    "the ceiling was reached before this traversal's robots request."),
                 productRequestCount: 0);
         }
 
@@ -1777,7 +1879,8 @@ public sealed class EuRepeatedEnumerationExecutor
                             batchRequestCount += count - productRequestCount;
                             productRequestCount = count;
                         },
-                        cancellationToken)
+                        cancellationToken,
+                        wireBudget)
                     .ConfigureAwait(false);
                 if (outcome.Failure is { } failure)
                 {
@@ -1786,6 +1889,14 @@ public sealed class EuRepeatedEnumerationExecutor
                         ObservationAttemptFailureKind.NotExecuted => EuWitnessTraversalRefusal.ObservationNotExecuted,
                         ObservationAttemptFailureKind.StatusNotAdmitted => EuWitnessTraversalRefusal.StatusNotAdmitted,
                         ObservationAttemptFailureKind.MediaTypeNotAdmitted => EuWitnessTraversalRefusal.MediaTypeNotAdmitted,
+                        // REACHABLE ONLY SINCE THE BUDGET BECAME REQUIRED, and it had to be mapped in
+                        // the same change. The glue returns this kind when it refuses to send; before
+                        // #579 no EU witness traversal passed a budget, so the kind could not occur
+                        // and the default arm below was genuinely unreachable. Leaving it there would
+                        // have turned the first real ceiling stop into an ArgumentOutOfRangeException
+                        // -- a crash where a refusal was the whole point.
+                        ObservationAttemptFailureKind.WireBudgetExhausted =>
+                            EuWitnessTraversalRefusal.WireBudgetExhausted,
                         _ => throw new ArgumentOutOfRangeException(
                             nameof(outcome),
                             $"Unreachable: an unhandled {nameof(ObservationAttemptFailureKind)} '{failure.Kind}'."),
@@ -1954,13 +2065,31 @@ public sealed class EuRepeatedEnumerationExecutor
     /// </summary>
     /// <param name="boundRequest">One <c>EuDocumentFetchPlan.Bind</c> result's own <c>Request</c>.</param>
     /// <param name="sourceWitness">The bound robots-negotiation witness this session starts from.</param>
+    /// <param name="wireBudget">
+    /// This fetch's enforced ceiling, charged for the session's robots fetch and for every attempt
+    /// including retries. REQUIRED, for the same reason the Luxembourg document-get door carries one:
+    /// this is a BODY fetch, so one request here can cost orders of magnitude more bytes than a
+    /// SPARQL page, and the adapter walks a whole media-type ladder of them per object.
+    /// </param>
     public async Task<EuDocumentFetchAttemptResult> RunDocumentFetchAsync(
         BoundMachineRequest boundRequest,
         BoundMachineRequest sourceWitness,
+        WireRequestBudget wireBudget,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(boundRequest);
         ArgumentNullException.ThrowIfNull(sourceWitness);
+        ArgumentNullException.ThrowIfNull(wireBudget);
+
+        // THE SESSION'S ROBOTS FETCH, RESERVED BEFORE THE SESSION EXISTS. Starting a session sends
+        // robots as its first act, so this is the last point at which that request can be stopped
+        // rather than merely counted after it has already gone out.
+        if (!wireBudget.TryReserveAttempt())
+        {
+            return EuDocumentFetchAttemptResult.Refused(
+                EuDocumentFetchAttemptRefusal.WireBudgetExhausted,
+                "the ceiling was reached before this fetch's robots request.");
+        }
 
         // S1-A10, Decision 83: THE SESSION STARTS FROM THE REQUEST IT IS ABOUT TO SEND, not from the
         // shared witness. Robots is evaluated once, at session start, against the URL the session
@@ -1988,6 +2117,17 @@ public sealed class EuRepeatedEnumerationExecutor
             RoutedHttpAcquisitionSession.AttemptResult attempt;
             while (true)
             {
+                // BEFORE THE ATTEMPT, NOT AFTER IT, AND EVERY ATTEMPT RATHER THAN THE FIRST. This
+                // loop re-attempts on a pre-header failure, so a ceiling charged once per call would
+                // be wrong by the profile's whole retry allowance at its own limit. That the first
+                // request was charged says nothing about the fourth.
+                if (!wireBudget.TryReserveAttempt())
+                {
+                    return EuDocumentFetchAttemptResult.Refused(
+                        EuDocumentFetchAttemptRefusal.WireBudgetExhausted,
+                        $"the ceiling was reached after {attemptOrdinal} attempt(s).");
+                }
+
                 attempt = await item.ExecuteNextAttemptAsync(cancellationToken).ConfigureAwait(false);
                 attemptOrdinal++;
                 if (attempt.Kind == OfficialHttpAcquisitionOutcomeKind.ExecutedObservation)
@@ -2189,8 +2329,9 @@ public sealed class EuRepeatedEnumerationExecutor
         IReadOnlyList<string>? batchObjects,
         int? batchMembershipKeyOrdinal,
         CancellationToken cancellationToken,
-        WireRequestBudget? budget = null)
+        WireRequestBudget budget)
     {
+        ArgumentNullException.ThrowIfNull(budget);
         var productRequestCount = 0;
         try
         {
@@ -2285,7 +2426,7 @@ public sealed class EuRepeatedEnumerationExecutor
         Func<int> currentCount,
         Action<int> setCount,
         CancellationToken cancellationToken,
-        WireRequestBudget? budget = null)
+        WireRequestBudget budget)
     {
         var countBound = bindCount(passOrdinal);
         var partitionKey = countBound.PartitionKey;

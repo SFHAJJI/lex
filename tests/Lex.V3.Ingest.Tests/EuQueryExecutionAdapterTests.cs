@@ -92,27 +92,32 @@ public sealed class EuQueryExecutionAdapterTests
 
         var (censusPlan, censusPlanId) = EuAcquisitionTestFixture.BuildCensusPlan();
         var censusRequest = new EuCensusPartitionRunRequest(
-            censusPlan, censusPlanId, seed.Celex, EuAcquisitionTestFixture.BuildRendererSource(1));
+            censusPlan, censusPlanId, seed.Celex, EuAcquisitionTestFixture.BuildRendererSource(1),
+            EuAcquisitionTestFixture.TestWireBudget());
 
         var (pPlan, pPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var pRequest = new EuObjectFactsPartitionRunRequest(
             pPlan, pPlanId, EuObjectFactsQuerySet.ObjectFacts, [rootIri],
-            EuAcquisitionTestFixture.BuildRendererSource(2));
+            EuAcquisitionTestFixture.BuildRendererSource(2),
+            EuAcquisitionTestFixture.TestWireBudget());
 
         var (xPlan, xPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var xRequest = new EuObjectFactsPartitionRunRequest(
             xPlan, xPlanId, EuObjectFactsQuerySet.ExpressionFacts, [rootIri],
-            EuAcquisitionTestFixture.BuildRendererSource(3));
+            EuAcquisitionTestFixture.BuildRendererSource(3),
+            EuAcquisitionTestFixture.TestWireBudget());
 
         var (wPlan, wPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var wRequest = new EuObjectFactsPartitionRunRequest(
             wPlan, wPlanId, EuObjectFactsQuerySet.RootWatermark, [rootIri],
-            EuAcquisitionTestFixture.BuildRendererSource(4));
+            EuAcquisitionTestFixture.BuildRendererSource(4),
+            EuAcquisitionTestFixture.TestWireBudget());
 
         var (mPlan, mPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var mRequest = new EuObjectFactsPartitionRunRequest(
             mPlan, mPlanId, EuObjectFactsQuerySet.ManifestationFacts, [rootIri],
-            EuAcquisitionTestFixture.BuildRendererSource(104));
+            EuAcquisitionTestFixture.BuildRendererSource(104),
+            EuAcquisitionTestFixture.TestWireBudget());
 
         var evidenceResolver = new PermissiveEvidenceResolver(CompleteEnumerationRef);
 
@@ -126,6 +131,7 @@ public sealed class EuQueryExecutionAdapterTests
             EuAcquisitionTestFixture.BuildRendererSource(1009),
             EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
             evidenceResolver,
+            EuAcquisitionTestFixture.TestWireBudget(),
             CancellationToken.None);
 
         Assert.IsNull(result.Refusal, $"code={result.Refusal?.Code} detail={result.Refusal?.Detail} " +
@@ -256,6 +262,7 @@ public sealed class EuQueryExecutionAdapterTests
             mintedAddressesByObjectRef,
             EuAcquisitionTestFixture.BuildRendererSource(801),
             EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
+            EuAcquisitionTestFixture.TestWireBudget(),
             CancellationToken.None);
 
         // RULING lex-event-20260904T213727510Z-671a8c2563684ab49048677997ceef1c. This used to refuse the
@@ -396,6 +403,7 @@ public sealed class EuQueryExecutionAdapterTests
             mintedAddressesByObjectRef,
             EuAcquisitionTestFixture.BuildRendererSource(801),
             EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
+            EuAcquisitionTestFixture.TestWireBudget(),
             CancellationToken.None);
     }
 
@@ -455,6 +463,7 @@ public sealed class EuQueryExecutionAdapterTests
             mintedAddressesByObjectRef,
             EuAcquisitionTestFixture.BuildRendererSource(901),
             EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
+            EuAcquisitionTestFixture.TestWireBudget(),
             CancellationToken.None);
 
         Assert.IsNull(refusal, refusal?.Detail);
@@ -520,6 +529,7 @@ public sealed class EuQueryExecutionAdapterTests
             mintedAddressesByObjectRef,
             EuAcquisitionTestFixture.BuildRendererSource(911),
             EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
+            EuAcquisitionTestFixture.TestWireBudget(),
             CancellationToken.None);
 
         Assert.IsNull(refusal, refusal?.Detail);
@@ -627,6 +637,7 @@ public sealed class EuQueryExecutionAdapterTests
             mintedAddressesByObjectRef,
             EuAcquisitionTestFixture.BuildRendererSource(9001),
             EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
+            EuAcquisitionTestFixture.TestWireBudget(),
             CancellationToken.None);
 
         // ---- Fix one, defect nine: the second object's own route-level refusal never blocks the
@@ -818,6 +829,7 @@ public sealed class EuQueryExecutionAdapterTests
             mintedAddressesByObjectRef,
             EuAcquisitionTestFixture.BuildRendererSource(9101),
             EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
+            EuAcquisitionTestFixture.TestWireBudget(),
             CancellationToken.None);
 
         Assert.IsNull(outcomes);
@@ -891,24 +903,29 @@ public sealed class EuQueryExecutionAdapterTests
 
             var (censusPlan, censusPlanId) = EuAcquisitionTestFixture.BuildCensusPlan();
             var censusRequest = new EuCensusPartitionRunRequest(
-                censusPlan, censusPlanId, seed.Celex, EuAcquisitionTestFixture.BuildRendererSource(941));
+                censusPlan, censusPlanId, seed.Celex, EuAcquisitionTestFixture.BuildRendererSource(941),
+                EuAcquisitionTestFixture.TestWireBudget());
             var (pPlan, pPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
             var pRequest = new EuObjectFactsPartitionRunRequest(
                 pPlan, pPlanId, EuObjectFactsQuerySet.ObjectFacts, [rootIri],
-                EuAcquisitionTestFixture.BuildRendererSource(942));
+                EuAcquisitionTestFixture.BuildRendererSource(942),
+                EuAcquisitionTestFixture.TestWireBudget());
             var (xPlan, xPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
             var xRequest = new EuObjectFactsPartitionRunRequest(
                 xPlan, xPlanId, EuObjectFactsQuerySet.ExpressionFacts, [rootIri],
-                EuAcquisitionTestFixture.BuildRendererSource(943));
+                EuAcquisitionTestFixture.BuildRendererSource(943),
+                EuAcquisitionTestFixture.TestWireBudget());
             var (wPlan, wPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
             var wRequest = new EuObjectFactsPartitionRunRequest(
                 wPlan, wPlanId, EuObjectFactsQuerySet.RootWatermark, [rootIri],
-                EuAcquisitionTestFixture.BuildRendererSource(944));
+                EuAcquisitionTestFixture.BuildRendererSource(944),
+                EuAcquisitionTestFixture.TestWireBudget());
 
             var (mPlan, mPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
             var mRequest = new EuObjectFactsPartitionRunRequest(
                 mPlan, mPlanId, EuObjectFactsQuerySet.ManifestationFacts, [rootIri],
-                EuAcquisitionTestFixture.BuildRendererSource(1044));
+                EuAcquisitionTestFixture.BuildRendererSource(1044),
+                EuAcquisitionTestFixture.TestWireBudget());
 
             return await adapter.RunAsync(
                 [(censusRequest, EuAcquisitionTestFixture.SourceWitness())],
@@ -920,6 +937,7 @@ public sealed class EuQueryExecutionAdapterTests
                 EuAcquisitionTestFixture.BuildRendererSource(1945),
                 EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
                 new PermissiveEvidenceResolver(CompleteEnumerationRef),
+                EuAcquisitionTestFixture.TestWireBudget(),
                 CancellationToken.None);
         }
 
@@ -1091,6 +1109,7 @@ public sealed class EuQueryExecutionAdapterTests
             mintedAddressesByObjectRef,
             EuAcquisitionTestFixture.BuildRendererSource(9201),
             EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
+            EuAcquisitionTestFixture.TestWireBudget(),
             CancellationToken.None);
 
         Assert.IsNull(refusal, refusal?.Detail);
@@ -1153,6 +1172,7 @@ public sealed class EuQueryExecutionAdapterTests
             mintedAddressesByObjectRef,
             EuAcquisitionTestFixture.BuildRendererSource(9301),
             EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
+            EuAcquisitionTestFixture.TestWireBudget(),
             CancellationToken.None);
 
         Assert.IsNull(refusal, refusal?.Detail);
@@ -1202,6 +1222,7 @@ public sealed class EuQueryExecutionAdapterTests
             mintedAddressesByObjectRef,
             EuAcquisitionTestFixture.BuildRendererSource(9301),
             EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
+            EuAcquisitionTestFixture.TestWireBudget(),
             CancellationToken.None);
 
         Assert.IsNull(refusal, refusal?.Detail);
@@ -1311,24 +1332,29 @@ public sealed class EuQueryExecutionAdapterTests
 
         var (censusPlan, censusPlanId) = EuAcquisitionTestFixture.BuildCensusPlan();
         var censusRequest = new EuCensusPartitionRunRequest(
-            censusPlan, censusPlanId, seed.Celex, EuAcquisitionTestFixture.BuildRendererSource(5));
+            censusPlan, censusPlanId, seed.Celex, EuAcquisitionTestFixture.BuildRendererSource(5),
+            EuAcquisitionTestFixture.TestWireBudget());
         var (pPlan, pPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var pRequest = new EuObjectFactsPartitionRunRequest(
             pPlan, pPlanId, EuObjectFactsQuerySet.ObjectFacts, [rootIri],
-            EuAcquisitionTestFixture.BuildRendererSource(6));
+            EuAcquisitionTestFixture.BuildRendererSource(6),
+            EuAcquisitionTestFixture.TestWireBudget());
         var (xPlan, xPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var xRequest = new EuObjectFactsPartitionRunRequest(
             xPlan, xPlanId, EuObjectFactsQuerySet.ExpressionFacts, [rootIri],
-            EuAcquisitionTestFixture.BuildRendererSource(7));
+            EuAcquisitionTestFixture.BuildRendererSource(7),
+            EuAcquisitionTestFixture.TestWireBudget());
         var (wPlan, wPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var wRequest = new EuObjectFactsPartitionRunRequest(
             wPlan, wPlanId, EuObjectFactsQuerySet.RootWatermark, [rootIri],
-            EuAcquisitionTestFixture.BuildRendererSource(8));
+            EuAcquisitionTestFixture.BuildRendererSource(8),
+            EuAcquisitionTestFixture.TestWireBudget());
 
         var (mPlan, mPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var mRequest = new EuObjectFactsPartitionRunRequest(
             mPlan, mPlanId, EuObjectFactsQuerySet.ManifestationFacts, [rootIri],
-            EuAcquisitionTestFixture.BuildRendererSource(108));
+            EuAcquisitionTestFixture.BuildRendererSource(108),
+            EuAcquisitionTestFixture.TestWireBudget());
 
         var result = await adapter.RunAsync(
             [(censusRequest, EuAcquisitionTestFixture.SourceWitness())],
@@ -1340,6 +1366,7 @@ public sealed class EuQueryExecutionAdapterTests
             EuAcquisitionTestFixture.BuildRendererSource(1080),
             EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
             new PermissiveEvidenceResolver(CompleteEnumerationRef),
+            EuAcquisitionTestFixture.TestWireBudget(),
             CancellationToken.None);
 
         Assert.IsNull(result.ScopeManifestReceipt);
@@ -1445,28 +1472,33 @@ public sealed class EuQueryExecutionAdapterTests
 
         var (censusPlan, censusPlanId) = EuAcquisitionTestFixture.BuildCensusPlan();
         var censusRequest = new EuCensusPartitionRunRequest(
-            censusPlan, censusPlanId, seed.Celex, EuAcquisitionTestFixture.BuildRendererSource(21));
+            censusPlan, censusPlanId, seed.Celex, EuAcquisitionTestFixture.BuildRendererSource(21),
+            EuAcquisitionTestFixture.TestWireBudget());
 
         var closureObjects = new[] { rootIri, state1Iri, state2Iri };
         var (pPlan, pPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var pRequest = new EuObjectFactsPartitionRunRequest(
             pPlan, pPlanId, EuObjectFactsQuerySet.ObjectFacts, closureObjects,
-            EuAcquisitionTestFixture.BuildRendererSource(22));
+            EuAcquisitionTestFixture.BuildRendererSource(22),
+            EuAcquisitionTestFixture.TestWireBudget());
 
         var (xPlan, xPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var xRequest = new EuObjectFactsPartitionRunRequest(
             xPlan, xPlanId, EuObjectFactsQuerySet.ExpressionFacts, closureObjects,
-            EuAcquisitionTestFixture.BuildRendererSource(23));
+            EuAcquisitionTestFixture.BuildRendererSource(23),
+            EuAcquisitionTestFixture.TestWireBudget());
 
         var (wPlan, wPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var wRequest = new EuObjectFactsPartitionRunRequest(
             wPlan, wPlanId, EuObjectFactsQuerySet.RootWatermark, [rootIri],
-            EuAcquisitionTestFixture.BuildRendererSource(24));
+            EuAcquisitionTestFixture.BuildRendererSource(24),
+            EuAcquisitionTestFixture.TestWireBudget());
 
         var (mPlan, mPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var mRequest = new EuObjectFactsPartitionRunRequest(
             mPlan, mPlanId, EuObjectFactsQuerySet.ManifestationFacts, [rootIri],
-            EuAcquisitionTestFixture.BuildRendererSource(124));
+            EuAcquisitionTestFixture.BuildRendererSource(124),
+            EuAcquisitionTestFixture.TestWireBudget());
 
         var result = await adapter.RunAsync(
             [(censusRequest, EuAcquisitionTestFixture.SourceWitness())],
@@ -1478,6 +1510,7 @@ public sealed class EuQueryExecutionAdapterTests
             EuAcquisitionTestFixture.BuildRendererSource(1029),
             EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
             new PermissiveEvidenceResolver(CompleteEnumerationRef),
+            EuAcquisitionTestFixture.TestWireBudget(),
             CancellationToken.None);
 
         Assert.IsNull(result.Refusal, $"code={result.Refusal?.Code} detail={result.Refusal?.Detail} " +
@@ -1610,28 +1643,33 @@ public sealed class EuQueryExecutionAdapterTests
 
         var (censusPlan, censusPlanId) = EuAcquisitionTestFixture.BuildCensusPlan();
         var censusRequest = new EuCensusPartitionRunRequest(
-            censusPlan, censusPlanId, seed.Celex, EuAcquisitionTestFixture.BuildRendererSource(21));
+            censusPlan, censusPlanId, seed.Celex, EuAcquisitionTestFixture.BuildRendererSource(21),
+            EuAcquisitionTestFixture.TestWireBudget());
 
         var closureObjects = new[] { rootIri, state1Iri, state2Iri };
         var (pPlan, pPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var pRequest = new EuObjectFactsPartitionRunRequest(
             pPlan, pPlanId, EuObjectFactsQuerySet.ObjectFacts, closureObjects,
-            EuAcquisitionTestFixture.BuildRendererSource(22));
+            EuAcquisitionTestFixture.BuildRendererSource(22),
+            EuAcquisitionTestFixture.TestWireBudget());
 
         var (xPlan, xPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var xRequest = new EuObjectFactsPartitionRunRequest(
             xPlan, xPlanId, EuObjectFactsQuerySet.ExpressionFacts, closureObjects,
-            EuAcquisitionTestFixture.BuildRendererSource(23));
+            EuAcquisitionTestFixture.BuildRendererSource(23),
+            EuAcquisitionTestFixture.TestWireBudget());
 
         var (wPlan, wPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var wRequest = new EuObjectFactsPartitionRunRequest(
             wPlan, wPlanId, EuObjectFactsQuerySet.RootWatermark, [rootIri],
-            EuAcquisitionTestFixture.BuildRendererSource(24));
+            EuAcquisitionTestFixture.BuildRendererSource(24),
+            EuAcquisitionTestFixture.TestWireBudget());
 
         var (mPlan, mPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var mRequest = new EuObjectFactsPartitionRunRequest(
             mPlan, mPlanId, EuObjectFactsQuerySet.ManifestationFacts, [rootIri],
-            EuAcquisitionTestFixture.BuildRendererSource(124));
+            EuAcquisitionTestFixture.BuildRendererSource(124),
+            EuAcquisitionTestFixture.TestWireBudget());
 
         var result = await adapter.RunAsync(
             [(censusRequest, EuAcquisitionTestFixture.SourceWitness())],
@@ -1643,6 +1681,7 @@ public sealed class EuQueryExecutionAdapterTests
             EuAcquisitionTestFixture.BuildRendererSource(1029),
             EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
             new PermissiveEvidenceResolver(CompleteEnumerationRef),
+            EuAcquisitionTestFixture.TestWireBudget(),
             CancellationToken.None);
 
         Assert.IsNull(result.Refusal, $"code={result.Refusal?.Code} detail={result.Refusal?.Detail} " +
@@ -1775,27 +1814,32 @@ public sealed class EuQueryExecutionAdapterTests
 
         var (censusPlan, censusPlanId) = EuAcquisitionTestFixture.BuildCensusPlan();
         var censusRequest = new EuCensusPartitionRunRequest(
-            censusPlan, censusPlanId, seed.Celex, EuAcquisitionTestFixture.BuildRendererSource(31));
+            censusPlan, censusPlanId, seed.Celex, EuAcquisitionTestFixture.BuildRendererSource(31),
+            EuAcquisitionTestFixture.TestWireBudget());
 
         var (pPlan, pPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var pRequest = new EuObjectFactsPartitionRunRequest(
             pPlan, pPlanId, EuObjectFactsQuerySet.ObjectFacts, [rootIri, outOfClosureIri],
-            EuAcquisitionTestFixture.BuildRendererSource(32));
+            EuAcquisitionTestFixture.BuildRendererSource(32),
+            EuAcquisitionTestFixture.TestWireBudget());
 
         var (xPlan, xPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var xRequest = new EuObjectFactsPartitionRunRequest(
             xPlan, xPlanId, EuObjectFactsQuerySet.ExpressionFacts, [rootIri],
-            EuAcquisitionTestFixture.BuildRendererSource(33));
+            EuAcquisitionTestFixture.BuildRendererSource(33),
+            EuAcquisitionTestFixture.TestWireBudget());
 
         var (wPlan, wPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var wRequest = new EuObjectFactsPartitionRunRequest(
             wPlan, wPlanId, EuObjectFactsQuerySet.RootWatermark, [rootIri],
-            EuAcquisitionTestFixture.BuildRendererSource(34));
+            EuAcquisitionTestFixture.BuildRendererSource(34),
+            EuAcquisitionTestFixture.TestWireBudget());
 
         var (mPlan, mPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var mRequest = new EuObjectFactsPartitionRunRequest(
             mPlan, mPlanId, EuObjectFactsQuerySet.ManifestationFacts, [rootIri],
-            EuAcquisitionTestFixture.BuildRendererSource(134));
+            EuAcquisitionTestFixture.BuildRendererSource(134),
+            EuAcquisitionTestFixture.TestWireBudget());
 
         var result = await adapter.RunAsync(
             [(censusRequest, EuAcquisitionTestFixture.SourceWitness())],
@@ -1807,6 +1851,7 @@ public sealed class EuQueryExecutionAdapterTests
             EuAcquisitionTestFixture.BuildRendererSource(1035),
             EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
             new PermissiveEvidenceResolver(CompleteEnumerationRef),
+            EuAcquisitionTestFixture.TestWireBudget(),
             CancellationToken.None);
 
         Assert.IsNull(result.ScopeManifestReceipt);
@@ -1895,27 +1940,32 @@ public sealed class EuQueryExecutionAdapterTests
 
         var (censusPlan, censusPlanId) = EuAcquisitionTestFixture.BuildCensusPlan();
         var censusRequest = new EuCensusPartitionRunRequest(
-            censusPlan, censusPlanId, seed.Celex, EuAcquisitionTestFixture.BuildRendererSource(41));
+            censusPlan, censusPlanId, seed.Celex, EuAcquisitionTestFixture.BuildRendererSource(41),
+            EuAcquisitionTestFixture.TestWireBudget());
 
         var (pPlan, pPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var pRequest = new EuObjectFactsPartitionRunRequest(
             pPlan, pPlanId, EuObjectFactsQuerySet.ObjectFacts, [rootIri],
-            EuAcquisitionTestFixture.BuildRendererSource(42));
+            EuAcquisitionTestFixture.BuildRendererSource(42),
+            EuAcquisitionTestFixture.TestWireBudget());
 
         var (xPlan, xPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var xRequest = new EuObjectFactsPartitionRunRequest(
             xPlan, xPlanId, EuObjectFactsQuerySet.ExpressionFacts, [rootIri],
-            EuAcquisitionTestFixture.BuildRendererSource(43));
+            EuAcquisitionTestFixture.BuildRendererSource(43),
+            EuAcquisitionTestFixture.TestWireBudget());
 
         var (wPlan, wPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var wRequest = new EuObjectFactsPartitionRunRequest(
             wPlan, wPlanId, EuObjectFactsQuerySet.RootWatermark, [rootIri, otherRootIri],
-            EuAcquisitionTestFixture.BuildRendererSource(44));
+            EuAcquisitionTestFixture.BuildRendererSource(44),
+            EuAcquisitionTestFixture.TestWireBudget());
 
         var (mPlan, mPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var mRequest = new EuObjectFactsPartitionRunRequest(
             mPlan, mPlanId, EuObjectFactsQuerySet.ManifestationFacts, [rootIri, otherRootIri],
-            EuAcquisitionTestFixture.BuildRendererSource(144));
+            EuAcquisitionTestFixture.BuildRendererSource(144),
+            EuAcquisitionTestFixture.TestWireBudget());
 
         var result = await adapter.RunAsync(
             [(censusRequest, EuAcquisitionTestFixture.SourceWitness())],
@@ -1927,6 +1977,7 @@ public sealed class EuQueryExecutionAdapterTests
             EuAcquisitionTestFixture.BuildRendererSource(1045),
             EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
             new PermissiveEvidenceResolver(CompleteEnumerationRef),
+            EuAcquisitionTestFixture.TestWireBudget(),
             CancellationToken.None);
 
         Assert.IsNull(result.ScopeManifestReceipt);
@@ -1976,7 +2027,8 @@ public sealed class EuQueryExecutionAdapterTests
 
         var (censusPlan, censusPlanId) = EuAcquisitionTestFixture.BuildCensusPlan();
         var censusRequest = new EuCensusPartitionRunRequest(
-            censusPlan, censusPlanId, seed.Celex, EuAcquisitionTestFixture.BuildRendererSource(51));
+            censusPlan, censusPlanId, seed.Celex, EuAcquisitionTestFixture.BuildRendererSource(51),
+            EuAcquisitionTestFixture.TestWireBudget());
 
         // The census refuses before any object-facts batch runs, so this policy is
         // never exercised; it exists because the run derives its own batches now and
@@ -1992,6 +2044,7 @@ public sealed class EuQueryExecutionAdapterTests
             EuAcquisitionTestFixture.BuildRendererSource(1052),
             EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
             new PermissiveEvidenceResolver(CompleteEnumerationRef),
+            EuAcquisitionTestFixture.TestWireBudget(),
             CancellationToken.None);
 
         Assert.IsNotNull(result.Refusal);
@@ -2027,7 +2080,8 @@ public sealed class EuQueryExecutionAdapterTests
 
         var (censusPlan, censusPlanId) = EuAcquisitionTestFixture.BuildCensusPlan();
         var censusRequest = new EuCensusPartitionRunRequest(
-            censusPlan, censusPlanId, seed.Celex, EuAcquisitionTestFixture.BuildRendererSource(61));
+            censusPlan, censusPlanId, seed.Celex, EuAcquisitionTestFixture.BuildRendererSource(61),
+            EuAcquisitionTestFixture.TestWireBudget());
 
         // The census refuses before any object-facts batch runs, so this policy is
         // never exercised; it exists because the run derives its own batches now and
@@ -2043,6 +2097,7 @@ public sealed class EuQueryExecutionAdapterTests
             EuAcquisitionTestFixture.BuildRendererSource(1062),
             EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
             new PermissiveEvidenceResolver(CompleteEnumerationRef),
+            EuAcquisitionTestFixture.TestWireBudget(),
             CancellationToken.None);
 
         Assert.IsNotNull(result.Refusal);
@@ -2115,24 +2170,29 @@ public sealed class EuQueryExecutionAdapterTests
 
         var (censusPlan, censusPlanId) = EuAcquisitionTestFixture.BuildCensusPlan();
         var censusRequest = new EuCensusPartitionRunRequest(
-            censusPlan, censusPlanId, seed.Celex, EuAcquisitionTestFixture.BuildRendererSource(701));
+            censusPlan, censusPlanId, seed.Celex, EuAcquisitionTestFixture.BuildRendererSource(701),
+            EuAcquisitionTestFixture.TestWireBudget());
         var (pPlan, pPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var pRequest = new EuObjectFactsPartitionRunRequest(
             pPlan, pPlanId, EuObjectFactsQuerySet.ObjectFacts, [rootIri],
-            EuAcquisitionTestFixture.BuildRendererSource(702));
+            EuAcquisitionTestFixture.BuildRendererSource(702),
+            EuAcquisitionTestFixture.TestWireBudget());
         var (xPlan, xPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var xRequest = new EuObjectFactsPartitionRunRequest(
             xPlan, xPlanId, EuObjectFactsQuerySet.ExpressionFacts, [rootIri],
-            EuAcquisitionTestFixture.BuildRendererSource(703));
+            EuAcquisitionTestFixture.BuildRendererSource(703),
+            EuAcquisitionTestFixture.TestWireBudget());
         var (wPlan, wPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var wRequest = new EuObjectFactsPartitionRunRequest(
             wPlan, wPlanId, EuObjectFactsQuerySet.RootWatermark, [rootIri],
-            EuAcquisitionTestFixture.BuildRendererSource(704));
+            EuAcquisitionTestFixture.BuildRendererSource(704),
+            EuAcquisitionTestFixture.TestWireBudget());
 
         var (mPlan, mPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var mRequest = new EuObjectFactsPartitionRunRequest(
             mPlan, mPlanId, EuObjectFactsQuerySet.ManifestationFacts, [rootIri],
-            EuAcquisitionTestFixture.BuildRendererSource(804));
+            EuAcquisitionTestFixture.BuildRendererSource(804),
+            EuAcquisitionTestFixture.TestWireBudget());
 
         Assert.AreEqual(0, handler.OccurrenceCountFor("Witness"), "no witness request should have been sent before the run.");
 
@@ -2146,6 +2206,7 @@ public sealed class EuQueryExecutionAdapterTests
             EuAcquisitionTestFixture.BuildRendererSource(1705),
             EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
             new PermissiveEvidenceResolver(CompleteEnumerationRef),
+            EuAcquisitionTestFixture.TestWireBudget(),
             CancellationToken.None);
 
         Assert.IsNull(result.Refusal, $"code={result.Refusal?.Code} detail={result.Refusal?.Detail}");
@@ -2216,24 +2277,29 @@ public sealed class EuQueryExecutionAdapterTests
 
         var (censusPlan, censusPlanId) = EuAcquisitionTestFixture.BuildCensusPlan();
         var censusRequest = new EuCensusPartitionRunRequest(
-            censusPlan, censusPlanId, seed.Celex, EuAcquisitionTestFixture.BuildRendererSource(711));
+            censusPlan, censusPlanId, seed.Celex, EuAcquisitionTestFixture.BuildRendererSource(711),
+            EuAcquisitionTestFixture.TestWireBudget());
         var (pPlan, pPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var pRequest = new EuObjectFactsPartitionRunRequest(
             pPlan, pPlanId, EuObjectFactsQuerySet.ObjectFacts, [rootIri],
-            EuAcquisitionTestFixture.BuildRendererSource(712));
+            EuAcquisitionTestFixture.BuildRendererSource(712),
+            EuAcquisitionTestFixture.TestWireBudget());
         var (xPlan, xPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var xRequest = new EuObjectFactsPartitionRunRequest(
             xPlan, xPlanId, EuObjectFactsQuerySet.ExpressionFacts, [rootIri],
-            EuAcquisitionTestFixture.BuildRendererSource(713));
+            EuAcquisitionTestFixture.BuildRendererSource(713),
+            EuAcquisitionTestFixture.TestWireBudget());
         var (wPlan, wPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var wRequest = new EuObjectFactsPartitionRunRequest(
             wPlan, wPlanId, EuObjectFactsQuerySet.RootWatermark, [rootIri],
-            EuAcquisitionTestFixture.BuildRendererSource(714));
+            EuAcquisitionTestFixture.BuildRendererSource(714),
+            EuAcquisitionTestFixture.TestWireBudget());
 
         var (mPlan, mPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var mRequest = new EuObjectFactsPartitionRunRequest(
             mPlan, mPlanId, EuObjectFactsQuerySet.ManifestationFacts, [rootIri],
-            EuAcquisitionTestFixture.BuildRendererSource(814));
+            EuAcquisitionTestFixture.BuildRendererSource(814),
+            EuAcquisitionTestFixture.TestWireBudget());
 
         var result = await adapter.RunAsync(
             [(censusRequest, EuAcquisitionTestFixture.SourceWitness())],
@@ -2245,6 +2311,7 @@ public sealed class EuQueryExecutionAdapterTests
             EuAcquisitionTestFixture.BuildRendererSource(1715),
             EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
             new PermissiveEvidenceResolver(CompleteEnumerationRef),
+            EuAcquisitionTestFixture.TestWireBudget(),
             CancellationToken.None);
 
         Assert.IsNull(result.Refusal, $"code={result.Refusal?.Code} detail={result.Refusal?.Detail}");
@@ -2314,24 +2381,29 @@ public sealed class EuQueryExecutionAdapterTests
 
         var (censusPlan, censusPlanId) = EuAcquisitionTestFixture.BuildCensusPlan();
         var censusRequest = new EuCensusPartitionRunRequest(
-            censusPlan, censusPlanId, seed.Celex, EuAcquisitionTestFixture.BuildRendererSource(721));
+            censusPlan, censusPlanId, seed.Celex, EuAcquisitionTestFixture.BuildRendererSource(721),
+            EuAcquisitionTestFixture.TestWireBudget());
         var (pPlan, pPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var pRequest = new EuObjectFactsPartitionRunRequest(
             pPlan, pPlanId, EuObjectFactsQuerySet.ObjectFacts, [rootIri],
-            EuAcquisitionTestFixture.BuildRendererSource(722));
+            EuAcquisitionTestFixture.BuildRendererSource(722),
+            EuAcquisitionTestFixture.TestWireBudget());
         var (xPlan, xPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var xRequest = new EuObjectFactsPartitionRunRequest(
             xPlan, xPlanId, EuObjectFactsQuerySet.ExpressionFacts, [rootIri],
-            EuAcquisitionTestFixture.BuildRendererSource(723));
+            EuAcquisitionTestFixture.BuildRendererSource(723),
+            EuAcquisitionTestFixture.TestWireBudget());
         var (wPlan, wPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var wRequest = new EuObjectFactsPartitionRunRequest(
             wPlan, wPlanId, EuObjectFactsQuerySet.RootWatermark, [rootIri],
-            EuAcquisitionTestFixture.BuildRendererSource(724));
+            EuAcquisitionTestFixture.BuildRendererSource(724),
+            EuAcquisitionTestFixture.TestWireBudget());
 
         var (mPlan, mPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var mRequest = new EuObjectFactsPartitionRunRequest(
             mPlan, mPlanId, EuObjectFactsQuerySet.ManifestationFacts, [rootIri],
-            EuAcquisitionTestFixture.BuildRendererSource(824));
+            EuAcquisitionTestFixture.BuildRendererSource(824),
+            EuAcquisitionTestFixture.TestWireBudget());
 
         var result = await adapter.RunAsync(
             [(censusRequest, EuAcquisitionTestFixture.SourceWitness())],
@@ -2343,6 +2415,7 @@ public sealed class EuQueryExecutionAdapterTests
             EuAcquisitionTestFixture.BuildRendererSource(1725),
             EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
             new PermissiveEvidenceResolver(CompleteEnumerationRef),
+            EuAcquisitionTestFixture.TestWireBudget(),
             CancellationToken.None);
 
         Assert.IsNull(result.ScopeManifestReceipt);
@@ -3053,24 +3126,29 @@ public sealed class EuQueryExecutionAdapterTests
 
         var (censusPlan, censusPlanId) = EuAcquisitionTestFixture.BuildCensusPlan();
         var censusRequest = new EuCensusPartitionRunRequest(
-            censusPlan, censusPlanId, seed.Celex, EuAcquisitionTestFixture.BuildRendererSource(1501));
+            censusPlan, censusPlanId, seed.Celex, EuAcquisitionTestFixture.BuildRendererSource(1501),
+            EuAcquisitionTestFixture.TestWireBudget());
 
         var (pPlan, pPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var pRequest = new EuObjectFactsPartitionRunRequest(
             pPlan, pPlanId, EuObjectFactsQuerySet.ObjectFacts, [rootIri],
-            EuAcquisitionTestFixture.BuildRendererSource(1502));
+            EuAcquisitionTestFixture.BuildRendererSource(1502),
+            EuAcquisitionTestFixture.TestWireBudget());
         var (xPlan, xPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var xRequest = new EuObjectFactsPartitionRunRequest(
             xPlan, xPlanId, EuObjectFactsQuerySet.ExpressionFacts, [rootIri],
-            EuAcquisitionTestFixture.BuildRendererSource(1503));
+            EuAcquisitionTestFixture.BuildRendererSource(1503),
+            EuAcquisitionTestFixture.TestWireBudget());
         var (wPlan, wPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var wRequest = new EuObjectFactsPartitionRunRequest(
             wPlan, wPlanId, EuObjectFactsQuerySet.RootWatermark, [rootIri],
-            EuAcquisitionTestFixture.BuildRendererSource(1504));
+            EuAcquisitionTestFixture.BuildRendererSource(1504),
+            EuAcquisitionTestFixture.TestWireBudget());
         var (mPlan, mPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var mRequest = new EuObjectFactsPartitionRunRequest(
             mPlan, mPlanId, EuObjectFactsQuerySet.ManifestationFacts, [rootIri],
-            EuAcquisitionTestFixture.BuildRendererSource(1505));
+            EuAcquisitionTestFixture.BuildRendererSource(1505),
+            EuAcquisitionTestFixture.TestWireBudget());
 
         var result = await adapter.RunAsync(
             [(censusRequest, EuAcquisitionTestFixture.SourceWitness())],
@@ -3082,6 +3160,7 @@ public sealed class EuQueryExecutionAdapterTests
             EuAcquisitionTestFixture.BuildRendererSource(2509),
             EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
             new PermissiveEvidenceResolver(CompleteEnumerationRef),
+            EuAcquisitionTestFixture.TestWireBudget(),
             CancellationToken.None);
 
         return (result, handler, store);
@@ -3374,7 +3453,8 @@ public sealed class EuQueryExecutionAdapterTests
 
         return await adapter.RunAsync(
             [(new EuCensusPartitionRunRequest(
-                censusPlan, censusPlanId, celex, EuAcquisitionTestFixture.BuildRendererSource(8101)),
+                censusPlan, censusPlanId, celex, EuAcquisitionTestFixture.BuildRendererSource(8101),
+                EuAcquisitionTestFixture.TestWireBudget()),
               EuAcquisitionTestFixture.SourceWitness())],
             new EuObjectFactsBatchPolicy(
                 objectFactsPlan, objectFactsPlanId,
@@ -3385,6 +3465,7 @@ public sealed class EuQueryExecutionAdapterTests
             EuAcquisitionTestFixture.BuildRendererSource(8104),
             EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
             new PermissiveEvidenceResolver(CompleteEnumerationRef),
+            EuAcquisitionTestFixture.TestWireBudget(),
             System.Threading.CancellationToken.None);
     }
 
