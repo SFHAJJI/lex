@@ -276,17 +276,53 @@ public sealed record EuObjectFactsPartitionRunRequest(
     MachineQueryRendererSource RendererSource);
 
 /// <summary>One bounded enumeration of the plan-fixed Luxembourg sector-7 NIM family.</summary>
+/// <param name="WireBudget">
+/// This run's enforced ceiling, counted over robots, counts, pages and every attempt. REQUIRED, and
+/// on the request rather than the entry point, so a run cannot go unbudgeted by omission - a plan's
+/// arithmetic is a prediction and only a stop in the path is a ceiling.
+/// </param>
 public sealed record EuNationalImplementingMeasureRunRequest(
     EuNationalImplementingMeasureDiscoveryPlan Plan,
     string PlanResourceId,
-    MachineQueryRendererSource RendererSource);
+    MachineQueryRendererSource RendererSource,
+    WireRequestBudget WireBudget)
+{
+    /// <summary>
+    /// This run's enforced ceiling. Required, and refused at construction when it is absent.
+    /// </summary>
+    /// <remarks>
+    /// A POSITIONAL RECORD DOES NOT CHECK ITS OWN PARAMETERS, which is how a sibling request came to
+    /// document this as required while <c>new(..., null!)</c> threw nothing and reached the pass loop
+    /// with the ceiling simply off. The property is therefore guarded here rather than described.
+    /// </remarks>
+    public WireRequestBudget WireBudget { get; } =
+        WireBudget ?? throw new ArgumentNullException(nameof(WireBudget));
+}
 
 /// <summary>One bounded enumeration of Legilux transposition target identities.</summary>
+/// <param name="WireBudget">
+/// This run's enforced ceiling, counted over robots, counts, pages and every attempt. REQUIRED, and
+/// on the request rather than the entry point, so a run cannot go unbudgeted by omission - a plan's
+/// arithmetic is a prediction and only a stop in the path is a ceiling.
+/// </param>
 public sealed record LuxembourgTranspositionIdentityRunRequest(
     LuxembourgTranspositionIdentityDiscoveryPlan Plan,
     IReadOnlyList<string> BatchEuElis,
     string PlanResourceId,
-    MachineQueryRendererSource RendererSource);
+    MachineQueryRendererSource RendererSource,
+    WireRequestBudget WireBudget)
+{
+    /// <summary>
+    /// This run's enforced ceiling. Required, and refused at construction when it is absent.
+    /// </summary>
+    /// <remarks>
+    /// A POSITIONAL RECORD DOES NOT CHECK ITS OWN PARAMETERS, which is how a sibling request came to
+    /// document this as required while <c>new(..., null!)</c> threw nothing and reached the pass loop
+    /// with the ceiling simply off. The property is therefore guarded here rather than described.
+    /// </remarks>
+    public WireRequestBudget WireBudget { get; } =
+        WireBudget ?? throw new ArgumentNullException(nameof(WireBudget));
+}
 
 /// <summary>One bounded enumeration of the Conseil d'Etat opinion events.</summary>
 /// <remarks>
@@ -295,10 +331,28 @@ public sealed record LuxembourgTranspositionIdentityRunRequest(
 /// contrast is the EU case-law family, which is asked ABOUT a caller-named batch of acts and
 /// therefore carries one.
 /// </remarks>
+/// <param name="WireBudget">
+/// This run's enforced ceiling, counted over robots, counts, pages and every attempt. REQUIRED, and
+/// on the request rather than the entry point, so a run cannot go unbudgeted by omission - a plan's
+/// arithmetic is a prediction and only a stop in the path is a ceiling.
+/// </param>
 public sealed record LuxembourgOpinionRunRequest(
     LuxembourgOpinionDiscoveryPlan Plan,
     string PlanResourceId,
-    MachineQueryRendererSource RendererSource);
+    MachineQueryRendererSource RendererSource,
+    WireRequestBudget WireBudget)
+{
+    /// <summary>
+    /// This run's enforced ceiling. Required, and refused at construction when it is absent.
+    /// </summary>
+    /// <remarks>
+    /// A POSITIONAL RECORD DOES NOT CHECK ITS OWN PARAMETERS, which is how a sibling request came to
+    /// document this as required while <c>new(..., null!)</c> threw nothing and reached the pass loop
+    /// with the ceiling simply off. The property is therefore guarded here rather than described.
+    /// </remarks>
+    public WireRequestBudget WireBudget { get; } =
+        WireBudget ?? throw new ArgumentNullException(nameof(WireBudget));
+}
 
 /// <summary>One bounded enumeration of the Luxembourg draft graph.</summary>
 /// <remarks>
@@ -580,11 +634,29 @@ public sealed record LuxembourgOpinionRequestGraphRunRequest
 /// enumerate. The plan still fixes the five predicates and the batch capacity, so the caller chooses
 /// which acts are asked about and nothing else.
 /// </remarks>
+/// <param name="WireBudget">
+/// This run's enforced ceiling, counted over robots, counts, pages and every attempt. REQUIRED, and
+/// on the request rather than the entry point, so a run cannot go unbudgeted by omission - a plan's
+/// arithmetic is a prediction and only a stop in the path is a ceiling.
+/// </param>
 public sealed record EuCaseLawRunRequest(
     EuCaseLawDiscoveryPlan Plan,
     IReadOnlyList<string> BatchWorks,
     string PlanResourceId,
-    MachineQueryRendererSource RendererSource);
+    MachineQueryRendererSource RendererSource,
+    WireRequestBudget WireBudget)
+{
+    /// <summary>
+    /// This run's enforced ceiling. Required, and refused at construction when it is absent.
+    /// </summary>
+    /// <remarks>
+    /// A POSITIONAL RECORD DOES NOT CHECK ITS OWN PARAMETERS, which is how a sibling request came to
+    /// document this as required while <c>new(..., null!)</c> threw nothing and reached the pass loop
+    /// with the ceiling simply off. The property is therefore guarded here rather than described.
+    /// </remarks>
+    public WireRequestBudget WireBudget { get; } =
+        WireBudget ?? throw new ArgumentNullException(nameof(WireBudget));
+}
 
 /// <summary>
 /// One bounded enumeration of the procedure events belonging to a batch of dossiers.
@@ -995,6 +1067,17 @@ public sealed class EuRepeatedEnumerationExecutor
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(sourceWitness);
 
+        // THE SESSION'S ROBOTS FETCH, RESERVED BEFORE THE SESSION EXISTS. StartSessionAsync sends
+        // robots as its first act, so this is the last point at which that request can be stopped
+        // rather than merely counted after the fact.
+        if (!request.WireBudget.TryReserveAttempt())
+        {
+            return EuEnumerationRunResult.Refused(
+                new EuEnumerationRefusalDetail(
+                    EuEnumerationRefusal.WireBudgetExhausted, null, null, null, null, null, null, null, null),
+                productRequestCount: 0);
+        }
+
         var session = await StartSessionAsync(sourceWitness, cancellationToken).ConfigureAwait(false);
         if (session is null)
         {
@@ -1017,7 +1100,8 @@ public sealed class EuRepeatedEnumerationExecutor
                         BindNationalImplementingMeasurePage(request, pass, cursor, selected, evidenceRef),
                     batchObjects: null,
                     batchMembershipKeyOrdinal: null,
-                    cancellationToken)
+                    cancellationToken,
+                    request.WireBudget)
                 .ConfigureAwait(false);
         }
         finally
@@ -1050,6 +1134,17 @@ public sealed class EuRepeatedEnumerationExecutor
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(sourceWitness);
 
+        // THE SESSION'S ROBOTS FETCH, RESERVED BEFORE THE SESSION EXISTS. StartSessionAsync sends
+        // robots as its first act, so this is the last point at which that request can be stopped
+        // rather than merely counted after the fact.
+        if (!request.WireBudget.TryReserveAttempt())
+        {
+            return EuEnumerationRunResult.Refused(
+                new EuEnumerationRefusalDetail(
+                    EuEnumerationRefusal.WireBudgetExhausted, null, null, null, null, null, null, null, null),
+                productRequestCount: 0);
+        }
+
         var session = await StartSessionAsync(sourceWitness, cancellationToken).ConfigureAwait(false);
         if (session is null)
         {
@@ -1076,7 +1171,8 @@ public sealed class EuRepeatedEnumerationExecutor
                     // https:// or a trailing slash - spellings the plan accepts rather than refuses.
                     batchObjects: EuCaseLawDiscoveryPlan.RequestedPartitionMembers(request.BatchWorks),
                     batchMembershipKeyOrdinal: CaseLawBatchMembershipKeyOrdinal(profile),
-                    cancellationToken)
+                    cancellationToken,
+                    request.WireBudget)
                 .ConfigureAwait(false);
         }
         finally
@@ -1093,6 +1189,17 @@ public sealed class EuRepeatedEnumerationExecutor
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(sourceWitness);
+
+        // THE SESSION'S ROBOTS FETCH, RESERVED BEFORE THE SESSION EXISTS. StartSessionAsync sends
+        // robots as its first act, so this is the last point at which that request can be stopped
+        // rather than merely counted after the fact.
+        if (!request.WireBudget.TryReserveAttempt())
+        {
+            return EuEnumerationRunResult.Refused(
+                new EuEnumerationRefusalDetail(
+                    EuEnumerationRefusal.WireBudgetExhausted, null, null, null, null, null, null, null, null),
+                productRequestCount: 0);
+        }
 
         var session = await StartSessionAsync(sourceWitness, cancellationToken).ConfigureAwait(false);
         if (session is null)
@@ -1116,7 +1223,8 @@ public sealed class EuRepeatedEnumerationExecutor
                         BindLuxembourgTranspositionIdentityPage(request, pass, cursor, selected, evidenceRef),
                     batchObjects: request.BatchEuElis,
                     batchMembershipKeyOrdinal: LuxembourgTranspositionIdentityBatchMembershipKeyOrdinal(profile),
-                    cancellationToken)
+                    cancellationToken,
+                    request.WireBudget)
                 .ConfigureAwait(false);
         }
         finally
@@ -1142,6 +1250,17 @@ public sealed class EuRepeatedEnumerationExecutor
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(sourceWitness);
 
+        // THE SESSION'S ROBOTS FETCH, RESERVED BEFORE THE SESSION EXISTS. StartSessionAsync sends
+        // robots as its first act, so this is the last point at which that request can be stopped
+        // rather than merely counted after the fact.
+        if (!request.WireBudget.TryReserveAttempt())
+        {
+            return EuEnumerationRunResult.Refused(
+                new EuEnumerationRefusalDetail(
+                    EuEnumerationRefusal.WireBudgetExhausted, null, null, null, null, null, null, null, null),
+                productRequestCount: 0);
+        }
+
         var session = await StartSessionAsync(sourceWitness, cancellationToken).ConfigureAwait(false);
         if (session is null)
         {
@@ -1164,7 +1283,8 @@ public sealed class EuRepeatedEnumerationExecutor
                         BindLuxembourgOpinionPage(request, pass, cursor, selected, evidenceRef),
                     batchObjects: null,
                     batchMembershipKeyOrdinal: null,
-                    cancellationToken)
+                    cancellationToken,
+                    request.WireBudget)
                 .ConfigureAwait(false);
         }
         finally

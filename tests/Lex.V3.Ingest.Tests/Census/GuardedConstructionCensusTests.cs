@@ -630,12 +630,21 @@ public sealed class GuardedConstructionCensusTests
                     + "method public instance Lex.V3.Ingest.WireBudgetSnapshot::<Clone>$, "
                     + "method public static Lex.V3.Ingest.WireBudgetSnapshot::Of",
                 "Lex.V3.Ingest.WireRequestBudget: by-ref-method public instance "
+                    + "Lex.V3.Ingest.Europe.EuCaseLawRunRequest::Deconstruct, "
+                    + "by-ref-method public instance "
+                    + "Lex.V3.Ingest.Europe.EuNationalImplementingMeasureRunRequest::Deconstruct, "
+                    + "by-ref-method public instance "
                     + "Lex.V3.Ingest.Europe.EuProcedureEventRunRequest::Deconstruct, "
                     + "by-ref-method public instance "
                     + "Lex.V3.Ingest.Europe.LuxembourgInitialDraftInventoryRunRequest::Deconstruct, "
                     + "by-ref-method public instance "
                     + "Lex.V3.Ingest.Europe.LuxembourgOpinionRequestInventoryRunRequest::Deconstruc"
-                    + "t, constructor private instance Lex.V3.Ingest.WireRequestBudget::.ctor, "
+                    + "t, "
+                    + "by-ref-method public instance "
+                    + "Lex.V3.Ingest.Europe.LuxembourgOpinionRunRequest::Deconstruct, "
+                    + "by-ref-method public instance "
+                    + "Lex.V3.Ingest.Europe.LuxembourgTranspositionIdentityRunRequest::Deconstruct, "
+                    + "constructor private instance Lex.V3.Ingest.WireRequestBudget::.ctor, "
                     + "method public static Lex.V3.Ingest.WireRequestBudget::OfWireRequests",
             },
             ClosedSurfaceCensus.GuardedConstruction(CensusScope.SweptHere).ToArray());
