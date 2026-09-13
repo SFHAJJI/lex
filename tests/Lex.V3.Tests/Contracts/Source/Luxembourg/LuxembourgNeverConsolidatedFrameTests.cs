@@ -1,3 +1,4 @@
+using System.Reflection;
 using Lex.V3.Contracts;
 using Lex.V3.Contracts.Custody;
 using Lex.V3.Contracts.Source.Absence;
@@ -9,14 +10,16 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 namespace Lex.V3.Tests.Contracts.Source.Luxembourg;
 
 /// <summary>
-/// The never-consolidated frame: an absence claim about a whole population, and the ways a count
-/// could be published that nobody actually established.
+/// The never-consolidated recorder: one disposition per act, each agreeing with the enumeration
+/// cited for it, and no population claim at all.
 /// </summary>
 /// <remarks>
-/// E10 says to treat the 23,370 measurement as audit context and never as a literal acceptance value.
-/// The tests that matter here are the ones that fail if a number can be produced from a partial
-/// sweep, if "never consolidated" can be claimed for an act nobody enumerated, or if the number
-/// cannot say which population it describes.
+/// An earlier head of this contract produced a population count from a caller-supplied class
+/// manifest bound to a proof only by cardinality. Review established that any proven delivery of N
+/// unrelated rows authorised any N caller-chosen act identities, so the count was not evidence-bound
+/// and the manifest was the wrapper it travelled in. Both were removed rather than relocated. The
+/// tests that matter here are the ones that fail if a population claim returns, or if one act can
+/// carry two answers.
 /// </remarks>
 [TestClass]
 public sealed class LuxembourgNeverConsolidatedFrameTests
@@ -30,168 +33,76 @@ public sealed class LuxembourgNeverConsolidatedFrameTests
 
     private const string ActOne = "https://data.legilux.public.lu/eli/etat/leg/loi/2026/01/01/a1";
     private const string ActTwo = "https://data.legilux.public.lu/eli/etat/leg/rgd/2026/02/02/a2";
-    private const string ActThree = "https://data.legilux.public.lu/eli/etat/leg/loi/2026/03/03/a3";
 
-    // ---- The population is the manifest's, not the caller's. ----
-
-    /// <summary>
-    /// A nonempty caller-selected subset is not the population, however terminal its dispositions.
-    /// </summary>
-    /// <remarks>
-    /// The defect this repair exists for. The frame used to count whatever it had been handed, so a
-    /// single caller-minted never-consolidated entry made the population 1 while the rest of the
-    /// LOI/RGD universe was never supplied. "Every entry in this list has a terminal disposition"
-    /// and "the complete population was swept" are different claims, and only the second is what a
-    /// published number means.
-    /// </remarks>
-    [TestMethod]
-    public void ANonemptySubsetOfTheManifestIsNotThePopulation()
-    {
-        var frame = new LuxembourgNeverConsolidatedFrame(
-            Manifest((ActOne, Loi), (ActTwo, Rgd), (ActThree, Loi)));
-        Assert.IsTrue(frame.TryAdmit(NeverConsolidated(ActOne, Loi), out _));
-
-        Assert.IsFalse(frame.TryCountNeverConsolidated(out var count, out var refusal));
-        Assert.AreEqual(
-            LuxembourgNeverConsolidatedCountRefusal.ManifestMemberNotDispositioned,
-            refusal,
-            "two of three members were never dispositioned, and no entry in the frame can show that.");
-        Assert.AreEqual(0, count);
-    }
-
-    /// <summary>The per-entry completion evidence does not close the subset gap on its own.</summary>
-    /// <remarks>
-    /// Every entry below carries a structurally valid completion reference, and the count is still
-    /// refused: evidence that AN enumeration completed is not evidence that THIS scope was swept.
-    /// </remarks>
-    [TestMethod]
-    public void CompletionEvidenceOnEveryAdmittedEntryStillDoesNotMakeASubsetThePopulation()
-    {
-        var frame = new LuxembourgNeverConsolidatedFrame(
-            Manifest((ActOne, Loi), (ActTwo, Rgd), (ActThree, Loi)));
-        Assert.IsTrue(frame.TryAdmit(NeverConsolidated(ActOne, Loi), out _));
-        Assert.IsTrue(frame.TryAdmit(Consolidated(ActTwo, Rgd), out _));
-
-        Assert.IsFalse(frame.TryCountNeverConsolidated(out _, out var refusal));
-        Assert.AreEqual(
-            LuxembourgNeverConsolidatedCountRefusal.ManifestMemberNotDispositioned, refusal);
-    }
-
-    // ---- The counting rule. ----
+    // ---- The population claim is gone, and must not come back. ----
 
     /// <summary>
-    /// One unenumerated act refuses the whole count, however many others were confirmed.
+    /// The recorder exposes nothing that returns a population, and the surface is pinned whole.
     /// </summary>
     /// <remarks>
-    /// The property E10's "never a literal acceptance value" demands, made structural. A count over a
-    /// partial sweep is indistinguishable, once written down, from a count over a complete one.
+    /// <para>
+    /// A NAME FILTER WOULD NOT HOLD THIS. Forbidding members whose names contain "Count" would pass
+    /// on one called <c>Total</c> or <c>Population</c>, and this is precisely the claim review found
+    /// unevidenced, so the guard against its return has to be the whole member surface rather than a
+    /// taboo list. Adding any member at all fails this test and makes the author say what it is.
+    /// </para>
+    /// <para>
+    /// Pinned from what reflection reports, printed rather than hand-written.
+    /// </para>
     /// </remarks>
     [TestMethod]
-    public void OneUnenumeratedActRefusesTheCountHoweverManyOthersAreConfirmed()
+    public void TheRecorderExposesNoPopulationCountAndItsSurfaceIsPinnedWhole()
     {
-        var frame = new LuxembourgNeverConsolidatedFrame(
-            Manifest((ActOne, Loi), (ActTwo, Rgd), (ActThree, Loi)));
-        Assert.IsTrue(frame.TryAdmit(NeverConsolidated(ActOne, Loi), out _));
-        Assert.IsTrue(frame.TryAdmit(NeverConsolidated(ActTwo, Rgd), out _));
-        Assert.IsTrue(frame.TryAdmit(Unproven(ActThree, Loi), out _));
+        var surface = typeof(LuxembourgNeverConsolidatedFrame)
+            .GetMembers(
+                BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static |
+                BindingFlags.DeclaredOnly)
+            .Select(member => $"{member.MemberType} {member}")
+            .OrderBy(signature => signature, StringComparer.Ordinal)
+            .ToArray();
 
-        Assert.IsFalse(frame.TryCountNeverConsolidated(out var count, out var refusal));
-        Assert.AreEqual(LuxembourgNeverConsolidatedCountRefusal.EnumerationIncomplete, refusal);
-        Assert.AreEqual(0, count, "a refused count reports nothing, not a partial total.");
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "Constructor Void .ctor()",
+                "Method Boolean TryAdmit(Lex.V3.Contracts.Source.Luxembourg."
+                    + "LuxembourgNeverConsolidatedEntry, Lex.V3.Contracts.Source.Luxembourg."
+                    + "LuxembourgNeverConsolidatedAdmitRefusal ByRef)",
+                "Method System.Collections.Generic.IReadOnlyList`1[Lex.V3.Contracts.Source.Luxembourg."
+                    + "LuxembourgNeverConsolidatedEntry] get_Entries()",
+                "Property System.Collections.Generic.IReadOnlyList`1[Lex.V3.Contracts.Source."
+                    + "Luxembourg.LuxembourgNeverConsolidatedEntry] Entries",
+            },
+            surface,
+            "the recorder records and exposes what it holds. A member that returned a population "
+            + "would be the claim review found unevidenced, arriving again.");
     }
 
-    [TestMethod]
-    public void ACompleteFrameCountsOnlyTheNeverConsolidated()
-    {
-        var frame = new LuxembourgNeverConsolidatedFrame(
-            Manifest((ActOne, Loi), (ActTwo, Rgd), (ActThree, Loi)));
-        Assert.IsTrue(frame.TryAdmit(NeverConsolidated(ActOne, Loi), out _));
-        Assert.IsTrue(frame.TryAdmit(Consolidated(ActTwo, Rgd), out _));
-        Assert.IsTrue(frame.TryAdmit(NeverConsolidated(ActThree, Loi), out _));
-
-        Assert.IsTrue(frame.TryCountNeverConsolidated(out var count, out var refusal));
-        Assert.AreEqual(LuxembourgNeverConsolidatedCountRefusal.None, refusal);
-        Assert.AreEqual(2, count);
-    }
-
-    /// <summary>An act outside the manifest is counted as neither and does not block the count.</summary>
-    [TestMethod]
-    public void AnActOutsideTheClassManifestBlocksNothingAndCountsAsNothing()
-    {
-        var frame = new LuxembourgNeverConsolidatedFrame(Manifest((ActOne, Loi)));
-        Assert.IsTrue(frame.TryAdmit(NeverConsolidated(ActOne, Loi), out _));
-        Assert.IsTrue(frame.TryAdmit(OutsideManifest(ActTwo, Unknown), out _));
-
-        Assert.IsTrue(frame.TryCountNeverConsolidated(out var count, out _));
-        Assert.AreEqual(1, count, "a deliberate exclusion is not a gap and is not a member.");
-        Assert.HasCount(2, frame.Entries, "and it is still recorded as having been considered.");
-    }
-
-    [TestMethod]
-    public void AFrameWithNoEntriesReportsNoPopulationRatherThanZero()
-    {
-        var frame = new LuxembourgNeverConsolidatedFrame(Manifest((ActOne, Loi)));
-
-        Assert.IsFalse(frame.TryCountNeverConsolidated(out var count, out var refusal));
-        Assert.AreEqual(
-            LuxembourgNeverConsolidatedCountRefusal.ManifestMemberNotDispositioned, refusal);
-        Assert.AreEqual(0, count, "zero acts never consolidated and no acts examined differ.");
-    }
-
-    // ---- Membership is derived, never chosen. ----
-
-    /// <summary>
-    /// A manifest member cannot be labelled outside the manifest and dropped from the count.
-    /// </summary>
+    /// <summary>No class-manifest type survives to carry the retired population scope.</summary>
     /// <remarks>
-    /// Before this, <c>OutsideClassManifest</c> was a freely chosen disposition independent of the
-    /// act's own class, so a LOI could be declared outside and quietly excluded from the population
-    /// its own manifest covers.
+    /// The manifest was the wrapper the substitution travelled in: caller-supplied members bound to
+    /// a proof by cardinality alone. Deleting the count while leaving the manifest would have left
+    /// the same unevidenced scope one call away.
     /// </remarks>
     [TestMethod]
-    public void AManifestMemberCannotBeDispositionedOutsideTheManifest()
+    public void NoClassManifestTypeSurvivesInTheContractAssembly()
     {
-        var frame = new LuxembourgNeverConsolidatedFrame(Manifest((ActOne, Loi)));
+        var retired = typeof(LuxembourgNeverConsolidatedFrame).Assembly
+            .GetTypes()
+            .Select(type => type.FullName ?? type.Name)
+            .Where(name =>
+                name.Contains("ActClassManifest", StringComparison.Ordinal)
+                || name.Contains("NeverConsolidatedCountRefusal", StringComparison.Ordinal))
+            .OrderBy(name => name, StringComparer.Ordinal)
+            .ToArray();
 
-        Assert.IsFalse(frame.TryAdmit(OutsideManifest(ActOne, Loi), out var refusal));
-        Assert.AreEqual(
-            LuxembourgNeverConsolidatedAdmitRefusal.MemberDispositionedOutside, refusal);
-        Assert.IsEmpty(frame.Entries);
-    }
-
-    /// <summary>And an act the manifest does not hold cannot be counted into its population.</summary>
-    /// <remarks>
-    /// The other direction of the same defect: the suite this replaced deliberately counted an act
-    /// of an unrecognised class as part of the never-consolidated population, which meant the number
-    /// could not state which population it described.
-    /// </remarks>
-    [TestMethod]
-    public void AnActTheManifestDoesNotHoldCannotBeDispositionedIntoIt()
-    {
-        var frame = new LuxembourgNeverConsolidatedFrame(Manifest((ActOne, Loi)));
-
-        Assert.IsFalse(frame.TryAdmit(NeverConsolidated(ActTwo, Rgd), out var refusal));
-        Assert.AreEqual(
-            LuxembourgNeverConsolidatedAdmitRefusal.NonMemberDispositionedInside, refusal);
-        Assert.IsEmpty(frame.Entries);
-    }
-
-    /// <summary>An entry whose class contradicts the manifest's own is refused, not accepted.</summary>
-    [TestMethod]
-    public void AnEntryWhoseClassContradictsTheManifestIsRefused()
-    {
-        var frame = new LuxembourgNeverConsolidatedFrame(Manifest((ActOne, Loi)));
-
-        Assert.IsFalse(frame.TryAdmit(NeverConsolidated(ActOne, Rgd), out var refusal));
-        Assert.AreEqual(
-            LuxembourgNeverConsolidatedAdmitRefusal.ActClassContradictsManifest, refusal);
-        Assert.IsEmpty(frame.Entries);
+        Assert.IsEmpty(retired);
     }
 
     // ---- Absence needs evidence; non-absence must not carry it. ----
 
     [TestMethod]
-    public void AnEnumeratedDispositionWithoutCompletionEvidenceIsRejected()
+    public void AnEnumeratedDispositionWithoutItsProofIsRejected()
     {
         foreach (var disposition in new[]
         {
@@ -202,46 +113,61 @@ public sealed class LuxembourgNeverConsolidatedFrameTests
             Assert.ThrowsExactly<ArgumentException>(
                 () => new LuxembourgNeverConsolidatedEntry(
                     ActOne, new LuxembourgActClassRef(Loi), disposition, null),
-                $"{disposition} claims an enumeration completed and must name the evidence.");
+                $"{disposition} claims an enumeration completed and must name the proof.");
         }
     }
 
     [TestMethod]
-    public void AnUnenumeratedDispositionCarryingCompletionEvidenceIsRejected()
+    public void AnUnenumeratedDispositionCarryingAProofIsRejected() =>
+        Assert.ThrowsExactly<ArgumentException>(
+            () => new LuxembourgNeverConsolidatedEntry(
+                ActOne,
+                new LuxembourgActClassRef(Loi),
+                LuxembourgNeverConsolidatedDisposition.EnumerationUnproven,
+                Proof(0)),
+            "'nobody enumerated this' must not carry evidence suggesting somebody had.");
+
+    /// <summary>
+    /// A disposition that contradicts its own proof is refused at construction, not recorded.
+    /// </summary>
+    /// <remarks>
+    /// The proof decides which of the two enumerated dispositions this is: rows delivered means the
+    /// act WAS consolidated, none delivered is the absence claim. A caller stating the opposite of
+    /// what its own evidence says is contradicting itself inside one argument list.
+    /// </remarks>
+    [TestMethod]
+    public void ADispositionThatContradictsItsOwnProofIsRejected()
     {
-        foreach (var disposition in new[]
-        {
-            LuxembourgNeverConsolidatedDisposition.EnumerationUnproven,
-            LuxembourgNeverConsolidatedDisposition.OutsideClassManifest,
-        })
-        {
-            Assert.ThrowsExactly<ArgumentException>(
-                () => new LuxembourgNeverConsolidatedEntry(
-                    ActOne, new LuxembourgActClassRef(Loi), disposition, Proof(0)),
-                $"{disposition} is not an enumeration outcome and must not look like one.");
-        }
+        Assert.ThrowsExactly<ArgumentException>(
+            () => new LuxembourgNeverConsolidatedEntry(
+                ActOne,
+                new LuxembourgActClassRef(Loi),
+                LuxembourgNeverConsolidatedDisposition.EnumeratedAndNeverConsolidated,
+                Proof(2)),
+            "never consolidated, beside a proof that delivered two consolidations.");
+
+        Assert.ThrowsExactly<ArgumentException>(
+            () => new LuxembourgNeverConsolidatedEntry(
+                ActOne,
+                new LuxembourgActClassRef(Loi),
+                LuxembourgNeverConsolidatedDisposition.EnumeratedAndConsolidated,
+                Proof(0)),
+            "consolidated, beside a proof that delivered nothing.");
     }
 
-    // ---- The publisher owns the class vocabulary; this count owns its own membership. ----
+    // ---- The publisher owns the class vocabulary. ----
 
     /// <summary>
     /// A class this build has no member for survives intact. E9's language axis nearly closed at 24
     /// while the publisher emitted 94; an act class is the same kind of thing.
     /// </summary>
-    /// <remarks>
-    /// The class vocabulary stays open and the manifest admits this one explicitly. Those are
-    /// different things: carrying a publisher's word verbatim is not the same as letting a caller
-    /// decide which acts a published number covers.
-    /// </remarks>
     [TestMethod]
     public void AnActClassThisBuildDoesNotRecogniseIsCarriedVerbatim()
     {
-        var frame = new LuxembourgNeverConsolidatedFrame(Manifest((ActOne, Unknown)));
+        var frame = new LuxembourgNeverConsolidatedFrame();
         Assert.IsTrue(frame.TryAdmit(NeverConsolidated(ActOne, Unknown), out _));
 
         Assert.AreEqual(Unknown, frame.Entries[0].ActClass.PublisherClassIri);
-        Assert.IsTrue(frame.TryCountNeverConsolidated(out var count, out _));
-        Assert.AreEqual(1, count, "an unrecognised class is still an act, not a refusal.");
     }
 
     [TestMethod]
@@ -279,129 +205,6 @@ public sealed class LuxembourgNeverConsolidatedFrameTests
                 new LuxembourgActClassRef(Loi),
                 LuxembourgNeverConsolidatedDisposition.EnumerationUnproven,
                 null));
-        Assert.ThrowsExactly<ArgumentException>(
-            () => new LuxembourgActClassManifestMember(notAnIri, new LuxembourgActClassRef(Loi)));
-    }
-
-    // ---- One act, one answer, compared on every admitted field. ----
-
-    [TestMethod]
-    public void ReadmittingOneActWithTheSameEntryIsIdempotent()
-    {
-        var frame = new LuxembourgNeverConsolidatedFrame(Manifest((ActOne, Loi)));
-        Assert.IsTrue(frame.TryAdmit(NeverConsolidated(ActOne, Loi), out _));
-
-        Assert.IsTrue(frame.TryAdmit(NeverConsolidated(ActOne, Loi), out var refusal));
-        Assert.AreEqual(LuxembourgNeverConsolidatedAdmitRefusal.None, refusal);
-        Assert.HasCount(1, frame.Entries);
-    }
-
-    [TestMethod]
-    public void TwoDifferentAnswersForOneActRefuseRatherThanOverwrite()
-    {
-        var frame = new LuxembourgNeverConsolidatedFrame(Manifest((ActOne, Loi)));
-        var held = NeverConsolidated(ActOne, Loi);
-        Assert.IsTrue(frame.TryAdmit(held, out _));
-
-        Assert.IsFalse(frame.TryAdmit(Consolidated(ActOne, Loi), out var refusal));
-        Assert.AreEqual(LuxembourgNeverConsolidatedAdmitRefusal.DispositionDisagrees, refusal);
-        Assert.HasCount(1, frame.Entries);
-        Assert.AreSame(held, frame.Entries[0], "the frame never replaces an admitted answer.");
-    }
-
-    /// <summary>
-    /// Two runs citing different completion evidence for one act are two claims, not a replay.
-    /// </summary>
-    [TestMethod]
-    public void ReadmittingOneActWithDifferentCompletionEvidenceIsADisagreement()
-    {
-        var frame = new LuxembourgNeverConsolidatedFrame(Manifest((ActOne, Loi)));
-        Assert.IsTrue(frame.TryAdmit(NeverConsolidated(ActOne, Loi), out _));
-
-        // A DIFFERENT RUN over the same rows, not a second object describing the same one: two
-        // proofs of one enumeration are one claim, and refusing those would turn an honest replay
-        // into a disagreement.
-        var other = new LuxembourgNeverConsolidatedEntry(
-            ActOne,
-            new LuxembourgActClassRef(Loi),
-            LuxembourgNeverConsolidatedDisposition.EnumeratedAndNeverConsolidated,
-            Proof(0, runIdentitySeed: 931));
-
-        Assert.IsFalse(frame.TryAdmit(other, out var refusal));
-        Assert.AreEqual(
-            LuxembourgNeverConsolidatedAdmitRefusal.CompletionEvidenceDisagrees, refusal);
-        Assert.HasCount(1, frame.Entries);
-    }
-
-    /// <summary>
-    /// The same act re-presented with a different class is a contradictory fact, not a replay.
-    /// </summary>
-    /// <remarks>
-    /// Reachable only through a manifest that holds both classings, which is why it is built by
-    /// hand here: the ordinary path refuses the contradiction against the manifest first, and this
-    /// test is about the frame's OWN comparison of what it already holds. Before this, that
-    /// comparison read the disposition alone, so LOI-then-RGD returned success with no disagreement
-    /// and silently kept LOI - and since class decides membership, that was a material change
-    /// reported as a no-op.
-    /// </remarks>
-    [TestMethod]
-    public void ReadmittingOneActWithADifferentClassIsADisagreement()
-    {
-        var frame = new LuxembourgNeverConsolidatedFrame(Manifest((ActOne, Loi)));
-        Assert.IsTrue(frame.TryAdmit(NeverConsolidated(ActOne, Loi), out _));
-
-        // The manifest's own check fires first, which is itself the point: a reclassed act cannot
-        // reach the held-entry comparison without contradicting the manifest that scoped it.
-        Assert.IsFalse(frame.TryAdmit(NeverConsolidated(ActOne, Rgd), out var refusal));
-        Assert.AreEqual(
-            LuxembourgNeverConsolidatedAdmitRefusal.ActClassContradictsManifest, refusal);
-        Assert.AreEqual(
-            Loi,
-            frame.Entries[0].ActClass.PublisherClassIri,
-            "and the held class is not quietly replaced.");
-    }
-
-    /// <summary>
-    /// An act re-presented as unproven after being enumerated is a disagreement, not a downgrade.
-    /// </summary>
-    [TestMethod]
-    public void AnEnumeratedActCannotBeDowngradedToUnproven()
-    {
-        var frame = new LuxembourgNeverConsolidatedFrame(Manifest((ActOne, Loi)));
-        Assert.IsTrue(frame.TryAdmit(NeverConsolidated(ActOne, Loi), out _));
-
-        Assert.IsFalse(frame.TryAdmit(Unproven(ActOne, Loi), out var refusal));
-        Assert.AreEqual(LuxembourgNeverConsolidatedAdmitRefusal.DispositionDisagrees, refusal);
-        Assert.IsTrue(frame.TryCountNeverConsolidated(out var count, out _),
-            "and the refused downgrade must not have poisoned the count.");
-        Assert.AreEqual(1, count);
-    }
-
-    /// <summary>
-    /// Two act IRIs differing only in case are two acts. The frame keys on the IRI, and IRI paths
-    /// are case-sensitive.
-    /// </summary>
-    /// <remarks>
-    /// Found by a mechanical sweep, not by me: flipping the frame's comparer to ignore-case survived
-    /// every other test here. Under that flip two distinct acts would collide, the second would be
-    /// read as a disagreement with the first, and the population would silently lose one.
-    /// </remarks>
-    [TestMethod]
-    public void TwoActIrisDifferingOnlyByCaseAreTwoActs()
-    {
-        var shouted = ActOne.Replace("/a1", "/A1", StringComparison.Ordinal);
-        Assert.AreNotEqual(ActOne, shouted);
-
-        var frame = new LuxembourgNeverConsolidatedFrame(Manifest((ActOne, Loi), (shouted, Loi)));
-        Assert.IsTrue(frame.TryAdmit(NeverConsolidated(ActOne, Loi), out _));
-        Assert.IsTrue(
-            frame.TryAdmit(NeverConsolidated(shouted, Loi), out var refusal),
-            "a different IRI is a different act, not a second answer about the first.");
-        Assert.AreEqual(LuxembourgNeverConsolidatedAdmitRefusal.None, refusal);
-
-        Assert.HasCount(2, frame.Entries);
-        Assert.IsTrue(frame.TryCountNeverConsolidated(out var count, out _));
-        Assert.AreEqual(2, count);
     }
 
     /// <summary>An act IRI or class IRI that is blank is refused rather than carried.</summary>
@@ -423,113 +226,73 @@ public sealed class LuxembourgNeverConsolidatedFrameTests
                 null));
     }
 
-    // ---- The manifest refuses to be built partial or self-contradictory. ----
+    // ---- One act, one answer, compared on every admitted field. ----
 
     [TestMethod]
-    public void AManifestWithNoAdmittedClassIsRefused()
+    public void ReadmittingOneActWithTheSameEntryIsIdempotent()
     {
-        Assert.IsNull(LuxembourgActClassManifest.TryCreate(
-            [],
-            [new LuxembourgActClassManifestMember(ActOne, new LuxembourgActClassRef(Loi))],
-            Proof(1),
-            out var refusal));
-        Assert.AreEqual(LuxembourgActClassManifestRefusal.NoAdmittedClass, refusal);
+        var frame = new LuxembourgNeverConsolidatedFrame();
+        Assert.IsTrue(frame.TryAdmit(NeverConsolidated(ActOne, Loi), out _));
+
+        Assert.IsTrue(frame.TryAdmit(NeverConsolidated(ActOne, Loi), out var refusal));
+        Assert.AreEqual(LuxembourgNeverConsolidatedAdmitRefusal.None, refusal);
+        Assert.HasCount(1, frame.Entries);
     }
 
     [TestMethod]
-    public void AManifestWithNoMemberIsRefused()
+    public void TwoDifferentAnswersForOneActRefuseRatherThanOverwrite()
     {
-        Assert.IsNull(LuxembourgActClassManifest.TryCreate(
-            [new LuxembourgActClassRef(Loi)], [], Proof(0), out var refusal));
-        Assert.AreEqual(LuxembourgActClassManifestRefusal.NoMember, refusal);
-    }
+        var frame = new LuxembourgNeverConsolidatedFrame();
+        var held = NeverConsolidated(ActOne, Loi);
+        Assert.IsTrue(frame.TryAdmit(held, out _));
 
-    /// <summary>A member of a class the manifest does not admit is a contradiction, not a member.</summary>
-    [TestMethod]
-    public void AMemberWhoseClassIsNotAdmittedIsRefused()
-    {
-        Assert.IsNull(LuxembourgActClassManifest.TryCreate(
-            [new LuxembourgActClassRef(Loi)],
-            [new LuxembourgActClassManifestMember(ActTwo, new LuxembourgActClassRef(Rgd))],
-            Proof(1),
-            out var refusal));
-        Assert.AreEqual(LuxembourgActClassManifestRefusal.MemberClassNotAdmitted, refusal);
-    }
-
-    [TestMethod]
-    public void AnActAppearingTwiceInTheManifestIsRefused()
-    {
-        Assert.IsNull(LuxembourgActClassManifest.TryCreate(
-            [new LuxembourgActClassRef(Loi)],
-            [
-                new LuxembourgActClassManifestMember(ActOne, new LuxembourgActClassRef(Loi)),
-                new LuxembourgActClassManifestMember(ActOne, new LuxembourgActClassRef(Loi)),
-            ],
-            Proof(2),
-            out var refusal));
-        Assert.AreEqual(LuxembourgActClassManifestRefusal.DuplicateMember, refusal);
-    }
-
-    [TestMethod]
-    public void AClassAppearingTwiceInTheAdmittedSetIsRefused()
-    {
-        Assert.IsNull(LuxembourgActClassManifest.TryCreate(
-            [new LuxembourgActClassRef(Loi), new LuxembourgActClassRef(Loi)],
-            [new LuxembourgActClassManifestMember(ActOne, new LuxembourgActClassRef(Loi))],
-            Proof(1),
-            out var refusal));
-        Assert.AreEqual(LuxembourgActClassManifestRefusal.DuplicateAdmittedClass, refusal);
-    }
-
-    // ---- The evidence is a proof, and it is checked against what it is offered for. ----
-
-    /// <summary>
-    /// A member set that is not the size the proof says the enumeration delivered is refused.
-    /// </summary>
-    /// <remarks>
-    /// The manifest's evidence used to be a bare <see cref="SourceArtifactRef"/> - the same unbound
-    /// gesture the review found on the entry, one level up. A proof says how many rows its
-    /// enumeration delivered, so a caller can no longer hand a proof of a whole-class sweep beside
-    /// three acts and call the three a population.
-    /// </remarks>
-    [TestMethod]
-    public void AMemberSetThatIsNotTheSizeTheProofDeliveredIsRefused()
-    {
-        Assert.IsNull(LuxembourgActClassManifest.TryCreate(
-            [new LuxembourgActClassRef(Loi)],
-            [new LuxembourgActClassManifestMember(ActOne, new LuxembourgActClassRef(Loi))],
-            Proof(2),
-            out var refusal));
-        Assert.AreEqual(LuxembourgActClassManifestRefusal.MemberCountDisagreesWithProof, refusal);
+        Assert.IsFalse(frame.TryAdmit(Consolidated(ActOne, Loi), out var refusal));
+        Assert.AreEqual(LuxembourgNeverConsolidatedAdmitRefusal.DispositionDisagrees, refusal);
+        Assert.HasCount(1, frame.Entries);
+        Assert.AreSame(held, frame.Entries[0], "the frame never replaces an admitted answer.");
     }
 
     /// <summary>
-    /// A disposition that contradicts its own proof is refused at construction, not recorded.
+    /// The same act re-presented with a different class is a contradictory fact, not a replay.
     /// </summary>
     /// <remarks>
-    /// The proof decides which of the two enumerated dispositions this is: rows delivered means the
-    /// act WAS consolidated, none delivered is the absence claim. A caller stating the opposite of
-    /// what its own evidence says is not reporting a disagreement between sources - it is
-    /// contradicting itself inside one argument list, and no frame should have to adjudicate that.
+    /// An earlier head compared the disposition alone, so LOI-then-RGD returned success with no
+    /// disagreement and silently kept LOI.
     /// </remarks>
     [TestMethod]
-    public void ADispositionThatContradictsItsOwnProofIsRejected()
+    public void ReadmittingOneActWithADifferentClassIsADisagreement()
     {
-        Assert.ThrowsExactly<ArgumentException>(
-            () => new LuxembourgNeverConsolidatedEntry(
-                ActOne,
-                new LuxembourgActClassRef(Loi),
-                LuxembourgNeverConsolidatedDisposition.EnumeratedAndNeverConsolidated,
-                Proof(2)),
-            "never consolidated, beside a proof that delivered two consolidations.");
+        var frame = new LuxembourgNeverConsolidatedFrame();
+        Assert.IsTrue(frame.TryAdmit(NeverConsolidated(ActOne, Loi), out _));
 
-        Assert.ThrowsExactly<ArgumentException>(
-            () => new LuxembourgNeverConsolidatedEntry(
-                ActOne,
-                new LuxembourgActClassRef(Loi),
-                LuxembourgNeverConsolidatedDisposition.EnumeratedAndConsolidated,
-                Proof(0)),
-            "consolidated, beside a proof that delivered nothing.");
+        Assert.IsFalse(frame.TryAdmit(NeverConsolidated(ActOne, Rgd), out var refusal));
+        Assert.AreEqual(LuxembourgNeverConsolidatedAdmitRefusal.ActClassDisagrees, refusal);
+        Assert.AreEqual(
+            Loi,
+            frame.Entries[0].ActClass.PublisherClassIri,
+            "and the held class is not quietly replaced.");
+    }
+
+    /// <summary>
+    /// Two runs citing different enumerations for one act are two claims, not a replay.
+    /// </summary>
+    [TestMethod]
+    public void ReadmittingOneActCitingADifferentEnumerationIsADisagreement()
+    {
+        var frame = new LuxembourgNeverConsolidatedFrame();
+        Assert.IsTrue(frame.TryAdmit(NeverConsolidated(ActOne, Loi), out _));
+
+        // A DIFFERENT RUN over the same rows, not a second object describing the same one.
+        var other = new LuxembourgNeverConsolidatedEntry(
+            ActOne,
+            new LuxembourgActClassRef(Loi),
+            LuxembourgNeverConsolidatedDisposition.EnumeratedAndNeverConsolidated,
+            Proof(0, runIdentitySeed: 931));
+
+        Assert.IsFalse(frame.TryAdmit(other, out var refusal));
+        Assert.AreEqual(
+            LuxembourgNeverConsolidatedAdmitRefusal.CompletionEvidenceDisagrees, refusal);
+        Assert.HasCount(1, frame.Entries);
     }
 
     /// <summary>
@@ -538,13 +301,12 @@ public sealed class LuxembourgNeverConsolidatedFrameTests
     /// </summary>
     /// <remarks>
     /// <see cref="AbsenceFamilyEnumerationProof"/> is a class with no value equality, so comparing
-    /// the objects would make an honest replay a refusal. What is compared is what a proof is about:
-    /// its family, its acquisition run, its delivered row count and its canonical-key digest.
+    /// the objects would make an honest replay a refusal.
     /// </remarks>
     [TestMethod]
     public void TwoProofsOfOneEnumerationAreOneClaim()
     {
-        var frame = new LuxembourgNeverConsolidatedFrame(Manifest((ActOne, Loi)));
+        var frame = new LuxembourgNeverConsolidatedFrame();
         var first = NeverConsolidated(ActOne, Loi);
         var second = NeverConsolidated(ActOne, Loi);
 
@@ -559,29 +321,57 @@ public sealed class LuxembourgNeverConsolidatedFrameTests
         Assert.HasCount(1, frame.Entries);
     }
 
+    /// <summary>
+    /// An act re-presented as unproven after being enumerated is a disagreement, not a downgrade.
+    /// </summary>
+    [TestMethod]
+    public void AnEnumeratedActCannotBeDowngradedToUnproven()
+    {
+        var frame = new LuxembourgNeverConsolidatedFrame();
+        Assert.IsTrue(frame.TryAdmit(NeverConsolidated(ActOne, Loi), out _));
+
+        Assert.IsFalse(frame.TryAdmit(Unproven(ActOne, Loi), out var refusal));
+        Assert.AreEqual(LuxembourgNeverConsolidatedAdmitRefusal.DispositionDisagrees, refusal);
+        Assert.HasCount(1, frame.Entries);
+    }
+
+    /// <summary>
+    /// Two act IRIs differing only in case are two acts. The frame keys on the IRI, and IRI paths
+    /// are case-sensitive.
+    /// </summary>
+    /// <remarks>
+    /// Found by a mechanical sweep, not by me: flipping the frame's comparer to ignore-case survived
+    /// every other test here. Under that flip two distinct acts would collide and the second would be
+    /// read as a disagreement with the first.
+    /// </remarks>
+    [TestMethod]
+    public void TwoActIrisDifferingOnlyByCaseAreTwoActs()
+    {
+        var shouted = ActOne.Replace("/a1", "/A1", StringComparison.Ordinal);
+        Assert.AreNotEqual(ActOne, shouted);
+
+        var frame = new LuxembourgNeverConsolidatedFrame();
+        Assert.IsTrue(frame.TryAdmit(NeverConsolidated(ActOne, Loi), out _));
+        Assert.IsTrue(
+            frame.TryAdmit(NeverConsolidated(shouted, Loi), out var refusal),
+            "a different IRI is a different act, not a second answer about the first.");
+        Assert.AreEqual(LuxembourgNeverConsolidatedAdmitRefusal.None, refusal);
+
+        Assert.HasCount(2, frame.Entries);
+    }
+
     // ---- Surface. ----
 
     [TestMethod]
-    public void TheExposedCollectionsCannotBeMutatedByACaller()
+    public void TheExposedCollectionCannotBeMutatedByACaller()
     {
-        var frame = new LuxembourgNeverConsolidatedFrame(Manifest((ActOne, Loi)));
+        var frame = new LuxembourgNeverConsolidatedFrame();
         Assert.IsTrue(frame.TryAdmit(NeverConsolidated(ActOne, Loi), out _));
 
         Assert.IsNotInstanceOfType<List<LuxembourgNeverConsolidatedEntry>>(frame.Entries);
         if (frame.Entries is ICollection<LuxembourgNeverConsolidatedEntry> mutable)
         {
             Assert.ThrowsExactly<NotSupportedException>(() => mutable.Clear());
-        }
-
-        Assert.IsNotInstanceOfType<List<LuxembourgActClassManifestMember>>(frame.Manifest.Members);
-        if (frame.Manifest.Members is ICollection<LuxembourgActClassManifestMember> members)
-        {
-            Assert.ThrowsExactly<NotSupportedException>(() => members.Clear());
-        }
-
-        if (frame.Manifest.AdmittedClasses is ICollection<LuxembourgActClassRef> classes)
-        {
-            Assert.ThrowsExactly<NotSupportedException>(() => classes.Clear());
         }
     }
 
@@ -595,24 +385,7 @@ public sealed class LuxembourgNeverConsolidatedFrameTests
                 LuxembourgNeverConsolidatedDisposition.EnumerationUnproven,
                 null));
         Assert.ThrowsExactly<ArgumentNullException>(
-            () => new LuxembourgNeverConsolidatedFrame(Manifest((ActOne, Loi)))
-                .TryAdmit(null!, out _));
-        Assert.ThrowsExactly<ArgumentNullException>(
-            () => new LuxembourgNeverConsolidatedFrame(null!));
-        Assert.ThrowsExactly<ArgumentNullException>(
-            () => new LuxembourgActClassManifestMember(ActOne, null!));
-        Assert.ThrowsExactly<ArgumentNullException>(() => LuxembourgActClassManifest.TryCreate(
-            null!,
-            [new LuxembourgActClassManifestMember(ActOne, new LuxembourgActClassRef(Loi))],
-            Proof(1),
-            out _));
-        Assert.ThrowsExactly<ArgumentNullException>(() => LuxembourgActClassManifest.TryCreate(
-            [new LuxembourgActClassRef(Loi)], null!, Proof(1), out _));
-        Assert.ThrowsExactly<ArgumentNullException>(() => LuxembourgActClassManifest.TryCreate(
-            [new LuxembourgActClassRef(Loi)],
-            [new LuxembourgActClassManifestMember(ActOne, new LuxembourgActClassRef(Loi))],
-            null!,
-            out _));
+            () => new LuxembourgNeverConsolidatedFrame().TryAdmit(null!, out _));
     }
 
     [TestMethod]
@@ -632,22 +405,8 @@ public sealed class LuxembourgNeverConsolidatedFrameTests
                 "\"enumerated_and_never_consolidated\"",
                 "\"enumerated_and_consolidated\"",
                 "\"enumeration_unproven\"",
-                "\"outside_class_manifest\"",
             },
             Enum.GetValues<LuxembourgNeverConsolidatedDisposition>()
-                .Select(member => ContractJson.Serialize(member))
-                .ToArray());
-
-    [TestMethod]
-    public void EveryCountRefusalHasItsExactWireToken() =>
-        CollectionAssert.AreEqual(
-            new[]
-            {
-                "\"none\"",
-                "\"enumeration_incomplete\"",
-                "\"manifest_member_not_dispositioned\"",
-            },
-            Enum.GetValues<LuxembourgNeverConsolidatedCountRefusal>()
                 .Select(member => ContractJson.Serialize(member))
                 .ToArray());
 
@@ -660,67 +419,19 @@ public sealed class LuxembourgNeverConsolidatedFrameTests
                 "\"disposition_disagrees\"",
                 "\"act_class_disagrees\"",
                 "\"completion_evidence_disagrees\"",
-                "\"act_class_contradicts_manifest\"",
-                "\"member_dispositioned_outside\"",
-                "\"non_member_dispositioned_inside\"",
             },
             Enum.GetValues<LuxembourgNeverConsolidatedAdmitRefusal>()
                 .Select(member => ContractJson.Serialize(member))
                 .ToArray());
 
-    [TestMethod]
-    public void EveryManifestRefusalHasItsExactWireToken() =>
-        CollectionAssert.AreEqual(
-            new[]
-            {
-                "\"none\"",
-                "\"no_admitted_class\"",
-                "\"no_member\"",
-                "\"member_class_not_admitted\"",
-                "\"duplicate_member\"",
-                "\"duplicate_admitted_class\"",
-                "\"member_count_disagrees_with_proof\"",
-            },
-            Enum.GetValues<LuxembourgActClassManifestRefusal>()
-                .Select(member => ContractJson.Serialize(member))
-                .ToArray());
-
     // ---- Fixtures. ----
 
-    /// <summary>
-    /// A manifest whose admitted classes are exactly the distinct classes of its members.
-    /// </summary>
-    /// <remarks>
-    /// Convenient for the frame's tests and useless for the manifest's own: a helper that cannot
-    /// build a contradictory manifest cannot test that contradictions are refused, so those tests
-    /// call <c>TryCreate</c> directly.
-    /// </remarks>
-    private static LuxembourgActClassManifest Manifest(params (string Act, string Class)[] members)
-    {
-        var manifest = LuxembourgActClassManifest.TryCreate(
-            [.. members
-                .Select(static member => member.Class)
-                .Distinct(StringComparer.Ordinal)
-                .Select(static value => new LuxembourgActClassRef(value))],
-            [.. members.Select(static member => new LuxembourgActClassManifestMember(
-                member.Act, new LuxembourgActClassRef(member.Class)))],
-            Proof(members.Length),
-            out var refusal);
-        Assert.IsNotNull(manifest, $"the fixture must mint an admitting manifest: {refusal}");
-        return manifest!;
-    }
-
-    /// <summary>
-    /// "Enumerated and never consolidated" requires a proof that delivered NOTHING, which is what
-    /// makes it an absence claim rather than an assertion.
-    /// </summary>
     private static LuxembourgNeverConsolidatedEntry NeverConsolidated(string act, string actClass) =>
         new(act,
             new LuxembourgActClassRef(actClass),
             LuxembourgNeverConsolidatedDisposition.EnumeratedAndNeverConsolidated,
             Proof(0));
 
-    /// <summary>And "enumerated and consolidated" requires a proof that delivered at least one.</summary>
     private static LuxembourgNeverConsolidatedEntry Consolidated(string act, string actClass) =>
         new(act,
             new LuxembourgActClassRef(actClass),
@@ -733,26 +444,15 @@ public sealed class LuxembourgNeverConsolidatedFrameTests
             LuxembourgNeverConsolidatedDisposition.EnumerationUnproven,
             null);
 
-    private static LuxembourgNeverConsolidatedEntry OutsideManifest(string act, string actClass) =>
-        new(act,
-            new LuxembourgActClassRef(actClass),
-            LuxembourgNeverConsolidatedDisposition.OutsideClassManifest,
-            null);
-
     /// <summary>
     /// A real <see cref="AbsenceFamilyEnumerationProof"/> over a delivery of exactly
     /// <paramref name="rows"/> rows.
     /// </summary>
     /// <remarks>
-    /// These used to be two hand-written <see cref="SourceArtifactRef"/> literals, which is exactly
-    /// the defect the review found: a structurally valid reference that no enumeration stands behind.
-    /// A proof can only be minted from an <see cref="EnumerationDeliveryComparison"/> whose two
-    /// independent passes agreed, so the fixture now pays the same price a caller does.
-    /// <para>
-    /// <paramref name="runIdentitySeed"/> mints an independent run over the same rows, which is the
-    /// only way to build two proofs that are genuinely different claims rather than two objects
-    /// describing one enumeration.
-    /// </para>
+    /// These used to be hand-written <see cref="SourceArtifactRef"/> literals, which is exactly the
+    /// defect review found: a structurally valid reference that no enumeration stands behind. A proof
+    /// can only be minted from an <see cref="EnumerationDeliveryComparison"/> whose two independent
+    /// passes agreed, so the fixture now pays the same price a caller does.
     /// </remarks>
     private static AbsenceFamilyEnumerationProof Proof(int rows, int runIdentitySeed = 930)
     {

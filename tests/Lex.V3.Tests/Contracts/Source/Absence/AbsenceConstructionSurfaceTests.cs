@@ -188,10 +188,6 @@ public sealed class AbsenceConstructionSurfaceTests
                     + "Lex.V3.Contracts.Source.Europe.EuProofBoundDelivery::<Proof>k__BackingField "
                     + "-> Lex.V3.Contracts.Source.Absence.AbsenceFamilyEnumerationProof",
                 "field private instance "
-                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgActClassManifest::<EnumerationP"
-                    + "roof>k__BackingField -> "
-                    + "Lex.V3.Contracts.Source.Absence.AbsenceFamilyEnumerationProof",
-                "field private instance "
                     + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgNeverConsolidatedEntry::<Enumer"
                     + "ationCompletionProof>k__BackingField -> "
                     + "Lex.V3.Contracts.Source.Absence.AbsenceFamilyEnumerationProof?",
@@ -225,9 +221,6 @@ public sealed class AbsenceConstructionSurfaceTests
                 "property public instance "
                     + "Lex.V3.Contracts.Source.Europe.EuProofBoundDelivery::Proof() -> "
                     + "Lex.V3.Contracts.Source.Absence.AbsenceFamilyEnumerationProof",
-                "property public instance "
-                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgActClassManifest::EnumerationPr"
-                    + "oof() -> Lex.V3.Contracts.Source.Absence.AbsenceFamilyEnumerationProof",
                 "property public instance "
                     + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgNeverConsolidatedEntry::Enumera"
                     + "tionCompletionProof() -> "
