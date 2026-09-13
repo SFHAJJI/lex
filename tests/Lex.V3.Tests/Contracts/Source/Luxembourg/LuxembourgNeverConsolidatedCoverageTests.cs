@@ -52,20 +52,27 @@ public sealed class LuxembourgNeverConsolidatedCoverageTests
     }
 
     /// <summary>The class is what the manifest reads off the class IRI, never what the ELI path says.</summary>
+    /// <remarks>
+    /// ASYMMETRIC ON PURPOSE: two /loi/ paths carrying the RGD class and one /rgd/ path carrying the
+    /// LOI class. With one of each, a path-based reading and a swap of the per-class counters both
+    /// produced the same 1/1 and survived the sweep; 2/1 makes either visible.
+    /// </remarks>
     [TestMethod]
     public void TheClassIsTheManifestsReadingNotTheEliPaths()
     {
-        // A /loi/ path carrying the RGD class, and a /rgd/ path carrying the LOI class.
         var coverage = Fold(Frame(
             Entry(ActLoiPath1, RgdClass, LuxembourgNeverConsolidatedDisposition.CitedEnumerationDeliveredNoRows),
+            Entry(ActLoiPath3, RgdClass, LuxembourgNeverConsolidatedDisposition.CitedEnumerationDeliveredNoRows),
             Entry(ActRgdPath2, LoiClass, LuxembourgNeverConsolidatedDisposition.CitedEnumerationDeliveredNoRows)));
 
         Assert.AreEqual(LuxembourgActClassScope.InScopeRgd, coverage.PlacementFor(ActLoiPath1)!.Scope);
+        Assert.AreEqual(LuxembourgActClassScope.InScopeRgd, coverage.PlacementFor(ActLoiPath3)!.Scope);
         Assert.AreEqual(LuxembourgActClassScope.InScopeLoi, coverage.PlacementFor(ActRgdPath2)!.Scope);
-        Assert.AreEqual(1, coverage.PopulationRgdCount);
-        Assert.AreEqual(1, coverage.PopulationLoiCount);
-        Assert.AreEqual(1, coverage.NeverConsolidatedRgdCount);
+        Assert.AreEqual(2, coverage.PopulationRgdCount, "two RGD acts, both on /loi/ paths.");
+        Assert.AreEqual(1, coverage.PopulationLoiCount, "one LOI act, on a /rgd/ path.");
+        Assert.AreEqual(2, coverage.NeverConsolidatedRgdCount);
         Assert.AreEqual(1, coverage.NeverConsolidatedLoiCount);
+        Assert.AreEqual(3, coverage.PopulationSize);
     }
 
     /// <summary>
@@ -153,17 +160,23 @@ public sealed class LuxembourgNeverConsolidatedCoverageTests
     [TestMethod]
     public void AnOutOfScopeActIsNeverAGapWhateverItsDisposition()
     {
-        var coverage = Fold(Frame(
-            Entry(ActAminPath5, AminClass, LuxembourgNeverConsolidatedDisposition.NoEnumerationCited)));
+        // EVERY DISPOSITION THE FRAME ADMITS, not one: the lens noted a single case could not
+        // establish "whatever its disposition".
+        foreach (var disposition in Enum.GetValues<LuxembourgNeverConsolidatedDisposition>())
+        {
+            var coverage = Fold(Frame(Entry(ActAminPath5, AminClass, disposition)));
 
-        Assert.AreEqual(1, coverage.HeldActCount);
-        Assert.AreEqual(0, coverage.PopulationSize);
-        Assert.AreEqual(0, coverage.UnresolvedGaps.Count);
-        Assert.AreEqual(1, coverage.NamedExclusionCount);
-        Assert.AreEqual(
-            LuxembourgNeverConsolidatedMembership.RecognizedOutOfScope,
-            coverage.PlacementFor(ActAminPath5)!.Membership);
-        Assert.IsTrue(coverage.AllHeldActsSettled, "nothing in the population is unsettled.");
+            Assert.AreEqual(1, coverage.HeldActCount, disposition.ToString());
+            Assert.AreEqual(0, coverage.PopulationSize, disposition.ToString());
+            Assert.AreEqual(0, coverage.NeverConsolidatedCount, disposition.ToString());
+            Assert.AreEqual(0, coverage.ConsolidatedCount, disposition.ToString());
+            Assert.AreEqual(0, coverage.UnresolvedGaps.Count, disposition.ToString());
+            Assert.AreEqual(1, coverage.NamedExclusionCount, disposition.ToString());
+            Assert.AreEqual(
+                LuxembourgNeverConsolidatedMembership.RecognizedOutOfScope,
+                coverage.PlacementFor(ActAminPath5)!.Membership);
+            Assert.IsTrue(coverage.AllHeldActsSettled, "nothing in the population is unsettled.");
+        }
     }
 
     /// <summary>
@@ -302,33 +315,75 @@ public sealed class LuxembourgNeverConsolidatedCoverageTests
 
     /// <summary>
     /// The 23,370 measurement is audit context. No expected, acceptance or measured figure lives on
-    /// the coverage, and the fold takes a frame and nothing else - the #584 invariant, kept.
+    /// the coverage - the #584 invariant, kept - and the fold takes a frame and nothing else.
     /// </summary>
+    /// <remarks>
+    /// AN ALLOW-LIST, NOT A KEYWORD HUNT. The preflight lens showed a keyword check passing against
+    /// a mutable non-public static field and against a public property with an innocent name. So:
+    /// every numeric-typed property, field and method the type declares, public or not, must be one
+    /// of the nine documented counters (or a counter's backing field); the type declares no constant
+    /// and no hand-written nested type. Two mutants carry exactly those two figures and must die here.
+    /// </remarks>
     [TestMethod]
     public void NoAcceptanceFigureLivesOnTheSurface()
     {
         var type = typeof(LuxembourgNeverConsolidatedCoverage);
+        const BindingFlags All = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance
+            | BindingFlags.Static | BindingFlags.DeclaredOnly;
+        var counters = new[]
+        {
+            nameof(LuxembourgNeverConsolidatedCoverage.HeldActCount),
+            nameof(LuxembourgNeverConsolidatedCoverage.PopulationSize),
+            nameof(LuxembourgNeverConsolidatedCoverage.PopulationLoiCount),
+            nameof(LuxembourgNeverConsolidatedCoverage.PopulationRgdCount),
+            nameof(LuxembourgNeverConsolidatedCoverage.NeverConsolidatedCount),
+            nameof(LuxembourgNeverConsolidatedCoverage.NeverConsolidatedLoiCount),
+            nameof(LuxembourgNeverConsolidatedCoverage.NeverConsolidatedRgdCount),
+            nameof(LuxembourgNeverConsolidatedCoverage.ConsolidatedCount),
+            nameof(LuxembourgNeverConsolidatedCoverage.NamedExclusionCount),
+        };
 
-        var literals = type
-            .GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)
-            .Where(static f => f.IsLiteral || f.IsInitOnly)
-            .Select(static f => f.Name)
-            .ToArray();
-        CollectionAssert.AreEquivalent(Array.Empty<string>(), literals, "no constant figure of any kind.");
-
-        var suspicious = type
-            .GetMembers(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static)
-            .Select(static m => m.Name)
-            .Where(static n => new[] { "Expected", "Acceptance", "Measured", "Target", "Baseline", "Audit" }
-                .Any(word => n.Contains(word, StringComparison.Ordinal)))
-            .ToArray();
-        CollectionAssert.AreEquivalent(Array.Empty<string>(), suspicious);
+        CollectionAssert.AreEquivalent(
+            counters,
+            type.GetProperties(All).Where(static p => IsNumeric(p.PropertyType)).Select(static p => p.Name).ToArray(),
+            "every numeric property, public or not, is a documented counter.");
+        CollectionAssert.AreEquivalent(
+            Array.Empty<string>(),
+            type.GetFields(All)
+                .Where(static f => IsNumeric(f.FieldType))
+                .Select(static f => f.Name)
+                .Where(name => !counters.Any(counter => name == $"<{counter}>k__BackingField"))
+                .ToArray(),
+            "every numeric field backs a documented counter; nothing else stores a figure.");
+        CollectionAssert.AreEquivalent(
+            Array.Empty<string>(),
+            type.GetFields(All).Where(static f => f.IsLiteral).Select(static f => f.Name).ToArray(),
+            "no constant of any kind.");
+        CollectionAssert.AreEquivalent(
+            Array.Empty<string>(),
+            type.GetMethods(All)
+                .Where(static m => !m.IsSpecialName && IsNumeric(m.ReturnType))
+                .Select(static m => m.Name)
+                .ToArray(),
+            "no method computes a figure.");
+        CollectionAssert.AreEquivalent(
+            Array.Empty<string>(),
+            type.GetNestedTypes(All)
+                .Where(static n => !n.IsDefined(typeof(System.Runtime.CompilerServices.CompilerGeneratedAttribute), false))
+                .Select(static n => n.Name)
+                .ToArray(),
+            "no hand-written nested type to hide one in.");
 
         var fold = type.GetMethod(nameof(LuxembourgNeverConsolidatedCoverage.TryComplete))!;
         CollectionAssert.AreEqual(
             new[] { typeof(LuxembourgNeverConsolidatedFrame) },
             fold.GetParameters().Where(static p => !p.IsOut).Select(static p => p.ParameterType).ToArray(),
             "the fold takes the frame and nothing a caller could set a figure through.");
+
+        static bool IsNumeric(Type type) =>
+            type == typeof(int) || type == typeof(long) || type == typeof(short) || type == typeof(byte)
+            || type == typeof(uint) || type == typeof(ulong) || type == typeof(ushort) || type == typeof(sbyte)
+            || type == typeof(double) || type == typeof(float) || type == typeof(decimal);
     }
 
     [TestMethod]
