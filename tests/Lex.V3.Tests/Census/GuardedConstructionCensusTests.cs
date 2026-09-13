@@ -1076,7 +1076,7 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgGazetteBodyDisposition::.ctor, "
                     + "method internal static "
                     + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgGazetteBodyDisposition::<Create"
-                    + ">g__NotHeld|38_0, "
+                    + ">g__NotHeld|41_0, "
                     + "method public instance "
                     + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgGazetteBodyDisposition::<Clone>"
                     + "$, "

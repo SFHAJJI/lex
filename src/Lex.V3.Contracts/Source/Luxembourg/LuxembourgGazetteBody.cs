@@ -107,6 +107,15 @@ public sealed record LuxembourgGazetteBodyDisposition
         FetchEvidenceRef = fetchEvidenceRef;
         Outcome = outcome;
         GapReason = gapReason;
+        // A TYPED GAP CARRIES ITS REASON, AND NOTHING ELSE DOES. Every caller is consistent today;
+        // this keeps a future one from minting a gap with no reason or a reason with no gap, which
+        // the reason-code switch below would otherwise paper over with its fallback.
+        if ((gapReason is null) != (outcome != LuxembourgGazetteBodyOutcome.TypedGap))
+        {
+            throw new InvalidOperationException(
+                $"{outcome} with gap reason '{gapReason}' is not a disposition this type mints.");
+        }
+
         ReasonCode = outcome switch
         {
             LuxembourgGazetteBodyOutcome.Admitted => "gazette_body_admitted",
@@ -315,12 +324,22 @@ public sealed record LuxembourgGazetteBodyDisposition
 /// has none. #419 slice 6a.
 /// </summary>
 /// <remarks>
+/// <para>
 /// COMPLETE OVER THE JOIN, OR REFUSED. The set is created from the act's body join and the
 /// dispositions a producer minted for it, and it requires exactly one disposition per Gazette-PDF
 /// listing of that join: a listing without a disposition, a disposition for a listing the join
 /// does not hold, or two for one listing, is a caller contract violation rather than a partial set.
 /// That is what lets a ledger over the population say "every discovered body has one typed outcome"
 /// without inspecting the joins itself.
+/// </para>
+/// <para>
+/// MINTED FROM THIS JOIN'S OWN LISTING, NOT A LOOKALIKE. A listing key (manifestation, item) names
+/// a body, but a candidate resolution also carries the disposition, blockers and rights the join
+/// computed for it, and a separately built one with the same key can carry others - the lens showed
+/// that a key-only check let a foreign disposition stand in for a real one at the right count. So
+/// each disposition's candidate must be the very object this join lists: the set is assembled from
+/// the join it was created against, which is also the only run identity the join actually binds.
+/// </para>
 /// </remarks>
 public sealed record LuxembourgGazetteBodySet
 {
@@ -363,8 +382,8 @@ public sealed record LuxembourgGazetteBodySet
     /// Assembles one act's set from its join and the dispositions minted for its Gazette listings.
     /// </summary>
     /// <exception cref="ArgumentException">
-    /// The dispositions are not exactly one per Gazette-PDF listing of the join, or one names
-    /// another act or another observation run.
+    /// The dispositions are not exactly one per Gazette-PDF listing of the join, one names another
+    /// act, or one was not minted from this join's own listing.
     /// </exception>
     public static LuxembourgGazetteBodySet Create(
         LuxembourgBodyJoinResolution join,
@@ -388,18 +407,12 @@ public sealed record LuxembourgGazetteBodySet
                     nameof(dispositions));
             }
 
-            if (disposition.Candidate.WemiCandidate.ObservationRef != join.ObservationRunRef)
-            {
-                throw new ArgumentException(
-                    "A disposition was minted from another observation run than this join's.",
-                    nameof(dispositions));
-            }
-
             var key = ListingKey(disposition.ManifestationIri, disposition.ItemIri);
-            if (!expected.Contains(key))
+            if (!listings.Any(listing => ReferenceEquals(listing, disposition.Candidate)))
             {
                 throw new ArgumentException(
-                    $"A disposition names a listing this join does not hold: {key}.", nameof(dispositions));
+                    $"A disposition was not minted from one of this join's own listings: {key}.",
+                    nameof(dispositions));
             }
 
             if (!seen.Add(key))

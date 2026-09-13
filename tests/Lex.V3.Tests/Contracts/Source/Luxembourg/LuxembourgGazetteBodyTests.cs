@@ -281,39 +281,81 @@ public sealed class LuxembourgGazetteBodyTests
     }
 
     [TestMethod]
-    public void ASetRefusesAMissingExtraDuplicateOrForeignDisposition()
+    public void ASetRefusesAMissingDispositionByName()
+    {
+        var join = JoinAgreedCcBy(ActLoi1, Candidate(ActLoi1, "fr", "pdfa"), Candidate(ActLoi1, "fr", "pdf"));
+        var bodies = Bodies(join);
+
+        var thrown = Assert.ThrowsExactly<ArgumentException>(
+            () => LuxembourgGazetteBodySet.Create(join, [bodies[0]]));
+
+        StringAssert.Contains(thrown.Message, "missing");
+        StringAssert.Contains(thrown.Message, bodies[1].ManifestationIri);
+    }
+
+    [TestMethod]
+    public void ASetRefusesADuplicateDisposition()
+    {
+        var join = JoinAgreedCcBy(ActLoi1, Candidate(ActLoi1, "fr", "pdfa"), Candidate(ActLoi1, "fr", "pdf"));
+        var bodies = Bodies(join);
+
+        var thrown = Assert.ThrowsExactly<ArgumentException>(
+            () => LuxembourgGazetteBodySet.Create(join, [bodies[0], bodies[1], bodies[0]]));
+
+        StringAssert.Contains(thrown.Message, "Two dispositions name one listing");
+    }
+
+    [TestMethod]
+    public void ASetRefusesADispositionNamingAnotherAct()
+    {
+        var join = JoinAgreedCcBy(ActLoi1, Candidate(ActLoi1, "fr", "pdf"));
+        var foreignJoin = JoinAgreedCcBy(ActRgd2, Candidate(ActRgd2, "fr", "pdf"));
+        var foreign = Bodies(foreignJoin).Single();
+
+        var thrown = Assert.ThrowsExactly<ArgumentException>(
+            () => LuxembourgGazetteBodySet.Create(join, [Bodies(join).Single(), foreign]));
+
+        StringAssert.Contains(thrown.Message, ActRgd2);
+        StringAssert.Contains(thrown.Message, "not this act");
+    }
+
+    /// <summary>
+    /// The lens's finding: a key-only check let a foreign disposition stand in for a real one at
+    /// the right count. A disposition must be minted from this join's own listing - the very object
+    /// - so a listing this join does not hold, and a lookalike minted from an equal-but-separate
+    /// join, are both refused even when the count is right.
+    /// </summary>
+    [TestMethod]
+    public void ASetRefusesAListingThatIsNotThisJoinsOwnEvenAtTheRightCount()
     {
         var pdfa = Candidate(ActLoi1, "fr", "pdfa");
         var pdf = Candidate(ActLoi1, "fr", "pdf");
         var join = JoinAgreedCcBy(ActLoi1, pdfa, pdf);
-        var bodies = LuxembourgGazetteBodySet.GazetteCandidatesOf(join)
-            .Select(static l => LuxembourgGazetteBodyDisposition.Create(l, null, null)).ToArray();
+        var bodies = Bodies(join);
 
-        // missing one
-        var missing = Assert.ThrowsExactly<ArgumentException>(
-            () => LuxembourgGazetteBodySet.Create(join, [bodies[0]]));
-        StringAssert.Contains(missing.Message, "missing");
-
-        // duplicate
-        Assert.ThrowsExactly<ArgumentException>(
-            () => LuxembourgGazetteBodySet.Create(join, [bodies[0], bodies[1], bodies[0]]));
-
-        // a listing this join does not hold
+        // A listing this join does not hold, REPLACING a real one: the count is right.
         var otherJoin = JoinAgreedCcBy(ActLoi1, pdfa, pdf, Candidate(ActLoi1, "de", "pdf"));
-        var extra = LuxembourgGazetteBodySet.GazetteCandidatesOf(otherJoin)
-            .Select(static l => LuxembourgGazetteBodyDisposition.Create(l, null, null))
-            .Single(static b => b.ManifestationIri.EndsWith("/de/pdf", StringComparison.Ordinal));
-        Assert.ThrowsExactly<ArgumentException>(
-            () => LuxembourgGazetteBodySet.Create(join, [bodies[0], bodies[1], extra]));
+        var extra = Bodies(otherJoin).Single(static b => b.ManifestationIri.EndsWith("/de/pdf", StringComparison.Ordinal));
+        var swapped = Assert.ThrowsExactly<ArgumentException>(
+            () => LuxembourgGazetteBodySet.Create(join, [bodies[0], extra]));
+        StringAssert.Contains(swapped.Message, "not minted from one of this join's own listings");
+        StringAssert.Contains(swapped.Message, extra.ManifestationIri);
 
-        // another act's body
-        var foreignJoin = JoinAgreedCcBy(ActRgd2, Candidate(ActRgd2, "fr", "pdf"));
-        var foreign = LuxembourgGazetteBodyDisposition.Create(
-            LuxembourgGazetteBodySet.GazetteCandidatesOf(foreignJoin).Single(), null, null);
-        var thrown = Assert.ThrowsExactly<ArgumentException>(
-            () => LuxembourgGazetteBodySet.Create(join, [bodies[0], bodies[1], foreign]));
-        StringAssert.Contains(thrown.Message, ActRgd2);
+        // A lookalike: the same act, the same listings, minted from a separate resolution of the
+        // same inputs. Equal keys, another object carrying its own disposition and rights.
+        var lookalike = Bodies(JoinAgreedCcBy(ActLoi1, pdfa, pdf));
+        var separate = Assert.ThrowsExactly<ArgumentException>(
+            () => LuxembourgGazetteBodySet.Create(join, lookalike));
+        StringAssert.Contains(separate.Message, "not minted from one of this join's own listings");
+
+        // And the join's own, complete, is accepted.
+        Assert.AreEqual(2, LuxembourgGazetteBodySet.Create(join, bodies).Bodies.Count);
     }
+
+    private static LuxembourgGazetteBodyDisposition[] Bodies(LuxembourgBodyJoinResolution join) =>
+        LuxembourgGazetteBodySet.GazetteCandidatesOf(join)
+            .Select(static l => LuxembourgGazetteBodyDisposition.Create(l, null, null))
+            .ToArray();
 
     [TestMethod]
     public void AnActWithTuplesButNoPdfHasTheActGapNoGazettePdfCandidate()
@@ -337,13 +379,14 @@ public sealed class LuxembourgGazetteBodyTests
         var set = LuxembourgGazetteBodySet.Create(join, []);
 
         Assert.AreEqual(LuxembourgGazetteActGapReason.RealizationPathUnproven, set.ActGap);
-        Assert.ThrowsExactly<ArgumentException>(
+        var thrown = Assert.ThrowsExactly<ArgumentException>(
             () => LuxembourgGazetteBodySet.Create(
                 join,
                 [LuxembourgGazetteBodyDisposition.Create(
                     LuxembourgGazetteBodySet.GazetteCandidatesOf(JoinAgreedCcBy(ActLoi1, Candidate(ActLoi1, "fr", "pdf"))).Single(),
                     null, null)]),
             "a disposition for a listing this join does not hold.");
+        StringAssert.Contains(thrown.Message, "not minted from one of this join's own listings");
     }
 
     [TestMethod]
