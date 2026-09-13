@@ -1109,6 +1109,24 @@ public sealed class GuardedConstructionCensusTests
                     + "method public static "
                     + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgLiteralCanonicalizer::Canonical"
                     + "ize",
+                "Lex.V3.Contracts.Source.Luxembourg.LuxembourgNeverConsolidatedCoverage: "
+                    + "constructor private instance "
+                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgNeverConsolidatedCoverage::.cto"
+                    + "r, "
+                    + "method public static "
+                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgNeverConsolidatedCoverage::TryC"
+                    + "omplete",
+                "Lex.V3.Contracts.Source.Luxembourg.LuxembourgNeverConsolidatedPlacement: "
+                    + "constructor internal instance "
+                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgNeverConsolidatedPlacement::.ct"
+                    + "or, "
+                    + "method public instance "
+                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgNeverConsolidatedCoverage::Plac"
+                    + "ementFor",
+                "Lex.V3.Contracts.Source.Luxembourg.LuxembourgNeverConsolidatedUnresolvedGap: "
+                    + "constructor internal instance "
+                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgNeverConsolidatedUnresolvedGap:"
+                    + ":.ctor",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgOpinionDiscoveryPlan: constructor "
                     + "private instance "
                     + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgOpinionDiscoveryPlan::.ctor, "

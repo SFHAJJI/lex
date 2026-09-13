@@ -532,9 +532,15 @@ public sealed class ClosedVocabularyCensusTests
                     + "TypedQuarantineContextDependentDatatype, TypedQuarantineIllTyped",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgNeverConsolidatedAdmitRefusal: None, "
                     + "DispositionDisagrees, ActClassDisagrees, CompletionEvidenceDisagrees",
+                "Lex.V3.Contracts.Source.Luxembourg.LuxembourgNeverConsolidatedCoverageRefusal: "
+                    + "None, UnrecognizedActClass",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgNeverConsolidatedDisposition: "
                     + "CitedEnumerationDeliveredNoRows, CitedEnumerationDeliveredRows, "
                     + "NoEnumerationCited",
+                "Lex.V3.Contracts.Source.Luxembourg.LuxembourgNeverConsolidatedGapReason: "
+                    + "EnumerationNotCited",
+                "Lex.V3.Contracts.Source.Luxembourg.LuxembourgNeverConsolidatedMembership: "
+                    + "NeverConsolidated, Consolidated, EnumerationNotCited, RecognizedOutOfScope",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgOpinionHostRobotsState: "
                     + "PermittedByStatedPolicy, NoStatedPolicy",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgOpinionLocatorRefusal: None, "
