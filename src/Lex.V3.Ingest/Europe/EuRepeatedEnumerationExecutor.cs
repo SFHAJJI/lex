@@ -501,6 +501,47 @@ public sealed record LuxembourgInitialDraftInventoryRunRequest(
         WireBudget ?? throw new ArgumentNullException(nameof(WireBudget));
 }
 
+/// <summary>One bounded enumeration of the consolidations of exactly one act.</summary>
+/// <remarks>
+/// UNLIKE THE INVENTORY REQUESTS BESIDE IT, THIS ONE CARRIES A SELECTION, and it must: #419's
+/// question is per-act, and the family key, the templates and every page are bound to one act. The
+/// act is canonicalized at construction through the plan's one derivation door, so a request holding
+/// an inadmissible spelling never reaches the pass loop - the same fail-at-the-edge discipline the
+/// budget below gets, for the same reason.
+/// </remarks>
+/// <param name="WireBudget">
+/// This run's enforced ceiling, counted over robots, counts, pages and every attempt. Required, and
+/// refused at construction when absent.
+/// </param>
+public sealed record LuxembourgConsolidationByActRunRequest(
+    LuxembourgConsolidationByActDiscoveryPlan Plan,
+    string PublisherActIri,
+    string PlanResourceId,
+    MachineQueryRendererSource RendererSource,
+    WireRequestBudget WireBudget)
+{
+    /// <summary>The act this run enumerates the consolidations of, in the one admitted spelling.</summary>
+    /// <remarks>
+    /// CANONICALIZED HERE, not merely stored. A positional record runs no code of its own, so an
+    /// inadmissible spelling passed as this parameter would otherwise reach <c>BindCount</c> and
+    /// throw deep in the pass loop, or key one act's run under another's partition. Running the plan's
+    /// own <see cref="LuxembourgConsolidationByActDiscoveryPlan.CanonicalizeSelection"/> in the
+    /// initializer moves that refusal to the edge, and stores the one spelling the key and the query
+    /// will both be derived from.
+    /// </remarks>
+    public string PublisherActIri { get; } =
+        LuxembourgConsolidationByActDiscoveryPlan.CanonicalizeSelection(PublisherActIri);
+
+    /// <summary>This run's enforced ceiling. Required, and refused at construction when absent.</summary>
+    /// <remarks>
+    /// A POSITIONAL RECORD DOES NOT CHECK ITS OWN PARAMETERS, which is how a sibling request came to
+    /// document this as required while <c>new(..., null!)</c> threw nothing and reached the pass loop
+    /// with the ceiling simply off. Guarded here rather than described.
+    /// </remarks>
+    public WireRequestBudget WireBudget { get; } =
+        WireBudget ?? throw new ArgumentNullException(nameof(WireBudget));
+}
+
 /// <summary>
 /// One bounded enumeration of the OpinionRequest class's own subjects.
 /// </summary>
@@ -1412,6 +1453,66 @@ public sealed class EuRepeatedEnumerationExecutor
                     pass => BindLuxembourgInitialDraftInventoryCount(request, pass),
                     (pass, cursor, selected, evidenceRef) =>
                         BindLuxembourgInitialDraftInventoryPage(request, pass, cursor, selected, evidenceRef),
+                    batchObjects: null,
+                    batchMembershipKeyOrdinal: null,
+                    cancellationToken,
+                    request.WireBudget)
+                .ConfigureAwait(false);
+        }
+        finally
+        {
+            session.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// The per-act consolidation family, one session and two passes over one act's consolidations.
+    /// </summary>
+    /// <remarks>
+    /// Structurally the InitialDraft inventory door beside it - reserve robots before the session,
+    /// open it, run two passes, dispose - and it differs only where #419 differs: the bind closures
+    /// carry the request's canonicalized act into every count and page, so the family key, the
+    /// templates and the projected act column are all bound to the one act this run is about.
+    /// </remarks>
+    public async Task<EuEnumerationRunResult> RunLuxembourgConsolidationByActAsync(
+        LuxembourgConsolidationByActRunRequest request,
+        BoundMachineRequest sourceWitness,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(sourceWitness);
+
+        // THE SESSION'S ROBOTS FETCH, RESERVED BEFORE THE SESSION EXISTS. Same position and reason
+        // as every Luxembourg door: StartSessionAsync sends robots as its first act, so this is the
+        // last point at which that request can be stopped rather than merely counted.
+        if (!request.WireBudget.TryReserveAttempt())
+        {
+            return EuEnumerationRunResult.Refused(
+                new EuEnumerationRefusalDetail(
+                    EuEnumerationRefusal.WireBudgetExhausted, null, null, null, null, null, null, null, null),
+                productRequestCount: 0);
+        }
+
+        var session = await StartSessionAsync(sourceWitness, cancellationToken).ConfigureAwait(false);
+        if (session is null)
+        {
+            return EuEnumerationRunResult.Refused(
+                new EuEnumerationRefusalDetail(
+                    EuEnumerationRefusal.RobotsBootstrapRefused, null, null, null, null, null, null, null, null),
+                productRequestCount: 0);
+        }
+
+        try
+        {
+            var profile = request.Plan.CreateDeliveryProfile();
+            var profileRef = RepeatedEnumerationInterpretationProfileIdentity.Create(NewUrn(), profile);
+            return await RunPassesAsync(
+                    session,
+                    profile,
+                    profileRef,
+                    pass => BindLuxembourgConsolidationByActCount(request, pass),
+                    (pass, cursor, selected, evidenceRef) =>
+                        BindLuxembourgConsolidationByActPage(request, pass, cursor, selected, evidenceRef),
                     batchObjects: null,
                     batchMembershipKeyOrdinal: null,
                     cancellationToken,
@@ -2749,6 +2850,42 @@ public sealed class EuRepeatedEnumerationExecutor
         SourceArtifactRef countEvidenceRef)
     {
         var bound = request.Plan.BindPage(
+            (LuxembourgQueryPass)passOrdinal,
+            cursor,
+            selected,
+            countEvidenceRef,
+            request.PlanResourceId,
+            NewUrn(),
+            request.RendererSource);
+        return new EuBoundQueryParts(
+            bound.MachinePlanRef, bound.InputArtifact.ArtifactRef, bound.Request,
+            bound.InputArtifact.PartitionBinding.MemberKey, bound.MachinePlan.ResponseCardinality.RowLimit);
+    }
+
+    private static EuBoundQueryParts BindLuxembourgConsolidationByActCount(
+        LuxembourgConsolidationByActRunRequest request,
+        int passOrdinal)
+    {
+        var bound = request.Plan.BindCount(
+            request.PublisherActIri,
+            (LuxembourgQueryPass)passOrdinal,
+            request.PlanResourceId,
+            NewUrn(),
+            request.RendererSource);
+        return new EuBoundQueryParts(
+            bound.MachinePlanRef, bound.InputArtifact.ArtifactRef, bound.Request,
+            bound.InputArtifact.PartitionBinding.MemberKey, null);
+    }
+
+    private static EuBoundQueryParts BindLuxembourgConsolidationByActPage(
+        LuxembourgConsolidationByActRunRequest request,
+        int passOrdinal,
+        IReadOnlyList<string>? cursor,
+        long selected,
+        SourceArtifactRef countEvidenceRef)
+    {
+        var bound = request.Plan.BindPage(
+            request.PublisherActIri,
             (LuxembourgQueryPass)passOrdinal,
             cursor,
             selected,
