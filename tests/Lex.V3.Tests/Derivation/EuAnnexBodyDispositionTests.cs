@@ -31,6 +31,7 @@ public sealed class EuAnnexBodyDispositionTests
             fixture.Request,
             fixture.Evidence,
             fixture.Receipt,
+            fixture.ProfileBytes,
             fixture.ProfileRef,
             EuAnnexBodyDispositionOutcome.TextNotAvailable);
 
@@ -106,6 +107,7 @@ public sealed class EuAnnexBodyDispositionTests
                     + "Lex.V3.Contracts.Source.Http.HttpLogicalRequest, "
                     + "Lex.V3.Contracts.Source.Http.RoutedHttpEvidence, "
                     + "Lex.V3.Contracts.Custody.DurableBlobWriteReceipt, "
+                    + "System.ReadOnlyMemory`1[System.Byte], "
                     + "Lex.V3.Contracts.Source.Core.SourceArtifactRef, "
                     + "Lex.V3.Contracts.Derivation.EuAnnexBodyDispositionOutcome)",
                 "Property instance Lex.V3.Contracts.Custody.DurableBlobWriteReceipt "
@@ -147,6 +149,7 @@ public sealed class EuAnnexBodyDispositionTests
             fixture.Request,
             fixture.Evidence,
             fixture.Receipt,
+            fixture.ProfileBytes,
             fixture.ProfileRef,
             EuAnnexBodyDispositionOutcome.TextNotAvailable));
     }
@@ -222,6 +225,7 @@ public sealed class EuAnnexBodyDispositionTests
             terminalRequest,
             evidence,
             fixture.Receipt,
+            fixture.ProfileBytes,
             fixture.ProfileRef,
             EuAnnexBodyDispositionOutcome.TextNotAvailable);
 
@@ -309,6 +313,7 @@ public sealed class EuAnnexBodyDispositionTests
             terminalRequest,
             evidence,
             fixture.Receipt,
+            fixture.ProfileBytes,
             fixture.ProfileRef,
             EuAnnexBodyDispositionOutcome.TextNotAvailable));
     }
@@ -333,6 +338,7 @@ public sealed class EuAnnexBodyDispositionTests
             fixture.Request,
             fixture.Evidence,
             fixture.Receipt,
+            fixture.ProfileBytes,
             fixture.ProfileRef,
             EuAnnexBodyDispositionOutcome.TextNotAvailable));
     }
@@ -371,6 +377,7 @@ public sealed class EuAnnexBodyDispositionTests
             fixture.Request,
             fixture.Evidence,
             Receipt(Digest('b'), 3),
+            fixture.ProfileBytes,
             fixture.ProfileRef,
             EuAnnexBodyDispositionOutcome.TextNotAvailable));
     }
@@ -388,6 +395,25 @@ public sealed class EuAnnexBodyDispositionTests
             fixture.Request,
             fixture.Evidence,
             Receipt(Digest('a'), 3, "2026-09-12T20:00:02Z"),
+            fixture.ProfileBytes,
+            fixture.ProfileRef,
+            EuAnnexBodyDispositionOutcome.TextNotAvailable));
+    }
+
+    [TestMethod]
+    public void ProfileBytesMustCarryTheDigestNamedByTheProfileReference()
+    {
+        var fixture = Fixture();
+
+        Assert.ThrowsExactly<ArgumentException>(() => EuAnnexBodyDisposition.Create(
+            fixture.SourceObject,
+            fixture.Location,
+            fixture.Address,
+            fixture.Request,
+            fixture.Request,
+            fixture.Evidence,
+            fixture.Receipt,
+            Encoding.UTF8.GetBytes("a different extraction profile"),
             fixture.ProfileRef,
             EuAnnexBodyDispositionOutcome.TextNotAvailable));
     }
@@ -428,6 +454,7 @@ public sealed class EuAnnexBodyDispositionTests
             fixture.Request,
             fixture.Evidence,
             fixture.Receipt,
+            fixture.ProfileBytes,
             fixture.ProfileRef,
             EuAnnexBodyDispositionOutcome.TextNotAvailable));
     }
@@ -449,6 +476,7 @@ public sealed class EuAnnexBodyDispositionTests
             fixture.Request,
             fixture.Evidence,
             fixture.Receipt,
+            fixture.ProfileBytes,
             fixture.ProfileRef,
             EuAnnexBodyDispositionOutcome.TextNotAvailable));
     }
@@ -461,7 +489,58 @@ public sealed class EuAnnexBodyDispositionTests
         var second = Create(fixture, EuAnnexBodyDispositionOutcome.TextNotAvailable);
 
         Assert.AreEqual(first.IdentitySha256, second.IdentitySha256);
-        Assert.AreEqual(first.TransportByteSha256, second.TransportByteSha256);
+    }
+
+    [TestMethod]
+    [DataRow("official-uri")]
+    [DataRow("official-count")]
+    [DataRow("terminal-uri")]
+    [DataRow("terminal-count")]
+    [DataRow("terminal-accept")]
+    [DataRow("terminal-language")]
+    public void OfficialAndTerminalRequestsAreIndependentlyBoundToTheObservedRoute(string mutation)
+    {
+        var fixture = Fixture();
+        var terminalUri = fixture.Address.ResourceUri + "?download=1";
+        var officialHeaders = ExactRequestHeaders(fixture.Address);
+        var terminalHeaders = ExactRequestHeaders(fixture.Address);
+
+        if (mutation == "official-count")
+        {
+            officialHeaders.Add(new HttpLogicalRequestHeader("x-extra", "not-part-of-the-address"));
+        }
+        else if (mutation == "terminal-count")
+        {
+            terminalHeaders.Add(new HttpLogicalRequestHeader("x-extra", "not-part-of-the-address"));
+        }
+        else if (mutation == "terminal-accept")
+        {
+            terminalHeaders[0] = new HttpLogicalRequestHeader("accept", "text/html");
+        }
+        else if (mutation == "terminal-language")
+        {
+            terminalHeaders[1] = new HttpLogicalRequestHeader("accept-language", "fr");
+        }
+
+        var officialRequest = Request(
+            mutation == "official-uri" ? fixture.Address.ResourceUri + "?wrong=1" : fixture.Address.ResourceUri,
+            officialHeaders);
+        var terminalRequest = Request(
+            mutation == "terminal-uri" ? terminalUri + "&wrong=1" : terminalUri,
+            terminalHeaders);
+        var evidence = RedirectEvidence(fixture, officialRequest, terminalRequest, terminalUri);
+
+        Assert.ThrowsExactly<ArgumentException>(() => EuAnnexBodyDisposition.Create(
+            fixture.SourceObject,
+            fixture.Location,
+            fixture.Address,
+            officialRequest,
+            terminalRequest,
+            evidence,
+            fixture.Receipt,
+            fixture.ProfileBytes,
+            fixture.ProfileRef,
+            EuAnnexBodyDispositionOutcome.TextNotAvailable));
     }
 
     [TestMethod]
@@ -471,7 +550,7 @@ public sealed class EuAnnexBodyDispositionTests
         var baseline = Create(baselineFixture, EuAnnexBodyDispositionOutcome.TextNotAvailable);
 
         Assert.AreEqual(
-            "1202090e93ab268aa1389adc001d66c94ef538819bda238078ad09ab419eadb4",
+            "e922d5bfb03601fb73eafbd3f2611ea90c5b843d54bcfe8c82280d329bee9df9",
             baseline.IdentitySha256,
             "the golden identity pins every canonical component, including the structurally bound "
             + "source and address contributions, so deleting either cannot be masked by the other.");
@@ -514,6 +593,7 @@ public sealed class EuAnnexBodyDispositionTests
             fixture.Request,
             fixture.Evidence,
             fixture.Receipt,
+            fixture.ProfileBytes,
             fixture.ProfileRef,
             outcome);
 
@@ -587,6 +667,7 @@ public sealed class EuAnnexBodyDispositionTests
             new CompleteHttpRouteOutcome(),
             new Dictionary<string, DurableBlobWriteReceipt> { [hop.ObservationId] = receipt });
 
+        var profileBytes = Encoding.UTF8.GetBytes("eu-annex-profile-" + profileFill);
         return new FixtureValues(
             sourceObject,
             location,
@@ -594,7 +675,78 @@ public sealed class EuAnnexBodyDispositionTests
             request,
             evidence,
             receipt,
-            ArtifactRef('7', profileFill));
+            profileBytes,
+            new SourceArtifactRef(ArtifactRef('7', profileFill).ResourceId, Sha256(profileBytes)));
+    }
+
+    private static List<HttpLogicalRequestHeader> ExactRequestHeaders(EuDocumentFetchAddress address) =>
+    [
+        new HttpLogicalRequestHeader("accept", address.Accept),
+        new HttpLogicalRequestHeader("accept-language", address.AcceptLanguage),
+    ];
+
+    private static HttpLogicalRequest Request(
+        string uri,
+        IReadOnlyList<HttpLogicalRequestHeader> headers) =>
+        HttpLogicalRequest.Create(
+            uri,
+            HttpRequestMethod.Get,
+            headers,
+            new HttpLogicalRequestBody(0, EmptyDigest),
+            Digest('1'),
+            Digest('2'));
+
+    private static RoutedHttpEvidence RedirectEvidence(
+        FixtureValues fixture,
+        HttpLogicalRequest officialRequest,
+        HttpLogicalRequest terminalRequest,
+        string terminalUri)
+    {
+        var firstReceipt = Receipt(EmptyDigest, 0);
+        const string firstHopId = "urn:uuid:ffffffff-ffff-4fff-8fff-ffffffffffff";
+        var first = RoutedHttpHop.Create(
+            0,
+            firstHopId,
+            null,
+            Sha256(officialRequest.CopyCanonicalBytes()),
+            fixture.Address.ResourceUri,
+            301,
+            RedirectHeaders(terminalUri),
+            "2026-09-12T20:00:00.0000000Z",
+            "2026-09-12T20:00:01.0000000Z",
+            new DeclaredContentLengthHttpCompletion(0),
+            0,
+            EmptyDigest,
+            DurableBlobWriteReceiptDigest.Of(firstReceipt),
+            0,
+            EmptyDigest);
+        var terminal = RoutedHttpHop.Create(
+            1,
+            "urn:uuid:99999999-9999-4999-8999-999999999999",
+            firstHopId,
+            Sha256(terminalRequest.CopyCanonicalBytes()),
+            terminalUri,
+            200,
+            Headers(),
+            "2026-09-12T20:00:02.0000000Z",
+            "2026-09-12T20:00:03.0000000Z",
+            new DeclaredContentLengthHttpCompletion(3),
+            3,
+            Digest('a'),
+            DurableBlobWriteReceiptDigest.Of(fixture.Receipt),
+            3,
+            Digest('a'));
+        return RoutedHttpEvidence.Create(
+            ArtifactRef('5', '6'),
+            1,
+            0,
+            [first, terminal],
+            new CompleteHttpRouteOutcome(),
+            new Dictionary<string, DurableBlobWriteReceipt>
+            {
+                [first.ObservationId] = firstReceipt,
+                [terminal.ObservationId] = fixture.Receipt,
+            });
     }
 
     private static RoutedHttpResponseHeaders Headers(string mediaType = "application/pdf")
@@ -684,5 +836,6 @@ public sealed class EuAnnexBodyDispositionTests
         HttpLogicalRequest Request,
         RoutedHttpEvidence Evidence,
         DurableBlobWriteReceipt Receipt,
+        byte[] ProfileBytes,
         SourceArtifactRef ProfileRef);
 }

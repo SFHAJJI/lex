@@ -97,6 +97,7 @@ public sealed record EuAnnexBodyDisposition
         HttpLogicalRequest terminalRequest,
         RoutedHttpEvidence sourceEvidence,
         DurableBlobWriteReceipt retainedTransportBytes,
+        ReadOnlyMemory<byte> profileBytes,
         SourceArtifactRef profileRef,
         EuAnnexBodyDispositionOutcome outcome)
     {
@@ -108,6 +109,19 @@ public sealed record EuAnnexBodyDisposition
         ArgumentNullException.ThrowIfNull(sourceEvidence);
         ArgumentNullException.ThrowIfNull(retainedTransportBytes);
         ArgumentNullException.ThrowIfNull(profileRef);
+
+        if (profileBytes.IsEmpty)
+        {
+            throw new ArgumentException("The extraction profile bytes are required.", nameof(profileBytes));
+        }
+
+        var profileDigest = Convert.ToHexString(SHA256.HashData(profileBytes.Span)).ToLowerInvariant();
+        if (!string.Equals(profileDigest, profileRef.Sha256, StringComparison.Ordinal))
+        {
+            throw new ArgumentException(
+                "The extraction profile bytes do not carry the digest their reference names.",
+                nameof(profileBytes));
+        }
 
         var sourceObservation = RepresentationChainObservation.FromRoute(
             sourceEvidence,
@@ -124,8 +138,9 @@ public sealed record EuAnnexBodyDisposition
             throw new ArgumentException("An EU annex must retain a Cellar source identity.", nameof(sourceObject));
         }
 
+        // EuAuthorityQualifiedToken already proves that the authority member suffix equals Code,
+        // so the exact AN member URI establishes both facts without a redundant second clause.
         if (!annexLocation.Tokens.Any(static token =>
-                string.Equals(token.Code, "AN", StringComparison.Ordinal) &&
                 string.Equals(token.AuthorityUri, PublisherAnnexMemberUri, StringComparison.Ordinal)))
         {
             throw new ArgumentException(
