@@ -45,10 +45,16 @@ public sealed class VerifiedRepeatedEnumerationRowsConstructionSurfaceTests
         // every page) and TryOpen (which calls VerifyPages) are the only three places in Contracts
         // that ever hand out real rows built from parsed bytes. A fourth would be a second parser or
         // a second door, exactly what Decision 80 and this door's own remarks rule out.
+        //
+        // The display-class ordinal below moved from 79 to 80 when RequirePageEvidenceIdentity was
+        // added to EnumerationDeliveryComparison ahead of ParseRows in that type: the compiler
+        // numbers generated closures by declaration position, so this is a renumbering and not a new
+        // producer. Re-printed after the change rather than guessed, and the proof that it is only a
+        // renumbering is that every other entry in this list is byte-identical.
         CollectionAssert.AreEqual(
             new[]
             {
-                "method internal instance " + N + "EnumerationDeliveryComparison+<>c__DisplayClass79_0"
+                "method internal instance " + N + "EnumerationDeliveryComparison+<>c__DisplayClass80_0"
                 + "::<ParseRows>b__0(" + RdfTerm + "[]) -> " + Row,
                 "method internal static " + N + "EnumerationDeliveryComparison::VerifyPages("
                 + "System.Collections.Generic.IReadOnlyList<" + N + "RepeatedEnumerationResolvedEvidence>, "

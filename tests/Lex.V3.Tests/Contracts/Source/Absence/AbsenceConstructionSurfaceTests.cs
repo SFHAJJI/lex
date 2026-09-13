@@ -31,6 +31,7 @@ public sealed class AbsenceConstructionSurfaceTests
     private const string Core = "Lex.V3.Contracts.Source.Core.";
     private const string Custody = "Lex.V3.Contracts.Custody.";
     private const string Lu = "Lex.V3.Contracts.Source.Luxembourg.";
+    private const string Eu = "Lex.V3.Contracts.Source.Europe.";
 
     [TestMethod]
     public void ASubjectHasExactlyOneCheckedDoor()
@@ -169,6 +170,19 @@ public sealed class AbsenceConstructionSurfaceTests
         CollectionAssert.AreEqual(
             new[]
             {
+                // E9's language-scoped expression decode takes a proof and the comparison it was
+                // minted from as two of the six inputs VerifiedRepeatedEnumerationRows.TryOpen
+                // requires, so that decode cannot be handed rows at all. It HOLDS both and can mint
+                // neither: the checked door pinned above remains the only mint, and TryOpen re-checks
+                // the pairing before a byte is parsed. Three lines rather than two because the record
+                // also has a compiler-generated Deconstruct.
+                "by-ref-method public instance " + Eu + "EuProofBoundDelivery::Deconstruct(out "
+                + N + "AbsenceFamilyEnumerationProof&, out " + Core + "EnumerationDeliveryComparison&, "
+                + "out " + Core + "RepeatedEnumerationInterpretationProfile&, out "
+                + Core + "SourceArtifactRef&, out " + Core + "SourceArtifactRef&, out "
+                + "System.Collections.Generic.IReadOnlyList<" + Core + "RepeatedEnumerationResolvedEvidence>&)"
+                + " -> System.Void",
+
                 // The auto-property's backing field is named rather than filtered out by a
                 // substring test. Filtering it was the same defect the neighbouring test removed
                 // from this file two tests up, reintroduced for the analogous case: a pin whose
@@ -177,6 +191,8 @@ public sealed class AbsenceConstructionSurfaceTests
                 // by naming it costs one line and keeps the diff honest.
                 "field private instance " + N + "AbsenceCut::<EnumerationProofs>k__BackingField -> "
                 + "System.Collections.Generic.IReadOnlyList<" + N + "AbsenceFamilyEnumerationProof>",
+                "field private instance " + Eu + "EuProofBoundDelivery::<Proof>k__BackingField -> "
+                + N + "AbsenceFamilyEnumerationProof",
 
                 // D1-06c-LU-2: the Luxembourg proof door. It HOLDS a proof rather than minting one,
                 // which is why it appears here and why that is admitted. Scope resolution and the
@@ -217,6 +233,8 @@ public sealed class AbsenceConstructionSurfaceTests
                 + N + "AbsenceFamilyEnumerationProof?",
                 "property public instance " + N + "AbsenceCut::EnumerationProofs() -> "
                 + "System.Collections.Generic.IReadOnlyList<" + N + "AbsenceFamilyEnumerationProof>",
+                "property public instance " + Eu + "EuProofBoundDelivery::Proof() -> "
+                + N + "AbsenceFamilyEnumerationProof",
                 "property public instance " + Lu + "LuxembourgProvenResourceObservations"
                 + "::AssertionFamilyProof() -> " + N + "AbsenceFamilyEnumerationProof?",
                 "property public instance " + Lu + "LuxembourgProvenResourceObservations"
@@ -275,6 +293,16 @@ public sealed class AbsenceConstructionSurfaceTests
         CollectionAssert.AreEqual(
             new[]
             {
+                // E9's proof-bound delivery holds the comparison beside the proof it was minted
+                // from, because TryOpen refuses the pair unless they match. Holding, never
+                // obtaining: Create above is still the only mint.
+                "by-ref-method public instance " + Eu + "EuProofBoundDelivery::Deconstruct(out "
+                + N + "AbsenceFamilyEnumerationProof&, out " + Core + "EnumerationDeliveryComparison&, "
+                + "out " + Core + "RepeatedEnumerationInterpretationProfile&, out "
+                + Core + "SourceArtifactRef&, out " + Core + "SourceArtifactRef&, out "
+                + "System.Collections.Generic.IReadOnlyList<" + Core + "RepeatedEnumerationResolvedEvidence>&)"
+                + " -> System.Void",
+
                 // Both are the publisher-neutral delivery receipt (queue item 19: moved and
                 // renamed from Lex.V3.Contracts.Source.Luxembourg.LuxembourgEnumerationDeliveryReceipt)
                 // holding the comparison it was minted from. None of them is a second way to OBTAIN
@@ -287,8 +315,12 @@ public sealed class AbsenceConstructionSurfaceTests
                 // away. It was removed rather than left unreferenced, so this pin is down to two.
                 "field private instance " + Core + "RepeatedEnumerationDeliveryReceipt"
                 + "::<Delivery>k__BackingField -> " + Core + "EnumerationDeliveryComparison",
+                "field private instance " + Eu + "EuProofBoundDelivery::<Comparison>k__BackingField -> "
+                + Core + "EnumerationDeliveryComparison",
                 "property public instance " + Core + "RepeatedEnumerationDeliveryReceipt"
                 + "::Delivery() -> " + Core + "EnumerationDeliveryComparison",
+                "property public instance " + Eu + "EuProofBoundDelivery::Comparison() -> "
+                + Core + "EnumerationDeliveryComparison",
             },
             ConstructionSurface.ProducersIn(
                 typeof(AbsenceCut).Assembly, typeof(EnumerationDeliveryComparison), true).ToArray(),

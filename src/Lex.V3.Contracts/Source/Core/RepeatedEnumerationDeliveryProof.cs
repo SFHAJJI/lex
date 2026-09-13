@@ -494,6 +494,49 @@ public sealed class EnumerationDeliveryComparison
             throw new ArgumentException("A retained HTTP artifact reference does not bind its exact canonical bytes.", nameof(reference));
         }
     }
+    /// <summary>
+    /// Whether one already-resolved page IS the evidence a given reference names - every field of
+    /// it, not only the payload's own hash.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// INTERNAL FOR <see cref="VerifiedRepeatedEnumerationRows.TryOpen"/>, WHICH HAS NO RESOLVER.
+    /// <see cref="Resolve"/> applies these same five bindings while minting a comparison, where it
+    /// holds a resolver and can additionally reproduce the render offline. A door reopening a page
+    /// from custody after the fact holds neither, but it holds the same five references and the
+    /// same five artifacts, so the identity question is answerable there too and was simply never
+    /// asked.
+    /// </para>
+    /// <para>
+    /// NOT A SECOND DEFINITION OF WHAT BINDING MEANS. Every check below calls the same primitive
+    /// <see cref="Resolve"/> calls - <see cref="MachineQueryPlanIdentity.Validate"/>,
+    /// <see cref="MachineQueryRenderReceiptIdentity.Validate"/> and
+    /// <see cref="RequireArtifactBinding"/>. What is repeated is the LIST of five, and
+    /// <c>VerifiedRepeatedEnumerationRowsTests.EveryEvidenceReferenceIsBoundFieldByField</c> fails
+    /// if <see cref="RepeatedEnumerationEvidenceRefs"/> ever grows a sixth reference this list does
+    /// not name.
+    /// </para>
+    /// </remarks>
+    internal static void RequirePageEvidenceIdentity(
+        RepeatedEnumerationEvidenceRefs refs,
+        RepeatedEnumerationResolvedEvidence value,
+        string parameterName)
+    {
+        ArgumentNullException.ThrowIfNull(refs);
+        ArgumentNullException.ThrowIfNull(value);
+
+        MachineQueryPlanIdentity.Validate(refs.QueryPlanRef, value.QueryPlan);
+        MachineQueryRenderReceiptIdentity.Validate(refs.RenderReceiptRef, value.RenderReceipt);
+        RequireArtifactBinding(refs.LogicalRequestRef, value.LogicalRequest.CopyCanonicalBytes());
+        RequireArtifactBinding(refs.HttpEvidenceRef, value.HttpEvidence.CopyCanonicalBytes());
+        if (value.QueryInput.ArtifactRef != refs.QueryInputRef)
+        {
+            throw new ArgumentException(
+                "A supplied page is not the page this delivery's own evidence reference names.",
+                parameterName);
+        }
+    }
+
     private static IReadOnlyList<VerifiedRepeatedEnumerationEvidence> ResolvePages(EnumerationPageSetRefs pageSet, RepeatedEnumerationInterpretationProfile profile, IRepeatedEnumerationEvidenceResolver resolver)
     {
         var pages = pageSet.Pages?.ToArray() ?? throw new ArgumentNullException(nameof(pageSet.Pages));
