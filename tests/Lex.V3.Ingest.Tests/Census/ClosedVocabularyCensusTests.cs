@@ -72,6 +72,11 @@ public sealed class ClosedVocabularyCensusTests
                     + "WireBudgetExhausted",
                 "Lex.V3.Ingest.Europe.EuFamilyEnumerationOutcomeKind: Proven, ExecutorRefused, "
                     + "ProofRefused",
+                "Lex.V3.Ingest.Europe.EuLanguageScopedExpressionProductionRefusal: None, "
+                    + "ExpressionFactsRequestIsNotTheExpressionFamily, "
+                    + "ObjectFactsRequestIsNotTheObjectFamily, ExpressionFactsEnumerationRefused, "
+                    + "ObjectFactsEnumerationRefused, EnumerationProofRefused, DerivationRefused, "
+                    + "DerivationNotRetained, ObjectFactsBatchDoesNotCoverTheExpressionBatch",
                 "Lex.V3.Ingest.Europe.EuLocatedAmendmentAxiomDecodeRefusal: None, "
                     + "RowShapeContradictsItsProjectedKind, DeliveryCarriesNoRows, "
                     + "ParentMissingOrNotAnIri, AxiomNodeNotAnIri, PredicateNotAnIri, "

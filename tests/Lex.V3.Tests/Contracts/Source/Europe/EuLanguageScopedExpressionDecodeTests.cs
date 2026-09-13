@@ -1441,12 +1441,65 @@ public sealed class EuLanguageScopedExpressionDecodeTests
     /// what this seed exists for - which is the only way to build a provenance substitution whose
     /// rows agree on every digest.
     /// </param>
+    /// <summary>
+    /// Two deliveries whose interpretation rules differ derive to DIFFERENT addresses, even over
+    /// identical rows.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// FOUND IN THE SECOND REVIEW ROUND OF #418's WIRING SLICE, AND IT WAS A COLLISION RATHER THAN A
+    /// DRIFT. The first repair made the derivation byte-stable by moving each proof's run-specific
+    /// references into a separate episode document. A <see cref="SourceArtifactRef"/> is a compound
+    /// of a per-run <c>ResourceId</c> and a content <c>Sha256</c>, so moving whole references also
+    /// moved the interpretation profile's CONTENT digest out of the derivation identity. Two
+    /// deliveries differing only in <c>MaximumDeliverableRows</c> then produced one derivation
+    /// address.
+    /// </para>
+    /// <para>
+    /// A wrong answer is worse than an unstable one, which is why this case is pinned rather than
+    /// left to the field-allocation test: that test read each reference as indivisible and was
+    /// satisfied by "the profile reference is in the episode", which is exactly the reading that
+    /// hid this.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void TwoDeliveriesUnderDifferentInterpretationRulesDeriveToDifferentAddresses()
+    {
+        var hundred = Bound(Expression(WorkOne, ExprEnglish, English), maximumDeliverableRows: 100);
+        var hundredAndOne = Bound(
+            Expression(WorkOne, ExprEnglish, English), maximumDeliverableRows: 101);
+
+        // The premise: the two differ in the profile and in nothing else this door reads.
+        Assert.AreNotEqual(
+            hundred.Proof.InterpretationProfileRef.Sha256,
+            hundredAndOne.Proof.InterpretationProfileRef.Sha256,
+            "the fixture must actually vary the interpretation profile's content.");
+        Assert.AreEqual(
+            hundred.Proof.CanonicalKeyDigest,
+            hundredAndOne.Proof.CanonicalKeyDigest,
+            "and must deliver the same rows, or the test proves nothing about the profile.");
+
+        var first = EuLanguageScopedExpressionDerivation.TryDerive(
+            hundred, null, out var firstRefusal, out var firstDecode, out _, out _);
+        var second = EuLanguageScopedExpressionDerivation.TryDerive(
+            hundredAndOne, null, out var secondRefusal, out var secondDecode, out _, out _);
+
+        Assert.IsNotNull(first, $"{firstRefusal} {firstDecode}");
+        Assert.IsNotNull(second, $"{secondRefusal} {secondDecode}");
+
+        Assert.AreNotEqual(
+            first!.DerivationSha256,
+            second!.DerivationSha256,
+            "two different sets of interpretation rules must not claim one content address.");
+    }
+
     private static EuProofBoundDelivery Bound(
         IReadOnlyList<string> rows,
         IReadOnlyList<string>? canonicalKey = null,
-        int runIdentitySeed = 930)
+        int runIdentitySeed = 930,
+        long maximumDeliverableRows = 100)
     {
-        var fixture = XFixture(rows, canonicalKey, runIdentitySeed);
+        var fixture = XFixture(rows, canonicalKey, runIdentitySeed, maximumDeliverableRows);
         var delivery = fixture.Create(string.Empty, string.Empty);
         var proof = AbsenceFamilyEnumerationProof.TryCreate(
             "laws", delivery, CustodyMembership.Floored, out var proofRefusal);
@@ -1489,7 +1542,8 @@ public sealed class EuLanguageScopedExpressionDecodeTests
     private static RepeatedEnumerationDeliveryProofTests.Fixture XFixture(
         IReadOnlyList<string> rows,
         IReadOnlyList<string>? canonicalKey = null,
-        int runIdentitySeed = 930)
+        int runIdentitySeed = 930,
+        long maximumDeliverableRows = 100)
     {
         var body = RowsJson(XProjection, rows);
         return new RepeatedEnumerationDeliveryProofTests.Fixture(
@@ -1498,7 +1552,8 @@ public sealed class EuLanguageScopedExpressionDecodeTests
             expectedCount: rows.Count,
             projectionVariables: XProjection,
             canonicalKeyVariables: canonicalKey ?? XKey,
-            runIdentitySeed: runIdentitySeed);
+            runIdentitySeed: runIdentitySeed,
+            maximumDeliverableRows: maximumDeliverableRows);
     }
 
     private static IReadOnlyList<RepeatedEnumerationResolvedEvidence> Pages(
