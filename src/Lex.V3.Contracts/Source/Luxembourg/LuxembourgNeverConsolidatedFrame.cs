@@ -6,44 +6,60 @@ using Lex.V3.Contracts.Source.Core;
 namespace Lex.V3.Contracts.Source.Luxembourg;
 
 /// <summary>
-/// What this frame can honestly say about one act's consolidation history. Closed at three members.
+/// What one record says: which enumeration was cited for an act, and what that enumeration
+/// delivered. Closed at three members.
 /// </summary>
 /// <remarks>
+/// <para>
+/// THESE MEMBERS NAME THE RECORD, NOT A PROVEN FACT ABOUT THE ACT, AND THE RENAME IS THE WHOLE
+/// POINT. They used to read <c>EnumeratedAndNeverConsolidated</c> / <c>EnumeratedAndConsolidated</c>,
+/// documented as "a proven-whole consolidation enumeration FOR THIS ACT delivered nothing". Nothing
+/// in this build can establish that: an <see cref="AbsenceFamilyEnumerationProof"/> carries a
+/// caller-chosen <c>FamilyKey</c> and no partition bounds, so a zero-row proof of an unrelated
+/// family satisfies every check here. Recording that limitation in remarks - which an earlier head
+/// did - does not unmake a claim the member name is still making. The names now say exactly what is
+/// established: an enumeration was cited, and it delivered this many rows.
+/// </para>
 /// <para>
 /// NEVER-CONSOLIDATED IS AN ABSENCE CLAIM, AND THIS REPOSITORY ALREADY KNOWS WHAT ABSENCE COSTS.
 /// <see cref="LuxembourgDraftPropertyAbsenceReason.EnumeratedAndNotHeld"/> is documented as "this
 /// batch's enumeration was proven whole and delivered no row for this pair", and Decision 64 exists
-/// because an empty list and "we never asked" are indistinguishable to a reader. "This act was never
-/// consolidated" is the same shape of claim, so it carries the same cost: only a proven-whole
-/// enumeration that delivered nothing can support it.
+/// because an empty list and "we never asked" are indistinguishable to a reader. The absence claim
+/// E10 wants is exactly that shape, and it is not available until an enumeration's scope can be tied
+/// to an act. #419 carries that work.
 /// </para>
 /// <para>
-/// The member that does the work here is <see cref="EnumerationUnproven"/>. Without it, an act nobody
-/// had checked would be indistinguishable from an act checked and found never consolidated - and the
-/// second is a publishable legal claim while the first is a gap in our own coverage.
+/// The member that does the work here is <see cref="NoEnumerationCited"/>. Without it, an act nobody
+/// had checked would be indistinguishable from an act checked and found nothing - and the two must
+/// never merge, whatever the first one is eventually allowed to claim.
 /// </para>
 /// <para>
 /// <c>OutsideClassManifest</c> was retired with the class manifest itself. It named membership of a
-/// population this contract no longer claims to know, so keeping it would have left a member whose
-/// referent had been deleted.
+/// population this contract no longer claims to know.
 /// </para>
 /// </remarks>
 public enum LuxembourgNeverConsolidatedDisposition
 {
-    /// <summary>A proven-whole consolidation enumeration for this act delivered nothing.</summary>
-    [JsonStringEnumMemberName("enumerated_and_never_consolidated")]
-    EnumeratedAndNeverConsolidated = 1,
-
-    /// <summary>A proven-whole enumeration delivered at least one consolidation.</summary>
-    [JsonStringEnumMemberName("enumerated_and_consolidated")]
-    EnumeratedAndConsolidated = 2,
+    /// <summary>
+    /// The enumeration cited for this act delivered no consolidation. This says what that
+    /// enumeration returned; it does not establish that the enumeration was scoped to this act.
+    /// </summary>
+    [JsonStringEnumMemberName("cited_enumeration_delivered_no_consolidation")]
+    CitedEnumerationDeliveredNoConsolidation = 1,
 
     /// <summary>
-    /// No completed enumeration exists for this act. Supports neither claim, and is why a reader can
-    /// tell a gap in our coverage from a finding about the publisher.
+    /// The enumeration cited for this act delivered at least one consolidation. Same limit as
+    /// above: it says what came back, not what it was asked about.
     /// </summary>
-    [JsonStringEnumMemberName("enumeration_unproven")]
-    EnumerationUnproven = 3,
+    [JsonStringEnumMemberName("cited_enumeration_delivered_consolidations")]
+    CitedEnumerationDeliveredConsolidations = 2,
+
+    /// <summary>
+    /// No enumeration is cited for this act at all. Supports nothing, and is how a reader tells a
+    /// gap in our coverage from a finding about the publisher.
+    /// </summary>
+    [JsonStringEnumMemberName("no_enumeration_cited")]
+    NoEnumerationCited = 3,
 }
 
 /// <summary>
@@ -97,21 +113,23 @@ public sealed record LuxembourgActClassRef
 /// A PROOF, NOT A REFERENCE, AND THE DISPOSITION MUST AGREE WITH IT.
 /// <see cref="AbsenceFamilyEnumerationProof"/> can only be minted from an
 /// <see cref="EnumerationDeliveryComparison"/> whose two independent passes agreed below the row cap,
-/// which is what makes it a proof rather than a claim. And once it is a proof it says how many
-/// consolidations that enumeration delivered, so the disposition becomes a statement the evidence
-/// either supports or contradicts: <see cref="LuxembourgNeverConsolidatedDisposition.EnumeratedAndNeverConsolidated"/>
+/// which is what makes it a proof rather than a claim. And once it is a proof it says how many rows
+/// that enumeration delivered, so the disposition becomes a statement the evidence either supports
+/// or contradicts:
+/// <see cref="LuxembourgNeverConsolidatedDisposition.CitedEnumerationDeliveredNoConsolidation"/>
 /// requires a delivered row count of zero and
-/// <see cref="LuxembourgNeverConsolidatedDisposition.EnumeratedAndConsolidated"/> at least one.
-/// "Never consolidated" beside a proof that delivered four consolidations is not a disagreement to
-/// record; it is a contradiction inside one argument list, and it refuses here.
+/// <see cref="LuxembourgNeverConsolidatedDisposition.CitedEnumerationDeliveredConsolidations"/> at
+/// least one. A member that names what the cited enumeration returned, beside a proof that returned
+/// something else, is a contradiction inside one argument list and refuses here.
 /// </para>
 /// <para>
-/// WHAT THIS DOES NOT ESTABLISH, AND THE REASON IT IS SAID HERE RATHER THAN DISCOVERED LATER: that
-/// the supplied proof enumerated THIS act rather than some other. A proof carries
-/// <c>FamilyKey</c> - a caller-chosen partition key - and no partition bounds, so nothing in this
-/// build can tie an enumeration's scope to an act identity. A zero-row proof of an unrelated family
-/// would satisfy every check above. That is a real substitution and it is open, which is exactly why
-/// this contract records dispositions and refuses to count a population from them.
+/// WHAT THIS DOES NOT ESTABLISH, AND WHY THE MEMBER NAMES WERE CHANGED RATHER THAN ANNOTATED: that
+/// the supplied proof enumerated THIS act. A proof carries <c>FamilyKey</c> - a caller-chosen
+/// partition key - and no partition bounds, so nothing in this build can tie an enumeration's scope
+/// to an act identity, and a zero-row proof of an unrelated family satisfies every check above. An
+/// earlier head said exactly this in remarks while the members still read
+/// "enumerated and never consolidated", which is an act-specific legal claim. A limitation written
+/// beside a claim does not retract the claim; the names had to stop making it.
 /// </para>
 /// </remarks>
 public sealed record LuxembourgNeverConsolidatedEntry
@@ -133,8 +151,8 @@ public sealed record LuxembourgNeverConsolidatedEntry
         Disposition = ContractValidation.RequireDefined(disposition, nameof(disposition));
 
         var enumerated =
-            disposition is LuxembourgNeverConsolidatedDisposition.EnumeratedAndNeverConsolidated
-                or LuxembourgNeverConsolidatedDisposition.EnumeratedAndConsolidated;
+            disposition is LuxembourgNeverConsolidatedDisposition.CitedEnumerationDeliveredNoConsolidation
+                or LuxembourgNeverConsolidatedDisposition.CitedEnumerationDeliveredConsolidations;
         if (enumerated != (enumerationCompletionProof is not null))
         {
             throw new ArgumentException(
@@ -150,14 +168,14 @@ public sealed record LuxembourgNeverConsolidatedEntry
         // disagreement between sources - it is contradicting itself in one argument list.
         if (enumerationCompletionProof is { } proof)
         {
-            var neverConsolidated =
-                disposition == LuxembourgNeverConsolidatedDisposition.EnumeratedAndNeverConsolidated;
-            if (neverConsolidated != (proof.DeliveredRowCount == 0))
+            var deliveredNone =
+                disposition == LuxembourgNeverConsolidatedDisposition.CitedEnumerationDeliveredNoConsolidation;
+            if (deliveredNone != (proof.DeliveredRowCount == 0))
             {
                 throw new ArgumentException(
-                    neverConsolidated
-                        ? "A never-consolidated disposition requires a proof that delivered no consolidation."
-                        : "A consolidated disposition requires a proof that delivered at least one consolidation.",
+                    deliveredNone
+                        ? "This member says the cited enumeration delivered nothing; its proof delivered rows."
+                        : "This member says the cited enumeration delivered rows; its proof delivered none.",
                     nameof(enumerationCompletionProof));
             }
         }
@@ -306,16 +324,23 @@ public sealed class LuxembourgNeverConsolidatedFrame
     /// Whether two completion proofs are the same claim about the same enumeration.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// NOT REFERENCE EQUALITY, AND THE DIFFERENCE IS NOT ACADEMIC.
     /// <see cref="AbsenceFamilyEnumerationProof"/> is a class with no value equality, so two proofs
     /// minted from one enumeration by two callers are different objects. Comparing the objects would
     /// make re-presenting an act with its own evidence a DISAGREEMENT, which turns an idempotent
     /// replay into a refusal for no reason a reader could defend.
+    /// </para>
     /// <para>
-    /// What makes two proofs the same claim is what a proof is about: the family it enumerated, the
-    /// acquisition run that produced it, how many rows that run delivered, and the digest over those
-    /// rows' canonical keys. Two proofs agreeing on all four cannot be about different enumerations;
-    /// two differing on any one of them are two claims.
+    /// EVERY FIELD OF THE CLAIM, NOT A CHOSEN FOUR. An earlier head compared family, run, row count
+    /// and key digest, and omitted <see cref="AbsenceFamilyEnumerationProof.RetainedFloor"/> and the
+    /// two profile references. Review minted two proofs from one delivery differing only in retention
+    /// class and the weaker one replayed as identical, silently keeping the stronger. Retention class
+    /// is part of what a proof asserts - <c>Floored</c> and <c>RetainedUnenforced</c> are different
+    /// custody guarantees - so two proofs differing in it are two claims. The rule is now the whole
+    /// public surface of the proof, and
+    /// <c>LuxembourgNeverConsolidatedFrameTests.EveryProofFieldParticipatesInTheClaimComparison</c>
+    /// fails if that surface grows a field this comparison does not read.
     /// </para>
     /// </remarks>
     private static bool SameEnumeration(
@@ -330,7 +355,10 @@ public sealed class LuxembourgNeverConsolidatedFrame
             && right is not null
             && string.Equals(left.FamilyKey, right.FamilyKey, StringComparison.Ordinal)
             && left.AcquisitionRunRef == right.AcquisitionRunRef
+            && left.InterpretationProfileRef == right.InterpretationProfileRef
+            && left.SourceProfileRef == right.SourceProfileRef
             && left.DeliveredRowCount == right.DeliveredRowCount
-            && string.Equals(left.CanonicalKeyDigest, right.CanonicalKeyDigest, StringComparison.Ordinal);
+            && string.Equals(left.CanonicalKeyDigest, right.CanonicalKeyDigest, StringComparison.Ordinal)
+            && left.RetainedFloor == right.RetainedFloor;
     }
 }

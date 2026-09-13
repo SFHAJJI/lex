@@ -106,8 +106,8 @@ public sealed class LuxembourgNeverConsolidatedFrameTests
     {
         foreach (var disposition in new[]
         {
-            LuxembourgNeverConsolidatedDisposition.EnumeratedAndNeverConsolidated,
-            LuxembourgNeverConsolidatedDisposition.EnumeratedAndConsolidated,
+            LuxembourgNeverConsolidatedDisposition.CitedEnumerationDeliveredNoConsolidation,
+            LuxembourgNeverConsolidatedDisposition.CitedEnumerationDeliveredConsolidations,
         })
         {
             Assert.ThrowsExactly<ArgumentException>(
@@ -123,7 +123,7 @@ public sealed class LuxembourgNeverConsolidatedFrameTests
             () => new LuxembourgNeverConsolidatedEntry(
                 ActOne,
                 new LuxembourgActClassRef(Loi),
-                LuxembourgNeverConsolidatedDisposition.EnumerationUnproven,
+                LuxembourgNeverConsolidatedDisposition.NoEnumerationCited,
                 Proof(0)),
             "'nobody enumerated this' must not carry evidence suggesting somebody had.");
 
@@ -142,7 +142,7 @@ public sealed class LuxembourgNeverConsolidatedFrameTests
             () => new LuxembourgNeverConsolidatedEntry(
                 ActOne,
                 new LuxembourgActClassRef(Loi),
-                LuxembourgNeverConsolidatedDisposition.EnumeratedAndNeverConsolidated,
+                LuxembourgNeverConsolidatedDisposition.CitedEnumerationDeliveredNoConsolidation,
                 Proof(2)),
             "never consolidated, beside a proof that delivered two consolidations.");
 
@@ -150,7 +150,7 @@ public sealed class LuxembourgNeverConsolidatedFrameTests
             () => new LuxembourgNeverConsolidatedEntry(
                 ActOne,
                 new LuxembourgActClassRef(Loi),
-                LuxembourgNeverConsolidatedDisposition.EnumeratedAndConsolidated,
+                LuxembourgNeverConsolidatedDisposition.CitedEnumerationDeliveredConsolidations,
                 Proof(0)),
             "consolidated, beside a proof that delivered nothing.");
     }
@@ -203,7 +203,7 @@ public sealed class LuxembourgNeverConsolidatedFrameTests
             () => new LuxembourgNeverConsolidatedEntry(
                 notAnIri,
                 new LuxembourgActClassRef(Loi),
-                LuxembourgNeverConsolidatedDisposition.EnumerationUnproven,
+                LuxembourgNeverConsolidatedDisposition.NoEnumerationCited,
                 null));
     }
 
@@ -222,7 +222,7 @@ public sealed class LuxembourgNeverConsolidatedFrameTests
             () => new LuxembourgNeverConsolidatedEntry(
                 blank,
                 new LuxembourgActClassRef(Loi),
-                LuxembourgNeverConsolidatedDisposition.EnumerationUnproven,
+                LuxembourgNeverConsolidatedDisposition.NoEnumerationCited,
                 null));
     }
 
@@ -286,7 +286,7 @@ public sealed class LuxembourgNeverConsolidatedFrameTests
         var other = new LuxembourgNeverConsolidatedEntry(
             ActOne,
             new LuxembourgActClassRef(Loi),
-            LuxembourgNeverConsolidatedDisposition.EnumeratedAndNeverConsolidated,
+            LuxembourgNeverConsolidatedDisposition.CitedEnumerationDeliveredNoConsolidation,
             Proof(0, runIdentitySeed: 931));
 
         Assert.IsFalse(frame.TryAdmit(other, out var refusal));
@@ -319,6 +319,138 @@ public sealed class LuxembourgNeverConsolidatedFrameTests
         Assert.IsTrue(frame.TryAdmit(second, out var refusal));
         Assert.AreEqual(LuxembourgNeverConsolidatedAdmitRefusal.None, refusal);
         Assert.HasCount(1, frame.Entries);
+    }
+
+    /// <summary>
+    /// Two proofs of one delivery differing only in retention class are two claims, not one.
+    /// </summary>
+    /// <remarks>
+    /// Found in review, not by me. The comparison read family, run, row count and key digest and
+    /// omitted <c>RetainedFloor</c>, so a proof retained under the weaker custody class replayed as
+    /// identical to a floored one and the stronger was silently kept. <c>Floored</c> and
+    /// <c>RetainedUnenforced</c> are different guarantees about whether the retained bytes survive,
+    /// so a record that treats them as interchangeable is asserting a durability it was not given.
+    /// </remarks>
+    [TestMethod]
+    public void AProofRetainedUnderAWeakerCustodyClassIsADifferentClaim()
+    {
+        var frame = new LuxembourgNeverConsolidatedFrame();
+        var floored = new LuxembourgNeverConsolidatedEntry(
+            ActOne,
+            new LuxembourgActClassRef(Loi),
+            LuxembourgNeverConsolidatedDisposition.CitedEnumerationDeliveredNoConsolidation,
+            Proof(0, floor: CustodyMembership.Floored));
+        var unenforced = new LuxembourgNeverConsolidatedEntry(
+            ActOne,
+            new LuxembourgActClassRef(Loi),
+            LuxembourgNeverConsolidatedDisposition.CitedEnumerationDeliveredNoConsolidation,
+            Proof(0, floor: CustodyMembership.RetainedUnenforced));
+
+        // The premise: the two proofs differ in EXACTLY this one field, or the test proves nothing
+        // about the field it names.
+        Assert.AreEqual(
+            floored.EnumerationCompletionProof!.CanonicalKeyDigest,
+            unenforced.EnumerationCompletionProof!.CanonicalKeyDigest);
+        Assert.AreEqual(
+            floored.EnumerationCompletionProof.AcquisitionRunRef,
+            unenforced.EnumerationCompletionProof.AcquisitionRunRef);
+        Assert.AreNotEqual(
+            floored.EnumerationCompletionProof.RetainedFloor,
+            unenforced.EnumerationCompletionProof.RetainedFloor);
+
+        Assert.IsTrue(frame.TryAdmit(floored, out _));
+        Assert.IsFalse(frame.TryAdmit(unenforced, out var refusal));
+        Assert.AreEqual(
+            LuxembourgNeverConsolidatedAdmitRefusal.CompletionEvidenceDisagrees, refusal);
+        Assert.AreEqual(
+            CustodyMembership.Floored,
+            frame.Entries[0].EnumerationCompletionProof!.RetainedFloor,
+            "and the stronger claim is not quietly replaced by the weaker one.");
+    }
+
+    /// <summary>
+    /// Every field a proof publishes takes part in deciding whether two proofs are one claim.
+    /// </summary>
+    /// <remarks>
+    /// The omission review found was a LIST going stale, not logic going wrong: four of the proof's
+    /// seven public fields were compared. A behavioural test per field would still say nothing about
+    /// a field nobody has added yet, so this pins the surface against the comparison's own source.
+    /// </remarks>
+    [TestMethod]
+    public void EveryProofFieldParticipatesInTheClaimComparison()
+    {
+        var fields = typeof(AbsenceFamilyEnumerationProof)
+            .GetProperties(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
+            .Select(property => property.Name)
+            .OrderBy(name => name, StringComparer.Ordinal)
+            .ToArray();
+
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "AcquisitionRunRef",
+                "CanonicalKeyDigest",
+                "DeliveredRowCount",
+                "FamilyKey",
+                "InterpretationProfileRef",
+                "RetainedFloor",
+                "SourceProfileRef",
+            },
+            fields,
+            "a proof that grew a field must also be compared on it, or two different claims "
+            + "become one replay.");
+
+        var comparison = MethodBody(
+            ReadSource("src/Lex.V3.Contracts/Source/Luxembourg/LuxembourgNeverConsolidatedFrame.cs"),
+            "private static bool SameEnumeration(");
+
+        foreach (var field in fields)
+        {
+            StringAssert.Contains(
+                comparison,
+                "left." + field,
+                $"SameEnumeration does not read {field}.");
+        }
+    }
+
+    /// <summary>One method's brace-matched body, so a mention elsewhere cannot satisfy the pin.</summary>
+    private static string MethodBody(string source, string signature)
+    {
+        var start = source.IndexOf(signature, StringComparison.Ordinal);
+        Assert.IsGreaterThanOrEqualTo(0, start, $"'{signature}' is not in the source read.");
+
+        var open = source.IndexOf('{', start);
+        Assert.IsGreaterThanOrEqualTo(0, open, "the method has no body.");
+
+        var depth = 0;
+        for (var index = open; index < source.Length; index++)
+        {
+            if (source[index] == '{')
+            {
+                depth++;
+            }
+            else if (source[index] == '}' && --depth == 0)
+            {
+                return source[open..index];
+            }
+        }
+
+        Assert.Fail("the method body is unterminated.");
+        return string.Empty;
+    }
+
+    private static string ReadSource(string repositoryRelativePath)
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "Lex.V3.slnx")))
+        {
+            directory = directory.Parent;
+        }
+
+        var root = directory?.FullName
+            ?? throw new InvalidOperationException("Checkout root not found.");
+        return File.ReadAllText(
+            Path.Combine(root, repositoryRelativePath.Replace('/', Path.DirectorySeparatorChar)));
     }
 
     /// <summary>
@@ -382,7 +514,7 @@ public sealed class LuxembourgNeverConsolidatedFrameTests
             () => new LuxembourgNeverConsolidatedEntry(
                 ActOne,
                 null!,
-                LuxembourgNeverConsolidatedDisposition.EnumerationUnproven,
+                LuxembourgNeverConsolidatedDisposition.NoEnumerationCited,
                 null));
         Assert.ThrowsExactly<ArgumentNullException>(
             () => new LuxembourgNeverConsolidatedFrame().TryAdmit(null!, out _));
@@ -402,9 +534,9 @@ public sealed class LuxembourgNeverConsolidatedFrameTests
         CollectionAssert.AreEqual(
             new[]
             {
-                "\"enumerated_and_never_consolidated\"",
-                "\"enumerated_and_consolidated\"",
-                "\"enumeration_unproven\"",
+                "\"cited_enumeration_delivered_no_consolidation\"",
+                "\"cited_enumeration_delivered_consolidations\"",
+                "\"no_enumeration_cited\"",
             },
             Enum.GetValues<LuxembourgNeverConsolidatedDisposition>()
                 .Select(member => ContractJson.Serialize(member))
@@ -429,19 +561,19 @@ public sealed class LuxembourgNeverConsolidatedFrameTests
     private static LuxembourgNeverConsolidatedEntry NeverConsolidated(string act, string actClass) =>
         new(act,
             new LuxembourgActClassRef(actClass),
-            LuxembourgNeverConsolidatedDisposition.EnumeratedAndNeverConsolidated,
+            LuxembourgNeverConsolidatedDisposition.CitedEnumerationDeliveredNoConsolidation,
             Proof(0));
 
     private static LuxembourgNeverConsolidatedEntry Consolidated(string act, string actClass) =>
         new(act,
             new LuxembourgActClassRef(actClass),
-            LuxembourgNeverConsolidatedDisposition.EnumeratedAndConsolidated,
+            LuxembourgNeverConsolidatedDisposition.CitedEnumerationDeliveredConsolidations,
             Proof(2));
 
     private static LuxembourgNeverConsolidatedEntry Unproven(string act, string actClass) =>
         new(act,
             new LuxembourgActClassRef(actClass),
-            LuxembourgNeverConsolidatedDisposition.EnumerationUnproven,
+            LuxembourgNeverConsolidatedDisposition.NoEnumerationCited,
             null);
 
     /// <summary>
@@ -454,7 +586,10 @@ public sealed class LuxembourgNeverConsolidatedFrameTests
     /// can only be minted from an <see cref="EnumerationDeliveryComparison"/> whose two independent
     /// passes agreed, so the fixture now pays the same price a caller does.
     /// </remarks>
-    private static AbsenceFamilyEnumerationProof Proof(int rows, int runIdentitySeed = 930)
+    private static AbsenceFamilyEnumerationProof Proof(
+        int rows,
+        int runIdentitySeed = 930,
+        CustodyMembership floor = CustodyMembership.Floored)
     {
         var fixture = rows == 0
             ? new RepeatedEnumerationDeliveryProofTests.Fixture(
@@ -473,7 +608,7 @@ public sealed class LuxembourgNeverConsolidatedFrameTests
 
         var delivery = fixture.Create(cursors, cursors);
         var proof = AbsenceFamilyEnumerationProof.TryCreate(
-            "laws", delivery, CustodyMembership.Floored, out var refusal);
+            "laws", delivery, floor, out var refusal);
         Assert.IsNotNull(proof, $"the fixture must mint an admitting proof: {refusal}");
         return proof!;
     }

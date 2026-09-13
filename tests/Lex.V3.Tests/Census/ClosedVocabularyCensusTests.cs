@@ -526,8 +526,8 @@ public sealed class ClosedVocabularyCensusTests
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgNeverConsolidatedAdmitRefusal: None, "
                     + "DispositionDisagrees, ActClassDisagrees, CompletionEvidenceDisagrees",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgNeverConsolidatedDisposition: "
-                    + "EnumeratedAndNeverConsolidated, EnumeratedAndConsolidated, "
-                    + "EnumerationUnproven",
+                    + "CitedEnumerationDeliveredNoConsolidation, "
+                    + "CitedEnumerationDeliveredConsolidations, NoEnumerationCited",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgOpinionHostRobotsState: "
                     + "PermittedByStatedPolicy, NoStatedPolicy",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgOpinionLocatorRefusal: None, "
