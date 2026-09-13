@@ -371,6 +371,172 @@ public sealed class LuxembourgConsolidationByActDiscoveryPlanTests
         Assert.StartsWith(LuxembourgConsolidationByActDiscoveryPlan.AdmittedActIriPrefix, Act);
     }
 
+    /// <summary>
+    /// HOSTILE CASE: a spelling the parser would rewrite into the admitted one does not mint a
+    /// second key for the same act.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// FOUND BY CODEX'S REVIEW OF THE SECOND HEAD, at the backslash spelling below. The raw prefix
+    /// check admitted <c>loi\2017/...</c> beside <c>loi/2017/...</c>; <c>System.Uri</c> reads both
+    /// as one absolute URI, and the plan digested the raw bytes of each - two keys for one act, the
+    /// split-family defect the method exists to close, reintroduced one directory deeper. The
+    /// admitted value is now the one text that IS its own parsed absolute spelling, byte for byte.
+    /// </para>
+    /// <para>
+    /// The dot-segment spellings are here for the mutation, not for the publisher. A backslash is
+    /// refused twice over - it is also outside the admitted alphabet - so deleting the
+    /// parsed-spelling comparison alone would leave the backslash case green. <c>loi/./2017</c> and
+    /// <c>loi/../loi/2017</c> are made of admitted characters only, and are refused by that
+    /// comparison and by nothing else.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void ASpellingTheParserWouldRewriteDoesNotMintASecondKey()
+    {
+        var plan = LuxembourgConsolidationByActDiscoveryPlan.Create();
+        var admitted = new Uri(Act, UriKind.Absolute).AbsoluteUri;
+        Assert.AreEqual(Act, admitted, "the premise: the admitted spelling is its own parsed form.");
+
+        foreach (var (label, variant, refusedBy) in new[]
+        {
+            ("backslash", "http://data.legilux.public.lu/eli/etat/leg/loi\\2017/03/14/a439/jo",
+                "admitted alphabet"),
+            ("dot segment", "http://data.legilux.public.lu/eli/etat/leg/loi/./2017/03/14/a439/jo",
+                "parsed absolute form"),
+            ("parent segment", "http://data.legilux.public.lu/eli/etat/leg/loi/../loi/2017/03/14/a439/jo",
+                "parsed absolute form"),
+        })
+        {
+            Assert.AreEqual(
+                admitted, new Uri(variant, UriKind.Absolute).AbsoluteUri,
+                $"the premise for '{label}': the parser reads it as the same act.");
+            Assert.AreEqual(
+                PublisherId.LuLegilux, OfficialIdentifier.EliMintedBy(variant),
+                $"and for '{label}' the build's ELI authority admits it, which is why refusing it "
+                + "is a decision.");
+            var thrown = Assert.ThrowsExactly<ArgumentException>(
+                () => LuxembourgConsolidationByActDiscoveryPlan.PartitionKeyFor(variant),
+                $"'{label}' would mint a second key for one act.");
+            Assert.AreEqual("publisherActIri", thrown.ParamName, "refused by the selection validator.");
+            StringAssert.Contains(
+                thrown.Message, refusedBy,
+                $"'{label}' is refused by the rule that owns it, so that rule is established here.");
+            Assert.ThrowsExactly<ArgumentException>(
+                () => plan.BindCount(variant, LuxembourgQueryPass.Pass1, NewUrn(), NewUrn(), RendererSource()),
+                $"'{label}' must not reach a bound request either.");
+        }
+    }
+
+    /// <summary>
+    /// HOSTILE CASE: every character SPARQL's IRIREF excludes - and the three that would let one
+    /// act spell itself two ways - refuses before a bound request exists.
+    /// </summary>
+    /// <remarks>
+    /// Codex's review reproduced a bound request carrying <c>&lt;...leg/x"y&gt;</c>: the renderer's
+    /// own term check refused only angle brackets and whitespace, and IRIREF excludes more than
+    /// that. Each character below is tried at the one door every key and every request passes
+    /// through, and the exception's parameter name pins that it is the selection validator that
+    /// refuses, not a later stage that happened to choke on the same byte.
+    /// </remarks>
+    [TestMethod]
+    public void EveryCharacterForbiddenInASparqlIriRefRefusesBeforeABoundRequestExists()
+    {
+        var plan = LuxembourgConsolidationByActDiscoveryPlan.Create();
+        foreach (var (label, character) in new[]
+        {
+            ("less-than", '<'), ("greater-than", '>'), ("double quote", '"'),
+            ("left brace", '{'), ("right brace", '}'), ("pipe", '|'), ("caret", '^'),
+            ("backtick", '`'), ("backslash", '\\'),
+            ("space", ' '), ("tab", '\t'), ("control 0x01", '\u0001'), ("control 0x1f", '\u001f'),
+            ("delete 0x7f", '\u007f'), ("non-ascii e-acute", '\u00e9'),
+            ("query", '?'), ("fragment", '#'), ("percent escape", '%'),
+        })
+        {
+            var variant = LuxembourgConsolidationByActDiscoveryPlan.AdmittedActIriPrefix
+                + "loi/2017/03/14/a439" + character + "/jo";
+
+            var thrown = Assert.ThrowsExactly<ArgumentException>(
+                () => LuxembourgConsolidationByActDiscoveryPlan.PartitionKeyFor(variant),
+                $"'{label}' must not be keyed.");
+            Assert.AreEqual(
+                "publisherActIri", thrown.ParamName,
+                $"'{label}' is refused by the selection validator itself.");
+            StringAssert.Contains(
+                thrown.Message, "admitted alphabet",
+                $"'{label}' is refused by the alphabet rule, not left to the parser's escaping.");
+            thrown = Assert.ThrowsExactly<ArgumentException>(
+                () => plan.BindCount(variant, LuxembourgQueryPass.Pass1, NewUrn(), NewUrn(), RendererSource()),
+                $"'{label}' must not reach a bound request.");
+            Assert.AreEqual("publisherActIri", thrown.ParamName);
+        }
+    }
+
+    /// <summary>
+    /// HOSTILE CASE: a hand-built input carrying a forbidden character does not render, because
+    /// the renderer's key recomputation runs the one selection validator.
+    /// </summary>
+    /// <remarks>
+    /// The first head kept a private character check in the renderer for exactly this path, and
+    /// review showed it was weaker than IRIREF. It is gone: the recomputation of the partition key
+    /// from the bound parameter - design review condition 2 - calls <c>PartitionKeyFor</c>, so the
+    /// rule that guards the plan's doors guards the renderer too, and there is no second, narrower
+    /// rule to drift from it.
+    /// </remarks>
+    [TestMethod]
+    public void AHandBuiltInputCarryingAForbiddenCharacterDoesNotRender()
+    {
+        var plan = LuxembourgConsolidationByActDiscoveryPlan.Create();
+        var renderer = new LuxembourgConsolidationByActSparqlRenderer(plan, isPage: false, RendererSource());
+        var opaque = new MachineResponseCardinality(MachineResponseCardinalityKind.OpaqueBody, null, null, null);
+        var hostile = LuxembourgConsolidationByActDiscoveryPlan.AdmittedActIriPrefix + "x\"y";
+        var input = MachineQueryInputArtifact.Create(
+            NewUrn(),
+            plan.CountQueryFamilyRef,
+            LuxembourgConsolidationByActDiscoveryPlan.PartitionKeyFor(Act),
+            opaque,
+            new MachineQueryParameter[]
+            {
+                new(LuxembourgConsolidationByActDiscoveryPlan.ActSelectionParameterName,
+                    MachineQueryParameterKind.PublisherLiteral, null, hostile, plan.ArtifactRef),
+                new("pass_id", MachineQueryParameterKind.BoundedInteger,
+                    (int)LuxembourgQueryPass.Pass1, null, plan.ArtifactRef),
+            });
+
+        var thrown = Assert.ThrowsExactly<ArgumentException>(() => renderer.RenderInput(input, opaque));
+        StringAssert.Contains(thrown.Message, "one admitted spelling");
+    }
+
+    /// <summary>The admitted spellings are their own parsed forms, and the bare branch is no act.</summary>
+    /// <remarks>
+    /// The parsed-spelling comparison must not be tighter than the publisher's real identifiers: a
+    /// law, a regulation and a consolidated code all key. And the prefix alone names a branch, not
+    /// an act; a key for it would be a well-formed key for nothing.
+    /// </remarks>
+    [TestMethod]
+    public void RealActSpellingsKeyAndTheBareBranchDoesNot()
+    {
+        foreach (var act in new[]
+        {
+            Act,
+            OtherAct,
+            "http://data.legilux.public.lu/eli/etat/leg/code/civil/20250101",
+        })
+        {
+            Assert.AreEqual(act, new Uri(act, UriKind.Absolute).AbsoluteUri, "the premise.");
+            Assert.AreEqual(act, LuxembourgConsolidationByActDiscoveryPlan.CanonicalizeSelection(act));
+            Assert.StartsWith(
+                LuxembourgConsolidationByActDiscoveryPlan.PartitionKeyPrefix,
+                LuxembourgConsolidationByActDiscoveryPlan.PartitionKeyFor(act));
+        }
+
+        var thrown = Assert.ThrowsExactly<ArgumentException>(
+            () => LuxembourgConsolidationByActDiscoveryPlan.PartitionKeyFor(
+                LuxembourgConsolidationByActDiscoveryPlan.AdmittedActIriPrefix),
+            "the branch prefix alone names no act.");
+        StringAssert.Contains(thrown.Message, "continue past it");
+    }
+
     /// <summary>The bound-query record cannot be assembled from parts by anyone but the plan.</summary>
     /// <remarks>
     /// A preflight lens assembled one from one act's input artifact beside another act's request,

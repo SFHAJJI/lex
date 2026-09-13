@@ -1,7 +1,6 @@
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
-using Lex.V3.Contracts.Facts;
 using Lex.V3.Contracts.Source.Core;
 
 namespace Lex.V3.Contracts.Source.Luxembourg;
@@ -296,20 +295,78 @@ public sealed class LuxembourgConsolidationByActDiscoveryPlan
         // FactsCommon applies to Cellar authorities for the same reason: System.Uri's own
         // case-folding is what makes a parsed check the wrong tool for a spelling decision.
         //
-        // EliMintedBy is still consulted afterwards so that a string with the right prefix but a
-        // shape that function would not mint (a space, for instance) is still refused by the
-        // build's one authority on what an ELI is.
+        // AND ONE PARSED SPELLING TOO, WHICH THE RAW PREFIX ALONE DID NOT GIVE. Codex's review of
+        // the second head reproduced what that check still admitted: `loi\2017/...` beside
+        // `loi/2017/...`. System.Uri reads both as one absolute URI - it rewrites the backslash -
+        // and this method returned the raw bytes of each, so one act minted two keys: the
+        // split-family defect this method exists to close, reintroduced one directory deeper. So
+        // the offered text must now equal, byte for byte, what the parser would print back for it.
+        // A backslash, a dot segment, an explicit default port or anything else the parser would
+        // rewrite is a second spelling and is refused. This is still not normalization: nothing is
+        // rewritten and returned; the caller's bytes either are the parsed form or they throw.
+        //
+        // AND QUERY-SAFE, BEFORE ANY REQUEST EXISTS. The value ends up inside <...> in a SPARQL
+        // request, and IRIREF (SPARQL 1.1 grammar rule 139) excludes <, >, ", {, }, |, ^, the
+        // backtick, the backslash and every control character up to space. The same review
+        // reproduced a bound request carrying `<...leg/x"y>`: the renderer's own term check
+        // refused only angle brackets and whitespace. The admitted alphabet is therefore printable
+        // ASCII minus the IRIREF exclusions - the discipline FactsCommon.IsExactUriSpelling applies
+        // to Cellar identifiers - and minus three more: ? and # (a Legilux act ELI carries no query
+        // or fragment, and either would let one act spell itself with a suffix) and % (an escaped
+        // byte is a second spelling of an unescaped one, and the publisher mints these from plain
+        // ASCII). Non-ASCII is outside the alphabet for the same reason: the parser would escape it.
+        //
+        // THREE CHECKS IN ORDER, EACH REFUSING IN ITS OWN WORDS. The order matters twice: the
+        // alphabet runs before the parser sees the text, so nothing here depends on how System.Uri
+        // copes with a control character; and each refusal names the rule that fired, so a test can
+        // pin WHICH rule refused a spelling. That is what makes every clause here establishable by
+        // deletion - most IRIREF exclusions would also fail the parsed-form comparison (the parser
+        // escapes them), and one shared message would let the alphabet rule be deleted unnoticed.
+        //
+        // OfficialIdentifier.EliMintedBy IS NO LONGER CONSULTED HERE, and that is deliberate. The
+        // prefix fixes the scheme, the host and the /eli/ path it tests; the alphabet excludes the
+        // space it refuses. Nothing it would reject can reach the end of this method, so a call
+        // would be a guard no deletion could establish. The tests still premise their hostile
+        // spellings on that authority admitting them, which is where it is rightly consulted.
         if (!publisherActIri.StartsWith(AdmittedActIriPrefix, StringComparison.Ordinal) ||
-            OfficialIdentifier.EliMintedBy(publisherActIri) != PublisherId.LuLegilux)
+            publisherActIri.Length == AdmittedActIriPrefix.Length)
         {
-            throw new ArgumentException(
-                $"'{publisherActIri}' is not a Legilux act ELI in the one admitted spelling, "
-                + $"beginning '{AdmittedActIriPrefix}'.",
-                nameof(publisherActIri));
+            throw Refused(
+                publisherActIri, nameof(publisherActIri),
+                $"it does not begin '{AdmittedActIriPrefix}' and continue past it");
+        }
+
+        if (!publisherActIri.All(IsAdmittedActIriCharacter))
+        {
+            throw Refused(
+                publisherActIri, nameof(publisherActIri),
+                "it carries a character outside the admitted alphabet, which is printable ASCII "
+                + "minus SPARQL IRIREF's exclusions and minus '?', '#' and '%'");
+        }
+
+        if (!Uri.TryCreate(publisherActIri, UriKind.Absolute, out var parsed) ||
+            !string.Equals(parsed.AbsoluteUri, publisherActIri, StringComparison.Ordinal))
+        {
+            throw Refused(
+                publisherActIri, nameof(publisherActIri),
+                "it is not equal to its own parsed absolute form");
         }
 
         return publisherActIri;
     }
+
+    private static ArgumentException Refused(string offered, string parameterName, string because) =>
+        new($"'{offered}' is not a Legilux act ELI in the one admitted spelling: {because}.", parameterName);
+
+    /// <summary>
+    /// Whether a character may appear in an admitted act IRI: printable ASCII, minus every
+    /// character SPARQL's IRIREF excludes, minus the three that would let one act spell itself two
+    /// ways.
+    /// </summary>
+    private static bool IsAdmittedActIriCharacter(char value) =>
+        value is > ' ' and <= '~'
+            and not ('<' or '>' or '"' or '{' or '}' or '|' or '^' or '`' or '\\')
+            and not ('?' or '#' or '%');
 
     /// <summary>
     /// The exact raw prefix every act IRI this family admits begins with, byte for byte.
@@ -637,27 +694,18 @@ internal sealed class LuxembourgConsolidationByActSparqlRenderer : IMachineQuery
             ? EnumerationCursorEnvelope.Decode(value.TextValue)
             : throw new ArgumentException($"The cursor input {name} is missing or invalid.");
 
-    /// <summary>
-    /// The act as a SPARQL IRI term, refusing anything that could escape the term.
-    /// </summary>
+    /// <summary>The act as a SPARQL IRI term.</summary>
     /// <remarks>
-    /// The value reaching here has already passed
-    /// <see cref="LuxembourgConsolidationByActDiscoveryPlan.CanonicalizeSelection"/>, so this cannot
-    /// fire on a value bound through the plan's own doors. It is kept because a renderer is reached
-    /// through <see cref="IMachineQueryRenderer"/> with an input a caller assembled, and a term that
-    /// carried a bracket or whitespace would end the IRI and continue the query.
+    /// NO CHARACTER CHECK OF ITS OWN, AND THAT IS A REPAIR. The first head kept one here - angle
+    /// brackets and whitespace - as a last line for inputs a caller assembled, and Codex's review
+    /// showed it was both weaker than IRIREF and unreachable: <see cref="RenderInput"/> recomputes
+    /// the partition key through
+    /// <see cref="LuxembourgConsolidationByActDiscoveryPlan.PartitionKeyFor"/> before this runs,
+    /// and that call is the one validator, so a value that reaches here has already been admitted
+    /// by the full rule. A second, narrower rule here would be a second opinion that no test could
+    /// establish by deletion, and the review found the gap between the two opinions.
     /// </remarks>
-    private static string SparqlIriTerm(string canonicalIri)
-    {
-        if (string.IsNullOrEmpty(canonicalIri) ||
-            canonicalIri.AsSpan().IndexOfAny('<', '>') >= 0 ||
-            canonicalIri.Any(char.IsWhiteSpace))
-        {
-            throw new ArgumentException("The act selection is not a safe SPARQL IRI term.");
-        }
-
-        return "<" + canonicalIri + ">";
-    }
+    private static string SparqlIriTerm(string canonicalIri) => "<" + canonicalIri + ">";
 
     private static string Replace(string source, string slot, string replacement)
     {
