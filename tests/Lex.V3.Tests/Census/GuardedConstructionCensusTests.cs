@@ -121,6 +121,14 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Artifacts.SyntheticSliceArtifactVerifier::Rejected, "
                     + "method public instance "
                     + "Lex.V3.Artifacts.SyntheticSliceArtifactVerifier::VerifyAsync",
+                "Lex.V3.Contracts.Derivation.EuAnnexBodyDisposition: constructor private instance "
+                    + "Lex.V3.Contracts.Derivation.EuAnnexBodyDisposition::.ctor, "
+                    + "constructor private instance "
+                    + "Lex.V3.Contracts.Derivation.EuAnnexBodyDisposition::.ctor, "
+                    + "method public instance "
+                    + "Lex.V3.Contracts.Derivation.EuAnnexBodyDisposition::<Clone>$, "
+                    + "method public static "
+                    + "Lex.V3.Contracts.Derivation.EuAnnexBodyDisposition::Create",
                 "Lex.V3.Contracts.Derivation.LanguageScopedExpression: constructor private "
                     + "instance Lex.V3.Contracts.Derivation.LanguageScopedExpression::.ctor, "
                     + "method public static "

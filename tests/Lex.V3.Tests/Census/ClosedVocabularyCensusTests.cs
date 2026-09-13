@@ -76,6 +76,8 @@ public sealed class ClosedVocabularyCensusTests
                     + "ImmutableObject1",
                 "Lex.V3.Contracts.Derivation.DerivationProfileComparisonOutcome: Comparable, "
                     + "ProfilesDiffer",
+                "Lex.V3.Contracts.Derivation.EuAnnexBodyDispositionOutcome: Admitted, Rejected, "
+                    + "TextNotAvailable",
                 "Lex.V3.Contracts.Derivation.LanguageScopedExpressionAppendRefusal: None, "
                     + "ConflictingCanonicalContent",
                 "Lex.V3.Contracts.Derivation.LanguageScopedExpressionContribution: "
