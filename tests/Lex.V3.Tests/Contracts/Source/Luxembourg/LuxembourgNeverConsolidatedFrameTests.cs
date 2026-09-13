@@ -576,6 +576,9 @@ public sealed class LuxembourgNeverConsolidatedFrameTests
             LuxembourgNeverConsolidatedDisposition.CitedEnumerationDeliveredNoRows,
             Proof(ActTwo, 0)));
         Assert.AreEqual("enumerationCompletionProof", thrown.ParamName);
+        StringAssert.Contains(
+            thrown.Message, "not this act's per-act consolidation key",
+            "refused by the family-key binding, not by the row-count guard that shares its ParamName.");
     }
 
     /// <summary>The generic inventory family key - the pre-slice-1 default - is refused.</summary>
@@ -593,6 +596,9 @@ public sealed class LuxembourgNeverConsolidatedFrameTests
             LuxembourgNeverConsolidatedDisposition.CitedEnumerationDeliveredNoRows,
             ProofKeyed("laws", 0)));
         Assert.AreEqual("enumerationCompletionProof", thrown.ParamName);
+        StringAssert.Contains(
+            thrown.Message, "not this act's per-act consolidation key",
+            "refused by the family-key binding, not by the row-count guard that shares its ParamName.");
     }
 
     /// <summary>

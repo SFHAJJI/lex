@@ -213,9 +213,19 @@ public sealed record LuxembourgNeverConsolidatedEntry
             }
             catch (ArgumentException inner)
             {
+                // FORWARD CONSTRAINT FOR THE SLICE 4-5 GLUE, stated where it fires: the act recorded
+                // here MUST be the exact string the enumeration was keyed under (the per-act plan's
+                // one admitted http spelling, i.e. LuxembourgConsolidationByActResult.Act), never an
+                // identity re-spelled by a WEMI or class-manifest decoder. This build's general act
+                // vocabulary (RequirePublisherUri, FactsCommon.EliMintedBy) admits an https spelling
+                // of the same real act; feeding that here for a cited enumeration refuses LOUDLY
+                // rather than silently mis-recording - a genuine enumeration would be forced to
+                // NoEnumerationCited, a false gap - so the glue must carry the enumerated spelling
+                // through, and this refusal is the tripwire if it does not.
                 throw new ArgumentException(
                     "A cited enumeration requires the act in the per-act consolidation family's one "
-                    + "admitted spelling; this act is not one that family can be keyed under.",
+                    + "admitted spelling; this act is not one that family can be keyed under. Record "
+                    + "the exact act string the enumeration was keyed under, not a re-spelled identity.",
                     nameof(publisherActIri),
                     inner);
             }
