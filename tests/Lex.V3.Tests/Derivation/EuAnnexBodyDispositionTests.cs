@@ -250,6 +250,16 @@ public sealed class EuAnnexBodyDispositionTests
     }
 
     [TestMethod]
+    public void ANonPdfResponseCannotBeCalledImageOnlyWhenPdfWasRequested()
+    {
+        var fixture = Fixture(responseMediaType: "text/html");
+
+        Assert.ThrowsExactly<ArgumentException>(() => Create(
+            fixture,
+            EuAnnexBodyDispositionOutcome.TextNotAvailable));
+    }
+
+    [TestMethod]
     public void ALocationWithoutAnAnnexTokenIsRejected()
     {
         var fixture = Fixture();
@@ -337,7 +347,8 @@ public sealed class EuAnnexBodyDispositionTests
         string annexValue = "III",
         char byteFill = 'a',
         char profileFill = '8',
-        string? sourcePublisherUri = null)
+        string? sourcePublisherUri = null,
+        string responseMediaType = "application/pdf")
     {
         var sourceObject = new SourceObjectRef(
             SourceCoreSchemaIds.SourceObjectRef,
@@ -374,7 +385,7 @@ public sealed class EuAnnexBodyDispositionTests
             requestDigest,
             address.ResourceUri,
             200,
-            Headers(),
+            Headers(responseMediaType),
             "2026-09-12T20:00:00.0000000Z",
             "2026-09-12T20:00:01.0000000Z",
             new DeclaredContentLengthHttpCompletion(3),
@@ -401,11 +412,11 @@ public sealed class EuAnnexBodyDispositionTests
             ArtifactRef('7', profileFill));
     }
 
-    private static RoutedHttpResponseHeaders Headers()
+    private static RoutedHttpResponseHeaders Headers(string mediaType = "application/pdf")
     {
         var absent = new RoutedHttpAbsentHeader();
         return new RoutedHttpResponseHeaders(
-            new RoutedHttpSingleHeader("application/pdf"),
+            new RoutedHttpSingleHeader(mediaType),
             new RoutedHttpSingleHeader("3"),
             absent,
             absent,

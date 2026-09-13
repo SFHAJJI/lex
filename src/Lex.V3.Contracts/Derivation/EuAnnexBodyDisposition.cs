@@ -155,6 +155,14 @@ public sealed record EuAnnexBodyDisposition
                 nameof(sourceObservation));
         }
 
+        if (sourceEvidence.Hops[^1].Headers.ContentType is not RoutedHttpSingleHeader contentType ||
+            !string.Equals(contentType.Value, officialAddress.Accept, StringComparison.Ordinal))
+        {
+            throw new ArgumentException(
+                "The terminal response media type does not match the official address request.",
+                nameof(sourceEvidence));
+        }
+
         if (sourceObservation.ReceivedEntityByteCount !=
                 checked((ulong)retainedTransportBytes.Reference.ByteLength) ||
             !string.Equals(
