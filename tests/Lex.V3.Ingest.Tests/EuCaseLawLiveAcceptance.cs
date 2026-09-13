@@ -51,6 +51,20 @@ public sealed class EuCaseLawLiveAcceptance
     /// </summary>
     private const int SeedCount = 3;
 
+    /// <summary>
+    /// The whole-run charged-request ceiling. Null until the owner dispositions one.
+    /// </summary>
+    /// <remarks>
+    /// BOUNDED IN ACTS IS NOT BOUNDED IN REQUESTS. <see cref="SeedCount"/> fixes how many acts this
+    /// run asks about, and that is the only term this file controls. The run still costs one robots
+    /// fetch, one count and <c>ceil(R/883)</c> pages on pass one, then one count and
+    /// <c>ceil(R/547)</c> on pass two, where R is the link-row count the publisher returns for those
+    /// acts -- a figure learned from the publisher during the run under
+    /// <c>ShortPageTerminal</c>, never known before it. A named ceiling is therefore the only thing
+    /// that bounds the traffic; the seed count bounds only the question.
+    /// </remarks>
+    private static readonly int? SharedWireCeiling = null;
+
     [TestMethod]
     public async Task RealPublisherPredicatesDriveLinkOnlyJudgmentTextWithGranularityDisclosed()
     {
@@ -61,6 +75,19 @@ public sealed class EuCaseLawLiveAcceptance
                 + "default so the suite does not depend on a third party's uptime or send unasked "
                 + "traffic.");
         }
+
+        // FAIL CLOSED ON A MISSING CEILING, before a root, a store or a producer is built.
+        if (SharedWireCeiling is not { } ceiling)
+        {
+            Assert.Inconclusive(
+                "The whole-run wire ceiling for E6's live acceptance has not been dispositioned. "
+                + "This harness will not choose one: set SharedWireCeiling from the reviewed "
+                + "acceptance plan before running it.");
+            return;
+        }
+
+        // ONE INSTANCE FOR THE RUN.
+        var budget = WireRequestBudget.OfWireRequests(ceiling);
 
         var checkout = CheckoutRoot();
         var root = Path.Combine(checkout, "artifacts", "e6-live-" + Guid.NewGuid().ToString("N"));
@@ -85,7 +112,7 @@ public sealed class EuCaseLawLiveAcceptance
                 acts,
                 NewUrn(),
                 RendererSource(checkout),
-                EuAcquisitionTestFixture.TestWireBudget()),
+                budget),
             scopes,
             EuAcquisitionTestFixture.SourceWitness(),
             CancellationToken.None);

@@ -19,6 +19,31 @@ public sealed class EuTranspositionBridgeLivePopulation
 {
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
 
+    /// <summary>
+    /// The whole-operation charged-request ceiling. Null until the owner dispositions one.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// THIS HARNESS WILL NOT CHOOSE THE NUMBER, AND IT CANNOT DERIVE ONE. The operation is two
+    /// families and the second's size is learned from the first. The NIM partition costs one robots
+    /// fetch, one count and <c>ceil(N/997)</c> pages on pass one, then one count and
+    /// <c>ceil(N/613)</c> on pass two, where N is the admitted row count the publisher returns.
+    /// The identity family is then <c>ceil(D/58)</c> separate producer runs -- D being the distinct
+    /// directive ELIs that NIM partition delivered -- each charging its own robots fetch, count and
+    /// pages. Both N and D are publisher figures observed mid-run, so the arithmetic here yields a
+    /// shape and not a bound, which is exactly the reason a dispositioned ceiling is required rather
+    /// than a computed one.
+    /// </para>
+    /// <para>
+    /// ONE CEILING FOR THE OPERATION, NOT ONE PER RUN. The identity family runs in a loop whose trip
+    /// count is the publisher's D. A budget minted inside that loop bounds each batch and leaves the
+    /// operation unbounded, which is a ceiling that reads as a ceiling and holds nothing -- the same
+    /// defect in the other direction as the one <see cref="WireRequestBudget"/>'s own remarks record
+    /// for a budget shared across sessions.
+    /// </para>
+    /// </remarks>
+    private static readonly int? SharedWireCeiling = null;
+
     [TestMethod]
     public async Task TheCompletedLegiluxAndCellarFamiliesReconcileIntoOneEvidenceBoundPopulation()
     {
@@ -27,6 +52,21 @@ public sealed class EuTranspositionBridgeLivePopulation
             Assert.Inconclusive(
                 "Set LEX_E5_LIVE_POPULATION=1 to run the complete official-source E5 population.");
         }
+
+        // FAIL CLOSED ON A MISSING CEILING, before a root, a store or a plan is built. A run that
+        // reached the publisher and only then discovered it had no agreed bound would already have
+        // spent the requests the bound exists to limit.
+        if (SharedWireCeiling is not { } ceiling)
+        {
+            Assert.Inconclusive(
+                "The whole-operation wire ceiling for the full E5 population has not been "
+                + "dispositioned. This harness will not choose one: set SharedWireCeiling from the "
+                + "reviewed population plan before running it.");
+            return;
+        }
+
+        // ONE INSTANCE, SHARED BY THE NIM PARTITION AND EVERY IDENTITY BATCH IT IMPLIES.
+        var budget = WireRequestBudget.OfWireRequests(ceiling);
 
         var checkout = CheckoutRoot();
         var configuredRoot = Environment.GetEnvironmentVariable("LEX_E5_EVIDENCE_ROOT");
@@ -46,7 +86,7 @@ public sealed class EuTranspositionBridgeLivePopulation
                 nimPlan,
                 NewUrn(),
                 nimRenderer,
-                EuAcquisitionTestFixture.TestWireBudget()),
+                budget),
             EuAcquisitionTestFixture.SourceWitness(),
             CancellationToken.None);
         Assert.IsTrue(nim.Delivered, $"NIM refused: {nim.Refusal}: {nim.Detail}");
@@ -108,7 +148,7 @@ public sealed class EuTranspositionBridgeLivePopulation
                     selection,
                     NewUrn(),
                     identityRenderer,
-                    EuAcquisitionTestFixture.TestWireBudget()),
+                    budget),
                 LuxembourgSourceWitness(),
                 CancellationToken.None);
             Assert.IsTrue(
