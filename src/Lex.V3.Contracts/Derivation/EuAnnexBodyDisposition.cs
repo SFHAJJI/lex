@@ -193,13 +193,7 @@ public sealed record EuAnnexBodyDisposition
                 nameof(sourceEvidence));
         }
 
-        if (sourceObservation.ReceivedEntityByteCount !=
-                checked((ulong)retainedTransportBytes.Reference.ByteLength) ||
-            !string.Equals(
-                sourceObservation.TransportByteSha256,
-                retainedTransportBytes.Reference.ContentSha256,
-                StringComparison.Ordinal) ||
-            !string.Equals(
+        if (!string.Equals(
                 sourceEvidence.Hops[^1].DurableWriteReceiptSha256,
                 DurableBlobWriteReceiptDigest.Of(retainedTransportBytes),
                 StringComparison.Ordinal))
