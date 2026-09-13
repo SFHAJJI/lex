@@ -7,6 +7,7 @@
     <RestoreLockedMode Condition="'$(CI)' == 'true'">true</RestoreLockedMode>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="PdfPig" Version="[0.1.11]" />
     <ProjectReference Include="../Lex.V3.Contracts/Lex.V3.Contracts.csproj" />
   </ItemGroup>
 </Project>
