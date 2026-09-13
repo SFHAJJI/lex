@@ -78,6 +78,11 @@ public sealed class DurableBlobReceiptFamilyIngestSurfaceTests
                 // from CustodyHold.TryHoldAsync and therefore from ICustodyStore.CreateAsync.
                 "field private instance " + ExpressionProductionResult + "::<RetainedDerivation>k__BackingField -> "
                 + Receipt + "?",
+                // The episode record's own receipt, added when review required the derivation to be
+                // byte-stable: the run-specific provenance is retained BESIDE the derivation rather
+                // than inside it, so the production holds two receipts and not one.
+                "field private instance " + ExpressionProductionResult + "::<RetainedEpisode>k__BackingField -> "
+                + Receipt + "?",
                 "field private instance " + EuQueryExecutionResult + "::<ScopeManifestReceipt>k__BackingField -> " + Receipt + "?",
                 "field private instance " + TranspositionPopulationRow + "::<NormalisedEliJoinEvidenceReceipts>k__BackingField -> "
                 + "System.Collections.Generic.IReadOnlyList<" + Receipt + ">",
@@ -104,6 +109,7 @@ public sealed class DurableBlobReceiptFamilyIngestSurfaceTests
                 + "-> System.Collections.Generic.Dictionary<System.String, " + Receipt + ">",
                 "property public instance " + CorpusAcquisitionOutcome + "::Receipt() -> " + Receipt + "?",
                 "property public instance " + ExpressionProductionResult + "::RetainedDerivation() -> " + Receipt + "?",
+                "property public instance " + ExpressionProductionResult + "::RetainedEpisode() -> " + Receipt + "?",
                 "property public instance " + EuQueryExecutionResult + "::ScopeManifestReceipt() -> " + Receipt + "?",
                 "property public instance " + TranspositionPopulationRow + "::NormalisedEliJoinEvidenceReceipts() -> "
                 + "System.Collections.Generic.IReadOnlyList<" + Receipt + ">",

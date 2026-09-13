@@ -92,24 +92,33 @@ public enum EuLanguageScopedExpressionDerivationRefusal
 /// </remarks>
 public sealed class EuLanguageScopedExpressionDerivation
 {
-    /// <summary>The digest schema for a whole derivation.</summary>
-    private const string CanonicalSchema = "eu_language_scoped_expression_derivation/1";
+    /// <summary>The digest schema for what was derived. Byte-stable across executions.</summary>
+    private const string DerivationSchema = "eu_language_scoped_expression_derivation/1";
+
+    /// <summary>The digest schema for which execution observed it.</summary>
+    private const string EpisodeSchema = "eu_language_scoped_expression_derivation_episode/1";
 
     private EuLanguageScopedExpressionDerivation(
         AbsenceFamilyEnumerationProof expressionFactsProof,
         AbsenceFamilyEnumerationProof? objectFactsProof,
         IReadOnlyList<LanguageScopedExpression> expressions,
-        byte[] canonicalBytes)
+        byte[] derivationBytes,
+        byte[] episodeBytes)
     {
         ExpressionFactsProof = expressionFactsProof;
         ObjectFactsProof = objectFactsProof;
         Expressions = expressions;
-        CanonicalBytes = canonicalBytes;
-        CanonicalSha256 = Convert.ToHexStringLower(SHA256.HashData(canonicalBytes));
+        DerivationBytes = derivationBytes;
+        DerivationSha256 = Convert.ToHexStringLower(SHA256.HashData(derivationBytes));
+        EpisodeBytes = episodeBytes;
+        EpisodeSha256 = Convert.ToHexStringLower(SHA256.HashData(episodeBytes));
     }
 
-    /// <summary>The schema every derivation declares.</summary>
-    public static string Schema => CanonicalSchema;
+    /// <summary>The schema a derivation declares.</summary>
+    public static string Schema => DerivationSchema;
+
+    /// <summary>The schema an episode record declares.</summary>
+    public static string EpisodeRecordSchema => EpisodeSchema;
 
     /// <summary>The family X (Expression-facts) enumeration proof these expressions were read from.</summary>
     public AbsenceFamilyEnumerationProof ExpressionFactsProof { get; }
@@ -130,11 +139,47 @@ public sealed class EuLanguageScopedExpressionDerivation
     /// <summary>Every expression derived, in the order the publisher first stated it.</summary>
     public IReadOnlyList<LanguageScopedExpression> Expressions { get; }
 
-    /// <summary>The canonical bytes to retain.</summary>
-    public ReadOnlyMemory<byte> CanonicalBytes { get; }
+    /// <summary>
+    /// WHAT WAS DERIVED, canonicalized. Byte-identical for two independent executions that observed
+    /// the same publisher statements.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// S3-A04 REQUIRES BOTH HALVES AND THEY ARE NOT IN TENSION: "Derivation is byte-stable across
+    /// two independent executions and every object retains source-observation and transport-byte
+    /// lineage." The lineage is here - every expression carries its retained page receipts, and
+    /// those digests are a function of the bytes the publisher sent, so identical bytes agree and
+    /// different bytes do not. What is NOT here is which run fetched them.
+    /// </para>
+    /// <para>
+    /// THE FIRST HEAD OF THIS TYPE FAILED THAT, AND IT FAILED IT THE WAY THIS REPOSITORY HAD ALREADY
+    /// LEARNED ONCE. <see cref="LanguageScopedExpression.CanonicalContentSha256"/>'s own remarks
+    /// record replacing a page-blob digest because it "made semantic identity depend on transport
+    /// structure". The derivation digest then covered each proof's <c>AcquisitionRunRef</c>, which
+    /// <c>RoutedHttpAcquisitionSession</c> mints from a fresh <c>Guid.NewGuid()</c> per session, so
+    /// two identical runs addressed one derivation two ways. Review measured it: the same rows at
+    /// fixed time produced two different digests. The run references now live in
+    /// <see cref="EpisodeBytes"/>, where varying is what they are for.
+    /// </para>
+    /// </remarks>
+    public ReadOnlyMemory<byte> DerivationBytes { get; }
 
-    /// <summary>The digest of <see cref="CanonicalBytes"/>.</summary>
-    public string CanonicalSha256 { get; }
+    /// <summary>The digest of <see cref="DerivationBytes"/>. Two identical executions agree.</summary>
+    public string DerivationSha256 { get; }
+
+    /// <summary>
+    /// WHICH EXECUTION OBSERVED IT, canonicalized: every run-specific reference the proofs carry,
+    /// bound to the derivation by its digest.
+    /// </summary>
+    /// <remarks>
+    /// Retained beside the derivation rather than dropped. Two runs over identical rows produce one
+    /// derivation artifact and two episode records, which is the accurate shape: what the publisher
+    /// said is one fact, and each time it was asked is another.
+    /// </remarks>
+    public ReadOnlyMemory<byte> EpisodeBytes { get; }
+
+    /// <summary>The digest of <see cref="EpisodeBytes"/>. Two executions differ, by design.</summary>
+    public string EpisodeSha256 { get; }
 
     /// <summary>
     /// Decodes both deliveries into a fresh set and records the result, or refuses without recording.
@@ -174,20 +219,30 @@ public sealed class EuLanguageScopedExpressionDerivation
             return null;
         }
 
-        var canonical = ContractCanonicalizer.Canonicalize(
+        var derivationBytes = ContractCanonicalizer.Canonicalize(
             new CanonicalDerivationDocument(
-                CanonicalSchema,
+                DerivationSchema,
                 CanonicalProofDocument.Of(expressionFacts.Proof),
                 objectFacts is null ? null : CanonicalProofDocument.Of(objectFacts.Proof),
                 [.. appended.Select(CanonicalExpressionDocument.Of)]),
-            CanonicalSchema + "-canonical-json",
+            DerivationSchema + "-canonical-json",
+            64);
+
+        var episodeBytes = ContractCanonicalizer.Canonicalize(
+            new CanonicalEpisodeDocument(
+                EpisodeSchema,
+                Convert.ToHexStringLower(SHA256.HashData(derivationBytes)),
+                CanonicalEpisodeProofDocument.Of(expressionFacts.Proof),
+                objectFacts is null ? null : CanonicalEpisodeProofDocument.Of(objectFacts.Proof)),
+            EpisodeSchema + "-canonical-json",
             64);
 
         return new EuLanguageScopedExpressionDerivation(
             expressionFacts.Proof,
             objectFacts?.Proof,
             appended,
-            canonical);
+            derivationBytes,
+            episodeBytes);
     }
 
     private sealed record CanonicalDerivationDocument(
@@ -196,25 +251,34 @@ public sealed class EuLanguageScopedExpressionDerivation
         CanonicalProofDocument? ObjectFactsProof,
         IReadOnlyList<CanonicalExpressionDocument> Expressions);
 
+    private sealed record CanonicalEpisodeDocument(
+        string Schema,
+        string DerivationSha256,
+        CanonicalEpisodeProofDocument ExpressionFactsProof,
+        CanonicalEpisodeProofDocument? ObjectFactsProof);
+
     /// <summary>
-    /// One enumeration proof, whole.
+    /// The half of a proof that identifies WHAT WAS OBSERVED rather than which run observed it.
     /// </summary>
     /// <remarks>
-    /// EVERY FIELD OF EVERY PROOF TRAVELS, not a chosen subset. #584's review found the same
-    /// omission one type over: a comparison read four of a proof's seven fields, so a proof retained
-    /// under the weaker custody class replayed as identical to a floored one. A derivation digest
-    /// that skipped <c>RetainedFloor</c> or either profile reference would make two genuinely
-    /// different derivations share an address, which is worse here than there because this address
-    /// is what the artifact is stored and reopened under.
+    /// <para>
+    /// EVERY FIELD OF EVERY PROOF STILL TRAVELS - across the two documents, not out of them. #584's
+    /// review found the opposite defect one type over: a comparison read four of a proof's seven
+    /// fields, so a proof retained under the weaker custody class replayed as identical to a floored
+    /// one. <c>RetainedFloor</c> is therefore here, in the identity, where a weaker custody class
+    /// makes a different derivation.
+    /// </para>
+    /// <para>
+    /// The three references that are NOT here are in
+    /// <see cref="CanonicalEpisodeProofDocument"/>, and the reason is measurable rather than
+    /// stylistic: all three are minted per run. <c>AcquisitionRunRef</c> comes from a fresh
+    /// <c>Guid.NewGuid()</c> per session; the interpretation profile reference is minted with a new
+    /// URN per run. A derivation identity containing them cannot be stable, which is what S3-A04
+    /// requires it to be.
+    /// </para>
     /// </remarks>
     private sealed record CanonicalProofDocument(
         string FamilyKey,
-        string AcquisitionRunResourceId,
-        string AcquisitionRunSha256,
-        string InterpretationProfileResourceId,
-        string InterpretationProfileSha256,
-        string SourceProfileResourceId,
-        string SourceProfileSha256,
         long DeliveredRowCount,
         string CanonicalKeyDigest,
         string RetainedFloor)
@@ -222,15 +286,30 @@ public sealed class EuLanguageScopedExpressionDerivation
         public static CanonicalProofDocument Of(AbsenceFamilyEnumerationProof proof) =>
             new(
                 proof.FamilyKey,
+                proof.DeliveredRowCount,
+                proof.CanonicalKeyDigest,
+                proof.RetainedFloor.ToString());
+    }
+
+    /// <summary>The half of a proof that names the execution. Varies between runs, by design.</summary>
+    private sealed record CanonicalEpisodeProofDocument(
+        string FamilyKey,
+        string AcquisitionRunResourceId,
+        string AcquisitionRunSha256,
+        string InterpretationProfileResourceId,
+        string InterpretationProfileSha256,
+        string SourceProfileResourceId,
+        string SourceProfileSha256)
+    {
+        public static CanonicalEpisodeProofDocument Of(AbsenceFamilyEnumerationProof proof) =>
+            new(
+                proof.FamilyKey,
                 proof.AcquisitionRunRef.ResourceId,
                 proof.AcquisitionRunRef.Sha256,
                 proof.InterpretationProfileRef.ResourceId,
                 proof.InterpretationProfileRef.Sha256,
                 proof.SourceProfileRef.ResourceId,
-                proof.SourceProfileRef.Sha256,
-                proof.DeliveredRowCount,
-                proof.CanonicalKeyDigest,
-                proof.RetainedFloor.ToString());
+                proof.SourceProfileRef.Sha256);
     }
 
     /// <summary>

@@ -49,6 +49,28 @@ public enum EuLanguageScopedExpressionProductionRefusal
     DerivationRefused = 6,
 
     /// <summary>
+    /// The object-facts batch does not cover every object the Expression-facts batch asks about, so
+    /// a missing date would be indistinguishable from a date nobody asked for.
+    /// </summary>
+    /// <remarks>
+    /// FOUND IN REVIEW, AND IT IS THIS FILE'S OWN RULE BEING BROKEN. The decoder filters family P
+    /// rows to the works family X delivered Expressions of, so a P batch over a disjoint object set
+    /// enumerates cleanly, contributes nothing, and every expression arrives with no date. The
+    /// derivation then carries a non-null <c>ObjectFactsProof</c>, whose own documentation says that
+    /// means a date delivery WAS consulted - so a reader concludes "asked, and the publisher stated
+    /// none". P never asked. That is exactly the confusion
+    /// <see cref="EuLanguageScopedExpressionProductionResult.ExpressionsOf"/> refuses a few lines
+    /// away, reintroduced at the door that pairs the two families.
+    /// <para>
+    /// Coverage is required rather than equality: a P batch asking about MORE objects than X is
+    /// harmless, because every work X delivered was still asked about. A P batch asking about fewer
+    /// is not.
+    /// </para>
+    /// </remarks>
+    [JsonStringEnumMemberName("object_facts_batch_does_not_cover_the_expression_batch")]
+    ObjectFactsBatchDoesNotCoverTheExpressionBatch = 8,
+
+    /// <summary>
     /// The derivation was produced but the store could not retain it, or handed back bytes its own
     /// digest does not name.
     /// </summary>
@@ -69,6 +91,7 @@ public sealed class EuLanguageScopedExpressionProductionResult
     private EuLanguageScopedExpressionProductionResult(
         EuLanguageScopedExpressionDerivation? derivation,
         DurableBlobWriteReceipt? retainedDerivation,
+        DurableBlobWriteReceipt? retainedEpisode,
         IReadOnlySet<string>? objectsAskedAbout,
         EuLanguageScopedExpressionProductionRefusal refusal,
         string? detail,
@@ -76,6 +99,7 @@ public sealed class EuLanguageScopedExpressionProductionResult
     {
         Derivation = derivation;
         RetainedDerivation = retainedDerivation;
+        RetainedEpisode = retainedEpisode;
         ObjectsAskedAbout = objectsAskedAbout;
         Refusal = refusal;
         Detail = detail;
@@ -108,6 +132,11 @@ public sealed class EuLanguageScopedExpressionProductionResult
     /// <see cref="ExpressionsOf"/> able to distinguish "no expression for this object" from
     /// "this object was never asked about".
     /// </remarks>
+    /// <summary>
+    /// The custody receipt for the retained episode record: which run observed this derivation.
+    /// </summary>
+    public DurableBlobWriteReceipt? RetainedEpisode { get; }
+
     public IReadOnlySet<string>? ObjectsAskedAbout { get; }
 
     public EuLanguageScopedExpressionProductionRefusal Refusal { get; }
@@ -148,9 +177,10 @@ public sealed class EuLanguageScopedExpressionProductionResult
     internal static EuLanguageScopedExpressionProductionResult Success(
         EuLanguageScopedExpressionDerivation derivation,
         DurableBlobWriteReceipt retainedDerivation,
+        DurableBlobWriteReceipt retainedEpisode,
         IReadOnlySet<string> objectsAskedAbout,
         int productRequestCount) =>
-        new(derivation, retainedDerivation, objectsAskedAbout,
+        new(derivation, retainedDerivation, retainedEpisode, objectsAskedAbout,
             EuLanguageScopedExpressionProductionRefusal.None, null, productRequestCount);
 
     internal static EuLanguageScopedExpressionProductionResult Refused(
@@ -164,7 +194,7 @@ public sealed class EuLanguageScopedExpressionProductionResult
                 nameof(refusal), "A refusal result requires a real refusal code.");
         }
 
-        return new(null, null, null, refusal, detail, productRequestCount);
+        return new(null, null, null, null, refusal, detail, productRequestCount);
     }
 }
 
@@ -268,6 +298,28 @@ public sealed class EuLanguageScopedExpressionProducer
                 productRequestCount: 0);
         }
 
+        // ALSO BEFORE ANY TRAFFIC, and compared in the plan's own canonical form because that is the
+        // form the publisher is asked in and therefore the only form in which two batches can be
+        // said to name the same object.
+        if (objectFactsRequest is not null)
+        {
+            var asked = new HashSet<string>(
+                EuObjectFactsDiscoveryPlan.RequestedPartitionMembers(objectFactsRequest.BatchObjects),
+                StringComparer.Ordinal);
+            var uncovered = EuObjectFactsDiscoveryPlan
+                .RequestedPartitionMembers(expressionFactsRequest.BatchObjects)
+                .Where(member => !asked.Contains(member))
+                .ToArray();
+            if (uncovered.Length > 0)
+            {
+                return EuLanguageScopedExpressionProductionResult.Refused(
+                    EuLanguageScopedExpressionProductionRefusal.ObjectFactsBatchDoesNotCoverTheExpressionBatch,
+                    $"the date delivery never asked about {uncovered.Length} of this run's "
+                    + $"object(s), the first being '{uncovered[0]}'.",
+                    productRequestCount: 0);
+            }
+        }
+
         var spent = 0;
 
         var expressionRun = await _executor
@@ -347,20 +399,39 @@ public sealed class EuLanguageScopedExpressionProducer
 
         // Decision 78 retention, through the one door that proves the hold by reopening the digest
         // the store returned rather than by trusting the write.
-        var (receipt, holdFailure) = await CustodyHold
-            .TryHoldAsync(_custodyStore, derivation.CanonicalBytes, cancellationToken)
+        //
+        // TWO ARTIFACTS, AND THE SPLIT IS THE POINT. The derivation is byte-stable across executions
+        // (S3-A04), so two runs over identical publisher rows hold ONE derivation blob at one
+        // address. The episode record names which run observed it and is therefore different every
+        // time, which is what it is for. Retaining only the first would drop provenance; retaining
+        // them as one document would make the derivation's address move per run, which is the defect
+        // review found.
+        var (derivationReceipt, derivationHoldFailure) = await CustodyHold
+            .TryHoldAsync(_custodyStore, derivation.DerivationBytes, cancellationToken)
             .ConfigureAwait(false);
-        if (receipt is null)
+        if (derivationReceipt is null)
         {
             return EuLanguageScopedExpressionProductionResult.Refused(
                 EuLanguageScopedExpressionProductionRefusal.DerivationNotRetained,
-                holdFailure,
+                derivationHoldFailure,
+                spent);
+        }
+
+        var (episodeReceipt, episodeHoldFailure) = await CustodyHold
+            .TryHoldAsync(_custodyStore, derivation.EpisodeBytes, cancellationToken)
+            .ConfigureAwait(false);
+        if (episodeReceipt is null)
+        {
+            return EuLanguageScopedExpressionProductionResult.Refused(
+                EuLanguageScopedExpressionProductionRefusal.DerivationNotRetained,
+                episodeHoldFailure,
                 spent);
         }
 
         return EuLanguageScopedExpressionProductionResult.Success(
             derivation,
-            receipt,
+            derivationReceipt,
+            episodeReceipt,
             ObjectsAskedAbout(expressionFactsRequest),
             spent);
     }

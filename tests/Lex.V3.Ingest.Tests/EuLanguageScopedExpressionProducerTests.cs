@@ -14,6 +14,7 @@ namespace Lex.V3.Ingest.Tests;
 public sealed class EuLanguageScopedExpressionProducerTests
 {
     private const string Work = "http://publications.europa.eu/resource/cellar/work-0001";
+    private const string OtherWork = "http://publications.europa.eu/resource/cellar/work-other";
     private const string EnglishExpression = "http://publications.europa.eu/resource/cellar/expr-eng";
     private const string FrenchExpression = "http://publications.europa.eu/resource/cellar/expr-fra";
     private const string BulgarianExpression = "http://publications.europa.eu/resource/cellar/expr-bul";
@@ -184,13 +185,24 @@ public sealed class EuLanguageScopedExpressionProducerTests
             store, result.RetainedDerivation!.Reference.ContentSha256, CancellationToken.None);
 
         CollectionAssert.AreEqual(
-            result.Derivation!.CanonicalBytes.ToArray(),
+            result.Derivation!.DerivationBytes.ToArray(),
             reopened.ToArray(),
             "the store must hand back the derivation's own canonical bytes.");
         Assert.AreEqual(
-            result.Derivation.CanonicalSha256,
+            result.Derivation.DerivationSha256,
             result.RetainedDerivation.Reference.ContentSha256,
             "and the address it is held under must be the derivation's own digest.");
+
+        // AND THE EPISODE IS HELD TOO, so splitting the two did not quietly drop the provenance
+        // half. Retaining only the stable document would have satisfied S3-A04's first clause by
+        // discarding what its second clause requires.
+        Assert.IsNotNull(result.RetainedEpisode);
+        var reopenedEpisode = await CustodyRestore.ReadByDigestCheckedAsync(
+            store, result.RetainedEpisode!.Reference.ContentSha256, CancellationToken.None);
+        CollectionAssert.AreEqual(
+            result.Derivation.EpisodeBytes.ToArray(),
+            reopenedEpisode.ToArray(),
+            "the episode record is retained beside the derivation, not instead of it.");
     }
 
     /// <summary>
@@ -261,6 +273,200 @@ public sealed class EuLanguageScopedExpressionProducerTests
         Assert.AreEqual(0, handler.SendCount, "refused before any traffic.");
     }
 
+    /// <summary>
+    /// A date delivery asked about OTHER objects is refused, not accepted as "no date".
+    /// </summary>
+    /// <remarks>
+    /// FOUND IN REVIEW, NOT BY ME, AND IT IS THIS FILE'S OWN RULE BEING BROKEN. The decoder filters
+    /// family P rows to the works family X delivered Expressions of, so a P batch over a disjoint
+    /// object set succeeds, contributes nothing, and every expression comes back with no date. The
+    /// derivation then carries a non-null ObjectFactsProof, whose own documentation says that means
+    /// "a date delivery WAS consulted" - so a reader concludes "asked, and the publisher stated
+    /// none". P never asked. That is exactly the absence confusion ExpressionsOf refuses one type
+    /// over, reintroduced at the door that pairs the two families.
+    /// </remarks>
+    [TestMethod]
+    public async Task ADateDeliveryAskedAboutOtherObjectsIsRefusedRatherThanReadAsNoDate()
+    {
+        var handler = new EuAcquisitionTestFixture.ClassifyingHandler(ScriptsWithEmptyObjectFacts());
+        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
+        var producer = new EuLanguageScopedExpressionProducer(
+            store, new EuAcquisitionTestFixture.FixedTimeProvider(), handler);
+
+        var result = await producer.RunAsync(
+            Request(EuObjectFactsQuerySet.ExpressionFacts),
+            RequestOver(EuObjectFactsQuerySet.ObjectFacts, OtherWork),
+            EuAcquisitionTestFixture.SourceWitness(),
+            CancellationToken.None);
+
+        Assert.AreEqual(
+            EuLanguageScopedExpressionProductionRefusal.ObjectFactsBatchDoesNotCoverTheExpressionBatch,
+            result.Refusal,
+            "a P batch that never asked about this run's works cannot stand in for one that did.");
+        Assert.AreEqual(
+            0, handler.SendCount,
+            "and it is refused before either family is asked, not after both have been spent.");
+    }
+
+    /// <summary>
+    /// S3-A04: two independent executions over identical publisher rows derive byte-identically.
+    /// </summary>
+    /// <remarks>
+    /// FOUND IN REVIEW, AND IT IS THE SAME LESSON THIS REPOSITORY ALREADY RECORDED ONE LAYER DOWN.
+    /// <c>LanguageScopedExpression.CanonicalContentSha256</c>'s own remarks describe replacing a
+    /// page-blob digest because it "made semantic identity depend on transport structure". The first
+    /// head of the derivation did precisely that again: its digest covered each proof's
+    /// <c>AcquisitionRunRef</c>, and <c>RoutedHttpAcquisitionSession</c> mints one from a fresh
+    /// <c>Guid.NewGuid()</c> per session, so two identical runs addressed the same derivation
+    /// differently.
+    /// <para>
+    /// S3-A04 requires both halves and they are not in tension: the DERIVATION is byte-stable, and
+    /// the transport lineage is still retained - now as a separately digested episode section rather
+    /// than inside the identity.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public async Task TwoIndependentExecutionsOverIdenticalRowsDeriveByteIdentically()
+    {
+        var (first, _, _) = await RunAsync(ThreeLanguageRows());
+        var (second, _, _) = await RunAsync(ThreeLanguageRows());
+
+        Assert.AreEqual(EuLanguageScopedExpressionProductionRefusal.None, first.Refusal, first.Detail);
+        Assert.AreEqual(EuLanguageScopedExpressionProductionRefusal.None, second.Refusal, second.Detail);
+
+        // The premise: these really are two independent episodes, or the test proves nothing about
+        // stability ACROSS executions.
+        Assert.AreNotEqual(
+            first.Derivation!.ExpressionFactsProof.AcquisitionRunRef.Sha256,
+            second.Derivation!.ExpressionFactsProof.AcquisitionRunRef.Sha256,
+            "two runs must carry different acquisition runs, or there is nothing to stabilise.");
+
+        Assert.AreEqual(
+            first.Derivation.DerivationSha256,
+            second.Derivation.DerivationSha256,
+            "S3-A04: derivation is byte-stable across two independent executions.");
+        CollectionAssert.AreEqual(
+            first.Derivation.DerivationBytes.ToArray(),
+            second.Derivation.DerivationBytes.ToArray(),
+            "byte-stable means the bytes, not merely the digest.");
+
+        // AND THE LINEAGE IS STILL RETAINED, which is the other half of the same clause.
+        Assert.IsTrue(
+            first.Derivation.Expressions.All(static expression => expression.Lineage.Entries.Count > 0),
+            "every object retains its transport-byte lineage.");
+        Assert.AreNotEqual(
+            first.Derivation.EpisodeSha256,
+            second.Derivation.EpisodeSha256,
+            "and the episode section still records WHICH run observed it, so nothing is lost.");
+    }
+
+    /// <summary>
+    /// Every field a proof publishes is read by one of the two canonical documents, and none by both.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// ADDED BECAUSE A MUTANT SURVIVED, NOT BECAUSE IT LOOKED TIDY. Hard-coding <c>RetainedFloor</c>
+    /// to a literal in the derivation identity changed nothing that any test observed: the
+    /// byte-stability test runs two productions whose floors are equal, so a field that stopped
+    /// being read still produced agreeing digests. #584's review found the identical omission one
+    /// type over - a comparison reading four of this proof's seven fields, so a proof retained under
+    /// the weaker custody class replayed as identical to a floored one - and its conclusion applies
+    /// unchanged: a behavioural test per field says nothing about a field nobody has added yet, so
+    /// the surface is pinned against the documents' own source.
+    /// </para>
+    /// <para>
+    /// The partition is asserted as well as the coverage. A field read by BOTH documents would be
+    /// carried into the derivation identity as well as the episode, which is how a run-specific
+    /// reference would creep back into the stable half - the defect review found. A field read by
+    /// NEITHER is evidence silently dropped.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void EveryProofFieldIsReadByExactlyOneOfTheTwoCanonicalDocuments()
+    {
+        var fields = typeof(Lex.V3.Contracts.Source.Absence.AbsenceFamilyEnumerationProof)
+            .GetProperties(System.Reflection.BindingFlags.Public
+                | System.Reflection.BindingFlags.Instance
+                | System.Reflection.BindingFlags.DeclaredOnly)
+            .Select(property => property.Name)
+            .OrderBy(name => name, StringComparer.Ordinal)
+            .ToArray();
+
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "AcquisitionRunRef",
+                "CanonicalKeyDigest",
+                "DeliveredRowCount",
+                "FamilyKey",
+                "InterpretationProfileRef",
+                "RetainedFloor",
+                "SourceProfileRef",
+            },
+            fields,
+            "a proof that grew a field must be placed in one of the two documents deliberately, "
+            + "rather than silently belonging to neither.");
+
+        var source = ReadSource(
+            "src/Lex.V3.Contracts/Source/Europe/EuLanguageScopedExpressionDerivation.cs");
+        var derivation = MethodBody(source, "private sealed record CanonicalProofDocument(");
+        var episode = MethodBody(source, "private sealed record CanonicalEpisodeProofDocument(");
+
+        foreach (var field in fields)
+        {
+            var inDerivation = derivation.Contains("proof." + field, StringComparison.Ordinal);
+            var inEpisode = episode.Contains("proof." + field, StringComparison.Ordinal);
+
+            Assert.IsTrue(
+                inDerivation || inEpisode,
+                $"no canonical document reads {field}, so it is evidence this record drops.");
+
+            // FamilyKey is the one field both halves carry, and deliberately: it is a LABEL saying
+            // which family each half is about, not evidence either half owns. Every other field
+            // belongs to exactly one, because a run-specific reference appearing in the derivation
+            // identity is precisely what made it unstable.
+            if (!string.Equals(field, "FamilyKey", StringComparison.Ordinal))
+            {
+                Assert.IsFalse(
+                    inDerivation && inEpisode,
+                    $"{field} is read by both documents; a run-specific reference in the derivation "
+                    + "identity is what makes it unstable.");
+            }
+        }
+
+        Assert.IsTrue(
+            derivation.Contains("proof.FamilyKey", StringComparison.Ordinal)
+                && episode.Contains("proof.FamilyKey", StringComparison.Ordinal),
+            "the exception is that BOTH halves label themselves with the family, and it is an "
+            + "exception this test states rather than tolerates silently.");
+    }
+
+    /// <summary>One brace-matched declaration body, so a mention elsewhere cannot satisfy the pin.</summary>
+    private static string MethodBody(string source, string signature)
+    {
+        var start = source.IndexOf(signature, StringComparison.Ordinal);
+        Assert.IsGreaterThanOrEqualTo(0, start, $"'{signature}' is not in the source read.");
+
+        var open = source.IndexOf('{', start);
+        Assert.IsGreaterThanOrEqualTo(0, open, "the declaration has no body.");
+
+        var depth = 0;
+        for (var index = open; index < source.Length; index++)
+        {
+            if (source[index] == '{')
+            {
+                depth++;
+            }
+            else if (source[index] == '}' && --depth == 0)
+            {
+                return source[open..index];
+            }
+        }
+
+        Assert.Fail("the declaration body is unterminated.");
+        return string.Empty;
+    }
+
     // ---------------------------------------------------------------- fixture
 
     private static async Task<(
@@ -289,11 +495,24 @@ public sealed class EuLanguageScopedExpressionProducerTests
                 "X", xRows.Count, xRows, EuAcquisitionTestFixture.ExpressionFactsProjection),
         };
 
-    private static EuObjectFactsPartitionRunRequest Request(EuObjectFactsQuerySet set)
+    private static EuObjectFactsPartitionRunRequest Request(EuObjectFactsQuerySet set) =>
+        RequestOver(set, Work);
+
+    private static EuObjectFactsPartitionRunRequest RequestOver(
+        EuObjectFactsQuerySet set, string objectIri)
     {
         var (plan, planId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         return new EuObjectFactsPartitionRunRequest(
-            plan, planId, set, [Work], EuAcquisitionTestFixture.BuildRendererSource(4180));
+            plan, planId, set, [objectIri], EuAcquisitionTestFixture.BuildRendererSource(4180));
+    }
+
+    private static Dictionary<string, EuAcquisitionTestFixture.FamilyScript>
+        ScriptsWithEmptyObjectFacts()
+    {
+        var scripts = Scripts(EnglishOnlyRows());
+        scripts["P"] = EuAcquisitionTestFixture.ScriptFor(
+            "P", 0, [], EuAcquisitionTestFixture.ObjectFactsProjection);
+        return scripts;
     }
 
     private static IReadOnlyList<string> EnglishOnlyRows() =>
