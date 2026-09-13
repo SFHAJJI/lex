@@ -214,7 +214,6 @@ public sealed class EuLanguageScopedExpressionDecodeTests
                 proof!, delivery, honest.ProfileForTest, delivery.InterpretationProfileRef,
                 delivery.CountA.HttpEvidenceRef, [substituted]),
             null,
-            SourceObject(),
             set,
             out var refusal,
             out var refusalDetail,
@@ -263,8 +262,7 @@ public sealed class EuLanguageScopedExpressionDecodeTests
             Bound(Expression(WorkOne, ExprFrench, French)),
             new EuProofBoundDelivery(
                 proof!, delivery, fixture.ProfileForTest, delivery.InterpretationProfileRef,
-                delivery.CountA.HttpEvidenceRef, [substituted]),
-            SourceObject(), set, out var refusal, out var refusalDetail, out _);
+                delivery.CountA.HttpEvidenceRef, [substituted]), set, out var refusal, out var refusalDetail, out _);
 
         Assert.IsNull(decoded);
         Assert.AreEqual(
@@ -274,21 +272,6 @@ public sealed class EuLanguageScopedExpressionDecodeTests
         Assert.IsNotNull(refusalDetail);
         Assert.IsEmpty(set.Expressions);
     }
-
-    /// <summary>
-    /// A null source object is a caller contract violation even when the delivery would refuse.
-    /// </summary>
-    /// <remarks>
-    /// <see cref="EveryNullArgumentIsACallerContractViolation"/> cannot see this door's own guard: it
-    /// supplies a decodable delivery, so <c>FromRetainedSource</c>'s downstream guard throws the same
-    /// exception type and the test passes either way. Here the delivery refuses before any expression
-    /// is constructed, so the downstream guard never runs.
-    /// </remarks>
-    [TestMethod]
-    public void ANullSourceObjectThrowsEvenWhenTheDeliveryWouldRefuse() =>
-        Assert.ThrowsExactly<ArgumentNullException>(() => EuLanguageScopedExpressionDecode.TryDecode(
-            Bound([XRow(WorkOne, ExprEnglish, UsesLanguageIri, English)]),
-            null, null!, new LanguageScopedExpressionSet(), out _, out _, out _));
 
     /// <summary>A family-X row whose parent is not an IRI breaks the shape family X promises.</summary>
     /// <remarks>
@@ -405,8 +388,7 @@ public sealed class EuLanguageScopedExpressionDecodeTests
                 ],
                 rowLimitA: 1,
                 rowLimitB: 2,
-                RepeatedEnumerationTerminalPagePolicy.EmptySuccessorAfterShortPage),
-            SourceObject(), new LanguageScopedExpressionSet(), out var refusal, out _, out _);
+                RepeatedEnumerationTerminalPagePolicy.EmptySuccessorAfterShortPage), new LanguageScopedExpressionSet(), out var refusal, out _, out _);
 
         Assert.IsNull(decoded);
         Assert.AreEqual(EuLanguageScopedExpressionDecodeRefusal.PageAttributionUnavailable, refusal);
@@ -491,7 +473,6 @@ public sealed class EuLanguageScopedExpressionDecodeTests
                 proof!, delivery, fixture.ProfileForTest, delivery.InterpretationProfileRef,
                 delivery.CountA.HttpEvidenceRef, [forged]),
             null,
-            SourceObject(),
             set,
             out var refusal,
             out _,
@@ -525,8 +506,7 @@ public sealed class EuLanguageScopedExpressionDecodeTests
             Bound(Expression(WorkOne, ExprFrench, French)),
             new EuProofBoundDelivery(
                 proof!, delivery, fixture.ProfileForTest, delivery.InterpretationProfileRef,
-                delivery.CountA.HttpEvidenceRef, [forged]),
-            SourceObject(), new LanguageScopedExpressionSet(), out var refusal, out _, out _);
+                delivery.CountA.HttpEvidenceRef, [forged]), new LanguageScopedExpressionSet(), out var refusal, out _, out _);
 
         Assert.IsNull(decoded);
         Assert.AreEqual(
@@ -549,7 +529,6 @@ public sealed class EuLanguageScopedExpressionDecodeTests
                 proof!, delivery, fixture.ProfileForTest, delivery.InterpretationProfileRef,
                 delivery.CountA.HttpEvidenceRef, pages),
             null,
-            SourceObject(),
             new LanguageScopedExpressionSet(),
             out _,
             out _,
@@ -878,7 +857,6 @@ public sealed class EuLanguageScopedExpressionDecodeTests
         var decoded = EuLanguageScopedExpressionDecode.TryDecode(
             Bound(Expression(WorkOne, ExprFrench, French)),
             dateFacts,
-            SourceObject(),
             new LanguageScopedExpressionSet(),
             out var refusal,
             out _,
@@ -1065,11 +1043,9 @@ public sealed class EuLanguageScopedExpressionDecodeTests
     {
         var set = new LanguageScopedExpressionSet();
         Assert.ThrowsExactly<ArgumentNullException>(() => EuLanguageScopedExpressionDecode.TryDecode(
-            null!, null, SourceObject(), set, out _, out _, out _));
+            null!, null, set, out _, out _, out _));
         Assert.ThrowsExactly<ArgumentNullException>(() => EuLanguageScopedExpressionDecode.TryDecode(
-            Bound(Expression(WorkOne, ExprFrench, French)), null, null!, set, out _, out _, out _));
-        Assert.ThrowsExactly<ArgumentNullException>(() => EuLanguageScopedExpressionDecode.TryDecode(
-            Bound(Expression(WorkOne, ExprFrench, French)), null, SourceObject(), null!,
+            Bound(Expression(WorkOne, ExprFrench, French)), null, null!,
             out _, out _, out _));
     }
 
@@ -1118,6 +1094,166 @@ public sealed class EuLanguageScopedExpressionDecodeTests
                 .ToArray());
     }
 
+    /// <summary>
+    /// A page that carried only a title row is cited by nothing: it stated neither admitted field.
+    /// </summary>
+    /// <remarks>
+    /// The reviewer's own probe for the first posted finding. Family X legitimately delivers rows
+    /// this door reads nothing from - <c>expression_title</c> among them - and admits them rather
+    /// than refusing the expression (<see cref="ATitleRowOnAnAdmittedExpressionAddsNoSecondExpression"/>
+    /// pins that). Before this repair the page map was unioned over EVERY row of an identity
+    /// whatever its predicate, so a title row pushed onto its own page made that page a second
+    /// <c>IdentityAndLanguage</c> entry - a custody receipt published as evidence for a work binding
+    /// and a language those bytes never carried.
+    /// <para>
+    /// Paging is arranged, not incidental: three rows under a pass-A limit of two put the two
+    /// admitted rows on page 0 and the title row alone on page 1. A single-page delivery cannot
+    /// distinguish the two behaviours at all, which is why every lineage test that existed before
+    /// this one passed while the defect stood.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void APageCarryingOnlyATitleRowIsCitedByNoExpression()
+    {
+        var rows = new List<string>();
+        rows.AddRange(Expression(WorkOne, ExprEnglish, English));
+        rows.Add(XLiteralRow(WorkOne, ExprEnglish, TitleIri, "Rectificatif", XsdString));
+
+        var decoded = DecodePaged(rows, rowLimitA: 2, rowLimitB: 3);
+
+        Assert.IsNotNull(decoded);
+        Assert.HasCount(1, decoded);
+        Assert.HasCount(
+            1,
+            decoded[0].Lineage.Entries,
+            "only page 0 carried an admitted field; page 1 carried a title and nothing else.");
+        Assert.AreEqual(
+            LanguageScopedExpressionContribution.IdentityAndLanguage,
+            decoded[0].Lineage.Entries[0].Contribution);
+    }
+
+    /// <summary>
+    /// Two works in one delivery cite two different source objects, each naming its own expression.
+    /// </summary>
+    /// <remarks>
+    /// The reviewer's own probe for the second posted finding. This door used to take one
+    /// <see cref="SourceObjectRef"/> from its caller and hand the same instance to every expression
+    /// it appended, so the second work's expression cited the first work's object - and any
+    /// structurally valid reference at all was admissible, because nothing compared it to what the
+    /// rows said. The reference is now derived from the expression IRI the publisher stated, so
+    /// there is no argument through which a caller can assert it and no way for two expressions to
+    /// share one.
+    /// </remarks>
+    [TestMethod]
+    public void EachExpressionCitesASourceObjectNamingItsOwnPublisherIri()
+    {
+        var rows = new List<string>();
+        rows.AddRange(Expression(WorkOne, ExprEnglish, English));
+        rows.AddRange(Expression(WorkTwo, ExprOfWorkTwo, French));
+
+        var decoded = Decode(new LanguageScopedExpressionSet(), rows, out var refusal, out _);
+
+        Assert.AreEqual(EuLanguageScopedExpressionDecodeRefusal.None, refusal);
+        Assert.IsNotNull(decoded);
+        Assert.HasCount(2, decoded);
+        Assert.AreEqual(ExprEnglish, decoded[0].SourceObject.PublisherUri);
+        Assert.AreEqual(
+            ExprOfWorkTwo,
+            decoded[1].SourceObject.PublisherUri,
+            "the second work's expression must not cite the first work's source object.");
+        Assert.AreNotEqual(
+            decoded[0].SourceObject.CanonicalKeySha256,
+            decoded[1].SourceObject.CanonicalKeySha256,
+            "two expressions are two source objects, not one shared reference.");
+    }
+
+    /// <summary>
+    /// Another run's pages are refused against this run's proof, even when the rows are identical.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The reviewer's own probe for the third posted finding, and the sharpest of the three. Two
+    /// independently minted deliveries of the SAME rows agree on every digest this door re-derives -
+    /// delivered count, canonical-key digest, cursor digest, row digest - and differ only in which
+    /// acquisition run produced them. So run B's pages handed in against run A's proof used to open
+    /// as None, and the lineage the decode then published cited run B's retained bodies as the bytes
+    /// that carried run A's proven rows. The rows were right and the provenance was not.
+    /// </para>
+    /// <para>
+    /// The substituted pages are honest in themselves - run B's own receipts name run B's own bytes -
+    /// which is exactly why the per-page receipt check added on the previous head does not catch
+    /// this. That check asks whether a page is internally consistent; this asks whether it belongs.
+    /// </para>
+    /// <para>
+    /// The two halves are asserted separately, so neither binding can be removed while the other
+    /// covers for it: first the pages alone with run A's own count evidence kept, then the count
+    /// evidence alone with run A's own pages kept.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void AnotherRunsPagesAreRefusedEvenWhenItsRowsAreIdentical()
+    {
+        var rows = Expression(WorkOne, ExprEnglish, English);
+        var runA = Bound(rows);
+        var runB = Bound(rows, runIdentitySeed: 931);
+
+        // The premise, asserted rather than assumed: if the fixture ever minted one run twice, every
+        // assertion below would pass while proving nothing at all.
+        Assert.AreNotEqual(
+            runA.Comparison.RunIdentity,
+            runB.Comparison.RunIdentity,
+            "the two deliveries must be independent runs for this to be a substitution.");
+        Assert.AreEqual(
+            runA.Proof.CanonicalKeyDigest,
+            runB.Proof.CanonicalKeyDigest,
+            "and they must agree on the rows, or the digest checks would refuse this without the "
+            + "binding under test.");
+
+        Assert.ThrowsExactly<ArgumentException>(
+            () => EuLanguageScopedExpressionDecode.TryDecode(
+                new EuProofBoundDelivery(
+                    runA.Proof, runA.Comparison, runA.Profile, runA.ProfileRef,
+                    runA.CountHttpEvidenceRef, runB.PagesInOrder),
+                null,
+                new LanguageScopedExpressionSet(),
+                out _,
+                out _,
+                out _),
+            "another run's pages are not this comparison's own first pass.");
+
+        Assert.ThrowsExactly<ArgumentException>(
+            () => EuLanguageScopedExpressionDecode.TryDecode(
+                new EuProofBoundDelivery(
+                    runA.Proof, runA.Comparison, runA.Profile, runA.ProfileRef,
+                    runB.CountHttpEvidenceRef, runA.PagesInOrder),
+                null,
+                new LanguageScopedExpressionSet(),
+                out _,
+                out _,
+                out _),
+            "and another run's count evidence is not this comparison's own count.");
+    }
+
+    /// <summary>The same delivery, unsubstituted, still decodes - so the binding above is not a wall.</summary>
+    /// <remarks>
+    /// A refusal test proves nothing on its own: a door that refused everything would pass it. This
+    /// is the other half, and it is the shape all thirteen production callers already use - pages
+    /// reopened from the comparison's own first pass, in ordinal order, with that comparison's own
+    /// count evidence.
+    /// </remarks>
+    [TestMethod]
+    public void ThisRunsOwnPagesStillOpenUnderTheSameBinding()
+    {
+        var runA = Bound(Expression(WorkOne, ExprEnglish, English));
+
+        var decoded = EuLanguageScopedExpressionDecode.TryDecode(
+            runA, null, new LanguageScopedExpressionSet(), out var refusal, out _, out _);
+
+        Assert.AreEqual(EuLanguageScopedExpressionDecodeRefusal.None, refusal);
+        Assert.IsNotNull(decoded);
+        Assert.HasCount(1, decoded);
+    }
+
     // ---- Fixtures. Every delivery below is minted, proven and reopened. ----
 
     private static IReadOnlyList<LanguageScopedExpression>? Decode(
@@ -1127,7 +1263,7 @@ public sealed class EuLanguageScopedExpressionDecodeTests
         out string? offendingIri,
         IReadOnlyList<string>? canonicalKey = null) =>
         EuLanguageScopedExpressionDecode.TryDecode(
-            Bound(expressionRows, canonicalKey), null, SourceObject(), into,
+            Bound(expressionRows, canonicalKey), null, into,
             out refusal, out _, out offendingIri);
 
     private static IReadOnlyList<LanguageScopedExpression>? DecodeWithDates(
@@ -1138,7 +1274,6 @@ public sealed class EuLanguageScopedExpressionDecodeTests
         EuLanguageScopedExpressionDecode.TryDecode(
             Bound(expressionRows),
             BoundObjectFacts(objectRows, objectFactsKey),
-            SourceObject(),
             new LanguageScopedExpressionSet(),
             out refusal,
             out _,
@@ -1186,7 +1321,6 @@ public sealed class EuLanguageScopedExpressionDecodeTests
                 proof!, delivery, fixture.ProfileForTest, delivery.InterpretationProfileRef,
                 delivery.CountA.HttpEvidenceRef, Pages(fixture, delivery)),
             null,
-            SourceObject(),
             new LanguageScopedExpressionSet(),
             out refusal,
             out _,
@@ -1220,10 +1354,18 @@ public sealed class EuLanguageScopedExpressionDecodeTests
             delivery.CountA.HttpEvidenceRef, Pages(fixture, delivery));
     }
 
+    /// <param name="runIdentitySeed">
+    /// Defaults to the fixture's own default. A second value mints an independently valid delivery
+    /// of the SAME rows under a different acquisition run - the fixture's own remarks say that is
+    /// what this seed exists for - which is the only way to build a provenance substitution whose
+    /// rows agree on every digest.
+    /// </param>
     private static EuProofBoundDelivery Bound(
-        IReadOnlyList<string> rows, IReadOnlyList<string>? canonicalKey = null)
+        IReadOnlyList<string> rows,
+        IReadOnlyList<string>? canonicalKey = null,
+        int runIdentitySeed = 930)
     {
-        var fixture = XFixture(rows, canonicalKey);
+        var fixture = XFixture(rows, canonicalKey, runIdentitySeed);
         var delivery = fixture.Create(string.Empty, string.Empty);
         var proof = AbsenceFamilyEnumerationProof.TryCreate(
             "laws", delivery, CustodyMembership.Floored, out var proofRefusal);
@@ -1264,7 +1406,9 @@ public sealed class EuLanguageScopedExpressionDecodeTests
     /// unique - so tests about idempotent repetition widen it to include the cursor.
     /// </param>
     private static RepeatedEnumerationDeliveryProofTests.Fixture XFixture(
-        IReadOnlyList<string> rows, IReadOnlyList<string>? canonicalKey = null)
+        IReadOnlyList<string> rows,
+        IReadOnlyList<string>? canonicalKey = null,
+        int runIdentitySeed = 930)
     {
         var body = RowsJson(XProjection, rows);
         return new RepeatedEnumerationDeliveryProofTests.Fixture(
@@ -1272,7 +1416,8 @@ public sealed class EuLanguageScopedExpressionDecodeTests
             rawRowsB: body,
             expectedCount: rows.Count,
             projectionVariables: XProjection,
-            canonicalKeyVariables: canonicalKey ?? XKey);
+            canonicalKeyVariables: canonicalKey ?? XKey,
+            runIdentitySeed: runIdentitySeed);
     }
 
     private static IReadOnlyList<RepeatedEnumerationResolvedEvidence> Pages(

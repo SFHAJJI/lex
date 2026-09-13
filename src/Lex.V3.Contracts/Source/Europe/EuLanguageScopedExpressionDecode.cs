@@ -234,15 +234,17 @@ public static class EuLanguageScopedExpressionDecode
     /// <summary>
     /// Appends one language-scoped expression per stated Expression, or refuses without appending.
     /// </summary>
-    /// <param name="expressionFactRows">The retained family X (Expression-facts) rows.</param>
-    /// <param name="expressionFactProfile">The profile family X was projected under.</param>
-    /// <param name="objectFactRows">
-    /// The retained family P (object-facts) rows. Read only for <c>work_date_document</c> on Works
-    /// this delivery has Expressions of; every other row is outside this door's subject set.
+    /// <param name="expressionFacts">
+    /// The family X (Expression-facts) delivery: its proof, the comparison that minted it, the
+    /// profile it was projected under and that profile's reference, its count evidence, and its
+    /// pages in order. Rows are never accepted; they are reopened from these through
+    /// <see cref="VerifiedRepeatedEnumerationRows.TryOpen"/>.
     /// </param>
-    /// <param name="objectFactProfile">The profile family P was projected under.</param>
-    /// <param name="sourceObject">The source object this delivery belongs to.</param>
-    /// <param name="retainedTransportBytes">The custody receipt for the exact retained bytes.</param>
+    /// <param name="objectFacts">
+    /// The family P (object-facts) delivery, in the same proof-bound shape, or <c>null</c> when
+    /// this call has none. Read only for <c>work_date_document</c> on Works this delivery has
+    /// Expressions of; every other row is outside this door's subject set.
+    /// </param>
     /// <param name="into">
     /// The append-only set to append into. On refusal it is left exactly as it was found.
     /// </param>
@@ -257,14 +259,12 @@ public static class EuLanguageScopedExpressionDecode
     public static IReadOnlyList<LanguageScopedExpression>? TryDecode(
         EuProofBoundDelivery expressionFacts,
         EuProofBoundDelivery? objectFacts,
-        SourceObjectRef sourceObject,
         LanguageScopedExpressionSet into,
         out EuLanguageScopedExpressionDecodeRefusal refusal,
         out string? refusalDetail,
         out string? offendingIri)
     {
         ArgumentNullException.ThrowIfNull(expressionFacts);
-        ArgumentNullException.ThrowIfNull(sourceObject);
         ArgumentNullException.ThrowIfNull(into);
 
         refusal = EuLanguageScopedExpressionDecodeRefusal.None;
@@ -551,9 +551,42 @@ public static class EuLanguageScopedExpressionDecode
         // would attach a role to bytes that never carried the thing it names. The terminating empty
         // page is therefore cited by nothing: it witnesses that the enumeration finished, which is a
         // property of the proof-bound delivery and is already carried there.
+        // ONLY THE ROWS THAT STATED AN ADMITTED FIELD, WHICH IS NARROWER THAN "MENTIONED THIS
+        // EXPRESSION".
+        //
+        // Two predicates state the fields this contribution is named for, and exactly two.
+        // belongs_to_work states the identity's work binding - it is what self-closure is computed
+        // from and what the two-column agreement check consumes - and uses_language is the sole
+        // source of the official language. Family X also delivers rows about the same expression
+        // under predicates this door reads nothing from, expression_title among them, and admits
+        // them deliberately rather than refusing the expression. A page carrying only such a row
+        // contributed NEITHER admitted field, so citing it here labels bytes with a role they never
+        // carried - which is a false provenance claim, not merely an over-broad one.
+        //
+        // Both predicates, not just uses_language. An earlier pass of this repair filtered to the
+        // language row alone, on the reading that the role names identity AND language
+        // conjunctively and only that row satisfies both at once. That is too narrow: it discards a
+        // page that really did state this expression's work binding, and under-citing bytes that
+        // contributed is the same class of error as over-citing bytes that did not. The straddle
+        // case in TheSameRowsPagedDifferentlyDecodeIdenticallyAndCiteEveryPage is exactly an
+        // expression whose two admitted rows fall either side of a page boundary, and it must keep
+        // citing both.
+        //
+        // Unbound rows of either predicate are skipped, mirroring the two loops above that skip
+        // them: a row that bound no value stated nothing, whatever its predicate says.
+        //
+        // No identity can come out with an empty page set: the loop above refuses
+        // ExpressionLanguageMissing for any identity with no bound uses_language row, so every
+        // identity reaching here has at least one, and the lookup below cannot miss.
         var pagesByIdentity = new Dictionary<LanguageScopedExpressionIdentity, SortedSet<int>>();
         foreach (var row in rows)
         {
+            if (row.ValueKind == "unbound" ||
+                (row.PredicateIri != belongsToWorkIri && row.PredicateIri != usesLanguageIri))
+            {
+                continue;
+            }
+
             var identity = new LanguageScopedExpressionIdentity(row.Parent, row.Expression);
             if (!pagesByIdentity.TryGetValue(identity, out var pages))
             {
@@ -589,7 +622,7 @@ public static class EuLanguageScopedExpressionDecode
                 identity,
                 languages[identity],
                 observedDate,
-                sourceObject,
+                BuildExpressionObjectRef(identity.PublisherExpressionId, expressionFacts.ProfileRef),
                 LanguageScopedExpressionLineage.FromContributions(entries)));
         }
 
@@ -634,6 +667,52 @@ public static class EuLanguageScopedExpressionDecode
     /// reopen path this door is given does not go through that private door, and a provenance claim
     /// that rests on an unchecked field is not a provenance claim.
     /// </remarks>
+    /// <summary>
+    /// This expression's own source object, derived from the IRI the publisher stated for it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// DERIVED, BECAUSE A CALLER MUST NOT BE ABLE TO ASSERT PROVENANCE. This door used to take one
+    /// <see cref="SourceObjectRef"/> and hand the same instance to every expression it appended. A
+    /// delivery covering two Works therefore made the second Work's expressions cite the first
+    /// Work's source object, and any structurally valid reference at all - one naming an unrelated
+    /// object - was admissible, because nothing compared it to anything the rows said. That is the
+    /// same shape <c>Lex.V3.Ingest.Europe.EuProcedureEventProducer</c> records as its own repaired
+    /// defect: "an assertion resting on rows a caller handed in and custody a caller named is not
+    /// one."
+    /// </para>
+    /// <para>
+    /// PER EXPRESSION, NOT PER WORK. <see cref="LanguageScopedExpression.SourceObject"/> is
+    /// documented as "the source object this expression was derived from", and one row of family X
+    /// is one Expression. A per-Work reference would still be wrong for the second corrigendum
+    /// Expression of one Work, which is precisely the case this whole contract exists to represent.
+    /// </para>
+    /// <para>
+    /// The evidence reference is the delivery's own interpretation-profile reference, which
+    /// <see cref="VerifiedRepeatedEnumerationRows.TryOpen"/> has already proved equal to
+    /// <c>proof.InterpretationProfileRef</c> before any row here was read - so it is this run's,
+    /// not a value this method chose. The shape mirrors
+    /// <see cref="EuCellarObjectDecode"/>'s own root and state object refs, which derive the same
+    /// way from the IRI they describe.
+    /// </para>
+    /// </remarks>
+    private static SourceObjectRef BuildExpressionObjectRef(
+        string expressionIri, SourceArtifactRef evidenceRef)
+    {
+        var canonicalKey = "eu-language-scoped-expression:" + expressionIri;
+        var canonicalKeySha256 = Convert.ToHexStringLower(
+            SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(canonicalKey)));
+        return new SourceObjectRef(
+            SourceCoreSchemaIds.SourceObjectRef,
+            SourceAuthority.Cellar,
+            new SourceRegistryMemberRef(evidenceRef, "eu_language_scoped_expression"),
+            expressionIri,
+            canonicalKey,
+            canonicalKeySha256,
+            evidenceRef,
+            null);
+    }
+
     private static bool EveryPageReceiptBindsItsBytes(
         EuProofBoundDelivery delivery, out string? offendingDigest)
     {
