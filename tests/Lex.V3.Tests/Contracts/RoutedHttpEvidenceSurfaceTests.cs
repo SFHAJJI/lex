@@ -101,10 +101,13 @@ public sealed class RoutedHttpEvidenceSurfaceTests
                 + "out System.ReadOnlyMemory<System.Byte>&) -> System.Void",
                 "field private instance " + Core + "RepeatedEnumerationObservedTransport::<HttpEvidence>k__BackingField -> " + Evidence,
                 "field private instance " + Core + "RepeatedEnumerationResolvedEvidence::<HttpEvidence>k__BackingField -> " + Evidence,
+                // LuxembourgGazetteBodyRetention (#419 slice 6a) carries the route evidence of one Gazette-PDF fetch beside its address, requests and receipt for the disposition to verify; a holder, never a minter.
+                "field private instance Lex.V3.Contracts.Source.Luxembourg.LuxembourgGazetteBodyRetention::<SourceEvidence>k__BackingField -> " + Evidence,
                 "method public static Lex.V3.Contracts.Source.Http.RoutedHttpCanonicalJson::ParseEvidence(System.ReadOnlySpan<System.Byte>) -> " + Evidence,
                 "property public instance " + Core + "EnumerationDeliveryComparison+VerifiedRepeatedEnumerationEvidence::HttpEvidence() -> " + Evidence,
                 "property public instance " + Core + "RepeatedEnumerationObservedTransport::HttpEvidence() -> " + Evidence,
                 "property public instance " + Core + "RepeatedEnumerationResolvedEvidence::HttpEvidence() -> " + Evidence,
+                "property public instance Lex.V3.Contracts.Source.Luxembourg.LuxembourgGazetteBodyRetention::SourceEvidence() -> " + Evidence,
             },
             ConstructionSurface.ProducersIn(typeof(RoutedHttpEvidence).Assembly, typeof(RoutedHttpEvidence), true).ToArray());
     }
