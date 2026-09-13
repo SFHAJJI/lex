@@ -18,7 +18,7 @@ public sealed partial class LuxembourgQueryExecutionAdapterTests
         var adapter = new LuxembourgQueryExecutionAdapter(store,
             NewExecutor(store, DisjointScopeHandler(families, subjects)), profile);
         var result = await adapter.RunScopedAsync(families, members,
-            new PermissiveEvidenceResolver(enumerationRef), DocumentFetchRendererSource(), CancellationToken.None);
+            new PermissiveEvidenceResolver(enumerationRef), DocumentFetchRendererSource(), LuxembourgAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
         Assert.IsNull(result.Refusal, result.Refusal?.Detail);
         Assert.AreEqual(LuxembourgQueryExecutionCompletion.AllFamiliesProven, result.Completion);
         CollectionAssert.AreEquivalent(subjects, result.ResourceObservationSubjects.ToArray());
@@ -60,7 +60,7 @@ public sealed partial class LuxembourgQueryExecutionAdapterTests
         var adapter = new LuxembourgQueryExecutionAdapter(store,
             NewExecutor(store, DisjointScopeHandler(families, subjects, refusedId)), profile);
         var result = await adapter.RunScopedAsync(families, members,
-            new PermissiveEvidenceResolver(enumerationRef), DocumentFetchRendererSource(), CancellationToken.None);
+            new PermissiveEvidenceResolver(enumerationRef), DocumentFetchRendererSource(), LuxembourgAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
         Assert.IsNotNull(result.Refusal);
         Assert.IsNull(result.ScopeManifestReceipt, "Incomplete declared scope must not reach reduction.");
         Assert.IsNull(result.CorpusRecordSet);
@@ -128,7 +128,7 @@ public sealed partial class LuxembourgQueryExecutionAdapterTests
         }
         var adapter = new LuxembourgQueryExecutionAdapter(store, NewExecutor(store, NoSendHandler()), profile);
         await Assert.ThrowsExactlyAsync<ArgumentException>(() => adapter.RunScopedAsync(
-            changed, members, DocumentFetchRendererSource(), CancellationToken.None));
+            changed, members, DocumentFetchRendererSource(), LuxembourgAcquisitionTestFixture.TestWireBudget(), CancellationToken.None));
     }
 
     [TestMethod]
@@ -143,7 +143,7 @@ public sealed partial class LuxembourgQueryExecutionAdapterTests
             DisjointScopeHandler(families, subjects, onFamilyStarting: key =>
             { if (key == "first-s") store.Corrupt = true; })), profile);
         var result = await adapter.RunScopedAsync(families, members,
-            new PermissiveEvidenceResolver(enumerationRef), DocumentFetchRendererSource(), CancellationToken.None);
+            new PermissiveEvidenceResolver(enumerationRef), DocumentFetchRendererSource(), LuxembourgAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
         Assert.IsTrue(result.FamilyOutcomes.All(value => value.Kind == LuxembourgFamilyEnumerationOutcomeKind.Proven));
         Assert.IsNotNull(result.Refusal);
         Assert.AreEqual(LuxembourgQueryExecutionRefusal.ResourceObservationRowsNotVerified, result.Refusal.Code);

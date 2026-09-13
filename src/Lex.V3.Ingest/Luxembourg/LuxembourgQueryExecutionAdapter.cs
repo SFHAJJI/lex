@@ -1068,10 +1068,11 @@ public sealed class LuxembourgQueryExecutionAdapter
         string? resourceObservationFamilyKey,
         string? resourceAssertionsFamilyKey,
         MachineQueryRendererSource documentFetchRendererSource,
+        WireRequestBudget wireBudget,
         CancellationToken cancellationToken) =>
         RunAsync(
             families, relationAssertionsFamilyKey, resourceObservationFamilyKey, resourceAssertionsFamilyKey,
-            evidenceResolver: null, documentFetchRendererSource, cancellationToken);
+            evidenceResolver: null, documentFetchRendererSource, wireBudget, cancellationToken);
 
     /// <summary>
     /// D1-04c item 2: the test-only seam. <paramref name="evidenceResolver"/>, when supplied,
@@ -1096,11 +1097,12 @@ public sealed class LuxembourgQueryExecutionAdapter
         string? resourceAssertionsFamilyKey,
         IScopeReductionEvidenceResolver? evidenceResolver,
         MachineQueryRendererSource documentFetchRendererSource,
+        WireRequestBudget wireBudget,
         CancellationToken cancellationToken) => RunCoreAsync(families,
             relationAssertionsFamilyKey is null ? [] : [relationAssertionsFamilyKey],
             resourceObservationFamilyKey is null ? [] : [resourceObservationFamilyKey],
             resourceAssertionsFamilyKey is null ? [] : [resourceAssertionsFamilyKey],
-            evidenceResolver, documentFetchRendererSource, scoped: false, cancellationToken);
+            evidenceResolver, documentFetchRendererSource, scoped: false, wireBudget, cancellationToken);
 
     /// <summary>
     /// Executes a declared union of disjoint whole-subject ranges. Every member names aligned
@@ -1111,8 +1113,9 @@ public sealed class LuxembourgQueryExecutionAdapter
             LuxembourgPartitionChain? Cover)> families,
         IReadOnlyList<LuxembourgScopePartitionFamilies> scopeMembers,
         MachineQueryRendererSource documentFetchRendererSource,
+        WireRequestBudget wireBudget,
         CancellationToken cancellationToken) => RunScopedAsync(
-            families, scopeMembers, null, documentFetchRendererSource, cancellationToken);
+            families, scopeMembers, null, documentFetchRendererSource, wireBudget, cancellationToken);
 
     internal Task<LuxembourgQueryExecutionResult> RunScopedAsync(
         IReadOnlyList<(LuxembourgPartitionRunRequest PartitionRequest, BoundMachineRequest SourceWitness,
@@ -1120,10 +1123,16 @@ public sealed class LuxembourgQueryExecutionAdapter
         IReadOnlyList<LuxembourgScopePartitionFamilies> scopeMembers,
         IScopeReductionEvidenceResolver? evidenceResolver,
         MachineQueryRendererSource documentFetchRendererSource,
+        WireRequestBudget wireBudget,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(families);
         ArgumentNullException.ThrowIfNull(scopeMembers);
+        // AT THE DOOR THE CALLER USED, not three frames down in RunCoreAsync. Validate below is a
+        // cross-argument check on the scope's shape, so a null ceiling reaching it surfaced as "a
+        // scoped run requires exactly S, A and G" - an error about the wrong argument entirely, and
+        // one that would send a caller looking at their families instead of their ceiling.
+        ArgumentNullException.ThrowIfNull(wireBudget);
         families = families.ToArray();
         scopeMembers = scopeMembers.ToArray();
         LuxembourgScopePartitionFamilies.Validate(families, scopeMembers);
@@ -1131,7 +1140,7 @@ public sealed class LuxembourgQueryExecutionAdapter
             scopeMembers.Select(static member => member.RelationFamilyKey).ToArray(),
             scopeMembers.Select(static member => member.CensusFamilyKey).ToArray(),
             scopeMembers.Select(static member => member.AssertionFamilyKey).ToArray(),
-            evidenceResolver, documentFetchRendererSource, scoped: true, cancellationToken);
+            evidenceResolver, documentFetchRendererSource, scoped: true, wireBudget, cancellationToken);
     }
 
     private async Task<LuxembourgQueryExecutionResult> RunCoreAsync(
@@ -1143,9 +1152,17 @@ public sealed class LuxembourgQueryExecutionAdapter
         IScopeReductionEvidenceResolver? evidenceResolver,
         MachineQueryRendererSource documentFetchRendererSource,
         bool scoped,
+        WireRequestBudget wireBudget,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(families);
+        // ONE CEILING FOR THE RUN, AND EVERY DOOR BELOW CHARGES IT. This run enumerates N families,
+        // may drive a cover chain for any of them, and then fetches a document per admitted object -
+        // three different loops whose trip counts come from the caller's families and the
+        // publisher's answers, never from a constant here. A ceiling minted per family, per leaf or
+        // per document would bound each of those and leave the run unbounded, so there is exactly
+        // one instance and it is the caller's.
+        ArgumentNullException.ThrowIfNull(wireBudget);
         families = families.ToArray();
         foreach (var family in families) ArgumentNullException.ThrowIfNull(family.PartitionRequest);
         if (families.Select(static family => family.PartitionRequest.Partition.PartitionId)
@@ -1186,7 +1203,7 @@ public sealed class LuxembourgQueryExecutionAdapter
             var isAssertionFamily = assertionFamilyKeys.Contains(familyKey, StringComparer.Ordinal);
 
             var runResult = await _executor.RunPartitionAsync(
-                    partitionRequest, sourceWitness, cancellationToken)
+                    partitionRequest, sourceWitness, wireBudget, cancellationToken)
                 .ConfigureAwait(false);
 
             if (runResult.Receipt is { } receipt)
@@ -1229,7 +1246,7 @@ public sealed class LuxembourgQueryExecutionAdapter
                 // saturated. A cover chain was supplied for exactly this family, so drive it rather
                 // than accepting the ordinary refusal below.
                 var coverOutcome = await DriveCoverReconciliationAsync(
-                        partitionRequest, cover, sourceWitness, cancellationToken)
+                        partitionRequest, cover, sourceWitness, wireBudget, cancellationToken)
                     .ConfigureAwait(false);
                 if (coverOutcome.Legs is { } legs)
                 {
@@ -1546,7 +1563,7 @@ public sealed class LuxembourgQueryExecutionAdapter
         var (documentAcquisitionOutcomesByOrdinal, acquisitionRefusal) =
             await RunDocumentAcquisitionAsync(
                     reopenedManifest!, mintedAddressesByObjectRef, documentFetchRendererSource,
-                    cancellationToken)
+                    wireBudget, cancellationToken)
                 .ConfigureAwait(false);
         if (acquisitionRefusal is not null)
         {
@@ -2074,11 +2091,13 @@ public sealed class LuxembourgQueryExecutionAdapter
         ScopeManifest reopenedManifest,
         IReadOnlyDictionary<SourceObjectRef, LuxembourgDocumentFetchAddress> mintedAddressesByObjectRef,
         MachineQueryRendererSource documentFetchRendererSource,
+        WireRequestBudget wireBudget,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(reopenedManifest);
         ArgumentNullException.ThrowIfNull(mintedAddressesByObjectRef);
         ArgumentNullException.ThrowIfNull(documentFetchRendererSource);
+        ArgumentNullException.ThrowIfNull(wireBudget);
 
         var bodyAcceptedOrdinals = new HashSet<int>();
         foreach (var accountingSet in reopenedManifest.Accounting)
@@ -2122,7 +2141,7 @@ public sealed class LuxembourgQueryExecutionAdapter
                 $"urn:uuid:{Guid.NewGuid():D}",
                 documentFetchRendererSource);
             var attempt = await _executor.RunDocumentGetAsync(
-                    bound.Request, cancellationToken)
+                    bound.Request, wireBudget, cancellationToken)
                 .ConfigureAwait(false);
             if (attempt.Evidence is null)
             {
@@ -2341,9 +2360,11 @@ public sealed class LuxembourgQueryExecutionAdapter
         LuxembourgPartitionRunRequest rootRequest,
         LuxembourgPartitionChain chain,
         BoundMachineRequest sourceWitness,
+        WireRequestBudget wireBudget,
         CancellationToken cancellationToken)
     {
-        var leafResults = await _executor.RunCoverAsync(rootRequest, chain, sourceWitness, cancellationToken)
+        var leafResults = await _executor.RunCoverAsync(
+                rootRequest, chain, sourceWitness, wireBudget, cancellationToken)
             .ConfigureAwait(false);
 
         // RunCoverAsync's own contract: exactly one result per chain leaf, in leaf order, whether or

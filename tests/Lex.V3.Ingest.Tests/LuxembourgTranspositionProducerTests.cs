@@ -49,6 +49,7 @@ public sealed partial class LuxembourgQueryExecutionAdapterTests
         var execution = await adapter.RunAsync(
             [(partitionRequest, witness, null)], RelationFamilyKey, null, null,
             new PermissiveEvidenceResolver(enumerationRef), DocumentFetchRendererSource(),
+            LuxembourgAcquisitionTestFixture.TestWireBudget(),
             CancellationToken.None);
 
         var result = LuxembourgTranspositionProducer.Produce(execution);
@@ -93,6 +94,7 @@ public sealed partial class LuxembourgQueryExecutionAdapterTests
         return await adapter.RunAsync(
             [(partitionRequest, witness, null)], RelationFamilyKey, null, null,
             new PermissiveEvidenceResolver(enumerationRef), DocumentFetchRendererSource(),
+            LuxembourgAcquisitionTestFixture.TestWireBudget(),
             CancellationToken.None);
     }
 }

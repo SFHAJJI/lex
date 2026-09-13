@@ -285,6 +285,7 @@ public sealed class LuxembourgDocumentGetTests
             manifest.Manifest,
             new Dictionary<SourceObjectRef, LuxembourgDocumentFetchAddress> { [ObjectRef()] = Address() },
             LuxembourgAcquisitionTestFixture.DocumentFetchRendererSource(3101),
+            LuxembourgAcquisitionTestFixture.TestWireBudget(),
             CancellationToken.None);
 
         Assert.IsNull(refusal, refusal?.Detail);
@@ -371,6 +372,7 @@ public sealed class LuxembourgDocumentGetTests
             manifest,
             addresses,
             LuxembourgAcquisitionTestFixture.DocumentFetchRendererSource(4242),
+            LuxembourgAcquisitionTestFixture.TestWireBudget(),
             CancellationToken.None);
 
         Assert.IsNull(refusal, $"one object's 404 must not refuse the run: {refusal?.Detail}");
@@ -958,7 +960,7 @@ public sealed class LuxembourgDocumentGetTests
             $"urn:uuid:{Guid.NewGuid():D}",
             LuxembourgAcquisitionTestFixture.DocumentFetchRendererSource(3001));
         return await executor.RunDocumentGetAsync(
-            bound.Request, cancellationToken);
+            bound.Request, LuxembourgAcquisitionTestFixture.TestWireBudget(), cancellationToken);
     }
 
     private static Task<(
@@ -1005,6 +1007,7 @@ public sealed class LuxembourgDocumentGetTests
             verified.Manifest,
             new Dictionary<SourceObjectRef, LuxembourgDocumentFetchAddress> { [ObjectRef()] = address },
             LuxembourgAcquisitionTestFixture.DocumentFetchRendererSource(3201),
+            LuxembourgAcquisitionTestFixture.TestWireBudget(),
             CancellationToken.None);
         return (
             outcomes ?? new Dictionary<int, CorpusAcquisitionOutcome>(),

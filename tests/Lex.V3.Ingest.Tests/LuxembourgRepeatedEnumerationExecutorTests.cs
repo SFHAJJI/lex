@@ -1821,7 +1821,7 @@ public sealed class LuxembourgRepeatedEnumerationExecutorTests
         for (var run = 0; run < 2; run++)
         {
             var result = await executor.RunPartitionAsync(
-                request, witness, CancellationToken.None, budget);
+                request, witness, budget, CancellationToken.None);
             codes.Add(result.Refusal?.Code);
         }
 
@@ -1857,7 +1857,7 @@ public sealed class LuxembourgRepeatedEnumerationExecutorTests
     {
         var executor = new LuxembourgRepeatedEnumerationExecutor(
             store, new LuxembourgAcquisitionTestFixture.FixedTimeProvider(), handler);
-        return executor.RunPartitionAsync(request, witness, CancellationToken.None);
+        return executor.RunPartitionAsync(request, witness, LuxembourgAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
     }
 
     /// <summary>See <see cref="Run"/>; drives RunCoverAsync instead of RunPartitionAsync.</summary>
@@ -1870,7 +1870,7 @@ public sealed class LuxembourgRepeatedEnumerationExecutorTests
     {
         var executor = new LuxembourgRepeatedEnumerationExecutor(
             store, new LuxembourgAcquisitionTestFixture.FixedTimeProvider(), handler);
-        return executor.RunCoverAsync(rootRequest, chain, witness, CancellationToken.None);
+        return executor.RunCoverAsync(rootRequest, chain, witness, LuxembourgAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
     }
 
     private static int CountFiles(string root) =>

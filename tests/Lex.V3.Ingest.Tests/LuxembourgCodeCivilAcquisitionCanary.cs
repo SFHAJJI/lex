@@ -175,14 +175,36 @@ public sealed class LuxembourgCodeCivilAcquisitionCanary
 
         var (manifest, manifestRef) = BuildAcceptedBodyManifest(objectRefs);
 
+        // DERIVED, NOT DISPOSITIONED, AND THE DIFFERENCE IS WHY. WireRequestBudget's own remarks
+        // warn that a number computed outside the executor is a prediction, because an enumeration
+        // keeps paging on the publisher's own row count after the plan was drawn. Nothing here
+        // pages: the manifest is fixed before the first request, every row is one document GET, and
+        // the source profile allows AttemptsPerDocument attempts for it including its robots fetch.
+        // So this is the run's exact worst case over its own declared inputs, not a projection of a
+        // figure the publisher has yet to state — and a ceiling that tracks the manifest cannot go
+        // stale when the manifest changes, which a pinned number would.
+        const int AttemptsPerDocument = 1 + 4;
+        var budget = WireRequestBudget.OfWireRequests(manifest.Rows.Count * AttemptsPerDocument);
+
         var (outcomes, refusal) = await adapter.RunDocumentAcquisitionAsync(
             manifest,
             addresses,
             LuxembourgAcquisitionTestFixture.DocumentFetchRendererSource(9101),
+            budget,
             CancellationToken.None);
 
         Assert.IsNull(refusal, $"whole-run refusal: {refusal?.Code} {refusal?.Detail}");
         Assert.IsNotNull(outcomes);
+
+        // The ceiling is reported, not merely held: a canary that stopped because it ran out of
+        // requests and a canary that finished look the same in the accepted fraction below.
+        Console.WriteLine(
+            $"CANARY wire requests: {budget.Spent} of {budget.Limit} "
+            + $"({manifest.Rows.Count} rows x {AttemptsPerDocument})");
+        Assert.IsFalse(
+            budget.Exhausted,
+            "the canary reached its derived ceiling, so the accepted fraction below is a partial "
+            + "run rather than a measurement of what the publisher holds.");
 
         // THE ACCEPTED FRACTION, AS A NUMBER.
         var held = outcomes!.Count(pair => pair.Value.Receipt is not null);
