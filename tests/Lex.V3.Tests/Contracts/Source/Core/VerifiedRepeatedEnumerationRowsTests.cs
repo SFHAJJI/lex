@@ -344,6 +344,62 @@ public sealed class VerifiedRepeatedEnumerationRowsTests
     }
 
     /// <summary>
+    /// Another run's pages, and another run's count evidence, are refused against this comparison -
+    /// even though the rows are identical and every digest below agrees.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The gap this closes was demonstrated rather than theorised: two independently valid
+    /// deliveries of the same rows agree on delivered count, canonical-key digest, cursor digest and
+    /// row digest, so every re-derivation in this door passed while the pages it returned rows from
+    /// belonged to a different acquisition run. Callers then published those pages' custody receipts
+    /// as the bytes that carried this proof's rows. The rows were right and the provenance was not.
+    /// </para>
+    /// <para>
+    /// The substituted pages are internally honest - run B's receipts name run B's own bytes - which
+    /// is why a per-page receipt check cannot catch this. That check asks whether a page is
+    /// self-consistent; this asks whether it belongs to the comparison being opened.
+    /// </para>
+    /// <para>
+    /// Each half is asserted on its own, so neither binding can be dropped while the other covers
+    /// for it.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void AnotherRunsPagesAndCountEvidenceAreRefusedAgainstThisComparison()
+    {
+        var fixture = new RepeatedEnumerationDeliveryProofTests.Fixture();
+        var delivery = fixture.Create("a,b", "a,b");
+        var proof = AbsenceFamilyEnumerationProof.TryCreate("laws", delivery, CustodyMembership.Floored, out _);
+        Assert.IsNotNull(proof);
+        var pages = ResolvePages(fixture, delivery);
+
+        var otherFixture = new RepeatedEnumerationDeliveryProofTests.Fixture(runIdentitySeed: 931);
+        var otherDelivery = otherFixture.Create("a,b", "a,b");
+        var otherPages = ResolvePages(otherFixture, otherDelivery);
+
+        // The premise, asserted rather than assumed. Without this, a fixture that ever minted one
+        // run twice would make both assertions below pass while proving nothing.
+        Assert.AreNotEqual(
+            delivery.PagesA.Pages[0].Evidence.HttpEvidenceRef,
+            otherDelivery.PagesA.Pages[0].Evidence.HttpEvidenceRef,
+            "the two deliveries must carry different page evidence for this to be a substitution.");
+        Assert.AreEqual(
+            delivery.CanonicalKeyDigestA,
+            otherDelivery.CanonicalKeyDigestA,
+            "and they must agree on the rows, or the digest checks would refuse this without the "
+            + "binding under test.");
+
+        Assert.ThrowsExactly<ArgumentException>(() => VerifiedRepeatedEnumerationRows.TryOpen(
+            proof!, delivery, fixture.ProfileForTest, delivery.InterpretationProfileRef,
+            delivery.CountA.HttpEvidenceRef, otherPages, out _));
+
+        Assert.ThrowsExactly<ArgumentException>(() => VerifiedRepeatedEnumerationRows.TryOpen(
+            proof!, delivery, fixture.ProfileForTest, delivery.InterpretationProfileRef,
+            otherDelivery.CountA.HttpEvidenceRef, pages, out _));
+    }
+
+    /// <summary>
     /// Another of the six compared fields: a comparison with the same partition key and run, but a
     /// different delivered row count (one row instead of two), is still an unrelated comparison
     /// this proof was not minted from.
@@ -486,6 +542,99 @@ public sealed class VerifiedRepeatedEnumerationRowsTests
         Assert.ThrowsExactly<ArgumentException>(() => VerifiedRepeatedEnumerationRows.TryOpen(
             proof!, delivery, otherProfile, otherProfileRef,
             delivery.CountA.HttpEvidenceRef, pages, out _));
+    }
+
+    /// <summary>
+    /// Every reference a page's evidence carries is one this door actually binds - all five, and a
+    /// sixth cannot be added silently.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <c>RequirePageEvidenceIdentity</c> calls the same primitives <c>Resolve</c> calls, so what is
+    /// repeated between them is not the logic but the LIST. A list is exactly the thing that goes
+    /// stale: adding a sixth reference to <see cref="RepeatedEnumerationEvidenceRefs"/> would leave
+    /// that field unbound at this door while every existing test kept passing, and the gap would
+    /// look exactly like the one this slice just repaired.
+    /// </para>
+    /// <para>
+    /// Structural, over the source text, because the property being pinned is "this method mentions
+    /// this field" - a property of the code, not of any one input. A behavioural test would need one
+    /// hostile case per field and would still say nothing about a field nobody thought to add.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void EveryEvidenceReferenceIsBoundFieldByField()
+    {
+        var references = typeof(RepeatedEnumerationEvidenceRefs)
+            .GetProperties()
+            .Where(static property => property.PropertyType == typeof(SourceArtifactRef))
+            .Select(static property => property.Name)
+            .OrderBy(static name => name, StringComparer.Ordinal)
+            .ToArray();
+
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "HttpEvidenceRef",
+                "LogicalRequestRef",
+                "QueryInputRef",
+                "QueryPlanRef",
+                "RenderReceiptRef",
+            },
+            references,
+            "a reference added here must also be bound below, or it travels unchecked.");
+
+        var body = MethodBody(
+            ReadSource("src/Lex.V3.Contracts/Source/Core/RepeatedEnumerationDeliveryProof.cs"),
+            "internal static void RequirePageEvidenceIdentity(");
+
+        foreach (var reference in references)
+        {
+            StringAssert.Contains(
+                body,
+                "refs." + reference,
+                $"RequirePageEvidenceIdentity does not bind {reference}.");
+        }
+    }
+
+    /// <summary>One method's braces-matched body, so a mention elsewhere in the file cannot satisfy the pin above.</summary>
+    private static string MethodBody(string source, string signature)
+    {
+        var start = source.IndexOf(signature, StringComparison.Ordinal);
+        Assert.IsGreaterThanOrEqualTo(0, start, $"'{signature}' is not in the source read.");
+
+        var open = source.IndexOf('{', start);
+        Assert.IsGreaterThanOrEqualTo(0, open, "the method has no body.");
+
+        var depth = 0;
+        for (var index = open; index < source.Length; index++)
+        {
+            if (source[index] == '{')
+            {
+                depth++;
+            }
+            else if (source[index] == '}' && --depth == 0)
+            {
+                return source[open..index];
+            }
+        }
+
+        Assert.Fail("the method body is unterminated.");
+        return string.Empty;
+    }
+
+    private static string ReadSource(string repositoryRelativePath)
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "Lex.V3.slnx")))
+        {
+            directory = directory.Parent;
+        }
+
+        var root = directory?.FullName
+            ?? throw new InvalidOperationException("Checkout root not found.");
+        return File.ReadAllText(
+            Path.Combine(root, repositoryRelativePath.Replace('/', Path.DirectorySeparatorChar)));
     }
 
     private static IReadOnlyList<RepeatedEnumerationResolvedEvidence> ResolvePages(
