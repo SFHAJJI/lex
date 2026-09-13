@@ -524,6 +524,12 @@ public sealed class ClosedVocabularyCensusTests
                     + "DeclaredOnAnotherClass",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgDraftRelationPredicate: "
                     + "DraftTransposes",
+                "Lex.V3.Contracts.Source.Luxembourg.LuxembourgGazetteActGapReason: "
+                    + "RealizationPathUnproven, NoGazettePdfCandidate",
+                "Lex.V3.Contracts.Source.Luxembourg.LuxembourgGazetteBodyGapReason: "
+                    + "WemiTupleTypedQuarantine, WemiRootMismatch, BodyNotRetained",
+                "Lex.V3.Contracts.Source.Luxembourg.LuxembourgGazetteBodyOutcome: Admitted, "
+                    + "Rejected, TypedGap",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgLiteralDisposition: Accepted, "
                     + "TypedQuarantine",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgLiteralReason: "
@@ -532,6 +538,10 @@ public sealed class ClosedVocabularyCensusTests
                     + "TypedQuarantineContextDependentDatatype, TypedQuarantineIllTyped",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgNeverConsolidatedAdmitRefusal: None, "
                     + "DispositionDisagrees, ActClassDisagrees, CompletionEvidenceDisagrees",
+                "Lex.V3.Contracts.Source.Luxembourg.LuxembourgNeverConsolidatedBodyActOutcome: "
+                    + "BodiesDisposed, ActGap, BodyNotDiscovered",
+                "Lex.V3.Contracts.Source.Luxembourg.LuxembourgNeverConsolidatedBodyLedgerRefusal: "
+                    + "None, SetForActNotInPopulation, SetDeliveredTwice",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgNeverConsolidatedCoverageRefusal: "
                     + "None, UnrecognizedActClass",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgNeverConsolidatedDisposition: "
