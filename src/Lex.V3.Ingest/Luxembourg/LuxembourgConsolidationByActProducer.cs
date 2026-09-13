@@ -85,7 +85,7 @@ public sealed class LuxembourgConsolidationByActResult
     private LuxembourgConsolidationByActResult(
         string act,
         IReadOnlyList<LuxembourgActConsolidation>? consolidations,
-        SourceArtifactRef? completionEvidenceRef,
+        AbsenceFamilyEnumerationProof? proof,
         LuxembourgConsolidationByActRefusal refusal,
         string? detail,
         int productRequestCount,
@@ -94,9 +94,9 @@ public sealed class LuxembourgConsolidationByActResult
         Act = act;
         // SNAPSHOTTED, NOT ALIASED, for the reason the inventory result is: an IReadOnlyList handed
         // out over the producer's own List can be cast back to and mutated, which would change what
-        // a consumer counts while the evidence reference kept pointing at the original delivery.
+        // a consumer counts while the proof kept describing the original delivery.
         Consolidations = consolidations is null ? null : Array.AsReadOnly(consolidations.ToArray());
-        CompletionEvidenceRef = completionEvidenceRef;
+        Proof = proof;
         Refusal = refusal;
         Detail = detail;
         ProductRequestCount = productRequestCount;
@@ -117,8 +117,30 @@ public sealed class LuxembourgConsolidationByActResult
     /// </remarks>
     public IReadOnlyList<LuxembourgActConsolidation>? Consolidations { get; }
 
-    /// <summary>The run whose own evidence every consolidation cites. Non-null exactly when delivered.</summary>
-    public SourceArtifactRef? CompletionEvidenceRef { get; }
+    /// <summary>
+    /// The exact enumeration proof this act's consolidations were read from. Non-null exactly when
+    /// delivered.
+    /// </summary>
+    /// <remarks>
+    /// THE PROOF ITSELF, not a reference off it, and this is a repair. Review of the first slice-2
+    /// head found the result carried only <see cref="AbsenceFamilyEnumerationProof.AcquisitionRunRef"/>,
+    /// which is insufficient for the one consumer this slice feeds: the merged
+    /// <c>LuxembourgNeverConsolidatedEntry</c> requires an <see cref="AbsenceFamilyEnumerationProof"/>
+    /// and reads its <see cref="AbsenceFamilyEnumerationProof.DeliveredRowCount"/> to admit a
+    /// delivered-no-rows or delivered-rows disposition. A run reference cannot reconstruct the
+    /// proof's family key, row count, canonical-key digest, profile refs or retention floor, so the
+    /// frame could not turn a successful result into an evidence-bound entry without rerunning. The
+    /// exact proof passed to <see cref="VerifiedRepeatedEnumerationRows.TryOpen"/> is carried here
+    /// unchanged, by object identity.
+    /// </remarks>
+    public AbsenceFamilyEnumerationProof? Proof { get; }
+
+    /// <summary>The acquisition run every consolidation cites, read off <see cref="Proof"/>.</summary>
+    /// <remarks>
+    /// Derived rather than stored, so it cannot disagree with the proof it is supposed to name.
+    /// Non-null exactly when delivered.
+    /// </remarks>
+    public SourceArtifactRef? CompletionEvidenceRef => Proof?.AcquisitionRunRef;
 
     public LuxembourgConsolidationByActRefusal Refusal { get; }
     public string? Detail { get; }
@@ -132,10 +154,10 @@ public sealed class LuxembourgConsolidationByActResult
     internal static LuxembourgConsolidationByActResult Success(
         string act,
         IReadOnlyList<LuxembourgActConsolidation> consolidations,
-        SourceArtifactRef completionEvidenceRef,
+        AbsenceFamilyEnumerationProof proof,
         int productRequestCount,
         WireBudgetSnapshot wireBudget) =>
-        new(act, consolidations, completionEvidenceRef,
+        new(act, consolidations, proof,
             LuxembourgConsolidationByActRefusal.None, null, productRequestCount, wireBudget);
 
     internal static LuxembourgConsolidationByActResult Refused(
@@ -342,7 +364,7 @@ public sealed class LuxembourgConsolidationByActProducer
         }
 
         return LuxembourgConsolidationByActResult.Success(
-            act, consolidations, completionEvidenceRef, productRequestCount, wireBudget);
+            act, consolidations, proof, productRequestCount, wireBudget);
     }
 
     private static LuxembourgActConsolidation DecodeRow(

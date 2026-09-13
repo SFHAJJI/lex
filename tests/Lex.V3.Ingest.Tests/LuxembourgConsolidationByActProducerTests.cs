@@ -79,12 +79,22 @@ public sealed class LuxembourgConsolidationByActProducerTests
     }
 
     private static LuxembourgConsolidationByActResult Decode(params RepeatedEnumerationRow[] rows) =>
+        DecodeWith(ProofOf(rows.Length), rows);
+
+    /// <summary>A proof whose delivered-row count is exactly <paramref name="rowCount"/>.</summary>
+    /// <remarks>
+    /// The count is honest, zero included, because the frame consumer reads
+    /// <see cref="AbsenceFamilyEnumerationProof.DeliveredRowCount"/> to admit a delivered-no-rows or
+    /// delivered-rows disposition; a fixture that reported one row for a zero-row decode could not
+    /// establish the zero-row handoff, which is one of the two things this repair closes.
+    /// </remarks>
+    private static AbsenceFamilyEnumerationProof ProofOf(int rowCount) =>
+        AbsenceFixtures.Delivery("lu-consolidation-by-act-test", rowCount).Proof;
+
+    private static LuxembourgConsolidationByActResult DecodeWith(
+        AbsenceFamilyEnumerationProof proof, params RepeatedEnumerationRow[] rows) =>
         LuxembourgConsolidationByActProducer.DecodeRows(
-            rows,
-            Profile(),
-            AbsenceFixtures.Delivery("lu-consolidation-by-act-test", Math.Max(rows.Length, 1)).Proof,
-            Act,
-            LuxembourgAcquisitionTestFixture.TestBudgetSnapshot());
+            rows, Profile(), proof, Act, LuxembourgAcquisitionTestFixture.TestBudgetSnapshot());
 
     // ---- the two bindings slice 2 exists to add --------------------------------------------------
 
@@ -133,7 +143,8 @@ public sealed class LuxembourgConsolidationByActProducerTests
         Assert.AreEqual(ConsA, one.Value);
         Assert.AreEqual(LuxembourgConsolidationByActDiscoveryPlan.IriKind, one.Kind);
         Assert.AreEqual(2, one.Multiplicity);
-        Assert.IsNotNull(result.CompletionEvidenceRef);
+        Assert.IsNotNull(result.Proof);
+        Assert.IsGreaterThanOrEqualTo(1, result.Proof!.DeliveredRowCount);
     }
 
     /// <summary>
@@ -177,7 +188,75 @@ public sealed class LuxembourgConsolidationByActProducerTests
         Assert.IsTrue(result.Delivered, $"{result.Refusal}: {result.Detail}");
         Assert.IsNotNull(result.Consolidations);
         Assert.IsEmpty(result.Consolidations!);
-        Assert.IsNotNull(result.CompletionEvidenceRef);
+        Assert.IsNotNull(result.Proof);
+        Assert.AreEqual(
+            0, result.Proof!.DeliveredRowCount,
+            "the carried proof reports zero rows, so the frame can admit a delivered-no-rows entry.");
+    }
+
+    /// <summary>
+    /// The exact proof used to read the rows is carried onto the result by object identity, and a
+    /// refusal carries none.
+    /// </summary>
+    /// <remarks>
+    /// The finding this repair closes: the first head kept only the acquisition-run reference off the
+    /// proof, which cannot reconstruct the family key, row count, digests or profile refs the merged
+    /// <c>LuxembourgNeverConsolidatedEntry</c> requires. The proof is carried unchanged - the same
+    /// object the decoder read from - so the frame consumes it without rerunning.
+    /// </remarks>
+    [TestMethod]
+    public void TheExactProofSurvivesOntoADeliveredResultAndARefusalCarriesNone()
+    {
+        var proof = ProofOf(1);
+        var delivered = DecodeWith(proof, Row());
+
+        Assert.IsTrue(delivered.Delivered, $"{delivered.Refusal}: {delivered.Detail}");
+        Assert.AreSame(
+            proof, delivered.Proof,
+            "the frame needs the exact proof by identity, not a reference derived from it.");
+        Assert.AreEqual(proof.AcquisitionRunRef, delivered.CompletionEvidenceRef);
+
+        var refused = DecodeWith(ProofOf(1), Row(act: Iri(OtherAct)));
+        Assert.AreEqual(LuxembourgConsolidationByActRefusal.RowNamesAnotherAct, refused.Refusal);
+        Assert.IsNull(refused.Proof, "a refusal carries no proof.");
+        Assert.IsNull(refused.CompletionEvidenceRef);
+    }
+
+    /// <summary>
+    /// A delivered result's proof builds the frame's own never-consolidated entry, both ways, with no
+    /// rerun - the whole reason the proof must survive this slice's public boundary.
+    /// </summary>
+    /// <remarks>
+    /// This reaches into the merged <c>LuxembourgNeverConsolidatedEntry</c> (Contracts), the exact
+    /// consumer the review named. A zero-row result admits <c>CitedEnumerationDeliveredNoRows</c>; a
+    /// delivered-rows result admits <c>CitedEnumerationDeliveredRows</c>; each is refused if paired
+    /// with the disposition its own proof contradicts, so the handoff is real rather than nominal.
+    /// </remarks>
+    [TestMethod]
+    public void ADeliveredResultsProofBuildsTheFramesNeverConsolidatedEntry()
+    {
+        const string Loi = "http://data.legilux.public.lu/resource/authority/legal-type/LOI";
+        var actClass = new LuxembourgActClassRef(Loi);
+
+        var none = Decode();
+        var noRows = new LuxembourgNeverConsolidatedEntry(
+            Act, actClass,
+            LuxembourgNeverConsolidatedDisposition.CitedEnumerationDeliveredNoRows,
+            none.Proof);
+        Assert.AreSame(none.Proof, noRows.EnumerationCompletionProof);
+
+        var some = DecodeWith(ProofOf(1), Row());
+        var withRows = new LuxembourgNeverConsolidatedEntry(
+            Act, actClass,
+            LuxembourgNeverConsolidatedDisposition.CitedEnumerationDeliveredRows,
+            some.Proof);
+        Assert.AreSame(some.Proof, withRows.EnumerationCompletionProof);
+
+        // AND THE PROOF STILL DECIDES: the delivered-rows proof cannot back a no-rows member.
+        Assert.ThrowsExactly<ArgumentException>(() => new LuxembourgNeverConsolidatedEntry(
+            Act, actClass,
+            LuxembourgNeverConsolidatedDisposition.CitedEnumerationDeliveredNoRows,
+            some.Proof));
     }
 
     // ---- the row-shape discipline, mirrored from the inventory decoder ---------------------------
@@ -346,6 +425,10 @@ public sealed class LuxembourgConsolidationByActProducerTests
             new[] { ConsA, ConsB }.Order(StringComparer.Ordinal).ToArray(),
             result.Consolidations!.Select(static value => value.Value).ToArray());
 
+        Assert.IsNotNull(result.Proof);
+        Assert.AreEqual(
+            2, result.Proof!.DeliveredRowCount,
+            "the real run's proof is carried and reports the two delivered rows.");
         var cited = await store.ReadByDigestAsync(
             result.CompletionEvidenceRef!.Sha256, CancellationToken.None);
         StringAssert.StartsWith(
