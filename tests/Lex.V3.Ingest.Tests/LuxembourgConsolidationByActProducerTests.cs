@@ -89,7 +89,12 @@ public sealed class LuxembourgConsolidationByActProducerTests
     /// establish the zero-row handoff, which is one of the two things this repair closes.
     /// </remarks>
     private static AbsenceFamilyEnumerationProof ProofOf(int rowCount) =>
-        AbsenceFixtures.Delivery("lu-consolidation-by-act-test", rowCount).Proof;
+        // KEYED TO THIS ACT'S OWN PER-ACT KEY, not an arbitrary family. #419 slice 3 binds a
+        // cited-enumeration frame entry to PartitionKeyFor(act), and ADeliveredResultsProofBuildsTheFramesNeverConsolidatedEntry
+        // below builds that entry from this proof, so the fixture must mint under the same key the
+        // real decoder's proof carries. An arbitrary family key would fail the frame's act-key guard.
+        AbsenceFixtures.Delivery(
+            LuxembourgConsolidationByActDiscoveryPlan.PartitionKeyFor(Act), rowCount).Proof;
 
     private static LuxembourgConsolidationByActResult DecodeWith(
         AbsenceFamilyEnumerationProof proof, params RepeatedEnumerationRow[] rows) =>
