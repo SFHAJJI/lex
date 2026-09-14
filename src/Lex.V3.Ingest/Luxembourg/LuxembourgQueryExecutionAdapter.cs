@@ -889,10 +889,13 @@ public sealed class LuxembourgQueryExecutionResult
     public VerifiedCorpusRecordSet? CorpusRecordSet { get; }
 
     /// <summary>
-    /// #419 slice 6c: per as-published act (by its manifest row ordinal) whose body join lists
-    /// Gazette PDFs, the act's <see cref="LuxembourgGazetteBodySet"/> - one typed outcome per
-    /// listing, produced by the accepted producer from this run's own fetches. Consolidations and
-    /// acts without Gazette listings have no entry. Null only on a refused run.
+    /// #419 slice 6c: per as-published original act, keyed by its manifest row ordinal, the act's
+    /// <see cref="LuxembourgGazetteBodySet"/> produced by the accepted producer from this run's own
+    /// fetches: one typed outcome per Gazette listing, or the act's own typed gap
+    /// (<see cref="LuxembourgGazetteActGapReason"/>) when it lists no Gazette PDF or its
+    /// realization path is unproven. EVERY as-published original act has an entry; only resources
+    /// the resolver admitted under another publication form (consolidations, regulator acts,
+    /// priority acts) or did not admit have none. Null only on a refused run.
     /// </summary>
     public IReadOnlyDictionary<int, LuxembourgGazetteBodySet>? GazetteBodySetsByOrdinal { get; }
 

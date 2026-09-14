@@ -57,8 +57,12 @@ public sealed class LuxembourgGazetteAcquisitionTests
         Assert.IsNull(run.Result.Refusal, $"{run.Result.Refusal?.Code}: {run.Result.Refusal?.Detail}");
         var sets = run.Result.GazetteBodySetsByOrdinal!;
         Assert.HasCount(1, sets, "one as-published act, one set.");
-        var set = sets.Values.Single();
+        var (ordinal, set) = sets.Single();
         Assert.AreEqual(Act, set.PublisherActIri);
+        Assert.AreEqual(
+            run.Result.CorpusRecordSet!.Set.Records.Single(record => record.ObjectRef.PublisherUri == Act).ObjectOrdinal,
+            ordinal,
+            "keyed by the act's own manifest row ordinal.");
         Assert.HasCount(2, set.Bodies);
         Assert.AreEqual(2, set.AdmittedCount);
         Assert.AreEqual(0, set.GapCount);
@@ -311,8 +315,12 @@ public sealed class LuxembourgGazetteAcquisitionTests
             ladderItem: itemXml, ladderBody: "<akomaNtoso/>"u8.ToArray(), ladderMediaType: "application/xml");
 
         Assert.IsNull(run.Result.Refusal, $"{run.Result.Refusal?.Code}: {run.Result.Refusal?.Detail}");
-        var set = run.Result.GazetteBodySetsByOrdinal!.Values.Single();
+        var (ordinal, set) = run.Result.GazetteBodySetsByOrdinal!.Single();
         Assert.AreEqual(Act, set.PublisherActIri);
+        Assert.AreEqual(
+            run.Result.CorpusRecordSet!.Set.Records.Single(record => record.ObjectRef.PublisherUri == Act).ObjectOrdinal,
+            ordinal,
+            "keyed by the act's own manifest row ordinal, the key the record set uses for it.");
         Assert.IsEmpty(set.Bodies);
         Assert.AreEqual(LuxembourgGazetteActGapReason.NoGazettePdfCandidate, set.ActGap);
         Assert.AreEqual(1, run.DocumentRequests, "the ladder's own xml fetch, and nothing from the Gazette loop.");
