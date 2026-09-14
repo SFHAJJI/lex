@@ -230,7 +230,7 @@ public sealed class ClosedVocabularyCensusTests
                 "Lex.V3.Ingest.Stage3EvidenceLineageRefusal: None, EuropeCorpusRecordSetMismatch, "
                     + "EuropeManifestMismatch, EuropeRunIdentityMismatch, "
                     + "LuxembourgCorpusRecordSetMismatch, LuxembourgManifestMismatch, "
-                    + "LuxembourgRunIdentityMismatch",
+                    + "LuxembourgRunIdentityMismatch, EuropeAnnexOutsideCorpus",
             },
             ClosedSurfaceCensus.ClosedVocabularies(CensusScope.SweptHere).ToArray());
     }

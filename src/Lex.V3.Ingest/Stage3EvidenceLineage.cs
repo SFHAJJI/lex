@@ -2,6 +2,7 @@ using System.Text.Json.Serialization;
 using Lex.V3.Contracts.Custody;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Corpus;
+using Lex.V3.Contracts.Source.Scope;
 
 namespace Lex.V3.Ingest;
 
@@ -28,6 +29,9 @@ public enum Stage3EvidenceLineageRefusal
 
     [JsonStringEnumMemberName("luxembourg_run_identity_mismatch")]
     LuxembourgRunIdentityMismatch = 6,
+
+    [JsonStringEnumMemberName("europe_annex_outside_corpus")]
+    EuropeAnnexOutsideCorpus = 7,
 }
 
 /// <summary>
@@ -94,6 +98,19 @@ public sealed class Stage3EvidenceLineage
                 out refusal,
                 out detail))
         {
+            return null;
+        }
+
+        var europeObjectRefs = envelope.Europe.CorpusRecordSet!.Set.Records
+            .Select(static record => record.ObjectRef)
+            .ToHashSet();
+        var annexOutsideCorpus = envelope.ImageOnlyEuAnnexes
+            .FirstOrDefault(annex => !europeObjectRefs.Contains(annex.SourceObject));
+        if (annexOutsideCorpus is not null)
+        {
+            refusal = Stage3EvidenceLineageRefusal.EuropeAnnexOutsideCorpus;
+            detail = ScopeManifestCanonicalWriter.ComputeObjectRefSha256(
+                annexOutsideCorpus.SourceObject);
             return null;
         }
 
