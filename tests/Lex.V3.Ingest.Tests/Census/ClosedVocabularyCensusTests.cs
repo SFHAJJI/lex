@@ -127,7 +127,7 @@ public sealed class ClosedVocabularyCensusTests
                     + "RowNotAdmitted",
                 "Lex.V3.Ingest.Europe.EuObjectPopulationRefusal: None, RunNotComplete, "
                     + "ObjectClaimedTwice, MintedRowOutsidePopulation, OutcomeOutsidePopulation, "
-                    + "OutcomeWithoutMintedRow",
+                    + "OutcomeWithoutMintedRow, PopulationIsNotEveryObservedObject",
                 "Lex.V3.Ingest.Europe.EuProcedureEventProductionRefusal: None, EnumerationRefused, "
                     + "EnumerationProofRefused, RowNotAdmitted, EventDossierNotConsistent, "
                     + "EventDateNotConsistent, DeliveredDossierOutsideRequestedPartition, "

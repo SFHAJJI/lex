@@ -28,6 +28,13 @@ public enum EuObjectPopulationRefusal
     /// <summary>An acquisition outcome names an ordinal that minted no fetch row.</summary>
     [JsonStringEnumMemberName("outcome_without_minted_row")]
     OutcomeWithoutMintedRow = 5,
+
+    /// <summary>
+    /// The corpus record set holds a different number of objects than the run says it observed, so
+    /// the population is not the run's own population.
+    /// </summary>
+    [JsonStringEnumMemberName("population_is_not_every_observed_object")]
+    PopulationIsNotEveryObservedObject = 6,
 }
 
 /// <summary>
@@ -51,7 +58,12 @@ public enum EuObjectPopulationRefusal
 /// </para>
 /// <para>
 /// It is minted from the run and takes no collection from a caller, so there is no list anyone can
-/// shorten. That is the difference between a population and an assertion about one.
+/// shorten. That is the difference between a population and an assertion about one. Taking no list
+/// was not on its own enough: the run itself is assembled through a public door that accepts the
+/// observed count and the corpus record set as independent arguments, so a valid, verified, SHORTER
+/// set could be handed in beside the original count and would have been read as the whole
+/// population. The size of the population is therefore checked against the run's own count rather
+/// than taken from the set, which is the same rule applied one level further back.
 /// </para>
 /// </remarks>
 public sealed class EuObjectPopulationCompletion
@@ -105,6 +117,22 @@ public sealed class EuObjectPopulationCompletion
         }
 
         var members = run.CorpusRecordSet.Set.Records;
+
+        // THE SET IS VERIFIED, WHICH IS NOT THE SAME AS BEING THIS RUN'S WHOLE POPULATION. A
+        // shortened set is still internally valid: it is strictly ordered, names no object twice,
+        // and canonicalizes to its own digest. What it cannot do is agree with the count the run
+        // states separately. EuQueryExecutionResult.Delivered is public and takes the observed count
+        // and the record set as independent arguments, so without this the one door that could
+        // shorten the population is the door that hands it over. Both directions refuse: a set
+        // larger than the run observed is no more this run's population than a smaller one.
+        if (members.Count != run.ObservedObjectCount)
+        {
+            refusal = EuObjectPopulationRefusal.PopulationIsNotEveryObservedObject;
+            detail = $"the run observed {run.ObservedObjectCount} objects but its corpus record set "
+                + $"holds {members.Count}";
+            return null;
+        }
+
         var byOrdinal = new Dictionary<int, CorpusRecord>();
         foreach (var member in members)
         {
