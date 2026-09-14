@@ -103,6 +103,19 @@ public sealed class DurableBlobReceiptFamilyIngestSurfaceTests
                 // paths. It HOLDS a receipt and never constructs one: the receipt comes only from
                 // ICustodyStore.CreateAsync, exactly as every other holder pinned here. Carried into
                 // this lane from the LU lane so one definition of held exists rather than two.
+                // #419 slice 6c: the manifest-driven document loop hands back, per accepted row, the
+                // route evidence and the receipt the custody store issued for the body it held, so
+                // the Gazette loop can reuse that fetch instead of asking the publisher a second
+                // time. It HOLDS receipts that came from CustodyHold.TryHoldAsync and constructs none.
+                "method internal instance Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionAdapter::RunDocumentAcquisitionAsync("
+                + "Lex.V3.Contracts.Source.Scope.ScopeManifest, System.Collections.Generic.IReadOnlyDictionary<"
+                + "Lex.V3.Contracts.Source.Core.SourceObjectRef, Lex.V3.Contracts.Source.Http.LuxembourgDocumentFetchAddress>, "
+                + "Lex.V3.Contracts.Source.Core.MachineQueryRendererSource, Lex.V3.Ingest.WireRequestBudget, "
+                + "System.Threading.CancellationToken) -> System.Threading.Tasks.Task<System.ValueTuple<"
+                + "System.Collections.Generic.IReadOnlyDictionary<System.Int32, Lex.V3.Ingest.CorpusAcquisitionOutcome>, "
+                + "System.Collections.Generic.IReadOnlyDictionary<System.Int32, System.ValueTuple<"
+                + "Lex.V3.Contracts.Source.Http.RoutedHttpEvidence, " + Receipt + ">>, "
+                + "Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionRefusalDetail>>",
                 "method internal static Lex.V3.Ingest.CustodyHold::TryHoldAsync("
                 + "Lex.V3.Contracts.Custody.ICustodyStore, System.ReadOnlyMemory<System.Byte>, "
                 + "System.Threading.CancellationToken) -> System.Threading.Tasks.Task<"

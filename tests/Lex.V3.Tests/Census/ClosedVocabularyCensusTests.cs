@@ -587,6 +587,8 @@ public sealed class ClosedVocabularyCensusTests
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgProfileResolutionFailureCode: "
                     + "InvalidPublisherIri, IncompleteVocabulary, UnknownVocabularyDrift, "
                     + "SelectorConflict, EvidenceBindingRejected",
+                "Lex.V3.Contracts.Source.Luxembourg.LuxembourgPublicationForm: NotQualified, "
+                    + "PriorityAct, Regulator, Consolidation, AsPublishedOriginal",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgQueryKeyKind: AbsoluteIriUtf8, "
                     + "CompositeLiteralUtf8",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgQueryPass: Pass1, Pass2",

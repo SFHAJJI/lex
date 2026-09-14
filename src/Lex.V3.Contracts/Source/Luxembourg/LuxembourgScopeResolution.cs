@@ -762,6 +762,46 @@ public sealed record LuxembourgDimensionAccounting
     public IReadOnlyList<int> ResourceOrdinals { get; }
 }
 
+/// <summary>
+/// Which of the resolver's own qualification branches admitted a resource's publication family,
+/// or that none did. Closed.
+/// </summary>
+/// <remarks>
+/// <para>
+/// WHY A TYPED FACT AND NOT A REASON CODE. The resolver already proves, inside its exact
+/// publication-family classifier, whether an ordinary act is the as-published original (its own
+/// <c>/jo</c> root, proven by class, membership and type) or a consolidation of one, and whether a
+/// regulator act is as-published; it then folds every accepted branch into the single reason code
+/// <c>accepted_exact_family</c>. Downstream, only the IRI suffix would remain, and a producer
+/// deciding what to fetch on an IRI suffix would be inferring what the resolver had already proved
+/// and thrown away. #419 slice 6c fetches every Gazette-PDF listing of the as-published original
+/// only, so the branch travels as data.
+/// </para>
+/// <para>
+/// It changes no disposition, reason code, rule id or evidence: it is the same decision, kept.
+/// </para>
+/// </remarks>
+public enum LuxembourgPublicationForm
+{
+    /// <summary>
+    /// The publication family did not reach <see cref="LuScopeTerminalState.AcceptedCandidate"/>
+    /// through any branch: missing, conflicting, point, never-ingest, quarantined or unqualified.
+    /// </summary>
+    NotQualified = 1,
+
+    /// <summary>A TC, RECT or ACC Act (the priority candidate types), carrying its own typed role.</summary>
+    PriorityAct = 2,
+
+    /// <summary>A regulator act (RCSF, RBCL, RILR) proven to be its own as-published original.</summary>
+    Regulator = 3,
+
+    /// <summary>A consolidation whose as-published original act is proven from the same observation.</summary>
+    Consolidation = 4,
+
+    /// <summary>The as-published original act itself: the proven <c>/jo</c> root of an ordinary type.</summary>
+    AsPublishedOriginal = 5,
+}
+
 public sealed record LuxembourgResourceResolution
 {
     internal LuxembourgResourceResolution(
@@ -771,7 +811,8 @@ public sealed record LuxembourgResourceResolution
         IReadOnlyList<LuxembourgResolvedRelation> relations,
         LuxembourgWemiTopologyResolution wemiTopology,
         LuxembourgBodyJoinResolution bodyJoin,
-        LuxembourgTypedRoleResolution typedRole)
+        LuxembourgTypedRoleResolution typedRole,
+        LuxembourgPublicationForm publicationForm)
     {
         ObjectRef = objectRef ?? throw new ArgumentNullException(nameof(objectRef));
         Dimensions = dimensions ?? throw new ArgumentNullException(nameof(dimensions));
@@ -780,6 +821,7 @@ public sealed record LuxembourgResourceResolution
         WemiTopology = wemiTopology ?? throw new ArgumentNullException(nameof(wemiTopology));
         BodyJoin = bodyJoin ?? throw new ArgumentNullException(nameof(bodyJoin));
         TypedRole = typedRole ?? throw new ArgumentNullException(nameof(typedRole));
+        PublicationForm = LuxembourgSourceValidation.RequireDefined(publicationForm, nameof(publicationForm));
     }
 
     public SourceObjectRef ObjectRef { get; }
@@ -796,6 +838,13 @@ public sealed record LuxembourgResourceResolution
 
     /// <summary>R5.1's own TC, RECT or ACC role for this resource. See <see cref="LuxembourgTypedRoleResolution"/>.</summary>
     public LuxembourgTypedRoleResolution TypedRole { get; }
+
+    /// <summary>
+    /// The branch that admitted the publication family, or
+    /// <see cref="LuxembourgPublicationForm.NotQualified"/>. Agrees with <see cref="Dimensions"/>'
+    /// publication-family state by construction: accepted if and only if a branch is named.
+    /// </summary>
+    public LuxembourgPublicationForm PublicationForm { get; }
 }
 
 public sealed record LuxembourgProfileResolutionFailure

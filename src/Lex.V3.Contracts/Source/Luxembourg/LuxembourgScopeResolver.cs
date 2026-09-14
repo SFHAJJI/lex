@@ -150,6 +150,7 @@ internal static class LuxembourgScopeResolver
                     WemiTopology = wemiTopology,
                     BodyJoin = bodyJoin,
                     TypedRole = ResolveTypedRole(observation),
+                    PublicationForm = ResolvePublicationForm(profile, observation),
                 };
             })
             .ToArray();
@@ -183,7 +184,8 @@ internal static class LuxembourgScopeResolver
                 relations,
                 classified[ordinal].WemiTopology,
                 classified[ordinal].BodyJoin,
-                classified[ordinal].TypedRole);
+                classified[ordinal].TypedRole,
+                classified[ordinal].PublicationForm);
             scopeInputs[ordinal] = BuildScopeInput(
                 profile,
                 observation,
@@ -459,7 +461,7 @@ internal static class LuxembourgScopeResolver
 
         if (types.Count == 1)
         {
-            var (state, reasonCode) = ClassifyExactPublicationFamily(
+            var (state, reasonCode, _) = ClassifyExactPublicationFamily(
                 profile, observation, classes, types[0]);
             return Disposition(state, reasonCode, "lu_family_exact_type", evidence);
         }
@@ -731,7 +733,27 @@ internal static class LuxembourgScopeResolver
     /// This is the same correction applied to the arm that still collapsed.
     /// </para>
     /// </remarks>
-    private static (LuScopeTerminalState State, string ReasonCode) ClassifyExactPublicationFamily(
+    /// <summary>
+    /// The publication form: the branch of <see cref="ClassifyExactPublicationFamily"/> that admitted
+    /// this resource, or not qualified. Computed from the same class and type assertions the family
+    /// disposition reads, so the two cannot disagree.
+    /// </summary>
+    private static LuxembourgPublicationForm ResolvePublicationForm(
+        VerifiedLuxembourgSourceProfile profile,
+        LuxembourgResourceObservation observation)
+    {
+        var resourceIri = observation.ObjectRef.PublisherUri;
+        var classes = IriValues(
+            observation.Assertions,
+            VerifiedLuxembourgSourceProfile.RdfType,
+            resourceIri);
+        var types = IriValues(observation.Assertions, TypeDocument, resourceIri);
+        return types.Length == 1
+            ? ClassifyExactPublicationFamily(profile, observation, classes, types[0]).Form
+            : LuxembourgPublicationForm.NotQualified;
+    }
+
+    private static (LuScopeTerminalState State, string ReasonCode, LuxembourgPublicationForm Form) ClassifyExactPublicationFamily(
         VerifiedLuxembourgSourceProfile profile,
         LuxembourgResourceObservation observation,
         IReadOnlyList<string> classes,
@@ -739,7 +761,7 @@ internal static class LuxembourgScopeResolver
     {
         if (NeverTypes.Contains(type))
         {
-            return (LuScopeTerminalState.NeverIngest, "never_ingest_exact_family");
+            return (LuScopeTerminalState.NeverIngest, "never_ingest_exact_family", LuxembourgPublicationForm.NotQualified);
         }
 
         // Decision 58's structural exclusions and an unsettled vocabulary value both quarantine,
@@ -749,24 +771,26 @@ internal static class LuxembourgScopeResolver
         {
             return (
                 LuScopeTerminalState.TypedQuarantine,
-                "typed_quarantine_structurally_excluded_type");
+                "typed_quarantine_structurally_excluded_type",
+                LuxembourgPublicationForm.NotQualified);
         }
 
         if (!profile.IsSettledVocabulary(LuxembourgVocabularyKind.TypeDocument, type))
         {
             return (
                 LuScopeTerminalState.TypedQuarantine,
-                "typed_quarantine_unsettled_type_vocabulary");
+                "typed_quarantine_unsettled_type_vocabulary",
+                LuxembourgPublicationForm.NotQualified);
         }
 
         if (PointTypes.Contains(type))
         {
-            return (LuScopeTerminalState.Point, "point_exact_family");
+            return (LuScopeTerminalState.Point, "point_exact_family", LuxembourgPublicationForm.NotQualified);
         }
 
         if (PriorityCandidateTypes.Contains(type) && IsActClass(classes))
         {
-            return (LuScopeTerminalState.AcceptedCandidate, "accepted_exact_family");
+            return (LuScopeTerminalState.AcceptedCandidate, "accepted_exact_family", LuxembourgPublicationForm.PriorityAct);
         }
 
         // A known role whose qualifying evidence is absent is a gap in what the publisher asserted,
@@ -775,23 +799,32 @@ internal static class LuxembourgScopeResolver
         if (RegulatorTypes.Contains(type))
         {
             return IsRegulatorQualified(observation, type)
-                ? (LuScopeTerminalState.AcceptedCandidate, "accepted_exact_family")
+                ? (LuScopeTerminalState.AcceptedCandidate, "accepted_exact_family", LuxembourgPublicationForm.Regulator)
                 : (LuScopeTerminalState.TypedQuarantine,
-                    "typed_quarantine_regulator_evidence_absent");
+                    "typed_quarantine_regulator_evidence_absent",
+                    LuxembourgPublicationForm.NotQualified);
         }
 
         if (OrdinaryCandidateTypes.Contains(type))
         {
-            return IsConsolidationQualified(observation, type) ||
-                   IsAsPublishedOriginalQualified(observation, type)
-                ? (LuScopeTerminalState.AcceptedCandidate, "accepted_exact_family")
+            // THE TWO ORDINARY BRANCHES ARE KEPT APART HERE, though they share one reason code: a
+            // consolidation and the as-published original it consolidates are different objects,
+            // and the producer that fetches the original's Gazette listings must not fetch the
+            // consolidation's. The disposition stays exactly what it was.
+            if (IsConsolidationQualified(observation, type))
+            {
+                return (LuScopeTerminalState.AcceptedCandidate, "accepted_exact_family", LuxembourgPublicationForm.Consolidation);
+            }
+            return IsAsPublishedOriginalQualified(observation, type)
+                ? (LuScopeTerminalState.AcceptedCandidate, "accepted_exact_family", LuxembourgPublicationForm.AsPublishedOriginal)
                 : (LuScopeTerminalState.TypedQuarantine,
-                    "typed_quarantine_ordinary_evidence_absent");
+                    "typed_quarantine_ordinary_evidence_absent",
+                    LuxembourgPublicationForm.NotQualified);
         }
 
         // Settled, recognised, structurally admitted, and filling no role this profile accepts.
         // This is the only finding the old shared code actually described.
-        return (LuScopeTerminalState.TypedQuarantine, "typed_quarantine_role_not_admitted");
+        return (LuScopeTerminalState.TypedQuarantine, "typed_quarantine_role_not_admitted", LuxembourgPublicationForm.NotQualified);
     }
 
     private static LuScopeDimensionDisposition ResolveRights(

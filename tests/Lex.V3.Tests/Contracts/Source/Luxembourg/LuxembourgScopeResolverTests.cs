@@ -1030,6 +1030,126 @@ public sealed class LuxembourgScopeResolverTests
             resolved.Resources.Single().TypedRole.Kind);
     }
 
+    // ---- The publication form: the resolver's own branch, kept as data (#419 slice 6c). ----
+
+    /// <summary>
+    /// The as-published original act - the proven <c>/jo</c> root - names its branch, and the
+    /// disposition it sits beside is exactly the accepted one it always was.
+    /// </summary>
+    [TestMethod]
+    public void AnAsPublishedOriginalActCarriesItsPublicationForm()
+    {
+        var resolved = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(
+            Profile().Resolve(Proven([BodyObservation()])));
+        var resource = resolved.Resources.Single();
+        Assert.AreEqual(LuxembourgPublicationForm.AsPublishedOriginal, resource.PublicationForm);
+        Assert.AreEqual(LuScopeTerminalState.AcceptedCandidate, resource.Dimensions.PublicationFamily.State);
+        Assert.AreEqual("accepted_exact_family", resource.Dimensions.PublicationFamily.ReasonCode, "the disposition did not move.");
+    }
+
+    /// <summary>
+    /// A consolidation whose original is proven from the same observation names the other ordinary
+    /// branch, under the same reason code: the two were one code and are now two facts.
+    /// </summary>
+    [TestMethod]
+    public void AConsolidationCarriesItsPublicationFormApartFromTheOriginal()
+    {
+        const string consolidation = ActParentIri + "/consolide/20260201";
+        var observation = new LuxembourgResourceObservation(
+            ObjectRef(consolidation),
+            ObservationRef,
+            [
+                Iri(consolidation, RdfType, Jolux + "Consolidation"),
+                Iri(consolidation, Jolux + "typeDocument", JoluxAuthority + "resource-type/LOI"),
+                Iri(consolidation, Jolux + "isMemberOf", ActParentIri),
+                Iri(ActIri, RdfType, Jolux + "Act"),
+                Iri(ActIri, Jolux + "typeDocument", JoluxAuthority + "resource-type/LOI"),
+                Iri(ActIri, Jolux + "isMemberOf", ActParentIri),
+            ],
+            [],
+            new LuxembourgSparqlRightsChannelObservations(ObservationRef, SparqlEnumerationRef, []),
+            new LuxembourgInFileRightsChannelObservations(ObservationRef, InFileEnumerationRef, []));
+
+        var resolved = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(
+            Profile().Resolve(Proven([observation])));
+        var resource = resolved.Resources.Single();
+        Assert.AreEqual(LuxembourgPublicationForm.Consolidation, resource.PublicationForm);
+        Assert.AreEqual(LuScopeTerminalState.AcceptedCandidate, resource.Dimensions.PublicationFamily.State);
+        Assert.AreEqual("accepted_exact_family", resource.Dimensions.PublicationFamily.ReasonCode);
+    }
+
+    /// <summary>A regulator act proven to be its own as-published original names the regulator branch.</summary>
+    [TestMethod]
+    public void AQualifiedRegulatorActCarriesItsPublicationForm()
+    {
+        var observation = new LuxembourgResourceObservation(
+            ObjectRef(),
+            ObservationRef,
+            [
+                Iri(ActIri, RdfType, Jolux + "Act"),
+                Iri(ActIri, Jolux + "typeDocument", JoluxAuthority + "resource-type/RCSF"),
+                Iri(ActIri, Jolux + "isMemberOf", ActParentIri),
+            ],
+            [],
+            new LuxembourgSparqlRightsChannelObservations(ObservationRef, SparqlEnumerationRef, []),
+            new LuxembourgInFileRightsChannelObservations(ObservationRef, InFileEnumerationRef, []));
+
+        var resolved = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(
+            Profile().Resolve(Proven([observation])));
+        var resource = resolved.Resources.Single();
+        Assert.AreEqual(LuxembourgPublicationForm.Regulator, resource.PublicationForm);
+        Assert.AreEqual(LuScopeTerminalState.AcceptedCandidate, resource.Dimensions.PublicationFamily.State);
+    }
+
+    /// <summary>A TC, RECT or ACC act names the priority branch, beside its typed role.</summary>
+    [TestMethod]
+    [DataRow("TC")]
+    [DataRow("RECT")]
+    public void APriorityActCarriesItsPublicationForm(string typeDocumentSuffix)
+    {
+        var resolved = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(
+            Profile().Resolve(Proven([TypedRoleObservation(typeDocumentSuffix)])));
+        var resource = resolved.Resources.Single();
+        Assert.AreEqual(LuxembourgPublicationForm.PriorityAct, resource.PublicationForm);
+        Assert.AreEqual(LuScopeTerminalState.AcceptedCandidate, resource.Dimensions.PublicationFamily.State);
+    }
+
+    /// <summary>
+    /// Every branch that does not accept names no form: a regulator without its evidence, an
+    /// ordinary act without its membership, a point type, and a resource with no type at all. The
+    /// form agrees with the disposition it sits beside in each case.
+    /// </summary>
+    [TestMethod]
+    public void EveryUnacceptedBranchCarriesNoPublicationForm()
+    {
+        foreach (var (observation, label) in new (LuxembourgResourceObservation, string)[]
+        {
+            (TypedRoleObservation("RCSF"), "a regulator without its as-published evidence"),
+            (BodyObservation(removePredicate: Jolux + "isMemberOf"), "an ordinary act without its membership"),
+            (TypedRoleObservation("RECUEIL"), "a point type"),
+            (TypedRoleObservation("ACCA"), "a never-ingest type"),
+        })
+        {
+            var resolved = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(
+                Profile().Resolve(Proven([observation])), label);
+            var resource = resolved.Resources.Single();
+            Assert.AreEqual(LuxembourgPublicationForm.NotQualified, resource.PublicationForm, label);
+            Assert.AreNotEqual(LuScopeTerminalState.AcceptedCandidate, resource.Dimensions.PublicationFamily.State, label);
+        }
+    }
+
+    /// <summary>Two typeDocument values are a selector conflict, so no branch is named.</summary>
+    [TestMethod]
+    public void AConflictingTypeDocumentCarriesNoPublicationForm()
+    {
+        var resolved = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(
+            Profile().Resolve(Proven([BodyObservation(additionalAssertions:
+                [Iri(ActIri, Jolux + "typeDocument", JoluxAuthority + "resource-type/RGD")])])));
+        var resource = resolved.Resources.Single();
+        Assert.AreEqual(LuxembourgPublicationForm.NotQualified, resource.PublicationForm);
+        Assert.AreEqual(LuScopeTerminalState.TypedQuarantine, resource.Dimensions.PublicationFamily.State);
+    }
+
     [TestMethod]
     public void AnOrdinaryAcceptedActCarriesNoTypedRole()
     {
@@ -1325,7 +1445,10 @@ public sealed class LuxembourgScopeResolverTests
                     + N + "LuxembourgResolvedAssertion>, "
                     + "System.Collections.Generic.IReadOnlyList<" + N
                     + "LuxembourgResolvedRelation>, " + N + "LuxembourgWemiTopologyResolution, "
-                    + N + "LuxembourgBodyJoinResolution, " + N + "LuxembourgTypedRoleResolution>",
+                    // #419 slice 6c: the classified tuple also carries the publication form, so the
+                    // anonymous type gained one type argument. Re-printed, not guessed.
+                    + N + "LuxembourgBodyJoinResolution, " + N + "LuxembourgTypedRoleResolution, "
+                    + N + "LuxembourgPublicationForm>",
                 "method private static " + N + "LuxembourgScopeResolver::ResolveTypedRole("
                     + N + "LuxembourgResourceObservation) -> "
                     + N + "LuxembourgTypedRoleResolution",
