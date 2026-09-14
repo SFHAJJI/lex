@@ -282,6 +282,13 @@ public sealed class EuAnnexEvidenceBinder
                 "the reconciliation profile names different inventory or PDF evidence");
         }
 
+        if (formexInventory.TransportBinding.Expression != package.ExpressionRef
+            || formexInventory.TransportBinding.FormexBody != package.BodyRef)
+        {
+            return Refused(EuAnnexEvidenceBindingRefusal.SourceLineageMismatch,
+                "the Formex inventory transport belongs to a different admitted package");
+        }
+
         var records = corpusRecordSet.Set.Records;
         var formexSource = UniqueHeldSource(records, formexInventory.SourceReceipt);
         var xhtmlSource = UniqueHeldSource(records, xhtmlInventory.SourceReceipt);
