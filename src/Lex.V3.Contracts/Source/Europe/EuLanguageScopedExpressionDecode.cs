@@ -727,7 +727,7 @@ public static class EuLanguageScopedExpressionDecode
             null);
     }
 
-    private static bool EveryPageReceiptBindsItsBytes(
+    internal static bool EveryPageReceiptBindsItsBytes(
         EuProofBoundDelivery delivery, out string? offendingDigest)
     {
         foreach (var page in delivery.PagesInOrder)
@@ -746,7 +746,7 @@ public static class EuLanguageScopedExpressionDecode
         return true;
     }
 
-    private static RepeatedEnumerationRdfTerm Term(
+    internal static RepeatedEnumerationRdfTerm Term(
         RepeatedEnumerationRow row,
         RepeatedEnumerationInterpretationProfile profile,
         string variableName)
@@ -779,7 +779,7 @@ public static class EuLanguageScopedExpressionDecode
         return row.Terms[index];
     }
 
-    private static bool IsPlainLiteral(RepeatedEnumerationRdfTerm term) =>
+    internal static bool IsPlainLiteral(RepeatedEnumerationRdfTerm term) =>
         term.Kind == RepeatedEnumerationRdfTermKind.Literal
         && term.Datatype is null
         && term.Language is null;
@@ -813,7 +813,7 @@ public static class EuLanguageScopedExpressionDecode
     /// that produces them, and <c>VerifiedRepeatedEnumerationRowsConstructionSurfaceTests</c> pins
     /// that there are exactly three.
     /// </remarks>
-    private static int[]? PageOfEachRow(EuProofBoundDelivery delivery, int rowCount)
+    internal static int[]? PageOfEachRow(EuProofBoundDelivery delivery, int rowCount)
     {
         if (delivery.Profile.TerminalPagePolicy
             != RepeatedEnumerationTerminalPagePolicy.ShortPageTerminal)

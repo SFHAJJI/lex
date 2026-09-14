@@ -8,9 +8,11 @@ namespace Lex.V3.Contracts.Derivation;
 
 /// <summary>Why <see cref="EuCorrigendumTripwireSet.TryDerive"/> derived nothing. Closed.</summary>
 /// <remarks>
-/// One member, because this fold has one condition under which its input is not a set of facts it
-/// can fold: the same object described twice. Everything else it meets is either a fact it records,
-/// a gap it names, or outside its subject set - none of which is a refusal.
+/// One member per named condition this door can refuse on, and no member for a row it simply does
+/// not read. Family P legitimately delivers rows about every predicate of every object it was asked
+/// about; only the <c>resource_legal_corrects_resource_legal</c> rows are this door's subject, and a
+/// row outside that subject is out of scope, not dropped. A row inside it that disagrees with its
+/// own promised shape refuses here by name.
 /// </remarks>
 public enum EuCorrigendumTripwireRefusal
 {
@@ -19,11 +21,52 @@ public enum EuCorrigendumTripwireRefusal
     None = 0,
 
     /// <summary>
-    /// Two snapshots name one object. One object has one set of Corrects edges; two descriptions of
-    /// it are two claims, and this fold does not pick one.
+    /// The object-facts delivery would not reopen through
+    /// <see cref="VerifiedRepeatedEnumerationRows.TryOpen"/>. The door's own reason travels in the
+    /// detail; nothing is read from rows that did not survive it.
     /// </summary>
-    [JsonStringEnumMemberName("snapshot_delivered_twice")]
-    SnapshotDeliveredTwice = 1,
+    [JsonStringEnumMemberName("object_facts_rows_refused")]
+    ObjectFactsRowsRefused = 1,
+
+    /// <summary>
+    /// An object-facts page's custody receipt does not name the bytes that page carried, so no edge
+    /// read from it can cite where it came from. The same check, for the same reason, as
+    /// <see cref="EuLanguageScopedExpressionDecodeRefusal.PageReceiptDoesNotBindItsBytes"/>.
+    /// </summary>
+    [JsonStringEnumMemberName("page_receipt_does_not_bind_its_bytes")]
+    PageReceiptDoesNotBindItsBytes = 2,
+
+    /// <summary>
+    /// Which page carried which row cannot be established for this delivery, so no edge can honestly
+    /// cite its bytes. Same rule as
+    /// <see cref="EuLanguageScopedExpressionDecodeRefusal.PageAttributionUnavailable"/>.
+    /// </summary>
+    [JsonStringEnumMemberName("page_attribution_unavailable")]
+    PageAttributionUnavailable = 3,
+
+    /// <summary>
+    /// A Corrects row's subject was not a canonicalizable Work root, its <c>value_kind</c> was not a
+    /// plain literal agreeing with its value, its bound value was not an IRI, or its target would
+    /// not canonicalize. The offending IRI travels beside the refusal.
+    /// </summary>
+    [JsonStringEnumMemberName("corrects_row_term_kind_mismatch")]
+    CorrectsRowTermKindMismatch = 4,
+
+    /// <summary>
+    /// One Work carried both the unbound "corrects nothing" marker and a bound Corrects edge. The
+    /// object decoder refuses the same pairing as a malformed delivery; choosing either reading
+    /// silently would publish a fact the publisher did not state.
+    /// </summary>
+    [JsonStringEnumMemberName("corrects_unbound_marker_beside_edges")]
+    CorrectsUnboundMarkerBesideEdges = 5,
+
+    /// <summary>
+    /// <see cref="EuLanguageScopedExpressionDerivation.TryDerive"/> refused the same two deliveries.
+    /// Its own refusal and the decoder's travel in the detail rather than being flattened into this
+    /// one; this door adds no vocabulary for conditions those doors already name exactly.
+    /// </summary>
+    [JsonStringEnumMemberName("expression_derivation_refused")]
+    ExpressionDerivationRefused = 6,
 }
 
 /// <summary>
@@ -51,19 +94,21 @@ public enum EuCorrigendumLanguageReach
     OutsideServedBodyLanguages = 2,
 }
 
-/// <summary>What is known about a corrigendum expression's publisher date. Three states, never two.</summary>
+/// <summary>What the consulted delivery stated about a corrigendum expression's publisher date.</summary>
 /// <remarks>
 /// <para>
-/// THE ABSENCE DOCTRINE, APPLIED TO A DATE. <see cref="EuLanguageScopedExpressionDerivation"/>'s own
-/// remarks separate "no date delivery was consulted" from "one was and stated nothing": the first
-/// is recorded as a null <see cref="EuLanguageScopedExpressionDerivation.ObjectFactsProof"/>, the
-/// second as an expression with no <see cref="PublisherCorrigendumDate"/>. A tripwire that rendered
-/// both as "undated" would tell a reader the publisher stated no date when in fact nobody asked.
+/// TWO STATES, BECAUSE THIS DOOR ALWAYS CONSULTS THE DATE DELIVERY. The object-facts delivery is
+/// where the Corrects edges come from, so it is present in every call, and "no date delivery was
+/// consulted" is a state no path here can produce. A closed vocabulary with a member nothing mints
+/// would be an unreachable claim, so there is none.
 /// </para>
 /// <para>
-/// The second state is named for exactly what it claims. The consulted date delivery stated no
-/// date for this work; whether it asked about the work is a fact about that delivery's batch, which
-/// this contract does not hold and therefore does not assert.
+/// THE SECOND STATE IS EXACT BY CONSTRUCTION, NOT BY ASSUMPTION. A line exists only for a work the
+/// consulted delivery stated a Corrects edge for, and family P states a work's rows only for a work
+/// it was asked about. So for every line the delivery did ask about the work, and an expression
+/// without a date is that delivery's own statement that it holds none - not a work the batch never
+/// named. Review of an earlier head found a "consulted" state that was true of the delivery as a
+/// whole and not of the work; this one is true of the work.
 /// </para>
 /// </remarks>
 public enum EuCorrigendumDateState
@@ -72,25 +117,21 @@ public enum EuCorrigendumDateState
     [JsonStringEnumMemberName("publisher_dated")]
     PublisherDated = 1,
 
-    /// <summary>A date delivery was consulted and stated no date for this work.</summary>
+    /// <summary>The consulted delivery, which asked about this work, stated no date for it.</summary>
     [JsonStringEnumMemberName("not_stated_by_consulted_delivery")]
     NotStatedByConsultedDelivery = 2,
-
-    /// <summary>No date delivery was consulted, so nothing is known about the date.</summary>
-    [JsonStringEnumMemberName("date_delivery_not_consulted")]
-    DateDeliveryNotConsulted = 3,
 }
 
-/// <summary>Why one snapshot could not contribute to any tripwire. Closed.</summary>
+/// <summary>Why one work the derivation holds expressions of could not be placed. Closed.</summary>
 public enum EuCorrigendumTripwireGapReason
 {
     /// <summary>
-    /// The object's Corrects family is not completely acquired, so whether it corrects anything is
-    /// unknown. Decision 64: only a complete bounded observation supports an absence claim, and this
-    /// fold makes none for such an object.
+    /// The consulted delivery carried neither a Corrects edge nor the unbound "corrects nothing"
+    /// marker for this work, so whether it corrects anything is unknown. Decision 64: only a complete
+    /// statement supports an absence claim, and this fold makes none for such a work.
     /// </summary>
-    [JsonStringEnumMemberName("corrects_not_completely_acquired")]
-    CorrectsNotCompletelyAcquired = 1,
+    [JsonStringEnumMemberName("corrects_not_stated_by_consulted_delivery")]
+    CorrectsNotStatedByConsultedDelivery = 1,
 }
 
 /// <summary>
@@ -109,7 +150,7 @@ public sealed class EuCorrigendumTripwireLine
         PublisherCorrigendumDate? publisherCorrigendumDate,
         string expressionContentSha256,
         ReadOnlyCollection<string> lineageContentSha256InOrder,
-        ReadOnlyCollection<SourceArtifactRef> correctsEvidenceRefs)
+        ReadOnlyCollection<string> correctsPageContentSha256InOrder)
     {
         CorrectedWorkRoot = correctedWorkRoot;
         CorrigendumWorkRoot = corrigendumWorkRoot;
@@ -120,7 +161,7 @@ public sealed class EuCorrigendumTripwireLine
         PublisherCorrigendumDate = publisherCorrigendumDate;
         ExpressionContentSha256 = expressionContentSha256;
         LineageContentSha256InOrder = lineageContentSha256InOrder;
-        CorrectsEvidenceRefs = correctsEvidenceRefs;
+        CorrectsPageContentSha256InOrder = correctsPageContentSha256InOrder;
     }
 
     /// <summary>The canonical root of the work this corrigendum corrects.</summary>
@@ -142,17 +183,22 @@ public sealed class EuCorrigendumTripwireLine
     /// <summary>The publisher's date exactly as stated, present only when <see cref="DateState"/> says so.</summary>
     public PublisherCorrigendumDate? PublisherCorrigendumDate { get; }
 
-    /// <summary>The expression's own <see cref="LanguageScopedExpression.CanonicalContentSha256"/>.</summary>
+    /// <summary>
+    /// The expression's own <see cref="LanguageScopedExpression.CanonicalContentSha256"/>. Redundant
+    /// with the line's own fields on purpose: it binds the line to the expression the derivation
+    /// admitted rather than to a re-statement of it.
+    /// </summary>
     public string ExpressionContentSha256 { get; }
 
     /// <summary>The expression's retained transport-byte lineage, by content digest, in its own order.</summary>
     public IReadOnlyList<string> LineageContentSha256InOrder { get; }
 
     /// <summary>
-    /// Every Corrects edge that states this corrigendum corrects this work, by the evidence that
-    /// carried it. Two snapshots of one corrigendum work may each state the edge; both are kept.
+    /// The retained object-facts page bytes that stated this corrigendum corrects this work, by
+    /// content digest, ordinal. Every page that stated the edge, not a representative one - the
+    /// discipline the decoder holds for a date stated on more than one page.
     /// </summary>
-    public IReadOnlyList<SourceArtifactRef> CorrectsEvidenceRefs { get; }
+    public IReadOnlyList<string> CorrectsPageContentSha256InOrder { get; }
 
     /// <summary>The closed reason token a display renders from.</summary>
     public string ReasonCode => (Reach, DateState) switch
@@ -161,69 +207,65 @@ public sealed class EuCorrigendumTripwireLine
             "corrigendum_dated_within_served_languages",
         (EuCorrigendumLanguageReach.WithinServedBodyLanguages, EuCorrigendumDateState.NotStatedByConsultedDelivery) =>
             "corrigendum_undated_within_served_languages",
-        (EuCorrigendumLanguageReach.WithinServedBodyLanguages, EuCorrigendumDateState.DateDeliveryNotConsulted) =>
-            "corrigendum_date_unknown_within_served_languages",
         (EuCorrigendumLanguageReach.OutsideServedBodyLanguages, EuCorrigendumDateState.PublisherDated) =>
             "corrigendum_dated_outside_served_languages",
         (EuCorrigendumLanguageReach.OutsideServedBodyLanguages, EuCorrigendumDateState.NotStatedByConsultedDelivery) =>
             "corrigendum_undated_outside_served_languages",
-        (EuCorrigendumLanguageReach.OutsideServedBodyLanguages, EuCorrigendumDateState.DateDeliveryNotConsulted) =>
-            "corrigendum_date_unknown_outside_served_languages",
         _ => throw new InvalidOperationException("Every reach and date state pair has a reason code."),
     };
 
     internal static EuCorrigendumTripwireLine Create(
         string correctedWorkRoot,
         LanguageScopedExpression expression,
-        bool dateDeliveryConsulted,
-        IEnumerable<SourceArtifactRef> correctsEvidenceRefs)
+        IEnumerable<string> correctsPageContentSha256)
     {
-        var dateState = expression.PublisherCorrigendumDate is not null
-            ? EuCorrigendumDateState.PublisherDated
-            : dateDeliveryConsulted
-                ? EuCorrigendumDateState.NotStatedByConsultedDelivery
-                : EuCorrigendumDateState.DateDeliveryNotConsulted;
-        var evidence = correctsEvidenceRefs
-            .OrderBy(static reference => reference.ResourceId, StringComparer.Ordinal)
-            .ThenBy(static reference => reference.Sha256, StringComparer.Ordinal)
-            .ToList();
         return new EuCorrigendumTripwireLine(
             correctedWorkRoot,
             expression.Identity.PublisherWorkId,
             expression.Identity.PublisherExpressionId,
             expression.OfficialLanguage,
             EuCorrigendumTripwireSet.ReachOf(expression.OfficialLanguage),
-            dateState,
+            expression.PublisherCorrigendumDate is not null
+                ? EuCorrigendumDateState.PublisherDated
+                : EuCorrigendumDateState.NotStatedByConsultedDelivery,
             expression.PublisherCorrigendumDate,
             expression.CanonicalContentSha256,
             expression.Lineage.Entries.Select(static entry => entry.ContentSha256).ToList().AsReadOnly(),
-            evidence.AsReadOnly());
+            EuCorrigendumTripwireSet.OrdinalDistinct(correctsPageContentSha256));
     }
 }
 
-/// <summary>One snapshot this fold could not place, and why.</summary>
-public sealed record EuCorrigendumTripwireUnresolvedGap
+/// <summary>
+/// A corrigendum work the consulted delivery states corrects a work, for which the derivation
+/// holds no expression: the edge is a fact with lineage, the languages are not derived.
+/// </summary>
+public sealed record EuCorrigendumWithoutDerivedExpressions
 {
-    internal EuCorrigendumTripwireUnresolvedGap(
-        string objectPublisherUri,
-        string canonicalWorkRoot,
-        EuCorrigendumTripwireGapReason reason,
-        EuRelationAcquisitionState correctsAcquisition)
+    internal EuCorrigendumWithoutDerivedExpressions(
+        string corrigendumWorkRoot, ReadOnlyCollection<string> correctsPageContentSha256InOrder)
     {
-        ObjectPublisherUri = objectPublisherUri;
-        CanonicalWorkRoot = canonicalWorkRoot;
-        Reason = reason;
-        CorrectsAcquisition = correctsAcquisition;
+        CorrigendumWorkRoot = corrigendumWorkRoot;
+        CorrectsPageContentSha256InOrder = correctsPageContentSha256InOrder;
     }
 
-    public string ObjectPublisherUri { get; }
+    public string CorrigendumWorkRoot { get; }
 
-    public string CanonicalWorkRoot { get; }
+    /// <summary>The retained pages that stated the edge, exactly as a line carries them.</summary>
+    public IReadOnlyList<string> CorrectsPageContentSha256InOrder { get; }
+}
+
+/// <summary>One work the derivation holds expressions of that this fold could not place, and why.</summary>
+public sealed record EuCorrigendumTripwireUnresolvedGap
+{
+    internal EuCorrigendumTripwireUnresolvedGap(string workRoot, EuCorrigendumTripwireGapReason reason)
+    {
+        WorkRoot = workRoot;
+        Reason = reason;
+    }
+
+    public string WorkRoot { get; }
 
     public EuCorrigendumTripwireGapReason Reason { get; }
-
-    /// <summary>The Corrects family's actual acquisition state, so the gap says how far it got.</summary>
-    public EuRelationAcquisitionState CorrectsAcquisition { get; }
 }
 
 /// <summary>The tripwire for one corrected work: every corrigendum expression this fold holds for it.</summary>
@@ -234,7 +276,7 @@ public sealed class EuCorrigendumTripwire
     private EuCorrigendumTripwire(
         string correctedWorkRoot,
         ReadOnlyCollection<EuCorrigendumTripwireLine> lines,
-        ReadOnlyCollection<string> corrigendaWithoutDerivedExpressions)
+        ReadOnlyCollection<EuCorrigendumWithoutDerivedExpressions> corrigendaWithoutDerivedExpressions)
     {
         CorrectedWorkRoot = correctedWorkRoot;
         Lines = lines;
@@ -253,11 +295,11 @@ public sealed class EuCorrigendumTripwire
     public IReadOnlyList<EuCorrigendumTripwireLine> Lines { get; }
 
     /// <summary>
-    /// Corrigendum works whose Corrects edges to this work are completely observed but for which the
-    /// derivation holds no expression. Stated, not dropped: a display that omitted them would say
-    /// "no corrigendum" about a work the publisher says is corrected.
+    /// Corrigendum works whose Corrects edges to this work the consulted delivery stated but for
+    /// which the derivation holds no expression, ordinal by root. Stated, not dropped: a display
+    /// that omitted them would say "no corrigendum" about a work the publisher says is corrected.
     /// </summary>
-    public IReadOnlyList<string> CorrigendaWithoutDerivedExpressions { get; }
+    public IReadOnlyList<EuCorrigendumWithoutDerivedExpressions> CorrigendaWithoutDerivedExpressions { get; }
 
     public int WithinServedCount =>
         Lines.Count(static line => line.Reach == EuCorrigendumLanguageReach.WithinServedBodyLanguages);
@@ -270,8 +312,8 @@ public sealed class EuCorrigendumTripwire
 
     /// <summary>
     /// A byte-stable identity over this work's tripwire content. Two independent executions that
-    /// observed the same publisher statements agree; evidence references and run identities are
-    /// lineage, held by the set, and are not in it.
+    /// observed the same publisher statements agree; page digests and run identities are lineage,
+    /// held by the set, and are not in it.
     /// </summary>
     public string TripwireSha256 { get; }
 
@@ -283,14 +325,14 @@ public sealed class EuCorrigendumTripwire
     internal static EuCorrigendumTripwire Create(
         string correctedWorkRoot,
         IEnumerable<EuCorrigendumTripwireLine> lines,
-        IEnumerable<string> corrigendaWithoutDerivedExpressions)
+        IEnumerable<EuCorrigendumWithoutDerivedExpressions> corrigendaWithoutDerivedExpressions)
     {
         var ordered = lines
             .OrderBy(static line => line.CorrigendumWorkRoot, StringComparer.Ordinal)
             .ThenBy(static line => line.PublisherExpressionId, StringComparer.Ordinal)
             .ToList();
         var undecoded = corrigendaWithoutDerivedExpressions
-            .OrderBy(static root => root, StringComparer.Ordinal)
+            .OrderBy(static corrigendum => corrigendum.CorrigendumWorkRoot, StringComparer.Ordinal)
             .ToList();
         return new EuCorrigendumTripwire(correctedWorkRoot, ordered.AsReadOnly(), undecoded.AsReadOnly());
     }
@@ -328,14 +370,14 @@ public sealed class EuCorrigendumTripwire
                 TripwireSchema,
                 tripwire.CorrectedWorkRoot,
                 [.. tripwire.Lines.Select(CanonicalLineDocument.Of)],
-                tripwire.CorrigendaWithoutDerivedExpressions);
+                [.. tripwire.CorrigendaWithoutDerivedExpressions.Select(static corrigendum => corrigendum.CorrigendumWorkRoot)]);
     }
 }
 
 /// <summary>
-/// The Stage 3 half of B31-L0071's "render the tripwire": from one retained expression derivation
-/// and the decoded object snapshots, every corrected work's corrigendum tripwire, canonical and
-/// byte-stable, with its lineage held beside it.
+/// The Stage 3 half of B31-L0071's "render the tripwire": from the two proof-bound publisher
+/// deliveries the expression derivation already takes, every corrected work's corrigendum tripwire,
+/// canonical and byte-stable, with its transport-byte lineage held beside it.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -343,33 +385,39 @@ public sealed class EuCorrigendumTripwire
 /// exists; languages Y". Stage 5 renders that sentence; this fold derives the typed fact it renders
 /// from - per corrected work, one line per corrigendum expression the derivation holds, carrying the
 /// publisher's language verbatim, whether that language is one the reviewed scope serves bodies in,
-/// and what is known about the publisher's date.
+/// and what the consulted delivery stated about the publisher's date.
 /// </para>
 /// <para>
-/// THE LINK IS THE PUBLISHER'S OWN EDGE. A corrigendum bears on a work because the publisher states
-/// <c>resource_legal_corrects_resource_legal</c> from the corrigendum work to it, and that statement
-/// arrives here as a <see cref="EuRelationFamily.Corrects"/> edge on a snapshot whose Corrects family
-/// is <see cref="EuRelationAcquisitionState.Complete"/>. The link is NOT derived from the CELEX
-/// <c>R(nn)</c> suffix: that would be an inference the publisher did not state, and the expression
-/// identities are cellar roots rather than CELEX numbers in any case.
+/// THE LINK IS THE PUBLISHER'S OWN ROW, READ FROM THE BYTES THAT STATED IT. A corrigendum bears on a
+/// work because the publisher states <c>resource_legal_corrects_resource_legal</c> from the
+/// corrigendum work to it, and that statement is read here from the object-facts delivery's own
+/// retained pages, reopened through <see cref="VerifiedRepeatedEnumerationRows.TryOpen"/> and
+/// attributed row by row to the page that carried it. It is NOT read from a decoded snapshot: a
+/// snapshot's edge cites the interpretation-profile reference, not the pages, so a derivation from
+/// one delivery could have been paired with snapshots from another and nothing would have refused.
+/// Review named that shape before freeze and this door has no parameter through which it can be
+/// written - the expressions and the edges come from the same two deliveries in one call. A row
+/// stating that a work corrects itself is recorded exactly as stated; this fold does not judge
+/// publisher data, it carries it.
 /// </para>
 /// <para>
-/// WHAT IS INSIDE THE SUBJECT SET AND WHAT IS NOT. A snapshot with a complete Corrects family and at
-/// least one edge is a corrigendum work; its expressions in the derivation are lines on each work it
-/// corrects, and if the derivation holds none of its expressions it is listed on each such work as a
-/// corrigendum whose languages were not derived. A snapshot whose Corrects family is not complete is
-/// an unresolved gap naming the object - this fold never says "no corrigendum" for it. An expression
-/// of a work with no Corrects edge - a base act - is outside the subject set: not a line, not a gap,
-/// simply not what this fold is about. Nothing here claims to hold every corrigendum of any work; the
-/// scope is exactly the snapshots and the derivation handed in.
+/// WHAT IS INSIDE THE SUBJECT SET AND WHAT IS NOT. A work with a bound Corrects row is a corrigendum
+/// work; its expressions in the derivation are lines on each work it corrects, and if the
+/// derivation holds none of its expressions it is listed on each such work as a corrigendum whose
+/// languages were not derived - with the pages that stated the edge, because that listing is a
+/// claim and a claim carries its lineage. A work with the unbound "corrects nothing" marker is a
+/// base act, outside the subject set: not a line, not a gap. A work the derivation holds
+/// expressions of, for which the consulted delivery states neither, is an unresolved gap - this
+/// fold never says "no corrigendum" for it. Nothing here claims to hold every corrigendum of any
+/// work; the scope is exactly the two deliveries handed in.
 /// </para>
 /// <para>
 /// TWO DIGESTS, THE SPLIT <see cref="EuLanguageScopedExpressionDerivation"/> ALREADY MADE. The
 /// canonical bytes cover content only - roots, expression identities, languages, reach, date states
 /// and dates - ordinal-sorted, so two independent executions over the same publisher statements
-/// produce one address. The lineage bytes cover the derivation digest, each expression's content and
-/// page digests, and each Corrects edge's evidence reference, which vary per run and are what lineage
-/// is for.
+/// produce one address. The lineage bytes cover the derivation's stable and episode digests and,
+/// per line and per listed corrigendum, the expression's page digests and the Corrects pages'
+/// digests, which vary per run and per paging and are what lineage is for.
 /// </para>
 /// </remarks>
 public sealed class EuCorrigendumTripwireSet
@@ -379,27 +427,29 @@ public sealed class EuCorrigendumTripwireSet
     private const string LanguageAuthorityBase = "http://publications.europa.eu/resource/authority/language/";
 
     /// <summary>
-    /// The served body languages by the publisher's own authority IRI, derived from
+    /// The served body languages by the publisher's own authority IRI, spelled from
     /// <see cref="EuLanguageBodyDisposition.BodyCandidateLanguages"/> and from nothing else.
     /// </summary>
     /// <remarks>
-    /// FAIL CLOSED ON A POLICY THIS TABLE CANNOT NAME. The table below spells the IRI of each served
-    /// language; if the reviewed policy ever admits a language it does not spell, this type refuses
-    /// to load rather than classifying that language's corrigenda as unreadable. A widened policy
-    /// with a silently stale table would misstate reach for exactly the language just admitted.
+    /// FAIL CLOSED ON A POLICY THE TABLE CANNOT NAME. <see cref="SpellServedBodyLanguages"/> spells
+    /// the IRI of each served language; if the reviewed policy ever admits a language it does not
+    /// spell, this type refuses to load rather than classifying that language's corrigenda as
+    /// unreadable. A widened policy with a silently stale table would misstate reach for exactly
+    /// the language just admitted.
     /// </remarks>
-    public static IReadOnlyList<string> ServedBodyLanguageIris { get; } = BuildServedBodyLanguageIris();
+    public static IReadOnlyList<string> ServedBodyLanguageIris { get; } =
+        SpellServedBodyLanguages(EuLanguageBodyDisposition.BodyCandidateLanguages);
 
     private readonly IReadOnlyDictionary<string, EuCorrigendumTripwire> _byCorrectedWorkRoot;
 
     private EuCorrigendumTripwireSet(
-        string derivationSha256,
+        EuLanguageScopedExpressionDerivation derivation,
         ReadOnlyCollection<EuCorrigendumTripwire> tripwires,
         ReadOnlyCollection<EuCorrigendumTripwireUnresolvedGap> unresolvedGaps,
         byte[] canonicalBytes,
         byte[] lineageBytes)
     {
-        DerivationSha256 = derivationSha256;
+        Derivation = derivation;
         Tripwires = tripwires;
         UnresolvedGaps = unresolvedGaps;
         _byCorrectedWorkRoot = tripwires.ToDictionary(
@@ -414,13 +464,19 @@ public sealed class EuCorrigendumTripwireSet
 
     public static string LineageRecordSchema => LineageSchema;
 
-    /// <summary>The <see cref="EuLanguageScopedExpressionDerivation.DerivationSha256"/> this set was folded from.</summary>
-    public string DerivationSha256 { get; }
+    /// <summary>
+    /// The expression derivation minted from the same two deliveries in the same call. Exposed so a
+    /// producer retains it once rather than deriving twice; it is not an input.
+    /// </summary>
+    public EuLanguageScopedExpressionDerivation Derivation { get; }
+
+    /// <summary>The <see cref="EuLanguageScopedExpressionDerivation.DerivationSha256"/> this set was folded with.</summary>
+    public string DerivationSha256 => Derivation.DerivationSha256;
 
     /// <summary>One per corrected work, ordinal by root.</summary>
     public IReadOnlyList<EuCorrigendumTripwire> Tripwires { get; }
 
-    /// <summary>Ordinal by object publisher URI.</summary>
+    /// <summary>Ordinal by work root.</summary>
     public IReadOnlyList<EuCorrigendumTripwireUnresolvedGap> UnresolvedGaps { get; }
 
     /// <summary>WHAT WAS DERIVED, canonicalized. Byte-identical across independent executions.</summary>
@@ -428,7 +484,7 @@ public sealed class EuCorrigendumTripwireSet
 
     public string CanonicalSha256 { get; }
 
-    /// <summary>WHERE IT CAME FROM, canonicalized: derivation, page and evidence references. Per run.</summary>
+    /// <summary>WHERE IT CAME FROM, canonicalized: derivation, episode and page digests. Per run.</summary>
     public ReadOnlyMemory<byte> LineageBytes { get; }
 
     public string LineageSha256 { get; }
@@ -456,109 +512,204 @@ public sealed class EuCorrigendumTripwireSet
             : EuCorrigendumLanguageReach.OutsideServedBodyLanguages;
     }
 
-    /// <summary>Folds the derivation and the snapshots into every corrected work's tripwire, or refuses.</summary>
-    /// <param name="derivation">The retained expression derivation. Its expressions are the only lines.</param>
-    /// <param name="snapshots">
-    /// The decoded object snapshots. Their complete Corrects families are the only links. Any
-    /// order; the fold is order-independent.
+    /// <summary>
+    /// Folds the two deliveries into every corrected work's tripwire, or refuses without folding.
+    /// </summary>
+    /// <param name="expressionFacts">
+    /// The family X (Expression-facts) delivery, in the proof-bound shape the decoder requires.
     /// </param>
+    /// <param name="objectFacts">
+    /// The family P (object-facts) delivery, in the same shape. Required: it is where the Corrects
+    /// edges and the corrigendum dates are read from, reopened here and never accepted as rows.
+    /// </param>
+    /// <param name="refusal">This door's own refusal, or <see cref="EuCorrigendumTripwireRefusal.None"/>.</param>
+    /// <param name="detail">The inner door's reason, or the offenders, when the refusal has one.</param>
+    /// <param name="offendingIri">The IRI a refusal is about, when it has one.</param>
     public static EuCorrigendumTripwireSet? TryDerive(
-        EuLanguageScopedExpressionDerivation derivation,
-        IReadOnlyList<EuCellarObjectSnapshot> snapshots,
+        EuProofBoundDelivery expressionFacts,
+        EuProofBoundDelivery objectFacts,
         out EuCorrigendumTripwireRefusal refusal,
-        out string? detail)
+        out string? detail,
+        out string? offendingIri)
     {
-        ArgumentNullException.ThrowIfNull(derivation);
-        ArgumentNullException.ThrowIfNull(snapshots);
+        ArgumentNullException.ThrowIfNull(expressionFacts);
+        ArgumentNullException.ThrowIfNull(objectFacts);
         refusal = EuCorrigendumTripwireRefusal.None;
         detail = null;
+        offendingIri = null;
 
-        // ---- One description per object, or nothing. Checked over the whole input first. ----
-        var seenObjects = new HashSet<string>(StringComparer.Ordinal);
-        var twice = new SortedSet<string>(StringComparer.Ordinal);
-        foreach (var snapshot in snapshots)
+        // ---- The object-facts delivery, reopened through the one door. Rows are never accepted. ----
+        var objectProfile = objectFacts.Profile;
+        var objectRows = VerifiedRepeatedEnumerationRows.TryOpen(
+            objectFacts.Proof,
+            objectFacts.Comparison,
+            objectProfile,
+            objectFacts.ProfileRef,
+            objectFacts.CountHttpEvidenceRef,
+            objectFacts.PagesInOrder,
+            out var openRefusal);
+        if (objectRows is null)
         {
-            ArgumentNullException.ThrowIfNull(snapshot, nameof(snapshots));
-            if (!seenObjects.Add(snapshot.ObjectRef.PublisherUri))
-            {
-                twice.Add(snapshot.ObjectRef.PublisherUri);
-            }
-        }
-
-        if (twice.Count > 0)
-        {
-            refusal = EuCorrigendumTripwireRefusal.SnapshotDeliveredTwice;
-            detail = "two snapshots name one object: " + string.Join("; ", twice);
+            refusal = EuCorrigendumTripwireRefusal.ObjectFactsRowsRefused;
+            detail = openRefusal.ToString();
             return null;
         }
 
-        // ---- The links: corrigendum root -> corrected root -> the evidence that stated it. ----
-        var gaps = new List<EuCorrigendumTripwireUnresolvedGap>();
-        var edgesByCorrigendum = new Dictionary<string, Dictionary<string, List<SourceArtifactRef>>>(StringComparer.Ordinal);
-        foreach (var snapshot in snapshots)
+        // Rows first, then the provenance about those rows - the decoder's order, for its reason.
+        if (!EuLanguageScopedExpressionDecode.EveryPageReceiptBindsItsBytes(objectFacts, out offendingIri))
         {
-            var corrects = snapshot.Relation(EuRelationFamily.Corrects);
-            if (corrects.Acquisition != EuRelationAcquisitionState.Complete)
+            refusal = EuCorrigendumTripwireRefusal.PageReceiptDoesNotBindItsBytes;
+            return null;
+        }
+
+        var pageOfRow = EuLanguageScopedExpressionDecode.PageOfEachRow(objectFacts, objectRows.Count);
+        if (pageOfRow is null)
+        {
+            refusal = EuCorrigendumTripwireRefusal.PageAttributionUnavailable;
+            return null;
+        }
+
+        // ---- The Corrects rows: corrigendum root -> corrected root -> the pages that stated it. ----
+        var correctsIri = EuObjectFactsDiscoveryPlan.RelationIri(EuRelationFamily.Corrects);
+        var pagesByEdge = new Dictionary<string, Dictionary<string, SortedSet<int>>>(StringComparer.Ordinal);
+        var statedNoCorrection = new HashSet<string>(StringComparer.Ordinal);
+        for (var index = 0; index < objectRows.Count; index++)
+        {
+            var row = objectRows[index];
+            var predicateTerm = EuLanguageScopedExpressionDecode.Term(row, objectProfile, "predicate");
+            if (predicateTerm.Kind != RepeatedEnumerationRdfTermKind.Iri ||
+                !string.Equals(predicateTerm.Value, correctsIri, StringComparison.Ordinal))
             {
-                gaps.Add(new EuCorrigendumTripwireUnresolvedGap(
-                    snapshot.ObjectRef.PublisherUri,
-                    snapshot.CanonicalWorkRoot,
-                    EuCorrigendumTripwireGapReason.CorrectsNotCompletelyAcquired,
-                    corrects.Acquisition));
+                // Outside this door's subject set: another door's row, refused there if malformed.
                 continue;
             }
 
-            foreach (var edge in corrects.Edges)
+            var objectTerm = EuLanguageScopedExpressionDecode.Term(row, objectProfile, "object");
+            var valueTerm = EuLanguageScopedExpressionDecode.Term(row, objectProfile, "value");
+            var valueKindTerm = EuLanguageScopedExpressionDecode.Term(row, objectProfile, "value_kind");
+            if (objectTerm.Kind != RepeatedEnumerationRdfTermKind.Iri || objectTerm.Value is null ||
+                !EuLanguageScopedExpressionDecode.IsPlainLiteral(valueKindTerm) ||
+                (valueTerm.Kind == RepeatedEnumerationRdfTermKind.Unbound) != (valueKindTerm.Value == "unbound"))
             {
-                if (!edgesByCorrigendum.TryGetValue(snapshot.CanonicalWorkRoot, out var targets))
-                {
-                    targets = new Dictionary<string, List<SourceArtifactRef>>(StringComparer.Ordinal);
-                    edgesByCorrigendum.Add(snapshot.CanonicalWorkRoot, targets);
-                }
-
-                if (!targets.TryGetValue(edge.TargetWorkRoot, out var evidence))
-                {
-                    evidence = [];
-                    targets.Add(edge.TargetWorkRoot, evidence);
-                }
-
-                evidence.Add(edge.EvidenceRef);
+                refusal = EuCorrigendumTripwireRefusal.CorrectsRowTermKindMismatch;
+                offendingIri = objectTerm.Value;
+                return null;
             }
+
+            var corrigendum = EuPackRootCanonicalForm.TryCanonicalize(objectTerm.Value, out _);
+            if (corrigendum is null)
+            {
+                refusal = EuCorrigendumTripwireRefusal.CorrectsRowTermKindMismatch;
+                offendingIri = objectTerm.Value;
+                return null;
+            }
+
+            if (valueKindTerm.Value == "unbound")
+            {
+                statedNoCorrection.Add(corrigendum);
+                continue;
+            }
+
+            if (valueKindTerm.Value != "iri" || valueTerm.Kind != RepeatedEnumerationRdfTermKind.Iri ||
+                valueTerm.Value is null)
+            {
+                refusal = EuCorrigendumTripwireRefusal.CorrectsRowTermKindMismatch;
+                offendingIri = corrigendum;
+                return null;
+            }
+
+            var corrected = EuPackRootCanonicalForm.TryCanonicalize(valueTerm.Value, out _);
+            if (corrected is null)
+            {
+                refusal = EuCorrigendumTripwireRefusal.CorrectsRowTermKindMismatch;
+                offendingIri = valueTerm.Value;
+                return null;
+            }
+
+            if (!pagesByEdge.TryGetValue(corrigendum, out var targets))
+            {
+                targets = new Dictionary<string, SortedSet<int>>(StringComparer.Ordinal);
+                pagesByEdge.Add(corrigendum, targets);
+            }
+
+            if (!targets.TryGetValue(corrected, out var pages))
+            {
+                pages = [];
+                targets.Add(corrected, pages);
+            }
+
+            pages.Add(pageOfRow[index]);
         }
 
-        // ---- The lines: every expression of every corrigendum work, on every work it corrects. ----
+        var contradictory = statedNoCorrection
+            .Where(pagesByEdge.ContainsKey)
+            .OrderBy(static root => root, StringComparer.Ordinal)
+            .ToArray();
+        if (contradictory.Length > 0)
+        {
+            refusal = EuCorrigendumTripwireRefusal.CorrectsUnboundMarkerBesideEdges;
+            offendingIri = contradictory[0];
+            detail = string.Join("; ", contradictory);
+            return null;
+        }
+
+        // ---- The expressions, from the same two deliveries, in this same call. ----
+        var derivation = EuLanguageScopedExpressionDerivation.TryDerive(
+            expressionFacts,
+            objectFacts,
+            out var derivationRefusal,
+            out var decodeRefusal,
+            out var decodeDetail,
+            out var decodeOffendingIri);
+        if (derivation is null)
+        {
+            refusal = EuCorrigendumTripwireRefusal.ExpressionDerivationRefused;
+            detail = $"derivation={derivationRefusal} decode={decodeRefusal} detail={decodeDetail}";
+            offendingIri = decodeOffendingIri;
+            return null;
+        }
+
+        // ---- Lines, listed corrigenda, gaps. ----
         var expressionsByWork = derivation.Expressions
             .GroupBy(static expression => expression.Identity.PublisherWorkId, StringComparer.Ordinal)
             .ToDictionary(static group => group.Key, static group => group.ToList(), StringComparer.Ordinal);
-        var dateDeliveryConsulted = derivation.ObjectFactsProof is not null;
+        var gaps = expressionsByWork.Keys
+            .Where(work => !pagesByEdge.ContainsKey(work) && !statedNoCorrection.Contains(work))
+            .OrderBy(static work => work, StringComparer.Ordinal)
+            .Select(static work => new EuCorrigendumTripwireUnresolvedGap(
+                work, EuCorrigendumTripwireGapReason.CorrectsNotStatedByConsultedDelivery))
+            .ToList();
         var linesByCorrected = new Dictionary<string, List<EuCorrigendumTripwireLine>>(StringComparer.Ordinal);
-        var undecodedByCorrected = new Dictionary<string, SortedSet<string>>(StringComparer.Ordinal);
-        foreach (var (corrigendumRoot, targets) in edgesByCorrigendum)
+        var undecodedByCorrected = new Dictionary<string, List<EuCorrigendumWithoutDerivedExpressions>>(StringComparer.Ordinal);
+        foreach (var (corrigendum, targets) in pagesByEdge)
         {
-            var held = expressionsByWork.GetValueOrDefault(corrigendumRoot);
-            foreach (var (correctedRoot, evidence) in targets)
+            var held = expressionsByWork.GetValueOrDefault(corrigendum);
+            foreach (var (corrected, pages) in targets)
             {
+                var pageDigests = pages
+                    .Select(page => objectFacts.PagesInOrder[page].DurableWriteReceipt.Reference.ContentSha256)
+                    .ToArray();
                 if (held is null)
                 {
-                    if (!undecodedByCorrected.TryGetValue(correctedRoot, out var undecoded))
+                    if (!undecodedByCorrected.TryGetValue(corrected, out var undecoded))
                     {
-                        undecoded = new SortedSet<string>(StringComparer.Ordinal);
-                        undecodedByCorrected.Add(correctedRoot, undecoded);
+                        undecoded = [];
+                        undecodedByCorrected.Add(corrected, undecoded);
                     }
 
-                    undecoded.Add(corrigendumRoot);
+                    undecoded.Add(new EuCorrigendumWithoutDerivedExpressions(corrigendum, OrdinalDistinct(pageDigests)));
                     continue;
                 }
 
-                if (!linesByCorrected.TryGetValue(correctedRoot, out var lines))
+                if (!linesByCorrected.TryGetValue(corrected, out var lines))
                 {
                     lines = [];
-                    linesByCorrected.Add(correctedRoot, lines);
+                    linesByCorrected.Add(corrected, lines);
                 }
 
                 foreach (var expression in held)
                 {
-                    lines.Add(EuCorrigendumTripwireLine.Create(correctedRoot, expression, dateDeliveryConsulted, evidence));
+                    lines.Add(EuCorrigendumTripwireLine.Create(corrected, expression, pageDigests));
                 }
             }
         }
@@ -571,15 +722,12 @@ public sealed class EuCorrigendumTripwireSet
                 linesByCorrected.GetValueOrDefault(root) ?? [],
                 undecodedByCorrected.GetValueOrDefault(root) ?? []))
             .ToList();
-        var orderedGaps = gaps
-            .OrderBy(static gap => gap.ObjectPublisherUri, StringComparer.Ordinal)
-            .ToList();
 
         var canonicalBytes = ContractCanonicalizer.Canonicalize(
             new CanonicalSetDocument(
                 SetSchema,
                 [.. tripwires.Select(EuCorrigendumTripwire.CanonicalTripwireDocument.Of)],
-                [.. orderedGaps.Select(CanonicalGapDocument.Of)]),
+                [.. gaps.Select(CanonicalGapDocument.Of)]),
             SetSchema + "-canonical-json",
             64);
         var lineageBytes = ContractCanonicalizer.Canonicalize(
@@ -587,27 +735,37 @@ public sealed class EuCorrigendumTripwireSet
                 LineageSchema,
                 Convert.ToHexStringLower(SHA256.HashData(canonicalBytes)),
                 derivation.DerivationSha256,
-                [.. tripwires.SelectMany(static tripwire => tripwire.Lines).Select(CanonicalLineLineageDocument.Of)]),
+                derivation.EpisodeSha256,
+                [.. tripwires.SelectMany(static tripwire => tripwire.Lines).Select(CanonicalLineLineageDocument.Of)],
+                [.. tripwires.SelectMany(static tripwire =>
+                    tripwire.CorrigendaWithoutDerivedExpressions.Select(corrigendum =>
+                        CanonicalListedCorrigendumLineageDocument.Of(tripwire.CorrectedWorkRoot, corrigendum)))]),
             LineageSchema + "-canonical-json",
             64);
 
         return new EuCorrigendumTripwireSet(
-            derivation.DerivationSha256,
+            derivation,
             tripwires.AsReadOnly(),
-            orderedGaps.AsReadOnly(),
+            gaps.AsReadOnly(),
             canonicalBytes,
             lineageBytes);
     }
 
-    private static IReadOnlyList<string> BuildServedBodyLanguageIris()
+    /// <summary>
+    /// Spells the served body languages by the publisher's authority IRI, ordinal, or refuses a
+    /// policy naming a language it cannot spell. Pure, so the refusal is testable without a policy
+    /// change.
+    /// </summary>
+    internal static IReadOnlyList<string> SpellServedBodyLanguages(IEnumerable<EuOfficialLanguage> policy)
     {
+        ArgumentNullException.ThrowIfNull(policy);
         var spelled = new Dictionary<EuOfficialLanguage, string>
         {
             [EuOfficialLanguage.English] = LanguageAuthorityBase + "ENG",
             [EuOfficialLanguage.French] = LanguageAuthorityBase + "FRA",
         };
         var iris = new List<string>();
-        foreach (var language in EuLanguageBodyDisposition.BodyCandidateLanguages)
+        foreach (var language in policy)
         {
             if (!spelled.TryGetValue(language, out var iri))
             {
@@ -623,14 +781,17 @@ public sealed class EuCorrigendumTripwireSet
         return iris.AsReadOnly();
     }
 
-    private sealed record CanonicalGapDocument(
-        string ObjectPublisherUri,
-        string CanonicalWorkRoot,
-        string Reason,
-        string CorrectsAcquisition)
+    internal static ReadOnlyCollection<string> OrdinalDistinct(IEnumerable<string> digests) =>
+        digests
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(static digest => digest, StringComparer.Ordinal)
+            .ToList()
+            .AsReadOnly();
+
+    private sealed record CanonicalGapDocument(string WorkRoot, string Reason)
     {
         public static CanonicalGapDocument Of(EuCorrigendumTripwireUnresolvedGap gap) =>
-            new(gap.ObjectPublisherUri, gap.CanonicalWorkRoot, gap.Reason.ToString(), gap.CorrectsAcquisition.ToString());
+            new(gap.WorkRoot, gap.Reason.ToString());
     }
 
     private sealed record CanonicalSetDocument(
@@ -643,7 +804,7 @@ public sealed class EuCorrigendumTripwireSet
         string CorrigendumWorkRoot,
         string PublisherExpressionId,
         IReadOnlyList<string> LineageContentSha256InOrder,
-        IReadOnlyList<CanonicalEvidenceDocument> CorrectsEvidenceRefs)
+        IReadOnlyList<string> CorrectsPageContentSha256InOrder)
     {
         public static CanonicalLineLineageDocument Of(EuCorrigendumTripwireLine line) =>
             new(
@@ -651,14 +812,24 @@ public sealed class EuCorrigendumTripwireSet
                 line.CorrigendumWorkRoot,
                 line.PublisherExpressionId,
                 line.LineageContentSha256InOrder,
-                [.. line.CorrectsEvidenceRefs.Select(static reference => new CanonicalEvidenceDocument(reference.ResourceId, reference.Sha256))]);
+                line.CorrectsPageContentSha256InOrder);
     }
 
-    private sealed record CanonicalEvidenceDocument(string ResourceId, string Sha256);
+    private sealed record CanonicalListedCorrigendumLineageDocument(
+        string CorrectedWorkRoot,
+        string CorrigendumWorkRoot,
+        IReadOnlyList<string> CorrectsPageContentSha256InOrder)
+    {
+        public static CanonicalListedCorrigendumLineageDocument Of(
+            string correctedWorkRoot, EuCorrigendumWithoutDerivedExpressions corrigendum) =>
+            new(correctedWorkRoot, corrigendum.CorrigendumWorkRoot, corrigendum.CorrectsPageContentSha256InOrder);
+    }
 
     private sealed record CanonicalLineageDocument(
         string Schema,
         string CanonicalSha256,
         string DerivationSha256,
-        IReadOnlyList<CanonicalLineLineageDocument> Lines);
+        string EpisodeSha256,
+        IReadOnlyList<CanonicalLineLineageDocument> Lines,
+        IReadOnlyList<CanonicalListedCorrigendumLineageDocument> CorrigendaWithoutDerivedExpressions);
 }

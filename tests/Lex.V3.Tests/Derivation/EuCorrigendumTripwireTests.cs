@@ -1,4 +1,4 @@
-using System.Security.Cryptography;
+using System.Reflection;
 using System.Text;
 using Lex.V3.Contracts;
 using Lex.V3.Contracts.Custody;
@@ -12,8 +12,9 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 namespace Lex.V3.Tests.Derivation;
 
 /// <summary>
-/// The Stage 3 half of "render the tripwire": from a retained expression derivation and the decoded
-/// snapshots, every corrected work's corrigendum lines, with reach and date stated per line.
+/// The Stage 3 half of "render the tripwire": from the two proof-bound deliveries the expression
+/// derivation takes, every corrected work's corrigendum lines, with reach and date stated per line
+/// and every edge cited to the retained page that stated it.
 /// </summary>
 /// <remarks>
 /// The measured shape this exists for is the product specification's own example: the GDPR's
@@ -25,8 +26,9 @@ namespace Lex.V3.Tests.Derivation;
 [TestClass]
 public sealed class EuCorrigendumTripwireTests
 {
-    // Every snapshot root must be an Appendix A pack root; the corrected targets need only be
-    // canonical. Picked by index so a reordered seed map cannot silently change the fixtures.
+    // Canonical cellar roots, picked from the seed map by index: the map sorts its roots itself and
+    // refuses to load out of order, so an index names one root regardless of how the seed lines are
+    // written.
     private static string Gdpr => EuAppendixASeedMap.PackRoots[0];
     private static string CorrigendumOne => EuAppendixASeedMap.PackRoots[1];
     private static string CorrigendumTwo => EuAppendixASeedMap.PackRoots[2];
@@ -42,6 +44,7 @@ public sealed class EuCorrigendumTripwireTests
     private const string Italian = LanguageBase + "ITA";
     private const string Norwegian = LanguageBase + "NOR";
     private const string XsdDate = "http://www.w3.org/2001/XMLSchema#date";
+    private const string XsdString = "http://www.w3.org/2001/XMLSchema#string";
     private const string GdprCorrigendumDate = "2018-05-23";
 
     private static readonly string BelongsToWorkIri =
@@ -50,6 +53,8 @@ public sealed class EuCorrigendumTripwireTests
         EuObjectFactsDiscoveryPlan.CdmIri(EuCdmPredicate.ExpressionUsesLanguage);
     private static readonly string WorkDateIri =
         EuObjectFactsDiscoveryPlan.CdmIri(EuCdmPredicate.WorkDateDocument);
+    private static readonly string CorrectsIri =
+        EuObjectFactsDiscoveryPlan.RelationIri(EuRelationFamily.Corrects);
 
     private static readonly string[] XProjection =
         ["parent", "object", "predicate", "value", "value_kind", "datatype_iri", "language_tag", "cursor"];
@@ -57,26 +62,29 @@ public sealed class EuCorrigendumTripwireTests
     private static readonly string[] PProjection =
         ["object", "predicate", "value", "value_kind", "cursor"];
     private static readonly string[] PKey = ["object", "predicate", "value"];
+    private static readonly string[] PKeyWithoutValue = ["object", "predicate"];
+    private static readonly string[] PKeyWithCursor = ["object", "predicate", "cursor"];
 
     // ---- The measured shape. ----
 
     /// <summary>
     /// The product specification's example: one corrigendum, four languages, none of them served.
-    /// Four lines, each outside the served languages, each dated exactly as the publisher wrote it.
+    /// Four lines, each outside the served languages, each dated exactly as the publisher wrote it,
+    /// each citing the page that stated the edge.
     /// </summary>
     [TestMethod]
     public void TheGdprCorrigendumShapeYieldsFourLinesAllOutsideServedLanguages()
     {
-        var derivation = Derive(
+        var objectFacts = BoundObjectFacts([Corrects(CorrigendumOne, Gdpr), Date(CorrigendumOne, GdprCorrigendumDate)]);
+        var set = Fold(
+            Bound(
             [
                 .. Expression(CorrigendumOne, "R01.EST", Estonian),
                 .. Expression(CorrigendumOne, "R01.DEU", German),
                 .. Expression(CorrigendumOne, "R01.HUN", Hungarian),
                 .. Expression(CorrigendumOne, "R01.ITA", Italian),
-            ],
-            [PRow(CorrigendumOne, WorkDateIri, GdprCorrigendumDate, XsdDate)]);
-
-        var set = Fold(derivation, Snapshot(CorrigendumOne, Complete(CorrigendumOne, "r01", Gdpr)));
+            ]),
+            objectFacts);
 
         Assert.HasCount(1, set.Tripwires);
         var tripwire = set.TripwireFor(Gdpr);
@@ -85,6 +93,7 @@ public sealed class EuCorrigendumTripwireTests
         Assert.AreEqual(0, tripwire.WithinServedCount, "no served body carries this corrigendum.");
         Assert.AreEqual(4, tripwire.OutsideServedCount);
         Assert.AreEqual(4, tripwire.DatedCount);
+        var pageDigests = objectFacts.PagesInOrder.Select(static page => page.DurableWriteReceipt.Reference.ContentSha256).ToArray();
         foreach (var line in tripwire.Lines)
         {
             Assert.AreEqual(Gdpr, line.CorrectedWorkRoot);
@@ -94,6 +103,8 @@ public sealed class EuCorrigendumTripwireTests
             Assert.AreEqual("corrigendum_dated_outside_served_languages", line.ReasonCode);
             Assert.AreEqual(GdprCorrigendumDate, line.PublisherCorrigendumDate!.RawLexical, "carried, never computed.");
             Assert.AreEqual(XsdDate, line.PublisherCorrigendumDate.DatatypeIri);
+            Assert.HasCount(1, line.CorrectsPageContentSha256InOrder);
+            Assert.Contains(line.CorrectsPageContentSha256InOrder[0], pageDigests, "the edge cites a retained page of this delivery.");
         }
 
         CollectionAssert.AreEquivalent(
@@ -112,15 +123,15 @@ public sealed class EuCorrigendumTripwireTests
     [TestMethod]
     public void EnglishAndFrenchAreWithinServedAndEverythingElseIsOutside()
     {
-        var derivation = Derive(
+        var tripwire = Fold(
+            Bound(
             [
                 .. Expression(CorrigendumOne, "R01.ENG", English),
                 .. Expression(CorrigendumOne, "R01.FRA", French),
                 .. Expression(CorrigendumOne, "R01.DEU", German),
                 .. Expression(CorrigendumOne, "R01.NOR", Norwegian),
-            ]);
-
-        var tripwire = Fold(derivation, Snapshot(CorrigendumOne, Complete(CorrigendumOne, "r01", Gdpr))).TripwireFor(Gdpr)!;
+            ]),
+            BoundObjectFacts([Corrects(CorrigendumOne, Gdpr)])).TripwireFor(Gdpr)!;
 
         Assert.AreEqual(2, tripwire.WithinServedCount);
         Assert.AreEqual(2, tripwire.OutsideServedCount);
@@ -138,76 +149,49 @@ public sealed class EuCorrigendumTripwireTests
     }
 
     /// <summary>
-    /// Dated, consulted-and-none-stated, and never-consulted are three states with three addresses.
-    /// The undated states invent no date.
+    /// Dated and consulted-and-none-stated are two states with two addresses, and the second is
+    /// exact: the delivery that stated the edge is the delivery that stated no date. The undated
+    /// state invents no date.
     /// </summary>
     [TestMethod]
-    public void TheThreeDateStatesAreDistinctAndDistinctlyAddressed()
+    public void TheTwoDateStatesAreDistinctAndDistinctlyAddressed()
     {
-        var rows = Expression(CorrigendumOne, "R01.DEU", German);
-        var snapshot = Snapshot(CorrigendumOne, Complete(CorrigendumOne, "r01", Gdpr));
+        var expressionFacts = Bound(Expression(CorrigendumOne, "R01.DEU", German));
 
-        var dated = Fold(Derive(rows, [PRow(CorrigendumOne, WorkDateIri, GdprCorrigendumDate, XsdDate)]), snapshot).TripwireFor(Gdpr)!;
-        var consultedUndated = Fold(Derive(rows, [PRow(OtherAct, WorkDateIri, "2016-01-01", XsdDate)]), snapshot).TripwireFor(Gdpr)!;
-        var notConsulted = Fold(Derive(rows), snapshot).TripwireFor(Gdpr)!;
+        var dated = Fold(expressionFacts, BoundObjectFacts([Corrects(CorrigendumOne, Gdpr), Date(CorrigendumOne, GdprCorrigendumDate)]))
+            .TripwireFor(Gdpr)!;
+        var undated = Fold(expressionFacts, BoundObjectFacts([Corrects(CorrigendumOne, Gdpr), NoDate(CorrigendumOne)], PKeyWithoutValue))
+            .TripwireFor(Gdpr)!;
 
         Assert.AreEqual(EuCorrigendumDateState.PublisherDated, dated.Lines.Single().DateState);
-        Assert.AreEqual(EuCorrigendumDateState.NotStatedByConsultedDelivery, consultedUndated.Lines.Single().DateState);
-        Assert.AreEqual(EuCorrigendumDateState.DateDeliveryNotConsulted, notConsulted.Lines.Single().DateState);
-        Assert.IsNull(consultedUndated.Lines.Single().PublisherCorrigendumDate, "no default, no sentinel.");
-        Assert.IsNull(notConsulted.Lines.Single().PublisherCorrigendumDate);
+        Assert.AreEqual(EuCorrigendumDateState.NotStatedByConsultedDelivery, undated.Lines.Single().DateState);
+        Assert.IsNull(undated.Lines.Single().PublisherCorrigendumDate, "no default, no sentinel.");
         Assert.AreEqual(1, dated.DatedCount);
-        Assert.AreEqual(0, consultedUndated.DatedCount);
-        Assert.AreEqual(0, notConsulted.DatedCount);
-        Assert.AreEqual(
-            3,
-            new HashSet<string>(StringComparer.Ordinal)
-            {
-                dated.TripwireSha256, consultedUndated.TripwireSha256, notConsulted.TripwireSha256,
-            }.Count,
-            "three different facts, three different addresses.");
+        Assert.AreEqual(0, undated.DatedCount);
+        Assert.AreNotEqual(dated.TripwireSha256, undated.TripwireSha256, "two different facts, two different addresses.");
     }
 
-    /// <summary>Every reach and date state pair renders to its own closed token.</summary>
+    /// <summary>Each reach and date state pair renders its own closed token - pinned pair by pair.</summary>
     [TestMethod]
-    public void EveryReachAndDateStatePairHasItsOwnReasonCode()
+    public void EachReachAndDateStatePairRendersItsOwnReasonCode()
     {
-        var rows = new List<string>();
-        rows.AddRange(Expression(CorrigendumOne, "R01.ENG", English));
-        rows.AddRange(Expression(CorrigendumOne, "R01.DEU", German));
-        var snapshot = Snapshot(CorrigendumOne, Complete(CorrigendumOne, "r01", Gdpr));
-        var codes = new SortedSet<string>(StringComparer.Ordinal);
-        foreach (var derivation in new[]
-        {
-            Derive(rows, [PRow(CorrigendumOne, WorkDateIri, GdprCorrigendumDate, XsdDate)]),
-            Derive(rows, [PRow(OtherAct, WorkDateIri, "2016-01-01", XsdDate)]),
-            Derive(rows),
-        })
-        {
-            foreach (var line in Fold(derivation, snapshot).TripwireFor(Gdpr)!.Lines)
-            {
-                codes.Add(line.ReasonCode);
-            }
-        }
+        var expressionFacts = Bound([.. Expression(CorrigendumOne, "R01.ENG", English), .. Expression(CorrigendumOne, "R01.DEU", German)]);
+        var dated = Fold(expressionFacts, BoundObjectFacts([Corrects(CorrigendumOne, Gdpr), Date(CorrigendumOne, GdprCorrigendumDate)]))
+            .TripwireFor(Gdpr)!.Lines.ToDictionary(static line => line.LanguageIri, StringComparer.Ordinal);
+        var undated = Fold(expressionFacts, BoundObjectFacts([Corrects(CorrigendumOne, Gdpr), NoDate(CorrigendumOne)], PKeyWithoutValue))
+            .TripwireFor(Gdpr)!.Lines.ToDictionary(static line => line.LanguageIri, StringComparer.Ordinal);
 
-        CollectionAssert.AreEqual(
-            new[]
-            {
-                "corrigendum_date_unknown_outside_served_languages",
-                "corrigendum_date_unknown_within_served_languages",
-                "corrigendum_dated_outside_served_languages",
-                "corrigendum_dated_within_served_languages",
-                "corrigendum_undated_outside_served_languages",
-                "corrigendum_undated_within_served_languages",
-            },
-            codes.ToArray());
+        Assert.AreEqual("corrigendum_dated_within_served_languages", dated[English].ReasonCode);
+        Assert.AreEqual("corrigendum_dated_outside_served_languages", dated[German].ReasonCode);
+        Assert.AreEqual("corrigendum_undated_within_served_languages", undated[English].ReasonCode);
+        Assert.AreEqual("corrigendum_undated_outside_served_languages", undated[German].ReasonCode);
     }
 
     // ---- S3-A04: byte-stable content, per-run lineage. ----
 
     /// <summary>
-    /// Two independent executions - different acquisition runs, different evidence references -
-    /// over the same publisher statements produce one canonical address and two lineages.
+    /// Two independent executions - different acquisition runs on both families - over the same
+    /// publisher statements produce one canonical address and two lineages.
     /// </summary>
     [TestMethod]
     public void TwoIndependentExecutionsAgreeOnContentAndDifferOnLineage()
@@ -215,20 +199,15 @@ public sealed class EuCorrigendumTripwireTests
         var rows = new List<string>();
         rows.AddRange(Expression(CorrigendumOne, "R01.EST", Estonian));
         rows.AddRange(Expression(CorrigendumOne, "R01.DEU", German));
-        var dates = new[] { PRow(CorrigendumOne, WorkDateIri, GdprCorrigendumDate, XsdDate) };
+        var objectRows = new[] { Corrects(CorrigendumOne, Gdpr), Date(CorrigendumOne, GdprCorrigendumDate) };
 
-        var first = Fold(
-            Derive(rows, dates, runIdentitySeed: 930),
-            Snapshot(CorrigendumOne, Complete(CorrigendumOne, "run-one", Gdpr), evidenceSeed: "run-one"));
-        var second = Fold(
-            Derive(rows, dates, runIdentitySeed: 931),
-            Snapshot(CorrigendumOne, Complete(CorrigendumOne, "run-two", Gdpr), evidenceSeed: "run-two"));
+        var first = Fold(Bound(rows, runIdentitySeed: 930), BoundObjectFacts(objectRows, runIdentitySeed: 930));
+        var second = Fold(Bound(rows, runIdentitySeed: 931), BoundObjectFacts(objectRows, runIdentitySeed: 931));
 
         // The premise: the two really are different executions.
         Assert.AreNotEqual(
-            first.Tripwires.Single().Lines[0].CorrectsEvidenceRefs[0].ResourceId,
-            second.Tripwires.Single().Lines[0].CorrectsEvidenceRefs[0].ResourceId,
-            "the fixture must vary the evidence the edge came from.");
+            first.Derivation.EpisodeSha256, second.Derivation.EpisodeSha256,
+            "the fixture must mint two acquisition runs.");
 
         Assert.AreEqual(first.CanonicalSha256, second.CanonicalSha256, "what the publisher said is one fact.");
         CollectionAssert.AreEqual(first.CanonicalBytes.ToArray(), second.CanonicalBytes.ToArray());
@@ -236,7 +215,7 @@ public sealed class EuCorrigendumTripwireTests
         Assert.AreNotEqual(first.LineageSha256, second.LineageSha256, "each time it was observed is another.");
     }
 
-    /// <summary>Snapshots and expressions in any order fold to one canonical form.</summary>
+    /// <summary>Rows in any order, on either family, fold to one canonical form.</summary>
     [TestMethod]
     public void PermutedInputOrdersFoldToOneCanonicalForm()
     {
@@ -248,11 +227,11 @@ public sealed class EuCorrigendumTripwireTests
         backward.AddRange(Expression(CorrigendumTwo, "R02.ITA", Italian));
         backward.AddRange(Expression(CorrigendumOne, "R01.DEU", German));
         backward.AddRange(Expression(CorrigendumOne, "R01.EST", Estonian));
-        var one = Snapshot(CorrigendumOne, Complete(CorrigendumOne, "r01", Gdpr, OtherAct));
-        var two = Snapshot(CorrigendumTwo, Complete(CorrigendumTwo, "r02", Gdpr));
+        var objectForward = new[] { Corrects(CorrigendumOne, Gdpr), Corrects(CorrigendumOne, OtherAct), Corrects(CorrigendumTwo, Gdpr) };
+        var objectBackward = objectForward.Reverse().ToArray();
 
-        var ascending = Fold(Derive(forward), one, two);
-        var descending = Fold(Derive(backward), two, one);
+        var ascending = Fold(Bound(forward), BoundObjectFacts(objectForward));
+        var descending = Fold(Bound(backward), BoundObjectFacts(objectBackward));
 
         Assert.AreNotEqual(
             ascending.DerivationSha256, descending.DerivationSha256,
@@ -272,14 +251,41 @@ public sealed class EuCorrigendumTripwireTests
         rows.AddRange(Expression(CorrigendumOne, "a", German));
         rows.AddRange(Expression(CorrigendumOne, "B", German));
 
-        var tripwire = Fold(Derive(rows), Snapshot(CorrigendumOne, Complete(CorrigendumOne, "r01", Gdpr))).TripwireFor(Gdpr)!;
+        var tripwire = Fold(Bound(rows), BoundObjectFacts([Corrects(CorrigendumOne, Gdpr)])).TripwireFor(Gdpr)!;
 
         CollectionAssert.AreEqual(
             new[] { CorrigendumOne + ".B", CorrigendumOne + ".a" },
             tripwire.Lines.Select(static line => line.PublisherExpressionId).ToArray());
-        var roots = Fold(Derive(rows), Snapshot(CorrigendumOne, Complete(CorrigendumOne, "r01", OtherAct, Gdpr)))
+        var roots = Fold(Bound(rows), BoundObjectFacts([Corrects(CorrigendumOne, OtherAct), Corrects(CorrigendumOne, Gdpr)]))
             .Tripwires.Select(static tripwire => tripwire.CorrectedWorkRoot).ToArray();
         CollectionAssert.AreEqual(roots.OrderBy(static root => root, StringComparer.Ordinal).ToArray(), roots);
+    }
+
+    /// <summary>
+    /// The corrigendum root is the dominant sort key. The lens noted every fixture's expression
+    /// identity began with its own root, so identity alone would have ordered identically; here the
+    /// expression identities sort the other way round from the roots.
+    /// </summary>
+    [TestMethod]
+    public void TheCorrigendumRootIsTheDominantSortKey()
+    {
+        var rows = new List<string>();
+        rows.AddRange(ExpressionNamed(CorrigendumOne, "http://z.example.org/expression", German));
+        rows.AddRange(ExpressionNamed(CorrigendumTwo, "http://a.example.org/expression", German));
+        var ordinalRoots = new[] { CorrigendumOne, CorrigendumTwo }.OrderBy(static root => root, StringComparer.Ordinal).ToArray();
+
+        var lines = Fold(Bound(rows), BoundObjectFacts([Corrects(CorrigendumOne, Gdpr), Corrects(CorrigendumTwo, Gdpr)]))
+            .TripwireFor(Gdpr)!.Lines;
+
+        Assert.AreNotEqual(
+            string.CompareOrdinal(CorrigendumOne, CorrigendumTwo) < 0,
+            string.CompareOrdinal("http://z.example.org/expression", "http://a.example.org/expression") < 0,
+            "the premise: root order and identity order disagree.");
+        CollectionAssert.AreEqual(ordinalRoots, lines.Select(static line => line.CorrigendumWorkRoot).ToArray());
+        CollectionAssert.AreEqual(
+            new[] { "http://z.example.org/expression", "http://a.example.org/expression" },
+            lines.Select(static line => line.PublisherExpressionId).ToArray(),
+            "identity alone would have put these the other way round.");
     }
 
     // ---- S3-A03: explicit fidelity. ----
@@ -289,8 +295,8 @@ public sealed class EuCorrigendumTripwireTests
     public void ACorrigendumCorrectingTwoWorksAppearsOnBoth()
     {
         var set = Fold(
-            Derive(Expression(CorrigendumOne, "R01.DEU", German)),
-            Snapshot(CorrigendumOne, Complete(CorrigendumOne, "r01", Gdpr, OtherAct)));
+            Bound(Expression(CorrigendumOne, "R01.DEU", German)),
+            BoundObjectFacts([Corrects(CorrigendumOne, Gdpr), Corrects(CorrigendumOne, OtherAct)]));
 
         Assert.HasCount(2, set.Tripwires);
         Assert.AreEqual(CorrigendumOne, set.TripwireFor(Gdpr)!.Lines.Single().CorrigendumWorkRoot);
@@ -300,73 +306,71 @@ public sealed class EuCorrigendumTripwireTests
 
     /// <summary>
     /// A corrigendum the publisher says corrects a work, whose expressions this derivation does not
-    /// hold, is listed on that work - not dropped. Dropping it would say "no corrigendum".
+    /// hold, is listed on that work with the pages that stated the edge - not dropped, and not
+    /// stated without lineage.
     /// </summary>
     [TestMethod]
-    public void ACorrigendumWithoutDerivedExpressionsIsListedNotDropped()
+    public void ACorrigendumWithoutDerivedExpressionsIsListedWithItsLineage()
     {
-        var derivation = Derive(Expression(CorrigendumOne, "R01.DEU", German));
-        var one = Snapshot(CorrigendumOne, Complete(CorrigendumOne, "r01", Gdpr));
-        var two = Snapshot(CorrigendumTwo, Complete(CorrigendumTwo, "r02", Gdpr));
+        var expressionFacts = Bound(Expression(CorrigendumOne, "R01.DEU", German));
+        var both = BoundObjectFacts([Corrects(CorrigendumOne, Gdpr), Corrects(CorrigendumTwo, Gdpr)]);
 
-        var with = Fold(derivation, one, two).TripwireFor(Gdpr)!;
-        var without = Fold(derivation, one).TripwireFor(Gdpr)!;
+        var with = Fold(expressionFacts, both);
+        var without = Fold(expressionFacts, BoundObjectFacts([Corrects(CorrigendumOne, Gdpr)]));
+        var tripwire = with.TripwireFor(Gdpr)!;
 
-        Assert.HasCount(1, with.Lines);
-        CollectionAssert.AreEqual(new[] { CorrigendumTwo }, with.CorrigendaWithoutDerivedExpressions.ToArray());
-        Assert.IsEmpty(without.CorrigendaWithoutDerivedExpressions);
-        Assert.AreNotEqual(with.TripwireSha256, without.TripwireSha256, "a listed unknown is content.");
-        StringAssert.Contains(with.Describe(), "corrigenda_without_derived_expressions=1");
+        Assert.HasCount(1, tripwire.Lines);
+        var listed = tripwire.CorrigendaWithoutDerivedExpressions.Single();
+        Assert.AreEqual(CorrigendumTwo, listed.CorrigendumWorkRoot);
+        Assert.HasCount(1, listed.CorrectsPageContentSha256InOrder);
+        var pageDigests = both.PagesInOrder.Select(static page => page.DurableWriteReceipt.Reference.ContentSha256).ToArray();
+        Assert.Contains(listed.CorrectsPageContentSha256InOrder[0], pageDigests, "the listing cites the page that stated the edge.");
+        var lineage = Encoding.UTF8.GetString(with.LineageBytes.Span);
+        StringAssert.Contains(lineage, listed.CorrectsPageContentSha256InOrder[0], "and the set's lineage carries it.");
+        StringAssert.Contains(lineage, CorrigendumTwo);
+        Assert.IsEmpty(without.TripwireFor(Gdpr)!.CorrigendaWithoutDerivedExpressions);
+        Assert.AreNotEqual(tripwire.TripwireSha256, without.TripwireFor(Gdpr)!.TripwireSha256, "a listed unknown is content.");
+        StringAssert.Contains(tripwire.Describe(), "corrigenda_without_derived_expressions=1");
     }
 
     /// <summary>
-    /// A Corrects family that is not completely acquired is an unresolved gap naming the object.
-    /// The fold never reads edges off it and never says "no corrigendum" for it; a complete family
-    /// with zero edges is exactly that and is neither a gap nor a tripwire.
+    /// A work the derivation holds expressions of, for which the consulted delivery states neither
+    /// an edge nor the "corrects nothing" marker, is an unresolved gap; a work with the marker is a
+    /// base act outside the subject set, neither a gap nor a tripwire.
     /// </summary>
     [TestMethod]
-    public void AnIncompletelyAcquiredCorrectsFamilyIsAnUnresolvedGapNotAnAbsenceClaim()
+    public void AWorkWhoseCorrectsStatementIsMissingIsAnUnresolvedGapNotAnAbsenceClaim()
     {
-        var derivation = Derive(Expression(CorrigendumOne, "R01.DEU", German));
-        var unacquired = Snapshot(CorrigendumOne, new EuRelationFamilyObservation(
-            EuRelationFamily.Corrects, EuRelationAcquisitionState.Unacquired, [], null), objectSuffix: "/u");
-        var incomplete = Snapshot(CorrigendumOne, new EuRelationFamilyObservation(
-            EuRelationFamily.Corrects, EuRelationAcquisitionState.Incomplete, [Edge("partial", Gdpr)], null), objectSuffix: "/i");
-        var uncertain = Snapshot(CorrigendumTwo, new EuRelationFamilyObservation(
-            EuRelationFamily.Corrects, EuRelationAcquisitionState.Uncertain, [Edge("doubtful", Gdpr)], null));
-        var completeAndEmpty = Snapshot(BaseAct, Complete(BaseAct, "base"));
+        var set = Fold(
+            Bound(
+            [
+                .. Expression(CorrigendumOne, "R01.DEU", German),
+                .. Expression(BaseAct, "ENG", English),
+                .. Expression(OtherAct, "ENG", English),
+            ]),
+            BoundObjectFacts([Corrects(CorrigendumOne, Gdpr), NoCorrection(BaseAct)], PKeyWithoutValue));
 
-        var set = Fold(derivation, uncertain, incomplete, unacquired, completeAndEmpty);
-
-        Assert.IsEmpty(set.Tripwires, "an incompletely acquired edge is not a link, even when it names a target.");
-        Assert.HasCount(3, set.UnresolvedGaps);
-        CollectionAssert.AreEqual(
-            set.UnresolvedGaps.Select(static gap => gap.ObjectPublisherUri).OrderBy(static uri => uri, StringComparer.Ordinal).ToArray(),
-            set.UnresolvedGaps.Select(static gap => gap.ObjectPublisherUri).ToArray(),
-            "ordinal by object.");
-        CollectionAssert.AreEquivalent(
-            new[]
-            {
-                EuRelationAcquisitionState.Unacquired,
-                EuRelationAcquisitionState.Incomplete,
-                EuRelationAcquisitionState.Uncertain,
-            },
-            set.UnresolvedGaps.Select(static gap => gap.CorrectsAcquisition).ToArray(),
-            "the gap says how far acquisition got.");
-        Assert.IsTrue(set.UnresolvedGaps.All(static gap => gap.Reason == EuCorrigendumTripwireGapReason.CorrectsNotCompletelyAcquired));
-        Assert.IsFalse(
-            set.UnresolvedGaps.Any(gap => gap.ObjectPublisherUri == BaseAct),
-            "a complete family with no edges is a complete answer, not a gap.");
+        Assert.HasCount(1, set.Tripwires);
+        Assert.IsNotNull(set.TripwireFor(Gdpr));
+        var gap = set.UnresolvedGaps.Single();
+        Assert.AreEqual(OtherAct, gap.WorkRoot, "nothing was stated about this work's corrections.");
+        Assert.AreEqual(EuCorrigendumTripwireGapReason.CorrectsNotStatedByConsultedDelivery, gap.Reason);
+        Assert.IsNull(set.TripwireFor(BaseAct), "the marker is a complete answer: a base act, not a corrigendum.");
+        Assert.AreEqual(
+            $"corrected_works=1 lines=1 (within_served=0 outside_served=1 dated=0) " +
+            "corrigenda_without_derived_expressions=0 unresolved_gaps=1",
+            set.Describe());
+        var canonical = Encoding.UTF8.GetString(set.CanonicalBytes.Span);
+        StringAssert.Contains(canonical, OtherAct, "the gap is content: a display must know it does not know.");
     }
 
-    /// <summary>Expressions of a work with no Corrects edge are outside the subject set: no line, no gap.</summary>
+    /// <summary>Expressions of a base act are outside the subject set: no line, no gap, nothing.</summary>
     [TestMethod]
-    public void ExpressionsOfWorksWithoutCorrectsEdgesAreOutsideTheSubjectSet()
+    public void ExpressionsOfABaseActAreOutsideTheSubjectSet()
     {
-        var derivation = Derive(
-            [.. Expression(BaseAct, "ENG", English), .. Expression(BaseAct, "FRA", French)]);
-
-        var set = Fold(derivation, Snapshot(BaseAct, Complete(BaseAct, "base")));
+        var set = Fold(
+            Bound([.. Expression(BaseAct, "ENG", English), .. Expression(BaseAct, "FRA", French)]),
+            BoundObjectFacts([NoCorrection(BaseAct)], PKeyWithoutValue));
 
         Assert.IsEmpty(set.Tripwires);
         Assert.IsEmpty(set.UnresolvedGaps);
@@ -376,90 +380,289 @@ public sealed class EuCorrigendumTripwireTests
             set.Describe());
     }
 
-    /// <summary>
-    /// Two snapshots of one corrigendum work - its root and a consolidated state - each stating the
-    /// edge contribute both their evidence references to every line, ordinal.
-    /// </summary>
+    /// <summary>A row stating that a work corrects itself is carried exactly as stated.</summary>
     [TestMethod]
-    public void TwoSnapshotsOfOneWorkRootMergeTheirEdgeEvidence()
+    public void ASelfCorrectingRowIsRecordedAsStated()
     {
-        var root = Snapshot(CorrigendumOne, Complete(CorrigendumOne, "root", Gdpr));
-        var state = Snapshot(CorrigendumOne, Complete(CorrigendumOne, "state", Gdpr), objectSuffix: "/state/2018");
+        var line = Fold(Bound(Expression(CorrigendumOne, "R01.DEU", German)), BoundObjectFacts([Corrects(CorrigendumOne, CorrigendumOne)]))
+            .TripwireFor(CorrigendumOne)!.Lines.Single();
 
-        var line = Fold(Derive(Expression(CorrigendumOne, "R01.DEU", German)), state, root).TripwireFor(Gdpr)!.Lines.Single();
-
-        Assert.HasCount(2, line.CorrectsEvidenceRefs, "both statements of the edge are kept.");
-        CollectionAssert.AreEqual(
-            line.CorrectsEvidenceRefs.Select(static reference => reference.ResourceId).OrderBy(static id => id, StringComparer.Ordinal).ToArray(),
-            line.CorrectsEvidenceRefs.Select(static reference => reference.ResourceId).ToArray());
+        Assert.AreEqual(CorrigendumOne, line.CorrectedWorkRoot);
+        Assert.AreEqual(CorrigendumOne, line.CorrigendumWorkRoot);
     }
 
-    /// <summary>The lineage names the derivation, every page digest and every edge's evidence.</summary>
+    /// <summary>
+    /// An edge stated on two retained pages cites both pages. Every page that stated it, not a
+    /// representative one - the decoder's own rule for a date stated twice.
+    /// </summary>
     [TestMethod]
-    public void TheLineageBindsTheDerivationAndEveryEdgeEvidence()
+    public void AnEdgeStatedOnTwoPagesCitesBothPages()
     {
-        var derivation = Derive(Expression(CorrigendumOne, "R01.DEU", German));
-        var set = Fold(derivation, Snapshot(CorrigendumOne, Complete(CorrigendumOne, "r01", Gdpr)));
+        var objectFacts = BoundObjectFacts(
+            [Corrects(CorrigendumOne, Gdpr), Date(CorrigendumOne, GdprCorrigendumDate), Corrects(CorrigendumOne, Gdpr)],
+            PKeyWithCursor, rowLimitA: 2, rowLimitB: 3);
+        Assert.HasCount(2, objectFacts.PagesInOrder, "the premise: a full page and a short terminal page, the edge on each.");
+
+        var line = Fold(Bound(Expression(CorrigendumOne, "R01.DEU", German)), objectFacts).TripwireFor(Gdpr)!.Lines.Single();
+
+        CollectionAssert.AreEquivalent(
+            objectFacts.PagesInOrder.Select(static page => page.DurableWriteReceipt.Reference.ContentSha256).ToArray(),
+            line.CorrectsPageContentSha256InOrder.ToArray());
+        CollectionAssert.AreEqual(
+            line.CorrectsPageContentSha256InOrder.OrderBy(static digest => digest, StringComparer.Ordinal).ToArray(),
+            line.CorrectsPageContentSha256InOrder.ToArray(),
+            "ordinal.");
+    }
+
+    /// <summary>The lineage binds the canonical digest, the derivation, its episode and every page; the canonical bytes hold none of the pages.</summary>
+    [TestMethod]
+    public void TheLineageBindsTheDerivationTheEpisodeAndEveryPage()
+    {
+        var set = Fold(Bound(Expression(CorrigendumOne, "R01.DEU", German)), BoundObjectFacts([Corrects(CorrigendumOne, Gdpr)]));
         var lineage = Encoding.UTF8.GetString(set.LineageBytes.Span);
         var canonical = Encoding.UTF8.GetString(set.CanonicalBytes.Span);
         var line = set.Tripwires.Single().Lines.Single();
 
-        StringAssert.Contains(lineage, derivation.DerivationSha256);
         StringAssert.Contains(lineage, set.CanonicalSha256, "the lineage is bound to what it is the lineage of.");
-        StringAssert.Contains(lineage, line.CorrectsEvidenceRefs.Single().ResourceId);
-        StringAssert.Contains(lineage, line.CorrectsEvidenceRefs.Single().Sha256);
-        foreach (var pageDigest in line.LineageContentSha256InOrder)
+        StringAssert.Contains(lineage, set.DerivationSha256);
+        StringAssert.Contains(lineage, set.Derivation.EpisodeSha256, "and to the run that observed it.");
+        StringAssert.Contains(lineage, EuCorrigendumTripwireSet.LineageRecordSchema);
+        foreach (var digest in line.LineageContentSha256InOrder.Concat(line.CorrectsPageContentSha256InOrder))
         {
-            StringAssert.Contains(lineage, pageDigest);
+            StringAssert.Contains(lineage, digest);
+            Assert.IsFalse(canonical.Contains(digest, StringComparison.Ordinal), "a page digest is lineage, not content.");
         }
 
-        Assert.IsFalse(
-            canonical.Contains(line.CorrectsEvidenceRefs.Single().ResourceId, StringComparison.Ordinal),
-            "and the per-run reference is NOT in the canonical bytes.");
-        StringAssert.Contains(canonical, line.ExpressionContentSha256, "the expression's own content digest is.");
+        StringAssert.Contains(canonical, line.ExpressionContentSha256, "the expression's own content digest is content.");
         StringAssert.Contains(canonical, EuCorrigendumTripwireSet.Schema);
-        StringAssert.Contains(lineage, EuCorrigendumTripwireSet.LineageRecordSchema);
     }
 
-    // ---- Refusals and caller contract. ----
+    // ---- The pairing shape review named, three ways. ----
 
-    /// <summary>Two snapshots naming one object refuse, naming every offender in ordinal order.</summary>
+    /// <summary>
+    /// Two structurally valid object-facts deliveries under one interpretation profile with
+    /// different Corrects rows: each fold's lines cite exactly their own delivery's pages.
+    /// </summary>
     [TestMethod]
-    public void TwoSnapshotsNamingOneObjectRefuseNamingEveryOffender()
+    public void TwoDeliveriesUnderOneProfileWithDifferentCorrectsRowsCiteOnlyTheirOwnPages()
     {
-        var derivation = Derive(Expression(CorrigendumOne, "R01.DEU", German));
-        var one = Snapshot(CorrigendumOne, Complete(CorrigendumOne, "r01", Gdpr));
-        var oneAgain = Snapshot(CorrigendumOne, Complete(CorrigendumOne, "r01-again", Gdpr));
-        var two = Snapshot(CorrigendumTwo, Complete(CorrigendumTwo, "r02", Gdpr));
-        var twoAgain = Snapshot(CorrigendumTwo, Complete(CorrigendumTwo, "r02-again", OtherAct));
+        var expressionFacts = Bound([.. Expression(CorrigendumOne, "R01.DEU", German), .. Expression(CorrigendumTwo, "R02.ITA", Italian)]);
+        var a = BoundObjectFacts([Corrects(CorrigendumOne, Gdpr), NoCorrection(CorrigendumTwo)], PKeyWithoutValue, runIdentitySeed: 930);
+        var b = BoundObjectFacts([Corrects(CorrigendumTwo, Gdpr), NoCorrection(CorrigendumOne)], PKeyWithoutValue, runIdentitySeed: 931);
+        Assert.AreEqual(a.ProfileRef.Sha256, b.ProfileRef.Sha256, "the premise: one interpretation profile.");
+        var pagesOfA = a.PagesInOrder.Select(static page => page.DurableWriteReceipt.Reference.ContentSha256).ToArray();
+        var pagesOfB = b.PagesInOrder.Select(static page => page.DurableWriteReceipt.Reference.ContentSha256).ToArray();
+        Assert.IsEmpty(pagesOfA.Intersect(pagesOfB, StringComparer.Ordinal), "and different bytes.");
 
-        var set = EuCorrigendumTripwireSet.TryDerive(derivation, [two, one, twoAgain, oneAgain], out var refusal, out var detail);
+        var fromA = Fold(expressionFacts, a).TripwireFor(Gdpr)!.Lines.Single();
+        var fromB = Fold(expressionFacts, b).TripwireFor(Gdpr)!.Lines.Single();
+
+        Assert.AreEqual(CorrigendumOne, fromA.CorrigendumWorkRoot);
+        Assert.AreEqual(CorrigendumTwo, fromB.CorrigendumWorkRoot);
+        Assert.IsTrue(fromA.CorrectsPageContentSha256InOrder.All(digest => pagesOfA.Contains(digest, StringComparer.Ordinal)));
+        Assert.IsTrue(fromB.CorrectsPageContentSha256InOrder.All(digest => pagesOfB.Contains(digest, StringComparer.Ordinal)));
+    }
+
+    /// <summary>
+    /// A delivery assembled from one run's proof and comparison with another run's pages does not
+    /// fold: the reopen door throws it out, exactly as the decoder's own substitution test pins.
+    /// </summary>
+    [TestMethod]
+    public void AProofPairedWithAnotherDeliverysPagesDoesNotFold()
+    {
+        var expressionFacts = Bound(Expression(CorrigendumOne, "R01.DEU", German));
+        var sameRowsA = BoundObjectFacts([Corrects(CorrigendumOne, Gdpr)], runIdentitySeed: 930);
+        var sameRowsB = BoundObjectFacts([Corrects(CorrigendumOne, Gdpr)], runIdentitySeed: 931);
+        var otherRows = BoundObjectFacts([Corrects(CorrigendumTwo, Gdpr)], runIdentitySeed: 932);
+        Assert.AreEqual(sameRowsA.Proof.CanonicalKeyDigest, sameRowsB.Proof.CanonicalKeyDigest, "the premise: same rows, other run.");
+
+        Assert.ThrowsExactly<ArgumentException>(() => EuCorrigendumTripwireSet.TryDerive(
+            expressionFacts,
+            new EuProofBoundDelivery(
+                sameRowsA.Proof, sameRowsA.Comparison, sameRowsA.Profile, sameRowsA.ProfileRef,
+                sameRowsA.CountHttpEvidenceRef, sameRowsB.PagesInOrder),
+            out _, out _, out _));
+        Assert.ThrowsExactly<ArgumentException>(() => EuCorrigendumTripwireSet.TryDerive(
+            expressionFacts,
+            new EuProofBoundDelivery(
+                sameRowsA.Proof, sameRowsA.Comparison, sameRowsA.Profile, sameRowsA.ProfileRef,
+                sameRowsA.CountHttpEvidenceRef, otherRows.PagesInOrder),
+            out _, out _, out _));
+    }
+
+    /// <summary>
+    /// The pairing shape cannot be written: no public member of any tripwire type accepts a
+    /// derivation, a snapshot, a relation observation or rows, and every constructor is non-public.
+    /// </summary>
+    [TestMethod]
+    public void ThePairingShapeCannotBeWritten()
+    {
+        var forbidden = new[]
+        {
+            typeof(EuLanguageScopedExpressionDerivation),
+            typeof(EuCellarObjectSnapshot),
+            typeof(EuRelationFamilyObservation),
+            typeof(EuRelationEdgeObservation),
+            typeof(RepeatedEnumerationRow),
+        };
+        var types = new[]
+        {
+            typeof(EuCorrigendumTripwireSet),
+            typeof(EuCorrigendumTripwire),
+            typeof(EuCorrigendumTripwireLine),
+            typeof(EuCorrigendumWithoutDerivedExpressions),
+            typeof(EuCorrigendumTripwireUnresolvedGap),
+        };
+        foreach (var type in types)
+        {
+            Assert.IsEmpty(
+                type.GetConstructors(BindingFlags.Public | BindingFlags.Instance),
+                $"{type.Name} must have no public constructor.");
+            foreach (var method in type.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly))
+            {
+                foreach (var parameter in method.GetParameters())
+                {
+                    Assert.IsFalse(
+                        forbidden.Any(candidate => Mentions(parameter.ParameterType, candidate)),
+                        $"{type.Name}.{method.Name} accepts {parameter.ParameterType.Name}.");
+                }
+            }
+        }
+
+        var door = typeof(EuCorrigendumTripwireSet).GetMethod(nameof(EuCorrigendumTripwireSet.TryDerive))!;
+        CollectionAssert.AreEqual(
+            new[] { typeof(EuProofBoundDelivery), typeof(EuProofBoundDelivery) },
+            door.GetParameters().Where(static parameter => !parameter.IsOut).Select(static parameter => parameter.ParameterType).ToArray(),
+            "the only door takes the two proof-bound deliveries and nothing else.");
+    }
+
+    private static bool Mentions(Type parameterType, Type candidate) =>
+        candidate.IsAssignableFrom(parameterType) ||
+        (parameterType.IsGenericType && parameterType.GetGenericArguments().Any(argument => Mentions(argument, candidate))) ||
+        (parameterType.IsArray && Mentions(parameterType.GetElementType()!, candidate));
+
+    // ---- Refusals. ----
+
+    [TestMethod]
+    public void ACorrectsRowWithALiteralTargetRefusesNamingTheWork()
+    {
+        var set = EuCorrigendumTripwireSet.TryDerive(
+            Bound(Expression(CorrigendumOne, "R01.DEU", German)),
+            BoundObjectFacts([PRow(CorrigendumOne, CorrectsIri, "not an IRI", XsdString)]),
+            out var refusal, out _, out var offendingIri);
 
         Assert.IsNull(set);
-        Assert.AreEqual(EuCorrigendumTripwireRefusal.SnapshotDeliveredTwice, refusal);
+        Assert.AreEqual(EuCorrigendumTripwireRefusal.CorrectsRowTermKindMismatch, refusal);
+        Assert.AreEqual(CorrigendumOne, offendingIri);
+    }
+
+    [TestMethod]
+    public void ACorrectsRowWhoseTargetIsNotARootRefusesNamingTheTarget()
+    {
+        const string NotARoot = "ftp://publications.europa.eu/resource/cellar/not-a-root";
+        var set = EuCorrigendumTripwireSet.TryDerive(
+            Bound(Expression(CorrigendumOne, "R01.DEU", German)),
+            BoundObjectFacts([Corrects(CorrigendumOne, NotARoot)]),
+            out var refusal, out _, out var offendingIri);
+
+        Assert.IsNull(set);
+        Assert.AreEqual(EuCorrigendumTripwireRefusal.CorrectsRowTermKindMismatch, refusal);
+        Assert.AreEqual(NotARoot, offendingIri);
+    }
+
+    [TestMethod]
+    public void ACorrectsRowWhoseSubjectIsNotARootRefusesNamingTheSubject()
+    {
+        const string NotARoot = "ftp://publications.europa.eu/resource/cellar/not-a-root";
+        var set = EuCorrigendumTripwireSet.TryDerive(
+            Bound(Expression(CorrigendumOne, "R01.DEU", German)),
+            BoundObjectFacts([Corrects(NotARoot, Gdpr)]),
+            out var refusal, out _, out var offendingIri);
+
+        Assert.IsNull(set);
+        Assert.AreEqual(EuCorrigendumTripwireRefusal.CorrectsRowTermKindMismatch, refusal);
+        Assert.AreEqual(NotARoot, offendingIri);
+    }
+
+    /// <summary>Every contradicted work is named, ordinal, in one refusal.</summary>
+    [TestMethod]
+    public void AnUnboundMarkerBesideAnEdgeRefusesNamingEveryContradictedWork()
+    {
+        var set = EuCorrigendumTripwireSet.TryDerive(
+            Bound(Expression(CorrigendumOne, "R01.DEU", German)),
+            BoundObjectFacts(
+                [Corrects(CorrigendumTwo, Gdpr), NoCorrection(CorrigendumOne), Corrects(CorrigendumOne, Gdpr), NoCorrection(CorrigendumTwo)],
+                PKeyWithCursor),
+            out var refusal, out var detail, out var offendingIri);
+
+        Assert.IsNull(set);
+        Assert.AreEqual(EuCorrigendumTripwireRefusal.CorrectsUnboundMarkerBesideEdges, refusal);
         var expected = new[] { CorrigendumOne, CorrigendumTwo }.OrderBy(static root => root, StringComparer.Ordinal).ToArray();
-        Assert.AreEqual("two snapshots name one object: " + string.Join("; ", expected), detail);
+        Assert.AreEqual(expected[0], offendingIri);
+        Assert.AreEqual(string.Join("; ", expected), detail);
+    }
+
+    [TestMethod]
+    public void ABrokenExpressionDeliveryRefusesThroughTheDerivationByName()
+    {
+        var set = EuCorrigendumTripwireSet.TryDerive(
+            Bound([XRow(CorrigendumOne, CorrigendumOne + ".R01", BelongsToWorkIri, CorrigendumOne)]),
+            BoundObjectFacts([Corrects(CorrigendumOne, Gdpr)]),
+            out var refusal, out var detail, out var offendingIri);
+
+        Assert.IsNull(set);
+        Assert.AreEqual(EuCorrigendumTripwireRefusal.ExpressionDerivationRefused, refusal);
+        StringAssert.Contains(detail, nameof(EuLanguageScopedExpressionDecodeRefusal.ExpressionLanguageMissing), "the decoder's own name travels.");
+        Assert.AreEqual(CorrigendumOne + ".R01", offendingIri);
+    }
+
+    [TestMethod]
+    public void AForgedPageReceiptRefuses()
+    {
+        var honest = BoundObjectFacts([Corrects(CorrigendumOne, Gdpr)]);
+        var forged = honest with
+        {
+            PagesInOrder = [honest.PagesInOrder[0] with { DurableWriteReceipt = ForgedReceipt() }],
+        };
+
+        var set = EuCorrigendumTripwireSet.TryDerive(
+            Bound(Expression(CorrigendumOne, "R01.DEU", German)), forged, out var refusal, out _, out var offendingIri);
+
+        Assert.IsNull(set);
+        Assert.AreEqual(EuCorrigendumTripwireRefusal.PageReceiptDoesNotBindItsBytes, refusal);
+        Assert.AreEqual(new string('f', 64), offendingIri);
+    }
+
+    [TestMethod]
+    public void AnUnattributablePagingRefuses()
+    {
+        var set = EuCorrigendumTripwireSet.TryDerive(
+            Bound(Expression(CorrigendumOne, "R01.DEU", German)),
+            BoundObjectFacts(
+                [Corrects(CorrigendumOne, Gdpr)],
+                terminalPagePolicy: RepeatedEnumerationTerminalPagePolicy.EmptySuccessorAfterShortPage),
+            out var refusal, out _, out _);
+
+        Assert.IsNull(set);
+        Assert.AreEqual(EuCorrigendumTripwireRefusal.PageAttributionUnavailable, refusal);
     }
 
     [TestMethod]
     public void NullsAreCallerContractViolations()
     {
-        var derivation = Derive(Expression(CorrigendumOne, "R01.DEU", German));
-        var snapshot = Snapshot(CorrigendumOne, Complete(CorrigendumOne, "r01", Gdpr));
+        var expressionFacts = Bound(Expression(CorrigendumOne, "R01.DEU", German));
+        var objectFacts = BoundObjectFacts([Corrects(CorrigendumOne, Gdpr)]);
 
-        Assert.ThrowsExactly<ArgumentNullException>(() => EuCorrigendumTripwireSet.TryDerive(null!, [snapshot], out _, out _));
-        Assert.ThrowsExactly<ArgumentNullException>(() => EuCorrigendumTripwireSet.TryDerive(derivation, null!, out _, out _));
-        Assert.ThrowsExactly<ArgumentNullException>(() => EuCorrigendumTripwireSet.TryDerive(derivation, [snapshot, null!], out _, out _));
+        Assert.ThrowsExactly<ArgumentNullException>(() => EuCorrigendumTripwireSet.TryDerive(null!, objectFacts, out _, out _, out _));
+        Assert.ThrowsExactly<ArgumentNullException>(() => EuCorrigendumTripwireSet.TryDerive(expressionFacts, null!, out _, out _, out _));
         Assert.ThrowsExactly<ArgumentException>(() => EuCorrigendumTripwireSet.ReachOf(" "));
-        Assert.ThrowsExactly<ArgumentException>(() => Fold(derivation, snapshot).TripwireFor(""));
+        Assert.ThrowsExactly<ArgumentException>(() => Fold(expressionFacts, objectFacts).TripwireFor(""));
+        Assert.ThrowsExactly<ArgumentNullException>(() => EuCorrigendumTripwireSet.SpellServedBodyLanguages(null!));
     }
 
     // ---- The policy binding. ----
 
-    /// <summary>
-    /// The served-language table is exactly the reviewed body policy, by the publisher's IRIs.
-    /// A policy the table could not spell would refuse to load rather than misstate reach.
-    /// </summary>
+    /// <summary>The served-language table is exactly the reviewed body policy, by the publisher's IRIs.</summary>
     [TestMethod]
     public void TheServedLanguageTableIsExactlyTheReviewedBodyPolicy()
     {
@@ -473,139 +676,89 @@ public sealed class EuCorrigendumTripwireTests
     }
 
     /// <summary>
-    /// The V2-era count of corrigenda outside the served languages is not restated here as a V3
-    /// fact. Nothing in this contract counts anything about the publisher.
+    /// A policy naming a language the table cannot spell refuses rather than misstating reach. The
+    /// lens noted the static table could never exercise this; the spelling is a pure function so
+    /// it can.
     /// </summary>
     [TestMethod]
-    public void NoAcceptanceFigureLivesOnTheSurface()
+    public void ThePolicySpellingFailsClosedOnALanguageItCannotSpell()
     {
-        var source = ReadSource("src/Lex.V3.Contracts/Derivation/EuCorrigendumTripwire.cs");
-        Assert.IsFalse(source.Contains("385", StringComparison.Ordinal));
+        CollectionAssert.AreEqual(
+            new[] { English, French },
+            EuCorrigendumTripwireSet.SpellServedBodyLanguages([EuOfficialLanguage.French, EuOfficialLanguage.English]).ToArray(),
+            "ordinal, whatever order the policy lists them in.");
+        var refusal = Assert.ThrowsExactly<InvalidOperationException>(() =>
+            EuCorrigendumTripwireSet.SpellServedBodyLanguages(
+                [EuOfficialLanguage.English, EuOfficialLanguage.French, EuOfficialLanguage.German]));
+        StringAssert.Contains(refusal.Message, nameof(EuOfficialLanguage.German));
     }
 
     // ---- Fixtures: the fold. ----
 
-    private static EuCorrigendumTripwireSet Fold(
-        EuLanguageScopedExpressionDerivation derivation, params EuCellarObjectSnapshot[] snapshots)
+    private static EuCorrigendumTripwireSet Fold(EuProofBoundDelivery expressionFacts, EuProofBoundDelivery objectFacts)
     {
-        var set = EuCorrigendumTripwireSet.TryDerive(derivation, snapshots, out var refusal, out var detail);
-        Assert.IsNotNull(set, $"{refusal} {detail}");
+        var set = EuCorrigendumTripwireSet.TryDerive(expressionFacts, objectFacts, out var refusal, out var detail, out var offendingIri);
+        Assert.IsNotNull(set, $"{refusal} {detail} {offendingIri}");
         return set;
     }
 
-    // ---- Fixtures: snapshots. ----
-
-    private static EuRelationFamilyObservation Complete(string corrigendumRoot, string evidenceLabel, params string[] targets) =>
-        new(
-            EuRelationFamily.Corrects,
-            EuRelationAcquisitionState.Complete,
-            [.. targets.Select(target => Edge(evidenceLabel + ":" + corrigendumRoot, target))],
-            Artifact("completion:" + evidenceLabel + ":" + corrigendumRoot));
-
-    private static EuRelationEdgeObservation Edge(string evidenceLabel, string target) =>
-        new(EuRelationFamily.Corrects, EuRelationAuthority.PublisherAsserted, target, Artifact("edge:" + evidenceLabel + ":" + target));
-
-    private static EuCellarObjectSnapshot Snapshot(
-        string root,
-        EuRelationFamilyObservation corrects,
-        string objectSuffix = "",
-        string evidenceSeed = "seed")
-    {
-        var objectUri = root + objectSuffix;
-        var relations = EuScopeVocabulary.ReadRelationFamilies
-            .Select(family => family == EuRelationFamily.Corrects
-                ? corrects
-                : new EuRelationFamilyObservation(family, EuRelationAcquisitionState.Unacquired, [], null))
-            .ToArray();
-        var snapshot = EuCellarObjectSnapshot.TryObserve(
-            ObjectRef(objectUri, evidenceSeed),
-            root,
-            EuActForm.Regulation,
-            Artifact(evidenceSeed + ":record:" + objectUri),
-            EuScopeVocabulary.CdmPredicates
-                .Select(predicate => new EuPredicateObservation(
-                    predicate, EuPredicateObservationState.NotObserved, [], Artifact(evidenceSeed + ":p:" + predicate)))
-                .ToArray(),
-            new EuChannelObservation(EuChannel.CellarSparqlEndpoint, "eu_channel.sparql", "rule.channel", Artifact(evidenceSeed + ":channel")),
-            null,
-            null,
-            null,
-            relations,
-            Artifact(evidenceSeed + ":relation-axis:" + objectUri),
-            null,
-            Artifact(evidenceSeed + ":supporting:" + objectUri),
-            out var refusal);
-        return snapshot ?? throw new InvalidOperationException($"fixture snapshot refused as {refusal}");
-    }
-
-    private static SourceObjectRef ObjectRef(string publisherUri, string evidenceSeed) => new(
-        SourceCoreSchemaIds.SourceObjectRef,
-        SourceAuthority.Cellar,
-        new SourceRegistryMemberRef(Artifact(evidenceSeed + ":registry"), "work"),
-        publisherUri,
-        "cellar|object|" + publisherUri,
-        Digest("cellar|object|" + publisherUri),
-        Artifact(evidenceSeed + ":identity-profile"),
-        null);
-
-    private static SourceArtifactRef Artifact(string label) =>
-        new($"urn:uuid:{DeterministicGuid(label)}", Digest("evidence:" + label));
-
-    private static Guid DeterministicGuid(string label) =>
-        new(SHA256.HashData(Encoding.UTF8.GetBytes("guid:" + label))[..16]);
-
-    private static string Digest(string value) =>
-        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value))).ToLowerInvariant();
-
-    // ---- Fixtures: the derivation, built exactly as the decoder's own tests build it. ----
-
-    private static EuLanguageScopedExpressionDerivation Derive(
-        IReadOnlyList<string> expressionRows,
-        IReadOnlyList<string>? objectRows = null,
-        int runIdentitySeed = 930)
-    {
-        var derivation = EuLanguageScopedExpressionDerivation.TryDerive(
-            Bound(expressionRows, runIdentitySeed),
-            objectRows is null ? null : BoundObjectFacts(objectRows, runIdentitySeed),
-            out var refusal,
-            out var decodeRefusal,
-            out var detail,
-            out var offendingIri);
-        Assert.IsNotNull(derivation, $"the fixture must derive: {refusal} {decodeRefusal} {detail} {offendingIri}");
-        return derivation;
-    }
+    // ---- Fixtures: the deliveries, built exactly as the decoder's own tests build them. ----
 
     /// <summary>One Expression's complete family-X rows: belongs-to-work plus a language.</summary>
     private static IReadOnlyList<string> Expression(string workRoot, string expressionSuffix, string languageAuthorityIri) =>
+        ExpressionNamed(workRoot, workRoot + "." + expressionSuffix, languageAuthorityIri);
+
+    private static IReadOnlyList<string> ExpressionNamed(string workRoot, string expressionIri, string languageAuthorityIri) =>
         [
-            XRow(workRoot, workRoot + "." + expressionSuffix, BelongsToWorkIri, workRoot),
-            XRow(workRoot, workRoot + "." + expressionSuffix, UsesLanguageIri, languageAuthorityIri),
+            XRow(workRoot, expressionIri, BelongsToWorkIri, workRoot),
+            XRow(workRoot, expressionIri, UsesLanguageIri, languageAuthorityIri),
         ];
 
-    private static EuProofBoundDelivery Bound(IReadOnlyList<string> rows, int runIdentitySeed) =>
-        BoundPaged(XProjection, XKey, rows, runIdentitySeed);
+    private static string Corrects(string corrigendumRoot, string correctedRoot) =>
+        PIriRow(corrigendumRoot, CorrectsIri, correctedRoot);
 
-    private static EuProofBoundDelivery BoundObjectFacts(IReadOnlyList<string> rows, int runIdentitySeed) =>
-        BoundPaged(PProjection, PKey, rows, runIdentitySeed);
+    private static string NoCorrection(string workRoot) => PUnboundRow(workRoot, CorrectsIri);
+
+    private static string Date(string workRoot, string date) => PRow(workRoot, WorkDateIri, date, XsdDate);
+
+    private static string NoDate(string workRoot) => PUnboundRow(workRoot, WorkDateIri);
+
+    private static EuProofBoundDelivery Bound(IReadOnlyList<string> rows, int runIdentitySeed = 930) =>
+        BoundPaged(XProjection, XKey, rows, runIdentitySeed, 6, 4, RepeatedEnumerationTerminalPagePolicy.ShortPageTerminal);
+
+    private static EuProofBoundDelivery BoundObjectFacts(
+        IReadOnlyList<string> rows,
+        string[]? canonicalKey = null,
+        int runIdentitySeed = 930,
+        int rowLimitA = 6,
+        int rowLimitB = 4,
+        RepeatedEnumerationTerminalPagePolicy terminalPagePolicy = RepeatedEnumerationTerminalPagePolicy.ShortPageTerminal) =>
+        BoundPaged(PProjection, canonicalKey ?? PKey, rows, runIdentitySeed, rowLimitA, rowLimitB, terminalPagePolicy);
 
     /// <summary>
     /// Paged on both passes, as the decoder's own paged probes are, so a delivery of any size fits:
     /// the fixture's single-page door holds at most seven rows and the GDPR shape alone needs eight.
     /// </summary>
     private static EuProofBoundDelivery BoundPaged(
-        string[] projection, string[] canonicalKey, IReadOnlyList<string> rows, int runIdentitySeed)
+        string[] projection,
+        string[] canonicalKey,
+        IReadOnlyList<string> rows,
+        int runIdentitySeed,
+        int rowLimitA,
+        int rowLimitB,
+        RepeatedEnumerationTerminalPagePolicy terminalPagePolicy)
     {
         var fixture = new RepeatedEnumerationDeliveryProofTests.Fixture(
             expectedCount: rows.Count,
             maximumDeliverableRows: 999,
-            terminalPagePolicy: RepeatedEnumerationTerminalPagePolicy.ShortPageTerminal,
+            terminalPagePolicy: terminalPagePolicy,
             projectionVariables: projection,
             canonicalKeyVariables: canonicalKey,
             runIdentitySeed: runIdentitySeed);
         var delivery = fixture.CreatePagedRaw(
             rows.Count,
-            6,
-            4,
+            rowLimitA,
+            rowLimitB,
             (first, take) => RowsJson(projection, [.. rows.Skip(first).Take(take)], first),
             static rowIndex => rowIndex.ToString("D4"));
         var proof = AbsenceFamilyEnumerationProof.TryCreate(
@@ -640,6 +793,20 @@ public sealed class EuCorrigendumTripwireTests
             ("value", Literal(value, datatype)),
             ("value_kind", Literal("literal", null)));
 
+    private static string PIriRow(string objectIri, string predicateIri, string valueIri) =>
+        Binding(
+            ("object", Uri(objectIri)),
+            ("predicate", Uri(predicateIri)),
+            ("value", Uri(valueIri)),
+            ("value_kind", Literal("iri", null)));
+
+    /// <summary>An asked-and-unanswered object-facts row: the value variable is simply absent.</summary>
+    private static string PUnboundRow(string objectIri, string predicateIri) =>
+        Binding(
+            ("object", Uri(objectIri)),
+            ("predicate", Uri(predicateIri)),
+            ("value_kind", Literal("unbound", null)));
+
     private static string Uri(string value) => $"{{\"type\":\"uri\",\"value\":{Json(value)}}}";
 
     private static string Literal(string value, string? datatype) =>
@@ -665,17 +832,25 @@ public sealed class EuCorrigendumTripwireTests
         "\"" + value.Replace("\\", "\\\\", StringComparison.Ordinal)
             .Replace("\"", "\\\"", StringComparison.Ordinal) + "\"";
 
-    private static string ReadSource(string repositoryRelativePath)
+    /// <summary>
+    /// A structurally valid write receipt naming bytes that do not exist, exactly as the decoder's
+    /// tests forge one. Nothing in the custody contracts ties a receipt to an actual write.
+    /// </summary>
+    private static DurableBlobWriteReceipt ForgedReceipt()
     {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "Lex.V3.slnx")))
-        {
-            directory = directory.Parent;
-        }
-
-        var root = directory?.FullName
-            ?? throw new InvalidOperationException("Checkout root not found.");
-        return File.ReadAllText(
-            Path.Combine(root, repositoryRelativePath.Replace('/', Path.DirectorySeparatorChar)));
+        var reference = new DurableBlobRef(
+            CustodySchemaIds.DurableBlobRef, new string('f', 64), 4, CustodyClass.NightlyFloor90d);
+        return new DurableBlobWriteReceipt(
+            CustodySchemaIds.DurableBlobWriteReceipt,
+            reference,
+            new CustodyPolicyEvidence(
+                CustodySchemaIds.CustodyPolicyEvidence,
+                reference,
+                CustodyVerificationProfile.FileSystemUnenforced1,
+                policyKey: null,
+                CustodyProtection.NotEnforced,
+                DateTimeOffset.Parse(
+                    "2026-01-02T03:04:05.0000000+00:00", System.Globalization.CultureInfo.InvariantCulture),
+                protectedUntil: null));
     }
 }
