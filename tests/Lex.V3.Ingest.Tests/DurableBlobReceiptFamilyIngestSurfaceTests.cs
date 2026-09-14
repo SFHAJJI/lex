@@ -114,6 +114,16 @@ public sealed class DurableBlobReceiptFamilyIngestSurfaceTests
                 + "System.Threading.CancellationToken) -> System.Threading.Tasks.Task<System.ValueTuple<"
                 + "Lex.V3.Contracts.Source.Scope.ScopeManifest, " + Receipt + ", Lex.V3.Contracts.Source.Core.SourceArtifactRef, "
                 + "System.String, Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionRefusalDetail>>",
+                // #419 slice 6c: the Gazette loop reopens, by the digests the terminal hop itself names,
+                // the request that fetched a Gazette body and the receipt the session retained for
+                // it, and hands that exact receipt to the accepted producer. It REOPENS a receipt the
+                // store already issued, parsed back from its canonical bytes, and constructs none;
+                // a second hold of the same bytes would be a different receipt, which the producer
+                // refuses.
+                "method private instance Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionAdapter::TryReopenTerminalHopAsync("
+                + "Lex.V3.Contracts.Source.Http.RoutedHttpEvidence, System.Threading.CancellationToken) -> "
+                + "System.Threading.Tasks.Task<System.ValueTuple<System.Nullable<System.ValueTuple<"
+                + "Lex.V3.Contracts.Source.Http.HttpLogicalRequest, " + Receipt + ">>, System.String>>",
                 "method private instance " + Session + "::BuildHopWriteReceipts(System.UInt64, System.UInt64, "
                 + "System.Collections.Generic.IReadOnlyList<Lex.V3.Contracts.Source.Http.RoutedHttpHop>) "
                 + "-> System.Collections.Generic.Dictionary<System.String, " + Receipt + ">",

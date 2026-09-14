@@ -281,7 +281,7 @@ public sealed class LuxembourgDocumentGetTests
             BuildProfile());
         var manifest = BuildManifest(Address(), ScopeDisposition.TypedQuarantine);
 
-        var (outcomes, refusal) = await adapter.RunDocumentAcquisitionAsync(
+        var (outcomes, _, refusal) = await adapter.RunDocumentAcquisitionAsync(
             manifest.Manifest,
             new Dictionary<SourceObjectRef, LuxembourgDocumentFetchAddress> { [ObjectRef()] = Address() },
             LuxembourgAcquisitionTestFixture.DocumentFetchRendererSource(3101),
@@ -368,7 +368,7 @@ public sealed class LuxembourgDocumentGetTests
 
         var (manifest, manifestRef, addresses) = BuildTwoObjectManifest(
             (heldPublisherUri, held), (missingPublisherUri, missing));
-        var (outcomes, refusal) = await adapter.RunDocumentAcquisitionAsync(
+        var (outcomes, _, refusal) = await adapter.RunDocumentAcquisitionAsync(
             manifest,
             addresses,
             LuxembourgAcquisitionTestFixture.DocumentFetchRendererSource(4242),
@@ -1129,7 +1129,7 @@ public sealed class LuxembourgDocumentGetTests
                 store, new LuxembourgAcquisitionTestFixture.FixedTimeProvider(), handler),
             BuildProfile());
         var verified = BuildManifest(address, ScopeDisposition.AcceptedSelected);
-        var (outcomes, refusal) = await adapter.RunDocumentAcquisitionAsync(
+        var (outcomes, _, refusal) = await adapter.RunDocumentAcquisitionAsync(
             verified.Manifest,
             new Dictionary<SourceObjectRef, LuxembourgDocumentFetchAddress> { [ObjectRef()] = address },
             LuxembourgAcquisitionTestFixture.DocumentFetchRendererSource(3201),

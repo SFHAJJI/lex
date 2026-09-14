@@ -186,7 +186,7 @@ public sealed class LuxembourgCodeCivilAcquisitionCanary
         const int AttemptsPerDocument = 1 + 4;
         var budget = WireRequestBudget.OfWireRequests(manifest.Rows.Count * AttemptsPerDocument);
 
-        var (outcomes, refusal) = await adapter.RunDocumentAcquisitionAsync(
+        var (outcomes, _, refusal) = await adapter.RunDocumentAcquisitionAsync(
             manifest,
             addresses,
             LuxembourgAcquisitionTestFixture.DocumentFetchRendererSource(9101),

@@ -519,6 +519,16 @@ public enum LuxembourgQueryExecutionRefusal
     /// </summary>
     [JsonStringEnumMemberName("assertion_fact_not_representable")]
     AssertionFactNotRepresentable = 15,
+
+    /// <summary>
+    /// #419 slice 6c: an as-published act's Gazette body set could not be produced - the accepted
+    /// producer refused (a custody read-back, or a retention the contract could not establish), or
+    /// the request or the receipt the terminal hop names could not be reopened from custody by the
+    /// hop's own digests. The inner code and detail travel in the detail. One act's failure here is
+    /// a whole-run refusal, as a body that will not hold already is.
+    /// </summary>
+    [JsonStringEnumMemberName("gazette_body_not_produced")]
+    GazetteBodyNotProduced = 16,
 }
 
 /// <summary>
@@ -703,6 +713,9 @@ public sealed class LuxembourgQueryExecutionResult
         IReadOnlyDictionary<int, CorpusAcquisitionOutcome>? documentAcquisitionOutcomesByOrdinal,
         SourceArtifactRef? corpusRecordSetRef,
         VerifiedCorpusRecordSet? corpusRecordSet,
+        IReadOnlyDictionary<int, LuxembourgGazetteBodySet>? gazetteBodySetsByOrdinal,
+        IReadOnlyDictionary<int, IReadOnlyDictionary<string, CorpusAcquisitionRefusalReason>>? gazetteListingFetchRefusalsByOrdinal,
+        IReadOnlyDictionary<int, IReadOnlyList<string>>? gazetteListingsWithContradictoryLegalValueByOrdinal,
         LuxembourgQueryExecutionRefusalDetail? refusal)
     {
         Topology = topology;
@@ -719,6 +732,9 @@ public sealed class LuxembourgQueryExecutionResult
         DocumentAcquisitionOutcomesByOrdinal = documentAcquisitionOutcomesByOrdinal;
         CorpusRecordSetRef = corpusRecordSetRef;
         CorpusRecordSet = corpusRecordSet;
+        GazetteBodySetsByOrdinal = gazetteBodySetsByOrdinal;
+        GazetteListingFetchRefusalsByOrdinal = gazetteListingFetchRefusalsByOrdinal;
+        GazetteListingsWithContradictoryLegalValueByOrdinal = gazetteListingsWithContradictoryLegalValueByOrdinal;
         Refusal = refusal;
     }
 
@@ -735,7 +751,10 @@ public sealed class LuxembourgQueryExecutionResult
         string scopeManifestCanonicalSha256,
         IReadOnlyDictionary<int, CorpusAcquisitionOutcome> documentAcquisitionOutcomesByOrdinal,
         SourceArtifactRef corpusRecordSetRef,
-        VerifiedCorpusRecordSet corpusRecordSet)
+        VerifiedCorpusRecordSet corpusRecordSet,
+        IReadOnlyDictionary<int, LuxembourgGazetteBodySet> gazetteBodySetsByOrdinal,
+        IReadOnlyDictionary<int, IReadOnlyDictionary<string, CorpusAcquisitionRefusalReason>> gazetteListingFetchRefusalsByOrdinal,
+        IReadOnlyDictionary<int, IReadOnlyList<string>> gazetteListingsWithContradictoryLegalValueByOrdinal)
     {
         ArgumentNullException.ThrowIfNull(topology);
         ArgumentNullException.ThrowIfNull(resolvedRelations);
@@ -748,6 +767,9 @@ public sealed class LuxembourgQueryExecutionResult
         ArgumentNullException.ThrowIfNull(documentAcquisitionOutcomesByOrdinal);
         ArgumentNullException.ThrowIfNull(corpusRecordSetRef);
         ArgumentNullException.ThrowIfNull(corpusRecordSet);
+        ArgumentNullException.ThrowIfNull(gazetteBodySetsByOrdinal);
+        ArgumentNullException.ThrowIfNull(gazetteListingFetchRefusalsByOrdinal);
+        ArgumentNullException.ThrowIfNull(gazetteListingsWithContradictoryLegalValueByOrdinal);
         var completion = familyOutcomes.All(
             static outcome => outcome.Kind is
                 LuxembourgFamilyEnumerationOutcomeKind.Proven or
@@ -759,7 +781,9 @@ public sealed class LuxembourgQueryExecutionResult
             localInboundRelations, typedAssertions,
             resourceObservationSubjects, resourceObservationExclusions, scopeManifestReceipt,
             scopeManifestCanonicalSha256, completion, documentAcquisitionOutcomesByOrdinal,
-            corpusRecordSetRef, corpusRecordSet, null);
+            corpusRecordSetRef, corpusRecordSet,
+            gazetteBodySetsByOrdinal, gazetteListingFetchRefusalsByOrdinal,
+            gazetteListingsWithContradictoryLegalValueByOrdinal, null);
     }
 
     public static LuxembourgQueryExecutionResult Refused(
@@ -772,7 +796,7 @@ public sealed class LuxembourgQueryExecutionResult
         ArgumentNullException.ThrowIfNull(refusal);
         return new(
             topology, familyOutcomes, relationFamilyAcquisitions, [], [], [], [], [], null, null, null,
-            null, null, null, refusal);
+            null, null, null, null, null, null, refusal);
     }
 
     /// <summary>Always present: minting it cannot fail, and it is useful context on a refusal too.</summary>
@@ -863,6 +887,31 @@ public sealed class LuxembourgQueryExecutionResult
     /// this run computed. Present iff delivered.
     /// </summary>
     public VerifiedCorpusRecordSet? CorpusRecordSet { get; }
+
+    /// <summary>
+    /// #419 slice 6c: per as-published original act, keyed by its manifest row ordinal, the act's
+    /// <see cref="LuxembourgGazetteBodySet"/> produced by the accepted producer from this run's own
+    /// fetches: one typed outcome per Gazette listing, or the act's own typed gap
+    /// (<see cref="LuxembourgGazetteActGapReason"/>) when it lists no Gazette PDF or its
+    /// realization path is unproven. EVERY as-published original act has an entry; only resources
+    /// the resolver admitted under another publication form (consolidations, regulator acts,
+    /// priority acts) or did not admit have none. Null only on a refused run.
+    /// </summary>
+    public IReadOnlyDictionary<int, LuxembourgGazetteBodySet>? GazetteBodySetsByOrdinal { get; }
+
+    /// <summary>
+    /// Per act (by ordinal), the Gazette listings this run tried to fetch and the publisher refused
+    /// (by item IRI), so the set's <c>body_not_retained</c> gap never stands without its cause.
+    /// Absent for an act whose every fetch was retrieved.
+    /// </summary>
+    public IReadOnlyDictionary<int, IReadOnlyDictionary<string, CorpusAcquisitionRefusalReason>>? GazetteListingFetchRefusalsByOrdinal { get; }
+
+    /// <summary>
+    /// Per act (by ordinal), the Gazette listings this run did not fetch because the publisher
+    /// states two different legal-value markers for the manifestation (by manifestation IRI): the
+    /// store disagreeing with itself, so no address can honestly be minted. Absent when none.
+    /// </summary>
+    public IReadOnlyDictionary<int, IReadOnlyList<string>>? GazetteListingsWithContradictoryLegalValueByOrdinal { get; }
 
     public LuxembourgQueryExecutionRefusalDetail? Refusal { get; }
 }
@@ -1560,7 +1609,7 @@ public sealed class LuxembourgQueryExecutionAdapter
         var runIdentityRef = new SourceArtifactRef(
             $"urn:uuid:{Guid.NewGuid():D}", writeReceipt!.Reference.ContentSha256);
 
-        var (documentAcquisitionOutcomesByOrdinal, acquisitionRefusal) =
+        var (documentAcquisitionOutcomesByOrdinal, heldByOrdinal, acquisitionRefusal) =
             await RunDocumentAcquisitionAsync(
                     reopenedManifest!, mintedAddressesByObjectRef, documentFetchRendererSource,
                     wireBudget, cancellationToken)
@@ -1610,6 +1659,21 @@ public sealed class LuxembourgQueryExecutionAdapter
                 set.Axis == ScopeAxis.Body && set.Disposition == ScopeDisposition.AcceptedSelected).ObjectOrdinals;
             documentAcquisitionOutcomesByOrdinal = documentAcquisitionOutcomesByOrdinal!
                 .Where(pair => accepted.Contains(pair.Key)).ToDictionary();
+            heldByOrdinal = heldByOrdinal!
+                .Where(pair => accepted.Contains(pair.Key)).ToDictionary();
+        }
+
+        // #419 slice 6c: after the final rights-bearing resolution, every Gazette listing of every
+        // as-published act, through the accepted producer. Before the record set: the sets are
+        // their own artifacts and the record set's shape does not move.
+        var (gazetteBodySetsByOrdinal, gazetteListingFetchRefusalsByOrdinal, gazetteContradictoryByOrdinal, gazetteRefusal) =
+            await RunGazetteAcquisitionAsync(
+                    resolved, reopenedManifest!, mintedAddressesByObjectRef, heldByOrdinal!,
+                    documentFetchRendererSource, wireBudget, cancellationToken)
+                .ConfigureAwait(false);
+        if (gazetteRefusal is not null)
+        {
+            return LuxembourgQueryExecutionResult.Refused(topology, outcomes, relationAcquisitions, gazetteRefusal);
         }
 
         // The record set is still the last artifact, after the final rights-bearing manifest.
@@ -1636,7 +1700,8 @@ public sealed class LuxembourgQueryExecutionAdapter
             resourceObservationSubjects,
             resourceObservationExclusions, writeReceipt!, manifestCanonicalSha256!,
             documentAcquisitionOutcomesByOrdinal!, recordSetResult.SetRef!,
-            recordSetResult.VerifiedSet!);
+            recordSetResult.VerifiedSet!,
+            gazetteBodySetsByOrdinal!, gazetteListingFetchRefusalsByOrdinal!, gazetteContradictoryByOrdinal!);
     }
 
     private static IReadOnlyList<LuxembourgTypedAssertion>? TryBuildTypedAssertions(
@@ -2087,6 +2152,7 @@ public sealed class LuxembourgQueryExecutionAdapter
     /// </returns>
     internal async Task<(
         IReadOnlyDictionary<int, CorpusAcquisitionOutcome>? Outcomes,
+        IReadOnlyDictionary<int, RoutedHttpEvidence>? HeldEvidenceByOrdinal,
         LuxembourgQueryExecutionRefusalDetail? Refusal)> RunDocumentAcquisitionAsync(
         ScopeManifest reopenedManifest,
         IReadOnlyDictionary<SourceObjectRef, LuxembourgDocumentFetchAddress> mintedAddressesByObjectRef,
@@ -2113,6 +2179,11 @@ public sealed class LuxembourgQueryExecutionAdapter
         }
 
         var outcomesByOrdinal = new Dictionary<int, CorpusAcquisitionOutcome>();
+        // The held rows' route evidence, handed back so the Gazette loop reuses the listing this
+        // manifest-driven fetch already retrieved rather than fetching it twice. The evidence only:
+        // the receipt the Gazette producer verifies is the one the terminal hop names, reopened from
+        // custody there, never this loop's own re-hold of the same bytes.
+        var heldByOrdinal = new Dictionary<int, RoutedHttpEvidence>();
         for (var rowOrdinal = 0; rowOrdinal < reopenedManifest.Rows.Count; rowOrdinal++)
         {
             var row = reopenedManifest.Rows[rowOrdinal];
@@ -2129,7 +2200,7 @@ public sealed class LuxembourgQueryExecutionAdapter
                 // MintDocumentFetchAddresses, the only path that mints one. Refusing the whole run
                 // here rather than throwing keeps this method's "never throws past a typed refusal"
                 // discipline even for a defect this loop cannot itself introduce.
-                return (null, new LuxembourgQueryExecutionRefusalDetail(
+                return (null, null, new LuxembourgQueryExecutionRefusalDetail(
                     LuxembourgQueryExecutionRefusal.AcquisitionOutcomeNotRepresentable,
                     null,
                     $"manifest row {rowOrdinal} ('{mintedObjectRef.CanonicalKey}') carries a Minted " +
@@ -2155,7 +2226,7 @@ public sealed class LuxembourgQueryExecutionAdapter
                     continue;
                 }
 
-                return (null, new LuxembourgQueryExecutionRefusalDetail(
+                return (null, null, new LuxembourgQueryExecutionRefusalDetail(
                     LuxembourgQueryExecutionRefusal.DocumentFetchSessionNotStarted,
                     null,
                     $"manifest row {rowOrdinal} ('{mintedObjectRef.CanonicalKey}'): code=" +
@@ -2184,7 +2255,7 @@ public sealed class LuxembourgQueryExecutionAdapter
                     }
                     catch (CustodyIntegrityException exception)
                     {
-                        return (null, new LuxembourgQueryExecutionRefusalDetail(
+                        return (null, null, new LuxembourgQueryExecutionRefusalDetail(
                             LuxembourgQueryExecutionRefusal.DocumentBodyNotRetained,
                             null,
                             $"manifest row {rowOrdinal} ('{mintedObjectRef.CanonicalKey}'): the "
@@ -2208,13 +2279,14 @@ public sealed class LuxembourgQueryExecutionAdapter
                         .ConfigureAwait(false);
                     if (bodyReceipt is null)
                     {
-                        return (null, new LuxembourgQueryExecutionRefusalDetail(
+                        return (null, null, new LuxembourgQueryExecutionRefusalDetail(
                             LuxembourgQueryExecutionRefusal.DocumentBodyNotRetained,
                             null,
                             $"manifest row {rowOrdinal} ('{mintedObjectRef.CanonicalKey}'): {holdFailure}"));
                     }
 
                     outcomesByOrdinal[rowOrdinal] = CorpusAcquisitionOutcome.Held(bodyReceipt);
+                    heldByOrdinal[rowOrdinal] = evidence;
                     continue;
                 }
 
@@ -2232,14 +2304,14 @@ public sealed class LuxembourgQueryExecutionAdapter
             var routeOutcomeDetail = evidence.Outcome is IncompleteHttpRouteOutcome incompleteOutcome
                 ? $"{evidence.Outcome.GetType().Name}({incompleteOutcome.Reason})"
                 : evidence.Outcome.GetType().Name;
-            return (null, new LuxembourgQueryExecutionRefusalDetail(
+            return (null, null, new LuxembourgQueryExecutionRefusalDetail(
                 LuxembourgQueryExecutionRefusal.AcquisitionOutcomeNotRepresentable,
                 null,
                 $"manifest row {rowOrdinal} ('{mintedObjectRef.CanonicalKey}'): " +
                 $"routeOutcome={routeOutcomeDetail}."));
         }
 
-        return (outcomesByOrdinal, null);
+        return (outcomesByOrdinal, heldByOrdinal, null);
     }
 
     /// <summary>
@@ -2249,6 +2321,270 @@ public sealed class LuxembourgQueryExecutionAdapter
     /// this method (it is the held path), and <c>RobotsDisallowed</c> never does either, because a
     /// robots refusal never produces a status to classify and is mapped at its own branch above.
     /// </summary>
+    /// <summary>
+    /// #419 slice 6c: for every as-published act whose body join lists Gazette PDFs, every listing
+    /// the rules do not withhold is fetched (or reused from the manifest-driven acquisition when it
+    /// already retrieved that very item), read back at its digest, held, bound to the exact requests
+    /// the route retained, and handed to the accepted producer, which types every listing.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// WHICH ACTS. Only resources the resolver classified as the as-published original
+    /// (<see cref="LuxembourgPublicationForm.AsPublishedOriginal"/>), the typed branch it already
+    /// proved and now keeps; a consolidation with a PDF manifestation is not a Gazette act and is
+    /// not touched. Only listings whose disposition is
+    /// <see cref="LuxembourgBodyCandidateDisposition.AcceptedCandidate"/> are fetched: a listing the
+    /// rules withhold (licence SCL, quarantine, root mismatch) is typed by the producer from the
+    /// listing alone, and fetching it would be a fetch of what the join withholds.
+    /// </para>
+    /// <para>
+    /// THE REQUESTS ARE THE ROUTE'S OWN. The retention the contract verifies needs the exact
+    /// official and terminal <see cref="HttpLogicalRequest"/>s. The session keeps neither on any
+    /// surface, but it retained both in custody per hop; they are reopened here by the hops' own
+    /// digests and parsed through the request's own verifying door, never rebuilt.
+    /// </para>
+    /// <para>
+    /// WHAT REFUSES WHAT. A listing the publisher refuses (robots, 404, 410, retry exhausted, an
+    /// unexpected status, an incomplete hop) yields no acquisition and is recorded per listing
+    /// beside the set, so the producer's <c>body_not_retained</c> gap never stands without its
+    /// cause. A listing whose legal-value markers contradict each other is not fetched and is
+    /// recorded as such. A session that will not start, a ceiling reached mid-loop, a request or a
+    /// receipt that will not reopen from custody, and a producer refusal are whole-run refusals,
+    /// exactly as the manifest-driven loop treats its own.
+    /// </para>
+    /// </remarks>
+    internal async Task<(
+        IReadOnlyDictionary<int, LuxembourgGazetteBodySet>? Sets,
+        IReadOnlyDictionary<int, IReadOnlyDictionary<string, CorpusAcquisitionRefusalReason>>? FetchRefusals,
+        IReadOnlyDictionary<int, IReadOnlyList<string>>? ContradictoryLegalValues,
+        LuxembourgQueryExecutionRefusalDetail? Refusal)> RunGazetteAcquisitionAsync(
+        LuxembourgProfileResolution.Resolved resolved,
+        ScopeManifest reopenedManifest,
+        IReadOnlyDictionary<SourceObjectRef, LuxembourgDocumentFetchAddress> mintedAddressesByObjectRef,
+        IReadOnlyDictionary<int, RoutedHttpEvidence> heldEvidenceByOrdinal,
+        MachineQueryRendererSource documentFetchRendererSource,
+        WireRequestBudget wireBudget,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(resolved);
+        ArgumentNullException.ThrowIfNull(reopenedManifest);
+        ArgumentNullException.ThrowIfNull(mintedAddressesByObjectRef);
+        ArgumentNullException.ThrowIfNull(heldEvidenceByOrdinal);
+        ArgumentNullException.ThrowIfNull(documentFetchRendererSource);
+        ArgumentNullException.ThrowIfNull(wireBudget);
+        var ordinalByObjectRef = new Dictionary<SourceObjectRef, int>();
+        for (var rowOrdinal = 0; rowOrdinal < reopenedManifest.Rows.Count; rowOrdinal++)
+        {
+            ordinalByObjectRef[reopenedManifest.ObservedObjects[rowOrdinal].ObjectRef] = rowOrdinal;
+        }
+
+        var sets = new Dictionary<int, LuxembourgGazetteBodySet>();
+        var fetchRefusals = new Dictionary<int, IReadOnlyDictionary<string, CorpusAcquisitionRefusalReason>>();
+        var contradictory = new Dictionary<int, IReadOnlyList<string>>();
+        var producer = new LuxembourgGazetteBodyProducer(_custodyStore);
+        foreach (var resource in resolved.Resources)
+        {
+            if (resource.PublicationForm != LuxembourgPublicationForm.AsPublishedOriginal)
+            {
+                continue;
+            }
+
+            // AN ACT WITH NO GAZETTE LISTING STILL GETS ITS SET. The producer types that absence as
+            // the act's own gap (no pdf/pdfa candidate, or a realization path the publisher never
+            // stated), so a delivered run accounts for every as-published act rather than leaving
+            // "checked and found nothing" indistinguishable from "never looked".
+            var listings = LuxembourgGazetteBodySet.GazetteCandidatesOf(resource.BodyJoin);
+            if (!ordinalByObjectRef.TryGetValue(resource.ObjectRef, out var ordinal))
+            {
+                // Unreachable in practice: the manifest was reduced from this very resolution, so
+                // every resolved resource has its row. Refusing rather than throwing keeps this
+                // method's "never throws past a typed refusal" discipline, as the sibling loop does.
+                return (null, null, null, new LuxembourgQueryExecutionRefusalDetail(
+                    LuxembourgQueryExecutionRefusal.AcquisitionOutcomeNotRepresentable,
+                    null,
+                    $"the as-published act '{resource.ObjectRef.CanonicalKey}' has no manifest row."));
+            }
+
+            var actEliPagePath = new Uri(resource.ObjectRef.PublisherUri, UriKind.Absolute).AbsolutePath;
+            var assertions = resource.Assertions.Select(static entry => entry.Assertion).ToArray();
+            var reusable = heldEvidenceByOrdinal.TryGetValue(ordinal, out var heldEvidence) &&
+                mintedAddressesByObjectRef.TryGetValue(resource.ObjectRef, out var mintedAddress)
+                ? (Address: mintedAddress, Evidence: heldEvidence)
+                : ((LuxembourgDocumentFetchAddress Address, RoutedHttpEvidence Evidence)?)null;
+            var acquisitions = new List<LuxembourgGazetteBodyAcquisition>();
+            var refusalsForAct = new Dictionary<string, CorpusAcquisitionRefusalReason>(StringComparer.Ordinal);
+            var contradictoryForAct = new List<string>();
+            foreach (var listing in listings)
+            {
+                if (listing.Disposition != LuxembourgBodyCandidateDisposition.AcceptedCandidate)
+                {
+                    // Withheld by the rules: the producer types it from the listing alone.
+                    continue;
+                }
+
+                var wemi = listing.WemiCandidate;
+                if (LuxembourgAuthorityIri.TryParseUserFormat(wemi.FormatIri) is not { } token)
+                {
+                    // Unreachable in practice: a Gazette listing is one whose format parsed as pdfa
+                    // or pdf, both of which this parser names. Refused, not thrown, as above.
+                    return (null, null, null, new LuxembourgQueryExecutionRefusalDetail(
+                        LuxembourgQueryExecutionRefusal.AcquisitionOutcomeNotRepresentable,
+                        null,
+                        $"Gazette listing '{wemi.ItemIri}' of manifest row {ordinal} carries a format this route cannot name."));
+                }
+
+                if (FindLegalValue(assertions, wemi.ManifestationIri) is not { } legalValue)
+                {
+                    contradictoryForAct.Add(wemi.ManifestationIri);
+                    continue;
+                }
+
+                var address = LuxembourgDocumentFetchAddress.Create(
+                    LuxembourgFileUri.RequireValid(wemi.ItemIri), token, legalValue, actEliPagePath);
+                RoutedHttpEvidence evidence;
+                if (reusable is { } reuse &&
+                    string.Equals(reuse.Address.StoreFileUri.Value.AbsoluteUri, wemi.ItemIri, StringComparison.Ordinal))
+                {
+                    // The manifest-driven acquisition already fetched and held this very item.
+                    address = reuse.Address;
+                    evidence = reuse.Evidence;
+                }
+                else
+                {
+                    var bound = new LuxembourgDocumentFetchPlan(address).Bind(
+                        $"urn:uuid:{Guid.NewGuid():D}",
+                        $"urn:uuid:{Guid.NewGuid():D}",
+                        documentFetchRendererSource);
+                    var attempt = await _executor.RunDocumentGetAsync(bound.Request, wireBudget, cancellationToken)
+                        .ConfigureAwait(false);
+                    if (attempt.Evidence is null)
+                    {
+                        if (attempt.Refusal == LuxembourgDocumentGetAttemptRefusal.RobotsDisallowed)
+                        {
+                            refusalsForAct[wemi.ItemIri] = CorpusAcquisitionRefusalReason.RobotsDisallowed;
+                            continue;
+                        }
+
+                        return (null, null, null, new LuxembourgQueryExecutionRefusalDetail(
+                            LuxembourgQueryExecutionRefusal.DocumentFetchSessionNotStarted,
+                            null,
+                            $"Gazette listing '{wemi.ItemIri}' of manifest row {ordinal}: code={attempt.Refusal} detail={attempt.Detail}."));
+                    }
+
+                    var fetched = attempt.Evidence;
+                    if (fetched.Outcome is CompleteHttpRouteOutcome && fetched.Hops.Count > 0)
+                    {
+                        var classified = LuxembourgDocumentGetOutcome.FromObservedStatus(
+                            fetched.Hops[^1].Status, attempt.RetryAllowanceSpent);
+                        if (classified.Kind != LuxembourgDocumentGetOutcomeKind.Retrieved)
+                        {
+                            refusalsForAct[wemi.ItemIri] = MapDocumentGetKind(classified.Kind);
+                            continue;
+                        }
+
+                        evidence = fetched;
+                    }
+                    else if (TryMapHopIncompleteToCorpusAcquisitionRefusal(fetched, out var hopRefusal))
+                    {
+                        refusalsForAct[wemi.ItemIri] = hopRefusal;
+                        continue;
+                    }
+                    else
+                    {
+                        var routeOutcomeDetail = fetched.Outcome is IncompleteHttpRouteOutcome incompleteOutcome
+                            ? $"{fetched.Outcome.GetType().Name}({incompleteOutcome.Reason})"
+                            : fetched.Outcome.GetType().Name;
+                        return (null, null, null, new LuxembourgQueryExecutionRefusalDetail(
+                            LuxembourgQueryExecutionRefusal.AcquisitionOutcomeNotRepresentable,
+                            null,
+                            $"Gazette listing '{wemi.ItemIri}' of manifest row {ordinal}: routeOutcome={routeOutcomeDetail}."));
+                    }
+                }
+
+                // THE REQUEST AND THE RECEIPT, FROM THE TERMINAL HOP'S OWN DIGESTS. Reopened, never
+                // rebuilt and never re-held: the retention the producer verifies binds the first hop
+                // to the official request's digest, the terminal request to the terminal hop, and
+                // the retained receipt to the exact receipt digest the terminal hop names. The
+                // Luxembourg profile admits no redirect, so a complete route has one hop and its
+                // request is both the official and the terminal one. A second hold of the same
+                // bytes would mint a receipt carrying its own policy observation and so its own
+                // digest, which the producer must refuse; only the receipt the session retained
+                // satisfies it.
+                var (reopened, reopenFailure) = await TryReopenTerminalHopAsync(evidence, cancellationToken)
+                    .ConfigureAwait(false);
+                if (reopened is not { } hop)
+                {
+                    return (null, null, null, new LuxembourgQueryExecutionRefusalDetail(
+                        LuxembourgQueryExecutionRefusal.GazetteBodyNotProduced,
+                        null,
+                        $"Gazette listing '{wemi.ItemIri}' of manifest row {ordinal}: {reopenFailure}"));
+                }
+
+                acquisitions.Add(new LuxembourgGazetteBodyAcquisition(
+                    wemi.ManifestationIri, wemi.ItemIri, address, hop.Request, hop.Request, evidence, hop.Receipt));
+            }
+
+            var produced = await producer.RunAsync(resource.BodyJoin, acquisitions, cancellationToken)
+                .ConfigureAwait(false);
+            // The set is null exactly when the producer refused; its code and detail travel on.
+            if (produced.Set is null)
+            {
+                return (null, null, null, new LuxembourgQueryExecutionRefusalDetail(
+                    LuxembourgQueryExecutionRefusal.GazetteBodyNotProduced,
+                    null,
+                    $"manifest row {ordinal} ('{resource.ObjectRef.CanonicalKey}'): {produced.Refusal}: {produced.Detail}"));
+            }
+
+            sets[ordinal] = produced.Set;
+            if (refusalsForAct.Count > 0)
+            {
+                fetchRefusals[ordinal] = refusalsForAct;
+            }
+
+            if (contradictoryForAct.Count > 0)
+            {
+                contradictory[ordinal] = contradictoryForAct.AsReadOnly();
+            }
+        }
+
+        return (sets, fetchRefusals, contradictory, null);
+    }
+
+    /// <summary>
+    /// The terminal hop's request and its retained receipt, reopened from custody by the digests the
+    /// hop itself names. The receipt is the store's own record of the bytes the hop transferred,
+    /// exactly as the session retained it: parsed back from its canonical bytes, never created
+    /// again. Any failure is named, not thrown past this door.
+    /// </summary>
+    private async Task<((HttpLogicalRequest Request, DurableBlobWriteReceipt Receipt)? Reopened, string? Failure)> TryReopenTerminalHopAsync(
+        RoutedHttpEvidence evidence,
+        CancellationToken cancellationToken)
+    {
+        var terminal = evidence.Hops[^1];
+        try
+        {
+            var request = HttpLogicalRequest.ParseAndVerify(
+                (await CustodyRestore.ReadByDigestCheckedAsync(
+                        _custodyStore, terminal.LogicalRequestSha256, cancellationToken)
+                    .ConfigureAwait(false)).Span);
+            var receiptBytes = await CustodyRestore.ReadByDigestCheckedAsync(
+                    _custodyStore, terminal.DurableWriteReceiptSha256, cancellationToken)
+                .ConfigureAwait(false);
+            var receipt = ContractJson.Deserialize<DurableBlobWriteReceipt>(
+                    new UTF8Encoding(false, true).GetString(receiptBytes.Span))
+                ?? throw new CustodyIntegrityException("The retained write receipt decoded to nothing.");
+            return ((request, receipt), null);
+        }
+        catch (Exception exception) when (exception is CustodyRequiredException
+            or CustodyIntegrityException or CustodyPolicyException or ArgumentException
+            or JsonException or DecoderFallbackException)
+        {
+            return (null,
+                "the request or receipt the terminal hop names could not be reopened from custody: "
+                + $"{exception.GetType().Name}: {exception.Message}");
+        }
+    }
+
     private static CorpusAcquisitionRefusalReason MapDocumentGetKind(
         LuxembourgDocumentGetOutcomeKind kind) => kind switch
     {

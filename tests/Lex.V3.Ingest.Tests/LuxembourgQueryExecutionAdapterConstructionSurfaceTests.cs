@@ -209,13 +209,17 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
     }
 
     [TestMethod]
-    public void QueryExecutionRefusalIsASixteenMemberEnumIncludingNone()
+    public void QueryExecutionRefusalIsASeventeenMemberEnumIncludingNone()
     {
         // D1-06c-LU-2 added four: DocumentFetchSessionNotStarted, DocumentBodyNotRetained,
         // AcquisitionOutcomeNotRepresentable and RecordSetNotHeld, one per whole-run failure the
         // document-acquisition phase and the corpus record-set write can produce. Every other
         // document-GET failure is a PER OBJECT refusal and appears nowhere here, which is the
         // distinction this pin makes visible.
+        // #419 slice 6c added one: GazetteBodyNotProduced, the whole-run failure when a fetched
+        // Gazette body cannot be typed by the accepted producer, or the request or receipt its
+        // terminal hop names cannot be reopened. A listing the publisher or the rules refuse stays a PER LISTING gap beside the
+        // set and adds nothing here.
         CollectionAssert.AreEqual(
             new[]
             {
@@ -238,6 +242,9 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
                 + "LuxembourgQueryExecutionRefusal",
                 "field public static " + N
                 + "LuxembourgQueryExecutionRefusal::DocumentFetchSessionNotStarted -> " + N
+                + "LuxembourgQueryExecutionRefusal",
+                "field public static " + N
+                + "LuxembourgQueryExecutionRefusal::GazetteBodyNotProduced -> " + N
                 + "LuxembourgQueryExecutionRefusal",
                 "field public static " + N + "LuxembourgQueryExecutionRefusal::None -> "
                 + N + "LuxembourgQueryExecutionRefusal",
@@ -441,7 +448,9 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
     /// <summary>
     /// Two public factories over one private constructor -- "delivered or refused, never both and
     /// never neither" -- and the constructor now also carries the completion field fold-in one
-    /// added: a third factory, or a public setter, is a line in this diff.
+    /// added: a third factory, or a public setter, is a line in this diff. #419 slice 6c adds
+    /// three delivered-only slots: the Gazette body sets by manifest row, the per-listing fetch
+    /// refusals beside them, and the listings whose legal value the publisher stated twice.
     /// </summary>
     [TestMethod]
     public void QueryExecutionResultIsDeliveredOrRefusedByConstruction()
@@ -481,6 +490,13 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
                 + Core
                 + "SourceArtifactRef?, "
                 + "Lex.V3.Contracts.Source.Corpus.VerifiedCorpusRecordSet?, "
+                + "System.Collections.Generic.IReadOnlyDictionary<System.Int32, "
+                + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgGazetteBodySet>?, "
+                + "System.Collections.Generic.IReadOnlyDictionary<System.Int32, "
+                + "System.Collections.Generic.IReadOnlyDictionary<System.String, "
+                + "Lex.V3.Contracts.Source.Corpus.CorpusAcquisitionRefusalReason>>?, "
+                + "System.Collections.Generic.IReadOnlyDictionary<System.Int32, "
+                + "System.Collections.Generic.IReadOnlyList<System.String>>?, "
                 + N
                 + "LuxembourgQueryExecutionRefusalDetail?) -> "
                 + N
@@ -513,7 +529,14 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
                 + "Lex.V3.Ingest.CorpusAcquisitionOutcome>, "
                 + Core
                 + "SourceArtifactRef, "
-                + "Lex.V3.Contracts.Source.Corpus.VerifiedCorpusRecordSet) -> "
+                + "Lex.V3.Contracts.Source.Corpus.VerifiedCorpusRecordSet, "
+                + "System.Collections.Generic.IReadOnlyDictionary<System.Int32, "
+                + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgGazetteBodySet>, "
+                + "System.Collections.Generic.IReadOnlyDictionary<System.Int32, "
+                + "System.Collections.Generic.IReadOnlyDictionary<System.String, "
+                + "Lex.V3.Contracts.Source.Corpus.CorpusAcquisitionRefusalReason>>, "
+                + "System.Collections.Generic.IReadOnlyDictionary<System.Int32, "
+                + "System.Collections.Generic.IReadOnlyList<System.String>>) -> "
                 + N
                 + "LuxembourgQueryExecutionResult",
                 "method public static "
