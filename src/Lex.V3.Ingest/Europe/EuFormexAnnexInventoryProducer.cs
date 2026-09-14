@@ -7,6 +7,8 @@ using System.Xml;
 using System.Xml.Linq;
 using Lex.V3.Contracts.Custody;
 using Lex.V3.Contracts.Source.Core;
+using Lex.V3.Contracts.Source.Europe;
+using Lex.V3.Contracts.Source.Http;
 
 namespace Lex.V3.Ingest.Europe;
 
@@ -21,9 +23,6 @@ public enum EuFormexAnnexInventoryRefusal
 
     [JsonStringEnumMemberName("profile_invalid")]
     ProfileInvalid = 2,
-
-    [JsonStringEnumMemberName("profile_does_not_name_transport")]
-    ProfileDoesNotNameTransport = 3,
 
     [JsonStringEnumMemberName("retained_bytes_unavailable")]
     RetainedBytesUnavailable = 4,
@@ -73,38 +72,108 @@ public sealed record EuFormexAnnexInventoryMember(
     int PageTotal,
     string Title);
 
+/// <summary>
+/// One run's Formex request, response and retained ZIP provenance for an exact expression.
+/// This evidence is deliberately outside semantic inventory identity.
+/// </summary>
+public sealed class EuFormexAnnexTransportBinding
+{
+    public EuFormexAnnexTransportBinding(
+        EuWemiIdentityBoundary identityBoundary,
+        SourceObjectRef expression,
+        HttpLogicalRequest requestEvidence,
+        RoutedHttpEvidence responseEvidence,
+        DurableBlobWriteReceipt retainedZipReceipt)
+    {
+        ArgumentNullException.ThrowIfNull(identityBoundary);
+        Expression = identityBoundary.Require(
+            expression, EuWemiRole.Expression, nameof(expression));
+        RequestEvidence = requestEvidence ?? throw new ArgumentNullException(nameof(requestEvidence));
+        ResponseEvidence = responseEvidence ?? throw new ArgumentNullException(nameof(responseEvidence));
+        RetainedZipReceipt = retainedZipReceipt
+            ?? throw new ArgumentNullException(nameof(retainedZipReceipt));
+
+        if (responseEvidence.Outcome is not CompleteHttpRouteOutcome
+            || responseEvidence.Hops.Count == 0)
+        {
+            throw new ArgumentException(
+                "Formex transport provenance requires one completed response route.",
+                nameof(responseEvidence));
+        }
+
+        var terminal = responseEvidence.Hops[^1];
+        var requestSha256 = Convert.ToHexStringLower(
+            SHA256.HashData(requestEvidence.CopyCanonicalBytes()));
+        if (!string.Equals(terminal.LogicalRequestSha256, requestSha256, StringComparison.Ordinal)
+            || !string.Equals(terminal.RequestUri, requestEvidence.Uri, StringComparison.Ordinal))
+        {
+            throw new ArgumentException(
+                "The response route does not answer the supplied Formex request evidence.",
+                nameof(responseEvidence));
+        }
+
+        if (terminal.Status != 200
+            || terminal.Length != checked((ulong)retainedZipReceipt.Reference.ByteLength)
+            || !string.Equals(
+                terminal.Sha256,
+                retainedZipReceipt.Reference.ContentSha256,
+                StringComparison.Ordinal)
+            || !string.Equals(
+                terminal.DurableWriteReceiptSha256,
+                DurableBlobWriteReceiptDigest.Of(retainedZipReceipt),
+                StringComparison.Ordinal))
+        {
+            throw new ArgumentException(
+                "The completed Formex response does not name the supplied retained ZIP receipt.",
+                nameof(retainedZipReceipt));
+        }
+    }
+
+    public SourceObjectRef Expression { get; }
+
+    public HttpLogicalRequest RequestEvidence { get; }
+
+    public RoutedHttpEvidence ResponseEvidence { get; }
+
+    public DurableBlobWriteReceipt RetainedZipReceipt { get; }
+}
+
 /// <summary>The complete ordered annex population proven by one retained Formex package.</summary>
 public sealed class EuFormexAnnexInventory
 {
     internal EuFormexAnnexInventory(
-        DurableBlobWriteReceipt sourceReceipt,
-        SourceArtifactRef profileRef,
+        EuFormexAnnexTransportBinding transportBinding,
+        SourceArtifactRef interpretationRuleProfileRef,
         IReadOnlyList<EuFormexAnnexInventoryMember> members)
     {
-        SourceReceipt = sourceReceipt;
-        ProfileRef = profileRef;
+        TransportBinding = transportBinding;
+        InterpretationRuleProfileRef = interpretationRuleProfileRef;
         Members = members.ToArray();
-        IdentitySha256 = IdentityOf(sourceReceipt, profileRef, Members);
+        IdentitySha256 = IdentityOf(
+            transportBinding.Expression, interpretationRuleProfileRef, Members);
     }
 
-    public DurableBlobWriteReceipt SourceReceipt { get; }
+    public EuFormexAnnexTransportBinding TransportBinding { get; }
 
-    public SourceArtifactRef ProfileRef { get; }
+    public DurableBlobWriteReceipt SourceReceipt => TransportBinding.RetainedZipReceipt;
+
+    public SourceArtifactRef InterpretationRuleProfileRef { get; }
+
+    public SourceArtifactRef ProfileRef => InterpretationRuleProfileRef;
 
     public IReadOnlyList<EuFormexAnnexInventoryMember> Members { get; }
 
     public string IdentitySha256 { get; }
 
     private static string IdentityOf(
-        DurableBlobWriteReceipt receipt,
-        SourceArtifactRef profileRef,
+        SourceObjectRef expression,
+        SourceArtifactRef interpretationRuleProfileRef,
         IReadOnlyList<EuFormexAnnexInventoryMember> members)
     {
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-        Append(hash, "lex-v3-eu-formex-annex-inventory/1");
-        Append(hash, receipt.Reference.ContentSha256);
-        Append(hash, profileRef.ResourceId);
-        Append(hash, profileRef.Sha256);
+        Append(hash, "lex-v3-eu-formex-annex-inventory/2");
+        Append(hash, expression.CanonicalKeySha256);
+        Append(hash, interpretationRuleProfileRef.Sha256);
         foreach (var member in members)
         {
             Append(hash, member.PackageEntry);
@@ -164,7 +233,7 @@ public sealed class EuFormexAnnexInventoryProductionResult
 /// </summary>
 public sealed class EuFormexAnnexInventoryProducer
 {
-    private const string ProfileHeader = "lex-v3-eu-formex-annex-inventory-profile/1";
+    private const string ProfileHeader = "lex-v3-eu-formex-annex-interpretation-profile/1";
     private const int MaxEntries = 4_096;
     private const long MaxXmlEntryBytes = 16 * 1024 * 1024;
     private const long MaxXmlPackageBytes = 64 * 1024 * 1024;
@@ -177,12 +246,12 @@ public sealed class EuFormexAnnexInventoryProducer
     }
 
     public async Task<EuFormexAnnexInventoryProductionResult> RunAsync(
-        DurableBlobWriteReceipt retainedFormexBytes,
+        EuFormexAnnexTransportBinding transportBinding,
         ReadOnlyMemory<byte> profileBytes,
         SourceArtifactRef profileRef,
         CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(retainedFormexBytes);
+        ArgumentNullException.ThrowIfNull(transportBinding);
         ArgumentNullException.ThrowIfNull(profileRef);
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -196,27 +265,17 @@ public sealed class EuFormexAnnexInventoryProducer
                 "the profile bytes do not carry the digest their reference names");
         }
 
-        if (!TryReadProfile(profileBytes.Span, out var transportDigest, out var profileFailure))
+        if (!TryReadProfile(profileBytes.Span, out var profileFailure))
         {
             return EuFormexAnnexInventoryProductionResult.Refused(
                 EuFormexAnnexInventoryRefusal.ProfileInvalid, profileFailure!);
-        }
-
-        if (!string.Equals(
-                transportDigest,
-                retainedFormexBytes.Reference.ContentSha256,
-                StringComparison.Ordinal))
-        {
-            return EuFormexAnnexInventoryProductionResult.Refused(
-                EuFormexAnnexInventoryRefusal.ProfileDoesNotNameTransport,
-                "the profile names different retained Formex bytes");
         }
 
         ReadOnlyMemory<byte> packageBytes;
         try
         {
             packageBytes = await CustodyRestore.ReadCheckedAsync(
-                    _custodyStore, retainedFormexBytes.Reference, cancellationToken)
+                    _custodyStore, transportBinding.RetainedZipReceipt.Reference, cancellationToken)
                 .ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -237,7 +296,7 @@ public sealed class EuFormexAnnexInventoryProducer
         }
 
         return EuFormexAnnexInventoryProductionResult.Success(
-            new EuFormexAnnexInventory(retainedFormexBytes, profileRef, parsed.Members!));
+            new EuFormexAnnexInventory(transportBinding, profileRef, parsed.Members!));
     }
 
     private static (IReadOnlyList<EuFormexAnnexInventoryMember>? Members,
@@ -468,10 +527,8 @@ public sealed class EuFormexAnnexInventoryProducer
 
     private static bool TryReadProfile(
         ReadOnlySpan<byte> bytes,
-        out string? transportDigest,
         out string? failure)
     {
-        transportDigest = null;
         failure = null;
         string text;
         try
@@ -485,19 +542,25 @@ public sealed class EuFormexAnnexInventoryProducer
         }
 
         var lines = text.Split('\n');
-        if (lines.Length != 4 || lines[3].Length != 0
+        if (lines.Length != 9 || lines[8].Length != 0
             || !string.Equals(lines[0], ProfileHeader, StringComparison.Ordinal)
-            || !lines[1].StartsWith("transport_sha256=", StringComparison.Ordinal)
-            || !string.Equals(lines[2], "annex_root=ANNEX", StringComparison.Ordinal))
+            || !string.Equals(lines[1], "document_root=DOC", StringComparison.Ordinal)
+            || !string.Equals(lines[2], "annex_root=ANNEX", StringComparison.Ordinal)
+            || !string.Equals(lines[3],
+                "schema_prefix=http://formex.publications.europa.eu/schema/formex-",
+                StringComparison.Ordinal)
+            || !string.Equals(lines[4],
+                "member_identity=document_reference_file+sequence",
+                StringComparison.Ordinal)
+            || !string.Equals(lines[5],
+                "ordering=sequence+package_entry",
+                StringComparison.Ordinal)
+            || !string.Equals(lines[6], "title=required", StringComparison.Ordinal)
+            || !string.Equals(lines[7],
+                "page_extent=inclusive_positive_consistent",
+                StringComparison.Ordinal))
         {
-            failure = "the profile does not have the exact Formex annex inventory shape";
-            return false;
-        }
-
-        transportDigest = lines[1]["transport_sha256=".Length..];
-        if (!CustodyDigest.IsLowercaseSha256(transportDigest))
-        {
-            failure = "the profile transport digest is not lowercase SHA-256";
+            failure = "the profile does not have the exact stable Formex interpretation-rule shape";
             return false;
         }
 

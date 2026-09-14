@@ -6,6 +6,7 @@ using Lex.V3.Contracts.Custody;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Corpus;
 using Lex.V3.Contracts.Source.Europe;
+using Lex.V3.Contracts.Source.Http;
 using Lex.V3.Contracts.Source.Scope;
 using Lex.V3.Ingest.Europe;
 
@@ -174,7 +175,15 @@ public sealed class EuAnnexEvidenceBinderTests
         var otherBody = Object("other-formex", EuWemiRole.Item, fixture.Package.ManifestationRef);
         var corpus = VerifiedCorpus([.. Sources(fixture), (otherBody, otherReceipt)]);
         var formex = new EuFormexAnnexInventory(
-            otherReceipt, fixture.Formex.ProfileRef, fixture.Formex.Members);
+            new EuFormexAnnexTransportBinding(
+                fixture.Boundary,
+                fixture.Package.ExpressionRef,
+                FormexRequest(fixture.Package.BodyRef),
+                FormexResponse(
+                    FormexRequest(fixture.Package.BodyRef), otherReceipt),
+                otherReceipt),
+            fixture.Formex.ProfileRef,
+            fixture.Formex.Members);
         var profile = ReconciliationProfile(formex, fixture.Xhtml, fixture.PdfReceipt, '3');
 
         var result = await fixture.RunAsync(profile, corpus, formex);
@@ -297,7 +306,7 @@ public sealed class EuAnnexEvidenceBinderTests
         var fixture = await FixtureAsync(PageLabelPdf(7, "<< /S /D /St 1 >>"),
             formexTwoMembers: true, xhtmlTwoMembers: true);
         var duplicateFormex = new EuFormexAnnexInventory(
-            fixture.Formex.SourceReceipt, fixture.Formex.ProfileRef,
+            fixture.Formex.TransportBinding, fixture.Formex.ProfileRef,
             [fixture.Formex.Members[0], fixture.Formex.Members[1] with
                 { PackageEntry = fixture.Formex.Members[0].PackageEntry }]);
         var duplicateXhtml = new EuXhtmlAnnexInventory(
@@ -467,13 +476,10 @@ public sealed class EuAnnexEvidenceBinderTests
         var xhtmlReceipt = await Hold(store, xhtmlBytes);
         var pdfReceipt = await Hold(store, pdfBytes);
 
-        var formexProfile = InventoryProfile(
-            "lex-v3-eu-formex-annex-inventory-profile/1", formexReceipt, "annex_root=ANNEX", '8');
+        var formexProfile = FormexProfile('8');
         var xhtmlProfile = InventoryProfile(
             "lex-v3-eu-xhtml-annex-inventory-profile/1", xhtmlReceipt,
             "xhtml_namespace=http://www.w3.org/1999/xhtml", '9');
-        var formex = (await new EuFormexAnnexInventoryProducer(store).RunAsync(
-            formexReceipt, formexProfile.Bytes, formexProfile.Reference, CancellationToken.None)).Inventory!;
         var xhtml = (await new EuXhtmlAnnexInventoryProducer(store).RunAsync(
             xhtmlReceipt, xhtmlProfile.Bytes, xhtmlProfile.Reference, CancellationToken.None)).Inventory!;
 
@@ -505,6 +511,16 @@ public sealed class EuAnnexEvidenceBinderTests
         var package = EuFormexPackage.TryAdmit(
             boundary, formexManifestation, expression, items, "EN", out var packageRefusal)!;
         Assert.AreEqual(EuFormexPackageRefusal.None, packageRefusal);
+        var formexRequest = FormexRequest(package.BodyRef);
+        var formexTransport = new EuFormexAnnexTransportBinding(
+            boundary,
+            package.ExpressionRef,
+            formexRequest,
+            FormexResponse(formexRequest, formexReceipt),
+            formexReceipt);
+        var formex = (await new EuFormexAnnexInventoryProducer(store).RunAsync(
+            formexTransport, formexProfile.Bytes, formexProfile.Reference,
+            CancellationToken.None)).Inventory!;
 
         var all = new List<(SourceObjectRef Object, DurableBlobWriteReceipt Receipt)>
         {
@@ -590,6 +606,62 @@ public sealed class EuAnnexEvidenceBinderTests
         var bytes = Encoding.UTF8.GetBytes(string.Join('\n', header,
             "transport_sha256=" + receipt.Reference.ContentSha256, lastLine) + "\n");
         return new Profile(bytes, Artifact(resource, Sha(bytes)));
+    }
+
+    private static Profile FormexProfile(char resource)
+    {
+        var bytes = Encoding.UTF8.GetBytes(string.Join('\n',
+            "lex-v3-eu-formex-annex-interpretation-profile/1",
+            "document_root=DOC",
+            "annex_root=ANNEX",
+            "schema_prefix=http://formex.publications.europa.eu/schema/formex-",
+            "member_identity=document_reference_file+sequence",
+            "ordering=sequence+package_entry",
+            "title=required",
+            "page_extent=inclusive_positive_consistent") + "\n");
+        return new Profile(bytes, Artifact(resource, Sha(bytes)));
+    }
+
+    private static HttpLogicalRequest FormexRequest(SourceObjectRef body) =>
+        HttpLogicalRequest.Create(
+            "https://publications.europa.eu/resource/cellar/" + body.CanonicalKey,
+            HttpRequestMethod.Get,
+            [new HttpLogicalRequestHeader("accept", "application/zip;mtype=fmx4")],
+            new HttpLogicalRequestBody(0, Sha([])),
+            new string('1', 64),
+            new string('2', 64));
+
+    private static RoutedHttpEvidence FormexResponse(
+        HttpLogicalRequest request,
+        DurableBlobWriteReceipt receipt)
+    {
+        var absent = new RoutedHttpAbsentHeader();
+        var headers = new RoutedHttpResponseHeaders(
+            new RoutedHttpSingleHeader("application/zip;mtype=fmx4"),
+            new RoutedHttpSingleHeader(receipt.Reference.ByteLength.ToString(
+                System.Globalization.CultureInfo.InvariantCulture)),
+            absent, absent, absent, absent, absent, absent, absent, absent, absent, absent, absent);
+        var length = checked((ulong)receipt.Reference.ByteLength);
+        var hop = RoutedHttpHop.Create(
+            0,
+            "urn:uuid:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            null,
+            Sha(request.CopyCanonicalBytes()),
+            request.Uri,
+            200,
+            headers,
+            "2026-09-14T12:00:00.0000000Z",
+            "2026-09-14T12:00:01.0000000Z",
+            new DeclaredContentLengthHttpCompletion(length),
+            length,
+            receipt.Reference.ContentSha256,
+            DurableBlobWriteReceiptDigest.Of(receipt),
+            length,
+            receipt.Reference.ContentSha256);
+        return RoutedHttpEvidence.Create(
+            Artifact('7', new string('7', 64)), 1, 0, [hop],
+            new CompleteHttpRouteOutcome(),
+            new Dictionary<string, DurableBlobWriteReceipt> { [hop.ObservationId] = receipt });
     }
 
     private static byte[] ProfileBytes(string formex, string xhtml, string pdf) =>

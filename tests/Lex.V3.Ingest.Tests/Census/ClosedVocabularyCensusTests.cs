@@ -90,7 +90,7 @@ public sealed class ClosedVocabularyCensusTests
                 "Lex.V3.Ingest.Europe.EuFamilyEnumerationOutcomeKind: Proven, ExecutorRefused, "
                     + "ProofRefused",
                 "Lex.V3.Ingest.Europe.EuFormexAnnexInventoryRefusal: None, ProfileDigestMismatch, "
-                    + "ProfileInvalid, ProfileDoesNotNameTransport, RetainedBytesUnavailable, "
+                    + "ProfileInvalid, RetainedBytesUnavailable, "
                     + "PackageUnreadable, PackageEntryInvalid, XmlInvalid, "
                     + "AnnexDocumentReferenceMissing, AnnexSequenceMissing, AnnexPageExtentMissing, "
                     + "AnnexPageExtentInvalid, AnnexPageExtentContradictory, DuplicateAnnexIdentity, "

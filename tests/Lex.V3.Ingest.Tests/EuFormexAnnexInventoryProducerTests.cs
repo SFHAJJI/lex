@@ -4,6 +4,8 @@ using System.Security.Cryptography;
 using System.Text;
 using Lex.V3.Contracts.Custody;
 using Lex.V3.Contracts.Source.Core;
+using Lex.V3.Contracts.Source.Europe;
+using Lex.V3.Contracts.Source.Http;
 using Lex.V3.Ingest.Europe;
 
 namespace Lex.V3.Ingest.Tests;
@@ -15,10 +17,10 @@ public sealed class EuFormexAnnexInventoryProducerTests
     public async Task RetainedFormexPackageDerivesItsAnnexPopulation()
     {
         var bytes = await FixtureBytesAsync("new-fmx4-200-body.bin");
-        var (store, receipt, profile) = await FixtureAsync(bytes);
+        var (store, receipt, binding, profile) = await FixtureAsync(bytes);
 
         var result = await new EuFormexAnnexInventoryProducer(store).RunAsync(
-            receipt, profile.Bytes, profile.Reference, CancellationToken.None);
+            binding, profile.Bytes, profile.Reference, CancellationToken.None);
 
         Assert.AreEqual(EuFormexAnnexInventoryRefusal.None, result.Refusal, result.Detail);
         Assert.IsNotNull(result.Inventory);
@@ -40,10 +42,10 @@ public sealed class EuFormexAnnexInventoryProducerTests
     public async Task RetainedPackageWithoutAnAnnexProvesZero()
     {
         var bytes = await FixtureBytesAsync("gdpr-fmx4-200-body.bin");
-        var (store, receipt, profile) = await FixtureAsync(bytes);
+        var (store, _, binding, profile) = await FixtureAsync(bytes);
 
         var result = await new EuFormexAnnexInventoryProducer(store).RunAsync(
-            receipt, profile.Bytes, profile.Reference, CancellationToken.None);
+            binding, profile.Bytes, profile.Reference, CancellationToken.None);
 
         Assert.AreEqual(EuFormexAnnexInventoryRefusal.None, result.Refusal, result.Detail);
         Assert.IsNotNull(result.Inventory);
@@ -54,11 +56,11 @@ public sealed class EuFormexAnnexInventoryProducerTests
     public async Task RepeatingTheSameEvidenceProducesTheSameInventoryIdentity()
     {
         var bytes = await FixtureBytesAsync("new-fmx4-200-body.bin");
-        var (store, receipt, profile) = await FixtureAsync(bytes);
+        var (store, _, binding, profile) = await FixtureAsync(bytes);
         var producer = new EuFormexAnnexInventoryProducer(store);
 
-        var first = await producer.RunAsync(receipt, profile.Bytes, profile.Reference, CancellationToken.None);
-        var second = await producer.RunAsync(receipt, profile.Bytes, profile.Reference, CancellationToken.None);
+        var first = await producer.RunAsync(binding, profile.Bytes, profile.Reference, CancellationToken.None);
+        var second = await producer.RunAsync(binding, profile.Bytes, profile.Reference, CancellationToken.None);
 
         Assert.IsNotNull(first.Inventory);
         Assert.IsNotNull(second.Inventory);
@@ -66,32 +68,140 @@ public sealed class EuFormexAnnexInventoryProducerTests
     }
 
     [TestMethod]
-    public async Task ProfileBytesBindTheRetainedPackage()
+    public async Task StableRuleProfileRejectsChangedRulesOrDigest()
     {
         var bytes = await FixtureBytesAsync("new-fmx4-200-body.bin");
-        var (store, receipt, profile) = await FixtureAsync(bytes);
-        var wrongProfile = Profile(new string('a', 64));
+        var (store, _, binding, profile) = await FixtureAsync(bytes);
+        var wrongProfileBytes = profile.Bytes.ToArray();
+        wrongProfileBytes[wrongProfileBytes.AsSpan().IndexOf("ANNEX"u8)] = (byte)'X';
+        var wrongProfile = (Bytes: wrongProfileBytes,
+            Reference: new SourceArtifactRef(profile.Reference.ResourceId, Sha(wrongProfileBytes)));
         var wrongReference = new SourceArtifactRef(profile.Reference.ResourceId, new string('b', 64));
         var producer = new EuFormexAnnexInventoryProducer(store);
 
-        var wrongTransport = await producer.RunAsync(
-            receipt, wrongProfile.Bytes, wrongProfile.Reference, CancellationToken.None);
+        var wrongRule = await producer.RunAsync(
+            binding, wrongProfile.Bytes, wrongProfile.Reference, CancellationToken.None);
         var wrongDigest = await producer.RunAsync(
-            receipt, profile.Bytes, wrongReference, CancellationToken.None);
+            binding, profile.Bytes, wrongReference, CancellationToken.None);
 
-        Assert.AreEqual(EuFormexAnnexInventoryRefusal.ProfileDoesNotNameTransport, wrongTransport.Refusal);
+        Assert.AreEqual(EuFormexAnnexInventoryRefusal.ProfileInvalid, wrongRule.Refusal);
         Assert.AreEqual(EuFormexAnnexInventoryRefusal.ProfileDigestMismatch, wrongDigest.Refusal);
+    }
+
+    [TestMethod]
+    public async Task EqualCanonicalContentHasOneIdentityAcrossDifferentZipTransports()
+    {
+        var entries = new[]
+        {
+            ("document.xml", DocumentXml()),
+            ("annex.xml", AnnexXml("document.xml", "0001.0001", 2, 7, 6)),
+        };
+        var firstBytes = Package([.. entries, ("transport-one.bin", "one")]);
+        var secondBytes = Package([("transport-two.bin", "two"), .. entries.Reverse()]);
+        var firstFixture = await FixtureAsync(firstBytes);
+        var secondFixture = await FixtureAsync(secondBytes);
+        var first = await new EuFormexAnnexInventoryProducer(firstFixture.Store).RunAsync(
+            firstFixture.Binding, firstFixture.Profile.Bytes, firstFixture.Profile.Reference,
+            CancellationToken.None);
+        var second = await new EuFormexAnnexInventoryProducer(secondFixture.Store).RunAsync(
+            secondFixture.Binding, secondFixture.Profile.Bytes, secondFixture.Profile.Reference,
+            CancellationToken.None);
+
+        Assert.IsNotNull(first.Inventory);
+        Assert.IsNotNull(second.Inventory);
+        Assert.AreNotEqual(
+            first.Inventory.SourceReceipt.Reference.ContentSha256,
+            second.Inventory.SourceReceipt.Reference.ContentSha256);
+        Assert.AreEqual(first.Inventory.IdentitySha256, second.Inventory.IdentitySha256);
+        Assert.AreNotEqual(
+            Sha(first.Inventory.TransportBinding.ResponseEvidence.CopyCanonicalBytes()),
+            Sha(second.Inventory.TransportBinding.ResponseEvidence.CopyCanonicalBytes()));
+    }
+
+    [TestMethod]
+    public async Task SemanticIdentityUsesExpressionAndRuleDigestOnlyFromTheBindingAndProfile()
+    {
+        var bytes = Package(
+            ("document.xml", DocumentXml()),
+            ("annex.xml", AnnexXml("document.xml", "0001.0001", 2, 7, 6)));
+        var fixture = await FixtureAsync(bytes);
+        var produced = await new EuFormexAnnexInventoryProducer(fixture.Store).RunAsync(
+            fixture.Binding, fixture.Profile.Bytes, fixture.Profile.Reference,
+            CancellationToken.None);
+        var inventory = produced.Inventory!;
+        var sameDigestDifferentResource = new EuFormexAnnexInventory(
+            fixture.Binding,
+            Artifact('9', fixture.Profile.Reference.Sha256),
+            inventory.Members);
+        var differentRuleDigest = new EuFormexAnnexInventory(
+            fixture.Binding,
+            Artifact('8', new string('8', 64)),
+            inventory.Members);
+
+        var (boundary, otherExpression) = Expression(".0002");
+        var otherBinding = new EuFormexAnnexTransportBinding(
+            boundary,
+            otherExpression,
+            fixture.Binding.RequestEvidence,
+            fixture.Binding.ResponseEvidence,
+            fixture.Receipt);
+        var otherExpressionInventory = new EuFormexAnnexInventory(
+            otherBinding,
+            fixture.Profile.Reference,
+            inventory.Members);
+
+        Assert.AreEqual(inventory.IdentitySha256, sameDigestDifferentResource.IdentitySha256);
+        Assert.AreNotEqual(inventory.IdentitySha256, differentRuleDigest.IdentitySha256);
+        Assert.AreNotEqual(inventory.IdentitySha256, otherExpressionInventory.IdentitySha256);
+    }
+
+    [TestMethod]
+    public async Task TransportBindingRejectsRequestOrReceiptSubstitution()
+    {
+        var bytes = Package(("document.xml", DocumentXml()));
+        var fixture = await FixtureAsync(bytes);
+        var wrongRequest = HttpLogicalRequest.Create(
+            "https://publications.europa.eu/resource/cellar/other-formex",
+            HttpRequestMethod.Get,
+            [new HttpLogicalRequestHeader("accept", "application/zip;mtype=fmx4")],
+            new HttpLogicalRequestBody(0, Sha([])),
+            new string('3', 64),
+            new string('4', 64));
+        var wrongReceipt = await fixture.Store.CreateAsync(
+            "different ZIP"u8.ToArray(), CustodyClass.NightlyFloor90d, CancellationToken.None);
+        var (boundary, expression) = Expression();
+        var nonSuccessResponse = Response(
+            fixture.Binding.RequestEvidence, fixture.Receipt, status: 404);
+
+        Assert.ThrowsExactly<ArgumentException>(() => new EuFormexAnnexTransportBinding(
+            boundary,
+            expression,
+            wrongRequest,
+            fixture.Binding.ResponseEvidence,
+            fixture.Receipt));
+        Assert.ThrowsExactly<ArgumentException>(() => new EuFormexAnnexTransportBinding(
+            boundary,
+            expression,
+            fixture.Binding.RequestEvidence,
+            fixture.Binding.ResponseEvidence,
+            wrongReceipt));
+        Assert.ThrowsExactly<ArgumentException>(() => new EuFormexAnnexTransportBinding(
+            boundary,
+            expression,
+            fixture.Binding.RequestEvidence,
+            nonSuccessResponse,
+            fixture.Receipt));
     }
 
     [TestMethod]
     public async Task MissingCustodyBytesCannotProduceAnInventory()
     {
         var bytes = await FixtureBytesAsync("new-fmx4-200-body.bin");
-        var (_, receipt, profile) = await FixtureAsync(bytes);
+        var (_, _, binding, profile) = await FixtureAsync(bytes);
 
         var result = await new EuFormexAnnexInventoryProducer(
             new EuAcquisitionTestFixture.EuInMemoryCustodyStore()).RunAsync(
-                receipt, profile.Bytes, profile.Reference, CancellationToken.None);
+                binding, profile.Bytes, profile.Reference, CancellationToken.None);
 
         Assert.AreEqual(EuFormexAnnexInventoryRefusal.RetainedBytesUnavailable, result.Refusal);
         Assert.IsNull(result.Inventory);
@@ -101,7 +211,7 @@ public sealed class EuFormexAnnexInventoryProducerTests
     public async Task SubstitutedCustodyBytesCannotProduceAnInventory()
     {
         var bytes = await FixtureBytesAsync("new-fmx4-200-body.bin");
-        var (store, receipt, profile) = await FixtureAsync(bytes);
+        var (store, receipt, binding, profile) = await FixtureAsync(bytes);
         var substituted = bytes.ToArray();
         substituted[^1] ^= 1;
         var heldBytes = (Dictionary<string, byte[]>)typeof(EuAcquisitionTestFixture.EuInMemoryCustodyStore)
@@ -110,7 +220,7 @@ public sealed class EuFormexAnnexInventoryProducerTests
         heldBytes[receipt.Reference.ContentSha256] = substituted;
 
         var result = await new EuFormexAnnexInventoryProducer(store).RunAsync(
-                receipt, profile.Bytes, profile.Reference, CancellationToken.None);
+                binding, profile.Bytes, profile.Reference, CancellationToken.None);
 
         Assert.AreEqual(EuFormexAnnexInventoryRefusal.RetainedBytesUnavailable, result.Refusal);
         Assert.IsNull(result.Inventory);
@@ -233,30 +343,112 @@ public sealed class EuFormexAnnexInventoryProducerTests
 
     private static async Task<EuFormexAnnexInventoryProductionResult> RunPackageAsync(byte[] bytes)
     {
-        var (store, receipt, profile) = await FixtureAsync(bytes);
+        var (store, _, binding, profile) = await FixtureAsync(bytes);
         return await new EuFormexAnnexInventoryProducer(store).RunAsync(
-            receipt, profile.Bytes, profile.Reference, CancellationToken.None);
+            binding, profile.Bytes, profile.Reference, CancellationToken.None);
     }
 
     private static async Task<(EuAcquisitionTestFixture.EuInMemoryCustodyStore Store,
-        DurableBlobWriteReceipt Receipt, (byte[] Bytes, SourceArtifactRef Reference) Profile)>
+        DurableBlobWriteReceipt Receipt, EuFormexAnnexTransportBinding Binding,
+        (byte[] Bytes, SourceArtifactRef Reference) Profile)>
         FixtureAsync(byte[] bytes)
     {
         var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
         var receipt = await store.CreateAsync(bytes, CustodyClass.NightlyFloor90d, CancellationToken.None);
-        return (store, receipt, Profile(receipt.Reference.ContentSha256));
+        var (boundary, expression) = Expression();
+        var request = Request();
+        var response = Response(request, receipt);
+        return (store, receipt,
+            new EuFormexAnnexTransportBinding(boundary, expression, request, response, receipt),
+            Profile());
     }
 
-    private static (byte[] Bytes, SourceArtifactRef Reference) Profile(string transportSha256)
+    private static (byte[] Bytes, SourceArtifactRef Reference) Profile()
     {
         var bytes = Encoding.UTF8.GetBytes(string.Join('\n',
-            "lex-v3-eu-formex-annex-inventory-profile/1",
-            "transport_sha256=" + transportSha256,
-            "annex_root=ANNEX") + "\n");
+            "lex-v3-eu-formex-annex-interpretation-profile/1",
+            "document_root=DOC",
+            "annex_root=ANNEX",
+            "schema_prefix=http://formex.publications.europa.eu/schema/formex-",
+            "member_identity=document_reference_file+sequence",
+            "ordering=sequence+package_entry",
+            "title=required",
+            "page_extent=inclusive_positive_consistent") + "\n");
         return (bytes, new SourceArtifactRef(
             "urn:uuid:88888888-8888-4888-8888-888888888888",
-            Convert.ToHexStringLower(SHA256.HashData(bytes))));
+            Sha(bytes)));
     }
+
+    private static (EuWemiIdentityBoundary Boundary, SourceObjectRef Expression) Expression(
+        string suffix = ".0001")
+    {
+        var registry = Artifact('1', new string('1', 64));
+        var identityProfile = Artifact('2', new string('2', 64));
+        var boundary = new EuWemiIdentityBoundary(registry, identityProfile);
+        const string workKey = "5f2552c2-11bd-11e6-ba9a-01aa75ed71a1";
+        var workKind = new SourceRegistryMemberRef(registry, EuWemiIdentityBoundary.MemberKeyOf(EuWemiRole.Work));
+        var work = new SourceObjectRef(SourceCoreSchemaIds.SourceObjectRef, SourceAuthority.Cellar,
+            workKind, "http://publications.europa.eu/resource/cellar/" + workKey,
+            workKey, Sha(Encoding.UTF8.GetBytes(workKey)), identityProfile, null);
+        var expressionKey = workKey + suffix;
+        var expressionKind = new SourceRegistryMemberRef(
+            registry, EuWemiIdentityBoundary.MemberKeyOf(EuWemiRole.Expression));
+        var parent = new SourceObjectKeyRef(work.EntityKind, work.PublisherUri,
+            work.CanonicalKey, work.CanonicalKeySha256);
+        var expression = new SourceObjectRef(SourceCoreSchemaIds.SourceObjectRef, SourceAuthority.Cellar,
+            expressionKind, "http://publications.europa.eu/resource/cellar/" + expressionKey,
+            expressionKey, Sha(Encoding.UTF8.GetBytes(expressionKey)), identityProfile, parent);
+        return (boundary, expression);
+    }
+
+    private static HttpLogicalRequest Request() => HttpLogicalRequest.Create(
+        "https://publications.europa.eu/resource/cellar/formex-test",
+        HttpRequestMethod.Get,
+        [new HttpLogicalRequestHeader("accept", "application/zip;mtype=fmx4")],
+        new HttpLogicalRequestBody(0, Sha([])),
+        new string('3', 64),
+        new string('4', 64));
+
+    private static RoutedHttpEvidence Response(
+        HttpLogicalRequest request,
+        DurableBlobWriteReceipt receipt,
+        int status = 200)
+    {
+        var hop = RoutedHttpHop.Create(
+            0,
+            "urn:uuid:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            null,
+            Sha(request.CopyCanonicalBytes()),
+            request.Uri,
+            status,
+            Headers(checked((ulong)receipt.Reference.ByteLength)),
+            "2026-09-14T12:00:00.0000000Z",
+            "2026-09-14T12:00:01.0000000Z",
+            new DeclaredContentLengthHttpCompletion(checked((ulong)receipt.Reference.ByteLength)),
+            checked((ulong)receipt.Reference.ByteLength),
+            receipt.Reference.ContentSha256,
+            DurableBlobWriteReceiptDigest.Of(receipt),
+            checked((ulong)receipt.Reference.ByteLength),
+            receipt.Reference.ContentSha256);
+        return RoutedHttpEvidence.Create(
+            Artifact('5', new string('5', 64)), 1, 0, [hop],
+            new CompleteHttpRouteOutcome(),
+            new Dictionary<string, DurableBlobWriteReceipt> { [hop.ObservationId] = receipt });
+    }
+
+    private static RoutedHttpResponseHeaders Headers(ulong length)
+    {
+        var absent = new RoutedHttpAbsentHeader();
+        return new(new RoutedHttpSingleHeader("application/zip;mtype=fmx4"),
+            new RoutedHttpSingleHeader(length.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+            absent, absent, absent, absent, absent, absent, absent, absent, absent, absent, absent);
+    }
+
+    private static SourceArtifactRef Artifact(char fill, string digest) => new(
+        $"urn:uuid:{new string(fill, 8)}-{new string(fill, 4)}-4{new string(fill, 3)}-8{new string(fill, 3)}-{new string(fill, 12)}",
+        digest);
+
+    private static string Sha(byte[] bytes) => Convert.ToHexStringLower(SHA256.HashData(bytes));
 
     private static async Task<byte[]> FixtureBytesAsync(string name) => await File.ReadAllBytesAsync(
         Path.Combine(AppContext.BaseDirectory, "Fixtures", "EuDocumentFetch", name));
