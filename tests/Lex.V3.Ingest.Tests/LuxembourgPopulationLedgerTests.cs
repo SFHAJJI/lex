@@ -209,6 +209,64 @@ public sealed class LuxembourgPopulationLedgerTests
         Assert.IsNull(result.PopulationLedger);
     }
 
+    /// <summary>
+    /// A RESULT ABOUT AN ACT THIS RUN NEVER PROVED IS A DISAGREEMENT, NOT SPARE DETAIL. Before this
+    /// repair it was neither refused nor recorded: the lookup is act-keyed and simply never asked
+    /// about it, so two incompatible views of who is in the count could sit side by side in silence.
+    /// </summary>
+    [TestMethod]
+    public async Task AResultForAnActOutsideTheProvenPopulationRefusesTheRun()
+    {
+        const string Stranger = "http://data.legilux.public.lu/eli/etat/leg/loi/2026/01/01/a2/jo";
+
+        var result = await RunAsync(
+            Assertions(), consolidations: [ResultFor(Act, rowCount: 0), ResultFor(Stranger, rowCount: 0)]);
+
+        Assert.AreEqual(LuxembourgQueryExecutionRefusal.PopulationLedgerNotCompleted, result.Refusal!.Code);
+        StringAssert.Contains(result.Refusal.Detail, "outside the proven population");
+        StringAssert.Contains(result.Refusal.Detail, Stranger);
+        Assert.IsNull(result.PopulationLedger);
+    }
+
+    /// <summary>
+    /// THE BOUNDARY OF THAT RULE, and the case it would be easiest to get wrong. A recognised
+    /// out-of-scope act IS part of the proven population; it is placed and simply not counted. A
+    /// result about it is legitimate evidence and must not read as a result about a stranger.
+    /// </summary>
+    [TestMethod]
+    public async Task AResultForARecognisedOutOfScopeActIsLegitimateEvidence()
+    {
+        var result = await RunAsync(
+            Assertions(replaceType: Types + "AGC"), consolidations: [ResultFor(Act, rowCount: 0)]);
+
+        Assert.AreEqual(
+            LuxembourgQueryExecutionRefusal.None,
+            result.Refusal?.Code ?? LuxembourgQueryExecutionRefusal.None,
+            result.Refusal?.Detail);
+        Assert.AreEqual(0, result.PopulationLedger!.PopulationActCount,
+            "placed and out of scope, so evidence about it is accepted and it is still not counted.");
+    }
+
+    /// <summary>
+    /// PRECEDENCE. An act the publisher typed twice is never placed, so a result about it would
+    /// read as a result about a stranger if the checks ran the other way round. The ambiguity is
+    /// the more specific truth and must be what the run says.
+    /// </summary>
+    [TestMethod]
+    public async Task AnAmbiguouslyTypedActRefusesForItsAmbiguityNotAsAStranger()
+    {
+        var result = await RunAsync(
+            Assertions(extraType: Types + "RGD"),
+            fetchesGazette: false,
+            consolidations: [ResultFor(Act, rowCount: 0)]);
+
+        Assert.AreEqual(LuxembourgQueryExecutionRefusal.PopulationLedgerNotCompleted, result.Refusal!.Code);
+        StringAssert.Contains(result.Refusal.Detail, "no single legal type");
+        Assert.IsFalse(
+            result.Refusal.Detail!.Contains("outside the proven population", StringComparison.Ordinal),
+            "the ambiguity is the more specific reason and must be the one reported.");
+    }
+
     // ---- Fixtures. ----
 
     private static LuxembourgNeverConsolidatedMembership MembershipOf(

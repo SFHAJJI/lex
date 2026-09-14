@@ -2460,6 +2460,11 @@ public sealed class LuxembourgQueryExecutionAdapter
 
         var frame = new LuxembourgNeverConsolidatedFrame();
         var ambiguouslyTyped = new SortedSet<string>(StringComparer.Ordinal);
+
+        // EVERY ACT THIS RUN ACTUALLY PROVED, so a supplied result about some other act cannot pass
+        // through unnoticed. An act placed out of scope is still in here: it is part of the proven
+        // population, it is simply not counted, so a result about it is legitimate evidence.
+        var proven = new SortedSet<string>(StringComparer.Ordinal);
         foreach (var resource in resolved.Resources)
         {
             if (!resource.IsPublisherActClass)
@@ -2511,6 +2516,8 @@ public sealed class LuxembourgQueryExecutionAdapter
                     null,
                     $"the population frame refused {actIri}: {admitRefusal}"));
             }
+
+            proven.Add(actIri);
         }
 
         if (ambiguouslyTyped.Count > 0)
@@ -2520,6 +2527,22 @@ public sealed class LuxembourgQueryExecutionAdapter
                 null,
                 "the publisher states no single legal type for these acts: "
                     + string.Join(", ", ambiguouslyTyped)));
+        }
+
+        // A RESULT ABOUT AN ACT THIS RUN NEVER PROVED IS NOT EXTRA DETAIL, IT IS A DISAGREEMENT.
+        // Whoever gathered these was answering a different question about a different population,
+        // and silently dropping their answer would let two incompatible views of who is in the
+        // count sit side by side with nothing to say so. The ambiguity check runs first, so an act
+        // the publisher typed twice refuses for that reason rather than reading as unknown here.
+        var unknown = byAct.Keys.Where(act => !proven.Contains(act))
+            .OrderBy(static act => act, StringComparer.Ordinal).ToArray();
+        if (unknown.Length > 0)
+        {
+            return (null, new LuxembourgQueryExecutionRefusalDetail(
+                LuxembourgQueryExecutionRefusal.PopulationLedgerNotCompleted,
+                null,
+                "consolidation results were supplied for acts outside the proven population: "
+                    + string.Join(", ", unknown)));
         }
 
         var coverage = LuxembourgNeverConsolidatedCoverage.TryComplete(
