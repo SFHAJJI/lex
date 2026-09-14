@@ -270,7 +270,8 @@ public sealed class Stage3EvidenceLineageTests
             source.CorpusRecordSet!,
             source.GazetteBodySetsByOrdinal!,
             source.GazetteListingFetchRefusalsByOrdinal!,
-            source.GazetteListingsWithContradictoryLegalValueByOrdinal!);
+            source.GazetteListingsWithContradictoryLegalValueByOrdinal!,
+            source.PopulationLedger!);
 
     private static CorpusRecordSetCompletion Complete(VerifiedCorpusRecordSet corpus)
     {

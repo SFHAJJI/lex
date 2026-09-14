@@ -1167,7 +1167,8 @@ public sealed class LuxembourgScopeResolverTests
 
         static LuxembourgResourceResolution Rebuild(LuxembourgResourceResolution resource, LuxembourgPublicationForm form) =>
             new(resource.ObjectRef, resource.Dimensions, resource.Assertions, resource.Relations,
-                resource.WemiTopology, resource.BodyJoin, resource.TypedRole, form);
+                resource.WemiTopology, resource.BodyJoin, resource.TypedRole, form,
+                resource.IsPublisherActClass, resource.LegalTypes);
     }
 
     /// <summary>Two typeDocument values are a selector conflict, so no branch is named.</summary>
@@ -1497,8 +1498,12 @@ public sealed class LuxembourgScopeResolverTests
                     + "LuxembourgResolvedRelation>, " + N + "LuxembourgWemiTopologyResolution, "
                     // #419 slice 6c: the classified tuple also carries the publication form, so the
                     // anonymous type gained one type argument. Re-printed, not guessed.
+                    // #419 slice 7: two more, the resolver's own act test and the publisher's legal
+                    // types, which the population ledger folds. The type arguments are what the
+                    // initializer actually yields - IriValues returns an array, so String[] here
+                    // rather than the read-only list the record exposes. Re-printed, not guessed.
                     + N + "LuxembourgBodyJoinResolution, " + N + "LuxembourgTypedRoleResolution, "
-                    + N + "LuxembourgPublicationForm>",
+                    + N + "LuxembourgPublicationForm, System.Boolean, System.String[]>",
                 "method private static " + N + "LuxembourgScopeResolver::ResolveTypedRole("
                     + N + "LuxembourgResourceObservation) -> "
                     + N + "LuxembourgTypedRoleResolution",

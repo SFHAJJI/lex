@@ -151,6 +151,20 @@ internal static class LuxembourgScopeResolver
                     BodyJoin = bodyJoin,
                     TypedRole = ResolveTypedRole(observation),
                     PublicationForm = ResolvePublicationForm(profile, observation),
+
+                    // This build's own act test, and the publisher's own legal types, read from the
+                    // same assertions the typed role reads. ResolveTypedRole discards both the
+                    // moment the types are not exactly one; a population count needs them anyway,
+                    // so that an act with no legal type, or several, refuses by name later instead
+                    // of disappearing into a role that was never applicable.
+                    IsPublisherActClass = IsActClass(IriValues(
+                        observation.Assertions,
+                        VerifiedLuxembourgSourceProfile.RdfType,
+                        observation.ObjectRef.PublisherUri)),
+                    LegalTypes = IriValues(
+                        observation.Assertions,
+                        TypeDocument,
+                        observation.ObjectRef.PublisherUri),
                 };
             })
             .ToArray();
@@ -185,7 +199,9 @@ internal static class LuxembourgScopeResolver
                 classified[ordinal].WemiTopology,
                 classified[ordinal].BodyJoin,
                 classified[ordinal].TypedRole,
-                classified[ordinal].PublicationForm);
+                classified[ordinal].PublicationForm,
+                classified[ordinal].IsPublisherActClass,
+                classified[ordinal].LegalTypes);
             scopeInputs[ordinal] = BuildScopeInput(
                 profile,
                 observation,

@@ -812,7 +812,9 @@ public sealed record LuxembourgResourceResolution
         LuxembourgWemiTopologyResolution wemiTopology,
         LuxembourgBodyJoinResolution bodyJoin,
         LuxembourgTypedRoleResolution typedRole,
-        LuxembourgPublicationForm publicationForm)
+        LuxembourgPublicationForm publicationForm,
+        bool isPublisherActClass,
+        IReadOnlyList<string> legalTypes)
     {
         ObjectRef = objectRef ?? throw new ArgumentNullException(nameof(objectRef));
         Dimensions = dimensions ?? throw new ArgumentNullException(nameof(dimensions));
@@ -822,6 +824,19 @@ public sealed record LuxembourgResourceResolution
         BodyJoin = bodyJoin ?? throw new ArgumentNullException(nameof(bodyJoin));
         TypedRole = typedRole ?? throw new ArgumentNullException(nameof(typedRole));
         PublicationForm = LuxembourgSourceValidation.RequireDefined(publicationForm, nameof(publicationForm));
+
+        // THE RESOLVER'S OWN ACT TEST, CARRIED RATHER THAN RE-DERIVED. Whether the publisher classes
+        // a resource exactly as an act is a rule this build already owns, in one place, and a
+        // consumer that re-implemented it from raw class IRIs would be a second copy free to drift.
+        // A population count needs the answer, so the answer travels.
+        IsPublisherActClass = isPublisherActClass;
+
+        // THE PUBLISHER'S OWN LEGAL TYPES, KEPT AS A SET AND NEVER AS ONE STRING. A resource the
+        // publisher gives no legal type, or two, is a real thing this record must be able to hold:
+        // the population count that reads it has to refuse such an act by name rather than take the
+        // first value and count it. Copied exactly - no case folding, no normalization, no ordering
+        // imposed - because the act class manifest matches these IRIs verbatim.
+        LegalTypes = LuxembourgSourceValidation.CopyStrings(legalTypes, nameof(legalTypes));
 
         // A FORM IS NAMED EXACTLY WHEN THE FAMILY IS ACCEPTED. The resolver derives both from one
         // classification, but this record is what consumers read - the Gazette loop fetches on the
@@ -856,6 +871,23 @@ public sealed record LuxembourgResourceResolution
     /// publication-family state by construction: accepted if and only if a branch is named.
     /// </summary>
     public LuxembourgPublicationForm PublicationForm { get; }
+
+    /// <summary>
+    /// Whether the publisher classes this resource exactly as an act, by the same rule the resolver
+    /// applies for its typed roles. A population count reads this to decide who is in the frame at
+    /// all, so an act the publisher gives no legal type is still seen, and refused by name, rather
+    /// than missed because some other field happened to be empty.
+    /// </summary>
+    public bool IsPublisherActClass { get; }
+
+    /// <summary>
+    /// Every <c>jolux:typeDocument</c> IRI the publisher asserts for this resource, exactly as
+    /// asserted and in the order the observation carried them. Usually one; empty when the publisher
+    /// states none, and longer when it states several. Callers that place an act in a population
+    /// must decide on the whole set: the resolver's own typed-role rule already refuses anything but
+    /// exactly one, and <c>LuxembourgActClassManifest</c> matches these IRIs verbatim.
+    /// </summary>
+    public IReadOnlyList<string> LegalTypes { get; }
 }
 
 public sealed record LuxembourgProfileResolutionFailure
