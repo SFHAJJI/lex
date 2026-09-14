@@ -227,6 +227,10 @@ public sealed class ClosedVocabularyCensusTests
                 "Lex.V3.Ingest.Stage3EvidenceEnvelopeRefusal: None, EuropeNotComplete, "
                     + "LuxembourgNotComplete, AnnexProductionRefused, "
                     + "AnnexIsNotTextUnavailable, DuplicateAnnex",
+                "Lex.V3.Ingest.Stage3EvidenceLineageRefusal: None, EuropeCorpusRecordSetMismatch, "
+                    + "EuropeManifestMismatch, EuropeRunIdentityMismatch, "
+                    + "LuxembourgCorpusRecordSetMismatch, LuxembourgManifestMismatch, "
+                    + "LuxembourgRunIdentityMismatch",
             },
             ClosedSurfaceCensus.ClosedVocabularies(CensusScope.SweptHere).ToArray());
     }

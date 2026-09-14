@@ -726,6 +726,9 @@ public sealed class GuardedConstructionCensusTests
                 "Lex.V3.Ingest.Stage3EvidenceEnvelope: constructor private instance "
                     + "Lex.V3.Ingest.Stage3EvidenceEnvelope::.ctor, "
                     + "method public static Lex.V3.Ingest.Stage3EvidenceEnvelope::TryCreate",
+                "Lex.V3.Ingest.Stage3EvidenceLineage: constructor private instance "
+                    + "Lex.V3.Ingest.Stage3EvidenceLineage::.ctor, "
+                    + "method public static Lex.V3.Ingest.Stage3EvidenceLineage::TryBind",
                 "Lex.V3.Ingest.WireBudgetSnapshot: constructor private instance "
                     + "Lex.V3.Ingest.WireBudgetSnapshot::.ctor, "
                     + "constructor private instance Lex.V3.Ingest.WireBudgetSnapshot::.ctor, "
