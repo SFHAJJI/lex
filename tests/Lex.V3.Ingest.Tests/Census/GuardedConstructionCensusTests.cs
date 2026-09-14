@@ -91,6 +91,21 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Ingest.Europe.EuAnnexEvidenceBindingResult::Success, "
                     + "method private static Lex.V3.Ingest.Europe.EuAnnexEvidenceBinder::Refused, "
                     + "method public instance Lex.V3.Ingest.Europe.EuAnnexEvidenceBinder::RunAsync",
+                "Lex.V3.Ingest.Europe.EuBoundAnnexBodyClassification: constructor internal "
+                    + "instance Lex.V3.Ingest.Europe.EuBoundAnnexBodyClassification::.ctor",
+                "Lex.V3.Ingest.Europe.EuBoundAnnexBodyClassificationResult: constructor private "
+                    + "instance Lex.V3.Ingest.Europe.EuBoundAnnexBodyClassificationResult::.ctor, "
+                    + "method internal static "
+                    + "Lex.V3.Ingest.Europe.EuBoundAnnexBodyClassificationResult::Refused, "
+                    + "method internal static "
+                    + "Lex.V3.Ingest.Europe.EuBoundAnnexBodyClassificationResult::Success, "
+                    + "method private static "
+                    + "Lex.V3.Ingest.Europe.EuBoundAnnexBodyClassifier::Refused, "
+                    + "method public instance "
+                    + "Lex.V3.Ingest.Europe.EuBoundAnnexBodyClassifier::RunAsync",
+                "Lex.V3.Ingest.Europe.EuBoundAnnexBodyMemberClassification: constructor internal "
+                    + "instance Lex.V3.Ingest.Europe.EuBoundAnnexBodyMemberClassification::.ctor, "
+                    + "1 compiler-generated",
                 "Lex.V3.Ingest.Europe.EuBoundAnnexEvidence: constructor internal instance "
                     + "Lex.V3.Ingest.Europe.EuBoundAnnexEvidence::.ctor, 6 compiler-generated",
                 "Lex.V3.Ingest.Europe.EuCaseLawLinkProductionResult: constructor private instance "

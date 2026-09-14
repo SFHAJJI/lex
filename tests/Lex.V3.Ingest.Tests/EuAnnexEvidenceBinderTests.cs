@@ -449,7 +449,7 @@ public sealed class EuAnnexEvidenceBinderTests
         Assert.IsTrue(parameterTypes.Contains(typeof(EuWemiIdentityBoundary)));
     }
 
-    private static async Task<Fixture> FixtureAsync(
+    internal static async Task<Fixture> FixtureAsync(
         byte[] pdfBytes,
         bool pdfInOtherExpression = false,
         bool xhtmlInOtherExpression = false,
@@ -648,11 +648,13 @@ public sealed class EuAnnexEvidenceBinderTests
         </body></html>
         """;
 
-    private static byte[] PageLabelPdf(
+    internal static byte[] PageLabelPdf(
         int pageCount,
         string? pageLabelSpecification,
         bool rawTree = false,
-        IReadOnlyList<string>? additionalObjects = null)
+        IReadOnlyList<string>? additionalObjects = null,
+        bool image = false,
+        bool text = false)
     {
         var pageObjects = Enumerable.Range(3, pageCount).ToArray();
         var catalogLabels = pageLabelSpecification is null ? string.Empty
@@ -664,8 +666,34 @@ public sealed class EuAnnexEvidenceBinderTests
             $"<< /Type /Catalog /Pages 2 0 R{catalogLabels} >>",
             $"<< /Type /Pages /Kids [{string.Join(' ', pageObjects.Select(static number => $"{number} 0 R"))}] /Count {pageCount} >>",
         };
+        var nextObject = pageObjects[^1] + 1;
+        var imageObject = image ? nextObject++ : 0;
+        var fontObject = text ? nextObject++ : 0;
+        var contentObject = nextObject;
+        var resources = string.Join(' ', new[]
+        {
+            image ? $"/XObject << /Im0 {imageObject} 0 R >>" : string.Empty,
+            text ? $"/Font << /F1 {fontObject} 0 R >>" : string.Empty,
+        }.Where(static value => value.Length > 0));
+        var pageSuffix = image || text
+            ? $" /Resources << {resources} >> /Contents {contentObject} 0 R"
+            : string.Empty;
         objects.AddRange(pageObjects.Select(_ =>
-            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 100 100] >>"));
+            $"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 100 100]{pageSuffix} >>"));
+        if (image)
+        {
+            objects.Add("<< /Type /XObject /Subtype /Image /Width 1 /Height 1 /ColorSpace /DeviceGray /BitsPerComponent 8 /Length 1 >>\nstream\nX\nendstream");
+        }
+        if (text)
+        {
+            objects.Add("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>");
+        }
+        if (image || text)
+        {
+            var commands = (image ? "q 1 0 0 1 0 0 cm /Im0 Do Q\n" : string.Empty)
+                + (text ? "BT /F1 12 Tf 0 0 Td (text) Tj ET\n" : string.Empty);
+            objects.Add($"<< /Length {Encoding.ASCII.GetByteCount(commands)} >>\nstream\n{commands}endstream");
+        }
         if (additionalObjects is not null)
         {
             objects.AddRange(additionalObjects);
@@ -698,9 +726,9 @@ public sealed class EuAnnexEvidenceBinderTests
 
     private static string Sha(byte[] bytes) => Convert.ToHexStringLower(SHA256.HashData(bytes));
 
-    private sealed record Profile(byte[] Bytes, SourceArtifactRef Reference);
+    internal sealed record Profile(byte[] Bytes, SourceArtifactRef Reference);
 
-    private sealed record Fixture(
+    internal sealed record Fixture(
         ICustodyStore Store,
         EuWemiIdentityBoundary Boundary,
         EuFormexPackage Package,

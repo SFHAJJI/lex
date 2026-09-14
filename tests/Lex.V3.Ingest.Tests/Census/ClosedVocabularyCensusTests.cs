@@ -66,6 +66,11 @@ public sealed class ClosedVocabularyCensusTests
                     + "PublisherPageLabelsMissing, PublisherPageLabelsInvalid, "
                     + "PublisherPageLabelMissing, PublisherPageLabelDuplicate, "
                     + "PdfPagesNotOrderedAndContiguous, CompetingPdfPageClaim",
+                "Lex.V3.Ingest.Europe.EuBoundAnnexBodyClassificationGap: None, MappingUnresolved, "
+                    + "BodyContainsText, BodyContainsNoImage, MappedPageOutsideDocument",
+                "Lex.V3.Ingest.Europe.EuBoundAnnexBodyClassificationRefusal: None, "
+                    + "ProfileDigestMismatch, ProfileInvalid, ProfileEvidenceMismatch, "
+                    + "SourceEvidenceMismatch, RetainedPdfUnavailable, PdfUnreadable",
                 "Lex.V3.Ingest.Europe.EuCaseLawLinkProductionRefusal: None, EnumerationRefused, "
                     + "EnumerationProofRefused, RowNotAdmitted, TargetBodyScopeNotSupplied, "
                     + "VerifiedRowsRefused, RequestedActBodyScopeNotSupplied, "
