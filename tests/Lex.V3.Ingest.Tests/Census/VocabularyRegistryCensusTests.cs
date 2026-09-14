@@ -67,6 +67,8 @@ public sealed class VocabularyRegistryCensusTests
                     + "AnnotatedPropertyPredicateIri, const AnnotatedSourcePredicateIri, "
                     + "const AnnotatedTargetPredicateIri, const OwlAxiomClassIri, "
                     + "const RdfTypePredicateIri",
+                "Lex.V3.Ingest.Europe.EuLocatedAmendmentProductionCanonicalWriter: const "
+                    + "DigestDomain, const Schema",
                 "Lex.V3.Ingest.Europe.EuObjectFactsBatchFactory: SetsOverObservedObjects=5, "
                     + "SetsOverPackRootsOnly=1",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgReferralDateComposition: const HasOpinion, "

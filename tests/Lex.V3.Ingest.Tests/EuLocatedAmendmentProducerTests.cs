@@ -11,7 +11,7 @@ using System.Reflection;
 namespace Lex.V3.Ingest.Tests;
 
 [TestClass]
-public sealed class EuLocatedAmendmentProducerTests
+public sealed partial class EuLocatedAmendmentProducerTests
 {
     private const string Source = "http://publications.europa.eu/resource/cellar/00000000-0000-4000-8000-000000000011";
     private const string OtherSource = "http://publications.europa.eu/resource/cellar/00000000-0000-4000-8000-000000000015";
