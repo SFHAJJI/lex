@@ -109,6 +109,8 @@ public sealed class EuLanguageScopedExpressionProductionResult
         DurableBlobWriteReceipt? retainedDerivation,
         DurableBlobWriteReceipt? retainedEpisode,
         IReadOnlySet<string>? objectsAskedAbout,
+        EuProofBoundDelivery? expressionFactsDelivery,
+        EuProofBoundDelivery? objectFactsDelivery,
         EuLanguageScopedExpressionProductionRefusal refusal,
         string? detail,
         int productRequestCount)
@@ -117,6 +119,8 @@ public sealed class EuLanguageScopedExpressionProductionResult
         RetainedDerivation = retainedDerivation;
         RetainedEpisode = retainedEpisode;
         ObjectsAskedAbout = objectsAskedAbout;
+        ExpressionFactsDelivery = expressionFactsDelivery;
+        ObjectFactsDelivery = objectFactsDelivery;
         Refusal = refusal;
         Detail = detail;
         ProductRequestCount = productRequestCount;
@@ -154,6 +158,17 @@ public sealed class EuLanguageScopedExpressionProductionResult
     public DurableBlobWriteReceipt? RetainedEpisode { get; }
 
     public IReadOnlySet<string>? ObjectsAskedAbout { get; }
+
+    /// <summary>
+    /// The family X delivery this run rebuilt from its own receipts, in the proof-bound shape the
+    /// decoder takes. Internal, for the producers that compose over this run - #418 slice 5's
+    /// tripwire producer folds exactly these two deliveries - and never a caller input: it is set
+    /// only by <see cref="Success"/>, from the run that proved it.
+    /// </summary>
+    internal EuProofBoundDelivery? ExpressionFactsDelivery { get; }
+
+    /// <summary>The family P delivery this run rebuilt, or <c>null</c> when none was requested.</summary>
+    internal EuProofBoundDelivery? ObjectFactsDelivery { get; }
 
     public EuLanguageScopedExpressionProductionRefusal Refusal { get; }
 
@@ -195,9 +210,15 @@ public sealed class EuLanguageScopedExpressionProductionResult
         DurableBlobWriteReceipt retainedDerivation,
         DurableBlobWriteReceipt retainedEpisode,
         IReadOnlySet<string> objectsAskedAbout,
-        int productRequestCount) =>
-        new(derivation, retainedDerivation, retainedEpisode, objectsAskedAbout,
+        EuProofBoundDelivery expressionFactsDelivery,
+        EuProofBoundDelivery? objectFactsDelivery,
+        int productRequestCount)
+    {
+        ArgumentNullException.ThrowIfNull(expressionFactsDelivery);
+        return new(derivation, retainedDerivation, retainedEpisode, objectsAskedAbout,
+            expressionFactsDelivery, objectFactsDelivery,
             EuLanguageScopedExpressionProductionRefusal.None, null, productRequestCount);
+    }
 
     internal static EuLanguageScopedExpressionProductionResult Refused(
         EuLanguageScopedExpressionProductionRefusal refusal,
@@ -210,7 +231,7 @@ public sealed class EuLanguageScopedExpressionProductionResult
                 nameof(refusal), "A refusal result requires a real refusal code.");
         }
 
-        return new(null, null, null, null, refusal, detail, productRequestCount);
+        return new(null, null, null, null, null, null, refusal, detail, productRequestCount);
     }
 }
 
@@ -461,6 +482,8 @@ public sealed class EuLanguageScopedExpressionProducer
             derivationReceipt,
             episodeReceipt,
             ObjectsAskedAbout(expressionFactsRequest),
+            expressionDelivery,
+            objectDelivery,
             spent);
     }
 

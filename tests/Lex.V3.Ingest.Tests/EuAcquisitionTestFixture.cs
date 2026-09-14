@@ -354,6 +354,28 @@ internal static class EuAcquisitionTestFixture
         return Row(fields);
     }
 
+    /// <summary>
+    /// One family-P outcome row whose value is a datatyped literal - the shape
+    /// <c>work_date_document</c> arrives in. Keyed exactly as <see cref="ObjectFactRow"/> keys an
+    /// IRI row, with <c>key_3</c> naming the literal kind and <c>key_4</c> the lexical form.
+    /// </summary>
+    internal static string ObjectFactLiteralRow(string objectIri, string predicateIri, string lexical, string datatypeIri) =>
+        Row(
+        [
+            ("object", Iri(objectIri)),
+            ("predicate", Iri(predicateIri)),
+            ("value", TypedLiteral(lexical, datatypeIri)),
+            ("value_kind", PlainLiteral("literal")),
+            ("datatype_iri", PlainLiteral(datatypeIri)),
+            ("language_tag", PlainLiteral("")),
+            ("key_1", PlainLiteral(objectIri)),
+            ("key_2", PlainLiteral(predicateIri)),
+            ("key_3", PlainLiteral("literal")),
+            ("key_4", PlainLiteral(lexical)),
+            ("key_5", PlainLiteral("")),
+            ("key_6", PlainLiteral("")),
+        ]);
+
     internal static string ObjectFactsRowsJson(IReadOnlyList<string> rows) => RowsJson(ObjectFactsProjection, rows);
 
     /// <summary>

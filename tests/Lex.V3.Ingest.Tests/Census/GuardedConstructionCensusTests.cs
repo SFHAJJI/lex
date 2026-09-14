@@ -90,6 +90,14 @@ public sealed class GuardedConstructionCensusTests
                     + "method internal static "
                     + "Lex.V3.Ingest.Europe.EuCaseLawLinkProductionResult::Success, "
                     + "method public instance Lex.V3.Ingest.Europe.EuCaseLawLinkProducer::RunAsync",
+                "Lex.V3.Ingest.Europe.EuCorrigendumTripwireProductionResult: constructor private "
+                    + "instance Lex.V3.Ingest.Europe.EuCorrigendumTripwireProductionResult::.ctor, "
+                    + "method internal static "
+                    + "Lex.V3.Ingest.Europe.EuCorrigendumTripwireProductionResult::Refused, "
+                    + "method internal static "
+                    + "Lex.V3.Ingest.Europe.EuCorrigendumTripwireProductionResult::Success, "
+                    + "method public instance "
+                    + "Lex.V3.Ingest.Europe.EuCorrigendumTripwireProducer::RunAsync",
                 "Lex.V3.Ingest.Europe.EuDeliveryEvidenceSet: constructor private instance "
                     + "Lex.V3.Ingest.Europe.EuDeliveryEvidenceSet::.ctor, "
                     + "method public static "
