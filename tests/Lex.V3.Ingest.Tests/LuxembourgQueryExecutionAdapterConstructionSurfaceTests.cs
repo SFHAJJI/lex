@@ -577,6 +577,9 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
         CollectionAssert.AreEqual(
             new[]
             {
+                "field private instance "
+                    + "Lex.V3.Ingest.Stage3EvidenceEnvelope::<Luxembourg>k__BackingField -> "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionResult",
                 "method internal instance "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionAdapter::RunAsync(System.Co"
                     + "llections.Generic.IReadOnlyList<System.ValueTuple<Lex.V3.Ingest.Luxembourg.L"
@@ -644,6 +647,8 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
                     + "System.Threading.CancellationToken) -> "
                     + "System.Threading.Tasks.Task<Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutio"
                     + "nResult>",
+                "property public instance Lex.V3.Ingest.Stage3EvidenceEnvelope::Luxembourg() -> "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionResult",
             },
             ConstructionSurface.ProducersIn(
                 typeof(LuxembourgQueryExecutionResult).Assembly,

@@ -11,7 +11,7 @@ using Lex.V3.Ingest.Europe;
 namespace Lex.V3.Ingest.Tests;
 
 [TestClass]
-public sealed class EuImageOnlyAnnexProducerTests
+public sealed partial class EuImageOnlyAnnexProducerTests
 {
     private const string CellarKey = "01234567-89ab-cdef-0123-456789abcdef";
     private const string AnnexAuthority = "http://publications.europa.eu/resource/authority/fd_370";
