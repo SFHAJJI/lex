@@ -156,6 +156,10 @@ public sealed class EuBoundAnnexBodyClassificationResult
 /// Classifies only the immutable PDF page mappings carried by a complete annex evidence binding.
 /// No annex coordinate or page selection enters this public door.
 /// </summary>
+/// <remarks>
+/// A non-null <see cref="EuDerivedPdfPageMapping"/> always contains at least one page: its
+/// constructor is internal and the binder creates it only after deriving a positive Formex extent.
+/// </remarks>
 public sealed class EuBoundAnnexBodyClassifier
 {
     private const string ProfileHeader = "lex-v3-eu-bound-annex-body-classification-profile/1";

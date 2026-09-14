@@ -81,6 +81,17 @@ public sealed class EuBoundAnnexBodyClassifierTests
     }
 
     [TestMethod]
+    public async Task OneGlyphCannotBecomeImageOnly()
+    {
+        var fixture = await FixtureAsync(image: true, text: true, textValue: "x");
+
+        var member = (await fixture.RunAsync()).Classification!.Members.Single();
+
+        Assert.IsNull(member.Outcome);
+        Assert.AreEqual(EuBoundAnnexBodyClassificationGap.BodyContainsText, member.Gap);
+    }
+
+    [TestMethod]
     public async Task ProfileCannotNameAnotherBindingOrPdf()
     {
         var fixture = await FixtureAsync(image: true, text: false);
@@ -103,6 +114,12 @@ public sealed class EuBoundAnnexBodyClassifierTests
         var malformed = new ProfileValue(malformedBytes, Artifact('f', Sha(malformedBytes)));
         Assert.AreEqual(EuBoundAnnexBodyClassificationRefusal.ProfileInvalid,
             (await fixture.RunAsync(malformed)).Refusal);
+
+        var wrongRule = Profile(fixture.Binding.IdentitySha256,
+            fixture.Binding.PdfReceipt.Reference.ContentSha256,
+            "classification=pdfpig-0.1.11:no_glyphs");
+        Assert.AreEqual(EuBoundAnnexBodyClassificationRefusal.ProfileInvalid,
+            (await fixture.RunAsync(wrongRule)).Refusal);
     }
 
     [TestMethod]
@@ -122,16 +139,38 @@ public sealed class EuBoundAnnexBodyClassifierTests
     public async Task EveryInputMemberIsConservedOnceInStableOrder()
     {
         var fixture = await FixtureAsync(
-            image: false, text: false, pageLabels: true, twoMembers: true);
+            image: true, text: false, pageLabels: true, twoMembers: true,
+            secondMemberAfterFirst: true);
 
-        var result = await fixture.RunAsync(
-            store: new EuAcquisitionTestFixture.EuInMemoryCustodyStore());
+        var result = await fixture.RunAsync();
 
         CollectionAssert.AreEqual(new[] { "anx_1", "anx_2" },
             result.Classification!.Members
                 .Select(static member => member.Evidence.PublisherAnnexId).ToArray());
-        Assert.IsTrue(result.Classification.Members.All(static member =>
-            member.Gap == EuBoundAnnexBodyClassificationGap.MappingUnresolved));
+        Assert.AreEqual(EuAnnexBodyDispositionOutcome.TextNotAvailable,
+            result.Classification.Members[0].Outcome);
+        Assert.AreEqual(EuBoundAnnexBodyClassificationGap.None,
+            result.Classification.Members[0].Gap);
+        Assert.IsNull(result.Classification.Members[1].Outcome);
+        Assert.AreEqual(EuBoundAnnexBodyClassificationGap.MappingUnresolved,
+            result.Classification.Members[1].Gap);
+    }
+
+    [TestMethod]
+    public async Task MappedPageOutsideTheRetainedDocumentIsConservedAsAGap()
+    {
+        var fixture = await FixtureAsync(image: true, text: false);
+        var member = fixture.Binding.Members.Single();
+        var outside = new EuBoundAnnexEvidence(member.Formex, member.Xhtml,
+            new EuDerivedPdfPageMapping([new EuDerivedPdfPage(8, "8")]),
+            EuAnnexEvidenceGap.BodyClassificationPending);
+        fixture = fixture.WithMembers([outside]);
+
+        var result = await fixture.RunAsync();
+
+        Assert.IsNull(result.Classification!.Members.Single().Outcome);
+        Assert.AreEqual(EuBoundAnnexBodyClassificationGap.MappedPageOutsideDocument,
+            result.Classification.Members.Single().Gap);
     }
 
     [TestMethod]
@@ -141,6 +180,40 @@ public sealed class EuBoundAnnexBodyClassifierTests
         var wrongRoute = Route(new string('1', 36), fixture.Binding.PdfReceipt, fixture.PdfLength);
 
         var result = await fixture.RunAsync(route: wrongRoute);
+
+        Assert.AreEqual(EuBoundAnnexBodyClassificationRefusal.SourceEvidenceMismatch,
+            result.Refusal);
+        Assert.IsNull(result.Classification);
+    }
+
+    [TestMethod]
+    public async Task OfficialRequestCanonicalDigestMustNameTheFirstHop()
+    {
+        var fixture = await FixtureAsync(image: true, text: false);
+        var substituted = Request(fixture.Address, new string('3', 64));
+
+        var result = await fixture.RunAsync(officialRequest: substituted);
+
+        Assert.AreEqual(EuBoundAnnexBodyClassificationRefusal.SourceEvidenceMismatch,
+            result.Refusal);
+        Assert.IsNull(result.Classification);
+    }
+
+    [TestMethod]
+    public async Task TerminalReceiptDigestMustNameTheBoundPdfReceipt()
+    {
+        var fixture = await FixtureAsync(image: true, text: false);
+        var original = fixture.Binding.PdfReceipt;
+        var policy = original.PolicyEvidence;
+        var substitutedPolicy = new CustodyPolicyEvidence(
+            policy.Schema, policy.Reference, policy.VerificationProfile, policy.PolicyKey,
+            policy.Protection, policy.ObservedAt.AddSeconds(1), policy.ProtectedUntil);
+        var substitutedReceipt = new DurableBlobWriteReceipt(
+            original.Schema, original.Reference, substitutedPolicy);
+        var substitutedRoute = Route(
+            fixture.Binding.Work.CanonicalKey, substitutedReceipt, fixture.PdfLength);
+
+        var result = await fixture.RunAsync(route: substitutedRoute);
 
         Assert.AreEqual(EuBoundAnnexBodyClassificationRefusal.SourceEvidenceMismatch,
             result.Refusal);
@@ -162,19 +235,23 @@ public sealed class EuBoundAnnexBodyClassifierTests
     }
 
     private static async Task<Fixture> FixtureAsync(
-        bool image, bool text, bool pageLabels = true, bool twoMembers = false)
+        bool image, bool text, bool pageLabels = true, bool twoMembers = false,
+        bool secondMemberAfterFirst = false, string textValue = "text")
     {
         var pdf = EuAnnexEvidenceBinderTests.PageLabelPdf(
-            7, pageLabels ? "<< /S /D /St 1 >>" : null, image: image, text: text);
+            7, pageLabels ? "<< /S /D /St 1 >>" : null, image: image, text: text,
+            textValue: textValue);
         var binderFixture = await EuAnnexEvidenceBinderTests.FixtureAsync(
-            pdf, formexTwoMembers: twoMembers, xhtmlTwoMembers: twoMembers);
+            pdf, formexTwoMembers: twoMembers, xhtmlTwoMembers: twoMembers,
+            secondMemberAfterFirst: secondMemberAfterFirst);
         var bindingResult = await binderFixture.RunAsync();
         Assert.AreEqual(EuAnnexEvidenceBindingRefusal.None, bindingResult.Refusal,
             bindingResult.Detail);
         var binding = bindingResult.Binding!;
         var route = Route(binding.Work.CanonicalKey, binding.PdfReceipt, pdf.Length);
-        return new Fixture(binderFixture.Store, binding, route.Address, route.Request,
-            route.Evidence, Profile(binding.IdentitySha256,
+        return new Fixture(binderFixture.Store, binderFixture.Package, binderFixture.Formex,
+            binderFixture.Xhtml, binding, route.Address, route.Request, route.Evidence,
+            Profile(binding.IdentitySha256,
                 binding.PdfReceipt.Reference.ContentSha256), pdf.Length);
     }
 
@@ -185,16 +262,7 @@ public sealed class EuBoundAnnexBodyClassifierTests
             "cellar", cellarKey, EuManifestationMediaType.ApplicationPdf,
             EuDocumentLanguage.Eng, out var refusal)!;
         Assert.AreEqual(EuDocumentFetchAddressRefusal.None, refusal);
-        var request = HttpLogicalRequest.Create(
-            address.ResourceUri,
-            HttpRequestMethod.Get,
-            [
-                new HttpLogicalRequestHeader("accept", address.Accept),
-                new HttpLogicalRequestHeader("accept-language", address.AcceptLanguage),
-            ],
-            new HttpLogicalRequestBody(0, Sha([])),
-            new string('1', 64),
-            new string('2', 64));
+        var request = Request(address, new string('2', 64));
         var hop = RoutedHttpHop.Create(
             0,
             "urn:uuid:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
@@ -218,13 +286,26 @@ public sealed class EuBoundAnnexBodyClassifierTests
         return new RouteValues(address, request, evidence);
     }
 
-    private static ProfileValue Profile(string bindingIdentity, string pdfDigest)
+    private static HttpLogicalRequest Request(EuDocumentFetchAddress address, string contextDigest) =>
+        HttpLogicalRequest.Create(
+            address.ResourceUri,
+            HttpRequestMethod.Get,
+            [
+                new HttpLogicalRequestHeader("accept", address.Accept),
+                new HttpLogicalRequestHeader("accept-language", address.AcceptLanguage),
+            ],
+            new HttpLogicalRequestBody(0, Sha([])),
+            new string('1', 64),
+            contextDigest);
+
+    private static ProfileValue Profile(string bindingIdentity, string pdfDigest,
+        string rule = "classification=pdfpig-0.1.11:no_glyphs+image")
     {
         var bytes = Encoding.UTF8.GetBytes(string.Join('\n',
             "lex-v3-eu-bound-annex-body-classification-profile/1",
             "binding_identity_sha256=" + bindingIdentity,
             "pdf_transport_sha256=" + pdfDigest,
-            "classification=pdfpig-0.1.11:no_glyphs+image") + "\n");
+            rule) + "\n");
         return new(bytes, Artifact('e', Sha(bytes)));
     }
 
@@ -247,6 +328,9 @@ public sealed class EuBoundAnnexBodyClassifierTests
         EuDocumentFetchAddress Address, HttpLogicalRequest Request, RoutedHttpEvidence Evidence);
     private sealed record Fixture(
         ICustodyStore Store,
+        EuFormexPackage Package,
+        EuFormexAnnexInventory Formex,
+        EuXhtmlAnnexInventory Xhtml,
         EuAnnexEvidenceBinding Binding,
         EuDocumentFetchAddress Address,
         HttpLogicalRequest Request,
@@ -255,11 +339,31 @@ public sealed class EuBoundAnnexBodyClassifierTests
         int PdfLength)
     {
         internal Task<EuBoundAnnexBodyClassificationResult> RunAsync(
-            ProfileValue? profile = null, RouteValues? route = null, ICustodyStore? store = null) =>
+            ProfileValue? profile = null, RouteValues? route = null, ICustodyStore? store = null,
+            HttpLogicalRequest? officialRequest = null,
+            HttpLogicalRequest? terminalRequest = null) =>
             new EuBoundAnnexBodyClassifier(store ?? Store).RunAsync(
-                Binding, route?.Address ?? Address, route?.Request ?? Request,
-                route?.Request ?? Request, route?.Evidence ?? Evidence,
+                Binding, route?.Address ?? Address, officialRequest ?? route?.Request ?? Request,
+                terminalRequest ?? route?.Request ?? Request, route?.Evidence ?? Evidence,
                 (profile ?? Profile).Bytes, (profile ?? Profile).Reference,
                 CancellationToken.None);
+
+        internal Fixture WithMembers(IReadOnlyList<EuBoundAnnexEvidence> members)
+        {
+            var binding = new EuAnnexEvidenceBinding(
+                Binding.Work, Package, Binding.FormexSource, Binding.XhtmlSource,
+                Binding.PdfSource, Formex, Xhtml, Binding.PdfReceipt,
+                Binding.ReconciliationProfileRef, members);
+            var route = Route(binding.Work.CanonicalKey, binding.PdfReceipt, PdfLength);
+            return this with
+            {
+                Binding = binding,
+                Address = route.Address,
+                Request = route.Request,
+                Evidence = route.Evidence,
+                Profile = EuBoundAnnexBodyClassifierTests.Profile(binding.IdentitySha256,
+                    binding.PdfReceipt.Reference.ContentSha256),
+            };
+        }
     }
 }
