@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json.Serialization;
 using Lex.V3.Contracts;
 using Lex.V3.Contracts.Custody;
+using Lex.V3.Contracts.Derivation;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Europe;
 using Lex.V3.Contracts.Source.Http;
@@ -576,6 +577,35 @@ public sealed record LuxembourgConsolidationByActRunRequest(
     /// </remarks>
     public WireRequestBudget WireBudget { get; } =
         WireBudget ?? throw new ArgumentNullException(nameof(WireBudget));
+}
+
+/// <summary>One offline-configured, budgeted enumeration for one proven EU expression identity.</summary>
+public sealed record EuFormexManifestationRunRequest(
+    EuFormexManifestationDiscoveryPlan Plan,
+    LanguageScopedExpression Expression,
+    string PlanResourceId,
+    MachineQueryRendererSource RendererSource,
+    WireRequestBudget WireBudget)
+{
+    public EuFormexManifestationDiscoveryPlan Plan { get; } =
+        Plan ?? throw new ArgumentNullException(nameof(Plan));
+
+    public LanguageScopedExpression Expression { get; } = Validate(Expression);
+
+    public LanguageScopedExpressionIdentity ExpressionIdentity => Expression.Identity;
+
+    public MachineQueryRendererSource RendererSource { get; } =
+        RendererSource ?? throw new ArgumentNullException(nameof(RendererSource));
+
+    public WireRequestBudget WireBudget { get; } =
+        WireBudget ?? throw new ArgumentNullException(nameof(WireBudget));
+
+    private static LanguageScopedExpression Validate(LanguageScopedExpression expression)
+    {
+        ArgumentNullException.ThrowIfNull(expression);
+        _ = EuFormexManifestationDiscoveryPlan.CanonicalizeSelection(expression.Identity);
+        return expression;
+    }
 }
 
 /// <summary>
@@ -1603,6 +1633,55 @@ public sealed class EuRepeatedEnumerationExecutor
                     pass => BindLuxembourgConsolidationByActCount(request, pass),
                     (pass, cursor, selected, evidenceRef) =>
                         BindLuxembourgConsolidationByActPage(request, pass, cursor, selected, evidenceRef),
+                    batchObjects: null,
+                    batchMembershipKeyOrdinal: null,
+                    cancellationToken,
+                    request.WireBudget)
+                .ConfigureAwait(false);
+        }
+        finally
+        {
+            session.Dispose();
+        }
+    }
+
+    /// <summary>Runs both proof passes for one exact EU expression identity.</summary>
+    public async Task<EuEnumerationRunResult> RunEuFormexManifestationsAsync(
+        EuFormexManifestationRunRequest request,
+        BoundMachineRequest sourceWitness,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(sourceWitness);
+        if (!request.WireBudget.TryReserveAttempt())
+        {
+            return EuEnumerationRunResult.Refused(
+                new EuEnumerationRefusalDetail(
+                    EuEnumerationRefusal.WireBudgetExhausted, null, null, null, null, null, null, null, null),
+                productRequestCount: 0);
+        }
+
+        var session = await StartSessionAsync(sourceWitness, request.WireBudget, cancellationToken)
+            .ConfigureAwait(false);
+        if (session is null)
+        {
+            return EuEnumerationRunResult.Refused(
+                new EuEnumerationRefusalDetail(
+                    EuEnumerationRefusal.RobotsBootstrapRefused, null, null, null, null, null, null, null, null),
+                productRequestCount: 0);
+        }
+
+        try
+        {
+            var profile = request.Plan.CreateDeliveryProfile();
+            var profileRef = RepeatedEnumerationInterpretationProfileIdentity.Create(NewUrn(), profile);
+            return await RunPassesAsync(
+                    session,
+                    profile,
+                    profileRef,
+                    pass => BindEuFormexManifestationCount(request, pass),
+                    (pass, cursor, selected, evidenceRef) =>
+                        BindEuFormexManifestationPage(request, pass, cursor, selected, evidenceRef),
                     batchObjects: null,
                     batchMembershipKeyOrdinal: null,
                     cancellationToken,
@@ -3062,6 +3141,42 @@ public sealed class EuRepeatedEnumerationExecutor
         var bound = request.Plan.BindPage(
             request.PublisherActIri,
             (LuxembourgQueryPass)passOrdinal,
+            cursor,
+            selected,
+            countEvidenceRef,
+            request.PlanResourceId,
+            NewUrn(),
+            request.RendererSource);
+        return new EuBoundQueryParts(
+            bound.MachinePlanRef, bound.InputArtifact.ArtifactRef, bound.Request,
+            bound.InputArtifact.PartitionBinding.MemberKey, bound.MachinePlan.ResponseCardinality.RowLimit);
+    }
+
+    private static EuBoundQueryParts BindEuFormexManifestationCount(
+        EuFormexManifestationRunRequest request,
+        int passOrdinal)
+    {
+        var bound = request.Plan.BindCount(
+            request.ExpressionIdentity,
+            (EuFormexManifestationQueryPass)passOrdinal,
+            request.PlanResourceId,
+            NewUrn(),
+            request.RendererSource);
+        return new EuBoundQueryParts(
+            bound.MachinePlanRef, bound.InputArtifact.ArtifactRef, bound.Request,
+            bound.InputArtifact.PartitionBinding.MemberKey, null);
+    }
+
+    private static EuBoundQueryParts BindEuFormexManifestationPage(
+        EuFormexManifestationRunRequest request,
+        int passOrdinal,
+        IReadOnlyList<string>? cursor,
+        long selected,
+        SourceArtifactRef countEvidenceRef)
+    {
+        var bound = request.Plan.BindPage(
+            request.ExpressionIdentity,
+            (EuFormexManifestationQueryPass)passOrdinal,
             cursor,
             selected,
             countEvidenceRef,
