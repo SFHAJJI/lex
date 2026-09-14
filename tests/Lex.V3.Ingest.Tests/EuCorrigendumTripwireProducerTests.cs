@@ -278,11 +278,15 @@ public sealed class EuCorrigendumTripwireProducerTests
             System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic
             | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Static
             | System.Reflection.BindingFlags.DeclaredOnly;
+        // #418 slice 6 widened this pin twice, because the join added both a nested pairing type and
+        // a parameter that carries deliveries inside a tuple. NESTED TYPES ARE SCANNED, and a
+        // parameter is refused if a delivery appears anywhere in its type - by ref, by array, or as
+        // a generic argument of a tuple or any other container. The letter and the intent now agree.
         foreach (var type in new[]
         {
             typeof(EuCorrigendumTripwireProducer), typeof(EuCorrigendumTripwireProductionResult),
             typeof(EuLanguageScopedExpressionProducer), typeof(EuLanguageScopedExpressionProductionResult),
-        })
+        }.SelectMany(type => type.GetNestedTypes(Everything).Prepend(type)))
         {
             var members = type.GetMethods(Everything).Cast<System.Reflection.MethodBase>()
                 .Concat(type.GetConstructors(Everything));
@@ -290,12 +294,17 @@ public sealed class EuCorrigendumTripwireProducerTests
             {
                 foreach (var parameter in member.GetParameters())
                 {
-                    Assert.AreNotEqual(
-                        typeof(EuProofBoundDelivery), parameter.ParameterType,
-                        $"{type.Name}.{member.Name} accepts a proof-bound delivery.");
+                    Assert.IsFalse(
+                        MentionsDelivery(parameter.ParameterType),
+                        $"{type.Name}.{member.Name} accepts a proof-bound delivery as the input '{parameter.Name}'.");
                 }
             }
         }
+
+        static bool MentionsDelivery(Type type) =>
+            type == typeof(EuProofBoundDelivery)
+            || (type.HasElementType && MentionsDelivery(type.GetElementType()!))
+            || type.GetGenericArguments().Any(MentionsDelivery);
     }
 
     [TestMethod]

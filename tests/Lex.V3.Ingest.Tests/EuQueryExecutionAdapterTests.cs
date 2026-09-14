@@ -59,7 +59,14 @@ public sealed class EuQueryExecutionAdapterTests
 
         Assert.AreEqual(13, pRows.Count, "family P must carry exactly 13 predicate outcomes for one object.");
 
-        var xRows = new[] { EuAcquisitionTestFixture.ExpressionFactRow(rootIri, expressionIri) };
+        // #418 slice 6: the derivation now reads every expression's language, so this expression
+        // states one; German, which the body policy does not serve, keeps this run's no-fetch world.
+        var xRows = new[]
+        {
+            EuAcquisitionTestFixture.ExpressionFactRow(rootIri, expressionIri),
+            EuAcquisitionTestFixture.ExpressionLanguageRow(
+                rootIri, expressionIri, "http://publications.europa.eu/resource/authority/language/DEU"),
+        };
         var wRows = new[] { EuAcquisitionTestFixture.RootWatermarkRow(rootIri, watermarkLexical) };
 
         var scripts = new Dictionary<string, EuAcquisitionTestFixture.FamilyScript>(StringComparer.Ordinal)
@@ -169,7 +176,8 @@ public sealed class EuQueryExecutionAdapterTests
         // four other acts in the band return live.
         // Families A and L each add one row: this fixture reifies neither a date nor a located
         // amendment axiom for the root, so each delivers its typed absence row.
-        CollectionAssert.AreEqual(new long[] { 0, 1, 1, 1, 1, 6, 13 }, byRows);
+        // #418 slice 6: the one expression carries its language row beside its work row, two X rows.
+        CollectionAssert.AreEqual(new long[] { 0, 1, 1, 1, 2, 6, 13 }, byRows);
 
         // ---- Precision two: the closure is bound to Appendix A's own 82-seed pack by identity. ----
         Assert.IsNotNull(result.RootBinding);
@@ -205,11 +213,13 @@ public sealed class EuQueryExecutionAdapterTests
         //
         // D1-05d changes WHY this row is skipped, and the distinction matters. The format axis is no
         // longer the blocker: family M's listing above is real, so this row's format contribution is
-        // now AcceptedSelected. What still caps it is this fixture's own family-X rows, which assert
-        // only expression_belongs_to_work and never expression_uses_language, so no language
-        // Expression is observed at all and the language contribution is TypedQuarantine
-        // (publisher_value_absent). ARealPre2004ActRecordsHeldThroughTextHtmlWhereItRecordedNotHeld
-        // is the run that supplies an observed English Expression and reaches a real fetch.
+        // now AcceptedSelected. What still caps it is this fixture's own family-X rows: the one
+        // Expression is observed in German, which the body policy does not serve (English and French
+        // are the body candidates), so the language contribution is a point and no body is selected.
+        // (#418 slice 6: before the join the row stated no language at all; the derivation that now
+        // runs in every delivered run reads it, so the fixture states the one real data would.)
+        // ARealPre2004ActRecordsHeldThroughTextHtmlWhereItRecordedNotHeld is the run that supplies
+        // an observed English Expression and reaches a real fetch.
         Assert.IsNotNull(result.DocumentAcquisitionOutcomesByOrdinal);
         Assert.HasCount(0, result.DocumentAcquisitionOutcomesByOrdinal!);
     }
@@ -930,7 +940,7 @@ public sealed class EuQueryExecutionAdapterTests
             .Concat(EuAcquisitionTestFixture.RelationPredicates.Select(predicate => (predicate, (string?)null)))
             .ToArray();
         var pRows = EuAcquisitionTestFixture.SortedObjectFactRows(rootIri, pOutcomes);
-        var xRows = new[] { EuAcquisitionTestFixture.ExpressionFactRow(rootIri, expressionIri) };
+        var xRows = EuAcquisitionTestFixture.EnglishExpressionFactRows(rootIri, expressionIri).ToArray();
         var wRows = new[] { EuAcquisitionTestFixture.RootWatermarkRow(rootIri, watermarkLexical) };
 
         var scripts = new Dictionary<string, EuAcquisitionTestFixture.FamilyScript>(StringComparer.Ordinal)
@@ -1369,7 +1379,7 @@ public sealed class EuQueryExecutionAdapterTests
             .ToArray();
         var pRows = EuAcquisitionTestFixture.SortedObjectFactRows(rootIri, pOutcomes);
 
-        var xRows = new[] { EuAcquisitionTestFixture.ExpressionFactRow(rootIri, expressionIri) };
+        var xRows = EuAcquisitionTestFixture.EnglishExpressionFactRows(rootIri, expressionIri).ToArray();
         var wRows = new[] { EuAcquisitionTestFixture.RootWatermarkRow(rootIri, watermarkLexical) };
 
         var scripts = new Dictionary<string, EuAcquisitionTestFixture.FamilyScript>(StringComparer.Ordinal)
@@ -1513,7 +1523,7 @@ public sealed class EuQueryExecutionAdapterTests
         Assert.AreEqual(39, pRows.Length, "13 predicate outcomes for each of 3 objects (root + 2 states).");
 
         const string expressionIri = "http://publications.europa.eu/resource/cellar/00000000-0000-0000-0000-000000000003.0001.01/DOC_1";
-        var xRows = new[] { EuAcquisitionTestFixture.ExpressionFactRow(rootIri, expressionIri) };
+        var xRows = EuAcquisitionTestFixture.EnglishExpressionFactRows(rootIri, expressionIri).ToArray();
         var wRows = new[] { EuAcquisitionTestFixture.RootWatermarkRow(rootIri, watermarkLexical) };
 
         var scripts = new Dictionary<string, EuAcquisitionTestFixture.FamilyScript>(StringComparer.Ordinal)
@@ -1600,7 +1610,8 @@ public sealed class EuQueryExecutionAdapterTests
             .ToArray();
         // D1-05d adds family M's own six delivered rows (see the sibling full-run test).
         // Families A and L each add one typed absence row, as above.
-        CollectionAssert.AreEqual(new long[] { 1, 1, 1, 1, 2, 6, 39 }, byRows);
+        // #418 slice 6: the one expression carries its language row beside its work row, two X rows.
+        CollectionAssert.AreEqual(new long[] { 1, 1, 1, 2, 2, 6, 39 }, byRows);
         Assert.AreEqual(3, result.ObservedObjectCount, "root + the 2 states this fixture itself delivered.");
         Assert.IsNotNull(result.RootBinding);
         CollectionAssert.AreEqual(new[] { rootIri }, result.RootBinding!.DiscoveredRoots.ToArray());
@@ -1689,7 +1700,7 @@ public sealed class EuQueryExecutionAdapterTests
         Assert.AreEqual(39, pRows.Length, "13 predicate outcomes for each of 3 objects (root + 2 states).");
 
         const string expressionIri = "http://publications.europa.eu/resource/cellar/00000000-0000-0000-0000-000000000003.0001.01/DOC_1";
-        var xRows = new[] { EuAcquisitionTestFixture.ExpressionFactRow(rootIri, expressionIri) };
+        var xRows = EuAcquisitionTestFixture.EnglishExpressionFactRows(rootIri, expressionIri).ToArray();
         var wRows = new[] { EuAcquisitionTestFixture.RootWatermarkRow(rootIri, watermarkLexical) };
 
         var scripts = new Dictionary<string, EuAcquisitionTestFixture.FamilyScript>(StringComparer.Ordinal)
@@ -1776,7 +1787,8 @@ public sealed class EuQueryExecutionAdapterTests
             .ToArray();
         // D1-05d adds family M's own six delivered rows (see the sibling full-run test).
         // Families A and L each add one typed absence row, as above.
-        CollectionAssert.AreEqual(new long[] { 1, 1, 1, 1, 2, 6, 39 }, byRows);
+        // #418 slice 6: the one expression carries its language row beside its work row, two X rows.
+        CollectionAssert.AreEqual(new long[] { 1, 1, 1, 2, 2, 6, 39 }, byRows);
         Assert.AreEqual(3, result.ObservedObjectCount, "root + the 2 states this fixture itself delivered.");
         Assert.IsNotNull(result.RootBinding);
         CollectionAssert.AreEqual(new[] { rootIri }, result.RootBinding!.DiscoveredRoots.ToArray());
@@ -1869,7 +1881,7 @@ public sealed class EuQueryExecutionAdapterTests
                 EuAcquisitionTestFixture.RegulationResourceType))
             .ToArray();
 
-        var xRows = new[] { EuAcquisitionTestFixture.ExpressionFactRow(rootIri, expressionIri) };
+        var xRows = EuAcquisitionTestFixture.EnglishExpressionFactRows(rootIri, expressionIri).ToArray();
         var wRows = new[] { EuAcquisitionTestFixture.RootWatermarkRow(rootIri, watermarkLexical) };
 
         var scripts = new Dictionary<string, EuAcquisitionTestFixture.FamilyScript>(StringComparer.Ordinal)
@@ -1984,7 +1996,7 @@ public sealed class EuQueryExecutionAdapterTests
             .ToArray();
         var pRows = EuAcquisitionTestFixture.SortedObjectFactRows(rootIri, pOutcomes);
 
-        var xRows = new[] { EuAcquisitionTestFixture.ExpressionFactRow(rootIri, expressionIri) };
+        var xRows = EuAcquisitionTestFixture.EnglishExpressionFactRows(rootIri, expressionIri).ToArray();
 
         // The W batch this run requests must name a real Appendix A root (EuObjectFactsDiscoveryPlan's
         // own root-watermark binder requires every batch member to be one of the 82 seeds), but this
@@ -2242,7 +2254,7 @@ public sealed class EuQueryExecutionAdapterTests
             .Concat(EuAcquisitionTestFixture.RelationPredicates.Select(predicate => (predicate, (string?)null)))
             .ToArray();
         var pRows = EuAcquisitionTestFixture.SortedObjectFactRows(rootIri, pOutcomes);
-        var xRows = new[] { EuAcquisitionTestFixture.ExpressionFactRow(rootIri, expressionIri) };
+        var xRows = EuAcquisitionTestFixture.EnglishExpressionFactRows(rootIri, expressionIri).ToArray();
         var wRows = new[] { EuAcquisitionTestFixture.RootWatermarkRow(rootIri, watermarkLexical) };
 
         var scripts = new Dictionary<string, EuAcquisitionTestFixture.FamilyScript>(StringComparer.Ordinal)
@@ -2353,7 +2365,7 @@ public sealed class EuQueryExecutionAdapterTests
             .Concat(EuAcquisitionTestFixture.RelationPredicates.Select(predicate => (predicate, (string?)null)))
             .ToArray();
         var pRows = EuAcquisitionTestFixture.SortedObjectFactRows(rootIri, pOutcomes);
-        var xRows = new[] { EuAcquisitionTestFixture.ExpressionFactRow(rootIri, expressionIri) };
+        var xRows = EuAcquisitionTestFixture.EnglishExpressionFactRows(rootIri, expressionIri).ToArray();
         var wRows = new[] { EuAcquisitionTestFixture.RootWatermarkRow(rootIri, watermarkLexical) };
 
         var scripts = new Dictionary<string, EuAcquisitionTestFixture.FamilyScript>(StringComparer.Ordinal)
@@ -2464,7 +2476,7 @@ public sealed class EuQueryExecutionAdapterTests
             .Concat(EuAcquisitionTestFixture.RelationPredicates.Select(predicate => (predicate, (string?)null)))
             .ToArray();
         var pRows = EuAcquisitionTestFixture.SortedObjectFactRows(rootIri, pOutcomes);
-        var xRows = new[] { EuAcquisitionTestFixture.ExpressionFactRow(rootIri, expressionIri) };
+        var xRows = EuAcquisitionTestFixture.EnglishExpressionFactRows(rootIri, expressionIri).ToArray();
         // Defect 6's own driving row: value_kind "unbound", not "literal" -- the real page template's
         // own FILTER NOT EXISTS shape for a root that carries no cmr:lastModificationDate at all.
         var wRows = new[] { EuAcquisitionTestFixture.RootWatermarkUnboundRow(rootIri) };
@@ -3528,12 +3540,9 @@ public sealed class EuQueryExecutionAdapterTests
         // limit bound that many requests each and neither bounds the run.
         var runWireBudget = EuAcquisitionTestFixture.TestWireBudget();
 
-        var xRows = new[]
-        {
-            EuAcquisitionTestFixture.ExpressionFactRow(
-                rootIri,
-                "http://publications.europa.eu/resource/cellar/00000000-0000-0000-0000-000000000004.0001.01/DOC_1"),
-        };
+        var xRows = EuAcquisitionTestFixture.EnglishExpressionFactRows(
+            rootIri,
+            "http://publications.europa.eu/resource/cellar/00000000-0000-0000-0000-000000000004.0001.01/DOC_1").ToArray();
         var wRows = new[]
         {
             EuAcquisitionTestFixture.RootWatermarkRow(rootIri, "2026-01-01T00:00:00.0000000+01:00"),

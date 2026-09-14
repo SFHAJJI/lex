@@ -183,7 +183,7 @@ internal static class EuAcquisitionTestFixture
         "{\"head\":{\"link\":[],\"vars\":" + System.Text.Json.JsonSerializer.Serialize(projection) + "}," +
         "\"results\":{\"distinct\":false,\"ordered\":true,\"bindings\":[]}}";
 
-    private static string RowsJson(IReadOnlyList<string> projection, IReadOnlyList<string> rows) =>
+    internal static string RowsJson(IReadOnlyList<string> projection, IReadOnlyList<string> rows) =>
         "{\"head\":{\"link\":[],\"vars\":" + System.Text.Json.JsonSerializer.Serialize(projection) + "}," +
         "\"results\":{\"distinct\":false,\"ordered\":true,\"bindings\":[" + string.Join(',', rows) + "]}}";
 
@@ -880,9 +880,35 @@ internal static class EuAcquisitionTestFixture
 
         private readonly Dictionary<string, int> _occurrence = new(StringComparer.Ordinal);
         private readonly List<string> _documentFetchAcceptTokens = [];
+        private readonly List<string> _familySequence = [];
         private int _sendCount;
 
         internal int SendCount => Volatile.Read(ref _sendCount);
+
+        /// <summary>
+        /// #418 slice 6: the family of every request this handler served, in the order it served
+        /// them - "Robots" for either robots file, "Fetch" for a document-fetch GET, and the
+        /// classified family tag for every SPARQL POST - so a test can pin the exact wire order of
+        /// a run rather than only its per-family counts.
+        /// </summary>
+        internal IReadOnlyList<string> FamilySequence
+        {
+            get
+            {
+                lock (_familySequence)
+                {
+                    return _familySequence.ToArray();
+                }
+            }
+        }
+
+        private void Record(string family)
+        {
+            lock (_familySequence)
+            {
+                _familySequence.Add(family);
+            }
+        }
 
         /// <summary>
         /// D1-05d: the exact Accept token of every document-fetch GET this handler answered, in the
@@ -931,11 +957,13 @@ internal static class EuAcquisitionTestFixture
             Interlocked.Increment(ref _sendCount);
             if (request.RequestUri!.Host == "publications.europa.eu" && request.RequestUri.AbsolutePath == "/robots.txt")
             {
+                Record("Robots");
                 return TextResponse(request, HttpStatusCode.MovedPermanently, "moved", "https://op.europa.eu/robots.txt");
             }
 
             if (request.RequestUri.Host == "op.europa.eu" && request.RequestUri.AbsolutePath == "/robots.txt")
             {
+                Record("Robots");
                 return TextResponse(request, HttpStatusCode.OK, "User-agent: *\nAllow: /\n");
             }
 
@@ -949,6 +977,7 @@ internal static class EuAcquisitionTestFixture
             // documentFetchResponse.
             if (request.Method == HttpMethod.Get)
             {
+                Record("Fetch");
                 lock (_documentFetchAcceptTokens)
                 {
                     _documentFetchAcceptTokens.Add(request.Headers.Accept.ToString());
@@ -959,6 +988,7 @@ internal static class EuAcquisitionTestFixture
 
             var body = await request.Content!.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
             var family = ClassifyFamily(body);
+            Record(family);
             lock (_occurrence)
             {
                 var index = _occurrence.TryGetValue(family, out var value) ? value : 0;

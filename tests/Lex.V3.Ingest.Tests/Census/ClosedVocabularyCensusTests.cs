@@ -79,6 +79,8 @@ public sealed class ClosedVocabularyCensusTests
                     + "ProfileDigestMismatch, ProfileInvalid, ProfileDoesNotNameAnnex, "
                     + "ProfileDoesNotNameTransport, RetainedBytesUnavailable, PdfUnreadable, "
                     + "ProfilePageOutsideDocument, AnnexContainsText, AnnexContainsNoImage",
+                "Lex.V3.Ingest.Europe.EuLanguageScopedExpressionProducer+PairingPhase: "
+                    + "ObjectFactsPending, ExpressionFactsPending, Spent",
                 "Lex.V3.Ingest.Europe.EuLanguageScopedExpressionProductionRefusal: None, "
                     + "ExpressionFactsRequestIsNotTheExpressionFamily, "
                     + "ObjectFactsRequestIsNotTheObjectFamily, ExpressionFactsEnumerationRefused, "
@@ -119,7 +121,8 @@ public sealed class ClosedVocabularyCensusTests
                     + "AcquisitionOutcomeNotRepresentable, RecordSetNotRetained, "
                     + "ReifiedAxiomDecodeRefused, LocatedAmendmentDecodeRefused, "
                     + "LocatedAmendmentCorpusScopeUnproven, "
-                    + "CensusRequestCarriesADifferentWireBudget, DocumentFetchWireBudgetExhausted",
+                    + "CensusRequestCarriesADifferentWireBudget, DocumentFetchWireBudgetExhausted, "
+                    + "CorrigendumTripwireProductionRefused, CorrigendumTripwireBatchesNotPaired",
                 "Lex.V3.Ingest.Europe.EuTranspositionBridgePopulationRefusal: None, WorkScopeEmpty, "
                     + "WorkScopeNotUnique, WorkScopeNotAdmitted, SourceNotDelivered, "
                     + "SourceWorkOutsideScope, BridgeRefused, JoinEvidenceNotHeld, "
