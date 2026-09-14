@@ -201,8 +201,10 @@ public sealed class EuCorrigendumTripwireTests
         rows.AddRange(Expression(CorrigendumOne, "R01.DEU", German));
         var objectRows = new[] { Corrects(CorrigendumOne, Gdpr), Date(CorrigendumOne, GdprCorrigendumDate) };
 
-        var first = Fold(Bound(rows, runIdentitySeed: 930), BoundObjectFacts(objectRows, runIdentitySeed: 930));
-        var second = Fold(Bound(rows, runIdentitySeed: 931), BoundObjectFacts(objectRows, runIdentitySeed: 931));
+        // Each family runs in its own acquisition session, as in production, so the two families'
+        // run identities differ within one fold as well as between the two folds.
+        var first = Fold(Bound(rows, runIdentitySeed: 930), BoundObjectFacts(objectRows, runIdentitySeed: 931));
+        var second = Fold(Bound(rows, runIdentitySeed: 932), BoundObjectFacts(objectRows, runIdentitySeed: 933));
 
         // The premise: the two really are different executions.
         Assert.AreNotEqual(
@@ -500,10 +502,20 @@ public sealed class EuCorrigendumTripwireTests
         var forbidden = new[]
         {
             typeof(EuLanguageScopedExpressionDerivation),
+            typeof(LanguageScopedExpressionSet),
+            typeof(LanguageScopedExpression),
             typeof(EuCellarObjectSnapshot),
             typeof(EuRelationFamilyObservation),
             typeof(EuRelationEdgeObservation),
             typeof(RepeatedEnumerationRow),
+            typeof(RepeatedEnumerationResolvedEvidence),
+        };
+        // The fold's own two internal steps take an expression the derivation minted in the same
+        // call; they are reachable only from TryDerive and are the allow-list, by exact name.
+        var sanctioned = new HashSet<string>(StringComparer.Ordinal)
+        {
+            typeof(EuCorrigendumTripwireLine).FullName + "::Create",
+            typeof(EuCorrigendumTripwire).FullName + "::Create",
         };
         var types = new[]
         {
@@ -515,15 +527,38 @@ public sealed class EuCorrigendumTripwireTests
         };
         foreach (var type in types)
         {
+            const BindingFlags Everything =
+                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly;
             Assert.IsEmpty(
                 type.GetConstructors(BindingFlags.Public | BindingFlags.Instance),
                 $"{type.Name} must have no public constructor.");
-            foreach (var method in type.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly))
+            Assert.IsEmpty(
+                type.GetFields(Everything).Where(static field => !field.IsPrivate),
+                $"{type.Name} must expose no field beyond private state: a field is a door too.");
+            // Private members are the fold's own plumbing, reachable from nothing outside the type;
+            // every other visibility is a door and is scanned, internal included.
+            foreach (var constructor in type.GetConstructors(Everything).Where(static constructor => !constructor.IsPrivate))
             {
+                foreach (var parameter in constructor.GetParameters())
+                {
+                    Assert.IsFalse(
+                        forbidden.Any(candidate => Mentions(Unwrap(parameter.ParameterType), candidate)),
+                        $"{type.Name}'s constructor accepts {parameter.ParameterType.Name}.");
+                }
+            }
+
+            foreach (var method in type.GetMethods(Everything).Where(static method => !method.IsPrivate))
+            {
+                if (sanctioned.Contains(type.FullName + "::" + method.Name))
+                {
+                    Assert.IsTrue(method.IsAssembly, $"{type.Name}.{method.Name} is the fold's own step and stays internal.");
+                    continue;
+                }
+
                 foreach (var parameter in method.GetParameters())
                 {
                     Assert.IsFalse(
-                        forbidden.Any(candidate => Mentions(parameter.ParameterType, candidate)),
+                        forbidden.Any(candidate => Mentions(Unwrap(parameter.ParameterType), candidate)),
                         $"{type.Name}.{method.Name} accepts {parameter.ParameterType.Name}.");
                 }
             }
@@ -535,6 +570,10 @@ public sealed class EuCorrigendumTripwireTests
             door.GetParameters().Where(static parameter => !parameter.IsOut).Select(static parameter => parameter.ParameterType).ToArray(),
             "the only door takes the two proof-bound deliveries and nothing else.");
     }
+
+    /// <summary>A ref or out parameter is a ByRef type; the lens noted an unwrapped guard would wave it through.</summary>
+    private static Type Unwrap(Type parameterType) =>
+        parameterType.IsByRef ? parameterType.GetElementType()! : parameterType;
 
     private static bool Mentions(Type parameterType, Type candidate) =>
         candidate.IsAssignableFrom(parameterType) ||
@@ -631,6 +670,78 @@ public sealed class EuCorrigendumTripwireTests
         Assert.IsNull(set);
         Assert.AreEqual(EuCorrigendumTripwireRefusal.PageReceiptDoesNotBindItsBytes, refusal);
         Assert.AreEqual(new string('f', 64), offendingIri);
+    }
+
+    /// <summary>
+    /// Bytes that are perfectly well-formed for DIFFERENT rows, standing in for the page the proof
+    /// was minted over, do not reopen: the decoder's own substitution case, reached through this
+    /// door's own refusal.
+    /// </summary>
+    [TestMethod]
+    public void APageCarryingOtherRowsThanTheProofWasMintedOverRefuses()
+    {
+        var honest = BoundObjectFacts([Corrects(CorrigendumOne, Gdpr)]);
+        var substituted = honest with
+        {
+            PagesInOrder = [honest.PagesInOrder[0] with
+            {
+                RetainedPayloadBytes = Encoding.UTF8.GetBytes(RowsJson(PProjection, [Corrects(CorrigendumTwo, Gdpr)], 0)),
+            }],
+        };
+
+        var set = EuCorrigendumTripwireSet.TryDerive(
+            Bound(Expression(CorrigendumOne, "R01.DEU", German)), substituted, out var refusal, out var detail, out _);
+
+        Assert.IsNull(set);
+        Assert.AreEqual(EuCorrigendumTripwireRefusal.ObjectFactsRowsRefused, refusal);
+        Assert.IsFalse(string.IsNullOrWhiteSpace(detail), "the reopen door's own reason travels.");
+    }
+
+    /// <summary>
+    /// A page whose bytes and receipt agree with EACH OTHER but not with the route that transported
+    /// them refuses. The lens's finding: a two-way check admits a genuine plan, request and route
+    /// paired with re-serialized bytes and a receipt minted for them; the terminal hop's digests are
+    /// the third party that refuses the pairing.
+    /// </summary>
+    [TestMethod]
+    public void ASelfConsistentSubstitutedPageRefuses()
+    {
+        var honest = BoundObjectFacts([Corrects(CorrigendumOne, Gdpr)]);
+        var page = honest.PagesInOrder[0];
+        var substitutedBytes = Encoding.UTF8.GetBytes(Encoding.UTF8.GetString(page.RetainedPayloadBytes.Span) + " ");
+        var substituted = honest with
+        {
+            PagesInOrder = [page with
+            {
+                RetainedPayloadBytes = substitutedBytes,
+                DurableWriteReceipt = ReceiptNaming(substitutedBytes),
+            }],
+        };
+        Assert.AreEqual(
+            Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(substitutedBytes)),
+            substituted.PagesInOrder[0].DurableWriteReceipt.Reference.ContentSha256,
+            "the premise: the substituted pair is self-consistent.");
+
+        var set = EuCorrigendumTripwireSet.TryDerive(
+            Bound(Expression(CorrigendumOne, "R01.DEU", German)), substituted, out var refusal, out _, out var offendingIri);
+
+        Assert.IsNull(set);
+        Assert.AreEqual(EuCorrigendumTripwireRefusal.PageReceiptDoesNotBindItsBytes, refusal);
+        Assert.AreEqual(substituted.PagesInOrder[0].DurableWriteReceipt.Reference.ContentSha256, offendingIri);
+    }
+
+    /// <summary>A row whose value is bound while its value_kind says unbound disagrees with itself.</summary>
+    [TestMethod]
+    public void ACorrectsRowWhoseValueKindDisagreesWithItsValueRefusesNamingTheWork()
+    {
+        var set = EuCorrigendumTripwireSet.TryDerive(
+            Bound(Expression(CorrigendumOne, "R01.DEU", German)),
+            BoundObjectFacts([PIriRowClaimingUnbound(CorrigendumOne, CorrectsIri, Gdpr)]),
+            out var refusal, out _, out var offendingIri);
+
+        Assert.IsNull(set);
+        Assert.AreEqual(EuCorrigendumTripwireRefusal.CorrectsRowTermKindMismatch, refusal);
+        Assert.AreEqual(CorrigendumOne, offendingIri);
     }
 
     [TestMethod]
@@ -800,6 +911,14 @@ public sealed class EuCorrigendumTripwireTests
             ("value", Uri(valueIri)),
             ("value_kind", Literal("iri", null)));
 
+    /// <summary>A bound IRI value under a value_kind that claims it is unbound: a row disagreeing with itself.</summary>
+    private static string PIriRowClaimingUnbound(string objectIri, string predicateIri, string valueIri) =>
+        Binding(
+            ("object", Uri(objectIri)),
+            ("predicate", Uri(predicateIri)),
+            ("value", Uri(valueIri)),
+            ("value_kind", Literal("unbound", null)));
+
     /// <summary>An asked-and-unanswered object-facts row: the value variable is simply absent.</summary>
     private static string PUnboundRow(string objectIri, string predicateIri) =>
         Binding(
@@ -836,10 +955,16 @@ public sealed class EuCorrigendumTripwireTests
     /// A structurally valid write receipt naming bytes that do not exist, exactly as the decoder's
     /// tests forge one. Nothing in the custody contracts ties a receipt to an actual write.
     /// </summary>
-    private static DurableBlobWriteReceipt ForgedReceipt()
+    private static DurableBlobWriteReceipt ForgedReceipt() => ReceiptFor(new string('f', 64), 4);
+
+    /// <summary>A structurally valid receipt that really does name these bytes - and nothing else.</summary>
+    private static DurableBlobWriteReceipt ReceiptNaming(byte[] bytes) =>
+        ReceiptFor(Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(bytes)), bytes.Length);
+
+    private static DurableBlobWriteReceipt ReceiptFor(string contentSha256, long byteLength)
     {
         var reference = new DurableBlobRef(
-            CustodySchemaIds.DurableBlobRef, new string('f', 64), 4, CustodyClass.NightlyFloor90d);
+            CustodySchemaIds.DurableBlobRef, contentSha256, byteLength, CustodyClass.NightlyFloor90d);
         return new DurableBlobWriteReceipt(
             CustodySchemaIds.DurableBlobWriteReceipt,
             reference,

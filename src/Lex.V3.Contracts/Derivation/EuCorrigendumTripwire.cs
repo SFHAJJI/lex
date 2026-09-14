@@ -231,7 +231,7 @@ public sealed class EuCorrigendumTripwireLine
             expression.PublisherCorrigendumDate,
             expression.CanonicalContentSha256,
             expression.Lineage.Entries.Select(static entry => entry.ContentSha256).ToList().AsReadOnly(),
-            EuCorrigendumTripwireSet.OrdinalDistinct(correctsPageContentSha256));
+            EuCorrigendumTripwireSet.OrdinalSorted(correctsPageContentSha256));
     }
 }
 
@@ -697,7 +697,7 @@ public sealed class EuCorrigendumTripwireSet
                         undecodedByCorrected.Add(corrected, undecoded);
                     }
 
-                    undecoded.Add(new EuCorrigendumWithoutDerivedExpressions(corrigendum, OrdinalDistinct(pageDigests)));
+                    undecoded.Add(new EuCorrigendumWithoutDerivedExpressions(corrigendum, OrdinalSorted(pageDigests)));
                     continue;
                 }
 
@@ -781,9 +781,14 @@ public sealed class EuCorrigendumTripwireSet
         return iris.AsReadOnly();
     }
 
-    internal static ReadOnlyCollection<string> OrdinalDistinct(IEnumerable<string> digests) =>
+    /// <summary>
+    /// Ordinal, and nothing else: the page ordinals behind these digests are already a set, and two
+    /// pages of one proven delivery cannot carry identical bytes because their rows' canonical keys
+    /// are unique across the delivery. A de-duplication here was written, found unreachable by the
+    /// lens, and removed rather than kept as a check no test could establish.
+    /// </summary>
+    internal static ReadOnlyCollection<string> OrdinalSorted(IEnumerable<string> digests) =>
         digests
-            .Distinct(StringComparer.Ordinal)
             .OrderBy(static digest => digest, StringComparer.Ordinal)
             .ToList()
             .AsReadOnly();
