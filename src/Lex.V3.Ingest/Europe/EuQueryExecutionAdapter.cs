@@ -345,6 +345,16 @@ public enum EuQueryExecutionRefusal
 
     [JsonStringEnumMemberName("located_amendment_corpus_scope_unproven")]
     LocatedAmendmentCorpusScopeUnproven = 22,
+
+    /// <summary>
+    /// #418 slice 6: the corrigendum tripwire production over a proven object-facts and
+    /// Expression-facts batch pair refused after both of its runs proved - the expression
+    /// derivation, the tripwire fold, or a hold. Carries the producer's code and detail and the
+    /// batch's family key. A refusal of the P or X run itself is not this: it stays a refused
+    /// family outcome and <see cref="ObjectFactsFamilyNotProven"/>, exactly as before the join.
+    /// </summary>
+    [JsonStringEnumMemberName("corrigendum_tripwire_production_refused")]
+    CorrigendumTripwireProductionRefused = 25,
 }
 
 public sealed class EuQueryExecutionRefusalDetail
@@ -450,6 +460,70 @@ public sealed record EuObservedExpressionSplit(int OfRootWork, int OfConsolidate
 /// <param name="SelectedByBodyAxis">Whether this run's manifest selected the row for a body.</param>
 public sealed record EuMintedRowAccounting(string CanonicalKey, bool SelectedByBodyAxis);
 
+/// <summary>
+/// #418 slice 6: one run's corrigendum tripwire productions, complete by construction. Minted from
+/// the run's own frozen batch pairing (the expected keys, computed from the paired Expression-facts
+/// batches before any traffic) and from the productions its loop recorded (the values): the keys
+/// must be exactly the paired batches' family keys - none missing, none extra - and every
+/// production delivered. The delivery door takes this object, never a dictionary a caller promises
+/// is complete, so a later consumer cannot mistake an omitted pair for complete production.
+/// </summary>
+public sealed class EuCorrigendumTripwireCompletion
+{
+    internal EuCorrigendumTripwireCompletion(
+        IReadOnlySet<string> expectedFamilyKeys,
+        IReadOnlyDictionary<string, EuCorrigendumTripwireProductionResult> productionsByFamilyKey)
+    {
+        ArgumentNullException.ThrowIfNull(expectedFamilyKeys);
+        ArgumentNullException.ThrowIfNull(productionsByFamilyKey);
+        var missing = expectedFamilyKeys
+            .Where(key => !productionsByFamilyKey.ContainsKey(key))
+            .OrderBy(static key => key, StringComparer.Ordinal)
+            .ToArray();
+        if (missing.Length > 0)
+        {
+            throw new ArgumentException(
+                $"{missing.Length} paired Expression-facts batch(es) have no production, the first being '{missing[0]}'.",
+                nameof(productionsByFamilyKey));
+        }
+
+        var extra = productionsByFamilyKey.Keys
+            .Where(key => !expectedFamilyKeys.Contains(key))
+            .OrderBy(static key => key, StringComparer.Ordinal)
+            .ToArray();
+        if (extra.Length > 0)
+        {
+            throw new ArgumentException(
+                $"{extra.Length} production(s) belong to no paired batch of this run, the first being '{extra[0]}'.",
+                nameof(productionsByFamilyKey));
+        }
+
+        var refused = productionsByFamilyKey
+            .Where(static pair => !pair.Value.Delivered)
+            .Select(static pair => pair.Key)
+            .OrderBy(static key => key, StringComparer.Ordinal)
+            .ToArray();
+        if (refused.Length > 0)
+        {
+            throw new ArgumentException(
+                $"{refused.Length} production(s) refused, the first being '{refused[0]}': "
+                + $"{productionsByFamilyKey[refused[0]].Refusal}.",
+                nameof(productionsByFamilyKey));
+        }
+
+        ProductionsByFamilyKey = productionsByFamilyKey.ToDictionary(
+            static pair => pair.Key, static pair => pair.Value, StringComparer.Ordinal);
+    }
+
+    /// <summary>
+    /// Per paired batch, by the family key its object-facts and Expression-facts outcomes share
+    /// (the partition key is a function of the batch's objects, not of the family that asked), the
+    /// delivered production: the derivation with its retained derivation and episode receipts, and
+    /// the tripwire set with its retained canonical and lineage receipts.
+    /// </summary>
+    public IReadOnlyDictionary<string, EuCorrigendumTripwireProductionResult> ProductionsByFamilyKey { get; }
+}
+
 /// <summary>Delivered or refused, never both and never neither.</summary>
 public sealed class EuQueryExecutionResult
 {
@@ -473,6 +547,7 @@ public sealed class EuQueryExecutionResult
         IReadOnlyList<EuDateAxiomBinding> dateAxioms,
         IReadOnlyList<EuLocatedAmendmentAxiomObservation> locatedAmendmentObservations,
         EuLocatedAmendmentProduction? locatedAmendmentProduction,
+        EuCorrigendumTripwireCompletion? corrigendumTripwires,
         SourceArtifactRef? corpusRecordSetRef,
         VerifiedCorpusRecordSet? corpusRecordSet,
         EuQueryExecutionCompletion? completion,
@@ -502,6 +577,7 @@ public sealed class EuQueryExecutionResult
         DateAxioms = dateAxioms;
         LocatedAmendmentObservations = locatedAmendmentObservations;
         LocatedAmendmentProduction = locatedAmendmentProduction;
+        CorrigendumTripwires = corrigendumTripwires;
         CorpusRecordSetRef = corpusRecordSetRef;
         CorpusRecordSet = corpusRecordSet;
         Completion = completion;
@@ -530,7 +606,8 @@ public sealed class EuQueryExecutionResult
         IReadOnlyDictionary<int, EuMintedRowAccounting> mintedRowsByOrdinal,
         IReadOnlyList<EuDateAxiomBinding> dateAxioms,
         SourceArtifactRef corpusRecordSetRef,
-        VerifiedCorpusRecordSet corpusRecordSet)
+        VerifiedCorpusRecordSet corpusRecordSet,
+        EuCorrigendumTripwireCompletion corrigendumTripwires)
     {
         ArgumentNullException.ThrowIfNull(topology);
         ArgumentNullException.ThrowIfNull(watermarkWitnessPlan);
@@ -547,6 +624,7 @@ public sealed class EuQueryExecutionResult
         ArgumentNullException.ThrowIfNull(dateAxioms);
         ArgumentNullException.ThrowIfNull(corpusRecordSetRef);
         ArgumentNullException.ThrowIfNull(corpusRecordSet);
+        ArgumentNullException.ThrowIfNull(corrigendumTripwires);
         var completion = familyOutcomes.All(static outcome => outcome.Kind == EuFamilyEnumerationOutcomeKind.Proven)
             ? EuQueryExecutionCompletion.AllFamiliesProven
             : EuQueryExecutionCompletion.PartialFamilyRefused;
@@ -555,7 +633,7 @@ public sealed class EuQueryExecutionResult
             watermarkWitnessPlan, rootBinding, witnessReconciliation, witnessTerminations, scopeManifestReceipt,
             scopeManifestCanonicalSha256, documentAcquisitionOutcomesByOrdinal, documentLadderResultsByOrdinal,
             observedManifestationTypesByCelex, observedExpressionsByCelex, mintedRowsByOrdinal,
-            dateAxioms, [], null, corpusRecordSetRef, corpusRecordSet,
+            dateAxioms, [], null, corrigendumTripwires, corpusRecordSetRef, corpusRecordSet,
             completion, null, null, null, null);
     }
 
@@ -582,7 +660,8 @@ public sealed class EuQueryExecutionResult
         IReadOnlyDictionary<int, EuMintedRowAccounting> mintedRowsByOrdinal,
         IReadOnlyList<EuDateAxiomBinding> dateAxioms,
         IReadOnlyList<EuLocatedAmendmentAxiomObservation> locatedAmendmentObservations,
-        CorpusRecordSetWriteResult recordSetResult)
+        CorpusRecordSetWriteResult recordSetResult,
+        EuCorrigendumTripwireCompletion corrigendumTripwires)
     {
         ArgumentNullException.ThrowIfNull(topology);
         ArgumentNullException.ThrowIfNull(watermarkWitnessPlan);
@@ -599,6 +678,7 @@ public sealed class EuQueryExecutionResult
         ArgumentNullException.ThrowIfNull(dateAxioms);
         ArgumentNullException.ThrowIfNull(locatedAmendmentObservations);
         ArgumentNullException.ThrowIfNull(recordSetResult);
+        ArgumentNullException.ThrowIfNull(corrigendumTripwires);
         if (!EuLocatedAmendmentProducer.TryGetCompleteCorpus(recordSetResult, out var corpusRecordSet))
         {
             throw new ArgumentException(
@@ -615,7 +695,7 @@ public sealed class EuQueryExecutionResult
             watermarkWitnessPlan, rootBinding, witnessReconciliation, witnessTerminations, scopeManifestReceipt,
             scopeManifestCanonicalSha256, documentAcquisitionOutcomesByOrdinal, documentLadderResultsByOrdinal,
             observedManifestationTypesByCelex, observedExpressionsByCelex, mintedRowsByOrdinal,
-            dateAxioms, locatedAmendmentObservations, locatedAmendmentProduction,
+            dateAxioms, locatedAmendmentObservations, locatedAmendmentProduction, corrigendumTripwires,
             recordSetResult.SetRef!, corpusRecordSet,
             completion, null, null, null, null);
     }
@@ -633,7 +713,7 @@ public sealed class EuQueryExecutionResult
         ArgumentNullException.ThrowIfNull(refusal);
         return new(
             topology, familyOutcomes, 0, 0, [], null, null, null, null, null, null, null, null, null, null, null,
-            [], [], null, null, null, null, refusal, decodeRefusal, decodeOffendingIri, decodeSnapshotRefusal,
+            [], [], null, null, null, null, null, refusal, decodeRefusal, decodeOffendingIri, decodeSnapshotRefusal,
             witnessTraversalRefusal);
     }
 
@@ -662,6 +742,13 @@ public sealed class EuQueryExecutionResult
     /// target's body scope. Null only on a refused run.
     /// </summary>
     public EuLocatedAmendmentProduction? LocatedAmendmentProduction { get; }
+
+    /// <summary>
+    /// #418 slice 6: this run's corrigendum tripwire productions, one per paired object-facts and
+    /// Expression-facts batch and complete by construction (see
+    /// <see cref="EuCorrigendumTripwireCompletion"/>). Null only on a refused run.
+    /// </summary>
+    public EuCorrigendumTripwireCompletion? CorrigendumTripwires { get; }
 
     public SourceProfileTopology Topology { get; }
 
@@ -1097,11 +1184,52 @@ public sealed class EuQueryExecutionAdapter
         var objectFactsByKey = new Dictionary<
             (EuObjectFactsQuerySet Set, string FamilyKey),
             (AbsenceFamilyEnumerationProof Proof, RepeatedEnumerationDeliveryReceipt Receipt)>();
-        foreach (var request in objectFactsRequests)
+        // #418 slice 6: THE X AND P RUNS ARE THE TRIPWIRE PRODUCER'S, IN THIS LOOP'S OWN ORDER. Each
+        // Expression-facts batch is paired with the object-facts batch over the identical object
+        // list; one producer pairing per pair makes the P run when this loop reaches that batch and
+        // the X run when it reaches that one, then derives, folds and retains over its own two runs.
+        // Every run result comes back and is recorded here exactly as the executor's own runs are,
+        // at its batch's position in the factory's order, so the wire order, the family outcomes,
+        // the decode, the record set and every existing refusal see what they saw before the join.
+        // Nothing is sent twice, and no delivery, receipt or run result crosses from this adapter
+        // into a producer. The expected keys are fixed from the frozen pairing before any traffic.
+        var (batchPairs, _) = PairExpressionAndObjectBatches(objectFactsRequests);
+        var tripwireProducer = new EuCorrigendumTripwireProducer(
+            new EuLanguageScopedExpressionProducer(_executor, _custodyStore), _custodyStore);
+        var pairingsByIndex = new Dictionary<int, EuCorrigendumTripwireProducer.Pairing>();
+        var expectedTripwireKeys = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var (expressionIndex, objectIndex) in batchPairs)
         {
-            var runResult = await _executor.RunObjectFactsPartitionAsync(
-                    request, objectFactsPolicy.SourceWitness, cancellationToken)
-                .ConfigureAwait(false);
+            var pairing = tripwireProducer.BeginPairing(
+                objectFactsRequests[expressionIndex], objectFactsRequests[objectIndex], objectFactsPolicy.SourceWitness);
+            pairingsByIndex[expressionIndex] = pairing;
+            pairingsByIndex[objectIndex] = pairing;
+            expectedTripwireKeys.Add(
+                EuObjectFactsDiscoveryPlan.PartitionKeyFor(objectFactsRequests[expressionIndex].BatchObjects));
+        }
+
+        var tripwireProductions = new Dictionary<string, EuCorrigendumTripwireProductionResult>(StringComparer.Ordinal);
+        for (var requestIndex = 0; requestIndex < objectFactsRequests.Count; requestIndex++)
+        {
+            var request = objectFactsRequests[requestIndex];
+            EuEnumerationRunResult runResult;
+            EuCorrigendumTripwireProductionResult? production = null;
+            if (!pairingsByIndex.TryGetValue(requestIndex, out var pairing))
+            {
+                runResult = await _executor.RunObjectFactsPartitionAsync(
+                        request, objectFactsPolicy.SourceWitness, cancellationToken)
+                    .ConfigureAwait(false);
+            }
+            else if (request.Set == EuObjectFactsQuerySet.ObjectFacts)
+            {
+                runResult = await pairing.RunObjectFactsAsync(cancellationToken).ConfigureAwait(false);
+            }
+            else
+            {
+                (production, runResult) = await pairing.RunExpressionFactsAndProduceAsync(cancellationToken)
+                    .ConfigureAwait(false);
+            }
+
             if (!TryRecordOutcome(runResult, out var familyKey, out var proof, out var receipt, outcomes))
             {
                 continue;
@@ -1110,6 +1238,11 @@ public sealed class EuQueryExecutionAdapter
             if (proof is not null && receipt is not null)
             {
                 objectFactsByKey[(request.Set, familyKey)] = (proof, receipt);
+            }
+
+            if (production is not null)
+            {
+                tripwireProductions[familyKey] = production;
             }
         }
 
@@ -1121,6 +1254,23 @@ public sealed class EuQueryExecutionAdapter
                     EuQueryExecutionRefusal.ObjectFactsFamilyNotProven,
                     "one or more requested object-facts family batches did not prove this run's enumeration."));
         }
+
+        // #418 slice 6: a production that refused after both of its runs proved is this run's
+        // refusal, by name. Checked after the family count so it can never shadow a family refusal.
+        foreach (var (familyKey, production) in tripwireProductions)
+        {
+            if (!production.Delivered)
+            {
+                return EuQueryExecutionResult.Refused(
+                    topology, outcomes,
+                    new EuQueryExecutionRefusalDetail(
+                        EuQueryExecutionRefusal.CorrigendumTripwireProductionRefused,
+                        $"the corrigendum tripwire production over batch '{familyKey}' refused: "
+                        + $"{production.Refusal}: {production.Detail}"));
+            }
+        }
+
+        var corrigendumTripwires = new EuCorrigendumTripwireCompletion(expectedTripwireKeys, tripwireProductions);
 
         var objectFactsRows = new Dictionary<EuObjectFactsQuerySet, List<(IReadOnlyList<RepeatedEnumerationRow> Rows, RepeatedEnumerationInterpretationProfile Profile, AbsenceFamilyEnumerationProof Proof)>>();
         foreach (var ((set, familyKey), (proof, receipt)) in objectFactsByKey)
@@ -1783,7 +1933,49 @@ public sealed class EuQueryExecutionAdapter
             documentLadderResultsByOrdinal: documentLadderResultsByOrdinal!,
             dateAxioms: dateAxioms,
             locatedAmendmentObservations: locatedAmendmentObservations,
-            recordSetResult: recordSetResult);
+            recordSetResult: recordSetResult,
+            corrigendumTripwires: corrigendumTripwires);
+    }
+
+    /// <summary>
+    /// #418 slice 6: pairs every Expression-facts batch with the object-facts batch over the
+    /// identical object list, by index into the factory's list, first unpaired match wins; every
+    /// other batch, and any batch left without a partner, stays a single and runs on its own. The
+    /// factory builds P and X over one ordered object list in one batch size, so the pairing is
+    /// total there; this stays a pure function so that property is checked rather than assumed.
+    /// </summary>
+    internal static (IReadOnlyList<(int ExpressionIndex, int ObjectIndex)> Pairs, IReadOnlyList<int> Singles)
+        PairExpressionAndObjectBatches(IReadOnlyList<EuObjectFactsPartitionRunRequest> requests)
+    {
+        ArgumentNullException.ThrowIfNull(requests);
+        var pairs = new List<(int ExpressionIndex, int ObjectIndex)>();
+        var paired = new HashSet<int>();
+        for (var expressionIndex = 0; expressionIndex < requests.Count; expressionIndex++)
+        {
+            if (requests[expressionIndex].Set != EuObjectFactsQuerySet.ExpressionFacts)
+            {
+                continue;
+            }
+
+            for (var objectIndex = 0; objectIndex < requests.Count; objectIndex++)
+            {
+                if (paired.Contains(objectIndex) ||
+                    requests[objectIndex].Set != EuObjectFactsQuerySet.ObjectFacts ||
+                    !requests[objectIndex].BatchObjects.SequenceEqual(
+                        requests[expressionIndex].BatchObjects, StringComparer.Ordinal))
+                {
+                    continue;
+                }
+
+                pairs.Add((expressionIndex, objectIndex));
+                paired.Add(expressionIndex);
+                paired.Add(objectIndex);
+                break;
+            }
+        }
+
+        var singles = Enumerable.Range(0, requests.Count).Where(index => !paired.Contains(index)).ToArray();
+        return (pairs, singles);
     }
 
     /// <summary>

@@ -162,6 +162,9 @@ public sealed class EuRefusalWireNameTests
                 // #579 review: a ceiling reached DURING document acquisition, which used to be
                 // reported as a session that never started.
                 "document_fetch_wire_budget_exhausted",
+                // #418 slice 6: a corrigendum tripwire production that refused after both of its
+                // batch's runs proved; a refused run stays object_facts_family_not_proven.
+                "corrigendum_tripwire_production_refused",
             }),
             string.Join("\n", WireNames<EuQueryExecutionRefusal>()),
             "a wire name changing is a contract change; a number changing is not.");

@@ -186,6 +186,20 @@ public sealed class EuCorrigendumTripwireProducer
         _expressions = new EuLanguageScopedExpressionProducer(custodyStore, timeProvider, testHandlerOverride);
     }
 
+    /// <summary>
+    /// #418 slice 6: over an expression producer an adapter built on its own executor, clock and
+    /// transport, so the production's X and P runs ARE that adapter's runs rather than a second
+    /// acquisition beside them. This producer still composes over the accepted expression producer
+    /// alone and never reaches the executor itself.
+    /// </summary>
+    internal EuCorrigendumTripwireProducer(EuLanguageScopedExpressionProducer expressions, ICustodyStore custodyStore)
+    {
+        ArgumentNullException.ThrowIfNull(expressions);
+        ArgumentNullException.ThrowIfNull(custodyStore);
+        _custodyStore = custodyStore;
+        _expressions = expressions;
+    }
+
     /// <summary>Runs one acquisition, folds the tripwire set, and holds it; or refuses by name.</summary>
     /// <param name="expressionFactsRequest">The family X request, as the expression producer takes it.</param>
     /// <param name="objectFactsRequest">The family P request. Required; a null refuses before traffic.</param>
@@ -210,9 +224,23 @@ public sealed class EuCorrigendumTripwireProducer
                 productRequestCount: 0);
         }
 
-        var (expressions, expressionFacts, objectFacts) = await _expressions
+        var expressionRun = await _expressions
             .RunWithDeliveriesAsync(expressionFactsRequest, objectFactsRequest, sourceWitness, cancellationToken)
             .ConfigureAwait(false);
+        return await FoldAndRetainAsync(expressionRun, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// The fold and its retention after the expression run, shared by the run above and the
+    /// object-first <see cref="Pairing"/>. It takes the expression run's own result triple, as one
+    /// value and exactly as that run handed it back: the two deliveries in it are outputs of that
+    /// run, never inputs from anywhere, and no member here accepts a delivery on its own.
+    /// </summary>
+    private async Task<EuCorrigendumTripwireProductionResult> FoldAndRetainAsync(
+        (EuLanguageScopedExpressionProductionResult Result, EuProofBoundDelivery? ExpressionFacts, EuProofBoundDelivery? ObjectFacts) expressionRun,
+        CancellationToken cancellationToken)
+    {
+        var (expressions, expressionFacts, objectFacts) = expressionRun;
         if (!expressions.Delivered)
         {
             return EuCorrigendumTripwireProductionResult.Refused(
@@ -222,9 +250,7 @@ public sealed class EuCorrigendumTripwireProducer
                 expressions.ProductRequestCount);
         }
 
-        // The two deliveries the inner run rebuilt from its own receipts, handed back by the same
-        // call that delivered - outputs of that run, never inputs from anywhere. Both are non-null
-        // on a delivered run with an object-facts request, which this one always has.
+        // Both are non-null on a delivered run with an object-facts request, which this one always has.
         var set = EuCorrigendumTripwireSet.TryDerive(
             expressionFacts!,
             objectFacts!,
@@ -266,5 +292,54 @@ public sealed class EuCorrigendumTripwireProducer
 
         return EuCorrigendumTripwireProductionResult.Success(
             expressions, set, tripwireReceipt, lineageReceipt, expressions.ProductRequestCount);
+    }
+
+    /// <summary>
+    /// #418 slice 6: one production whose two runs are made in the order an adapter walks its
+    /// batches (see <see cref="EuLanguageScopedExpressionProducer.Pairing"/>), with the fold and its
+    /// retention after the Expression run. The object-facts request is required here by type.
+    /// </summary>
+    internal Pairing BeginPairing(
+        EuObjectFactsPartitionRunRequest expressionFactsRequest,
+        EuObjectFactsPartitionRunRequest objectFactsRequest,
+        BoundMachineRequest sourceWitness) =>
+        new(this, expressionFactsRequest, objectFactsRequest, sourceWitness);
+
+    internal sealed class Pairing
+    {
+        private readonly EuCorrigendumTripwireProducer _producer;
+        private readonly EuLanguageScopedExpressionProducer.Pairing _expressions;
+
+        internal Pairing(
+            EuCorrigendumTripwireProducer producer,
+            EuObjectFactsPartitionRunRequest expressionFactsRequest,
+            EuObjectFactsPartitionRunRequest objectFactsRequest,
+            BoundMachineRequest sourceWitness)
+        {
+            ArgumentNullException.ThrowIfNull(producer);
+            _producer = producer;
+            _expressions = new EuLanguageScopedExpressionProducer.Pairing(
+                producer._expressions, expressionFactsRequest, objectFactsRequest, sourceWitness);
+        }
+
+        /// <summary>The object-facts run, made once, when the adapter reaches that batch.</summary>
+        internal Task<EuEnumerationRunResult> RunObjectFactsAsync(CancellationToken cancellationToken) =>
+            _expressions.RunObjectFactsAsync(cancellationToken);
+
+        /// <summary>
+        /// The Expression-facts run, then the derivation, the fold and their retention over this
+        /// pairing's own two runs; the Expression run result travels beside the production.
+        /// </summary>
+        internal async Task<(EuCorrigendumTripwireProductionResult Result, EuEnumerationRunResult ExpressionRun)>
+            RunExpressionFactsAndProduceAsync(CancellationToken cancellationToken)
+        {
+            var (expressions, expressionRun, expressionFacts, objectFacts) = await _expressions
+                .RunExpressionFactsAndDeriveAsync(cancellationToken)
+                .ConfigureAwait(false);
+            var production = await _producer
+                .FoldAndRetainAsync((expressions, expressionFacts, objectFacts), cancellationToken)
+                .ConfigureAwait(false);
+            return (production, expressionRun);
+        }
     }
 }

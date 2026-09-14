@@ -53,7 +53,7 @@ internal static class EuAxiomWiringHarness
             .Concat(EuAcquisitionTestFixture.RelationPredicates.Select(predicate => (predicate, (string?)null)))
             .ToArray();
         var pRows = EuAcquisitionTestFixture.SortedObjectFactRows(rootIri, pOutcomes);
-        var xRows = new[] { EuAcquisitionTestFixture.ExpressionFactRow(rootIri, ExpressionIri) };
+        var xRows = EuAcquisitionTestFixture.EnglishExpressionFactRows(rootIri, ExpressionIri).ToArray();
         var wRows = new[] { EuAcquisitionTestFixture.RootWatermarkRow(rootIri, WatermarkLexical) };
 
         var scripts = new Dictionary<string, EuAcquisitionTestFixture.FamilyScript>(StringComparer.Ordinal)
@@ -146,7 +146,7 @@ internal static class EuAxiomWiringHarness
         var pRows = roots.SelectMany(root =>
             EuAcquisitionTestFixture.SortedObjectFactRows(root, outcomes)).ToArray();
         var xRows = roots
-            .Select((root, index) => EuAcquisitionTestFixture.ExpressionFactRow(
+            .SelectMany((root, index) => EuAcquisitionTestFixture.EnglishExpressionFactRows(
                 root, $"{root}.000{index + 1}.01/DOC_1"))
             .ToArray();
         var wRows = roots

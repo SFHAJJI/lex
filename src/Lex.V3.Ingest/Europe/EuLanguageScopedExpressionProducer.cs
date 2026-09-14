@@ -274,6 +274,19 @@ public sealed class EuLanguageScopedExpressionProducer
     }
 
     /// <summary>
+    /// #418 slice 6: over an adapter's own executor, clock and transport, so a production's X and P
+    /// runs ARE that adapter's runs rather than a second acquisition beside them.
+    /// </summary>
+    internal EuLanguageScopedExpressionProducer(EuRepeatedEnumerationExecutor executor, ICustodyStore custodyStore)
+    {
+        ArgumentNullException.ThrowIfNull(executor);
+        ArgumentNullException.ThrowIfNull(custodyStore);
+        _custodyStore = custodyStore;
+        _executor = executor;
+        _reopenGlue = new RepeatedEnumerationDeliveryReopenGlue(custodyStore);
+    }
+
+    /// <summary>
     /// Runs family X, optionally family P, derives the expressions and retains them. The only public
     /// way to obtain a derivation.
     /// </summary>
@@ -322,22 +335,53 @@ public sealed class EuLanguageScopedExpressionProducer
         ArgumentNullException.ThrowIfNull(expressionFactsRequest);
         ArgumentNullException.ThrowIfNull(sourceWitness);
 
+        if (RefuseBeforeTraffic(expressionFactsRequest, objectFactsRequest) is { } refusedBeforeTraffic)
+        {
+            return (refusedBeforeTraffic, null, null);
+        }
+
+        // EXPRESSION FIRST, and an Expression refusal ends the run before the object family is asked.
+        var expressionRun = await _executor
+            .RunObjectFactsPartitionAsync(expressionFactsRequest, sourceWitness, cancellationToken)
+            .ConfigureAwait(false);
+        (EuObjectFactsPartitionRunRequest Request, EuEnumerationRunResult Run)? objectFacts = null;
+        if (expressionRun.Receipt is not null && objectFactsRequest is not null)
+        {
+            var objectRun = await _executor
+                .RunObjectFactsPartitionAsync(objectFactsRequest, sourceWitness, cancellationToken)
+                .ConfigureAwait(false);
+            objectFacts = (objectFactsRequest, objectRun);
+        }
+
+        return await DeriveAndRetainAsync(expressionFactsRequest, expressionRun, objectFacts, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// The four checks that refuse before any traffic: the Expression slot holds the Expression
+    /// family, the object slot (when given) holds the object family, the two carry one budget
+    /// instance, and the object batch asks about every object the Expression batch asks about.
+    /// </summary>
+    private static EuLanguageScopedExpressionProductionResult? RefuseBeforeTraffic(
+        EuObjectFactsPartitionRunRequest expressionFactsRequest,
+        EuObjectFactsPartitionRunRequest? objectFactsRequest)
+    {
         // BEFORE ANY TRAFFIC. A family mix-up costs two sessions' worth of requests if it is found
         // after the run rather than before it.
         if (expressionFactsRequest.Set != EuObjectFactsQuerySet.ExpressionFacts)
         {
-            return (EuLanguageScopedExpressionProductionResult.Refused(
+            return EuLanguageScopedExpressionProductionResult.Refused(
                 EuLanguageScopedExpressionProductionRefusal.ExpressionFactsRequestIsNotTheExpressionFamily,
                 $"the Expression-facts slot was given family {expressionFactsRequest.Set}.",
-                productRequestCount: 0), null, null);
+                productRequestCount: 0);
         }
 
         if (objectFactsRequest is not null && objectFactsRequest.Set != EuObjectFactsQuerySet.ObjectFacts)
         {
-            return (EuLanguageScopedExpressionProductionResult.Refused(
+            return EuLanguageScopedExpressionProductionResult.Refused(
                 EuLanguageScopedExpressionProductionRefusal.ObjectFactsRequestIsNotTheObjectFamily,
                 $"the object-facts slot was given family {objectFactsRequest.Set}.",
-                productRequestCount: 0), null, null);
+                productRequestCount: 0);
         }
 
         // ONE PRODUCTION, ONE CEILING. Reference equality rather than equal limits, for the reason
@@ -345,11 +389,11 @@ public sealed class EuLanguageScopedExpressionProducer
         if (objectFactsRequest is not null &&
             !ReferenceEquals(objectFactsRequest.WireBudget, expressionFactsRequest.WireBudget))
         {
-            return (EuLanguageScopedExpressionProductionResult.Refused(
+            return EuLanguageScopedExpressionProductionResult.Refused(
                 EuLanguageScopedExpressionProductionRefusal.FamiliesCarryDifferentWireBudgets,
                 "the two families carry different budget instances, so neither limit bounds this "
                 + "production.",
-                productRequestCount: 0), null, null);
+                productRequestCount: 0);
         }
 
         // ALSO BEFORE ANY TRAFFIC, and compared in the plan's own canonical form because that is the
@@ -366,20 +410,29 @@ public sealed class EuLanguageScopedExpressionProducer
                 .ToArray();
             if (uncovered.Length > 0)
             {
-                return (EuLanguageScopedExpressionProductionResult.Refused(
+                return EuLanguageScopedExpressionProductionResult.Refused(
                     EuLanguageScopedExpressionProductionRefusal.ObjectFactsBatchDoesNotCoverTheExpressionBatch,
                     $"the date delivery never asked about {uncovered.Length} of this run's "
                     + $"object(s), the first being '{uncovered[0]}'.",
-                    productRequestCount: 0), null, null);
+                    productRequestCount: 0);
             }
         }
 
-        var spent = 0;
+        return null;
+    }
 
-        var expressionRun = await _executor
-            .RunObjectFactsPartitionAsync(expressionFactsRequest, sourceWitness, cancellationToken)
-            .ConfigureAwait(false);
-        spent += expressionRun.ProductRequestCount;
+    /// <summary>
+    /// Everything after the runs: the deliveries rebuilt from this producer's own receipts, the
+    /// derivation, and its retention. Shared by the Expression-first run above and the object-first
+    /// <see cref="Pairing"/>; the run results it reads are always this producer's own.
+    /// </summary>
+    private async Task<(EuLanguageScopedExpressionProductionResult Result, EuProofBoundDelivery? ExpressionFacts, EuProofBoundDelivery? ObjectFacts)> DeriveAndRetainAsync(
+        EuObjectFactsPartitionRunRequest expressionFactsRequest,
+        EuEnumerationRunResult expressionRun,
+        (EuObjectFactsPartitionRunRequest Request, EuEnumerationRunResult Run)? objectFacts,
+        CancellationToken cancellationToken)
+    {
+        var spent = expressionRun.ProductRequestCount + (objectFacts?.Run.ProductRequestCount ?? 0);
         if (expressionRun.Receipt is not { } expressionReceipt)
         {
             return (EuLanguageScopedExpressionProductionResult.Refused(
@@ -405,17 +458,13 @@ public sealed class EuLanguageScopedExpressionProducer
         }
 
         EuProofBoundDelivery? objectDelivery = null;
-        if (objectFactsRequest is not null)
+        if (objectFacts is { } objectFamily)
         {
-            var objectRun = await _executor
-                .RunObjectFactsPartitionAsync(objectFactsRequest, sourceWitness, cancellationToken)
-                .ConfigureAwait(false);
-            spent += objectRun.ProductRequestCount;
-            if (objectRun.Receipt is not { } objectReceipt)
+            if (objectFamily.Run.Receipt is not { } objectReceipt)
             {
                 return (EuLanguageScopedExpressionProductionResult.Refused(
                     EuLanguageScopedExpressionProductionRefusal.ObjectFactsEnumerationRefused,
-                    objectRun.Refusal?.Code.ToString()
+                    objectFamily.Run.Refusal?.Code.ToString()
                         ?? "the object-facts enumeration returned neither a receipt nor a refusal",
                     spent), null, null);
             }
@@ -423,7 +472,7 @@ public sealed class EuLanguageScopedExpressionProducer
             try
             {
                 objectDelivery = await BuildProofBoundDeliveryAsync(
-                        objectReceipt, objectFactsRequest, cancellationToken)
+                        objectReceipt, objectFamily.Request, cancellationToken)
                     .ConfigureAwait(false);
             }
             catch (EnumerationProofUnavailableException exception)
@@ -494,9 +543,87 @@ public sealed class EuLanguageScopedExpressionProducer
     }
 
     /// <summary>
-    /// Rebuilds the decoder's proof-bound input from one run's own receipt. Nothing here is taken
-    /// from a caller.
+    /// #418 slice 6: this producer's two runs made in the order an adapter walks its batches - the
+    /// object-facts run when that batch's turn comes, the Expression-facts run when its own turn
+    /// comes, and the derivation and its retention after the second. Both runs are this pairing's
+    /// own: it hands their results out and takes none in. Unlike the Expression-first run above,
+    /// which stops on an Expression refusal, this order attempts both families, as an adapter's
+    /// independent family runs always have, so a refused object-facts batch still has its
+    /// Expression sibling attempted and recorded.
     /// </summary>
+    internal sealed class Pairing
+    {
+        private readonly EuLanguageScopedExpressionProducer _producer;
+        private readonly EuObjectFactsPartitionRunRequest _expressionFactsRequest;
+        private readonly EuObjectFactsPartitionRunRequest _objectFactsRequest;
+        private readonly BoundMachineRequest _sourceWitness;
+        private EuEnumerationRunResult? _objectRun;
+
+        internal Pairing(
+            EuLanguageScopedExpressionProducer producer,
+            EuObjectFactsPartitionRunRequest expressionFactsRequest,
+            EuObjectFactsPartitionRunRequest objectFactsRequest,
+            BoundMachineRequest sourceWitness)
+        {
+            ArgumentNullException.ThrowIfNull(producer);
+            ArgumentNullException.ThrowIfNull(expressionFactsRequest);
+            ArgumentNullException.ThrowIfNull(objectFactsRequest);
+            ArgumentNullException.ThrowIfNull(sourceWitness);
+
+            // The same four checks the Expression-first run makes before traffic. Here they are the
+            // caller's contract rather than a refusal: an adapter mints both batches of a pair from
+            // one object list under one budget, so a pair that fails them is a programming error.
+            if (RefuseBeforeTraffic(expressionFactsRequest, objectFactsRequest) is { } refused)
+            {
+                throw new ArgumentException($"{refused.Refusal}: {refused.Detail}", nameof(objectFactsRequest));
+            }
+
+            _producer = producer;
+            _expressionFactsRequest = expressionFactsRequest;
+            _objectFactsRequest = objectFactsRequest;
+            _sourceWitness = sourceWitness;
+        }
+
+        /// <summary>The object-facts run, made once, when the adapter reaches that batch.</summary>
+        internal async Task<EuEnumerationRunResult> RunObjectFactsAsync(CancellationToken cancellationToken)
+        {
+            if (_objectRun is not null)
+            {
+                throw new InvalidOperationException("This pairing's object-facts run was already made.");
+            }
+
+            _objectRun = await _producer._executor
+                .RunObjectFactsPartitionAsync(_objectFactsRequest, _sourceWitness, cancellationToken)
+                .ConfigureAwait(false);
+            return _objectRun;
+        }
+
+        /// <summary>
+        /// The Expression-facts run, made when the adapter reaches that batch, then the derivation
+        /// and its retention over this pairing's own two runs. The Expression run result travels
+        /// beside the production so the adapter records it as its own family outcome.
+        /// </summary>
+        internal async Task<(
+            EuLanguageScopedExpressionProductionResult Result,
+            EuEnumerationRunResult ExpressionRun,
+            EuProofBoundDelivery? ExpressionFacts,
+            EuProofBoundDelivery? ObjectFacts)> RunExpressionFactsAndDeriveAsync(CancellationToken cancellationToken)
+        {
+            if (_objectRun is not { } objectRun)
+            {
+                throw new InvalidOperationException("The object-facts run comes first in this order.");
+            }
+
+            var expressionRun = await _producer._executor
+                .RunObjectFactsPartitionAsync(_expressionFactsRequest, _sourceWitness, cancellationToken)
+                .ConfigureAwait(false);
+            var (result, expressionFacts, objectFacts) = await _producer
+                .DeriveAndRetainAsync(_expressionFactsRequest, expressionRun, (_objectFactsRequest, objectRun), cancellationToken)
+                .ConfigureAwait(false);
+            return (result, expressionRun, expressionFacts, objectFacts);
+        }
+    }
+
     private async Task<EuProofBoundDelivery> BuildProofBoundDeliveryAsync(
         RepeatedEnumerationDeliveryReceipt receipt,
         EuObjectFactsPartitionRunRequest request,
