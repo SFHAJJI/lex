@@ -82,6 +82,9 @@ public sealed class DurableBlobReceiptFamilyIngestSurfaceTests
                 // property is the internal Success factory, fed by CustodyHold.TryHoldAsync.
                 "field private instance Lex.V3.Ingest.Europe.EuCorrigendumTripwireProductionResult::<RetainedTripwire>k__BackingField -> " + Receipt + "?",
                 "field private instance Lex.V3.Ingest.Europe.EuCorrigendumTripwireProductionResult::<RetainedTripwireLineage>k__BackingField -> " + Receipt + "?",
+                // S3-A02's Formex inventory retains the exact package receipt it reopened. Its
+                // internal constructor accepts that already-real receipt and constructs none.
+                "field private instance Lex.V3.Ingest.Europe.EuFormexAnnexInventory::<SourceReceipt>k__BackingField -> " + Receipt,
                 "field private instance " + ExpressionProductionResult + "::<RetainedDerivation>k__BackingField -> "
                 + Receipt + "?",
                 // The episode record's own receipt, added when review required the derivation to be
@@ -132,6 +135,7 @@ public sealed class DurableBlobReceiptFamilyIngestSurfaceTests
                 "property public instance " + CorpusAcquisitionOutcome + "::Receipt() -> " + Receipt + "?",
                 "property public instance Lex.V3.Ingest.Europe.EuCorrigendumTripwireProductionResult::RetainedTripwire() -> " + Receipt + "?",
                 "property public instance Lex.V3.Ingest.Europe.EuCorrigendumTripwireProductionResult::RetainedTripwireLineage() -> " + Receipt + "?",
+                "property public instance Lex.V3.Ingest.Europe.EuFormexAnnexInventory::SourceReceipt() -> " + Receipt,
                 "property public instance " + ExpressionProductionResult + "::RetainedDerivation() -> " + Receipt + "?",
                 "property public instance " + ExpressionProductionResult + "::RetainedEpisode() -> " + Receipt + "?",
                 "property public instance " + EuQueryExecutionResult + "::ScopeManifestReceipt() -> " + Receipt + "?",
