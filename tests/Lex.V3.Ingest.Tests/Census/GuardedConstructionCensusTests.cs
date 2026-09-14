@@ -350,6 +350,16 @@ public sealed class GuardedConstructionCensusTests
                     + "method public static "
                     + "Lex.V3.Ingest.Europe.EuWitnessTraversalResult::Delivered, "
                     + "method public static Lex.V3.Ingest.Europe.EuWitnessTraversalResult::Refused",
+                "Lex.V3.Ingest.Europe.EuXhtmlAnnexInventory: constructor internal instance "
+                    + "Lex.V3.Ingest.Europe.EuXhtmlAnnexInventory::.ctor",
+                "Lex.V3.Ingest.Europe.EuXhtmlAnnexInventoryProductionResult: constructor private "
+                    + "instance Lex.V3.Ingest.Europe.EuXhtmlAnnexInventoryProductionResult::.ctor, "
+                    + "method internal static "
+                    + "Lex.V3.Ingest.Europe.EuXhtmlAnnexInventoryProductionResult::Refused, "
+                    + "method internal static "
+                    + "Lex.V3.Ingest.Europe.EuXhtmlAnnexInventoryProductionResult::Success, "
+                    + "method public instance "
+                    + "Lex.V3.Ingest.Europe.EuXhtmlAnnexInventoryProducer::RunAsync",
                 "Lex.V3.Ingest.Europe.LuxembourgDraftGraphRunRequest: constructor private instance "
                     + "Lex.V3.Ingest.Europe.LuxembourgDraftGraphRunRequest::.ctor, "
                     + "constructor private instance "
