@@ -139,8 +139,9 @@ public sealed class EuCorrigendumTripwireProductionResult
 /// <see cref="EuCorrigendumTripwireSet.TryDerive"/> takes exactly those two deliveries. Running the
 /// enumerations a second time here would double the publisher traffic for the same rows, and
 /// rebuilding the deliveries here would be a second copy of a reviewed path; this producer does
-/// neither. It runs the accepted producer once, folds over the deliveries that run carries, and
-/// holds what the fold produced.
+/// neither. It runs the accepted producer's internal core once, which hands back the deliveries it
+/// rebuilt beside its result - outputs of that one call, never inputs to any factory - folds over
+/// them, and holds what the fold produced.
 /// </para>
 /// <para>
 /// THE OBJECT-FACTS DELIVERY IS REQUIRED HERE, OPTIONAL THERE. The expression producer can derive
@@ -209,8 +210,8 @@ public sealed class EuCorrigendumTripwireProducer
                 productRequestCount: 0);
         }
 
-        var expressions = await _expressions
-            .RunAsync(expressionFactsRequest, objectFactsRequest, sourceWitness, cancellationToken)
+        var (expressions, expressionFacts, objectFacts) = await _expressions
+            .RunWithDeliveriesAsync(expressionFactsRequest, objectFactsRequest, sourceWitness, cancellationToken)
             .ConfigureAwait(false);
         if (!expressions.Delivered)
         {
@@ -221,11 +222,12 @@ public sealed class EuCorrigendumTripwireProducer
                 expressions.ProductRequestCount);
         }
 
-        // The two deliveries the inner run rebuilt from its own receipts. A delivered inner result
-        // carries both by construction of its Success factory; they are not caller inputs.
+        // The two deliveries the inner run rebuilt from its own receipts, handed back by the same
+        // call that delivered - outputs of that run, never inputs from anywhere. Both are non-null
+        // on a delivered run with an object-facts request, which this one always has.
         var set = EuCorrigendumTripwireSet.TryDerive(
-            expressions.ExpressionFactsDelivery!,
-            expressions.ObjectFactsDelivery!,
+            expressionFacts!,
+            objectFacts!,
             out var refusal,
             out var detail,
             out var offendingIri);

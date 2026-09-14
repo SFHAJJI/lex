@@ -124,6 +124,7 @@ public sealed class EuCorrigendumTripwireProducerTests
             EuLanguageScopedExpressionProductionRefusal.ExpressionFactsRequestIsNotTheExpressionFamily,
             result.Expressions.Refusal);
         Assert.AreEqual(0, handler.SendCount);
+        Assert.AreEqual(0, result.ProductRequestCount, "refused before traffic: nothing to report.");
         Assert.IsNull(result.TripwireSet);
     }
 
@@ -147,6 +148,8 @@ public sealed class EuCorrigendumTripwireProducerTests
         Assert.IsNotNull(result.Expressions);
         Assert.IsTrue(result.Expressions.Delivered, "the inner run had already delivered; its receipts are not lost.");
         Assert.IsGreaterThan(0, handler.OccurrenceCountFor("P"));
+        Assert.IsGreaterThan(0, result.ProductRequestCount, "the requests the inner run sent are reported on a refusal too.");
+        Assert.AreEqual(result.Expressions.ProductRequestCount, result.ProductRequestCount);
         Assert.IsNull(result.TripwireSet);
         Assert.IsNull(result.RetainedTripwire);
     }
@@ -184,7 +187,10 @@ public sealed class EuCorrigendumTripwireProducerTests
             new EuAcquisitionTestFixture.EuInMemoryCustodyStore(failWriteDigest: (digest, _) => digest == canonical));
         Assert.AreEqual(EuCorrigendumTripwireProductionRefusal.TripwireNotRetained, canonicalFailed.Refusal);
         StringAssert.StartsWith(canonicalFailed.Detail, "canonical: ");
+        StringAssert.Contains(canonicalFailed.Detail, "the scripted store refused to write this object.", "the store's own reason travels.");
         Assert.IsTrue(canonicalFailed.Expressions!.Delivered, "the inner run's own receipts are not lost.");
+        Assert.AreEqual(canonicalFailed.Expressions.ProductRequestCount, canonicalFailed.ProductRequestCount);
+        Assert.IsGreaterThan(0, canonicalFailed.ProductRequestCount);
         Assert.IsNull(canonicalFailed.RetainedTripwire);
 
         // The lineage differs per run, so it cannot be named ahead; it is the LAST write of a run,
@@ -197,8 +203,11 @@ public sealed class EuCorrigendumTripwireProducerTests
         var (lineageFailed, _, _) = await RunAsync(FourLanguageRows(), CorrigendumRows(), failing);
         Assert.AreEqual(EuCorrigendumTripwireProductionRefusal.TripwireNotRetained, lineageFailed.Refusal);
         StringAssert.StartsWith(lineageFailed.Detail, "lineage: ");
+        StringAssert.Contains(lineageFailed.Detail, "the counting store refused this write.", "the store's own reason travels.");
         Assert.IsNull(lineageFailed.RetainedTripwireLineage);
         Assert.IsTrue(lineageFailed.Expressions!.Delivered);
+        Assert.AreEqual(lineageFailed.Expressions.ProductRequestCount, lineageFailed.ProductRequestCount);
+        Assert.IsGreaterThan(0, lineageFailed.ProductRequestCount);
     }
 
     /// <summary>Two independent runs over the same rows hold one tripwire address and two lineages.</summary>
@@ -233,6 +242,59 @@ public sealed class EuCorrigendumTripwireProducerTests
         })
         {
             Assert.IsFalse(code.Contains(forbidden, StringComparison.Ordinal), $"the producer must not reach {forbidden}.");
+        }
+    }
+
+    /// <summary>
+    /// The internal factories guard what the run has already proved; the lens noted no test reached
+    /// those guards, so they are reached here rather than left as untested premises.
+    /// </summary>
+    [TestMethod]
+    public async Task TheFactoriesRefuseWhatARunNeverHandsThem()
+    {
+        var (honest, _, _) = await RunAsync(FourLanguageRows(), CorrigendumRows());
+        Assert.IsTrue(honest.Delivered, honest.Detail);
+        var expressions = honest.Expressions!;
+        var set = honest.TripwireSet!;
+        var receipt = honest.RetainedTripwire!;
+
+        Assert.ThrowsExactly<ArgumentNullException>(() => EuCorrigendumTripwireProductionResult.Success(null!, set, receipt, receipt, 1));
+        Assert.ThrowsExactly<ArgumentNullException>(() => EuCorrigendumTripwireProductionResult.Success(expressions, null!, receipt, receipt, 1));
+        Assert.ThrowsExactly<ArgumentNullException>(() => EuCorrigendumTripwireProductionResult.Success(expressions, set, null!, receipt, 1));
+        Assert.ThrowsExactly<ArgumentNullException>(() => EuCorrigendumTripwireProductionResult.Success(expressions, set, receipt, null!, 1));
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => EuCorrigendumTripwireProductionResult.Refused(
+            EuCorrigendumTripwireProductionRefusal.None, "not a refusal", null, 0));
+    }
+
+    /// <summary>
+    /// The deliveries the fold takes leave the inner run as outputs; no member of either producer
+    /// or result accepts a proof-bound delivery as an input. The lens's concern on an earlier head:
+    /// a result factory taking deliveries would have been the pairing door one level up.
+    /// </summary>
+    [TestMethod]
+    public void NoProducerSurfaceAcceptsADeliveryAsAnInput()
+    {
+        const System.Reflection.BindingFlags Everything =
+            System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic
+            | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Static
+            | System.Reflection.BindingFlags.DeclaredOnly;
+        foreach (var type in new[]
+        {
+            typeof(EuCorrigendumTripwireProducer), typeof(EuCorrigendumTripwireProductionResult),
+            typeof(EuLanguageScopedExpressionProducer), typeof(EuLanguageScopedExpressionProductionResult),
+        })
+        {
+            var members = type.GetMethods(Everything).Cast<System.Reflection.MethodBase>()
+                .Concat(type.GetConstructors(Everything));
+            foreach (var member in members)
+            {
+                foreach (var parameter in member.GetParameters())
+                {
+                    Assert.AreNotEqual(
+                        typeof(EuProofBoundDelivery), parameter.ParameterType,
+                        $"{type.Name}.{member.Name} accepts a proof-bound delivery.");
+                }
+            }
         }
     }
 
