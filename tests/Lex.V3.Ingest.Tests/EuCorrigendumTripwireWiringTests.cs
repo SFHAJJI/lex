@@ -314,6 +314,17 @@ public sealed class EuCorrigendumTripwireWiringTests
         Assert.AreEqual(EuQueryExecutionRefusal.CorrigendumTripwireBatchesNotPaired, doubled!.Code);
         StringAssert.Contains(doubled.Detail, "has 2 object-facts batches over its own objects, not one.");
 
+        // Two Expression batches over one object batch's objects: each finds exactly one partner,
+        // and it is the same one. Left alone, one of the two pairings would own the object phase and
+        // the other would reach its Expression turn with that phase never started.
+        var sharedObjectBatch = EuQueryExecutionAdapter.TryPairExpressionAndObjectBatches(
+            [Request(EuObjectFactsQuerySet.ObjectFacts, A), Request(EuObjectFactsQuerySet.ExpressionFacts, A), Request(EuObjectFactsQuerySet.ExpressionFacts, A)],
+            out var sharedPairs);
+        Assert.IsNotNull(sharedObjectBatch);
+        Assert.AreEqual(EuQueryExecutionRefusal.CorrigendumTripwireBatchesNotPaired, sharedObjectBatch!.Code);
+        StringAssert.Contains(sharedObjectBatch.Detail, "is the partner of Expression-facts batches 1 and 2, not of one.");
+        Assert.IsEmpty(sharedPairs);
+
         // And an object batch no Expression batch covers, which would mean a population asked about
         // for facts but never for its expressions.
         var orphanObject = EuQueryExecutionAdapter.TryPairExpressionAndObjectBatches(

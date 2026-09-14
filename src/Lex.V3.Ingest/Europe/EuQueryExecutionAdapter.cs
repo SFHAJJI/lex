@@ -2001,7 +2001,7 @@ public sealed class EuQueryExecutionAdapter
         ArgumentNullException.ThrowIfNull(requests);
         pairs = [];
         var found = new List<(int ExpressionIndex, int ObjectIndex)>();
-        var partnered = new HashSet<int>();
+        var claimedBy = new Dictionary<int, int>();
         for (var expressionIndex = 0; expressionIndex < requests.Count; expressionIndex++)
         {
             if (requests[expressionIndex].Set != EuObjectFactsQuerySet.ExpressionFacts)
@@ -2024,12 +2024,25 @@ public sealed class EuQueryExecutionAdapter
                     + $"has {partners.Length} object-facts batches over its own objects, not one.");
             }
 
+            // ONE TO ONE BOTH WAYS. Exactly one partner each is not enough on its own: two
+            // Expression batches over the same objects each find the same single object batch, and
+            // a pairing that let both claim it would run that object batch for one of them and
+            // leave the other's object phase never started.
+            if (!claimedBy.TryAdd(partners[0], expressionIndex))
+            {
+                return new EuQueryExecutionRefusalDetail(
+                    EuQueryExecutionRefusal.CorrigendumTripwireBatchesNotPaired,
+                    $"object-facts batch {partners[0]} "
+                    + $"('{EuObjectFactsDiscoveryPlan.PartitionKeyFor(requests[partners[0]].BatchObjects)}') "
+                    + $"is the partner of Expression-facts batches {claimedBy[partners[0]]} and "
+                    + $"{expressionIndex}, not of one.");
+            }
+
             found.Add((expressionIndex, partners[0]));
-            partnered.Add(partners[0]);
         }
 
         var unpartnered = Enumerable.Range(0, requests.Count)
-            .Where(index => requests[index].Set == EuObjectFactsQuerySet.ObjectFacts && !partnered.Contains(index))
+            .Where(index => requests[index].Set == EuObjectFactsQuerySet.ObjectFacts && !claimedBy.ContainsKey(index))
             .ToArray();
         if (unpartnered.Length > 0)
         {
