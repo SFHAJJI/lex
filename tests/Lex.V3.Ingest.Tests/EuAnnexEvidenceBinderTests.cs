@@ -449,18 +449,19 @@ public sealed class EuAnnexEvidenceBinderTests
         Assert.IsTrue(parameterTypes.Contains(typeof(EuWemiIdentityBoundary)));
     }
 
-    private static async Task<Fixture> FixtureAsync(
+    internal static async Task<Fixture> FixtureAsync(
         byte[] pdfBytes,
         bool pdfInOtherExpression = false,
         bool xhtmlInOtherExpression = false,
         string xhtmlTitle = "ANNEX",
         bool formexTwoMembers = false,
         bool xhtmlTwoMembers = false,
+        bool secondMemberAfterFirst = false,
         byte[]? formexBytes = null,
         byte[]? xhtmlBytes = null)
     {
         var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
-        formexBytes ??= FormexPackage(formexTwoMembers);
+        formexBytes ??= FormexPackage(formexTwoMembers, secondMemberAfterFirst);
         xhtmlBytes ??= Encoding.UTF8.GetBytes(Xhtml(xhtmlTitle, xhtmlTwoMembers));
         var formexReceipt = await Hold(store, formexBytes);
         var xhtmlReceipt = await Hold(store, xhtmlBytes);
@@ -599,7 +600,7 @@ public sealed class EuAnnexEvidenceBinderTests
             "pdf_transport_sha256=" + pdf,
             "rule=pdf_page_label_bijection/1") + "\n");
 
-    private static byte[] FormexPackage(bool twoMembers)
+    private static byte[] FormexPackage(bool twoMembers, bool secondMemberAfterFirst)
     {
         using var bytes = new MemoryStream();
         using (var archive = new ZipArchive(bytes, ZipArchiveMode.Create, leaveOpen: true))
@@ -608,7 +609,9 @@ public sealed class EuAnnexEvidenceBinderTests
             Write(archive, "L_202601965EN.000201.fmx.xml", AnnexXml("0001.0001"));
             if (twoMembers)
             {
-                Write(archive, "L_202601965EN.000202.fmx.xml", AnnexXml("0001.0002"));
+                Write(archive, "L_202601965EN.000202.fmx.xml", secondMemberAfterFirst
+                    ? AnnexXml("0001.0002", 8, 13)
+                    : AnnexXml("0001.0002"));
             }
         }
         return bytes.ToArray();
@@ -627,14 +630,14 @@ public sealed class EuAnnexEvidenceBinderTests
              xsi:noNamespaceSchemaLocation="http://formex.publications.europa.eu/schema/formex-test.xd"/>
         """;
 
-    private static string AnnexXml(string sequence) => $$"""
+    private static string AnnexXml(string sequence, int pageFirst = 2, int pageLast = 7) => $$"""
         <?xml version="1.0" encoding="UTF-8"?>
         <ANNEX xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
                xsi:noNamespaceSchemaLocation="http://formex.publications.europa.eu/schema/formex-test.xd">
           <BIB.INSTANCE>
             <DOCUMENT.REF FILE="L_202601965EN.doc.fmx.xml">LEU20261965EN1101</DOCUMENT.REF>
-            <NO.SEQ>{{sequence}}</NO.SEQ><PAGE.FIRST>2</PAGE.FIRST>
-            <PAGE.LAST>7</PAGE.LAST><PAGE.TOTAL>6</PAGE.TOTAL>
+            <NO.SEQ>{{sequence}}</NO.SEQ><PAGE.FIRST>{{pageFirst}}</PAGE.FIRST>
+            <PAGE.LAST>{{pageLast}}</PAGE.LAST><PAGE.TOTAL>{{pageLast - pageFirst + 1}}</PAGE.TOTAL>
           </BIB.INSTANCE><TITLE><TI><P>ANNEX</P></TI></TITLE>
         </ANNEX>
         """;
@@ -648,11 +651,14 @@ public sealed class EuAnnexEvidenceBinderTests
         </body></html>
         """;
 
-    private static byte[] PageLabelPdf(
+    internal static byte[] PageLabelPdf(
         int pageCount,
         string? pageLabelSpecification,
         bool rawTree = false,
-        IReadOnlyList<string>? additionalObjects = null)
+        IReadOnlyList<string>? additionalObjects = null,
+        bool image = false,
+        bool text = false,
+        string textValue = "text")
     {
         var pageObjects = Enumerable.Range(3, pageCount).ToArray();
         var catalogLabels = pageLabelSpecification is null ? string.Empty
@@ -664,8 +670,34 @@ public sealed class EuAnnexEvidenceBinderTests
             $"<< /Type /Catalog /Pages 2 0 R{catalogLabels} >>",
             $"<< /Type /Pages /Kids [{string.Join(' ', pageObjects.Select(static number => $"{number} 0 R"))}] /Count {pageCount} >>",
         };
+        var nextObject = pageObjects[^1] + 1;
+        var imageObject = image ? nextObject++ : 0;
+        var fontObject = text ? nextObject++ : 0;
+        var contentObject = nextObject;
+        var resources = string.Join(' ', new[]
+        {
+            image ? $"/XObject << /Im0 {imageObject} 0 R >>" : string.Empty,
+            text ? $"/Font << /F1 {fontObject} 0 R >>" : string.Empty,
+        }.Where(static value => value.Length > 0));
+        var pageSuffix = image || text
+            ? $" /Resources << {resources} >> /Contents {contentObject} 0 R"
+            : string.Empty;
         objects.AddRange(pageObjects.Select(_ =>
-            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 100 100] >>"));
+            $"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 100 100]{pageSuffix} >>"));
+        if (image)
+        {
+            objects.Add("<< /Type /XObject /Subtype /Image /Width 1 /Height 1 /ColorSpace /DeviceGray /BitsPerComponent 8 /Length 1 >>\nstream\nX\nendstream");
+        }
+        if (text)
+        {
+            objects.Add("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>");
+        }
+        if (image || text)
+        {
+            var commands = (image ? "q 1 0 0 1 0 0 cm /Im0 Do Q\n" : string.Empty)
+                + (text ? $"BT /F1 12 Tf 0 0 Td ({textValue}) Tj ET\n" : string.Empty);
+            objects.Add($"<< /Length {Encoding.ASCII.GetByteCount(commands)} >>\nstream\n{commands}endstream");
+        }
         if (additionalObjects is not null)
         {
             objects.AddRange(additionalObjects);
@@ -698,9 +730,9 @@ public sealed class EuAnnexEvidenceBinderTests
 
     private static string Sha(byte[] bytes) => Convert.ToHexStringLower(SHA256.HashData(bytes));
 
-    private sealed record Profile(byte[] Bytes, SourceArtifactRef Reference);
+    internal sealed record Profile(byte[] Bytes, SourceArtifactRef Reference);
 
-    private sealed record Fixture(
+    internal sealed record Fixture(
         ICustodyStore Store,
         EuWemiIdentityBoundary Boundary,
         EuFormexPackage Package,
