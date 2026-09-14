@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text.Json.Serialization;
+using Lex.V3.Contracts.Custody;
 using Lex.V3.Contracts.Derivation;
 using Lex.V3.Contracts.Source.Absence;
 using Lex.V3.Contracts.Source.Core;
@@ -727,15 +728,29 @@ public static class EuLanguageScopedExpressionDecode
             null);
     }
 
-    private static bool EveryPageReceiptBindsItsBytes(
+    internal static bool EveryPageReceiptBindsItsBytes(
         EuProofBoundDelivery delivery, out string? offendingDigest)
     {
         foreach (var page in delivery.PagesInOrder)
         {
             var carried = Convert.ToHexString(
                 SHA256.HashData(page.RetainedPayloadBytes.Span)).ToLowerInvariant();
+            // THREE-WAY, NOT TWO-WAY. A receipt agreeing with the bytes beside it proves only that
+            // the pair is self-consistent: a caller could pair a genuine plan, request and route
+            // with re-serialized bytes and a receipt minted for them, and the rows would still
+            // reopen. The route's terminal hop carries the digest of the receipt the acquisition
+            // actually wrote and the digest of the bytes it actually transported - what Resolve
+            // binds and TryOpen does not. Review of #418's tripwire head found the gap; both doors
+            // that cite page bytes as lineage now hold the terminal hop's word as well.
+            var terminal = page.HttpEvidence.Hops.Count > 0 ? page.HttpEvidence.Hops[^1] : null;
             if (!string.Equals(
-                carried, page.DurableWriteReceipt.Reference.ContentSha256, StringComparison.Ordinal))
+                    carried, page.DurableWriteReceipt.Reference.ContentSha256, StringComparison.Ordinal) ||
+                terminal is null ||
+                !string.Equals(terminal.Sha256, carried, StringComparison.Ordinal) ||
+                !string.Equals(
+                    terminal.DurableWriteReceiptSha256,
+                    DurableBlobWriteReceiptDigest.Of(page.DurableWriteReceipt),
+                    StringComparison.Ordinal))
             {
                 offendingDigest = page.DurableWriteReceipt.Reference.ContentSha256;
                 return false;
@@ -746,7 +761,7 @@ public static class EuLanguageScopedExpressionDecode
         return true;
     }
 
-    private static RepeatedEnumerationRdfTerm Term(
+    internal static RepeatedEnumerationRdfTerm Term(
         RepeatedEnumerationRow row,
         RepeatedEnumerationInterpretationProfile profile,
         string variableName)
@@ -779,7 +794,7 @@ public static class EuLanguageScopedExpressionDecode
         return row.Terms[index];
     }
 
-    private static bool IsPlainLiteral(RepeatedEnumerationRdfTerm term) =>
+    internal static bool IsPlainLiteral(RepeatedEnumerationRdfTerm term) =>
         term.Kind == RepeatedEnumerationRdfTermKind.Literal
         && term.Datatype is null
         && term.Language is null;
@@ -813,7 +828,7 @@ public static class EuLanguageScopedExpressionDecode
     /// that produces them, and <c>VerifiedRepeatedEnumerationRowsConstructionSurfaceTests</c> pins
     /// that there are exactly three.
     /// </remarks>
-    private static int[]? PageOfEachRow(EuProofBoundDelivery delivery, int rowCount)
+    internal static int[]? PageOfEachRow(EuProofBoundDelivery delivery, int rowCount)
     {
         if (delivery.Profile.TerminalPagePolicy
             != RepeatedEnumerationTerminalPagePolicy.ShortPageTerminal)
