@@ -117,6 +117,58 @@ public sealed class EuFormexManifestationEnumerationProducerTests
     }
 
     [TestMethod]
+    public void ARefusedEnumerationCannotSilentlyMakeAnExpressionIneligible()
+    {
+        var first = Expression(ExpressionA);
+        var second = Expression(ExpressionB);
+        var production = Production(first, second);
+        var firstAnswer = Decode(first, Row(first, "fmx4", 1));
+        var refused = EuFormexManifestationEnumerationResult.Refused(
+            second,
+            EuFormexManifestationEnumerationRefusal.EnumerationRefused,
+            "the expression was not enumerated",
+            0,
+            LuxembourgAcquisitionTestFixture.TestBudgetSnapshot());
+
+        Assert.IsNull(EuFormexEligibilityPopulation.TryCreate(
+            production, [firstAnswer, refused], out var refusal, out var detail));
+        Assert.AreEqual(EuFormexEligibilityPopulationRefusal.ExpressionEnumerationRefused, refusal);
+        StringAssert.Contains(detail, ExpressionB);
+    }
+
+    [TestMethod]
+    public void AnEnumerationOutsideTheProvenExpressionPopulationRefuses()
+    {
+        var first = Expression(ExpressionA);
+        var foreign = Expression(ExpressionB);
+        var production = Production(first);
+        var foreignAnswer = Decode(foreign, Row(foreign, "fmx4", 1));
+
+        Assert.IsNull(EuFormexEligibilityPopulation.TryCreate(
+            production, [foreignAnswer], out var refusal, out var detail));
+        Assert.AreEqual(EuFormexEligibilityPopulationRefusal.ExpressionOutsidePopulation, refusal);
+        Assert.AreEqual(ExpressionB, detail);
+    }
+
+    [TestMethod]
+    public void TheSameExpressionIdentityWithDifferentCanonicalContentRefuses()
+    {
+        var expected = Expression(ExpressionA);
+        var changedContent = Expression(
+            ExpressionA,
+            "http://publications.europa.eu/resource/authority/language/FRA");
+        Assert.AreEqual(expected.Identity, changedContent.Identity);
+        Assert.AreNotEqual(expected.CanonicalContentSha256, changedContent.CanonicalContentSha256);
+        var production = Production(expected);
+        var changedAnswer = Decode(changedContent, Row(changedContent, "fmx4", 1));
+
+        Assert.IsNull(EuFormexEligibilityPopulation.TryCreate(
+            production, [changedAnswer], out var refusal, out var detail));
+        Assert.AreEqual(EuFormexEligibilityPopulationRefusal.ExpressionContentDisagrees, refusal);
+        Assert.AreEqual(ExpressionA, detail);
+    }
+
+    [TestMethod]
     public async Task TheOfflineScriptExercisesBothPassesPagingProofAndBudgetEndToEnd()
     {
         var expression = Expression(ExpressionA);
@@ -214,10 +266,12 @@ public sealed class EuFormexManifestationEnumerationProducerTests
             JsonSerializer.Serialize(value.Key) + ":" + value.Value)) + "}";
     }
 
-    private static LanguageScopedExpression Expression(string expressionIri) =>
+    private static LanguageScopedExpression Expression(
+        string expressionIri,
+        string officialLanguage = "http://publications.europa.eu/resource/authority/language/ENG") =>
         LanguageScopedExpression.FromRetainedSource(
             new LanguageScopedExpressionIdentity(Work, expressionIri),
-            "http://publications.europa.eu/resource/authority/language/ENG",
+            officialLanguage,
             null,
             new SourceObjectRef(
                 SourceCoreSchemaIds.SourceObjectRef,

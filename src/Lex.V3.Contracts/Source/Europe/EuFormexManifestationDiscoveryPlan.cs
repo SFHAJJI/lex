@@ -41,6 +41,11 @@ public sealed class EuFormexManifestationDiscoveryPlan
     public const string PartitionKeyPrefix = "eu-formex-manifestations-by-expression-v1-";
     public const string WorkSelectionParameterName = "work_iri";
     public const string ExpressionSelectionParameterName = "expression_iri";
+
+    /// <summary>
+    /// The Cellar publisher-lexical manifestation type observed as <c>fmx4</c> on named EU works on
+    /// 2026-09-04, matching the separately closed listing vocabulary without sharing its wire concern.
+    /// </summary>
     public const string FormexTypeToken = "fmx4";
 
     internal const long PublisherDeliveryCeilingRows = 1_000_000;

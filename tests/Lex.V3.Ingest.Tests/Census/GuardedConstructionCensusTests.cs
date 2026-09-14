@@ -335,6 +335,10 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Ingest.Europe.EuNationalImplementingMeasureProductionResult::Success, "
                     + "method public instance "
                     + "Lex.V3.Ingest.Europe.EuNationalImplementingMeasureProducer::RunAsync",
+                "Lex.V3.Ingest.Europe.EuObjectPopulationCompletion: constructor private instance "
+                    + "Lex.V3.Ingest.Europe.EuObjectPopulationCompletion::.ctor, "
+                    + "method public static "
+                    + "Lex.V3.Ingest.Europe.EuObjectPopulationCompletion::TryClose",
                 "Lex.V3.Ingest.Europe.EuProcedureEventProductionResult: constructor private "
                     + "instance Lex.V3.Ingest.Europe.EuProcedureEventProductionResult::.ctor, "
                     + "method internal static "

@@ -90,10 +90,10 @@ public sealed class ClosedVocabularyCensusTests
                 "Lex.V3.Ingest.Europe.EuFamilyEnumerationOutcomeKind: Proven, ExecutorRefused, "
                     + "ProofRefused",
                 "Lex.V3.Ingest.Europe.EuFormexAnnexInventoryRefusal: None, ProfileDigestMismatch, "
-                    + "ProfileInvalid, RetainedBytesUnavailable, "
-                    + "PackageUnreadable, PackageEntryInvalid, XmlInvalid, "
-                    + "AnnexDocumentReferenceMissing, AnnexSequenceMissing, AnnexPageExtentMissing, "
-                    + "AnnexPageExtentInvalid, AnnexPageExtentContradictory, DuplicateAnnexIdentity, "
+                    + "ProfileInvalid, RetainedBytesUnavailable, PackageUnreadable, "
+                    + "PackageEntryInvalid, XmlInvalid, AnnexDocumentReferenceMissing, "
+                    + "AnnexSequenceMissing, AnnexPageExtentMissing, AnnexPageExtentInvalid, "
+                    + "AnnexPageExtentContradictory, DuplicateAnnexIdentity, "
                     + "PackageDoesNotIdentifyFormex, AnnexTitleMissing",
                 "Lex.V3.Ingest.Europe.EuFormexEligibilityPopulationRefusal: None, "
                     + "ExpressionProductionRefused, ExpressionEnumerationRefused, "
@@ -132,6 +132,9 @@ public sealed class ClosedVocabularyCensusTests
                 "Lex.V3.Ingest.Europe.EuNationalImplementingMeasureProductionRefusal: None, "
                     + "EnumerationRefused, EnumerationProofRefused, VerifiedRowsRefused, "
                     + "RowNotAdmitted",
+                "Lex.V3.Ingest.Europe.EuObjectPopulationRefusal: None, RunNotComplete, "
+                    + "ObjectClaimedTwice, MintedRowOutsidePopulation, OutcomeOutsidePopulation, "
+                    + "OutcomeWithoutMintedRow, PopulationIsNotEveryObservedObject",
                 "Lex.V3.Ingest.Europe.EuProcedureEventProductionRefusal: None, EnumerationRefused, "
                     + "EnumerationProofRefused, RowNotAdmitted, EventDossierNotConsistent, "
                     + "EventDateNotConsistent, DeliveredDossierOutsideRequestedPartition, "
