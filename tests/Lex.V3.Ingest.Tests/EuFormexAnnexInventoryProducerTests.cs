@@ -196,6 +196,41 @@ public sealed class EuFormexAnnexInventoryProducerTests
         Assert.IsNull(result.Inventory);
     }
 
+    [TestMethod]
+    public async Task AnAnnexNameWithoutAFormexSchemaCannotEnterTheInventory()
+    {
+        var result = await RunPackageAsync(Package(
+            ("document.xml", DocumentXml()),
+            ("annex.xml", """
+                <ANNEX>
+                  <BIB.INSTANCE>
+                    <DOCUMENT.REF FILE="document.xml">LEU20261965EN1101</DOCUMENT.REF>
+                    <NO.SEQ>0001.0001</NO.SEQ>
+                    <PAGE.FIRST>2</PAGE.FIRST>
+                    <PAGE.LAST>7</PAGE.LAST>
+                    <PAGE.TOTAL>6</PAGE.TOTAL>
+                  </BIB.INSTANCE>
+                  <TITLE><TI><P>ANNEX</P></TI></TITLE>
+                </ANNEX>
+                """)));
+
+        Assert.AreEqual(EuFormexAnnexInventoryRefusal.PackageDoesNotIdentifyFormex, result.Refusal);
+        Assert.IsNull(result.Inventory);
+    }
+
+    [TestMethod]
+    public async Task ADocumentTypeDeclarationIsRefused()
+    {
+        var documentWithDtd = DocumentXml().Replace(
+            "?>",
+            "?>\n<!DOCTYPE DOC [<!ELEMENT DOC ANY>]>",
+            StringComparison.Ordinal);
+        var result = await RunPackageAsync(Package(("document.xml", documentWithDtd)));
+
+        Assert.AreEqual(EuFormexAnnexInventoryRefusal.XmlInvalid, result.Refusal);
+        Assert.IsNull(result.Inventory);
+    }
+
     private static async Task<EuFormexAnnexInventoryProductionResult> RunPackageAsync(byte[] bytes)
     {
         var (store, receipt, profile) = await FixtureAsync(bytes);
