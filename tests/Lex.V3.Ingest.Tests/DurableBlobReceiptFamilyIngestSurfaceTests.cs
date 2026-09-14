@@ -99,6 +99,8 @@ public sealed class DurableBlobReceiptFamilyIngestSurfaceTests
                 "field private instance " + QueryExecutionResult + "::<ScopeManifestReceipt>k__BackingField -> " + Receipt + "?",
                 "field private instance " + Session + "+HeldBodyReceipt::<Receipt>k__BackingField -> " + Receipt,
                 "field private instance " + Session + "+ResolvedHeldBody::<Receipt>k__BackingField -> " + Receipt,
+                "field private instance Lex.V3.Ingest.Stage3EvidenceLineage::<EuropeScopeManifestReceipt>k__BackingField -> " + Receipt,
+                "field private instance Lex.V3.Ingest.Stage3EvidenceLineage::<LuxembourgScopeManifestReceipt>k__BackingField -> " + Receipt,
                 // The one place that decides what "held" means, for both publishers' acquisition
                 // paths. It HOLDS a receipt and never constructs one: the receipt comes only from
                 // ICustodyStore.CreateAsync, exactly as every other holder pinned here. Carried into
@@ -139,6 +141,8 @@ public sealed class DurableBlobReceiptFamilyIngestSurfaceTests
                 "property public instance " + QueryExecutionResult + "::ScopeManifestReceipt() -> " + Receipt + "?",
                 "property public instance " + Session + "+HeldBodyReceipt::Receipt() -> " + Receipt,
                 "property public instance " + Session + "+ResolvedHeldBody::Receipt() -> " + Receipt,
+                "property public instance Lex.V3.Ingest.Stage3EvidenceLineage::EuropeScopeManifestReceipt() -> " + Receipt,
+                "property public instance Lex.V3.Ingest.Stage3EvidenceLineage::LuxembourgScopeManifestReceipt() -> " + Receipt,
             },
             ConstructionSurface.ProducersIn(typeof(RoutedHttpAcquisitionSession).Assembly, typeof(DurableBlobWriteReceipt), true).ToArray());
     }
