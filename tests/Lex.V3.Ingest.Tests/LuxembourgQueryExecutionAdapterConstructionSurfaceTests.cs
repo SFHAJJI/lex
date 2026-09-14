@@ -217,8 +217,8 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
         // document-GET failure is a PER OBJECT refusal and appears nowhere here, which is the
         // distinction this pin makes visible.
         // #419 slice 6c added one: GazetteBodyNotProduced, the whole-run failure when a fetched
-        // Gazette body cannot be typed by the accepted producer or its retained requests cannot be
-        // reopened. A listing the publisher or the rules refuse stays a PER LISTING gap beside the
+        // Gazette body cannot be typed by the accepted producer, or the request or receipt its
+        // terminal hop names cannot be reopened. A listing the publisher or the rules refuse stays a PER LISTING gap beside the
         // set and adds nothing here.
         CollectionAssert.AreEqual(
             new[]

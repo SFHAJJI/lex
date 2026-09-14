@@ -162,7 +162,13 @@ public sealed class LuxembourgGazetteAcquisitionTests
             ladderItem: consolidationItem, ladderBody: PdfBytes);
 
         Assert.IsNull(run.Result.Refusal, $"{run.Result.Refusal?.Code}: {run.Result.Refusal?.Detail}");
-        Assert.IsEmpty(run.Result.GazetteBodySetsByOrdinal!, "a consolidation's PDF is not a Gazette body.");
+        // The consolidation has no set: its PDF is not a Gazette body. The original act it proves
+        // itself against is as-published and gets its set, the typed act gap for a realization path
+        // the publisher never stated, so the two are told apart rather than both being an absence.
+        var set = run.Result.GazetteBodySetsByOrdinal!.Values.Single();
+        Assert.AreEqual(Act, set.PublisherActIri, "the original act's set; none for the consolidation.");
+        Assert.IsEmpty(set.Bodies);
+        Assert.AreEqual(LuxembourgGazetteActGapReason.RealizationPathUnproven, set.ActGap);
         Assert.AreEqual(1, run.DocumentRequests, "the ladder's own fetch, and nothing from the Gazette loop.");
     }
 
@@ -185,22 +191,131 @@ public sealed class LuxembourgGazetteAcquisitionTests
     }
 
     /// <summary>
-    /// The retention the producer verifies binds each body to the exact requests the route retained:
-    /// the official request's digest is the first hop's, the terminal request's the last hop's.
+    /// Codex's pre-freeze objection on this slice, pinned: the receipt the delivered set carries is
+    /// the exact receipt the session retained and the terminal hop names, reopened from custody, and
+    /// never a replacement minted by holding the same bytes again. The store here stamps every
+    /// receipt with an advancing policy observation, so a second create of identical bytes yields a
+    /// receipt with a different digest, as a file-system store with a moving clock does, and the
+    /// producer refuses a re-held replacement as a retention it cannot establish.
     /// </summary>
     [TestMethod]
-    public async Task EveryAdmittedBodyIsBoundToTheRequestsTheRouteRetained()
+    public async Task TheDeliveredSetCarriesTheReceiptTheRouteBoundNotAReplacement()
     {
-        var run = await RunAsync(GazetteAssertions(), pdf: (HttpStatusCode.OK, PdfBytes));
+        GazetteCustodyStore? store = null;
+        var run = await RunAsync(GazetteAssertions(), pdf: (HttpStatusCode.OK, PdfBytes),
+            decorate: inner => store = new GazetteCustodyStore(inner) { AdvanceObservationPerCreate = true });
 
         Assert.IsNull(run.Result.Refusal, $"{run.Result.Refusal?.Code}: {run.Result.Refusal?.Detail}");
-        foreach (var body in run.Result.GazetteBodySetsByOrdinal!.Values.Single().Bodies)
-        {
-            Assert.AreEqual(LuxembourgGazetteBodyOutcome.Admitted, body.Outcome);
-            var observation = body.SourceObservation!;
-            Assert.AreEqual(body.OfficialAddress!.FetchUri.AbsoluteUri, observation.RequestedUri);
-            Assert.IsTrue(observation.QualifiesAsTrustedBaselineCandidate());
-        }
+        // The fixture self-checks: the ladder's own fetch is held by the session and held again by
+        // the manifest-driven loop's record, and those two receipts over identical bytes differ.
+        var pdfaReceipts = store!.ReceiptsByContent[Sha256(PdfABytes)];
+        Assert.IsTrue(pdfaReceipts.Count >= 2, "the pdfa is held by the session and again by the manifest-driven record.");
+        Assert.AreNotEqual(
+            DurableBlobWriteReceiptDigest.Of(pdfaReceipts[0]), DurableBlobWriteReceiptDigest.Of(pdfaReceipts[1]),
+            "a second create of identical bytes yields a different receipt digest in this store.");
+        var byItem = run.Result.GazetteBodySetsByOrdinal!.Values.Single().Bodies
+            .ToDictionary(static body => body.Candidate.WemiCandidate.ItemIri, StringComparer.Ordinal);
+        Assert.AreEqual(
+            DurableBlobWriteReceiptDigest.Of(pdfaReceipts[0]),
+            DurableBlobWriteReceiptDigest.Of(byItem[ItemPdfA].RetainedTransportBytes!),
+            "the reused listing carries the session's own receipt, the first one minted, not a re-hold.");
+        var pdfReceipts = store.ReceiptsByContent[Sha256(PdfBytes)];
+        Assert.HasCount(1, pdfReceipts, "the Gazette loop's own fetch is held once, by the session, and never again.");
+        Assert.AreEqual(
+            DurableBlobWriteReceiptDigest.Of(pdfReceipts[0]),
+            DurableBlobWriteReceiptDigest.Of(byItem[ItemPdf].RetainedTransportBytes!));
+    }
+
+    /// <summary>A listing the publisher's robots file disallows is not fetched; the gap keeps that cause.</summary>
+    [TestMethod]
+    public async Task AListingRobotsDisallowsIsAGapWithItsCause()
+    {
+        var run = await RunAsync(GazetteAssertions(), pdf: (HttpStatusCode.OK, PdfBytes),
+            pdfRobots: "User-agent: *\nDisallow: /filestore/\n");
+
+        Assert.IsNull(run.Result.Refusal, $"{run.Result.Refusal?.Code}: {run.Result.Refusal?.Detail}");
+        var (ordinal, set) = run.Result.GazetteBodySetsByOrdinal!.Single();
+        Assert.AreEqual(1, set.AdmittedCount);
+        Assert.AreEqual(1, set.GapCount);
+        Assert.AreEqual(
+            CorpusAcquisitionRefusalReason.RobotsDisallowed,
+            run.Result.GazetteListingFetchRefusalsByOrdinal![ordinal][ItemPdf]);
+        Assert.AreEqual(1, run.DocumentRequests, "the ladder's own fetch; the disallowed GET never went out.");
+    }
+
+    /// <summary>
+    /// A producer refusal is the run's refusal, by name: here the store loses the Gazette body
+    /// between the session's hold and the producer's own checked read-back, and the run refuses
+    /// naming the producer's code and the listing rather than delivering a set without it.
+    /// </summary>
+    [TestMethod]
+    public async Task AProducerRefusalRefusesTheRunByName()
+    {
+        // The session reads the body back by reference once when it seals the route's evidence;
+        // the producer's checked read is the second, and that is the one the store fails.
+        var run = await RunAsync(GazetteAssertions(), pdf: (HttpStatusCode.OK, PdfBytes),
+            decorate: inner => new GazetteCustodyStore(inner) { FailReadOfContentSha256 = Sha256(PdfBytes), FailReadOrdinal = 2 });
+
+        Assert.IsNotNull(run.Result.Refusal);
+        Assert.AreEqual(LuxembourgQueryExecutionRefusal.GazetteBodyNotProduced, run.Result.Refusal.Code);
+        StringAssert.Contains(run.Result.Refusal.Detail, nameof(LuxembourgGazetteBodyProductionRefusal.RetainedBytesUnavailable));
+        StringAssert.Contains(run.Result.Refusal.Detail, ItemPdf);
+        Assert.IsNull(run.Result.GazetteBodySetsByOrdinal);
+    }
+
+    /// <summary>
+    /// A receipt the terminal hop names that custody cannot give back refuses the run by name: the
+    /// loop reopens the session's own receipt rather than minting one, so a store that has lost it
+    /// is a whole-run refusal, never a set admitted on a receipt nobody can reopen.
+    /// </summary>
+    [TestMethod]
+    public async Task AReceiptThatWillNotReopenRefusesTheRunByName()
+    {
+        // The session proves its own retain by reopening the receipt once; the loop's reopen is the
+        // second, and that is the one the store fails.
+        var run = await RunAsync(GazetteAssertions(), pdf: (HttpStatusCode.OK, PdfBytes),
+            decorate: inner => new GazetteCustodyStore(inner) { FailReopenOfReceiptForContent = Sha256(PdfBytes), FailReopenOrdinal = 2 });
+
+        Assert.IsNotNull(run.Result.Refusal);
+        Assert.AreEqual(LuxembourgQueryExecutionRefusal.GazetteBodyNotProduced, run.Result.Refusal.Code);
+        StringAssert.Contains(run.Result.Refusal.Detail, ItemPdf);
+        StringAssert.Contains(run.Result.Refusal.Detail, "could not be reopened from custody");
+        Assert.IsNull(run.Result.GazetteBodySetsByOrdinal);
+    }
+
+    /// <summary>
+    /// An as-published act with no Gazette listing at all still gets its set: the producer types the
+    /// absence as the act's own gap, so a delivered run never leaves an as-published act unaccounted.
+    /// </summary>
+    [TestMethod]
+    public async Task AnAsPublishedActWithoutAGazetteListingCarriesItsTypedActGap()
+    {
+        const string manifestationXml = Expression + "/xml";
+        const string itemXml = "http://data.legilux.public.lu/filestore/eli/etat/leg/loi/2026/01/01/a1/jo/fr/xml/eli-etat-leg-loi-2026-01-01-a1-jo-fr-xml.xml";
+        (string, string, string)[] assertions =
+        [
+            (Act, RdfType, Jolux + "Act"),
+            (Act, Jolux + "typeDocument", Types + "LOI"),
+            (Act, Jolux + "isMemberOf", Parent),
+            (Act, Jolux + "isRealizedBy", Expression),
+            (Expression, RdfType, Jolux + "Expression"),
+            (Expression, Jolux + "language", "http://publications.europa.eu/resource/authority/language/FRA"),
+            (Expression, Jolux + "isEmbodiedBy", manifestationXml),
+            (manifestationXml, RdfType, Jolux + "Manifestation"),
+            (manifestationXml, Jolux + "userFormat", Formats + "xml"),
+            (manifestationXml, Jolux + "isExemplifiedBy", itemXml),
+            (manifestationXml, Jolux + "license", CcBy),
+        ];
+
+        var run = await RunAsync(assertions, pdf: null, subjects: [Act, Expression, manifestationXml],
+            ladderItem: itemXml, ladderBody: "<akomaNtoso/>"u8.ToArray(), ladderMediaType: "application/xml");
+
+        Assert.IsNull(run.Result.Refusal, $"{run.Result.Refusal?.Code}: {run.Result.Refusal?.Detail}");
+        var set = run.Result.GazetteBodySetsByOrdinal!.Values.Single();
+        Assert.AreEqual(Act, set.PublisherActIri);
+        Assert.IsEmpty(set.Bodies);
+        Assert.AreEqual(LuxembourgGazetteActGapReason.NoGazettePdfCandidate, set.ActGap);
+        Assert.AreEqual(1, run.DocumentRequests, "the ladder's own xml fetch, and nothing from the Gazette loop.");
     }
 
     // ---- Fixtures. ----
@@ -249,14 +364,18 @@ public sealed class LuxembourgGazetteAcquisitionTests
         string[]? subjects = null,
         string ladderItem = ItemPdfA,
         byte[]? ladderBody = null,
-        WireRequestBudget? wireBudget = null)
+        WireRequestBudget? wireBudget = null,
+        string? pdfRobots = null,
+        Func<ICustodyStore, ICustodyStore>? decorate = null,
+        string ladderMediaType = "application/pdf")
     {
         // The census is a cursor-ordered enumeration: subjects in ascending ordinal order, or the
         // executor's own strict cursor check refuses the family as never advancing.
         subjects = (subjects ?? [Act, Expression, ManifestationPdfA, ManifestationPdf])
             .OrderBy(static subject => subject, StringComparer.Ordinal).ToArray();
         ladderBody ??= PdfABytes;
-        var store = new RoutedHttpAcquisitionSessionTests.MultiObjectCustodyStore();
+        ICustodyStore store = new RoutedHttpAcquisitionSessionTests.MultiObjectCustodyStore();
+        store = decorate?.Invoke(store) ?? store;
         var profileReceipt = await store.CreateAsync(
             "synthetic vocabulary observation for the gazette acquisition"u8.ToArray(),
             CustodyClass.NightlyFloor90d, CancellationToken.None);
@@ -275,11 +394,12 @@ public sealed class LuxembourgGazetteAcquisitionTests
             8 or 11 => LuxembourgAcquisitionTestFixture.JsonResponse(request, LuxembourgAcquisitionTestFixture.CountJson(assertions.Length)),
             9 or 12 => LuxembourgAcquisitionTestFixture.JsonResponse(request, assertionPage),
             10 or 13 => LuxembourgAcquisitionTestFixture.JsonResponse(request, AssertionRows([])),
-            15 => Document(request, ladderItem, HttpStatusCode.OK, ladderBody),
+            15 => Document(request, ladderItem, HttpStatusCode.OK, ladderBody, ladderMediaType),
             // Every document GET runs in its own session, and a session bootstraps robots first: the
-            // Gazette loop's one fetch is a robots request and then the GET.
-            16 when pdf is not null => Response(request, "User-agent: *\nAllow: /\n"u8.ToArray(), "text/plain"),
-            17 when pdf is { } scripted => Document(request, ItemPdf, scripted.Status, scripted.Body),
+            // Gazette loop's one fetch is a robots request and then the GET. A robots file that
+            // disallows the listing ends that session there, and the GET is then unscripted.
+            16 when pdf is not null => Response(request, Encoding.ASCII.GetBytes(pdfRobots ?? "User-agent: *\nAllow: /\n"), "text/plain"),
+            17 when pdf is { } scripted && pdfRobots is null => Document(request, ItemPdf, scripted.Status, scripted.Body),
             _ => throw new AssertFailedException($"Unexpected HTTP request {ordinal}: {request.Method} {request.RequestUri}"),
         });
         var executor = new LuxembourgRepeatedEnumerationExecutor(
@@ -294,14 +414,14 @@ public sealed class LuxembourgGazetteAcquisitionTests
             CancellationToken.None);
         return new GazetteRun(result, documentRequests);
 
-        HttpResponseMessage Document(HttpRequestMessage request, string item, HttpStatusCode status, byte[] body)
+        HttpResponseMessage Document(HttpRequestMessage request, string item, HttpStatusCode status, byte[] body, string mediaType = "application/pdf")
         {
             documentRequests++;
             Assert.AreEqual(HttpMethod.Get, request.Method);
             Assert.AreEqual(
                 new Uri(item.Replace("http://data.legilux.public.lu/", "https://legilux.public.lu/", StringComparison.Ordinal)).AbsoluteUri,
                 request.RequestUri!.AbsoluteUri);
-            return Response(request, body, "application/pdf", status);
+            return Response(request, body, mediaType, status);
         }
     }
 
@@ -342,6 +462,79 @@ public sealed class LuxembourgGazetteAcquisitionTests
         content.Headers.TryAddWithoutValidation("Content-Type", mediaType);
         content.Headers.ContentLength = bytes.Length;
         return new HttpResponseMessage(status) { RequestMessage = request, Content = content };
+    }
+
+    /// <summary>
+    /// Decorates the in-memory store for three calibrations: an advancing policy observation, so a
+    /// second create of identical bytes yields a receipt with a different digest (as a file-system
+    /// store with a moving clock does); one body whose read-back by reference fails after the
+    /// session held it, so the producer's own checked read refuses; and one body whose session
+    /// receipt the store then cannot give back by digest, so the loop's reopen refuses.
+    /// </summary>
+    internal sealed class GazetteCustodyStore(ICustodyStore inner) : ICustodyStore
+    {
+        private DateTimeOffset _observed = new(2026, 9, 14, 0, 0, 0, TimeSpan.Zero);
+
+        internal bool AdvanceObservationPerCreate { get; init; }
+
+        internal string? FailReadOfContentSha256 { get; init; }
+
+        /// <summary>Which read-back of that body fails, counting from one; the earlier ones succeed.</summary>
+        internal int FailReadOrdinal { get; init; } = 1;
+
+        /// <summary>The body whose first receipt, once minted, the store will not give back by digest.</summary>
+        internal string? FailReopenOfReceiptForContent { get; init; }
+
+        /// <summary>Which reopen of that receipt fails, counting from one; the earlier ones succeed.</summary>
+        internal int FailReopenOrdinal { get; init; } = 1;
+
+        private string? _lostReceiptDigest;
+
+        private int _lostReceiptReopens;
+
+        internal Dictionary<string, List<DurableBlobWriteReceipt>> ReceiptsByContent { get; } = new(StringComparer.Ordinal);
+
+        private readonly Dictionary<string, int> _readsByContent = new(StringComparer.Ordinal);
+
+        public async Task<DurableBlobWriteReceipt> CreateAsync(
+            ReadOnlyMemory<byte> bytes, CustodyClass custodyClass, CancellationToken cancellationToken)
+        {
+            var receipt = await inner.CreateAsync(bytes, custodyClass, cancellationToken);
+            if (AdvanceObservationPerCreate)
+            {
+                _observed = _observed.AddSeconds(1);
+                var policy = receipt.PolicyEvidence;
+                receipt = new DurableBlobWriteReceipt(receipt.Schema, receipt.Reference, new CustodyPolicyEvidence(
+                    policy.Schema, policy.Reference, policy.VerificationProfile, policy.PolicyKey, policy.Protection,
+                    _observed, policy.ProtectedUntil is null ? null : _observed.AddDays(91)));
+            }
+
+            if (!ReceiptsByContent.TryGetValue(receipt.Reference.ContentSha256, out var receipts))
+            {
+                ReceiptsByContent[receipt.Reference.ContentSha256] = receipts = [];
+            }
+
+            receipts.Add(receipt);
+            if (string.Equals(receipt.Reference.ContentSha256, FailReopenOfReceiptForContent, StringComparison.Ordinal))
+            {
+                _lostReceiptDigest ??= DurableBlobWriteReceiptDigest.Of(receipt);
+            }
+
+            return receipt;
+        }
+
+        public Task<ReadOnlyMemory<byte>> ReadAsync(DurableBlobRef reference, CancellationToken cancellationToken)
+        {
+            var reads = _readsByContent[reference.ContentSha256] = _readsByContent.GetValueOrDefault(reference.ContentSha256) + 1;
+            return string.Equals(reference.ContentSha256, FailReadOfContentSha256, StringComparison.Ordinal) && reads == FailReadOrdinal
+                ? throw new IOException("The fixture store lost this object between the hold and the read-back.")
+                : inner.ReadAsync(reference, cancellationToken);
+        }
+
+        public Task<ReadOnlyMemory<byte>> ReadByDigestAsync(string contentSha256, CancellationToken cancellationToken) =>
+            string.Equals(contentSha256, _lostReceiptDigest, StringComparison.Ordinal) && ++_lostReceiptReopens == FailReopenOrdinal
+                ? throw new FileNotFoundException("The fixture store lost the session's receipt for this body.")
+                : inner.ReadByDigestAsync(contentSha256, cancellationToken);
     }
 
     private static string Sha256(byte[] bytes) =>

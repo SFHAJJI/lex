@@ -1128,6 +1128,9 @@ public sealed class LuxembourgScopeResolverTests
             (BodyObservation(removePredicate: Jolux + "isMemberOf"), "an ordinary act without its membership"),
             (TypedRoleObservation("RECUEIL"), "a point type"),
             (TypedRoleObservation("ACCA"), "a never-ingest type"),
+            (TypedRoleObservation("DIV"), "a structurally excluded type"),
+            (TypedRoleObservation("NOT_A_SETTLED_TYPE"), "a type this profile never settled"),
+            (PriorityTypeOnANonActClass(), "a priority type on a class that is not an Act"),
         })
         {
             var resolved = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(
@@ -1138,16 +1141,63 @@ public sealed class LuxembourgScopeResolverTests
         }
     }
 
+    /// <summary>
+    /// The record itself refuses a form its family state does not admit, in both directions: an
+    /// accepted resource with no form, and a quarantined one with a form. The resolver derives both
+    /// from one classification; this is what stops a second producer, or a test double, from
+    /// handing the Gazette loop a form the family never accepted.
+    /// </summary>
+    [TestMethod]
+    public void AResolutionRefusesAFormItsFamilyStateDoesNotAdmit()
+    {
+        var accepted = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(
+            Profile().Resolve(Proven([BodyObservation()]))).Resources.Single();
+        var quarantined = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(
+            Profile().Resolve(Proven([TypedRoleObservation("RCSF")]))).Resources.Single();
+        Assert.AreEqual(LuxembourgPublicationForm.AsPublishedOriginal, accepted.PublicationForm);
+        Assert.AreEqual(LuScopeTerminalState.TypedQuarantine, quarantined.Dimensions.PublicationFamily.State);
+
+        var noForm = Assert.ThrowsExactly<ArgumentException>(() => Rebuild(accepted, LuxembourgPublicationForm.NotQualified));
+        var aForm = Assert.ThrowsExactly<ArgumentException>(() => Rebuild(quarantined, LuxembourgPublicationForm.AsPublishedOriginal));
+        StringAssert.Contains(noForm.Message, "exactly when the publication family is accepted");
+        StringAssert.Contains(aForm.Message, "exactly when the publication family is accepted");
+        // And the record accepts exactly what the resolver minted.
+        Assert.AreEqual(accepted.PublicationForm, Rebuild(accepted, accepted.PublicationForm).PublicationForm);
+        Assert.AreEqual(quarantined.PublicationForm, Rebuild(quarantined, quarantined.PublicationForm).PublicationForm);
+
+        static LuxembourgResourceResolution Rebuild(LuxembourgResourceResolution resource, LuxembourgPublicationForm form) =>
+            new(resource.ObjectRef, resource.Dimensions, resource.Assertions, resource.Relations,
+                resource.WemiTopology, resource.BodyJoin, resource.TypedRole, form);
+    }
+
     /// <summary>Two typeDocument values are a selector conflict, so no branch is named.</summary>
     [TestMethod]
     public void AConflictingTypeDocumentCarriesNoPublicationForm()
     {
+        // A PRIORITY conflict, deliberately: the ordinary qualifiers already require exactly one
+        // typeDocument, so an ordinary conflict would name no form even if the resolver classified
+        // the first value it found. The priority branch needs only the type and the Act class, so
+        // only the resolver's own single-selector rule keeps a TC/RECT conflict from being read as
+        // a priority act.
+        var observation = new LuxembourgResourceObservation(
+            ObjectRef(),
+            ObservationRef,
+            [
+                Iri(ActIri, RdfType, Jolux + "Act"),
+                Iri(ActIri, Jolux + "typeDocument", JoluxAuthority + "resource-type/TC"),
+                Iri(ActIri, Jolux + "typeDocument", JoluxAuthority + "resource-type/RECT"),
+            ],
+            [],
+            new LuxembourgSparqlRightsChannelObservations(ObservationRef, SparqlEnumerationRef, []),
+            new LuxembourgInFileRightsChannelObservations(ObservationRef, InFileEnumerationRef, []));
+
         var resolved = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(
-            Profile().Resolve(Proven([BodyObservation(additionalAssertions:
-                [Iri(ActIri, Jolux + "typeDocument", JoluxAuthority + "resource-type/RGD")])])));
+            Profile().Resolve(Proven([observation])));
+
         var resource = resolved.Resources.Single();
         Assert.AreEqual(LuxembourgPublicationForm.NotQualified, resource.PublicationForm);
         Assert.AreEqual(LuScopeTerminalState.TypedQuarantine, resource.Dimensions.PublicationFamily.State);
+        Assert.AreEqual("typed_quarantine_selector_conflict", resource.Dimensions.PublicationFamily.ReasonCode);
     }
 
     [TestMethod]
@@ -1479,6 +1529,19 @@ public sealed class LuxembourgScopeResolverTests
     private static LuxembourgProvenResourceObservations Proven(
         params LuxembourgResourceObservation[] observations) =>
         LuxembourgProvenResourceObservations.RequireProven(AbsenceFixtures.Proof(), observations);
+
+    /// <summary>A priority type whose subject is a consolidation, not an Act: the priority branch needs both.</summary>
+    private static LuxembourgResourceObservation PriorityTypeOnANonActClass() =>
+        new(
+            ObjectRef(),
+            ObservationRef,
+            [
+                Iri(ActIri, RdfType, Jolux + "Consolidation"),
+                Iri(ActIri, Jolux + "typeDocument", JoluxAuthority + "resource-type/TC"),
+            ],
+            [],
+            new LuxembourgSparqlRightsChannelObservations(ObservationRef, SparqlEnumerationRef, []),
+            new LuxembourgInFileRightsChannelObservations(ObservationRef, InFileEnumerationRef, []));
 
     private static LuxembourgResourceObservation TypedRoleObservation(string typeDocumentSuffix) =>
         new(

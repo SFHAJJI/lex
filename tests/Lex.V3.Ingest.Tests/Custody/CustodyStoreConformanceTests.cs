@@ -62,6 +62,10 @@ public sealed class CustodyStoreConformanceTests
         "Lex.V3.Ingest.Tests.EuCorrigendumTripwireProducerTests+CountingCustodyStore: decorates an "
             + "inner store, counts its creates, and takes the one ordinal it refuses - the last "
             + "write of a run, whose digest differs per run and so cannot be named ahead",
+        "Lex.V3.Ingest.Tests.LuxembourgGazetteAcquisitionTests+GazetteCustodyStore: decorates an "
+            + "inner store, stamps each receipt with an advancing policy observation so a second "
+            + "create of the same bytes yields a different receipt digest, and takes the one body "
+            + "whose read-back by reference it fails",
         "Lex.V3.Ingest.Tests.LuxembourgDocumentGetTests+BodyReopenFailingCustodyStore: decorates "
             + "an inner store and takes the body whose reopen it corrupts at a chosen ordinal",
         "Lex.V3.Ingest.Tests.LuxembourgDocumentGetTests+CustodyRequiredAfterProductRequestStore: "
@@ -133,14 +137,14 @@ public sealed class CustodyStoreConformanceTests
     public void TheImplementationCountsAreExactlyThese()
     {
         var types = CustodyStoreConformance.ImplementationTypes(Scope);
-        Assert.AreEqual(24, types.Count, "implementations swept");
+        Assert.AreEqual(25, types.Count, "implementations swept");
         Assert.AreEqual(
             9,
             types.Count(static type =>
                 CustodyStoreConformance.IsDrivenByDefault(type)
                 || CustodyStoreConformance.HasRecipe(type)),
             "implementations driven");
-        Assert.AreEqual(15, Exempt.Length, "implementations exempt");
+        Assert.AreEqual(16, Exempt.Length, "implementations exempt");
     }
 
     [TestMethod]

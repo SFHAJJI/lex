@@ -822,6 +822,17 @@ public sealed record LuxembourgResourceResolution
         BodyJoin = bodyJoin ?? throw new ArgumentNullException(nameof(bodyJoin));
         TypedRole = typedRole ?? throw new ArgumentNullException(nameof(typedRole));
         PublicationForm = LuxembourgSourceValidation.RequireDefined(publicationForm, nameof(publicationForm));
+
+        // A FORM IS NAMED EXACTLY WHEN THE FAMILY IS ACCEPTED. The resolver derives both from one
+        // classification, but this record is what consumers read - the Gazette loop fetches on the
+        // form alone - so the agreement is checked here rather than trusted to the one caller.
+        if ((PublicationForm != LuxembourgPublicationForm.NotQualified) !=
+            (Dimensions.PublicationFamily.State == LuScopeTerminalState.AcceptedCandidate))
+        {
+            throw new ArgumentException(
+                "A publication form is named exactly when the publication family is accepted.",
+                nameof(publicationForm));
+        }
     }
 
     public SourceObjectRef ObjectRef { get; }

@@ -522,10 +522,10 @@ public enum LuxembourgQueryExecutionRefusal
 
     /// <summary>
     /// #419 slice 6c: an as-published act's Gazette body set could not be produced - the accepted
-    /// producer refused (custody read-back, hold, or a retention the contract could not establish),
-    /// or the requests a retention cites could not be reopened from custody by the hops' own
-    /// digests. The inner code and detail travel in the detail. One act's failure here is a
-    /// whole-run refusal, as a body that will not hold already is.
+    /// producer refused (a custody read-back, or a retention the contract could not establish), or
+    /// the request or the receipt the terminal hop names could not be reopened from custody by the
+    /// hop's own digests. The inner code and detail travel in the detail. One act's failure here is
+    /// a whole-run refusal, as a body that will not hold already is.
     /// </summary>
     [JsonStringEnumMemberName("gazette_body_not_produced")]
     GazetteBodyNotProduced = 16,
@@ -2149,7 +2149,7 @@ public sealed class LuxembourgQueryExecutionAdapter
     /// </returns>
     internal async Task<(
         IReadOnlyDictionary<int, CorpusAcquisitionOutcome>? Outcomes,
-        IReadOnlyDictionary<int, (RoutedHttpEvidence Evidence, DurableBlobWriteReceipt Receipt)>? HeldByOrdinal,
+        IReadOnlyDictionary<int, RoutedHttpEvidence>? HeldEvidenceByOrdinal,
         LuxembourgQueryExecutionRefusalDetail? Refusal)> RunDocumentAcquisitionAsync(
         ScopeManifest reopenedManifest,
         IReadOnlyDictionary<SourceObjectRef, LuxembourgDocumentFetchAddress> mintedAddressesByObjectRef,
@@ -2176,9 +2176,11 @@ public sealed class LuxembourgQueryExecutionAdapter
         }
 
         var outcomesByOrdinal = new Dictionary<int, CorpusAcquisitionOutcome>();
-        // The held rows' route evidence and receipt, handed back so the Gazette loop reuses the
-        // listing this manifest-driven fetch already retrieved rather than fetching it twice.
-        var heldByOrdinal = new Dictionary<int, (RoutedHttpEvidence Evidence, DurableBlobWriteReceipt Receipt)>();
+        // The held rows' route evidence, handed back so the Gazette loop reuses the listing this
+        // manifest-driven fetch already retrieved rather than fetching it twice. The evidence only:
+        // the receipt the Gazette producer verifies is the one the terminal hop names, reopened from
+        // custody there, never this loop's own re-hold of the same bytes.
+        var heldByOrdinal = new Dictionary<int, RoutedHttpEvidence>();
         for (var rowOrdinal = 0; rowOrdinal < reopenedManifest.Rows.Count; rowOrdinal++)
         {
             var row = reopenedManifest.Rows[rowOrdinal];
@@ -2281,7 +2283,7 @@ public sealed class LuxembourgQueryExecutionAdapter
                     }
 
                     outcomesByOrdinal[rowOrdinal] = CorpusAcquisitionOutcome.Held(bodyReceipt);
-                    heldByOrdinal[rowOrdinal] = (evidence, bodyReceipt);
+                    heldByOrdinal[rowOrdinal] = evidence;
                     continue;
                 }
 
@@ -2343,9 +2345,9 @@ public sealed class LuxembourgQueryExecutionAdapter
     /// unexpected status, an incomplete hop) yields no acquisition and is recorded per listing
     /// beside the set, so the producer's <c>body_not_retained</c> gap never stands without its
     /// cause. A listing whose legal-value markers contradict each other is not fetched and is
-    /// recorded as such. A session that will not start, a ceiling reached mid-loop, a body that
-    /// will not read back or hold, a request that will not reopen, and a producer refusal are
-    /// whole-run refusals, exactly as the manifest-driven loop treats its own.
+    /// recorded as such. A session that will not start, a ceiling reached mid-loop, a request or a
+    /// receipt that will not reopen from custody, and a producer refusal are whole-run refusals,
+    /// exactly as the manifest-driven loop treats its own.
     /// </para>
     /// </remarks>
     internal async Task<(
@@ -2356,7 +2358,7 @@ public sealed class LuxembourgQueryExecutionAdapter
         LuxembourgProfileResolution.Resolved resolved,
         ScopeManifest reopenedManifest,
         IReadOnlyDictionary<SourceObjectRef, LuxembourgDocumentFetchAddress> mintedAddressesByObjectRef,
-        IReadOnlyDictionary<int, (RoutedHttpEvidence Evidence, DurableBlobWriteReceipt Receipt)> heldByOrdinal,
+        IReadOnlyDictionary<int, RoutedHttpEvidence> heldEvidenceByOrdinal,
         MachineQueryRendererSource documentFetchRendererSource,
         WireRequestBudget wireBudget,
         CancellationToken cancellationToken)
@@ -2364,7 +2366,7 @@ public sealed class LuxembourgQueryExecutionAdapter
         ArgumentNullException.ThrowIfNull(resolved);
         ArgumentNullException.ThrowIfNull(reopenedManifest);
         ArgumentNullException.ThrowIfNull(mintedAddressesByObjectRef);
-        ArgumentNullException.ThrowIfNull(heldByOrdinal);
+        ArgumentNullException.ThrowIfNull(heldEvidenceByOrdinal);
         ArgumentNullException.ThrowIfNull(documentFetchRendererSource);
         ArgumentNullException.ThrowIfNull(wireBudget);
         var ordinalByObjectRef = new Dictionary<SourceObjectRef, int>();
@@ -2384,12 +2386,11 @@ public sealed class LuxembourgQueryExecutionAdapter
                 continue;
             }
 
+            // AN ACT WITH NO GAZETTE LISTING STILL GETS ITS SET. The producer types that absence as
+            // the act's own gap (no pdf/pdfa candidate, or a realization path the publisher never
+            // stated), so a delivered run accounts for every as-published act rather than leaving
+            // "checked and found nothing" indistinguishable from "never looked".
             var listings = LuxembourgGazetteBodySet.GazetteCandidatesOf(resource.BodyJoin);
-            if (listings.Count == 0)
-            {
-                continue;
-            }
-
             if (!ordinalByObjectRef.TryGetValue(resource.ObjectRef, out var ordinal))
             {
                 // Unreachable in practice: the manifest was reduced from this very resolution, so
@@ -2403,10 +2404,10 @@ public sealed class LuxembourgQueryExecutionAdapter
 
             var actEliPagePath = new Uri(resource.ObjectRef.PublisherUri, UriKind.Absolute).AbsolutePath;
             var assertions = resource.Assertions.Select(static entry => entry.Assertion).ToArray();
-            var reusable = heldByOrdinal.TryGetValue(ordinal, out var held) &&
+            var reusable = heldEvidenceByOrdinal.TryGetValue(ordinal, out var heldEvidence) &&
                 mintedAddressesByObjectRef.TryGetValue(resource.ObjectRef, out var mintedAddress)
-                ? (Address: mintedAddress, held.Evidence, held.Receipt)
-                : ((LuxembourgDocumentFetchAddress Address, RoutedHttpEvidence Evidence, DurableBlobWriteReceipt Receipt)?)null;
+                ? (Address: mintedAddress, Evidence: heldEvidence)
+                : ((LuxembourgDocumentFetchAddress Address, RoutedHttpEvidence Evidence)?)null;
             var acquisitions = new List<LuxembourgGazetteBodyAcquisition>();
             var refusalsForAct = new Dictionary<string, CorpusAcquisitionRefusalReason>(StringComparer.Ordinal);
             var contradictoryForAct = new List<string>();
@@ -2438,14 +2439,12 @@ public sealed class LuxembourgQueryExecutionAdapter
                 var address = LuxembourgDocumentFetchAddress.Create(
                     LuxembourgFileUri.RequireValid(wemi.ItemIri), token, legalValue, actEliPagePath);
                 RoutedHttpEvidence evidence;
-                DurableBlobWriteReceipt receipt;
                 if (reusable is { } reuse &&
                     string.Equals(reuse.Address.StoreFileUri.Value.AbsoluteUri, wemi.ItemIri, StringComparison.Ordinal))
                 {
                     // The manifest-driven acquisition already fetched and held this very item.
                     address = reuse.Address;
                     evidence = reuse.Evidence;
-                    receipt = reuse.Receipt;
                 }
                 else
                 {
@@ -2480,35 +2479,7 @@ public sealed class LuxembourgQueryExecutionAdapter
                             continue;
                         }
 
-                        ReadOnlyMemory<byte> bodyBytes;
-                        try
-                        {
-                            bodyBytes = await CustodyRestore.ReadByDigestCheckedAsync(
-                                    _custodyStore, fetched.Hops[^1].Sha256, cancellationToken)
-                                .ConfigureAwait(false);
-                        }
-                        catch (CustodyIntegrityException exception)
-                        {
-                            return (null, null, null, new LuxembourgQueryExecutionRefusalDetail(
-                                LuxembourgQueryExecutionRefusal.DocumentBodyNotRetained,
-                                null,
-                                $"Gazette listing '{wemi.ItemIri}' of manifest row {ordinal}: the body could not be "
-                                + $"reopened at its own digest: {exception.Message}"));
-                        }
-
-                        var (bodyReceipt, holdFailure) = await CustodyHold
-                            .TryHoldAsync(_custodyStore, bodyBytes, cancellationToken)
-                            .ConfigureAwait(false);
-                        if (bodyReceipt is null)
-                        {
-                            return (null, null, null, new LuxembourgQueryExecutionRefusalDetail(
-                                LuxembourgQueryExecutionRefusal.DocumentBodyNotRetained,
-                                null,
-                                $"Gazette listing '{wemi.ItemIri}' of manifest row {ordinal}: {holdFailure}"));
-                        }
-
                         evidence = fetched;
-                        receipt = bodyReceipt;
                     }
                     else if (TryMapHopIncompleteToCorpusAcquisitionRefusal(fetched, out var hopRefusal))
                     {
@@ -2527,40 +2498,33 @@ public sealed class LuxembourgQueryExecutionAdapter
                     }
                 }
 
-                // THE REQUESTS, FROM THE HOPS' OWN DIGESTS. Reopened, never rebuilt: the retention
-                // the producer verifies binds the first hop to the official request's digest and the
-                // terminal request to the terminal hop, so only the bytes the session retained
-                // can satisfy it.
-                HttpLogicalRequest officialRequest;
-                HttpLogicalRequest terminalRequest;
-                try
-                {
-                    officialRequest = HttpLogicalRequest.ParseAndVerify(
-                        (await CustodyRestore.ReadByDigestCheckedAsync(
-                                _custodyStore, evidence.Hops[0].LogicalRequestSha256, cancellationToken)
-                            .ConfigureAwait(false)).Span);
-                    terminalRequest = HttpLogicalRequest.ParseAndVerify(
-                        (await CustodyRestore.ReadByDigestCheckedAsync(
-                                _custodyStore, evidence.Hops[^1].LogicalRequestSha256, cancellationToken)
-                            .ConfigureAwait(false)).Span);
-                }
-                catch (Exception exception) when (exception is CustodyRequiredException
-                    or CustodyIntegrityException or CustodyPolicyException or ArgumentException)
+                // THE REQUEST AND THE RECEIPT, FROM THE TERMINAL HOP'S OWN DIGESTS. Reopened, never
+                // rebuilt and never re-held: the retention the producer verifies binds the first hop
+                // to the official request's digest, the terminal request to the terminal hop, and
+                // the retained receipt to the exact receipt digest the terminal hop names. The
+                // Luxembourg profile admits no redirect, so a complete route has one hop and its
+                // request is both the official and the terminal one. A second hold of the same
+                // bytes would mint a receipt carrying its own policy observation and so its own
+                // digest, which the producer must refuse; only the receipt the session retained
+                // satisfies it.
+                var (reopened, reopenFailure) = await TryReopenTerminalHopAsync(evidence, cancellationToken)
+                    .ConfigureAwait(false);
+                if (reopened is not { } hop)
                 {
                     return (null, null, null, new LuxembourgQueryExecutionRefusalDetail(
                         LuxembourgQueryExecutionRefusal.GazetteBodyNotProduced,
                         null,
-                        $"Gazette listing '{wemi.ItemIri}' of manifest row {ordinal}: the request that fetched it "
-                        + $"could not be reopened from custody: {exception.GetType().Name}: {exception.Message}"));
+                        $"Gazette listing '{wemi.ItemIri}' of manifest row {ordinal}: {reopenFailure}"));
                 }
 
                 acquisitions.Add(new LuxembourgGazetteBodyAcquisition(
-                    wemi.ManifestationIri, wemi.ItemIri, address, officialRequest, terminalRequest, evidence, receipt));
+                    wemi.ManifestationIri, wemi.ItemIri, address, hop.Request, hop.Request, evidence, hop.Receipt));
             }
 
             var produced = await producer.RunAsync(resource.BodyJoin, acquisitions, cancellationToken)
                 .ConfigureAwait(false);
-            if (!produced.Produced || produced.Set is null)
+            // The set is null exactly when the producer refused; its code and detail travel on.
+            if (produced.Set is null)
             {
                 return (null, null, null, new LuxembourgQueryExecutionRefusalDetail(
                     LuxembourgQueryExecutionRefusal.GazetteBodyNotProduced,
@@ -2581,6 +2545,41 @@ public sealed class LuxembourgQueryExecutionAdapter
         }
 
         return (sets, fetchRefusals, contradictory, null);
+    }
+
+    /// <summary>
+    /// The terminal hop's request and its retained receipt, reopened from custody by the digests the
+    /// hop itself names. The receipt is the store's own record of the bytes the hop transferred,
+    /// exactly as the session retained it: parsed back from its canonical bytes, never created
+    /// again. Any failure is named, not thrown past this door.
+    /// </summary>
+    private async Task<((HttpLogicalRequest Request, DurableBlobWriteReceipt Receipt)? Reopened, string? Failure)> TryReopenTerminalHopAsync(
+        RoutedHttpEvidence evidence,
+        CancellationToken cancellationToken)
+    {
+        var terminal = evidence.Hops[^1];
+        try
+        {
+            var request = HttpLogicalRequest.ParseAndVerify(
+                (await CustodyRestore.ReadByDigestCheckedAsync(
+                        _custodyStore, terminal.LogicalRequestSha256, cancellationToken)
+                    .ConfigureAwait(false)).Span);
+            var receiptBytes = await CustodyRestore.ReadByDigestCheckedAsync(
+                    _custodyStore, terminal.DurableWriteReceiptSha256, cancellationToken)
+                .ConfigureAwait(false);
+            var receipt = ContractJson.Deserialize<DurableBlobWriteReceipt>(
+                    new UTF8Encoding(false, true).GetString(receiptBytes.Span))
+                ?? throw new CustodyIntegrityException("The retained write receipt decoded to nothing.");
+            return ((request, receipt), null);
+        }
+        catch (Exception exception) when (exception is CustodyRequiredException
+            or CustodyIntegrityException or CustodyPolicyException or ArgumentException
+            or JsonException or DecoderFallbackException)
+        {
+            return (null,
+                "the request or receipt the terminal hop names could not be reopened from custody: "
+                + $"{exception.GetType().Name}: {exception.Message}");
+        }
     }
 
     private static CorpusAcquisitionRefusalReason MapDocumentGetKind(
