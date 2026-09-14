@@ -128,6 +128,32 @@ public sealed class Stage3EvidenceLineageTests
         Assert.IsNotNull(lineage);
     }
 
+    [TestMethod]
+    public async Task ImageOnlyAnnexSourceCannotMatchTheEuropeCorpusByCanonicalKeyAlone()
+    {
+        var europe = await EuAxiomWiringHarness.RunAsync(
+            static root => EuAcquisitionTestFixture.AxiomAbsenceScriptFor(root));
+        var luxembourg = await LuxembourgQueryExecutionAdapterTests.RunEmptyDeliveredForEnvelopeAsync();
+        var annex = await EuImageOnlyAnnexProducerTests.ProduceForEnvelopeAsync();
+        var source = annex.Disposition!.SourceObject;
+        var sameKeyForeignSource = new SourceObjectRef(
+            source.Schema,
+            source.Authority,
+            source.EntityKind,
+            "https://example.invalid/resource/cellar/" + source.CanonicalKey,
+            source.CanonicalKey,
+            source.CanonicalKeySha256,
+            source.IdentityProfileRef,
+            source.ParentKeyRef);
+        var envelope = Rebuild(
+            AddEuropeCorpusRecord(europe, sameKeyForeignSource),
+            luxembourg,
+            [annex]);
+
+        Assert.IsNull(Stage3EvidenceLineage.TryBind(envelope, out var refusal, out _));
+        Assert.AreEqual(Stage3EvidenceLineageRefusal.EuropeAnnexOutsideCorpus, refusal);
+    }
+
     private static async Task<Stage3EvidenceEnvelope> CompleteEnvelopeAsync()
     {
         var europe = await EuAxiomWiringHarness.RunAsync(
