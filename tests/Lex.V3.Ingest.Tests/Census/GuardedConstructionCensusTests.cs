@@ -106,7 +106,11 @@ public sealed class GuardedConstructionCensusTests
                     + "method internal static "
                     + "Lex.V3.Ingest.Europe.EuCorrigendumTripwireProductionResult::Success, "
                     + "method private instance "
-                    + "Lex.V3.Ingest.Europe.EuCorrigendumTripwireProducer::FoldAndRetainAsync, "
+                    + "Lex.V3.Ingest.Europe.EuCorrigendumTripwireProducer::RetainAsync, "
+                    + "method private static "
+                    + "Lex.V3.Ingest.Europe.EuCorrigendumTripwireProducer::RefuseFold, "
+                    + "method private static "
+                    + "Lex.V3.Ingest.Europe.EuCorrigendumTripwireProducer::RefuseUnlessDelivered, "
                     + "method public instance "
                     + "Lex.V3.Ingest.Europe.EuCorrigendumTripwireProducer::RunAsync, "
                     + "1 compiler-generated",
@@ -190,7 +194,8 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Ingest.Europe.EuRepeatedEnumerationExecutor::RunObjectFactsPartitionA"
                     + "sync, "
                     + "method public static Lex.V3.Ingest.Europe.EuEnumerationRunResult::Delivered, "
-                    + "method public static Lex.V3.Ingest.Europe.EuEnumerationRunResult::Refused",
+                    + "method public static Lex.V3.Ingest.Europe.EuEnumerationRunResult::Refused, "
+                    + "2 compiler-generated",
                 "Lex.V3.Ingest.Europe.EuFamilyEnumerationOutcome: constructor private instance "
                     + "Lex.V3.Ingest.Europe.EuFamilyEnumerationOutcome::.ctor, "
                     + "method public static "
@@ -224,6 +229,9 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Ingest.Europe.EuLanguageScopedExpressionProductionResult::Success, "
                     + "method private instance "
                     + "Lex.V3.Ingest.Europe.EuLanguageScopedExpressionProducer::DeriveAndRetainAsyn"
+                    + "c, "
+                    + "method private instance "
+                    + "Lex.V3.Ingest.Europe.EuLanguageScopedExpressionProducer::TryOpenDeliveryAsyn"
                     + "c, "
                     + "method private static "
                     + "Lex.V3.Ingest.Europe.EuLanguageScopedExpressionProducer::RefuseBeforeTraffic, "
@@ -283,7 +291,10 @@ public sealed class GuardedConstructionCensusTests
                 "Lex.V3.Ingest.Europe.EuQueryExecutionRefusalDetail: constructor internal instance "
                     + "Lex.V3.Ingest.Europe.EuQueryExecutionRefusalDetail::.ctor, "
                     + "method internal instance "
-                    + "Lex.V3.Ingest.Europe.EuQueryExecutionAdapter::RunDocumentAcquisitionAsync",
+                    + "Lex.V3.Ingest.Europe.EuQueryExecutionAdapter::RunDocumentAcquisitionAsync, "
+                    + "method internal static "
+                    + "Lex.V3.Ingest.Europe.EuQueryExecutionAdapter::TryPairExpressionAndObjectBatc"
+                    + "hes",
                 "Lex.V3.Ingest.Europe.EuQueryExecutionResult: constructor private instance "
                     + "Lex.V3.Ingest.Europe.EuQueryExecutionResult::.ctor, "
                     + "method internal static "

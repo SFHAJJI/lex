@@ -355,6 +355,21 @@ public enum EuQueryExecutionRefusal
     /// </summary>
     [JsonStringEnumMemberName("corrigendum_tripwire_production_refused")]
     CorrigendumTripwireProductionRefused = 25,
+
+    /// <summary>
+    /// #418 slice 6: this run's object-facts and Expression-facts batches do not pair one to one
+    /// over identical objects, so a tripwire production cannot be set up for every Expression batch
+    /// this run will make. Refused BEFORE any object-facts request goes out, and never downgraded to
+    /// running the odd batch alone: a delivered run whose Expression population was only partly
+    /// produced could not be told apart from a complete one by anything downstream.
+    /// </summary>
+    /// <remarks>
+    /// Unreachable through <see cref="EuObjectFactsBatchFactory.Build"/> as it stands, which chunks
+    /// one ordered object list identically for both families. That is the point: this names what
+    /// would otherwise be a silent hole if that ever drifted, rather than trusting it not to.
+    /// </remarks>
+    [JsonStringEnumMemberName("corrigendum_tripwire_batches_not_paired")]
+    CorrigendumTripwireBatchesNotPaired = 26,
 }
 
 public sealed class EuQueryExecutionRefusalDetail
@@ -1193,20 +1208,29 @@ public sealed class EuQueryExecutionAdapter
         // the decode, the record set and every existing refusal see what they saw before the join.
         // Nothing is sent twice, and no delivery, receipt or run result crosses from this adapter
         // into a producer. The expected keys are fixed from the frozen pairing before any traffic.
-        var (batchPairs, _) = PairExpressionAndObjectBatches(objectFactsRequests);
+        if (TryPairExpressionAndObjectBatches(objectFactsRequests, out var batchPairs) is { } pairingRefusal)
+        {
+            return EuQueryExecutionResult.Refused(topology, outcomes, pairingRefusal);
+        }
+
         var tripwireProducer = new EuCorrigendumTripwireProducer(
             new EuLanguageScopedExpressionProducer(_executor, _custodyStore), _custodyStore);
         var pairingsByIndex = new Dictionary<int, EuCorrigendumTripwireProducer.Pairing>();
-        var expectedTripwireKeys = new HashSet<string>(StringComparer.Ordinal);
         foreach (var (expressionIndex, objectIndex) in batchPairs)
         {
             var pairing = tripwireProducer.BeginPairing(
                 objectFactsRequests[expressionIndex], objectFactsRequests[objectIndex], objectFactsPolicy.SourceWitness);
             pairingsByIndex[expressionIndex] = pairing;
             pairingsByIndex[objectIndex] = pairing;
-            expectedTripwireKeys.Add(
-                EuObjectFactsDiscoveryPlan.PartitionKeyFor(objectFactsRequests[expressionIndex].BatchObjects));
         }
+
+        // FROM THE COMPLETE EXPRESSION-FACTS REQUEST SET, not from whatever paired: the pairing above
+        // is total or this run already refused, and reading the expectation off the requests keeps
+        // that so even if the two ever disagreed.
+        var expectedTripwireKeys = objectFactsRequests
+            .Where(static request => request.Set == EuObjectFactsQuerySet.ExpressionFacts)
+            .Select(static request => EuObjectFactsDiscoveryPlan.PartitionKeyFor(request.BatchObjects))
+            .ToHashSet(StringComparer.Ordinal);
 
         var tripwireProductions = new Dictionary<string, EuCorrigendumTripwireProductionResult>(StringComparer.Ordinal);
         for (var requestIndex = 0; requestIndex < objectFactsRequests.Count; requestIndex++)
@@ -1270,7 +1294,26 @@ public sealed class EuQueryExecutionAdapter
             }
         }
 
-        var corrigendumTripwires = new EuCorrigendumTripwireCompletion(expectedTripwireKeys, tripwireProductions);
+        EuCorrigendumTripwireCompletion corrigendumTripwires;
+        try
+        {
+            corrigendumTripwires = new EuCorrigendumTripwireCompletion(expectedTripwireKeys, tripwireProductions);
+        }
+        catch (ArgumentException exception)
+        {
+            // Unreachable in practice: the expected keys are this run's own paired batches and the
+            // productions are keyed by the family key those same batches delivered, and the loop
+            // above already refused every production that refused. Refusing rather than throwing
+            // keeps this method's "never throws past a typed refusal" discipline, so a defect
+            // elsewhere that broke the partition key would still leave a readable run rather than
+            // an unhandled exception.
+            return EuQueryExecutionResult.Refused(
+                topology, outcomes,
+                new EuQueryExecutionRefusalDetail(
+                    EuQueryExecutionRefusal.CorrigendumTripwireProductionRefused,
+                    "the run's tripwire productions do not account for its paired batches: " + exception.Message));
+        }
+
 
         var objectFactsRows = new Dictionary<EuObjectFactsQuerySet, List<(IReadOnlyList<RepeatedEnumerationRow> Rows, RepeatedEnumerationInterpretationProfile Profile, AbsenceFamilyEnumerationProof Proof)>>();
         foreach (var ((set, familyKey), (proof, receipt)) in objectFactsByKey)
@@ -1938,18 +1981,27 @@ public sealed class EuQueryExecutionAdapter
     }
 
     /// <summary>
-    /// #418 slice 6: pairs every Expression-facts batch with the object-facts batch over the
-    /// identical object list, by index into the factory's list, first unpaired match wins; every
-    /// other batch, and any batch left without a partner, stays a single and runs on its own. The
-    /// factory builds P and X over one ordered object list in one batch size, so the pairing is
-    /// total there; this stays a pure function so that property is checked rather than assumed.
+    /// #418 slice 6: pairs every Expression-facts batch with THE object-facts batch over the
+    /// identical object list, by index into the factory's list. The pairing must be TOTAL over both
+    /// families - exactly one partner each way, none left over - or this returns the run's typed
+    /// refusal and no pairs; every other family's batches are untouched and run on their own.
     /// </summary>
-    internal static (IReadOnlyList<(int ExpressionIndex, int ObjectIndex)> Pairs, IReadOnlyList<int> Singles)
-        PairExpressionAndObjectBatches(IReadOnlyList<EuObjectFactsPartitionRunRequest> requests)
+    /// <remarks>
+    /// <see cref="EuObjectFactsBatchFactory.Build"/> chunks one ordered, deduplicated object list
+    /// with one capacity for both families, so the k-th object-facts batch and the k-th
+    /// Expression-facts batch always carry the same objects and the pairing is total there. This is
+    /// a pure function so that is CHECKED on every run rather than assumed: an Expression batch
+    /// left alone would run, prove, and deliver while producing no tripwire, and nothing downstream
+    /// could tell that run from one whose whole Expression population was produced.
+    /// </remarks>
+    internal static EuQueryExecutionRefusalDetail? TryPairExpressionAndObjectBatches(
+        IReadOnlyList<EuObjectFactsPartitionRunRequest> requests,
+        out IReadOnlyList<(int ExpressionIndex, int ObjectIndex)> pairs)
     {
         ArgumentNullException.ThrowIfNull(requests);
-        var pairs = new List<(int ExpressionIndex, int ObjectIndex)>();
-        var paired = new HashSet<int>();
+        pairs = [];
+        var found = new List<(int ExpressionIndex, int ObjectIndex)>();
+        var partnered = new HashSet<int>();
         for (var expressionIndex = 0; expressionIndex < requests.Count; expressionIndex++)
         {
             if (requests[expressionIndex].Set != EuObjectFactsQuerySet.ExpressionFacts)
@@ -1957,25 +2009,39 @@ public sealed class EuQueryExecutionAdapter
                 continue;
             }
 
-            for (var objectIndex = 0; objectIndex < requests.Count; objectIndex++)
-            {
-                if (paired.Contains(objectIndex) ||
-                    requests[objectIndex].Set != EuObjectFactsQuerySet.ObjectFacts ||
-                    !requests[objectIndex].BatchObjects.SequenceEqual(
+            var partners = Enumerable.Range(0, requests.Count)
+                .Where(objectIndex =>
+                    requests[objectIndex].Set == EuObjectFactsQuerySet.ObjectFacts &&
+                    requests[objectIndex].BatchObjects.SequenceEqual(
                         requests[expressionIndex].BatchObjects, StringComparer.Ordinal))
-                {
-                    continue;
-                }
-
-                pairs.Add((expressionIndex, objectIndex));
-                paired.Add(expressionIndex);
-                paired.Add(objectIndex);
-                break;
+                .ToArray();
+            if (partners.Length != 1)
+            {
+                return new EuQueryExecutionRefusalDetail(
+                    EuQueryExecutionRefusal.CorrigendumTripwireBatchesNotPaired,
+                    $"Expression-facts batch {expressionIndex} "
+                    + $"('{EuObjectFactsDiscoveryPlan.PartitionKeyFor(requests[expressionIndex].BatchObjects)}') "
+                    + $"has {partners.Length} object-facts batches over its own objects, not one.");
             }
+
+            found.Add((expressionIndex, partners[0]));
+            partnered.Add(partners[0]);
         }
 
-        var singles = Enumerable.Range(0, requests.Count).Where(index => !paired.Contains(index)).ToArray();
-        return (pairs, singles);
+        var unpartnered = Enumerable.Range(0, requests.Count)
+            .Where(index => requests[index].Set == EuObjectFactsQuerySet.ObjectFacts && !partnered.Contains(index))
+            .ToArray();
+        if (unpartnered.Length > 0)
+        {
+            return new EuQueryExecutionRefusalDetail(
+                EuQueryExecutionRefusal.CorrigendumTripwireBatchesNotPaired,
+                $"{unpartnered.Length} object-facts batch(es) have no Expression-facts batch over their own "
+                + $"objects, the first being {unpartnered[0]} "
+                + $"('{EuObjectFactsDiscoveryPlan.PartitionKeyFor(requests[unpartnered[0]].BatchObjects)}').");
+        }
+
+        pairs = found;
+        return null;
     }
 
     /// <summary>

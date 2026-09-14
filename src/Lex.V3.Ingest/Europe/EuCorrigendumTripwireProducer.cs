@@ -224,48 +224,62 @@ public sealed class EuCorrigendumTripwireProducer
                 productRequestCount: 0);
         }
 
-        var expressionRun = await _expressions
+        var (expressions, expressionFacts, objectFacts) = await _expressions
             .RunWithDeliveriesAsync(expressionFactsRequest, objectFactsRequest, sourceWitness, cancellationToken)
             .ConfigureAwait(false);
-        return await FoldAndRetainAsync(expressionRun, cancellationToken).ConfigureAwait(false);
+        if (RefuseUnlessDelivered(expressions) is { } refusedProduction)
+        {
+            return refusedProduction;
+        }
+
+        // Both deliveries are non-null on a delivered run with an object-facts request, which this
+        // one always has. They are this call's own locals, straight from the run that rebuilt them.
+        var set = EuCorrigendumTripwireSet.TryDerive(
+            expressionFacts!, objectFacts!, out var refusal, out var detail, out var offendingIri);
+        return set is null
+            ? RefuseFold(expressions, refusal, detail, offendingIri)
+            : await RetainAsync(expressions, set, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
-    /// The fold and its retention after the expression run, shared by the run above and the
-    /// object-first <see cref="Pairing"/>. It takes the expression run's own result triple, as one
-    /// value and exactly as that run handed it back: the two deliveries in it are outputs of that
-    /// run, never inputs from anywhere, and no member here accepts a delivery on its own.
+    /// The expression production's own refusal, travelling by name. Shared by both orders, as every
+    /// decision below is: only the two lines that fold this producer's own locals sit at each site,
+    /// because a delivery must never appear in a signature here - the accepted pin
+    /// <c>NoProducerSurfaceAcceptsADeliveryAsAnInput</c> is what keeps a caller from assembling a
+    /// production out of deliveries no single run rebuilt together.
     /// </summary>
-    private async Task<EuCorrigendumTripwireProductionResult> FoldAndRetainAsync(
-        (EuLanguageScopedExpressionProductionResult Result, EuProofBoundDelivery? ExpressionFacts, EuProofBoundDelivery? ObjectFacts) expressionRun,
-        CancellationToken cancellationToken)
-    {
-        var (expressions, expressionFacts, objectFacts) = expressionRun;
-        if (!expressions.Delivered)
-        {
-            return EuCorrigendumTripwireProductionResult.Refused(
+    private static EuCorrigendumTripwireProductionResult? RefuseUnlessDelivered(
+        EuLanguageScopedExpressionProductionResult expressions) =>
+        expressions.Delivered
+            ? null
+            : EuCorrigendumTripwireProductionResult.Refused(
                 EuCorrigendumTripwireProductionRefusal.ExpressionProductionRefused,
                 $"{expressions.Refusal}: {expressions.Detail}",
                 expressions,
                 expressions.ProductRequestCount);
-        }
 
-        // Both are non-null on a delivered run with an object-facts request, which this one always has.
-        var set = EuCorrigendumTripwireSet.TryDerive(
-            expressionFacts!,
-            objectFacts!,
-            out var refusal,
-            out var detail,
-            out var offendingIri);
-        if (set is null)
-        {
-            return EuCorrigendumTripwireProductionResult.Refused(
-                EuCorrigendumTripwireProductionRefusal.TripwireRefused,
-                $"{refusal} detail={detail} offendingIri={offendingIri}",
-                expressions,
-                expressions.ProductRequestCount);
-        }
+    /// <summary>The contract's own fold refusal, carrying its code, detail and offending IRI.</summary>
+    private static EuCorrigendumTripwireProductionResult RefuseFold(
+        EuLanguageScopedExpressionProductionResult expressions,
+        EuCorrigendumTripwireRefusal refusal,
+        string? detail,
+        string? offendingIri) =>
+        EuCorrigendumTripwireProductionResult.Refused(
+            EuCorrigendumTripwireProductionRefusal.TripwireRefused,
+            $"{refusal} detail={detail} offendingIri={offendingIri}",
+            expressions,
+            expressions.ProductRequestCount);
 
+    /// <summary>
+    /// Decision 78 retention of the folded set: its canonical bytes and its lineage bytes, each
+    /// through the one door that proves the hold by reopening the digest the store returned. A
+    /// failed hold refuses by name, saying which of the two it was.
+    /// </summary>
+    private async Task<EuCorrigendumTripwireProductionResult> RetainAsync(
+        EuLanguageScopedExpressionProductionResult expressions,
+        EuCorrigendumTripwireSet set,
+        CancellationToken cancellationToken)
+    {
         var (tripwireReceipt, tripwireHoldFailure) = await CustodyHold
             .TryHoldAsync(_custodyStore, set.CanonicalBytes, cancellationToken)
             .ConfigureAwait(false);
@@ -336,9 +350,17 @@ public sealed class EuCorrigendumTripwireProducer
             var (expressions, expressionRun, expressionFacts, objectFacts) = await _expressions
                 .RunExpressionFactsAndDeriveAsync(cancellationToken)
                 .ConfigureAwait(false);
-            var production = await _producer
-                .FoldAndRetainAsync((expressions, expressionFacts, objectFacts), cancellationToken)
-                .ConfigureAwait(false);
+            if (RefuseUnlessDelivered(expressions) is { } refusedProduction)
+            {
+                return (refusedProduction, expressionRun);
+            }
+
+            // This pairing's own two runs rebuilt these; they are locals here and go nowhere else.
+            var set = EuCorrigendumTripwireSet.TryDerive(
+                expressionFacts!, objectFacts!, out var refusal, out var detail, out var offendingIri);
+            var production = set is null
+                ? RefuseFold(expressions, refusal, detail, offendingIri)
+                : await _producer.RetainAsync(expressions, set, cancellationToken).ConfigureAwait(false);
             return (production, expressionRun);
         }
     }

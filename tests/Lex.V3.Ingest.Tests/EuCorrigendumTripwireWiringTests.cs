@@ -194,6 +194,10 @@ public sealed class EuCorrigendumTripwireWiringTests
         Assert.AreEqual(EuQueryExecutionRefusal.CorrigendumTripwireProductionRefused, run.Result.Refusal!.Code);
         StringAssert.Contains(run.Result.Refusal.Detail, nameof(EuCorrigendumTripwireProductionRefusal.TripwireRefused));
         StringAssert.Contains(run.Result.Refusal.Detail, EuObjectFactsDiscoveryPlan.PartitionKeyFor(run.Closure.Batches[0]));
+        // NAMED WHERE IT HAPPENED. The loop refuses the production directly; the completion's own
+        // accounting would also catch a refused production, but only as a totality complaint, which
+        // says the run does not add up rather than which production refused and why.
+        StringAssert.StartsWith(run.Result.Refusal.Detail, "the corrigendum tripwire production over batch ");
         Assert.IsNull(run.Result.CorrigendumTripwires);
         Assert.IsTrue(
             run.Result.FamilyOutcomes.Count(static outcome => outcome.Kind == EuFamilyEnumerationOutcomeKind.Proven) >= 4,
@@ -259,27 +263,65 @@ public sealed class EuCorrigendumTripwireWiringTests
 
     // ---- The pairing, on its own. ----
 
+    /// <summary>
+    /// The pairing is total over both families or the run refuses by name, and the refusal is the
+    /// one the adapter returns. An Expression batch left alone would otherwise run, prove and
+    /// deliver while producing no tripwire, which nothing downstream could tell from a complete run.
+    /// </summary>
     [TestMethod]
-    public void PairingIsByIdenticalObjectListOnlyAndLeavesEverythingElseSingle()
+    public void PairingIsExactlyOneEachWayAndNamesTheBatchThatIsNot()
     {
+        const string A = "http://publications.europa.eu/resource/cellar/a";
+        const string B = "http://publications.europa.eu/resource/cellar/b";
+        const string C = "http://publications.europa.eu/resource/cellar/c";
+        const string D = "http://publications.europa.eu/resource/cellar/d";
         var (plan, planId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
         var budget = EuAcquisitionTestFixture.TestWireBudget();
         EuObjectFactsPartitionRunRequest Request(EuObjectFactsQuerySet set, params string[] objects) =>
             new(plan, planId, set, objects, EuAcquisitionTestFixture.BuildRendererSource(4186), budget);
 
-        var requests = new[]
+        // The shape the factory builds: one object-facts and one Expression-facts batch per chunk,
+        // and any number of other families over whatever objects they ask about.
+        var total = new[]
         {
-            Request(EuObjectFactsQuerySet.ObjectFacts, "http://publications.europa.eu/resource/cellar/a", "http://publications.europa.eu/resource/cellar/b"),
-            Request(EuObjectFactsQuerySet.ObjectFacts, "http://publications.europa.eu/resource/cellar/c"),
-            Request(EuObjectFactsQuerySet.ExpressionFacts, "http://publications.europa.eu/resource/cellar/a", "http://publications.europa.eu/resource/cellar/b"),
-            Request(EuObjectFactsQuerySet.ExpressionFacts, "http://publications.europa.eu/resource/cellar/c", "http://publications.europa.eu/resource/cellar/d"),
-            Request(EuObjectFactsQuerySet.ManifestationFacts, "http://publications.europa.eu/resource/cellar/a", "http://publications.europa.eu/resource/cellar/b"),
+            Request(EuObjectFactsQuerySet.ObjectFacts, A, B),
+            Request(EuObjectFactsQuerySet.ObjectFacts, C),
+            Request(EuObjectFactsQuerySet.ExpressionFacts, A, B),
+            Request(EuObjectFactsQuerySet.ExpressionFacts, C),
+            Request(EuObjectFactsQuerySet.ManifestationFacts, A, B),
+            Request(EuObjectFactsQuerySet.RootWatermark, A),
         };
+        Assert.IsNull(EuQueryExecutionAdapter.TryPairExpressionAndObjectBatches(total, out var pairs));
+        Assert.AreEqual(
+            "(2,0) (3,1)",
+            string.Join(" ", pairs.Select(static pair => $"({pair.ExpressionIndex},{pair.ObjectIndex})")),
+            "each Expression batch with the object batch over its own objects, and no other family touched.");
 
-        var (pairs, singles) = EuQueryExecutionAdapter.PairExpressionAndObjectBatches(requests);
+        // An Expression batch whose objects no object batch asks about.
+        var unpaired = EuQueryExecutionAdapter.TryPairExpressionAndObjectBatches(
+            [Request(EuObjectFactsQuerySet.ObjectFacts, A, B), Request(EuObjectFactsQuerySet.ExpressionFacts, C, D)],
+            out var nonePairs);
+        Assert.IsNotNull(unpaired);
+        Assert.AreEqual(EuQueryExecutionRefusal.CorrigendumTripwireBatchesNotPaired, unpaired!.Code);
+        StringAssert.Contains(unpaired.Detail, "has 0 object-facts batches over its own objects, not one.");
+        Assert.IsEmpty(nonePairs, "a run that will not pair totally pairs nothing at all.");
 
-        Assert.AreEqual("(2,0)", string.Join(" ", pairs.Select(static pair => $"({pair.ExpressionIndex},{pair.ObjectIndex})")));
-        CollectionAssert.AreEqual(new[] { 1, 3, 4 }, singles.ToArray(), "an Expression batch with no partner over the same objects stays single.");
+        // Two object batches over one Expression batch's objects: which one produced it would be a
+        // choice this route must not make silently.
+        var doubled = EuQueryExecutionAdapter.TryPairExpressionAndObjectBatches(
+            [Request(EuObjectFactsQuerySet.ObjectFacts, A), Request(EuObjectFactsQuerySet.ObjectFacts, A), Request(EuObjectFactsQuerySet.ExpressionFacts, A)],
+            out _);
+        Assert.AreEqual(EuQueryExecutionRefusal.CorrigendumTripwireBatchesNotPaired, doubled!.Code);
+        StringAssert.Contains(doubled.Detail, "has 2 object-facts batches over its own objects, not one.");
+
+        // And an object batch no Expression batch covers, which would mean a population asked about
+        // for facts but never for its expressions.
+        var orphanObject = EuQueryExecutionAdapter.TryPairExpressionAndObjectBatches(
+            [Request(EuObjectFactsQuerySet.ObjectFacts, A), Request(EuObjectFactsQuerySet.ObjectFacts, B), Request(EuObjectFactsQuerySet.ExpressionFacts, A)],
+            out var orphanPairs);
+        Assert.AreEqual(EuQueryExecutionRefusal.CorrigendumTripwireBatchesNotPaired, orphanObject!.Code);
+        StringAssert.Contains(orphanObject.Detail, "have no Expression-facts batch over their own objects");
+        Assert.IsEmpty(orphanPairs, "a run that will not pair totally pairs nothing, including the pair it did find.");
     }
 
     [TestMethod]
@@ -362,7 +404,135 @@ public sealed class EuCorrigendumTripwireWiringTests
         Assert.AreEqual(1, handler.OccurrenceCountFor("X"));
     }
 
+    /// <summary>
+    /// The accepted order, kept: an Expression run the publisher delivered but whose enumeration
+    /// this producer cannot prove (counted two, sent one) ends the run BEFORE the object family is
+    /// asked, so the ceiling the two families share is never spent on a production that cannot be
+    /// folded. The join's first shape moved the object run ahead of this check; the lens caught it.
+    /// </summary>
+    [TestMethod]
+    public async Task AnUnprovableExpressionDeliveryAsksNoObjectFamilyAndReportsOnlyItsOwnRequests()
+    {
+        var handler = new EuAcquisitionTestFixture.ClassifyingHandler(new Dictionary<string, EuAcquisitionTestFixture.FamilyScript>(StringComparer.Ordinal)
+        {
+            // Two counted, one delivered, in both passes: the passes agree with each other and only
+            // the publisher's own count disagrees, which is a proof failure rather than a decode one.
+            ["X"] = EuAcquisitionTestFixture.ScriptFor(
+                "X", 2,
+                [EuAcquisitionTestFixture.ExpressionFactRow(
+                    "http://publications.europa.eu/resource/cellar/work-4186",
+                    "http://publications.europa.eu/resource/cellar/work-4186.0001.01/DOC_1")],
+                EuAcquisitionTestFixture.ExpressionFactsProjection),
+            ["P"] = EuAcquisitionTestFixture.ScriptFor("P", 0, [], EuAcquisitionTestFixture.ObjectFactsProjection),
+        });
+        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
+        var executor = new EuRepeatedEnumerationExecutor(store, new EuAcquisitionTestFixture.FixedTimeProvider(), handler);
+        var producer = new EuLanguageScopedExpressionProducer(executor, store);
+        var budget = EuAcquisitionTestFixture.TestWireBudget();
+
+        var result = await producer.RunAsync(
+            SingleRequest(EuObjectFactsQuerySet.ExpressionFacts, budget), SingleRequest(EuObjectFactsQuerySet.ObjectFacts, budget),
+            EuAcquisitionTestFixture.SourceWitness(), CancellationToken.None);
+
+        Assert.AreEqual(EuLanguageScopedExpressionProductionRefusal.EnumerationProofRefused, result.Refusal, result.Detail);
+        StringAssert.Contains(result.Detail, "expression facts: ");
+        Assert.AreEqual(0, handler.OccurrenceCountFor("P"), "the object family is never asked for a production that cannot be folded.");
+        Assert.AreEqual(
+            handler.OccurrenceCountFor("X"), result.ProductRequestCount,
+            "and the run reports exactly the requests it made, never the object family's too.");
+    }
+
+    /// <summary>
+    /// The stated consequence of the join, driven: the accepted derivation now runs inside every
+    /// delivered EU run, so a publisher expression stated without its language refuses the whole
+    /// run by name rather than delivering without the tripwire. A second inner refusal flavour
+    /// beside the fold's own, through the same one door.
+    /// </summary>
+    [TestMethod]
+    public async Task ADerivationRefusalInsideAProductionAlsoRefusesTheRunByName()
+    {
+        var closure = BuildClosure();
+        var run = await RunAsync(new Options(Corrigendum: new Corrigendum(closure.State(1), Languages: [], StateAnExpressionWithoutItsLanguage: true)));
+
+        Assert.IsNotNull(run.Result.Refusal);
+        Assert.AreEqual(EuQueryExecutionRefusal.CorrigendumTripwireProductionRefused, run.Result.Refusal!.Code);
+        StringAssert.Contains(run.Result.Refusal.Detail, nameof(EuCorrigendumTripwireProductionRefusal.ExpressionProductionRefused));
+        StringAssert.Contains(run.Result.Refusal.Detail, nameof(EuLanguageScopedExpressionProductionRefusal.DerivationRefused));
+        StringAssert.Contains(run.Result.Refusal.Detail, "ExpressionLanguageMissing");
+        Assert.IsNull(run.Result.CorrigendumTripwires);
+    }
+
+    /// <summary>
+    /// The delivery door's own guard, driven rather than described: the public factory refuses a
+    /// null completion, and accepts the one this run actually produced. It is the only caller this
+    /// factory has, so without this test its new parameter's guard is asserted by nothing.
+    /// </summary>
+    [TestMethod]
+    public async Task TheDeliveryDoorRefusesANullCompletionAndAcceptsTheRunsOwn()
+    {
+        var delivered = (await RunAsync()).Result;
+        Assert.IsNull(delivered.Refusal);
+
+        Assert.ThrowsExactly<ArgumentNullException>(() => Rebuild(delivered, null!));
+        Assert.AreSame(
+            delivered.CorrigendumTripwires,
+            Rebuild(delivered, delivered.CorrigendumTripwires!).CorrigendumTripwires);
+
+        static EuQueryExecutionResult Rebuild(EuQueryExecutionResult result, EuCorrigendumTripwireCompletion completion) =>
+            EuQueryExecutionResult.Delivered(
+                result.Topology, result.FamilyOutcomes, result.ObservedObjectCount, result.ObservedExpressionCount,
+                result.ReductionExclusions, result.WatermarkWitnessPlan!, result.RootBinding!,
+                result.WitnessReconciliation!, result.WitnessTerminations!, result.ScopeManifestReceipt!,
+                result.ScopeManifestCanonicalSha256!, result.DocumentAcquisitionOutcomesByOrdinal!,
+                result.DocumentLadderResultsByOrdinal!, result.ObservedManifestationTypesByCelex!,
+                result.ObservedExpressionsByCelex!, result.MintedRowsByOrdinal!, result.DateAxioms,
+                result.CorpusRecordSetRef!, result.CorpusRecordSet!, completion);
+    }
+
+    /// <summary>
+    /// The adapter-facing door's own single-use, driven: after one object run and one completed
+    /// Expression run, a second call of either phase refuses BEFORE any request goes out, so no
+    /// internal composition can spend a batch's traffic twice. The outer tripwire pairing holds one
+    /// inner pairing and only delegates, so its own single-use follows from the inner phase state;
+    /// this drives the outer door because that is the one an adapter holds.
+    /// </summary>
+    [TestMethod]
+    public async Task ThePairingSpendsEachPhaseOnceAndRefusesASecondRunBeforeAnyTraffic()
+    {
+        var handler = new EuAcquisitionTestFixture.ClassifyingHandler(new Dictionary<string, EuAcquisitionTestFixture.FamilyScript>(StringComparer.Ordinal)
+        {
+            ["X"] = EuAcquisitionTestFixture.ScriptFor("X", 0, [], EuAcquisitionTestFixture.ExpressionFactsProjection),
+            ["P"] = EuAcquisitionTestFixture.ScriptFor("P", 0, [], EuAcquisitionTestFixture.ObjectFactsProjection),
+        });
+        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
+        var executor = new EuRepeatedEnumerationExecutor(store, new EuAcquisitionTestFixture.FixedTimeProvider(), handler);
+        var budget = EuAcquisitionTestFixture.TestWireBudget();
+        var pairing = new EuCorrigendumTripwireProducer(new EuLanguageScopedExpressionProducer(executor, store), store)
+            .BeginPairing(
+                SingleRequest(EuObjectFactsQuerySet.ExpressionFacts, budget),
+                SingleRequest(EuObjectFactsQuerySet.ObjectFacts, budget),
+                EuAcquisitionTestFixture.SourceWitness());
+
+        var objectRun = await pairing.RunObjectFactsAsync(CancellationToken.None);
+        Assert.IsNotNull(objectRun.Receipt);
+        var (production, expressionRun) = await pairing.RunExpressionFactsAndProduceAsync(CancellationToken.None);
+        Assert.IsTrue(production.Delivered, $"{production.Refusal}: {production.Detail}");
+        Assert.IsNotNull(expressionRun.Receipt);
+        var (objectRequests, expressionRequests) = (handler.OccurrenceCountFor("P"), handler.OccurrenceCountFor("X"));
+
+        var secondExpression = await Assert.ThrowsExactlyAsync<InvalidOperationException>(
+            () => pairing.RunExpressionFactsAndProduceAsync(CancellationToken.None));
+        StringAssert.Contains(secondExpression.Message, "Expression-facts run was already made");
+        var secondObject = await Assert.ThrowsExactlyAsync<InvalidOperationException>(
+            () => pairing.RunObjectFactsAsync(CancellationToken.None));
+        StringAssert.Contains(secondObject.Message, "object-facts run was already made");
+
+        Assert.AreEqual(expressionRequests, handler.OccurrenceCountFor("X"), "the second Expression call sent nothing.");
+        Assert.AreEqual(objectRequests, handler.OccurrenceCountFor("P"), "and the second object call sent nothing.");
+    }
+
     // ---- Fixtures. ----
+
 
     private sealed record Options(
         Corrigendum? Corrigendum = null,
@@ -371,7 +541,11 @@ public sealed class EuCorrigendumTripwireWiringTests
         WireRequestBudget? Budget = null);
 
     /// <summary>A census-discovered state that corrects the root on a stated date, with expressions in these languages.</summary>
-    private sealed record Corrigendum(string Iri, IReadOnlyList<string> Languages, bool EdgeBesideMarker = false);
+    private sealed record Corrigendum(
+        string Iri,
+        IReadOnlyList<string> Languages,
+        bool EdgeBesideMarker = false,
+        bool StateAnExpressionWithoutItsLanguage = false);
 
     private sealed record WiringRun(
         EuQueryExecutionResult Result,
@@ -470,6 +644,11 @@ public sealed class EuCorrigendumTripwireWiringTests
             }
             else if (corrigendum is not null && string.Equals(parent, corrigendum.Iri, StringComparison.Ordinal))
             {
+                if (corrigendum.StateAnExpressionWithoutItsLanguage)
+                {
+                    rows.Add(EuAcquisitionTestFixture.ExpressionFactRow(parent, parent + ".0009.01/DOC_1"));
+                }
+
                 for (var index = 0; index < corrigendum.Languages.Count; index++)
                 {
                     var expression = parent + ".000" + (index + 1).ToString(CultureInfo.InvariantCulture) + ".01/DOC_1";
