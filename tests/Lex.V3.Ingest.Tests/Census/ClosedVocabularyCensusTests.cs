@@ -57,6 +57,15 @@ public sealed class ClosedVocabularyCensusTests
                 "Lex.V3.Ingest.CorpusRecordOutcomeKind: Held, NotHeld, PendingAcquisition",
                 "Lex.V3.Ingest.CorpusRecordSetCompletionState: Complete, Partial",
                 "Lex.V3.Ingest.CorpusRecordSetWriteRefusalKind: RecordSetNotRetained",
+                "Lex.V3.Ingest.Europe.EuAnnexEvidenceBinder+PageLabelState: Missing, Invalid, Valid",
+                "Lex.V3.Ingest.Europe.EuAnnexEvidenceBindingRefusal: None, ProfileDigestMismatch, "
+                    + "ProfileInvalid, ProfileEvidenceMismatch, SourceEvidenceMissingOrAmbiguous, "
+                    + "SourceLineageMismatch, PublisherPopulationMismatch, RetainedPdfUnavailable, "
+                    + "PdfUnreadable",
+                "Lex.V3.Ingest.Europe.EuAnnexEvidenceGap: BodyClassificationPending, "
+                    + "PublisherPageLabelsMissing, PublisherPageLabelsInvalid, "
+                    + "PublisherPageLabelMissing, PublisherPageLabelDuplicate, "
+                    + "PdfPagesNotOrderedAndContiguous, CompetingPdfPageClaim",
                 "Lex.V3.Ingest.Europe.EuCaseLawLinkProductionRefusal: None, EnumerationRefused, "
                     + "EnumerationProofRefused, RowNotAdmitted, TargetBodyScopeNotSupplied, "
                     + "VerifiedRowsRefused, RequestedActBodyScopeNotSupplied, "

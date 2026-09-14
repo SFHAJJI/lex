@@ -81,6 +81,18 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Ingest.Europe.EuAmendmentAttributionCoverage::.ctor, "
                     + "constructor private static "
                     + "Lex.V3.Ingest.Europe.EuAmendmentAttributionCoverage::.cctor",
+                "Lex.V3.Ingest.Europe.EuAnnexEvidenceBinding: constructor internal instance "
+                    + "Lex.V3.Ingest.Europe.EuAnnexEvidenceBinding::.ctor",
+                "Lex.V3.Ingest.Europe.EuAnnexEvidenceBindingResult: constructor private instance "
+                    + "Lex.V3.Ingest.Europe.EuAnnexEvidenceBindingResult::.ctor, "
+                    + "method internal static "
+                    + "Lex.V3.Ingest.Europe.EuAnnexEvidenceBindingResult::Refused, "
+                    + "method internal static "
+                    + "Lex.V3.Ingest.Europe.EuAnnexEvidenceBindingResult::Success, "
+                    + "method private static Lex.V3.Ingest.Europe.EuAnnexEvidenceBinder::Refused, "
+                    + "method public instance Lex.V3.Ingest.Europe.EuAnnexEvidenceBinder::RunAsync",
+                "Lex.V3.Ingest.Europe.EuBoundAnnexEvidence: constructor internal instance "
+                    + "Lex.V3.Ingest.Europe.EuBoundAnnexEvidence::.ctor, 6 compiler-generated",
                 "Lex.V3.Ingest.Europe.EuCaseLawLinkProductionResult: constructor private instance "
                     + "Lex.V3.Ingest.Europe.EuCaseLawLinkProductionResult::.ctor, "
                     + "method internal static "
@@ -128,6 +140,9 @@ public sealed class GuardedConstructionCensusTests
                     + "constructor private instance Lex.V3.Ingest.Europe.EuDeliveryPass::.ctor, "
                     + "method public instance Lex.V3.Ingest.Europe.EuDeliveryPass::WithPage, "
                     + "method public static Lex.V3.Ingest.Europe.EuDeliveryPass::BeginWithCount",
+                "Lex.V3.Ingest.Europe.EuDerivedPdfPageMapping: constructor internal instance "
+                    + "Lex.V3.Ingest.Europe.EuDerivedPdfPageMapping::.ctor, "
+                    + "method private static Lex.V3.Ingest.Europe.EuAnnexEvidenceBinder::Map",
                 "Lex.V3.Ingest.Europe.EuDocumentFetchAttemptResult: constructor private instance "
                     + "Lex.V3.Ingest.Europe.EuDocumentFetchAttemptResult::.ctor, "
                     + "method public instance "

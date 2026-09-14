@@ -71,6 +71,9 @@ public sealed class DurableBlobReceiptFamilyIngestSurfaceTests
                 "by-ref-method public instance " + Session + "+ResolvedHeldBody::Deconstruct(out " + Receipt
                 + "&, out System.ReadOnlyMemory<System.Byte>&, out System.String&) -> System.Void",
                 "field private instance " + CorpusAcquisitionOutcome + "::<Receipt>k__BackingField -> " + Receipt + "?",
+                "field private instance Lex.V3.Ingest.Europe.EuAnnexEvidenceBinding::<FormexSourceReceipt>k__BackingField -> " + Receipt,
+                "field private instance Lex.V3.Ingest.Europe.EuAnnexEvidenceBinding::<PdfReceipt>k__BackingField -> " + Receipt,
+                "field private instance Lex.V3.Ingest.Europe.EuAnnexEvidenceBinding::<XhtmlSourceReceipt>k__BackingField -> " + Receipt,
                 // #418's third slice adds the fifth holder: the language-scoped expression
                 // production result carries the custody receipt for the derivation it retained.
                 // It HOLDS that receipt and never constructs one -- the only path onto the property
@@ -134,6 +137,9 @@ public sealed class DurableBlobReceiptFamilyIngestSurfaceTests
                 + "System.Collections.Generic.IReadOnlyList<Lex.V3.Contracts.Source.Http.RoutedHttpHop>) "
                 + "-> System.Collections.Generic.Dictionary<System.String, " + Receipt + ">",
                 "property public instance " + CorpusAcquisitionOutcome + "::Receipt() -> " + Receipt + "?",
+                "property public instance Lex.V3.Ingest.Europe.EuAnnexEvidenceBinding::FormexSourceReceipt() -> " + Receipt,
+                "property public instance Lex.V3.Ingest.Europe.EuAnnexEvidenceBinding::PdfReceipt() -> " + Receipt,
+                "property public instance Lex.V3.Ingest.Europe.EuAnnexEvidenceBinding::XhtmlSourceReceipt() -> " + Receipt,
                 "property public instance Lex.V3.Ingest.Europe.EuCorrigendumTripwireProductionResult::RetainedTripwire() -> " + Receipt + "?",
                 "property public instance Lex.V3.Ingest.Europe.EuCorrigendumTripwireProductionResult::RetainedTripwireLineage() -> " + Receipt + "?",
                 "property public instance Lex.V3.Ingest.Europe.EuFormexAnnexInventory::SourceReceipt() -> " + Receipt,
