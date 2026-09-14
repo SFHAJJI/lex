@@ -115,6 +115,162 @@ public sealed class EuFormexRunOutcomeReconciliationTests
         Assert.AreEqual(EuFormexRunOutcomeReconciliationRefusal.ExpressionClaimedTwice, refusal);
     }
 
+    /// <summary>
+    /// EVERY CLAUSE OF THE RUN BINDING, ONE AT A TIME.
+    /// <see cref="AnotherRunsPopulationCannotStandInForThisRunsEpisode"/> supplies a population from a
+    /// wholly different run, so every clause of the binding disagrees at once and the composite gate
+    /// refuses on whichever fires first. That proves the gate and establishes no clause inside it:
+    /// neutralise any single one and the suite stays green, which means a refactor could delete one
+    /// and nothing would notice.
+    /// </summary>
+    /// <remarks>
+    /// Each case below agrees with the run in every dimension except the one under test, so only the
+    /// clause named can be what refuses. That is the difference between proving a gate and proving
+    /// the reasons it is built from.
+    /// </remarks>
+    [TestMethod]
+    public async Task ADifferentSemanticDerivationAloneRefuses()
+    {
+        var run = await CompleteEuropeAsync();
+        var supplied = VaryingOneThing(
+            RunProduction(run), derivationBytes: Encoding.UTF8.GetBytes("a-different-derivation"));
+
+        Assert.IsNull(EuFormexRunOutcomeReconciliation.TryClose(
+            run, [PopulationOf(supplied)], out var refusal, out _));
+        Assert.AreEqual(EuFormexRunOutcomeReconciliationRefusal.PopulationProductionDisagrees, refusal);
+    }
+
+    [TestMethod]
+    public async Task ADifferentEpisodeAloneRefuses()
+    {
+        var run = await CompleteEuropeAsync();
+        var supplied = VaryingOneThing(
+            RunProduction(run), episodeBytes: Encoding.UTF8.GetBytes("a-different-episode"));
+
+        Assert.IsNull(EuFormexRunOutcomeReconciliation.TryClose(
+            run, [PopulationOf(supplied)], out var refusal, out _));
+        Assert.AreEqual(EuFormexRunOutcomeReconciliationRefusal.PopulationProductionDisagrees, refusal);
+    }
+
+    /// <summary>
+    /// Same derivation, same episode, same bytes: only the durable write receipt differs. This is the
+    /// clause that says the population came from THIS run's retention rather than from an identical
+    /// computation somebody else performed and retained separately.
+    /// </summary>
+    [TestMethod]
+    public async Task ADifferentRetainedDerivationReceiptAloneRefuses()
+    {
+        var run = await CompleteEuropeAsync();
+        var supplied = VaryingOneThing(RunProduction(run), varyDerivationReceipt: true);
+
+        Assert.IsNull(EuFormexRunOutcomeReconciliation.TryClose(
+            run, [PopulationOf(supplied)], out var refusal, out _));
+        Assert.AreEqual(EuFormexRunOutcomeReconciliationRefusal.PopulationProductionDisagrees, refusal);
+    }
+
+    [TestMethod]
+    public async Task ADifferentRetainedEpisodeReceiptAloneRefuses()
+    {
+        var run = await CompleteEuropeAsync();
+        var supplied = VaryingOneThing(RunProduction(run), varyEpisodeReceipt: true);
+
+        Assert.IsNull(EuFormexRunOutcomeReconciliation.TryClose(
+            run, [PopulationOf(supplied)], out var refusal, out _));
+        Assert.AreEqual(EuFormexRunOutcomeReconciliationRefusal.PopulationProductionDisagrees, refusal);
+    }
+
+    /// <summary>
+    /// The derivation and its retention agree; the production was asked about a different set of
+    /// objects. Two runs can derive identical expressions from different questions, and the answer is
+    /// only this run's answer if the question was this run's question.
+    /// </summary>
+    [TestMethod]
+    public async Task ADifferentAskedObjectSetAloneRefuses()
+    {
+        var run = await CompleteEuropeAsync();
+        var original = RunProduction(run);
+        var widened = new HashSet<string>(original.ObjectsAskedAbout!, StringComparer.Ordinal)
+        {
+            "http://publications.europa.eu/resource/cellar/00000000-0000-4000-8000-000000000000",
+        };
+
+        Assert.IsNull(EuFormexRunOutcomeReconciliation.TryClose(
+            run, [PopulationOf(VaryingOneThing(original, objectsAskedAbout: widened))],
+            out var refusal, out _));
+        Assert.AreEqual(EuFormexRunOutcomeReconciliationRefusal.PopulationProductionDisagrees, refusal);
+    }
+
+    /// <summary>
+    /// A population that is internally valid and belongs to no batch of this run. Without this the
+    /// refusal exists in the vocabulary and nothing can reach it, so a reader would believe a
+    /// distinction the type does not in fact draw.
+    /// </summary>
+    [TestMethod]
+    public async Task APopulationBelongingToNoBatchOfThisRunRefusesByName()
+    {
+        var run = await CompleteEuropeAsync();
+        var supplied = VaryingOneThing(RunProduction(run), familyKey: "a-family-this-run-never-asked");
+
+        Assert.IsNull(EuFormexRunOutcomeReconciliation.TryClose(
+            run, [PopulationOf(supplied)], out var refusal, out var detail));
+        Assert.AreEqual(EuFormexRunOutcomeReconciliationRefusal.PopulationOutsideRun, refusal);
+        Assert.AreEqual("a-family-this-run-never-asked", detail);
+    }
+
+    private static EuLanguageScopedExpressionProductionResult RunProduction(EuQueryExecutionResult run) =>
+        run.CorrigendumTripwires!.ProductionsByFamilyKey.Values.Single().Expressions!;
+
+    /// <summary>
+    /// A production equal to <paramref name="original"/> in every dimension the run binding compares,
+    /// except the single one the caller names. Reusing the original's own bytes and receipts for the
+    /// untouched dimensions is what makes each test about one clause rather than about the gate.
+    /// </summary>
+    private static EuLanguageScopedExpressionProductionResult VaryingOneThing(
+        EuLanguageScopedExpressionProductionResult original,
+        string? familyKey = null,
+        byte[]? derivationBytes = null,
+        byte[]? episodeBytes = null,
+        bool varyDerivationReceipt = false,
+        bool varyEpisodeReceipt = false,
+        IReadOnlySet<string>? objectsAskedAbout = null)
+    {
+        var derivation = original.Derivation!;
+        var chosenDerivationBytes = derivationBytes ?? derivation.DerivationBytes.ToArray();
+        var chosenEpisodeBytes = episodeBytes ?? derivation.EpisodeBytes.ToArray();
+        var constructor = typeof(EuLanguageScopedExpressionDerivation).GetConstructor(
+            BindingFlags.Instance | BindingFlags.NonPublic,
+            binder: null,
+            [
+                typeof(AbsenceFamilyEnumerationProof),
+                typeof(AbsenceFamilyEnumerationProof),
+                typeof(IReadOnlyList<LanguageScopedExpression>),
+                typeof(byte[]),
+                typeof(byte[]),
+            ],
+            modifiers: null)!;
+        var rebuilt = (EuLanguageScopedExpressionDerivation)constructor.Invoke(
+            [
+                familyKey is null
+                    ? derivation.ExpressionFactsProof
+                    : AbsenceFixtures.Delivery(familyKey, derivation.Expressions.Count).Proof,
+                derivation.ObjectFactsProof,
+                derivation.Expressions,
+                chosenDerivationBytes,
+                chosenEpisodeBytes,
+            ]);
+
+        return EuLanguageScopedExpressionProductionResult.Success(
+            rebuilt,
+            varyDerivationReceipt
+                ? Receipt(rebuilt.DerivationSha256, chosenDerivationBytes.Length + 1)
+                : original.RetainedDerivation!,
+            varyEpisodeReceipt
+                ? Receipt(rebuilt.EpisodeSha256, chosenEpisodeBytes.Length + 1)
+                : original.RetainedEpisode!,
+            objectsAskedAbout ?? original.ObjectsAskedAbout!,
+            original.ProductRequestCount);
+    }
+
     private static EuLanguageScopedExpressionProductionResult DuplicateProductionForFamily(
         EuLanguageScopedExpressionProductionResult original,
         string familyKey)
