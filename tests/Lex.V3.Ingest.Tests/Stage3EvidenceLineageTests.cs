@@ -1,6 +1,8 @@
 using Lex.V3.Contracts.Custody;
+using Lex.V3.Contracts.Derivation;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Corpus;
+using Lex.V3.Contracts.Source.Scope;
 using Lex.V3.Ingest.Europe;
 using Lex.V3.Ingest.Luxembourg;
 
@@ -102,6 +104,30 @@ public sealed class Stage3EvidenceLineageTests
         Assert.AreEqual(Stage3EvidenceLineageRefusal.LuxembourgRunIdentityMismatch, refusal);
     }
 
+    [TestMethod]
+    public async Task ImageOnlyAnnexSourceMustBelongToTheBoundEuropeCorpus()
+    {
+        var envelope = await CompleteEnvelopeWithAnnexAsync(includeAnnexSourceInEuropeCorpus: false);
+
+        Assert.IsNull(Stage3EvidenceLineage.TryBind(envelope, out var refusal, out var detail));
+        Assert.AreEqual(Stage3EvidenceLineageRefusal.EuropeAnnexOutsideCorpus, refusal);
+        Assert.AreEqual(
+            ScopeManifestCanonicalWriter.ComputeObjectRefSha256(
+                envelope.ImageOnlyEuAnnexes.Single().SourceObject),
+            detail);
+    }
+
+    [TestMethod]
+    public async Task ImageOnlyAnnexSourceInTheBoundEuropeCorpusBinds()
+    {
+        var envelope = await CompleteEnvelopeWithAnnexAsync(includeAnnexSourceInEuropeCorpus: true);
+
+        var lineage = Stage3EvidenceLineage.TryBind(envelope, out var refusal, out var detail);
+
+        Assert.AreEqual(Stage3EvidenceLineageRefusal.None, refusal, detail);
+        Assert.IsNotNull(lineage);
+    }
+
     private static async Task<Stage3EvidenceEnvelope> CompleteEnvelopeAsync()
     {
         var europe = await EuAxiomWiringHarness.RunAsync(
@@ -110,19 +136,36 @@ public sealed class Stage3EvidenceLineageTests
         return Rebuild(europe, luxembourg);
     }
 
+    private static async Task<Stage3EvidenceEnvelope> CompleteEnvelopeWithAnnexAsync(
+        bool includeAnnexSourceInEuropeCorpus)
+    {
+        var europe = await EuAxiomWiringHarness.RunAsync(
+            static root => EuAcquisitionTestFixture.AxiomAbsenceScriptFor(root));
+        var luxembourg = await LuxembourgQueryExecutionAdapterTests.RunEmptyDeliveredForEnvelopeAsync();
+        var annex = await EuImageOnlyAnnexProducerTests.ProduceForEnvelopeAsync();
+        if (includeAnnexSourceInEuropeCorpus)
+        {
+            europe = AddEuropeCorpusRecord(europe, annex.Disposition!.SourceObject);
+        }
+
+        return Rebuild(europe, luxembourg, [annex]);
+    }
+
     private static Stage3EvidenceEnvelope Rebuild(
         EuQueryExecutionResult europe,
-        LuxembourgQueryExecutionResult luxembourg) =>
-        Stage3EvidenceEnvelope.TryCreate(europe, luxembourg, [], out var refusal, out var detail)
+        LuxembourgQueryExecutionResult luxembourg,
+        IEnumerable<EuImageOnlyAnnexProductionResult>? annexes = null) =>
+        Stage3EvidenceEnvelope.TryCreate(europe, luxembourg, annexes ?? [], out var refusal, out var detail)
         ?? throw new AssertFailedException($"Envelope refused: {refusal}: {detail}");
 
     private static EuQueryExecutionResult CopyEurope(
         EuQueryExecutionResult source,
         SourceArtifactRef? corpusRecordSetRef = null,
+        VerifiedCorpusRecordSet? corpusRecordSet = null,
         string? manifestCanonicalSha256 = null,
         DurableBlobWriteReceipt? scopeManifestReceipt = null)
     {
-        var corpus = source.CorpusRecordSet!;
+        var corpus = corpusRecordSet ?? source.CorpusRecordSet!;
         var recordSetResult = CorpusRecordSetWriteResult.Written(
             corpusRecordSetRef ?? source.CorpusRecordSetRef!,
             corpus,
@@ -149,6 +192,35 @@ public sealed class Stage3EvidenceLineageTests
             source.LocatedAmendmentObservations,
             recordSetResult,
             source.CorrigendumTripwires!);
+    }
+
+    private static EuQueryExecutionResult AddEuropeCorpusRecord(
+        EuQueryExecutionResult source,
+        SourceObjectRef objectRef)
+    {
+        var set = source.CorpusRecordSet!.Set;
+        var template = set.Records[^1];
+        var record = new CorpusRecord(
+            CorpusRecordSchemaIds.Record,
+            objectRef,
+            template.ObjectOrdinal + 1,
+            template.RecordDisposition,
+            template.BodyDisposition,
+            template.RelationDisposition,
+            template.SupportingDocumentDisposition,
+            template.Body,
+            set.ManifestRef,
+            set.RunIdentity);
+        var rebuilt = new CorpusRecordSet(
+            CorpusRecordSetSchemaIds.Set,
+            set.ManifestRef,
+            set.RunIdentity,
+            [.. set.Records, record]);
+        using var bytes = new MemoryStream();
+        var sha256 = CorpusRecordSetCanonicalWriter.Write(bytes, rebuilt);
+        var reference = new SourceArtifactRef(source.CorpusRecordSetRef!.ResourceId, sha256);
+        var verified = VerifiedCorpusRecordSet.ParseAndVerify(reference, bytes.ToArray());
+        return CopyEurope(source, reference, verified);
     }
 
     private static LuxembourgQueryExecutionResult CopyLuxembourg(
