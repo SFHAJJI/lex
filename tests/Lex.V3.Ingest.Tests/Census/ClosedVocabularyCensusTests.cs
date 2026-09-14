@@ -108,6 +108,10 @@ public sealed class ClosedVocabularyCensusTests
                     + "OutcomeOutsideExpressionPopulation, ExpressionContentDisagrees, "
                     + "ExpressionDisposedTwice, OutcomeMissing, EligibleExpressionMarkedIneligible, "
                     + "IneligibleExpressionHasPackageOutcome",
+                "Lex.V3.Ingest.Europe.EuFormexRunOutcomeReconciliationRefusal: None, RunNotComplete, "
+                    + "RunExpressionProductionInvalid, PopulationOutsideRun, "
+                    + "PopulationProductionDisagrees, PopulationSuppliedTwice, PopulationMissing, "
+                    + "ExpressionClaimedTwice, RunExpressionCountDisagrees",
                 "Lex.V3.Ingest.Europe.EuImageOnlyAnnexProductionRefusal: None, "
                     + "ProfileDigestMismatch, ProfileInvalid, ProfileDoesNotNameAnnex, "
                     + "ProfileDoesNotNameTransport, RetainedBytesUnavailable, PdfUnreadable, "
