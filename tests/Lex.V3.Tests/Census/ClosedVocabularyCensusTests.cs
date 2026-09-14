@@ -340,6 +340,7 @@ public sealed class ClosedVocabularyCensusTests
                 "Lex.V3.Contracts.Source.Europe.EuFormatBodyAdmission: BodyAdmitted, "
                     + "BodyNotAdmitted",
                 "Lex.V3.Contracts.Source.Europe.EuFormexItemRole: MainText, Descriptor",
+                "Lex.V3.Contracts.Source.Europe.EuFormexManifestationQueryPass: Pass1, Pass2",
                 "Lex.V3.Contracts.Source.Europe.EuFormexPackageRefusal: None, "
                     + "ExpressionDisagreement, LanguageDisagreement, ManifestationDisagreement",
                 "Lex.V3.Contracts.Source.Europe.EuFormexRoleRefusal: None, UnrecognisedStreamName, "

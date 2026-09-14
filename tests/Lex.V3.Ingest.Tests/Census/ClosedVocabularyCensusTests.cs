@@ -95,6 +95,13 @@ public sealed class ClosedVocabularyCensusTests
                     + "AnnexSequenceMissing, AnnexPageExtentMissing, AnnexPageExtentInvalid, "
                     + "AnnexPageExtentContradictory, DuplicateAnnexIdentity, "
                     + "PackageDoesNotIdentifyFormex, AnnexTitleMissing",
+                "Lex.V3.Ingest.Europe.EuFormexEligibilityPopulationRefusal: None, "
+                    + "ExpressionProductionRefused, ExpressionEnumerationRefused, "
+                    + "ExpressionEnumerationMissing, ExpressionEnumeratedTwice, "
+                    + "ExpressionOutsidePopulation, ExpressionContentDisagrees",
+                "Lex.V3.Ingest.Europe.EuFormexManifestationEnumerationRefusal: None, "
+                    + "EnumerationRefused, EnumerationProofRefused, VerifiedRowsRefused, "
+                    + "RowNotAdmitted, RowNamesAnotherExpression, ManifestationTypeDeliveredTwice",
                 "Lex.V3.Ingest.Europe.EuImageOnlyAnnexProductionRefusal: None, "
                     + "ProfileDigestMismatch, ProfileInvalid, ProfileDoesNotNameAnnex, "
                     + "ProfileDoesNotNameTransport, RetainedBytesUnavailable, PdfUnreadable, "
