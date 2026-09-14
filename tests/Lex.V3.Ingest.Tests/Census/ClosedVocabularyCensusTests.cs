@@ -224,6 +224,9 @@ public sealed class ClosedVocabularyCensusTests
                     + "NoRedirect, AdmittedOriginRoute",
                 "Lex.V3.Ingest.RoutedHttpAcquisitionSession+RequestPolicyKind: RobotsGet, "
                     + "MachineQueryPost, MachineQueryGet",
+                "Lex.V3.Ingest.Stage3EvidenceEnvelopeRefusal: None, EuropeNotComplete, "
+                    + "LuxembourgNotComplete, AnnexProductionRefused, "
+                    + "AnnexIsNotTextUnavailable, DuplicateAnnex",
             },
             ClosedSurfaceCensus.ClosedVocabularies(CensusScope.SweptHere).ToArray());
     }

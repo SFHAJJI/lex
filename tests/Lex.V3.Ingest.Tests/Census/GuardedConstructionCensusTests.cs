@@ -723,6 +723,9 @@ public sealed class GuardedConstructionCensusTests
                     + "tHandlerAsync, "
                     + "method private instance "
                     + "Lex.V3.Ingest.RoutedHttpAcquisitionSession::BootstrapRobotsAsync",
+                "Lex.V3.Ingest.Stage3EvidenceEnvelope: constructor private instance "
+                    + "Lex.V3.Ingest.Stage3EvidenceEnvelope::.ctor, "
+                    + "method public static Lex.V3.Ingest.Stage3EvidenceEnvelope::TryCreate",
                 "Lex.V3.Ingest.WireBudgetSnapshot: constructor private instance "
                     + "Lex.V3.Ingest.WireBudgetSnapshot::.ctor, "
                     + "constructor private instance Lex.V3.Ingest.WireBudgetSnapshot::.ctor, "
