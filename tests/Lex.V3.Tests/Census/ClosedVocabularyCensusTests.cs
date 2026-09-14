@@ -78,6 +78,16 @@ public sealed class ClosedVocabularyCensusTests
                     + "ProfilesDiffer",
                 "Lex.V3.Contracts.Derivation.EuAnnexBodyDispositionOutcome: Admitted, Rejected, "
                     + "TextNotAvailable",
+                "Lex.V3.Contracts.Derivation.EuCorrigendumDateState: PublisherDated, "
+                    + "NotStatedByConsultedDelivery",
+                "Lex.V3.Contracts.Derivation.EuCorrigendumLanguageReach: WithinServedBodyLanguages, "
+                    + "OutsideServedBodyLanguages",
+                "Lex.V3.Contracts.Derivation.EuCorrigendumTripwireGapReason: "
+                    + "CorrectsNotStatedByConsultedDelivery",
+                "Lex.V3.Contracts.Derivation.EuCorrigendumTripwireRefusal: None, "
+                    + "ObjectFactsRowsRefused, PageReceiptDoesNotBindItsBytes, "
+                    + "PageAttributionUnavailable, CorrectsRowTermKindMismatch, "
+                    + "CorrectsUnboundMarkerBesideEdges, ExpressionDerivationRefused",
                 "Lex.V3.Contracts.Derivation.LanguageScopedExpressionAppendRefusal: None, "
                     + "ConflictingCanonicalContent",
                 "Lex.V3.Contracts.Derivation.LanguageScopedExpressionContribution: "
