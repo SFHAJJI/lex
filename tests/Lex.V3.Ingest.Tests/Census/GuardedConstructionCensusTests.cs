@@ -203,6 +203,16 @@ public sealed class GuardedConstructionCensusTests
                     + "method public static "
                     + "Lex.V3.Ingest.Europe.EuFamilyEnumerationOutcome::ProofRefused, "
                     + "method public static Lex.V3.Ingest.Europe.EuFamilyEnumerationOutcome::Proven",
+                "Lex.V3.Ingest.Europe.EuFormexAnnexInventory: constructor internal instance "
+                    + "Lex.V3.Ingest.Europe.EuFormexAnnexInventory::.ctor",
+                "Lex.V3.Ingest.Europe.EuFormexAnnexInventoryProductionResult: constructor private "
+                    + "instance Lex.V3.Ingest.Europe.EuFormexAnnexInventoryProductionResult::.ctor, "
+                    + "method internal static "
+                    + "Lex.V3.Ingest.Europe.EuFormexAnnexInventoryProductionResult::Refused, "
+                    + "method internal static "
+                    + "Lex.V3.Ingest.Europe.EuFormexAnnexInventoryProductionResult::Success, "
+                    + "method public instance "
+                    + "Lex.V3.Ingest.Europe.EuFormexAnnexInventoryProducer::RunAsync",
                 "Lex.V3.Ingest.Europe.EuImageOnlyAnnexProductionResult: constructor private "
                     + "instance Lex.V3.Ingest.Europe.EuImageOnlyAnnexProductionResult::.ctor, "
                     + "method internal static "

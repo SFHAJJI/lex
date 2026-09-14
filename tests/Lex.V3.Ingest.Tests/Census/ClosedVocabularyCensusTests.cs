@@ -75,6 +75,12 @@ public sealed class ClosedVocabularyCensusTests
                     + "WireBudgetExhausted",
                 "Lex.V3.Ingest.Europe.EuFamilyEnumerationOutcomeKind: Proven, ExecutorRefused, "
                     + "ProofRefused",
+                "Lex.V3.Ingest.Europe.EuFormexAnnexInventoryRefusal: None, ProfileDigestMismatch, "
+                    + "ProfileInvalid, ProfileDoesNotNameTransport, RetainedBytesUnavailable, "
+                    + "PackageUnreadable, PackageEntryInvalid, XmlInvalid, "
+                    + "AnnexDocumentReferenceMissing, AnnexSequenceMissing, AnnexPageExtentMissing, "
+                    + "AnnexPageExtentInvalid, AnnexPageExtentContradictory, DuplicateAnnexIdentity, "
+                    + "PackageDoesNotIdentifyFormex, AnnexTitleMissing",
                 "Lex.V3.Ingest.Europe.EuImageOnlyAnnexProductionRefusal: None, "
                     + "ProfileDigestMismatch, ProfileInvalid, ProfileDoesNotNameAnnex, "
                     + "ProfileDoesNotNameTransport, RetainedBytesUnavailable, PdfUnreadable, "
