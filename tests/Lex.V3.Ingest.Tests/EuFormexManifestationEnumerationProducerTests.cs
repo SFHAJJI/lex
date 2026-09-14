@@ -208,6 +208,37 @@ public sealed class EuFormexManifestationEnumerationProducerTests
             handler.FamilySequence.ToArray());
     }
 
+    [TestMethod]
+    public async Task AnExhaustedBudgetRefusesBeforeOpeningThePublisherSession()
+    {
+        var expression = Expression(ExpressionA);
+        var plan = EuFormexManifestationDiscoveryPlan.Create();
+        var handler = new EuAcquisitionTestFixture.ClassifyingHandler(
+            new Dictionary<string, EuAcquisitionTestFixture.FamilyScript>(StringComparer.Ordinal));
+        var budget = WireRequestBudget.OfWireRequests(2);
+        Assert.IsTrue(budget.TryReserveAttempt(), "the fixture spends the budget itself.");
+        Assert.IsTrue(budget.TryReserveAttempt(), "the fixture spends the budget itself.");
+        Assert.IsTrue(budget.Exhausted, "the entry point must receive an already-spent budget.");
+        var executor = new EuRepeatedEnumerationExecutor(
+            new EuAcquisitionTestFixture.EuInMemoryCustodyStore(),
+            new EuAcquisitionTestFixture.FixedTimeProvider(),
+            handler);
+
+        var result = await executor.RunEuFormexManifestationsAsync(
+            new EuFormexManifestationRunRequest(
+                plan, expression, "urn:uuid:a36cce1d-e89e-4d2d-8ff2-91ef7e61e788",
+                EuAcquisitionTestFixture.BuildRendererSource(9812), budget),
+            EuAcquisitionTestFixture.SourceWitness(),
+            CancellationToken.None);
+
+        Assert.IsNull(result.Receipt);
+        Assert.IsNotNull(result.Refusal);
+        Assert.AreEqual(EuEnumerationRefusal.WireBudgetExhausted, result.Refusal.Code);
+        Assert.AreEqual(0, result.ProductRequestCount);
+        Assert.AreEqual(0, handler.SendCount, "nothing may reach the publisher, not even robots.");
+        Assert.AreEqual(2, budget.Spent, "the refused attempt must not overspend the ceiling.");
+    }
+
     private static EuFormexManifestationEnumerationResult Decode(
         LanguageScopedExpression expression, params RepeatedEnumerationRow[] rows) =>
         EuFormexManifestationEnumerationProducer.DecodeRows(
