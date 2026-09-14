@@ -227,7 +227,7 @@ public sealed class EuAnnexEvidenceBindingResult
 
 /// <summary>
 /// Binds receipt-proven Formex and XHTML annex identity to PDF page labels in the same verified
-/// WEMI lineage. It accepts no annex coordinate or page selection from a caller.
+/// WEMI lineage. The public production door accepts no annex coordinate or page selection from a caller.
 /// </summary>
 public sealed class EuAnnexEvidenceBinder
 {
@@ -240,7 +240,9 @@ public sealed class EuAnnexEvidenceBinder
         _custodyStore = custodyStore ?? throw new ArgumentNullException(nameof(custodyStore));
 
     public async Task<EuAnnexEvidenceBindingResult> RunAsync(
+        EuWemiIdentityBoundary identityBoundary,
         EuFormexPackage package,
+        SourceObjectRef expectedPdfManifestation,
         VerifiedCorpusRecordSet corpusRecordSet,
         EuFormexAnnexInventory formexInventory,
         EuXhtmlAnnexInventory xhtmlInventory,
@@ -249,7 +251,9 @@ public sealed class EuAnnexEvidenceBinder
         SourceArtifactRef reconciliationProfileRef,
         CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(identityBoundary);
         ArgumentNullException.ThrowIfNull(package);
+        ArgumentNullException.ThrowIfNull(expectedPdfManifestation);
         ArgumentNullException.ThrowIfNull(corpusRecordSet);
         ArgumentNullException.ThrowIfNull(formexInventory);
         ArgumentNullException.ThrowIfNull(xhtmlInventory);
@@ -288,6 +292,13 @@ public sealed class EuAnnexEvidenceBinder
                 "each retained source must occur exactly once as a held body in the verified corpus set");
         }
 
+        if (new[] { formexSource.ObjectRef, xhtmlSource.ObjectRef, pdfSource.ObjectRef }
+            .Distinct().Count() != 3)
+        {
+            return Refused(EuAnnexEvidenceBindingRefusal.SourceLineageMismatch,
+                "Formex, XHTML and PDF must be three distinct admitted source items");
+        }
+
         if (formexSource.ObjectRef != package.BodyRef)
         {
             return Refused(EuAnnexEvidenceBindingRefusal.SourceLineageMismatch,
@@ -296,11 +307,12 @@ public sealed class EuAnnexEvidenceBinder
 
         var expression = package.ExpressionRef;
         var work = FindByKey(records, expression.ParentKeyRef);
-        var boundary = new EuWemiIdentityBoundary(
-            expression.EntityKind.RegistryRef, expression.IdentityProfileRef);
-        if (work is null || !IsAdmitted(boundary, work.ObjectRef, EuWemiRole.Work)
-            || !TryLineage(records, xhtmlSource.ObjectRef, expression, boundary)
-            || !TryLineage(records, pdfSource.ObjectRef, expression, boundary))
+        if (work is null
+            || !IsAdmitted(identityBoundary, expression, EuWemiRole.Expression)
+            || !IsAdmitted(identityBoundary, work.ObjectRef, EuWemiRole.Work)
+            || !TryLineage(records, xhtmlSource.ObjectRef, expression, identityBoundary, null)
+            || !TryLineage(records, pdfSource.ObjectRef, expression, identityBoundary,
+                expectedPdfManifestation))
         {
             return Refused(EuAnnexEvidenceBindingRefusal.SourceLineageMismatch,
                 "the Formex, XHTML and PDF sources do not share the admitted expression and work lineage");
@@ -309,7 +321,11 @@ public sealed class EuAnnexEvidenceBinder
         var xhtmlByEntry = xhtmlInventory.Members
             .GroupBy(static member => member.FormexPackageEntry, StringComparer.Ordinal)
             .ToDictionary(static group => group.Key, static group => group.ToArray(), StringComparer.Ordinal);
-        if (xhtmlInventory.Members.Count != formexInventory.Members.Count
+        if (formexInventory.Members.Select(static member => member.PackageEntry)
+                .Distinct(StringComparer.Ordinal).Count() != formexInventory.Members.Count
+            || xhtmlInventory.Members.Select(static member => member.PublisherAnnexId)
+                .Distinct(StringComparer.Ordinal).Count() != xhtmlInventory.Members.Count
+            || xhtmlInventory.Members.Count != formexInventory.Members.Count
             || formexInventory.Members.Any(member =>
                 !xhtmlByEntry.TryGetValue(member.PackageEntry, out var matches)
                 || matches.Length != 1
@@ -406,12 +422,14 @@ public sealed class EuAnnexEvidenceBinder
         IReadOnlyList<CorpusRecord> records,
         SourceObjectRef source,
         SourceObjectRef expression,
-        EuWemiIdentityBoundary boundary)
+        EuWemiIdentityBoundary boundary,
+        SourceObjectRef? expectedManifestation)
     {
         var manifestation = FindByKey(records, source.ParentKeyRef);
         return manifestation is not null
             && IsAdmitted(boundary, source, EuWemiRole.Item)
             && IsAdmitted(boundary, manifestation.ObjectRef, EuWemiRole.Manifestation)
+            && (expectedManifestation is null || manifestation.ObjectRef == expectedManifestation)
             && manifestation.ObjectRef.ParentKeyRef is { } parent
             && parent.EntityKind == expression.EntityKind
             && string.Equals(parent.CanonicalKey, expression.CanonicalKey, StringComparison.Ordinal)
@@ -465,8 +483,7 @@ public sealed class EuAnnexEvidenceBinder
             pages.Add(matches[0]);
         }
 
-        if (pages.Count != member.PageTotal
-            || pages.Select(static page => page.PhysicalPageNumber)
+        if (pages.Select(static page => page.PhysicalPageNumber)
                 .Zip(pages.Skip(1).Select(static page => page.PhysicalPageNumber),
                     static (left, right) => right == left + 1).Any(static contiguous => !contiguous))
         {
@@ -494,8 +511,8 @@ public sealed class EuAnnexEvidenceBinder
         }
 
         var entries = new SortedDictionary<int, object>();
-        var visited = new HashSet<string>(StringComparer.Ordinal);
-        if (!ReadNumberTree(document, root, entries, visited, 0, cancellationToken)
+        var path = new HashSet<string>(StringComparer.Ordinal);
+        if (!ReadNumberTree(document, root, entries, path, 0, cancellationToken)
             || entries.Count == 0 || entries.Keys.First() != 0)
         {
             return new PageLabelRead(PageLabelState.Invalid, null);
@@ -521,7 +538,7 @@ public sealed class EuAnnexEvidenceBinder
         object documentValue,
         object tokenValue,
         SortedDictionary<int, object> entries,
-        HashSet<string> visited,
+        HashSet<string> path,
         int depth,
         CancellationToken cancellationToken)
     {
@@ -531,7 +548,45 @@ public sealed class EuAnnexEvidenceBinder
             return false;
         }
         cancellationToken.ThrowIfCancellationRequested();
-        if (depth > 32 || !TryResolve(document, token, visited, out var resolved)
+        if (depth > 32)
+        {
+            return false;
+        }
+
+        string? nodeIdentity = null;
+        if (token is IndirectReferenceToken indirect)
+        {
+            nodeIdentity = indirect.Data.ToString();
+            if (!path.Add(nodeIdentity))
+            {
+                return false;
+            }
+        }
+
+        try
+        {
+            return ReadNumberTreeNode(document, token, entries, path, depth, cancellationToken);
+        }
+        finally
+        {
+            if (nodeIdentity is not null)
+            {
+                path.Remove(nodeIdentity);
+            }
+        }
+    }
+
+    private static bool ReadNumberTreeNode(
+        object documentValue,
+        object tokenValue,
+        SortedDictionary<int, object> entries,
+        HashSet<string> path,
+        int depth,
+        CancellationToken cancellationToken)
+    {
+        var document = (PdfDocument)documentValue;
+        if (tokenValue is not IToken token
+            || !TryResolve(document, token, out var resolved)
             || resolved is not DictionaryToken dictionary)
         {
             return false;
@@ -546,7 +601,7 @@ public sealed class EuAnnexEvidenceBinder
 
         if (hasNums)
         {
-            if (!TryResolve(document, numsToken!, visited, out var resolvedNums)
+            if (!TryResolve(document, numsToken!, out var resolvedNums)
                 || resolvedNums is not ArrayToken nums || nums.Data.Count == 0
                 || nums.Data.Count % 2 != 0)
             {
@@ -554,9 +609,9 @@ public sealed class EuAnnexEvidenceBinder
             }
             for (var index = 0; index < nums.Data.Count; index += 2)
             {
-                if (!TryResolve(document, nums.Data[index], visited, out var key)
+                if (!TryResolve(document, nums.Data[index], out var key)
                     || key is not NumericToken number || number.Int < 0
-                    || !TryResolve(document, nums.Data[index + 1], visited, out var value)
+                    || !TryResolve(document, nums.Data[index + 1], out var value)
                     || value is not DictionaryToken spec || !entries.TryAdd(number.Int, spec))
                 {
                     return false;
@@ -565,14 +620,14 @@ public sealed class EuAnnexEvidenceBinder
             return true;
         }
 
-        if (!TryResolve(document, kidsToken!, visited, out var resolvedKids)
+        if (!TryResolve(document, kidsToken!, out var resolvedKids)
             || resolvedKids is not ArrayToken kids || kids.Data.Count == 0)
         {
             return false;
         }
         foreach (var kid in kids.Data)
         {
-            if (!ReadNumberTree(document, kid, entries, visited, depth + 1, cancellationToken))
+            if (!ReadNumberTree(document, kid, entries, path, depth + 1, cancellationToken))
             {
                 return false;
             }
@@ -583,7 +638,6 @@ public sealed class EuAnnexEvidenceBinder
     private static bool TryResolve(
         object documentValue,
         object tokenValue,
-        HashSet<string> visited,
         out object resolved)
     {
         var document = (PdfDocument)documentValue;
@@ -596,11 +650,6 @@ public sealed class EuAnnexEvidenceBinder
         if (token is not IndirectReferenceToken indirect)
         {
             return true;
-        }
-        var identity = indirect.Data.ToString();
-        if (!visited.Add(identity))
-        {
-            return false;
         }
         resolved = document.Structure.GetObject(indirect.Data).Data;
         return true;

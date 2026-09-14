@@ -84,6 +84,65 @@ public sealed class EuAnnexEvidenceBinderTests
     }
 
     [TestMethod]
+    public async Task ProfileDigestShapeRuleAndPdfTransportAreExact()
+    {
+        var fixture = await FixtureAsync(PageLabelPdf(7, "<< /S /D /St 1 >>"));
+        var wrongDigest = fixture.Profile with
+        {
+            Reference = new SourceArtifactRef(fixture.Profile.Reference.ResourceId, new string('0', 64)),
+        };
+        var badHeaderBytes = fixture.Profile.Bytes.ToArray();
+        badHeaderBytes[0] = (byte)'X';
+        var badHeader = new Profile(badHeaderBytes, Artifact('4', Sha(badHeaderBytes)));
+        var badRuleBytes = Encoding.UTF8.GetBytes(Encoding.UTF8.GetString(fixture.Profile.Bytes)
+            .Replace("rule=pdf_page_label_bijection/1", "rule=pdf_page_label_bijection/2",
+                StringComparison.Ordinal));
+        var badRule = new Profile(badRuleBytes, Artifact('5', Sha(badRuleBytes)));
+        var wrongPdfBytes = ProfileBytes(fixture.Formex.IdentitySha256,
+            fixture.Xhtml.IdentitySha256, new string('6', 64));
+        var wrongPdf = new Profile(wrongPdfBytes, Artifact('6', Sha(wrongPdfBytes)));
+
+        Assert.AreEqual(EuAnnexEvidenceBindingRefusal.ProfileDigestMismatch,
+            (await fixture.RunAsync(wrongDigest)).Refusal);
+        Assert.AreEqual(EuAnnexEvidenceBindingRefusal.ProfileInvalid,
+            (await fixture.RunAsync(badHeader)).Refusal);
+        Assert.AreEqual(EuAnnexEvidenceBindingRefusal.ProfileInvalid,
+            (await fixture.RunAsync(badRule)).Refusal);
+        Assert.AreEqual(EuAnnexEvidenceBindingRefusal.ProfileEvidenceMismatch,
+            (await fixture.RunAsync(wrongPdf)).Refusal);
+    }
+
+    [TestMethod]
+    public async Task MissingDuplicateAndUnavailablePdfEvidenceAreRefused()
+    {
+        var fixture = await FixtureAsync(PageLabelPdf(7, "<< /S /D /St 1 >>"));
+        var sources = Sources(fixture);
+        var missing = VerifiedCorpus(sources.Where(source => source.Receipt != fixture.PdfReceipt).ToArray());
+        var duplicateObject = Object("duplicate-pdf", EuWemiRole.Item,
+            fixture.Corpus.Set.Records.Single(record =>
+                record.ObjectRef.CanonicalKey.EndsWith(".0001.03", StringComparison.Ordinal)).ObjectRef);
+        var ambiguous = VerifiedCorpus([.. sources, (duplicateObject, fixture.PdfReceipt)]);
+
+        Assert.AreEqual(EuAnnexEvidenceBindingRefusal.SourceEvidenceMissingOrAmbiguous,
+            (await fixture.RunAsync(corpus: missing)).Refusal);
+        Assert.AreEqual(EuAnnexEvidenceBindingRefusal.SourceEvidenceMissingOrAmbiguous,
+            (await fixture.RunAsync(corpus: ambiguous)).Refusal);
+        Assert.AreEqual(EuAnnexEvidenceBindingRefusal.RetainedPdfUnavailable,
+            (await fixture.RunAsync(store: new EuAcquisitionTestFixture.EuInMemoryCustodyStore())).Refusal);
+    }
+
+    [TestMethod]
+    public async Task UnreadableRetainedPdfIsRefused()
+    {
+        var fixture = await FixtureAsync("not a pdf"u8.ToArray());
+
+        var result = await fixture.RunAsync();
+
+        Assert.AreEqual(EuAnnexEvidenceBindingRefusal.PdfUnreadable, result.Refusal);
+        Assert.IsNull(result.Binding);
+    }
+
+    [TestMethod]
     public async Task SubstitutedPdfLineageIsRefusedBeforeReadingPages()
     {
         var fixture = await FixtureAsync(
@@ -93,6 +152,94 @@ public sealed class EuAnnexEvidenceBinderTests
 
         Assert.AreEqual(EuAnnexEvidenceBindingRefusal.SourceLineageMismatch, result.Refusal);
         Assert.IsNull(result.Binding);
+    }
+
+    [TestMethod]
+    public async Task SubstitutedXhtmlLineageIsRefusedBeforeReadingPages()
+    {
+        var fixture = await FixtureAsync(
+            PageLabelPdf(7, "<< /S /D /St 1 >>"), xhtmlInOtherExpression: true);
+
+        var result = await fixture.RunAsync();
+
+        Assert.AreEqual(EuAnnexEvidenceBindingRefusal.SourceLineageMismatch, result.Refusal);
+        Assert.IsNull(result.Binding);
+    }
+
+    [TestMethod]
+    public async Task FormexInventoryMustNameTheAdmittedPackageBody()
+    {
+        var fixture = await FixtureAsync(PageLabelPdf(7, "<< /S /D /St 1 >>"));
+        var otherReceipt = await Hold(fixture.Store, "other formex"u8.ToArray());
+        var otherBody = Object("other-formex", EuWemiRole.Item, fixture.Package.ManifestationRef);
+        var corpus = VerifiedCorpus([.. Sources(fixture), (otherBody, otherReceipt)]);
+        var formex = new EuFormexAnnexInventory(
+            otherReceipt, fixture.Formex.ProfileRef, fixture.Formex.Members);
+        var profile = ReconciliationProfile(formex, fixture.Xhtml, fixture.PdfReceipt, '3');
+
+        var result = await fixture.RunAsync(profile, corpus, formex);
+
+        Assert.AreEqual(EuAnnexEvidenceBindingRefusal.SourceLineageMismatch, result.Refusal);
+        Assert.IsNull(result.Binding);
+    }
+
+    [TestMethod]
+    public async Task WorkMustBeAdmittedByTheExpressionIdentityBoundary()
+    {
+        var fixture = await FixtureAsync(PageLabelPdf(7, "<< /S /D /St 1 >>"));
+        var badWork = new SourceObjectRef(SourceCoreSchemaIds.SourceObjectRef,
+            fixture.Work.Authority, fixture.Work.EntityKind, fixture.Work.PublisherUri,
+            fixture.Work.CanonicalKey, fixture.Work.CanonicalKeySha256,
+            Artifact('2', new string('2', 64)), fixture.Work.ParentKeyRef);
+        var sources = Sources(fixture).Select(source => source.Object == fixture.Work
+            ? (badWork, source.Receipt) : source).ToArray();
+
+        var result = await fixture.RunAsync(corpus: VerifiedCorpus(sources));
+
+        Assert.AreEqual(EuAnnexEvidenceBindingRefusal.SourceLineageMismatch, result.Refusal);
+        Assert.IsNull(result.Binding);
+    }
+
+    [TestMethod]
+    public async Task SuppliedIdentityBoundaryReAdmitsThePackageExpression()
+    {
+        var fixture = await FixtureAsync(PageLabelPdf(7, "<< /S /D /St 1 >>"));
+        var hostileBoundary = new EuWemiIdentityBoundary(
+            Registry, Artifact('2', new string('2', 64)));
+
+        var result = await fixture.RunAsync(boundary: hostileBoundary);
+
+        Assert.AreEqual(EuAnnexEvidenceBindingRefusal.SourceLineageMismatch, result.Refusal);
+        Assert.IsNull(result.Binding);
+    }
+
+    [TestMethod]
+    public async Task EvidenceLegsMustBeDistinctAndPdfMustMatchTheExpectedManifestation()
+    {
+        var fixture = await FixtureAsync(PageLabelPdf(7, "<< /S /D /St 1 >>"));
+        var collapsedProfile = ReconciliationProfile(
+            fixture.Formex, fixture.Xhtml, fixture.Formex.SourceReceipt, '4');
+        var collapsed = await fixture.RunAsync(
+            collapsedProfile, pdfReceipt: fixture.Formex.SourceReceipt);
+
+        var decoyReceipt = await Hold(fixture.Store, PageLabelPdf(9, "<< /S /D /St 1 >>"));
+        var decoyManifestation = Object(
+            fixture.Package.ExpressionRef.CanonicalKey + ".04",
+            EuWemiRole.Manifestation, fixture.Package.ExpressionRef);
+        var decoyItem = Object(decoyManifestation.CanonicalKey + "/PDF",
+            EuWemiRole.Item, decoyManifestation);
+        var corpus = VerifiedCorpus([
+            .. Sources(fixture),
+            (decoyManifestation, await Hold(fixture.Store, "decoy manifestation"u8.ToArray())),
+            (decoyItem, decoyReceipt),
+        ]);
+        var decoyProfile = ReconciliationProfile(
+            fixture.Formex, fixture.Xhtml, decoyReceipt, '5');
+        var decoy = await fixture.RunAsync(decoyProfile, corpus,
+            pdfReceipt: decoyReceipt);
+
+        Assert.AreEqual(EuAnnexEvidenceBindingRefusal.SourceLineageMismatch, collapsed.Refusal);
+        Assert.AreEqual(EuAnnexEvidenceBindingRefusal.SourceLineageMismatch, decoy.Refusal);
     }
 
     [TestMethod]
@@ -136,11 +283,39 @@ public sealed class EuAnnexEvidenceBinderTests
         var profile = new Profile(bytes, Artifact('7', Sha(bytes)));
 
         var result = await new EuAnnexEvidenceBinder(fixture.Store).RunAsync(
-            fixture.Package, fixture.Corpus, fixture.Formex, duplicated, fixture.PdfReceipt,
+            fixture.Boundary, fixture.Package, fixture.PdfManifestation,
+            fixture.Corpus, fixture.Formex, duplicated, fixture.PdfReceipt,
             profile.Bytes, profile.Reference, CancellationToken.None);
 
         Assert.AreEqual(EuAnnexEvidenceBindingRefusal.PublisherPopulationMismatch, result.Refusal);
         Assert.IsNull(result.Binding);
+    }
+
+    [TestMethod]
+    public async Task DuplicateFormexEntryOrPublisherAnnexIdCannotConserveThePopulation()
+    {
+        var fixture = await FixtureAsync(PageLabelPdf(7, "<< /S /D /St 1 >>"),
+            formexTwoMembers: true, xhtmlTwoMembers: true);
+        var duplicateFormex = new EuFormexAnnexInventory(
+            fixture.Formex.SourceReceipt, fixture.Formex.ProfileRef,
+            [fixture.Formex.Members[0], fixture.Formex.Members[1] with
+                { PackageEntry = fixture.Formex.Members[0].PackageEntry }]);
+        var duplicateXhtml = new EuXhtmlAnnexInventory(
+            fixture.Xhtml.SourceReceipt, fixture.Xhtml.ProfileRef, fixture.Xhtml.WorkEli,
+            [fixture.Xhtml.Members[0], fixture.Xhtml.Members[1] with
+                { PublisherAnnexId = fixture.Xhtml.Members[0].PublisherAnnexId }]);
+
+        var formexResult = await fixture.RunAsync(
+            ReconciliationProfile(duplicateFormex, fixture.Xhtml, fixture.PdfReceipt, '1'),
+            formex: duplicateFormex);
+        var xhtmlResult = await fixture.RunAsync(
+            ReconciliationProfile(fixture.Formex, duplicateXhtml, fixture.PdfReceipt, '2'),
+            xhtml: duplicateXhtml);
+
+        Assert.AreEqual(EuAnnexEvidenceBindingRefusal.PublisherPopulationMismatch,
+            formexResult.Refusal);
+        Assert.AreEqual(EuAnnexEvidenceBindingRefusal.PublisherPopulationMismatch,
+            xhtmlResult.Refusal);
     }
 
     [TestMethod]
@@ -158,7 +333,7 @@ public sealed class EuAnnexEvidenceBinderTests
     [TestMethod]
     public async Task UnreasonablyLargeAlphabeticPageLabelIsInvalidAndSelectsNoPages()
     {
-        var fixture = await FixtureAsync(PageLabelPdf(7, "<< /S /A /St 2147483647 >>"));
+        var fixture = await FixtureAsync(PageLabelPdf(7, "<< /S /A /St 200000 >>"));
 
         var result = await fixture.RunAsync();
 
@@ -177,6 +352,52 @@ public sealed class EuAnnexEvidenceBinderTests
 
         var member = result.Binding!.Members.Single();
         Assert.AreEqual(EuAnnexEvidenceGap.PublisherPageLabelDuplicate, member.Gap);
+        Assert.IsNull(member.PdfMapping);
+    }
+
+    [TestMethod]
+    public async Task NonIdentityPublisherLabelsMapToTheirPhysicalPages()
+    {
+        var fixture = await FixtureAsync(PageLabelPdf(
+            8, "<< /Nums [0 << /S /r /St 1 >> 2 << /S /D /St 2 >>] >>", rawTree: true));
+
+        var member = (await fixture.RunAsync()).Binding!.Members.Single();
+
+        Assert.AreEqual(EuAnnexEvidenceGap.BodyClassificationPending, member.Gap);
+        CollectionAssert.AreEqual(new[] { 3, 4, 5, 6, 7, 8 },
+            member.PdfMapping!.Pages.Select(static page => page.PhysicalPageNumber).ToArray());
+    }
+
+    [TestMethod]
+    public async Task NumberTreeMustBeginAtZeroAndMayShareAnIndirectSpecification()
+    {
+        var missingZero = await FixtureAsync(PageLabelPdf(
+            7, "<< /Nums [1 << /S /D /St 1 >>] >>", rawTree: true));
+        var sharedObjectNumber = 10;
+        var shared = await FixtureAsync(PageLabelPdf(7,
+            $"<< /Nums [0 {sharedObjectNumber} 0 R 4 {sharedObjectNumber} 0 R] >>",
+            rawTree: true, additionalObjects: ["<< /S /D /St 1 >>"]));
+
+        Assert.AreEqual(EuAnnexEvidenceGap.PublisherPageLabelsInvalid,
+            (await missingZero.RunAsync()).Binding!.Members.Single().Gap);
+        Assert.AreEqual(EuAnnexEvidenceGap.PublisherPageLabelDuplicate,
+            (await shared.RunAsync()).Binding!.Members.Single().Gap);
+    }
+
+    [TestMethod]
+    public async Task RetainedPublisherSpecimensConserveOneRawMemberWithoutGuessingPages()
+    {
+        var fixture = await FixtureAsync(
+            await FixtureBytesAsync("new-pdfa2a-200-body.bin"),
+            formexBytes: await FixtureBytesAsync("new-fmx4-200-body.bin"),
+            xhtmlBytes: await FixtureBytesAsync("new-xhtml-200-body.bin"));
+
+        var result = await fixture.RunAsync();
+
+        Assert.AreEqual(EuAnnexEvidenceBindingRefusal.None, result.Refusal, result.Detail);
+        var member = result.Binding!.Members.Single();
+        Assert.AreEqual("anx_1", member.PublisherAnnexId);
+        Assert.AreEqual(EuAnnexEvidenceGap.PublisherPageLabelsMissing, member.Gap);
         Assert.IsNull(member.PdfMapping);
     }
 
@@ -225,18 +446,22 @@ public sealed class EuAnnexEvidenceBinderTests
         Assert.IsFalse(parameterTypes.Contains(typeof(int)));
         Assert.IsFalse(parameterTypes.Contains(typeof(int[])));
         Assert.IsFalse(parameterTypes.Contains(typeof(IReadOnlyList<int>)));
+        Assert.IsTrue(parameterTypes.Contains(typeof(EuWemiIdentityBoundary)));
     }
 
     private static async Task<Fixture> FixtureAsync(
         byte[] pdfBytes,
         bool pdfInOtherExpression = false,
+        bool xhtmlInOtherExpression = false,
         string xhtmlTitle = "ANNEX",
         bool formexTwoMembers = false,
-        bool xhtmlTwoMembers = false)
+        bool xhtmlTwoMembers = false,
+        byte[]? formexBytes = null,
+        byte[]? xhtmlBytes = null)
     {
         var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
-        var formexBytes = FormexPackage(formexTwoMembers);
-        var xhtmlBytes = Encoding.UTF8.GetBytes(Xhtml(xhtmlTitle, xhtmlTwoMembers));
+        formexBytes ??= FormexPackage(formexTwoMembers);
+        xhtmlBytes ??= Encoding.UTF8.GetBytes(Xhtml(xhtmlTitle, xhtmlTwoMembers));
         var formexReceipt = await Hold(store, formexBytes);
         var xhtmlReceipt = await Hold(store, xhtmlBytes);
         var pdfReceipt = await Hold(store, pdfBytes);
@@ -257,7 +482,11 @@ public sealed class EuAnnexEvidenceBinderTests
         var expression = Object(workKey + ".0001", EuWemiRole.Expression, work);
         var formexManifestation = Object(workKey + ".0001.01", EuWemiRole.Manifestation, expression);
         var formexItem = Object(workKey + ".0001.01/FORMEX", EuWemiRole.Item, formexManifestation);
-        var xhtmlManifestation = Object(workKey + ".0001.02", EuWemiRole.Manifestation, expression);
+        var xhtmlExpression = xhtmlInOtherExpression
+            ? Object(workKey + ".0003", EuWemiRole.Expression, work) : expression;
+        var xhtmlManifestation = Object(
+            xhtmlInOtherExpression ? workKey + ".0003.01" : workKey + ".0001.02",
+            EuWemiRole.Manifestation, xhtmlExpression);
         var xhtmlItem = Object(workKey + ".0001.02/XHTML", EuWemiRole.Item, xhtmlManifestation);
         var pdfExpression = pdfInOtherExpression
             ? Object(workKey + ".0002", EuWemiRole.Expression, work) : expression;
@@ -285,6 +514,10 @@ public sealed class EuAnnexEvidenceBinderTests
             (xhtmlManifestation, await Hold(store, "xhtml-manifestation"u8.ToArray())),
             (xhtmlItem, xhtmlReceipt),
         };
+        if (xhtmlInOtherExpression)
+        {
+            all.Insert(4, (xhtmlExpression, await Hold(store, "other-xhtml-expression"u8.ToArray())));
+        }
         if (pdfInOtherExpression)
         {
             all.Add((pdfExpression, await Hold(store, "other-expression"u8.ToArray())));
@@ -295,7 +528,8 @@ public sealed class EuAnnexEvidenceBinderTests
         var profileBytes = ProfileBytes(
             formex.IdentitySha256, xhtml.IdentitySha256, pdfReceipt.Reference.ContentSha256);
         var profile = new Profile(profileBytes, Artifact('f', Sha(profileBytes)));
-        return new Fixture(store, package, corpus, work, formex, xhtml, pdfReceipt, profile);
+        return new Fixture(store, boundary, package, pdfManifestation, corpus,
+            work, formex, xhtml, pdfReceipt, profile);
     }
 
     private static VerifiedCorpusRecordSet VerifiedCorpus(
@@ -313,6 +547,23 @@ public sealed class EuAnnexEvidenceBinderTests
         var digest = CorpusRecordSetCanonicalWriter.Write(bytes, set);
         return VerifiedCorpusRecordSet.ParseAndVerify(Artifact('c', digest), bytes.ToArray());
     }
+
+    private static (SourceObjectRef Object, DurableBlobWriteReceipt Receipt)[] Sources(Fixture fixture) =>
+        fixture.Corpus.Set.Records.Select(static record => (record.ObjectRef, record.Body.Receipt!)).ToArray();
+
+    private static Profile ReconciliationProfile(
+        EuFormexAnnexInventory formex,
+        EuXhtmlAnnexInventory xhtml,
+        DurableBlobWriteReceipt pdf,
+        char resource)
+    {
+        var bytes = ProfileBytes(formex.IdentitySha256, xhtml.IdentitySha256,
+            pdf.Reference.ContentSha256);
+        return new Profile(bytes, Artifact(resource, Sha(bytes)));
+    }
+
+    private static Task<byte[]> FixtureBytesAsync(string name) => File.ReadAllBytesAsync(
+        Path.Combine(AppContext.BaseDirectory, "Fixtures", "EuDocumentFetch", name));
 
     private static SourceObjectRef Object(string key, EuWemiRole role, SourceObjectRef? parent)
     {
@@ -400,7 +651,8 @@ public sealed class EuAnnexEvidenceBinderTests
     private static byte[] PageLabelPdf(
         int pageCount,
         string? pageLabelSpecification,
-        bool rawTree = false)
+        bool rawTree = false,
+        IReadOnlyList<string>? additionalObjects = null)
     {
         var pageObjects = Enumerable.Range(3, pageCount).ToArray();
         var catalogLabels = pageLabelSpecification is null ? string.Empty
@@ -414,6 +666,10 @@ public sealed class EuAnnexEvidenceBinderTests
         };
         objects.AddRange(pageObjects.Select(_ =>
             "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 100 100] >>"));
+        if (additionalObjects is not null)
+        {
+            objects.AddRange(additionalObjects);
+        }
         var builder = new StringBuilder("%PDF-1.4\n");
         var offsets = new List<int> { 0 };
         for (var index = 0; index < objects.Count; index++)
@@ -446,7 +702,9 @@ public sealed class EuAnnexEvidenceBinderTests
 
     private sealed record Fixture(
         ICustodyStore Store,
+        EuWemiIdentityBoundary Boundary,
         EuFormexPackage Package,
+        SourceObjectRef PdfManifestation,
         VerifiedCorpusRecordSet Corpus,
         SourceObjectRef Work,
         EuFormexAnnexInventory Formex,
@@ -454,9 +712,18 @@ public sealed class EuAnnexEvidenceBinderTests
         DurableBlobWriteReceipt PdfReceipt,
         Profile Profile)
     {
-        internal Task<EuAnnexEvidenceBindingResult> RunAsync(Profile? profile = null) =>
-            new EuAnnexEvidenceBinder(Store).RunAsync(
-                Package, Corpus, Formex, Xhtml, PdfReceipt,
+        internal Task<EuAnnexEvidenceBindingResult> RunAsync(
+            Profile? profile = null,
+            VerifiedCorpusRecordSet? corpus = null,
+            EuFormexAnnexInventory? formex = null,
+            EuXhtmlAnnexInventory? xhtml = null,
+            ICustodyStore? store = null,
+            EuWemiIdentityBoundary? boundary = null,
+            SourceObjectRef? expectedPdfManifestation = null,
+            DurableBlobWriteReceipt? pdfReceipt = null) =>
+            new EuAnnexEvidenceBinder(store ?? Store).RunAsync(
+                boundary ?? Boundary, Package, expectedPdfManifestation ?? PdfManifestation,
+                corpus ?? Corpus, formex ?? Formex, xhtml ?? Xhtml, pdfReceipt ?? PdfReceipt,
                 (profile ?? Profile).Bytes, (profile ?? Profile).Reference, CancellationToken.None);
     }
 }
