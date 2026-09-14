@@ -69,9 +69,9 @@ public sealed class LuxembourgRefusalWireNameTests
     }
 
     /// <summary>
-    /// The query-execution refusal vocabulary, every member. R4 declared a token on 10 of these
-    /// 16; before that the undeclared ones serialized as their CLR member names and nothing
-    /// pinned them.
+    /// The query-execution refusal vocabulary, every member. R4 declared a token on 10 of the
+    /// first 16; before that the undeclared ones serialized as their CLR member names and nothing
+    /// pinned them. #419 slice 6c added the seventeenth, gazette_body_not_produced.
     /// </summary>
     [TestMethod]
     public void TheQueryExecutionRefusalVocabularyKeepsItsExactWireNames()
@@ -98,6 +98,7 @@ public sealed class LuxembourgRefusalWireNameTests
                 "relation_row_predicate_not_admitted",
                 "relation_row_subject_not_in_census",
                 "assertion_fact_not_representable",
+                "gazette_body_not_produced",
             }),
             string.Join("\n", WireNames<LuxembourgQueryExecutionRefusal>()),
             "a wire name changing is a contract change; a number changing is not.");
