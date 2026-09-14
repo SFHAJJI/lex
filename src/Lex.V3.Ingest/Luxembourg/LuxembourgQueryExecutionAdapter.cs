@@ -529,6 +529,18 @@ public enum LuxembourgQueryExecutionRefusal
     /// </summary>
     [JsonStringEnumMemberName("gazette_body_not_produced")]
     GazetteBodyNotProduced = 16,
+
+    /// <summary>
+    /// #419 slice 7: the population ledger would not complete over this run's own evidence. Three
+    /// folds can refuse, and the detail says which and names every offending act in ordinal order:
+    /// an act the publisher gives no legal type or more than one, so the frame cannot hold a single
+    /// class for it; the coverage, when the class manifest does not recognise a code; or the ledger,
+    /// when a Gazette body set names an act outside the counted population or two sets claim one
+    /// act. A count that will not fold is not a smaller count - it is no count - so this refuses the
+    /// run rather than delivering a population the evidence does not support.
+    /// </summary>
+    [JsonStringEnumMemberName("population_ledger_not_completed")]
+    PopulationLedgerNotCompleted = 17,
 }
 
 /// <summary>
@@ -716,6 +728,7 @@ public sealed class LuxembourgQueryExecutionResult
         IReadOnlyDictionary<int, LuxembourgGazetteBodySet>? gazetteBodySetsByOrdinal,
         IReadOnlyDictionary<int, IReadOnlyDictionary<string, CorpusAcquisitionRefusalReason>>? gazetteListingFetchRefusalsByOrdinal,
         IReadOnlyDictionary<int, IReadOnlyList<string>>? gazetteListingsWithContradictoryLegalValueByOrdinal,
+        LuxembourgNeverConsolidatedBodyLedger? populationLedger,
         LuxembourgQueryExecutionRefusalDetail? refusal)
     {
         Topology = topology;
@@ -735,6 +748,7 @@ public sealed class LuxembourgQueryExecutionResult
         GazetteBodySetsByOrdinal = gazetteBodySetsByOrdinal;
         GazetteListingFetchRefusalsByOrdinal = gazetteListingFetchRefusalsByOrdinal;
         GazetteListingsWithContradictoryLegalValueByOrdinal = gazetteListingsWithContradictoryLegalValueByOrdinal;
+        PopulationLedger = populationLedger;
         Refusal = refusal;
     }
 
@@ -754,7 +768,8 @@ public sealed class LuxembourgQueryExecutionResult
         VerifiedCorpusRecordSet corpusRecordSet,
         IReadOnlyDictionary<int, LuxembourgGazetteBodySet> gazetteBodySetsByOrdinal,
         IReadOnlyDictionary<int, IReadOnlyDictionary<string, CorpusAcquisitionRefusalReason>> gazetteListingFetchRefusalsByOrdinal,
-        IReadOnlyDictionary<int, IReadOnlyList<string>> gazetteListingsWithContradictoryLegalValueByOrdinal)
+        IReadOnlyDictionary<int, IReadOnlyList<string>> gazetteListingsWithContradictoryLegalValueByOrdinal,
+        LuxembourgNeverConsolidatedBodyLedger populationLedger)
     {
         ArgumentNullException.ThrowIfNull(topology);
         ArgumentNullException.ThrowIfNull(resolvedRelations);
@@ -770,6 +785,7 @@ public sealed class LuxembourgQueryExecutionResult
         ArgumentNullException.ThrowIfNull(gazetteBodySetsByOrdinal);
         ArgumentNullException.ThrowIfNull(gazetteListingFetchRefusalsByOrdinal);
         ArgumentNullException.ThrowIfNull(gazetteListingsWithContradictoryLegalValueByOrdinal);
+        ArgumentNullException.ThrowIfNull(populationLedger);
         var completion = familyOutcomes.All(
             static outcome => outcome.Kind is
                 LuxembourgFamilyEnumerationOutcomeKind.Proven or
@@ -783,7 +799,7 @@ public sealed class LuxembourgQueryExecutionResult
             scopeManifestCanonicalSha256, completion, documentAcquisitionOutcomesByOrdinal,
             corpusRecordSetRef, corpusRecordSet,
             gazetteBodySetsByOrdinal, gazetteListingFetchRefusalsByOrdinal,
-            gazetteListingsWithContradictoryLegalValueByOrdinal, null);
+            gazetteListingsWithContradictoryLegalValueByOrdinal, populationLedger, null);
     }
 
     public static LuxembourgQueryExecutionResult Refused(
@@ -796,7 +812,7 @@ public sealed class LuxembourgQueryExecutionResult
         ArgumentNullException.ThrowIfNull(refusal);
         return new(
             topology, familyOutcomes, relationFamilyAcquisitions, [], [], [], [], [], null, null, null,
-            null, null, null, null, null, null, refusal);
+            null, null, null, null, null, null, null, refusal);
     }
 
     /// <summary>Always present: minting it cannot fail, and it is useful context on a refusal too.</summary>
@@ -898,6 +914,13 @@ public sealed class LuxembourgQueryExecutionResult
     /// priority acts) or did not admit have none. Null only on a refused run.
     /// </summary>
     public IReadOnlyDictionary<int, LuxembourgGazetteBodySet>? GazetteBodySetsByOrdinal { get; }
+
+    /// <summary>
+    /// #419 slice 7: the never-consolidated population ledger this run's own evidence supports,
+    /// with its gaps named. Null on a refused run. It reports what was proven; it is not an
+    /// acceptance value and no count here is one.
+    /// </summary>
+    public LuxembourgNeverConsolidatedBodyLedger? PopulationLedger { get; }
 
     /// <summary>
     /// Per act (by ordinal), the Gazette listings this run tried to fetch and the publisher refused
@@ -1136,6 +1159,15 @@ public sealed class LuxembourgQueryExecutionAdapter
     /// <param name="evidenceResolver">
     /// Test-only. Null in every production call (the five-parameter overload always passes null).
     /// </param>
+    /// <param name="consolidationsByAct">
+    /// #419 slice 7. The per-act consolidation results a compositor already gathered, each carrying
+    /// the exact enumeration proof its rows were read from. This adapter does not gather them: it
+    /// enumerates families, it does not ask the per-act consolidation question. Absent or empty, the
+    /// population ledger cites no enumeration for any act and says exactly that, which is the honest
+    /// answer when no such evidence was supplied. It is NEVER substituted for by the relation-family
+    /// acquisitions, whose consolidates entry carries the generic relation-assertions proof copied
+    /// onto all eighteen predicates and is about no particular act.
+    /// </param>
     internal Task<LuxembourgQueryExecutionResult> RunAsync(
         IReadOnlyList<(
             LuxembourgPartitionRunRequest PartitionRequest,
@@ -1147,11 +1179,13 @@ public sealed class LuxembourgQueryExecutionAdapter
         IScopeReductionEvidenceResolver? evidenceResolver,
         MachineQueryRendererSource documentFetchRendererSource,
         WireRequestBudget wireBudget,
-        CancellationToken cancellationToken) => RunCoreAsync(families,
+        CancellationToken cancellationToken,
+        IReadOnlyList<LuxembourgConsolidationByActResult>? consolidationsByAct = null) => RunCoreAsync(families,
             relationAssertionsFamilyKey is null ? [] : [relationAssertionsFamilyKey],
             resourceObservationFamilyKey is null ? [] : [resourceObservationFamilyKey],
             resourceAssertionsFamilyKey is null ? [] : [resourceAssertionsFamilyKey],
-            evidenceResolver, documentFetchRendererSource, scoped: false, wireBudget, cancellationToken);
+            evidenceResolver, documentFetchRendererSource, scoped: false, wireBudget, cancellationToken,
+            consolidationsByAct);
 
     /// <summary>
     /// Executes a declared union of disjoint whole-subject ranges. Every member names aligned
@@ -1173,7 +1207,8 @@ public sealed class LuxembourgQueryExecutionAdapter
         IScopeReductionEvidenceResolver? evidenceResolver,
         MachineQueryRendererSource documentFetchRendererSource,
         WireRequestBudget wireBudget,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IReadOnlyList<LuxembourgConsolidationByActResult>? consolidationsByAct = null)
     {
         ArgumentNullException.ThrowIfNull(families);
         ArgumentNullException.ThrowIfNull(scopeMembers);
@@ -1189,7 +1224,8 @@ public sealed class LuxembourgQueryExecutionAdapter
             scopeMembers.Select(static member => member.RelationFamilyKey).ToArray(),
             scopeMembers.Select(static member => member.CensusFamilyKey).ToArray(),
             scopeMembers.Select(static member => member.AssertionFamilyKey).ToArray(),
-            evidenceResolver, documentFetchRendererSource, scoped: true, wireBudget, cancellationToken);
+            evidenceResolver, documentFetchRendererSource, scoped: true, wireBudget, cancellationToken,
+            consolidationsByAct);
     }
 
     private async Task<LuxembourgQueryExecutionResult> RunCoreAsync(
@@ -1202,7 +1238,8 @@ public sealed class LuxembourgQueryExecutionAdapter
         MachineQueryRendererSource documentFetchRendererSource,
         bool scoped,
         WireRequestBudget wireBudget,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IReadOnlyList<LuxembourgConsolidationByActResult>? consolidationsByAct)
     {
         ArgumentNullException.ThrowIfNull(families);
         // ONE CEILING FOR THE RUN, AND EVERY DOOR BELOW CHARGES IT. This run enumerates N families,
@@ -1676,6 +1713,17 @@ public sealed class LuxembourgQueryExecutionAdapter
             return LuxembourgQueryExecutionResult.Refused(topology, outcomes, relationAcquisitions, gazetteRefusal);
         }
 
+        // #419 slice 7: the population ledger, folded from the resolution, the consolidates family's
+        // own per-act proofs, and the Gazette sets just produced. Nothing is fetched and no count is
+        // asserted as an acceptance value: this is what the run's evidence supports, with its gaps.
+        var (populationLedger, populationRefusal) = CompletePopulationLedger(
+            resolved, consolidationsByAct ?? [], gazetteBodySetsByOrdinal!);
+        if (populationRefusal is not null)
+        {
+            return LuxembourgQueryExecutionResult.Refused(
+                topology, outcomes, relationAcquisitions, populationRefusal);
+        }
+
         // The record set is still the last artifact, after the final rights-bearing manifest.
         var recordSetWriter = new CorpusRecordSetWriter(_custodyStore);
         var recordSetResult = await recordSetWriter.WriteAsync(
@@ -1701,7 +1749,8 @@ public sealed class LuxembourgQueryExecutionAdapter
             resourceObservationExclusions, writeReceipt!, manifestCanonicalSha256!,
             documentAcquisitionOutcomesByOrdinal!, recordSetResult.SetRef!,
             recordSetResult.VerifiedSet!,
-            gazetteBodySetsByOrdinal!, gazetteListingFetchRefusalsByOrdinal!, gazetteContradictoryByOrdinal!);
+            gazetteBodySetsByOrdinal!, gazetteListingFetchRefusalsByOrdinal!, gazetteContradictoryByOrdinal!,
+            populationLedger!);
     }
 
     private static IReadOnlyList<LuxembourgTypedAssertion>? TryBuildTypedAssertions(
@@ -2353,6 +2402,162 @@ public sealed class LuxembourgQueryExecutionAdapter
     /// exactly as the manifest-driven loop treats its own.
     /// </para>
     /// </remarks>
+    /// <summary>
+    /// #419 slice 7: the never-consolidated population ledger, folded from this run's own evidence
+    /// and nothing else. Offline; sends nothing; asserts no acceptance value.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// WHO IS IN THE FRAME. Every resource the publisher classes exactly as an act, by this build's
+    /// own act test carried on the resolution rather than re-derived here. Not "every resource with
+    /// a legal type": an act the publisher gives no legal type must be SEEN and refused, and a test
+    /// that keyed on the type would have skipped exactly those acts and counted a smaller population
+    /// without saying so.
+    /// </para>
+    /// <para>
+    /// WHAT EACH ENTRY CITES. The consolidates family's own per-act enumeration proof, matched by
+    /// the proof's family key. An act whose proof delivered no rows is never consolidated on that
+    /// evidence; one whose proof delivered rows is not; an act with no proof cites no enumeration
+    /// and says so. The disposition never outruns the evidence: this method mints no proof, and
+    /// when the family is not acquired complete every act falls to <c>NoEnumerationCited</c>.
+    /// </para>
+    /// <para>
+    /// WHAT REFUSES. An act with no legal type or more than one refuses the run, naming every such
+    /// act in ordinal order, because the frame holds one class per act and choosing among several
+    /// would be this code inventing the publisher's answer. The coverage's unrecognised-class
+    /// refusal and the ledger's outside-population and claimed-twice refusals travel by their own
+    /// names in the detail. A count that will not fold is no count.
+    /// </para>
+    /// </remarks>
+    internal static (
+        LuxembourgNeverConsolidatedBodyLedger? Ledger,
+        LuxembourgQueryExecutionRefusalDetail? Refusal) CompletePopulationLedger(
+        LuxembourgProfileResolution.Resolved resolved,
+        IReadOnlyList<LuxembourgConsolidationByActResult> consolidationsByAct,
+        IReadOnlyDictionary<int, LuxembourgGazetteBodySet> gazetteBodySetsByOrdinal)
+    {
+        ArgumentNullException.ThrowIfNull(resolved);
+        ArgumentNullException.ThrowIfNull(consolidationsByAct);
+        ArgumentNullException.ThrowIfNull(gazetteBodySetsByOrdinal);
+
+        // THE PER-ACT PRODUCER'S OWN RESULTS, JOINED BY THE ACT EACH ONE ASKED ABOUT. Not the
+        // relation-family acquisitions: those carry the generic relation-assertions proof copied
+        // onto all eighteen predicates, so reading the consolidates entry there would cite an
+        // enumeration that was never about this act. Each result carries the exact proof its rows
+        // were read from, which is what the frame needs; a result that refused carries none.
+        var byAct = new Dictionary<string, LuxembourgConsolidationByActResult>(StringComparer.Ordinal);
+        foreach (var result in consolidationsByAct)
+        {
+            ArgumentNullException.ThrowIfNull(result, nameof(consolidationsByAct));
+            if (!byAct.TryAdd(result.Act, result))
+            {
+                return (null, new LuxembourgQueryExecutionRefusalDetail(
+                    LuxembourgQueryExecutionRefusal.PopulationLedgerNotCompleted,
+                    null,
+                    "two consolidation results were supplied for one act: " + result.Act));
+            }
+        }
+
+        var frame = new LuxembourgNeverConsolidatedFrame();
+        var ambiguouslyTyped = new SortedSet<string>(StringComparer.Ordinal);
+        foreach (var resource in resolved.Resources)
+        {
+            if (!resource.IsPublisherActClass)
+            {
+                continue;
+            }
+
+            var actIri = resource.ObjectRef.PublisherUri;
+            if (resource.LegalTypes.Count != 1)
+            {
+                ambiguouslyTyped.Add(actIri);
+                continue;
+            }
+
+            // A result that delivered carries its proof; one that refused does not, and an act
+            // with no result at all cites nothing. The row count is the enumeration's own, not the
+            // decoded consolidation count, because that is what the frame's disposition is about.
+            var (disposition, proof) = byAct.TryGetValue(actIri, out var cited)
+                && cited.Proof is { } citedProof
+                ? (citedProof.DeliveredRowCount == 0
+                    ? LuxembourgNeverConsolidatedDisposition.CitedEnumerationDeliveredNoRows
+                    : LuxembourgNeverConsolidatedDisposition.CitedEnumerationDeliveredRows, citedProof)
+                : (LuxembourgNeverConsolidatedDisposition.NoEnumerationCited, null);
+
+            // THE ENTRY'S OWN GUARDS THROW, AND THIS METHOD DOES NOT. The frame refuses a proof
+            // whose family key is not this act's per-act consolidation key, and a class ref the
+            // publisher could not have emitted, by throwing: they are caller-contract violations
+            // there. Here the "caller" is whoever supplied the per-act results, so a mismatched one
+            // is a typed run refusal, the way every other failure in this loop is, rather than an
+            // exception out of the whole run.
+            LuxembourgNeverConsolidatedEntry entry;
+            try
+            {
+                entry = new LuxembourgNeverConsolidatedEntry(
+                    actIri, new LuxembourgActClassRef(resource.LegalTypes[0]), disposition, proof);
+            }
+            catch (ArgumentException exception)
+            {
+                return (null, new LuxembourgQueryExecutionRefusalDetail(
+                    LuxembourgQueryExecutionRefusal.PopulationLedgerNotCompleted,
+                    null,
+                    $"the population frame would not hold {actIri}: {exception.Message}"));
+            }
+
+            if (!frame.TryAdmit(entry, out var admitRefusal))
+            {
+                return (null, new LuxembourgQueryExecutionRefusalDetail(
+                    LuxembourgQueryExecutionRefusal.PopulationLedgerNotCompleted,
+                    null,
+                    $"the population frame refused {actIri}: {admitRefusal}"));
+            }
+        }
+
+        if (ambiguouslyTyped.Count > 0)
+        {
+            return (null, new LuxembourgQueryExecutionRefusalDetail(
+                LuxembourgQueryExecutionRefusal.PopulationLedgerNotCompleted,
+                null,
+                "the publisher states no single legal type for these acts: "
+                    + string.Join(", ", ambiguouslyTyped)));
+        }
+
+        var coverage = LuxembourgNeverConsolidatedCoverage.TryComplete(
+            frame, out var coverageRefusal, out var coverageDetail);
+        if (coverage is null)
+        {
+            return (null, new LuxembourgQueryExecutionRefusalDetail(
+                LuxembourgQueryExecutionRefusal.PopulationLedgerNotCompleted,
+                null,
+                $"the population coverage refused: {coverageRefusal}: {coverageDetail}"));
+        }
+
+        // THE COUNTED POPULATION'S OWN SETS, IN THE RUN'S ORDINAL ORDER. The Gazette loop fetches
+        // for every as-published original, whatever its legal type; this ledger counts LOI and RGD.
+        // So a recognised out-of-scope act - an AGC or an RGC that is still an as-published
+        // original - has a Gazette set the ledger must not be handed, or it would refuse the whole
+        // run over evidence that is simply not part of this count. Those sets are NOT lost: they
+        // stay on the result under GazetteBodySetsByOrdinal, where every as-published act's set is.
+        // Ordinal order keeps the ledger's own offender lists stable across runs.
+        var counted = coverage.Placements
+            .Where(static placement => LuxembourgActClassManifest.IsCounted(placement.Scope))
+            .Select(static placement => placement.PublisherActIri)
+            .ToHashSet(StringComparer.Ordinal);
+        var sets = gazetteBodySetsByOrdinal
+            .OrderBy(static pair => pair.Key)
+            .Select(static pair => pair.Value)
+            .Where(set => counted.Contains(set.PublisherActIri))
+            .ToArray();
+        var ledger = LuxembourgNeverConsolidatedBodyLedger.TryComplete(
+            coverage, sets, out var ledgerRefusal, out var ledgerDetail);
+        return ledger is null
+            ? (null, new LuxembourgQueryExecutionRefusalDetail(
+                LuxembourgQueryExecutionRefusal.PopulationLedgerNotCompleted,
+                null,
+                $"the population ledger refused: {ledgerRefusal}: {ledgerDetail}"))
+            : (ledger, null);
+    }
+
     internal async Task<(
         IReadOnlyDictionary<int, LuxembourgGazetteBodySet>? Sets,
         IReadOnlyDictionary<int, IReadOnlyDictionary<string, CorpusAcquisitionRefusalReason>>? FetchRefusals,
