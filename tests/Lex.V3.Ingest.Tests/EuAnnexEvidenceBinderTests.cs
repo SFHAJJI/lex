@@ -176,8 +176,7 @@ public sealed class EuAnnexEvidenceBinderTests
         var corpus = VerifiedCorpus([.. Sources(fixture), (otherBody, otherReceipt)]);
         var formex = new EuFormexAnnexInventory(
             new EuFormexAnnexTransportBinding(
-                fixture.Boundary,
-                fixture.Package.ExpressionRef,
+                fixture.Package,
                 FormexRequest(fixture.Package.BodyRef),
                 FormexResponse(
                     FormexRequest(fixture.Package.BodyRef), otherReceipt),
@@ -187,6 +186,42 @@ public sealed class EuAnnexEvidenceBinderTests
         var profile = ReconciliationProfile(formex, fixture.Xhtml, fixture.PdfReceipt, '3');
 
         var result = await fixture.RunAsync(profile, corpus, formex);
+
+        Assert.AreEqual(EuAnnexEvidenceBindingRefusal.SourceLineageMismatch, result.Refusal);
+        Assert.IsNull(result.Binding);
+    }
+
+    [TestMethod]
+    public async Task FormexInventoryTransportMustNameTheSameExpressionAsThePackage()
+    {
+        var fixture = await FixtureAsync(PageLabelPdf(7, "<< /S /D /St 1 >>"));
+        var otherExpression = Object(
+            fixture.Work.CanonicalKey + ".0002", EuWemiRole.Expression, fixture.Work);
+        var otherManifestation = Object(
+            otherExpression.CanonicalKey + ".01", EuWemiRole.Manifestation, otherExpression);
+        var otherItem = Object(
+            otherManifestation.CanonicalKey + "/FORMEX", EuWemiRole.Item, otherManifestation);
+        var stream = EuFormexStreamName.TryParse(
+            "CL2026R1965EN0000010.0001.xml", "32026R1965", out var roleRefusal)!;
+        Assert.AreEqual(EuFormexRoleRefusal.None, roleRefusal);
+        var items = EuFormexItemSet.TryAdmit(
+            [new EuFormexItem(fixture.Boundary, stream, otherItem, 0)], out roleRefusal)!;
+        Assert.AreEqual(EuFormexRoleRefusal.None, roleRefusal);
+        var otherPackage = EuFormexPackage.TryAdmit(
+            fixture.Boundary, otherManifestation, otherExpression, items, "EN",
+            out var packageRefusal)!;
+        Assert.AreEqual(EuFormexPackageRefusal.None, packageRefusal);
+        var request = FormexRequest(otherPackage.BodyRef);
+        var transport = new EuFormexAnnexTransportBinding(
+            otherPackage,
+            request,
+            FormexResponse(request, fixture.Formex.SourceReceipt),
+            fixture.Formex.SourceReceipt);
+        var formex = new EuFormexAnnexInventory(
+            transport, fixture.Formex.ProfileRef, fixture.Formex.Members);
+        var profile = ReconciliationProfile(formex, fixture.Xhtml, fixture.PdfReceipt, '2');
+
+        var result = await fixture.RunAsync(profile: profile, formex: formex);
 
         Assert.AreEqual(EuAnnexEvidenceBindingRefusal.SourceLineageMismatch, result.Refusal);
         Assert.IsNull(result.Binding);
@@ -513,8 +548,7 @@ public sealed class EuAnnexEvidenceBinderTests
         Assert.AreEqual(EuFormexPackageRefusal.None, packageRefusal);
         var formexRequest = FormexRequest(package.BodyRef);
         var formexTransport = new EuFormexAnnexTransportBinding(
-            boundary,
-            package.ExpressionRef,
+            package,
             formexRequest,
             FormexResponse(formexRequest, formexReceipt),
             formexReceipt);

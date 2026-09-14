@@ -79,22 +79,34 @@ public sealed record EuFormexAnnexInventoryMember(
 public sealed class EuFormexAnnexTransportBinding
 {
     public EuFormexAnnexTransportBinding(
-        EuWemiIdentityBoundary identityBoundary,
-        SourceObjectRef expression,
+        EuFormexPackage package,
         HttpLogicalRequest requestEvidence,
         RoutedHttpEvidence responseEvidence,
         DurableBlobWriteReceipt retainedZipReceipt)
     {
-        ArgumentNullException.ThrowIfNull(identityBoundary);
-        Expression = identityBoundary.Require(
-            expression, EuWemiRole.Expression, nameof(expression));
+        ArgumentNullException.ThrowIfNull(package);
+        Expression = package.ExpressionRef;
+        FormexBody = package.BodyRef;
         RequestEvidence = requestEvidence ?? throw new ArgumentNullException(nameof(requestEvidence));
         ResponseEvidence = responseEvidence ?? throw new ArgumentNullException(nameof(responseEvidence));
         RetainedZipReceipt = retainedZipReceipt
             ?? throw new ArgumentNullException(nameof(retainedZipReceipt));
 
-        if (responseEvidence.Outcome is not CompleteHttpRouteOutcome
-            || responseEvidence.Hops.Count == 0)
+        var expectedRequestUri =
+            $"https://{EuDocumentFetchAddress.AdmittedHost}/resource/cellar/{FormexBody.CanonicalKey}";
+        if (requestEvidence.Method != HttpRequestMethod.Get
+            || !string.Equals(requestEvidence.Uri, expectedRequestUri, StringComparison.Ordinal)
+            || requestEvidence.Headers.Count(header =>
+                string.Equals(header.Name, "accept", StringComparison.Ordinal)
+                && string.Equals(header.Value, "application/zip;mtype=fmx4",
+                    StringComparison.Ordinal)) != 1)
+        {
+            throw new ArgumentException(
+                "The Formex request does not target the admitted package body.",
+                nameof(requestEvidence));
+        }
+
+        if (responseEvidence.Outcome is not CompleteHttpRouteOutcome)
         {
             throw new ArgumentException(
                 "Formex transport provenance requires one completed response route.",
@@ -113,11 +125,6 @@ public sealed class EuFormexAnnexTransportBinding
         }
 
         if (terminal.Status != 200
-            || terminal.Length != checked((ulong)retainedZipReceipt.Reference.ByteLength)
-            || !string.Equals(
-                terminal.Sha256,
-                retainedZipReceipt.Reference.ContentSha256,
-                StringComparison.Ordinal)
             || !string.Equals(
                 terminal.DurableWriteReceiptSha256,
                 DurableBlobWriteReceiptDigest.Of(retainedZipReceipt),
@@ -130,6 +137,8 @@ public sealed class EuFormexAnnexTransportBinding
     }
 
     public SourceObjectRef Expression { get; }
+
+    public SourceObjectRef FormexBody { get; }
 
     public HttpLogicalRequest RequestEvidence { get; }
 

@@ -138,12 +138,12 @@ public sealed class EuFormexAnnexInventoryProducerTests
             Artifact('8', new string('8', 64)),
             inventory.Members);
 
-        var (boundary, otherExpression) = Expression(".0002");
+        var otherPackage = FormexPackage(".0002");
+        var otherRequest = Request(otherPackage.BodyRef);
         var otherBinding = new EuFormexAnnexTransportBinding(
-            boundary,
-            otherExpression,
-            fixture.Binding.RequestEvidence,
-            fixture.Binding.ResponseEvidence,
+            otherPackage,
+            otherRequest,
+            Response(otherRequest, fixture.Receipt),
             fixture.Receipt);
         var otherExpressionInventory = new EuFormexAnnexInventory(
             otherBinding,
@@ -156,10 +156,11 @@ public sealed class EuFormexAnnexInventoryProducerTests
     }
 
     [TestMethod]
-    public async Task TransportBindingRejectsRequestOrReceiptSubstitution()
+    public async Task TransportBindingRejectsPackageBodyRequestSubstitution()
     {
         var bytes = Package(("document.xml", DocumentXml()));
         var fixture = await FixtureAsync(bytes);
+        var package = FormexPackage();
         var wrongRequest = HttpLogicalRequest.Create(
             "https://publications.europa.eu/resource/cellar/other-formex",
             HttpRequestMethod.Get,
@@ -167,30 +168,66 @@ public sealed class EuFormexAnnexInventoryProducerTests
             new HttpLogicalRequestBody(0, Sha([])),
             new string('3', 64),
             new string('4', 64));
-        var wrongReceipt = await fixture.Store.CreateAsync(
-            "different ZIP"u8.ToArray(), CustodyClass.NightlyFloor90d, CancellationToken.None);
-        var (boundary, expression) = Expression();
-        var nonSuccessResponse = Response(
-            fixture.Binding.RequestEvidence, fixture.Receipt, status: 404);
+        var wrongAccept = HttpLogicalRequest.Create(
+            "https://publications.europa.eu/resource/cellar/" + package.BodyRef.CanonicalKey,
+            HttpRequestMethod.Get,
+            [new HttpLogicalRequestHeader("accept", "application/zip")],
+            new HttpLogicalRequestBody(0, Sha([])),
+            new string('3', 64),
+            new string('4', 64));
 
         Assert.ThrowsExactly<ArgumentException>(() => new EuFormexAnnexTransportBinding(
-            boundary,
-            expression,
+            package,
             wrongRequest,
             fixture.Binding.ResponseEvidence,
             fixture.Receipt));
         Assert.ThrowsExactly<ArgumentException>(() => new EuFormexAnnexTransportBinding(
-            boundary,
-            expression,
-            fixture.Binding.RequestEvidence,
+            package,
+            wrongAccept,
             fixture.Binding.ResponseEvidence,
-            wrongReceipt));
-        Assert.ThrowsExactly<ArgumentException>(() => new EuFormexAnnexTransportBinding(
-            boundary,
-            expression,
-            fixture.Binding.RequestEvidence,
-            nonSuccessResponse,
             fixture.Receipt));
+    }
+
+    [TestMethod]
+    public async Task TransportBindingRejectsEachResponseAndReceiptSubstitution()
+    {
+        var bytes = Package(("document.xml", DocumentXml()));
+        var fixture = await FixtureAsync(bytes);
+        var package = FormexPackage();
+        var request = fixture.Binding.RequestEvidence;
+        var wrongRequestDigest = Response(
+            request, fixture.Receipt, logicalRequestSha256: new string('6', 64));
+        var wrongRequestUri = Response(
+            request, fixture.Receipt,
+            requestUri: "https://publications.europa.eu/resource/cellar/other-formex");
+        var nonSuccessResponse = Response(request, fixture.Receipt, status: 404);
+        var incompleteResponse = Response(
+            request,
+            fixture.Receipt,
+            outcome: new IncompleteHttpRouteOutcome(HttpRouteIncompleteReason.SourceProfileStale));
+        var policy = fixture.Receipt.PolicyEvidence;
+        var substitutedReceipt = new DurableBlobWriteReceipt(
+            fixture.Receipt.Schema,
+            fixture.Receipt.Reference,
+            new CustodyPolicyEvidence(
+                policy.Schema,
+                policy.Reference,
+                policy.VerificationProfile,
+                policy.PolicyKey,
+                policy.Protection,
+                policy.ObservedAt.AddSeconds(1),
+                policy.ProtectedUntil));
+
+        Assert.ThrowsExactly<ArgumentException>(() => new EuFormexAnnexTransportBinding(
+            package, request, wrongRequestDigest, fixture.Receipt));
+        Assert.ThrowsExactly<ArgumentException>(() => new EuFormexAnnexTransportBinding(
+            package, request, wrongRequestUri, fixture.Receipt));
+        Assert.ThrowsExactly<ArgumentException>(() => new EuFormexAnnexTransportBinding(
+            package, request, nonSuccessResponse, fixture.Receipt));
+        Assert.ThrowsExactly<ArgumentException>(() => new EuFormexAnnexTransportBinding(
+            package, request, incompleteResponse, fixture.Receipt));
+        Assert.ThrowsExactly<ArgumentException>(() => new EuFormexAnnexTransportBinding(
+            package, request, fixture.Binding.ResponseEvidence, substitutedReceipt));
     }
 
     [TestMethod]
@@ -355,11 +392,11 @@ public sealed class EuFormexAnnexInventoryProducerTests
     {
         var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
         var receipt = await store.CreateAsync(bytes, CustodyClass.NightlyFloor90d, CancellationToken.None);
-        var (boundary, expression) = Expression();
-        var request = Request();
+        var package = FormexPackage();
+        var request = Request(package.BodyRef);
         var response = Response(request, receipt);
         return (store, receipt,
-            new EuFormexAnnexTransportBinding(boundary, expression, request, response, receipt),
+            new EuFormexAnnexTransportBinding(package, request, response, receipt),
             Profile());
     }
 
@@ -379,7 +416,7 @@ public sealed class EuFormexAnnexInventoryProducerTests
             Sha(bytes)));
     }
 
-    private static (EuWemiIdentityBoundary Boundary, SourceObjectRef Expression) Expression(
+    private static EuFormexPackage FormexPackage(
         string suffix = ".0001")
     {
         var registry = Artifact('1', new string('1', 64));
@@ -398,11 +435,50 @@ public sealed class EuFormexAnnexInventoryProducerTests
         var expression = new SourceObjectRef(SourceCoreSchemaIds.SourceObjectRef, SourceAuthority.Cellar,
             expressionKind, "http://publications.europa.eu/resource/cellar/" + expressionKey,
             expressionKey, Sha(Encoding.UTF8.GetBytes(expressionKey)), identityProfile, parent);
-        return (boundary, expression);
+        var manifestationKey = expressionKey + ".01";
+        var manifestation = Object(
+            boundary, registry, identityProfile, manifestationKey,
+            EuWemiRole.Manifestation, expression);
+        var item = Object(
+            boundary, registry, identityProfile, manifestationKey + "/FORMEX",
+            EuWemiRole.Item, manifestation);
+        var stream = EuFormexStreamName.TryParse(
+            "CL2026R1965EN0000010.0001.xml", "32026R1965", out var roleRefusal)!;
+        Assert.AreEqual(EuFormexRoleRefusal.None, roleRefusal);
+        var items = EuFormexItemSet.TryAdmit(
+            [new EuFormexItem(boundary, stream, item, 0)], out roleRefusal)!;
+        Assert.AreEqual(EuFormexRoleRefusal.None, roleRefusal);
+        var package = EuFormexPackage.TryAdmit(
+            boundary, manifestation, expression, items, "EN", out var packageRefusal)!;
+        Assert.AreEqual(EuFormexPackageRefusal.None, packageRefusal);
+        return package;
     }
 
-    private static HttpLogicalRequest Request() => HttpLogicalRequest.Create(
-        "https://publications.europa.eu/resource/cellar/formex-test",
+    private static SourceObjectRef Object(
+        EuWemiIdentityBoundary boundary,
+        SourceArtifactRef registry,
+        SourceArtifactRef identityProfile,
+        string key,
+        EuWemiRole role,
+        SourceObjectRef parent)
+    {
+        var kind = new SourceRegistryMemberRef(registry, EuWemiIdentityBoundary.MemberKeyOf(role));
+        var parentKey = new SourceObjectKeyRef(
+            parent.EntityKind, parent.PublisherUri, parent.CanonicalKey, parent.CanonicalKeySha256);
+        var value = new SourceObjectRef(
+            SourceCoreSchemaIds.SourceObjectRef,
+            SourceAuthority.Cellar,
+            kind,
+            "http://publications.europa.eu/resource/cellar/" + key,
+            key,
+            Sha(Encoding.UTF8.GetBytes(key)),
+            identityProfile,
+            parentKey);
+        return boundary.Require(value, role, nameof(value));
+    }
+
+    private static HttpLogicalRequest Request(SourceObjectRef body) => HttpLogicalRequest.Create(
+        "https://publications.europa.eu/resource/cellar/" + body.CanonicalKey,
         HttpRequestMethod.Get,
         [new HttpLogicalRequestHeader("accept", "application/zip;mtype=fmx4")],
         new HttpLogicalRequestBody(0, Sha([])),
@@ -412,14 +488,17 @@ public sealed class EuFormexAnnexInventoryProducerTests
     private static RoutedHttpEvidence Response(
         HttpLogicalRequest request,
         DurableBlobWriteReceipt receipt,
-        int status = 200)
+        int status = 200,
+        string? logicalRequestSha256 = null,
+        string? requestUri = null,
+        RoutedHttpRouteOutcome? outcome = null)
     {
         var hop = RoutedHttpHop.Create(
             0,
             "urn:uuid:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
             null,
-            Sha(request.CopyCanonicalBytes()),
-            request.Uri,
+            logicalRequestSha256 ?? Sha(request.CopyCanonicalBytes()),
+            requestUri ?? request.Uri,
             status,
             Headers(checked((ulong)receipt.Reference.ByteLength)),
             "2026-09-14T12:00:00.0000000Z",
@@ -432,7 +511,7 @@ public sealed class EuFormexAnnexInventoryProducerTests
             receipt.Reference.ContentSha256);
         return RoutedHttpEvidence.Create(
             Artifact('5', new string('5', 64)), 1, 0, [hop],
-            new CompleteHttpRouteOutcome(),
+            outcome ?? new CompleteHttpRouteOutcome(),
             new Dictionary<string, DurableBlobWriteReceipt> { [hop.ObservationId] = receipt });
     }
 
