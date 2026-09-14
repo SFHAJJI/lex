@@ -61,6 +61,9 @@ public sealed class ClosedVocabularyCensusTests
                     + "EnumerationProofRefused, RowNotAdmitted, TargetBodyScopeNotSupplied, "
                     + "VerifiedRowsRefused, RequestedActBodyScopeNotSupplied, "
                     + "DeliveredRowNotAccountedFor",
+                "Lex.V3.Ingest.Europe.EuCorrigendumTripwireProductionRefusal: None, "
+                    + "ObjectFactsRequestRequired, ExpressionProductionRefused, TripwireRefused, "
+                    + "TripwireNotRetained",
                 "Lex.V3.Ingest.Europe.EuDocumentFetchAttemptRefusal: None, RobotsBootstrapRefused, "
                     + "ObservationNotExecuted, WireBudgetExhausted",
                 "Lex.V3.Ingest.Europe.EuEnumerationRefusal: None, RobotsBootstrapRefused, "

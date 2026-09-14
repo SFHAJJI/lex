@@ -76,6 +76,12 @@ public sealed class DurableBlobReceiptFamilyIngestSurfaceTests
                 // It HOLDS that receipt and never constructs one -- the only path onto the property
                 // is the internal Success factory, which requires an already-real receipt that came
                 // from CustodyHold.TryHoldAsync and therefore from ICustodyStore.CreateAsync.
+                // #418 slice 5: EuCorrigendumTripwireProductionResult carries the receipts the tripwire
+                // producer held for the set's canonical bytes and its lineage bytes, beside the inner
+                // expression result. It HOLDS them and never constructs one: the only path onto either
+                // property is the internal Success factory, fed by CustodyHold.TryHoldAsync.
+                "field private instance Lex.V3.Ingest.Europe.EuCorrigendumTripwireProductionResult::<RetainedTripwire>k__BackingField -> " + Receipt + "?",
+                "field private instance Lex.V3.Ingest.Europe.EuCorrigendumTripwireProductionResult::<RetainedTripwireLineage>k__BackingField -> " + Receipt + "?",
                 "field private instance " + ExpressionProductionResult + "::<RetainedDerivation>k__BackingField -> "
                 + Receipt + "?",
                 // The episode record's own receipt, added when review required the derivation to be
@@ -112,6 +118,8 @@ public sealed class DurableBlobReceiptFamilyIngestSurfaceTests
                 + "System.Collections.Generic.IReadOnlyList<Lex.V3.Contracts.Source.Http.RoutedHttpHop>) "
                 + "-> System.Collections.Generic.Dictionary<System.String, " + Receipt + ">",
                 "property public instance " + CorpusAcquisitionOutcome + "::Receipt() -> " + Receipt + "?",
+                "property public instance Lex.V3.Ingest.Europe.EuCorrigendumTripwireProductionResult::RetainedTripwire() -> " + Receipt + "?",
+                "property public instance Lex.V3.Ingest.Europe.EuCorrigendumTripwireProductionResult::RetainedTripwireLineage() -> " + Receipt + "?",
                 "property public instance " + ExpressionProductionResult + "::RetainedDerivation() -> " + Receipt + "?",
                 "property public instance " + ExpressionProductionResult + "::RetainedEpisode() -> " + Receipt + "?",
                 "property public instance " + EuQueryExecutionResult + "::ScopeManifestReceipt() -> " + Receipt + "?",

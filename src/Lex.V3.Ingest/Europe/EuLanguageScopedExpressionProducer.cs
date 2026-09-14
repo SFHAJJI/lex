@@ -293,6 +293,32 @@ public sealed class EuLanguageScopedExpressionProducer
         BoundMachineRequest sourceWitness,
         CancellationToken cancellationToken)
     {
+        var (result, _, _) = await RunWithDeliveriesAsync(
+                expressionFactsRequest, objectFactsRequest, sourceWitness, cancellationToken)
+            .ConfigureAwait(false);
+        return result;
+    }
+
+    /// <summary>
+    /// The run itself, also handing back the two proof-bound deliveries it rebuilt from its own
+    /// receipts - <c>null</c> on every refusal and for a family that was not requested.
+    /// </summary>
+    /// <remarks>
+    /// OUTPUTS, NEVER INPUTS. A producer composing over this run (#418 slice 5 folds exactly these
+    /// two deliveries) needs the deliveries the run proved, and the honest way to hand them over is
+    /// as a second and third result of the same call. They are deliberately NOT carried on
+    /// <see cref="EuLanguageScopedExpressionProductionResult"/>: a result type with a factory that
+    /// accepted deliveries would be a door through which a delivered result could be assembled from
+    /// deliveries no run rebuilt together - the pairing shape review refused at the contract layer,
+    /// one level up. No such factory exists; the deliveries leave this method and enter nothing but
+    /// a fold.
+    /// </remarks>
+    internal async Task<(EuLanguageScopedExpressionProductionResult Result, EuProofBoundDelivery? ExpressionFacts, EuProofBoundDelivery? ObjectFacts)> RunWithDeliveriesAsync(
+        EuObjectFactsPartitionRunRequest expressionFactsRequest,
+        EuObjectFactsPartitionRunRequest? objectFactsRequest,
+        BoundMachineRequest sourceWitness,
+        CancellationToken cancellationToken)
+    {
         ArgumentNullException.ThrowIfNull(expressionFactsRequest);
         ArgumentNullException.ThrowIfNull(sourceWitness);
 
@@ -300,18 +326,18 @@ public sealed class EuLanguageScopedExpressionProducer
         // after the run rather than before it.
         if (expressionFactsRequest.Set != EuObjectFactsQuerySet.ExpressionFacts)
         {
-            return EuLanguageScopedExpressionProductionResult.Refused(
+            return (EuLanguageScopedExpressionProductionResult.Refused(
                 EuLanguageScopedExpressionProductionRefusal.ExpressionFactsRequestIsNotTheExpressionFamily,
                 $"the Expression-facts slot was given family {expressionFactsRequest.Set}.",
-                productRequestCount: 0);
+                productRequestCount: 0), null, null);
         }
 
         if (objectFactsRequest is not null && objectFactsRequest.Set != EuObjectFactsQuerySet.ObjectFacts)
         {
-            return EuLanguageScopedExpressionProductionResult.Refused(
+            return (EuLanguageScopedExpressionProductionResult.Refused(
                 EuLanguageScopedExpressionProductionRefusal.ObjectFactsRequestIsNotTheObjectFamily,
                 $"the object-facts slot was given family {objectFactsRequest.Set}.",
-                productRequestCount: 0);
+                productRequestCount: 0), null, null);
         }
 
         // ONE PRODUCTION, ONE CEILING. Reference equality rather than equal limits, for the reason
@@ -319,11 +345,11 @@ public sealed class EuLanguageScopedExpressionProducer
         if (objectFactsRequest is not null &&
             !ReferenceEquals(objectFactsRequest.WireBudget, expressionFactsRequest.WireBudget))
         {
-            return EuLanguageScopedExpressionProductionResult.Refused(
+            return (EuLanguageScopedExpressionProductionResult.Refused(
                 EuLanguageScopedExpressionProductionRefusal.FamiliesCarryDifferentWireBudgets,
                 "the two families carry different budget instances, so neither limit bounds this "
                 + "production.",
-                productRequestCount: 0);
+                productRequestCount: 0), null, null);
         }
 
         // ALSO BEFORE ANY TRAFFIC, and compared in the plan's own canonical form because that is the
@@ -340,11 +366,11 @@ public sealed class EuLanguageScopedExpressionProducer
                 .ToArray();
             if (uncovered.Length > 0)
             {
-                return EuLanguageScopedExpressionProductionResult.Refused(
+                return (EuLanguageScopedExpressionProductionResult.Refused(
                     EuLanguageScopedExpressionProductionRefusal.ObjectFactsBatchDoesNotCoverTheExpressionBatch,
                     $"the date delivery never asked about {uncovered.Length} of this run's "
                     + $"object(s), the first being '{uncovered[0]}'.",
-                    productRequestCount: 0);
+                    productRequestCount: 0), null, null);
             }
         }
 
@@ -356,11 +382,11 @@ public sealed class EuLanguageScopedExpressionProducer
         spent += expressionRun.ProductRequestCount;
         if (expressionRun.Receipt is not { } expressionReceipt)
         {
-            return EuLanguageScopedExpressionProductionResult.Refused(
+            return (EuLanguageScopedExpressionProductionResult.Refused(
                 EuLanguageScopedExpressionProductionRefusal.ExpressionFactsEnumerationRefused,
                 expressionRun.Refusal?.Code.ToString()
                     ?? "the Expression-facts enumeration returned neither a receipt nor a refusal",
-                spent);
+                spent), null, null);
         }
 
         EuProofBoundDelivery expressionDelivery;
@@ -372,10 +398,10 @@ public sealed class EuLanguageScopedExpressionProducer
         }
         catch (EnumerationProofUnavailableException exception)
         {
-            return EuLanguageScopedExpressionProductionResult.Refused(
+            return (EuLanguageScopedExpressionProductionResult.Refused(
                 EuLanguageScopedExpressionProductionRefusal.EnumerationProofRefused,
                 "expression facts: " + exception.Message,
-                spent);
+                spent), null, null);
         }
 
         EuProofBoundDelivery? objectDelivery = null;
@@ -387,11 +413,11 @@ public sealed class EuLanguageScopedExpressionProducer
             spent += objectRun.ProductRequestCount;
             if (objectRun.Receipt is not { } objectReceipt)
             {
-                return EuLanguageScopedExpressionProductionResult.Refused(
+                return (EuLanguageScopedExpressionProductionResult.Refused(
                     EuLanguageScopedExpressionProductionRefusal.ObjectFactsEnumerationRefused,
                     objectRun.Refusal?.Code.ToString()
                         ?? "the object-facts enumeration returned neither a receipt nor a refusal",
-                    spent);
+                    spent), null, null);
             }
 
             try
@@ -402,10 +428,10 @@ public sealed class EuLanguageScopedExpressionProducer
             }
             catch (EnumerationProofUnavailableException exception)
             {
-                return EuLanguageScopedExpressionProductionResult.Refused(
+                return (EuLanguageScopedExpressionProductionResult.Refused(
                     EuLanguageScopedExpressionProductionRefusal.EnumerationProofRefused,
                     "object facts: " + exception.Message,
-                    spent);
+                    spent), null, null);
             }
         }
 
@@ -418,11 +444,11 @@ public sealed class EuLanguageScopedExpressionProducer
             out var offendingIri);
         if (derivation is null)
         {
-            return EuLanguageScopedExpressionProductionResult.Refused(
+            return (EuLanguageScopedExpressionProductionResult.Refused(
                 EuLanguageScopedExpressionProductionRefusal.DerivationRefused,
                 $"derivation={derivationRefusal} decode={decodeRefusal} detail={decodeDetail} " +
                 $"offendingIri={offendingIri}",
-                spent);
+                spent), null, null);
         }
 
         // Decision 78 retention, through the one door that proves the hold by reopening the digest
@@ -439,10 +465,10 @@ public sealed class EuLanguageScopedExpressionProducer
             .ConfigureAwait(false);
         if (derivationReceipt is null)
         {
-            return EuLanguageScopedExpressionProductionResult.Refused(
+            return (EuLanguageScopedExpressionProductionResult.Refused(
                 EuLanguageScopedExpressionProductionRefusal.DerivationNotRetained,
                 derivationHoldFailure,
-                spent);
+                spent), null, null);
         }
 
         var (episodeReceipt, episodeHoldFailure) = await CustodyHold
@@ -450,18 +476,21 @@ public sealed class EuLanguageScopedExpressionProducer
             .ConfigureAwait(false);
         if (episodeReceipt is null)
         {
-            return EuLanguageScopedExpressionProductionResult.Refused(
+            return (EuLanguageScopedExpressionProductionResult.Refused(
                 EuLanguageScopedExpressionProductionRefusal.DerivationNotRetained,
                 episodeHoldFailure,
-                spent);
+                spent), null, null);
         }
 
-        return EuLanguageScopedExpressionProductionResult.Success(
-            derivation,
-            derivationReceipt,
-            episodeReceipt,
-            ObjectsAskedAbout(expressionFactsRequest),
-            spent);
+        return (
+            EuLanguageScopedExpressionProductionResult.Success(
+                derivation,
+                derivationReceipt,
+                episodeReceipt,
+                ObjectsAskedAbout(expressionFactsRequest),
+                spent),
+            expressionDelivery,
+            objectDelivery);
     }
 
     /// <summary>
