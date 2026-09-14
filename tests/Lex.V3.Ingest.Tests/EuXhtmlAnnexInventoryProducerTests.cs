@@ -114,6 +114,26 @@ public sealed class EuXhtmlAnnexInventoryProducerTests
     }
 
     [TestMethod]
+    public async Task MultipleAnnexContainersInOnePublisherUnitAreRefused()
+    {
+        var result = await RunAsync(Xhtml(
+            "anx_1", includeWorkEli: true, secondAnnexId: "anx_2"));
+
+        Assert.AreEqual(EuXhtmlAnnexInventoryRefusal.PublisherAnnexConventionInvalid, result.Refusal);
+        Assert.IsNull(result.Inventory);
+    }
+
+    [TestMethod]
+    public async Task MalformedPublisherUnitIdentifierIsRefused()
+    {
+        var result = await RunAsync(Xhtml(
+            "anx_1", includeWorkEli: true, publisherUnitId: "malformed/unit.fmx"));
+
+        Assert.AreEqual(EuXhtmlAnnexInventoryRefusal.PublisherAnnexConventionInvalid, result.Refusal);
+        Assert.IsNull(result.Inventory);
+    }
+
+    [TestMethod]
     public async Task PublisherAnnexWithoutAWorkEliIsRefused()
     {
         var result = await RunAsync(Xhtml("anx_1", includeWorkEli: false));
@@ -129,19 +149,34 @@ public sealed class EuXhtmlAnnexInventoryProducerTests
             receipt, profile.Bytes, profile.Reference, CancellationToken.None);
     }
 
-    private static string Xhtml(string annexId, bool includeWorkEli) => $$"""
-        <?xml version="1.0" encoding="UTF-8"?>
-        <html xmlns="http://www.w3.org/1999/xhtml">
-          <body>
-            <div id="L_202601965EN.000201.fmx">
-              <div class="eli-container" id="{{annexId}}">
-                <p class="oj-doc-ti">ANNEX</p>
+    private static string Xhtml(
+        string annexId,
+        bool includeWorkEli,
+        string publisherUnitId = "L_202601965EN.000201.fmx",
+        string? secondAnnexId = null)
+    {
+        var secondAnnex = secondAnnexId is null
+            ? string.Empty
+            : $"""
+              <div class="eli-container" id="{secondAnnexId}">
+                <p class="oj-doc-ti">SECOND ANNEX</p>
               </div>
-            </div>
-            {{(includeWorkEli ? "<p>ELI: http://data.europa.eu/eli/reg_impl/2026/1965/oj</p>" : string.Empty)}}
-          </body>
-        </html>
-        """;
+              """;
+        return $$"""
+            <?xml version="1.0" encoding="UTF-8"?>
+            <html xmlns="http://www.w3.org/1999/xhtml">
+              <body>
+                <div id="{{publisherUnitId}}">
+                  <div class="eli-container" id="{{annexId}}">
+                    <p class="oj-doc-ti">ANNEX</p>
+                  </div>
+                  {{secondAnnex}}
+                </div>
+                {{(includeWorkEli ? "<p>ELI: http://data.europa.eu/eli/reg_impl/2026/1965/oj</p>" : string.Empty)}}
+              </body>
+            </html>
+            """;
+    }
 
     private static async Task<(EuAcquisitionTestFixture.EuInMemoryCustodyStore Store,
         DurableBlobWriteReceipt Receipt, (byte[] Bytes, SourceArtifactRef Reference) Profile)>
