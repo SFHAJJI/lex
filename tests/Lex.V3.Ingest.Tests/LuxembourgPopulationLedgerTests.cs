@@ -6,7 +6,9 @@ using Lex.V3.Contracts;
 using Lex.V3.Contracts.Custody;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Luxembourg;
+using Lex.V3.Contracts.Source.Absence;
 using Lex.V3.Ingest.Luxembourg;
+using Lex.V3.Tests.Contracts.Source.Absence;
 using Lex.V3.TestSupport;
 
 namespace Lex.V3.Ingest.Tests;
@@ -132,7 +134,114 @@ public sealed class LuxembourgPopulationLedgerTests
             "the act's Gazette body set is still on the result, not dropped with the count.");
     }
 
+    /// <summary>
+    /// A DELIVERED ZERO-ROW PER-ACT RESULT IS WHAT MAKES AN ACT NEVER-CONSOLIDATED HERE. The proof
+    /// comes from the per-act producer and is keyed to this act; the relation-family acquisitions
+    /// cannot stand in for it, and this head no longer reads them.
+    /// </summary>
+    [TestMethod]
+    public async Task ADeliveredZeroRowResultCountsTheActAsNeverConsolidated()
+    {
+        var result = await RunAsync(Assertions(), consolidations: [ResultFor(Act, rowCount: 0)]);
+
+        Assert.AreEqual(LuxembourgNeverConsolidatedMembership.NeverConsolidated,
+            MembershipOf(result));
+    }
+
+    /// <summary>And a delivered result whose enumeration returned rows is the opposite claim.</summary>
+    [TestMethod]
+    public async Task ADeliveredResultWithRowsCountsTheActAsConsolidated()
+    {
+        var result = await RunAsync(Assertions(), consolidations: [ResultFor(Act, rowCount: 1)]);
+
+        Assert.AreEqual(LuxembourgNeverConsolidatedMembership.Consolidated, MembershipOf(result));
+    }
+
+    /// <summary>
+    /// No per-act result, and a refused one, are both "no enumeration cited". This adapter does not
+    /// ask the per-act question itself, so with nothing supplied this is what every act gets, and
+    /// the ledger says so rather than implying a count it cannot support.
+    /// </summary>
+    [TestMethod]
+    public async Task AnAbsentOrRefusedResultCitesNoEnumeration()
+    {
+        var absent = await RunAsync(Assertions());
+        var refused = await RunAsync(Assertions(), consolidations: [RefusedResultFor(Act)]);
+
+        Assert.AreEqual(LuxembourgNeverConsolidatedMembership.EnumerationNotCited,
+            MembershipOf(absent));
+        Assert.AreEqual(LuxembourgNeverConsolidatedMembership.EnumerationNotCited,
+            MembershipOf(refused));
+    }
+
+    /// <summary>Two results for one act are two claims, and this fold chooses between neither.</summary>
+    [TestMethod]
+    public async Task TwoResultsForOneActRefuseTheRun()
+    {
+        var result = await RunAsync(
+            Assertions(), consolidations: [ResultFor(Act, 0), ResultFor(Act, 1)]);
+
+        Assert.AreEqual(LuxembourgQueryExecutionRefusal.PopulationLedgerNotCompleted,
+            result.Refusal!.Code);
+        StringAssert.Contains(result.Refusal.Detail, "two consolidation results");
+        StringAssert.Contains(result.Refusal.Detail, Act);
+    }
+
+    /// <summary>
+    /// A proof keyed to a different act cannot be cited for this one. The frame owns that guard;
+    /// this pins that the fold surfaces it as a named run refusal rather than letting it throw.
+    /// </summary>
+    [TestMethod]
+    public async Task AProofKeyedToAnotherActCannotBeCited()
+    {
+        var foreign = LuxembourgConsolidationByActResult.Success(
+            Act,
+            [],
+            AbsenceFixtures.Delivery(
+                LuxembourgConsolidationByActDiscoveryPlan.PartitionKeyFor(Act + "/other"), 0).Proof,
+            0,
+            LuxembourgAcquisitionTestFixture.TestBudgetSnapshot());
+
+        var result = await RunAsync(Assertions(), consolidations: [foreign]);
+
+        Assert.AreEqual(LuxembourgQueryExecutionRefusal.PopulationLedgerNotCompleted,
+            result.Refusal!.Code);
+        Assert.IsNull(result.PopulationLedger);
+    }
+
     // ---- Fixtures. ----
+
+    private static LuxembourgNeverConsolidatedMembership MembershipOf(
+        LuxembourgQueryExecutionResult result)
+    {
+        Assert.AreEqual(
+            LuxembourgQueryExecutionRefusal.None,
+            result.Refusal?.Code ?? LuxembourgQueryExecutionRefusal.None,
+            result.Refusal?.Detail);
+        return result.PopulationLedger!.EntryFor(Act)!.Placement.Membership;
+    }
+
+    /// <summary>
+    /// A delivered per-act result, proved under this act's own per-act family key, exactly as the
+    /// accepted producer proves it. The row count is the ENUMERATION's, which is what the frame's
+    /// disposition reads; the decoded consolidation list is a separate thing and is left empty.
+    /// </summary>
+    private static LuxembourgConsolidationByActResult ResultFor(string act, int rowCount) =>
+        LuxembourgConsolidationByActResult.Success(
+            act,
+            [],
+            AbsenceFixtures.Delivery(
+                LuxembourgConsolidationByActDiscoveryPlan.PartitionKeyFor(act), rowCount).Proof,
+            0,
+            LuxembourgAcquisitionTestFixture.TestBudgetSnapshot());
+
+    private static LuxembourgConsolidationByActResult RefusedResultFor(string act) =>
+        LuxembourgConsolidationByActResult.Refused(
+            act,
+            LuxembourgConsolidationByActRefusal.EnumerationRefused,
+            "the fixture refuses this act's enumeration",
+            0,
+            LuxembourgAcquisitionTestFixture.TestBudgetSnapshot());
 
     private static (string Subject, string Predicate, string Value)[] Assertions(
         string? extraType = null,
@@ -167,7 +276,8 @@ public sealed class LuxembourgPopulationLedgerTests
 
     private static async Task<LuxembourgQueryExecutionResult> RunAsync(
         (string Subject, string Predicate, string Value)[] assertions,
-        bool fetchesGazette = true)
+        bool fetchesGazette = true,
+        IReadOnlyList<LuxembourgConsolidationByActResult>? consolidations = null)
     {
         var subjects = new[] { Act, Expression, ManifestationPdfA }
             .OrderBy(static subject => subject, StringComparer.Ordinal).ToArray();
@@ -201,9 +311,11 @@ public sealed class LuxembourgPopulationLedgerTests
         var (assertionRequest, assertionWitness) = Partition("A", "assertions");
         return await adapter.RunAsync(
             [(censusRequest, censusWitness, null), (assertionRequest, assertionWitness, null)],
-            null, "census", "assertions", LuxembourgAcquisitionTestFixture.DocumentFetchRendererSource(420),
+            null, "census", "assertions", evidenceResolver: null,
+            LuxembourgAcquisitionTestFixture.DocumentFetchRendererSource(420),
             LuxembourgAcquisitionTestFixture.TestWireBudget(),
-            CancellationToken.None);
+            CancellationToken.None,
+            consolidations);
 
         static HttpResponseMessage Document(HttpRequestMessage request, HttpStatusCode status, byte[] body)
         {

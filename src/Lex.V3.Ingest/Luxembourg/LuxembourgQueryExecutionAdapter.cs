@@ -1159,6 +1159,15 @@ public sealed class LuxembourgQueryExecutionAdapter
     /// <param name="evidenceResolver">
     /// Test-only. Null in every production call (the five-parameter overload always passes null).
     /// </param>
+    /// <param name="consolidationsByAct">
+    /// #419 slice 7. The per-act consolidation results a compositor already gathered, each carrying
+    /// the exact enumeration proof its rows were read from. This adapter does not gather them: it
+    /// enumerates families, it does not ask the per-act consolidation question. Absent or empty, the
+    /// population ledger cites no enumeration for any act and says exactly that, which is the honest
+    /// answer when no such evidence was supplied. It is NEVER substituted for by the relation-family
+    /// acquisitions, whose consolidates entry carries the generic relation-assertions proof copied
+    /// onto all eighteen predicates and is about no particular act.
+    /// </param>
     internal Task<LuxembourgQueryExecutionResult> RunAsync(
         IReadOnlyList<(
             LuxembourgPartitionRunRequest PartitionRequest,
@@ -1170,11 +1179,13 @@ public sealed class LuxembourgQueryExecutionAdapter
         IScopeReductionEvidenceResolver? evidenceResolver,
         MachineQueryRendererSource documentFetchRendererSource,
         WireRequestBudget wireBudget,
-        CancellationToken cancellationToken) => RunCoreAsync(families,
+        CancellationToken cancellationToken,
+        IReadOnlyList<LuxembourgConsolidationByActResult>? consolidationsByAct = null) => RunCoreAsync(families,
             relationAssertionsFamilyKey is null ? [] : [relationAssertionsFamilyKey],
             resourceObservationFamilyKey is null ? [] : [resourceObservationFamilyKey],
             resourceAssertionsFamilyKey is null ? [] : [resourceAssertionsFamilyKey],
-            evidenceResolver, documentFetchRendererSource, scoped: false, wireBudget, cancellationToken);
+            evidenceResolver, documentFetchRendererSource, scoped: false, wireBudget, cancellationToken,
+            consolidationsByAct);
 
     /// <summary>
     /// Executes a declared union of disjoint whole-subject ranges. Every member names aligned
@@ -1196,7 +1207,8 @@ public sealed class LuxembourgQueryExecutionAdapter
         IScopeReductionEvidenceResolver? evidenceResolver,
         MachineQueryRendererSource documentFetchRendererSource,
         WireRequestBudget wireBudget,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IReadOnlyList<LuxembourgConsolidationByActResult>? consolidationsByAct = null)
     {
         ArgumentNullException.ThrowIfNull(families);
         ArgumentNullException.ThrowIfNull(scopeMembers);
@@ -1212,7 +1224,8 @@ public sealed class LuxembourgQueryExecutionAdapter
             scopeMembers.Select(static member => member.RelationFamilyKey).ToArray(),
             scopeMembers.Select(static member => member.CensusFamilyKey).ToArray(),
             scopeMembers.Select(static member => member.AssertionFamilyKey).ToArray(),
-            evidenceResolver, documentFetchRendererSource, scoped: true, wireBudget, cancellationToken);
+            evidenceResolver, documentFetchRendererSource, scoped: true, wireBudget, cancellationToken,
+            consolidationsByAct);
     }
 
     private async Task<LuxembourgQueryExecutionResult> RunCoreAsync(
@@ -1225,7 +1238,8 @@ public sealed class LuxembourgQueryExecutionAdapter
         MachineQueryRendererSource documentFetchRendererSource,
         bool scoped,
         WireRequestBudget wireBudget,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IReadOnlyList<LuxembourgConsolidationByActResult>? consolidationsByAct)
     {
         ArgumentNullException.ThrowIfNull(families);
         // ONE CEILING FOR THE RUN, AND EVERY DOOR BELOW CHARGES IT. This run enumerates N families,
@@ -1703,11 +1717,7 @@ public sealed class LuxembourgQueryExecutionAdapter
         // own per-act proofs, and the Gazette sets just produced. Nothing is fetched and no count is
         // asserted as an acceptance value: this is what the run's evidence supports, with its gaps.
         var (populationLedger, populationRefusal) = CompletePopulationLedger(
-            resolved, relationAcquisitions, gazetteBodySetsByOrdinal!,
-            _sourceProfile.RelationRules
-                .Single(static rule =>
-                    rule.Semantic == LuxembourgRelationSemantic.ConsolidatesShapeRequired)
-                .PredicateIri);
+            resolved, consolidationsByAct ?? [], gazetteBodySetsByOrdinal!);
         if (populationRefusal is not null)
         {
             return LuxembourgQueryExecutionResult.Refused(
@@ -2423,21 +2433,30 @@ public sealed class LuxembourgQueryExecutionAdapter
         LuxembourgNeverConsolidatedBodyLedger? Ledger,
         LuxembourgQueryExecutionRefusalDetail? Refusal) CompletePopulationLedger(
         LuxembourgProfileResolution.Resolved resolved,
-        IReadOnlyList<LuxembourgRelationFamilyAcquisition> relationAcquisitions,
-        IReadOnlyDictionary<int, LuxembourgGazetteBodySet> gazetteBodySetsByOrdinal,
-        string consolidatesPredicateIri)
+        IReadOnlyList<LuxembourgConsolidationByActResult> consolidationsByAct,
+        IReadOnlyDictionary<int, LuxembourgGazetteBodySet> gazetteBodySetsByOrdinal)
     {
         ArgumentNullException.ThrowIfNull(resolved);
-        ArgumentNullException.ThrowIfNull(relationAcquisitions);
+        ArgumentNullException.ThrowIfNull(consolidationsByAct);
         ArgumentNullException.ThrowIfNull(gazetteBodySetsByOrdinal);
 
-        var consolidates = relationAcquisitions.SingleOrDefault(acquisition => string.Equals(
-            acquisition.PredicateIri, consolidatesPredicateIri, StringComparison.Ordinal));
-        var proofsByAct = consolidates is
-            { State: LuxembourgRelationFamilyAcquisitionState.AcquiredComplete }
-            ? consolidates.CompletionProofs.ToDictionary(
-                static proof => proof.FamilyKey, StringComparer.Ordinal)
-            : new Dictionary<string, AbsenceFamilyEnumerationProof>(StringComparer.Ordinal);
+        // THE PER-ACT PRODUCER'S OWN RESULTS, JOINED BY THE ACT EACH ONE ASKED ABOUT. Not the
+        // relation-family acquisitions: those carry the generic relation-assertions proof copied
+        // onto all eighteen predicates, so reading the consolidates entry there would cite an
+        // enumeration that was never about this act. Each result carries the exact proof its rows
+        // were read from, which is what the frame needs; a result that refused carries none.
+        var byAct = new Dictionary<string, LuxembourgConsolidationByActResult>(StringComparer.Ordinal);
+        foreach (var result in consolidationsByAct)
+        {
+            ArgumentNullException.ThrowIfNull(result, nameof(consolidationsByAct));
+            if (!byAct.TryAdd(result.Act, result))
+            {
+                return (null, new LuxembourgQueryExecutionRefusalDetail(
+                    LuxembourgQueryExecutionRefusal.PopulationLedgerNotCompleted,
+                    null,
+                    "two consolidation results were supplied for one act: " + result.Act));
+            }
+        }
 
         var frame = new LuxembourgNeverConsolidatedFrame();
         var ambiguouslyTyped = new SortedSet<string>(StringComparer.Ordinal);
@@ -2455,16 +2474,37 @@ public sealed class LuxembourgQueryExecutionAdapter
                 continue;
             }
 
-            var (disposition, proof) = proofsByAct.TryGetValue(actIri, out var cited)
-                ? (cited.DeliveredRowCount == 0
+            // A result that delivered carries its proof; one that refused does not, and an act
+            // with no result at all cites nothing. The row count is the enumeration's own, not the
+            // decoded consolidation count, because that is what the frame's disposition is about.
+            var (disposition, proof) = byAct.TryGetValue(actIri, out var cited)
+                && cited.Proof is { } citedProof
+                ? (citedProof.DeliveredRowCount == 0
                     ? LuxembourgNeverConsolidatedDisposition.CitedEnumerationDeliveredNoRows
-                    : LuxembourgNeverConsolidatedDisposition.CitedEnumerationDeliveredRows, cited)
+                    : LuxembourgNeverConsolidatedDisposition.CitedEnumerationDeliveredRows, citedProof)
                 : (LuxembourgNeverConsolidatedDisposition.NoEnumerationCited, null);
 
-            if (!frame.TryAdmit(
-                new LuxembourgNeverConsolidatedEntry(
-                    actIri, new LuxembourgActClassRef(resource.LegalTypes[0]), disposition, proof),
-                out var admitRefusal))
+            // THE ENTRY'S OWN GUARDS THROW, AND THIS METHOD DOES NOT. The frame refuses a proof
+            // whose family key is not this act's per-act consolidation key, and a class ref the
+            // publisher could not have emitted, by throwing: they are caller-contract violations
+            // there. Here the "caller" is whoever supplied the per-act results, so a mismatched one
+            // is a typed run refusal, the way every other failure in this loop is, rather than an
+            // exception out of the whole run.
+            LuxembourgNeverConsolidatedEntry entry;
+            try
+            {
+                entry = new LuxembourgNeverConsolidatedEntry(
+                    actIri, new LuxembourgActClassRef(resource.LegalTypes[0]), disposition, proof);
+            }
+            catch (ArgumentException exception)
+            {
+                return (null, new LuxembourgQueryExecutionRefusalDetail(
+                    LuxembourgQueryExecutionRefusal.PopulationLedgerNotCompleted,
+                    null,
+                    $"the population frame would not hold {actIri}: {exception.Message}"));
+            }
+
+            if (!frame.TryAdmit(entry, out var admitRefusal))
             {
                 return (null, new LuxembourgQueryExecutionRefusalDetail(
                     LuxembourgQueryExecutionRefusal.PopulationLedgerNotCompleted,
