@@ -102,6 +102,12 @@ public sealed class ClosedVocabularyCensusTests
                 "Lex.V3.Ingest.Europe.EuFormexManifestationEnumerationRefusal: None, "
                     + "EnumerationRefused, EnumerationProofRefused, VerifiedRowsRefused, "
                     + "RowNotAdmitted, RowNamesAnotherExpression, ManifestationTypeDeliveredTwice",
+                "Lex.V3.Ingest.Europe.EuFormexPackageOutcomeKind: NotEligible, Acquired, "
+                    + "Unavailable, Refused",
+                "Lex.V3.Ingest.Europe.EuFormexPackageOutcomePopulationRefusal: None, "
+                    + "OutcomeOutsideExpressionPopulation, ExpressionContentDisagrees, "
+                    + "ExpressionDisposedTwice, OutcomeMissing, EligibleExpressionMarkedIneligible, "
+                    + "IneligibleExpressionHasPackageOutcome",
                 "Lex.V3.Ingest.Europe.EuImageOnlyAnnexProductionRefusal: None, "
                     + "ProfileDigestMismatch, ProfileInvalid, ProfileDoesNotNameAnnex, "
                     + "ProfileDoesNotNameTransport, RetainedBytesUnavailable, PdfUnreadable, "
