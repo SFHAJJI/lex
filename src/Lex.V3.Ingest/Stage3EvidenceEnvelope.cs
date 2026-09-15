@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Text.Json.Serialization;
 using Lex.V3.Contracts.Derivation;
+using Lex.V3.Contracts.Source.Scope;
 using Lex.V3.Ingest.Europe;
 using Lex.V3.Ingest.Luxembourg;
 
@@ -29,6 +30,9 @@ public enum Stage3EvidenceEnvelopeRefusal
 
     [JsonStringEnumMemberName("europe_formex_run_mismatch")]
     EuropeFormexRunMismatch = 6,
+
+    [JsonStringEnumMemberName("europe_annex_outside_corpus")]
+    EuropeAnnexOutsideCorpus = 7,
 }
 
 /// <summary>
@@ -104,6 +108,9 @@ public sealed class Stage3EvidenceEnvelope
             return null;
         }
 
+        var europeObjectRefs = europe.CorpusRecordSet!.Set.Records
+            .Select(static record => record.ObjectRef)
+            .ToHashSet();
         var annexes = new List<EuAnnexBodyDisposition>();
         foreach (var production in imageOnlyEuAnnexProductions)
         {
@@ -126,6 +133,13 @@ public sealed class Stage3EvidenceEnvelope
             {
                 refusal = Stage3EvidenceEnvelopeRefusal.AnnexIsNotTextUnavailable;
                 detail = annex.IdentitySha256;
+                return null;
+            }
+
+            if (!europeObjectRefs.Contains(annex.SourceObject))
+            {
+                refusal = Stage3EvidenceEnvelopeRefusal.EuropeAnnexOutsideCorpus;
+                detail = ScopeManifestCanonicalWriter.ComputeObjectRefSha256(annex.SourceObject);
                 return null;
             }
 

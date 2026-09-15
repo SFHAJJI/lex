@@ -270,7 +270,7 @@ public sealed class ClosedVocabularyCensusTests
                     + "MachineQueryPost, MachineQueryGet",
                 "Lex.V3.Ingest.Stage3EvidenceEnvelopeRefusal: None, EuropeNotComplete, "
                     + "LuxembourgNotComplete, AnnexProductionRefused, AnnexIsNotTextUnavailable, "
-                    + "DuplicateAnnex, EuropeFormexRunMismatch",
+                    + "DuplicateAnnex, EuropeFormexRunMismatch, EuropeAnnexOutsideCorpus",
                 "Lex.V3.Ingest.Stage3EvidenceLineageRefusal: None, EuropeCorpusRecordSetMismatch, "
                     + "EuropeManifestMismatch, EuropeRunIdentityMismatch, "
                     + "LuxembourgCorpusRecordSetMismatch, LuxembourgManifestMismatch, "
