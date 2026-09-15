@@ -115,10 +115,15 @@ public sealed class EuFormexAnnexClassificationReconciliation
             }
         }
 
-        var ordered = formex.Outcomes
-            .Where(static outcome => outcome.Kind == EuFormexPackageOutcomeKind.Acquired)
-            .Select(outcome => delivered[outcome.AcquiredInventory!.IdentitySha256])
-            .ToArray();
+        var ordered = new List<EuBoundAnnexBodyClassification>(expected.Count);
+        foreach (var outcome in formex.Outcomes)
+        {
+            if (outcome.Kind == EuFormexPackageOutcomeKind.Acquired)
+            {
+                ordered.Add(delivered[outcome.AcquiredInventory!.IdentitySha256]);
+            }
+        }
+
         return new EuFormexAnnexClassificationReconciliation(formex, ordered);
     }
 
