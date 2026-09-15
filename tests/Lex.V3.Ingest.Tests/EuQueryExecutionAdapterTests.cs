@@ -3332,7 +3332,8 @@ public sealed class EuQueryExecutionAdapterTests
         var manifestRef = new SourceArtifactRef(
             $"urn:uuid:{Guid.NewGuid():D}", result.ScopeManifestCanonicalSha256!);
         var manifest = EuScopeManifestBindingProof.TryOpenAsEuManifest(
-            manifestRef, bytes.Span, new PermissiveEvidenceResolver(CompleteEnumerationRef), out var refusal);
+            manifestRef, bytes.Span,
+            new PermissiveEvidenceResolver(result.RootBinding!.ClosureQueryPlanRef), out var refusal);
         Assert.IsNotNull(manifest, $"the written manifest did not reopen: {refusal}.");
         return manifest!;
     }
@@ -3345,7 +3346,8 @@ public sealed class EuQueryExecutionAdapterTests
         var manifestRef = new SourceArtifactRef(
             $"urn:uuid:{Guid.NewGuid():D}", result.ScopeManifestCanonicalSha256!);
         var manifest = EuScopeManifestBindingProof.TryOpenAsEuManifest(
-            manifestRef, bytes.Span, new PermissiveEvidenceResolver(CompleteEnumerationRef), out var refusal);
+            manifestRef, bytes.Span,
+            new PermissiveEvidenceResolver(result.RootBinding!.ClosureQueryPlanRef), out var refusal);
         Assert.IsNotNull(manifest, $"the written manifest did not reopen: {refusal}.");
         return manifest!.Rows.Single().FetchAddress;
     }
