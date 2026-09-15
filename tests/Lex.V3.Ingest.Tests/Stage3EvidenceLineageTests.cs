@@ -107,7 +107,14 @@ public sealed class Stage3EvidenceLineageTests
     [TestMethod]
     public async Task ImageOnlyAnnexSourceInTheBoundEuropeCorpusBinds()
     {
-        var envelope = await CompleteEnvelopeWithAnnexAsync(includeAnnexSourceInEuropeCorpus: true);
+        var europe = await EuAxiomWiringHarness.RunAsync(
+            static root => EuAcquisitionTestFixture.AxiomAbsenceScriptFor(root));
+        var luxembourg = await LuxembourgQueryExecutionAdapterTests.RunEmptyDeliveredForEnvelopeAsync();
+        var annex = await EuImageOnlyAnnexProducerTests.ProduceForEnvelopeAsync();
+        var envelope = Rebuild(
+            AddEuropeCorpusRecord(europe, annex.Disposition!.SourceObject),
+            luxembourg,
+            [annex]);
 
         var lineage = Stage3EvidenceLineage.TryBind(envelope, out var refusal, out var detail);
 
