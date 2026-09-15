@@ -38,7 +38,7 @@ public sealed class NoLawContentCapabilityTests
     /// DTO/gate types) and 7 are compiler-generated closure-cache classes for those hand-authored
     /// types' own lambdas.
     /// </remarks>
-    private const int ExpectedSweptTypeCount = 32;
+    private const int ExpectedSweptTypeCount = 31;
 
     private static readonly Type[] ForbiddenContentTypes =
     [
