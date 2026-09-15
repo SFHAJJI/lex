@@ -3040,6 +3040,46 @@ public sealed class EuQueryExecutionAdapterTests
         StringAssert.Contains(result.Refusal.Detail, "could not reproduce those exact");
         Assert.IsNull(result.CorpusRecordSet, "and no set is reported for one this run could not retain.");
         Assert.IsNull(result.CorpusRecordSetRef);
+        Assert.IsNull(result.CorpusRecordSetReceipt);
+    }
+
+    [TestMethod]
+    public async Task ADeliveredRunsRecordSetReopensFromTheAddressTheRunCarries()
+    {
+        var (result, _, store) = await RunWorkingTimeDirectiveAsync(
+            EuAcquisitionTestFixture.RealBandListedTypes, WorkingTimeLadderResponse);
+
+        Assert.IsNull(result.Refusal, $"code={result.Refusal?.Code} detail={result.Refusal?.Detail}");
+        Assert.IsNotNull(result.CorpusRecordSetReceipt,
+            "a delivered run must carry the custody address of its own corpus/6 set.");
+
+        var read = await new CorpusRecordSetReader(store).ReadAsync(
+            result.CorpusRecordSetReceipt!, result.CorpusRecordSetRef!, CancellationToken.None);
+
+        Assert.IsNull(read.Refusal, read.Refusal?.Detail);
+        CollectionAssert.AreEqual(
+            Canonical(result.CorpusRecordSet!),
+            Canonical(read.VerifiedSet!),
+            "the receipt and reference carried by the finished run must reopen that run's exact set.");
+    }
+
+    [TestMethod]
+    public async Task TheRecordSetCustodyAddressIsNotItsSemanticReference()
+    {
+        var (result, _, _) = await RunWorkingTimeDirectiveAsync(
+            EuAcquisitionTestFixture.RealBandListedTypes, WorkingTimeLadderResponse);
+
+        Assert.AreNotEqual(
+            result.CorpusRecordSetRef!.Sha256,
+            result.CorpusRecordSetReceipt!.Reference.ContentSha256,
+            "the semantic set digest is domain separated while custody addresses the plain canonical bytes.");
+    }
+
+    private static byte[] Canonical(VerifiedCorpusRecordSet set)
+    {
+        using var buffer = new MemoryStream();
+        CorpusRecordSetCanonicalWriter.Write(buffer, set.Set);
+        return buffer.ToArray();
     }
 
     /// <summary>
