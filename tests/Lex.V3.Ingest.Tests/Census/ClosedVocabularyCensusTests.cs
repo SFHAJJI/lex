@@ -223,6 +223,9 @@ public sealed class ClosedVocabularyCensusTests
                 "Lex.V3.Ingest.Luxembourg.LuxembourgInitialDraftInventoryRefusal: None, "
                     + "EnumerationRefused, EnumerationProofRefused, VerifiedRowsRefused, "
                     + "RowNotAdmitted, SubjectDeliveredTwice, NonAddressableSubjectObserved",
+                "Lex.V3.Ingest.Luxembourg.LuxembourgObjectPopulationRefusal: None, RunNotComplete, "
+                    + "MemberIsNotAnObservedSubject, ObservedSubjectHasNoMember, "
+                    + "SubjectClaimedTwice, ObservedSubjectDeliveredTwice, OutcomeOutsidePopulation",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgOpinionProductionRefusal: None, RowNotAdmitted, "
                     + "EnumerationRefused, EnumerationProofRefused, VerifiedRowsRefused",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgOpinionRequestBatchCoverRefusal: None, "
