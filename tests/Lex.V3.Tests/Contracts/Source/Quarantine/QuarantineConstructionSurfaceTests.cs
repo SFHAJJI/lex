@@ -148,6 +148,16 @@ public sealed class QuarantineConstructionSurfaceTests
         CollectionAssert.AreEqual(
             new[]
             {
+                // Neither of the two rows below is a second mint either, for the same reason as
+                // VerifySignature: TrustedQuarantinedPriorCoordinateInventory holds the exact
+                // instance TryAdmit was handed and hands that same reference back, so it can only
+                // ever narrow who may obtain an inventory, never widen it -- a caller must already
+                // hold one to get a Trusted wrapper at all. ConstructionSurface reads signatures
+                // only, so it cannot see "same instance in, same instance out" and reports the
+                // backing field and the property as producers exactly as it would a real second
+                // door. Pinned explicitly rather than silently exempted.
+                "field private instance " + N + "TrustedQuarantinedPriorCoordinateInventory::"
+                + "<Inventory>k__BackingField -> " + N + "QuarantinedPriorCoordinateInventory",
                 // Not a second mint: VerifySignature takes an already-reconciled inventory (the
                 // private constructor makes any other origin impossible) and returns that same
                 // reference once its signature checks out. ConstructionSurface reads signatures
@@ -157,6 +167,8 @@ public sealed class QuarantineConstructionSurfaceTests
                 "method public static " + N + "QuarantineInventoryCanonicalizer::VerifySignature("
                 + N + "QuarantinedPriorCoordinateInventory, System.Security.Cryptography.ECDsa) -> "
                 + N + "QuarantinedPriorCoordinateInventory",
+                "property public instance " + N + "TrustedQuarantinedPriorCoordinateInventory::"
+                + "Inventory() -> " + N + "QuarantinedPriorCoordinateInventory",
             },
             ConstructionSurface.ProducersIn(
                     typeof(QuarantinedPriorCoordinateInventory).Assembly,
