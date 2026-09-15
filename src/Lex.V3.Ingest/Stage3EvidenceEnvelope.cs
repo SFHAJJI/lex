@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Lex.V3.Contracts.Source.Scope;
 using Lex.V3.Ingest.Europe;
 using Lex.V3.Ingest.Luxembourg;
 
@@ -21,6 +22,9 @@ public enum Stage3EvidenceEnvelopeRefusal
 
     [JsonStringEnumMemberName("europe_formex_classification_mismatch")]
     EuropeFormexClassificationMismatch = 4,
+
+    [JsonStringEnumMemberName("europe_formex_classification_source_outside_corpus")]
+    EuropeFormexClassificationSourceOutsideCorpus = 5,
 }
 
 /// <summary>
@@ -99,6 +103,24 @@ public sealed class Stage3EvidenceEnvelope
         {
             refusal = Stage3EvidenceEnvelopeRefusal.EuropeFormexClassificationMismatch;
             detail = "the Formex annex classifications belong to a different Formex reconciliation";
+            return null;
+        }
+
+        var europeObjectRefs = europe.CorpusRecordSet!.Set.Records
+            .Select(static record => record.ObjectRef)
+            .ToHashSet();
+        var sourceOutsideCorpus = formexAnnexClassifications.Classifications
+            .SelectMany(static classification => new[]
+            {
+                classification.Binding.FormexSource.ObjectRef,
+                classification.Binding.XhtmlSource.ObjectRef,
+                classification.Binding.PdfSource.ObjectRef,
+            })
+            .FirstOrDefault(source => !europeObjectRefs.Contains(source));
+        if (sourceOutsideCorpus is not null)
+        {
+            refusal = Stage3EvidenceEnvelopeRefusal.EuropeFormexClassificationSourceOutsideCorpus;
+            detail = ScopeManifestCanonicalWriter.ComputeObjectRefSha256(sourceOutsideCorpus);
             return null;
         }
 

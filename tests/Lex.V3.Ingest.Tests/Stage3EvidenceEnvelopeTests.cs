@@ -1,3 +1,4 @@
+using Lex.V3.Contracts.Source.Scope;
 using Lex.V3.Ingest.Europe;
 using Lex.V3.Ingest.Luxembourg;
 
@@ -123,6 +124,51 @@ public sealed class Stage3EvidenceEnvelopeTests
     }
 
     [TestMethod]
+    public async Task EveryClassificationSourceMustBelongToTheEuropeCorpus()
+    {
+        var acquired = await EuFormexAnnexClassificationReconciliationTests.AcquiredFixtureAsync();
+        var eu = acquired.Run;
+        var luxembourg = await LuxembourgQueryExecutionAdapterTests.RunEmptyDeliveredForEnvelopeAsync();
+        var formex = EuFormexAnnexClassificationReconciliationTests.Reconciliation(
+            eu, [acquired.Outcome]);
+        var classifications = CompleteClassifications(formex, [acquired.Classification]);
+
+        Assert.IsNull(Stage3EvidenceEnvelope.TryCreate(
+            eu, luxembourg, formex, classifications, out var refusal, out var detail));
+        Assert.AreEqual(
+            Stage3EvidenceEnvelopeRefusal.EuropeFormexClassificationSourceOutsideCorpus,
+            refusal);
+        Assert.AreEqual(
+            ScopeManifestCanonicalWriter.ComputeObjectRefSha256(
+                acquired.Classification.Binding.FormexSource.ObjectRef),
+            detail);
+    }
+
+    [TestMethod]
+    public async Task AcquiredClassificationsWhoseSourcesBelongToEuropeMintTheEnvelope()
+    {
+        var acquired = await EuFormexAnnexClassificationReconciliationTests.AcquiredFixtureAsync();
+        var eu = new[]
+            {
+                acquired.Classification.Binding.FormexSource.ObjectRef,
+                acquired.Classification.Binding.XhtmlSource.ObjectRef,
+                acquired.Classification.Binding.PdfSource.ObjectRef,
+            }
+            .Aggregate(acquired.Run, Stage3EvidenceLineageTests.AddEuropeCorpusRecord);
+        var luxembourg = await LuxembourgQueryExecutionAdapterTests.RunEmptyDeliveredForEnvelopeAsync();
+        var formex = EuFormexAnnexClassificationReconciliationTests.Reconciliation(
+            eu, [acquired.Outcome]);
+        var classifications = CompleteClassifications(formex, [acquired.Classification]);
+
+        var envelope = Stage3EvidenceEnvelope.TryCreate(
+            eu, luxembourg, formex, classifications, out var refusal, out var detail);
+
+        Assert.AreEqual(Stage3EvidenceEnvelopeRefusal.None, refusal, detail);
+        Assert.IsNotNull(envelope);
+        Assert.AreSame(classifications, envelope.FormexAnnexClassifications);
+    }
+
+    [TestMethod]
     public void PublicDoorAcceptsNoCallerSelectedAnnexProductionList()
     {
         var parameters = typeof(Stage3EvidenceEnvelope).GetMethod(nameof(Stage3EvidenceEnvelope.TryCreate))!
@@ -135,9 +181,10 @@ public sealed class Stage3EvidenceEnvelopeTests
     }
 
     internal static EuFormexAnnexClassificationReconciliation CompleteClassifications(
-        EuFormexRunOutcomeReconciliation formex) =>
+        EuFormexRunOutcomeReconciliation formex,
+        IReadOnlyList<EuBoundAnnexBodyClassification>? classifications = null) =>
         EuFormexAnnexClassificationReconciliation.TryClose(
-            formex, [], out var refusal, out var detail)
+            formex, classifications ?? [], out var refusal, out var detail)
         ?? throw new AssertFailedException($"Formex annex classification refused: {refusal}: {detail}");
 
     private static Task<EuQueryExecutionResult> CompleteEuropeAsync() =>

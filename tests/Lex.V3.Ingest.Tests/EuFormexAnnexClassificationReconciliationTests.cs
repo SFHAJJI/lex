@@ -126,7 +126,7 @@ public sealed class EuFormexAnnexClassificationReconciliationTests
             refusal);
     }
 
-    private static async Task<Fixture> AcquiredFixtureAsync(
+    internal static async Task<Fixture> AcquiredFixtureAsync(
         bool formexTwoMembers = false,
         byte[]? formexBytes = null)
     {
@@ -165,7 +165,7 @@ public sealed class EuFormexAnnexClassificationReconciliationTests
             classification);
     }
 
-    private static EuFormexRunOutcomeReconciliation Reconciliation(
+    internal static EuFormexRunOutcomeReconciliation Reconciliation(
         EuQueryExecutionResult run,
         IReadOnlyList<EuFormexPackageOutcome> outcomes)
     {
@@ -182,7 +182,7 @@ public sealed class EuFormexAnnexClassificationReconciliationTests
             [run, new Dictionary<string, EuFormexPackageOutcomePopulation>(), outcomes]);
     }
 
-    private sealed record Fixture(
+    internal sealed record Fixture(
         EuQueryExecutionResult Run,
         EuFormexAnnexInventory Inventory,
         EuFormexPackageOutcome Outcome,
