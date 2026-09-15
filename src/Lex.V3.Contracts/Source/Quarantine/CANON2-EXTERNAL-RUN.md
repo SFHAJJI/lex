@@ -64,14 +64,38 @@ constant.
 
 ### The trust boundary, stated exactly
 
-| side | may do | must never do |
+**There are three actors, not two, and conflating the first two is the error this section exists to
+prevent.** The tool that reads the retired index never signs; the identity that signs never reads it.
+
+| actor | may do | must never do |
 | --- | --- | --- |
-| **External, quarantined** | pin the exact previously promoted signed index pair; read it; enumerate public coordinates; sign the reconciled inventory | write to any network; mutate its source; publish; promote; touch production credentials |
+| **Reproducer** — the quarantined read-only tool, run twice under two identities | pin the exact previously promoted signed index pair; read it; enumerate public coordinates; emit its own coordinate list | **sign anything**; write to any network; mutate its source; publish; promote; touch production credentials |
+| **Reviewer signing identity** — the pinned `quarantine_reviewer` | reconcile the two coordinate lists; sign the reconciled inventory | read, open, pin or execute against the retired index at all |
 | **V3** | parse the coordinate-only artifact; re-derive every digest; re-reconcile the two reproductions; verify the signature against a trusted key | contain, execute, vendor or link a reader of the retired index; read its schema; read its serializer; accept any byte payload of law text |
 
-`QuarantineVerifierReceipt` makes the read-only half of that table a **construction-time refusal**,
-not a promise: `operatedReadOnly = false` throws, with the reason naming section 7.3's prohibition on
-network writes, source mutation, signing, publication and production access.
+`QuarantineVerifierReceipt` is the **reproducer's** receipt, not the signer's, and it makes that row a
+construction-time refusal rather than a promise: `operatedReadOnly = false` throws, and its own
+message names section 7.3's prohibition on network writes, source mutation, **signing**, publication
+and production access "from the tool it describes". A document whose receipt claimed the reproducer
+signed would therefore be refused by the receipt's own constructor.
+
+`QuarantineAttestation.Issuer`, whose role must be exactly `quarantine_reviewer`, is the **signer**.
+Section 7.3 step 4 requires that dedicated review identity to sign; nothing gives it index access.
+
+### How the reproductions reach the signer without widening the boundary
+
+Each reproducer emits **only its own coordinate list** — the four bounded strings per coordinate
+described in section 3, which by construction cannot carry bytes, a stream or a path. The signer
+receives two such lists and nothing else: no index handle, no credentials, no serializer, no file
+from the retired generation.
+
+That is sufficient for it to do its job, because reconciliation is a pure function of the two lists
+(section 4.1's ordering, then a digest comparison). The signer reconciles in order to know what it is
+signing, and signs the result. **It never needs to see the index, so its not seeing it costs
+nothing.**
+
+The boundary therefore narrows at each hop rather than widening: the index is read only by the
+reproducer, only coordinates leave it, and only a signature is added downstream.
 
 ---
 
@@ -249,7 +273,7 @@ UTF-8 JSON, unmapped members disallowed, matching the convention of every other 
     "algorithm": "ECDSA-P256-SHA256",
     "signature_format": "ieee-p1363",
     "signature": "<86 chars unpadded base64url>",
-    "issuer": { "role": "quarantine_reviewer", "issuer_id": "<identifier>", "keyId": "<identifier>" }
+    "issuer": { "role": "quarantine_reviewer", "issuer_id": "<identifier>", "key_id": "<identifier>" }
   }
 }
 ```
@@ -263,7 +287,15 @@ and the reconciled object are different artifacts and must not share an identifi
   would let a producer make two disagreeing walks "agree" by supplying matching strings;
 - no reconciled coordinate list beside the two reproductions — the reconciled set **is** the primary's
   list once reconciliation passes, and a third copy could disagree with both;
-- no byte payload, stream, path, URI, or law text under any key;
+- no byte payload, stream, path or law text under any key;
+- **no locator URI** — nothing that names where content may be fetched from. This is narrower than
+  "no URI", deliberately: `source_index_identity_ref.resource_id` must be a `urn:uuid`, which
+  `SourceArtifactRef` requires and which names an artifact *identity* rather than a retrievable
+  location. The enforceable rule a parser applies is the one already in code:
+  `QuarantineCoordinateValidation.RequireOpaqueKey` rejects `://` in every coordinate field, so no
+  coordinate can name a location, while the artifact reference is validated as a UUID URN by
+  `SourceCoreValidation.RequireUuidUrn`. Those two rules do not overlap and neither is a judgement
+  call;
 - no field naming the retired index's schema, serializer, row type or file layout.
 
 ### 5.4 The admission sequence, in order
