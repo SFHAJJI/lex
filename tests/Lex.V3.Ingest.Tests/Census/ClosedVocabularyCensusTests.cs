@@ -89,6 +89,10 @@ public sealed class ClosedVocabularyCensusTests
                     + "WireBudgetExhausted",
                 "Lex.V3.Ingest.Europe.EuFamilyEnumerationOutcomeKind: Proven, ExecutorRefused, "
                     + "ProofRefused",
+                "Lex.V3.Ingest.Europe.EuFormexAnnexClassificationReconciliationRefusal: None, "
+                    + "AcquiredInventoryClaimedTwice, ClassificationOutsideAcquiredPopulation, "
+                    + "ClassificationInventoryDisagrees, ClassificationSuppliedTwice, "
+                    + "ClassificationMissing",
                 "Lex.V3.Ingest.Europe.EuFormexAnnexInventoryRefusal: None, ProfileDigestMismatch, "
                     + "ProfileInvalid, RetainedBytesUnavailable, PackageUnreadable, "
                     + "PackageEntryInvalid, XmlInvalid, AnnexDocumentReferenceMissing, "
