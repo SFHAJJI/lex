@@ -2706,7 +2706,7 @@ public sealed class EuRepeatedEnumerationExecutor
                     partitionKey,
                     new EuEnumerationRefusalDetail(
                         EuEnumerationRefusal.PageBudgetExhausted,
-                        null, null, null, null, null, null, null, null));
+                        null, null, null, null, null, selected, null, null));
             }
 
             var pageBound = bindPage(passOrdinal, cursor, selected, countObservation.HttpEvidenceRef);
@@ -2718,7 +2718,20 @@ public sealed class EuRepeatedEnumerationExecutor
                 .ConfigureAwait(false));
             if (pageOutcome.Refusal is not null)
             {
-                return new PassOutcome(null, partitionKey, pageOutcome.Refusal);
+                var refusal = pageOutcome.Refusal;
+                return new PassOutcome(
+                    null,
+                    partitionKey,
+                    new EuEnumerationRefusalDetail(
+                        refusal.Code,
+                        refusal.RequestOrdinal,
+                        refusal.AttemptOrdinalReached,
+                        refusal.TerminalStatus,
+                        refusal.ResponseBodySha256,
+                        refusal.ObservedMediaType,
+                        selected,
+                        refusal.OffendingKey,
+                        refusal.CoreRefusalDetail));
             }
 
             var transport = pageOutcome.Transport!;

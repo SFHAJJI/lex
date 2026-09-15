@@ -300,6 +300,77 @@ public sealed class EuFormexManifestationEnumerationProducerTests
         Assert.AreEqual(2, budget.Spent, "the refused attempt must not overspend the ceiling.");
     }
 
+    [TestMethod]
+    public async Task ABudgetRefusalAfterCountRetainsThePublishersObservedPopulation()
+    {
+        var expression = Expression(ExpressionA);
+        var plan = EuFormexManifestationDiscoveryPlan.Create();
+        var handler = new EuAcquisitionTestFixture.ClassifyingHandler(
+            new Dictionary<string, EuAcquisitionTestFixture.FamilyScript>(StringComparer.Ordinal)
+            {
+                ["M"] = new("M", [EuAcquisitionTestFixture.EuCountJson(7)]),
+            });
+        var producer = new EuFormexManifestationEnumerationProducer(
+            new EuAcquisitionTestFixture.EuInMemoryCustodyStore(),
+            new EuAcquisitionTestFixture.FixedTimeProvider(),
+            handler);
+
+        var result = await producer.RunAsync(
+            new EuFormexManifestationRunRequest(
+                plan, expression, "urn:uuid:59a97502-b344-4894-a64f-8b456180b4e7",
+                EuAcquisitionTestFixture.BuildRendererSource(9813),
+                WireRequestBudget.OfWireRequests(3)),
+            EuAcquisitionTestFixture.SourceWitness(),
+            CancellationToken.None);
+
+        Assert.IsFalse(result.Delivered);
+        Assert.AreEqual(EuFormexManifestationEnumerationRefusal.EnumerationRefused, result.Refusal);
+        StringAssert.Contains(result.Detail, "WireBudgetExhausted");
+        StringAssert.Contains(result.Detail, "observedCount=7");
+        Assert.AreEqual(1, result.ProductRequestCount, "the publisher count was the only product request sent.");
+        CollectionAssert.AreEqual(new[] { "Robots", "Robots", "M" }, handler.FamilySequence.ToArray());
+    }
+
+    [TestMethod]
+    public async Task APageBudgetRefusalRetainsThePublishersObservedPopulation()
+    {
+        var expression = Expression(ExpressionA);
+        var plan = EuFormexManifestationDiscoveryPlan.Create();
+        var projection = plan.CreateDeliveryProfile().ProjectionVariables;
+        var firstPage = EuAcquisitionTestFixture.RowsJson(
+            projection,
+            Enumerable.Range(0, 449).Select(index => JsonRow(expression, "fmx4", index)).ToArray());
+        var secondPage = EuAcquisitionTestFixture.RowsJson(
+            projection,
+            Enumerable.Range(449, 449).Select(index => JsonRow(expression, "fmx4", index)).ToArray());
+        var handler = new EuAcquisitionTestFixture.ClassifyingHandler(
+            new Dictionary<string, EuAcquisitionTestFixture.FamilyScript>(StringComparer.Ordinal)
+            {
+                ["M"] = new("M", [EuAcquisitionTestFixture.EuCountJson(449), firstPage, secondPage]),
+            });
+        var producer = new EuFormexManifestationEnumerationProducer(
+            new EuAcquisitionTestFixture.EuInMemoryCustodyStore(),
+            new EuAcquisitionTestFixture.FixedTimeProvider(),
+            handler);
+
+        var result = await producer.RunAsync(
+            new EuFormexManifestationRunRequest(
+                plan, expression, "urn:uuid:524efc91-eb82-4320-a369-3398938286b1",
+                EuAcquisitionTestFixture.BuildRendererSource(9814),
+                WireRequestBudget.OfWireRequests(20)),
+            EuAcquisitionTestFixture.SourceWitness(),
+            CancellationToken.None);
+
+        Assert.IsFalse(result.Delivered);
+        Assert.AreEqual(EuFormexManifestationEnumerationRefusal.EnumerationRefused, result.Refusal);
+        StringAssert.Contains(result.Detail, "PageBudgetExhausted");
+        StringAssert.Contains(result.Detail, "observedCount=449");
+        Assert.AreEqual(3, result.ProductRequestCount, "one count and two pages were sent.");
+        Assert.AreEqual(5, result.WireBudget.Spent, "the refusal did not depend on exhausting the wire budget.");
+        CollectionAssert.AreEqual(
+            new[] { "Robots", "Robots", "M", "M", "M" }, handler.FamilySequence.ToArray());
+    }
+
     /// <summary>
     /// THE PROOF'S OWN COUNT IS HALF THE GATE, AND IT WAS THE UNTESTED HALF. The decoder refuses
     /// unless the proof names this expression's family AND carries exactly the delivered row count.
@@ -399,23 +470,27 @@ public sealed class EuFormexManifestationEnumerationProducerTests
         return new RepeatedEnumerationRow(terms, terms, terms);
     }
 
-    private static string JsonRow(LanguageScopedExpression expression, string type)
+    private static string JsonRow(LanguageScopedExpression expression, string type, int? manifestationOrdinal = null)
     {
         static string Term(string kind, string value, string? datatype = null) =>
             "{\"type\":" + JsonSerializer.Serialize(kind) + ",\"value\":"
             + JsonSerializer.Serialize(value)
             + (datatype is null ? string.Empty : ",\"datatype\":" + JsonSerializer.Serialize(datatype)) + "}";
+        var manifestation = expression.Identity.PublisherExpressionId + "." +
+            (manifestationOrdinal is { } ordinal
+                ? ordinal.ToString("D4", System.Globalization.CultureInfo.InvariantCulture)
+                : "01");
         var values = new Dictionary<string, string>(StringComparer.Ordinal)
         {
             ["work"] = Term("uri", expression.Identity.PublisherWorkId),
             ["expression"] = Term("uri", expression.Identity.PublisherExpressionId),
-            ["manifestation"] = Term("uri", expression.Identity.PublisherExpressionId + ".01"),
+            ["manifestation"] = Term("uri", manifestation),
             ["manifestation_type"] = Term("literal", type, XsdString),
             ["manifestation_type_kind"] = Term("literal", "literal"),
             ["datatype_iri"] = Term("literal", XsdString),
             ["language_tag"] = Term("literal", string.Empty),
             ["multiplicity"] = Term("literal", "1", XsdInteger),
-            ["key_1"] = Term("literal", expression.Identity.PublisherExpressionId + ".01"),
+            ["key_1"] = Term("literal", manifestation),
             ["key_2"] = Term("literal", "literal"),
             ["key_3"] = Term("literal", type),
             ["key_4"] = Term("literal", XsdString),
