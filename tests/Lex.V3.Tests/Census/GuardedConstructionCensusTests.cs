@@ -1616,6 +1616,8 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Contracts.Source.Quarantine.QuarantineInventoryCanonicalizer::VerifyS"
                     + "ignature, "
                     + "method public static "
+                    + "Lex.V3.Contracts.Source.Quarantine.QuarantineInventoryWireReader::TryParse, "
+                    + "method public static "
                     + "Lex.V3.Contracts.Source.Quarantine.QuarantinedPriorCoordinateInventory::TryR"
                     + "econcile",
                 "Lex.V3.Contracts.Source.Quarantine.TrustedQuarantinedPriorCoordinateInventory: "

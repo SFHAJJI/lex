@@ -646,6 +646,10 @@ public sealed class ClosedVocabularyCensusTests
                 "Lex.V3.Contracts.Source.Quarantine.QuarantineInventoryRefusal: None, "
                     + "ReproductionRolesNotDistinct, ReproducerIdentitiesNotDistinct, "
                     + "ReproductionCountMismatch, ReproductionsDisagree, PriorIndexPairHashInvalid",
+                "Lex.V3.Contracts.Source.Quarantine.QuarantineInventoryWireRefusal: None, "
+                    + "NotOneValidTypedDocument, UnexpectedSchema, ReproductionCountNotTwo, "
+                    + "RoleNotRecognised, CoordinateInvalid, ReproductionRefused, "
+                    + "ReconciliationRefused, EvidenceInvalid",
                 "Lex.V3.Contracts.Source.Quarantine.QuarantineReproducerRole: Primary, "
                     + "IndependentReviewer",
                 "Lex.V3.Contracts.Source.Quarantine.QuarantineReproductionRefusal: None, "
