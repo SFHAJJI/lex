@@ -106,6 +106,10 @@ public sealed class EuFormexManifestationCanary
         var expression = ExpressionFromAcceptedEvidence(reopened.Span, acceptedReceipt);
 
         var plan = EuFormexManifestationDiscoveryPlan.Create();
+        Assert.AreEqual(CurrentPlanSha256, plan.ArtifactRef.Sha256,
+            "the authorized question changed; refuse before traffic.");
+        Assert.AreEqual("eu-formex-manifestations-by-expression.count",
+            plan.CountQueryFamilyRef.MemberKey);
         var renderer = RendererSource(checkout);
         var preflight = plan.BindCount(
             expression.Identity,
