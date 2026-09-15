@@ -10,9 +10,10 @@ using Lex.V3.Ingest.Europe;
 
 namespace Lex.V3.Ingest.Tests;
 
-/// <summary>The single checkpoint-31 Formex manifestation canary authorized on #344.</summary>
+/// <summary>The separately governed Formex v2 manifestation canary proposed on #344.</summary>
 /// <remarks>
-/// This test is offline unless <c>LEX_FORMEX_MANIFESTATION_CANARY=1</c>. When enabled it first
+/// This test is offline unless <c>LEX_FORMEX_MANIFESTATION_CANARY_V2=1</c>. The fresh gate prevents
+/// checkpoint 31's spent v1 authorization from activating this changed publisher question. When enabled it first
 /// reopens the accepted clean Stage 1 EU evidence, verifies its pinned digest, and confirms that the
 /// exact expression is derived from its belongs-to-work and language rows. Only then does it create
 /// the six-attempt budget and call the production manifestation-enumeration producer.
@@ -26,7 +27,7 @@ namespace Lex.V3.Ingest.Tests;
 [DoNotParallelize]
 public sealed class EuFormexManifestationCanary
 {
-    private const string EnableVariable = "LEX_FORMEX_MANIFESTATION_CANARY";
+    private const string EnableVariable = "LEX_FORMEX_MANIFESTATION_CANARY_V2";
     private const int WireCeiling = 6;
     private const int ProductCeiling = 4;
     private const string Endpoint = "https://publications.europa.eu/webapi/rdf/sparql";
@@ -39,6 +40,7 @@ public sealed class EuFormexManifestationCanary
         "http://publications.europa.eu/ontology/cdm#expression_belongs_to_work";
     private const string AcceptedEvidenceSha256 =
         "bdc14319f2f02a43c7a8a58059eb1e1c3835cd3edf708e27d9d4f0d48f4e4f0b";
+    private const string PlanV2Sha256 = "__PIN__";
 
     [TestMethod]
     public void TheGovernedInvocationPinsItsCoordinateMethodEndpointAndCeilings()
@@ -56,6 +58,15 @@ public sealed class EuFormexManifestationCanary
 
         Assert.AreEqual(Work, expression.Identity.PublisherWorkId);
         Assert.AreEqual(Expression, expression.Identity.PublisherExpressionId);
+        Assert.AreEqual("eu-formex-manifestations-by-expression-v2-",
+            EuFormexManifestationDiscoveryPlan.PartitionKeyPrefix);
+        Assert.AreEqual(PlanV2Sha256, plan.ArtifactRef.Sha256);
+        Assert.AreEqual(plan.ArtifactRef, plan.CountQueryFamilyRef.RegistryRef);
+        Assert.AreEqual(plan.ArtifactRef, plan.PageQueryFamilyRef.RegistryRef);
+        Assert.AreEqual("eu-formex-manifestations-by-expression.count",
+            plan.CountQueryFamilyRef.MemberKey);
+        Assert.AreEqual("eu-formex-manifestations-by-expression.page",
+            plan.PageQueryFamilyRef.MemberKey);
         Assert.AreEqual(HttpRequestMethod.Post, bound.MachinePlan.Method);
         Assert.AreEqual(Endpoint, bound.MachinePlan.TargetOriginAndPath);
         Assert.AreEqual(Endpoint, opened.RequestedUri);
@@ -81,7 +92,7 @@ public sealed class EuFormexManifestationCanary
         var root = Path.Combine(
             checkout,
             "artifacts",
-            "checkpoint-31-formex-canary-" + DateTimeOffset.UtcNow.ToString("yyyyMMddTHHmmssfffZ"));
+            "formex-v2-manifestation-canary-" + DateTimeOffset.UtcNow.ToString("yyyyMMddTHHmmssfffZ"));
         Directory.CreateDirectory(root);
         var store = new FileSystemCustodyStore(root);
 
@@ -120,7 +131,7 @@ public sealed class EuFormexManifestationCanary
 
         var summaryBytes = JsonSerializer.SerializeToUtf8Bytes(new
         {
-            schema = "checkpoint_31_formex_manifestation_canary/1",
+            schema = "formex_manifestation_v2_canary_result/1",
             acceptedEvidenceSha256 = AcceptedEvidenceSha256,
             acceptedEvidenceReceipt = acceptedReceipt.Reference,
             work = Work,
@@ -129,6 +140,13 @@ public sealed class EuFormexManifestationCanary
             method = "POST",
             wireCeiling = WireCeiling,
             productCeiling = ProductCeiling,
+            plan = new
+            {
+                plan.ArtifactRef,
+                plan.CountQueryFamilyRef,
+                plan.PageQueryFamilyRef,
+                partitionKey = EuFormexManifestationDiscoveryPlan.PartitionKeyFor(expression.Identity),
+            },
             result.Delivered,
             refusal = result.Refusal.ToString(),
             result.Detail,
@@ -143,11 +161,12 @@ public sealed class EuFormexManifestationCanary
                 result.Proof.CanonicalKeyDigest,
                 acquisitionRunSha256 = result.Proof.AcquisitionRunRef.Sha256,
             },
-            manifestationTypes = result.ManifestationTypes?.Select(static type => new
+            manifestations = result.ManifestationTypes?.Select(static manifestation => new
             {
-                type.PublisherType,
-                type.Multiplicity,
-                type.SourceObservationId,
+                manifestation.PublisherManifestationIri,
+                manifestation.PublisherType,
+                manifestation.Multiplicity,
+                manifestation.SourceObservationId,
             }).ToArray(),
         }, new JsonSerializerOptions { WriteIndented = true });
         var summaryPath = Path.Combine(root, "result.json");
