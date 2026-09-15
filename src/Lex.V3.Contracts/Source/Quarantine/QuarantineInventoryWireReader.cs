@@ -267,7 +267,7 @@ public static class QuarantineInventoryWireReader
         string PriorIndexPairSha256,
         WireArtifactRef SourceIndexIdentityRef,
         WireVerifierReceipt VerifierReceipt,
-        IReadOnlyList<WireReproduction> Reproductions,
+        IReadOnlyList<WireReproduction?> Reproductions,
         WireAttestation Attestation);
 
     private sealed record WireArtifactRef(string ResourceId, string Sha256);
@@ -276,7 +276,7 @@ public static class QuarantineInventoryWireReader
         string VerifierIdentity, bool OperatedReadOnly, string ProducedAtUtc);
 
     private sealed record WireReproduction(
-        string Role, string ReproducerIdentity, IReadOnlyList<WireCoordinate> Coordinates);
+        string Role, string ReproducerIdentity, IReadOnlyList<WireCoordinate?> Coordinates);
 
     private sealed record WireCoordinate(
         string WorkKey, string Language, string ValidFrom, string? Anchor);
