@@ -13,7 +13,7 @@ internal sealed record EuScopeReductionEvidenceObservation(
 /// constructing the manifest. Creation happens before manifest construction, so verification never
 /// derives its admission set from the manifest being verified.
 /// </summary>
-public sealed class EuProductionScopeReductionEvidenceResolver : IScopeReductionEvidenceResolver
+internal sealed class EuProductionScopeReductionEvidenceResolver : IScopeReductionEvidenceResolver
 {
     private readonly IReadOnlySet<string> _observedObjectRefSha256Values;
     private readonly IReadOnlySet<SourceArtifactRef> _custodyConfirmedEvidenceArtifacts;

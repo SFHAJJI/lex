@@ -19,7 +19,7 @@ public sealed class EuProductionScopeReductionEvidenceResolverTests
     {
         var store = new RoutedHttpAcquisitionSessionAuditTests.RecordingCustodyStore { RefuseFallback = true };
         var receipt = await store.CreateAsync(
-            "retained Union interpretation profile"u8.ToArray(),
+            "retained Union HTTP evidence"u8.ToArray(),
             CustodyClass.NightlyFloor90d,
             CancellationToken.None);
         var retainedEvidence = new SourceArtifactRef(
