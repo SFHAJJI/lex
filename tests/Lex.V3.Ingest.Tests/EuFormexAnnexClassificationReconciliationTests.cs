@@ -13,11 +13,7 @@ public sealed class EuFormexAnnexClassificationReconciliationTests
     public async Task EveryAcquiredInventoryReceivesExactlyOneClassification()
     {
         var acquired = await AcquiredFixtureAsync();
-        var refused = EuFormexPackageOutcome.Refused(
-            acquired.Outcome.Expression,
-            EuDocumentFetchAttemptRefusal.ObservationNotExecuted,
-            "offline fixture");
-        var formex = Reconciliation(acquired.Run, [refused, acquired.Outcome]);
+        var formex = Reconciliation(acquired.Run, [acquired.Outcome]);
 
         var reconciliation = EuFormexAnnexClassificationReconciliation.TryClose(
             formex, [acquired.Classification], out var refusal, out var detail);
