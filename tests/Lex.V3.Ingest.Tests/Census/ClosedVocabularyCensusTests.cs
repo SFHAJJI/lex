@@ -269,8 +269,8 @@ public sealed class ClosedVocabularyCensusTests
                 "Lex.V3.Ingest.RoutedHttpAcquisitionSession+RequestPolicyKind: RobotsGet, "
                     + "MachineQueryPost, MachineQueryGet",
                 "Lex.V3.Ingest.Stage3EvidenceEnvelopeRefusal: None, EuropeNotComplete, "
-                    + "LuxembourgNotComplete, AnnexProductionRefused, AnnexIsNotTextUnavailable, "
-                    + "DuplicateAnnex",
+                    + "LuxembourgNotComplete, EuropeFormexRunMismatch, AnnexProductionRefused, "
+                    + "AnnexIsNotTextUnavailable, DuplicateAnnex",
                 "Lex.V3.Ingest.Stage3EvidenceLineageRefusal: None, EuropeCorpusRecordSetMismatch, "
                     + "EuropeManifestMismatch, EuropeRunIdentityMismatch, "
                     + "LuxembourgCorpusRecordSetMismatch, LuxembourgManifestMismatch, "

@@ -180,9 +180,18 @@ public sealed class Stage3EvidenceLineageTests
     private static Stage3EvidenceEnvelope Rebuild(
         EuQueryExecutionResult europe,
         LuxembourgQueryExecutionResult luxembourg,
-        IEnumerable<EuImageOnlyAnnexProductionResult>? annexes = null) =>
-        Stage3EvidenceEnvelope.TryCreate(europe, luxembourg, annexes ?? [], out var refusal, out var detail)
-        ?? throw new AssertFailedException($"Envelope refused: {refusal}: {detail}");
+        IEnumerable<EuImageOnlyAnnexProductionResult>? annexes = null)
+    {
+        var formex = EuFormexRunOutcomeReconciliationTests.CompleteForEnvelope(europe);
+        return Stage3EvidenceEnvelope.TryCreate(
+            europe,
+            luxembourg,
+            formex,
+            annexes ?? [],
+            out var refusal,
+            out var detail)
+            ?? throw new AssertFailedException($"Envelope refused: {refusal}: {detail}");
+    }
 
     private static EuQueryExecutionResult CopyEurope(
         EuQueryExecutionResult source,

@@ -13,10 +13,12 @@ public sealed class Stage3EvidenceEnvelopeTests
         var eu = await CompleteEuropeAsync();
         var luxembourg = await LuxembourgQueryExecutionAdapterTests.RunEmptyDeliveredForEnvelopeAsync();
         var annexProduction = await EuImageOnlyAnnexProducerTests.ProduceForEnvelopeAsync();
+        var formex = EuFormexRunOutcomeReconciliationTests.CompleteForEnvelope(eu);
 
         var envelope = Stage3EvidenceEnvelope.TryCreate(
             eu,
             luxembourg,
+            formex,
             [annexProduction],
             out var refusal,
             out var detail);
@@ -25,6 +27,7 @@ public sealed class Stage3EvidenceEnvelopeTests
         Assert.IsNotNull(envelope);
         Assert.AreSame(eu, envelope.Europe);
         Assert.AreSame(luxembourg, envelope.Luxembourg);
+        Assert.AreSame(formex, envelope.Formex);
         Assert.HasCount(1, envelope.ImageOnlyEuAnnexes);
         Assert.AreSame(annexProduction.Disposition, envelope.ImageOnlyEuAnnexes[0]);
     }
@@ -34,6 +37,7 @@ public sealed class Stage3EvidenceEnvelopeTests
     {
         var eu = await CompleteEuropeAsync();
         var luxembourg = await LuxembourgQueryExecutionAdapterTests.RunEmptyDeliveredForEnvelopeAsync();
+        var formex = EuFormexRunOutcomeReconciliationTests.CompleteForEnvelope(eu);
         var refusedEu = EuQueryExecutionResult.Refused(
             eu.Topology,
             [],
@@ -48,11 +52,11 @@ public sealed class Stage3EvidenceEnvelopeTests
                 "test"));
 
         Assert.IsNull(Stage3EvidenceEnvelope.TryCreate(
-            refusedEu, luxembourg, [], out var euRefusal, out _));
+            refusedEu, luxembourg, formex, [], out var euRefusal, out _));
         Assert.AreEqual(Stage3EvidenceEnvelopeRefusal.EuropeNotComplete, euRefusal);
 
         Assert.IsNull(Stage3EvidenceEnvelope.TryCreate(
-            eu, refusedLuxembourg, [], out var luRefusal, out _));
+            eu, refusedLuxembourg, formex, [], out var luRefusal, out _));
         Assert.AreEqual(Stage3EvidenceEnvelopeRefusal.LuxembourgNotComplete, luRefusal);
     }
 
@@ -61,6 +65,7 @@ public sealed class Stage3EvidenceEnvelopeTests
     {
         var eu = await CompleteEuropeAsync();
         var luxembourg = await LuxembourgQueryExecutionAdapterTests.RunEmptyDeliveredForEnvelopeAsync();
+        var formex = EuFormexRunOutcomeReconciliationTests.CompleteForEnvelope(eu);
         var missingJoinedProduction = EuQueryExecutionResult.Delivered(
             eu.Topology,
             eu.FamilyOutcomes,
@@ -85,8 +90,32 @@ public sealed class Stage3EvidenceEnvelopeTests
 
         Assert.AreEqual(EuQueryExecutionCompletion.AllFamiliesProven, missingJoinedProduction.Completion);
         Assert.IsNull(Stage3EvidenceEnvelope.TryCreate(
-            missingJoinedProduction, luxembourg, [], out var refusal, out _));
+            missingJoinedProduction, luxembourg, formex, [], out var refusal, out _));
         Assert.AreEqual(Stage3EvidenceEnvelopeRefusal.EuropeNotComplete, refusal);
+    }
+
+    [TestMethod]
+    public async Task FormexReconciliationMustBelongToTheExactEuropeResult()
+    {
+        var eu = await CompleteEuropeAsync();
+        var foreignEurope = await CompleteEuropeAsync();
+        var luxembourg = await LuxembourgQueryExecutionAdapterTests.RunEmptyDeliveredForEnvelopeAsync();
+        var foreignFormex = EuFormexRunOutcomeReconciliationTests.CompleteForEnvelope(foreignEurope);
+
+        Assert.IsNull(Stage3EvidenceEnvelope.TryCreate(
+            eu, luxembourg, foreignFormex, [], out var refusal, out var detail));
+        Assert.AreEqual(Stage3EvidenceEnvelopeRefusal.EuropeFormexRunMismatch, refusal);
+        Assert.AreEqual("the Formex reconciliation belongs to a different EU result", detail);
+    }
+
+    [TestMethod]
+    public async Task FormexReconciliationCannotBeOmitted()
+    {
+        var eu = await CompleteEuropeAsync();
+        var luxembourg = await LuxembourgQueryExecutionAdapterTests.RunEmptyDeliveredForEnvelopeAsync();
+
+        Assert.ThrowsExactly<ArgumentNullException>(() => Stage3EvidenceEnvelope.TryCreate(
+            eu, luxembourg, null!, [], out _, out _));
     }
 
     [TestMethod]
@@ -94,6 +123,7 @@ public sealed class Stage3EvidenceEnvelopeTests
     {
         var eu = await CompleteEuropeAsync();
         var luxembourg = await LuxembourgQueryExecutionAdapterTests.RunEmptyDeliveredForEnvelopeAsync();
+        var formex = EuFormexRunOutcomeReconciliationTests.CompleteForEnvelope(eu);
         var gap = await EuImageOnlyAnnexProducerTests.ProduceForEnvelopeAsync();
         var sameSourceLocationDifferentEvidence =
             await EuImageOnlyAnnexProducerTests.ProduceForEnvelopeFromTwoPagePdfAsync();
@@ -101,18 +131,18 @@ public sealed class Stage3EvidenceEnvelopeTests
             EuAnnexBodyDispositionOutcome.Admitted);
 
         Assert.IsNull(Stage3EvidenceEnvelope.TryCreate(
-            eu, luxembourg, [admitted], out var outcomeRefusal, out _));
+            eu, luxembourg, formex, [admitted], out var outcomeRefusal, out _));
         Assert.AreEqual(Stage3EvidenceEnvelopeRefusal.AnnexIsNotTextUnavailable, outcomeRefusal);
 
         var refused = EuImageOnlyAnnexProductionResult.Refused(
             EuImageOnlyAnnexProductionRefusal.ProfileInvalid,
             "test");
         Assert.IsNull(Stage3EvidenceEnvelope.TryCreate(
-            eu, luxembourg, [refused], out var productionRefusal, out _));
+            eu, luxembourg, formex, [refused], out var productionRefusal, out _));
         Assert.AreEqual(Stage3EvidenceEnvelopeRefusal.AnnexProductionRefused, productionRefusal);
 
         Assert.IsNull(Stage3EvidenceEnvelope.TryCreate(
-            eu, luxembourg, [gap, sameSourceLocationDifferentEvidence], out var duplicateRefusal, out _));
+            eu, luxembourg, formex, [gap, sameSourceLocationDifferentEvidence], out var duplicateRefusal, out _));
         Assert.AreEqual(Stage3EvidenceEnvelopeRefusal.DuplicateAnnex, duplicateRefusal);
     }
 
@@ -121,6 +151,7 @@ public sealed class Stage3EvidenceEnvelopeTests
     {
         var eu = await CompleteEuropeAsync();
         var luxembourg = await LuxembourgQueryExecutionAdapterTests.RunEmptyDeliveredForEnvelopeAsync();
+        var formex = EuFormexRunOutcomeReconciliationTests.CompleteForEnvelope(eu);
         var first = await EuImageOnlyAnnexProducerTests.ProduceForEnvelopeAtAsync("III");
         var second = await EuImageOnlyAnnexProducerTests.ProduceForEnvelopeAtAsync("IV");
         var input = new[] { first, second }
@@ -128,7 +159,7 @@ public sealed class Stage3EvidenceEnvelopeTests
             .ToList();
 
         var envelope = Stage3EvidenceEnvelope.TryCreate(
-            eu, luxembourg, input, out var refusal, out var detail);
+            eu, luxembourg, formex, input, out var refusal, out var detail);
         input.Clear();
 
         Assert.AreEqual(Stage3EvidenceEnvelopeRefusal.None, refusal, detail);
