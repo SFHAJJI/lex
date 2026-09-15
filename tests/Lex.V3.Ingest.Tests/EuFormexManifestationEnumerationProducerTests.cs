@@ -107,12 +107,21 @@ public sealed class EuFormexManifestationEnumerationProducerTests
     public void AManifestationOutsideTheSelectedExpressionRefuses()
     {
         var expression = Expression(ExpressionA);
-        var result = Decode(
-            expression,
-            Row(expression, "fmx4", 1, ExpressionB + ".01"));
-
-        Assert.AreEqual(EuFormexManifestationEnumerationRefusal.RowNotAdmitted, result.Refusal);
-        Assert.IsNull(result.ManifestationTypes);
+        foreach (var invalid in new[]
+                 {
+                     ExpressionB + ".01",
+                     ExpressionA + ".1",
+                     "https://example.invalid/resource/cellar/" +
+                     "3e485e15-11bd-11e6-ba9a-01aa75ed71a1.0024.01",
+                 })
+        {
+            var result = Decode(expression, Row(expression, "fmx4", 1, invalid));
+            Assert.AreEqual(
+                EuFormexManifestationEnumerationRefusal.RowNotAdmitted,
+                result.Refusal,
+                invalid);
+            Assert.IsNull(result.ManifestationTypes, invalid);
+        }
     }
 
     [TestMethod]
