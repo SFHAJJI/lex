@@ -239,6 +239,63 @@ public sealed class EuFormexManifestationEnumerationProducerTests
         Assert.AreEqual(2, budget.Spent, "the refused attempt must not overspend the ceiling.");
     }
 
+    /// <summary>
+    /// THE PROOF'S OWN COUNT IS HALF THE GATE, AND IT WAS THE UNTESTED HALF. The decoder refuses
+    /// unless the proof names this expression's family AND carries exactly the delivered row count.
+    /// Every other test here builds the proof through <see cref="Decode"/>, which derives the count
+    /// from the rows it was handed, so the two agree by construction and no test could disagree with
+    /// the count even in principle.
+    /// </summary>
+    /// <remarks>
+    /// What the clause holds: without it a proof asserting more rows than arrived pairs with a short
+    /// row set, the decoder decodes what came, and the answer reports success while carrying a proof
+    /// that claims more than it proves. That is a truncated population wearing an intact count, which
+    /// is the same defect shape this build refuses one level up in the object population.
+    /// Both directions are tested because a proof that under-claims is no more this delivery's proof
+    /// than one that over-claims.
+    /// </remarks>
+    [TestMethod]
+    public void AProofClaimingMoreRowsThanArrivedIsNotThisDeliverysProof()
+    {
+        var expression = Expression(ExpressionA);
+
+        var result = DecodeAgainstProvenCount(expression, 2, Row(expression, "fmx4", 1));
+
+        Assert.AreEqual(
+            EuFormexManifestationEnumerationRefusal.EnumerationProofRefused, result.Refusal);
+        Assert.IsNull(result.ManifestationTypes, "a short delivery was decoded under an over-claiming proof.");
+    }
+
+    [TestMethod]
+    public void AProofClaimingFewerRowsThanArrivedIsNotThisDeliverysProof()
+    {
+        var expression = Expression(ExpressionA);
+
+        var result = DecodeAgainstProvenCount(
+            expression, 1, Row(expression, "fmx4", 1), Row(expression, "html", 1));
+
+        Assert.AreEqual(
+            EuFormexManifestationEnumerationRefusal.EnumerationProofRefused, result.Refusal);
+        Assert.IsNull(result.ManifestationTypes, "extra rows were decoded under an under-claiming proof.");
+    }
+
+    /// <summary>
+    /// <see cref="Decode"/> derives the proven row count from the rows themselves. This takes it
+    /// independently, which is the only way the count clause can be the thing that refuses.
+    /// </summary>
+    private static EuFormexManifestationEnumerationResult DecodeAgainstProvenCount(
+        LanguageScopedExpression expression,
+        int provenRowCount,
+        params RepeatedEnumerationRow[] rows) =>
+        EuFormexManifestationEnumerationProducer.DecodeRows(
+            rows,
+            EuFormexManifestationDiscoveryPlan.Create().CreateDeliveryProfile(),
+            AbsenceFixtures.Delivery(
+                EuFormexManifestationDiscoveryPlan.PartitionKeyFor(expression.Identity),
+                provenRowCount).Proof,
+            expression,
+            LuxembourgAcquisitionTestFixture.TestBudgetSnapshot());
+
     private static EuFormexManifestationEnumerationResult Decode(
         LanguageScopedExpression expression, params RepeatedEnumerationRow[] rows) =>
         EuFormexManifestationEnumerationProducer.DecodeRows(
