@@ -2,12 +2,35 @@ using Lex.V3.Contracts.Custody;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Scope;
 using Lex.V3.Ingest.Europe;
+using Lex.V3.TestSupport;
 
 namespace Lex.V3.Ingest.Tests;
 
 [TestClass]
 public sealed class EuProductionScopeReductionEvidenceResolverTests
 {
+    [TestMethod]
+    public void CustodyCheckedFactoryIsTheOnlyConstructionDoor()
+    {
+        const string name = "Lex.V3.Ingest.Europe.EuProductionScopeReductionEvidenceResolver";
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "constructor private instance " + name + "::.ctor(" +
+                    "Lex.V3.Contracts.Source.Core.SourceArtifactRef, " +
+                    "System.Collections.Generic.IReadOnlySet<System.String>, " +
+                    "System.Collections.Generic.IReadOnlySet<Lex.V3.Contracts.Source.Core.SourceArtifactRef>) -> " +
+                    name,
+                "method internal static " + name + "::CreateAsync(" +
+                    "Lex.V3.Contracts.Custody.ICustodyStore, " +
+                    "Lex.V3.Contracts.Source.Core.SourceArtifactRef, " +
+                    "System.Collections.Generic.IReadOnlyList<Lex.V3.Contracts.Source.Core.SourceObjectRef>, " +
+                    "System.Collections.Generic.IReadOnlyList<Lex.V3.Ingest.Europe.EuScopeReductionEvidenceObservation>, " +
+                    "System.Threading.CancellationToken) -> System.Threading.Tasks.Task<" + name + ">",
+            },
+            ConstructionSurface.Of(typeof(EuProductionScopeReductionEvidenceResolver)).ToArray());
+    }
+
     private static readonly SourceArtifactRef IdentityProfileRef = new(
         "urn:uuid:bbbbbbbb-0000-0000-0000-000000000001", new string('a', 64));
 
