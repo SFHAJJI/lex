@@ -1618,6 +1618,13 @@ public sealed class GuardedConstructionCensusTests
                     + "method public static "
                     + "Lex.V3.Contracts.Source.Quarantine.QuarantinedPriorCoordinateInventory::TryR"
                     + "econcile",
+                "Lex.V3.Contracts.Source.Quarantine.TrustedQuarantinedPriorCoordinateInventory: "
+                    + "constructor private instance "
+                    + "Lex.V3.Contracts.Source.Quarantine.TrustedQuarantinedPriorCoordinateInventor"
+                    + "y::.ctor, "
+                    + "method public static "
+                    + "Lex.V3.Contracts.Source.Quarantine.TrustedQuarantinedPriorCoordinateInventor"
+                    + "y::TryAdmit",
                 "Lex.V3.Contracts.Source.Scope.ScopeManifestWriteReceipt: constructor internal "
                     + "instance Lex.V3.Contracts.Source.Scope.ScopeManifestWriteReceipt::.ctor, "
                     + "method public static "

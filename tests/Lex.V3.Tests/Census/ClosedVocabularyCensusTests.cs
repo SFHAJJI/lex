@@ -651,6 +651,8 @@ public sealed class ClosedVocabularyCensusTests
                 "Lex.V3.Contracts.Source.Quarantine.QuarantineReproductionRefusal: None, "
                     + "RoleUndefined, ReproducerIdentityInvalid, CoordinatesEmpty, "
                     + "CoordinatesTooMany, DuplicateCoordinate",
+                "Lex.V3.Contracts.Source.Quarantine.TrustedQuarantineInventoryRefusal: None, "
+                    + "IssuerNotTrusted, KeyNotResolvedUnderIssuer, SignatureDoesNotVerify",
                 "Lex.V3.Contracts.Source.Scope.ScopeAxis: Record, Body, Relation, "
                     + "SupportingDocument",
                 "Lex.V3.Contracts.Source.Scope.ScopeDisposition: AcceptedSelected, TypedQuarantine, "

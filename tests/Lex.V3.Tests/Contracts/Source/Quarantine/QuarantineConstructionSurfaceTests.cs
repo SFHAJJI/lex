@@ -148,15 +148,20 @@ public sealed class QuarantineConstructionSurfaceTests
         CollectionAssert.AreEqual(
             new[]
             {
-                // Not a second mint: VerifySignature takes an already-reconciled inventory (the
-                // private constructor makes any other origin impossible) and returns that same
-                // reference once its signature checks out. ConstructionSurface reads signatures
-                // only, so it cannot see "same instance in, same instance out" and reports this as
-                // a producer exactly as it would a real second door -- pinned here explicitly, per
-                // this test class's own summary, rather than silently exempted.
-                "method public static " + N + "QuarantineInventoryCanonicalizer::VerifySignature("
-                + N + "QuarantinedPriorCoordinateInventory, System.Security.Cryptography.ECDsa) -> "
-                + N + "QuarantinedPriorCoordinateInventory",
+                "field private instance "
+                    + "Lex.V3.Contracts.Source.Quarantine.TrustedQuarantinedPriorCoordinateInventor"
+                    + "y::<Inventory>k__BackingField -> "
+                    + "Lex.V3.Contracts.Source.Quarantine.QuarantinedPriorCoordinateInventory",
+                "method public static "
+                    + "Lex.V3.Contracts.Source.Quarantine.QuarantineInventoryCanonicalizer::VerifyS"
+                    + "ignature(Lex.V3.Contracts.Source.Quarantine.QuarantinedPriorCoordinateInvent"
+                    + "ory, "
+                    + "System.Security.Cryptography.ECDsa) -> "
+                    + "Lex.V3.Contracts.Source.Quarantine.QuarantinedPriorCoordinateInventory",
+                "property public instance "
+                    + "Lex.V3.Contracts.Source.Quarantine.TrustedQuarantinedPriorCoordinateInventor"
+                    + "y::Inventory() -> "
+                    + "Lex.V3.Contracts.Source.Quarantine.QuarantinedPriorCoordinateInventory",
             },
             ConstructionSurface.ProducersIn(
                     typeof(QuarantinedPriorCoordinateInventory).Assembly,
