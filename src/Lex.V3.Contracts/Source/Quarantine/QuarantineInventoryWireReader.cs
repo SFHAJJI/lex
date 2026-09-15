@@ -139,6 +139,13 @@ public static class QuarantineInventoryWireReader
         for (var index = 0; index < 2; index++)
         {
             var wire = document.Reproductions[index];
+            if (wire is null)
+            {
+                refusal = QuarantineInventoryWireRefusal.NotOneValidTypedDocument;
+                detail = $"reproductions[{index}] is null";
+                return null;
+            }
+
             if (!TryReadRole(wire.Role, out var role))
             {
                 refusal = QuarantineInventoryWireRefusal.RoleNotRecognised;
@@ -146,13 +153,22 @@ public static class QuarantineInventoryWireReader
                 return null;
             }
 
-            IReadOnlyList<PriorPublicCoordinate> coordinates;
+            var coordinates = new PriorPublicCoordinate[wire.Coordinates.Count];
             try
             {
-                coordinates = wire.Coordinates
-                    .Select(static coordinate => new PriorPublicCoordinate(
-                        coordinate.WorkKey, coordinate.Language, coordinate.ValidFrom, coordinate.Anchor))
-                    .ToArray();
+                for (var coordinateIndex = 0; coordinateIndex < wire.Coordinates.Count; coordinateIndex++)
+                {
+                    var coordinate = wire.Coordinates[coordinateIndex];
+                    if (coordinate is null)
+                    {
+                        refusal = QuarantineInventoryWireRefusal.CoordinateInvalid;
+                        detail = $"reproductions[{index}].coordinates[{coordinateIndex}] is null";
+                        return null;
+                    }
+
+                    coordinates[coordinateIndex] = new PriorPublicCoordinate(
+                        coordinate.WorkKey, coordinate.Language, coordinate.ValidFrom, coordinate.Anchor);
+                }
             }
             catch (ArgumentException exception)
             {
