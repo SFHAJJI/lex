@@ -230,6 +230,9 @@ public sealed class EuFormexManifestationEnumerationProducer
                 request.Expression,
                 EuFormexManifestationEnumerationRefusal.EnumerationRefused,
                 run.Refusal is { } refusal ? refusal.Code + ": " + refusal.CoreRefusalDetail
+                    + (refusal.ObservedCount is { } observedCount
+                        ? "; observedCount=" + observedCount.ToString(CultureInfo.InvariantCulture)
+                        : string.Empty)
                     : "enumeration returned neither a receipt nor a refusal",
                 run.ProductRequestCount,
                 budget);
