@@ -71,6 +71,12 @@ public sealed class DurableBlobReceiptFamilyIngestSurfaceTests
                 "by-ref-method public instance " + Session + "+ResolvedHeldBody::Deconstruct(out " + Receipt
                 + "&, out System.ReadOnlyMemory<System.Byte>&, out System.String&) -> System.Void",
                 "field private instance " + CorpusAcquisitionOutcome + "::<Receipt>k__BackingField -> " + Receipt + "?",
+                // The corpus/6 set writer now carries the custody store's own receipt for the
+                // set it wrote, the address by which that set can be reopened after the run.
+                // It HOLDS that receipt and never constructs one: the only path onto the
+                // property is the Written factory, fed by CustodyHold.TryHoldAsync.
+                "field private instance Lex.V3.Ingest.CorpusRecordSetWriteResult::"
+                    + "<RetainedSetReceipt>k__BackingField -> " + Receipt + "?",
                 "field private instance Lex.V3.Ingest.Europe.EuAnnexEvidenceBinding::<FormexSourceReceipt>k__BackingField -> " + Receipt,
                 "field private instance Lex.V3.Ingest.Europe.EuAnnexEvidenceBinding::<PdfReceipt>k__BackingField -> " + Receipt,
                 "field private instance Lex.V3.Ingest.Europe.EuAnnexEvidenceBinding::<XhtmlSourceReceipt>k__BackingField -> " + Receipt,
@@ -139,6 +145,8 @@ public sealed class DurableBlobReceiptFamilyIngestSurfaceTests
                 + "System.Collections.Generic.IReadOnlyList<Lex.V3.Contracts.Source.Http.RoutedHttpHop>) "
                 + "-> System.Collections.Generic.Dictionary<System.String, " + Receipt + ">",
                 "property public instance " + CorpusAcquisitionOutcome + "::Receipt() -> " + Receipt + "?",
+                "property public instance Lex.V3.Ingest.CorpusRecordSetWriteResult::"
+                    + "RetainedSetReceipt() -> " + Receipt + "?",
                 "property public instance Lex.V3.Ingest.Europe.EuAnnexEvidenceBinding::FormexSourceReceipt() -> " + Receipt,
                 "property public instance Lex.V3.Ingest.Europe.EuAnnexEvidenceBinding::PdfReceipt() -> " + Receipt,
                 "property public instance Lex.V3.Ingest.Europe.EuAnnexEvidenceBinding::XhtmlSourceReceipt() -> " + Receipt,

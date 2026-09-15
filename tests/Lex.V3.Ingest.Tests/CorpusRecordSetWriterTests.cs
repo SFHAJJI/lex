@@ -591,6 +591,234 @@ public sealed class CorpusRecordSetWriterTests
     }
 
     /// <summary>
+    /// The written result names the address its own bytes were retained at, and that address is NOT
+    /// the set reference.
+    /// </summary>
+    /// <remarks>
+    /// Both values are digests of the same bytes and they are different values, because
+    /// <c>CorpusRecordSetCanonicalWriter.ComputeSetSha256</c> hashes a domain string before the
+    /// bytes while custody addresses blobs by the plain SHA-256. The writer's own reopen has always
+    /// depended on that difference -- it reads by the receipt's digest and verifies against the set
+    /// reference -- and then dropped the receipt, so the run kept no address at all. This test is
+    /// what makes "use the set reference instead" fail rather than look equivalent.
+    /// </remarks>
+    [TestMethod]
+    public async Task WriteAsyncCarriesTheAddressItsOwnBytesWereRetainedAt()
+    {
+        var writer = new CorpusRecordSetWriter(new EnforcingInMemoryCustodyStore());
+
+        var result = await writer.WriteAsync(
+            ManifestFixture(), ManifestRef(), RunIdentity(), null, CancellationToken.None);
+
+        Assert.IsNull(result.Refusal, result.Refusal?.Detail);
+        Assert.IsNotNull(result.RetainedSetReceipt,
+            "a retained set must name where it was retained, or it can never be reopened.");
+        Assert.AreNotEqual(
+            result.SetRef!.Sha256,
+            result.RetainedSetReceipt!.Reference.ContentSha256,
+            "the two digests of these same bytes are different values, which is the whole reason "
+                + "the receipt has to be carried separately.");
+    }
+
+    /// <summary>
+    /// The post-run door returns the exact set that was written, reopened from custody bytes rather
+    /// than from anything this process was still holding.
+    /// </summary>
+    [TestMethod]
+    public async Task ReadAsyncReopensTheExactSetThatWasRetained()
+    {
+        var store = new EnforcingInMemoryCustodyStore();
+        var written = await new CorpusRecordSetWriter(store).WriteAsync(
+            ManifestFixture(), ManifestRef(), RunIdentity(), null, CancellationToken.None);
+        Assert.IsNull(written.Refusal, written.Refusal?.Detail);
+
+        var read = await new CorpusRecordSetReader(store).ReadAsync(
+            written.RetainedSetReceipt!, written.SetRef!, CancellationToken.None);
+
+        Assert.IsNull(read.Refusal, read.Refusal?.Detail);
+        Assert.IsNotNull(read.VerifiedSet);
+        CollectionAssert.AreEqual(
+            Canonical(written.VerifiedSet!),
+            Canonical(read.VerifiedSet!),
+            "the reopened set must be the written one byte for byte, not merely a set with the "
+                + "same digest.");
+    }
+
+    /// <summary>Custody no longer holds the bytes: the set is not there to reopen, and the door says so.</summary>
+    [TestMethod]
+    public async Task ReadAsyncRefusesWhenCustodyNoLongerHoldsTheBytes()
+    {
+        var writeRoot = Path.Combine(
+            Path.GetTempPath(), "lex-corpus-set-reader-held-" + Guid.NewGuid().ToString("N"));
+        var emptyRoot = Path.Combine(
+            Path.GetTempPath(), "lex-corpus-set-reader-empty-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(writeRoot);
+        Directory.CreateDirectory(emptyRoot);
+        try
+        {
+            var written = await new CorpusRecordSetWriter(new FileSystemCustodyStore(writeRoot))
+                .WriteAsync(
+                    ManifestFixture(), ManifestRef(), RunIdentity(), null, CancellationToken.None);
+            Assert.IsNull(written.Refusal, written.Refusal?.Detail);
+
+            // A real store that genuinely has nothing at that address, which is how a lost or
+            // never-replicated retention actually presents. An in-memory double would have raised a
+            // different exception and proved a different mapping.
+            var read = await new CorpusRecordSetReader(new FileSystemCustodyStore(emptyRoot))
+                .ReadAsync(written.RetainedSetReceipt!, written.SetRef!, CancellationToken.None);
+
+            Assert.IsNotNull(read.Refusal);
+            Assert.AreEqual(
+                CorpusRecordSetReadRefusalKind.CustodyBytesNotRetained, read.Refusal!.Kind);
+            Assert.IsNull(read.VerifiedSet, "and no set is presented for bytes nobody could obtain.");
+        }
+        finally
+        {
+            Directory.Delete(writeRoot, recursive: true);
+            Directory.Delete(emptyRoot, recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// Custody answers at the address, with bytes that are not the ones it was asked for. Same
+    /// refusal as bytes that are gone, and deliberately so: neither one is the retained set.
+    /// </summary>
+    [TestMethod]
+    public async Task ReadAsyncRefusesWhenCustodyAnswersWithOtherBytes()
+    {
+        var store = new EnforcingInMemoryCustodyStore();
+        var written = await new CorpusRecordSetWriter(store).WriteAsync(
+            ManifestFixture(), ManifestRef(), RunIdentity(), null, CancellationToken.None);
+        Assert.IsNull(written.Refusal, written.Refusal?.Detail);
+
+        var read = await new CorpusRecordSetReader(new HoldFailingCustodyStore(store)).ReadAsync(
+            written.RetainedSetReceipt!, written.SetRef!, CancellationToken.None);
+
+        Assert.IsNotNull(read.Refusal);
+        Assert.AreEqual(CorpusRecordSetReadRefusalKind.CustodyBytesNotRetained, read.Refusal!.Kind);
+        Assert.IsNull(read.VerifiedSet);
+    }
+
+    /// <summary>
+    /// The store cannot serve the read at all. Kept apart from bytes that are gone, because a
+    /// transient outage that read as a retention failure would be a false statement about a corpus.
+    /// </summary>
+    [TestMethod]
+    public async Task ReadAsyncRefusesSeparatelyWhenTheStoreCannotServeTheRead()
+    {
+        var store = new EnforcingInMemoryCustodyStore();
+        var written = await new CorpusRecordSetWriter(store).WriteAsync(
+            ManifestFixture(), ManifestRef(), RunIdentity(), null, CancellationToken.None);
+        Assert.IsNull(written.Refusal, written.Refusal?.Detail);
+
+        var read = await new CorpusRecordSetReader(new UnavailableCustodyStore(store)).ReadAsync(
+            written.RetainedSetReceipt!, written.SetRef!, CancellationToken.None);
+
+        Assert.IsNotNull(read.Refusal);
+        Assert.AreEqual(CorpusRecordSetReadRefusalKind.CustodyUnavailable, read.Refusal!.Kind);
+        Assert.IsNull(read.VerifiedSet);
+    }
+
+    /// <summary>
+    /// One run's retained bytes paired with another run's set reference are refused. The two inputs
+    /// are each checked against the bytes; neither is taken on the other's word.
+    /// </summary>
+    [TestMethod]
+    public async Task ReadAsyncRefusesAReceiptPairedWithAnotherRunsSetReference()
+    {
+        var store = new EnforcingInMemoryCustodyStore();
+        var writer = new CorpusRecordSetWriter(store);
+
+        var first = await writer.WriteAsync(
+            ManifestFixture(), ManifestRef(), RunIdentity(), null, CancellationToken.None);
+        var second = await writer.WriteAsync(
+            ManifestFixture(), OtherManifestRef(), RunIdentity(), null, CancellationToken.None);
+        Assert.IsNull(first.Refusal, first.Refusal?.Detail);
+        Assert.IsNull(second.Refusal, second.Refusal?.Detail);
+        Assert.AreNotEqual(
+            first.SetRef!.Sha256,
+            second.SetRef!.Sha256,
+            "the premise: these are genuinely two different sets, or the pairing below proves nothing.");
+
+        var read = await new CorpusRecordSetReader(store).ReadAsync(
+            first.RetainedSetReceipt!, second.SetRef!, CancellationToken.None);
+
+        Assert.IsNotNull(read.Refusal);
+        Assert.AreEqual(
+            CorpusRecordSetReadRefusalKind.RetainedBytesAreNotThisSet, read.Refusal!.Kind);
+        Assert.IsNull(read.VerifiedSet);
+    }
+
+    /// <summary>
+    /// S3-A04, for corpus/6: two independent executions retain byte-identical record sets, proven by
+    /// reopening both FROM CUSTODY rather than by comparing what either run still held in memory.
+    /// </summary>
+    /// <remarks>
+    /// Byte-stable means the bytes, not merely the digest, which is why the comparison is over the
+    /// canonical bytes of both reopened sets. This states the property for the corpus/6 arm only; it
+    /// does not close A04, whose two-independent-executions clause also covers derivation surfaces
+    /// this writer has nothing to do with.
+    /// </remarks>
+    [TestMethod]
+    public async Task TwoIndependentExecutionsRetainByteIdenticalRecordSets()
+    {
+        var firstStore = new EnforcingInMemoryCustodyStore();
+        var secondStore = new EnforcingInMemoryCustodyStore();
+
+        var first = await new CorpusRecordSetWriter(firstStore).WriteAsync(
+            ManifestFixture(), ManifestRef(), RunIdentity(), null, CancellationToken.None);
+        var second = await new CorpusRecordSetWriter(secondStore).WriteAsync(
+            ManifestFixture(), ManifestRef(), RunIdentity(), null, CancellationToken.None);
+        Assert.IsNull(first.Refusal, first.Refusal?.Detail);
+        Assert.IsNull(second.Refusal, second.Refusal?.Detail);
+
+        var reopenedFirst = await new CorpusRecordSetReader(firstStore).ReadAsync(
+            first.RetainedSetReceipt!, first.SetRef!, CancellationToken.None);
+        var reopenedSecond = await new CorpusRecordSetReader(secondStore).ReadAsync(
+            second.RetainedSetReceipt!, second.SetRef!, CancellationToken.None);
+        Assert.IsNull(reopenedFirst.Refusal, reopenedFirst.Refusal?.Detail);
+        Assert.IsNull(reopenedSecond.Refusal, reopenedSecond.Refusal?.Detail);
+
+        CollectionAssert.AreEqual(
+            Canonical(reopenedFirst.VerifiedSet!),
+            Canonical(reopenedSecond.VerifiedSet!),
+            "two independent executions over the same manifest must retain the same bytes.");
+        Assert.AreEqual(
+            first.RetainedSetReceipt!.Reference.ContentSha256,
+            second.RetainedSetReceipt!.Reference.ContentSha256,
+            "and custody must therefore address both at the same content digest.");
+    }
+
+    private static byte[] Canonical(VerifiedCorpusRecordSet set)
+    {
+        using var buffer = new MemoryStream();
+        CorpusRecordSetCanonicalWriter.Write(buffer, set.Set);
+        return buffer.ToArray();
+    }
+
+    private static SourceArtifactRef OtherManifestRef() =>
+        Artifact("b6b3f8d1-2f4c-4f0e-9f2a-7c1d5e8a4b39");
+
+    /// <summary>
+    /// A store that accepts writes and then cannot be reached for reads. Distinct from
+    /// <see cref="HoldFailingCustodyStore"/>, which answers -- wrongly.
+    /// </summary>
+    private sealed class UnavailableCustodyStore(ICustodyStore inner) : ICustodyStore
+    {
+        public Task<DurableBlobWriteReceipt> CreateAsync(
+            ReadOnlyMemory<byte> bytes, CustodyClass custodyClass, CancellationToken cancellationToken) =>
+            inner.CreateAsync(bytes, custodyClass, cancellationToken);
+
+        public Task<ReadOnlyMemory<byte>> ReadAsync(
+            DurableBlobRef reference, CancellationToken cancellationToken) =>
+            throw new TimeoutException("the custody store did not answer.");
+
+        public Task<ReadOnlyMemory<byte>> ReadByDigestAsync(
+            string contentSha256, CancellationToken cancellationToken) =>
+            throw new TimeoutException("the custody store did not answer.");
+    }
+
+    /// <summary>
     /// Accepts every write and then cannot answer for the object by its content address. This is not
     /// the write obligation failing: the write succeeded and the receipt is real. It is the property
     /// CustodyHold's own reopen proves, and the one every downstream consumer depends on.
