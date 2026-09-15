@@ -40,7 +40,8 @@ public sealed class EuFormexManifestationCanary
         "http://publications.europa.eu/ontology/cdm#expression_belongs_to_work";
     private const string AcceptedEvidenceSha256 =
         "bdc14319f2f02a43c7a8a58059eb1e1c3835cd3edf708e27d9d4f0d48f4e4f0b";
-    private const string PlanV2Sha256 = "__PIN__";
+    private const string PlanV2Sha256 =
+        "d57b51867ee02fa1a83770f03dd2e2910ef2a549c6a900f637be88d0c724182a";
 
     [TestMethod]
     public void TheGovernedInvocationPinsItsCoordinateMethodEndpointAndCeilings()
