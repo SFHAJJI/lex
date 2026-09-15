@@ -125,6 +125,19 @@ public sealed class EuFormexManifestationEnumerationProducerTests
     }
 
     [TestMethod]
+    public void AManifestationLiteralWithTheExactIriTextRefuses()
+    {
+        var expression = Expression(ExpressionA);
+
+        var result = Decode(
+            expression,
+            Row(expression, "fmx4", 1, ManifestationA1, manifestationIsLiteral: true));
+
+        Assert.AreEqual(EuFormexManifestationEnumerationRefusal.RowNotAdmitted, result.Refusal);
+        Assert.IsNull(result.ManifestationTypes);
+    }
+
+    [TestMethod]
     public void TheDecoderWillNotPairRowsWithAnotherExpressionsProof()
     {
         var expression = Expression(ExpressionA);
@@ -361,14 +374,17 @@ public sealed class EuFormexManifestationEnumerationProducerTests
         string? manifestationIri = null,
         string marker = "literal",
         string? typeKey = null,
-        string? manifestationKey = null)
+        string? manifestationKey = null,
+        bool manifestationIsLiteral = false)
     {
         manifestationIri ??= expression.Identity.PublisherExpressionId + ".01";
         var terms = new List<RepeatedEnumerationRdfTerm>
         {
             RepeatedEnumerationRdfTerm.Iri(expression.Identity.PublisherWorkId),
             RepeatedEnumerationRdfTerm.Iri(expression.Identity.PublisherExpressionId),
-            RepeatedEnumerationRdfTerm.Iri(manifestationIri),
+            manifestationIsLiteral
+                ? RepeatedEnumerationRdfTerm.Literal(manifestationIri, null, null)
+                : RepeatedEnumerationRdfTerm.Iri(manifestationIri),
             RepeatedEnumerationRdfTerm.Literal(type, XsdString, null),
             RepeatedEnumerationRdfTerm.Literal(marker, null, null),
             RepeatedEnumerationRdfTerm.Literal(XsdString, null, null),
