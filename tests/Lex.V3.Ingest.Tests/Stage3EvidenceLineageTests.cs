@@ -215,6 +215,8 @@ public sealed class Stage3EvidenceLineageTests
             corpusRecordSetRef ?? source.CorpusRecordSetRef!,
             source.CorpusRecordSetReceipt!,
             source.CorpusRecordSet!,
+            source.ObservedObjectIdentitySetRef!,
+            source.ObservedObjectIdentitySetReceipt!,
             source.GazetteBodySetsByOrdinal!,
             source.GazetteListingFetchRefusalsByOrdinal!,
             source.GazetteListingsWithContradictoryLegalValueByOrdinal!,

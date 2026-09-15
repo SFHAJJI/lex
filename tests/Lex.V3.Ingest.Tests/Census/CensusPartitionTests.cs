@@ -46,6 +46,12 @@ public sealed class CensusPartitionTests
     [
         "Lex.V3.Ingest.Luxembourg.LuxembourgTranspositionProducer: one private predicate token; "
             + "the producer has its own direct contract tests and is not a vocabulary registry.",
+        "Lex.V3.Ingest.Luxembourg.LuxembourgObservedObjectIdentitySetCanonicalWriter: one private "
+            + "domain-separation constant, which is not a vocabulary -- nothing chooses among its "
+            + "members because it has one. What a roster would protect here is the wire form, and "
+            + "that is pinned harder elsewhere: LuxembourgObservedObjectIdentitySetTests."
+            + "TheCanonicalFormIsExactlyTheseBytes states the whole canonical document by hand, "
+            + "domain string included, and compares bytes.",
     ];
 
     [TestMethod]
@@ -70,14 +76,14 @@ public sealed class CensusPartitionTests
     public void ThePartitionTotalsAreExactlyThese()
     {
         Assert.AreEqual(
-            171, ClosedSurfaceCensus.Candidates(CensusScope.SweptHere).Count, "candidates");
+            178, ClosedSurfaceCensus.Candidates(CensusScope.SweptHere).Count, "candidates");
         Assert.AreEqual(
-            71, ClosedSurfaceCensus.ClosedVocabularies(CensusScope.SweptHere).Count, "vocabularies");
+            73, ClosedSurfaceCensus.ClosedVocabularies(CensusScope.SweptHere).Count, "vocabularies");
         Assert.AreEqual(
-            95, ClosedSurfaceCensus.GuardedConstruction(CensusScope.SweptHere).Count, "guarded types");
+            99, ClosedSurfaceCensus.GuardedConstruction(CensusScope.SweptHere).Count, "guarded types");
         Assert.AreEqual(
             4, ClosedSurfaceCensus.VocabularyRegistries(CensusScope.SweptHere).Count, "registries");
-        Assert.AreEqual(1, Declined.Length, "declined");
+        Assert.AreEqual(2, Declined.Length, "declined");
     }
 
     private static string NameOf(string row) =>
