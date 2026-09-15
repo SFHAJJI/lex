@@ -169,6 +169,58 @@ public sealed class Stage3EvidenceEnvelopeTests
     }
 
     [TestMethod]
+    public async Task XhtmlClassificationSourceMustBelongToTheEuropeCorpus()
+    {
+        var acquired = await EuFormexAnnexClassificationReconciliationTests.AcquiredFixtureAsync();
+        var eu = new[]
+            {
+                acquired.Classification.Binding.FormexSource.ObjectRef,
+                acquired.Classification.Binding.PdfSource.ObjectRef,
+            }
+            .Aggregate(acquired.Run, Stage3EvidenceLineageTests.AddEuropeCorpusRecord);
+        var luxembourg = await LuxembourgQueryExecutionAdapterTests.RunEmptyDeliveredForEnvelopeAsync();
+        var formex = EuFormexAnnexClassificationReconciliationTests.Reconciliation(
+            eu, [acquired.Outcome]);
+        var classifications = CompleteClassifications(formex, [acquired.Classification]);
+
+        Assert.IsNull(Stage3EvidenceEnvelope.TryCreate(
+            eu, luxembourg, formex, classifications, out var refusal, out var detail));
+        Assert.AreEqual(
+            Stage3EvidenceEnvelopeRefusal.EuropeFormexClassificationSourceOutsideCorpus,
+            refusal);
+        Assert.AreEqual(
+            ScopeManifestCanonicalWriter.ComputeObjectRefSha256(
+                acquired.Classification.Binding.XhtmlSource.ObjectRef),
+            detail);
+    }
+
+    [TestMethod]
+    public async Task PdfClassificationSourceMustBelongToTheEuropeCorpus()
+    {
+        var acquired = await EuFormexAnnexClassificationReconciliationTests.AcquiredFixtureAsync();
+        var eu = new[]
+            {
+                acquired.Classification.Binding.FormexSource.ObjectRef,
+                acquired.Classification.Binding.XhtmlSource.ObjectRef,
+            }
+            .Aggregate(acquired.Run, Stage3EvidenceLineageTests.AddEuropeCorpusRecord);
+        var luxembourg = await LuxembourgQueryExecutionAdapterTests.RunEmptyDeliveredForEnvelopeAsync();
+        var formex = EuFormexAnnexClassificationReconciliationTests.Reconciliation(
+            eu, [acquired.Outcome]);
+        var classifications = CompleteClassifications(formex, [acquired.Classification]);
+
+        Assert.IsNull(Stage3EvidenceEnvelope.TryCreate(
+            eu, luxembourg, formex, classifications, out var refusal, out var detail));
+        Assert.AreEqual(
+            Stage3EvidenceEnvelopeRefusal.EuropeFormexClassificationSourceOutsideCorpus,
+            refusal);
+        Assert.AreEqual(
+            ScopeManifestCanonicalWriter.ComputeObjectRefSha256(
+                acquired.Classification.Binding.PdfSource.ObjectRef),
+            detail);
+    }
+
+    [TestMethod]
     public void PublicDoorAcceptsNoCallerSelectedAnnexProductionList()
     {
         var parameters = typeof(Stage3EvidenceEnvelope).GetMethod(nameof(Stage3EvidenceEnvelope.TryCreate))!
