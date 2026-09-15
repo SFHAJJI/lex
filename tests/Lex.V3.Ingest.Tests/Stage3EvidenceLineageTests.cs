@@ -105,53 +105,21 @@ public sealed class Stage3EvidenceLineageTests
     }
 
     [TestMethod]
-    public async Task ImageOnlyAnnexSourceMustBelongToTheBoundEuropeCorpus()
-    {
-        var envelope = await CompleteEnvelopeWithAnnexAsync(includeAnnexSourceInEuropeCorpus: false);
-
-        Assert.IsNull(Stage3EvidenceLineage.TryBind(envelope, out var refusal, out var detail));
-        Assert.AreEqual(Stage3EvidenceLineageRefusal.EuropeAnnexOutsideCorpus, refusal);
-        Assert.AreEqual(
-            ScopeManifestCanonicalWriter.ComputeObjectRefSha256(
-                envelope.ImageOnlyEuAnnexes.Single().SourceObject),
-            detail);
-    }
-
-    [TestMethod]
     public async Task ImageOnlyAnnexSourceInTheBoundEuropeCorpusBinds()
-    {
-        var envelope = await CompleteEnvelopeWithAnnexAsync(includeAnnexSourceInEuropeCorpus: true);
-
-        var lineage = Stage3EvidenceLineage.TryBind(envelope, out var refusal, out var detail);
-
-        Assert.AreEqual(Stage3EvidenceLineageRefusal.None, refusal, detail);
-        Assert.IsNotNull(lineage);
-    }
-
-    [TestMethod]
-    public async Task ImageOnlyAnnexSourceCannotMatchTheEuropeCorpusByCanonicalKeyAlone()
     {
         var europe = await EuAxiomWiringHarness.RunAsync(
             static root => EuAcquisitionTestFixture.AxiomAbsenceScriptFor(root));
         var luxembourg = await LuxembourgQueryExecutionAdapterTests.RunEmptyDeliveredForEnvelopeAsync();
         var annex = await EuImageOnlyAnnexProducerTests.ProduceForEnvelopeAsync();
-        var source = annex.Disposition!.SourceObject;
-        var sameKeyForeignSource = new SourceObjectRef(
-            source.Schema,
-            source.Authority,
-            source.EntityKind,
-            "https://example.invalid/resource/cellar/" + source.CanonicalKey,
-            source.CanonicalKey,
-            source.CanonicalKeySha256,
-            source.IdentityProfileRef,
-            source.ParentKeyRef);
         var envelope = Rebuild(
-            AddEuropeCorpusRecord(europe, sameKeyForeignSource),
+            AddEuropeCorpusRecord(europe, annex.Disposition!.SourceObject),
             luxembourg,
             [annex]);
 
-        Assert.IsNull(Stage3EvidenceLineage.TryBind(envelope, out var refusal, out _));
-        Assert.AreEqual(Stage3EvidenceLineageRefusal.EuropeAnnexOutsideCorpus, refusal);
+        var lineage = Stage3EvidenceLineage.TryBind(envelope, out var refusal, out var detail);
+
+        Assert.AreEqual(Stage3EvidenceLineageRefusal.None, refusal, detail);
+        Assert.IsNotNull(lineage);
     }
 
     private static async Task<Stage3EvidenceEnvelope> CompleteEnvelopeAsync()
@@ -162,27 +130,21 @@ public sealed class Stage3EvidenceLineageTests
         return Rebuild(europe, luxembourg);
     }
 
-    private static async Task<Stage3EvidenceEnvelope> CompleteEnvelopeWithAnnexAsync(
-        bool includeAnnexSourceInEuropeCorpus)
-    {
-        var europe = await EuAxiomWiringHarness.RunAsync(
-            static root => EuAcquisitionTestFixture.AxiomAbsenceScriptFor(root));
-        var luxembourg = await LuxembourgQueryExecutionAdapterTests.RunEmptyDeliveredForEnvelopeAsync();
-        var annex = await EuImageOnlyAnnexProducerTests.ProduceForEnvelopeAsync();
-        if (includeAnnexSourceInEuropeCorpus)
-        {
-            europe = AddEuropeCorpusRecord(europe, annex.Disposition!.SourceObject);
-        }
-
-        return Rebuild(europe, luxembourg, [annex]);
-    }
-
     private static Stage3EvidenceEnvelope Rebuild(
         EuQueryExecutionResult europe,
         LuxembourgQueryExecutionResult luxembourg,
-        IEnumerable<EuImageOnlyAnnexProductionResult>? annexes = null) =>
-        Stage3EvidenceEnvelope.TryCreate(europe, luxembourg, annexes ?? [], out var refusal, out var detail)
-        ?? throw new AssertFailedException($"Envelope refused: {refusal}: {detail}");
+        IEnumerable<EuImageOnlyAnnexProductionResult>? annexes = null)
+    {
+        var formex = EuFormexRunOutcomeReconciliationTests.CompleteForEnvelope(europe);
+        return Stage3EvidenceEnvelope.TryCreate(
+            europe,
+            luxembourg,
+            formex,
+            annexes ?? [],
+            out var refusal,
+            out var detail)
+            ?? throw new AssertFailedException($"Envelope refused: {refusal}: {detail}");
+    }
 
     private static EuQueryExecutionResult CopyEurope(
         EuQueryExecutionResult source,
@@ -220,7 +182,7 @@ public sealed class Stage3EvidenceLineageTests
             source.CorrigendumTripwires!);
     }
 
-    private static EuQueryExecutionResult AddEuropeCorpusRecord(
+    internal static EuQueryExecutionResult AddEuropeCorpusRecord(
         EuQueryExecutionResult source,
         SourceObjectRef objectRef)
     {

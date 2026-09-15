@@ -439,6 +439,15 @@ public sealed class EuFormexRunOutcomeReconciliationTests
         EuAxiomWiringHarness.RunAsync(
             static root => EuAcquisitionTestFixture.AxiomAbsenceScriptFor(root));
 
+    internal static EuFormexRunOutcomeReconciliation CompleteForEnvelope(
+        EuQueryExecutionResult run) =>
+        EuFormexRunOutcomeReconciliation.TryClose(
+            run,
+            PopulationsOf(run),
+            out var refusal,
+            out var detail)
+        ?? throw new AssertFailedException($"{refusal}: {detail}");
+
     private static IReadOnlyList<EuFormexPackageOutcomePopulation> PopulationsOf(
         EuQueryExecutionResult run) =>
         run.CorrigendumTripwires!.ProductionsByFamilyKey
