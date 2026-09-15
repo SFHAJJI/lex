@@ -30,6 +30,23 @@ public sealed class EuFormexAnnexClassificationReconciliationTests
     }
 
     [TestMethod]
+    public async Task CallerOrderCannotReorderTheAcquiredOutcomePopulation()
+    {
+        var first = await AcquiredFixtureAsync();
+        var second = await AcquiredFixtureAsync(formexTwoMembers: true);
+        var formex = Reconciliation(first.Run, [first.Outcome, second.Outcome]);
+
+        var reconciliation = EuFormexAnnexClassificationReconciliation.TryClose(
+            formex, [second.Classification, first.Classification], out var refusal, out var detail);
+
+        Assert.AreEqual(EuFormexAnnexClassificationReconciliationRefusal.None, refusal, detail);
+        Assert.IsNotNull(reconciliation);
+        CollectionAssert.AreEqual(
+            new[] { first.Classification, second.Classification },
+            reconciliation.Classifications.ToArray());
+    }
+
+    [TestMethod]
     public async Task MissingAcquiredClassificationRefusesClosure()
     {
         var acquired = await AcquiredFixtureAsync();

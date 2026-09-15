@@ -29,6 +29,13 @@ public enum EuFormexAnnexClassificationReconciliationRefusal
 /// Proves that every acquired inventory in a total Formex run reconciliation has exactly one
 /// complete bound-annex classification, and that no other Formex outcome has one.
 /// </summary>
+/// <remarks>
+/// The join uses the stable semantic inventory digest because the outcome and classification can
+/// arrive from independent construction paths. After that value join, the retained ZIP receipt is
+/// compared separately so equal canonical content from a different transport remains distinct
+/// lineage. The caller's input order has no authority: output order is rebuilt from the total
+/// Formex outcome order.
+/// </remarks>
 public sealed class EuFormexAnnexClassificationReconciliation
 {
     private EuFormexAnnexClassificationReconciliation(
@@ -131,15 +138,9 @@ public sealed class EuFormexAnnexClassificationReconciliation
         EuBoundAnnexBodyClassification classification,
         EuFormexAnnexInventory inventory)
     {
-        var binding = classification.Binding;
-        return binding.Expression == inventory.TransportBinding.Expression
-            && binding.FormexBody == inventory.TransportBinding.FormexBody
-            && binding.FormexProfileRef == inventory.ProfileRef
-            && string.Equals(
-                DurableBlobWriteReceiptDigest.Of(binding.FormexSourceReceipt),
-                DurableBlobWriteReceiptDigest.Of(inventory.SourceReceipt),
-                StringComparison.Ordinal)
-            && binding.Members.Select(static member => member.Formex)
-                .SequenceEqual(inventory.Members);
+        return string.Equals(
+            DurableBlobWriteReceiptDigest.Of(classification.Binding.FormexSourceReceipt),
+            DurableBlobWriteReceiptDigest.Of(inventory.SourceReceipt),
+            StringComparison.Ordinal);
     }
 }
