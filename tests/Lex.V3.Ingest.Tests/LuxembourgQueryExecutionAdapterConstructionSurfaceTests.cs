@@ -209,7 +209,7 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
     }
 
     [TestMethod]
-    public void QueryExecutionRefusalIsAnEighteenMemberEnumIncludingNone()
+    public void QueryExecutionRefusalIsANineteenMemberEnumIncludingNone()
     {
         // D1-06c-LU-2 added four: DocumentFetchSessionNotStarted, DocumentBodyNotRetained,
         // AcquisitionOutcomeNotRepresentable and RecordSetNotHeld, one per whole-run failure the
@@ -225,6 +225,10 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
         // publisher gives no single legal type, a class the manifest does not recognise, or a
         // Gazette set outside the counted population. A count that will not fold is no count, so
         // it refuses here rather than delivering a smaller population without saying so.
+        // #344 S3-A04 added one: ObservedObjectIdentitySetNotRetained, the whole-run failure when
+        // custody will not hold the run's own observed object-identity set. That set is the premise
+        // every scope-reduction admission is decided against, so a run that cannot retain it would
+        // deliver conclusions no later party could reopen the basis for.
         CollectionAssert.AreEqual(
             new[]
             {
@@ -256,6 +260,9 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
                 "field public static " + N
                 + "LuxembourgQueryExecutionRefusal::ObservationSubjectNotInDeliveredCensus -> "
                 + N + "LuxembourgQueryExecutionRefusal",
+                "field public static " + N
+                + "LuxembourgQueryExecutionRefusal::ObservedObjectIdentitySetNotRetained -> " + N
+                + "LuxembourgQueryExecutionRefusal",
                 "field public static " + N
                 + "LuxembourgQueryExecutionRefusal::PopulationLedgerNotCompleted -> " + N
                 + "LuxembourgQueryExecutionRefusal",
@@ -467,106 +474,82 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
             new[]
             {
                 "constructor private instance "
-                + N
-                + "LuxembourgQueryExecutionResult::.ctor("
-                + Core
-                + "SourceProfileTopology, System.Collections.Generic.IReadOnlyList<"
-                + N
-                + "LuxembourgFamilyEnumerationOutcome>, "
-                + "System.Collections.Generic.IReadOnlyList<"
-                + N
-                + "LuxembourgRelationFamilyAcquisition>, "
-                + "System.Collections.Generic.IReadOnlyList<"
-                + Contracts
-                + "LuxembourgResolvedRelation>, "
-                + "System.Collections.Generic.IReadOnlyList<"
-                + Contracts
-                + "LuxembourgResolvedLocalInboundRelation>, "
-                + "System.Collections.Generic.IReadOnlyList<"
-                + N
-                + "LuxembourgTypedAssertion>, "
-                + "System.Collections.Generic.IReadOnlyList<System.String>, "
-                + "System.Collections.Generic.IReadOnlyList<"
-                + N
-                + "LuxembourgResourceObservationExclusionAccounting>, "
-                + "Lex.V3.Contracts.Custody.DurableBlobWriteReceipt?, System.String?, "
-                + "System.Nullable<"
-                + N
-                + "LuxembourgQueryExecutionCompletion>, "
-                + "System.Collections.Generic.IReadOnlyDictionary<System.Int32, "
-                + "Lex.V3.Ingest.CorpusAcquisitionOutcome>?, "
-                + Core
-                + "SourceArtifactRef?, "
-                + "Lex.V3.Contracts.Custody.DurableBlobWriteReceipt?, "
-                + "Lex.V3.Contracts.Source.Corpus.VerifiedCorpusRecordSet?, "
-                + "System.Collections.Generic.IReadOnlyDictionary<System.Int32, "
-                + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgGazetteBodySet>?, "
-                + "System.Collections.Generic.IReadOnlyDictionary<System.Int32, "
-                + "System.Collections.Generic.IReadOnlyDictionary<System.String, "
-                + "Lex.V3.Contracts.Source.Corpus.CorpusAcquisitionRefusalReason>>?, "
-                + "System.Collections.Generic.IReadOnlyDictionary<System.Int32, "
-                + "System.Collections.Generic.IReadOnlyList<System.String>>?, "
-                + Contracts
-                + "LuxembourgNeverConsolidatedBodyLedger?, "
-                + N
-                + "LuxembourgQueryExecutionRefusalDetail?) -> "
-                + N
-                + "LuxembourgQueryExecutionResult",
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionResult::.ctor(Lex.V3.Contra"
+                    + "cts.Source.Core.SourceProfileTopology, "
+                    + "System.Collections.Generic.IReadOnlyList<Lex.V3.Ingest.Luxembourg.Luxembourg"
+                    + "FamilyEnumerationOutcome>, "
+                    + "System.Collections.Generic.IReadOnlyList<Lex.V3.Ingest.Luxembourg.Luxembourg"
+                    + "RelationFamilyAcquisition>, "
+                    + "System.Collections.Generic.IReadOnlyList<Lex.V3.Contracts.Source.Luxembourg."
+                    + "LuxembourgResolvedRelation>, "
+                    + "System.Collections.Generic.IReadOnlyList<Lex.V3.Contracts.Source.Luxembourg."
+                    + "LuxembourgResolvedLocalInboundRelation>, "
+                    + "System.Collections.Generic.IReadOnlyList<Lex.V3.Ingest.Luxembourg.Luxembourg"
+                    + "TypedAssertion>, System.Collections.Generic.IReadOnlyList<System.String>, "
+                    + "System.Collections.Generic.IReadOnlyList<Lex.V3.Ingest.Luxembourg.Luxembourg"
+                    + "ResourceObservationExclusionAccounting>, "
+                    + "Lex.V3.Contracts.Custody.DurableBlobWriteReceipt?, System.String?, "
+                    + "System.Nullable<Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionCompletion>, "
+                    + "System.Collections.Generic.IReadOnlyDictionary<System.Int32, "
+                    + "Lex.V3.Ingest.CorpusAcquisitionOutcome>?, "
+                    + "Lex.V3.Contracts.Source.Core.SourceArtifactRef?, "
+                    + "Lex.V3.Contracts.Custody.DurableBlobWriteReceipt?, "
+                    + "Lex.V3.Contracts.Source.Corpus.VerifiedCorpusRecordSet?, "
+                    + "Lex.V3.Contracts.Source.Core.SourceArtifactRef?, "
+                    + "Lex.V3.Contracts.Custody.DurableBlobWriteReceipt?, "
+                    + "Lex.V3.Ingest.Luxembourg.VerifiedLuxembourgObservedObjectIdentitySet?, "
+                    + "System.Collections.Generic.IReadOnlyDictionary<System.Int32, "
+                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgGazetteBodySet>?, "
+                    + "System.Collections.Generic.IReadOnlyDictionary<System.Int32, "
+                    + "System.Collections.Generic.IReadOnlyDictionary<System.String, "
+                    + "Lex.V3.Contracts.Source.Corpus.CorpusAcquisitionRefusalReason>>?, "
+                    + "System.Collections.Generic.IReadOnlyDictionary<System.Int32, "
+                    + "System.Collections.Generic.IReadOnlyList<System.String>>?, "
+                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgNeverConsolidatedBodyLedger?, "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionRefusalDetail?) -> "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionResult",
                 "method public static "
-                + N
-                + "LuxembourgQueryExecutionResult::Delivered("
-                + Core
-                + "SourceProfileTopology, System.Collections.Generic.IReadOnlyList<"
-                + N
-                + "LuxembourgFamilyEnumerationOutcome>, "
-                + "System.Collections.Generic.IReadOnlyList<"
-                + N
-                + "LuxembourgRelationFamilyAcquisition>, "
-                + "System.Collections.Generic.IReadOnlyList<"
-                + Contracts
-                + "LuxembourgResolvedRelation>, "
-                + "System.Collections.Generic.IReadOnlyList<"
-                + Contracts
-                + "LuxembourgResolvedLocalInboundRelation>, "
-                + "System.Collections.Generic.IReadOnlyList<"
-                + N
-                + "LuxembourgTypedAssertion>, "
-                + "System.Collections.Generic.IReadOnlyList<System.String>, "
-                + "System.Collections.Generic.IReadOnlyList<"
-                + N
-                + "LuxembourgResourceObservationExclusionAccounting>, "
-                + "Lex.V3.Contracts.Custody.DurableBlobWriteReceipt, System.String, "
-                + "System.Collections.Generic.IReadOnlyDictionary<System.Int32, "
-                + "Lex.V3.Ingest.CorpusAcquisitionOutcome>, "
-                + Core
-                + "SourceArtifactRef, "
-                + "Lex.V3.Contracts.Custody.DurableBlobWriteReceipt, "
-                + "Lex.V3.Contracts.Source.Corpus.VerifiedCorpusRecordSet, "
-                + "System.Collections.Generic.IReadOnlyDictionary<System.Int32, "
-                + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgGazetteBodySet>, "
-                + "System.Collections.Generic.IReadOnlyDictionary<System.Int32, "
-                + "System.Collections.Generic.IReadOnlyDictionary<System.String, "
-                + "Lex.V3.Contracts.Source.Corpus.CorpusAcquisitionRefusalReason>>, "
-                + "System.Collections.Generic.IReadOnlyDictionary<System.Int32, "
-                + "System.Collections.Generic.IReadOnlyList<System.String>>, "
-                + Contracts
-                + "LuxembourgNeverConsolidatedBodyLedger) -> "
-                + N
-                + "LuxembourgQueryExecutionResult",
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionResult::Delivered(Lex.V3.Co"
+                    + "ntracts.Source.Core.SourceProfileTopology, "
+                    + "System.Collections.Generic.IReadOnlyList<Lex.V3.Ingest.Luxembourg.Luxembourg"
+                    + "FamilyEnumerationOutcome>, "
+                    + "System.Collections.Generic.IReadOnlyList<Lex.V3.Ingest.Luxembourg.Luxembourg"
+                    + "RelationFamilyAcquisition>, "
+                    + "System.Collections.Generic.IReadOnlyList<Lex.V3.Contracts.Source.Luxembourg."
+                    + "LuxembourgResolvedRelation>, "
+                    + "System.Collections.Generic.IReadOnlyList<Lex.V3.Contracts.Source.Luxembourg."
+                    + "LuxembourgResolvedLocalInboundRelation>, "
+                    + "System.Collections.Generic.IReadOnlyList<Lex.V3.Ingest.Luxembourg.Luxembourg"
+                    + "TypedAssertion>, System.Collections.Generic.IReadOnlyList<System.String>, "
+                    + "System.Collections.Generic.IReadOnlyList<Lex.V3.Ingest.Luxembourg.Luxembourg"
+                    + "ResourceObservationExclusionAccounting>, "
+                    + "Lex.V3.Contracts.Custody.DurableBlobWriteReceipt, System.String, "
+                    + "System.Collections.Generic.IReadOnlyDictionary<System.Int32, "
+                    + "Lex.V3.Ingest.CorpusAcquisitionOutcome>, "
+                    + "Lex.V3.Contracts.Source.Core.SourceArtifactRef, "
+                    + "Lex.V3.Contracts.Custody.DurableBlobWriteReceipt, "
+                    + "Lex.V3.Contracts.Source.Corpus.VerifiedCorpusRecordSet, "
+                    + "Lex.V3.Contracts.Source.Core.SourceArtifactRef, "
+                    + "Lex.V3.Contracts.Custody.DurableBlobWriteReceipt, "
+                    + "Lex.V3.Ingest.Luxembourg.VerifiedLuxembourgObservedObjectIdentitySet, "
+                    + "System.Collections.Generic.IReadOnlyDictionary<System.Int32, "
+                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgGazetteBodySet>, "
+                    + "System.Collections.Generic.IReadOnlyDictionary<System.Int32, "
+                    + "System.Collections.Generic.IReadOnlyDictionary<System.String, "
+                    + "Lex.V3.Contracts.Source.Corpus.CorpusAcquisitionRefusalReason>>, "
+                    + "System.Collections.Generic.IReadOnlyDictionary<System.Int32, "
+                    + "System.Collections.Generic.IReadOnlyList<System.String>>, "
+                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgNeverConsolidatedBodyLedger) "
+                    + "-> Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionResult",
                 "method public static "
-                + N
-                + "LuxembourgQueryExecutionResult::Refused("
-                + Core
-                + "SourceProfileTopology, System.Collections.Generic.IReadOnlyList<"
-                + N
-                + "LuxembourgFamilyEnumerationOutcome>, "
-                + "System.Collections.Generic.IReadOnlyList<"
-                + N
-                + "LuxembourgRelationFamilyAcquisition>, "
-                + N
-                + "LuxembourgQueryExecutionRefusalDetail) -> "
-                + N
-                + "LuxembourgQueryExecutionResult",
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionResult::Refused(Lex.V3.Cont"
+                    + "racts.Source.Core.SourceProfileTopology, "
+                    + "System.Collections.Generic.IReadOnlyList<Lex.V3.Ingest.Luxembourg.Luxembourg"
+                    + "FamilyEnumerationOutcome>, "
+                    + "System.Collections.Generic.IReadOnlyList<Lex.V3.Ingest.Luxembourg.Luxembourg"
+                    + "RelationFamilyAcquisition>, "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionRefusalDetail) -> "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionResult",
             },
             ConstructionSurface.Of(typeof(LuxembourgQueryExecutionResult)).ToArray());
     }

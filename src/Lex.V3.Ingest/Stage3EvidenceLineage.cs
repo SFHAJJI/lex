@@ -2,6 +2,7 @@ using System.Text.Json.Serialization;
 using Lex.V3.Contracts.Custody;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Corpus;
+using Lex.V3.Ingest.Luxembourg;
 
 namespace Lex.V3.Ingest;
 
@@ -28,6 +29,23 @@ public enum Stage3EvidenceLineageRefusal
 
     [JsonStringEnumMemberName("luxembourg_run_identity_mismatch")]
     LuxembourgRunIdentityMismatch = 6,
+
+    /// <summary>
+    /// The Luxembourg observed object-identity set reference is not the digest of the set the
+    /// envelope carries. The reference and the bytes disagree, so whatever the reference names is
+    /// not what any later party would reopen.
+    /// </summary>
+    [JsonStringEnumMemberName("luxembourg_observed_identity_set_mismatch")]
+    LuxembourgObservedIdentitySetMismatch = 7,
+
+    /// <summary>
+    /// The set is a real, well-formed identity set and it belongs to another run. This is the
+    /// substitution the door exists to stop: the premise a run's scope reduction was admitted
+    /// against must be that run's own, not one lifted from a different execution that happens to
+    /// parse.
+    /// </summary>
+    [JsonStringEnumMemberName("luxembourg_observed_identity_set_run_mismatch")]
+    LuxembourgObservedIdentitySetRunMismatch = 8,
 
 }
 
@@ -112,9 +130,61 @@ public sealed class Stage3EvidenceLineage
             return null;
         }
 
+        // Luxembourg only, and deliberately asymmetric: the observed object-identity set is a
+        // Luxembourg artifact and Europe has no counterpart to bind. Checked here rather than left
+        // to the reader because this is the terminal door -- a reference that never gets reopened
+        // still reaches Stage 3 lineage, and until this check existed a foreign set reference
+        // passed it untouched.
+        if (!TryBindObservedIdentitySet(
+                envelope.Luxembourg.ObservedObjectIdentitySetRef!,
+                envelope.Luxembourg.ObservedObjectIdentitySet!,
+                envelope.Luxembourg.CorpusRecordSet!.Set.RunIdentity,
+                out refusal,
+                out detail))
+        {
+            return null;
+        }
+
         refusal = Stage3EvidenceLineageRefusal.None;
         detail = null;
         return new Stage3EvidenceLineage(envelope);
+    }
+
+    private static bool TryBindObservedIdentitySet(
+        SourceArtifactRef observedIdentitySetRef,
+        VerifiedLuxembourgObservedObjectIdentitySet observedIdentitySet,
+        SourceArtifactRef runIdentity,
+        out Stage3EvidenceLineageRefusal refusal,
+        out string? detail)
+    {
+        // Recomputed from the set's own bytes, exactly as the corpus record set above is, rather
+        // than trusting the reference the envelope happens to carry beside it.
+        using var bytes = new MemoryStream();
+        var canonicalSetSha256 = LuxembourgObservedObjectIdentitySetCanonicalWriter.Write(
+            bytes, observedIdentitySet.Set);
+        if (!string.Equals(observedIdentitySetRef.Sha256, canonicalSetSha256, StringComparison.Ordinal))
+        {
+            refusal = Stage3EvidenceLineageRefusal.LuxembourgObservedIdentitySetMismatch;
+            detail = $"expected {canonicalSetSha256}; found {observedIdentitySetRef.Sha256}";
+            return false;
+        }
+
+        if (!string.Equals(
+                observedIdentitySet.Set.RunIdentity.Sha256, runIdentity.Sha256, StringComparison.Ordinal)
+            || !string.Equals(
+                observedIdentitySet.Set.RunIdentity.ResourceId,
+                runIdentity.ResourceId,
+                StringComparison.Ordinal))
+        {
+            refusal = Stage3EvidenceLineageRefusal.LuxembourgObservedIdentitySetRunMismatch;
+            detail = $"expected run {runIdentity.Sha256}; the set names "
+                + observedIdentitySet.Set.RunIdentity.Sha256;
+            return false;
+        }
+
+        refusal = Stage3EvidenceLineageRefusal.None;
+        detail = null;
+        return true;
     }
 
     private static bool TryBindRun(

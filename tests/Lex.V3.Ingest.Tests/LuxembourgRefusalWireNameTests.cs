@@ -72,7 +72,9 @@ public sealed class LuxembourgRefusalWireNameTests
     /// The query-execution refusal vocabulary, every member. R4 declared a token on 10 of the
     /// first 16; before that the undeclared ones serialized as their CLR member names and nothing
     /// pinned them. #419 slice 6c added the seventeenth, gazette_body_not_produced, and slice 7
-/// the eighteenth, population_ledger_not_completed.
+    /// the eighteenth, population_ledger_not_completed. #344 S3-A04 added the nineteenth,
+    /// observed_object_identity_set_not_retained, the whole-run failure when custody will not hold
+    /// the run's own observed object-identity set -- the premise its scope reduction rests on.
     /// </summary>
     [TestMethod]
     public void TheQueryExecutionRefusalVocabularyKeepsItsExactWireNames()
@@ -101,6 +103,7 @@ public sealed class LuxembourgRefusalWireNameTests
                 "assertion_fact_not_representable",
                 "gazette_body_not_produced",
                 "population_ledger_not_completed",
+                "observed_object_identity_set_not_retained",
             }),
             string.Join("\n", WireNames<LuxembourgQueryExecutionRefusal>()),
             "a wire name changing is a contract change; a number changing is not.");

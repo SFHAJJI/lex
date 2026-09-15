@@ -226,6 +226,11 @@ public sealed class ClosedVocabularyCensusTests
                 "Lex.V3.Ingest.Luxembourg.LuxembourgObjectPopulationRefusal: None, RunNotComplete, "
                     + "MemberIsNotAnObservedSubject, ObservedSubjectHasNoMember, "
                     + "SubjectClaimedTwice, ObservedSubjectDeliveredTwice, OutcomeOutsidePopulation",
+                "Lex.V3.Ingest.Luxembourg.LuxembourgObservedObjectIdentitySetReadRefusalKind: "
+                    + "CustodyBytesNotRetained, CustodyUnavailable, RetainedBytesAreNotThisSet, "
+                    + "RetainedSetIsForAnotherRun",
+                "Lex.V3.Ingest.Luxembourg.LuxembourgObservedObjectIdentitySetWriteRefusalKind: "
+                    + "IdentitySetNotRetained",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgOpinionProductionRefusal: None, RowNotAdmitted, "
                     + "EnumerationRefused, EnumerationProofRefused, VerifiedRowsRefused",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgOpinionRequestBatchCoverRefusal: None, "
@@ -252,7 +257,8 @@ public sealed class ClosedVocabularyCensusTests
                     + "DocumentBodyNotRetained, AcquisitionOutcomeNotRepresentable, "
                     + "RecordSetNotRetained, RelationRowTermNotIri, RelationRowPredicateNotAdmitted, "
                     + "RelationRowSubjectNotInCensus, AssertionFactNotRepresentable, "
-                    + "GazetteBodyNotProduced, PopulationLedgerNotCompleted",
+                    + "GazetteBodyNotProduced, PopulationLedgerNotCompleted, "
+                    + "ObservedObjectIdentitySetNotRetained",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgRelationFamilyAcquisitionState: "
                     + "AcquiredComplete, Unacquired, Incomplete, Uncertain",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgResourceObservationExclusionCause: "
@@ -286,7 +292,8 @@ public sealed class ClosedVocabularyCensusTests
                 "Lex.V3.Ingest.Stage3EvidenceLineageRefusal: None, EuropeCorpusRecordSetMismatch, "
                     + "EuropeManifestMismatch, EuropeRunIdentityMismatch, "
                     + "LuxembourgCorpusRecordSetMismatch, LuxembourgManifestMismatch, "
-                    + "LuxembourgRunIdentityMismatch",
+                    + "LuxembourgRunIdentityMismatch, LuxembourgObservedIdentitySetMismatch, "
+                    + "LuxembourgObservedIdentitySetRunMismatch",
                 "Lex.V3.Ingest.Stage3FidelityPreservationObligation: MarkerOnlyRuleUnsupported, "
                     + "FootnotePreservationUnproven, CitationPreservationUnproven",
                 "Lex.V3.Ingest.Stage3FidelityPreservationReconciliationRefusal: None, "

@@ -129,6 +129,65 @@ public sealed class Stage3EvidenceLineageTests
             ?? throw new AssertFailedException($"Envelope refused: {refusal}: {detail}");
     }
 
+    /// <summary>
+    /// The premise a Luxembourg run's scope reduction was admitted against must be that run's own.
+    /// A complete, well-formed identity set belonging to a different execution is refused at the
+    /// terminal lineage door.
+    /// </summary>
+    /// <remarks>
+    /// FOUND IN REVIEW. The artifact carried a RunIdentity from the start, and nothing read it:
+    /// the reader had no expected-run input, <c>Delivered</c> only null-checked the new reference
+    /// and receipt, and this door ignored both fields. A foreign set therefore reached Stage 3
+    /// lineage untouched. The substituted set here is REAL -- same shape, same canonical form, its
+    /// own correct reference -- so what refuses it is whose it is, not that it fails to parse.
+    /// </remarks>
+    [TestMethod]
+    public async Task LuxembourgObservedIdentitySetCannotBeSubstituted()
+    {
+        var envelope = await CompleteEnvelopeAsync();
+
+        var foreign = LuxembourgObservedObjectIdentitySetTests.BuildFor(
+            new SourceArtifactRef(
+                "urn:uuid:88888888-8888-4888-8888-888888888888", new string('8', 64)));
+
+        var substituted = Rebuild(
+            envelope.Europe,
+            CopyLuxembourg(
+                envelope.Luxembourg,
+                observedObjectIdentitySetRef: foreign.Reference,
+                observedObjectIdentitySet: foreign.Set));
+
+        var lineage = Stage3EvidenceLineage.TryBind(substituted, out var refusal, out var detail);
+
+        Assert.IsNull(lineage, "a set from another run must not bind into Stage 3 lineage.");
+        Assert.AreEqual(
+            Stage3EvidenceLineageRefusal.LuxembourgObservedIdentitySetRunMismatch, refusal, detail);
+    }
+
+    /// <summary>
+    /// And the reference has to be the digest of the set beside it: a reference and bytes that
+    /// disagree name something no later party would reopen.
+    /// </summary>
+    [TestMethod]
+    public async Task LuxembourgObservedIdentitySetReferenceMustBeItsOwnDigest()
+    {
+        var envelope = await CompleteEnvelopeAsync();
+
+        var substituted = Rebuild(
+            envelope.Europe,
+            CopyLuxembourg(
+                envelope.Luxembourg,
+                observedObjectIdentitySetRef: new SourceArtifactRef(
+                    envelope.Luxembourg.ObservedObjectIdentitySetRef!.ResourceId,
+                    new string('9', 64))));
+
+        var lineage = Stage3EvidenceLineage.TryBind(substituted, out var refusal, out var detail);
+
+        Assert.IsNull(lineage);
+        Assert.AreEqual(
+            Stage3EvidenceLineageRefusal.LuxembourgObservedIdentitySetMismatch, refusal, detail);
+    }
+
     private static EuQueryExecutionResult CopyEurope(
         EuQueryExecutionResult source,
         SourceArtifactRef? corpusRecordSetRef = null,
@@ -199,7 +258,9 @@ public sealed class Stage3EvidenceLineageTests
         LuxembourgQueryExecutionResult source,
         SourceArtifactRef? corpusRecordSetRef = null,
         string? manifestCanonicalSha256 = null,
-        DurableBlobWriteReceipt? scopeManifestReceipt = null) =>
+        DurableBlobWriteReceipt? scopeManifestReceipt = null,
+        SourceArtifactRef? observedObjectIdentitySetRef = null,
+        VerifiedLuxembourgObservedObjectIdentitySet? observedObjectIdentitySet = null) =>
         LuxembourgQueryExecutionResult.Delivered(
             source.Topology,
             source.FamilyOutcomes,
@@ -215,6 +276,9 @@ public sealed class Stage3EvidenceLineageTests
             corpusRecordSetRef ?? source.CorpusRecordSetRef!,
             source.CorpusRecordSetReceipt!,
             source.CorpusRecordSet!,
+            observedObjectIdentitySetRef ?? source.ObservedObjectIdentitySetRef!,
+            source.ObservedObjectIdentitySetReceipt!,
+            observedObjectIdentitySet ?? source.ObservedObjectIdentitySet!,
             source.GazetteBodySetsByOrdinal!,
             source.GazetteListingFetchRefusalsByOrdinal!,
             source.GazetteListingsWithContradictoryLegalValueByOrdinal!,

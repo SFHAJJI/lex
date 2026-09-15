@@ -541,6 +541,15 @@ public enum LuxembourgQueryExecutionRefusal
     /// </summary>
     [JsonStringEnumMemberName("population_ledger_not_completed")]
     PopulationLedgerNotCompleted = 17,
+
+    /// <summary>
+    /// The run derived its own observed object-identity set and custody would not hold it. That set
+    /// is the premise every scope-reduction admission rests on, so a run that cannot retain it would
+    /// deliver conclusions whose basis no later party could reopen. Stated as a retention failure
+    /// rather than passed over, the same way a record set that will not hold refuses the run.
+    /// </summary>
+    [JsonStringEnumMemberName("observed_object_identity_set_not_retained")]
+    ObservedObjectIdentitySetNotRetained = 18,
 }
 
 /// <summary>
@@ -726,6 +735,9 @@ public sealed class LuxembourgQueryExecutionResult
         SourceArtifactRef? corpusRecordSetRef,
         DurableBlobWriteReceipt? corpusRecordSetReceipt,
         VerifiedCorpusRecordSet? corpusRecordSet,
+        SourceArtifactRef? observedObjectIdentitySetRef,
+        DurableBlobWriteReceipt? observedObjectIdentitySetReceipt,
+        VerifiedLuxembourgObservedObjectIdentitySet? observedObjectIdentitySet,
         IReadOnlyDictionary<int, LuxembourgGazetteBodySet>? gazetteBodySetsByOrdinal,
         IReadOnlyDictionary<int, IReadOnlyDictionary<string, CorpusAcquisitionRefusalReason>>? gazetteListingFetchRefusalsByOrdinal,
         IReadOnlyDictionary<int, IReadOnlyList<string>>? gazetteListingsWithContradictoryLegalValueByOrdinal,
@@ -747,6 +759,9 @@ public sealed class LuxembourgQueryExecutionResult
         CorpusRecordSetRef = corpusRecordSetRef;
         CorpusRecordSetReceipt = corpusRecordSetReceipt;
         CorpusRecordSet = corpusRecordSet;
+        ObservedObjectIdentitySetRef = observedObjectIdentitySetRef;
+        ObservedObjectIdentitySetReceipt = observedObjectIdentitySetReceipt;
+        ObservedObjectIdentitySet = observedObjectIdentitySet;
         GazetteBodySetsByOrdinal = gazetteBodySetsByOrdinal;
         GazetteListingFetchRefusalsByOrdinal = gazetteListingFetchRefusalsByOrdinal;
         GazetteListingsWithContradictoryLegalValueByOrdinal = gazetteListingsWithContradictoryLegalValueByOrdinal;
@@ -769,6 +784,9 @@ public sealed class LuxembourgQueryExecutionResult
         SourceArtifactRef corpusRecordSetRef,
         DurableBlobWriteReceipt corpusRecordSetReceipt,
         VerifiedCorpusRecordSet corpusRecordSet,
+        SourceArtifactRef observedObjectIdentitySetRef,
+        DurableBlobWriteReceipt observedObjectIdentitySetReceipt,
+        VerifiedLuxembourgObservedObjectIdentitySet observedObjectIdentitySet,
         IReadOnlyDictionary<int, LuxembourgGazetteBodySet> gazetteBodySetsByOrdinal,
         IReadOnlyDictionary<int, IReadOnlyDictionary<string, CorpusAcquisitionRefusalReason>> gazetteListingFetchRefusalsByOrdinal,
         IReadOnlyDictionary<int, IReadOnlyList<string>> gazetteListingsWithContradictoryLegalValueByOrdinal,
@@ -786,6 +804,9 @@ public sealed class LuxembourgQueryExecutionResult
         ArgumentNullException.ThrowIfNull(corpusRecordSetRef);
         ArgumentNullException.ThrowIfNull(corpusRecordSetReceipt);
         ArgumentNullException.ThrowIfNull(corpusRecordSet);
+        ArgumentNullException.ThrowIfNull(observedObjectIdentitySetRef);
+        ArgumentNullException.ThrowIfNull(observedObjectIdentitySetReceipt);
+        ArgumentNullException.ThrowIfNull(observedObjectIdentitySet);
         ArgumentNullException.ThrowIfNull(gazetteBodySetsByOrdinal);
         ArgumentNullException.ThrowIfNull(gazetteListingFetchRefusalsByOrdinal);
         ArgumentNullException.ThrowIfNull(gazetteListingsWithContradictoryLegalValueByOrdinal);
@@ -802,6 +823,8 @@ public sealed class LuxembourgQueryExecutionResult
             resourceObservationSubjects, resourceObservationExclusions, scopeManifestReceipt,
             scopeManifestCanonicalSha256, completion, documentAcquisitionOutcomesByOrdinal,
             corpusRecordSetRef, corpusRecordSetReceipt, corpusRecordSet,
+            observedObjectIdentitySetRef, observedObjectIdentitySetReceipt,
+            observedObjectIdentitySet,
             gazetteBodySetsByOrdinal, gazetteListingFetchRefusalsByOrdinal,
             gazetteListingsWithContradictoryLegalValueByOrdinal, populationLedger, null);
     }
@@ -816,8 +839,33 @@ public sealed class LuxembourgQueryExecutionResult
         ArgumentNullException.ThrowIfNull(refusal);
         return new(
             topology, familyOutcomes, relationFamilyAcquisitions, [], [], [], [], [], null, null, null,
-            null, null, null, null, null, null, null, null, refusal);
+            null, null, null, null, null, null, null, null, null, null, null, refusal);
     }
+
+    /// <summary>
+    /// The run's own observed object-identity set reference, for a delivered run. This is the
+    /// premise <see cref="LuxembourgProductionScopeReductionEvidenceResolver"/> decided every
+    /// admission against, kept so a later party can reopen it rather than only the manifest it
+    /// justified.
+    /// </summary>
+    public SourceArtifactRef? ObservedObjectIdentitySetRef { get; }
+
+    /// <summary>
+    /// Where those bytes are, which is not the same value as
+    /// <see cref="ObservedObjectIdentitySetRef"/>: the reference is domain separated and custody
+    /// addresses the plain bytes, so a consumer holding only the reference could never fetch the
+    /// set. Both are carried for exactly that reason.
+    /// </summary>
+    public DurableBlobWriteReceipt? ObservedObjectIdentitySetReceipt { get; }
+
+    /// <summary>
+    /// The set itself, as it came back out of custody inside the write. Carried rather than dropped
+    /// because the terminal lineage door is synchronous and has no custody store: without the
+    /// verified set in hand it could only see a reference and a receipt, and a reference alone
+    /// cannot say whose run the bytes behind it describe. That is exactly how a foreign set survived
+    /// the door before this was here.
+    /// </summary>
+    public VerifiedLuxembourgObservedObjectIdentitySet? ObservedObjectIdentitySet { get; }
 
     /// <summary>Always present: minting it cannot fail, and it is useful context on a refusal too.</summary>
     public SourceProfileTopology Topology { get; }
@@ -1743,6 +1791,25 @@ public sealed class LuxembourgQueryExecutionAdapter
                 topology, outcomes, relationAcquisitions, populationRefusal);
         }
 
+        // #344 S3-A04: the run's own observed object-identity set, retained as its own artifact.
+        // Every admission on LuxembourgProductionScopeReductionEvidenceResolver is decided against
+        // this set, and until now it lived only in a private HashSet for the length of one
+        // CreateAsync: the manifest outlived the run and the premise behind it did not. Derived here
+        // from the run's own observations, never recomputed from the manifest -- a set rebuilt from
+        // the manifest would agree with the manifest by construction and prove nothing.
+        var identitySetResult = await new LuxembourgObservedObjectIdentitySetWriter(_custodyStore)
+            .WriteAsync(runIdentityRef, observations, cancellationToken)
+            .ConfigureAwait(false);
+        if (identitySetResult.Refusal is not null)
+        {
+            return LuxembourgQueryExecutionResult.Refused(
+                topology, outcomes, relationAcquisitions,
+                new LuxembourgQueryExecutionRefusalDetail(
+                    LuxembourgQueryExecutionRefusal.ObservedObjectIdentitySetNotRetained,
+                    null,
+                    identitySetResult.Refusal.Detail));
+        }
+
         // The record set is still the last artifact, after the final rights-bearing manifest.
         var recordSetWriter = new CorpusRecordSetWriter(_custodyStore);
         var recordSetResult = await recordSetWriter.WriteAsync(
@@ -1769,6 +1836,9 @@ public sealed class LuxembourgQueryExecutionAdapter
             documentAcquisitionOutcomesByOrdinal!, recordSetResult.SetRef!,
             recordSetResult.RetainedSetReceipt!,
             recordSetResult.VerifiedSet!,
+            identitySetResult.SetRef!,
+            identitySetResult.RetainedSetReceipt!,
+            identitySetResult.VerifiedSet!,
             gazetteBodySetsByOrdinal!, gazetteListingFetchRefusalsByOrdinal!, gazetteContradictoryByOrdinal!,
             populationLedger!);
     }
