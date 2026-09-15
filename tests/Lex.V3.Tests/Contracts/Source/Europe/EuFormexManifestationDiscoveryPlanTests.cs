@@ -65,9 +65,9 @@ public sealed class EuFormexManifestationDiscoveryPlanTests
     {
         var key = EuFormexManifestationDiscoveryPlan.PartitionKeyFor(Identity());
         var other = EuFormexManifestationDiscoveryPlan.PartitionKeyFor(Identity(OtherExpression));
-        Assert.AreEqual(
+        Assert.StartsWith(
             "eu-formex-manifestations-by-expression-v2-",
-            EuFormexManifestationDiscoveryPlan.PartitionKeyPrefix,
+            key,
             "proof retained for the v1 plan must not identify this changed query family.");
         Assert.StartsWith(EuFormexManifestationDiscoveryPlan.PartitionKeyPrefix, key);
         Assert.AreEqual(64, key[EuFormexManifestationDiscoveryPlan.PartitionKeyPrefix.Length..].Length);
