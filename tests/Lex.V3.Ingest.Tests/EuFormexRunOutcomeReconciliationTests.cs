@@ -271,6 +271,116 @@ public sealed class EuFormexRunOutcomeReconciliationTests
             original.ProductRequestCount);
     }
 
+    /// <summary>
+    /// THE RUN'S OWN PRODUCTIONS ARE VALIDATED BY A NINE-CLAUSE COMPOSITE THAT REPORTS ONE REFUSAL,
+    /// and until these cases nothing reached any of it. Every other test here attacks the SUPPLIED
+    /// population; this validates what the run itself carries, which is the side the whole
+    /// reconciliation is measured against.
+    /// </summary>
+    /// <remarks>
+    /// Two clauses of that composite are deliberately not covered because no admitted input reaches
+    /// them: a production that is not delivered cannot exist, since
+    /// <c>EuCorrigendumTripwireCompletion</c>'s own constructor throws on one, and a delivered
+    /// production always carries expressions because <c>EuCorrigendumTripwireProductionResult.Success</c>
+    /// null-checks them. Declaring those is worth more than a test that cannot be written.
+    /// </remarks>
+    [TestMethod]
+    public async Task ARunProductionWhoseRetainedDerivationDoesNotCarryItsOwnDigestIsInvalid()
+    {
+        var run = await CompleteEuropeAsync();
+
+        Assert.IsNull(EuFormexRunOutcomeReconciliation.TryClose(
+            Rebuild(run, corrigendumTripwires: RunCarrying(run, ForeignDerivationReceipt)),
+            PopulationsOf(run), out var refusal, out _));
+        Assert.AreEqual(
+            EuFormexRunOutcomeReconciliationRefusal.RunExpressionProductionInvalid, refusal);
+    }
+
+    [TestMethod]
+    public async Task ARunProductionWhoseRetainedEpisodeDoesNotCarryItsOwnDigestIsInvalid()
+    {
+        var run = await CompleteEuropeAsync();
+
+        Assert.IsNull(EuFormexRunOutcomeReconciliation.TryClose(
+            Rebuild(run, corrigendumTripwires: RunCarrying(run, ForeignEpisodeReceipt)),
+            PopulationsOf(run), out var refusal, out _));
+        Assert.AreEqual(
+            EuFormexRunOutcomeReconciliationRefusal.RunExpressionProductionInvalid, refusal);
+    }
+
+    /// <summary>
+    /// The production is internally consistent; it simply sits in the run's batch map under a key its
+    /// own enumeration proof does not name. Without this clause a run could file a batch's production
+    /// under another batch's key and every later join would be measured against the wrong derivation.
+    /// </summary>
+    [TestMethod]
+    public async Task ARunProductionFiledUnderAKeyItsOwnProofDoesNotNameIsInvalid()
+    {
+        var run = await CompleteEuropeAsync();
+        var production = run.CorrigendumTripwires!.ProductionsByFamilyKey.Single().Value;
+        var misfiled = EuCorrigendumTripwireProductionResult.Success(
+            DuplicateProductionForFamily(production.Expressions!, "the-proof-says-this-batch"),
+            production.TripwireSet!,
+            production.RetainedTripwire!,
+            production.RetainedTripwireLineage!,
+            production.ProductRequestCount);
+        var filedElsewhere = new EuCorrigendumTripwireCompletion(
+            new HashSet<string>(["but-it-is-filed-under-this-one"], StringComparer.Ordinal),
+            new Dictionary<string, EuCorrigendumTripwireProductionResult>(StringComparer.Ordinal)
+            {
+                ["but-it-is-filed-under-this-one"] = misfiled,
+            });
+
+        Assert.IsNull(EuFormexRunOutcomeReconciliation.TryClose(
+            Rebuild(run, corrigendumTripwires: filedElsewhere),
+            PopulationsOf(run), out var refusal, out var detail));
+        Assert.AreEqual(
+            EuFormexRunOutcomeReconciliationRefusal.RunExpressionProductionInvalid, refusal);
+        Assert.AreEqual("but-it-is-filed-under-this-one", detail);
+    }
+
+    /// <summary>
+    /// The run's own single batch, rebuilt with one retention receipt replaced. The receipt still
+    /// exists and is still well formed; it simply carries a content digest that is not the digest of
+    /// the thing it claims to retain.
+    /// </summary>
+    private static EuCorrigendumTripwireCompletion RunCarrying(
+        EuQueryExecutionResult run,
+        Func<EuLanguageScopedExpressionProductionResult, EuLanguageScopedExpressionProductionResult> doctor)
+    {
+        var production = run.CorrigendumTripwires!.ProductionsByFamilyKey.Single();
+        var doctored = EuCorrigendumTripwireProductionResult.Success(
+            doctor(production.Value.Expressions!),
+            production.Value.TripwireSet!,
+            production.Value.RetainedTripwire!,
+            production.Value.RetainedTripwireLineage!,
+            production.Value.ProductRequestCount);
+        return new EuCorrigendumTripwireCompletion(
+            new HashSet<string>([production.Key], StringComparer.Ordinal),
+            new Dictionary<string, EuCorrigendumTripwireProductionResult>(StringComparer.Ordinal)
+            {
+                [production.Key] = doctored,
+            });
+    }
+
+    private static EuLanguageScopedExpressionProductionResult ForeignDerivationReceipt(
+        EuLanguageScopedExpressionProductionResult original) =>
+        EuLanguageScopedExpressionProductionResult.Success(
+            original.Derivation!,
+            Receipt(new string('9', 64), 1),
+            original.RetainedEpisode!,
+            original.ObjectsAskedAbout!,
+            original.ProductRequestCount);
+
+    private static EuLanguageScopedExpressionProductionResult ForeignEpisodeReceipt(
+        EuLanguageScopedExpressionProductionResult original) =>
+        EuLanguageScopedExpressionProductionResult.Success(
+            original.Derivation!,
+            original.RetainedDerivation!,
+            Receipt(new string('9', 64), 1),
+            original.ObjectsAskedAbout!,
+            original.ProductRequestCount);
+
     private static EuLanguageScopedExpressionProductionResult DuplicateProductionForFamily(
         EuLanguageScopedExpressionProductionResult original,
         string familyKey)
