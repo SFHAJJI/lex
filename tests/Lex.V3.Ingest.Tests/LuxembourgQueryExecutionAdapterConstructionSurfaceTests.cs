@@ -592,6 +592,10 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
                 "field private instance "
                     + "Lex.V3.Ingest.Stage3EvidenceEnvelope::<Luxembourg>k__BackingField -> "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionResult",
+                "field private instance "
+                    + "Lex.V3.Ingest.Stage3FidelityPreservationReconciliation::"
+                    + "<Luxembourg>k__BackingField -> "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionResult",
                 "method internal instance "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionAdapter::RunAsync(System.Co"
                     + "llections.Generic.IReadOnlyList<System.ValueTuple<Lex.V3.Ingest.Luxembourg.L"
@@ -675,6 +679,9 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
                     + "System.Threading.Tasks.Task<Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutio"
                     + "nResult>",
                 "property public instance Lex.V3.Ingest.Stage3EvidenceEnvelope::Luxembourg() -> "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionResult",
+                "property public instance "
+                    + "Lex.V3.Ingest.Stage3FidelityPreservationReconciliation::Luxembourg() -> "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionResult",
             },
             ConstructionSurface.ProducersIn(

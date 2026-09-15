@@ -117,11 +117,13 @@ public sealed class Stage3EvidenceLineageTests
     {
         var formex = EuFormexRunOutcomeReconciliationTests.CompleteForEnvelope(europe);
         var classifications = Stage3EvidenceEnvelopeTests.CompleteClassifications(formex);
+        var fidelity = Stage3FidelityPreservationReconciliationTests.Complete(europe, luxembourg);
         return Stage3EvidenceEnvelope.TryCreate(
             europe,
             luxembourg,
             formex,
             classifications,
+            fidelity,
             out var refusal,
             out var detail)
             ?? throw new AssertFailedException($"Envelope refused: {refusal}: {detail}");
