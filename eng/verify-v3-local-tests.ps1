@@ -8,7 +8,8 @@ param(
     [Parameter()][ValidateRange(0, [int]::MaxValue)][int]$ExpectedIngestSkipped,
     [Parameter()][ValidateRange(0, [int]::MaxValue)][int]$ExpectedContractsSkipped,
     [Parameter()][ValidateRange(0, 86400)][int]$MutexWaitSeconds = 0,
-    [Parameter()][string]$OutputRoot
+    [Parameter()][string]$OutputRoot,
+    [Parameter()][ValidateSet('Checkpoint31FormexManifestationCanary')][string]$AuthorizedPublisherRun
 )
 
 $ErrorActionPreference = 'Stop'
@@ -17,6 +18,7 @@ $solution = Join-Path $repositoryRoot 'Lex.V3.slnx'
 $hasExpectedTests = $PSBoundParameters.ContainsKey('ExpectedTests')
 $hasExpectedIngestSkipped = $PSBoundParameters.ContainsKey('ExpectedIngestSkipped')
 $hasExpectedContractsSkipped = $PSBoundParameters.ContainsKey('ExpectedContractsSkipped')
+$hasAuthorizedPublisherRun = $PSBoundParameters.ContainsKey('AuthorizedPublisherRun')
 
 function Invoke-Git {
     param([Parameter(Mandatory)][string[]]$Arguments)
@@ -151,6 +153,18 @@ else {
     }
 }
 
+if ($hasAuthorizedPublisherRun) {
+    $expectedProject = 'tests/Lex.V3.Ingest.Tests/Lex.V3.Ingest.Tests.csproj'
+    $expectedFilter = 'FullyQualifiedName~EuFormexManifestationCanary'
+    if ($Mode -cne 'Focused' -or
+        $Project.Replace('\', '/') -cne $expectedProject -or
+        $Filter -cne $expectedFilter -or
+        -not $hasExpectedTests -or
+        $ExpectedTests -ne 2) {
+        throw 'Checkpoint31FormexManifestationCanary requires Focused mode, the exact Ingest test project, the exact canary class filter and ExpectedTests 2.'
+    }
+}
+
 if ($Mode -eq 'Mutation' -and -not $hasExpectedTests) {
     throw 'Mutation mode requires -ExpectedTests to prevent ambiguous mutation attribution.'
 }
@@ -217,6 +231,7 @@ $receipt = [ordered]@{
     ExpectedSkipped = if ($Mode -eq 'Full') {
         [ordered]@{ 'Lex.V3.Ingest.Tests' = $ExpectedIngestSkipped; 'Lex.V3.Tests' = $ExpectedContractsSkipped }
     } else { $null }
+    AuthorizedPublisherRun = if ($hasAuthorizedPublisherRun) { $AuthorizedPublisherRun } else { $null }
     Sdk = $actualSdk
     MaxParallelTestModules = if ($Mode -eq 'Full') { 2 } else { 1 }
     RestoreSeconds = $null
@@ -288,9 +303,25 @@ try {
         '--no-ansi'
     )
 
+    $publisherGate = if ($hasAuthorizedPublisherRun) {
+        'LEX_FORMEX_MANIFESTATION_CANARY'
+    }
+    else {
+        $null
+    }
     $timer.Restart()
-    $testExit = Invoke-Dotnet -Arguments $testArguments
-    $timer.Stop()
+    try {
+        if ($null -ne $publisherGate) {
+            [Environment]::SetEnvironmentVariable($publisherGate, '1', 'Process')
+        }
+        $testExit = Invoke-Dotnet -Arguments $testArguments
+    }
+    finally {
+        if ($null -ne $publisherGate) {
+            [Environment]::SetEnvironmentVariable($publisherGate, $null, 'Process')
+        }
+        $timer.Stop()
+    }
     $receipt.TestSeconds = [Math]::Round($timer.Elapsed.TotalSeconds, 3)
     $receipt.TestExitCode = $testExit
     $results = Read-TestResults -Directory $resultsDirectory
