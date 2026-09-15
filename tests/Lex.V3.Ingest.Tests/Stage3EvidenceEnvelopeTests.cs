@@ -15,6 +15,9 @@ public sealed class Stage3EvidenceEnvelopeTests
         var eu = await CompleteEuropeAsync();
         var luxembourg = await LuxembourgQueryExecutionAdapterTests.RunEmptyDeliveredForEnvelopeAsync();
         var annexProduction = await EuImageOnlyAnnexProducerTests.ProduceForEnvelopeAsync();
+        eu = Stage3EvidenceLineageTests.AddEuropeCorpusRecord(
+            eu,
+            annexProduction.Disposition!.SourceObject);
         var formex = EuFormexRunOutcomeReconciliationTests.CompleteForEnvelope(eu);
 
         var envelope = Stage3EvidenceEnvelope.TryCreate(
@@ -165,12 +168,13 @@ public sealed class Stage3EvidenceEnvelopeTests
     {
         var eu = await CompleteEuropeAsync();
         var luxembourg = await LuxembourgQueryExecutionAdapterTests.RunEmptyDeliveredForEnvelopeAsync();
-        var formex = EuFormexRunOutcomeReconciliationTests.CompleteForEnvelope(eu);
         var gap = await EuImageOnlyAnnexProducerTests.ProduceForEnvelopeAsync();
         var sameSourceLocationDifferentEvidence =
             await EuImageOnlyAnnexProducerTests.ProduceForEnvelopeFromTwoPagePdfAsync();
         var admitted = await EuImageOnlyAnnexProducerTests.ProduceForEnvelopeAsync(
             EuAnnexBodyDispositionOutcome.Admitted);
+        eu = Stage3EvidenceLineageTests.AddEuropeCorpusRecord(eu, gap.Disposition!.SourceObject);
+        var formex = EuFormexRunOutcomeReconciliationTests.CompleteForEnvelope(eu);
 
         Assert.IsNull(Stage3EvidenceEnvelope.TryCreate(
             eu, luxembourg, formex, [admitted], out var outcomeRefusal, out _));
@@ -193,9 +197,10 @@ public sealed class Stage3EvidenceEnvelopeTests
     {
         var eu = await CompleteEuropeAsync();
         var luxembourg = await LuxembourgQueryExecutionAdapterTests.RunEmptyDeliveredForEnvelopeAsync();
-        var formex = EuFormexRunOutcomeReconciliationTests.CompleteForEnvelope(eu);
         var first = await EuImageOnlyAnnexProducerTests.ProduceForEnvelopeAtAsync("III");
         var second = await EuImageOnlyAnnexProducerTests.ProduceForEnvelopeAtAsync("IV");
+        eu = Stage3EvidenceLineageTests.AddEuropeCorpusRecord(eu, first.Disposition!.SourceObject);
+        var formex = EuFormexRunOutcomeReconciliationTests.CompleteForEnvelope(eu);
         var input = new[] { first, second }
             .OrderByDescending(static production => production.Disposition!.IdentitySha256, StringComparer.Ordinal)
             .ToList();
