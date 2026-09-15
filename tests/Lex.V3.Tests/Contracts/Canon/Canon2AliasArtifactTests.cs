@@ -1,4 +1,5 @@
 using System.Text;
+using System.Security.Cryptography;
 using Lex.V3.Contracts.Canon;
 using Lex.V3.Contracts.Source.Core;
 
@@ -29,6 +30,17 @@ public sealed class Canon2AliasArtifactTests
         CollectionAssert.AreEqual(firstBytes, secondBytes);
         Assert.AreEqual(firstDigest, secondDigest);
         StringAssert.StartsWith(Encoding.UTF8.GetString(firstBytes), "{\"schema\":\"lex-canon-aliases/1\",\"entries\":[");
+    }
+
+    [TestMethod]
+    public void NonEmptyCanonicalBytesAndDigestArePinned()
+    {
+        var bytes = Write(RequireArtifact(Entry("old-a", "new-a", "article-1")), out var digest);
+
+        Assert.AreEqual(
+            "{\"schema\":\"lex-canon-aliases/1\",\"entries\":[{\"source_coordinate\":{\"publisher\":\"luxembourg\",\"version_key\":\"work-key|fra|2026-01-01\",\"anchor\":\"article-1\"},\"target_coordinate\":{\"publisher\":\"luxembourg\",\"version_key\":\"work-key|fra|2026-01-01\",\"anchor\":\"article-1\"},\"source_identity\":\"old-a\",\"canonicalized_to\":\"new-a\"}]}\n",
+            Encoding.UTF8.GetString(bytes));
+        Assert.AreEqual("15afeb7c1575d5b6fc470e066f965445ea3c3379af74a6e951c2f02e507efb93", digest);
     }
 
     [TestMethod]
@@ -123,6 +135,20 @@ public sealed class Canon2AliasArtifactTests
             VerifiedCanon2AliasArtifact.ParseAndVerify(artifactRef, tampered));
     }
 
+    [TestMethod]
+    public void VerifiedReaderRejectsValidNonCanonicalBytesWithMatchingDigest()
+    {
+        const string nonCanonical =
+            "{ \"entries\": [{\"canonicalized_to\":\"new-a\",\"source_identity\":\"old-a\",\"target_coordinate\":{\"anchor\":\"article-1\",\"version_key\":\"work-key|fra|2026-01-01\",\"publisher\":\"luxembourg\"},\"source_coordinate\":{\"anchor\":\"article-1\",\"version_key\":\"work-key|fra|2026-01-01\",\"publisher\":\"luxembourg\"}}], \"schema\": \"lex-canon-aliases/1\" }";
+        var bytes = Encoding.UTF8.GetBytes(nonCanonical);
+        var artifactRef = new SourceArtifactRef(
+            "urn:uuid:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+            ComputeArtifactDigest(bytes));
+
+        Assert.ThrowsExactly<ArgumentException>(() =>
+            VerifiedCanon2AliasArtifact.ParseAndVerify(artifactRef, bytes));
+    }
+
     private static Canon2AliasArtifact RequireArtifact(params Canon2AliasEntry[] entries)
     {
         var artifact = Canon2AliasArtifact.TryCreate(entries, out var refusal, out var detail);
@@ -141,5 +167,13 @@ public sealed class Canon2AliasArtifactTests
         using var stream = new MemoryStream();
         digest = Canon2AliasArtifactCanonicalWriter.Write(stream, artifact);
         return stream.ToArray();
+    }
+
+    private static string ComputeArtifactDigest(ReadOnlySpan<byte> bytes)
+    {
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        hash.AppendData(Encoding.ASCII.GetBytes(Canon2AliasArtifact.SchemaId + "\n"));
+        hash.AppendData(bytes);
+        return Convert.ToHexStringLower(hash.GetHashAndReset());
     }
 }
