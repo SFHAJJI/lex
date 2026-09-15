@@ -170,6 +170,43 @@ public sealed class LuxembourgObservedObjectIdentitySetTests
         StringAssert.Contains(failure.Message, "not the canonical form of the set they parse into");
     }
 
+    /// <summary>
+    /// A set that is real, well formed, and another run's. The reader refuses it by name rather than
+    /// handing back a premise belonging to a different execution. The artifact carries a RunIdentity
+    /// precisely so this can be checked, and until the review that produced this test the reader
+    /// never looked at it -- so any run's retained set could be presented as the basis of any other.
+    /// </summary>
+    [TestMethod]
+    public async Task AnotherRunsRetainedSetIsRefusedByName()
+    {
+        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
+        var written = await new LuxembourgObservedObjectIdentitySetWriter(store).WriteAsync(
+            RunIdentity,
+            [Observation("https://data.legilux.lu/eli/a"), Observation("https://data.legilux.lu/eli/b")],
+            CancellationToken.None);
+        Assert.IsNull(written.Refusal, written.Refusal?.Detail);
+
+        var anotherRun = new SourceArtifactRef(
+            "urn:uuid:77777777-7777-4777-8777-777777777777", new string('7', 64));
+
+        // The receipt and the reference are this set's own and both check out; the only thing wrong
+        // is whose premise it is.
+        var read = await new LuxembourgObservedObjectIdentitySetReader(store).ReadAsync(
+            written.RetainedSetReceipt!, written.SetRef!, anotherRun, CancellationToken.None);
+
+        Assert.IsNull(read.VerifiedSet);
+        Assert.AreEqual(
+            LuxembourgObservedObjectIdentitySetReadRefusalKind.RetainedSetIsForAnotherRun,
+            read.Refusal!.Kind);
+
+        // And the same bytes under their own run are admitted, so the refusal above is about the
+        // run and not about the set being unreadable.
+        var honest = await new LuxembourgObservedObjectIdentitySetReader(store).ReadAsync(
+            written.RetainedSetReceipt!, written.SetRef!, RunIdentity, CancellationToken.None);
+        Assert.IsNull(honest.Refusal, honest.Refusal?.Detail);
+        Assert.IsNotNull(honest.VerifiedSet);
+    }
+
     private static byte[] Canonical(LuxembourgObservedObjectIdentitySet set)
     {
         using var buffer = new MemoryStream();
@@ -177,7 +214,26 @@ public sealed class LuxembourgObservedObjectIdentitySetTests
         return buffer.ToArray();
     }
 
-    private static LuxembourgResourceObservation Observation(string subjectUri)
+    /// <summary>
+    /// A complete, well-formed identity set for whichever run is named. Used by the lineage tests to
+    /// mint another run's set: the substitution they have to refuse is a REAL artifact belonging to
+    /// someone else, not a malformed one that any parse would reject anyway.
+    /// </summary>
+    internal static (SourceArtifactRef Reference, VerifiedLuxembourgObservedObjectIdentitySet Set)
+        BuildFor(SourceArtifactRef runIdentity)
+    {
+        var set = LuxembourgObservedObjectIdentitySet.FromObservations(
+            runIdentity,
+            [Observation("https://data.legilux.lu/eli/a"), Observation("https://data.legilux.lu/eli/b")]);
+        using var buffer = new MemoryStream();
+        var sha256 = LuxembourgObservedObjectIdentitySetCanonicalWriter.Write(buffer, set);
+        var reference = new SourceArtifactRef(
+            "urn:uuid:66666666-6666-4666-8666-666666666666", sha256);
+        return (reference,
+            VerifiedLuxembourgObservedObjectIdentitySet.ParseAndVerify(reference, buffer.ToArray()));
+    }
+
+    internal static LuxembourgResourceObservation Observation(string subjectUri)
     {
         var objectRef = new SourceObjectRef(
             SourceCoreSchemaIds.SourceObjectRef,
@@ -218,6 +274,7 @@ public sealed class LuxembourgRetainedObservedObjectIdentitySetTests
         var read = await new LuxembourgObservedObjectIdentitySetReader(store).ReadAsync(
             run.ObservedObjectIdentitySetReceipt!,
             run.ObservedObjectIdentitySetRef!,
+            run.CorpusRecordSet!.Set.RunIdentity,
             CancellationToken.None);
 
         Assert.IsNull(read.Refusal, read.Refusal?.Detail);
@@ -262,6 +319,7 @@ public sealed class LuxembourgRetainedObservedObjectIdentitySetTests
         var read = await new LuxembourgObservedObjectIdentitySetReader(store).ReadAsync(
             run.ObservedObjectIdentitySetReceipt!,
             run.CorpusRecordSetRef!,
+            run.CorpusRecordSet!.Set.RunIdentity,
             CancellationToken.None);
 
         Assert.IsNull(read.VerifiedSet);

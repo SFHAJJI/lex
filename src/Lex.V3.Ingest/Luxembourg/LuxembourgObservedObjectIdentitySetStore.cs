@@ -155,6 +155,16 @@ public enum LuxembourgObservedObjectIdentitySetReadRefusalKind
     /// </summary>
     [JsonStringEnumMemberName("retained_bytes_are_not_this_set")]
     RetainedBytesAreNotThisSet = 3,
+
+    /// <summary>
+    /// The bytes are a valid identity set and they are another run's. Separate from
+    /// <see cref="RetainedBytesAreNotThisSet"/> because the two are different facts: those bytes
+    /// are not this artifact, these bytes are this artifact but not this run's premise. Without
+    /// this refusal a caller could reopen any run's set and present it as the basis of theirs,
+    /// which the artifact's own RunIdentity field was there to prevent and nothing enforced.
+    /// </summary>
+    [JsonStringEnumMemberName("retained_set_is_for_another_run")]
+    RetainedSetIsForAnotherRun = 4,
 }
 
 public sealed record LuxembourgObservedObjectIdentitySetReadRefusal(
@@ -213,13 +223,20 @@ public sealed class LuxembourgObservedObjectIdentitySetReader
         _custodyStore = custodyStore ?? throw new ArgumentNullException(nameof(custodyStore));
     }
 
+    /// <param name="expectedRunIdentity">
+    /// The run whose premise the caller is asking for. Required, not optional: a reader that let a
+    /// caller omit it would hand back whatever set the bytes happened to be, and the artifact's
+    /// RunIdentity would be decoration.
+    /// </param>
     public async Task<LuxembourgObservedObjectIdentitySetReadResult> ReadAsync(
         DurableBlobWriteReceipt retainedSetReceipt,
         SourceArtifactRef setRef,
+        SourceArtifactRef expectedRunIdentity,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(retainedSetReceipt);
         ArgumentNullException.ThrowIfNull(setRef);
+        ArgumentNullException.ThrowIfNull(expectedRunIdentity);
 
         ReadOnlyMemory<byte> retained;
         try
@@ -245,10 +262,10 @@ public sealed class LuxembourgObservedObjectIdentitySetReader
                     exception.Message));
         }
 
+        VerifiedLuxembourgObservedObjectIdentitySet verified;
         try
         {
-            return LuxembourgObservedObjectIdentitySetReadResult.Reopened(
-                VerifiedLuxembourgObservedObjectIdentitySet.ParseAndVerify(setRef, retained.Span));
+            verified = VerifiedLuxembourgObservedObjectIdentitySet.ParseAndVerify(setRef, retained.Span);
         }
         catch (ArgumentException exception)
         {
@@ -260,5 +277,23 @@ public sealed class LuxembourgObservedObjectIdentitySetReader
                     LuxembourgObservedObjectIdentitySetReadRefusalKind.RetainedBytesAreNotThisSet,
                     exception.Message));
         }
+
+        // Checked against the bytes, like everything else here: the run identity being compared is
+        // the one the retained bytes carry, not one the caller also supplied alongside them.
+        if (!string.Equals(
+                verified.Set.RunIdentity.Sha256, expectedRunIdentity.Sha256, StringComparison.Ordinal)
+            || !string.Equals(
+                verified.Set.RunIdentity.ResourceId,
+                expectedRunIdentity.ResourceId,
+                StringComparison.Ordinal))
+        {
+            return LuxembourgObservedObjectIdentitySetReadResult.Refused(
+                new LuxembourgObservedObjectIdentitySetReadRefusal(
+                    LuxembourgObservedObjectIdentitySetReadRefusalKind.RetainedSetIsForAnotherRun,
+                    $"expected run {expectedRunIdentity.Sha256}; the retained set names "
+                    + verified.Set.RunIdentity.Sha256));
+        }
+
+        return LuxembourgObservedObjectIdentitySetReadResult.Reopened(verified);
     }
 }

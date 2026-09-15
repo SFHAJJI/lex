@@ -737,6 +737,7 @@ public sealed class LuxembourgQueryExecutionResult
         VerifiedCorpusRecordSet? corpusRecordSet,
         SourceArtifactRef? observedObjectIdentitySetRef,
         DurableBlobWriteReceipt? observedObjectIdentitySetReceipt,
+        VerifiedLuxembourgObservedObjectIdentitySet? observedObjectIdentitySet,
         IReadOnlyDictionary<int, LuxembourgGazetteBodySet>? gazetteBodySetsByOrdinal,
         IReadOnlyDictionary<int, IReadOnlyDictionary<string, CorpusAcquisitionRefusalReason>>? gazetteListingFetchRefusalsByOrdinal,
         IReadOnlyDictionary<int, IReadOnlyList<string>>? gazetteListingsWithContradictoryLegalValueByOrdinal,
@@ -760,6 +761,7 @@ public sealed class LuxembourgQueryExecutionResult
         CorpusRecordSet = corpusRecordSet;
         ObservedObjectIdentitySetRef = observedObjectIdentitySetRef;
         ObservedObjectIdentitySetReceipt = observedObjectIdentitySetReceipt;
+        ObservedObjectIdentitySet = observedObjectIdentitySet;
         GazetteBodySetsByOrdinal = gazetteBodySetsByOrdinal;
         GazetteListingFetchRefusalsByOrdinal = gazetteListingFetchRefusalsByOrdinal;
         GazetteListingsWithContradictoryLegalValueByOrdinal = gazetteListingsWithContradictoryLegalValueByOrdinal;
@@ -784,6 +786,7 @@ public sealed class LuxembourgQueryExecutionResult
         VerifiedCorpusRecordSet corpusRecordSet,
         SourceArtifactRef observedObjectIdentitySetRef,
         DurableBlobWriteReceipt observedObjectIdentitySetReceipt,
+        VerifiedLuxembourgObservedObjectIdentitySet observedObjectIdentitySet,
         IReadOnlyDictionary<int, LuxembourgGazetteBodySet> gazetteBodySetsByOrdinal,
         IReadOnlyDictionary<int, IReadOnlyDictionary<string, CorpusAcquisitionRefusalReason>> gazetteListingFetchRefusalsByOrdinal,
         IReadOnlyDictionary<int, IReadOnlyList<string>> gazetteListingsWithContradictoryLegalValueByOrdinal,
@@ -803,6 +806,7 @@ public sealed class LuxembourgQueryExecutionResult
         ArgumentNullException.ThrowIfNull(corpusRecordSet);
         ArgumentNullException.ThrowIfNull(observedObjectIdentitySetRef);
         ArgumentNullException.ThrowIfNull(observedObjectIdentitySetReceipt);
+        ArgumentNullException.ThrowIfNull(observedObjectIdentitySet);
         ArgumentNullException.ThrowIfNull(gazetteBodySetsByOrdinal);
         ArgumentNullException.ThrowIfNull(gazetteListingFetchRefusalsByOrdinal);
         ArgumentNullException.ThrowIfNull(gazetteListingsWithContradictoryLegalValueByOrdinal);
@@ -820,6 +824,7 @@ public sealed class LuxembourgQueryExecutionResult
             scopeManifestCanonicalSha256, completion, documentAcquisitionOutcomesByOrdinal,
             corpusRecordSetRef, corpusRecordSetReceipt, corpusRecordSet,
             observedObjectIdentitySetRef, observedObjectIdentitySetReceipt,
+            observedObjectIdentitySet,
             gazetteBodySetsByOrdinal, gazetteListingFetchRefusalsByOrdinal,
             gazetteListingsWithContradictoryLegalValueByOrdinal, populationLedger, null);
     }
@@ -834,7 +839,7 @@ public sealed class LuxembourgQueryExecutionResult
         ArgumentNullException.ThrowIfNull(refusal);
         return new(
             topology, familyOutcomes, relationFamilyAcquisitions, [], [], [], [], [], null, null, null,
-            null, null, null, null, null, null, null, null, null, null, refusal);
+            null, null, null, null, null, null, null, null, null, null, null, refusal);
     }
 
     /// <summary>
@@ -852,6 +857,15 @@ public sealed class LuxembourgQueryExecutionResult
     /// set. Both are carried for exactly that reason.
     /// </summary>
     public DurableBlobWriteReceipt? ObservedObjectIdentitySetReceipt { get; }
+
+    /// <summary>
+    /// The set itself, as it came back out of custody inside the write. Carried rather than dropped
+    /// because the terminal lineage door is synchronous and has no custody store: without the
+    /// verified set in hand it could only see a reference and a receipt, and a reference alone
+    /// cannot say whose run the bytes behind it describe. That is exactly how a foreign set survived
+    /// the door before this was here.
+    /// </summary>
+    public VerifiedLuxembourgObservedObjectIdentitySet? ObservedObjectIdentitySet { get; }
 
     /// <summary>Always present: minting it cannot fail, and it is useful context on a refusal too.</summary>
     public SourceProfileTopology Topology { get; }
@@ -1824,6 +1838,7 @@ public sealed class LuxembourgQueryExecutionAdapter
             recordSetResult.VerifiedSet!,
             identitySetResult.SetRef!,
             identitySetResult.RetainedSetReceipt!,
+            identitySetResult.VerifiedSet!,
             gazetteBodySetsByOrdinal!, gazetteListingFetchRefusalsByOrdinal!, gazetteContradictoryByOrdinal!,
             populationLedger!);
     }

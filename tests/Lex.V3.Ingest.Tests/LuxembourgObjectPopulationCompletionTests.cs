@@ -222,6 +222,7 @@ public sealed class LuxembourgObjectPopulationCompletionTests
             corpusRecordSet ?? run.CorpusRecordSet!,
             run.ObservedObjectIdentitySetRef!,
             run.ObservedObjectIdentitySetReceipt!,
+            run.ObservedObjectIdentitySet!,
             run.GazetteBodySetsByOrdinal!,
             run.GazetteListingFetchRefusalsByOrdinal!,
             run.GazetteListingsWithContradictoryLegalValueByOrdinal!,
