@@ -33,12 +33,12 @@ public sealed record EuFormexManifestationBoundQuery
 }
 
 /// <summary>
-/// Enumerates every manifestation type asserted for one proven EU expression identity.
+/// Enumerates every manifestation and asserted type for one proven EU expression identity.
 /// Rendering is offline; this plan sends no traffic.
 /// </summary>
 public sealed class EuFormexManifestationDiscoveryPlan
 {
-    public const string PartitionKeyPrefix = "eu-formex-manifestations-by-expression-v1-";
+    public const string PartitionKeyPrefix = "eu-formex-manifestations-by-expression-v2-";
     public const string WorkSelectionParameterName = "work_iri";
     public const string ExpressionSelectionParameterName = "expression_iri";
 
@@ -61,10 +61,11 @@ public sealed class EuFormexManifestationDiscoveryPlan
 
     private static readonly string[] Projection =
     [
-        "work", "expression", "manifestation_type", "manifestation_type_kind",
-        "datatype_iri", "language_tag", "multiplicity", "key_1", "key_2", "key_3", "key_4",
+        "work", "expression", "manifestation", "manifestation_type", "manifestation_type_kind",
+        "datatype_iri", "language_tag", "multiplicity",
+        "key_1", "key_2", "key_3", "key_4", "key_5",
     ];
-    private static readonly string[] Cursor = ["key_1", "key_2", "key_3", "key_4"];
+    private static readonly string[] Cursor = ["key_1", "key_2", "key_3", "key_4", "key_5"];
     private readonly byte[] _canonicalIdentityBytes;
 
     private EuFormexManifestationDiscoveryPlan()
@@ -72,7 +73,7 @@ public sealed class EuFormexManifestationDiscoveryPlan
         (CountTemplate, PageTemplate) = BuildTemplates();
         _canonicalIdentityBytes = StrictUtf8.GetBytes(string.Join('\n', new[]
         {
-            "eu-formex-manifestations-by-expression-plan/1",
+            "eu-formex-manifestations-by-expression-plan/2",
             "endpoint=" + PublisherEndpoint,
             "method=POST",
             "target=/webapi/rdf/sparql",
@@ -258,13 +259,13 @@ public sealed class EuFormexManifestationDiscoveryPlan
               ?manifestation <{{EuObjectFactsDiscoveryPlan.ManifestationTypePredicateIri}}> ?manifestation_type .
             """;
         var rows = $$"""
-            SELECT ?work ?expression ?manifestation_type ?manifestation_type_kind ?datatype_iri ?language_tag (COUNT(*) AS ?multiplicity) WHERE {
+            SELECT ?work ?expression ?manifestation ?manifestation_type ?manifestation_type_kind ?datatype_iri ?language_tag (COUNT(*) AS ?multiplicity) WHERE {
             {{Indent(pattern)}}
               BIND(IF(isIRI(?manifestation_type), "iri", IF(isLiteral(?manifestation_type), "literal", "unsupported")) AS ?manifestation_type_kind)
               BIND(COALESCE(STR(DATATYPE(?manifestation_type)), "") AS ?datatype_iri)
               BIND(COALESCE(LANG(?manifestation_type), "") AS ?language_tag)
             }
-            GROUP BY ?work ?expression ?manifestation_type ?manifestation_type_kind ?datatype_iri ?language_tag
+            GROUP BY ?work ?expression ?manifestation ?manifestation_type ?manifestation_type_kind ?datatype_iri ?language_tag
             """;
         var count = $$"""
             SELECT (COUNT(*) AS ?count) WHERE {
@@ -274,23 +275,25 @@ public sealed class EuFormexManifestationDiscoveryPlan
             }
             """;
         var page = $$"""
-            SELECT ?work ?expression ?manifestation_type ?manifestation_type_kind ?datatype_iri ?language_tag ?multiplicity ?key_1 ?key_2 ?key_3 ?key_4 WHERE {
+            SELECT ?work ?expression ?manifestation ?manifestation_type ?manifestation_type_kind ?datatype_iri ?language_tag ?multiplicity ?key_1 ?key_2 ?key_3 ?key_4 ?key_5 WHERE {
               {
             {{Indent(Indent(rows))}}
               }
-              BIND(?manifestation_type_kind AS ?key_1)
-              BIND(COALESCE(STR(?manifestation_type), "") AS ?key_2)
-              BIND(?datatype_iri AS ?key_3)
-              BIND(?language_tag AS ?key_4)
-              VALUES (?has_cursor ?last_key_1 ?last_key_2 ?last_key_3 ?last_key_4) {
-                ({has_cursor:uint} {last_key_1:sparql_string} {last_key_2:sparql_string} {last_key_3:sparql_string} {last_key_4:sparql_string})
+              BIND(STR(?manifestation) AS ?key_1)
+              BIND(?manifestation_type_kind AS ?key_2)
+              BIND(COALESCE(STR(?manifestation_type), "") AS ?key_3)
+              BIND(?datatype_iri AS ?key_4)
+              BIND(?language_tag AS ?key_5)
+              VALUES (?has_cursor ?last_key_1 ?last_key_2 ?last_key_3 ?last_key_4 ?last_key_5) {
+                ({has_cursor:uint} {last_key_1:sparql_string} {last_key_2:sparql_string} {last_key_3:sparql_string} {last_key_4:sparql_string} {last_key_5:sparql_string})
               }
               FILTER(?has_cursor = 0 || ?key_1 > ?last_key_1 ||
                 (?key_1 = ?last_key_1 && ?key_2 > ?last_key_2) ||
                 (?key_1 = ?last_key_1 && ?key_2 = ?last_key_2 && ?key_3 > ?last_key_3) ||
-                (?key_1 = ?last_key_1 && ?key_2 = ?last_key_2 && ?key_3 = ?last_key_3 && ?key_4 > ?last_key_4))
+                (?key_1 = ?last_key_1 && ?key_2 = ?last_key_2 && ?key_3 = ?last_key_3 && ?key_4 > ?last_key_4) ||
+                (?key_1 = ?last_key_1 && ?key_2 = ?last_key_2 && ?key_3 = ?last_key_3 && ?key_4 = ?last_key_4 && ?key_5 > ?last_key_5))
             }
-            ORDER BY ?key_1 ?key_2 ?key_3 ?key_4
+            ORDER BY ?key_1 ?key_2 ?key_3 ?key_4 ?key_5
             LIMIT {page_limit:uint}
             """;
         return (Normalize(count), Normalize(page));
