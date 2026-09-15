@@ -218,6 +218,7 @@ public sealed class LuxembourgObjectPopulationCompletionTests
             run.ScopeManifestCanonicalSha256!,
             outcomes ?? run.DocumentAcquisitionOutcomesByOrdinal!,
             run.CorpusRecordSetRef!,
+            run.CorpusRecordSetReceipt!,
             corpusRecordSet ?? run.CorpusRecordSet!,
             run.GazetteBodySetsByOrdinal!,
             run.GazetteListingFetchRefusalsByOrdinal!,

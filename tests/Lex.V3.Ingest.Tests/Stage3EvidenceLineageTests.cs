@@ -213,6 +213,7 @@ public sealed class Stage3EvidenceLineageTests
             manifestCanonicalSha256 ?? source.ScopeManifestCanonicalSha256!,
             source.DocumentAcquisitionOutcomesByOrdinal!,
             corpusRecordSetRef ?? source.CorpusRecordSetRef!,
+            source.CorpusRecordSetReceipt!,
             source.CorpusRecordSet!,
             source.GazetteBodySetsByOrdinal!,
             source.GazetteListingFetchRefusalsByOrdinal!,

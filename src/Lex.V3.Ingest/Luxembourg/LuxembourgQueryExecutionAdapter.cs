@@ -724,6 +724,7 @@ public sealed class LuxembourgQueryExecutionResult
         LuxembourgQueryExecutionCompletion? completion,
         IReadOnlyDictionary<int, CorpusAcquisitionOutcome>? documentAcquisitionOutcomesByOrdinal,
         SourceArtifactRef? corpusRecordSetRef,
+        DurableBlobWriteReceipt? corpusRecordSetReceipt,
         VerifiedCorpusRecordSet? corpusRecordSet,
         IReadOnlyDictionary<int, LuxembourgGazetteBodySet>? gazetteBodySetsByOrdinal,
         IReadOnlyDictionary<int, IReadOnlyDictionary<string, CorpusAcquisitionRefusalReason>>? gazetteListingFetchRefusalsByOrdinal,
@@ -744,6 +745,7 @@ public sealed class LuxembourgQueryExecutionResult
         Completion = completion;
         DocumentAcquisitionOutcomesByOrdinal = documentAcquisitionOutcomesByOrdinal;
         CorpusRecordSetRef = corpusRecordSetRef;
+        CorpusRecordSetReceipt = corpusRecordSetReceipt;
         CorpusRecordSet = corpusRecordSet;
         GazetteBodySetsByOrdinal = gazetteBodySetsByOrdinal;
         GazetteListingFetchRefusalsByOrdinal = gazetteListingFetchRefusalsByOrdinal;
@@ -765,6 +767,7 @@ public sealed class LuxembourgQueryExecutionResult
         string scopeManifestCanonicalSha256,
         IReadOnlyDictionary<int, CorpusAcquisitionOutcome> documentAcquisitionOutcomesByOrdinal,
         SourceArtifactRef corpusRecordSetRef,
+        DurableBlobWriteReceipt corpusRecordSetReceipt,
         VerifiedCorpusRecordSet corpusRecordSet,
         IReadOnlyDictionary<int, LuxembourgGazetteBodySet> gazetteBodySetsByOrdinal,
         IReadOnlyDictionary<int, IReadOnlyDictionary<string, CorpusAcquisitionRefusalReason>> gazetteListingFetchRefusalsByOrdinal,
@@ -781,6 +784,7 @@ public sealed class LuxembourgQueryExecutionResult
         ArgumentException.ThrowIfNullOrWhiteSpace(scopeManifestCanonicalSha256);
         ArgumentNullException.ThrowIfNull(documentAcquisitionOutcomesByOrdinal);
         ArgumentNullException.ThrowIfNull(corpusRecordSetRef);
+        ArgumentNullException.ThrowIfNull(corpusRecordSetReceipt);
         ArgumentNullException.ThrowIfNull(corpusRecordSet);
         ArgumentNullException.ThrowIfNull(gazetteBodySetsByOrdinal);
         ArgumentNullException.ThrowIfNull(gazetteListingFetchRefusalsByOrdinal);
@@ -797,7 +801,7 @@ public sealed class LuxembourgQueryExecutionResult
             localInboundRelations, typedAssertions,
             resourceObservationSubjects, resourceObservationExclusions, scopeManifestReceipt,
             scopeManifestCanonicalSha256, completion, documentAcquisitionOutcomesByOrdinal,
-            corpusRecordSetRef, corpusRecordSet,
+            corpusRecordSetRef, corpusRecordSetReceipt, corpusRecordSet,
             gazetteBodySetsByOrdinal, gazetteListingFetchRefusalsByOrdinal,
             gazetteListingsWithContradictoryLegalValueByOrdinal, populationLedger, null);
     }
@@ -812,7 +816,7 @@ public sealed class LuxembourgQueryExecutionResult
         ArgumentNullException.ThrowIfNull(refusal);
         return new(
             topology, familyOutcomes, relationFamilyAcquisitions, [], [], [], [], [], null, null, null,
-            null, null, null, null, null, null, null, refusal);
+            null, null, null, null, null, null, null, null, refusal);
     }
 
     /// <summary>Always present: minting it cannot fail, and it is useful context on a refusal too.</summary>
@@ -859,6 +863,21 @@ public sealed class LuxembourgQueryExecutionResult
     /// and also whenever a derivation ran but excluded nothing.
     /// </summary>
     public IReadOnlyList<LuxembourgResourceObservationExclusionAccounting> ResourceObservationExclusions { get; }
+
+    /// <summary>
+    /// The custody write receipt for this run's own corpus/6 record set: the address by which that
+    /// set can be reopened after this run ends. Present if and only if this result is delivered.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="CorpusRecordSetRef"/> cannot serve that purpose. Its digest is
+    /// <c>CorpusRecordSetCanonicalWriter.ComputeSetSha256</c>, which hashes a domain string before
+    /// the bytes, while custody addresses blobs by their plain SHA-256. The two are different values
+    /// of the same bytes, so a reader holding only the reference has the set's identity and no way
+    /// to fetch it. <see cref="CorpusRecordSetReader"/> takes both and checks each against the bytes.
+    /// This mirrors <see cref="ScopeManifestReceipt"/>, which this result has always carried for the
+    /// manifest one step earlier.
+    /// </remarks>
+    public DurableBlobWriteReceipt? CorpusRecordSetReceipt { get; }
 
     /// <summary>
     /// Present if and only if this result is delivered. A consumer that reads
@@ -1748,6 +1767,7 @@ public sealed class LuxembourgQueryExecutionAdapter
             resourceObservationSubjects,
             resourceObservationExclusions, writeReceipt!, manifestCanonicalSha256!,
             documentAcquisitionOutcomesByOrdinal!, recordSetResult.SetRef!,
+            recordSetResult.RetainedSetReceipt!,
             recordSetResult.VerifiedSet!,
             gazetteBodySetsByOrdinal!, gazetteListingFetchRefusalsByOrdinal!, gazetteContradictoryByOrdinal!,
             populationLedger!);

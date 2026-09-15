@@ -497,6 +497,7 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
                 + "Lex.V3.Ingest.CorpusAcquisitionOutcome>?, "
                 + Core
                 + "SourceArtifactRef?, "
+                + "Lex.V3.Contracts.Custody.DurableBlobWriteReceipt?, "
                 + "Lex.V3.Contracts.Source.Corpus.VerifiedCorpusRecordSet?, "
                 + "System.Collections.Generic.IReadOnlyDictionary<System.Int32, "
                 + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgGazetteBodySet>?, "
@@ -539,6 +540,7 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
                 + "Lex.V3.Ingest.CorpusAcquisitionOutcome>, "
                 + Core
                 + "SourceArtifactRef, "
+                + "Lex.V3.Contracts.Custody.DurableBlobWriteReceipt, "
                 + "Lex.V3.Contracts.Source.Corpus.VerifiedCorpusRecordSet, "
                 + "System.Collections.Generic.IReadOnlyDictionary<System.Int32, "
                 + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgGazetteBodySet>, "

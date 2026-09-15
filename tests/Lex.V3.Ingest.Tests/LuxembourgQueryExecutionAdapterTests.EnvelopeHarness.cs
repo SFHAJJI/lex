@@ -43,7 +43,16 @@ public sealed partial class LuxembourgQueryExecutionAdapterTests
     /// membership rule vacuously, so a closer tested only against it would pass with its matching
     /// deleted.
     /// </remarks>
-    internal static async Task<LuxembourgQueryExecutionResult> RunTwoSubjectDeliveredForPopulationAsync()
+    internal static async Task<LuxembourgQueryExecutionResult> RunTwoSubjectDeliveredForPopulationAsync() =>
+        (await RunTwoSubjectDeliveredWithStoreAsync()).Result;
+
+    /// <summary>
+    /// The same run, handing back the custody store it wrote into. A test that reopens this run's
+    /// retained evidence needs the shelf as well as the address, and the run itself carries only the
+    /// address.
+    /// </summary>
+    internal static async Task<(LuxembourgQueryExecutionResult Result, ICustodyStore Store)>
+        RunTwoSubjectDeliveredWithStoreAsync()
     {
         var subjectA0 = PopulationHarnessSubjects[0];
         var subjectA1 = PopulationHarnessSubjects[1];
@@ -69,7 +78,7 @@ public sealed partial class LuxembourgQueryExecutionAdapterTests
         var (resourceRequest, resourceWitness) = BuildPartitionRequest(ResourceSetId, ResourceFamilyKey);
         var (assertionRequest, assertionWitness) = BuildPartitionRequest(AssertionSetId, AssertionFamilyKey);
 
-        return await adapter.RunAsync(
+        var result = await adapter.RunAsync(
             [(resourceRequest, resourceWitness, null), (assertionRequest, assertionWitness, null)],
             null,
             ResourceFamilyKey,
@@ -78,5 +87,6 @@ public sealed partial class LuxembourgQueryExecutionAdapterTests
             DocumentFetchRendererSource(),
             LuxembourgAcquisitionTestFixture.TestWireBudget(),
             CancellationToken.None);
+        return (result, store);
     }
 }
