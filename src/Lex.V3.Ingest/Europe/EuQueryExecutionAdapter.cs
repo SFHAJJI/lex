@@ -1658,10 +1658,10 @@ public sealed class EuQueryExecutionAdapter
             .Select(static family => ScopeEvidenceObservation(family.Proof, family.Receipt))
             .ToArray();
         var resolver = await EuProductionScopeReductionEvidenceResolver.CreateAsync(
-                    _custodyStore,
-                    rootBinding.ClosureQueryPlanRef,
-                    observedObjects,
-                    scopeEvidenceObservations,
+                _custodyStore,
+                rootBinding.ClosureQueryPlanRef,
+                observedObjects,
+                scopeEvidenceObservations,
                 cancellationToken)
             .ConfigureAwait(false);
 
