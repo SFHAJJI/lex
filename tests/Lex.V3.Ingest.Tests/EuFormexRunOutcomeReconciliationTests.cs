@@ -509,6 +509,7 @@ public sealed class EuFormexRunOutcomeReconciliationTests
             run.MintedRowsByOrdinal!,
             run.DateAxioms,
             run.CorpusRecordSetRef!,
+            run.CorpusRecordSetReceipt!,
             run.CorpusRecordSet!,
             corrigendumTripwires ?? run.CorrigendumTripwires!);
 }

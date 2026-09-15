@@ -68,7 +68,8 @@ public sealed class Stage3EvidenceEnvelopeTests
             eu.ScopeManifestCanonicalSha256!, eu.DocumentAcquisitionOutcomesByOrdinal!,
             eu.DocumentLadderResultsByOrdinal!, eu.ObservedManifestationTypesByCelex!,
             eu.ObservedExpressionsByCelex!, eu.MintedRowsByOrdinal!, eu.DateAxioms,
-            eu.CorpusRecordSetRef!, eu.CorpusRecordSet!, eu.CorrigendumTripwires!);
+            eu.CorpusRecordSetRef!, eu.CorpusRecordSetReceipt!, eu.CorpusRecordSet!,
+            eu.CorrigendumTripwires!);
 
         Assert.AreEqual(EuQueryExecutionCompletion.AllFamiliesProven, missingJoinedProduction.Completion);
         Assert.IsNull(Stage3EvidenceEnvelope.TryCreate(

@@ -103,6 +103,8 @@ public sealed class DurableBlobReceiptFamilyIngestSurfaceTests
                 // than inside it, so the production holds two receipts and not one.
                 "field private instance " + ExpressionProductionResult + "::<RetainedEpisode>k__BackingField -> "
                 + Receipt + "?",
+                "field private instance " + EuQueryExecutionResult + "::<CorpusRecordSetReceipt>k__BackingField -> "
+                    + Receipt + "?",
                 "field private instance " + EuQueryExecutionResult + "::<ScopeManifestReceipt>k__BackingField -> " + Receipt + "?",
                 "field private instance " + TranspositionPopulationRow + "::<NormalisedEliJoinEvidenceReceipts>k__BackingField -> "
                 + "System.Collections.Generic.IReadOnlyList<" + Receipt + ">",
@@ -159,6 +161,8 @@ public sealed class DurableBlobReceiptFamilyIngestSurfaceTests
                 "property public instance Lex.V3.Ingest.Europe.EuFormexAnnexTransportBinding::RetainedZipReceipt() -> " + Receipt,
                 "property public instance " + ExpressionProductionResult + "::RetainedDerivation() -> " + Receipt + "?",
                 "property public instance " + ExpressionProductionResult + "::RetainedEpisode() -> " + Receipt + "?",
+                "property public instance " + EuQueryExecutionResult + "::CorpusRecordSetReceipt() -> "
+                    + Receipt + "?",
                 "property public instance " + EuQueryExecutionResult + "::ScopeManifestReceipt() -> " + Receipt + "?",
                 "property public instance " + TranspositionPopulationRow + "::NormalisedEliJoinEvidenceReceipts() -> "
                 + "System.Collections.Generic.IReadOnlyList<" + Receipt + ">",
