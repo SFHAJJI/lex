@@ -54,26 +54,15 @@ public sealed class QuarantineConstructionSurfaceTests
         CollectionAssert.AreEqual(
             new[]
             {
-                "field private instance "
-                    + "Lex.V3.Contracts.Source.Quarantine.TrustedQuarantinedPriorCoordinateInventor"
-                    + "y::<Inventory>k__BackingField -> "
-                    + "Lex.V3.Contracts.Source.Quarantine.QuarantinedPriorCoordinateInventory",
-                "method public static "
-                    + "Lex.V3.Contracts.Source.Quarantine.QuarantineInventoryCanonicalizer::VerifyS"
-                    + "ignature(Lex.V3.Contracts.Source.Quarantine.QuarantinedPriorCoordinateInvent"
-                    + "ory, "
-                    + "System.Security.Cryptography.ECDsa) -> "
-                    + "Lex.V3.Contracts.Source.Quarantine.QuarantinedPriorCoordinateInventory",
-                "method public static "
-                    + "Lex.V3.Contracts.Source.Quarantine.QuarantineInventoryWireReader::TryParse(S"
-                    + "ystem.String, "
-                    + "out Lex.V3.Contracts.Source.Quarantine.QuarantineInventoryWireRefusal&, "
-                    + "out System.String&?) -> "
-                    + "Lex.V3.Contracts.Source.Quarantine.QuarantinedPriorCoordinateInventory?",
-                "property public instance "
-                    + "Lex.V3.Contracts.Source.Quarantine.TrustedQuarantinedPriorCoordinateInventor"
-                    + "y::Inventory() -> "
-                    + "Lex.V3.Contracts.Source.Quarantine.QuarantinedPriorCoordinateInventory",
+                "constructor private instance " + N + "QuarantinePriorCoordinateReproduction::.ctor("
+                + N + "QuarantineReproducerRole, System.String, "
+                + "System.Collections.Generic.IReadOnlyList<" + N + "PriorPublicCoordinate>, "
+                + "System.String) -> " + N + "QuarantinePriorCoordinateReproduction",
+                "method public static " + N + "QuarantinePriorCoordinateReproduction::TryCreate("
+                + N + "QuarantineReproducerRole, System.String, "
+                + "System.Collections.Generic.IReadOnlyList<" + N + "PriorPublicCoordinate>, "
+                + "out " + N + "QuarantineReproductionRefusal&) -> "
+                + N + "QuarantinePriorCoordinateReproduction?",
             },
             ConstructionSurface.Of(typeof(QuarantinePriorCoordinateReproduction)).ToArray());
 
@@ -169,6 +158,12 @@ public sealed class QuarantineConstructionSurfaceTests
                     + "ory, "
                     + "System.Security.Cryptography.ECDsa) -> "
                     + "Lex.V3.Contracts.Source.Quarantine.QuarantinedPriorCoordinateInventory",
+                "method public static "
+                    + "Lex.V3.Contracts.Source.Quarantine.QuarantineInventoryWireReader::TryParse(S"
+                    + "ystem.String, "
+                    + "out Lex.V3.Contracts.Source.Quarantine.QuarantineInventoryWireRefusal&, "
+                    + "out System.String&?) -> "
+                    + "Lex.V3.Contracts.Source.Quarantine.QuarantinedPriorCoordinateInventory?",
                 "property public instance "
                     + "Lex.V3.Contracts.Source.Quarantine.TrustedQuarantinedPriorCoordinateInventor"
                     + "y::Inventory() -> "
