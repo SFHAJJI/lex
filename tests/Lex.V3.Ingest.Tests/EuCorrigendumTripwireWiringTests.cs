@@ -786,7 +786,6 @@ public sealed class EuCorrigendumTripwireWiringTests
             EuAcquisitionTestFixture.SourceWitness(),
             EuAcquisitionTestFixture.BuildRendererSource(1049),
             EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
-            new PermissiveEvidenceResolver(CompleteEnumerationRef),
             budget,
             CancellationToken.None);
         return new WiringRun(result, handler, budget, closure);

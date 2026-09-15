@@ -253,7 +253,6 @@ public sealed class EuStageOneAcquisitionCanary
             EuAcquisitionTestFixture.SourceWitness(),
             EuAcquisitionTestFixture.BuildRendererSource(6400),
             EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
-            new CanaryPermissiveEvidenceResolver(completeEnumerationRef),
             wireBudget,
             CancellationToken.None);
 
