@@ -1075,38 +1075,13 @@ public sealed class EuQueryExecutionAdapter
     /// equal limit is not the same promise.
     /// </para>
     /// </param>
-    public Task<EuQueryExecutionResult> RunAsync(
+    public async Task<EuQueryExecutionResult> RunAsync(
         IReadOnlyList<(EuCensusPartitionRunRequest Request, BoundMachineRequest SourceWitness)> censusFamilies,
         EuObjectFactsBatchPolicy objectFactsPolicy,
         MachineQueryRendererSource witnessRendererSource,
         BoundMachineRequest witnessSourceWitness,
         MachineQueryRendererSource documentFetchRendererSource,
         BoundMachineRequest documentFetchSourceWitness,
-        WireRequestBudget wireBudget,
-        CancellationToken cancellationToken) =>
-        RunAsync(
-            censusFamilies,
-            objectFactsPolicy,
-            witnessRendererSource,
-            witnessSourceWitness,
-            documentFetchRendererSource,
-            documentFetchSourceWitness,
-            evidenceResolver: null,
-            wireBudget,
-            cancellationToken);
-
-    /// <summary>
-    /// Test-only admission seam. Production callers use the public overload, which always builds
-    /// the resolver from this run's decoded observations and custody-confirmed evidence.
-    /// </summary>
-    internal async Task<EuQueryExecutionResult> RunAsync(
-        IReadOnlyList<(EuCensusPartitionRunRequest Request, BoundMachineRequest SourceWitness)> censusFamilies,
-        EuObjectFactsBatchPolicy objectFactsPolicy,
-        MachineQueryRendererSource witnessRendererSource,
-        BoundMachineRequest witnessSourceWitness,
-        MachineQueryRendererSource documentFetchRendererSource,
-        BoundMachineRequest documentFetchSourceWitness,
-        IScopeReductionEvidenceResolver? evidenceResolver,
         WireRequestBudget wireBudget,
         CancellationToken cancellationToken)
     {
@@ -1682,14 +1657,13 @@ public sealed class EuQueryExecutionAdapter
             .Concat(mFamilies)
             .Select(static family => ScopeEvidenceObservation(family.Proof, family.Receipt))
             .ToArray();
-        var resolver = evidenceResolver ??
-            await EuProductionScopeReductionEvidenceResolver.CreateAsync(
+        var resolver = await EuProductionScopeReductionEvidenceResolver.CreateAsync(
                     _custodyStore,
                     rootBinding.ClosureQueryPlanRef,
                     observedObjects,
                     scopeEvidenceObservations,
-                    cancellationToken)
-                .ConfigureAwait(false);
+                cancellationToken)
+            .ConfigureAwait(false);
 
         VerifiedScopeManifest manifest;
         try
