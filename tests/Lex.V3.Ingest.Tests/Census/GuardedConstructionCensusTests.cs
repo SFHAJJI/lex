@@ -827,6 +827,11 @@ public sealed class GuardedConstructionCensusTests
                 "Lex.V3.Ingest.Stage3EvidenceLineage: constructor private instance "
                     + "Lex.V3.Ingest.Stage3EvidenceLineage::.ctor, "
                     + "method public static Lex.V3.Ingest.Stage3EvidenceLineage::TryBind",
+                "Lex.V3.Ingest.Stage3FidelityPreservationReconciliation: constructor private instance "
+                    + "Lex.V3.Ingest.Stage3FidelityPreservationReconciliation::.ctor, "
+                    + "constructor private static "
+                    + "Lex.V3.Ingest.Stage3FidelityPreservationReconciliation::.cctor, "
+                    + "method public static Lex.V3.Ingest.Stage3FidelityPreservationReconciliation::TryCreate",
                 "Lex.V3.Ingest.WireBudgetSnapshot: constructor private instance "
                     + "Lex.V3.Ingest.WireBudgetSnapshot::.ctor, "
                     + "constructor private instance Lex.V3.Ingest.WireBudgetSnapshot::.ctor, "

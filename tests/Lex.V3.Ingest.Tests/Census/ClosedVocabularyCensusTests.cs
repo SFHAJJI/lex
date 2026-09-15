@@ -275,11 +275,17 @@ public sealed class ClosedVocabularyCensusTests
                 "Lex.V3.Ingest.Stage3EvidenceEnvelopeRefusal: None, EuropeNotComplete, "
                     + "LuxembourgNotComplete, EuropeFormexRunMismatch, "
                     + "EuropeFormexClassificationMismatch, "
-                    + "EuropeFormexClassificationSourceOutsideCorpus",
+                    + "EuropeFormexClassificationSourceOutsideCorpus, "
+                    + "EuropeFidelityPreservationMismatch, "
+                    + "LuxembourgFidelityPreservationMismatch",
                 "Lex.V3.Ingest.Stage3EvidenceLineageRefusal: None, EuropeCorpusRecordSetMismatch, "
                     + "EuropeManifestMismatch, EuropeRunIdentityMismatch, "
                     + "LuxembourgCorpusRecordSetMismatch, LuxembourgManifestMismatch, "
                     + "LuxembourgRunIdentityMismatch",
+                "Lex.V3.Ingest.Stage3FidelityPreservationObligation: MarkerOnlyRuleUnsupported, "
+                    + "FootnotePreservationUnproven, CitationPreservationUnproven",
+                "Lex.V3.Ingest.Stage3FidelityPreservationReconciliationRefusal: None, "
+                    + "EuropeNotComplete, LuxembourgNotComplete",
             },
             ClosedSurfaceCensus.ClosedVocabularies(CensusScope.SweptHere).ToArray());
     }

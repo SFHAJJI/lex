@@ -25,6 +25,12 @@ public enum Stage3EvidenceEnvelopeRefusal
 
     [JsonStringEnumMemberName("europe_formex_classification_source_outside_corpus")]
     EuropeFormexClassificationSourceOutsideCorpus = 5,
+
+    [JsonStringEnumMemberName("europe_fidelity_preservation_mismatch")]
+    EuropeFidelityPreservationMismatch = 6,
+
+    [JsonStringEnumMemberName("luxembourg_fidelity_preservation_mismatch")]
+    LuxembourgFidelityPreservationMismatch = 7,
 }
 
 /// <summary>
@@ -37,12 +43,14 @@ public sealed class Stage3EvidenceEnvelope
         EuQueryExecutionResult europe,
         LuxembourgQueryExecutionResult luxembourg,
         EuFormexRunOutcomeReconciliation formex,
-        EuFormexAnnexClassificationReconciliation formexAnnexClassifications)
+        EuFormexAnnexClassificationReconciliation formexAnnexClassifications,
+        Stage3FidelityPreservationReconciliation fidelityPreservation)
     {
         Europe = europe;
         Luxembourg = luxembourg;
         Formex = formex;
         FormexAnnexClassifications = formexAnnexClassifications;
+        FidelityPreservation = fidelityPreservation;
     }
 
     public EuQueryExecutionResult Europe { get; }
@@ -61,11 +69,18 @@ public sealed class Stage3EvidenceEnvelope
     /// </summary>
     public EuFormexAnnexClassificationReconciliation FormexAnnexClassifications { get; }
 
+    /// <summary>
+    /// The exact adapter runs' already-guarded fidelity outputs and explicit unproved obligations.
+    /// This carrier does not interpret publisher text or claim those obligations complete.
+    /// </summary>
+    public Stage3FidelityPreservationReconciliation FidelityPreservation { get; }
+
     public static Stage3EvidenceEnvelope? TryCreate(
         EuQueryExecutionResult europe,
         LuxembourgQueryExecutionResult luxembourg,
         EuFormexRunOutcomeReconciliation formex,
         EuFormexAnnexClassificationReconciliation formexAnnexClassifications,
+        Stage3FidelityPreservationReconciliation fidelityPreservation,
         out Stage3EvidenceEnvelopeRefusal refusal,
         out string? detail)
     {
@@ -73,6 +88,7 @@ public sealed class Stage3EvidenceEnvelope
         ArgumentNullException.ThrowIfNull(luxembourg);
         ArgumentNullException.ThrowIfNull(formex);
         ArgumentNullException.ThrowIfNull(formexAnnexClassifications);
+        ArgumentNullException.ThrowIfNull(fidelityPreservation);
 
         refusal = Stage3EvidenceEnvelopeRefusal.None;
         detail = null;
@@ -106,6 +122,20 @@ public sealed class Stage3EvidenceEnvelope
             return null;
         }
 
+        if (!ReferenceEquals(fidelityPreservation.Europe, europe))
+        {
+            refusal = Stage3EvidenceEnvelopeRefusal.EuropeFidelityPreservationMismatch;
+            detail = "the fidelity preservation belongs to a different EU result";
+            return null;
+        }
+
+        if (!ReferenceEquals(fidelityPreservation.Luxembourg, luxembourg))
+        {
+            refusal = Stage3EvidenceEnvelopeRefusal.LuxembourgFidelityPreservationMismatch;
+            detail = "the fidelity preservation belongs to a different Luxembourg result";
+            return null;
+        }
+
         var europeObjectRefs = europe.CorpusRecordSet!.Set.Records
             .Select(static record => record.ObjectRef)
             .ToHashSet();
@@ -124,7 +154,12 @@ public sealed class Stage3EvidenceEnvelope
             return null;
         }
 
-        return new Stage3EvidenceEnvelope(europe, luxembourg, formex, formexAnnexClassifications);
+        return new Stage3EvidenceEnvelope(
+            europe,
+            luxembourg,
+            formex,
+            formexAnnexClassifications,
+            fidelityPreservation);
     }
 
     private static bool EuropeIsComplete(EuQueryExecutionResult result) =>
