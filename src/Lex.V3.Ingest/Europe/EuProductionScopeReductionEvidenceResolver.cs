@@ -4,6 +4,10 @@ using Lex.V3.Contracts.Source.Scope;
 
 namespace Lex.V3.Ingest.Europe;
 
+internal sealed record EuScopeReductionEvidenceObservation(
+    SourceArtifactRef InterpretationProfileRef,
+    IReadOnlyList<SourceArtifactRef> RetainedEvidenceRefs);
+
 /// <summary>
 /// Admits Union scope bindings only against observations and retained evidence from the run that is
 /// constructing the manifest. Creation happens before manifest construction, so verification never
@@ -30,13 +34,13 @@ public sealed class EuProductionScopeReductionEvidenceResolver : IScopeReduction
         ICustodyStore custodyStore,
         SourceArtifactRef completeEnumerationRef,
         IReadOnlyList<SourceObjectRef> observedObjects,
-        IReadOnlyList<SourceArtifactRef> evidenceArtifacts,
+        IReadOnlyList<EuScopeReductionEvidenceObservation> evidenceObservations,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(custodyStore);
         ArgumentNullException.ThrowIfNull(completeEnumerationRef);
         ArgumentNullException.ThrowIfNull(observedObjects);
-        ArgumentNullException.ThrowIfNull(evidenceArtifacts);
+        ArgumentNullException.ThrowIfNull(evidenceObservations);
 
         var observedObjectRefSha256Values = new HashSet<string>(StringComparer.Ordinal);
         foreach (var observedObject in observedObjects)
@@ -47,13 +51,33 @@ public sealed class EuProductionScopeReductionEvidenceResolver : IScopeReduction
         }
 
         var custodyConfirmedEvidenceArtifacts = new HashSet<SourceArtifactRef>();
-        foreach (var artifact in evidenceArtifacts.Distinct())
+        foreach (var observation in evidenceObservations)
         {
-            ArgumentNullException.ThrowIfNull(artifact);
-            if (await IsReopenableFromCustodyAsync(custodyStore, artifact, cancellationToken)
-                .ConfigureAwait(false))
+            ArgumentNullException.ThrowIfNull(observation);
+            ArgumentNullException.ThrowIfNull(observation.InterpretationProfileRef);
+            ArgumentNullException.ThrowIfNull(observation.RetainedEvidenceRefs);
+            var retainedEvidenceRefs = observation.RetainedEvidenceRefs.Distinct().ToArray();
+            if (retainedEvidenceRefs.Length == 0)
             {
-                custodyConfirmedEvidenceArtifacts.Add(artifact);
+                continue;
+            }
+
+            var allReopened = true;
+            foreach (var retainedEvidenceRef in retainedEvidenceRefs)
+            {
+                ArgumentNullException.ThrowIfNull(retainedEvidenceRef);
+                if (!await IsReopenableFromCustodyAsync(
+                        custodyStore, retainedEvidenceRef, cancellationToken)
+                    .ConfigureAwait(false))
+                {
+                    allReopened = false;
+                    break;
+                }
+            }
+
+            if (allReopened)
+            {
+                custodyConfirmedEvidenceArtifacts.Add(observation.InterpretationProfileRef);
             }
         }
 

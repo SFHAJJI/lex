@@ -1348,7 +1348,7 @@ public sealed class EuQueryExecutionAdapter
         }
 
 
-        var objectFactsRows = new Dictionary<EuObjectFactsQuerySet, List<(IReadOnlyList<RepeatedEnumerationRow> Rows, RepeatedEnumerationInterpretationProfile Profile, AbsenceFamilyEnumerationProof Proof)>>();
+        var objectFactsRows = new Dictionary<EuObjectFactsQuerySet, List<(IReadOnlyList<RepeatedEnumerationRow> Rows, RepeatedEnumerationInterpretationProfile Profile, AbsenceFamilyEnumerationProof Proof, RepeatedEnumerationDeliveryReceipt Receipt)>>();
         foreach (var ((set, familyKey), (proof, receipt)) in objectFactsByKey)
         {
             var profile = EuObjectFactsDiscoveryPlan.Create().CreateDeliveryProfile(set);
@@ -1370,7 +1370,7 @@ public sealed class EuQueryExecutionAdapter
                 objectFactsRows[set] = list;
             }
 
-            list.Add((rows, reopenedProfile, proof));
+            list.Add((rows, reopenedProfile, proof, receipt));
         }
 
         if (!objectFactsRows.TryGetValue(EuObjectFactsQuerySet.ObjectFacts, out var pFamilies) || pFamilies.Count == 0 ||
@@ -1678,12 +1678,16 @@ public sealed class EuQueryExecutionAdapter
             }
         }
 
+        var scopeEvidenceObservations = pFamilies
+            .Concat(mFamilies)
+            .Select(static family => ScopeEvidenceObservation(family.Proof, family.Receipt))
+            .ToArray();
         var resolver = evidenceResolver ??
             await EuProductionScopeReductionEvidenceResolver.CreateAsync(
                     _custodyStore,
                     rootBinding.ClosureQueryPlanRef,
                     observedObjects,
-                    orderedEvidenceArtifacts,
+                    scopeEvidenceObservations,
                     cancellationToken)
                 .ConfigureAwait(false);
 
@@ -2578,6 +2582,31 @@ public sealed class EuQueryExecutionAdapter
         familyKey = $"executor-refused-{Guid.NewGuid():N}";
         outcomes.Add(EuFamilyEnumerationOutcome.ExecutorRefused(familyKey, runResult.Refusal!));
         return false;
+    }
+
+    private static EuScopeReductionEvidenceObservation ScopeEvidenceObservation(
+        AbsenceFamilyEnumerationProof proof,
+        RepeatedEnumerationDeliveryReceipt receipt)
+    {
+        if (receipt.Delivery.InterpretationProfileRef != proof.InterpretationProfileRef)
+        {
+            throw new InvalidOperationException(
+                "A proven family and its delivery receipt disagree on interpretation-profile identity.");
+        }
+
+        var delivery = receipt.Delivery;
+        var retainedEvidenceRefs = new[]
+            {
+                delivery.CountA.HttpEvidenceRef,
+                delivery.CountB.HttpEvidenceRef,
+            }
+            .Concat(delivery.PagesA.Pages.Select(static page => page.Evidence.HttpEvidenceRef))
+            .Concat(delivery.PagesB.Pages.Select(static page => page.Evidence.HttpEvidenceRef))
+            .Distinct()
+            .ToArray();
+        return new EuScopeReductionEvidenceObservation(
+            proof.InterpretationProfileRef,
+            retainedEvidenceRefs);
     }
 
     private async Task<(

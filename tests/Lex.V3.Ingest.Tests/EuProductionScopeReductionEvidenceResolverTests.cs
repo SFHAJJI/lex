@@ -34,17 +34,23 @@ public sealed class EuProductionScopeReductionEvidenceResolverTests
             store,
             CompleteEnumerationRef,
             [observed],
-            [retainedEvidence, absentEvidence],
+            [new EuScopeReductionEvidenceObservation(IdentityProfileRef, [retainedEvidence])],
+            CancellationToken.None);
+        var resolverWithAbsentEvidence = await EuProductionScopeReductionEvidenceResolver.CreateAsync(
+            store,
+            CompleteEnumerationRef,
+            [observed],
+            [new EuScopeReductionEvidenceObservation(IdentityProfileRef, [absentEvidence])],
             CancellationToken.None);
         var observedDigest = ScopeManifestCanonicalWriter.ComputeObjectRefSha256(observed);
         var foreignDigest = ScopeManifestCanonicalWriter.ComputeObjectRefSha256(foreign);
 
-        Assert.IsTrue(resolver.IsSelectorObservationAdmitted(Selector(observedDigest, retainedEvidence)));
+        Assert.IsTrue(resolver.IsSelectorObservationAdmitted(Selector(observedDigest, IdentityProfileRef)));
         Assert.IsFalse(
-            resolver.IsSelectorObservationAdmitted(Selector(observedDigest, absentEvidence)),
+            resolverWithAbsentEvidence.IsSelectorObservationAdmitted(Selector(observedDigest, IdentityProfileRef)),
             "a shaped digest that this run's custody cannot reopen must be refused");
         Assert.IsFalse(
-            resolver.IsSelectorObservationAdmitted(Selector(foreignDigest, retainedEvidence)),
+            resolver.IsSelectorObservationAdmitted(Selector(foreignDigest, IdentityProfileRef)),
             "a custody-backed artifact cannot admit an object absent from this run's decoded observations");
     }
 
