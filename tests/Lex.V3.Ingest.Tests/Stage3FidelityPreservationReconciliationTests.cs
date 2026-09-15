@@ -62,7 +62,8 @@ public sealed class Stage3FidelityPreservationReconciliationTests
             complete.ScopeManifestCanonicalSha256!, complete.DocumentAcquisitionOutcomesByOrdinal!,
             complete.DocumentLadderResultsByOrdinal!, complete.ObservedManifestationTypesByCelex!,
             complete.ObservedExpressionsByCelex!, complete.MintedRowsByOrdinal!, complete.DateAxioms,
-            complete.CorpusRecordSetRef!, complete.CorpusRecordSet!, complete.CorrigendumTripwires!);
+            complete.CorpusRecordSetRef!, complete.CorpusRecordSetReceipt!, complete.CorpusRecordSet!,
+            complete.CorrigendumTripwires!);
 
         Assert.IsNull(Stage3FidelityPreservationReconciliation.TryCreate(
             missing, luxembourg, out var refusal, out var detail));

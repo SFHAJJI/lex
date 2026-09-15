@@ -497,7 +497,7 @@ public sealed class EuCorrigendumTripwireWiringTests
                 result.ScopeManifestCanonicalSha256!, result.DocumentAcquisitionOutcomesByOrdinal!,
                 result.DocumentLadderResultsByOrdinal!, result.ObservedManifestationTypesByCelex!,
                 result.ObservedExpressionsByCelex!, result.MintedRowsByOrdinal!, result.DateAxioms,
-                result.CorpusRecordSetRef!, result.CorpusRecordSet!, completion);
+                result.CorpusRecordSetRef!, result.CorpusRecordSetReceipt!, result.CorpusRecordSet!, completion);
     }
 
     /// <summary>

@@ -564,6 +564,7 @@ public sealed class EuQueryExecutionResult
         EuLocatedAmendmentProduction? locatedAmendmentProduction,
         EuCorrigendumTripwireCompletion? corrigendumTripwires,
         SourceArtifactRef? corpusRecordSetRef,
+        DurableBlobWriteReceipt? corpusRecordSetReceipt,
         VerifiedCorpusRecordSet? corpusRecordSet,
         EuQueryExecutionCompletion? completion,
         EuQueryExecutionRefusalDetail? refusal,
@@ -594,6 +595,7 @@ public sealed class EuQueryExecutionResult
         LocatedAmendmentProduction = locatedAmendmentProduction;
         CorrigendumTripwires = corrigendumTripwires;
         CorpusRecordSetRef = corpusRecordSetRef;
+        CorpusRecordSetReceipt = corpusRecordSetReceipt;
         CorpusRecordSet = corpusRecordSet;
         Completion = completion;
         Refusal = refusal;
@@ -621,6 +623,7 @@ public sealed class EuQueryExecutionResult
         IReadOnlyDictionary<int, EuMintedRowAccounting> mintedRowsByOrdinal,
         IReadOnlyList<EuDateAxiomBinding> dateAxioms,
         SourceArtifactRef corpusRecordSetRef,
+        DurableBlobWriteReceipt corpusRecordSetReceipt,
         VerifiedCorpusRecordSet corpusRecordSet,
         EuCorrigendumTripwireCompletion corrigendumTripwires)
     {
@@ -638,6 +641,7 @@ public sealed class EuQueryExecutionResult
         ArgumentNullException.ThrowIfNull(mintedRowsByOrdinal);
         ArgumentNullException.ThrowIfNull(dateAxioms);
         ArgumentNullException.ThrowIfNull(corpusRecordSetRef);
+        ArgumentNullException.ThrowIfNull(corpusRecordSetReceipt);
         ArgumentNullException.ThrowIfNull(corpusRecordSet);
         ArgumentNullException.ThrowIfNull(corrigendumTripwires);
         var completion = familyOutcomes.All(static outcome => outcome.Kind == EuFamilyEnumerationOutcomeKind.Proven)
@@ -648,8 +652,8 @@ public sealed class EuQueryExecutionResult
             watermarkWitnessPlan, rootBinding, witnessReconciliation, witnessTerminations, scopeManifestReceipt,
             scopeManifestCanonicalSha256, documentAcquisitionOutcomesByOrdinal, documentLadderResultsByOrdinal,
             observedManifestationTypesByCelex, observedExpressionsByCelex, mintedRowsByOrdinal,
-            dateAxioms, [], null, corrigendumTripwires, corpusRecordSetRef, corpusRecordSet,
-            completion, null, null, null, null);
+            dateAxioms, [], null, corrigendumTripwires, corpusRecordSetRef, corpusRecordSetReceipt,
+            corpusRecordSet, completion, null, null, null, null);
     }
 
     /// <summary>
@@ -711,7 +715,7 @@ public sealed class EuQueryExecutionResult
             scopeManifestCanonicalSha256, documentAcquisitionOutcomesByOrdinal, documentLadderResultsByOrdinal,
             observedManifestationTypesByCelex, observedExpressionsByCelex, mintedRowsByOrdinal,
             dateAxioms, locatedAmendmentObservations, locatedAmendmentProduction, corrigendumTripwires,
-            recordSetResult.SetRef!, corpusRecordSet,
+            recordSetResult.SetRef!, recordSetResult.RetainedSetReceipt!, corpusRecordSet,
             completion, null, null, null, null);
     }
 
@@ -728,7 +732,7 @@ public sealed class EuQueryExecutionResult
         ArgumentNullException.ThrowIfNull(refusal);
         return new(
             topology, familyOutcomes, 0, 0, [], null, null, null, null, null, null, null, null, null, null, null,
-            [], [], null, null, null, null, null, refusal, decodeRefusal, decodeOffendingIri, decodeSnapshotRefusal,
+            [], [], null, null, null, null, null, null, refusal, decodeRefusal, decodeOffendingIri, decodeSnapshotRefusal,
             witnessTraversalRefusal);
     }
 
@@ -930,6 +934,13 @@ public sealed class EuQueryExecutionResult
     /// this result is delivered.
     /// </summary>
     public SourceArtifactRef? CorpusRecordSetRef { get; }
+
+    /// <summary>
+    /// The custody address of this run's retained corpus/6 record set. Present if and only if the
+    /// result is delivered. Consumers reopen the set with this receipt and verify its independent,
+    /// domain-separated identity with <see cref="CorpusRecordSetRef"/>.
+    /// </summary>
+    public DurableBlobWriteReceipt? CorpusRecordSetReceipt { get; }
 
     /// <summary>
     /// D1-06c-EU fix two: the corpus/6 record set this run wrote, reopened and verified through its

@@ -198,6 +198,7 @@ public sealed class EuObjectPopulationCompletionTests
             mintedRows ?? run.MintedRowsByOrdinal!,
             run.DateAxioms,
             run.CorpusRecordSetRef!,
+            run.CorpusRecordSetReceipt!,
             corpusRecordSet ?? run.CorpusRecordSet!,
             run.CorrigendumTripwires!);
 }
