@@ -47,6 +47,10 @@ public sealed class EuFormexManifestationDiscoveryPlanTests
             profile.CanonicalKeyVariables.ToArray());
         CollectionAssert.AreEqual(
             profile.CanonicalKeyVariables.ToArray(), profile.CursorVariables.ToArray());
+        StringAssert.Contains(plan.PageTemplate, "BIND(STR(?manifestation) AS ?key_1)");
+        StringAssert.Contains(
+            plan.PageTemplate,
+            "VALUES (?has_cursor ?last_key_1 ?last_key_2 ?last_key_3 ?last_key_4 ?last_key_5)");
     }
 
     [TestMethod]
