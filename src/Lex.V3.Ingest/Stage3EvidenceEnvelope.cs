@@ -26,6 +26,9 @@ public enum Stage3EvidenceEnvelopeRefusal
 
     [JsonStringEnumMemberName("duplicate_annex")]
     DuplicateAnnex = 5,
+
+    [JsonStringEnumMemberName("europe_formex_run_mismatch")]
+    EuropeFormexRunMismatch = 6,
 }
 
 /// <summary>
@@ -37,16 +40,24 @@ public sealed class Stage3EvidenceEnvelope
     private Stage3EvidenceEnvelope(
         EuQueryExecutionResult europe,
         LuxembourgQueryExecutionResult luxembourg,
+        EuFormexRunOutcomeReconciliation formex,
         IReadOnlyList<EuAnnexBodyDisposition> imageOnlyEuAnnexes)
     {
         Europe = europe;
         Luxembourg = luxembourg;
+        Formex = formex;
         ImageOnlyEuAnnexes = imageOnlyEuAnnexes;
     }
 
     public EuQueryExecutionResult Europe { get; }
 
     public LuxembourgQueryExecutionResult Luxembourg { get; }
+
+    /// <summary>
+    /// The total supplementary Formex disposition for the exact EU run in this envelope. Formex
+    /// does not enter or alter the primary-body acquisition ladder.
+    /// </summary>
+    public EuFormexRunOutcomeReconciliation Formex { get; }
 
     /// <summary>
     /// Successfully produced image-only annex gaps, ordered by their evidence-bound identity.
@@ -58,12 +69,14 @@ public sealed class Stage3EvidenceEnvelope
     public static Stage3EvidenceEnvelope? TryCreate(
         EuQueryExecutionResult europe,
         LuxembourgQueryExecutionResult luxembourg,
+        EuFormexRunOutcomeReconciliation formex,
         IEnumerable<EuImageOnlyAnnexProductionResult> imageOnlyEuAnnexProductions,
         out Stage3EvidenceEnvelopeRefusal refusal,
         out string? detail)
     {
         ArgumentNullException.ThrowIfNull(europe);
         ArgumentNullException.ThrowIfNull(luxembourg);
+        ArgumentNullException.ThrowIfNull(formex);
         ArgumentNullException.ThrowIfNull(imageOnlyEuAnnexProductions);
 
         refusal = Stage3EvidenceEnvelopeRefusal.None;
@@ -81,6 +94,13 @@ public sealed class Stage3EvidenceEnvelope
             detail = luxembourg.Refusal?.Code.ToString()
                 ?? luxembourg.Completion?.ToString()
                 ?? "completion absent";
+            return null;
+        }
+
+        if (!ReferenceEquals(formex.Run, europe))
+        {
+            refusal = Stage3EvidenceEnvelopeRefusal.EuropeFormexRunMismatch;
+            detail = "the Formex reconciliation belongs to a different EU result";
             return null;
         }
 
@@ -127,6 +147,7 @@ public sealed class Stage3EvidenceEnvelope
         return new Stage3EvidenceEnvelope(
             europe,
             luxembourg,
+            formex,
             new ReadOnlyCollection<EuAnnexBodyDisposition>(annexes));
     }
 
