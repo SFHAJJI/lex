@@ -30,7 +30,7 @@ public sealed class EuProductionScopeReductionEvidenceResolver : IScopeReduction
 
     public SourceArtifactRef CompleteEnumerationRef { get; }
 
-    public static async Task<EuProductionScopeReductionEvidenceResolver> CreateAsync(
+    internal static async Task<EuProductionScopeReductionEvidenceResolver> CreateAsync(
         ICustodyStore custodyStore,
         SourceArtifactRef completeEnumerationRef,
         IReadOnlyList<SourceObjectRef> observedObjects,
