@@ -18,7 +18,7 @@ internal sealed class EuProductionScopeReductionEvidenceResolver : IScopeReducti
     private readonly IReadOnlySet<string> _observedObjectRefSha256Values;
     private readonly IReadOnlySet<SourceArtifactRef> _custodyConfirmedEvidenceArtifacts;
 
-    private EuProductionScopeReductionEvidenceResolver(
+    public EuProductionScopeReductionEvidenceResolver(
         SourceArtifactRef completeEnumerationRef,
         IReadOnlySet<string> observedObjectRefSha256Values,
         IReadOnlySet<SourceArtifactRef> custodyConfirmedEvidenceArtifacts)
