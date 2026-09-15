@@ -1058,7 +1058,6 @@ public sealed class EuQueryExecutionAdapter
     /// <c>publications.europa.eu/resource/...</c> rather than POST against the SPARQL endpoint), so it
     /// cannot be the same kind of witness the other parameters here use.
     /// </param>
-    /// <param name="evidenceResolver">The evidence resolver the scope reduction requires.</param>
     /// <param name="wireBudget">
     /// THIS RUN'S ONE CEILING, charged for every request every door below sends: each census and
     /// object-facts session's robots fetch, its counts, its pages and every retry; the witness
@@ -1076,14 +1075,38 @@ public sealed class EuQueryExecutionAdapter
     /// equal limit is not the same promise.
     /// </para>
     /// </param>
-    public async Task<EuQueryExecutionResult> RunAsync(
+    public Task<EuQueryExecutionResult> RunAsync(
         IReadOnlyList<(EuCensusPartitionRunRequest Request, BoundMachineRequest SourceWitness)> censusFamilies,
         EuObjectFactsBatchPolicy objectFactsPolicy,
         MachineQueryRendererSource witnessRendererSource,
         BoundMachineRequest witnessSourceWitness,
         MachineQueryRendererSource documentFetchRendererSource,
         BoundMachineRequest documentFetchSourceWitness,
-        IScopeReductionEvidenceResolver evidenceResolver,
+        WireRequestBudget wireBudget,
+        CancellationToken cancellationToken) =>
+        RunAsync(
+            censusFamilies,
+            objectFactsPolicy,
+            witnessRendererSource,
+            witnessSourceWitness,
+            documentFetchRendererSource,
+            documentFetchSourceWitness,
+            evidenceResolver: null,
+            wireBudget,
+            cancellationToken);
+
+    /// <summary>
+    /// Test-only admission seam. Production callers use the public overload, which always builds
+    /// the resolver from this run's decoded observations and custody-confirmed evidence.
+    /// </summary>
+    internal async Task<EuQueryExecutionResult> RunAsync(
+        IReadOnlyList<(EuCensusPartitionRunRequest Request, BoundMachineRequest SourceWitness)> censusFamilies,
+        EuObjectFactsBatchPolicy objectFactsPolicy,
+        MachineQueryRendererSource witnessRendererSource,
+        BoundMachineRequest witnessSourceWitness,
+        MachineQueryRendererSource documentFetchRendererSource,
+        BoundMachineRequest documentFetchSourceWitness,
+        IScopeReductionEvidenceResolver? evidenceResolver,
         WireRequestBudget wireBudget,
         CancellationToken cancellationToken)
     {
@@ -1093,7 +1116,6 @@ public sealed class EuQueryExecutionAdapter
         ArgumentNullException.ThrowIfNull(witnessSourceWitness);
         ArgumentNullException.ThrowIfNull(documentFetchRendererSource);
         ArgumentNullException.ThrowIfNull(documentFetchSourceWitness);
-        ArgumentNullException.ThrowIfNull(evidenceResolver);
         ArgumentNullException.ThrowIfNull(wireBudget);
 
         var topology = MintTopology();
@@ -1656,11 +1678,20 @@ public sealed class EuQueryExecutionAdapter
             }
         }
 
+        var resolver = evidenceResolver ??
+            await EuProductionScopeReductionEvidenceResolver.CreateAsync(
+                    _custodyStore,
+                    rootBinding.ClosureQueryPlanRef,
+                    observedObjects,
+                    orderedEvidenceArtifacts,
+                    cancellationToken)
+                .ConfigureAwait(false);
+
         VerifiedScopeManifest manifest;
         try
         {
             manifest = ScopeReducer.Reduce(
-                scopeProfile, orderedEvidenceArtifacts, observedObjects, reductionInputs, evidenceResolver);
+                scopeProfile, orderedEvidenceArtifacts, observedObjects, reductionInputs, resolver);
         }
         catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
         {
@@ -1720,7 +1751,7 @@ public sealed class EuQueryExecutionAdapter
         var runIdentityRef = new SourceArtifactRef(
             $"urn:uuid:{Guid.NewGuid():D}", writeReceipt.Reference.ContentSha256);
         var reopenedManifest = EuScopeManifestBindingProof.TryOpenAsEuManifest(
-            manifestArtifactRef, reopened.Span, evidenceResolver, out var bindingRefusal);
+            manifestArtifactRef, reopened.Span, resolver, out var bindingRefusal);
         if (reopenedManifest is null)
         {
             return EuQueryExecutionResult.Refused(

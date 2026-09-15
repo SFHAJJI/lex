@@ -18,10 +18,6 @@ namespace Lex.V3.Ingest.Tests;
 /// </remarks>
 internal static class EuAxiomWiringHarness
 {
-    private static readonly SourceArtifactRef CompleteEnumerationRef = new(
-        "urn:uuid:00000000-0000-4000-8000-0000000000f0",
-        new string('a', 64));
-
     private const string ExpressionIri =
         "http://publications.europa.eu/resource/cellar/00000000-0000-0000-0000-000000000001.0001.01/DOC_1";
 
@@ -104,7 +100,6 @@ internal static class EuAxiomWiringHarness
             EuAcquisitionTestFixture.SourceWitness(),
             EuAcquisitionTestFixture.BuildRendererSource(1009),
             EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
-            new PermissiveEvidenceResolver(CompleteEnumerationRef),
             runWireBudget,
             CancellationToken.None);
     }
@@ -212,32 +207,8 @@ internal static class EuAxiomWiringHarness
             EuAcquisitionTestFixture.SourceWitness(),
             EuAcquisitionTestFixture.BuildRendererSource(1009),
             EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
-            new PermissiveEvidenceResolver(CompleteEnumerationRef),
             runWireBudget,
             CancellationToken.None);
     }
 
-    private sealed class PermissiveEvidenceResolver(SourceArtifactRef completeEnumerationRef)
-        : IScopeReductionEvidenceResolver
-    {
-        public SourceArtifactRef CompleteEnumerationRef { get; } = completeEnumerationRef;
-
-        public bool IsSelectorObservationAdmitted(ScopeSelectorObservationBinding binding) =>
-            IsSha256(binding.ObjectRefSha256) && IsSha256(binding.SelectorEvidenceSha256);
-
-        public bool IsSelectorNotApplicableAdmitted(ScopeSelectorNotApplicableBinding binding) =>
-            IsSha256(binding.ObjectRefSha256);
-
-        public bool IsRuleEvaluationAdmitted(ScopeRuleEvaluationBinding binding) =>
-            IsSha256(binding.ObjectRefSha256) &&
-            IsSha256(binding.SelectorSetSha256) &&
-            IsSha256(binding.RuleEvaluationSha256);
-
-        public bool IsCompleteEnumerationAdmitted(ScopeCompleteEnumerationBinding binding) =>
-            binding.CompleteEnumerationRef == CompleteEnumerationRef;
-
-        private static bool IsSha256(string value) =>
-            value.Length == 64 &&
-            value.All(static character => character is (>= '0' and <= '9') or (>= 'a' and <= 'f'));
-    }
 }
