@@ -1,4 +1,6 @@
 using Lex.V3.Contracts.Derivation;
+using Lex.V3.Contracts.Source.Core;
+using Lex.V3.Contracts.Source.Scope;
 using Lex.V3.Ingest.Europe;
 using Lex.V3.Ingest.Luxembourg;
 
@@ -116,6 +118,46 @@ public sealed class Stage3EvidenceEnvelopeTests
 
         Assert.ThrowsExactly<ArgumentNullException>(() => Stage3EvidenceEnvelope.TryCreate(
             eu, luxembourg, null!, [], out _, out _));
+    }
+
+    [TestMethod]
+    public async Task ImageOnlyAnnexSourceMustBelongToTheEuropeCorpus()
+    {
+        var eu = await CompleteEuropeAsync();
+        var luxembourg = await LuxembourgQueryExecutionAdapterTests.RunEmptyDeliveredForEnvelopeAsync();
+        var formex = EuFormexRunOutcomeReconciliationTests.CompleteForEnvelope(eu);
+        var annex = await EuImageOnlyAnnexProducerTests.ProduceForEnvelopeAsync();
+
+        Assert.IsNull(Stage3EvidenceEnvelope.TryCreate(
+            eu, luxembourg, formex, [annex], out var refusal, out var detail));
+        Assert.AreEqual(Stage3EvidenceEnvelopeRefusal.EuropeAnnexOutsideCorpus, refusal);
+        Assert.AreEqual(
+            ScopeManifestCanonicalWriter.ComputeObjectRefSha256(annex.Disposition!.SourceObject),
+            detail);
+    }
+
+    [TestMethod]
+    public async Task ImageOnlyAnnexSourceCannotMatchTheEuropeCorpusByCanonicalKeyAlone()
+    {
+        var eu = await CompleteEuropeAsync();
+        var luxembourg = await LuxembourgQueryExecutionAdapterTests.RunEmptyDeliveredForEnvelopeAsync();
+        var annex = await EuImageOnlyAnnexProducerTests.ProduceForEnvelopeAsync();
+        var source = annex.Disposition!.SourceObject;
+        var sameKeyForeignSource = new SourceObjectRef(
+            source.Schema,
+            source.Authority,
+            source.EntityKind,
+            "https://example.invalid/resource/cellar/" + source.CanonicalKey,
+            source.CanonicalKey,
+            source.CanonicalKeySha256,
+            source.IdentityProfileRef,
+            source.ParentKeyRef);
+        eu = Stage3EvidenceLineageTests.AddEuropeCorpusRecord(eu, sameKeyForeignSource);
+        var formex = EuFormexRunOutcomeReconciliationTests.CompleteForEnvelope(eu);
+
+        Assert.IsNull(Stage3EvidenceEnvelope.TryCreate(
+            eu, luxembourg, formex, [annex], out var refusal, out _));
+        Assert.AreEqual(Stage3EvidenceEnvelopeRefusal.EuropeAnnexOutsideCorpus, refusal);
     }
 
     [TestMethod]

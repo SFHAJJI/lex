@@ -105,19 +105,6 @@ public sealed class Stage3EvidenceLineageTests
     }
 
     [TestMethod]
-    public async Task ImageOnlyAnnexSourceMustBelongToTheBoundEuropeCorpus()
-    {
-        var envelope = await CompleteEnvelopeWithAnnexAsync(includeAnnexSourceInEuropeCorpus: false);
-
-        Assert.IsNull(Stage3EvidenceLineage.TryBind(envelope, out var refusal, out var detail));
-        Assert.AreEqual(Stage3EvidenceLineageRefusal.EuropeAnnexOutsideCorpus, refusal);
-        Assert.AreEqual(
-            ScopeManifestCanonicalWriter.ComputeObjectRefSha256(
-                envelope.ImageOnlyEuAnnexes.Single().SourceObject),
-            detail);
-    }
-
-    [TestMethod]
     public async Task ImageOnlyAnnexSourceInTheBoundEuropeCorpusBinds()
     {
         var envelope = await CompleteEnvelopeWithAnnexAsync(includeAnnexSourceInEuropeCorpus: true);
@@ -128,53 +115,12 @@ public sealed class Stage3EvidenceLineageTests
         Assert.IsNotNull(lineage);
     }
 
-    [TestMethod]
-    public async Task ImageOnlyAnnexSourceCannotMatchTheEuropeCorpusByCanonicalKeyAlone()
-    {
-        var europe = await EuAxiomWiringHarness.RunAsync(
-            static root => EuAcquisitionTestFixture.AxiomAbsenceScriptFor(root));
-        var luxembourg = await LuxembourgQueryExecutionAdapterTests.RunEmptyDeliveredForEnvelopeAsync();
-        var annex = await EuImageOnlyAnnexProducerTests.ProduceForEnvelopeAsync();
-        var source = annex.Disposition!.SourceObject;
-        var sameKeyForeignSource = new SourceObjectRef(
-            source.Schema,
-            source.Authority,
-            source.EntityKind,
-            "https://example.invalid/resource/cellar/" + source.CanonicalKey,
-            source.CanonicalKey,
-            source.CanonicalKeySha256,
-            source.IdentityProfileRef,
-            source.ParentKeyRef);
-        var envelope = Rebuild(
-            AddEuropeCorpusRecord(europe, sameKeyForeignSource),
-            luxembourg,
-            [annex]);
-
-        Assert.IsNull(Stage3EvidenceLineage.TryBind(envelope, out var refusal, out _));
-        Assert.AreEqual(Stage3EvidenceLineageRefusal.EuropeAnnexOutsideCorpus, refusal);
-    }
-
     private static async Task<Stage3EvidenceEnvelope> CompleteEnvelopeAsync()
     {
         var europe = await EuAxiomWiringHarness.RunAsync(
             static root => EuAcquisitionTestFixture.AxiomAbsenceScriptFor(root));
         var luxembourg = await LuxembourgQueryExecutionAdapterTests.RunEmptyDeliveredForEnvelopeAsync();
         return Rebuild(europe, luxembourg);
-    }
-
-    private static async Task<Stage3EvidenceEnvelope> CompleteEnvelopeWithAnnexAsync(
-        bool includeAnnexSourceInEuropeCorpus)
-    {
-        var europe = await EuAxiomWiringHarness.RunAsync(
-            static root => EuAcquisitionTestFixture.AxiomAbsenceScriptFor(root));
-        var luxembourg = await LuxembourgQueryExecutionAdapterTests.RunEmptyDeliveredForEnvelopeAsync();
-        var annex = await EuImageOnlyAnnexProducerTests.ProduceForEnvelopeAsync();
-        if (includeAnnexSourceInEuropeCorpus)
-        {
-            europe = AddEuropeCorpusRecord(europe, annex.Disposition!.SourceObject);
-        }
-
-        return Rebuild(europe, luxembourg, [annex]);
     }
 
     private static Stage3EvidenceEnvelope Rebuild(
@@ -229,7 +175,7 @@ public sealed class Stage3EvidenceLineageTests
             source.CorrigendumTripwires!);
     }
 
-    private static EuQueryExecutionResult AddEuropeCorpusRecord(
+    internal static EuQueryExecutionResult AddEuropeCorpusRecord(
         EuQueryExecutionResult source,
         SourceObjectRef objectRef)
     {
