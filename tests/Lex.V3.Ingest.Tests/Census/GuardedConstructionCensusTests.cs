@@ -72,6 +72,11 @@ public sealed class GuardedConstructionCensusTests
                     + "method public instance Lex.V3.Ingest.CorpusAcquisitionOutcome::<Clone>$, "
                     + "method public static Lex.V3.Ingest.CorpusAcquisitionOutcome::Held, "
                     + "method public static Lex.V3.Ingest.CorpusAcquisitionOutcome::Refused",
+                "Lex.V3.Ingest.CorpusRecordSetReadResult: constructor private instance "
+                    + "Lex.V3.Ingest.CorpusRecordSetReadResult::.ctor, "
+                    + "method public instance Lex.V3.Ingest.CorpusRecordSetReader::ReadAsync, "
+                    + "method public static Lex.V3.Ingest.CorpusRecordSetReadResult::Refused, "
+                    + "method public static Lex.V3.Ingest.CorpusRecordSetReadResult::Reopened",
                 "Lex.V3.Ingest.CorpusRecordSetWriteResult: constructor private instance "
                     + "Lex.V3.Ingest.CorpusRecordSetWriteResult::.ctor, "
                     + "method public instance Lex.V3.Ingest.CorpusRecordSetWriter::WriteAsync, "
@@ -827,11 +832,12 @@ public sealed class GuardedConstructionCensusTests
                 "Lex.V3.Ingest.Stage3EvidenceLineage: constructor private instance "
                     + "Lex.V3.Ingest.Stage3EvidenceLineage::.ctor, "
                     + "method public static Lex.V3.Ingest.Stage3EvidenceLineage::TryBind",
-                "Lex.V3.Ingest.Stage3FidelityPreservationReconciliation: constructor private instance "
-                    + "Lex.V3.Ingest.Stage3FidelityPreservationReconciliation::.ctor, "
+                "Lex.V3.Ingest.Stage3FidelityPreservationReconciliation: constructor private "
+                    + "instance Lex.V3.Ingest.Stage3FidelityPreservationReconciliation::.ctor, "
                     + "constructor private static "
                     + "Lex.V3.Ingest.Stage3FidelityPreservationReconciliation::.cctor, "
-                    + "method public static Lex.V3.Ingest.Stage3FidelityPreservationReconciliation::TryCreate",
+                    + "method public static "
+                    + "Lex.V3.Ingest.Stage3FidelityPreservationReconciliation::TryCreate",
                 "Lex.V3.Ingest.WireBudgetSnapshot: constructor private instance "
                     + "Lex.V3.Ingest.WireBudgetSnapshot::.ctor, "
                     + "constructor private instance Lex.V3.Ingest.WireBudgetSnapshot::.ctor, "

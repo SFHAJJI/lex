@@ -56,6 +56,8 @@ public sealed class ClosedVocabularyCensusTests
             {
                 "Lex.V3.Ingest.CorpusRecordOutcomeKind: Held, NotHeld, PendingAcquisition",
                 "Lex.V3.Ingest.CorpusRecordSetCompletionState: Complete, Partial",
+                "Lex.V3.Ingest.CorpusRecordSetReadRefusalKind: CustodyBytesNotRetained, "
+                    + "CustodyUnavailable, RetainedBytesAreNotThisSet",
                 "Lex.V3.Ingest.CorpusRecordSetWriteRefusalKind: RecordSetNotRetained",
                 "Lex.V3.Ingest.Europe.EuAnnexEvidenceBinder+PageLabelState: Missing, Invalid, Valid",
                 "Lex.V3.Ingest.Europe.EuAnnexEvidenceBindingRefusal: None, ProfileDigestMismatch, "
@@ -105,7 +107,8 @@ public sealed class ClosedVocabularyCensusTests
                     + "ExpressionOutsidePopulation, ExpressionContentDisagrees",
                 "Lex.V3.Ingest.Europe.EuFormexManifestationEnumerationRefusal: None, "
                     + "EnumerationRefused, EnumerationProofRefused, VerifiedRowsRefused, "
-                    + "RowNotAdmitted, RowNamesAnotherExpression, ManifestationBindingDeliveredTwice",
+                    + "RowNotAdmitted, RowNamesAnotherExpression, "
+                    + "ManifestationBindingDeliveredTwice",
                 "Lex.V3.Ingest.Europe.EuFormexPackageOutcomeKind: NotEligible, Acquired, "
                     + "Unavailable, Refused",
                 "Lex.V3.Ingest.Europe.EuFormexPackageOutcomePopulationRefusal: None, "
@@ -276,8 +279,7 @@ public sealed class ClosedVocabularyCensusTests
                     + "LuxembourgNotComplete, EuropeFormexRunMismatch, "
                     + "EuropeFormexClassificationMismatch, "
                     + "EuropeFormexClassificationSourceOutsideCorpus, "
-                    + "EuropeFidelityPreservationMismatch, "
-                    + "LuxembourgFidelityPreservationMismatch",
+                    + "EuropeFidelityPreservationMismatch, LuxembourgFidelityPreservationMismatch",
                 "Lex.V3.Ingest.Stage3EvidenceLineageRefusal: None, EuropeCorpusRecordSetMismatch, "
                     + "EuropeManifestMismatch, EuropeRunIdentityMismatch, "
                     + "LuxembourgCorpusRecordSetMismatch, LuxembourgManifestMismatch, "
