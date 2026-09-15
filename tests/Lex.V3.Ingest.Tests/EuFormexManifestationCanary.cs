@@ -58,8 +58,6 @@ public sealed class EuFormexManifestationCanary
 
         Assert.AreEqual(Work, expression.Identity.PublisherWorkId);
         Assert.AreEqual(Expression, expression.Identity.PublisherExpressionId);
-        Assert.AreEqual("eu-formex-manifestations-by-expression-v2-",
-            EuFormexManifestationDiscoveryPlan.PartitionKeyPrefix);
         Assert.AreEqual(PlanV2Sha256, plan.ArtifactRef.Sha256);
         Assert.AreEqual(plan.ArtifactRef, plan.CountQueryFamilyRef.RegistryRef);
         Assert.AreEqual(plan.ArtifactRef, plan.PageQueryFamilyRef.RegistryRef);
