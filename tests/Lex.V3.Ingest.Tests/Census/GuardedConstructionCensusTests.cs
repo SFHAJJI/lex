@@ -376,6 +376,11 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Ingest.Europe.EuProcedureEventProductionResult::Success, "
                     + "method public instance "
                     + "Lex.V3.Ingest.Europe.EuProcedureEventProducer::RunAsync",
+                "Lex.V3.Ingest.Europe.EuProductionScopeReductionEvidenceResolver: constructor "
+                    + "private instance "
+                    + "Lex.V3.Ingest.Europe.EuProductionScopeReductionEvidenceResolver::.ctor, "
+                    + "method internal static "
+                    + "Lex.V3.Ingest.Europe.EuProductionScopeReductionEvidenceResolver::CreateAsync",
                 "Lex.V3.Ingest.Europe.EuPublisherMarkedAmendmentAttribution: constructor internal "
                     + "instance Lex.V3.Ingest.Europe.EuPublisherMarkedAmendmentAttribution::.ctor",
                 "Lex.V3.Ingest.Europe.EuQueryExecutionRefusalDetail: constructor internal instance "

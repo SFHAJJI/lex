@@ -405,7 +405,6 @@ public sealed class EuStageOnePopulationRun
             EuAcquisitionTestFixture.SourceWitness(),
             EuAcquisitionTestFixture.BuildRendererSource(7400),
             EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
-            new PopulationPermissiveEvidenceResolver(completeEnumerationRef),
             wireBudget,
             CancellationToken.None).ConfigureAwait(false);
     }

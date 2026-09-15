@@ -434,7 +434,6 @@ public sealed class UnbudgetedEntryPointClosureTests
             EuAcquisitionTestFixture.SourceWitness(),
             EuAcquisitionTestFixture.BuildRendererSource(1009),
             EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
-            new UnreachableEvidenceResolver(),
             runBudget,
             CancellationToken.None);
 
@@ -585,7 +584,6 @@ public sealed class UnbudgetedEntryPointClosureTests
             EuAcquisitionTestFixture.SourceWitness(),
             EuAcquisitionTestFixture.BuildRendererSource(1009),
             EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
-            new UnreachableEvidenceResolver(),
             runBudget,
             CancellationToken.None);
 

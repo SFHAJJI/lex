@@ -130,9 +130,6 @@ public sealed class EuQueryExecutionAdapterTests
             mPlan, mPlanId, EuObjectFactsQuerySet.ManifestationFacts, [rootIri],
             EuAcquisitionTestFixture.BuildRendererSource(104),
             runWireBudget);
-
-        var evidenceResolver = new PermissiveEvidenceResolver(CompleteEnumerationRef);
-
         var result = await adapter.RunAsync(
             [(censusRequest, EuAcquisitionTestFixture.SourceWitness())],
             new EuObjectFactsBatchPolicy(
@@ -142,7 +139,6 @@ public sealed class EuQueryExecutionAdapterTests
             EuAcquisitionTestFixture.SourceWitness(),
             EuAcquisitionTestFixture.BuildRendererSource(1009),
             EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
-            evidenceResolver,
             runWireBudget,
             CancellationToken.None);
 
@@ -1008,7 +1004,6 @@ public sealed class EuQueryExecutionAdapterTests
                 EuAcquisitionTestFixture.SourceWitness(),
                 EuAcquisitionTestFixture.BuildRendererSource(1945),
                 EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
-                new PermissiveEvidenceResolver(CompleteEnumerationRef),
                 runWireBudget,
                 CancellationToken.None);
         }
@@ -1442,7 +1437,6 @@ public sealed class EuQueryExecutionAdapterTests
             EuAcquisitionTestFixture.SourceWitness(),
             EuAcquisitionTestFixture.BuildRendererSource(1080),
             EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
-            new PermissiveEvidenceResolver(CompleteEnumerationRef),
             runWireBudget,
             CancellationToken.None);
 
@@ -1591,7 +1585,6 @@ public sealed class EuQueryExecutionAdapterTests
             EuAcquisitionTestFixture.SourceWitness(),
             EuAcquisitionTestFixture.BuildRendererSource(1029),
             EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
-            new PermissiveEvidenceResolver(CompleteEnumerationRef),
             runWireBudget,
             CancellationToken.None);
 
@@ -1768,7 +1761,6 @@ public sealed class EuQueryExecutionAdapterTests
             EuAcquisitionTestFixture.SourceWitness(),
             EuAcquisitionTestFixture.BuildRendererSource(1029),
             EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
-            new PermissiveEvidenceResolver(CompleteEnumerationRef),
             runWireBudget,
             CancellationToken.None);
 
@@ -1944,7 +1936,6 @@ public sealed class EuQueryExecutionAdapterTests
             EuAcquisitionTestFixture.SourceWitness(),
             EuAcquisitionTestFixture.BuildRendererSource(1035),
             EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
-            new PermissiveEvidenceResolver(CompleteEnumerationRef),
             runWireBudget,
             CancellationToken.None);
 
@@ -2075,7 +2066,6 @@ public sealed class EuQueryExecutionAdapterTests
             EuAcquisitionTestFixture.SourceWitness(),
             EuAcquisitionTestFixture.BuildRendererSource(1045),
             EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
-            new PermissiveEvidenceResolver(CompleteEnumerationRef),
             runWireBudget,
             CancellationToken.None);
 
@@ -2147,7 +2137,6 @@ public sealed class EuQueryExecutionAdapterTests
             EuAcquisitionTestFixture.SourceWitness(),
             EuAcquisitionTestFixture.BuildRendererSource(1052),
             EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
-            new PermissiveEvidenceResolver(CompleteEnumerationRef),
             runWireBudget,
             CancellationToken.None);
 
@@ -2205,7 +2194,6 @@ public sealed class EuQueryExecutionAdapterTests
             EuAcquisitionTestFixture.SourceWitness(),
             EuAcquisitionTestFixture.BuildRendererSource(1062),
             EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
-            new PermissiveEvidenceResolver(CompleteEnumerationRef),
             runWireBudget,
             CancellationToken.None);
 
@@ -2319,7 +2307,6 @@ public sealed class EuQueryExecutionAdapterTests
             EuAcquisitionTestFixture.SourceWitness(),
             EuAcquisitionTestFixture.BuildRendererSource(1705),
             EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
-            new PermissiveEvidenceResolver(CompleteEnumerationRef),
             runWireBudget,
             CancellationToken.None);
 
@@ -2429,7 +2416,6 @@ public sealed class EuQueryExecutionAdapterTests
             EuAcquisitionTestFixture.SourceWitness(),
             EuAcquisitionTestFixture.BuildRendererSource(1715),
             EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
-            new PermissiveEvidenceResolver(CompleteEnumerationRef),
             runWireBudget,
             CancellationToken.None);
 
@@ -2538,7 +2524,6 @@ public sealed class EuQueryExecutionAdapterTests
             EuAcquisitionTestFixture.SourceWitness(),
             EuAcquisitionTestFixture.BuildRendererSource(1725),
             EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
-            new PermissiveEvidenceResolver(CompleteEnumerationRef),
             runWireBudget,
             CancellationToken.None);
 
@@ -3328,7 +3313,6 @@ public sealed class EuQueryExecutionAdapterTests
             EuAcquisitionTestFixture.SourceWitness(),
             EuAcquisitionTestFixture.BuildRendererSource(2509),
             EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
-            new PermissiveEvidenceResolver(CompleteEnumerationRef),
             runWireBudget,
             CancellationToken.None);
 
@@ -3348,7 +3332,8 @@ public sealed class EuQueryExecutionAdapterTests
         var manifestRef = new SourceArtifactRef(
             $"urn:uuid:{Guid.NewGuid():D}", result.ScopeManifestCanonicalSha256!);
         var manifest = EuScopeManifestBindingProof.TryOpenAsEuManifest(
-            manifestRef, bytes.Span, new PermissiveEvidenceResolver(CompleteEnumerationRef), out var refusal);
+            manifestRef, bytes.Span,
+            new PermissiveEvidenceResolver(result.RootBinding!.ClosureQueryPlanRef), out var refusal);
         Assert.IsNotNull(manifest, $"the written manifest did not reopen: {refusal}.");
         return manifest!;
     }
@@ -3361,7 +3346,8 @@ public sealed class EuQueryExecutionAdapterTests
         var manifestRef = new SourceArtifactRef(
             $"urn:uuid:{Guid.NewGuid():D}", result.ScopeManifestCanonicalSha256!);
         var manifest = EuScopeManifestBindingProof.TryOpenAsEuManifest(
-            manifestRef, bytes.Span, new PermissiveEvidenceResolver(CompleteEnumerationRef), out var refusal);
+            manifestRef, bytes.Span,
+            new PermissiveEvidenceResolver(result.RootBinding!.ClosureQueryPlanRef), out var refusal);
         Assert.IsNotNull(manifest, $"the written manifest did not reopen: {refusal}.");
         return manifest!.Rows.Single().FetchAddress;
     }
@@ -3635,7 +3621,6 @@ public sealed class EuQueryExecutionAdapterTests
             EuAcquisitionTestFixture.SourceWitness(),
             EuAcquisitionTestFixture.BuildRendererSource(8104),
             EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
-            new PermissiveEvidenceResolver(CompleteEnumerationRef),
             runWireBudget,
             System.Threading.CancellationToken.None);
     }
