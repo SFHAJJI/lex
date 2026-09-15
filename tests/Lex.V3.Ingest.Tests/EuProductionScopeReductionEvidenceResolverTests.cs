@@ -110,7 +110,7 @@ public sealed class EuProductionScopeReductionEvidenceResolverTests
     private static SourceObjectRef BuildObject(string sourceId) =>
         new(
             SourceCoreSchemaIds.SourceObjectRef,
-            SourceAuthority.EurLex,
+            SourceAuthority.Cellar,
             new SourceRegistryMemberRef(IdentityProfileRef, "legal_resource"),
             sourceId,
             sourceId,
