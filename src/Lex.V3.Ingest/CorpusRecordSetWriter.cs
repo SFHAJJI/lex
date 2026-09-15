@@ -290,12 +290,14 @@ public sealed class CorpusRecordSetWriteResult
 {
     private CorpusRecordSetWriteResult(
         SourceArtifactRef? setRef,
+        DurableBlobWriteReceipt? retainedSetReceipt,
         VerifiedCorpusRecordSet? verifiedSet,
         CorpusRecordSetCompletion? completion,
         CorpusRecordSetWriteRefusal? refusal,
         CustodyMembership? retainedFloor)
     {
         SetRef = setRef;
+        RetainedSetReceipt = retainedSetReceipt;
         VerifiedSet = verifiedSet;
         Completion = completion;
         Refusal = refusal;
@@ -318,6 +320,24 @@ public sealed class CorpusRecordSetWriteResult
     public SourceArtifactRef? SetRef { get; }
 
     /// <summary>
+    /// The custody write receipt for this set's own bytes, for a written result only: the address
+    /// by which the retained set can be found again after this run ends.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="SetRef"/> cannot serve that purpose and never could.
+    /// <c>CorpusRecordSetCanonicalWriter.ComputeSetSha256</c> domain-separates its digest by hashing
+    /// a domain string before the bytes, while custody addresses blobs by
+    /// <see cref="CustodyDigest.Of"/>, the plain SHA-256 of those same bytes; the two values are
+    /// different, which is why <see cref="CorpusRecordSetWriter.WriteAsync"/> itself reads by the
+    /// receipt's digest and only then verifies against <see cref="SetRef"/>. Before this property
+    /// existed the receipt was used for exactly that one read and then dropped, so a run retained
+    /// its corpus/6 record set and kept no address by which anyone could ever reopen it -- unlike
+    /// the scope manifest one step earlier, whose receipt both adapters carry on their own results.
+    /// <see cref="CorpusRecordSetReader"/> is the door that needs it.
+    /// </remarks>
+    public DurableBlobWriteReceipt? RetainedSetReceipt { get; }
+
+    /// <summary>
     /// The reopened, checked set -- reopened through <see cref="VerifiedCorpusRecordSet.ParseAndVerify"/>
     /// against the exact bytes the custody store returned, never the in-memory set this writer built,
     /// for a written result only.
@@ -330,11 +350,13 @@ public sealed class CorpusRecordSetWriteResult
 
     public static CorpusRecordSetWriteResult Written(
         SourceArtifactRef setRef,
+        DurableBlobWriteReceipt retainedSetReceipt,
         VerifiedCorpusRecordSet verifiedSet,
         CorpusRecordSetCompletion completion,
         CustodyMembership retainedFloor)
     {
         ArgumentNullException.ThrowIfNull(setRef);
+        ArgumentNullException.ThrowIfNull(retainedSetReceipt);
         ArgumentNullException.ThrowIfNull(verifiedSet);
         ArgumentNullException.ThrowIfNull(completion);
         if (retainedFloor is not (CustodyMembership.RetainedUnenforced or CustodyMembership.Floored))
@@ -346,13 +368,14 @@ public sealed class CorpusRecordSetWriteResult
                 "derives only RetainedUnenforced or Floored.");
         }
 
-        return new CorpusRecordSetWriteResult(setRef, verifiedSet, completion, null, retainedFloor);
+        return new CorpusRecordSetWriteResult(
+            setRef, retainedSetReceipt, verifiedSet, completion, null, retainedFloor);
     }
 
     public static CorpusRecordSetWriteResult Refused(CorpusRecordSetWriteRefusal refusal)
     {
         ArgumentNullException.ThrowIfNull(refusal);
-        return new CorpusRecordSetWriteResult(null, null, null, refusal, null);
+        return new CorpusRecordSetWriteResult(null, null, null, null, refusal, null);
     }
 }
 
@@ -425,7 +448,11 @@ public sealed class CorpusRecordSetWriter
         var verifiedSet = VerifiedCorpusRecordSet.ParseAndVerify(setArtifactRef, reopenedBytes.Span);
 
         return CorpusRecordSetWriteResult.Written(
-            setArtifactRef, verifiedSet, completion, CustodyMembershipClassifier.Classify(writeReceipt));
+            setArtifactRef,
+            writeReceipt,
+            verifiedSet,
+            completion,
+            CustodyMembershipClassifier.Classify(writeReceipt));
     }
 
     private static CorpusRecordSetCompletion BuildCompletion(

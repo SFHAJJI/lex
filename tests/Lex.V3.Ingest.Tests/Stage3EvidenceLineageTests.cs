@@ -139,6 +139,7 @@ public sealed class Stage3EvidenceLineageTests
         var corpus = corpusRecordSet ?? source.CorpusRecordSet!;
         var recordSetResult = CorpusRecordSetWriteResult.Written(
             corpusRecordSetRef ?? source.CorpusRecordSetRef!,
+            RetainedSetReceipt(),
             corpus,
             Complete(corpus),
             CustodyMembership.Floored);
@@ -217,6 +218,27 @@ public sealed class Stage3EvidenceLineageTests
             source.GazetteListingFetchRefusalsByOrdinal!,
             source.GazetteListingsWithContradictoryLegalValueByOrdinal!,
             source.PopulationLedger!);
+
+    /// <summary>
+    /// A stand-in custody address for a set these fixtures fabricate rather than write. The lineage
+    /// under test never reads it; it exists because a written result now has to name the address its
+    /// own bytes were retained at, and a fixture that fabricates the result fabricates that too.
+    /// </summary>
+    private static DurableBlobWriteReceipt RetainedSetReceipt()
+    {
+        var observedAt = new DateTimeOffset(2026, 9, 15, 0, 0, 0, TimeSpan.Zero);
+        var reference = new DurableBlobRef(
+            CustodySchemaIds.DurableBlobRef, new string('d', 64), 2048, CustodyClass.NightlyFloor90d);
+        var policy = new CustodyPolicyEvidence(
+            CustodySchemaIds.CustodyPolicyEvidence,
+            reference,
+            CustodyVerificationProfile.ImmutableObject1,
+            Guid.Parse("00000000-0000-0000-0000-0000000000d1"),
+            CustodyProtection.LockedTime,
+            observedAt,
+            observedAt.AddDays(91));
+        return new DurableBlobWriteReceipt(CustodySchemaIds.DurableBlobWriteReceipt, reference, policy);
+    }
 
     private static CorpusRecordSetCompletion Complete(VerifiedCorpusRecordSet corpus)
     {

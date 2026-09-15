@@ -204,6 +204,7 @@ public sealed partial class EuLocatedAmendmentProducerTests
         CorpusRecordSetCompletion completion) =>
         CorpusRecordSetWriteResult.Written(
             new SourceArtifactRef("urn:uuid:10000000-0000-4000-8000-000000000006", new string('f', 64)),
+            HeldReceipt(),
             corpus,
             completion,
             CustodyMembership.Floored);
