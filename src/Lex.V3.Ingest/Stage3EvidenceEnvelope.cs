@@ -1,6 +1,4 @@
-using System.Collections.ObjectModel;
 using System.Text.Json.Serialization;
-using Lex.V3.Contracts.Derivation;
 using Lex.V3.Contracts.Source.Scope;
 using Lex.V3.Ingest.Europe;
 using Lex.V3.Ingest.Luxembourg;
@@ -19,25 +17,19 @@ public enum Stage3EvidenceEnvelopeRefusal
     [JsonStringEnumMemberName("luxembourg_not_complete")]
     LuxembourgNotComplete = 2,
 
-    [JsonStringEnumMemberName("annex_production_refused")]
-    AnnexProductionRefused = 3,
-
-    [JsonStringEnumMemberName("annex_is_not_text_unavailable")]
-    AnnexIsNotTextUnavailable = 4,
-
-    [JsonStringEnumMemberName("duplicate_annex")]
-    DuplicateAnnex = 5,
-
     [JsonStringEnumMemberName("europe_formex_run_mismatch")]
-    EuropeFormexRunMismatch = 6,
+    EuropeFormexRunMismatch = 3,
 
-    [JsonStringEnumMemberName("europe_annex_outside_corpus")]
-    EuropeAnnexOutsideCorpus = 7,
+    [JsonStringEnumMemberName("europe_formex_classification_mismatch")]
+    EuropeFormexClassificationMismatch = 4,
+
+    [JsonStringEnumMemberName("europe_formex_classification_source_outside_corpus")]
+    EuropeFormexClassificationSourceOutsideCorpus = 5,
 }
 
 /// <summary>
-/// The construction-only meeting point for the accepted EU, Luxembourg and image-only-annex
-/// producer outputs. It neither serializes nor upgrades them to a release artifact.
+/// The construction-only meeting point for accepted EU, Luxembourg and supplementary Formex
+/// outputs. It neither serializes nor upgrades them to a release artifact.
 /// </summary>
 public sealed class Stage3EvidenceEnvelope
 {
@@ -45,12 +37,12 @@ public sealed class Stage3EvidenceEnvelope
         EuQueryExecutionResult europe,
         LuxembourgQueryExecutionResult luxembourg,
         EuFormexRunOutcomeReconciliation formex,
-        IReadOnlyList<EuAnnexBodyDisposition> imageOnlyEuAnnexes)
+        EuFormexAnnexClassificationReconciliation formexAnnexClassifications)
     {
         Europe = europe;
         Luxembourg = luxembourg;
         Formex = formex;
-        ImageOnlyEuAnnexes = imageOnlyEuAnnexes;
+        FormexAnnexClassifications = formexAnnexClassifications;
     }
 
     public EuQueryExecutionResult Europe { get; }
@@ -64,24 +56,23 @@ public sealed class Stage3EvidenceEnvelope
     public EuFormexRunOutcomeReconciliation Formex { get; }
 
     /// <summary>
-    /// Successfully produced image-only annex gaps, ordered by their evidence-bound identity.
-    /// A producer refusal cannot enter this collection as a disposition. This collection records
-    /// the supplied producer outcomes; it does not certify that a global annex population is complete.
+    /// The proof-complete classifications for every acquired Formex inventory member in the exact
+    /// reconciliation above. This supplementary carrier preserves its authoritative member order.
     /// </summary>
-    public IReadOnlyList<EuAnnexBodyDisposition> ImageOnlyEuAnnexes { get; }
+    public EuFormexAnnexClassificationReconciliation FormexAnnexClassifications { get; }
 
     public static Stage3EvidenceEnvelope? TryCreate(
         EuQueryExecutionResult europe,
         LuxembourgQueryExecutionResult luxembourg,
         EuFormexRunOutcomeReconciliation formex,
-        IEnumerable<EuImageOnlyAnnexProductionResult> imageOnlyEuAnnexProductions,
+        EuFormexAnnexClassificationReconciliation formexAnnexClassifications,
         out Stage3EvidenceEnvelopeRefusal refusal,
         out string? detail)
     {
         ArgumentNullException.ThrowIfNull(europe);
         ArgumentNullException.ThrowIfNull(luxembourg);
         ArgumentNullException.ThrowIfNull(formex);
-        ArgumentNullException.ThrowIfNull(imageOnlyEuAnnexProductions);
+        ArgumentNullException.ThrowIfNull(formexAnnexClassifications);
 
         refusal = Stage3EvidenceEnvelopeRefusal.None;
         detail = null;
@@ -108,61 +99,32 @@ public sealed class Stage3EvidenceEnvelope
             return null;
         }
 
-        var europeObjectRefs = europe.CorpusRecordSet!.Set.Records
-            .Select(static record => record.ObjectRef)
-            .ToHashSet();
-        var annexes = new List<EuAnnexBodyDisposition>();
-        foreach (var production in imageOnlyEuAnnexProductions)
+        if (!ReferenceEquals(formexAnnexClassifications.Formex, formex))
         {
-            if (production is null)
-            {
-                throw new ArgumentException(
-                    "An annex production result cannot be null.",
-                    nameof(imageOnlyEuAnnexProductions));
-            }
-
-            if (!production.Produced || production.Disposition is null)
-            {
-                refusal = Stage3EvidenceEnvelopeRefusal.AnnexProductionRefused;
-                detail = production.Refusal + ": " + production.Detail;
-                return null;
-            }
-
-            var annex = production.Disposition;
-            if (annex.Outcome != EuAnnexBodyDispositionOutcome.TextNotAvailable)
-            {
-                refusal = Stage3EvidenceEnvelopeRefusal.AnnexIsNotTextUnavailable;
-                detail = annex.IdentitySha256;
-                return null;
-            }
-
-            if (!europeObjectRefs.Contains(annex.SourceObject))
-            {
-                refusal = Stage3EvidenceEnvelopeRefusal.EuropeAnnexOutsideCorpus;
-                detail = ScopeManifestCanonicalWriter.ComputeObjectRefSha256(annex.SourceObject);
-                return null;
-            }
-
-            annexes.Add(annex);
-        }
-
-        var duplicate = annexes
-            .GroupBy(AnnexKey, StringComparer.Ordinal)
-            .FirstOrDefault(static group => group.Skip(1).Any());
-        if (duplicate is not null)
-        {
-            refusal = Stage3EvidenceEnvelopeRefusal.DuplicateAnnex;
-            detail = duplicate.Key;
+            refusal = Stage3EvidenceEnvelopeRefusal.EuropeFormexClassificationMismatch;
+            detail = "the Formex annex classifications belong to a different Formex reconciliation";
             return null;
         }
 
-        annexes.Sort(static (left, right) =>
-            StringComparer.Ordinal.Compare(left.IdentitySha256, right.IdentitySha256));
-        return new Stage3EvidenceEnvelope(
-            europe,
-            luxembourg,
-            formex,
-            new ReadOnlyCollection<EuAnnexBodyDisposition>(annexes));
+        var europeObjectRefs = europe.CorpusRecordSet!.Set.Records
+            .Select(static record => record.ObjectRef)
+            .ToHashSet();
+        var sourceOutsideCorpus = formexAnnexClassifications.Classifications
+            .SelectMany(static classification => new[]
+            {
+                classification.Binding.FormexSource.ObjectRef,
+                classification.Binding.XhtmlSource.ObjectRef,
+                classification.Binding.PdfSource.ObjectRef,
+            })
+            .FirstOrDefault(source => !europeObjectRefs.Contains(source));
+        if (sourceOutsideCorpus is not null)
+        {
+            refusal = Stage3EvidenceEnvelopeRefusal.EuropeFormexClassificationSourceOutsideCorpus;
+            detail = ScopeManifestCanonicalWriter.ComputeObjectRefSha256(sourceOutsideCorpus);
+            return null;
+        }
+
+        return new Stage3EvidenceEnvelope(europe, luxembourg, formex, formexAnnexClassifications);
     }
 
     private static bool EuropeIsComplete(EuQueryExecutionResult result) =>
@@ -200,7 +162,4 @@ public sealed class Stage3EvidenceEnvelope
         result.GazetteListingFetchRefusalsByOrdinal is not null &&
         result.GazetteListingsWithContradictoryLegalValueByOrdinal is not null;
 
-    private static string AnnexKey(EuAnnexBodyDisposition annex) => string.Join('\n',
-        annex.SourceObject.CanonicalKeySha256,
-        annex.AnnexLocation.RawValue);
 }

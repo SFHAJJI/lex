@@ -2,7 +2,6 @@ using Lex.V3.Contracts.Custody;
 using Lex.V3.Contracts.Derivation;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Corpus;
-using Lex.V3.Contracts.Source.Scope;
 using Lex.V3.Ingest.Europe;
 using Lex.V3.Ingest.Luxembourg;
 
@@ -104,24 +103,6 @@ public sealed class Stage3EvidenceLineageTests
         Assert.AreEqual(Stage3EvidenceLineageRefusal.LuxembourgRunIdentityMismatch, refusal);
     }
 
-    [TestMethod]
-    public async Task ImageOnlyAnnexSourceInTheBoundEuropeCorpusBinds()
-    {
-        var europe = await EuAxiomWiringHarness.RunAsync(
-            static root => EuAcquisitionTestFixture.AxiomAbsenceScriptFor(root));
-        var luxembourg = await LuxembourgQueryExecutionAdapterTests.RunEmptyDeliveredForEnvelopeAsync();
-        var annex = await EuImageOnlyAnnexProducerTests.ProduceForEnvelopeAsync();
-        var envelope = Rebuild(
-            AddEuropeCorpusRecord(europe, annex.Disposition!.SourceObject),
-            luxembourg,
-            [annex]);
-
-        var lineage = Stage3EvidenceLineage.TryBind(envelope, out var refusal, out var detail);
-
-        Assert.AreEqual(Stage3EvidenceLineageRefusal.None, refusal, detail);
-        Assert.IsNotNull(lineage);
-    }
-
     private static async Task<Stage3EvidenceEnvelope> CompleteEnvelopeAsync()
     {
         var europe = await EuAxiomWiringHarness.RunAsync(
@@ -132,15 +113,15 @@ public sealed class Stage3EvidenceLineageTests
 
     private static Stage3EvidenceEnvelope Rebuild(
         EuQueryExecutionResult europe,
-        LuxembourgQueryExecutionResult luxembourg,
-        IEnumerable<EuImageOnlyAnnexProductionResult>? annexes = null)
+        LuxembourgQueryExecutionResult luxembourg)
     {
         var formex = EuFormexRunOutcomeReconciliationTests.CompleteForEnvelope(europe);
+        var classifications = Stage3EvidenceEnvelopeTests.CompleteClassifications(formex);
         return Stage3EvidenceEnvelope.TryCreate(
             europe,
             luxembourg,
             formex,
-            annexes ?? [],
+            classifications,
             out var refusal,
             out var detail)
             ?? throw new AssertFailedException($"Envelope refused: {refusal}: {detail}");
