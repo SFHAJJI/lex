@@ -216,6 +216,8 @@ public sealed class VocabularyRegistryCensusTests
                     + "const UserFormat",
                 "Lex.V3.Contracts.Source.Quarantine.QuarantineCoordinateValidation: "
                     + "ForbiddenLawContentExtensions=4",
+                "Lex.V3.Contracts.Source.Quarantine.QuarantineInventoryWireReader: const "
+                    + "IndependentReviewerRole, const PrimaryRole, const SchemaId",
                 "Lex.V3.Contracts.Source.Scope.ScopeManifestCanonicalWriter: const "
                     + "InputSequenceDomain, const ManifestDomain, const ObjectRefDomain, "
                     + "const ObservedObjectSequenceDomain, const RowDomain, "

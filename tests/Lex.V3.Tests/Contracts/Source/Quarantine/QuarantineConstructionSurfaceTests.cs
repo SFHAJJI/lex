@@ -158,6 +158,12 @@ public sealed class QuarantineConstructionSurfaceTests
                     + "ory, "
                     + "System.Security.Cryptography.ECDsa) -> "
                     + "Lex.V3.Contracts.Source.Quarantine.QuarantinedPriorCoordinateInventory",
+                "method public static "
+                    + "Lex.V3.Contracts.Source.Quarantine.QuarantineInventoryWireReader::TryParse(S"
+                    + "ystem.String, "
+                    + "out Lex.V3.Contracts.Source.Quarantine.QuarantineInventoryWireRefusal&, "
+                    + "out System.String&?) -> "
+                    + "Lex.V3.Contracts.Source.Quarantine.QuarantinedPriorCoordinateInventory?",
                 "property public instance "
                     + "Lex.V3.Contracts.Source.Quarantine.TrustedQuarantinedPriorCoordinateInventor"
                     + "y::Inventory() -> "
