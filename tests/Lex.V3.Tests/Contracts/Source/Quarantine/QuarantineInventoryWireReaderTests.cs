@@ -115,15 +115,15 @@ public sealed class QuarantineInventoryWireReaderTests
         using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
         var json = Document(key, reproductions:
         [
-            Reproduction("Primary", "writer-run-a", [null!]),
-            Reproduction("IndependentReviewer", "reviewer-run-b", Coordinates()),
+            Reproduction("Primary", "writer-run-a", Coordinates()),
+            Reproduction("IndependentReviewer", "reviewer-run-b", [null!]),
         ]);
 
         var inventory = QuarantineInventoryWireReader.TryParse(json, out var refusal, out var detail);
 
         Assert.IsNull(inventory);
         Assert.AreEqual(QuarantineInventoryWireRefusal.CoordinateInvalid, refusal);
-        StringAssert.Contains(detail, "reproductions[0].coordinates[0]");
+        Assert.AreEqual("reproductions[1].coordinates[0] is null", detail);
     }
 
     /// <summary>
