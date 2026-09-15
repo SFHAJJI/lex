@@ -300,6 +300,37 @@ public sealed class EuFormexManifestationEnumerationProducerTests
         Assert.AreEqual(2, budget.Spent, "the refused attempt must not overspend the ceiling.");
     }
 
+    [TestMethod]
+    public async Task ABudgetRefusalAfterCountRetainsThePublishersObservedPopulation()
+    {
+        var expression = Expression(ExpressionA);
+        var plan = EuFormexManifestationDiscoveryPlan.Create();
+        var handler = new EuAcquisitionTestFixture.ClassifyingHandler(
+            new Dictionary<string, EuAcquisitionTestFixture.FamilyScript>(StringComparer.Ordinal)
+            {
+                ["M"] = new("M", [EuAcquisitionTestFixture.EuCountJson(7)]),
+            });
+        var producer = new EuFormexManifestationEnumerationProducer(
+            new EuAcquisitionTestFixture.EuInMemoryCustodyStore(),
+            new EuAcquisitionTestFixture.FixedTimeProvider(),
+            handler);
+
+        var result = await producer.RunAsync(
+            new EuFormexManifestationRunRequest(
+                plan, expression, "urn:uuid:59a97502-b344-4894-a64f-8b456180b4e7",
+                EuAcquisitionTestFixture.BuildRendererSource(9813),
+                WireRequestBudget.OfWireRequests(3)),
+            EuAcquisitionTestFixture.SourceWitness(),
+            CancellationToken.None);
+
+        Assert.IsFalse(result.Delivered);
+        Assert.AreEqual(EuFormexManifestationEnumerationRefusal.EnumerationRefused, result.Refusal);
+        StringAssert.Contains(result.Detail, "WireBudgetExhausted");
+        StringAssert.Contains(result.Detail, "observedCount=7");
+        Assert.AreEqual(1, result.ProductRequestCount, "the publisher count was the only product request sent.");
+        CollectionAssert.AreEqual(new[] { "Robots", "Robots", "M" }, handler.FamilySequence.ToArray());
+    }
+
     /// <summary>
     /// THE PROOF'S OWN COUNT IS HALF THE GATE, AND IT WAS THE UNTESTED HALF. The decoder refuses
     /// unless the proof names this expression's family AND carries exactly the delivered row count.
