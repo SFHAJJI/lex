@@ -100,7 +100,7 @@ public sealed class EuFormexManifestationEnumerationProducerTests
         Assert.HasCount(2, result.ManifestationTypes!);
         CollectionAssert.AreEqual(
             new[] { ManifestationA1, ManifestationA2 },
-            result.ManifestationTypes.Select(static value => value.PublisherManifestationIri).ToArray());
+            result.ManifestationTypes!.Select(static value => value.PublisherManifestationIri).ToArray());
     }
 
     [TestMethod]
