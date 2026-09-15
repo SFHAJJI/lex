@@ -40,7 +40,7 @@ public sealed class EuFormexManifestationCanary
         "http://publications.europa.eu/ontology/cdm#expression_belongs_to_work";
     private const string AcceptedEvidenceSha256 =
         "bdc14319f2f02a43c7a8a58059eb1e1c3835cd3edf708e27d9d4f0d48f4e4f0b";
-    private const string PlanV2Sha256 =
+    private const string CurrentPlanSha256 =
         "d57b51867ee02fa1a83770f03dd2e2910ef2a549c6a900f637be88d0c724182a";
 
     [TestMethod]
@@ -59,7 +59,7 @@ public sealed class EuFormexManifestationCanary
 
         Assert.AreEqual(Work, expression.Identity.PublisherWorkId);
         Assert.AreEqual(Expression, expression.Identity.PublisherExpressionId);
-        Assert.AreEqual(PlanV2Sha256, plan.ArtifactRef.Sha256);
+        Assert.AreEqual(CurrentPlanSha256, plan.ArtifactRef.Sha256);
         Assert.AreEqual(plan.ArtifactRef, plan.CountQueryFamilyRef.RegistryRef);
         Assert.AreEqual(plan.ArtifactRef, plan.PageQueryFamilyRef.RegistryRef);
         Assert.AreEqual("eu-formex-manifestations-by-expression.count",
