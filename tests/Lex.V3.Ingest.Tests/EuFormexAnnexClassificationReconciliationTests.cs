@@ -1,4 +1,5 @@
 using System.Reflection;
+using Lex.V3.Contracts.Custody;
 using Lex.V3.Contracts.Derivation;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Europe;
@@ -69,6 +70,29 @@ public sealed class EuFormexAnnexClassificationReconciliationTests
     }
 
     [TestMethod]
+    public async Task EqualSemanticInventoryFromAnotherTransportCannotReplaceTheAcquiredLineage()
+    {
+        var acquired = await AcquiredFixtureAsync();
+        var package = (byte[])typeof(EuAnnexEvidenceBinderTests).GetMethod(
+            "FormexPackage", BindingFlags.Static | BindingFlags.NonPublic)!
+            .Invoke(null, [false, false])!;
+        var alternateContainer = package.Concat(new byte[] { 0 }).ToArray();
+        var otherTransport = await AcquiredFixtureAsync(formexBytes: alternateContainer);
+
+        Assert.AreEqual(acquired.Inventory.IdentitySha256, otherTransport.Inventory.IdentitySha256);
+        Assert.AreNotEqual(
+            DurableBlobWriteReceiptDigest.Of(acquired.Inventory.SourceReceipt),
+            DurableBlobWriteReceiptDigest.Of(otherTransport.Inventory.SourceReceipt));
+        Assert.IsNull(EuFormexAnnexClassificationReconciliation.TryClose(
+            Reconciliation(acquired.Run, [acquired.Outcome]),
+            [otherTransport.Classification], out var refusal, out var detail));
+        Assert.AreEqual(
+            EuFormexAnnexClassificationReconciliationRefusal.ClassificationInventoryDisagrees,
+            refusal);
+        Assert.AreEqual(acquired.Inventory.IdentitySha256, detail);
+    }
+
+    [TestMethod]
     public async Task NonAcquiredExpressionsCannotReceiveAClassification()
     {
         var fixture = await AcquiredFixtureAsync();
@@ -85,12 +109,15 @@ public sealed class EuFormexAnnexClassificationReconciliationTests
             refusal);
     }
 
-    private static async Task<Fixture> AcquiredFixtureAsync(bool formexTwoMembers = false)
+    private static async Task<Fixture> AcquiredFixtureAsync(
+        bool formexTwoMembers = false,
+        byte[]? formexBytes = null)
     {
         var source = await EuAnnexEvidenceBinderTests.FixtureAsync(
             EuAnnexEvidenceBinderTests.PageLabelPdf(7, "<< /S /D /St 1 >>"),
             formexTwoMembers: formexTwoMembers,
-            xhtmlTwoMembers: formexTwoMembers);
+            xhtmlTwoMembers: formexTwoMembers,
+            formexBytes: formexBytes);
         var bound = await source.RunAsync();
         Assert.AreEqual(EuAnnexEvidenceBindingRefusal.None, bound.Refusal, bound.Detail);
         var binding = bound.Binding!;
