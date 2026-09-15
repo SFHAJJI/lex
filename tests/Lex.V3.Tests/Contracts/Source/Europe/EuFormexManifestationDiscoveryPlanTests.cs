@@ -16,7 +16,7 @@ public sealed class EuFormexManifestationDiscoveryPlanTests
     private static LanguageScopedExpressionIdentity Identity(string expression = Expression) => new(Work, expression);
 
     [TestMethod]
-    public void BothPassesAskForTypesOfTheExactExpressionAndProjectItsIdentity()
+    public void BothPassesProjectEveryExactManifestationCoordinateAndItsType()
     {
         var plan = EuFormexManifestationDiscoveryPlan.Create();
         foreach (var template in new[] { plan.CountTemplate, plan.PageTemplate })
@@ -28,8 +28,29 @@ public sealed class EuFormexManifestationDiscoveryPlanTests
                 "?manifestation <http://publications.europa.eu/ontology/cdm#manifestation_manifests_expression> ?expression .");
             StringAssert.Contains(template,
                 "?manifestation <http://publications.europa.eu/ontology/cdm#manifestation_type> ?manifestation_type .");
-            StringAssert.Contains(template, "SELECT ?work ?expression ?manifestation_type");
+            StringAssert.Contains(template, "SELECT ?work ?expression ?manifestation ?manifestation_type");
+            StringAssert.Contains(template,
+                "GROUP BY ?work ?expression ?manifestation ?manifestation_type");
         }
+
+        var profile = plan.CreateDeliveryProfile();
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "work", "expression", "manifestation", "manifestation_type",
+                "manifestation_type_kind", "datatype_iri", "language_tag", "multiplicity",
+                "key_1", "key_2", "key_3", "key_4", "key_5",
+            },
+            profile.ProjectionVariables.ToArray());
+        CollectionAssert.AreEqual(
+            new[] { "key_1", "key_2", "key_3", "key_4", "key_5" },
+            profile.CanonicalKeyVariables.ToArray());
+        CollectionAssert.AreEqual(
+            profile.CanonicalKeyVariables.ToArray(), profile.CursorVariables.ToArray());
+        StringAssert.Contains(plan.PageTemplate, "BIND(STR(?manifestation) AS ?key_1)");
+        StringAssert.Contains(
+            plan.PageTemplate,
+            "VALUES (?has_cursor ?last_key_1 ?last_key_2 ?last_key_3 ?last_key_4 ?last_key_5)");
     }
 
     [TestMethod]
@@ -48,6 +69,10 @@ public sealed class EuFormexManifestationDiscoveryPlanTests
     {
         var key = EuFormexManifestationDiscoveryPlan.PartitionKeyFor(Identity());
         var other = EuFormexManifestationDiscoveryPlan.PartitionKeyFor(Identity(OtherExpression));
+        Assert.StartsWith(
+            "eu-formex-manifestations-by-expression-v2-",
+            key,
+            "proof retained for the v1 plan must not identify this changed query family.");
         Assert.StartsWith(EuFormexManifestationDiscoveryPlan.PartitionKeyPrefix, key);
         Assert.AreEqual(64, key[EuFormexManifestationDiscoveryPlan.PartitionKeyPrefix.Length..].Length);
         Assert.AreNotEqual(key, other);

@@ -19,6 +19,8 @@ public sealed class EuFormexManifestationEnumerationProducerTests
         "http://publications.europa.eu/resource/cellar/3e485e15-11bd-11e6-ba9a-01aa75ed71a1";
     private const string ExpressionA = Work + ".0024";
     private const string ExpressionB = Work + ".0001";
+    private const string ManifestationA1 = ExpressionA + ".01";
+    private const string ManifestationA2 = ExpressionA + ".02";
     private const string XsdString = "http://www.w3.org/2001/XMLSchema#string";
     private const string XsdInteger = "http://www.w3.org/2001/XMLSchema#integer";
 
@@ -26,12 +28,18 @@ public sealed class EuFormexManifestationEnumerationProducerTests
     public void ACompleteExpressionAnswerCarriesEveryTypeAndFindsFormexExactly()
     {
         var expression = Expression(ExpressionA);
-        var result = Decode(expression, Row(expression, "fmx4", 2), Row(expression, "html", 1));
+        var result = Decode(
+            expression,
+            Row(expression, "fmx4", 2, ManifestationA1),
+            Row(expression, "html", 1, ManifestationA2));
         Assert.IsTrue(result.Delivered, result.Detail);
         Assert.IsTrue(result.IsFormexEligible);
         Assert.HasCount(2, result.ManifestationTypes!);
         Assert.AreEqual("fmx4", result.ManifestationTypes![0].PublisherType);
+        Assert.AreEqual(ManifestationA1, result.ManifestationTypes[0].PublisherManifestationIri);
         Assert.AreEqual(2, result.ManifestationTypes[0].Multiplicity);
+        Assert.AreEqual(result.Proof!.AcquisitionRunRef.ResourceId,
+            result.ManifestationTypes[0].SourceObservationId);
         Assert.AreSame(expression, result.Expression);
         Assert.IsNotNull(result.Proof);
     }
@@ -62,18 +70,71 @@ public sealed class EuFormexManifestationEnumerationProducerTests
         Assert.AreEqual(EuFormexManifestationEnumerationRefusal.RowNotAdmitted,
             Decode(expression, Row(expression, "fmx4", 1, marker: "iri")).Refusal);
         Assert.AreEqual(EuFormexManifestationEnumerationRefusal.RowNotAdmitted,
-            Decode(expression, Row(expression, "fmx4", 1, key2: "html")).Refusal);
+            Decode(expression, Row(expression, "fmx4", 1, typeKey: "html")).Refusal);
+        Assert.AreEqual(EuFormexManifestationEnumerationRefusal.RowNotAdmitted,
+            Decode(expression, Row(expression, "fmx4", 1,
+                manifestationKey: ManifestationA2)).Refusal);
         Assert.AreEqual(EuFormexManifestationEnumerationRefusal.RowNotAdmitted,
             Decode(expression, Row(expression, "fmx4", 0)).Refusal);
     }
 
     [TestMethod]
-    public void AGroupedTypeDeliveredTwiceRefusesRatherThanDeduplicating()
+    public void AGroupedManifestationBindingDeliveredTwiceRefusesRatherThanDeduplicating()
     {
         var expression = Expression(ExpressionA);
         var result = Decode(expression, Row(expression, "fmx4", 1), Row(expression, "fmx4", 1));
         Assert.AreEqual(
-            EuFormexManifestationEnumerationRefusal.ManifestationTypeDeliveredTwice, result.Refusal);
+            EuFormexManifestationEnumerationRefusal.ManifestationBindingDeliveredTwice, result.Refusal);
+    }
+
+    [TestMethod]
+    public void TwoManifestationsWithTheSameTypeRemainTwoEvidenceBoundCoordinates()
+    {
+        var expression = Expression(ExpressionA);
+        var result = Decode(
+            expression,
+            Row(expression, "fmx4", 1, ManifestationA1),
+            Row(expression, "fmx4", 1, ManifestationA2));
+
+        Assert.IsTrue(result.Delivered, result.Detail);
+        Assert.HasCount(2, result.ManifestationTypes!);
+        CollectionAssert.AreEqual(
+            new[] { ManifestationA1, ManifestationA2 },
+            result.ManifestationTypes!.Select(static value => value.PublisherManifestationIri).ToArray());
+    }
+
+    [TestMethod]
+    public void AManifestationOutsideTheSelectedExpressionRefuses()
+    {
+        var expression = Expression(ExpressionA);
+        foreach (var invalid in new[]
+                 {
+                     ExpressionB + ".01",
+                     ExpressionA + ".1",
+                     "https://example.invalid/resource/cellar/" +
+                     "3e485e15-11bd-11e6-ba9a-01aa75ed71a1.0024.01",
+                 })
+        {
+            var result = Decode(expression, Row(expression, "fmx4", 1, invalid));
+            Assert.AreEqual(
+                EuFormexManifestationEnumerationRefusal.RowNotAdmitted,
+                result.Refusal,
+                invalid);
+            Assert.IsNull(result.ManifestationTypes, invalid);
+        }
+    }
+
+    [TestMethod]
+    public void AManifestationLiteralWithTheExactIriTextRefuses()
+    {
+        var expression = Expression(ExpressionA);
+
+        var result = Decode(
+            expression,
+            Row(expression, "fmx4", 1, ManifestationA1, manifestationIsLiteral: true));
+
+        Assert.AreEqual(EuFormexManifestationEnumerationRefusal.RowNotAdmitted, result.Refusal);
+        Assert.IsNull(result.ManifestationTypes);
     }
 
     [TestMethod]
@@ -310,20 +371,28 @@ public sealed class EuFormexManifestationEnumerationProducerTests
         LanguageScopedExpression expression,
         string type,
         long multiplicity,
+        string? manifestationIri = null,
         string marker = "literal",
-        string? key2 = null)
+        string? typeKey = null,
+        string? manifestationKey = null,
+        bool manifestationIsLiteral = false)
     {
+        manifestationIri ??= expression.Identity.PublisherExpressionId + ".01";
         var terms = new List<RepeatedEnumerationRdfTerm>
         {
             RepeatedEnumerationRdfTerm.Iri(expression.Identity.PublisherWorkId),
             RepeatedEnumerationRdfTerm.Iri(expression.Identity.PublisherExpressionId),
+            manifestationIsLiteral
+                ? RepeatedEnumerationRdfTerm.Literal(manifestationIri, null, null)
+                : RepeatedEnumerationRdfTerm.Iri(manifestationIri),
             RepeatedEnumerationRdfTerm.Literal(type, XsdString, null),
             RepeatedEnumerationRdfTerm.Literal(marker, null, null),
             RepeatedEnumerationRdfTerm.Literal(XsdString, null, null),
             RepeatedEnumerationRdfTerm.Literal(string.Empty, null, null),
             RepeatedEnumerationRdfTerm.Literal(multiplicity.ToString(), XsdInteger, null),
+            RepeatedEnumerationRdfTerm.Literal(manifestationKey ?? manifestationIri, null, null),
             RepeatedEnumerationRdfTerm.Literal("literal", null, null),
-            RepeatedEnumerationRdfTerm.Literal(key2 ?? type, null, null),
+            RepeatedEnumerationRdfTerm.Literal(typeKey ?? type, null, null),
             RepeatedEnumerationRdfTerm.Literal(XsdString, null, null),
             RepeatedEnumerationRdfTerm.Literal(string.Empty, null, null),
         };
@@ -340,15 +409,17 @@ public sealed class EuFormexManifestationEnumerationProducerTests
         {
             ["work"] = Term("uri", expression.Identity.PublisherWorkId),
             ["expression"] = Term("uri", expression.Identity.PublisherExpressionId),
+            ["manifestation"] = Term("uri", expression.Identity.PublisherExpressionId + ".01"),
             ["manifestation_type"] = Term("literal", type, XsdString),
             ["manifestation_type_kind"] = Term("literal", "literal"),
             ["datatype_iri"] = Term("literal", XsdString),
             ["language_tag"] = Term("literal", string.Empty),
             ["multiplicity"] = Term("literal", "1", XsdInteger),
-            ["key_1"] = Term("literal", "literal"),
-            ["key_2"] = Term("literal", type),
-            ["key_3"] = Term("literal", XsdString),
-            ["key_4"] = Term("literal", string.Empty),
+            ["key_1"] = Term("literal", expression.Identity.PublisherExpressionId + ".01"),
+            ["key_2"] = Term("literal", "literal"),
+            ["key_3"] = Term("literal", type),
+            ["key_4"] = Term("literal", XsdString),
+            ["key_5"] = Term("literal", string.Empty),
         };
         return "{" + string.Join(',', values.Select(value =>
             JsonSerializer.Serialize(value.Key) + ":" + value.Value)) + "}";

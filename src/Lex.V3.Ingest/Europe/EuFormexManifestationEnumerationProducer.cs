@@ -22,12 +22,13 @@ public enum EuFormexManifestationEnumerationRefusal
     RowNotAdmitted = 4,
     [JsonStringEnumMemberName("row_names_another_expression")]
     RowNamesAnotherExpression = 5,
-    [JsonStringEnumMemberName("manifestation_type_delivered_twice")]
-    ManifestationTypeDeliveredTwice = 6,
+    [JsonStringEnumMemberName("manifestation_binding_delivered_twice")]
+    ManifestationBindingDeliveredTwice = 6,
 }
 
-/// <summary>One manifestation type proven by a completed enumeration for one expression.</summary>
+/// <summary>One exact publisher manifestation and asserted type proven by a completed enumeration.</summary>
 public sealed record EuExpressionManifestationType(
+    string PublisherManifestationIri,
     string PublisherType,
     long Multiplicity,
     string SourceObservationId)
@@ -283,7 +284,7 @@ public sealed class EuFormexManifestationEnumerationProducer
                 productRequestCount, wireBudget);
         }
         var types = new List<EuExpressionManifestationType>(rows.Count);
-        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var seen = new HashSet<(string ManifestationIri, string PublisherType)>();
         foreach (var row in rows)
         {
             EuExpressionManifestationType decoded;
@@ -303,11 +304,12 @@ public sealed class EuFormexManifestationEnumerationProducer
                     expression, EuFormexManifestationEnumerationRefusal.RowNotAdmitted,
                     exception.Message, productRequestCount, wireBudget);
             }
-            if (!seen.Add(decoded.PublisherType))
+            if (!seen.Add((decoded.PublisherManifestationIri, decoded.PublisherType)))
             {
                 return EuFormexManifestationEnumerationResult.Refused(
-                    expression, EuFormexManifestationEnumerationRefusal.ManifestationTypeDeliveredTwice,
-                    decoded.PublisherType, productRequestCount, wireBudget);
+                    expression, EuFormexManifestationEnumerationRefusal.ManifestationBindingDeliveredTwice,
+                    decoded.PublisherManifestationIri + " " + decoded.PublisherType,
+                    productRequestCount, wireBudget);
             }
             types.Add(decoded);
         }
@@ -336,6 +338,8 @@ public sealed class EuFormexManifestationEnumerationProducer
                 $"The row names work '{work.Value}' and expression '{expression.Value}', not the selected expression.");
         }
 
+        var manifestationIri = RequireManifestationIri(
+            Term(row, profile, "manifestation"), identity);
         var type = Term(row, profile, "manifestation_type");
         if (type.Kind != RepeatedEnumerationRdfTermKind.Literal || string.IsNullOrEmpty(type.Value) ||
             type.Language is not null || type.Datatype is not (null or XsdString))
@@ -346,11 +350,46 @@ public sealed class EuFormexManifestationEnumerationProducer
         RequirePlainLiteral(row, profile, "datatype_iri", type.Datatype ?? string.Empty);
         RequirePlainLiteral(row, profile, "language_tag", string.Empty);
         var multiplicity = PositiveInteger(Term(row, profile, "multiplicity"));
-        RequirePlainLiteral(row, profile, "key_1", "literal");
-        RequirePlainLiteral(row, profile, "key_2", type.Value);
-        RequirePlainLiteral(row, profile, "key_3", type.Datatype ?? string.Empty);
-        RequirePlainLiteral(row, profile, "key_4", string.Empty);
-        return new EuExpressionManifestationType(type.Value, multiplicity, observationId);
+        RequirePlainLiteral(row, profile, "key_1", manifestationIri);
+        RequirePlainLiteral(row, profile, "key_2", "literal");
+        RequirePlainLiteral(row, profile, "key_3", type.Value);
+        RequirePlainLiteral(row, profile, "key_4", type.Datatype ?? string.Empty);
+        RequirePlainLiteral(row, profile, "key_5", string.Empty);
+        return new EuExpressionManifestationType(
+            manifestationIri, type.Value, multiplicity, observationId);
+    }
+
+    private static string RequireManifestationIri(
+        RepeatedEnumerationRdfTerm term,
+        LanguageScopedExpressionIdentity identity)
+    {
+        const string HttpOrigin = "http://publications.europa.eu/resource/cellar/";
+        const string HttpsOrigin = "https://publications.europa.eu/resource/cellar/";
+        if (term.Kind != RepeatedEnumerationRdfTermKind.Iri ||
+            !Uri.TryCreate(term.Value, UriKind.Absolute, out var parsed) ||
+            !string.Equals(parsed.AbsoluteUri, term.Value, StringComparison.Ordinal))
+        {
+            throw new ArgumentException(
+                "A manifestation coordinate is one exact absolute publisher IRI.", nameof(term));
+        }
+
+        var origin = term.Value.StartsWith(HttpOrigin, StringComparison.Ordinal)
+            ? HttpOrigin
+            : term.Value.StartsWith(HttpsOrigin, StringComparison.Ordinal) ? HttpsOrigin : null;
+        var expressionKey = identity.PublisherExpressionId[HttpOrigin.Length..];
+        var expectedPrefix = expressionKey + ".";
+        var key = origin is null ? string.Empty : term.Value[origin.Length..];
+        var suffix = key.StartsWith(expectedPrefix, StringComparison.Ordinal)
+            ? key[expectedPrefix.Length..]
+            : string.Empty;
+        if (suffix.Length != 2 || suffix.Any(static value => value is < '0' or > '9'))
+        {
+            throw new ArgumentException(
+                "The manifestation IRI must be the exact two-digit Cellar child of the selected expression.",
+                nameof(term));
+        }
+
+        return term.Value;
     }
 
     private static RepeatedEnumerationRdfTerm Term(

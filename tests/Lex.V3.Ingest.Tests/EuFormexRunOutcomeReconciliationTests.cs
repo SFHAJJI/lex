@@ -461,7 +461,11 @@ public sealed class EuFormexRunOutcomeReconciliationTests
         var enumerations = production.Derivation!.Expressions.Select(static expression =>
             EuFormexManifestationEnumerationResult.Success(
                 expression,
-                [new EuExpressionManifestationType("fmx4", 1, "offline-test-observation")],
+                [new EuExpressionManifestationType(
+                    expression.Identity.PublisherExpressionId + ".01",
+                    "fmx4",
+                    1,
+                    "offline-test-observation")],
                 Proof(),
                 0,
                 LuxembourgAcquisitionTestFixture.TestBudgetSnapshot())).ToArray();

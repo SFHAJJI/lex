@@ -205,6 +205,8 @@ public sealed class EuFormexPackageOutcomePopulationTests
         {
             ["work"] = RepeatedEnumerationRdfTerm.Iri(expression.Identity.PublisherWorkId),
             ["expression"] = RepeatedEnumerationRdfTerm.Iri(expression.Identity.PublisherExpressionId),
+            ["manifestation"] = RepeatedEnumerationRdfTerm.Iri(
+                expression.Identity.PublisherExpressionId + ".01"),
             ["manifestation_type"] = RepeatedEnumerationRdfTerm.Literal(manifestationType,
                 "http://www.w3.org/2001/XMLSchema#string", null),
             ["manifestation_type_kind"] = RepeatedEnumerationRdfTerm.Literal("literal", null, null),
@@ -213,11 +215,13 @@ public sealed class EuFormexPackageOutcomePopulationTests
             ["language_tag"] = RepeatedEnumerationRdfTerm.Literal(string.Empty, null, null),
             ["multiplicity"] = RepeatedEnumerationRdfTerm.Literal("1",
                 "http://www.w3.org/2001/XMLSchema#integer", null),
-            ["key_1"] = RepeatedEnumerationRdfTerm.Literal("literal", null, null),
-            ["key_2"] = RepeatedEnumerationRdfTerm.Literal(manifestationType, null, null),
-            ["key_3"] = RepeatedEnumerationRdfTerm.Literal(
+            ["key_1"] = RepeatedEnumerationRdfTerm.Literal(
+                expression.Identity.PublisherExpressionId + ".01", null, null),
+            ["key_2"] = RepeatedEnumerationRdfTerm.Literal("literal", null, null),
+            ["key_3"] = RepeatedEnumerationRdfTerm.Literal(manifestationType, null, null),
+            ["key_4"] = RepeatedEnumerationRdfTerm.Literal(
                 "http://www.w3.org/2001/XMLSchema#string", null, null),
-            ["key_4"] = RepeatedEnumerationRdfTerm.Literal(string.Empty, null, null),
+            ["key_5"] = RepeatedEnumerationRdfTerm.Literal(string.Empty, null, null),
         };
         var terms = profile.ProjectionVariables.Select(name => values[name]).ToArray();
         return EuFormexManifestationEnumerationProducer.DecodeRows(
