@@ -19,6 +19,19 @@ public sealed class EuLanguageScopedExpressionProducerTests
     private const string FrenchExpression = "http://publications.europa.eu/resource/cellar/expr-fra";
     private const string BulgarianExpression = "http://publications.europa.eu/resource/cellar/expr-bul";
 
+    /// <summary>
+    /// A second English Expression of the same Work. #418's completion criterion is that multiple
+    /// SAME-language expressions coexist, and every other fixture here gives each Expression a
+    /// language of its own, so nothing yet distinguishes a run that carries both from one that keys
+    /// its expressions by language and silently keeps the last.
+    /// </summary>
+    private const string SecondEnglishExpression =
+        "http://publications.europa.eu/resource/cellar/expr-eng-2";
+
+    private const string XsdDate = "http://www.w3.org/2001/XMLSchema#date";
+
+    private const string WorkDate = "2018-05-23";
+
     private const string EnglishAuthority =
         "http://publications.europa.eu/resource/authority/language/ENG";
     private const string FrenchAuthority =
@@ -617,6 +630,32 @@ public sealed class EuLanguageScopedExpressionProducerTests
     /// correctly rejecting a page no real publisher would send. Bulgarian sorts first here and that
     /// is a property of the IRI, not a statement about the language.
     /// </remarks>
+    /// <summary>
+    /// Two Expressions of one Work, both stating the SAME language authority, with the publisher's
+    /// own work date delivered beside them.
+    /// </summary>
+    private static IReadOnlyList<string> SameLanguagePairRows() =>
+    [
+        EuAcquisitionTestFixture.ExpressionFactRow(Work, EnglishExpression),
+        EuAcquisitionTestFixture.ExpressionLanguageRow(Work, EnglishExpression, EnglishAuthority),
+        EuAcquisitionTestFixture.ExpressionFactRow(Work, SecondEnglishExpression),
+        EuAcquisitionTestFixture.ExpressionLanguageRow(Work, SecondEnglishExpression, EnglishAuthority),
+    ];
+
+    private static Dictionary<string, EuAcquisitionTestFixture.FamilyScript> ScriptsWithWorkDate(
+        IReadOnlyList<string> xRows)
+    {
+        var scripts = Scripts(xRows);
+        string[] dateRows =
+        [
+            EuAcquisitionTestFixture.ObjectFactLiteralRow(
+                Work, EuAcquisitionTestFixture.WorkDateDocument, WorkDate, XsdDate),
+        ];
+        scripts["P"] = EuAcquisitionTestFixture.ScriptFor(
+            "P", dateRows.Length, dateRows, EuAcquisitionTestFixture.ObjectFactsProjection);
+        return scripts;
+    }
+
     private static IReadOnlyList<string> ThreeLanguageRows() =>
     [
         EuAcquisitionTestFixture.ExpressionFactRow(Work, BulgarianExpression),
@@ -626,6 +665,84 @@ public sealed class EuLanguageScopedExpressionProducerTests
         EuAcquisitionTestFixture.ExpressionFactRow(Work, FrenchExpression),
         EuAcquisitionTestFixture.ExpressionLanguageRow(Work, FrenchExpression, FrenchAuthority),
     ];
+
+    /// <summary>
+    /// #418's completion criterion, at run level: multiple same-language expressions coexist and the
+    /// corrigendum date survives onto each of them.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The coexistence itself is already pinned one layer down, on the type, by
+    /// <c>LanguageScopedExpressionTests.TwoExpressionsOfOneWorkInOneLanguageCoexist</c>. That proves
+    /// the model PERMITS two same-language expressions; it cannot prove a governed run DELIVERS
+    /// them, because nothing in it goes near the decoder or the wire.
+    /// </para>
+    /// <para>
+    /// What this closes is the gap between those two facts. Every other run-level fixture in this
+    /// file gives each Expression a distinct language, so a decoder that kept its expressions in a
+    /// map keyed by language would pass all of them and quietly drop one of these two. The decoder
+    /// does not do that -- it keys identity by the Expression IRI -- and this is the test that would
+    /// fail if that ever changed.
+    /// </para>
+    /// <para>
+    /// The date half is checked on BOTH expressions rather than on the set. The publisher states one
+    /// work_date_document for the Work, so a run that attached it to whichever expression it read
+    /// last, or to only one of them, would still satisfy an assertion that "the date survives".
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public async Task TwoSameLanguageExpressionsBothSurviveARunAndBothCarryTheWorksDate()
+    {
+        var handler = new EuAcquisitionTestFixture.ClassifyingHandler(
+            ScriptsWithWorkDate(SameLanguagePairRows()));
+        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
+        var producer = new EuLanguageScopedExpressionProducer(
+            store, new EuAcquisitionTestFixture.FixedTimeProvider(), handler);
+
+        // ONE budget across both families, exactly as a real production pairs them.
+        var budget = EuAcquisitionTestFixture.TestWireBudget();
+        var result = await producer.RunAsync(
+            Request(EuObjectFactsQuerySet.ExpressionFacts, budget),
+            Request(EuObjectFactsQuerySet.ObjectFacts, budget),
+            EuAcquisitionTestFixture.SourceWitness(),
+            CancellationToken.None);
+
+        Assert.AreEqual(
+            EuLanguageScopedExpressionProductionRefusal.None, result.Refusal,
+            $"{result.Refusal} {result.Detail}");
+
+        var expressions = result.Derivation!.Expressions
+            .OrderBy(expression => expression.Identity.PublisherExpressionId, StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.HasCount(2, expressions, "both same-language expressions must survive the run.");
+        CollectionAssert.AreEqual(
+            new[] { EnglishExpression, SecondEnglishExpression },
+            expressions.Select(expression => expression.Identity.PublisherExpressionId).ToArray(),
+            "they are two distinct Expressions, told apart by their own IRIs and not by language.");
+        Assert.AreEqual(
+            1,
+            expressions.Select(expression => expression.Identity.PublisherWorkId)
+                .Distinct(StringComparer.Ordinal).Count(),
+            "and both are Expressions of the one Work.");
+
+        foreach (var expression in expressions)
+        {
+            Assert.AreEqual(
+                EnglishAuthority, expression.OfficialLanguage,
+                "both state the same language authority; that is the whole point of the pair.");
+            Assert.IsNotNull(
+                expression.PublisherCorrigendumDate,
+                $"the Work's date must survive onto {expression.Identity.PublisherExpressionId}, "
+                    + "not onto whichever expression was read last.");
+            Assert.AreEqual(WorkDate, expression.PublisherCorrigendumDate!.RawLexical);
+            Assert.AreEqual(XsdDate, expression.PublisherCorrigendumDate.DatatypeIri);
+        }
+
+        // REAL DISPATCH: both families came off the socket this handler served.
+        Assert.IsGreaterThan(0, handler.OccurrenceCountFor("X"));
+        Assert.IsGreaterThan(0, handler.OccurrenceCountFor("P"));
+    }
 
     /// <summary>Code with comments and string literals removed, so a mention in prose cannot satisfy a pin.</summary>
     private static string StripComments(string source)
