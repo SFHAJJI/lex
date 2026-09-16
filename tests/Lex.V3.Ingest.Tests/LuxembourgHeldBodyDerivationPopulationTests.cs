@@ -1,6 +1,7 @@
 using Lex.V3.Contracts.Custody;
 using Lex.V3.Contracts.Source.Corpus;
 using Lex.V3.Contracts.Source.Http;
+using Lex.V3.Contracts.Source.Luxembourg;
 using Lex.V3.Ingest.Luxembourg;
 
 namespace Lex.V3.Ingest.Tests;
@@ -20,6 +21,15 @@ public sealed class LuxembourgHeldBodyDerivationPopulationTests
         var input = population.Inputs.Single();
         Assert.AreEqual(CorpusBodyRecordKind.Held, input.CorpusRecord.Body.Kind);
         Assert.AreEqual(LuxembourgUserFormatToken.PdfA, input.Address.UserFormatToken);
+        Assert.AreEqual(
+            "http://data.legilux.public.lu/eli/etat/leg/loi/2026/01/01/a1/jo/fr/pdfa",
+            input.SelectedWemiCandidate.ManifestationIri);
+        Assert.AreEqual(
+            input.Address.StoreFileUri.Value.AbsoluteUri,
+            input.SelectedWemiCandidate.ItemIri);
+        Assert.AreEqual(
+            LuxembourgWemiCandidateDisposition.StructurallyConsistent,
+            input.SelectedWemiCandidate.Disposition);
         Assert.AreEqual(input.CorpusRecord.ObjectOrdinal, input.ObjectOrdinal);
         Assert.AreSame(input.CorpusRecord.Body.Receipt, input.Receipt);
         Assert.AreEqual(
@@ -34,7 +44,7 @@ public sealed class LuxembourgHeldBodyDerivationPopulationTests
 
         var population = LuxembourgHeldBodyDerivationPopulation.TryCreate(
             run.CorpusRecordSet!, run.DocumentAcquisitionOutcomesByOrdinal!,
-            new Dictionary<Contracts.Source.Core.SourceObjectRef, LuxembourgDocumentFetchAddress>(),
+            new Dictionary<Contracts.Source.Core.SourceObjectRef, LuxembourgSelectedDocumentFetch>(),
             out var refusal, out var detail);
 
         Assert.IsNull(population);
@@ -54,7 +64,7 @@ public sealed class LuxembourgHeldBodyDerivationPopulationTests
         var population = LuxembourgHeldBodyDerivationPopulation.TryCreate(
             run.CorpusRecordSet!,
             new Dictionary<int, CorpusAcquisitionOutcome>(),
-            Addresses(run),
+            SelectedFetches(run),
             out var refusal, out var detail);
 
         Assert.IsNull(population);
@@ -73,7 +83,7 @@ public sealed class LuxembourgHeldBodyDerivationPopulationTests
         outcomes[int.MaxValue] = outcomes.Values.Single(static outcome => outcome.Receipt is not null);
 
         var population = LuxembourgHeldBodyDerivationPopulation.TryCreate(
-            run.CorpusRecordSet!, outcomes, Addresses(run), out var refusal, out var detail);
+            run.CorpusRecordSet!, outcomes, SelectedFetches(run), out var refusal, out var detail);
 
         Assert.IsNull(population);
         Assert.AreEqual(
@@ -112,7 +122,7 @@ public sealed class LuxembourgHeldBodyDerivationPopulationTests
         var population = LuxembourgHeldBodyDerivationPopulation.TryCreate(
             verified,
             run.DocumentAcquisitionOutcomesByOrdinal!,
-            Addresses(run),
+            SelectedFetches(run),
             out var refusal,
             out var detail);
 
@@ -135,7 +145,7 @@ public sealed class LuxembourgHeldBodyDerivationPopulationTests
         outcomes[input.ObjectOrdinal] = CorpusAcquisitionOutcome.Held(otherReceipt);
 
         var population = LuxembourgHeldBodyDerivationPopulation.TryCreate(
-            run.CorpusRecordSet!, outcomes, Addresses(run), out var refusal, out var detail);
+            run.CorpusRecordSet!, outcomes, SelectedFetches(run), out var refusal, out var detail);
 
         Assert.IsNull(population);
         Assert.AreEqual(
@@ -144,9 +154,60 @@ public sealed class LuxembourgHeldBodyDerivationPopulationTests
         Assert.AreEqual(input.ObjectOrdinal.ToString(), detail);
     }
 
-    private static IReadOnlyDictionary<Contracts.Source.Core.SourceObjectRef, LuxembourgDocumentFetchAddress>
-        Addresses(LuxembourgQueryExecutionResult run) =>
+    [TestMethod]
+    public async Task ASelectedWemiIdentityCannotBePairedWithAnotherAddress()
+    {
+        var run = await LuxembourgGazetteAcquisitionTests.CompleteForStage3BodyCompositionAsync();
+        var input = run.HeldBodyDerivationPopulation!.Inputs.Single();
+        var otherAddress = LuxembourgDocumentFetchAddress.Create(
+            LuxembourgFileUri.RequireValid(
+                "http://data.legilux.public.lu/filestore/eli/etat/leg/loi/2026/01/01/a1/jo/fr/pdfa/other.pdf"),
+            input.Address.UserFormatToken,
+            input.Address.LegalValue,
+            input.Address.ActEliPagePath);
+
+        Assert.ThrowsExactly<ArgumentException>(() =>
+            new LuxembourgSelectedDocumentFetch(otherAddress, input.SelectedWemiCandidate));
+    }
+
+    [TestMethod]
+    public async Task ASelectedWemiIdentityForAnotherPublisherObjectIsRefused()
+    {
+        var run = await LuxembourgGazetteAcquisitionTests.CompleteForStage3BodyCompositionAsync();
+        var input = run.HeldBodyDerivationPopulation!.Inputs.Single();
+        const string foreignRoot =
+            "http://data.legilux.public.lu/eli/etat/leg/loi/2025/01/01/a2/jo";
+        var source = input.SelectedWemiCandidate;
+        var foreign = new LuxembourgWemiCandidate(
+            foreignRoot,
+            foreignRoot + "/fr",
+            foreignRoot + "/fr/pdfa",
+            source.ItemIri,
+            source.LanguageIri,
+            source.FormatIri,
+            source.ObservationRef,
+            LuxembourgWemiCandidateDisposition.StructurallyConsistent,
+            []);
+        var selected = new Dictionary<Contracts.Source.Core.SourceObjectRef, LuxembourgSelectedDocumentFetch>
+        {
+            [input.CorpusRecord.ObjectRef] = new LuxembourgSelectedDocumentFetch(input.Address, foreign),
+        };
+
+        var population = LuxembourgHeldBodyDerivationPopulation.TryCreate(
+            run.CorpusRecordSet!, run.DocumentAcquisitionOutcomesByOrdinal!, selected,
+            out var refusal, out var detail);
+
+        Assert.IsNull(population);
+        Assert.AreEqual(
+            LuxembourgHeldBodyDerivationPopulationRefusal.HeldRecordSelectedIdentityMismatch,
+            refusal);
+        Assert.AreEqual(input.CorpusRecord.ObjectRef.PublisherUri, detail);
+    }
+
+    private static IReadOnlyDictionary<Contracts.Source.Core.SourceObjectRef, LuxembourgSelectedDocumentFetch>
+        SelectedFetches(LuxembourgQueryExecutionResult run) =>
         run.HeldBodyDerivationPopulation!.Inputs.ToDictionary(
             static input => input.CorpusRecord.ObjectRef,
-            static input => input.Address);
+            static input => new LuxembourgSelectedDocumentFetch(
+                input.Address, input.SelectedWemiCandidate));
 }

@@ -271,6 +271,43 @@ public sealed class LuxembourgDocumentFetchAddressMintingTests
         Assert.IsNull(address);
     }
 
+    [TestMethod]
+    public void TwoPublisherIdentitiesForTheSameSelectedAddressTupleAreRefused()
+    {
+        const string germanExpression = Act + "/de";
+        const string germanManifestation = germanExpression + "/xml";
+        const string languageDeu =
+            "http://publications.europa.eu/resource/authority/language/DEU";
+        var assertions = TwoManifestationAssertions(
+                xmlToken: "xml-akomantoso", xmlLegalValue: "officiel",
+                pdfToken: "pdf", pdfLegalValue: "officiel")
+            .Concat([
+                Iri(Act, Jolux + "isRealizedBy", germanExpression),
+                Iri(germanExpression, RdfType, Jolux + "Expression"),
+                Iri(germanExpression, Jolux + "language", languageDeu),
+                Iri(germanExpression, Jolux + "isEmbodiedBy", germanManifestation),
+                Iri(germanManifestation, RdfType, Jolux + "Manifestation"),
+                Iri(germanManifestation, Jolux + "userFormat", UserFormatPrefix + "xml-akomantoso"),
+                Iri(germanManifestation, Jolux + "isExemplifiedBy", ItemXml),
+                Iri(germanManifestation, Jolux + "legalValue", LegalValuePrefix + "officiel"),
+            ])
+            .ToArray();
+
+        var address = LuxembourgQueryExecutionAdapter.MintDocumentFetchAddress(
+            ObjectRef(Act),
+            LuxembourgWemiTopology.Resolve(Act, assertions, ObservationRef),
+            assertions,
+            out var refusal);
+
+        Assert.IsNull(
+            address,
+            "the address tuple cannot choose between two distinct publisher expression/manifestation identities.");
+        Assert.AreEqual(
+            LuxembourgQueryExecutionRefusal.SelectedManifestationIdentityNotUnique,
+            refusal,
+            "the production selector must retain the typed reason instead of collapsing ambiguity into no address.");
+    }
+
     /// <summary>
     /// The minted address projects onto the manifest row as a NON-NEGOTIATING minted address: host
     /// and resource path, and no Accept pair, because this route sends neither header. The row is

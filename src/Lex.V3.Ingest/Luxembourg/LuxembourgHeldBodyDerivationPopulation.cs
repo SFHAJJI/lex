@@ -3,6 +3,7 @@ using Lex.V3.Contracts.Custody;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Corpus;
 using Lex.V3.Contracts.Source.Http;
+using Lex.V3.Contracts.Source.Luxembourg;
 
 namespace Lex.V3.Ingest.Luxembourg;
 
@@ -26,6 +27,35 @@ public enum LuxembourgHeldBodyDerivationPopulationRefusal
 
     [JsonStringEnumMemberName("held_record_has_no_selected_address")]
     HeldRecordHasNoSelectedAddress = 5,
+
+    [JsonStringEnumMemberName("held_record_selected_identity_mismatch")]
+    HeldRecordSelectedIdentityMismatch = 6,
+}
+
+internal sealed class LuxembourgSelectedDocumentFetch
+{
+    internal LuxembourgSelectedDocumentFetch(
+        LuxembourgDocumentFetchAddress address,
+        LuxembourgWemiCandidate wemiCandidate)
+    {
+        Address = address ?? throw new ArgumentNullException(nameof(address));
+        WemiCandidate = wemiCandidate ?? throw new ArgumentNullException(nameof(wemiCandidate));
+        if (WemiCandidate.Disposition != LuxembourgWemiCandidateDisposition.StructurallyConsistent ||
+            !string.Equals(
+                LuxembourgFileUri.RequireValid(WemiCandidate.ItemIri).Value.AbsoluteUri,
+                Address.StoreFileUri.Value.AbsoluteUri,
+                StringComparison.Ordinal) ||
+            LuxembourgAuthorityIri.TryParseUserFormat(WemiCandidate.FormatIri) != Address.UserFormatToken)
+        {
+            throw new ArgumentException(
+                "The selected WEMI candidate must be the exact candidate that minted the address.",
+                nameof(wemiCandidate));
+        }
+    }
+
+    internal LuxembourgDocumentFetchAddress Address { get; }
+
+    internal LuxembourgWemiCandidate WemiCandidate { get; }
 }
 
 /// <summary>
@@ -36,11 +66,12 @@ public sealed class LuxembourgHeldBodyDerivationInput
 {
     internal LuxembourgHeldBodyDerivationInput(
         CorpusRecord corpusRecord,
-        LuxembourgDocumentFetchAddress address,
+        LuxembourgSelectedDocumentFetch selectedFetch,
         DurableBlobWriteReceipt receipt)
     {
         CorpusRecord = corpusRecord;
-        Address = address;
+        Address = selectedFetch.Address;
+        SelectedWemiCandidate = selectedFetch.WemiCandidate;
         Receipt = receipt;
     }
 
@@ -49,6 +80,8 @@ public sealed class LuxembourgHeldBodyDerivationInput
     public CorpusRecord CorpusRecord { get; }
 
     public LuxembourgDocumentFetchAddress Address { get; }
+
+    public LuxembourgWemiCandidate SelectedWemiCandidate { get; }
 
     public DurableBlobWriteReceipt Receipt { get; }
 }
@@ -74,13 +107,13 @@ public sealed class LuxembourgHeldBodyDerivationPopulation
     internal static LuxembourgHeldBodyDerivationPopulation? TryCreate(
         VerifiedCorpusRecordSet corpusRecordSet,
         IReadOnlyDictionary<int, CorpusAcquisitionOutcome> outcomesByOrdinal,
-        IReadOnlyDictionary<SourceObjectRef, LuxembourgDocumentFetchAddress> addressesByObject,
+        IReadOnlyDictionary<SourceObjectRef, LuxembourgSelectedDocumentFetch> selectedFetchesByObject,
         out LuxembourgHeldBodyDerivationPopulationRefusal refusal,
         out string? detail)
     {
         ArgumentNullException.ThrowIfNull(corpusRecordSet);
         ArgumentNullException.ThrowIfNull(outcomesByOrdinal);
-        ArgumentNullException.ThrowIfNull(addressesByObject);
+        ArgumentNullException.ThrowIfNull(selectedFetchesByObject);
         refusal = LuxembourgHeldBodyDerivationPopulationRefusal.None;
         detail = null;
 
@@ -126,14 +159,24 @@ public sealed class LuxembourgHeldBodyDerivationPopulation
                 return null;
             }
 
-            if (!addressesByObject.TryGetValue(record.ObjectRef, out var address))
+            if (!selectedFetchesByObject.TryGetValue(record.ObjectRef, out var selectedFetch))
             {
                 refusal = LuxembourgHeldBodyDerivationPopulationRefusal.HeldRecordHasNoSelectedAddress;
                 detail = record.ObjectRef.PublisherUri;
                 return null;
             }
 
-            inputs.Add(new LuxembourgHeldBodyDerivationInput(record, address, record.Body.Receipt!));
+            if (!string.Equals(
+                    record.ObjectRef.PublisherUri,
+                    selectedFetch.WemiCandidate.RootIri,
+                    StringComparison.Ordinal))
+            {
+                refusal = LuxembourgHeldBodyDerivationPopulationRefusal.HeldRecordSelectedIdentityMismatch;
+                detail = record.ObjectRef.PublisherUri;
+                return null;
+            }
+
+            inputs.Add(new LuxembourgHeldBodyDerivationInput(record, selectedFetch, record.Body.Receipt!));
         }
 
         return new LuxembourgHeldBodyDerivationPopulation(corpusRecordSet, inputs);

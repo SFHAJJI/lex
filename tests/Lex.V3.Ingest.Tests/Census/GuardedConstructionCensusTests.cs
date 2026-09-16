@@ -708,7 +708,10 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionAdapter::HoldManifestAsync, "
                     + "method private instance "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionAdapter::ReadInFileRightsAs"
-                    + "ync",
+                    + "ync, "
+                    + "method private static "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionAdapter::MintDocumentFetchS"
+                    + "elections",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionResult: constructor private "
                     + "instance Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionResult::.ctor, "
                     + "method internal instance "
@@ -737,6 +740,14 @@ public sealed class GuardedConstructionCensusTests
                     + "method public static "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgRelationFamilyAcquisition::NotComplete, "
                     + "3 compiler-generated",
+                "Lex.V3.Ingest.Luxembourg.LuxembourgSelectedDocumentFetch: constructor internal "
+                    + "instance Lex.V3.Ingest.Luxembourg.LuxembourgSelectedDocumentFetch::.ctor, "
+                    + "method private static "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionAdapter::MintDocumentFetchS"
+                    + "elections, "
+                    + "method private static "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionAdapter::SelectDocumentFetc"
+                    + "h",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgTranspositionIdentityProductionResult: "
                     + "by-ref-method public instance "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgTranspositionIdentityCompletedBatch::Deco"
