@@ -63,7 +63,16 @@ public sealed class LuxembourgPdfProfileEligibilityProducerTests
     {
         var composition = await CompleteCompositionAsync();
         var input = composition.LuxembourgDerivationPopulation.Inputs.Single();
-        var gazette = composition.Luxembourg.SelectMany(static value => value.GazetteBodies.Bodies).Single();
+        var selected = input.SelectedWemiCandidate;
+        var gazette = composition.Luxembourg
+            .SelectMany(static value => value.GazetteBodies.Bodies)
+            .Single(body =>
+                body.Candidate.WemiCandidate.RootIri == selected.RootIri &&
+                body.Candidate.WemiCandidate.ExpressionIri == selected.ExpressionIri &&
+                body.Candidate.WemiCandidate.ManifestationIri == selected.ManifestationIri &&
+                body.Candidate.WemiCandidate.ItemIri == selected.ItemIri &&
+                body.Candidate.WemiCandidate.LanguageIri == selected.LanguageIri &&
+                body.Candidate.WemiCandidate.FormatIri == selected.FormatIri);
 
         AssertOutcome(
             Classify(XmlInput(input), []),
