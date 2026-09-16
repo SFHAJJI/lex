@@ -675,6 +675,28 @@ public sealed class GuardedConstructionCensusTests
                     + "method public static "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgPartitionCoverReconciliationDetail::Recon"
                     + "ciliationRefused",
+                "Lex.V3.Ingest.Luxembourg.LuxembourgPdfLayoutEvidenceArtifactCodec+Writer: "
+                    + "constructor internal instance Lex.V3.Ingest.Luxembourg."
+                    + "LuxembourgPdfLayoutEvidenceArtifactCodec+Writer::.ctor",
+                "Lex.V3.Ingest.Luxembourg.LuxembourgPdfLayoutEvidenceOutcome: constructor "
+                    + "internal instance "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgPdfLayoutEvidenceOutcome::.ctor, "
+                    + "method private static "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgPdfLayoutEvidenceProducer::Outcome",
+                "Lex.V3.Ingest.Luxembourg.LuxembourgPdfLayoutEvidencePopulation: constructor "
+                    + "private instance "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgPdfLayoutEvidencePopulation::.ctor, "
+                    + "method internal static "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgPdfLayoutEvidencePopulation::Create",
+                "Lex.V3.Ingest.Luxembourg.LuxembourgPdfLayoutEvidenceProductionResult: constructor "
+                    + "private instance "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgPdfLayoutEvidenceProductionResult::.ctor, "
+                    + "method internal static "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgPdfLayoutEvidenceProductionResult::Refused, "
+                    + "method internal static "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgPdfLayoutEvidenceProductionResult::Success, "
+                    + "method public instance "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgPdfLayoutEvidenceProducer::RunAsync",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgPdfProfileEligibilityOutcome: constructor "
                     + "internal instance "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgPdfProfileEligibilityOutcome::.ctor, "

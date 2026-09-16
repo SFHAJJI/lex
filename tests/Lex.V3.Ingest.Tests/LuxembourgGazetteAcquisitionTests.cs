@@ -365,8 +365,13 @@ public sealed class LuxembourgGazetteAcquisitionTests
             ladderMediaType: "application/xml")).Result;
     }
 
-    internal static async Task<LuxembourgQueryExecutionResult> CompletePublisherPdfForStage3BodyCompositionAsync()
+    internal static Task<LuxembourgQueryExecutionResult> CompletePublisherPdfForStage3BodyCompositionAsync() =>
+        CompletePublisherPdfForStage3BodyCompositionAsync(PdfBytes);
+
+    internal static async Task<LuxembourgQueryExecutionResult> CompletePublisherPdfForStage3BodyCompositionAsync(
+        byte[] retainedPdfBytes)
     {
+        ArgumentNullException.ThrowIfNull(retainedPdfBytes);
         const string consolidation = Parent + "/consolide/20260201";
         const string expression = consolidation + "/fr";
         const string manifestation = expression + "/pdf";
@@ -394,7 +399,55 @@ public sealed class LuxembourgGazetteAcquisitionTests
             pdf: null,
             subjects: [consolidation, expression, manifestation, Act],
             ladderItem: item,
-            ladderBody: PdfBytes)).Result;
+            ladderBody: retainedPdfBytes)).Result;
+    }
+
+    internal static async Task<LuxembourgQueryExecutionResult>
+        CompleteTwoPublisherPdfsForStage3BodyCompositionAsync(byte[] firstBytes, byte[] secondBytes)
+    {
+        ArgumentNullException.ThrowIfNull(firstBytes);
+        ArgumentNullException.ThrowIfNull(secondBytes);
+        var first = PublisherPdfAssertions("first");
+        var second = PublisherPdfAssertions("second");
+        var documents = new Dictionary<string, byte[]>(StringComparer.Ordinal)
+        {
+            [first.Item] = firstBytes,
+            [second.Item] = secondBytes,
+        };
+        return (await RunAsync(
+            [.. first.Assertions, .. second.Assertions, (Act, RdfType, Jolux + "Act"),
+                (Act, Jolux + "typeDocument", Types + "LOI"), (Act, Jolux + "isMemberOf", Parent)],
+            pdf: null,
+            subjects: [first.Consolidation, first.Expression, first.Manifestation,
+                second.Consolidation, second.Expression, second.Manifestation, Act],
+            ladderItem: first.Item,
+            ladderBody: firstBytes,
+            ladderBodies: documents)).Result;
+    }
+
+    private static (string Consolidation, string Expression, string Manifestation, string Item,
+        (string, string, string)[] Assertions) PublisherPdfAssertions(string suffix)
+    {
+        var consolidation = Parent + "/consolide/20260201" + suffix;
+        var expression = consolidation + "/fr";
+        var manifestation = expression + "/pdf";
+        var item = "http://data.legilux.public.lu/filestore/eli/etat/leg/loi/2026/01/01/a1/consolide/20260201/fr/pdf/consolide"
+            + suffix + ".pdf";
+        (string, string, string)[] assertions =
+        [
+            (consolidation, RdfType, Jolux + "Consolidation"),
+            (consolidation, Jolux + "typeDocument", Types + "LOI"),
+            (consolidation, Jolux + "isMemberOf", Parent),
+            (consolidation, Jolux + "isRealizedBy", expression),
+            (expression, RdfType, Jolux + "Expression"),
+            (expression, Jolux + "language", "http://publications.europa.eu/resource/authority/language/FRA"),
+            (expression, Jolux + "isEmbodiedBy", manifestation),
+            (manifestation, RdfType, Jolux + "Manifestation"),
+            (manifestation, Jolux + "userFormat", Formats + "pdf"),
+            (manifestation, Jolux + "isExemplifiedBy", item),
+            (manifestation, Jolux + "license", CcBy),
+        ];
+        return (consolidation, expression, manifestation, item, assertions);
     }
 
     private sealed record GazetteRun(LuxembourgQueryExecutionResult Result, int DocumentRequests);
@@ -444,7 +497,8 @@ public sealed class LuxembourgGazetteAcquisitionTests
         WireRequestBudget? wireBudget = null,
         string? pdfRobots = null,
         Func<ICustodyStore, ICustodyStore>? decorate = null,
-        string ladderMediaType = "application/pdf")
+        string ladderMediaType = "application/pdf",
+        IReadOnlyDictionary<string, byte[]>? ladderBodies = null)
     {
         // The census is a cursor-ordered enumeration: subjects in ascending ordinal order, or the
         // executor's own strict cursor check refuses the family as never advancing.
@@ -471,12 +525,17 @@ public sealed class LuxembourgGazetteAcquisitionTests
             8 or 11 => LuxembourgAcquisitionTestFixture.JsonResponse(request, LuxembourgAcquisitionTestFixture.CountJson(assertions.Length)),
             9 or 12 => LuxembourgAcquisitionTestFixture.JsonResponse(request, assertionPage),
             10 or 13 => LuxembourgAcquisitionTestFixture.JsonResponse(request, AssertionRows([])),
-            15 => Document(request, ladderItem, HttpStatusCode.OK, ladderBody, ladderMediaType),
+            15 when ladderBodies is null =>
+                Document(request, ladderItem, HttpStatusCode.OK, ladderBody, ladderMediaType),
             // Every document GET runs in its own session, and a session bootstraps robots first: the
             // Gazette loop's one fetch is a robots request and then the GET. A robots file that
             // disallows the listing ends that session there, and the GET is then unscripted.
             16 when pdf is not null => Response(request, Encoding.ASCII.GetBytes(pdfRobots ?? "User-agent: *\nAllow: /\n"), "text/plain"),
             17 when pdf is { } scripted && pdfRobots is null => Document(request, ItemPdf, scripted.Status, scripted.Body),
+            _ when ladderBodies is not null
+                && request.RequestUri?.AbsolutePath == "/robots.txt" =>
+                Response(request, "User-agent: *\nAllow: /\n"u8.ToArray(), "text/plain"),
+            _ when ladderBodies is not null => DocumentFromMap(request, ladderBodies),
             _ => throw new AssertFailedException($"Unexpected HTTP request {ordinal}: {request.Method} {request.RequestUri}"),
         });
         var executor = new LuxembourgRepeatedEnumerationExecutor(
@@ -499,6 +558,26 @@ public sealed class LuxembourgGazetteAcquisitionTests
                 new Uri(item.Replace("http://data.legilux.public.lu/", "https://legilux.public.lu/", StringComparison.Ordinal)).AbsoluteUri,
                 request.RequestUri!.AbsoluteUri);
             return Response(request, body, mediaType, status);
+        }
+
+        HttpResponseMessage DocumentFromMap(
+            HttpRequestMessage request,
+            IReadOnlyDictionary<string, byte[]> bodies)
+        {
+            var match = bodies.SingleOrDefault(pair => string.Equals(
+                new Uri(pair.Key.Replace(
+                    "http://data.legilux.public.lu/",
+                    "https://legilux.public.lu/",
+                    StringComparison.Ordinal)).AbsoluteUri,
+                request.RequestUri!.AbsoluteUri,
+                StringComparison.Ordinal));
+            if (match.Key is null)
+            {
+                throw new AssertFailedException(
+                    $"Unexpected mapped document request: {request.Method} {request.RequestUri}");
+            }
+
+            return Document(request, match.Key, HttpStatusCode.OK, match.Value, ladderMediaType);
         }
     }
 

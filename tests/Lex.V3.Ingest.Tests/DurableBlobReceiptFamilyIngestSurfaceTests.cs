@@ -129,6 +129,12 @@ public sealed class DurableBlobReceiptFamilyIngestSurfaceTests
                 // receipt as run provenance. The producer receives it through the proof-bound
                 // composition; it does not construct custody evidence.
                 "field private instance Lex.V3.Ingest.Luxembourg."
+                    + "LuxembourgPdfLayoutEvidenceOutcome::<LayoutEvidenceReceipt>k__BackingField -> "
+                    + Receipt + "?",
+                "field private instance Lex.V3.Ingest.Luxembourg."
+                    + "LuxembourgPdfLayoutEvidenceOutcome::<TransportReceipt>k__BackingField -> "
+                    + Receipt,
+                "field private instance Lex.V3.Ingest.Luxembourg."
                     + "LuxembourgPdfProfileEligibilityOutcome::<TransportReceipt>k__BackingField -> "
                     + Receipt,
                 "field private instance " + QueryExecutionResult + "::<CorpusRecordSetReceipt>k__BackingField -> "
@@ -152,6 +158,10 @@ public sealed class DurableBlobReceiptFamilyIngestSurfaceTests
                 + "Lex.V3.Contracts.Custody.ICustodyStore, System.ReadOnlyMemory<System.Byte>, "
                 + "System.Threading.CancellationToken) -> System.Threading.Tasks.Task<"
                 + "System.ValueTuple<" + Receipt + ", System.String>>",
+                "method private instance Lex.V3.Ingest.Luxembourg."
+                    + "LuxembourgPdfLayoutEvidenceProducer::HoldArtifactAsync("
+                    + "System.ReadOnlyMemory<System.Byte>, System.Threading.CancellationToken) -> "
+                    + "System.Threading.Tasks.Task<" + Receipt + ">",
                 // Both scope writes use the same private hold/reopen helper. It returns the
                 // custody store's receipt; it constructs no receipt or policy evidence.
                 "method private instance Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionAdapter::HoldManifestAsync("
@@ -198,6 +208,11 @@ public sealed class DurableBlobReceiptFamilyIngestSurfaceTests
                 "property public instance Lex.V3.Ingest.Luxembourg."
                     + "LuxembourgObservedObjectIdentitySetWriteResult::RetainedSetReceipt() -> "
                     + Receipt + "?",
+                "property public instance Lex.V3.Ingest.Luxembourg."
+                    + "LuxembourgPdfLayoutEvidenceOutcome::LayoutEvidenceReceipt() -> "
+                    + Receipt + "?",
+                "property public instance Lex.V3.Ingest.Luxembourg."
+                    + "LuxembourgPdfLayoutEvidenceOutcome::TransportReceipt() -> " + Receipt,
                 "property public instance Lex.V3.Ingest.Luxembourg."
                     + "LuxembourgPdfProfileEligibilityOutcome::TransportReceipt() -> " + Receipt,
                 "property public instance " + QueryExecutionResult + "::CorpusRecordSetReceipt() -> "
