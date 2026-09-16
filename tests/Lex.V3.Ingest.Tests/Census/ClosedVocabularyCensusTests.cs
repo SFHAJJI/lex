@@ -189,6 +189,8 @@ public sealed class ClosedVocabularyCensusTests
                     + "ProfileInvalid, ProfileDoesNotNameTransport, RetainedBytesUnavailable, "
                     + "XhtmlInvalid, PublisherAnnexConventionAbsent, "
                     + "PublisherAnnexConventionInvalid, WorkEliMissing",
+                "Lex.V3.Ingest.Luxembourg.LuxembourgAknArticleInventoryDisposition: Inventoried, "
+                    + "NotAkn, RetainedBytesUnavailable, XmlRejected",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgConsolidationByActRefusal: None, "
                     + "EnumerationRefused, EnumerationProofRefused, VerifiedRowsRefused, "
                     + "RowNotAdmitted, RowNamesAnotherAct, ConsolidationDeliveredTwice",
