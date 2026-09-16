@@ -33,15 +33,22 @@ public sealed class LuxembourgPublisherPdfActScopeProducerTests
     [TestMethod]
     public async Task MemorialItemRemainsIssueScopedAndRequiresLaterSplitting()
     {
-        const string item =
-            "http://data.legilux.public.lu/filestore/eli/etat/leg/memorial/1977/a67/fr/pdf/eli-etat-leg-memorial-1977-a67-fr-pdf.pdf";
-        var source = await TextPopulationAsync(Fixture(), item);
+        var items = new[]
+        {
+            "http://data.legilux.public.lu/filestore/eli/etat/leg/memorial/1977/a67/fr/pdf/eli-etat-leg-memorial-1977-a67-fr-pdf.pdf",
+            "http://data.legilux.public.lu/filestore/eli/etat/adm/memorial/2015/b12/fr/pdf/eli-etat-adm-memorial-2015-b12-fr-pdf.pdf",
+        };
 
-        var outcome = LuxembourgPublisherPdfActScopeProducer.Produce(source).Outcomes.Single();
-
-        Assert.AreEqual(LuxembourgPublisherPdfActScopeDisposition.GazetteIssueScope, outcome.Disposition);
-        Assert.IsNull(outcome.GapReason);
-        Assert.AreEqual(item, outcome.PublisherItemIri);
+        foreach (var item in items)
+        {
+            var source = await TextPopulationAsync(Fixture(), item);
+            var outcome = LuxembourgPublisherPdfActScopeProducer.Produce(source).Outcomes.Single();
+            Assert.AreEqual(
+                LuxembourgPublisherPdfActScopeDisposition.GazetteIssueScope,
+                outcome.Disposition);
+            Assert.IsNull(outcome.GapReason);
+            Assert.AreEqual(item, outcome.PublisherItemIri);
+        }
     }
 
     [TestMethod]
@@ -73,6 +80,32 @@ public sealed class LuxembourgPublisherPdfActScopeProducerTests
         Assert.AreEqual(
             LuxembourgPublisherPdfActScopeGapReason.UpstreamTextLayerGap,
             outcome.GapReason);
+    }
+
+    [TestMethod]
+    public async Task MixedPopulationHasOneOrderedOutcomePerExactSourceMember()
+    {
+        var clean = Fixture();
+        var invisible = File.ReadAllBytes(Path.Combine(
+            AppContext.BaseDirectory, "Fixtures", "LuDocumentFetch", "lu-pdf-invisible-1987-12-23-n5.bin"));
+        var luxembourg = await LuxembourgGazetteAcquisitionTests
+            .CompleteTwoPublisherPdfsForStage3BodyCompositionAsync(clean, invisible);
+        var source = await TextPopulationAsync(luxembourg, clean, invisible);
+
+        var population = LuxembourgPublisherPdfActScopeProducer.Produce(source);
+
+        Assert.HasCount(2, population.Outcomes);
+        CollectionAssert.AreEqual(
+            source.Outcomes.Select(static outcome => outcome.SemanticIdentitySha256).ToArray(),
+            population.Outcomes.Select(
+                static outcome => outcome.SourceTextLayer.SemanticIdentitySha256).ToArray());
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                LuxembourgPublisherPdfActScopeDisposition.ActScopedCoordinate,
+                LuxembourgPublisherPdfActScopeDisposition.TypedGap,
+            },
+            population.Outcomes.Select(static outcome => outcome.Disposition).ToArray());
     }
 
     [TestMethod]
@@ -111,9 +144,19 @@ public sealed class LuxembourgPublisherPdfActScopeProducerTests
     {
         var luxembourg = await LuxembourgGazetteAcquisitionTests
             .CompletePublisherPdfForStage3BodyCompositionAsync(bytes, item);
+        return await TextPopulationAsync(luxembourg, bytes);
+    }
+
+    private static async Task<LuxembourgPublisherPdfTextLayerPopulation> TextPopulationAsync(
+        LuxembourgQueryExecutionResult luxembourg,
+        params byte[][] bytes)
+    {
         var eligibility = await EligibilityAsync(luxembourg);
         ICustodyStore store = new RoutedHttpAcquisitionSessionTests.MultiObjectCustodyStore();
-        _ = await store.CreateAsync(bytes, CustodyClass.NightlyFloor90d, CancellationToken.None);
+        foreach (var body in bytes)
+        {
+            _ = await store.CreateAsync(body, CustodyClass.NightlyFloor90d, CancellationToken.None);
+        }
         var layout = await new LuxembourgPdfLayoutEvidenceProducer(store)
             .RunAsync(eligibility, CancellationToken.None);
         Assert.IsTrue(layout.Produced, $"{layout.Refusal}: {layout.Detail}");
