@@ -11,14 +11,11 @@ public enum LuxembourgPublisherPdfActScopeDisposition
     [JsonStringEnumMemberName("not_applicable")]
     NotApplicable = 1,
 
-    [JsonStringEnumMemberName("act_scoped_coordinate")]
-    ActScopedCoordinate = 2,
-
     [JsonStringEnumMemberName("gazette_issue_scope")]
-    GazetteIssueScope = 3,
+    GazetteIssueScope = 2,
 
     [JsonStringEnumMemberName("typed_gap")]
-    TypedGap = 4,
+    TypedGap = 3,
 }
 
 /// <summary>Why an exact publisher-PDF member has no usable act-scope coordinate.</summary>
@@ -144,8 +141,8 @@ public static class LuxembourgPublisherPdfActScopeProducer
         "lex-v3-luxembourg-publisher-pdf-act-scope-rule/1\n" +
         "source=exact-luxembourg-publisher-pdf-text-layer-population/1\n" +
         "gazette-issue=/filestore/eli/etat/{leg|adm}/memorial/=>issue-scope;act-splitting-required\n" +
-        "act-scope=item-path-strictly-nested-under-exact-manifestation-path\n" +
-        "other=typed-gap:act-scope-unproven\n" +
+        "gazette-issue-scope-does-not-prove-an-act-boundary\n" +
+        "all-other-admitted-publisher-pdf=typed-gap:act-scope-unproven\n" +
         "semantics=publisher-coordinate-only;no-pdf-content-or-legal-wording-claim\n";
 
     private const string LegislativeMemorialPrefix = "/filestore/eli/etat/leg/memorial/";
@@ -198,14 +195,10 @@ public static class LuxembourgPublisherPdfActScopeProducer
             return Outcome(source, LuxembourgPublisherPdfActScopeDisposition.GazetteIssueScope);
         }
 
-        var manifestationPath = manifestation.AbsolutePath;
-        var exactActPrefix = "/filestore" + manifestationPath + "/";
-        return itemPath.StartsWith(exactActPrefix, StringComparison.Ordinal)
-            ? Outcome(source, LuxembourgPublisherPdfActScopeDisposition.ActScopedCoordinate)
-            : Outcome(
-                source,
-                LuxembourgPublisherPdfActScopeDisposition.TypedGap,
-                LuxembourgPublisherPdfActScopeGapReason.ActScopeUnproven);
+        return Outcome(
+            source,
+            LuxembourgPublisherPdfActScopeDisposition.TypedGap,
+            LuxembourgPublisherPdfActScopeGapReason.ActScopeUnproven);
     }
 
     private static LuxembourgPublisherPdfActScopeOutcome Outcome(

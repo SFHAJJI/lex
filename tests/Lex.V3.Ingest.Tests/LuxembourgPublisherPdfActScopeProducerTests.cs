@@ -13,7 +13,7 @@ public sealed class LuxembourgPublisherPdfActScopeProducerTests
         "http://data.legilux.public.lu/filestore/eli/etat/leg/loi/2026/01/01/a1/consolide/20260201/fr/pdf/consolide.pdf";
 
     [TestMethod]
-    public async Task ExactManifestationNestedItemIsOnlyCoordinateScoped()
+    public async Task ExactManifestationNestedItemDoesNotProveOneAct()
     {
         var source = await TextPopulationAsync(Fixture(), ActItem);
 
@@ -22,9 +22,11 @@ public sealed class LuxembourgPublisherPdfActScopeProducerTests
         var outcome = population.Outcomes.Single();
         Assert.AreSame(source.Outcomes.Single(), outcome.SourceTextLayer);
         Assert.AreEqual(
-            LuxembourgPublisherPdfActScopeDisposition.ActScopedCoordinate,
+            LuxembourgPublisherPdfActScopeDisposition.TypedGap,
             outcome.Disposition);
-        Assert.IsNull(outcome.GapReason);
+        Assert.AreEqual(
+            LuxembourgPublisherPdfActScopeGapReason.ActScopeUnproven,
+            outcome.GapReason);
         Assert.AreEqual(source.Outcomes.Single().SourceLayoutEvidence.SourceEligibility.PublisherExpressionIri,
             outcome.PublisherExpressionIri);
         Assert.AreEqual(ActItem, outcome.PublisherItemIri);

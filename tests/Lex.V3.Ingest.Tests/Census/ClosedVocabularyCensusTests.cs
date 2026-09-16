@@ -266,7 +266,7 @@ public sealed class ClosedVocabularyCensusTests
                 "Lex.V3.Ingest.Luxembourg.LuxembourgPdfProfileEligibilityGapReason: "
                     + "GazetteReceiptMismatch",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgPublisherPdfActScopeDisposition: "
-                    + "NotApplicable, ActScopedCoordinate, GazetteIssueScope, TypedGap",
+                    + "NotApplicable, GazetteIssueScope, TypedGap",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgPublisherPdfActScopeGapReason: "
                     + "UpstreamTextLayerGap, ActScopeUnproven",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgPublisherPdfTextLayerDisposition: NotApplicable, "
