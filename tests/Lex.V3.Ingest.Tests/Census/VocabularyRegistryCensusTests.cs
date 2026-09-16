@@ -71,6 +71,8 @@ public sealed class VocabularyRegistryCensusTests
                     + "DigestDomain, const Schema",
                 "Lex.V3.Ingest.Europe.EuObjectFactsBatchFactory: SetsOverObservedObjects=5, "
                     + "SetsOverPackRootsOnly=1",
+                "Lex.V3.Ingest.Luxembourg.LuxembourgPublisherPdfActScopeProducer: const "
+                    + "RuleProfile, static property RuleProfileSha256",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgReferralDateComposition: const HasOpinion, "
                     + "const IriKind, const ReferralDate",
             },

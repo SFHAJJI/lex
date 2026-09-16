@@ -265,6 +265,10 @@ public sealed class ClosedVocabularyCensusTests
                     + "PublisherPdfEligible, GazettePdfEligible, TypedGap",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgPdfProfileEligibilityGapReason: "
                     + "GazetteReceiptMismatch",
+                "Lex.V3.Ingest.Luxembourg.LuxembourgPublisherPdfActScopeDisposition: "
+                    + "NotApplicable, ActScopedCoordinate, GazetteIssueScope, TypedGap",
+                "Lex.V3.Ingest.Luxembourg.LuxembourgPublisherPdfActScopeGapReason: "
+                    + "UpstreamTextLayerGap, ActScopeUnproven",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgPublisherPdfTextLayerDisposition: NotApplicable, "
                     + "Admitted, TypedGap",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgPublisherPdfTextLayerGapReason: "
