@@ -2292,7 +2292,13 @@ public sealed class LuxembourgQueryExecutionAdapter
             return (null, false);
         }
 
-        var exactMatches = candidates.Where(candidate => candidate.Selection == selected).ToArray();
+        var exactMatches = candidates.Where(candidate =>
+            candidate.Selection.Token == selected.Token &&
+            candidate.Selection.LegalValue == selected.LegalValue &&
+            string.Equals(
+                candidate.Selection.FileUri.Value.AbsoluteUri,
+                selected.FileUri.Value.AbsoluteUri,
+                StringComparison.Ordinal)).ToArray();
         if (exactMatches.Length != 1)
         {
             return (null, true);
