@@ -81,6 +81,30 @@ public sealed class Canon2AliasArtifactTests
     }
 
     [TestMethod]
+    public void DuplicateSourceAtOneCoordinateIsRefused()
+    {
+        var artifact = Canon2AliasArtifact.TryCreate(
+            [Entry("old-a", "new-a", "article-1"), Entry("old-a", "new-b", "article-1")],
+            out var refusal,
+            out _);
+
+        Assert.IsNull(artifact);
+        Assert.AreEqual(Canon2AliasArtifactRefusal.DuplicateSource, refusal);
+    }
+
+    [TestMethod]
+    public void DuplicateTargetAtOneCoordinateIsRefused()
+    {
+        var artifact = Canon2AliasArtifact.TryCreate(
+            [Entry("old-a", "new-a", "article-1"), Entry("old-b", "new-a", "article-1")],
+            out var refusal,
+            out _);
+
+        Assert.IsNull(artifact);
+        Assert.AreEqual(Canon2AliasArtifactRefusal.DuplicateTarget, refusal);
+    }
+
+    [TestMethod]
     public void TwoSourcesAtOneCoordinateAreRefusedAsACollision()
     {
         var artifact = Canon2AliasArtifact.TryCreate(

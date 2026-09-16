@@ -69,7 +69,7 @@ public sealed class ClosedVocabularyCensusTests
                     + "NoVisibleContent",
                 "Lex.V3.Contracts.BodyHoldingState: HeldPublic, HeldWithheld, NotHeld",
                 "Lex.V3.Contracts.Canon.Canon2AliasArtifactRefusal: None, DuplicateSource, "
-                    + "DuplicateTarget, CoordinateCollision, NonDirectGraph",
+                    + "DuplicateTarget, CoordinateCollision",
                 "Lex.V3.Contracts.Custody.CustodyClass: NightlyFloor90d, LegalHoldEvidence",
                 "Lex.V3.Contracts.Custody.CustodyMembership: ReadOnce, RetainedUnenforced, Floored",
                 "Lex.V3.Contracts.Custody.CustodyProtection: NotEnforced, LockedTime, "
