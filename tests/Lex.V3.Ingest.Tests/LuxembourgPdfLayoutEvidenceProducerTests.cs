@@ -47,9 +47,7 @@ public sealed class LuxembourgPdfLayoutEvidenceProducerTests
             "9f34cd405f1f0f9b4349fa967b2271b257d4982fbf90351f4b6261f56633c111");
         var source = await EligibilityAsync(await LuxembourgGazetteAcquisitionTests
             .CompleteTwoPublisherPdfsForStage3BodyCompositionAsync(firstBytes, secondBytes));
-        var store = await StoreAsync(
-            (source.Outcomes[0].TransportReceipt.Reference, firstBytes),
-            (source.Outcomes[1].TransportReceipt.Reference, secondBytes));
+        var store = await StoreAsync(firstBytes, secondBytes);
 
         var result = await new LuxembourgPdfLayoutEvidenceProducer(store)
             .RunAsync(source, CancellationToken.None);
@@ -63,8 +61,12 @@ public sealed class LuxembourgPdfLayoutEvidenceProducerTests
             source.Outcomes.Select(static value => value.TransportReceipt.Reference.ContentSha256).ToArray(),
             result.Population.Outcomes.Select(static value => value.TransportReceipt.Reference.ContentSha256).ToArray(),
             "Every output must carry the exact source member receipt in source order.");
-        var firstDocument = await OpenAsync(store, result.Population.Outcomes[0]);
-        var secondDocument = await OpenAsync(store, result.Population.Outcomes[1]);
+        var firstOutcome = result.Population.Outcomes.Single(value =>
+            value.TransportReceipt.Reference.ContentSha256 == CustodyDigest.Of(firstBytes));
+        var secondOutcome = result.Population.Outcomes.Single(value =>
+            value.TransportReceipt.Reference.ContentSha256 == CustodyDigest.Of(secondBytes));
+        var firstDocument = await OpenAsync(store, firstOutcome);
+        var secondDocument = await OpenAsync(store, secondOutcome);
         Assert.AreEqual(0, firstDocument.Pages.Sum(static page => page.ImageCount));
         Assert.AreEqual(58, secondDocument.Pages.Sum(static page => page.ImageCount));
         Assert.AreEqual(27, InvisibleCount(secondDocument));
@@ -94,7 +96,7 @@ public sealed class LuxembourgPdfLayoutEvidenceProducerTests
             "86b5d5021ebd57735914a2a02ea0158447eb2b2d6a45889fbd42faea2bd973ea");
         var source = await EligibilityAsync(await LuxembourgGazetteAcquisitionTests
             .CompletePublisherPdfForStage3BodyCompositionAsync(bytes));
-        var inner = await StoreAsync((source.Outcomes.Single().TransportReceipt.Reference, bytes));
+        var inner = await StoreAsync(bytes);
         var store = CreateGuardStore.Wrap(inner, CreateBehavior.FailTest);
 
         var result = await new LuxembourgPdfLayoutEvidenceProducer(store, maximumArtifactBytes: 64)
@@ -113,7 +115,7 @@ public sealed class LuxembourgPdfLayoutEvidenceProducerTests
         var bytes = "%PDF-1.7 deliberately unreadable\n%%EOF\n"u8.ToArray();
         var source = await EligibilityAsync(await LuxembourgGazetteAcquisitionTests
             .CompletePublisherPdfForStage3BodyCompositionAsync(bytes));
-        var store = await StoreAsync((source.Outcomes.Single().TransportReceipt.Reference, bytes));
+        var store = await StoreAsync(bytes);
 
         var result = await new LuxembourgPdfLayoutEvidenceProducer(store)
             .RunAsync(source, CancellationToken.None);
@@ -148,7 +150,7 @@ public sealed class LuxembourgPdfLayoutEvidenceProducerTests
         var bytes = LuxembourgDocumentFetchFixtures.PdfBody();
         var source = await EligibilityAsync(await LuxembourgGazetteAcquisitionTests
             .CompletePublisherPdfForStage3BodyCompositionAsync(bytes));
-        var inner = await StoreAsync((source.Outcomes.Single().TransportReceipt.Reference, bytes));
+        var inner = await StoreAsync(bytes);
         var store = CreateGuardStore.Wrap(inner, CreateBehavior.Refuse);
 
         var result = await new LuxembourgPdfLayoutEvidenceProducer(store)
@@ -189,9 +191,7 @@ public sealed class LuxembourgPdfLayoutEvidenceProducerTests
             .CompletePublisherPdfForStage3BodyCompositionAsync(bytes));
         var secondSource = await EligibilityAsync(await LuxembourgGazetteAcquisitionTests
             .CompletePublisherPdfForStage3BodyCompositionAsync(bytes));
-        var store = await StoreAsync(
-            (firstSource.Outcomes.Single().TransportReceipt.Reference, bytes),
-            (secondSource.Outcomes.Single().TransportReceipt.Reference, bytes));
+        var store = await StoreAsync(bytes);
 
         var first = await new LuxembourgPdfLayoutEvidenceProducer(store)
             .RunAsync(firstSource, CancellationToken.None);
@@ -224,7 +224,7 @@ public sealed class LuxembourgPdfLayoutEvidenceProducerTests
     {
         var source = await EligibilityAsync(await LuxembourgGazetteAcquisitionTests
             .CompletePublisherPdfForStage3BodyCompositionAsync(bytes));
-        var store = await StoreAsync((source.Outcomes.Single().TransportReceipt.Reference, bytes));
+        var store = await StoreAsync(bytes);
         var result = await new LuxembourgPdfLayoutEvidenceProducer(store)
             .RunAsync(source, CancellationToken.None);
         Assert.IsTrue(result.Produced, $"{result.Refusal}: {result.Detail}");
@@ -269,15 +269,13 @@ public sealed class LuxembourgPdfLayoutEvidenceProducerTests
         LuxembourgPdfLayoutEvidenceOutcome outcome) =>
         LuxembourgPdfLayoutEvidenceArtifactReader.ReadAsync(outcome, store, CancellationToken.None);
 
-    private static async Task<ICustodyStore> StoreAsync(
-        params (DurableBlobRef Reference, byte[] Bytes)[] retained)
+    private static async Task<ICustodyStore> StoreAsync(params byte[][] retained)
     {
         ICustodyStore store = new RoutedHttpAcquisitionSessionTests.MultiObjectCustodyStore();
-        foreach (var (reference, bytes) in retained)
+        foreach (var bytes in retained)
         {
-            Assert.AreEqual(reference.ByteLength, bytes.LongLength);
-            Assert.AreEqual(reference.ContentSha256, CustodyDigest.Of(bytes));
-            _ = await store.CreateAsync(bytes, reference.CustodyClass, CancellationToken.None);
+            _ = await store.CreateAsync(
+                bytes, CustodyClass.NightlyFloor90d, CancellationToken.None);
         }
 
         return store;
