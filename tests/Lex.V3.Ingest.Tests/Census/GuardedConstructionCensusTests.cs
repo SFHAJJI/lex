@@ -461,6 +461,18 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Ingest.Europe.LuxembourgOpinionRequestGraphRunRequest::<Clone>$, "
                     + "method public static "
                     + "Lex.V3.Ingest.Europe.LuxembourgOpinionRequestGraphRunRequest::ForBatch",
+                "Lex.V3.Ingest.Luxembourg.LuxembourgAknArticleInventory: by-ref-method private "
+                    + "static Lex.V3.Ingest.Luxembourg.LuxembourgAknArticleInventoryProducer::TryInventory, "
+                    + "constructor internal instance "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgAknArticleInventory::.ctor",
+                "Lex.V3.Ingest.Luxembourg.LuxembourgAknArticleInventoryOutcome: constructor "
+                    + "internal instance "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgAknArticleInventoryOutcome::.ctor",
+                "Lex.V3.Ingest.Luxembourg.LuxembourgAknArticleInventoryPopulation: constructor "
+                    + "internal instance "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgAknArticleInventoryPopulation::.ctor, "
+                    + "method public instance "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgAknArticleInventoryProducer::RunAsync",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgConsolidationByActResult: constructor private "
                     + "instance Lex.V3.Ingest.Luxembourg.LuxembourgConsolidationByActResult::.ctor, "
                     + "method internal static "
