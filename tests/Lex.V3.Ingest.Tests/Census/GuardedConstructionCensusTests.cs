@@ -876,6 +876,11 @@ public sealed class GuardedConstructionCensusTests
                     + "tHandlerAsync, "
                     + "method private instance "
                     + "Lex.V3.Ingest.RoutedHttpAcquisitionSession::BootstrapRobotsAsync",
+                "Lex.V3.Ingest.Stage3BodyComposition: constructor private instance "
+                    + "Lex.V3.Ingest.Stage3BodyComposition::.ctor, "
+                    + "method public static Lex.V3.Ingest.Stage3BodyComposition::TryCreate",
+                "Lex.V3.Ingest.Stage3EuropeBodyComposition: constructor internal instance "
+                    + "Lex.V3.Ingest.Stage3EuropeBodyComposition::.ctor, 1 compiler-generated",
                 "Lex.V3.Ingest.Stage3EvidenceEnvelope: constructor private instance "
                     + "Lex.V3.Ingest.Stage3EvidenceEnvelope::.ctor, "
                     + "method public static Lex.V3.Ingest.Stage3EvidenceEnvelope::TryCreate",
@@ -888,6 +893,8 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Ingest.Stage3FidelityPreservationReconciliation::.cctor, "
                     + "method public static "
                     + "Lex.V3.Ingest.Stage3FidelityPreservationReconciliation::TryCreate",
+                "Lex.V3.Ingest.Stage3LuxembourgBodyComposition: constructor internal instance "
+                    + "Lex.V3.Ingest.Stage3LuxembourgBodyComposition::.ctor",
                 "Lex.V3.Ingest.WireBudgetSnapshot: constructor private instance "
                     + "Lex.V3.Ingest.WireBudgetSnapshot::.ctor, "
                     + "constructor private instance Lex.V3.Ingest.WireBudgetSnapshot::.ctor, "

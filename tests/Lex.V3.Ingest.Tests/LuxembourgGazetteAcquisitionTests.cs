@@ -328,6 +328,9 @@ public sealed class LuxembourgGazetteAcquisitionTests
 
     // ---- Fixtures. ----
 
+    internal static async Task<LuxembourgQueryExecutionResult> CompleteForStage3BodyCompositionAsync() =>
+        (await RunAsync(GazetteAssertions(), pdf: (HttpStatusCode.OK, PdfBytes))).Result;
+
     private sealed record GazetteRun(LuxembourgQueryExecutionResult Result, int DocumentRequests);
 
     private static (string, string, string)[] GazetteAssertions(string? pdfLicence = null, string[]? pdfLegalValues = null)
