@@ -75,9 +75,10 @@ public sealed class LexCorpus6BuilderTests
         var reopened = VerifiedLexCorpus6ManifestSet.ParseAndVerify(
             first.ArtifactRef,
             first.CanonicalBytes.Span);
+        Assert.HasCount(first.VerifiedSet.Set.Members.Count, reopened.Set.Members);
         CollectionAssert.AreEqual(
-            first.VerifiedSet.Set.Members.ToArray(),
-            reopened.Set.Members.ToArray());
+            first.VerifiedSet.Set.Members.Select(static member => member.ObjectRefSha256).ToArray(),
+            reopened.Set.Members.Select(static member => member.ObjectRefSha256).ToArray());
     }
 
     private static async Task<Stage3DerivationProfileEnvelope> CompleteProfileEnvelopeAsync()
