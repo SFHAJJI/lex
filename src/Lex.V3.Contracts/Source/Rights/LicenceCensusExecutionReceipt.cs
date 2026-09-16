@@ -824,7 +824,7 @@ internal static class LicenceCensusValidation
         {
             ArgumentNullException.ThrowIfNull(frozen[index], $"{parameterName}[{index}]");
             var current = key(frozen[index]);
-            if (previous is not null && string.CompareOrdinal(previous, current) >= 0)
+            if (previous is not null && CompareUnsignedUtf8(previous, current) >= 0)
             {
                 throw new ArgumentException("A census collection must be strictly ASCII-sorted and duplicate-free.", parameterName);
             }
@@ -833,5 +833,22 @@ internal static class LicenceCensusValidation
         }
 
         return frozen;
+    }
+
+    private static int CompareUnsignedUtf8(string left, string right)
+    {
+        var leftBytes = RoutedHttpValidation.StrictUtf8.GetBytes(left);
+        var rightBytes = RoutedHttpValidation.StrictUtf8.GetBytes(right);
+        var sharedLength = Math.Min(leftBytes.Length, rightBytes.Length);
+        for (var index = 0; index < sharedLength; index++)
+        {
+            var comparison = leftBytes[index].CompareTo(rightBytes[index]);
+            if (comparison != 0)
+            {
+                return comparison;
+            }
+        }
+
+        return leftBytes.Length.CompareTo(rightBytes.Length);
     }
 }

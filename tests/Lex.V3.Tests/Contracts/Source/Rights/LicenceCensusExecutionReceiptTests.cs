@@ -82,6 +82,19 @@ public sealed class LicenceCensusExecutionReceiptTests
     }
 
     [TestMethod]
+    public void PathOrderIsUnsignedUtf8RatherThanUtf16CodeUnitOrder()
+    {
+        var receipt = Fixture.Create(sourceArtifacts:
+        [
+            new LicenceCensusSourceArtifact("artifacts/\uE000", 1, new string('8', 64)),
+            new LicenceCensusSourceArtifact("artifacts/\U00010000", 1, new string('9', 64)),
+        ]);
+
+        Assert.AreEqual("artifacts/\uE000", receipt.SourceArtifacts[0].Path);
+        Assert.AreEqual("artifacts/\U00010000", receipt.SourceArtifacts[1].Path);
+    }
+
+    [TestMethod]
     public void ExecutionBoundaryRefusesPhysicalPathsAmbientStateAndUnboundedOutput()
     {
         Assert.Throws<ArgumentException>(() => Fixture.Run(0, executorToken: "C:\\Python\\python.exe"));
