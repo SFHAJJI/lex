@@ -274,6 +274,7 @@ public sealed class Stage3EvidenceEnvelopeTests
         Assert.Contains(typeof(EuFormexAnnexClassificationReconciliation), parameters);
         Assert.Contains(typeof(Stage3FidelityPreservationReconciliation), parameters);
         Assert.Contains(typeof(LuxembourgAknArticleInventoryPopulation), parameters);
+        Assert.Contains(typeof(LuxembourgAknLegalContentPopulation), parameters);
         Assert.IsFalse(parameters.Contains(typeof(IEnumerable<EuImageOnlyAnnexProductionResult>)));
     }
 
