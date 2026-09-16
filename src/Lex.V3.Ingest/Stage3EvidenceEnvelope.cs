@@ -37,6 +37,12 @@ public enum Stage3EvidenceEnvelopeRefusal
 
     [JsonStringEnumMemberName("luxembourg_akn_article_inventory_mismatch")]
     LuxembourgAknArticleInventoryPopulationMismatch = 9,
+
+    [JsonStringEnumMemberName("luxembourg_akn_legal_content_population_missing")]
+    LuxembourgAknLegalContentPopulationMissing = 10,
+
+    [JsonStringEnumMemberName("luxembourg_akn_legal_content_population_mismatch")]
+    LuxembourgAknLegalContentPopulationMismatch = 11,
 }
 
 /// <summary>
@@ -51,7 +57,8 @@ public sealed class Stage3EvidenceEnvelope
         EuFormexRunOutcomeReconciliation formex,
         EuFormexAnnexClassificationReconciliation formexAnnexClassifications,
         Stage3FidelityPreservationReconciliation fidelityPreservation,
-        LuxembourgAknArticleInventoryPopulation luxembourgAknArticleInventoryPopulation)
+        LuxembourgAknArticleInventoryPopulation luxembourgAknArticleInventoryPopulation,
+        LuxembourgAknLegalContentPopulation luxembourgAknLegalContentPopulation)
     {
         Europe = europe;
         Luxembourg = luxembourg;
@@ -59,6 +66,7 @@ public sealed class Stage3EvidenceEnvelope
         FormexAnnexClassifications = formexAnnexClassifications;
         FidelityPreservation = fidelityPreservation;
         LuxembourgAknArticleInventoryPopulation = luxembourgAknArticleInventoryPopulation;
+        LuxembourgAknLegalContentPopulation = luxembourgAknLegalContentPopulation;
     }
 
     public EuQueryExecutionResult Europe { get; }
@@ -89,6 +97,12 @@ public sealed class Stage3EvidenceEnvelope
     /// </summary>
     public LuxembourgAknArticleInventoryPopulation LuxembourgAknArticleInventoryPopulation { get; }
 
+    /// <summary>
+    /// The complete ordered legal-content dispositions produced from the exact AKN inventory
+    /// above. This carrier does not reinterpret tokens, markers or publisher evidence.
+    /// </summary>
+    public LuxembourgAknLegalContentPopulation LuxembourgAknLegalContentPopulation { get; }
+
     public static Stage3EvidenceEnvelope? TryCreate(
         EuQueryExecutionResult europe,
         LuxembourgQueryExecutionResult luxembourg,
@@ -96,6 +110,7 @@ public sealed class Stage3EvidenceEnvelope
         EuFormexAnnexClassificationReconciliation formexAnnexClassifications,
         Stage3FidelityPreservationReconciliation fidelityPreservation,
         LuxembourgAknArticleInventoryPopulation luxembourgAknArticleInventoryPopulation,
+        LuxembourgAknLegalContentPopulation? luxembourgAknLegalContentPopulation,
         out Stage3EvidenceEnvelopeRefusal refusal,
         out string? detail)
     {
@@ -108,6 +123,13 @@ public sealed class Stage3EvidenceEnvelope
 
         refusal = Stage3EvidenceEnvelopeRefusal.None;
         detail = null;
+        if (luxembourgAknLegalContentPopulation is null)
+        {
+            refusal = Stage3EvidenceEnvelopeRefusal.LuxembourgAknLegalContentPopulationMissing;
+            detail = "the AKN legal-content population is missing";
+            return null;
+        }
+
         if (!EuropeIsComplete(europe))
         {
             refusal = Stage3EvidenceEnvelopeRefusal.EuropeNotComplete;
@@ -170,6 +192,15 @@ public sealed class Stage3EvidenceEnvelope
             return null;
         }
 
+        if (!ReferenceEquals(
+                luxembourgAknLegalContentPopulation.SourceInventoryPopulation,
+                luxembourgAknArticleInventoryPopulation))
+        {
+            refusal = Stage3EvidenceEnvelopeRefusal.LuxembourgAknLegalContentPopulationMismatch;
+            detail = "the AKN legal content belongs to a different article inventory population";
+            return null;
+        }
+
         var europeObjectRefs = europe.CorpusRecordSet!.Set.Records
             .Select(static record => record.ObjectRef)
             .ToHashSet();
@@ -194,7 +225,8 @@ public sealed class Stage3EvidenceEnvelope
             formex,
             formexAnnexClassifications,
             fidelityPreservation,
-            luxembourgAknArticleInventoryPopulation);
+            luxembourgAknArticleInventoryPopulation,
+            luxembourgAknLegalContentPopulation);
     }
 
     private static bool EuropeIsComplete(EuQueryExecutionResult result) =>

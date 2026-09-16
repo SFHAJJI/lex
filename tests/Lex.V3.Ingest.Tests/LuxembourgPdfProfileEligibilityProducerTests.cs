@@ -132,13 +132,12 @@ public sealed class LuxembourgPdfProfileEligibilityProducerTests
         var classifications = Stage3EvidenceEnvelopeTests.CompleteClassifications(
             formex, [acquired.Classification]);
         var fidelity = Stage3FidelityPreservationReconciliationTests.Complete(europe, luxembourg);
-        var envelope = Stage3EvidenceEnvelope.TryCreate(
+        var envelope = Stage3EvidenceEnvelopeTests.TryCreate(
             europe,
             luxembourg,
             formex,
             classifications,
             fidelity,
-            Stage3EvidenceEnvelopeTests.CompleteAknInventory(luxembourg),
             out var envelopeRefusal,
             out var envelopeDetail);
         Assert.IsNotNull(envelope, $"{envelopeRefusal}: {envelopeDetail}");
