@@ -170,6 +170,40 @@ public sealed class LuxembourgHeldBodyDerivationPopulationTests
             new LuxembourgSelectedDocumentFetch(otherAddress, input.SelectedWemiCandidate));
     }
 
+    [TestMethod]
+    public async Task ASelectedWemiIdentityForAnotherPublisherObjectIsRefused()
+    {
+        var run = await LuxembourgGazetteAcquisitionTests.CompleteForStage3BodyCompositionAsync();
+        var input = run.HeldBodyDerivationPopulation!.Inputs.Single();
+        const string foreignRoot =
+            "http://data.legilux.public.lu/eli/etat/leg/loi/2025/01/01/a2/jo";
+        var source = input.SelectedWemiCandidate;
+        var foreign = new LuxembourgWemiCandidate(
+            foreignRoot,
+            foreignRoot + "/fr",
+            foreignRoot + "/fr/pdfa",
+            source.ItemIri,
+            source.LanguageIri,
+            source.FormatIri,
+            source.ObservationRef,
+            LuxembourgWemiCandidateDisposition.StructurallyConsistent,
+            []);
+        var selected = new Dictionary<Contracts.Source.Core.SourceObjectRef, LuxembourgSelectedDocumentFetch>
+        {
+            [input.CorpusRecord.ObjectRef] = new LuxembourgSelectedDocumentFetch(input.Address, foreign),
+        };
+
+        var population = LuxembourgHeldBodyDerivationPopulation.TryCreate(
+            run.CorpusRecordSet!, run.DocumentAcquisitionOutcomesByOrdinal!, selected,
+            out var refusal, out var detail);
+
+        Assert.IsNull(population);
+        Assert.AreEqual(
+            LuxembourgHeldBodyDerivationPopulationRefusal.HeldRecordSelectedIdentityMismatch,
+            refusal);
+        Assert.AreEqual(input.CorpusRecord.ObjectRef.PublisherUri, detail);
+    }
+
     private static IReadOnlyDictionary<Contracts.Source.Core.SourceObjectRef, LuxembourgSelectedDocumentFetch>
         SelectedFetches(LuxembourgQueryExecutionResult run) =>
         run.HeldBodyDerivationPopulation!.Inputs.ToDictionary(
