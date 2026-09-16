@@ -129,6 +129,9 @@ public sealed class DurableBlobReceiptFamilyIngestSurfaceTests
                 // receipt as run provenance. The producer receives it through the proof-bound
                 // composition; it does not construct custody evidence.
                 "field private instance Lex.V3.Ingest.Luxembourg."
+                    + "LuxembourgPdfLayoutEvidenceOutcome::<TransportReceipt>k__BackingField -> "
+                    + Receipt,
+                "field private instance Lex.V3.Ingest.Luxembourg."
                     + "LuxembourgPdfProfileEligibilityOutcome::<TransportReceipt>k__BackingField -> "
                     + Receipt,
                 "field private instance " + QueryExecutionResult + "::<CorpusRecordSetReceipt>k__BackingField -> "
@@ -198,6 +201,8 @@ public sealed class DurableBlobReceiptFamilyIngestSurfaceTests
                 "property public instance Lex.V3.Ingest.Luxembourg."
                     + "LuxembourgObservedObjectIdentitySetWriteResult::RetainedSetReceipt() -> "
                     + Receipt + "?",
+                "property public instance Lex.V3.Ingest.Luxembourg."
+                    + "LuxembourgPdfLayoutEvidenceOutcome::TransportReceipt() -> " + Receipt,
                 "property public instance Lex.V3.Ingest.Luxembourg."
                     + "LuxembourgPdfProfileEligibilityOutcome::TransportReceipt() -> " + Receipt,
                 "property public instance " + QueryExecutionResult + "::CorpusRecordSetReceipt() -> "
