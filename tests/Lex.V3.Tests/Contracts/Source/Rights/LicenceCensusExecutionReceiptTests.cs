@@ -34,6 +34,7 @@ public sealed class LicenceCensusExecutionReceiptTests
             json.Replace("{\"schema\":", "{\"unknown\":0,\"schema\":", StringComparison.Ordinal),
             json.Replace("\"source_artifacts\":[", "\"source_artifacts\":null,\"discarded\":[", StringComparison.Ordinal),
             json.Replace("\"record_count\":2", "\"record_count\":\"2\"", StringComparison.Ordinal),
+            json.Replace("\"executor_token\":\"python3\"", "\"executor_token\":\"\\u0070ython3\"", StringComparison.Ordinal),
             json.Replace(
                 "\"structural_vocabulary_sha256\":\"" + new string('a', 64) + "\",\"structural_counts_sha256\":\"" + new string('b', 64) + "\"",
                 "\"structural_counts_sha256\":\"" + new string('b', 64) + "\",\"structural_vocabulary_sha256\":\"" + new string('a', 64) + "\"",
