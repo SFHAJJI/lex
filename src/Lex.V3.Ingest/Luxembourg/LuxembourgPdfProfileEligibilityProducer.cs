@@ -28,6 +28,14 @@ public enum LuxembourgPdfProfileEligibilityGapReason
 {
     [JsonStringEnumMemberName("gazette_receipt_mismatch")]
     GazetteReceiptMismatch = 1,
+
+    /// <summary>
+    /// The exact Gazette listing exists, but its body was rejected or its transport bytes were not
+    /// retained. That evidence cannot certify the Gazette-PDF family and is not equivalent to an
+    /// expression for which the publisher supplied no exact Gazette listing.
+    /// </summary>
+    [JsonStringEnumMemberName("gazette_evidence_not_admitted")]
+    GazetteEvidenceNotAdmitted = 2,
 }
 
 /// <summary>
@@ -164,7 +172,6 @@ public static class LuxembourgPdfProfileEligibilityProducer
 
         var selected = input.SelectedWemiCandidate;
         var gazette = gazetteBodies.SingleOrDefault(body =>
-                body.RetainedTransportBytes is not null &&
                 Same(body.Candidate.WemiCandidate.RootIri, selected.RootIri) &&
                 Same(body.Candidate.WemiCandidate.ExpressionIri, selected.ExpressionIri) &&
                 Same(body.Candidate.WemiCandidate.ManifestationIri, selected.ManifestationIri) &&
@@ -174,6 +181,15 @@ public static class LuxembourgPdfProfileEligibilityProducer
         if (gazette is null)
         {
             return Outcome(input, LuxembourgPdfProfileEligibilityDisposition.PublisherPdfEligible);
+        }
+
+        if (gazette.Outcome != LuxembourgGazetteBodyOutcome.Admitted ||
+            gazette.RetainedTransportBytes is null)
+        {
+            return Outcome(
+                input,
+                LuxembourgPdfProfileEligibilityDisposition.TypedGap,
+                LuxembourgPdfProfileEligibilityGapReason.GazetteEvidenceNotAdmitted);
         }
 
         if (gazette.RetainedTransportBytes != input.Receipt)
@@ -204,8 +220,8 @@ public static class LuxembourgPdfProfileEligibilityProducer
         "lex-v3-luxembourg-pdf-profile-eligibility-rule/1\n" +
         "pdf=selected-wemi-format-pdf-or-pdfa\n" +
         "gazette=exact-admitted-act-expression-manifestation-item-and-retained-receipt\n" +
-        "exact-gazette-without-retained-bytes=publisher-pdf-family\n" +
-        "no-admitted-match=publisher-pdf-family\n" +
+        "exact-non-admitted-gazette=typed-gap\n" +
+        "no-exact-gazette-listing=publisher-pdf-family\n" +
         "layout=not-inspected\n";
 
     private static string Digest(string value) =>
