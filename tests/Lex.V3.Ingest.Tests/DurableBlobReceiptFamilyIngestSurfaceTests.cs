@@ -109,6 +109,10 @@ public sealed class DurableBlobReceiptFamilyIngestSurfaceTests
                 "field private instance " + TranspositionPopulationRow + "::<NormalisedEliJoinEvidenceReceipts>k__BackingField -> "
                 + "System.Collections.Generic.IReadOnlyList<" + Receipt + ">",
                 "field private instance Lex.V3.Ingest.Europe.EuXhtmlAnnexInventory::<SourceReceipt>k__BackingField -> " + Receipt,
+                // S3-A01/A03/A04's article inventory outcome carries the exact receipt already
+                // bound by its held derivation input. It HOLDS transport provenance beside the
+                // semantic inventory and constructs no custody value.
+                "field private instance Lex.V3.Ingest.Luxembourg.LuxembourgAknArticleInventoryOutcome::<TransportReceipt>k__BackingField -> " + Receipt,
                 // #419 slice 6b: LuxembourgGazetteBodyAcquisition carries the receipt the document-fetch
                 // loop held for one Gazette-PDF body, beside its address, requests and route evidence, for
                 // the producer to verify. It HOLDS that receipt and never constructs one.
@@ -177,6 +181,7 @@ public sealed class DurableBlobReceiptFamilyIngestSurfaceTests
                 "property public instance " + TranspositionPopulationRow + "::NormalisedEliJoinEvidenceReceipts() -> "
                 + "System.Collections.Generic.IReadOnlyList<" + Receipt + ">",
                 "property public instance Lex.V3.Ingest.Europe.EuXhtmlAnnexInventory::SourceReceipt() -> " + Receipt,
+                "property public instance Lex.V3.Ingest.Luxembourg.LuxembourgAknArticleInventoryOutcome::TransportReceipt() -> " + Receipt,
                 "property public instance Lex.V3.Ingest.Luxembourg.LuxembourgGazetteBodyAcquisition::RetainedTransportBytes() -> " + Receipt,
                 "property public instance Lex.V3.Ingest.Luxembourg.LuxembourgHeldBodyDerivationInput::Receipt() -> " + Receipt,
                 "property public instance Lex.V3.Ingest.Luxembourg."
