@@ -50,6 +50,13 @@ public sealed record LuxembourgPdfGlyphEvidence(
     string FontName,
     int TextOrientation);
 
+/// <summary>One physical page, retained even when it contains no text glyphs.</summary>
+public sealed record LuxembourgPdfPageEvidence(
+    int PhysicalPageNumber,
+    double Width,
+    double Height,
+    int RotationDegrees);
+
 /// <summary>
 /// One eligibility member's exact structural evidence. Glyphs are evidence only: this type makes
 /// no claim about reading order, OCR, legal wording, columns, markers, footnotes or citations.
@@ -60,12 +67,14 @@ public sealed class LuxembourgPdfLayoutEvidenceOutcome
         LuxembourgPdfProfileEligibilityOutcome sourceEligibility,
         LuxembourgPdfLayoutEvidenceDisposition disposition,
         LuxembourgPdfLayoutEvidenceGapReason? gapReason,
+        IReadOnlyList<LuxembourgPdfPageEvidence> pages,
         IReadOnlyList<LuxembourgPdfGlyphEvidence> glyphs,
         string ruleProfileSha256)
     {
         SourceEligibility = sourceEligibility;
         Disposition = disposition;
         GapReason = gapReason;
+        Pages = Array.AsReadOnly(pages.ToArray());
         Glyphs = Array.AsReadOnly(glyphs.ToArray());
         TransportReceipt = sourceEligibility.TransportReceipt;
         RuleProfileSha256 = ruleProfileSha256;
@@ -77,6 +86,8 @@ public sealed class LuxembourgPdfLayoutEvidenceOutcome
     public LuxembourgPdfLayoutEvidenceDisposition Disposition { get; }
 
     public LuxembourgPdfLayoutEvidenceGapReason? GapReason { get; }
+
+    public IReadOnlyList<LuxembourgPdfPageEvidence> Pages { get; }
 
     public IReadOnlyList<LuxembourgPdfGlyphEvidence> Glyphs { get; }
 
@@ -95,6 +106,13 @@ public sealed class LuxembourgPdfLayoutEvidenceOutcome
         Append(hash, outcome.SourceEligibility.SemanticIdentitySha256);
         Append(hash, (int)outcome.Disposition);
         Append(hash, outcome.GapReason is { } gap ? (int)gap : 0);
+        foreach (var page in outcome.Pages)
+        {
+            Append(hash, page.PhysicalPageNumber);
+            Append(hash, Canonical(page.Width));
+            Append(hash, Canonical(page.Height));
+            Append(hash, page.RotationDegrees);
+        }
         foreach (var glyph in outcome.Glyphs)
         {
             Append(hash, glyph.PhysicalPageNumber);
@@ -235,7 +253,7 @@ public sealed class LuxembourgPdfLayoutEvidenceProducer
             if (source.Disposition == LuxembourgPdfProfileEligibilityDisposition.NotPdf)
             {
                 outcomes.Add(Outcome(
-                    source, LuxembourgPdfLayoutEvidenceDisposition.NotApplicable, null, []));
+                    source, LuxembourgPdfLayoutEvidenceDisposition.NotApplicable, null, [], []));
                 continue;
             }
 
@@ -245,6 +263,7 @@ public sealed class LuxembourgPdfLayoutEvidenceProducer
                     source,
                     LuxembourgPdfLayoutEvidenceDisposition.TypedGap,
                     LuxembourgPdfLayoutEvidenceGapReason.UpstreamEligibilityGap,
+                    [],
                     []));
                 continue;
             }
@@ -267,10 +286,10 @@ public sealed class LuxembourgPdfLayoutEvidenceProducer
                     source.PublisherItemIri + ": " + exception.Message);
             }
 
-            IReadOnlyList<LuxembourgPdfGlyphEvidence> glyphs;
+            PdfLayoutEvidence layout;
             try
             {
-                glyphs = ReadGlyphs(bytes.ToArray(), cancellationToken);
+                layout = ReadLayout(bytes.ToArray(), cancellationToken);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
@@ -282,30 +301,38 @@ public sealed class LuxembourgPdfLayoutEvidenceProducer
                     source,
                     LuxembourgPdfLayoutEvidenceDisposition.TypedGap,
                     LuxembourgPdfLayoutEvidenceGapReason.PdfUnreadable,
+                    [],
                     []));
                 continue;
             }
 
-            if (glyphs.Any(static glyph => !Valid(glyph)))
+            if (layout.Pages.Any(static page => !Valid(page))
+                || layout.Glyphs.Any(static glyph => !Valid(glyph)))
             {
                 outcomes.Add(Outcome(
                     source,
                     LuxembourgPdfLayoutEvidenceDisposition.TypedGap,
                     LuxembourgPdfLayoutEvidenceGapReason.InvalidGlyphGeometry,
+                    [],
                     []));
             }
-            else if (glyphs.Count == 0)
+            else if (layout.Glyphs.Count == 0)
             {
                 outcomes.Add(Outcome(
                     source,
                     LuxembourgPdfLayoutEvidenceDisposition.TypedGap,
                     LuxembourgPdfLayoutEvidenceGapReason.NoTextGlyphs,
+                    layout.Pages,
                     []));
             }
             else
             {
                 outcomes.Add(Outcome(
-                    source, LuxembourgPdfLayoutEvidenceDisposition.Admitted, null, glyphs));
+                    source,
+                    LuxembourgPdfLayoutEvidenceDisposition.Admitted,
+                    null,
+                    layout.Pages,
+                    layout.Glyphs));
             }
         }
 
@@ -314,20 +341,26 @@ public sealed class LuxembourgPdfLayoutEvidenceProducer
                 sourceEligibilityPopulation, outcomes, RuleProfileSha256));
     }
 
-    private static IReadOnlyList<LuxembourgPdfGlyphEvidence> ReadGlyphs(
+    private static PdfLayoutEvidence ReadLayout(
         byte[] bytes,
         CancellationToken cancellationToken)
     {
         using var document = PdfDocument.Open(bytes);
-        var result = new List<LuxembourgPdfGlyphEvidence>();
+        var pages = new List<LuxembourgPdfPageEvidence>(document.NumberOfPages);
+        var glyphs = new List<LuxembourgPdfGlyphEvidence>();
         foreach (var page in document.GetPages())
         {
             cancellationToken.ThrowIfCancellationRequested();
+            pages.Add(new LuxembourgPdfPageEvidence(
+                page.Number,
+                page.Width,
+                page.Height,
+                page.Rotation.Value));
             foreach (var letter in page.Letters)
             {
-                result.Add(new LuxembourgPdfGlyphEvidence(
+                glyphs.Add(new LuxembourgPdfGlyphEvidence(
                     page.Number,
-                    result.Count,
+                    glyphs.Count,
                     letter.Value,
                     letter.GlyphRectangle.Left,
                     letter.GlyphRectangle.Bottom,
@@ -339,8 +372,15 @@ public sealed class LuxembourgPdfLayoutEvidenceProducer
             }
         }
 
-        return result;
+        return new PdfLayoutEvidence(pages, glyphs);
     }
+
+    private static bool Valid(LuxembourgPdfPageEvidence page) =>
+        page.PhysicalPageNumber > 0
+        && Finite(page.Width)
+        && page.Width > 0
+        && Finite(page.Height)
+        && page.Height > 0;
 
     private static bool Valid(LuxembourgPdfGlyphEvidence glyph) =>
         glyph.PhysicalPageNumber > 0
@@ -358,9 +398,14 @@ public sealed class LuxembourgPdfLayoutEvidenceProducer
         LuxembourgPdfProfileEligibilityOutcome source,
         LuxembourgPdfLayoutEvidenceDisposition disposition,
         LuxembourgPdfLayoutEvidenceGapReason? gap,
+        IReadOnlyList<LuxembourgPdfPageEvidence> pages,
         IReadOnlyList<LuxembourgPdfGlyphEvidence> glyphs) =>
-        new(source, disposition, gap, glyphs, RuleProfileSha256);
+        new(source, disposition, gap, pages, glyphs, RuleProfileSha256);
 
     private static string Digest(string value) =>
         Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
+
+    private sealed record PdfLayoutEvidence(
+        IReadOnlyList<LuxembourgPdfPageEvidence> Pages,
+        IReadOnlyList<LuxembourgPdfGlyphEvidence> Glyphs);
 }

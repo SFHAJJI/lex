@@ -26,6 +26,10 @@ public sealed class LuxembourgPdfLayoutEvidenceProducerTests
         Assert.AreSame(source.Outcomes.Single(), outcome.SourceEligibility);
         Assert.AreEqual(LuxembourgPdfLayoutEvidenceDisposition.Admitted, outcome.Disposition);
         Assert.IsNull(outcome.GapReason);
+        Assert.IsNotEmpty(outcome.Pages);
+        CollectionAssert.AreEqual(
+            Enumerable.Range(1, outcome.Pages.Count).ToArray(),
+            outcome.Pages.Select(static page => page.PhysicalPageNumber).ToArray());
         Assert.IsNotEmpty(outcome.Glyphs);
         Assert.IsTrue(outcome.Glyphs.All(static glyph => glyph.PhysicalPageNumber > 0));
         CollectionAssert.AreEqual(
@@ -48,7 +52,26 @@ public sealed class LuxembourgPdfLayoutEvidenceProducerTests
         var outcome = result.Population!.Outcomes.Single();
         Assert.AreEqual(LuxembourgPdfLayoutEvidenceDisposition.TypedGap, outcome.Disposition);
         Assert.AreEqual(LuxembourgPdfLayoutEvidenceGapReason.PdfUnreadable, outcome.GapReason);
+        Assert.IsEmpty(outcome.Pages);
         Assert.IsEmpty(outcome.Glyphs);
+    }
+
+    [TestMethod]
+    public async Task MissingRetainedBytesRefuseTheWholePopulation()
+    {
+        var bytes = LuxembourgDocumentFetchFixtures.PdfBody();
+        var source = await EligibilityAsync(
+            await LuxembourgGazetteAcquisitionTests
+                .CompletePublisherPdfForStage3BodyCompositionAsync(bytes));
+
+        var result = await new LuxembourgPdfLayoutEvidenceProducer(ReadStore.CreateUnavailable())
+            .RunAsync(source, CancellationToken.None);
+
+        Assert.IsFalse(result.Produced);
+        Assert.IsNull(result.Population);
+        Assert.AreEqual(
+            LuxembourgPdfLayoutEvidenceProductionRefusal.RetainedBytesUnavailable,
+            result.Refusal);
     }
 
     [TestMethod]
@@ -149,10 +172,23 @@ public sealed class LuxembourgPdfLayoutEvidenceProducerTests
             return proxy;
         }
 
+        internal static ICustodyStore CreateUnavailable()
+        {
+            var proxy = Create<ICustodyStore, ReadStore>();
+            ((ReadStore)(object)proxy)._unavailable = true;
+            return proxy;
+        }
+
+        private bool _unavailable;
+
         protected override object? Invoke(MethodInfo? targetMethod, object?[]? args)
         {
             if (targetMethod?.Name == nameof(ICustodyStore.ReadAsync))
             {
+                if (_unavailable)
+                {
+                    throw new CustodyRequiredException("fixture bytes unavailable");
+                }
                 if (_failOnRead)
                 {
                     throw new AssertFailedException("A non-eligible body must not touch custody.");
