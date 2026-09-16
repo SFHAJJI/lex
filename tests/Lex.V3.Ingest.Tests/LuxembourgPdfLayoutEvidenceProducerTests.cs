@@ -120,6 +120,41 @@ public sealed class LuxembourgPdfLayoutEvidenceProducerTests
     }
 
     [TestMethod]
+    public async Task DifferentCanonicalLayoutsHaveDifferentSemanticIdentity()
+    {
+        var firstBytes = LuxembourgDocumentFetchFixtures.PdfBody();
+        var secondBytes = File.ReadAllBytes(Path.Combine(
+            AppContext.BaseDirectory, "Fixtures", "EuDocumentFetch", "new-pdfa2a-200-body.bin"));
+        var firstSource = await EligibilityAsync(
+            await LuxembourgGazetteAcquisitionTests
+                .CompletePublisherPdfForStage3BodyCompositionAsync(firstBytes));
+        var secondSource = await EligibilityAsync(
+            await LuxembourgGazetteAcquisitionTests
+                .CompletePublisherPdfForStage3BodyCompositionAsync(secondBytes));
+
+        Assert.AreEqual(
+            firstSource.Outcomes.Single().SemanticIdentitySha256,
+            secondSource.Outcomes.Single().SemanticIdentitySha256,
+            "transport bytes are provenance, so the upstream semantic member is the same.");
+
+        var first = await new LuxembourgPdfLayoutEvidenceProducer(ReadStore.Create(firstBytes))
+            .RunAsync(firstSource, CancellationToken.None);
+        var second = await new LuxembourgPdfLayoutEvidenceProducer(ReadStore.Create(secondBytes))
+            .RunAsync(secondSource, CancellationToken.None);
+
+        Assert.AreEqual(
+            LuxembourgPdfLayoutEvidenceDisposition.Admitted,
+            first.Population!.Outcomes.Single().Disposition);
+        Assert.AreEqual(
+            LuxembourgPdfLayoutEvidenceDisposition.Admitted,
+            second.Population!.Outcomes.Single().Disposition);
+        Assert.AreNotEqual(
+            first.Population.Outcomes.Single().SemanticIdentitySha256,
+            second.Population.Outcomes.Single().SemanticIdentitySha256,
+            "canonical physical-page and glyph evidence, not the container digest, distinguishes layouts.");
+    }
+
+    [TestMethod]
     public void PublicDoorAcceptsOnlyTheProofCompleteEligibilityPopulation()
     {
         var parameters = typeof(LuxembourgPdfLayoutEvidenceProducer)
