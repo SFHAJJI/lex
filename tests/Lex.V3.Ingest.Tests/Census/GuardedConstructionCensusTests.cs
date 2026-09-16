@@ -675,6 +675,9 @@ public sealed class GuardedConstructionCensusTests
                     + "method public static "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgPartitionCoverReconciliationDetail::Recon"
                     + "ciliationRefused",
+                "Lex.V3.Ingest.Luxembourg.LuxembourgPdfLayoutEvidenceArtifactCodec+Writer: "
+                    + "constructor internal instance Lex.V3.Ingest.Luxembourg."
+                    + "LuxembourgPdfLayoutEvidenceArtifactCodec+Writer::.ctor",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgPdfLayoutEvidenceOutcome: constructor "
                     + "internal instance "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgPdfLayoutEvidenceOutcome::.ctor, "
