@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json.Serialization;
 using Lex.V3.Contracts.Custody;
+using Lex.V3.Contracts.Source.Http;
 using Lex.V3.Contracts.Source.Luxembourg;
 
 namespace Lex.V3.Ingest.Luxembourg;
