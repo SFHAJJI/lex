@@ -191,6 +191,11 @@ public sealed class ClosedVocabularyCensusTests
                     + "PublisherAnnexConventionInvalid, WorkEliMissing",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgAknArticleInventoryDisposition: Inventoried, "
                     + "NotAkn, RetainedBytesUnavailable, XmlRejected",
+                "Lex.V3.Ingest.Luxembourg.LuxembourgAknLegalContentDisposition: Admitted, "
+                    + "UpstreamNotInventoried, RetainedBytesUnavailable, XmlRejected, "
+                    + "ArticleCoordinatesMismatch, UnsupportedContentShape",
+                "Lex.V3.Ingest.Luxembourg.LuxembourgAknLegalContentTokenKind: Text, Reference, "
+                    + "ModificationStart, ModificationEnd, NoteReference",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgConsolidationByActRefusal: None, "
                     + "EnumerationRefused, EnumerationProofRefused, VerifiedRowsRefused, "
                     + "RowNotAdmitted, RowNamesAnotherAct, ConsolidationDeliveredTwice",

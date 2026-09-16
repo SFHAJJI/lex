@@ -113,6 +113,10 @@ public sealed class DurableBlobReceiptFamilyIngestSurfaceTests
                 // bound by its held derivation input. It HOLDS transport provenance beside the
                 // semantic inventory and constructs no custody value.
                 "field private instance Lex.V3.Ingest.Luxembourg.LuxembourgAknArticleInventoryOutcome::<TransportReceipt>k__BackingField -> " + Receipt,
+                // The legal-content profile preserves that same inventory-bound receipt as
+                // run provenance beside its semantic token stream. It reopens the receipt through
+                // the custody store and never constructs a custody value.
+                "field private instance Lex.V3.Ingest.Luxembourg.LuxembourgAknLegalContentOutcome::<TransportReceipt>k__BackingField -> " + Receipt,
                 // #419 slice 6b: LuxembourgGazetteBodyAcquisition carries the receipt the document-fetch
                 // loop held for one Gazette-PDF body, beside its address, requests and route evidence, for
                 // the producer to verify. It HOLDS that receipt and never constructs one.
@@ -188,6 +192,7 @@ public sealed class DurableBlobReceiptFamilyIngestSurfaceTests
                 + "System.Collections.Generic.IReadOnlyList<" + Receipt + ">",
                 "property public instance Lex.V3.Ingest.Europe.EuXhtmlAnnexInventory::SourceReceipt() -> " + Receipt,
                 "property public instance Lex.V3.Ingest.Luxembourg.LuxembourgAknArticleInventoryOutcome::TransportReceipt() -> " + Receipt,
+                "property public instance Lex.V3.Ingest.Luxembourg.LuxembourgAknLegalContentOutcome::TransportReceipt() -> " + Receipt,
                 "property public instance Lex.V3.Ingest.Luxembourg.LuxembourgGazetteBodyAcquisition::RetainedTransportBytes() -> " + Receipt,
                 "property public instance Lex.V3.Ingest.Luxembourg.LuxembourgHeldBodyDerivationInput::Receipt() -> " + Receipt,
                 "property public instance Lex.V3.Ingest.Luxembourg."

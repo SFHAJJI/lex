@@ -26,6 +26,7 @@
              CopyToOutputDirectory="PreserveNewest" />
     <Content Include="Fixtures/EuDocumentFetch/*.bin" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="Fixtures/LuDocumentFetch/*.bin" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Fixtures/LuAknLegalContent/*.bin" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="Fixtures/EuDocumentFetch/*.txt" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="Fixtures/EuPageDecode/*.bin" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
