@@ -10,6 +10,7 @@ public sealed class V3IndexCapabilityManifestArtifactTests
 {
     private const string IndexDigest =
         "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+    private const string ArtifactResourceId = "urn:uuid:8eac41ab-50cd-4dab-9f2c-c7425f1ef657";
 
     [TestMethod]
     public void WriterIsCanonicalAndReaderReopensTheExactManifest()
@@ -36,7 +37,7 @@ public sealed class V3IndexCapabilityManifestArtifactTests
             Encoding.UTF8.GetString(first.ToArray()));
 
         var reopened = V3IndexCapabilityManifestArtifact.ParseAndVerify(
-            new SourceArtifactRef("urn:lex:v3:index-capabilities:lu", digest),
+            new SourceArtifactRef(ArtifactResourceId, digest),
             first.ToArray());
 
         Assert.AreEqual(manifest.Publisher, reopened.Publisher);
@@ -50,7 +51,7 @@ public sealed class V3IndexCapabilityManifestArtifactTests
         var bytes = Write(Create(Cell("search", "fts_title", "title", "fra", 2020, 2024, 41)), out var digest);
 
         Assert.ThrowsExactly<ArgumentException>(() => V3IndexCapabilityManifestArtifact.ParseAndVerify(
-            new SourceArtifactRef("urn:lex:v3:index-capabilities:lu", new string('a', 64)), bytes));
+            new SourceArtifactRef(ArtifactResourceId, new string('a', 64)), bytes));
         AssertInvalid(Replace(bytes, V3IndexCapabilityManifestArtifact.SchemaId, "wrong-schema"));
         AssertInvalid(Replace(bytes, "\"period_granularity\":\"day\"", "\"period_granularity\":\"month\""));
         AssertInvalid(Replace(bytes, "\"population\":41", "\"population\":41,\"extra\":true"));
@@ -59,7 +60,7 @@ public sealed class V3IndexCapabilityManifestArtifactTests
         {
             var candidateDigest = V3IndexCapabilityManifestArtifact.ComputeSha256(candidate);
             Assert.ThrowsExactly<ArgumentException>(() => V3IndexCapabilityManifestArtifact.ParseAndVerify(
-                new SourceArtifactRef("urn:lex:v3:index-capabilities:lu", candidateDigest), candidate));
+                new SourceArtifactRef(ArtifactResourceId, candidateDigest), candidate));
         }
     }
 
@@ -72,7 +73,7 @@ public sealed class V3IndexCapabilityManifestArtifactTests
         var digest = V3IndexCapabilityManifestArtifact.ComputeSha256(noncanonical);
 
         Assert.ThrowsExactly<ArgumentException>(() => V3IndexCapabilityManifestArtifact.ParseAndVerify(
-            new SourceArtifactRef("urn:lex:v3:index-capabilities:lu", digest), noncanonical));
+            new SourceArtifactRef(ArtifactResourceId, digest), noncanonical));
     }
 
     [TestMethod]
@@ -89,7 +90,7 @@ public sealed class V3IndexCapabilityManifestArtifactTests
         {
             var digest = V3IndexCapabilityManifestArtifact.ComputeSha256(candidate);
             Assert.ThrowsExactly<ArgumentException>(() => V3IndexCapabilityManifestArtifact.ParseAndVerify(
-                new SourceArtifactRef("urn:lex:v3:index-capabilities:lu", digest), candidate));
+                new SourceArtifactRef(ArtifactResourceId, digest), candidate));
         }
     }
 
