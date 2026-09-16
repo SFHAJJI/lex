@@ -135,6 +135,48 @@ public sealed class V3IndexCapabilityManifestTests
     }
 
     [TestMethod]
+    public void OneDayGapBetweenPositiveCellsRemainsTypedUnsupported()
+    {
+        var first = Cell(
+            periodFrom: new DateOnly(2020, 1, 1),
+            periodTo: new DateOnly(2020, 3, 31));
+        var afterOneDayGap = Cell(
+            periodFrom: new DateOnly(2020, 4, 2),
+            periodTo: new DateOnly(2020, 12, 31));
+        var manifest = Create(PublisherId.LuLegilux, Digest, [first, afterOneDayGap]);
+
+        AssertUnsupported(
+            manifest,
+            "search",
+            "fts_title",
+            "title",
+            "fra",
+            new DateOnly(2020, 1, 1),
+            new DateOnly(2020, 12, 31));
+    }
+
+    [TestMethod]
+    public void ExactInclusiveCellBoundaryIsSupported()
+    {
+        var cell = Cell(
+            periodFrom: new DateOnly(2020, 1, 1),
+            periodTo: new DateOnly(2020, 12, 31));
+        var manifest = Create(PublisherId.LuLegilux, Digest, [cell]);
+
+        var outcome = manifest.Lookup(
+            "search",
+            "fts_title",
+            "title",
+            "fra",
+            cell.PeriodFrom,
+            cell.PeriodTo,
+            out var cells);
+
+        Assert.AreEqual(V3IndexCapabilityLookupOutcome.Supported, outcome);
+        CollectionAssert.AreEqual(new[] { cell }, cells.ToArray());
+    }
+
+    [TestMethod]
     public void AGapOrDifferentDimensionIsTypedUnsupportedAndCarriesNoPartialCells()
     {
         var first = Cell(periodFrom: new DateOnly(2020, 1, 1), periodTo: new DateOnly(2020, 3, 31));
