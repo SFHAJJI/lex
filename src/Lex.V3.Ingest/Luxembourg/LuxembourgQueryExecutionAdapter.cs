@@ -556,6 +556,16 @@ public enum LuxembourgQueryExecutionRefusal
     /// selected publisher addresses. Without that binding a derivation profile would have to guess
     /// whether retained bytes are AKN/XML or PDF, so the run refuses instead.
     /// </summary>
+    /// <remarks>
+    /// Defensive at the current production door rather than a separately reachable publisher
+    /// outcome. <c>RunCoreAsync</c> creates one <c>mintedAddressesByObjectRef</c> map, uses that exact
+    /// map to build the manifest, and hands the same instance to document acquisition. Acquisition
+    /// can produce a held outcome only after finding the row's object in that map; the corpus-set
+    /// writer then derives held records from those same outcomes. Consequently the three inputs to
+    /// <c>LuxembourgHeldBodyDerivationPopulation.TryCreate</c> are mutually consistent by
+    /// construction today. The typed refusal is retained as a fail-closed boundary for a future
+    /// acquisition or record-writer path that no longer shares that construction.
+    /// </remarks>
     [JsonStringEnumMemberName("held_body_derivation_population_not_completed")]
     HeldBodyDerivationPopulationNotCompleted = 19,
 }
@@ -1849,6 +1859,10 @@ public sealed class LuxembourgQueryExecutionAdapter
             mintedAddressesByObjectRef, out var derivationRefusal, out var derivationDetail);
         if (derivationPopulation is null)
         {
+            // Defensive only at this production door today. The exact address map above built the
+            // manifest and drove acquisition; a held outcome (and therefore a held corpus record)
+            // can arise only after acquisition found that object's address in the same map. Keep a
+            // typed refusal for future producers instead of assuming that invariant forever.
             return LuxembourgQueryExecutionResult.Refused(
                 topology, outcomes, relationAcquisitions,
                 new LuxembourgQueryExecutionRefusalDetail(
