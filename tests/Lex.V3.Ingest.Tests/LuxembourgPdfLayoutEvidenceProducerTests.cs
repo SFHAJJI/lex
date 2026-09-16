@@ -18,7 +18,7 @@ public sealed class LuxembourgPdfLayoutEvidenceProducerTests
             "9f34cd405f1f0f9b4349fa967b2271b257d4982fbf90351f4b6261f56633c111");
 
         var clean = await ProduceOneAsync(consolidated);
-        var cleanDocument = await clean.Store.OpenAsync(clean.Outcome);
+        var cleanDocument = await OpenAsync(clean.Store, clean.Outcome);
         Assert.HasCount(1, cleanDocument.Pages);
         Assert.HasCount(1_462, cleanDocument.Glyphs);
         Assert.AreEqual(0, cleanDocument.Pages.Sum(static page => page.ImageCount));
@@ -28,12 +28,12 @@ public sealed class LuxembourgPdfLayoutEvidenceProducerTests
             "A field omission or reordering must move the canonical admitted identity.");
 
         var hidden = await ProduceOneAsync(invisible);
-        var hiddenDocument = await hidden.Store.OpenAsync(hidden.Outcome);
+        var hiddenDocument = await OpenAsync(hidden.Store, hidden.Outcome);
         Assert.AreEqual(58, hiddenDocument.Pages.Sum(static page => page.ImageCount));
         Assert.AreEqual(27, InvisibleCount(hiddenDocument));
 
         var imageBearing = await ProduceOneAsync(LuxembourgDocumentFetchFixtures.PdfBody());
-        var imageDocument = await imageBearing.Store.OpenAsync(imageBearing.Outcome);
+        var imageDocument = await OpenAsync(imageBearing.Store, imageBearing.Outcome);
         Assert.AreEqual(9, imageDocument.Pages.Sum(static page => page.ImageCount));
         Assert.AreEqual(0, InvisibleCount(imageDocument));
     }
@@ -45,17 +45,11 @@ public sealed class LuxembourgPdfLayoutEvidenceProducerTests
             "86b5d5021ebd57735914a2a02ea0158447eb2b2d6a45889fbd42faea2bd973ea");
         var secondBytes = Fixture("lu-pdf-invisible-1987-12-23-n5.bin", 237_720,
             "9f34cd405f1f0f9b4349fa967b2271b257d4982fbf90351f4b6261f56633c111");
-        var first = await EligibilityAsync(await LuxembourgGazetteAcquisitionTests
-            .CompletePublisherPdfForStage3BodyCompositionAsync(firstBytes, "first"));
-        var second = await EligibilityAsync(await LuxembourgGazetteAcquisitionTests
-            .CompletePublisherPdfForStage3BodyCompositionAsync(secondBytes, "second"));
-        var source = new LuxembourgPdfProfileEligibilityPopulation(
-            first.SourceComposition,
-            [first.Outcomes.Single(), second.Outcomes.Single()],
-            LuxembourgPdfProfileEligibilityProducer.RuleProfileSha256);
-        var store = ReadStore.Create(
-            (first.Outcomes.Single().TransportReceipt.Reference, firstBytes),
-            (second.Outcomes.Single().TransportReceipt.Reference, secondBytes));
+        var source = await EligibilityAsync(await LuxembourgGazetteAcquisitionTests
+            .CompleteTwoPublisherPdfsForStage3BodyCompositionAsync(firstBytes, secondBytes));
+        var store = await StoreAsync(
+            (source.Outcomes[0].TransportReceipt.Reference, firstBytes),
+            (source.Outcomes[1].TransportReceipt.Reference, secondBytes));
 
         var result = await new LuxembourgPdfLayoutEvidenceProducer(store)
             .RunAsync(source, CancellationToken.None);
@@ -67,10 +61,10 @@ public sealed class LuxembourgPdfLayoutEvidenceProducerTests
             result.Population.Outcomes.Select(static value => value.SourceEligibility.PublisherItemIri).ToArray());
         CollectionAssert.AreEqual(
             source.Outcomes.Select(static value => value.TransportReceipt.Reference.ContentSha256).ToArray(),
-            store.TransportReads.Take(2).ToArray(),
-            "Each member must reopen its own source receipt, in proof-bound source order.");
-        var firstDocument = await store.OpenAsync(result.Population.Outcomes[0]);
-        var secondDocument = await store.OpenAsync(result.Population.Outcomes[1]);
+            result.Population.Outcomes.Select(static value => value.TransportReceipt.Reference.ContentSha256).ToArray(),
+            "Every output must carry the exact source member receipt in source order.");
+        var firstDocument = await OpenAsync(store, result.Population.Outcomes[0]);
+        var secondDocument = await OpenAsync(store, result.Population.Outcomes[1]);
         Assert.AreEqual(0, firstDocument.Pages.Sum(static page => page.ImageCount));
         Assert.AreEqual(58, secondDocument.Pages.Sum(static page => page.ImageCount));
         Assert.AreEqual(27, InvisibleCount(secondDocument));
@@ -87,7 +81,7 @@ public sealed class LuxembourgPdfLayoutEvidenceProducerTests
         Assert.AreEqual(1, produced.Outcome.PageCount);
         Assert.AreEqual(0, produced.Outcome.GlyphCount);
         Assert.IsNotNull(produced.Outcome.LayoutEvidenceReceipt);
-        var document = await produced.Store.OpenAsync(produced.Outcome);
+        var document = await OpenAsync(produced.Store, produced.Outcome);
         Assert.HasCount(1, document.Pages);
         Assert.AreEqual(1, document.Pages.Single().ImageCount);
         Assert.IsEmpty(document.Glyphs);
@@ -100,7 +94,8 @@ public sealed class LuxembourgPdfLayoutEvidenceProducerTests
             "86b5d5021ebd57735914a2a02ea0158447eb2b2d6a45889fbd42faea2bd973ea");
         var source = await EligibilityAsync(await LuxembourgGazetteAcquisitionTests
             .CompletePublisherPdfForStage3BodyCompositionAsync(bytes));
-        var store = ReadStore.Create((source.Outcomes.Single().TransportReceipt.Reference, bytes));
+        var inner = await StoreAsync((source.Outcomes.Single().TransportReceipt.Reference, bytes));
+        var store = CreateGuardStore.Wrap(inner, CreateBehavior.FailTest);
 
         var result = await new LuxembourgPdfLayoutEvidenceProducer(store, maximumArtifactBytes: 64)
             .RunAsync(source, CancellationToken.None);
@@ -110,7 +105,6 @@ public sealed class LuxembourgPdfLayoutEvidenceProducerTests
         Assert.AreEqual(LuxembourgPdfLayoutEvidenceDisposition.TypedGap, outcome.Disposition);
         Assert.AreEqual(LuxembourgPdfLayoutEvidenceGapReason.EvidenceArtifactTooLarge, outcome.GapReason);
         Assert.IsNull(outcome.LayoutEvidenceReceipt);
-        Assert.AreEqual(0, store.CreateCount, "An oversized artifact must stop before custody.");
     }
 
     [TestMethod]
@@ -119,7 +113,7 @@ public sealed class LuxembourgPdfLayoutEvidenceProducerTests
         var bytes = "%PDF-1.7 deliberately unreadable\n%%EOF\n"u8.ToArray();
         var source = await EligibilityAsync(await LuxembourgGazetteAcquisitionTests
             .CompletePublisherPdfForStage3BodyCompositionAsync(bytes));
-        var store = ReadStore.Create((source.Outcomes.Single().TransportReceipt.Reference, bytes));
+        var store = await StoreAsync((source.Outcomes.Single().TransportReceipt.Reference, bytes));
 
         var result = await new LuxembourgPdfLayoutEvidenceProducer(store)
             .RunAsync(source, CancellationToken.None);
@@ -139,7 +133,8 @@ public sealed class LuxembourgPdfLayoutEvidenceProducerTests
         var bytes = LuxembourgDocumentFetchFixtures.PdfBody();
         var source = await EligibilityAsync(await LuxembourgGazetteAcquisitionTests
             .CompletePublisherPdfForStage3BodyCompositionAsync(bytes));
-        var result = await new LuxembourgPdfLayoutEvidenceProducer(ReadStore.Create())
+        var result = await new LuxembourgPdfLayoutEvidenceProducer(
+                new RoutedHttpAcquisitionSessionTests.MultiObjectCustodyStore())
             .RunAsync(source, CancellationToken.None);
 
         Assert.IsFalse(result.Produced);
@@ -153,8 +148,8 @@ public sealed class LuxembourgPdfLayoutEvidenceProducerTests
         var bytes = LuxembourgDocumentFetchFixtures.PdfBody();
         var source = await EligibilityAsync(await LuxembourgGazetteAcquisitionTests
             .CompletePublisherPdfForStage3BodyCompositionAsync(bytes));
-        var store = ReadStore.Create((source.Outcomes.Single().TransportReceipt.Reference, bytes));
-        store.FailOnCreate = true;
+        var inner = await StoreAsync((source.Outcomes.Single().TransportReceipt.Reference, bytes));
+        var store = CreateGuardStore.Wrap(inner, CreateBehavior.Refuse);
 
         var result = await new LuxembourgPdfLayoutEvidenceProducer(store)
             .RunAsync(source, CancellationToken.None);
@@ -173,8 +168,7 @@ public sealed class LuxembourgPdfLayoutEvidenceProducerTests
             await LuxembourgGazetteAcquisitionTests.CompleteXmlForStage3BodyCompositionAsync());
         var upstreamGap = await EligibilityAsync(await LuxembourgGazetteAcquisitionTests
             .CompleteWithDistinctReceiptsForStage3BodyCompositionAsync());
-        var store = ReadStore.Create();
-        store.FailOnRead = true;
+        ICustodyStore store = new RoutedHttpAcquisitionSessionTests.MultiObjectCustodyStore();
 
         var xmlResult = await new LuxembourgPdfLayoutEvidenceProducer(store)
             .RunAsync(xml, CancellationToken.None);
@@ -195,7 +189,7 @@ public sealed class LuxembourgPdfLayoutEvidenceProducerTests
             .CompletePublisherPdfForStage3BodyCompositionAsync(bytes));
         var secondSource = await EligibilityAsync(await LuxembourgGazetteAcquisitionTests
             .CompletePublisherPdfForStage3BodyCompositionAsync(bytes));
-        var store = ReadStore.Create(
+        var store = await StoreAsync(
             (firstSource.Outcomes.Single().TransportReceipt.Reference, bytes),
             (secondSource.Outcomes.Single().TransportReceipt.Reference, bytes));
 
@@ -225,12 +219,12 @@ public sealed class LuxembourgPdfLayoutEvidenceProducerTests
     private static int InvisibleCount(LuxembourgPdfLayoutEvidenceDocument document) =>
         document.Glyphs.Count(static glyph => glyph.RenderingMode == 3);
 
-    private static async Task<(LuxembourgPdfLayoutEvidenceOutcome Outcome, ReadStore Store)>
+    private static async Task<(LuxembourgPdfLayoutEvidenceOutcome Outcome, ICustodyStore Store)>
         ProduceOneAsync(byte[] bytes)
     {
         var source = await EligibilityAsync(await LuxembourgGazetteAcquisitionTests
             .CompletePublisherPdfForStage3BodyCompositionAsync(bytes));
-        var store = ReadStore.Create((source.Outcomes.Single().TransportReceipt.Reference, bytes));
+        var store = await StoreAsync((source.Outcomes.Single().TransportReceipt.Reference, bytes));
         var result = await new LuxembourgPdfLayoutEvidenceProducer(store)
             .RunAsync(source, CancellationToken.None);
         Assert.IsTrue(result.Produced, $"{result.Refusal}: {result.Detail}");
@@ -270,73 +264,55 @@ public sealed class LuxembourgPdfLayoutEvidenceProducerTests
         return LuxembourgPdfProfileEligibilityProducer.Produce(composition);
     }
 
-    private sealed class ReadStore : ICustodyStore
+    private static Task<LuxembourgPdfLayoutEvidenceDocument> OpenAsync(
+        ICustodyStore store,
+        LuxembourgPdfLayoutEvidenceOutcome outcome) =>
+        LuxembourgPdfLayoutEvidenceArtifactReader.ReadAsync(outcome, store, CancellationToken.None);
+
+    private static async Task<ICustodyStore> StoreAsync(
+        params (DurableBlobRef Reference, byte[] Bytes)[] retained)
     {
-        private readonly Dictionary<string, byte[]> _objects = new(StringComparer.Ordinal);
-
-        internal bool FailOnRead { get; set; }
-        internal bool FailOnCreate { get; set; }
-        internal int CreateCount { get; private set; }
-        internal List<string> TransportReads { get; } = [];
-
-        internal static ReadStore Create(params (DurableBlobRef Reference, byte[] Bytes)[] retained)
+        ICustodyStore store = new RoutedHttpAcquisitionSessionTests.MultiObjectCustodyStore();
+        foreach (var (reference, bytes) in retained)
         {
-            var store = new ReadStore();
-            foreach (var (reference, bytes) in retained)
+            Assert.AreEqual(reference.ByteLength, bytes.LongLength);
+            Assert.AreEqual(reference.ContentSha256, CustodyDigest.Of(bytes));
+            _ = await store.CreateAsync(bytes, reference.CustodyClass, CancellationToken.None);
+        }
+
+        return store;
+    }
+
+    private enum CreateBehavior
+    {
+        FailTest,
+        Refuse,
+    }
+
+    private class CreateGuardStore : DispatchProxy
+    {
+        private ICustodyStore _inner = null!;
+        private CreateBehavior _behavior;
+
+        internal static ICustodyStore Wrap(ICustodyStore inner, CreateBehavior behavior)
+        {
+            var proxy = Create<ICustodyStore, CreateGuardStore>();
+            var state = (CreateGuardStore)(object)proxy;
+            state._inner = inner;
+            state._behavior = behavior;
+            return proxy;
+        }
+
+        protected override object? Invoke(MethodInfo? targetMethod, object?[]? args)
+        {
+            if (targetMethod?.Name == nameof(ICustodyStore.CreateAsync))
             {
-                Assert.AreEqual(reference.ByteLength, bytes.LongLength);
-                Assert.AreEqual(reference.ContentSha256, CustodyDigest.Of(bytes));
-                store._objects[reference.ContentSha256] = bytes.ToArray();
+                if (_behavior == CreateBehavior.FailTest)
+                    throw new AssertFailedException("An oversized artifact must stop before custody.");
+                throw new CustodyRequiredException("fixture write unavailable");
             }
-            return store;
-        }
 
-        internal Task<LuxembourgPdfLayoutEvidenceDocument> OpenAsync(
-            LuxembourgPdfLayoutEvidenceOutcome outcome) =>
-            LuxembourgPdfLayoutEvidenceArtifactReader.ReadAsync(outcome, this, CancellationToken.None);
-
-        public Task<DurableBlobWriteReceipt> CreateAsync(
-            ReadOnlyMemory<byte> bytes, CustodyClass custodyClass, CancellationToken cancellationToken)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            if (FailOnCreate) throw new CustodyRequiredException("fixture write unavailable");
-            CreateCount++;
-            var frozen = bytes.ToArray();
-            var digest = CustodyDigest.Of(frozen);
-            _objects[digest] = frozen;
-            var reference = new DurableBlobRef(
-                CustodySchemaIds.DurableBlobRef, digest, frozen.LongLength, custodyClass);
-            var observedAt = new DateTimeOffset(2026, 9, 16, 0, 0, 0, TimeSpan.Zero);
-            var policy = new CustodyPolicyEvidence(
-                CustodySchemaIds.CustodyPolicyEvidence,
-                reference,
-                CustodyVerificationProfile.ImmutableObject1,
-                Guid.Parse("00000000-0000-0000-0000-000000000660"),
-                CustodyProtection.LockedTime,
-                observedAt,
-                observedAt.AddDays(91));
-            return Task.FromResult(new DurableBlobWriteReceipt(
-                CustodySchemaIds.DurableBlobWriteReceipt, reference, policy));
-        }
-
-        public Task<ReadOnlyMemory<byte>> ReadAsync(
-            DurableBlobRef reference, CancellationToken cancellationToken)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            if (FailOnRead) throw new AssertFailedException("This path must not touch custody.");
-            if (!_objects.TryGetValue(reference.ContentSha256, out var bytes))
-                throw new CustodyRequiredException("fixture bytes unavailable");
-            TransportReads.Add(reference.ContentSha256);
-            return Task.FromResult<ReadOnlyMemory<byte>>(bytes);
-        }
-
-        public Task<ReadOnlyMemory<byte>> ReadByDigestAsync(
-            string contentSha256, CancellationToken cancellationToken)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            if (!_objects.TryGetValue(contentSha256, out var bytes))
-                throw new CustodyRequiredException("fixture bytes unavailable");
-            return Task.FromResult<ReadOnlyMemory<byte>>(bytes);
+            return targetMethod!.Invoke(_inner, args);
         }
     }
 }
