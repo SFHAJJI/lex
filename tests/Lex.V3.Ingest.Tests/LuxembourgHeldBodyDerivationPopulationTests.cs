@@ -154,6 +154,22 @@ public sealed class LuxembourgHeldBodyDerivationPopulationTests
         Assert.AreEqual(input.ObjectOrdinal.ToString(), detail);
     }
 
+    [TestMethod]
+    public async Task ASelectedWemiIdentityCannotBePairedWithAnotherAddress()
+    {
+        var run = await LuxembourgGazetteAcquisitionTests.CompleteForStage3BodyCompositionAsync();
+        var input = run.HeldBodyDerivationPopulation!.Inputs.Single();
+        var otherAddress = LuxembourgDocumentFetchAddress.Create(
+            LuxembourgFileUri.RequireValid(
+                "http://data.legilux.public.lu/filestore/eli/etat/leg/loi/2026/01/01/a1/jo/fr/pdfa/other.pdf"),
+            input.Address.UserFormatToken,
+            input.Address.LegalValue,
+            input.Address.ActEliPagePath);
+
+        Assert.ThrowsExactly<ArgumentException>(() =>
+            new LuxembourgSelectedDocumentFetch(otherAddress, input.SelectedWemiCandidate));
+    }
+
     private static IReadOnlyDictionary<Contracts.Source.Core.SourceObjectRef, LuxembourgSelectedDocumentFetch>
         SelectedFetches(LuxembourgQueryExecutionResult run) =>
         run.HeldBodyDerivationPopulation!.Inputs.ToDictionary(
