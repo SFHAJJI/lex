@@ -462,7 +462,8 @@ public sealed class GuardedConstructionCensusTests
                     + "method public static "
                     + "Lex.V3.Ingest.Europe.LuxembourgOpinionRequestGraphRunRequest::ForBatch",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgAknArticleInventory: by-ref-method private "
-                    + "static Lex.V3.Ingest.Luxembourg.LuxembourgAknArticleInventoryProducer::TryInventory, "
+                    + "static "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgAknArticleInventoryProducer::TryInventory, "
                     + "constructor internal instance "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgAknArticleInventory::.ctor",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgAknArticleInventoryOutcome: constructor "
@@ -573,8 +574,9 @@ public sealed class GuardedConstructionCensusTests
                 "Lex.V3.Ingest.Luxembourg.LuxembourgHeldBodyDerivationInput: constructor internal "
                     + "instance Lex.V3.Ingest.Luxembourg.LuxembourgHeldBodyDerivationInput::.ctor",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgHeldBodyDerivationPopulation: constructor "
-                    + "private instance Lex.V3.Ingest.Luxembourg."
-                    + "LuxembourgHeldBodyDerivationPopulation::.ctor, method internal static "
+                    + "private instance "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgHeldBodyDerivationPopulation::.ctor, "
+                    + "method internal static "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgHeldBodyDerivationPopulation::TryCreate",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgInitialDraftInventoryResult: constructor "
                     + "private instance "
@@ -676,11 +678,11 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgPartitionCoverReconciliationDetail::Recon"
                     + "ciliationRefused",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgPdfLayoutEvidenceArtifactCodec+Writer: "
-                    + "constructor internal instance Lex.V3.Ingest.Luxembourg."
-                    + "LuxembourgPdfLayoutEvidenceArtifactCodec+Writer::.ctor",
-                "Lex.V3.Ingest.Luxembourg.LuxembourgPdfLayoutEvidenceOutcome: constructor "
-                    + "internal instance "
-                    + "Lex.V3.Ingest.Luxembourg.LuxembourgPdfLayoutEvidenceOutcome::.ctor, "
+                    + "constructor internal instance "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgPdfLayoutEvidenceArtifactCodec+Writer::.c"
+                    + "tor",
+                "Lex.V3.Ingest.Luxembourg.LuxembourgPdfLayoutEvidenceOutcome: constructor internal "
+                    + "instance Lex.V3.Ingest.Luxembourg.LuxembourgPdfLayoutEvidenceOutcome::.ctor, "
                     + "method private static "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgPdfLayoutEvidenceProducer::Outcome",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgPdfLayoutEvidencePopulation: constructor "
@@ -692,9 +694,11 @@ public sealed class GuardedConstructionCensusTests
                     + "private instance "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgPdfLayoutEvidenceProductionResult::.ctor, "
                     + "method internal static "
-                    + "Lex.V3.Ingest.Luxembourg.LuxembourgPdfLayoutEvidenceProductionResult::Refused, "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgPdfLayoutEvidenceProductionResult::Refuse"
+                    + "d, "
                     + "method internal static "
-                    + "Lex.V3.Ingest.Luxembourg.LuxembourgPdfLayoutEvidenceProductionResult::Success, "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgPdfLayoutEvidenceProductionResult::Succes"
+                    + "s, "
                     + "method public instance "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgPdfLayoutEvidenceProducer::RunAsync",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgPdfProfileEligibilityOutcome: constructor "
@@ -994,6 +998,10 @@ public sealed class GuardedConstructionCensusTests
                 "Lex.V3.Ingest.Stage3BodyComposition: constructor private instance "
                     + "Lex.V3.Ingest.Stage3BodyComposition::.ctor, "
                     + "method public static Lex.V3.Ingest.Stage3BodyComposition::TryCreate",
+                "Lex.V3.Ingest.Stage3DerivationProfileEnvelope: constructor private instance "
+                    + "Lex.V3.Ingest.Stage3DerivationProfileEnvelope::.ctor, "
+                    + "method public static "
+                    + "Lex.V3.Ingest.Stage3DerivationProfileEnvelope::TryCreate",
                 "Lex.V3.Ingest.Stage3EuropeBodyComposition: constructor internal instance "
                     + "Lex.V3.Ingest.Stage3EuropeBodyComposition::.ctor, 1 compiler-generated",
                 "Lex.V3.Ingest.Stage3EvidenceEnvelope: constructor private instance "
