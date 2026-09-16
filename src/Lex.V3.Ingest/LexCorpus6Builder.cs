@@ -330,7 +330,7 @@ public static class LexCorpus6Builder
         {
             writer.WriteStartObject();
             writer.WriteString("schema", Schema);
-            WriteArtifact(writer, "eu_source_set_ref", set.EuropeSourceSetRef);
+            WriteArtifact(writer, "europe_source_set_ref", set.EuropeSourceSetRef);
             WriteArtifact(writer, "luxembourg_source_set_ref", set.LuxembourgSourceSetRef);
             WriteStrings(writer, "profile_identities", set.ProfileIdentities);
             WriteStrings(writer, "corrigendum_evidence_receipt_sha256", set.CorrigendumEvidenceReceiptSha256);
