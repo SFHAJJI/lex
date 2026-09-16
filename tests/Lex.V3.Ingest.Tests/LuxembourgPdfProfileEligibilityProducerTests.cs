@@ -106,7 +106,8 @@ public sealed class LuxembourgPdfProfileEligibilityProducerTests
                 .CompleteWithUnretainedSelectedGazetteForStage3BodyCompositionAsync());
         var matchingGazette = composition.Luxembourg
             .SelectMany(static value => value.GazetteBodies.Bodies)
-            .Single();
+            .Single(body => body.Candidate.WemiCandidate.ItemIri ==
+                composition.LuxembourgDerivationPopulation.Inputs.Single().SelectedWemiCandidate.ItemIri);
         Assert.AreEqual(LuxembourgGazetteBodyOutcome.TypedGap, matchingGazette.Outcome);
         Assert.IsNull(matchingGazette.RetainedTransportBytes);
 
