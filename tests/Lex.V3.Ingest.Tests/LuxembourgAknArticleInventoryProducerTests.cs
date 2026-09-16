@@ -5,6 +5,7 @@ using Lex.V3.Contracts.Custody;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Corpus;
 using Lex.V3.Contracts.Source.Http;
+using Lex.V3.Contracts.Source.Luxembourg;
 using Lex.V3.Contracts.Source.Scope;
 using Lex.V3.Ingest.Luxembourg;
 
@@ -27,6 +28,12 @@ public sealed class LuxembourgAknArticleInventoryProducerTests
         var outcome = first.Outcomes.Single();
         Assert.AreEqual(LuxembourgAknArticleInventoryDisposition.Inventoried, outcome.Disposition);
         Assert.IsNotNull(outcome.Inventory);
+        Assert.AreNotEqual(
+            outcome.Input.CorpusRecord.ObjectRef.PublisherUri,
+            outcome.Input.SelectedWemiCandidate.ExpressionIri);
+        Assert.AreEqual(
+            outcome.Input.SelectedWemiCandidate.ExpressionIri,
+            outcome.Inventory.PublisherExpressionIri);
         CollectionAssert.AreEqual(
             new[] { "art_1er", "art_2", "art_3", "art_4", "art_5", "art_6", "art_7", "art_8" },
             outcome.Inventory.Articles.Select(static article => article.PublisherId).ToArray());
@@ -206,16 +213,39 @@ public sealed class LuxembourgAknArticleInventoryProducerTests
                 token,
                 LuxembourgLegalValue.Unstated,
                 "/eli/etat/leg/loi/2017/03/14/a439/jo/fr");
+            var candidate = new LuxembourgWemiCandidate(
+                publisherUri,
+                publisherUri + "/expression",
+                publisherUri + "/expression/manifestation",
+                address.StoreFileUri.Value.AbsoluteUri,
+                "http://publications.europa.eu/resource/authority/language/FRA",
+                "http://data.legilux.public.lu/resource/authority/user-format/" +
+                    FormatName(token),
+                enumeration,
+                LuxembourgWemiCandidateDisposition.StructurallyConsistent,
+                []);
             var population = LuxembourgHeldBodyDerivationPopulation.TryCreate(
                 verified,
                 new Dictionary<int, CorpusAcquisitionOutcome> { [0] = CorpusAcquisitionOutcome.Held(receipt) },
-                new Dictionary<SourceObjectRef, LuxembourgDocumentFetchAddress> { [objectRef] = address },
+                new Dictionary<SourceObjectRef, LuxembourgSelectedDocumentFetch>
+                {
+                    [objectRef] = new LuxembourgSelectedDocumentFetch(address, candidate),
+                },
                 out var refusal,
                 out var detail);
             Assert.AreEqual(LuxembourgHeldBodyDerivationPopulationRefusal.None, refusal, detail);
             Assert.IsNotNull(population);
             return new Fixture(store, population);
         }
+
+        private static string FormatName(LuxembourgUserFormatToken token) => token switch
+        {
+            LuxembourgUserFormatToken.XmlAkomaNtoso => "xml-akomantoso",
+            LuxembourgUserFormatToken.Xml => "xml",
+            LuxembourgUserFormatToken.PdfA => "pdfa",
+            LuxembourgUserFormatToken.Pdf => "pdf",
+            _ => throw new ArgumentOutOfRangeException(nameof(token)),
+        };
     }
 
     private static SourceArtifactRef Artifact(char suffix, ReadOnlySpan<byte> bytes) => new(
