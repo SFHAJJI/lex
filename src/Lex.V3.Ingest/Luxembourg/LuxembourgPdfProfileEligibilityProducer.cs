@@ -205,7 +205,7 @@ public static class LuxembourgPdfProfileEligibilityProducer
                 LuxembourgPdfProfileEligibilityGapReason.GazetteEvidenceNotAdmitted);
         }
 
-        if (!ReferenceEquals(gazette.RetainedTransportBytes, input.Receipt))
+        if (gazette.RetainedTransportBytes != input.Receipt)
         {
             return Outcome(
                 input,

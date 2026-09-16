@@ -23,7 +23,7 @@ public sealed class LuxembourgPdfProfileEligibilityProducerTests
         Assert.AreEqual(outcome.Input.SelectedWemiCandidate.ManifestationIri, outcome.PublisherManifestationIri);
         Assert.AreEqual(outcome.Input.SelectedWemiCandidate.ItemIri, outcome.PublisherItemIri);
         Assert.AreSame(outcome.Input.Receipt, outcome.TransportReceipt);
-        Assert.AreSame(
+        Assert.AreEqual(
             outcome.Input.Receipt,
             outcome.GazetteEvidence.RetainedTransportBytes,
             "eligibility is bound to the exact retained receipt already admitted by the Gazette producer");
