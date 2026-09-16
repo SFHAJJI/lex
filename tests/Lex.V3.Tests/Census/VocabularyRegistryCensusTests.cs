@@ -62,6 +62,7 @@ public sealed class VocabularyRegistryCensusTests
                 "Lex.V3.Artifacts.AdmissionHeaderReader: AttestationMembers=4, "
                     + "ContractReferenceMembers=3, ContractSetMembers=4, EnvironmentMembers=2, "
                     + "IssuerMembers=3, PayloadMembers=6, RootMembers=11",
+                "Lex.V3.Contracts.Canon.Canon2AliasArtifactCanonicalWriter: Domain=20",
                 "Lex.V3.Contracts.ContractValidation: const IdentifierPattern, "
                     + "const SyntheticCelexCoordinate, const SyntheticEliCoordinate, "
                     + "const SyntheticEuHeldRecordIdentifier, "
