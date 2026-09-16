@@ -119,19 +119,23 @@ public sealed class Canon2AliasArtifact
             throw new ArgumentException("Alias entries cannot contain null.", nameof(entries));
         }
 
-        var sourceIdentities = new HashSet<string>(StringComparer.Ordinal);
-        var targetIdentities = new HashSet<string>(StringComparer.Ordinal);
+        // Decision 45 scopes a migration identity to its public coordinate. The same opaque
+        // identity token may therefore occur at two different coordinates without creating
+        // fan-out, fan-in, or an intermediate node. Keep the coordinate in every graph key so a
+        // token collision between provisions cannot turn two independent edges into one graph.
+        var sourceIdentities = new HashSet<(Canon2AliasCoordinate Coordinate, string Identity)>();
+        var targetIdentities = new HashSet<(Canon2AliasCoordinate Coordinate, string Identity)>();
         var sourceCoordinates = new HashSet<Canon2AliasCoordinate>();
         foreach (var entry in materialized)
         {
-            if (!sourceIdentities.Add(entry.SourceIdentity))
+            if (!sourceIdentities.Add((entry.SourceCoordinate, entry.SourceIdentity)))
             {
                 refusal = Canon2AliasArtifactRefusal.DuplicateSource;
                 detail = entry.SourceIdentity;
                 return null;
             }
 
-            if (!targetIdentities.Add(entry.CanonicalizedTo))
+            if (!targetIdentities.Add((entry.TargetCoordinate, entry.CanonicalizedTo)))
             {
                 refusal = Canon2AliasArtifactRefusal.DuplicateTarget;
                 detail = entry.CanonicalizedTo;
@@ -146,12 +150,14 @@ public sealed class Canon2AliasArtifact
             }
         }
 
-        var intermediate = sourceIdentities.FirstOrDefault(targetIdentities.Contains);
-        if (intermediate is not null)
+        foreach (var intermediate in sourceIdentities)
         {
-            refusal = Canon2AliasArtifactRefusal.NonDirectGraph;
-            detail = intermediate;
-            return null;
+            if (targetIdentities.Contains(intermediate))
+            {
+                refusal = Canon2AliasArtifactRefusal.NonDirectGraph;
+                detail = $"{CoordinateDetail(intermediate.Coordinate)}:{intermediate.Identity}";
+                return null;
+            }
         }
 
         Array.Sort(materialized, CompareEntries);
