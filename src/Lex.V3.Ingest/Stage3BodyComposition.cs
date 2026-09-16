@@ -110,7 +110,7 @@ public sealed class Stage3BodyComposition
         var luxembourg = new List<Stage3LuxembourgBodyComposition>();
         foreach (var pair in envelope.Luxembourg.GazetteBodySetsByOrdinal!.OrderBy(static pair => pair.Key))
         {
-            if (!recordsByOrdinal.TryGetValue(pair.Key, out var matches) || matches.Length != 1)
+            if (!recordsByOrdinal.TryGetValue(pair.Key, out var matches))
             {
                 refusal = Stage3BodyCompositionRefusal.LuxembourgBodySetOutsideCorpus;
                 detail = pair.Key.ToString(CultureInfo.InvariantCulture);
