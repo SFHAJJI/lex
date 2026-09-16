@@ -58,9 +58,12 @@ public sealed record LexCorpus6Member(
         ArgumentException.ThrowIfNullOrWhiteSpace(RightsDisposition);
         ArgumentNullException.ThrowIfNull(RightsEvidenceRefs);
         ArgumentNullException.ThrowIfNull(Gaps);
-        if ((Outcome == LexCorpus6OutcomeKind.Acquired) != (BodySha256 is not null))
+        var carriesHeldBytes = Outcome is LexCorpus6OutcomeKind.Acquired or LexCorpus6OutcomeKind.RightsWithheld;
+        if (carriesHeldBytes != (BodySha256 is not null))
         {
-            throw new ArgumentException("Exactly an acquired member carries body bytes.", nameof(BodySha256));
+            throw new ArgumentException(
+                "Exactly an acquired or rights-withheld member carries held-body custody.",
+                nameof(BodySha256));
         }
 
         if (BodySha256 is not null)
@@ -381,7 +384,9 @@ public static class LexCorpus6Builder
         PublisherId publisher, CorpusRecord record, LexCorpus6OutcomeKind outcome,
         string rightsDisposition, IReadOnlyList<SourceArtifactRef> rightsEvidence, IReadOnlyList<string> gaps)
     {
-        var acquired = outcome == LexCorpus6OutcomeKind.Acquired ? record.Body.Receipt : null;
+        var acquired = outcome is LexCorpus6OutcomeKind.Acquired or LexCorpus6OutcomeKind.RightsWithheld
+            ? record.Body.Receipt
+            : null;
         return new LexCorpus6Member(
             publisher, ScopeManifestCanonicalWriter.ComputeObjectRefSha256(record.ObjectRef),
             record.ObjectOrdinal, record.ManifestRef, record.RunIdentity, record.BodyDisposition, outcome,
@@ -407,9 +412,12 @@ public static class LexCorpus6Builder
     };
 
     private static bool IsTerminalLuxembourgRights(LuxembourgRightsChannelDisposition disposition) =>
-        disposition is LuxembourgRightsChannelDisposition.AgreedSameRunCcBy
+        disposition is LuxembourgRightsChannelDisposition.MissingValue
+            or LuxembourgRightsChannelDisposition.AgreedSameRunCcBy
             or LuxembourgRightsChannelDisposition.NonAdmittingLicenceScl
-            or LuxembourgRightsChannelDisposition.TypedQuarantineUnruledLicence;
+            or LuxembourgRightsChannelDisposition.TypedQuarantineUnruledLicence
+            or LuxembourgRightsChannelDisposition.TypedQuarantineUnrepresentableLicenceShape
+            or LuxembourgRightsChannelDisposition.TypedQuarantineInFileReadingRejected;
 
     private static IReadOnlyList<SourceArtifactRef> SortArtifacts(IEnumerable<SourceArtifactRef> values) => values
         .Distinct().OrderBy(static value => value.ResourceId, StringComparer.Ordinal)

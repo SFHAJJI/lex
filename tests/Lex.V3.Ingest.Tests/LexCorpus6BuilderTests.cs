@@ -68,6 +68,10 @@ public sealed class LexCorpus6BuilderTests
                 .Select(static member => (member.Publisher, member.ObjectRefSha256))
                 .Distinct()
                 .ToArray());
+        Assert.IsTrue(first.VerifiedSet.Set.Members.Any(static member =>
+            member.Outcome == LexCorpus6OutcomeKind.RightsWithheld &&
+            member.BodySha256 is not null &&
+            member.BodyReceiptSha256 is not null));
         var reopened = VerifiedLexCorpus6ManifestSet.ParseAndVerify(
             first.ArtifactRef,
             first.CanonicalBytes.Span);
