@@ -247,12 +247,12 @@ public sealed class ClosedVocabularyCensusTests
                 "Lex.V3.Ingest.Luxembourg.LuxembourgOpinionRequestInventoryRefusal: None, "
                     + "EnumerationRefused, EnumerationProofRefused, VerifiedRowsRefused, "
                     + "RowNotAdmitted, SubjectDeliveredTwice, NonAddressableSubjectObserved",
+                "Lex.V3.Ingest.Luxembourg.LuxembourgPartitionCoverReconciliationRefusal: "
+                    + "LeafExecutorRefused, LeafProofRefused, CoverReconciliationRefused",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgPdfProfileEligibilityDisposition: NotPdf, "
                     + "PublisherPdfEligible, GazettePdfEligible, TypedGap",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgPdfProfileEligibilityGapReason: "
                     + "GazetteEvidenceAmbiguous, GazetteEvidenceNotAdmitted, GazetteReceiptMismatch",
-                "Lex.V3.Ingest.Luxembourg.LuxembourgPartitionCoverReconciliationRefusal: "
-                    + "LeafExecutorRefused, LeafProofRefused, CoverReconciliationRefused",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionAdapter+ResourceObservationBuildO"
                     + "utcomeKind: Built, SubjectNotInCensus, ObjectKindNotRecognised, TermUnbound, "
                     + "RelationTermUnbound, RelationTermNotIri, RelationPredicateNotAdmitted, "
