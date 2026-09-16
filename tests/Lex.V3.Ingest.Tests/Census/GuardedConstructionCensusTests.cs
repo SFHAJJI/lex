@@ -473,6 +473,15 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgAknArticleInventoryPopulation::.ctor, "
                     + "method public instance "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgAknArticleInventoryProducer::RunAsync",
+                "Lex.V3.Ingest.Luxembourg.LuxembourgAknLegalContentArticle: constructor internal "
+                    + "instance Lex.V3.Ingest.Luxembourg.LuxembourgAknLegalContentArticle::.ctor",
+                "Lex.V3.Ingest.Luxembourg.LuxembourgAknLegalContentOutcome: constructor internal "
+                    + "instance Lex.V3.Ingest.Luxembourg.LuxembourgAknLegalContentOutcome::.ctor",
+                "Lex.V3.Ingest.Luxembourg.LuxembourgAknLegalContentPopulation: constructor "
+                    + "internal instance "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgAknLegalContentPopulation::.ctor, "
+                    + "method public instance "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgAknLegalContentProfileProducer::RunAsync",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgConsolidationByActResult: constructor private "
                     + "instance Lex.V3.Ingest.Luxembourg.LuxembourgConsolidationByActResult::.ctor, "
                     + "method internal static "
