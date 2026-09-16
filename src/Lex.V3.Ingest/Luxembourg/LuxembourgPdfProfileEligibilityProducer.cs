@@ -139,14 +139,7 @@ public sealed class LuxembourgPdfProfileEligibilityPopulation
 /// </summary>
 public static class LuxembourgPdfProfileEligibilityProducer
 {
-    private const string RuleProfile =
-        "lex-v3-luxembourg-pdf-profile-eligibility-rule/1\n" +
-        "pdf=selected-wemi-format-pdf-or-pdfa\n" +
-        "gazette=exact-act-expression-manifestation-item-and-retained-receipt\n" +
-        "no-match=publisher-pdf-family\n" +
-        "layout=not-inspected\n";
-
-    public static string RuleProfileSha256 { get; } = Digest(RuleProfile);
+    public static string RuleProfileSha256 { get; } = Digest(RuleProfileText());
 
     public static LuxembourgPdfProfileEligibilityPopulation Produce(Stage3BodyComposition composition)
     {
@@ -228,6 +221,13 @@ public static class LuxembourgPdfProfileEligibilityProducer
 
     private static bool Same(string left, string right) =>
         string.Equals(left, right, StringComparison.Ordinal);
+
+    private static string RuleProfileText() =>
+        "lex-v3-luxembourg-pdf-profile-eligibility-rule/1\n" +
+        "pdf=selected-wemi-format-pdf-or-pdfa\n" +
+        "gazette=exact-act-expression-manifestation-item-and-retained-receipt\n" +
+        "no-match=publisher-pdf-family\n" +
+        "layout=not-inspected\n";
 
     private static string Digest(string value) =>
         Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
