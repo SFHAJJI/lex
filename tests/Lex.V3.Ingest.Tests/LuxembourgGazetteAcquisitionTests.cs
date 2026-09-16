@@ -468,7 +468,7 @@ public sealed class LuxembourgGazetteAcquisitionTests
             [],
             []);
         var replacementSet = LuxembourgGazetteBodySet.Create(join, dispositions);
-        var bodySets = source.GazetteBodySetsByOrdinal.ToDictionary(
+        var bodySets = source.GazetteBodySetsByOrdinal!.ToDictionary(
             static pair => pair.Key,
             pair => pair.Key == ordinal ? replacementSet : pair.Value);
 
