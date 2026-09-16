@@ -145,6 +145,11 @@ public sealed class ClosedVocabularyCensusTests
                     + "EcliState, TargetBodyScope, DateSemanticRole, TranspositionEvidence, "
                     + "DatePrecision, DateOpenSentinel",
                 "Lex.V3.Contracts.IdentifierFamily: Eli, Celex, Memorial, HistoricalLegalId",
+                "Lex.V3.Contracts.Index.V3IndexCapabilityLookupOutcome: Supported, "
+                    + "FilterNotSupportedByIndex",
+                "Lex.V3.Contracts.Index.V3IndexCapabilityManifestRefusal: None, UnknownPublisher, "
+                    + "PublisherMismatch, IndexMismatch, MalformedCell, DuplicateCell, "
+                    + "OverlappingPeriod",
                 "Lex.V3.Contracts.LuScopeTerminalState: AcceptedMetadata, AcceptedCandidate, Point, "
                     + "NeverIngest, TypedQuarantine, MissingPublisherValue, NotApplicable",
                 "Lex.V3.Contracts.PreviewBodyDispositionReason: SyntheticFixture, "
