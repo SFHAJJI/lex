@@ -331,6 +331,72 @@ public sealed class LuxembourgGazetteAcquisitionTests
     internal static async Task<LuxembourgQueryExecutionResult> CompleteForStage3BodyCompositionAsync() =>
         (await RunAsync(GazetteAssertions(), pdf: (HttpStatusCode.OK, PdfBytes))).Result;
 
+    internal static async Task<LuxembourgQueryExecutionResult> CompleteWithDistinctReceiptsForStage3BodyCompositionAsync() =>
+        (await RunAsync(
+            GazetteAssertions(),
+            pdf: (HttpStatusCode.OK, PdfBytes),
+            decorate: inner => new GazetteCustodyStore(inner) { AdvanceObservationPerCreate = true })).Result;
+
+    internal static async Task<LuxembourgQueryExecutionResult> CompleteXmlForStage3BodyCompositionAsync()
+    {
+        const string manifestationXml = Expression + "/xml";
+        const string itemXml = "http://data.legilux.public.lu/filestore/eli/etat/leg/loi/2026/01/01/a1/jo/fr/xml/eli-etat-leg-loi-2026-01-01-a1-jo-fr-xml.xml";
+        (string, string, string)[] assertions =
+        [
+            (Act, RdfType, Jolux + "Act"),
+            (Act, Jolux + "typeDocument", Types + "LOI"),
+            (Act, Jolux + "isMemberOf", Parent),
+            (Act, Jolux + "isRealizedBy", Expression),
+            (Expression, RdfType, Jolux + "Expression"),
+            (Expression, Jolux + "language", "http://publications.europa.eu/resource/authority/language/FRA"),
+            (Expression, Jolux + "isEmbodiedBy", manifestationXml),
+            (manifestationXml, RdfType, Jolux + "Manifestation"),
+            (manifestationXml, Jolux + "userFormat", Formats + "xml"),
+            (manifestationXml, Jolux + "isExemplifiedBy", itemXml),
+            (manifestationXml, Jolux + "license", CcBy),
+        ];
+
+        return (await RunAsync(
+            assertions,
+            pdf: null,
+            subjects: [Act, Expression, manifestationXml],
+            ladderItem: itemXml,
+            ladderBody: "<akomaNtoso/>"u8.ToArray(),
+            ladderMediaType: "application/xml")).Result;
+    }
+
+    internal static async Task<LuxembourgQueryExecutionResult> CompletePublisherPdfForStage3BodyCompositionAsync()
+    {
+        const string consolidation = Parent + "/consolide/20260201";
+        const string expression = consolidation + "/fr";
+        const string manifestation = expression + "/pdf";
+        const string item = "http://data.legilux.public.lu/filestore/eli/etat/leg/loi/2026/01/01/a1/consolide/20260201/fr/pdf/consolide.pdf";
+        (string, string, string)[] assertions =
+        [
+            (consolidation, RdfType, Jolux + "Consolidation"),
+            (consolidation, Jolux + "typeDocument", Types + "LOI"),
+            (consolidation, Jolux + "isMemberOf", Parent),
+            (consolidation, Jolux + "isRealizedBy", expression),
+            (expression, RdfType, Jolux + "Expression"),
+            (expression, Jolux + "language", "http://publications.europa.eu/resource/authority/language/FRA"),
+            (expression, Jolux + "isEmbodiedBy", manifestation),
+            (manifestation, RdfType, Jolux + "Manifestation"),
+            (manifestation, Jolux + "userFormat", Formats + "pdf"),
+            (manifestation, Jolux + "isExemplifiedBy", item),
+            (manifestation, Jolux + "license", CcBy),
+            (Act, RdfType, Jolux + "Act"),
+            (Act, Jolux + "typeDocument", Types + "LOI"),
+            (Act, Jolux + "isMemberOf", Parent),
+        ];
+
+        return (await RunAsync(
+            assertions,
+            pdf: null,
+            subjects: [consolidation, expression, manifestation, Act],
+            ladderItem: item,
+            ladderBody: PdfBytes)).Result;
+    }
+
     private sealed record GazetteRun(LuxembourgQueryExecutionResult Result, int DocumentRequests);
 
     private static (string, string, string)[] GazetteAssertions(string? pdfLicence = null, string[]? pdfLegalValues = null)

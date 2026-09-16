@@ -52,6 +52,9 @@ public sealed class CensusPartitionTests
             + "that is pinned harder elsewhere: LuxembourgObservedObjectIdentitySetTests."
             + "TheCanonicalFormIsExactlyTheseBytes states the whole canonical document by hand, "
             + "domain string included, and compares bytes.",
+        "Lex.V3.Ingest.Luxembourg.LuxembourgPdfProfileEligibilityProducer: one stable rule-profile "
+            + "digest and its private canonical rule text; the public proof-bound production door "
+            + "has direct contract tests and this is not a selectable vocabulary registry.",
     ];
 
     [TestMethod]
@@ -76,14 +79,14 @@ public sealed class CensusPartitionTests
     public void ThePartitionTotalsAreExactlyThese()
     {
         Assert.AreEqual(
-            190, ClosedSurfaceCensus.Candidates(CensusScope.SweptHere).Count, "candidates");
+            195, ClosedSurfaceCensus.Candidates(CensusScope.SweptHere).Count, "candidates");
         Assert.AreEqual(
-            76, ClosedSurfaceCensus.ClosedVocabularies(CensusScope.SweptHere).Count, "vocabularies");
+            78, ClosedSurfaceCensus.ClosedVocabularies(CensusScope.SweptHere).Count, "vocabularies");
         Assert.AreEqual(
-            108, ClosedSurfaceCensus.GuardedConstruction(CensusScope.SweptHere).Count, "guarded types");
+            110, ClosedSurfaceCensus.GuardedConstruction(CensusScope.SweptHere).Count, "guarded types");
         Assert.AreEqual(
             4, ClosedSurfaceCensus.VocabularyRegistries(CensusScope.SweptHere).Count, "registries");
-        Assert.AreEqual(2, Declined.Length, "declined");
+        Assert.AreEqual(3, Declined.Length, "declined");
     }
 
     private static string NameOf(string row) =>

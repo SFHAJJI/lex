@@ -666,6 +666,19 @@ public sealed class GuardedConstructionCensusTests
                     + "method public static "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgPartitionCoverReconciliationDetail::Recon"
                     + "ciliationRefused",
+                "Lex.V3.Ingest.Luxembourg.LuxembourgPdfProfileEligibilityOutcome: constructor "
+                    + "internal instance "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgPdfProfileEligibilityOutcome::.ctor, "
+                    + "method private static "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgPdfProfileEligibilityProducer::Classify, "
+                    + "method private static "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgPdfProfileEligibilityProducer::Outcome, "
+                    + "1 compiler-generated",
+                "Lex.V3.Ingest.Luxembourg.LuxembourgPdfProfileEligibilityPopulation: constructor "
+                    + "internal instance "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgPdfProfileEligibilityPopulation::.ctor, "
+                    + "method public static "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgPdfProfileEligibilityProducer::Produce",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgProductionScopeReductionEvidenceResolver: "
                     + "constructor private instance "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgProductionScopeReductionEvidenceResolver:"
