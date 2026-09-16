@@ -164,7 +164,6 @@ public static class LuxembourgPdfProfileEligibilityProducer
 
         var selected = input.SelectedWemiCandidate;
         var gazette = gazetteBodies.SingleOrDefault(body =>
-                body.Outcome == LuxembourgGazetteBodyOutcome.Admitted &&
                 body.RetainedTransportBytes is not null &&
                 Same(body.Candidate.WemiCandidate.RootIri, selected.RootIri) &&
                 Same(body.Candidate.WemiCandidate.ExpressionIri, selected.ExpressionIri) &&
@@ -205,6 +204,7 @@ public static class LuxembourgPdfProfileEligibilityProducer
         "lex-v3-luxembourg-pdf-profile-eligibility-rule/1\n" +
         "pdf=selected-wemi-format-pdf-or-pdfa\n" +
         "gazette=exact-admitted-act-expression-manifestation-item-and-retained-receipt\n" +
+        "exact-gazette-without-retained-bytes=publisher-pdf-family\n" +
         "no-admitted-match=publisher-pdf-family\n" +
         "layout=not-inspected\n";
 
