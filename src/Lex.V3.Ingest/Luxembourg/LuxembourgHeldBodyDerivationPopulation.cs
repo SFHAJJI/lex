@@ -39,7 +39,7 @@ internal sealed class LuxembourgSelectedDocumentFetch
         WemiCandidate = wemiCandidate ?? throw new ArgumentNullException(nameof(wemiCandidate));
         if (WemiCandidate.Disposition != LuxembourgWemiCandidateDisposition.StructurallyConsistent ||
             !string.Equals(
-                WemiCandidate.ItemIri,
+                LuxembourgFileUri.RequireValid(WemiCandidate.ItemIri).Value.AbsoluteUri,
                 Address.StoreFileUri.Value.AbsoluteUri,
                 StringComparison.Ordinal) ||
             LuxembourgAuthorityIri.TryParseUserFormat(WemiCandidate.FormatIri) != Address.UserFormatToken)

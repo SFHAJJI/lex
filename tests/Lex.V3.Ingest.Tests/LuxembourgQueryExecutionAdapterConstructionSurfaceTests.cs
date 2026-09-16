@@ -209,7 +209,7 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
     }
 
     [TestMethod]
-    public void QueryExecutionRefusalIsATwentyMemberEnumIncludingNone()
+    public void QueryExecutionRefusalIsATwentyOneMemberEnumIncludingNone()
     {
         // D1-06c-LU-2 added four: DocumentFetchSessionNotStarted, DocumentBodyNotRetained,
         // AcquisitionOutcomeNotRepresentable and RecordSetNotHeld, one per whole-run failure the
@@ -293,6 +293,9 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
                 "field public static " + N
                 + "LuxembourgQueryExecutionRefusal::ScopeResolutionFailed -> " + N
                 + "LuxembourgQueryExecutionRefusal",
+                "field public static " + N
+                + "LuxembourgQueryExecutionRefusal::SelectedManifestationIdentityNotUnique -> "
+                + N + "LuxembourgQueryExecutionRefusal",
             },
             ConstructionSurface.Of(typeof(LuxembourgQueryExecutionRefusal)).ToArray());
     }
