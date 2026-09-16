@@ -337,6 +337,11 @@ public sealed class LuxembourgGazetteAcquisitionTests
             pdf: (HttpStatusCode.OK, PdfBytes),
             decorate: inner => new GazetteCustodyStore(inner) { AdvanceObservationPerCreate = true })).Result;
 
+    internal static async Task<LuxembourgQueryExecutionResult> CompleteWithRejectedSelectedGazetteForStage3BodyCompositionAsync() =>
+        (await RunAsync(
+            GazetteAssertions(pdfALicence: LicenceScl),
+            pdf: (HttpStatusCode.OK, PdfBytes))).Result;
+
     internal static async Task<LuxembourgQueryExecutionResult> CompleteWithUnretainedSelectedGazetteForStage3BodyCompositionAsync()
     {
         var assertions = GazetteAssertions()
@@ -416,7 +421,10 @@ public sealed class LuxembourgGazetteAcquisitionTests
 
     private sealed record GazetteRun(LuxembourgQueryExecutionResult Result, int DocumentRequests);
 
-    private static (string, string, string)[] GazetteAssertions(string? pdfLicence = null, string[]? pdfLegalValues = null)
+    private static (string, string, string)[] GazetteAssertions(
+        string? pdfLicence = null,
+        string[]? pdfLegalValues = null,
+        string? pdfALicence = null)
     {
         var assertions = new List<(string, string, string)>
         {
@@ -431,7 +439,7 @@ public sealed class LuxembourgGazetteAcquisitionTests
             (ManifestationPdfA, RdfType, Jolux + "Manifestation"),
             (ManifestationPdfA, Jolux + "userFormat", Formats + "pdfa"),
             (ManifestationPdfA, Jolux + "isExemplifiedBy", ItemPdfA),
-            (ManifestationPdfA, Jolux + "license", CcBy),
+            (ManifestationPdfA, Jolux + "license", pdfALicence ?? CcBy),
             (ManifestationPdf, RdfType, Jolux + "Manifestation"),
             (ManifestationPdf, Jolux + "userFormat", Formats + "pdf"),
             (ManifestationPdf, Jolux + "isExemplifiedBy", ItemPdf),

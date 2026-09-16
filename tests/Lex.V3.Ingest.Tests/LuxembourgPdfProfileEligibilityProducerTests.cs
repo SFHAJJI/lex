@@ -78,7 +78,28 @@ public sealed class LuxembourgPdfProfileEligibilityProducerTests
     }
 
     [TestMethod]
-    public async Task ASelectedPdfWithoutRetainedGazetteBytesUsesThePublisherPdfFamily()
+    public async Task RejectedSelectedGazetteEvidenceIsAnExplicitGap()
+    {
+        var composition = await CompleteCompositionAsync(
+            await LuxembourgGazetteAcquisitionTests
+                .CompleteWithRejectedSelectedGazetteForStage3BodyCompositionAsync());
+        var matchingGazette = composition.Luxembourg
+            .SelectMany(static value => value.GazetteBodies.Bodies)
+            .Single(body => body.Candidate.WemiCandidate.ItemIri ==
+                composition.LuxembourgDerivationPopulation.Inputs.Single().SelectedWemiCandidate.ItemIri);
+        Assert.AreEqual(LuxembourgGazetteBodyOutcome.Rejected, matchingGazette.Outcome);
+        Assert.IsNull(matchingGazette.RetainedTransportBytes);
+
+        var outcome = LuxembourgPdfProfileEligibilityProducer.Produce(composition).Outcomes.Single();
+
+        AssertOutcome(
+            outcome,
+            LuxembourgPdfProfileEligibilityDisposition.TypedGap,
+            LuxembourgPdfProfileEligibilityGapReason.GazetteEvidenceNotAdmitted);
+    }
+
+    [TestMethod]
+    public async Task ASelectedPdfWithoutRetainedGazetteBytesIsAnExplicitGap()
     {
         var composition = await CompleteCompositionAsync(
             await LuxembourgGazetteAcquisitionTests
@@ -91,7 +112,10 @@ public sealed class LuxembourgPdfProfileEligibilityProducerTests
 
         var outcome = LuxembourgPdfProfileEligibilityProducer.Produce(composition).Outcomes.Single();
 
-        AssertOutcome(outcome, LuxembourgPdfProfileEligibilityDisposition.PublisherPdfEligible);
+        AssertOutcome(
+            outcome,
+            LuxembourgPdfProfileEligibilityDisposition.TypedGap,
+            LuxembourgPdfProfileEligibilityGapReason.GazetteEvidenceNotAdmitted);
     }
 
     [TestMethod]
@@ -107,6 +131,9 @@ public sealed class LuxembourgPdfProfileEligibilityProducerTests
                 await LuxembourgGazetteAcquisitionTests.CompletePublisherPdfForStage3BodyCompositionAsync()),
             await CompleteCompositionAsync(
                 await LuxembourgGazetteAcquisitionTests.CompleteWithDistinctReceiptsForStage3BodyCompositionAsync()),
+            await CompleteCompositionAsync(
+                await LuxembourgGazetteAcquisitionTests
+                    .CompleteWithRejectedSelectedGazetteForStage3BodyCompositionAsync()),
             await CompleteCompositionAsync(
                 await LuxembourgGazetteAcquisitionTests
                     .CompleteWithUnretainedSelectedGazetteForStage3BodyCompositionAsync()),
