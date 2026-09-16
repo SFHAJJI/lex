@@ -88,8 +88,11 @@ public sealed class Stage3EvidenceEnvelopeTests
             "the AKN legal content belongs to a different article inventory population",
             detail);
 
-        Assert.ThrowsExactly<ArgumentNullException>(() => Stage3EvidenceEnvelope.TryCreate(
-            eu, luxembourg, formex, classifications, fidelity, akn.Inventory, null!, out _, out _));
+        Assert.IsNull(Stage3EvidenceEnvelope.TryCreate(
+            eu, luxembourg, formex, classifications, fidelity, akn.Inventory, null!,
+            out refusal, out detail));
+        Assert.AreEqual("LuxembourgAknLegalContentPopulationMissing", refusal.ToString(), detail);
+        Assert.AreEqual("the AKN legal-content population is missing", detail);
     }
 
     [TestMethod]
