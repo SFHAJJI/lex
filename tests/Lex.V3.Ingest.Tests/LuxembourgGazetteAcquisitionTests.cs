@@ -337,15 +337,20 @@ public sealed class LuxembourgGazetteAcquisitionTests
             pdf: (HttpStatusCode.OK, PdfBytes),
             decorate: inner => new GazetteCustodyStore(inner) { AdvanceObservationPerCreate = true })).Result;
 
-    internal static async Task<LuxembourgQueryExecutionResult> CompleteWithRejectedSelectedGazetteForStage3BodyCompositionAsync() =>
-        WithSelectedGazetteNotAdmitted(
-            (await RunAsync(GazetteAssertions(), pdf: (HttpStatusCode.OK, PdfBytes))).Result,
-            rejected: true);
+    internal static async Task<LuxembourgQueryExecutionResult> CompleteWithRejectedSelectedGazetteForStage3BodyCompositionAsync()
+    {
+        var held = (await RunAsync(GazetteAssertions(), pdf: (HttpStatusCode.OK, PdfBytes))).Result;
+        var rejected = (await RunAsync(
+            GazetteAssertions(pdfALicence: LicenceScl),
+            pdf: null,
+            ladderItem: ItemPdf,
+            ladderBody: PdfBytes)).Result;
+        return CopyWithGazetteBodySets(held, rejected.GazetteBodySetsByOrdinal!);
+    }
 
     internal static async Task<LuxembourgQueryExecutionResult> CompleteWithUnretainedSelectedGazetteForStage3BodyCompositionAsync() =>
-        WithSelectedGazetteNotAdmitted(
-            (await RunAsync(GazetteAssertions(), pdf: (HttpStatusCode.OK, PdfBytes))).Result,
-            rejected: false);
+        WithSelectedGazetteUnretained(
+            (await RunAsync(GazetteAssertions(), pdf: (HttpStatusCode.OK, PdfBytes))).Result);
 
     internal static async Task<LuxembourgQueryExecutionResult> CompleteXmlForStage3BodyCompositionAsync()
     {
@@ -409,7 +414,10 @@ public sealed class LuxembourgGazetteAcquisitionTests
 
     private sealed record GazetteRun(LuxembourgQueryExecutionResult Result, int DocumentRequests);
 
-    private static (string, string, string)[] GazetteAssertions(string? pdfLicence = null, string[]? pdfLegalValues = null)
+    private static (string, string, string)[] GazetteAssertions(
+        string? pdfLicence = null,
+        string[]? pdfLegalValues = null,
+        string? pdfALicence = null)
     {
         var assertions = new List<(string, string, string)>
         {
@@ -424,7 +432,7 @@ public sealed class LuxembourgGazetteAcquisitionTests
             (ManifestationPdfA, RdfType, Jolux + "Manifestation"),
             (ManifestationPdfA, Jolux + "userFormat", Formats + "pdfa"),
             (ManifestationPdfA, Jolux + "isExemplifiedBy", ItemPdfA),
-            (ManifestationPdfA, Jolux + "license", CcBy),
+            (ManifestationPdfA, Jolux + "license", pdfALicence ?? CcBy),
             (ManifestationPdf, RdfType, Jolux + "Manifestation"),
             (ManifestationPdf, Jolux + "userFormat", Formats + "pdf"),
             (ManifestationPdf, Jolux + "isExemplifiedBy", ItemPdf),
@@ -438,25 +446,17 @@ public sealed class LuxembourgGazetteAcquisitionTests
         return [.. assertions];
     }
 
-    private static LuxembourgQueryExecutionResult WithSelectedGazetteNotAdmitted(
-        LuxembourgQueryExecutionResult source,
-        bool rejected)
+    private static LuxembourgQueryExecutionResult WithSelectedGazetteUnretained(
+        LuxembourgQueryExecutionResult source)
     {
         var selected = source.HeldBodyDerivationPopulation!.Inputs.Single().SelectedWemiCandidate;
         var (ordinal, originalSet) = source.GazetteBodySetsByOrdinal!.Single();
         var original = originalSet.Bodies.Single(body =>
             string.Equals(body.ManifestationIri, selected.ManifestationIri, StringComparison.Ordinal) &&
             string.Equals(body.ItemIri, selected.ItemIri, StringComparison.Ordinal));
-        var candidate = rejected
-            ? new LuxembourgBodyCandidateResolution(
-                original.Candidate.WemiCandidate,
-                original.Candidate.RightsResolution,
-                LuxembourgBodyCandidateDisposition.Withheld,
-                [LuxembourgBodyBlockerCode.PublisherMarkedNotReusable])
-            : original.Candidate;
-        var replacement = LuxembourgGazetteBodyDisposition.Create(candidate, retention: null);
+        var replacement = LuxembourgGazetteBodyDisposition.Create(original.Candidate, retention: null);
         var candidates = originalSet.Bodies
-            .Select(body => ReferenceEquals(body, original) ? candidate : body.Candidate)
+            .Select(static body => body.Candidate)
             .ToArray();
         var dispositions = originalSet.Bodies
             .Select(body => ReferenceEquals(body, original) ? replacement : body)
@@ -472,7 +472,13 @@ public sealed class LuxembourgGazetteAcquisitionTests
             static pair => pair.Key,
             pair => pair.Key == ordinal ? replacementSet : pair.Value);
 
-        return LuxembourgQueryExecutionResult.Delivered(
+        return CopyWithGazetteBodySets(source, bodySets);
+    }
+
+    private static LuxembourgQueryExecutionResult CopyWithGazetteBodySets(
+        LuxembourgQueryExecutionResult source,
+        IReadOnlyDictionary<int, LuxembourgGazetteBodySet> bodySets) =>
+        LuxembourgQueryExecutionResult.Delivered(
             source.Topology,
             source.FamilyOutcomes,
             source.RelationFamilyAcquisitions,
@@ -495,7 +501,6 @@ public sealed class LuxembourgGazetteAcquisitionTests
             source.GazetteListingFetchRefusalsByOrdinal!,
             source.GazetteListingsWithContradictoryLegalValueByOrdinal!,
             source.PopulationLedger!);
-    }
 
     /// <summary>
     /// One full adapter run over the scripted transport: two passes of the census family, robots,
