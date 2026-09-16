@@ -209,7 +209,7 @@ public sealed class LuxembourgAknArticleInventoryProducerTests
                 canonical.ToArray());
             var address = LuxembourgDocumentFetchAddress.Create(
                 LuxembourgFileUri.RequireValid(
-                    "https://data.legilux.public.lu/filestore/eli/etat/leg/loi/2017/03/14/a439/jo/fr/xml"),
+                    "http://data.legilux.public.lu/filestore/eli/etat/leg/loi/2017/03/14/a439/jo/fr/xml"),
                 token,
                 LuxembourgLegalValue.Unstated,
                 "/eli/etat/leg/loi/2017/03/14/a439/jo/fr");
