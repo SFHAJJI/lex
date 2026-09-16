@@ -50,7 +50,7 @@ public sealed class LexCorpus6BuilderTests
     public async Task CompleteProductionEvidenceBuildsOneDeterministicStrictlyReopenableMemberPerSourceUnit()
     {
         var envelope = await CompleteProfileEnvelopeAsync();
-        var matrix = CompleteEuropeRightsMatrix();
+        var matrix = CompleteEuropeRightsMatrix(envelope.BodyComposition.Envelope.EuropeLegalNoticeEvidence!);
 
         var first = LexCorpus6Builder.TryBuild(envelope, matrix, out var firstRefusal, out var firstDetail);
         var second = LexCorpus6Builder.TryBuild(envelope, matrix, out var secondRefusal, out var secondDetail);
@@ -72,13 +72,79 @@ public sealed class LexCorpus6BuilderTests
             member.Outcome == LexCorpus6OutcomeKind.RightsWithheld &&
             member.BodySha256 is not null &&
             member.BodyReceiptSha256 is not null));
+        Assert.HasCount(
+            Enum.GetValues<Lex.V3.Contracts.Source.Europe.EuContentClass>().Length,
+            first.VerifiedSet.Set.EuropeRightsMatrix.ContentClasses);
+        Assert.HasCount(
+            Enum.GetValues<Lex.V3.Contracts.Source.Europe.EuRightsExceptionChannel>().Length,
+            first.VerifiedSet.Set.EuropeRightsMatrix.ExceptionChannels);
+        Assert.IsTrue(first.VerifiedSet.Set.Members
+            .Where(static member =>
+                member.Publisher == Lex.V3.Contracts.Source.Scope.PublisherId.EuEurLex &&
+                member.BodySha256 is not null)
+            .All(static member =>
+                member.EuropeContentClass is not null && member.LuxembourgRights is null));
+        Assert.IsTrue(first.VerifiedSet.Set.Members
+            .Where(static member =>
+                member.Publisher == Lex.V3.Contracts.Source.Scope.PublisherId.LuLegilux &&
+                member.BodySha256 is not null)
+            .All(static member =>
+                member.EuropeContentClass is null &&
+                member.LuxembourgRights is not null &&
+                member.LuxembourgRights.BoundRunIdentity == member.RunIdentity));
         var reopened = VerifiedLexCorpus6ManifestSet.ParseAndVerify(
             first.ArtifactRef,
+            first.VerifiedSet.Set.EuropeSourceSetRef,
+            first.VerifiedSet.Set.LuxembourgSourceSetRef,
             first.CanonicalBytes.Span);
         Assert.HasCount(first.VerifiedSet.Set.Members.Count, reopened.Set.Members);
         CollectionAssert.AreEqual(
             first.VerifiedSet.Set.Members.Select(static member => member.ObjectRefSha256).ToArray(),
             reopened.Set.Members.Select(static member => member.ObjectRefSha256).ToArray());
+    }
+
+    [TestMethod]
+    public async Task StrictReaderRejectsInventedOrUnboundRights()
+    {
+        var envelope = await CompleteProfileEnvelopeAsync();
+        var built = LexCorpus6Builder.TryBuild(
+            envelope,
+            CompleteEuropeRightsMatrix(envelope.BodyComposition.Envelope.EuropeLegalNoticeEvidence!),
+            out var refusal,
+            out var detail);
+        Assert.IsNotNull(built, $"{refusal}: {detail}");
+
+        var canonical = System.Text.Encoding.UTF8.GetString(built.CanonicalBytes.Span);
+        var invented = canonical.Replace(
+            "\"basis\":\"cc0\"",
+            "\"basis\":\"invented\"",
+            StringComparison.Ordinal);
+        Assert.AreNotEqual(canonical, invented);
+        Assert.ThrowsExactly<ArgumentException>(() => Reopen(invented, built));
+
+        const string binding = "\"bound_run_identity\":{\"resource_id\":\"";
+        var bindingStart = canonical.IndexOf(binding, StringComparison.Ordinal);
+        Assert.IsGreaterThanOrEqualTo(0, bindingStart);
+        var shaStart = canonical.IndexOf("\"sha256\":\"", bindingStart, StringComparison.Ordinal) +
+            "\"sha256\":\"".Length;
+        Assert.IsGreaterThan(bindingStart, shaStart);
+        var replacement = canonical[shaStart] == 'a' ? new string('b', 64) : new string('a', 64);
+        var unbound = canonical.Remove(shaStart, 64).Insert(shaStart, replacement);
+        Assert.ThrowsExactly<ArgumentException>(() => Reopen(unbound, built));
+    }
+
+    private static void Reopen(string canonical, LexCorpus6BuildResult built)
+    {
+        var bytes = System.Text.Encoding.UTF8.GetBytes(canonical);
+        var digest = LexCorpus6Builder.ComputeSha256(bytes);
+        var reference = new Lex.V3.Contracts.Source.Core.SourceArtifactRef(
+            LexCorpus6Builder.ResourceIdOf(digest),
+            digest);
+        _ = VerifiedLexCorpus6ManifestSet.ParseAndVerify(
+            reference,
+            built.VerifiedSet.Set.EuropeSourceSetRef,
+            built.VerifiedSet.Set.LuxembourgSourceSetRef,
+            bytes);
     }
 
     private static async Task<Stage3DerivationProfileEnvelope> CompleteProfileEnvelopeAsync()
@@ -95,12 +161,16 @@ public sealed class LexCorpus6BuilderTests
         var formex = EuFormexRunOutcomeReconciliationTests.CompleteForEnvelope(europe);
         var classifications = Stage3EvidenceEnvelopeTests.CompleteClassifications(formex);
         var fidelity = Stage3FidelityPreservationReconciliationTests.Complete(europe, luxembourg);
-        var evidence = Stage3EvidenceEnvelopeTests.TryCreate(
+        var akn = await Stage3EvidenceEnvelopeTests.CompleteAknEvidenceAsync(luxembourg);
+        var evidence = Stage3EvidenceEnvelope.TryCreateWithEuropeLegalNoticeEvidence(
             europe,
+            CompleteLegalNoticeEvidence(),
             luxembourg,
             formex,
             classifications,
             fidelity,
+            akn.Inventory,
+            akn.LegalContent,
             out var evidenceRefusal,
             out var evidenceDetail);
         Assert.IsNotNull(evidence, $"{evidenceRefusal}: {evidenceDetail}");
@@ -128,11 +198,11 @@ public sealed class LexCorpus6BuilderTests
         return envelope;
     }
 
-    private static Lex.V3.Contracts.Source.Europe.EuRightsMatrix CompleteEuropeRightsMatrix()
+    private static Lex.V3.Contracts.Source.Europe.EuRightsMatrix CompleteEuropeRightsMatrix(
+        Lex.V3.Contracts.Source.Europe.EuLegalNoticeEvidence notice)
     {
-        var evidence = new Lex.V3.Contracts.Source.Core.SourceArtifactRef(
-            "urn:uuid:11111111-1111-1111-1111-111111111111",
-            new string('a', 64));
+        var evidence = notice.ToArtifactRef(
+            "urn:uuid:11111111-1111-1111-1111-111111111111");
         var classes = Enum.GetValues<Lex.V3.Contracts.Source.Europe.EuContentClass>()
             .Select(value => new Lex.V3.Contracts.Source.Europe.EuRightsDisposition(
                 value,
@@ -148,5 +218,25 @@ public sealed class LexCorpus6BuilderTests
             out var refusal);
         Assert.IsNotNull(matrix, refusal.ToString());
         return matrix;
+    }
+
+    private static Lex.V3.Contracts.Source.Europe.EuLegalNoticeEvidence CompleteLegalNoticeEvidence()
+    {
+        var json =
+            "{\"schema\":\"lex-eu-legal-notice-evidence/2\"," +
+            "\"requested_uri\":\"https://eur-lex.europa.eu/content/legal-notice/legal-notice.html?locale=en\"," +
+            "\"effective_uri\":\"https://eur-lex.europa.eu/content/legal-notice/legal-notice.html?locale=en\"," +
+            "\"language_selection\":\"en\"," +
+            "\"media_type\":{\"kind\":\"single\",\"value\":\"text/html; charset=UTF-8\"}," +
+            "\"observed_date\":{\"kind\":\"single\",\"value\":\"Thu, 03 Sep 2026 16:55:19 GMT\"}," +
+            "\"policy_effective_date\":{\"kind\":\"absent\"}," +
+            "\"source_policy_version\":{\"kind\":\"absent\"}," +
+            "\"byte_length\":135428," +
+            $"\"sha256\":\"{new string('a', 64)}\"," +
+            $"\"durable_write_receipt_sha256\":\"{new string('b', 64)}\"," +
+            $"\"routed_evidence_sha256\":\"{new string('c', 64)}\"," +
+            "\"captured_at\":\"2026-09-03T16:55:19.3670000Z\"}\n";
+        return Lex.V3.Contracts.Source.Europe.EuLegalNoticeEvidence.ParseAndVerify(
+            System.Text.Encoding.UTF8.GetBytes(json));
     }
 }

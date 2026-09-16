@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Lex.V3.Contracts.Source.Europe;
 using Lex.V3.Contracts.Source.Scope;
 using Lex.V3.Ingest.Europe;
 using Lex.V3.Ingest.Luxembourg;
@@ -53,6 +54,7 @@ public sealed class Stage3EvidenceEnvelope
 {
     private Stage3EvidenceEnvelope(
         EuQueryExecutionResult europe,
+        EuLegalNoticeEvidence? europeLegalNoticeEvidence,
         LuxembourgQueryExecutionResult luxembourg,
         EuFormexRunOutcomeReconciliation formex,
         EuFormexAnnexClassificationReconciliation formexAnnexClassifications,
@@ -61,6 +63,7 @@ public sealed class Stage3EvidenceEnvelope
         LuxembourgAknLegalContentPopulation luxembourgAknLegalContentPopulation)
     {
         Europe = europe;
+        EuropeLegalNoticeEvidence = europeLegalNoticeEvidence;
         Luxembourg = luxembourg;
         Formex = formex;
         FormexAnnexClassifications = formexAnnexClassifications;
@@ -70,6 +73,12 @@ public sealed class Stage3EvidenceEnvelope
     }
 
     public EuQueryExecutionResult Europe { get; }
+
+    /// <summary>
+    /// The strict-reopened retained EUR-Lex legal-notice evidence accepted for terminal rights
+    /// projection. Null on lower-layer envelopes that cannot satisfy a corpus/6 build.
+    /// </summary>
+    public EuLegalNoticeEvidence? EuropeLegalNoticeEvidence { get; }
 
     public LuxembourgQueryExecutionResult Luxembourg { get; }
 
@@ -105,6 +114,58 @@ public sealed class Stage3EvidenceEnvelope
 
     public static Stage3EvidenceEnvelope? TryCreate(
         EuQueryExecutionResult europe,
+        LuxembourgQueryExecutionResult luxembourg,
+        EuFormexRunOutcomeReconciliation formex,
+        EuFormexAnnexClassificationReconciliation formexAnnexClassifications,
+        Stage3FidelityPreservationReconciliation fidelityPreservation,
+        LuxembourgAknArticleInventoryPopulation luxembourgAknArticleInventoryPopulation,
+        LuxembourgAknLegalContentPopulation? luxembourgAknLegalContentPopulation,
+        out Stage3EvidenceEnvelopeRefusal refusal,
+        out string? detail) => TryCreateCore(
+            europe,
+            europeLegalNoticeEvidence: null,
+            luxembourg,
+            formex,
+            formexAnnexClassifications,
+            fidelityPreservation,
+            luxembourgAknArticleInventoryPopulation,
+            luxembourgAknLegalContentPopulation,
+            out refusal,
+            out detail);
+
+    /// <summary>
+    /// Terminal-builder door that binds strict-reopened retained EU legal-notice evidence into the
+    /// exact Stage 3 composition. A detached matrix reference cannot substitute for this value.
+    /// </summary>
+    public static Stage3EvidenceEnvelope? TryCreateWithEuropeLegalNoticeEvidence(
+        EuQueryExecutionResult europe,
+        EuLegalNoticeEvidence europeLegalNoticeEvidence,
+        LuxembourgQueryExecutionResult luxembourg,
+        EuFormexRunOutcomeReconciliation formex,
+        EuFormexAnnexClassificationReconciliation formexAnnexClassifications,
+        Stage3FidelityPreservationReconciliation fidelityPreservation,
+        LuxembourgAknArticleInventoryPopulation luxembourgAknArticleInventoryPopulation,
+        LuxembourgAknLegalContentPopulation? luxembourgAknLegalContentPopulation,
+        out Stage3EvidenceEnvelopeRefusal refusal,
+        out string? detail)
+    {
+        ArgumentNullException.ThrowIfNull(europeLegalNoticeEvidence);
+        return TryCreateCore(
+            europe,
+            europeLegalNoticeEvidence,
+            luxembourg,
+            formex,
+            formexAnnexClassifications,
+            fidelityPreservation,
+            luxembourgAknArticleInventoryPopulation,
+            luxembourgAknLegalContentPopulation,
+            out refusal,
+            out detail);
+    }
+
+    private static Stage3EvidenceEnvelope? TryCreateCore(
+        EuQueryExecutionResult europe,
+        EuLegalNoticeEvidence? europeLegalNoticeEvidence,
         LuxembourgQueryExecutionResult luxembourg,
         EuFormexRunOutcomeReconciliation formex,
         EuFormexAnnexClassificationReconciliation formexAnnexClassifications,
@@ -221,6 +282,7 @@ public sealed class Stage3EvidenceEnvelope
 
         return new Stage3EvidenceEnvelope(
             europe,
+            europeLegalNoticeEvidence,
             luxembourg,
             formex,
             formexAnnexClassifications,

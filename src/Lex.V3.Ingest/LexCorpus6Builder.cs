@@ -20,6 +20,9 @@ public enum LexCorpus6BuildRefusal
     [JsonStringEnumMemberName("eu_rights_binding_missing")] EuropeRightsBindingMissing = 2,
     [JsonStringEnumMemberName("luxembourg_rights_binding_missing")] LuxembourgRightsBindingMissing = 3,
     [JsonStringEnumMemberName("luxembourg_rights_evidence_incomplete")] LuxembourgRightsEvidenceIncomplete = 4,
+    [JsonStringEnumMemberName("population_mismatch")] PopulationMismatch = 5,
+    [JsonStringEnumMemberName("eu_rights_evidence_missing")] EuropeRightsEvidenceMissing = 6,
+    [JsonStringEnumMemberName("eu_rights_evidence_unbound")] EuropeRightsEvidenceUnbound = 7,
 }
 
 public enum LexCorpus6OutcomeKind
@@ -28,6 +31,158 @@ public enum LexCorpus6OutcomeKind
     [JsonStringEnumMemberName("unavailable")] Unavailable = 2,
     [JsonStringEnumMemberName("refused")] Refused = 3,
     [JsonStringEnumMemberName("rights_withheld")] RightsWithheld = 4,
+}
+
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record LexCorpus6EuropeRightsMatrix(
+    SourceArtifactRef LegalNoticeEvidenceRef,
+    string LegalNoticeEvidenceBase64,
+    string RoutedEvidenceSha256,
+    string ResponseBodySha256,
+    ulong ResponseByteLength,
+    string DurableWriteReceiptSha256,
+    string CapturedAt,
+    IReadOnlyList<EuRightsDisposition> ContentClasses,
+    IReadOnlyList<EuRightsExceptionDisposition> ExceptionChannels)
+{
+    public LexCorpus6EuropeRightsMatrix Validate()
+    {
+        ArgumentNullException.ThrowIfNull(LegalNoticeEvidenceRef);
+        byte[] legalNoticeBytes;
+        try
+        {
+            legalNoticeBytes = Convert.FromBase64String(LegalNoticeEvidenceBase64);
+        }
+        catch (FormatException exception)
+        {
+            throw new ArgumentException("The embedded EU legal-notice evidence is not base64.", nameof(LegalNoticeEvidenceBase64), exception);
+        }
+        if (!string.Equals(Convert.ToBase64String(legalNoticeBytes), LegalNoticeEvidenceBase64, StringComparison.Ordinal))
+        {
+            throw new ArgumentException("The embedded EU legal-notice evidence is not canonical base64.", nameof(LegalNoticeEvidenceBase64));
+        }
+        var notice = EuLegalNoticeEvidence.ParseAndVerify(legalNoticeBytes);
+        if (!string.Equals(notice.CanonicalSha256, LegalNoticeEvidenceRef.Sha256, StringComparison.Ordinal) ||
+            !string.Equals(notice.RoutedEvidenceSha256, RoutedEvidenceSha256, StringComparison.Ordinal) ||
+            !string.Equals(notice.Sha256, ResponseBodySha256, StringComparison.Ordinal) ||
+            notice.ByteLength != ResponseByteLength ||
+            !string.Equals(notice.DurableWriteReceiptSha256, DurableWriteReceiptSha256, StringComparison.Ordinal) ||
+            !string.Equals(notice.CapturedAt, CapturedAt, StringComparison.Ordinal))
+        {
+            throw new ArgumentException("The EU policy provenance does not match its strict-reopened legal-notice evidence.");
+        }
+        LexCorpus6Member.RequireSha256(RoutedEvidenceSha256, nameof(RoutedEvidenceSha256));
+        LexCorpus6Member.RequireSha256(ResponseBodySha256, nameof(ResponseBodySha256));
+        LexCorpus6Member.RequireSha256(DurableWriteReceiptSha256, nameof(DurableWriteReceiptSha256));
+        if (ResponseByteLength == 0 || string.IsNullOrWhiteSpace(CapturedAt))
+        {
+            throw new ArgumentException("The EU notice policy must retain response custody and capture time.");
+        }
+        ArgumentNullException.ThrowIfNull(ContentClasses);
+        ArgumentNullException.ThrowIfNull(ExceptionChannels);
+        var expectedClasses = Enum.GetValues<EuContentClass>();
+        var expectedChannels = Enum.GetValues<EuRightsExceptionChannel>();
+        if (ContentClasses.Count != expectedClasses.Length ||
+            ContentClasses.Where((value, index) =>
+                value is null || value.ContentClass != expectedClasses[index] ||
+                value.Basis != EuRightsDisposition.BasisFor(expectedClasses[index]) ||
+                value.EvidenceRef != LegalNoticeEvidenceRef).Any())
+        {
+            throw new ArgumentException(
+                "The EU rights matrix must carry every content class exactly once in closed order.",
+                nameof(ContentClasses));
+        }
+
+        if (ExceptionChannels.Count != expectedChannels.Length ||
+            ExceptionChannels.Where((value, index) =>
+                value is null || value.Channel != expectedChannels[index] ||
+                value.EvidenceRef != LegalNoticeEvidenceRef).Any())
+        {
+            throw new ArgumentException(
+                "The EU rights matrix must carry every exception channel exactly once in closed order.",
+                nameof(ExceptionChannels));
+        }
+
+        return this;
+    }
+
+    public static LexCorpus6EuropeRightsMatrix From(
+        EuRightsMatrix matrix,
+        EuLegalNoticeEvidence notice)
+    {
+        ArgumentNullException.ThrowIfNull(matrix);
+        ArgumentNullException.ThrowIfNull(notice);
+        var evidenceRef = notice.ToArtifactRef(LexCorpus6Builder.ResourceIdOf(notice.CanonicalSha256));
+        return new LexCorpus6EuropeRightsMatrix(
+            evidenceRef,
+            Convert.ToBase64String(notice.CopyCanonicalBytes()),
+            notice.RoutedEvidenceSha256,
+            notice.Sha256,
+            notice.ByteLength,
+            notice.DurableWriteReceiptSha256,
+            notice.CapturedAt,
+            matrix.ContentClasses.Select(value =>
+                new EuRightsDisposition(value.ContentClass, value.Basis, evidenceRef)).ToArray(),
+            matrix.ExceptionChannels.Select(value =>
+                new EuRightsExceptionDisposition(value.Channel, evidenceRef)).ToArray()).Validate();
+    }
+}
+
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record LexCorpus6LuxembourgRights(
+    string SelectedManifestationIri,
+    SourceArtifactRef BoundRunIdentity,
+    LuxembourgRightsChannelDisposition Disposition,
+    IReadOnlyList<SourceArtifactRef> EvidenceRefs)
+{
+    public LexCorpus6LuxembourgRights Validate(SourceArtifactRef memberRunIdentity)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(SelectedManifestationIri);
+        if (!Uri.TryCreate(SelectedManifestationIri, UriKind.Absolute, out var parsed) ||
+            !string.IsNullOrEmpty(parsed.UserInfo) ||
+            !string.IsNullOrEmpty(parsed.Query) ||
+            !string.IsNullOrEmpty(parsed.Fragment))
+        {
+            throw new ArgumentException(
+                "The selected Luxembourg manifestation must be an exact absolute IRI.",
+                nameof(SelectedManifestationIri));
+        }
+
+        ArgumentNullException.ThrowIfNull(BoundRunIdentity);
+        ArgumentNullException.ThrowIfNull(memberRunIdentity);
+        if (BoundRunIdentity != memberRunIdentity)
+        {
+            throw new ArgumentException(
+                "The Luxembourg rights resolution must bind the member's exact run identity.",
+                nameof(BoundRunIdentity));
+        }
+
+        if (!IsTerminal(Disposition))
+        {
+            throw new ArgumentException(
+                "The Luxembourg rights resolution is not a terminal post-acquisition disposition.",
+                nameof(Disposition));
+        }
+
+        ArgumentNullException.ThrowIfNull(EvidenceRefs);
+        if (EvidenceRefs.Count < 2)
+        {
+            throw new ArgumentException(
+                "Both Luxembourg rights-channel enumerations must be evidenced.",
+                nameof(EvidenceRefs));
+        }
+
+        LexCorpus6Member.RequireSortedArtifacts(EvidenceRefs, nameof(EvidenceRefs));
+        return this;
+    }
+
+    internal static bool IsTerminal(LuxembourgRightsChannelDisposition disposition) =>
+        disposition is LuxembourgRightsChannelDisposition.MissingValue
+            or LuxembourgRightsChannelDisposition.AgreedSameRunCcBy
+            or LuxembourgRightsChannelDisposition.NonAdmittingLicenceScl
+            or LuxembourgRightsChannelDisposition.TypedQuarantineUnruledLicence
+            or LuxembourgRightsChannelDisposition.TypedQuarantineUnrepresentableLicenceShape
+            or LuxembourgRightsChannelDisposition.TypedQuarantineInFileReadingRejected;
 }
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
@@ -42,8 +197,8 @@ public sealed record LexCorpus6Member(
     string? BodySha256,
     long? BodyByteLength,
     string? BodyReceiptSha256,
-    string RightsDisposition,
-    IReadOnlyList<SourceArtifactRef> RightsEvidenceRefs,
+    EuContentClassObservation? EuropeContentClass,
+    LexCorpus6LuxembourgRights? LuxembourgRights,
     IReadOnlyList<string> Gaps)
 {
     public LexCorpus6Member Validate()
@@ -55,8 +210,6 @@ public sealed record LexCorpus6Member(
         ArgumentNullException.ThrowIfNull(RunIdentity);
         RequireDefined(BodyDisposition, nameof(BodyDisposition));
         RequireDefined(Outcome, nameof(Outcome));
-        ArgumentException.ThrowIfNullOrWhiteSpace(RightsDisposition);
-        ArgumentNullException.ThrowIfNull(RightsEvidenceRefs);
         ArgumentNullException.ThrowIfNull(Gaps);
         var carriesHeldBytes = Outcome is LexCorpus6OutcomeKind.Acquired or LexCorpus6OutcomeKind.RightsWithheld;
         if (carriesHeldBytes != (BodySha256 is not null))
@@ -77,7 +230,40 @@ public sealed record LexCorpus6Member(
             throw new ArgumentException("A member without acquired bytes carries no body custody fields.");
         }
 
-        RequireSortedArtifacts(RightsEvidenceRefs, nameof(RightsEvidenceRefs));
+        if (!carriesHeldBytes)
+        {
+            if (EuropeContentClass is not null || LuxembourgRights is not null)
+            {
+                throw new ArgumentException("A member without held bytes cannot carry rights bindings.");
+            }
+        }
+        else if (Publisher == PublisherId.EuEurLex)
+        {
+            ArgumentNullException.ThrowIfNull(EuropeContentClass);
+            if (LuxembourgRights is not null || Outcome != LexCorpus6OutcomeKind.Acquired)
+            {
+                throw new ArgumentException("A held EU member requires only its EU class binding and an acquired outcome.");
+            }
+        }
+        else if (Publisher == PublisherId.LuLegilux)
+        {
+            if (EuropeContentClass is not null)
+            {
+                throw new ArgumentException("A Luxembourg member cannot carry an EU rights class.");
+            }
+
+            ArgumentNullException.ThrowIfNull(LuxembourgRights);
+            LuxembourgRights.Validate(RunIdentity);
+            var expectedOutcome = LuxembourgRights.Disposition ==
+                LuxembourgRightsChannelDisposition.AgreedSameRunCcBy
+                    ? LexCorpus6OutcomeKind.Acquired
+                    : LexCorpus6OutcomeKind.RightsWithheld;
+            if (Outcome != expectedOutcome)
+            {
+                throw new ArgumentException("The Luxembourg outcome contradicts its closed rights disposition.");
+            }
+        }
+
         RequireSortedStrings(Gaps, nameof(Gaps));
         return this;
     }
@@ -143,6 +329,7 @@ public sealed record LexCorpus6ManifestSet(
     string Schema,
     SourceArtifactRef EuropeSourceSetRef,
     SourceArtifactRef LuxembourgSourceSetRef,
+    LexCorpus6EuropeRightsMatrix EuropeRightsMatrix,
     IReadOnlyList<string> ProfileIdentities,
     IReadOnlyList<string> CorrigendumEvidenceReceiptSha256,
     IReadOnlyList<LexCorpus6Member> Members)
@@ -156,6 +343,8 @@ public sealed record LexCorpus6ManifestSet(
 
         ArgumentNullException.ThrowIfNull(EuropeSourceSetRef);
         ArgumentNullException.ThrowIfNull(LuxembourgSourceSetRef);
+        ArgumentNullException.ThrowIfNull(EuropeRightsMatrix);
+        EuropeRightsMatrix.Validate();
         ArgumentNullException.ThrowIfNull(ProfileIdentities);
         ArgumentNullException.ThrowIfNull(CorrigendumEvidenceReceiptSha256);
         ArgumentNullException.ThrowIfNull(Members);
@@ -228,8 +417,57 @@ public static class LexCorpus6Builder
             return null;
         }
 
-        var luInputs = composition.LuxembourgDerivationPopulation.Inputs
-            .ToDictionary(static input => input.CorpusRecord.ObjectRef);
+        var legalNotice = evidence.EuropeLegalNoticeEvidence;
+        if (legalNotice is null)
+        {
+            refusal = LexCorpus6BuildRefusal.EuropeRightsEvidenceMissing;
+            detail = "The Stage 3 envelope carries no strict-reopened retained EU legal-notice evidence.";
+            return null;
+        }
+
+        if (euRightsMatrix.ContentClasses.Any(value =>
+                !string.Equals(value.EvidenceRef.Sha256, legalNotice.CanonicalSha256, StringComparison.Ordinal)) ||
+            euRightsMatrix.ExceptionChannels.Any(value =>
+                !string.Equals(value.EvidenceRef.Sha256, legalNotice.CanonicalSha256, StringComparison.Ordinal)))
+        {
+            refusal = LexCorpus6BuildRefusal.EuropeRightsEvidenceUnbound;
+            detail = "Every EU class and exception decision must name the bound legal-notice evidence digest.";
+            return null;
+        }
+
+        var euHeldRecords = eu.CorpusRecordSet.Set.Records
+            .Where(static record => record.Body.Kind == CorpusBodyRecordKind.Held)
+            .Select(static record => record.ObjectRef)
+            .ToHashSet();
+        if (eu.HeldBodyContentClasses.Count != euHeldRecords.Count ||
+            eu.HeldBodyContentClasses.Keys.Any(key => !euHeldRecords.Contains(key)))
+        {
+            refusal = LexCorpus6BuildRefusal.PopulationMismatch;
+            detail = "The EU held-body content-class population is missing, duplicated or extra.";
+            return null;
+        }
+
+        var luInputs = new Dictionary<SourceObjectRef, Luxembourg.LuxembourgHeldBodyDerivationInput>();
+        foreach (var input in composition.LuxembourgDerivationPopulation.Inputs)
+        {
+            if (!luInputs.TryAdd(input.CorpusRecord.ObjectRef, input))
+            {
+                refusal = LexCorpus6BuildRefusal.PopulationMismatch;
+                detail = "The Luxembourg held-body derivation population contains a duplicate object.";
+                return null;
+            }
+        }
+
+        var luHeldRecords = lu.CorpusRecordSet.Set.Records
+            .Where(static record => record.Body.Kind == CorpusBodyRecordKind.Held)
+            .Select(static record => record.ObjectRef)
+            .ToHashSet();
+        if (luInputs.Count != luHeldRecords.Count || luInputs.Keys.Any(key => !luHeldRecords.Contains(key)))
+        {
+            refusal = LexCorpus6BuildRefusal.PopulationMismatch;
+            detail = "The Luxembourg derivation population is missing or extra relative to held corpus records.";
+            return null;
+        }
         if (luInputs.Values.Any(static input => input.RightsResolution is null))
         {
             refusal = LexCorpus6BuildRefusal.LuxembourgRightsBindingMissing;
@@ -258,8 +496,8 @@ public static class LexCorpus6Builder
                 PublisherId.EuEurLex,
                 record,
                 record.Body.Kind == CorpusBodyRecordKind.Held ? LexCorpus6OutcomeKind.Acquired : OutcomeOf(record),
-                rights is null ? "not_applicable" : ContractWire.NameOf(rights.Basis),
-                SortArtifacts(rights is null ? [] : [observedClass!.EvidenceRef, rights.EvidenceRef]),
+                observedClass,
+                null,
                 GapOf(record)));
         }
 
@@ -267,7 +505,7 @@ public static class LexCorpus6Builder
         {
             if (record.Body.Kind != CorpusBodyRecordKind.Held)
             {
-                members.Add(MemberFromRecord(PublisherId.LuLegilux, record, OutcomeOf(record), "not_applicable", [], GapOf(record)));
+                members.Add(MemberFromRecord(PublisherId.LuLegilux, record, OutcomeOf(record), null, null, GapOf(record)));
                 continue;
             }
 
@@ -279,7 +517,17 @@ public static class LexCorpus6Builder
             }
 
             var rights = input.RightsResolution;
-            if (!IsTerminalLuxembourgRights(rights.Disposition))
+            if (rights.BoundRunIdentity != record.RunIdentity ||
+                !string.Equals(
+                    rights.SelectedManifestationIri,
+                    input.SelectedWemiCandidate.ManifestationIri,
+                    StringComparison.Ordinal))
+            {
+                refusal = LexCorpus6BuildRefusal.LuxembourgRightsBindingMissing;
+                detail = $"{record.ObjectRef.PublisherUri}: final rights bind a different run or manifestation";
+                return null;
+            }
+            if (!LexCorpus6LuxembourgRights.IsTerminal(rights.Disposition))
             {
                 refusal = LexCorpus6BuildRefusal.LuxembourgRightsEvidenceIncomplete;
                 detail = $"{record.ObjectRef.PublisherUri}: {rights.ReasonCode}";
@@ -298,8 +546,12 @@ public static class LexCorpus6Builder
                 PublisherId.LuLegilux,
                 record,
                 admitted ? LexCorpus6OutcomeKind.Acquired : LexCorpus6OutcomeKind.RightsWithheld,
-                rights.ReasonCode,
-                SortArtifacts(rightsEvidence),
+                null,
+                new LexCorpus6LuxembourgRights(
+                    rights.SelectedManifestationIri,
+                    rights.BoundRunIdentity,
+                    rights.Disposition,
+                    SortArtifacts(rightsEvidence)),
                 admitted ? [] : [rights.ReasonCode]));
         }
 
@@ -307,13 +559,18 @@ public static class LexCorpus6Builder
             Schema,
             eu.CorpusRecordSetRef,
             lu.CorpusRecordSetRef,
+            LexCorpus6EuropeRightsMatrix.From(euRightsMatrix, legalNotice),
             ProfileIdentities(profileEnvelope),
             CorrigendumReceipts(eu.CorrigendumTripwires),
             members.OrderBy(static member => member, Comparer<LexCorpus6Member>.Create(LexCorpus6ManifestSet.CompareMembers)).ToArray()).Validate();
         var bytes = Write(set);
         var digest = ComputeSha256(bytes);
         var artifactRef = new SourceArtifactRef(ResourceIdOf(digest), digest);
-        var verified = VerifiedLexCorpus6ManifestSet.ParseAndVerify(artifactRef, bytes);
+        var verified = VerifiedLexCorpus6ManifestSet.ParseAndVerify(
+            artifactRef,
+            eu.CorpusRecordSetRef,
+            lu.CorpusRecordSetRef,
+            bytes);
         return new LexCorpus6BuildResult(artifactRef, bytes, verified);
     }
 
@@ -332,6 +589,7 @@ public static class LexCorpus6Builder
             writer.WriteString("schema", Schema);
             WriteArtifact(writer, "europe_source_set_ref", set.EuropeSourceSetRef);
             WriteArtifact(writer, "luxembourg_source_set_ref", set.LuxembourgSourceSetRef);
+            WriteEuropeRightsMatrix(writer, set.EuropeRightsMatrix);
             WriteStrings(writer, "profile_identities", set.ProfileIdentities);
             WriteStrings(writer, "corrigendum_evidence_receipt_sha256", set.CorrigendumEvidenceReceiptSha256);
             writer.WriteStartArray("members");
@@ -356,10 +614,34 @@ public static class LexCorpus6Builder
                     writer.WriteString("body_receipt_sha256", member.BodyReceiptSha256);
                 }
 
-                writer.WriteString("rights_disposition", member.RightsDisposition);
-                writer.WriteStartArray("rights_evidence_refs");
-                foreach (var artifact in member.RightsEvidenceRefs) WriteArtifactValue(writer, artifact);
-                writer.WriteEndArray();
+                if (member.EuropeContentClass is null)
+                {
+                    writer.WriteNull("europe_content_class");
+                }
+                else
+                {
+                    writer.WriteStartObject("europe_content_class");
+                    writer.WriteString("content_class", ContractWire.NameOf(member.EuropeContentClass.ContentClass));
+                    WriteArtifact(writer, "evidence_ref", member.EuropeContentClass.EvidenceRef);
+                    writer.WriteEndObject();
+                }
+
+                if (member.LuxembourgRights is null)
+                {
+                    writer.WriteNull("luxembourg_rights");
+                }
+                else
+                {
+                    writer.WriteStartObject("luxembourg_rights");
+                    writer.WriteString("selected_manifestation_iri", member.LuxembourgRights.SelectedManifestationIri);
+                    WriteArtifact(writer, "bound_run_identity", member.LuxembourgRights.BoundRunIdentity);
+                    writer.WriteString("disposition", ContractWire.NameOf(member.LuxembourgRights.Disposition));
+                    writer.WriteStartArray("evidence_refs");
+                    foreach (var artifact in member.LuxembourgRights.EvidenceRefs) WriteArtifactValue(writer, artifact);
+                    writer.WriteEndArray();
+                    writer.WriteEndObject();
+                }
+
                 WriteStrings(writer, "gaps", member.Gaps);
                 writer.WriteEndObject();
             }
@@ -380,7 +662,7 @@ public static class LexCorpus6Builder
         return Convert.ToHexStringLower(digest);
     }
 
-    private static string ResourceIdOf(string digest)
+    internal static string ResourceIdOf(string digest)
     {
         var uuid = digest[..32].ToCharArray();
         uuid[12] = '5';
@@ -391,7 +673,9 @@ public static class LexCorpus6Builder
 
     private static LexCorpus6Member MemberFromRecord(
         PublisherId publisher, CorpusRecord record, LexCorpus6OutcomeKind outcome,
-        string rightsDisposition, IReadOnlyList<SourceArtifactRef> rightsEvidence, IReadOnlyList<string> gaps)
+        EuContentClassObservation? europeContentClass,
+        LexCorpus6LuxembourgRights? luxembourgRights,
+        IReadOnlyList<string> gaps)
     {
         var acquired = outcome is LexCorpus6OutcomeKind.Acquired or LexCorpus6OutcomeKind.RightsWithheld
             ? record.Body.Receipt
@@ -401,7 +685,7 @@ public static class LexCorpus6Builder
             record.ObjectOrdinal, record.ManifestRef, record.RunIdentity, record.BodyDisposition, outcome,
             acquired?.Reference.ContentSha256, acquired?.Reference.ByteLength,
             acquired is null ? null : DurableBlobWriteReceiptDigest.Of(acquired),
-            rightsDisposition, rightsEvidence, gaps).Validate();
+            europeContentClass, luxembourgRights, gaps).Validate();
     }
 
     private static LexCorpus6OutcomeKind OutcomeOf(CorpusRecord record) => record.Body.Kind switch
@@ -419,14 +703,6 @@ public static class LexCorpus6Builder
         CorpusBodyRecordKind.PendingAcquisition => [ContractWire.NameOf(record.Body.PendingAcquisitionReason!.Kind)],
         _ => [],
     };
-
-    private static bool IsTerminalLuxembourgRights(LuxembourgRightsChannelDisposition disposition) =>
-        disposition is LuxembourgRightsChannelDisposition.MissingValue
-            or LuxembourgRightsChannelDisposition.AgreedSameRunCcBy
-            or LuxembourgRightsChannelDisposition.NonAdmittingLicenceScl
-            or LuxembourgRightsChannelDisposition.TypedQuarantineUnruledLicence
-            or LuxembourgRightsChannelDisposition.TypedQuarantineUnrepresentableLicenceShape
-            or LuxembourgRightsChannelDisposition.TypedQuarantineInFileReadingRejected;
 
     private static IReadOnlyList<SourceArtifactRef> SortArtifacts(IEnumerable<SourceArtifactRef> values) => values
         .Distinct().OrderBy(static value => value.ResourceId, StringComparer.Ordinal)
@@ -468,6 +744,43 @@ public static class LexCorpus6Builder
     {
         writer.WriteStartArray(name); foreach (var value in values) writer.WriteStringValue(value); writer.WriteEndArray();
     }
+
+    private static void WriteEuropeRightsMatrix(
+        Utf8JsonWriter writer,
+        LexCorpus6EuropeRightsMatrix matrix)
+    {
+        matrix.Validate();
+        writer.WriteStartObject("europe_rights_matrix");
+        WriteArtifact(writer, "legal_notice_evidence_ref", matrix.LegalNoticeEvidenceRef);
+        writer.WriteString("legal_notice_evidence_base64", matrix.LegalNoticeEvidenceBase64);
+        writer.WriteString("routed_evidence_sha256", matrix.RoutedEvidenceSha256);
+        writer.WriteString("response_body_sha256", matrix.ResponseBodySha256);
+        writer.WriteNumber("response_byte_length", matrix.ResponseByteLength);
+        writer.WriteString("durable_write_receipt_sha256", matrix.DurableWriteReceiptSha256);
+        writer.WriteString("captured_at", matrix.CapturedAt);
+        writer.WriteStartArray("content_classes");
+        foreach (var disposition in matrix.ContentClasses)
+        {
+            writer.WriteStartObject();
+            writer.WriteString("content_class", ContractWire.NameOf(disposition.ContentClass));
+            writer.WriteString("basis", ContractWire.NameOf(disposition.Basis));
+            WriteArtifact(writer, "evidence_ref", disposition.EvidenceRef);
+            writer.WriteEndObject();
+        }
+
+        writer.WriteEndArray();
+        writer.WriteStartArray("exception_channels");
+        foreach (var disposition in matrix.ExceptionChannels)
+        {
+            writer.WriteStartObject();
+            writer.WriteString("channel", ContractWire.NameOf(disposition.Channel));
+            WriteArtifact(writer, "evidence_ref", disposition.EvidenceRef);
+            writer.WriteEndObject();
+        }
+
+        writer.WriteEndArray();
+        writer.WriteEndObject();
+    }
 }
 
 public sealed record LexCorpus6BuildResult(
@@ -480,12 +793,28 @@ public sealed class VerifiedLexCorpus6ManifestSet
     private VerifiedLexCorpus6ManifestSet(LexCorpus6ManifestSet set) => Set = set;
     public LexCorpus6ManifestSet Set { get; }
 
-    public static VerifiedLexCorpus6ManifestSet ParseAndVerify(SourceArtifactRef artifactRef, ReadOnlySpan<byte> canonicalBytes)
+    public static VerifiedLexCorpus6ManifestSet ParseAndVerify(
+        SourceArtifactRef artifactRef,
+        SourceArtifactRef expectedEuropeSourceSetRef,
+        SourceArtifactRef expectedLuxembourgSourceSetRef,
+        ReadOnlySpan<byte> canonicalBytes)
     {
         ArgumentNullException.ThrowIfNull(artifactRef);
+        ArgumentNullException.ThrowIfNull(expectedEuropeSourceSetRef);
+        ArgumentNullException.ThrowIfNull(expectedLuxembourgSourceSetRef);
         if (!string.Equals(LexCorpus6Builder.ComputeSha256(canonicalBytes), artifactRef.Sha256, StringComparison.Ordinal))
         {
             throw new ArgumentException("The corpus manifest-set bytes do not match their artifact reference.", nameof(canonicalBytes));
+        }
+
+        if (!string.Equals(
+                LexCorpus6Builder.ResourceIdOf(artifactRef.Sha256),
+                artifactRef.ResourceId,
+                StringComparison.Ordinal))
+        {
+            throw new ArgumentException(
+                "The corpus manifest-set resource identity does not derive from its canonical digest.",
+                nameof(artifactRef));
         }
 
         LexCorpus6ManifestSet set;
@@ -501,6 +830,14 @@ public sealed class VerifiedLexCorpus6ManifestSet
         if (!canonicalBytes.SequenceEqual(LexCorpus6Builder.Write(set)))
         {
             throw new ArgumentException("The corpus manifest set is not its exact canonical representation.", nameof(canonicalBytes));
+        }
+
+        if (set.EuropeSourceSetRef != expectedEuropeSourceSetRef ||
+            set.LuxembourgSourceSetRef != expectedLuxembourgSourceSetRef)
+        {
+            throw new ArgumentException(
+                "The corpus manifest set does not bind the expected source record sets.",
+                nameof(canonicalBytes));
         }
 
         return new VerifiedLexCorpus6ManifestSet(set);
