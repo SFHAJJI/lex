@@ -1732,10 +1732,7 @@ public sealed class LuxembourgQueryExecutionAdapter
         {
             return LuxembourgQueryExecutionResult.Refused(
                 topology, outcomes, relationAcquisitions,
-                new LuxembourgQueryExecutionRefusalDetail(
-                    LuxembourgQueryExecutionRefusal.SelectedManifestationIdentityNotUnique,
-                    null,
-                    selectedFetchFailure));
+                selectedFetchFailure);
         }
 
         var mintedAddressesByObjectRef = selectedFetchesByObjectRef!.ToDictionary(
@@ -2181,7 +2178,7 @@ public sealed class LuxembourgQueryExecutionAdapter
         var (selected, failure) = MintDocumentFetchSelections(resolution);
         if (failure is not null)
         {
-            throw new InvalidOperationException(failure);
+            throw new InvalidOperationException($"{failure.Code}: {failure.Detail}");
         }
 
         return selected!.ToDictionary(static pair => pair.Key, static pair => pair.Value.Address);
@@ -2189,23 +2186,26 @@ public sealed class LuxembourgQueryExecutionAdapter
 
     private static (
         IReadOnlyDictionary<SourceObjectRef, LuxembourgSelectedDocumentFetch>? Selected,
-        string? Failure) MintDocumentFetchSelections(LuxembourgProfileResolution.Resolved resolution)
+        LuxembourgQueryExecutionRefusalDetail? Failure) MintDocumentFetchSelections(
+            LuxembourgProfileResolution.Resolved resolution)
     {
         ArgumentNullException.ThrowIfNull(resolution);
         var selected = new Dictionary<SourceObjectRef, LuxembourgSelectedDocumentFetch>();
         foreach (var resource in resolution.Resources)
         {
-            var (fetch, ambiguousIdentity) = SelectDocumentFetch(
+            var (fetch, selectionRefusal) = SelectDocumentFetch(
                 resource.ObjectRef,
                 resource.BodyJoin.Candidates
                     .Where(static candidate => candidate.Disposition == LuxembourgBodyCandidateDisposition.AcceptedCandidate)
                     .Select(static candidate => candidate.WemiCandidate),
                 resource.Assertions.Select(static resolved => resolved.Assertion).ToArray());
-            if (ambiguousIdentity)
+            if (selectionRefusal is not null)
             {
-                return (null,
+                return (null, new LuxembourgQueryExecutionRefusalDetail(
+                    selectionRefusal.Value,
+                    null,
                     $"'{resource.ObjectRef.CanonicalKey}' has more than one accepted WEMI identity " +
-                    "for the selected address tuple.");
+                    "for the selected address tuple."));
             }
 
             if (fetch is not null)
@@ -2227,17 +2227,27 @@ public sealed class LuxembourgQueryExecutionAdapter
         SourceObjectRef objectRef,
         LuxembourgWemiTopologyResolution wemiTopology,
         IReadOnlyList<LuxembourgObservedAssertion> assertions)
+        => MintDocumentFetchAddress(objectRef, wemiTopology, assertions, out _);
+
+    internal static LuxembourgDocumentFetchAddress? MintDocumentFetchAddress(
+        SourceObjectRef objectRef,
+        LuxembourgWemiTopologyResolution wemiTopology,
+        IReadOnlyList<LuxembourgObservedAssertion> assertions,
+        out LuxembourgQueryExecutionRefusal? refusal)
     {
         ArgumentNullException.ThrowIfNull(objectRef);
         ArgumentNullException.ThrowIfNull(wemiTopology);
         ArgumentNullException.ThrowIfNull(assertions);
 
-        var (selected, ambiguousIdentity) = SelectDocumentFetch(
+        var (selected, selectionRefusal) = SelectDocumentFetch(
             objectRef, wemiTopology.Candidates, assertions);
-        return ambiguousIdentity ? null : selected?.Address;
+        refusal = selectionRefusal;
+        return selectionRefusal is not null ? null : selected?.Address;
     }
 
-    private static (LuxembourgSelectedDocumentFetch? Selected, bool AmbiguousIdentity) SelectDocumentFetch(
+    private static (
+        LuxembourgSelectedDocumentFetch? Selected,
+        LuxembourgQueryExecutionRefusal? Refusal) SelectDocumentFetch(
         SourceObjectRef objectRef, IEnumerable<LuxembourgWemiCandidate> wemiCandidates,
         IReadOnlyList<LuxembourgObservedAssertion> assertions)
     {
@@ -2289,7 +2299,7 @@ public sealed class LuxembourgQueryExecutionAdapter
             candidates.Select(static candidate => candidate.Selection).ToArray());
         if (selection.Selected is not { } selected)
         {
-            return (null, false);
+            return (null, null);
         }
 
         var exactMatches = candidates.Where(candidate =>
@@ -2301,12 +2311,12 @@ public sealed class LuxembourgQueryExecutionAdapter
                 StringComparison.Ordinal)).ToArray();
         if (exactMatches.Length != 1)
         {
-            return (null, true);
+            return (null, LuxembourgQueryExecutionRefusal.SelectedManifestationIdentityNotUnique);
         }
 
         var address = LuxembourgDocumentFetchAddress.Create(
             selected.FileUri, selected.Token, selected.LegalValue, actEliPagePath);
-        return (new LuxembourgSelectedDocumentFetch(address, exactMatches[0].Wemi), false);
+        return (new LuxembourgSelectedDocumentFetch(address, exactMatches[0].Wemi), null);
     }
 
     /// <summary>
