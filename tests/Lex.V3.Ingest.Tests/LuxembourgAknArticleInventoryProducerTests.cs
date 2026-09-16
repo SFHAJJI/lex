@@ -150,6 +150,24 @@ public sealed class LuxembourgAknArticleInventoryProducerTests
         Assert.AreEqual(LuxembourgAknArticleInventoryDisposition.XmlRejected, outcome.Disposition);
     }
 
+    [TestMethod]
+    public async Task PublisherXmlBeyondTheDocumentCeilingIsRejected()
+    {
+        const int oversizedTextLength = (64 * 1024 * 1024) + 1;
+        const string prefix =
+            "<akomaNtoso xmlns=\"http://docs.oasis-open.org/legaldocml/ns/akn/3.0/CSD13\">" +
+            "<act><body><article id=\"art_1\"><p>";
+        const string suffix = "</p></article></body></act></akomaNtoso>";
+        var bytes = new byte[prefix.Length + oversizedTextLength + suffix.Length];
+        Encoding.UTF8.GetBytes(prefix, bytes);
+        bytes.AsSpan(prefix.Length, oversizedTextLength).Fill((byte)'x');
+        Encoding.UTF8.GetBytes(suffix, bytes.AsSpan(prefix.Length + oversizedTextLength));
+
+        var outcome = await RunOne(bytes);
+
+        Assert.AreEqual(LuxembourgAknArticleInventoryDisposition.XmlRejected, outcome.Disposition);
+    }
+
     private static async Task<LuxembourgAknArticleInventoryOutcome> RunOne(byte[] bytes)
     {
         var fixture = await Fixture.CreateAsync(bytes, LuxembourgUserFormatToken.XmlAkomaNtoso);
