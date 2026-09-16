@@ -72,6 +72,7 @@ public sealed class VocabularyRegistryCensusTests
                 "Lex.V3.Ingest.Europe.EuObjectFactsBatchFactory: SetsOverObservedObjects=5, "
                     + "SetsOverPackRootsOnly=1",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgPublisherPdfActScopeProducer: const "
+                    + "AdministrativeMemorialPrefix, const LegislativeMemorialPrefix, const "
                     + "RuleProfile, static property RuleProfileSha256",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgReferralDateComposition: const HasOpinion, "
                     + "const IriKind, const ReferralDate",
