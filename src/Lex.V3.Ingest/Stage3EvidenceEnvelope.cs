@@ -31,6 +31,9 @@ public enum Stage3EvidenceEnvelopeRefusal
 
     [JsonStringEnumMemberName("luxembourg_fidelity_preservation_mismatch")]
     LuxembourgFidelityPreservationMismatch = 7,
+
+    [JsonStringEnumMemberName("luxembourg_derivation_population_mismatch")]
+    LuxembourgDerivationPopulationMismatch = 8,
 }
 
 /// <summary>
@@ -136,6 +139,15 @@ public sealed class Stage3EvidenceEnvelope
             return null;
         }
 
+        if (!ReferenceEquals(
+                luxembourg.HeldBodyDerivationPopulation!.CorpusRecordSet,
+                luxembourg.CorpusRecordSet))
+        {
+            refusal = Stage3EvidenceEnvelopeRefusal.LuxembourgDerivationPopulationMismatch;
+            detail = "the held-body derivation population belongs to a different corpus record set";
+            return null;
+        }
+
         var europeObjectRefs = europe.CorpusRecordSet!.Set.Records
             .Select(static record => record.ObjectRef)
             .ToHashSet();
@@ -193,6 +205,7 @@ public sealed class Stage3EvidenceEnvelope
         result.DocumentAcquisitionOutcomesByOrdinal is not null &&
         result.CorpusRecordSetRef is not null &&
         result.CorpusRecordSet is not null &&
+        result.HeldBodyDerivationPopulation is not null &&
         result.GazetteBodySetsByOrdinal is not null &&
         result.GazetteListingFetchRefusalsByOrdinal is not null &&
         result.GazetteListingsWithContradictoryLegalValueByOrdinal is not null;

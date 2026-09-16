@@ -223,6 +223,7 @@ public sealed class LuxembourgObjectPopulationCompletionTests
             run.ObservedObjectIdentitySetRef!,
             run.ObservedObjectIdentitySetReceipt!,
             run.ObservedObjectIdentitySet!,
+            run.HeldBodyDerivationPopulation!,
             run.GazetteBodySetsByOrdinal!,
             run.GazetteListingFetchRefusalsByOrdinal!,
             run.GazetteListingsWithContradictoryLegalValueByOrdinal!,

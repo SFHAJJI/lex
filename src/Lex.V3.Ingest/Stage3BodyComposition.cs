@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 using Lex.V3.Contracts.Source.Corpus;
 using Lex.V3.Contracts.Source.Luxembourg;
 using Lex.V3.Ingest.Europe;
+using Lex.V3.Ingest.Luxembourg;
 
 namespace Lex.V3.Ingest;
 
@@ -78,11 +79,13 @@ public sealed class Stage3BodyComposition
     private Stage3BodyComposition(
         Stage3EvidenceEnvelope envelope,
         IReadOnlyList<Stage3EuropeBodyComposition> europe,
-        IReadOnlyList<Stage3LuxembourgBodyComposition> luxembourg)
+        IReadOnlyList<Stage3LuxembourgBodyComposition> luxembourg,
+        LuxembourgHeldBodyDerivationPopulation luxembourgDerivationPopulation)
     {
         Envelope = envelope;
         Europe = Array.AsReadOnly(europe.ToArray());
         Luxembourg = Array.AsReadOnly(luxembourg.ToArray());
+        LuxembourgDerivationPopulation = luxembourgDerivationPopulation;
     }
 
     public Stage3EvidenceEnvelope Envelope { get; }
@@ -90,6 +93,12 @@ public sealed class Stage3BodyComposition
     public IReadOnlyList<Stage3EuropeBodyComposition> Europe { get; }
 
     public IReadOnlyList<Stage3LuxembourgBodyComposition> Luxembourg { get; }
+
+    /// <summary>
+    /// Every held Luxembourg corpus body, bound to the publisher-selected address and format that
+    /// determines which derivation profile may consume its retained bytes.
+    /// </summary>
+    public LuxembourgHeldBodyDerivationPopulation LuxembourgDerivationPopulation { get; }
 
     public static Stage3BodyComposition? TryCreate(
         Stage3EvidenceEnvelope envelope,
@@ -131,6 +140,7 @@ public sealed class Stage3BodyComposition
             luxembourg.Add(new Stage3LuxembourgBodyComposition(record, pair.Value));
         }
 
-        return new Stage3BodyComposition(envelope, europe, luxembourg);
+        return new Stage3BodyComposition(
+            envelope, europe, luxembourg, envelope.Luxembourg.HeldBodyDerivationPopulation!);
     }
 }

@@ -279,6 +279,7 @@ public sealed class Stage3EvidenceLineageTests
             observedObjectIdentitySetRef ?? source.ObservedObjectIdentitySetRef!,
             source.ObservedObjectIdentitySetReceipt!,
             observedObjectIdentitySet ?? source.ObservedObjectIdentitySet!,
+            source.HeldBodyDerivationPopulation!,
             source.GazetteBodySetsByOrdinal!,
             source.GazetteListingFetchRefusalsByOrdinal!,
             source.GazetteListingsWithContradictoryLegalValueByOrdinal!,
