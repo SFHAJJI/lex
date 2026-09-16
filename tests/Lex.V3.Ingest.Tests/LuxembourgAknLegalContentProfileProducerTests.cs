@@ -41,8 +41,8 @@ public sealed class LuxembourgAknLegalContentProfileProducerTests
             && token.Target == "#pm2");
         var note = tokens.Single(token => token.Kind == LuxembourgAknLegalContentTokenKind.NoteReference
             && token.Target == "#M2");
-        Assert.IsLessThan(tokens.IndexOf(start), tokens.IndexOf(end));
-        Assert.IsLessThan(tokens.IndexOf(end), tokens.IndexOf(note));
+        Assert.IsTrue(tokens.IndexOf(start) < tokens.IndexOf(end));
+        Assert.IsTrue(tokens.IndexOf(end) < tokens.IndexOf(note));
         Assert.IsTrue(tokens.Any(token => token.Kind == LuxembourgAknLegalContentTokenKind.Text
             && token.Text!.Contains("de l’Autorité de concurrence", StringComparison.Ordinal)));
         Assert.AreSame(result.SourceInventoryPopulation, outcome.SourceInventoryPopulation);
@@ -70,9 +70,9 @@ public sealed class LuxembourgAknLegalContentProfileProducerTests
             "Au cas où des règlements non visés", StringComparison.Ordinal));
         var third = Array.FindIndex(texts, text => text.StartsWith(
             "Le présent article ne déroge pas", StringComparison.Ordinal));
-        Assert.IsGreaterThanOrEqualTo(first, 0);
-        Assert.IsGreaterThan(second, first);
-        Assert.IsGreaterThan(third, second);
+        Assert.IsTrue(first >= 0);
+        Assert.IsTrue(second > first);
+        Assert.IsTrue(third > second);
     }
 
     [TestMethod]
