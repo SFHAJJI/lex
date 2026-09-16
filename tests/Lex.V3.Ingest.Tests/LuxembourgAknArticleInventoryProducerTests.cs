@@ -197,7 +197,9 @@ public sealed class LuxembourgAknArticleInventoryProducerTests
             using var canonical = new MemoryStream();
             var setDigest = CorpusRecordSetCanonicalWriter.Write(canonical, set);
             var verified = VerifiedCorpusRecordSet.ParseAndVerify(
-                Artifact('d', Encoding.UTF8.GetBytes(setDigest)), canonical.ToArray());
+                new SourceArtifactRef(
+                    "urn:uuid:00000000-0000-0000-0000-00000000000d", setDigest),
+                canonical.ToArray());
             var address = LuxembourgDocumentFetchAddress.Create(
                 LuxembourgFileUri.RequireValid(
                     "https://data.legilux.public.lu/filestore/eli/etat/leg/loi/2017/03/14/a439/jo/fr/xml"),
