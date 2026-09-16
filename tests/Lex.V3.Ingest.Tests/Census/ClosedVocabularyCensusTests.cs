@@ -220,7 +220,7 @@ public sealed class ClosedVocabularyCensusTests
                 "Lex.V3.Ingest.Luxembourg.LuxembourgHeldBodyDerivationPopulationRefusal: None, "
                     + "HeldRecordHasNoHeldOutcome, HeldOutcomeHasNoRecord, "
                     + "HeldOutcomeRecordIsNotHeld, HeldReceiptMismatch, "
-                    + "HeldRecordHasNoSelectedAddress",
+                    + "HeldRecordHasNoSelectedAddress, HeldRecordSelectedIdentityMismatch",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgInFileRightsReadStatus: Observed, "
                     + "UnsupportedRepresentation, MalformedXml, ManifestationIdentityMismatch, "
                     + "InvalidLicenceIri",

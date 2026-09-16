@@ -27,6 +27,9 @@ public enum LuxembourgHeldBodyDerivationPopulationRefusal
 
     [JsonStringEnumMemberName("held_record_has_no_selected_address")]
     HeldRecordHasNoSelectedAddress = 5,
+
+    [JsonStringEnumMemberName("held_record_selected_identity_mismatch")]
+    HeldRecordSelectedIdentityMismatch = 6,
 }
 
 internal sealed class LuxembourgSelectedDocumentFetch
@@ -159,6 +162,16 @@ public sealed class LuxembourgHeldBodyDerivationPopulation
             if (!selectedFetchesByObject.TryGetValue(record.ObjectRef, out var selectedFetch))
             {
                 refusal = LuxembourgHeldBodyDerivationPopulationRefusal.HeldRecordHasNoSelectedAddress;
+                detail = record.ObjectRef.PublisherUri;
+                return null;
+            }
+
+            if (!string.Equals(
+                    record.ObjectRef.PublisherUri,
+                    selectedFetch.WemiCandidate.RootIri,
+                    StringComparison.Ordinal))
+            {
+                refusal = LuxembourgHeldBodyDerivationPopulationRefusal.HeldRecordSelectedIdentityMismatch;
                 detail = record.ObjectRef.PublisherUri;
                 return null;
             }
