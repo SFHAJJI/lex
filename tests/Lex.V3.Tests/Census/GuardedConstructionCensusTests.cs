@@ -202,7 +202,9 @@ public sealed class GuardedConstructionCensusTests
                 "Lex.V3.Contracts.Index.V3IndexCapabilityManifest: by-ref-method public static "
                     + "Lex.V3.Contracts.Index.V3IndexCapabilityManifest::TryCreate, "
                     + "constructor private instance "
-                    + "Lex.V3.Contracts.Index.V3IndexCapabilityManifest::.ctor",
+                    + "Lex.V3.Contracts.Index.V3IndexCapabilityManifest::.ctor, "
+                    + "method public static "
+                    + "Lex.V3.Contracts.Index.V3IndexCapabilityManifestArtifact::ParseAndVerify",
                 "Lex.V3.Contracts.PreviewEnvelope: constructor private-protected instance "
                     + "Lex.V3.Contracts.PreviewEnvelope::.ctor, "
                     + "constructor public instance Lex.V3.Contracts.PreviewRefusalEnvelope::.ctor, "

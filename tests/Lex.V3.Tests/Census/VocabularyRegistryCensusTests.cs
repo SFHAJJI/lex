@@ -98,6 +98,8 @@ public sealed class VocabularyRegistryCensusTests
                     + "const PublisherDateFact, const PublisherRelation, const RelationFact, "
                     + "const VocabularyDrift",
                 "Lex.V3.Contracts.Facts.FactsVocabularies: KindsByType=8, AllKinds=8",
+                "Lex.V3.Contracts.Index.V3IndexCapabilityManifestArtifact: Domain=35, "
+                    + "const SchemaId",
                 "Lex.V3.Contracts.PreviewOfficialPublisherLinks: const EuSearch, const LuSearch",
                 "Lex.V3.Contracts.PreviewSchemaExporter: SchemaFiles=6, SchemaTypes=6",
                 "Lex.V3.Contracts.PreviewSchemaGraph: ContractSetSchemaIds=4, SchemaIds=6",
