@@ -153,6 +153,9 @@ public sealed class DurableBlobReceiptFamilyIngestSurfaceTests
                 "field private instance " + Session + "+ResolvedHeldBody::<Receipt>k__BackingField -> " + Receipt,
                 "field private instance Lex.V3.Ingest.Stage3EvidenceLineage::<EuropeScopeManifestReceipt>k__BackingField -> " + Receipt,
                 "field private instance Lex.V3.Ingest.Stage3EvidenceLineage::<LuxembourgScopeManifestReceipt>k__BackingField -> " + Receipt,
+                "method internal instance Lex.V3.Ingest.LexCorpus6Builder+<>c::<CorrigendumReceipts>b__11_0("
+                    + "Lex.V3.Ingest.Europe.EuCorrigendumTripwireProductionResult) -> "
+                    + "System.Collections.Generic.IEnumerable<" + Receipt + ">",
                 // The one place that decides what "held" means, for both publishers' acquisition
                 // paths. It HOLDS a receipt and never constructs one: the receipt comes only from
                 // ICustodyStore.CreateAsync, exactly as every other holder pinned here. Carried into
@@ -181,7 +184,7 @@ public sealed class DurableBlobReceiptFamilyIngestSurfaceTests
                 "method private instance Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionAdapter::TryReopenTerminalHopAsync("
                 + "Lex.V3.Contracts.Source.Http.RoutedHttpEvidence, System.Threading.CancellationToken) -> "
                 + "System.Threading.Tasks.Task<System.ValueTuple<System.Nullable<System.ValueTuple<"
-                + "Lex.V3.Contracts.Source.Http.HttpLogicalRequest, " + Receipt + ">>, System.String>>",
+                    + "Lex.V3.Contracts.Source.Http.HttpLogicalRequest, " + Receipt + ">>, System.String>>",
                 "method private instance " + Session + "::BuildHopWriteReceipts(System.UInt64, System.UInt64, "
                 + "System.Collections.Generic.IReadOnlyList<Lex.V3.Contracts.Source.Http.RoutedHttpHop>) "
                 + "-> System.Collections.Generic.Dictionary<System.String, " + Receipt + ">",

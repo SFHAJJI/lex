@@ -1006,7 +1006,10 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Ingest.Stage3EuropeBodyComposition::.ctor, 1 compiler-generated",
                 "Lex.V3.Ingest.Stage3EvidenceEnvelope: constructor private instance "
                     + "Lex.V3.Ingest.Stage3EvidenceEnvelope::.ctor, "
-                    + "method public static Lex.V3.Ingest.Stage3EvidenceEnvelope::TryCreate",
+                    + "method private static Lex.V3.Ingest.Stage3EvidenceEnvelope::TryCreateCore, "
+                    + "method public static Lex.V3.Ingest.Stage3EvidenceEnvelope::TryCreate, "
+                    + "method public static "
+                    + "Lex.V3.Ingest.Stage3EvidenceEnvelope::TryCreateWithEuropeLegalNoticeEvidence",
                 "Lex.V3.Ingest.Stage3EvidenceLineage: constructor private instance "
                     + "Lex.V3.Ingest.Stage3EvidenceLineage::.ctor, "
                     + "method public static Lex.V3.Ingest.Stage3EvidenceLineage::TryBind",
@@ -1018,6 +1021,12 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Ingest.Stage3FidelityPreservationReconciliation::TryCreate",
                 "Lex.V3.Ingest.Stage3LuxembourgBodyComposition: constructor internal instance "
                     + "Lex.V3.Ingest.Stage3LuxembourgBodyComposition::.ctor",
+                "Lex.V3.Ingest.VerifiedLexCorpus6ManifestSet: by-ref-method public instance "
+                    + "Lex.V3.Ingest.LexCorpus6BuildResult::Deconstruct, "
+                    + "constructor private instance "
+                    + "Lex.V3.Ingest.VerifiedLexCorpus6ManifestSet::.ctor, "
+                    + "method public static "
+                    + "Lex.V3.Ingest.VerifiedLexCorpus6ManifestSet::ParseAndVerify",
                 "Lex.V3.Ingest.WireBudgetSnapshot: constructor private instance "
                     + "Lex.V3.Ingest.WireBudgetSnapshot::.ctor, "
                     + "constructor private instance Lex.V3.Ingest.WireBudgetSnapshot::.ctor, "

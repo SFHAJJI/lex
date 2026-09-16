@@ -189,6 +189,12 @@ public sealed class ClosedVocabularyCensusTests
                     + "ProfileInvalid, ProfileDoesNotNameTransport, RetainedBytesUnavailable, "
                     + "XhtmlInvalid, PublisherAnnexConventionAbsent, "
                     + "PublisherAnnexConventionInvalid, WorkEliMissing",
+                "Lex.V3.Ingest.LexCorpus6BuildRefusal: None, EvidenceIncomplete, "
+                    + "EuropeRightsBindingMissing, LuxembourgRightsBindingMissing, "
+                    + "LuxembourgRightsEvidenceIncomplete, PopulationMismatch, "
+                    + "EuropeRightsEvidenceMissing, EuropeRightsEvidenceUnbound",
+                "Lex.V3.Ingest.LexCorpus6OutcomeKind: Acquired, Unavailable, Refused, "
+                    + "RightsWithheld",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgAknArticleInventoryDisposition: Inventoried, "
                     + "NotAkn, RetainedBytesUnavailable, XmlRejected",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgAknLegalContentDisposition: Admitted, "
