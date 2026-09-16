@@ -150,6 +150,7 @@ public static class LuxembourgPublisherPdfActScopeProducer
 
     private const string LegislativeMemorialPrefix = "/filestore/eli/etat/leg/memorial/";
     private const string AdministrativeMemorialPrefix = "/filestore/eli/etat/adm/memorial/";
+    private const string ExpectedResourceHost = "data.legilux.public.lu";
 
     public static string RuleProfileSha256 { get; } = Digest(RuleProfile);
 
@@ -186,8 +187,16 @@ public static class LuxembourgPublisherPdfActScopeProducer
             return Outcome(source, LuxembourgPublisherPdfActScopeDisposition.GazetteIssueScope);
         }
 
-        var manifestationPath = new Uri(
-            eligibility.PublisherManifestationIri, UriKind.Absolute).AbsolutePath;
+        var manifestation = new Uri(eligibility.PublisherManifestationIri, UriKind.Absolute);
+        if (!string.Equals(manifestation.Host, ExpectedResourceHost, StringComparison.Ordinal))
+        {
+            return Outcome(
+                source,
+                LuxembourgPublisherPdfActScopeDisposition.TypedGap,
+                LuxembourgPublisherPdfActScopeGapReason.ActScopeUnproven);
+        }
+
+        var manifestationPath = manifestation.AbsolutePath;
         var exactActPrefix = "/filestore" + manifestationPath + "/";
         return itemPath.StartsWith(exactActPrefix, StringComparison.Ordinal)
             ? Outcome(source, LuxembourgPublisherPdfActScopeDisposition.ActScopedCoordinate)
