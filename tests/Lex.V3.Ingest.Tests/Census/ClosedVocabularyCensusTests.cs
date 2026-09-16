@@ -254,19 +254,19 @@ public sealed class ClosedVocabularyCensusTests
                     + "RowNotAdmitted, SubjectDeliveredTwice, NonAddressableSubjectObserved",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgPartitionCoverReconciliationRefusal: "
                     + "LeafExecutorRefused, LeafProofRefused, CoverReconciliationRefused",
-                "Lex.V3.Ingest.Luxembourg.LuxembourgPdfLayoutEvidenceDisposition: "
-                    + "NotApplicable, Admitted, TypedGap",
+                "Lex.V3.Ingest.Luxembourg.LuxembourgPdfLayoutEvidenceDisposition: NotApplicable, "
+                    + "Admitted, TypedGap",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgPdfLayoutEvidenceGapReason: "
                     + "UpstreamEligibilityGap, PdfUnreadable, NoTextGlyphs, InvalidGlyphGeometry, "
                     + "EvidenceArtifactTooLarge",
-                "Lex.V3.Ingest.Luxembourg.LuxembourgPdfLayoutEvidenceProductionRefusal: "
-                    + "None, RetainedBytesUnavailable, LayoutEvidenceCustodyUnavailable",
+                "Lex.V3.Ingest.Luxembourg.LuxembourgPdfLayoutEvidenceProductionRefusal: None, "
+                    + "RetainedBytesUnavailable, LayoutEvidenceCustodyUnavailable",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgPdfProfileEligibilityDisposition: NotPdf, "
                     + "PublisherPdfEligible, GazettePdfEligible, TypedGap",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgPdfProfileEligibilityGapReason: "
                     + "GazetteReceiptMismatch",
-                "Lex.V3.Ingest.Luxembourg.LuxembourgPublisherPdfActScopeDisposition: "
-                    + "NotApplicable, GazetteIssueScope, TypedGap",
+                "Lex.V3.Ingest.Luxembourg.LuxembourgPublisherPdfActScopeDisposition: NotApplicable, "
+                    + "GazetteIssueScope, TypedGap",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgPublisherPdfActScopeGapReason: "
                     + "UpstreamTextLayerGap, ActScopeUnproven",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgPublisherPdfTextLayerDisposition: NotApplicable, "
@@ -318,8 +318,10 @@ public sealed class ClosedVocabularyCensusTests
                     + "NoRedirect, AdmittedOriginRoute",
                 "Lex.V3.Ingest.RoutedHttpAcquisitionSession+RequestPolicyKind: RobotsGet, "
                     + "MachineQueryPost, MachineQueryGet",
-                "Lex.V3.Ingest.Stage3BodyCompositionRefusal: None, "
-                    + "LuxembourgBodySetOutsideCorpus, LuxembourgBodySetObjectMismatch",
+                "Lex.V3.Ingest.Stage3BodyCompositionRefusal: None, LuxembourgBodySetOutsideCorpus, "
+                    + "LuxembourgBodySetObjectMismatch",
+                "Lex.V3.Ingest.Stage3DerivationProfileEnvelopeRefusal: None, "
+                    + "PublisherPdfActScopeMissing",
                 "Lex.V3.Ingest.Stage3EvidenceEnvelopeRefusal: None, EuropeNotComplete, "
                     + "LuxembourgNotComplete, EuropeFormexRunMismatch, "
                     + "EuropeFormexClassificationMismatch, "
