@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
+using System.Globalization;
 using Lex.V3.Contracts.Source.Core;
 
 namespace Lex.V3.Contracts.Index;
@@ -48,8 +49,8 @@ public static class V3IndexCapabilityManifestArtifact
                 writer.WriteString("column", cell.Column);
                 writer.WriteString("field", cell.Field);
                 writer.WriteString("language", cell.Language);
-                writer.WriteString("period_from", cell.PeriodFrom);
-                writer.WriteString("period_to", cell.PeriodTo);
+                writer.WriteString("period_from", cell.PeriodFrom.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+                writer.WriteString("period_to", cell.PeriodTo.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
                 writer.WriteNumber("population", cell.Population);
                 writer.WriteEndObject();
             }
