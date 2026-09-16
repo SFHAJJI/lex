@@ -38,8 +38,11 @@ public enum Stage3EvidenceEnvelopeRefusal
     [JsonStringEnumMemberName("luxembourg_akn_article_inventory_mismatch")]
     LuxembourgAknArticleInventoryPopulationMismatch = 9,
 
+    [JsonStringEnumMemberName("luxembourg_akn_legal_content_population_missing")]
+    LuxembourgAknLegalContentPopulationMissing = 10,
+
     [JsonStringEnumMemberName("luxembourg_akn_legal_content_population_mismatch")]
-    LuxembourgAknLegalContentPopulationMismatch = 10,
+    LuxembourgAknLegalContentPopulationMismatch = 11,
 }
 
 /// <summary>
@@ -107,7 +110,7 @@ public sealed class Stage3EvidenceEnvelope
         EuFormexAnnexClassificationReconciliation formexAnnexClassifications,
         Stage3FidelityPreservationReconciliation fidelityPreservation,
         LuxembourgAknArticleInventoryPopulation luxembourgAknArticleInventoryPopulation,
-        LuxembourgAknLegalContentPopulation luxembourgAknLegalContentPopulation,
+        LuxembourgAknLegalContentPopulation? luxembourgAknLegalContentPopulation,
         out Stage3EvidenceEnvelopeRefusal refusal,
         out string? detail)
     {
@@ -117,10 +120,16 @@ public sealed class Stage3EvidenceEnvelope
         ArgumentNullException.ThrowIfNull(formexAnnexClassifications);
         ArgumentNullException.ThrowIfNull(fidelityPreservation);
         ArgumentNullException.ThrowIfNull(luxembourgAknArticleInventoryPopulation);
-        ArgumentNullException.ThrowIfNull(luxembourgAknLegalContentPopulation);
 
         refusal = Stage3EvidenceEnvelopeRefusal.None;
         detail = null;
+        if (luxembourgAknLegalContentPopulation is null)
+        {
+            refusal = Stage3EvidenceEnvelopeRefusal.LuxembourgAknLegalContentPopulationMissing;
+            detail = "the AKN legal-content population is missing";
+            return null;
+        }
+
         if (!EuropeIsComplete(europe))
         {
             refusal = Stage3EvidenceEnvelopeRefusal.EuropeNotComplete;
