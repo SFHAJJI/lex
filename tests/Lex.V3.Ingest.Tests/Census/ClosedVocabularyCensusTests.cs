@@ -309,7 +309,8 @@ public sealed class ClosedVocabularyCensusTests
                     + "EuropeFormexClassificationSourceOutsideCorpus, "
                     + "EuropeFidelityPreservationMismatch, LuxembourgFidelityPreservationMismatch, "
                     + "LuxembourgDerivationPopulationMismatch, "
-                    + "LuxembourgAknArticleInventoryPopulationMismatch",
+                    + "LuxembourgAknArticleInventoryPopulationMismatch, "
+                    + "LuxembourgAknLegalContentPopulationMismatch",
                 "Lex.V3.Ingest.Stage3EvidenceLineageRefusal: None, EuropeCorpusRecordSetMismatch, "
                     + "EuropeManifestMismatch, EuropeRunIdentityMismatch, "
                     + "LuxembourgCorpusRecordSetMismatch, LuxembourgManifestMismatch, "

@@ -116,13 +116,12 @@ public sealed class Stage3EvidenceLineageTests
         var fidelity = Stage3FidelityPreservationReconciliationTests.Complete(
             original.Europe, substituted);
 
-        var envelope = Stage3EvidenceEnvelope.TryCreate(
+        var envelope = Stage3EvidenceEnvelopeTests.TryCreate(
             original.Europe,
             substituted,
             formex,
             classifications,
             fidelity,
-            Stage3EvidenceEnvelopeTests.CompleteAknInventory(substituted),
             out var refusal,
             out var detail);
 
@@ -148,13 +147,12 @@ public sealed class Stage3EvidenceLineageTests
         var formex = EuFormexRunOutcomeReconciliationTests.CompleteForEnvelope(europe);
         var classifications = Stage3EvidenceEnvelopeTests.CompleteClassifications(formex);
         var fidelity = Stage3FidelityPreservationReconciliationTests.Complete(europe, luxembourg);
-        return Stage3EvidenceEnvelope.TryCreate(
+        return Stage3EvidenceEnvelopeTests.TryCreate(
             europe,
             luxembourg,
             formex,
             classifications,
             fidelity,
-            Stage3EvidenceEnvelopeTests.CompleteAknInventory(luxembourg),
             out var refusal,
             out var detail)
             ?? throw new AssertFailedException($"Envelope refused: {refusal}: {detail}");
