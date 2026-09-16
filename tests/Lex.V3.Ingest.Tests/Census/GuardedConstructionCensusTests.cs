@@ -577,7 +577,13 @@ public sealed class GuardedConstructionCensusTests
                     + "private instance "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgHeldBodyDerivationPopulation::.ctor, "
                     + "method internal static "
-                    + "Lex.V3.Ingest.Luxembourg.LuxembourgHeldBodyDerivationPopulation::TryCreate",
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgHeldBodyDerivationPopulation::TryCreate, "
+                    + "method internal static "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgHeldBodyDerivationPopulation::TryCreateWi"
+                    + "thFinalRights, "
+                    + "method private static "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgHeldBodyDerivationPopulation::TryCreateCo"
+                    + "re",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgInitialDraftInventoryResult: constructor "
                     + "private instance "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgInitialDraftInventoryResult::.ctor, "
