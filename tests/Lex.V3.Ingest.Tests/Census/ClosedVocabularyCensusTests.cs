@@ -258,6 +258,12 @@ public sealed class ClosedVocabularyCensusTests
                     + "PublisherPdfEligible, GazettePdfEligible, TypedGap",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgPdfProfileEligibilityGapReason: "
                     + "GazetteReceiptMismatch",
+                "Lex.V3.Ingest.Luxembourg.LuxembourgPdfLayoutEvidenceDisposition: "
+                    + "NotApplicable, Admitted, TypedGap",
+                "Lex.V3.Ingest.Luxembourg.LuxembourgPdfLayoutEvidenceGapReason: "
+                    + "UpstreamEligibilityGap, PdfUnreadable, NoTextGlyphs, InvalidGlyphGeometry",
+                "Lex.V3.Ingest.Luxembourg.LuxembourgPdfLayoutEvidenceProductionRefusal: "
+                    + "None, RetainedBytesUnavailable",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionAdapter+ResourceObservationBuildO"
                     + "utcomeKind: Built, SubjectNotInCensus, ObjectKindNotRecognised, TermUnbound, "
                     + "RelationTermUnbound, RelationTermNotIri, RelationPredicateNotAdmitted, "
