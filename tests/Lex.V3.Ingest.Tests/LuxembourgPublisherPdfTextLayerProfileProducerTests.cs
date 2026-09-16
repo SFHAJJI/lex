@@ -82,6 +82,10 @@ public sealed class LuxembourgPublisherPdfTextLayerProfileProducerTests
         var document = await LuxembourgPublisherPdfTextLayerArtifactReader.ReadAsync(
             outcome, store, CancellationToken.None);
         Assert.AreEqual(9, document.Pages.Sum(static page => page.ImageCount));
+        CollectionAssert.AreEqual(
+            new[] { 2_889, 2_605, 2_692, 2_776, 3_421, 2_756, 2_549, 2_764 },
+            document.Pages.Select(static page => page.OrderedGlyphTextFragments.Count).ToArray(),
+            "Every glyph fragment must remain attributed to its exact physical page.");
         Assert.AreEqual(
             outcome.GlyphFragmentCount,
             document.Pages.Sum(static page => page.OrderedGlyphTextFragments.Count));
