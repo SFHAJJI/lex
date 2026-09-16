@@ -717,6 +717,20 @@ public sealed class GuardedConstructionCensusTests
                     + "method public static "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgProductionScopeReductionEvidenceResolver:"
                     + ":CreateAsync",
+                "Lex.V3.Ingest.Luxembourg.LuxembourgPublisherPdfActScopeOutcome: constructor "
+                    + "internal instance "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgPublisherPdfActScopeOutcome::.ctor, "
+                    + "method private static "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgPublisherPdfActScopeProducer::Classify, "
+                    + "method private static "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgPublisherPdfActScopeProducer::Outcome",
+                "Lex.V3.Ingest.Luxembourg.LuxembourgPublisherPdfActScopePopulation: constructor "
+                    + "private instance "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgPublisherPdfActScopePopulation::.ctor, "
+                    + "method internal static "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgPublisherPdfActScopePopulation::Create, "
+                    + "method public static "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgPublisherPdfActScopeProducer::Produce",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgPublisherPdfTextLayerArtifactCodec+Writer: "
                     + "constructor internal instance "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgPublisherPdfTextLayerArtifactCodec+Writer"
