@@ -708,7 +708,10 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionAdapter::HoldManifestAsync, "
                     + "method private instance "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionAdapter::ReadInFileRightsAs"
-                    + "ync",
+                    + "ync, "
+                    + "method private static "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionAdapter::MintDocumentFetchS"
+                    + "elections",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionResult: constructor private "
                     + "instance Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionResult::.ctor, "
                     + "method internal instance "
