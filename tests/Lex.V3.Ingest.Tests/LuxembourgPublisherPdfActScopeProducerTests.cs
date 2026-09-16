@@ -106,15 +106,15 @@ public sealed class LuxembourgPublisherPdfActScopeProducerTests
                 LuxembourgPublisherPdfActScopeDisposition.TypedGap,
             },
             population.Outcomes.Select(static outcome => outcome.Disposition).ToArray());
-        CollectionAssert.AreEqual(
+        CollectionAssert.AreEquivalent(
             new[]
             {
                 LuxembourgPublisherPdfActScopeGapReason.ActScopeUnproven,
                 LuxembourgPublisherPdfActScopeGapReason.UpstreamTextLayerGap,
             },
             population.Outcomes.Select(static outcome => outcome.GapReason!.Value).ToArray(),
-            "The first fixture's item is not nested under its suffixed manifestation; the second "
-            + "is already an upstream invisible-text gap.");
+            "One fixture's item is not nested under its suffixed manifestation; the other is "
+            + "already an upstream invisible-text gap. Source order is asserted independently.");
     }
 
     [TestMethod]
