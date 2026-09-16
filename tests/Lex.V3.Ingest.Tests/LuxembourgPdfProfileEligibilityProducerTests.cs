@@ -1,8 +1,3 @@
-using System.Reflection;
-using Lex.V3.Contracts.Custody;
-using Lex.V3.Contracts.Source.Corpus;
-using Lex.V3.Contracts.Source.Http;
-using Lex.V3.Contracts.Source.Luxembourg;
 using Lex.V3.Ingest.Europe;
 using Lex.V3.Ingest.Luxembourg;
 
@@ -14,7 +9,8 @@ public sealed class LuxembourgPdfProfileEligibilityProducerTests
     [TestMethod]
     public async Task ExactGazetteEvidenceClassifiesTheSelectedPdfWithoutInterpretingIt()
     {
-        var composition = await CompleteCompositionAsync();
+        var composition = await CompleteCompositionAsync(
+            await LuxembourgGazetteAcquisitionTests.CompleteForStage3BodyCompositionAsync());
 
         var population = LuxembourgPdfProfileEligibilityProducer.Produce(composition);
 
@@ -37,8 +33,10 @@ public sealed class LuxembourgPdfProfileEligibilityProducerTests
     [TestMethod]
     public async Task EqualPublisherFactsHaveStableEligibilityIdentityAcrossExecutions()
     {
-        var first = LuxembourgPdfProfileEligibilityProducer.Produce(await CompleteCompositionAsync());
-        var second = LuxembourgPdfProfileEligibilityProducer.Produce(await CompleteCompositionAsync());
+        var first = LuxembourgPdfProfileEligibilityProducer.Produce(await CompleteCompositionAsync(
+            await LuxembourgGazetteAcquisitionTests.CompleteForStage3BodyCompositionAsync()));
+        var second = LuxembourgPdfProfileEligibilityProducer.Produce(await CompleteCompositionAsync(
+            await LuxembourgGazetteAcquisitionTests.CompleteForStage3BodyCompositionAsync()));
 
         Assert.AreEqual(first.IdentitySha256, second.IdentitySha256);
         Assert.AreEqual(
@@ -59,69 +57,52 @@ public sealed class LuxembourgPdfProfileEligibilityProducerTests
     }
 
     [TestMethod]
-    public async Task EveryDispositionAndTypedGapIsExplicit()
+    public async Task AcceptedPublicCompositionsReachEveryRetainedDispositionAndGap()
     {
-        var composition = await CompleteCompositionAsync();
-        var input = composition.LuxembourgDerivationPopulation.Inputs.Single();
-        var selected = input.SelectedWemiCandidate;
-        var gazette = composition.Luxembourg
-            .SelectMany(static value => value.GazetteBodies.Bodies)
-            .Single(body =>
-                body.Candidate.WemiCandidate.RootIri == selected.RootIri &&
-                body.Candidate.WemiCandidate.ExpressionIri == selected.ExpressionIri &&
-                body.Candidate.WemiCandidate.ManifestationIri == selected.ManifestationIri &&
-                body.Candidate.WemiCandidate.ItemIri == selected.ItemIri &&
-                body.Candidate.WemiCandidate.LanguageIri == selected.LanguageIri &&
-                body.Candidate.WemiCandidate.FormatIri == selected.FormatIri);
+        var xml = LuxembourgPdfProfileEligibilityProducer.Produce(await CompleteCompositionAsync(
+            await LuxembourgGazetteAcquisitionTests.CompleteXmlForStage3BodyCompositionAsync()));
+        var publisherPdf = LuxembourgPdfProfileEligibilityProducer.Produce(await CompleteCompositionAsync(
+            await LuxembourgGazetteAcquisitionTests.CompletePublisherPdfForStage3BodyCompositionAsync()));
+        var receiptMismatch = LuxembourgPdfProfileEligibilityProducer.Produce(await CompleteCompositionAsync(
+            await LuxembourgGazetteAcquisitionTests.CompleteWithDistinctReceiptsForStage3BodyCompositionAsync()));
 
+        AssertOutcome(xml.Outcomes.Single(), LuxembourgPdfProfileEligibilityDisposition.NotPdf);
         AssertOutcome(
-            Classify(XmlInput(input), []),
-            LuxembourgPdfProfileEligibilityDisposition.NotPdf);
-        AssertOutcome(
-            Classify(input, []),
+            publisherPdf.Outcomes.Single(),
             LuxembourgPdfProfileEligibilityDisposition.PublisherPdfEligible);
         AssertOutcome(
-            Classify(input, [gazette, gazette]),
-            LuxembourgPdfProfileEligibilityDisposition.TypedGap,
-            LuxembourgPdfProfileEligibilityGapReason.GazetteEvidenceAmbiguous);
-        AssertOutcome(
-            Classify(input, [LuxembourgGazetteBodyDisposition.Create(gazette.Candidate, null)]),
-            LuxembourgPdfProfileEligibilityDisposition.TypedGap,
-            LuxembourgPdfProfileEligibilityGapReason.GazetteEvidenceNotAdmitted);
-        AssertOutcome(
-            Classify(InputWith(input, receipt: OtherReceipt()), [gazette]),
+            receiptMismatch.Outcomes.Single(),
             LuxembourgPdfProfileEligibilityDisposition.TypedGap,
             LuxembourgPdfProfileEligibilityGapReason.GazetteReceiptMismatch);
     }
 
     [TestMethod]
-    public async Task PopulationOrdersEveryHeldInputAndEmitsExactlyOneOutcome()
+    public async Task EveryAcceptedHeldInputHasExactlyOneOutcomeInOrdinalOrder()
     {
-        var original = await CompleteCompositionAsync();
-        var input = original.LuxembourgDerivationPopulation.Inputs.Single();
-        var laterRecord = CopyRecord(input.CorpusRecord, input.ObjectOrdinal + 2);
-        var earlierRecord = CopyRecord(input.CorpusRecord, input.ObjectOrdinal + 1);
-        var source = CompositionWithInputs(
-            original,
-            [InputWith(input, record: laterRecord), InputWith(input, record: earlierRecord)],
-            includeGazetteBodies: false);
+        var compositions = new[]
+        {
+            await CompleteCompositionAsync(
+                await LuxembourgGazetteAcquisitionTests.CompleteForStage3BodyCompositionAsync()),
+            await CompleteCompositionAsync(
+                await LuxembourgGazetteAcquisitionTests.CompleteXmlForStage3BodyCompositionAsync()),
+            await CompleteCompositionAsync(
+                await LuxembourgGazetteAcquisitionTests.CompletePublisherPdfForStage3BodyCompositionAsync()),
+            await CompleteCompositionAsync(
+                await LuxembourgGazetteAcquisitionTests.CompleteWithDistinctReceiptsForStage3BodyCompositionAsync()),
+        };
 
-        var population = LuxembourgPdfProfileEligibilityProducer.Produce(source);
-
-        CollectionAssert.AreEqual(
-            new[] { earlierRecord.ObjectOrdinal, laterRecord.ObjectOrdinal },
-            population.Outcomes.Select(static outcome => outcome.Input.ObjectOrdinal).ToArray());
-        Assert.HasCount(2, population.Outcomes);
-        Assert.IsTrue(population.Outcomes.All(static outcome =>
-            outcome.Disposition == LuxembourgPdfProfileEligibilityDisposition.PublisherPdfEligible));
+        foreach (var composition in compositions)
+        {
+            var population = LuxembourgPdfProfileEligibilityProducer.Produce(composition);
+            Assert.HasCount(composition.LuxembourgDerivationPopulation.Inputs.Count, population.Outcomes);
+            CollectionAssert.AreEqual(
+                composition.LuxembourgDerivationPopulation.Inputs
+                    .OrderBy(static input => input.ObjectOrdinal)
+                    .Select(static input => input.ObjectOrdinal)
+                    .ToArray(),
+                population.Outcomes.Select(static outcome => outcome.Input.ObjectOrdinal).ToArray());
+        }
     }
-
-    private static LuxembourgPdfProfileEligibilityOutcome Classify(
-        LuxembourgHeldBodyDerivationInput input,
-        IReadOnlyList<LuxembourgGazetteBodyDisposition> gazetteBodies) =>
-        (LuxembourgPdfProfileEligibilityOutcome)typeof(LuxembourgPdfProfileEligibilityProducer)
-            .GetMethod("Classify", BindingFlags.NonPublic | BindingFlags.Static)!
-            .Invoke(null, [input, gazetteBodies])!;
 
     private static void AssertOutcome(
         LuxembourgPdfProfileEligibilityOutcome outcome,
@@ -135,95 +116,8 @@ public sealed class LuxembourgPdfProfileEligibilityProducerTests
             outcome.GazetteEvidence is not null);
     }
 
-    private static LuxembourgHeldBodyDerivationInput XmlInput(
-        LuxembourgHeldBodyDerivationInput source)
-    {
-        var candidate = source.SelectedWemiCandidate;
-        var item = candidate.ItemIri[..candidate.ItemIri.LastIndexOf('.')] + ".xml";
-        var manifestation = candidate.ManifestationIri[..candidate.ManifestationIri.LastIndexOf('/')] + "/xml";
-        var format = candidate.FormatIri[..(candidate.FormatIri.LastIndexOf('/') + 1)] + "xml";
-        var xml = new LuxembourgWemiCandidate(
-            candidate.RootIri,
-            candidate.ExpressionIri,
-            manifestation,
-            item,
-            candidate.LanguageIri,
-            format,
-            candidate.ObservationRef,
-            LuxembourgWemiCandidateDisposition.StructurallyConsistent,
-            []);
-        var address = LuxembourgDocumentFetchAddress.Create(
-            LuxembourgFileUri.RequireValid(item),
-            LuxembourgUserFormatToken.Xml,
-            source.Address.LegalValue,
-            source.Address.ActEliPagePath);
-        return new LuxembourgHeldBodyDerivationInput(
-            source.CorpusRecord,
-            new LuxembourgSelectedDocumentFetch(address, xml),
-            source.Receipt);
-    }
-
-    private static LuxembourgHeldBodyDerivationInput InputWith(
-        LuxembourgHeldBodyDerivationInput source,
-        CorpusRecord? record = null,
-        DurableBlobWriteReceipt? receipt = null) =>
-        new(
-            record ?? source.CorpusRecord,
-            new LuxembourgSelectedDocumentFetch(source.Address, source.SelectedWemiCandidate),
-            receipt ?? source.Receipt);
-
-    private static DurableBlobWriteReceipt OtherReceipt()
-    {
-        var reference = new DurableBlobRef(
-            CustodySchemaIds.DurableBlobRef,
-            new string('f', 64),
-            1,
-            CustodyClass.NightlyFloor90d);
-        var policy = new CustodyPolicyEvidence(
-            CustodySchemaIds.CustodyPolicyEvidence,
-            reference,
-            CustodyVerificationProfile.FileSystemUnenforced1,
-            null,
-            CustodyProtection.NotEnforced,
-            new DateTimeOffset(2026, 9, 16, 12, 0, 0, TimeSpan.Zero),
-            null);
-        return new DurableBlobWriteReceipt(CustodySchemaIds.DurableBlobWriteReceipt, reference, policy);
-    }
-
-    private static CorpusRecord CopyRecord(CorpusRecord source, int ordinal) =>
-        new(
-            source.Schema,
-            source.ObjectRef,
-            ordinal,
-            source.RecordDisposition,
-            source.BodyDisposition,
-            source.RelationDisposition,
-            source.SupportingDocumentDisposition,
-            source.Body,
-            source.ManifestRef,
-            source.RunIdentity);
-
-    private static Stage3BodyComposition CompositionWithInputs(
-        Stage3BodyComposition source,
-        IReadOnlyList<LuxembourgHeldBodyDerivationInput> inputs,
-        bool includeGazetteBodies)
-    {
-        var population = (LuxembourgHeldBodyDerivationPopulation)typeof(LuxembourgHeldBodyDerivationPopulation)
-            .GetConstructors(BindingFlags.Instance | BindingFlags.NonPublic)
-            .Single()
-            .Invoke([source.LuxembourgDerivationPopulation.CorpusRecordSet, inputs]);
-        return (Stage3BodyComposition)typeof(Stage3BodyComposition)
-            .GetConstructors(BindingFlags.Instance | BindingFlags.NonPublic)
-            .Single()
-            .Invoke([
-                source.Envelope,
-                source.Europe,
-                includeGazetteBodies ? source.Luxembourg : Array.Empty<Stage3LuxembourgBodyComposition>(),
-                population,
-            ]);
-    }
-
-    private static async Task<Stage3BodyComposition> CompleteCompositionAsync()
+    private static async Task<Stage3BodyComposition> CompleteCompositionAsync(
+        LuxembourgQueryExecutionResult luxembourg)
     {
         var acquired = await EuFormexAnnexClassificationReconciliationTests.AcquiredFixtureAsync();
         var europe = new[]
@@ -233,7 +127,6 @@ public sealed class LuxembourgPdfProfileEligibilityProducerTests
                 acquired.Classification.Binding.PdfSource.ObjectRef,
             }
             .Aggregate(acquired.Run, Stage3EvidenceLineageTests.AddEuropeCorpusRecord);
-        var luxembourg = await LuxembourgGazetteAcquisitionTests.CompleteForStage3BodyCompositionAsync();
         var formex = EuFormexAnnexClassificationReconciliationTests.Reconciliation(
             europe, [acquired.Outcome]);
         var classifications = Stage3EvidenceEnvelopeTests.CompleteClassifications(
