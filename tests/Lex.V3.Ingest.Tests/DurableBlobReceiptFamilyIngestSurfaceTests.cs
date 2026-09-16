@@ -137,6 +137,9 @@ public sealed class DurableBlobReceiptFamilyIngestSurfaceTests
                 "field private instance Lex.V3.Ingest.Luxembourg."
                     + "LuxembourgPdfProfileEligibilityOutcome::<TransportReceipt>k__BackingField -> "
                     + Receipt,
+                "field private instance Lex.V3.Ingest.Luxembourg."
+                    + "LuxembourgPublisherPdfTextLayerOutcome::<TextArtifactReceipt>k__BackingField -> "
+                    + Receipt + "?",
                 "field private instance " + QueryExecutionResult + "::<CorpusRecordSetReceipt>k__BackingField -> "
                     + Receipt + "?",
                 // #344 S3-A04: the address of the run's own observed object-identity set, the
@@ -215,6 +218,9 @@ public sealed class DurableBlobReceiptFamilyIngestSurfaceTests
                     + "LuxembourgPdfLayoutEvidenceOutcome::TransportReceipt() -> " + Receipt,
                 "property public instance Lex.V3.Ingest.Luxembourg."
                     + "LuxembourgPdfProfileEligibilityOutcome::TransportReceipt() -> " + Receipt,
+                "property public instance Lex.V3.Ingest.Luxembourg."
+                    + "LuxembourgPublisherPdfTextLayerOutcome::TextArtifactReceipt() -> "
+                    + Receipt + "?",
                 "property public instance " + QueryExecutionResult + "::CorpusRecordSetReceipt() -> "
                     + Receipt + "?",
                 "property public instance " + QueryExecutionResult
