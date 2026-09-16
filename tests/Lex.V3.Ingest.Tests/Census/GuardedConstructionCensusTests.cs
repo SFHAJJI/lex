@@ -394,6 +394,8 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Ingest.Europe.EuQueryExecutionResult::.ctor, "
                     + "method internal static "
                     + "Lex.V3.Ingest.Europe.EuQueryExecutionResult::DeliveredWithLocatedAmendments, "
+                    + "method internal static "
+                    + "Lex.V3.Ingest.Europe.EuQueryExecutionResult::DeliveredWithLocatedAmendments, "
                     + "method public instance "
                     + "Lex.V3.Ingest.Europe.EuQueryExecutionAdapter::RunAsync, "
                     + "method public static Lex.V3.Ingest.Europe.EuQueryExecutionResult::Delivered, "
