@@ -121,6 +121,12 @@ public sealed class DurableBlobReceiptFamilyIngestSurfaceTests
                 "field private instance Lex.V3.Ingest.Luxembourg."
                     + "LuxembourgObservedObjectIdentitySetWriteResult::"
                     + "<RetainedSetReceipt>k__BackingField -> " + Receipt + "?",
+                // S3-A01/A02/A04's PDF-family eligibility outcome carries the exact held-body
+                // receipt as run provenance. The producer receives it through the proof-bound
+                // composition; it does not construct custody evidence.
+                "field private instance Lex.V3.Ingest.Luxembourg."
+                    + "LuxembourgPdfProfileEligibilityOutcome::<TransportReceipt>k__BackingField -> "
+                    + Receipt,
                 "field private instance " + QueryExecutionResult + "::<CorpusRecordSetReceipt>k__BackingField -> "
                     + Receipt + "?",
                 // #344 S3-A04: the address of the run's own observed object-identity set, the
@@ -187,6 +193,8 @@ public sealed class DurableBlobReceiptFamilyIngestSurfaceTests
                 "property public instance Lex.V3.Ingest.Luxembourg."
                     + "LuxembourgObservedObjectIdentitySetWriteResult::RetainedSetReceipt() -> "
                     + Receipt + "?",
+                "property public instance Lex.V3.Ingest.Luxembourg."
+                    + "LuxembourgPdfProfileEligibilityOutcome::TransportReceipt() -> " + Receipt,
                 "property public instance " + QueryExecutionResult + "::CorpusRecordSetReceipt() -> "
                     + Receipt + "?",
                 "property public instance " + QueryExecutionResult
