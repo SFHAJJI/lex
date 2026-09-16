@@ -5,6 +5,7 @@ using Lex.V3.Contracts.Custody;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Corpus;
 using Lex.V3.Contracts.Source.Http;
+using Lex.V3.Contracts.Source.Scope;
 using Lex.V3.Ingest.Luxembourg;
 
 namespace Lex.V3.Ingest.Tests;
@@ -196,7 +197,7 @@ public sealed class LuxembourgAknArticleInventoryProducerTests
             using var canonical = new MemoryStream();
             var setDigest = CorpusRecordSetCanonicalWriter.Write(canonical, set);
             var verified = VerifiedCorpusRecordSet.ParseAndVerify(
-                Artifact('d', setDigest), canonical.ToArray());
+                Artifact('d', Encoding.UTF8.GetBytes(setDigest)), canonical.ToArray());
             var address = LuxembourgDocumentFetchAddress.Create(
                 LuxembourgFileUri.RequireValid(
                     "https://data.legilux.public.lu/filestore/eli/etat/leg/loi/2017/03/14/a439/jo/fr/xml"),
