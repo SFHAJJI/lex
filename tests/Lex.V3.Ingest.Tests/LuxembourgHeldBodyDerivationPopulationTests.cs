@@ -44,7 +44,7 @@ public sealed class LuxembourgHeldBodyDerivationPopulationTests
 
         var population = LuxembourgHeldBodyDerivationPopulation.TryCreate(
             run.CorpusRecordSet!, run.DocumentAcquisitionOutcomesByOrdinal!,
-            new Dictionary<Contracts.Source.Core.SourceObjectRef, LuxembourgDocumentFetchAddress>(),
+            new Dictionary<Contracts.Source.Core.SourceObjectRef, LuxembourgSelectedDocumentFetch>(),
             out var refusal, out var detail);
 
         Assert.IsNull(population);
@@ -64,7 +64,7 @@ public sealed class LuxembourgHeldBodyDerivationPopulationTests
         var population = LuxembourgHeldBodyDerivationPopulation.TryCreate(
             run.CorpusRecordSet!,
             new Dictionary<int, CorpusAcquisitionOutcome>(),
-            Addresses(run),
+            SelectedFetches(run),
             out var refusal, out var detail);
 
         Assert.IsNull(population);
@@ -83,7 +83,7 @@ public sealed class LuxembourgHeldBodyDerivationPopulationTests
         outcomes[int.MaxValue] = outcomes.Values.Single(static outcome => outcome.Receipt is not null);
 
         var population = LuxembourgHeldBodyDerivationPopulation.TryCreate(
-            run.CorpusRecordSet!, outcomes, Addresses(run), out var refusal, out var detail);
+            run.CorpusRecordSet!, outcomes, SelectedFetches(run), out var refusal, out var detail);
 
         Assert.IsNull(population);
         Assert.AreEqual(
@@ -122,7 +122,7 @@ public sealed class LuxembourgHeldBodyDerivationPopulationTests
         var population = LuxembourgHeldBodyDerivationPopulation.TryCreate(
             verified,
             run.DocumentAcquisitionOutcomesByOrdinal!,
-            Addresses(run),
+            SelectedFetches(run),
             out var refusal,
             out var detail);
 
@@ -145,7 +145,7 @@ public sealed class LuxembourgHeldBodyDerivationPopulationTests
         outcomes[input.ObjectOrdinal] = CorpusAcquisitionOutcome.Held(otherReceipt);
 
         var population = LuxembourgHeldBodyDerivationPopulation.TryCreate(
-            run.CorpusRecordSet!, outcomes, Addresses(run), out var refusal, out var detail);
+            run.CorpusRecordSet!, outcomes, SelectedFetches(run), out var refusal, out var detail);
 
         Assert.IsNull(population);
         Assert.AreEqual(
@@ -154,9 +154,10 @@ public sealed class LuxembourgHeldBodyDerivationPopulationTests
         Assert.AreEqual(input.ObjectOrdinal.ToString(), detail);
     }
 
-    private static IReadOnlyDictionary<Contracts.Source.Core.SourceObjectRef, LuxembourgDocumentFetchAddress>
-        Addresses(LuxembourgQueryExecutionResult run) =>
+    private static IReadOnlyDictionary<Contracts.Source.Core.SourceObjectRef, LuxembourgSelectedDocumentFetch>
+        SelectedFetches(LuxembourgQueryExecutionResult run) =>
         run.HeldBodyDerivationPopulation!.Inputs.ToDictionary(
             static input => input.CorpusRecord.ObjectRef,
-            static input => input.Address);
+            static input => new LuxembourgSelectedDocumentFetch(
+                input.Address, input.SelectedWemiCandidate));
 }

@@ -568,6 +568,14 @@ public enum LuxembourgQueryExecutionRefusal
     /// </remarks>
     [JsonStringEnumMemberName("held_body_derivation_population_not_completed")]
     HeldBodyDerivationPopulationNotCompleted = 19,
+
+    /// <summary>
+    /// The address-selection tuple chosen by the existing ladder did not identify exactly one
+    /// accepted WEMI candidate. Derivation cannot recover publisher identity by first-wins or by
+    /// parsing the selected file URI, so the whole run refuses before acquisition.
+    /// </summary>
+    [JsonStringEnumMemberName("selected_manifestation_identity_not_unique")]
+    SelectedManifestationIdentityNotUnique = 20,
 }
 
 /// <summary>
@@ -1719,7 +1727,20 @@ public sealed class LuxembourgQueryExecutionAdapter
         // store's own isExemplifiedBy file URI, and carry it onto the durable manifest row. Before
         // this, every Luxembourg row was NotMinted with reason NoPublisherRouteYet, which was true
         // when there was no LU route and is a lie now that there is one.
-        var mintedAddressesByObjectRef = MintDocumentFetchAddresses(resolved);
+        var (selectedFetchesByObjectRef, selectedFetchFailure) = MintDocumentFetchSelections(resolved);
+        if (selectedFetchFailure is not null)
+        {
+            return LuxembourgQueryExecutionResult.Refused(
+                topology, outcomes, relationAcquisitions,
+                new LuxembourgQueryExecutionRefusalDetail(
+                    LuxembourgQueryExecutionRefusal.SelectedManifestationIdentityNotUnique,
+                    null,
+                    selectedFetchFailure));
+        }
+
+        var mintedAddressesByObjectRef = selectedFetchesByObjectRef!.ToDictionary(
+            static pair => pair.Key,
+            static pair => pair.Value.Address);
         var manifest = _sourceProfile.ReduceScope(
             resolved,
             resolver,
@@ -1856,7 +1877,7 @@ public sealed class LuxembourgQueryExecutionAdapter
 
         var derivationPopulation = LuxembourgHeldBodyDerivationPopulation.TryCreate(
             recordSetResult.VerifiedSet!, documentAcquisitionOutcomesByOrdinal!,
-            mintedAddressesByObjectRef, out var derivationRefusal, out var derivationDetail);
+            selectedFetchesByObjectRef!, out var derivationRefusal, out var derivationDetail);
         if (derivationPopulation is null)
         {
             // Defensive only at this production door today. The exact address map above built the
@@ -2157,23 +2178,43 @@ public sealed class LuxembourgQueryExecutionAdapter
     internal static IReadOnlyDictionary<SourceObjectRef, LuxembourgDocumentFetchAddress>
         MintDocumentFetchAddresses(LuxembourgProfileResolution.Resolved resolution)
     {
+        var (selected, failure) = MintDocumentFetchSelections(resolution);
+        if (failure is not null)
+        {
+            throw new InvalidOperationException(failure);
+        }
+
+        return selected!.ToDictionary(static pair => pair.Key, static pair => pair.Value.Address);
+    }
+
+    private static (
+        IReadOnlyDictionary<SourceObjectRef, LuxembourgSelectedDocumentFetch>? Selected,
+        string? Failure) MintDocumentFetchSelections(LuxembourgProfileResolution.Resolved resolution)
+    {
         ArgumentNullException.ThrowIfNull(resolution);
-        var minted = new Dictionary<SourceObjectRef, LuxembourgDocumentFetchAddress>();
+        var selected = new Dictionary<SourceObjectRef, LuxembourgSelectedDocumentFetch>();
         foreach (var resource in resolution.Resources)
         {
-            var address = SelectDocumentFetchAddress(
+            var (fetch, ambiguousIdentity) = SelectDocumentFetch(
                 resource.ObjectRef,
                 resource.BodyJoin.Candidates
                     .Where(static candidate => candidate.Disposition == LuxembourgBodyCandidateDisposition.AcceptedCandidate)
                     .Select(static candidate => candidate.WemiCandidate),
                 resource.Assertions.Select(static resolved => resolved.Assertion).ToArray());
-            if (address is not null)
+            if (ambiguousIdentity)
             {
-                minted[resource.ObjectRef] = address;
+                return (null,
+                    $"'{resource.ObjectRef.CanonicalKey}' has more than one accepted WEMI identity " +
+                    "for the selected address tuple.");
+            }
+
+            if (fetch is not null)
+            {
+                selected[resource.ObjectRef] = fetch;
             }
         }
 
-        return minted;
+        return (selected, null);
     }
 
     /// <summary>
@@ -2191,16 +2232,18 @@ public sealed class LuxembourgQueryExecutionAdapter
         ArgumentNullException.ThrowIfNull(wemiTopology);
         ArgumentNullException.ThrowIfNull(assertions);
 
-        return SelectDocumentFetchAddress(objectRef, wemiTopology.Candidates, assertions);
+        var (selected, ambiguousIdentity) = SelectDocumentFetch(
+            objectRef, wemiTopology.Candidates, assertions);
+        return ambiguousIdentity ? null : selected?.Address;
     }
 
-    private static LuxembourgDocumentFetchAddress? SelectDocumentFetchAddress(
+    private static (LuxembourgSelectedDocumentFetch? Selected, bool AmbiguousIdentity) SelectDocumentFetch(
         SourceObjectRef objectRef, IEnumerable<LuxembourgWemiCandidate> wemiCandidates,
         IReadOnlyList<LuxembourgObservedAssertion> assertions)
     {
 
         var actEliPagePath = new Uri(objectRef.PublisherUri, UriKind.Absolute).AbsolutePath;
-        var candidates = new List<LuxembourgManifestationCandidate>();
+        var candidates = new List<(LuxembourgManifestationCandidate Selection, LuxembourgWemiCandidate Wemi)>();
         foreach (var wemi in wemiCandidates)
         {
             if (wemi.Disposition != LuxembourgWemiCandidateDisposition.StructurallyConsistent)
@@ -2236,15 +2279,28 @@ public sealed class LuxembourgQueryExecutionAdapter
                 continue;
             }
 
-            candidates.Add(new LuxembourgManifestationCandidate(
-                token, legalValue, LuxembourgFileUri.RequireValid(wemi.ItemIri)));
+            candidates.Add((
+                new LuxembourgManifestationCandidate(
+                    token, legalValue, LuxembourgFileUri.RequireValid(wemi.ItemIri)),
+                wemi));
         }
 
-        var selection = LuxembourgManifestationSelection.Select(candidates);
-        return selection.Selected is { } selected
-            ? LuxembourgDocumentFetchAddress.Create(
-                selected.FileUri, selected.Token, selected.LegalValue, actEliPagePath)
-            : null;
+        var selection = LuxembourgManifestationSelection.Select(
+            candidates.Select(static candidate => candidate.Selection).ToArray());
+        if (selection.Selected is not { } selected)
+        {
+            return (null, false);
+        }
+
+        var exactMatches = candidates.Where(candidate => candidate.Selection == selected).ToArray();
+        if (exactMatches.Length != 1)
+        {
+            return (null, true);
+        }
+
+        var address = LuxembourgDocumentFetchAddress.Create(
+            selected.FileUri, selected.Token, selected.LegalValue, actEliPagePath);
+        return (new LuxembourgSelectedDocumentFetch(address, exactMatches[0].Wemi), false);
     }
 
     /// <summary>
