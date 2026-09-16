@@ -65,6 +65,18 @@ public sealed class LuxembourgPublisherPdfActScopeProducerTests
     }
 
     [TestMethod]
+    public async Task ForeignHostNeverReachesTheActScopeDoor()
+    {
+        const string item =
+            "https://example.invalid/filestore/eli/etat/leg/memorial/1977/a67/fr/pdf/issue.pdf";
+        var source = await TextPopulationAsync(Fixture(), item);
+
+        Assert.IsEmpty(source.Outcomes);
+
+        Assert.IsEmpty(LuxembourgPublisherPdfActScopeProducer.Produce(source).Outcomes);
+    }
+
+    [TestMethod]
     public async Task UpstreamTextGapStaysExplicitInsteadOfUsingItsCoordinate()
     {
         var bytes = File.ReadAllBytes(Path.Combine(

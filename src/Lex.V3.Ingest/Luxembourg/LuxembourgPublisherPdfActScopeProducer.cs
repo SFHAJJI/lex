@@ -180,20 +180,22 @@ public static class LuxembourgPublisherPdfActScopeProducer
         }
 
         var eligibility = source.SourceLayoutEvidence.SourceEligibility;
-        var itemPath = new Uri(eligibility.PublisherItemIri, UriKind.Absolute).AbsolutePath;
-        if (itemPath.StartsWith(LegislativeMemorialPrefix, StringComparison.Ordinal)
-            || itemPath.StartsWith(AdministrativeMemorialPrefix, StringComparison.Ordinal))
-        {
-            return Outcome(source, LuxembourgPublisherPdfActScopeDisposition.GazetteIssueScope);
-        }
-
+        var item = new Uri(eligibility.PublisherItemIri, UriKind.Absolute);
         var manifestation = new Uri(eligibility.PublisherManifestationIri, UriKind.Absolute);
-        if (!string.Equals(manifestation.Host, ExpectedResourceHost, StringComparison.Ordinal))
+        if (!string.Equals(item.Host, ExpectedResourceHost, StringComparison.Ordinal)
+            || !string.Equals(manifestation.Host, ExpectedResourceHost, StringComparison.Ordinal))
         {
             return Outcome(
                 source,
                 LuxembourgPublisherPdfActScopeDisposition.TypedGap,
                 LuxembourgPublisherPdfActScopeGapReason.ActScopeUnproven);
+        }
+
+        var itemPath = item.AbsolutePath;
+        if (itemPath.StartsWith(LegislativeMemorialPrefix, StringComparison.Ordinal)
+            || itemPath.StartsWith(AdministrativeMemorialPrefix, StringComparison.Ordinal))
+        {
+            return Outcome(source, LuxembourgPublisherPdfActScopeDisposition.GazetteIssueScope);
         }
 
         var manifestationPath = manifestation.AbsolutePath;
