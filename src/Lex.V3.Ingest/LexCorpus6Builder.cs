@@ -224,6 +224,7 @@ public sealed record LexCorpus6LuxembourgWemiBinding(
 public sealed record LexCorpus6LuxembourgRights(
     LexCorpus6LuxembourgWemiBinding SelectedWemi,
     SourceArtifactRef BoundRunIdentity,
+    string BindingSha256,
     LuxembourgRightsChannelDisposition Disposition,
     IReadOnlyList<SourceArtifactRef> EvidenceRefs)
 {
@@ -234,11 +235,14 @@ public sealed record LexCorpus6LuxembourgRights(
 
         ArgumentNullException.ThrowIfNull(BoundRunIdentity);
         ArgumentNullException.ThrowIfNull(memberRunIdentity);
-        if (BoundRunIdentity != memberRunIdentity)
+        if (!string.Equals(
+                BindingSha256,
+                ComputeBindingSha256(memberRunIdentity, BoundRunIdentity, SelectedWemi.IdentitySha256),
+                StringComparison.Ordinal))
         {
             throw new ArgumentException(
-                "The Luxembourg rights resolution must bind the member's exact run identity.",
-                nameof(BoundRunIdentity));
+                "The Luxembourg rights binding does not match its acquisition run, rights run and selected WEMI.",
+                nameof(BindingSha256));
         }
 
         if (!IsTerminal(Disposition))
@@ -258,6 +262,33 @@ public sealed record LexCorpus6LuxembourgRights(
 
         LexCorpus6Member.RequireSortedArtifacts(EvidenceRefs, nameof(EvidenceRefs));
         return this;
+    }
+
+    public static string ComputeBindingSha256(
+        SourceArtifactRef memberRunIdentity,
+        SourceArtifactRef rightsRunIdentity,
+        string selectedWemiIdentitySha256)
+    {
+        ArgumentNullException.ThrowIfNull(memberRunIdentity);
+        ArgumentNullException.ThrowIfNull(rightsRunIdentity);
+        ArgumentException.ThrowIfNullOrWhiteSpace(selectedWemiIdentitySha256);
+
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        foreach (var value in new[]
+        {
+            "lex-corpus/6/luxembourg-rights-binding/1",
+            memberRunIdentity.ResourceId,
+            memberRunIdentity.Sha256,
+            rightsRunIdentity.ResourceId,
+            rightsRunIdentity.Sha256,
+            selectedWemiIdentitySha256,
+        })
+        {
+            hash.AppendData(Encoding.UTF8.GetBytes(value));
+            hash.AppendData([(byte)'\n']);
+        }
+
+        return Convert.ToHexStringLower(hash.GetHashAndReset());
     }
 
     internal static bool IsTerminal(LuxembourgRightsChannelDisposition disposition) =>
@@ -601,14 +632,13 @@ public static class LexCorpus6Builder
             }
 
             var rights = input.RightsResolution;
-            if (rights.BoundRunIdentity != record.RunIdentity ||
-                !string.Equals(
+            if (!string.Equals(
                     rights.SelectedManifestationIri,
                     input.SelectedWemiCandidate.ManifestationIri,
                     StringComparison.Ordinal))
             {
                 refusal = LexCorpus6BuildRefusal.LuxembourgRightsBindingMissing;
-                detail = $"{record.ObjectRef.PublisherUri}: rights run {rights.BoundRunIdentity.ResourceId}/{rights.BoundRunIdentity.Sha256} vs member run {record.RunIdentity.ResourceId}/{record.RunIdentity.Sha256}; rights manifestation {rights.SelectedManifestationIri} vs selected {input.SelectedWemiCandidate.ManifestationIri}";
+                detail = $"{record.ObjectRef.PublisherUri}: rights manifestation {rights.SelectedManifestationIri} vs selected {input.SelectedWemiCandidate.ManifestationIri}";
                 return null;
             }
             if (!LexCorpus6LuxembourgRights.IsTerminal(rights.Disposition))
@@ -626,14 +656,19 @@ public static class LexCorpus6Builder
             };
             if (rights.SparqlObservation is not null) rightsEvidence.Add(rights.SparqlObservation.EvidenceRef);
             if (rights.InFileObservation is not null) rightsEvidence.Add(rights.InFileObservation.EvidenceRef);
+            var selectedWemi = LexCorpus6LuxembourgWemiBinding.From(input.SelectedWemiCandidate);
             members.Add(MemberFromRecord(
                 PublisherId.LuLegilux,
                 record,
                 admitted ? LexCorpus6OutcomeKind.Acquired : LexCorpus6OutcomeKind.RightsWithheld,
                 null,
                 new LexCorpus6LuxembourgRights(
-                    LexCorpus6LuxembourgWemiBinding.From(input.SelectedWemiCandidate),
+                    selectedWemi,
                     rights.BoundRunIdentity,
+                    LexCorpus6LuxembourgRights.ComputeBindingSha256(
+                        record.RunIdentity,
+                        rights.BoundRunIdentity,
+                        selectedWemi.IdentitySha256),
                     rights.Disposition,
                     SortArtifacts(rightsEvidence)),
                 admitted ? [] : [rights.ReasonCode]));
@@ -719,6 +754,7 @@ public static class LexCorpus6Builder
                     writer.WriteStartObject("luxembourg_rights");
                     WriteLuxembourgWemiBinding(writer, member.LuxembourgRights.SelectedWemi);
                     WriteArtifact(writer, "bound_run_identity", member.LuxembourgRights.BoundRunIdentity);
+                    writer.WriteString("binding_sha256", member.LuxembourgRights.BindingSha256);
                     writer.WriteString("disposition", ContractWire.NameOf(member.LuxembourgRights.Disposition));
                     writer.WriteStartArray("evidence_refs");
                     foreach (var artifact in member.LuxembourgRights.EvidenceRefs) WriteArtifactValue(writer, artifact);

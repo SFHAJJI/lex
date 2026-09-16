@@ -94,14 +94,21 @@ public sealed class LexCorpus6BuilderTests
                 member.BodySha256 is not null)
             .All(static member =>
                 member.EuropeContentClass is not null && member.LuxembourgRights is null));
-        Assert.IsTrue(first.VerifiedSet.Set.Members
+        var luxembourgMembers = first.VerifiedSet.Set.Members
             .Where(static member =>
                 member.Publisher == Lex.V3.Contracts.PublisherId.LuLegilux &&
                 member.BodySha256 is not null)
-            .All(static member =>
+            .ToArray();
+        Assert.IsTrue(luxembourgMembers.All(static member =>
                 member.EuropeContentClass is null &&
                 member.LuxembourgRights is not null &&
-                member.LuxembourgRights.BoundRunIdentity == member.RunIdentity));
+                member.LuxembourgRights.BindingSha256 ==
+                    LexCorpus6LuxembourgRights.ComputeBindingSha256(
+                        member.RunIdentity,
+                        member.LuxembourgRights.BoundRunIdentity,
+                        member.LuxembourgRights.SelectedWemi.IdentitySha256)));
+        Assert.IsTrue(luxembourgMembers.Any(static member =>
+            member.LuxembourgRights!.BoundRunIdentity != member.RunIdentity));
         var reopened = VerifiedLexCorpus6ManifestSet.ParseAndVerify(
             first.ArtifactRef,
             first.VerifiedSet.Set.EuropeSourceSetRef,
