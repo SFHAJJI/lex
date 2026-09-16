@@ -337,23 +337,6 @@ public sealed class LuxembourgGazetteAcquisitionTests
             pdf: (HttpStatusCode.OK, PdfBytes),
             decorate: inner => new GazetteCustodyStore(inner) { AdvanceObservationPerCreate = true })).Result;
 
-    internal static async Task<LuxembourgQueryExecutionResult> CompleteWithUnretainedSelectedGazetteForStage3BodyCompositionAsync()
-    {
-        var assertions = GazetteAssertions()
-            .Where(static row =>
-                row.Item1 != ManifestationPdfA &&
-                row.Item3 != ManifestationPdfA &&
-                row.Item3 != ItemPdfA)
-            .ToArray();
-
-        return (await RunAsync(
-            assertions,
-            pdf: (HttpStatusCode.NotFound, []),
-            subjects: [Act, Expression, ManifestationPdf],
-            ladderItem: ItemPdf,
-            ladderBody: PdfBytes)).Result;
-    }
-
     internal static async Task<LuxembourgQueryExecutionResult> CompleteXmlForStage3BodyCompositionAsync()
     {
         const string manifestationXml = Expression + "/xml";
