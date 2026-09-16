@@ -14,4 +14,35 @@ public sealed class LexCorpus6BuilderTests
         Assert.IsNotNull(typeof(VerifiedLexCorpus6ManifestSet).GetMethod(
             nameof(VerifiedLexCorpus6ManifestSet.ParseAndVerify)));
     }
+
+    [TestMethod]
+    public async Task ProductionAdaptersRetainExactRightsInputsForTheTerminalBuilder()
+    {
+        var europe = await EuAxiomWiringHarness.RunAsync(
+            static root => EuAcquisitionTestFixture.AxiomAbsenceScriptFor(root));
+        Assert.IsNull(europe.Refusal);
+        Assert.IsNotNull(europe.HeldBodyContentClasses);
+        var heldEurope = europe.CorpusRecordSet!.Set.Records
+            .Where(static record =>
+                record.Body.Kind == Lex.V3.Contracts.Source.Corpus.CorpusBodyRecordKind.Held)
+            .ToArray();
+        Assert.HasCount(heldEurope.Length, europe.HeldBodyContentClasses);
+        foreach (var record in heldEurope)
+        {
+            Assert.IsTrue(europe.HeldBodyContentClasses.ContainsKey(record.ObjectRef));
+        }
+
+        var pdfBytes = File.ReadAllBytes(Path.Combine(
+            AppContext.BaseDirectory,
+            "Fixtures",
+            "LuDocumentFetch",
+            "lu-pdf-consolidated-2020-04-08-a265.bin"));
+        var luxembourg = await LuxembourgGazetteAcquisitionTests
+            .CompletePublisherPdfForStage3BodyCompositionAsync(pdfBytes);
+        Assert.IsNull(luxembourg.Refusal);
+        Assert.IsNotNull(luxembourg.HeldBodyDerivationPopulation);
+        Assert.IsTrue(luxembourg.HeldBodyDerivationPopulation.Inputs.Count > 0);
+        Assert.IsTrue(luxembourg.HeldBodyDerivationPopulation.Inputs.All(
+            static input => input.RightsResolution is not null));
+    }
 }
