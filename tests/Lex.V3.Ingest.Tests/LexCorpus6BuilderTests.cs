@@ -45,4 +45,103 @@ public sealed class LexCorpus6BuilderTests
         Assert.IsTrue(luxembourg.HeldBodyDerivationPopulation.Inputs.All(
             static input => input.RightsResolution is not null));
     }
+
+    [TestMethod]
+    public async Task CompleteProductionEvidenceBuildsOneDeterministicStrictlyReopenableMemberPerSourceUnit()
+    {
+        var envelope = await CompleteProfileEnvelopeAsync();
+        var matrix = CompleteEuropeRightsMatrix();
+
+        var first = LexCorpus6Builder.TryBuild(envelope, matrix, out var firstRefusal, out var firstDetail);
+        var second = LexCorpus6Builder.TryBuild(envelope, matrix, out var secondRefusal, out var secondDetail);
+
+        Assert.IsNotNull(first, $"{firstRefusal}: {firstDetail}");
+        Assert.IsNotNull(second, $"{secondRefusal}: {secondDetail}");
+        CollectionAssert.AreEqual(first.CanonicalBytes.ToArray(), second.CanonicalBytes.ToArray());
+        Assert.AreEqual(first.ArtifactRef, second.ArtifactRef);
+        var expected = envelope.BodyComposition.Envelope.Europe.CorpusRecordSet!.Set.Records.Count
+            + envelope.BodyComposition.Envelope.Luxembourg.CorpusRecordSet!.Set.Records.Count;
+        Assert.HasCount(expected, first.VerifiedSet.Set.Members);
+        Assert.HasCount(
+            expected,
+            first.VerifiedSet.Set.Members
+                .Select(static member => (member.Publisher, member.ObjectRefSha256))
+                .Distinct()
+                .ToArray());
+        var reopened = VerifiedLexCorpus6ManifestSet.ParseAndVerify(
+            first.ArtifactRef,
+            first.CanonicalBytes.Span);
+        CollectionAssert.AreEqual(
+            first.VerifiedSet.Set.Members.ToArray(),
+            reopened.Set.Members.ToArray());
+    }
+
+    private static async Task<Stage3DerivationProfileEnvelope> CompleteProfileEnvelopeAsync()
+    {
+        var europe = await EuAxiomWiringHarness.RunAsync(
+            static root => EuAcquisitionTestFixture.AxiomAbsenceScriptFor(root));
+        var bytes = File.ReadAllBytes(Path.Combine(
+            AppContext.BaseDirectory,
+            "Fixtures",
+            "LuDocumentFetch",
+            "lu-pdf-consolidated-2020-04-08-a265.bin"));
+        var luxembourg = await LuxembourgGazetteAcquisitionTests
+            .CompletePublisherPdfForStage3BodyCompositionAsync(bytes);
+        var formex = EuFormexRunOutcomeReconciliationTests.CompleteForEnvelope(europe);
+        var classifications = Stage3EvidenceEnvelopeTests.CompleteClassifications(formex);
+        var fidelity = Stage3FidelityPreservationReconciliationTests.Complete(europe, luxembourg);
+        var evidence = Stage3EvidenceEnvelopeTests.TryCreate(
+            europe,
+            luxembourg,
+            formex,
+            classifications,
+            fidelity,
+            out var evidenceRefusal,
+            out var evidenceDetail);
+        Assert.IsNotNull(evidence, $"{evidenceRefusal}: {evidenceDetail}");
+        var composition = Stage3BodyComposition.TryCreate(
+            evidence,
+            out var compositionRefusal,
+            out var compositionDetail);
+        Assert.IsNotNull(composition, $"{compositionRefusal}: {compositionDetail}");
+        var eligibility = Luxembourg.LuxembourgPdfProfileEligibilityProducer.Produce(composition);
+        Lex.V3.Contracts.Custody.ICustodyStore store =
+            new RoutedHttpAcquisitionSessionTests.MultiObjectCustodyStore();
+        _ = await store.CreateAsync(bytes, Lex.V3.Contracts.Custody.CustodyClass.NightlyFloor90d, CancellationToken.None);
+        var layout = await new Luxembourg.LuxembourgPdfLayoutEvidenceProducer(store)
+            .RunAsync(eligibility, CancellationToken.None);
+        Assert.IsTrue(layout.Produced, $"{layout.Refusal}: {layout.Detail}");
+        var text = await new Luxembourg.LuxembourgPublisherPdfTextLayerProfileProducer(store)
+            .RunAsync(layout.Population!, CancellationToken.None);
+        Assert.IsTrue(text.Produced, $"{text.Refusal}: {text.Detail}");
+        var actScope = Luxembourg.LuxembourgPublisherPdfActScopeProducer.Produce(text.Population!);
+        var envelope = Stage3DerivationProfileEnvelope.TryCreate(
+            actScope,
+            out var profileRefusal,
+            out var profileDetail);
+        Assert.IsNotNull(envelope, $"{profileRefusal}: {profileDetail}");
+        return envelope;
+    }
+
+    private static Lex.V3.Contracts.Source.Europe.EuRightsMatrix CompleteEuropeRightsMatrix()
+    {
+        var evidence = new Lex.V3.Contracts.Source.Core.SourceArtifactRef(
+            "urn:uuid:11111111-1111-1111-1111-111111111111",
+            new string('a', 64));
+        var classes = Enum.GetValues<Lex.V3.Contracts.Source.Europe.EuContentClass>()
+            .Select(value => new Lex.V3.Contracts.Source.Europe.EuRightsDisposition(
+                value,
+                Lex.V3.Contracts.Source.Europe.EuRightsDisposition.BasisFor(value),
+                evidence))
+            .ToArray();
+        var channels = Enum.GetValues<Lex.V3.Contracts.Source.Europe.EuRightsExceptionChannel>()
+            .Select(value => new Lex.V3.Contracts.Source.Europe.EuRightsExceptionDisposition(value, evidence))
+            .ToArray();
+        var matrix = Lex.V3.Contracts.Source.Europe.EuRightsMatrix.TryAdmit(
+            classes,
+            channels,
+            out var refusal);
+        Assert.IsNotNull(matrix, refusal.ToString());
+        return matrix;
+    }
 }
