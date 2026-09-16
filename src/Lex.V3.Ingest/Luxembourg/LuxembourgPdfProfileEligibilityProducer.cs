@@ -26,14 +26,8 @@ public enum LuxembourgPdfProfileEligibilityDisposition
 /// <summary>Why one PDF body could not enter either reviewed profile family.</summary>
 public enum LuxembourgPdfProfileEligibilityGapReason
 {
-    [JsonStringEnumMemberName("gazette_evidence_ambiguous")]
-    GazetteEvidenceAmbiguous = 1,
-
-    [JsonStringEnumMemberName("gazette_evidence_not_admitted")]
-    GazetteEvidenceNotAdmitted = 2,
-
     [JsonStringEnumMemberName("gazette_receipt_mismatch")]
-    GazetteReceiptMismatch = 3,
+    GazetteReceiptMismatch = 1,
 }
 
 /// <summary>
@@ -167,35 +161,18 @@ public static class LuxembourgPdfProfileEligibilityProducer
         }
 
         var selected = input.SelectedWemiCandidate;
-        var matches = gazetteBodies.Where(body =>
+        var gazette = gazetteBodies.SingleOrDefault(body =>
+                body.Outcome == LuxembourgGazetteBodyOutcome.Admitted &&
+                body.RetainedTransportBytes is not null &&
                 Same(body.Candidate.WemiCandidate.RootIri, selected.RootIri) &&
                 Same(body.Candidate.WemiCandidate.ExpressionIri, selected.ExpressionIri) &&
                 Same(body.Candidate.WemiCandidate.ManifestationIri, selected.ManifestationIri) &&
                 Same(body.Candidate.WemiCandidate.ItemIri, selected.ItemIri) &&
                 Same(body.Candidate.WemiCandidate.LanguageIri, selected.LanguageIri) &&
-                Same(body.Candidate.WemiCandidate.FormatIri, selected.FormatIri))
-            .ToArray();
-        if (matches.Length == 0)
+                Same(body.Candidate.WemiCandidate.FormatIri, selected.FormatIri));
+        if (gazette is null)
         {
             return Outcome(input, LuxembourgPdfProfileEligibilityDisposition.PublisherPdfEligible);
-        }
-
-        if (matches.Length != 1)
-        {
-            return Outcome(
-                input,
-                LuxembourgPdfProfileEligibilityDisposition.TypedGap,
-                LuxembourgPdfProfileEligibilityGapReason.GazetteEvidenceAmbiguous);
-        }
-
-        var gazette = matches[0];
-        if (gazette.Outcome != LuxembourgGazetteBodyOutcome.Admitted ||
-            gazette.RetainedTransportBytes is null)
-        {
-            return Outcome(
-                input,
-                LuxembourgPdfProfileEligibilityDisposition.TypedGap,
-                LuxembourgPdfProfileEligibilityGapReason.GazetteEvidenceNotAdmitted);
         }
 
         if (gazette.RetainedTransportBytes != input.Receipt)
@@ -225,8 +202,8 @@ public static class LuxembourgPdfProfileEligibilityProducer
     private static string RuleProfileText() =>
         "lex-v3-luxembourg-pdf-profile-eligibility-rule/1\n" +
         "pdf=selected-wemi-format-pdf-or-pdfa\n" +
-        "gazette=exact-act-expression-manifestation-item-and-retained-receipt\n" +
-        "no-match=publisher-pdf-family\n" +
+        "gazette=exact-admitted-act-expression-manifestation-item-and-retained-receipt\n" +
+        "no-admitted-match=publisher-pdf-family\n" +
         "layout=not-inspected\n";
 
     private static string Digest(string value) =>
