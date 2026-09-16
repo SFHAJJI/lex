@@ -83,7 +83,7 @@ public sealed class LuxembourgPublisherPdfActScopeProducerTests
     }
 
     [TestMethod]
-    public async Task MixedPopulationHasOneOrderedOutcomePerExactSourceMember()
+    public async Task MixedPopulationPreservesOrderAndDistinctGapCauses()
     {
         var clean = Fixture();
         var invisible = File.ReadAllBytes(Path.Combine(
@@ -102,10 +102,19 @@ public sealed class LuxembourgPublisherPdfActScopeProducerTests
         CollectionAssert.AreEqual(
             new[]
             {
-                LuxembourgPublisherPdfActScopeDisposition.ActScopedCoordinate,
+                LuxembourgPublisherPdfActScopeDisposition.TypedGap,
                 LuxembourgPublisherPdfActScopeDisposition.TypedGap,
             },
             population.Outcomes.Select(static outcome => outcome.Disposition).ToArray());
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                LuxembourgPublisherPdfActScopeGapReason.ActScopeUnproven,
+                LuxembourgPublisherPdfActScopeGapReason.UpstreamTextLayerGap,
+            },
+            population.Outcomes.Select(static outcome => outcome.GapReason!.Value).ToArray(),
+            "The first fixture's item is not nested under its suffixed manifestation; the second "
+            + "is already an upstream invisible-text gap.");
     }
 
     [TestMethod]
