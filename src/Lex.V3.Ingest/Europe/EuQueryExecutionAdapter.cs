@@ -681,6 +681,53 @@ public sealed class EuQueryExecutionResult
         IReadOnlyDictionary<int, EuMintedRowAccounting> mintedRowsByOrdinal,
         IReadOnlyList<EuDateAxiomBinding> dateAxioms,
         IReadOnlyList<EuLocatedAmendmentAxiomObservation> locatedAmendmentObservations,
+        CorpusRecordSetWriteResult recordSetResult,
+        EuCorrigendumTripwireCompletion corrigendumTripwires)
+    {
+        if (!EuLocatedAmendmentProducer.TryGetCompleteCorpus(recordSetResult, out var corpusRecordSet))
+        {
+            throw new ArgumentException(
+                "Located amendment completion requires the same writer's complete reopened corpus set.",
+                nameof(recordSetResult));
+        }
+
+        var completion = familyOutcomes.All(static outcome => outcome.Kind == EuFamilyEnumerationOutcomeKind.Proven)
+            ? EuQueryExecutionCompletion.AllFamiliesProven
+            : EuQueryExecutionCompletion.PartialFamilyRefused;
+        return new(
+            topology, familyOutcomes, observedObjectCount, observedExpressionCount, reductionExclusions,
+            watermarkWitnessPlan, rootBinding, witnessReconciliation, witnessTerminations, scopeManifestReceipt,
+            scopeManifestCanonicalSha256, documentAcquisitionOutcomesByOrdinal, documentLadderResultsByOrdinal,
+            observedManifestationTypesByCelex, observedExpressionsByCelex, mintedRowsByOrdinal,
+            dateAxioms, locatedAmendmentObservations,
+            EuLocatedAmendmentProducer.Produce(locatedAmendmentObservations, recordSetResult),
+            corrigendumTripwires, recordSetResult.SetRef!, recordSetResult.RetainedSetReceipt!, corpusRecordSet,
+            null, completion, null, null, null, null);
+    }
+
+    /// <summary>
+    /// Production completion door. In addition to the retained corpus, it receives the adapter's
+    /// own decoded snapshots and derives the held-body class bindings internally.
+    /// </summary>
+    internal static EuQueryExecutionResult DeliveredWithLocatedAmendments(
+        SourceProfileTopology topology,
+        IReadOnlyList<EuFamilyEnumerationOutcome> familyOutcomes,
+        int observedObjectCount,
+        int observedExpressionCount,
+        IReadOnlyList<EuObjectReductionExclusion> reductionExclusions,
+        EuWatermarkWitnessPlan watermarkWitnessPlan,
+        EuPrimaryEnumerationRootBinding rootBinding,
+        EuPrimaryEnumerationWitnessReconciliation witnessReconciliation,
+        IReadOnlyList<EuFeedEntryTermination> witnessTerminations,
+        DurableBlobWriteReceipt scopeManifestReceipt,
+        string scopeManifestCanonicalSha256,
+        IReadOnlyDictionary<int, CorpusAcquisitionOutcome> documentAcquisitionOutcomesByOrdinal,
+        IReadOnlyDictionary<int, EuDocumentLadderResult> documentLadderResultsByOrdinal,
+        IReadOnlyDictionary<string, IReadOnlyList<string>> observedManifestationTypesByCelex,
+        IReadOnlyDictionary<string, EuObservedExpressionSplit> observedExpressionsByCelex,
+        IReadOnlyDictionary<int, EuMintedRowAccounting> mintedRowsByOrdinal,
+        IReadOnlyList<EuDateAxiomBinding> dateAxioms,
+        IReadOnlyList<EuLocatedAmendmentAxiomObservation> locatedAmendmentObservations,
         IReadOnlyList<EuCellarObjectSnapshot> decodedSnapshots,
         CorpusRecordSetWriteResult recordSetResult,
         EuCorrigendumTripwireCompletion corrigendumTripwires)
