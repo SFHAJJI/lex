@@ -119,6 +119,48 @@ public sealed class LuxembourgAknLegalContentProfileProducerTests
         Assert.AreEqual(
             LuxembourgAknLegalContentProfileProducer.RuleProfileSha256,
             first.Outcomes.Single().Article!.RuleProfileSha256);
+        var changed = await RunAsync(
+            Akn("<article id=\"art_1\"><num>Art. 1.</num><content><p>changed words</p></content></article>"),
+            "stable",
+            '3');
+        Assert.AreNotEqual(first.IdentitySha256, changed.IdentitySha256);
+        Assert.AreNotEqual(
+            first.Outcomes.Single().Article!.IdentitySha256,
+            changed.Outcomes.Single().Article!.IdentitySha256);
+    }
+
+    [TestMethod]
+    public async Task PopulationHasOneOutcomePerInventoriedArticleInPublisherOrder()
+    {
+        var result = await RunAsync(Akn(
+            "<article id=\"art_3\"><content><p>third</p></content></article>" +
+            "<article id=\"art_1\"><content><p>first</p></content></article>" +
+            "<article id=\"art_2\"><content><p>second</p></content></article>"), "ordered");
+
+        CollectionAssert.AreEqual(
+            new[] { "art_3", "art_1", "art_2" },
+            result.Outcomes.Select(outcome => outcome.Coordinate!.PublisherId).ToArray());
+        Assert.AreEqual(
+            result.SourceInventoryPopulation.Outcomes.Single().Inventory!.Articles.Count,
+            result.Outcomes.Count);
+    }
+
+    [TestMethod]
+    public async Task MarkerEvidenceWithoutPublisherWordingRemainsATypedGap()
+    {
+        var result = await RunAsync(Akn(
+            "<article id=\"art_1\"><content><p>" +
+            "<mod class=\"mod-start\" for=\"#pm1\"/>" +
+            "<mod class=\"mod-end\" for=\"#pm1\"/>" +
+            "<noteRef href=\"#M1\" marker=\"1\"/>" +
+            "</p></content></article>"), "marker-only");
+
+        var outcome = result.Outcomes.Single();
+        Assert.AreEqual(
+            LuxembourgAknLegalContentDisposition.UnsupportedContentShape,
+            outcome.Disposition);
+        Assert.IsNull(outcome.Article);
+        StringAssert.Contains(outcome.Detail, "no publisher legal wording");
     }
 
     [TestMethod]

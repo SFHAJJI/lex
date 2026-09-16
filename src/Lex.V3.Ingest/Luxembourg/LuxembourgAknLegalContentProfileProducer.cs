@@ -169,6 +169,8 @@ public sealed class LuxembourgAknLegalContentPopulation
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         LuxembourgAknLegalContentArticle.Append(
             hash, "lex-v3-luxembourg-akn-legal-content-population/1");
+        LuxembourgAknLegalContentArticle.Append(
+            hash, LuxembourgAknLegalContentProfileProducer.RuleProfileSha256);
         foreach (var outcome in outcomes)
         {
             LuxembourgAknLegalContentArticle.Append(
@@ -177,9 +179,18 @@ public sealed class LuxembourgAknLegalContentPopulation
             LuxembourgAknLegalContentArticle.Append(
                 hash, ((int)outcome.Disposition).ToString(System.Globalization.CultureInfo.InvariantCulture));
             LuxembourgAknLegalContentArticle.Append(hash, outcome.Article?.IdentitySha256 ?? "");
+            LuxembourgAknLegalContentArticle.Append(hash, SemanticDetail(outcome));
         }
         return Convert.ToHexStringLower(hash.GetHashAndReset());
     }
+
+    private static string SemanticDetail(LuxembourgAknLegalContentOutcome outcome) =>
+        outcome.Disposition is LuxembourgAknLegalContentDisposition.UpstreamNotInventoried
+            or LuxembourgAknLegalContentDisposition.XmlRejected
+            or LuxembourgAknLegalContentDisposition.ArticleCoordinatesMismatch
+            or LuxembourgAknLegalContentDisposition.UnsupportedContentShape
+            ? outcome.Detail ?? ""
+            : "";
 }
 
 /// <summary>
@@ -362,6 +373,14 @@ public sealed class LuxembourgAknLegalContentProfileProducer
             tokens = null;
             failure = "article ends with an unclosed modification span: "
                 + string.Join(",", openModifications.Order(StringComparer.Ordinal));
+            return false;
+        }
+        if (!collected.Any(static token => token.Kind is
+                LuxembourgAknLegalContentTokenKind.Text
+                or LuxembourgAknLegalContentTokenKind.Reference))
+        {
+            tokens = null;
+            failure = "article contains no publisher legal wording";
             return false;
         }
         tokens = collected;
