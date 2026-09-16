@@ -78,9 +78,15 @@ public static class V3IndexCapabilityManifestArtifact
 
     public static V3IndexCapabilityManifest ParseAndVerify(
         SourceArtifactRef artifactRef,
-        ReadOnlySpan<byte> canonicalBytes)
+        ReadOnlySpan<byte> canonicalBytes,
+        PublisherId expectedPublisher,
+        string expectedIndexSha256)
     {
         ArgumentNullException.ThrowIfNull(artifactRef);
+        ContractValidation.RequireDefined(expectedPublisher, nameof(expectedPublisher));
+        expectedIndexSha256 = ContractValidation.RequireSha256(
+            expectedIndexSha256,
+            nameof(expectedIndexSha256));
         if (!string.Equals(ComputeSha256(canonicalBytes), artifactRef.Sha256, StringComparison.Ordinal))
         {
             throw new ArgumentException(
@@ -104,6 +110,14 @@ public static class V3IndexCapabilityManifestArtifact
         if (!string.Equals(wire.Schema, SchemaId, StringComparison.Ordinal))
         {
             throw new ArgumentException("Unexpected index capability manifest schema.", nameof(canonicalBytes));
+        }
+
+        if (wire.Publisher != expectedPublisher ||
+            !string.Equals(wire.IndexSha256, expectedIndexSha256, StringComparison.Ordinal))
+        {
+            throw new ArgumentException(
+                "The index capability manifest does not bind the expected publisher and index.",
+                nameof(canonicalBytes));
         }
 
         if (!string.Equals(

@@ -38,7 +38,9 @@ public sealed class V3IndexCapabilityManifestArtifactTests
 
         var reopened = V3IndexCapabilityManifestArtifact.ParseAndVerify(
             new SourceArtifactRef(ArtifactResourceId, digest),
-            first.ToArray());
+            first.ToArray(),
+            PublisherId.LuLegilux,
+            IndexDigest);
 
         Assert.AreEqual(manifest.Publisher, reopened.Publisher);
         Assert.AreEqual(manifest.IndexSha256, reopened.IndexSha256);
@@ -51,7 +53,10 @@ public sealed class V3IndexCapabilityManifestArtifactTests
         var bytes = Write(Create(Cell("search", "fts_title", "title", "fra", 2020, 2024, 41)), out var digest);
 
         Assert.ThrowsExactly<ArgumentException>(() => V3IndexCapabilityManifestArtifact.ParseAndVerify(
-            new SourceArtifactRef(ArtifactResourceId, new string('a', 64)), bytes));
+            new SourceArtifactRef(ArtifactResourceId, new string('a', 64)),
+            bytes,
+            PublisherId.LuLegilux,
+            IndexDigest));
         AssertInvalid(Replace(bytes, V3IndexCapabilityManifestArtifact.SchemaId, "wrong-schema"));
         AssertInvalid(Replace(bytes, "\"period_granularity\":\"day\"", "\"period_granularity\":\"month\""));
         AssertInvalid(Replace(bytes, "\"population\":41", "\"population\":41,\"extra\":true"));
@@ -60,7 +65,10 @@ public sealed class V3IndexCapabilityManifestArtifactTests
         {
             var candidateDigest = V3IndexCapabilityManifestArtifact.ComputeSha256(candidate);
             Assert.ThrowsExactly<ArgumentException>(() => V3IndexCapabilityManifestArtifact.ParseAndVerify(
-                new SourceArtifactRef(ArtifactResourceId, candidateDigest), candidate));
+                new SourceArtifactRef(ArtifactResourceId, candidateDigest),
+                candidate,
+                PublisherId.LuLegilux,
+                IndexDigest));
         }
     }
 
@@ -73,7 +81,10 @@ public sealed class V3IndexCapabilityManifestArtifactTests
         var digest = V3IndexCapabilityManifestArtifact.ComputeSha256(noncanonical);
 
         Assert.ThrowsExactly<ArgumentException>(() => V3IndexCapabilityManifestArtifact.ParseAndVerify(
-            new SourceArtifactRef(ArtifactResourceId, digest), noncanonical));
+            new SourceArtifactRef(ArtifactResourceId, digest),
+            noncanonical,
+            PublisherId.LuLegilux,
+            IndexDigest));
     }
 
     [TestMethod]
@@ -90,7 +101,10 @@ public sealed class V3IndexCapabilityManifestArtifactTests
         {
             var digest = V3IndexCapabilityManifestArtifact.ComputeSha256(candidate);
             Assert.ThrowsExactly<ArgumentException>(() => V3IndexCapabilityManifestArtifact.ParseAndVerify(
-                new SourceArtifactRef(ArtifactResourceId, digest), candidate));
+                new SourceArtifactRef(ArtifactResourceId, digest),
+                candidate,
+                PublisherId.LuLegilux,
+                IndexDigest));
         }
     }
 
