@@ -296,11 +296,16 @@ public sealed class LuxembourgDocumentFetchAddressMintingTests
         var address = LuxembourgQueryExecutionAdapter.MintDocumentFetchAddress(
             ObjectRef(Act),
             LuxembourgWemiTopology.Resolve(Act, assertions, ObservationRef),
-            assertions);
+            assertions,
+            out var refusal);
 
         Assert.IsNull(
             address,
             "the address tuple cannot choose between two distinct publisher expression/manifestation identities.");
+        Assert.AreEqual(
+            LuxembourgQueryExecutionRefusal.SelectedManifestationIdentityNotUnique,
+            refusal,
+            "the production selector must retain the typed reason instead of collapsing ambiguity into no address.");
     }
 
     /// <summary>
