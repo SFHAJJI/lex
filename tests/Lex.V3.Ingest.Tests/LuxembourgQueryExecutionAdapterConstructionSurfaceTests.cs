@@ -209,7 +209,7 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
     }
 
     [TestMethod]
-    public void QueryExecutionRefusalIsANineteenMemberEnumIncludingNone()
+    public void QueryExecutionRefusalIsATwentyMemberEnumIncludingNone()
     {
         // D1-06c-LU-2 added four: DocumentFetchSessionNotStarted, DocumentBodyNotRetained,
         // AcquisitionOutcomeNotRepresentable and RecordSetNotHeld, one per whole-run failure the
@@ -255,6 +255,9 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
                 "field public static " + N
                 + "LuxembourgQueryExecutionRefusal::GazetteBodyNotProduced -> " + N
                 + "LuxembourgQueryExecutionRefusal",
+                "field public static " + N
+                + "LuxembourgQueryExecutionRefusal::HeldBodyDerivationPopulationNotCompleted -> "
+                + N + "LuxembourgQueryExecutionRefusal",
                 "field public static " + N + "LuxembourgQueryExecutionRefusal::None -> "
                 + N + "LuxembourgQueryExecutionRefusal",
                 "field public static " + N
@@ -498,6 +501,7 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
                     + "Lex.V3.Contracts.Source.Core.SourceArtifactRef?, "
                     + "Lex.V3.Contracts.Custody.DurableBlobWriteReceipt?, "
                     + "Lex.V3.Ingest.Luxembourg.VerifiedLuxembourgObservedObjectIdentitySet?, "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgHeldBodyDerivationPopulation?, "
                     + "System.Collections.Generic.IReadOnlyDictionary<System.Int32, "
                     + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgGazetteBodySet>?, "
                     + "System.Collections.Generic.IReadOnlyDictionary<System.Int32, "
@@ -532,6 +536,7 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
                     + "Lex.V3.Contracts.Source.Core.SourceArtifactRef, "
                     + "Lex.V3.Contracts.Custody.DurableBlobWriteReceipt, "
                     + "Lex.V3.Ingest.Luxembourg.VerifiedLuxembourgObservedObjectIdentitySet, "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgHeldBodyDerivationPopulation, "
                     + "System.Collections.Generic.IReadOnlyDictionary<System.Int32, "
                     + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgGazetteBodySet>, "
                     + "System.Collections.Generic.IReadOnlyDictionary<System.Int32, "

@@ -83,6 +83,47 @@ public sealed class LuxembourgHeldBodyDerivationPopulationTests
     }
 
     [TestMethod]
+    public async Task AHeldOutcomeWhoseVerifiedRecordIsNotHeldIsRefused()
+    {
+        var run = await LuxembourgGazetteAcquisitionTests.CompleteForStage3BodyCompositionAsync();
+        var original = run.HeldBodyDerivationPopulation!.Inputs.Single().CorpusRecord;
+        var pending = new CorpusRecord(
+            original.Schema,
+            original.ObjectRef,
+            original.ObjectOrdinal,
+            original.RecordDisposition,
+            original.BodyDisposition,
+            original.RelationDisposition,
+            original.SupportingDocumentDisposition,
+            CorpusBodyRecord.PendingAcquisition(CorpusBodyPendingAcquisitionReason.NotYetAcquired()),
+            original.ManifestRef,
+            original.RunIdentity);
+        var rebuilt = new CorpusRecordSet(
+            run.CorpusRecordSet!.Set.Schema,
+            run.CorpusRecordSet.Set.ManifestRef,
+            run.CorpusRecordSet.Set.RunIdentity,
+            [pending]);
+        using var bytes = new MemoryStream();
+        var digest = CorpusRecordSetCanonicalWriter.Write(bytes, rebuilt);
+        var reference = new Contracts.Source.Core.SourceArtifactRef(
+            run.CorpusRecordSetRef!.ResourceId, digest);
+        var verified = VerifiedCorpusRecordSet.ParseAndVerify(reference, bytes.ToArray());
+
+        var population = LuxembourgHeldBodyDerivationPopulation.TryCreate(
+            verified,
+            run.DocumentAcquisitionOutcomesByOrdinal!,
+            Addresses(run),
+            out var refusal,
+            out var detail);
+
+        Assert.IsNull(population);
+        Assert.AreEqual(
+            LuxembourgHeldBodyDerivationPopulationRefusal.HeldOutcomeRecordIsNotHeld,
+            refusal);
+        Assert.AreEqual(original.ObjectOrdinal.ToString(), detail);
+    }
+
+    [TestMethod]
     public async Task AReceiptOtherThanTheVerifiedCorpusRecordsReceiptIsRefused()
     {
         var run = await LuxembourgGazetteAcquisitionTests.CompleteForStage3BodyCompositionAsync();

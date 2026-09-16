@@ -103,6 +103,35 @@ public sealed class Stage3EvidenceLineageTests
         Assert.AreEqual(Stage3EvidenceLineageRefusal.LuxembourgRunIdentityMismatch, refusal);
     }
 
+    [TestMethod]
+    public async Task LuxembourgDerivationPopulationMustBelongToTheExactCorpusSet()
+    {
+        var original = await CompleteEnvelopeAsync();
+        var foreign = await LuxembourgQueryExecutionAdapterTests.RunEmptyDeliveredForEnvelopeAsync();
+        var substituted = CopyLuxembourg(
+            original.Luxembourg,
+            heldBodyDerivationPopulation: foreign.HeldBodyDerivationPopulation);
+        var formex = EuFormexRunOutcomeReconciliationTests.CompleteForEnvelope(original.Europe);
+        var classifications = Stage3EvidenceEnvelopeTests.CompleteClassifications(formex);
+        var fidelity = Stage3FidelityPreservationReconciliationTests.Complete(
+            original.Europe, substituted);
+
+        var envelope = Stage3EvidenceEnvelope.TryCreate(
+            original.Europe,
+            substituted,
+            formex,
+            classifications,
+            fidelity,
+            out var refusal,
+            out var detail);
+
+        Assert.IsNull(envelope);
+        Assert.AreEqual(
+            Stage3EvidenceEnvelopeRefusal.LuxembourgDerivationPopulationMismatch,
+            refusal,
+            detail);
+    }
+
     private static async Task<Stage3EvidenceEnvelope> CompleteEnvelopeAsync()
     {
         var europe = await EuAxiomWiringHarness.RunAsync(
@@ -260,7 +289,8 @@ public sealed class Stage3EvidenceLineageTests
         string? manifestCanonicalSha256 = null,
         DurableBlobWriteReceipt? scopeManifestReceipt = null,
         SourceArtifactRef? observedObjectIdentitySetRef = null,
-        VerifiedLuxembourgObservedObjectIdentitySet? observedObjectIdentitySet = null) =>
+        VerifiedLuxembourgObservedObjectIdentitySet? observedObjectIdentitySet = null,
+        LuxembourgHeldBodyDerivationPopulation? heldBodyDerivationPopulation = null) =>
         LuxembourgQueryExecutionResult.Delivered(
             source.Topology,
             source.FamilyOutcomes,
@@ -279,7 +309,7 @@ public sealed class Stage3EvidenceLineageTests
             observedObjectIdentitySetRef ?? source.ObservedObjectIdentitySetRef!,
             source.ObservedObjectIdentitySetReceipt!,
             observedObjectIdentitySet ?? source.ObservedObjectIdentitySet!,
-            source.HeldBodyDerivationPopulation!,
+            heldBodyDerivationPopulation ?? source.HeldBodyDerivationPopulation!,
             source.GazetteBodySetsByOrdinal!,
             source.GazetteListingFetchRefusalsByOrdinal!,
             source.GazetteListingsWithContradictoryLegalValueByOrdinal!,
