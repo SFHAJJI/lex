@@ -1,4 +1,3 @@
-using System.Security.Cryptography;
 using System.Text;
 using Lex.V3.Contracts.Source.Rights;
 
@@ -15,7 +14,6 @@ public sealed class LicenceCensusExecutionReceiptTests
     {
         var receipt = Fixture.Create();
         var bytes = receipt.CopyCanonicalBytes();
-
         var read = LicenceCensusExecutionReceipt.ParseAndVerify(bytes);
 
         CollectionAssert.AreEqual(bytes, read.CopyCanonicalBytes());
@@ -26,152 +24,147 @@ public sealed class LicenceCensusExecutionReceiptTests
         Assert.AreEqual((byte)'\n', bytes[^1]);
     }
 
+    [TestMethod]
+    public void ClosedJsonRejectsDuplicateUnknownNullWrongTypeAndNoncanonicalOrder()
+    {
+        var json = Encoding.UTF8.GetString(Fixture.Create().CopyCanonicalBytes());
+        var mutations = new[]
+        {
+            json.Replace("{\"schema\":", "{\"schema\":\"lex-census-execution-receipt/1\",\"schema\":", StringComparison.Ordinal),
+            json.Replace("{\"schema\":", "{\"unknown\":0,\"schema\":", StringComparison.Ordinal),
+            json.Replace("\"source_artifacts\":[", "\"source_artifacts\":null,\"discarded\":[", StringComparison.Ordinal),
+            json.Replace("\"record_count\":2", "\"record_count\":\"2\"", StringComparison.Ordinal),
+            json.Replace(
+                "\"structural_vocabulary_sha256\":\"" + new string('a', 64) + "\",\"structural_counts_sha256\":\"" + new string('b', 64) + "\"",
+                "\"structural_counts_sha256\":\"" + new string('b', 64) + "\",\"structural_vocabulary_sha256\":\"" + new string('a', 64) + "\"",
+                StringComparison.Ordinal),
+        };
+
+        foreach (var mutation in mutations)
+        {
+            Assert.Throws<ArgumentException>(() =>
+                LicenceCensusExecutionReceipt.ParseAndVerify(Encoding.UTF8.GetBytes(mutation)));
+        }
+    }
+
+    [TestMethod]
+    public void DerivedDigestsCannotBeSuppliedByTheCaller()
+    {
+        Assert.Throws<ArgumentException>(() => Fixture.Create(censusInputSha256: new string('f', 64)));
+        Assert.Throws<ArgumentException>(() => Fixture.Create(censusOutputSha256: new string('f', 64)));
+    }
+
+    [TestMethod]
+    public void EveryRequiredRunAppearsExactlyOnceInAsciiOrder()
+    {
+        Assert.Throws<ArgumentException>(() => Fixture.Create(runs: Fixture.Runs().Reverse().ToArray()));
+        Assert.Throws<ArgumentException>(() => Fixture.Create(runs: Fixture.Runs().Take(6).ToArray()));
+    }
+
+    [TestMethod]
+    public void OrderedCollectionsRefuseDuplicatesAndReordering()
+    {
+        Assert.Throws<ArgumentException>(() => Fixture.Create(sourceArtifacts:
+        [
+            new LicenceCensusSourceArtifact("z", 1, new string('8', 64)),
+            new LicenceCensusSourceArtifact("a", 1, new string('9', 64)),
+        ]));
+        Assert.Throws<ArgumentException>(() => Fixture.Create(selection:
+        [
+            new LicenceCensusGitBlob("works/b.xml", new string('2', 64)),
+            new LicenceCensusGitBlob("works/a.xml", new string('1', 64)),
+        ]));
+        Assert.Throws<ArgumentException>(() => Fixture.Run(0, environment:
+        [
+            new LicenceCensusEnvironmentVariable("TZ", "UTC"),
+            new LicenceCensusEnvironmentVariable("LANG", "C"),
+        ]));
+    }
+
+    [TestMethod]
+    public void ExecutionBoundaryRefusesPhysicalPathsAmbientStateAndUnboundedOutput()
+    {
+        Assert.Throws<ArgumentException>(() => Fixture.Run(0, executorToken: "C:\\Python\\python.exe"));
+        Assert.Throws<ArgumentException>(() => Fixture.Run(0, argv: ["C:\\corpus\\probe.py"]));
+        Assert.Throws<ArgumentException>(() => Fixture.Run(0, logicalCwd: "C:\\corpus"));
+        Assert.Throws<ArgumentException>(() =>
+            new LicenceCensusEnvironmentVariable("PATH", "anything"));
+        Assert.Throws<ArgumentOutOfRangeException>(() => Fixture.Run(0, stdoutLength: 16_777_217));
+    }
+
+    [TestMethod]
+    public void NoneStdinAndZeroLengthStreamsBindTheEmptyDigest()
+    {
+        Assert.Throws<ArgumentException>(() => Fixture.Run(0, stdinSha256: new string('d', 64)));
+        Assert.Throws<ArgumentException>(() => Fixture.Run(0, stdoutSha256: new string('d', 64)));
+    }
+
     private static class Fixture
     {
-        private const string Commit = "1111111111111111111111111111111111111111";
-        private const string Tree = "2222222222222222222222222222222222222222";
-        private const string Works = "3333333333333333333333333333333333333333";
         private const string StructuralVocabulary =
             "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
         private const string StructuralCounts =
             "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
         private static readonly string[] RunNames =
         [
-            "probe_akn_licence.py",
-            "probe_archive.py",
-            "probe_block_repeats.py",
-            "probe_edge_cases.py",
-            "probe_manifestation_licence.py",
-            "probe_schema_binding.py",
-            "probe_scl_names.py",
+            "probe_akn_licence.py", "probe_archive.py", "probe_block_repeats.py",
+            "probe_edge_cases.py", "probe_manifestation_licence.py",
+            "probe_schema_binding.py", "probe_scl_names.py",
         ];
 
-        public static string InputSha256 => CensusInput(
-            Commit,
+        public const string InputSha256 =
+            "7fd1f8c9c55a4961073cdf0a538859dcdcf1e500869d917f8c9726f604fa8fa8";
+        public const string OutputSha256 =
+            "a63e64b07262a048cf2ca3b01ae52749c48bf76c2602718b8385cd5ccadbbbf3";
+
+        public static LicenceCensusExecutionReceipt Create(
+            IReadOnlyList<LicenceCensusSourceArtifact>? sourceArtifacts = null,
+            IReadOnlyList<LicenceCensusGitBlob>? selection = null,
+            string? censusInputSha256 = null,
+            IReadOnlyList<LicenceCensusRun>? runs = null,
+            string? censusOutputSha256 = null)
+        {
+            selection ??=
             [
                 new LicenceCensusGitBlob("works/a.xml", Filled('1')),
                 new LicenceCensusGitBlob("works/b.xml", Filled('2')),
-            ]);
-
-        public static string OutputSha256
-        {
-            get
-            {
-                var runs = Runs();
-                return CensusOutput(InputSha256, runs, StructuralVocabulary, StructuralCounts);
-            }
-        }
-
-        public static LicenceCensusExecutionReceipt Create()
-        {
-            var selection = new[]
-            {
-                new LicenceCensusGitBlob("works/a.xml", Filled('1')),
-                new LicenceCensusGitBlob("works/b.xml", Filled('2')),
-            };
-            var runs = Runs();
+            ];
+            runs ??= Runs();
             return LicenceCensusExecutionReceipt.Create(
-                [new LicenceCensusSourceArtifact("probes/probe.py", 3, Filled('9'))],
+                sourceArtifacts ?? [new LicenceCensusSourceArtifact("probes/probe.py", 3, Filled('9'))],
                 new LicenceCensusCorpus(
                     "https://github.com/example/corpus.git",
-                    Commit,
-                    Tree,
-                    Works,
+                    new string('1', 40), new string('2', 40), new string('3', 40),
                     "2026-09-16T00:00:00.0000000Z"),
                 selection,
-                InputSha256,
+                censusInputSha256 ?? InputSha256,
                 runs,
                 StructuralVocabulary,
                 StructuralCounts,
-                OutputSha256,
+                censusOutputSha256 ?? OutputSha256,
                 "2026-09-16T00:01:00.0000000Z");
         }
 
-        private static IReadOnlyList<LicenceCensusRun> Runs() => RunNames
-            .Select((name, index) => new LicenceCensusRun(
-                name,
-                Filled((char)('3' + index)),
-                "python3",
-                Filled('c'),
-                "3.13.7",
-                "python",
-                "3.13.7",
-                "windows",
-                "x64",
-                "corpus-root",
-                [name],
-                LicenceCensusStdinMode.None,
-                0,
-                EmptySha256,
-                [new LicenceCensusEnvironmentVariable("PYTHONUTF8", "1")],
-                "Invariant",
-                "UTC",
-                $"2026-09-16T00:00:{index:00}.0000000Z",
-                $"2026-09-16T00:00:{index + 1:00}.0000000Z",
-                0,
-                0,
-                EmptySha256,
-                0,
-                EmptySha256))
-            .ToArray();
+        public static IReadOnlyList<LicenceCensusRun> Runs() => RunNames
+            .Select((_, index) => Run(index)).ToArray();
 
-        private static string CensusInput(
-            string commit,
-            IReadOnlyList<LicenceCensusGitBlob> selection)
-        {
-            using var stream = new MemoryStream();
-            WriteLp(stream, Encoding.ASCII.GetBytes("lex-license-census-input/1"));
-            WriteLp(stream, Encoding.ASCII.GetBytes(commit));
-            WriteLp(stream, U64((ulong)selection.Count));
-            foreach (var blob in selection)
-            {
-                using var record = new MemoryStream();
-                WriteLp(record, Encoding.UTF8.GetBytes(blob.Path));
-                WriteLp(record, Convert.FromHexString(blob.Sha256));
-                WriteLp(stream, record.ToArray());
-            }
-
-            return Sha(stream.ToArray());
-        }
-
-        private static string CensusOutput(
-            string input,
-            IReadOnlyList<LicenceCensusRun> runs,
-            string vocabulary,
-            string counts)
-        {
-            using var stream = new MemoryStream();
-            WriteLp(stream, Encoding.ASCII.GetBytes("lex-license-census-output/1"));
-            WriteLp(stream, Convert.FromHexString(input));
-            WriteLp(stream, U64((ulong)runs.Count));
-            foreach (var run in runs)
-            {
-                var runBytes = LicenceCensusExecutionReceipt.CopyCanonicalRunBytes(run);
-                using var preimage = new MemoryStream();
-                WriteLp(preimage, Encoding.ASCII.GetBytes("lex-license-census-run/1"));
-                WriteLp(preimage, runBytes);
-                WriteLp(stream, SHA256.HashData(preimage.ToArray()));
-            }
-
-            WriteLp(stream, Convert.FromHexString(vocabulary));
-            WriteLp(stream, Convert.FromHexString(counts));
-            return Sha(stream.ToArray());
-        }
-
-        private static byte[] U64(ulong value)
-        {
-            var bytes = new byte[8];
-            System.Buffers.Binary.BinaryPrimitives.WriteUInt64BigEndian(bytes, value);
-            return bytes;
-        }
-
-        private static void WriteLp(Stream stream, byte[] value)
-        {
-            stream.Write(U64((ulong)value.Length));
-            stream.Write(value);
-        }
-
-        private static string Sha(byte[] bytes) => Convert.ToHexStringLower(SHA256.HashData(bytes));
+        public static LicenceCensusRun Run(
+            int index,
+            string executorToken = "python3",
+            string logicalCwd = "corpus-root",
+            IReadOnlyList<string>? argv = null,
+            IReadOnlyList<LicenceCensusEnvironmentVariable>? environment = null,
+            ulong stdoutLength = 0,
+            string? stdinSha256 = null,
+            string? stdoutSha256 = null) => new(
+                RunNames[index], Filled((char)('3' + index)), executorToken, Filled('c'),
+                "3.13.7", "python", "3.13.7", "windows", "x64", logicalCwd,
+                argv ?? [RunNames[index]], LicenceCensusStdinMode.None, 0,
+                stdinSha256 ?? EmptySha256,
+                environment ?? [new LicenceCensusEnvironmentVariable("PYTHONUTF8", "1")],
+                "Invariant", "UTC", $"2026-09-16T00:00:{index:00}.0000000Z",
+                $"2026-09-16T00:00:{index + 1:00}.0000000Z", 0, stdoutLength,
+                stdoutSha256 ?? EmptySha256, 0, EmptySha256);
 
         private static string Filled(char value) => new(value, 64);
     }
