@@ -312,7 +312,7 @@ public static class LexCorpus6Builder
             members.OrderBy(static member => member, Comparer<LexCorpus6Member>.Create(LexCorpus6ManifestSet.CompareMembers)).ToArray()).Validate();
         var bytes = Write(set);
         var digest = ComputeSha256(bytes);
-        var artifactRef = new SourceArtifactRef($"urn:lex:corpus:6:{digest}", digest);
+        var artifactRef = new SourceArtifactRef(ResourceIdOf(digest), digest);
         var verified = VerifiedLexCorpus6ManifestSet.ParseAndVerify(artifactRef, bytes);
         return new LexCorpus6BuildResult(artifactRef, bytes, verified);
     }
@@ -378,6 +378,15 @@ public static class LexCorpus6Builder
         Span<byte> digest = stackalloc byte[SHA256.HashSizeInBytes];
         hash.GetHashAndReset(digest);
         return Convert.ToHexStringLower(digest);
+    }
+
+    private static string ResourceIdOf(string digest)
+    {
+        var uuid = digest[..32].ToCharArray();
+        uuid[12] = '5';
+        uuid[16] = '8';
+        return $"urn:uuid:{new string(uuid, 0, 8)}-{new string(uuid, 8, 4)}-" +
+            $"{new string(uuid, 12, 4)}-{new string(uuid, 16, 4)}-{new string(uuid, 20, 12)}";
     }
 
     private static LexCorpus6Member MemberFromRecord(
