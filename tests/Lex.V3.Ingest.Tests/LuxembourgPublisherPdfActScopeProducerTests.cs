@@ -54,16 +54,36 @@ public sealed class LuxembourgPublisherPdfActScopeProducerTests
     }
 
     [TestMethod]
-    public async Task NearManifestationPrefixCannotBecomeActScoped()
+    public async Task MemorialOutsideExactPublisherItemPrefixCannotBecomeIssueScoped()
     {
         const string item =
-            "http://data.legilux.public.lu/filestore/eli/etat/leg/loi/2026/01/01/a1/consolide/20260201/fr/pdf-extra/consolide.pdf";
+            "http://data.legilux.public.lu/filestore/eli/etat/leg/loi/2026/01/01/a1/memorial/1977/a67/fr/pdf/issue.pdf";
         var source = await TextPopulationAsync(Fixture(), item);
 
         var outcome = LuxembourgPublisherPdfActScopeProducer.Produce(source).Outcomes.Single();
 
         Assert.AreEqual(LuxembourgPublisherPdfActScopeDisposition.TypedGap, outcome.Disposition);
         Assert.AreEqual(LuxembourgPublisherPdfActScopeGapReason.ActScopeUnproven, outcome.GapReason);
+    }
+
+    [TestMethod]
+    public async Task UpstreamNotApplicableRemainsExplicit()
+    {
+        var bytes = LuxembourgGazetteAcquisitionTests.GazetteSelectedPdfBytes();
+        var source = await TextPopulationAsync(
+            await LuxembourgGazetteAcquisitionTests.CompleteForStage3BodyCompositionAsync(),
+            bytes);
+        Assert.AreEqual(
+            LuxembourgPublisherPdfTextLayerDisposition.NotApplicable,
+            source.Outcomes.Single().Disposition);
+
+        var outcome = LuxembourgPublisherPdfActScopeProducer.Produce(source).Outcomes.Single();
+
+        Assert.AreSame(source.Outcomes.Single(), outcome.SourceTextLayer);
+        Assert.AreEqual(
+            LuxembourgPublisherPdfActScopeDisposition.NotApplicable,
+            outcome.Disposition);
+        Assert.IsNull(outcome.GapReason);
     }
 
     [TestMethod]
