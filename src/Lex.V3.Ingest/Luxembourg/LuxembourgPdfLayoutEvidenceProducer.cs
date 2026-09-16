@@ -428,7 +428,7 @@ public sealed class LuxembourgPdfLayoutEvidenceProducer
     }
 
     private async Task<DurableBlobWriteReceipt> HoldArtifactAsync(
-        byte[] bytes,
+        ReadOnlyMemory<byte> bytes,
         CancellationToken cancellationToken)
     {
         var (receipt, failure) = await CustodyHold
@@ -488,7 +488,7 @@ public sealed class LuxembourgPdfLayoutEvidenceProducer
         }
 
         return new PdfLayoutEvidenceArtifact(
-            writer.ToArray(), document.NumberOfPages, glyphOrdinal, valid);
+            writer.ToMemory(), document.NumberOfPages, glyphOrdinal, valid);
     }
 
     private static bool Valid(LuxembourgPdfPageEvidence page) =>
@@ -524,7 +524,7 @@ public sealed class LuxembourgPdfLayoutEvidenceProducer
         Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
 
     private sealed record PdfLayoutEvidenceArtifact(
-        byte[] Bytes,
+        ReadOnlyMemory<byte> Bytes,
         int PageCount,
         int GlyphCount,
         bool Valid);
@@ -577,7 +577,15 @@ internal static class LuxembourgPdfLayoutEvidenceArtifactCodec
             WriteInt32(glyph.RenderingMode);
         }
 
-        internal byte[] ToArray() => _stream.ToArray();
+        internal ReadOnlyMemory<byte> ToMemory()
+        {
+            if (!_stream.TryGetBuffer(out var buffer))
+            {
+                throw new InvalidOperationException("The canonical artifact buffer is unavailable.");
+            }
+
+            return new ReadOnlyMemory<byte>(buffer.Array!, buffer.Offset, checked((int)_stream.Length));
+        }
 
         public void Dispose() => _stream.Dispose();
 

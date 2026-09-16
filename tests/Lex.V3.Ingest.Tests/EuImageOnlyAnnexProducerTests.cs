@@ -635,7 +635,7 @@ public sealed partial class EuImageOnlyAnnexProducerTests
             "urn:uuid:77777777-7777-4777-8777-777777777777", Sha256(bytes)));
     }
 
-    private static byte[] MinimalPdf(bool image, bool text)
+    internal static byte[] MinimalPdf(bool image, bool text)
         => MultiPagePdf((image, text));
 
     private static byte[] MultiPagePdf(params (bool Image, bool Text)[] pages)

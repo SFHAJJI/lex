@@ -369,13 +369,15 @@ public sealed class LuxembourgGazetteAcquisitionTests
         CompletePublisherPdfForStage3BodyCompositionAsync(PdfBytes);
 
     internal static async Task<LuxembourgQueryExecutionResult> CompletePublisherPdfForStage3BodyCompositionAsync(
-        byte[] retainedPdfBytes)
+        byte[] retainedPdfBytes,
+        string coordinateSuffix = "")
     {
         ArgumentNullException.ThrowIfNull(retainedPdfBytes);
-        const string consolidation = Parent + "/consolide/20260201";
-        const string expression = consolidation + "/fr";
-        const string manifestation = expression + "/pdf";
-        const string item = "http://data.legilux.public.lu/filestore/eli/etat/leg/loi/2026/01/01/a1/consolide/20260201/fr/pdf/consolide.pdf";
+        var consolidation = Parent + "/consolide/20260201" + coordinateSuffix;
+        var expression = consolidation + "/fr";
+        var manifestation = expression + "/pdf";
+        var item = "http://data.legilux.public.lu/filestore/eli/etat/leg/loi/2026/01/01/a1/consolide/20260201/fr/pdf/consolide"
+            + coordinateSuffix + ".pdf";
         (string, string, string)[] assertions =
         [
             (consolidation, RdfType, Jolux + "Consolidation"),

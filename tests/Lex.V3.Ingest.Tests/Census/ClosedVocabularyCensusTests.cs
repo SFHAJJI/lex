@@ -257,7 +257,8 @@ public sealed class ClosedVocabularyCensusTests
                 "Lex.V3.Ingest.Luxembourg.LuxembourgPdfLayoutEvidenceDisposition: "
                     + "NotApplicable, Admitted, TypedGap",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgPdfLayoutEvidenceGapReason: "
-                    + "UpstreamEligibilityGap, PdfUnreadable, NoTextGlyphs, InvalidGlyphGeometry",
+                    + "UpstreamEligibilityGap, PdfUnreadable, NoTextGlyphs, InvalidGlyphGeometry, "
+                    + "EvidenceArtifactTooLarge",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgPdfLayoutEvidenceProductionRefusal: "
                     + "None, RetainedBytesUnavailable, LayoutEvidenceCustodyUnavailable",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgPdfProfileEligibilityDisposition: NotPdf, "
