@@ -99,8 +99,8 @@ public sealed class LuxembourgPdfProfileEligibilityProducerTests
     {
         var original = await CompleteCompositionAsync();
         var input = original.LuxembourgDerivationPopulation.Inputs.Single();
-        var laterRecord = CopyRecord(input.CorpusRecord, input.ObjectOrdinal + 1);
-        var earlierRecord = CopyRecord(input.CorpusRecord, input.ObjectOrdinal - 1);
+        var laterRecord = CopyRecord(input.CorpusRecord, input.ObjectOrdinal + 2);
+        var earlierRecord = CopyRecord(input.CorpusRecord, input.ObjectOrdinal + 1);
         var source = CompositionWithInputs(
             original,
             [InputWith(input, record: laterRecord), InputWith(input, record: earlierRecord)],
