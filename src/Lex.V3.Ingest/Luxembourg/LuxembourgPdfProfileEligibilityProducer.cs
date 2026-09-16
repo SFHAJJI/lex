@@ -183,8 +183,7 @@ public static class LuxembourgPdfProfileEligibilityProducer
             return Outcome(input, LuxembourgPdfProfileEligibilityDisposition.PublisherPdfEligible);
         }
 
-        if (gazette.Outcome != LuxembourgGazetteBodyOutcome.Admitted ||
-            gazette.RetainedTransportBytes is null)
+        if (gazette.Outcome != LuxembourgGazetteBodyOutcome.Admitted)
         {
             return Outcome(
                 input,
