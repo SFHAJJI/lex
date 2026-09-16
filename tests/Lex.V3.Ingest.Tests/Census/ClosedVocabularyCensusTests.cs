@@ -284,6 +284,8 @@ public sealed class ClosedVocabularyCensusTests
                     + "NoRedirect, AdmittedOriginRoute",
                 "Lex.V3.Ingest.RoutedHttpAcquisitionSession+RequestPolicyKind: RobotsGet, "
                     + "MachineQueryPost, MachineQueryGet",
+                "Lex.V3.Ingest.Stage3BodyCompositionRefusal: None, "
+                    + "LuxembourgBodySetOutsideCorpus, LuxembourgBodySetObjectMismatch",
                 "Lex.V3.Ingest.Stage3EvidenceEnvelopeRefusal: None, EuropeNotComplete, "
                     + "LuxembourgNotComplete, EuropeFormexRunMismatch, "
                     + "EuropeFormexClassificationMismatch, "
