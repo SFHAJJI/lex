@@ -48,13 +48,13 @@ public sealed record LexCorpus6Member(
 {
     public LexCorpus6Member Validate()
     {
-        ContractValidation.RequireDefined(Publisher, nameof(Publisher));
-        ContractValidation.RequireSha256(ObjectRefSha256, nameof(ObjectRefSha256));
+        RequireDefined(Publisher, nameof(Publisher));
+        RequireSha256(ObjectRefSha256, nameof(ObjectRefSha256));
         ArgumentOutOfRangeException.ThrowIfNegative(SourceOrdinal, nameof(SourceOrdinal));
         ArgumentNullException.ThrowIfNull(SourceManifestRef);
         ArgumentNullException.ThrowIfNull(RunIdentity);
-        ContractValidation.RequireDefined(BodyDisposition, nameof(BodyDisposition));
-        ContractValidation.RequireDefined(Outcome, nameof(Outcome));
+        RequireDefined(BodyDisposition, nameof(BodyDisposition));
+        RequireDefined(Outcome, nameof(Outcome));
         ArgumentException.ThrowIfNullOrWhiteSpace(RightsDisposition);
         ArgumentNullException.ThrowIfNull(RightsEvidenceRefs);
         ArgumentNullException.ThrowIfNull(Gaps);
@@ -65,8 +65,8 @@ public sealed record LexCorpus6Member(
 
         if (BodySha256 is not null)
         {
-            ContractValidation.RequireSha256(BodySha256, nameof(BodySha256));
-            ContractValidation.RequireSha256(BodyReceiptSha256!, nameof(BodyReceiptSha256));
+            RequireSha256(BodySha256, nameof(BodySha256));
+            RequireSha256(BodyReceiptSha256!, nameof(BodyReceiptSha256));
             ArgumentOutOfRangeException.ThrowIfNegative(BodyByteLength!.Value, nameof(BodyByteLength));
         }
         else if (BodyByteLength is not null || BodyReceiptSha256 is not null)
@@ -113,6 +113,26 @@ public sealed record LexCorpus6Member(
             }
         }
     }
+
+    internal static string RequireSha256(string value, string name)
+    {
+        if (value is not { Length: 64 } || value.Any(static c => c is not ((>= '0' and <= '9') or (>= 'a' and <= 'f'))))
+        {
+            throw new ArgumentException("A SHA-256 must be 64 lowercase hexadecimal characters.", name);
+        }
+
+        return value;
+    }
+
+    private static T RequireDefined<T>(T value, string name) where T : struct, Enum
+    {
+        if (!Enum.IsDefined(value))
+        {
+            throw new ArgumentOutOfRangeException(name, value, "The value is outside the closed vocabulary.");
+        }
+
+        return value;
+    }
 }
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
@@ -138,7 +158,7 @@ public sealed record LexCorpus6ManifestSet(
         ArgumentNullException.ThrowIfNull(Members);
         foreach (var value in ProfileIdentities.Concat(CorrigendumEvidenceReceiptSha256))
         {
-            ContractValidation.RequireSha256(value, nameof(ProfileIdentities));
+            LexCorpus6Member.RequireSha256(value, nameof(ProfileIdentities));
         }
 
         LexCorpus6Member.RequireSortedStrings(ProfileIdentities, nameof(ProfileIdentities));
@@ -413,7 +433,7 @@ public static class LexCorpus6Builder
                 result.Expressions!.RetainedDerivation, result.Expressions.RetainedEpisode,
                 result.RetainedTripwire!, result.RetainedTripwireLineage!,
             })
-            .Select(DurableBlobWriteReceiptDigest.Of)
+            .Select(static receipt => DurableBlobWriteReceiptDigest.Of(receipt!))
             .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
 
     private static void WriteArtifact(Utf8JsonWriter writer, string name, SourceArtifactRef artifact)
