@@ -122,6 +122,7 @@ public sealed class Stage3EvidenceLineageTests
             formex,
             classifications,
             fidelity,
+            Stage3EvidenceEnvelopeTests.CompleteAknInventory(substituted),
             out var refusal,
             out var detail);
 
@@ -153,6 +154,7 @@ public sealed class Stage3EvidenceLineageTests
             formex,
             classifications,
             fidelity,
+            Stage3EvidenceEnvelopeTests.CompleteAknInventory(luxembourg),
             out var refusal,
             out var detail)
             ?? throw new AssertFailedException($"Envelope refused: {refusal}: {detail}");

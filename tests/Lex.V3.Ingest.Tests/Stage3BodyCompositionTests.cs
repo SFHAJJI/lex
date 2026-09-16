@@ -24,7 +24,7 @@ public sealed class Stage3BodyCompositionTests
             formex, [acquired.Classification]);
         var fidelity = Stage3FidelityPreservationReconciliationTests.Complete(europe, luxembourg);
         var envelope = Stage3EvidenceEnvelope.TryCreate(
-            europe, luxembourg, formex, classifications, fidelity, out var envelopeRefusal, out var envelopeDetail);
+            europe, luxembourg, formex, classifications, fidelity, Stage3EvidenceEnvelopeTests.CompleteAknInventory(luxembourg), out var envelopeRefusal, out var envelopeDetail);
         Assert.IsNotNull(envelope, $"{envelopeRefusal}: {envelopeDetail}");
 
         var composition = Stage3BodyComposition.TryCreate(
@@ -71,7 +71,7 @@ public sealed class Stage3BodyCompositionTests
         var classifications = Stage3EvidenceEnvelopeTests.CompleteClassifications(formex);
         var fidelity = Stage3FidelityPreservationReconciliationTests.Complete(europe, luxembourg);
         var envelope = Stage3EvidenceEnvelope.TryCreate(
-            europe, luxembourg, formex, classifications, fidelity, out var envelopeRefusal, out var envelopeDetail);
+            europe, luxembourg, formex, classifications, fidelity, Stage3EvidenceEnvelopeTests.CompleteAknInventory(luxembourg), out var envelopeRefusal, out var envelopeDetail);
         Assert.IsNotNull(envelope, $"{envelopeRefusal}: {envelopeDetail}");
 
         Assert.IsNull(Stage3BodyComposition.TryCreate(envelope, out var refusal, out var detail));
@@ -96,7 +96,7 @@ public sealed class Stage3BodyCompositionTests
         var classifications = Stage3EvidenceEnvelopeTests.CompleteClassifications(formex);
         var fidelity = Stage3FidelityPreservationReconciliationTests.Complete(europe, luxembourg);
         var envelope = Stage3EvidenceEnvelope.TryCreate(
-            europe, luxembourg, formex, classifications, fidelity, out var envelopeRefusal, out var envelopeDetail);
+            europe, luxembourg, formex, classifications, fidelity, Stage3EvidenceEnvelopeTests.CompleteAknInventory(luxembourg), out var envelopeRefusal, out var envelopeDetail);
         Assert.IsNotNull(envelope, $"{envelopeRefusal}: {envelopeDetail}");
 
         Assert.IsNull(Stage3BodyComposition.TryCreate(envelope, out var refusal, out var detail));

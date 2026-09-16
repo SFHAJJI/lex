@@ -17,7 +17,7 @@ public sealed class Stage3EvidenceEnvelopeTests
         var fidelity = Stage3FidelityPreservationReconciliationTests.Complete(eu, luxembourg);
 
         var envelope = Stage3EvidenceEnvelope.TryCreate(
-            eu, luxembourg, formex, classifications, fidelity, out var refusal, out var detail);
+            eu, luxembourg, formex, classifications, fidelity, CompleteAknInventory(luxembourg), out var refusal, out var detail);
 
         Assert.AreEqual(Stage3EvidenceEnvelopeRefusal.None, refusal, detail);
         Assert.IsNotNull(envelope);
@@ -26,6 +26,37 @@ public sealed class Stage3EvidenceEnvelopeTests
         Assert.AreSame(formex, envelope.Formex);
         Assert.AreSame(classifications, envelope.FormexAnnexClassifications);
         Assert.AreSame(fidelity, envelope.FidelityPreservation);
+    }
+
+    [TestMethod]
+    public async Task LuxembourgAknInventoryMustComeFromTheExactRunPopulation()
+    {
+        var eu = await CompleteEuropeAsync();
+        var luxembourg = await LuxembourgQueryExecutionAdapterTests.RunEmptyDeliveredForEnvelopeAsync();
+        var foreignLuxembourg = await LuxembourgQueryExecutionAdapterTests.RunEmptyDeliveredForEnvelopeAsync();
+        var formex = EuFormexRunOutcomeReconciliationTests.CompleteForEnvelope(eu);
+        var classifications = CompleteClassifications(formex);
+        var fidelity = Stage3FidelityPreservationReconciliationTests.Complete(eu, luxembourg);
+        var inventory = await CompleteAknInventoryAsync(luxembourg);
+        var foreignInventory = await CompleteAknInventoryAsync(foreignLuxembourg);
+
+        var envelope = Stage3EvidenceEnvelope.TryCreate(
+            eu, luxembourg, formex, classifications, fidelity, inventory, out var refusal, out var detail);
+
+        Assert.AreEqual(Stage3EvidenceEnvelopeRefusal.None, refusal, detail);
+        Assert.IsNotNull(envelope);
+        Assert.AreSame(inventory, envelope.LuxembourgAknArticleInventoryPopulation);
+
+        Assert.IsNull(Stage3EvidenceEnvelope.TryCreate(
+            eu, luxembourg, formex, classifications, fidelity, foreignInventory,
+            out refusal, out detail));
+        Assert.AreEqual(Stage3EvidenceEnvelopeRefusal.LuxembourgAknArticleInventoryPopulationMismatch, refusal);
+        Assert.AreEqual(
+            "the AKN article inventory belongs to a different held-body derivation population",
+            detail);
+
+        Assert.ThrowsExactly<ArgumentNullException>(() => Stage3EvidenceEnvelope.TryCreate(
+            eu, luxembourg, formex, classifications, fidelity, null!, out _, out _));
     }
 
     [TestMethod]
@@ -45,11 +76,11 @@ public sealed class Stage3EvidenceEnvelopeTests
                 LuxembourgQueryExecutionRefusal.ScopeManifestNotRetained, null, "test"));
 
         Assert.IsNull(Stage3EvidenceEnvelope.TryCreate(
-            refusedEu, luxembourg, formex, classifications, fidelity, out var euRefusal, out _));
+            refusedEu, luxembourg, formex, classifications, fidelity, CompleteAknInventory(luxembourg), out var euRefusal, out _));
         Assert.AreEqual(Stage3EvidenceEnvelopeRefusal.EuropeNotComplete, euRefusal);
 
         Assert.IsNull(Stage3EvidenceEnvelope.TryCreate(
-            eu, refusedLuxembourg, formex, classifications, fidelity, out var luRefusal, out _));
+            eu, refusedLuxembourg, formex, classifications, fidelity, CompleteAknInventory(luxembourg), out var luRefusal, out _));
         Assert.AreEqual(Stage3EvidenceEnvelopeRefusal.LuxembourgNotComplete, luRefusal);
     }
 
@@ -73,7 +104,7 @@ public sealed class Stage3EvidenceEnvelopeTests
 
         Assert.AreEqual(EuQueryExecutionCompletion.AllFamiliesProven, missingJoinedProduction.Completion);
         Assert.IsNull(Stage3EvidenceEnvelope.TryCreate(
-            missingJoinedProduction, luxembourg, formex, classifications, fidelity, out var refusal, out _));
+            missingJoinedProduction, luxembourg, formex, classifications, fidelity, CompleteAknInventory(luxembourg), out var refusal, out _));
         Assert.AreEqual(Stage3EvidenceEnvelopeRefusal.EuropeNotComplete, refusal);
     }
 
@@ -88,7 +119,7 @@ public sealed class Stage3EvidenceEnvelopeTests
         var fidelity = Stage3FidelityPreservationReconciliationTests.Complete(eu, luxembourg);
 
         Assert.IsNull(Stage3EvidenceEnvelope.TryCreate(
-            eu, luxembourg, foreignFormex, foreignClassifications, fidelity, out var refusal, out var detail));
+            eu, luxembourg, foreignFormex, foreignClassifications, fidelity, CompleteAknInventory(luxembourg), out var refusal, out var detail));
         Assert.AreEqual(Stage3EvidenceEnvelopeRefusal.EuropeFormexRunMismatch, refusal);
         Assert.AreEqual("the Formex reconciliation belongs to a different EU result", detail);
     }
@@ -100,7 +131,7 @@ public sealed class Stage3EvidenceEnvelopeTests
         var luxembourg = await LuxembourgQueryExecutionAdapterTests.RunEmptyDeliveredForEnvelopeAsync();
 
         Assert.ThrowsExactly<ArgumentNullException>(() => Stage3EvidenceEnvelope.TryCreate(
-            eu, luxembourg, null!, null!, null!, out _, out _));
+            eu, luxembourg, null!, null!, null!, null!, out _, out _));
     }
 
     [TestMethod]
@@ -112,7 +143,7 @@ public sealed class Stage3EvidenceEnvelopeTests
         var fidelity = Stage3FidelityPreservationReconciliationTests.Complete(eu, luxembourg);
 
         Assert.ThrowsExactly<ArgumentNullException>(() => Stage3EvidenceEnvelope.TryCreate(
-            eu, luxembourg, formex, null!, fidelity, out _, out _));
+            eu, luxembourg, formex, null!, fidelity, CompleteAknInventory(luxembourg), out _, out _));
     }
 
     [TestMethod]
@@ -126,7 +157,7 @@ public sealed class Stage3EvidenceEnvelopeTests
         var fidelity = Stage3FidelityPreservationReconciliationTests.Complete(eu, luxembourg);
 
         Assert.IsNull(Stage3EvidenceEnvelope.TryCreate(
-            eu, luxembourg, formex, foreignClassifications, fidelity, out var refusal, out var detail));
+            eu, luxembourg, formex, foreignClassifications, fidelity, CompleteAknInventory(luxembourg), out var refusal, out var detail));
         Assert.AreEqual(Stage3EvidenceEnvelopeRefusal.EuropeFormexClassificationMismatch, refusal);
         Assert.AreEqual("the Formex annex classifications belong to a different Formex reconciliation", detail);
     }
@@ -143,7 +174,7 @@ public sealed class Stage3EvidenceEnvelopeTests
         var fidelity = Stage3FidelityPreservationReconciliationTests.Complete(eu, luxembourg);
 
         Assert.IsNull(Stage3EvidenceEnvelope.TryCreate(
-            eu, luxembourg, formex, classifications, fidelity, out var refusal, out var detail));
+            eu, luxembourg, formex, classifications, fidelity, CompleteAknInventory(luxembourg), out var refusal, out var detail));
         Assert.AreEqual(
             Stage3EvidenceEnvelopeRefusal.EuropeFormexClassificationSourceOutsideCorpus,
             refusal);
@@ -171,7 +202,7 @@ public sealed class Stage3EvidenceEnvelopeTests
         var fidelity = Stage3FidelityPreservationReconciliationTests.Complete(eu, luxembourg);
 
         var envelope = Stage3EvidenceEnvelope.TryCreate(
-            eu, luxembourg, formex, classifications, fidelity, out var refusal, out var detail);
+            eu, luxembourg, formex, classifications, fidelity, CompleteAknInventory(luxembourg), out var refusal, out var detail);
 
         Assert.AreEqual(Stage3EvidenceEnvelopeRefusal.None, refusal, detail);
         Assert.IsNotNull(envelope);
@@ -195,7 +226,7 @@ public sealed class Stage3EvidenceEnvelopeTests
         var fidelity = Stage3FidelityPreservationReconciliationTests.Complete(eu, luxembourg);
 
         Assert.IsNull(Stage3EvidenceEnvelope.TryCreate(
-            eu, luxembourg, formex, classifications, fidelity, out var refusal, out var detail));
+            eu, luxembourg, formex, classifications, fidelity, CompleteAknInventory(luxembourg), out var refusal, out var detail));
         Assert.AreEqual(
             Stage3EvidenceEnvelopeRefusal.EuropeFormexClassificationSourceOutsideCorpus,
             refusal);
@@ -222,7 +253,7 @@ public sealed class Stage3EvidenceEnvelopeTests
         var fidelity = Stage3FidelityPreservationReconciliationTests.Complete(eu, luxembourg);
 
         Assert.IsNull(Stage3EvidenceEnvelope.TryCreate(
-            eu, luxembourg, formex, classifications, fidelity, out var refusal, out var detail));
+            eu, luxembourg, formex, classifications, fidelity, CompleteAknInventory(luxembourg), out var refusal, out var detail));
         Assert.AreEqual(
             Stage3EvidenceEnvelopeRefusal.EuropeFormexClassificationSourceOutsideCorpus,
             refusal);
@@ -242,6 +273,7 @@ public sealed class Stage3EvidenceEnvelopeTests
 
         Assert.Contains(typeof(EuFormexAnnexClassificationReconciliation), parameters);
         Assert.Contains(typeof(Stage3FidelityPreservationReconciliation), parameters);
+        Assert.Contains(typeof(LuxembourgAknArticleInventoryPopulation), parameters);
         Assert.IsFalse(parameters.Contains(typeof(IEnumerable<EuImageOnlyAnnexProductionResult>)));
     }
 
@@ -257,7 +289,7 @@ public sealed class Stage3EvidenceEnvelopeTests
             foreignEurope, luxembourg);
 
         Assert.IsNull(Stage3EvidenceEnvelope.TryCreate(
-            eu, luxembourg, formex, classifications, foreignFidelity, out var refusal, out var detail));
+            eu, luxembourg, formex, classifications, foreignFidelity, CompleteAknInventory(luxembourg), out var refusal, out var detail));
         Assert.AreEqual(Stage3EvidenceEnvelopeRefusal.EuropeFidelityPreservationMismatch, refusal);
         Assert.AreEqual("the fidelity preservation belongs to a different EU result", detail);
     }
@@ -271,7 +303,7 @@ public sealed class Stage3EvidenceEnvelopeTests
         var classifications = CompleteClassifications(formex);
 
         Assert.ThrowsExactly<ArgumentNullException>(() => Stage3EvidenceEnvelope.TryCreate(
-            eu, luxembourg, formex, classifications, null!, out _, out _));
+            eu, luxembourg, formex, classifications, null!, CompleteAknInventory(luxembourg), out _, out _));
     }
 
     [TestMethod]
@@ -286,7 +318,7 @@ public sealed class Stage3EvidenceEnvelopeTests
             eu, foreignLuxembourg);
 
         Assert.IsNull(Stage3EvidenceEnvelope.TryCreate(
-            eu, luxembourg, formex, classifications, foreignFidelity, out var refusal, out var detail));
+            eu, luxembourg, formex, classifications, foreignFidelity, CompleteAknInventory(luxembourg), out var refusal, out var detail));
         Assert.AreEqual(Stage3EvidenceEnvelopeRefusal.LuxembourgFidelityPreservationMismatch, refusal);
         Assert.AreEqual("the fidelity preservation belongs to a different Luxembourg result", detail);
     }
@@ -297,6 +329,15 @@ public sealed class Stage3EvidenceEnvelopeTests
         EuFormexAnnexClassificationReconciliation.TryClose(
             formex, classifications ?? [], out var refusal, out var detail)
         ?? throw new AssertFailedException($"Formex annex classification refused: {refusal}: {detail}");
+
+    internal static LuxembourgAknArticleInventoryPopulation CompleteAknInventory(
+        LuxembourgQueryExecutionResult luxembourg) =>
+        CompleteAknInventoryAsync(luxembourg).GetAwaiter().GetResult();
+
+    internal static Task<LuxembourgAknArticleInventoryPopulation> CompleteAknInventoryAsync(
+        LuxembourgQueryExecutionResult luxembourg) =>
+        new LuxembourgAknArticleInventoryProducer(new EuAcquisitionTestFixture.EuInMemoryCustodyStore())
+            .RunAsync(luxembourg.HeldBodyDerivationPopulation!, CancellationToken.None);
 
     private static Task<EuQueryExecutionResult> CompleteEuropeAsync() =>
         EuAxiomWiringHarness.RunAsync(

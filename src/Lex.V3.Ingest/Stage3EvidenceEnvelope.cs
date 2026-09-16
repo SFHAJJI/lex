@@ -34,6 +34,9 @@ public enum Stage3EvidenceEnvelopeRefusal
 
     [JsonStringEnumMemberName("luxembourg_derivation_population_mismatch")]
     LuxembourgDerivationPopulationMismatch = 8,
+
+    [JsonStringEnumMemberName("luxembourg_akn_article_inventory_mismatch")]
+    LuxembourgAknArticleInventoryPopulationMismatch = 9,
 }
 
 /// <summary>
@@ -47,13 +50,15 @@ public sealed class Stage3EvidenceEnvelope
         LuxembourgQueryExecutionResult luxembourg,
         EuFormexRunOutcomeReconciliation formex,
         EuFormexAnnexClassificationReconciliation formexAnnexClassifications,
-        Stage3FidelityPreservationReconciliation fidelityPreservation)
+        Stage3FidelityPreservationReconciliation fidelityPreservation,
+        LuxembourgAknArticleInventoryPopulation luxembourgAknArticleInventoryPopulation)
     {
         Europe = europe;
         Luxembourg = luxembourg;
         Formex = formex;
         FormexAnnexClassifications = formexAnnexClassifications;
         FidelityPreservation = fidelityPreservation;
+        LuxembourgAknArticleInventoryPopulation = luxembourgAknArticleInventoryPopulation;
     }
 
     public EuQueryExecutionResult Europe { get; }
@@ -78,12 +83,19 @@ public sealed class Stage3EvidenceEnvelope
     /// </summary>
     public Stage3FidelityPreservationReconciliation FidelityPreservation { get; }
 
+    /// <summary>
+    /// The complete ordered AKN article dispositions produced from this exact Luxembourg run's
+    /// held-body derivation population. This carrier adds no marker or text interpretation.
+    /// </summary>
+    public LuxembourgAknArticleInventoryPopulation LuxembourgAknArticleInventoryPopulation { get; }
+
     public static Stage3EvidenceEnvelope? TryCreate(
         EuQueryExecutionResult europe,
         LuxembourgQueryExecutionResult luxembourg,
         EuFormexRunOutcomeReconciliation formex,
         EuFormexAnnexClassificationReconciliation formexAnnexClassifications,
         Stage3FidelityPreservationReconciliation fidelityPreservation,
+        LuxembourgAknArticleInventoryPopulation luxembourgAknArticleInventoryPopulation,
         out Stage3EvidenceEnvelopeRefusal refusal,
         out string? detail)
     {
@@ -92,6 +104,7 @@ public sealed class Stage3EvidenceEnvelope
         ArgumentNullException.ThrowIfNull(formex);
         ArgumentNullException.ThrowIfNull(formexAnnexClassifications);
         ArgumentNullException.ThrowIfNull(fidelityPreservation);
+        ArgumentNullException.ThrowIfNull(luxembourgAknArticleInventoryPopulation);
 
         refusal = Stage3EvidenceEnvelopeRefusal.None;
         detail = null;
@@ -148,6 +161,15 @@ public sealed class Stage3EvidenceEnvelope
             return null;
         }
 
+        if (!ReferenceEquals(
+                luxembourgAknArticleInventoryPopulation.SourcePopulation,
+                luxembourg.HeldBodyDerivationPopulation))
+        {
+            refusal = Stage3EvidenceEnvelopeRefusal.LuxembourgAknArticleInventoryPopulationMismatch;
+            detail = "the AKN article inventory belongs to a different held-body derivation population";
+            return null;
+        }
+
         var europeObjectRefs = europe.CorpusRecordSet!.Set.Records
             .Select(static record => record.ObjectRef)
             .ToHashSet();
@@ -171,7 +193,8 @@ public sealed class Stage3EvidenceEnvelope
             luxembourg,
             formex,
             formexAnnexClassifications,
-            fidelityPreservation);
+            fidelityPreservation,
+            luxembourgAknArticleInventoryPopulation);
     }
 
     private static bool EuropeIsComplete(EuQueryExecutionResult result) =>
