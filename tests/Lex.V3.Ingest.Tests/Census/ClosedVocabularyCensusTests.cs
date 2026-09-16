@@ -254,16 +254,16 @@ public sealed class ClosedVocabularyCensusTests
                     + "RowNotAdmitted, SubjectDeliveredTwice, NonAddressableSubjectObserved",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgPartitionCoverReconciliationRefusal: "
                     + "LeafExecutorRefused, LeafProofRefused, CoverReconciliationRefused",
-                "Lex.V3.Ingest.Luxembourg.LuxembourgPdfProfileEligibilityDisposition: NotPdf, "
-                    + "PublisherPdfEligible, GazettePdfEligible, TypedGap",
-                "Lex.V3.Ingest.Luxembourg.LuxembourgPdfProfileEligibilityGapReason: "
-                    + "GazetteReceiptMismatch",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgPdfLayoutEvidenceDisposition: "
                     + "NotApplicable, Admitted, TypedGap",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgPdfLayoutEvidenceGapReason: "
                     + "UpstreamEligibilityGap, PdfUnreadable, NoTextGlyphs, InvalidGlyphGeometry",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgPdfLayoutEvidenceProductionRefusal: "
                     + "None, RetainedBytesUnavailable",
+                "Lex.V3.Ingest.Luxembourg.LuxembourgPdfProfileEligibilityDisposition: NotPdf, "
+                    + "PublisherPdfEligible, GazettePdfEligible, TypedGap",
+                "Lex.V3.Ingest.Luxembourg.LuxembourgPdfProfileEligibilityGapReason: "
+                    + "GazetteReceiptMismatch",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionAdapter+ResourceObservationBuildO"
                     + "utcomeKind: Built, SubjectNotInCensus, ObjectKindNotRecognised, TermUnbound, "
                     + "RelationTermUnbound, RelationTermNotIri, RelationPredicateNotAdmitted, "

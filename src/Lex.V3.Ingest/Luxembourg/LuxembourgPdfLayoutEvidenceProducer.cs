@@ -149,7 +149,7 @@ public sealed class LuxembourgPdfLayoutEvidenceOutcome
 /// <summary>Exactly one layout-evidence outcome per member of one proof-complete eligibility population.</summary>
 public sealed class LuxembourgPdfLayoutEvidencePopulation
 {
-    internal LuxembourgPdfLayoutEvidencePopulation(
+    private LuxembourgPdfLayoutEvidencePopulation(
         LuxembourgPdfProfileEligibilityPopulation sourceEligibilityPopulation,
         IReadOnlyList<LuxembourgPdfLayoutEvidenceOutcome> outcomes,
         string ruleProfileSha256)
@@ -174,6 +174,12 @@ public sealed class LuxembourgPdfLayoutEvidencePopulation
     public string RuleProfileSha256 { get; }
 
     public string IdentitySha256 { get; }
+
+    internal static LuxembourgPdfLayoutEvidencePopulation Create(
+        LuxembourgPdfProfileEligibilityPopulation sourceEligibilityPopulation,
+        IReadOnlyList<LuxembourgPdfLayoutEvidenceOutcome> outcomes,
+        string ruleProfileSha256) =>
+        new(sourceEligibilityPopulation, outcomes, ruleProfileSha256);
 
     private static string Digest(string value) =>
         Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
@@ -337,7 +343,7 @@ public sealed class LuxembourgPdfLayoutEvidenceProducer
         }
 
         return LuxembourgPdfLayoutEvidenceProductionResult.Success(
-            new LuxembourgPdfLayoutEvidencePopulation(
+            LuxembourgPdfLayoutEvidencePopulation.Create(
                 sourceEligibilityPopulation, outcomes, RuleProfileSha256));
     }
 
