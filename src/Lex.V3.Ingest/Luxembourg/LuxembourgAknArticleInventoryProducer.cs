@@ -316,7 +316,7 @@ public sealed class LuxembourgAknArticleInventoryProducer
         }
 
         inventory = new LuxembourgAknArticleInventory(
-            input.CorpusRecord.ObjectRef.PublisherUri, RuleDigest, articles);
+            input.SelectedWemiCandidate.ExpressionIri, RuleDigest, articles);
         return true;
     }
 
