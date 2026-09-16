@@ -164,6 +164,33 @@ public sealed class LuxembourgAknLegalContentProfileProducerTests
     }
 
     [TestMethod]
+    public async Task PublicPublisherPdfPinsItsReachableUpstreamOutcomeIdentity()
+    {
+        var query = await LuxembourgGazetteAcquisitionTests
+            .CompletePublisherPdfForStage3BodyCompositionAsync();
+        var inventory = await Stage3EvidenceEnvelopeTests.CompleteAknInventoryAsync(query);
+        var producer = new LuxembourgAknLegalContentProfileProducer(
+            new EuAcquisitionTestFixture.EuInMemoryCustodyStore());
+
+        var first = await producer.RunAsync(inventory, CancellationToken.None);
+        var second = await producer.RunAsync(inventory, CancellationToken.None);
+
+        var outcome = first.Outcomes.Single();
+        Assert.AreEqual(
+            LuxembourgAknLegalContentDisposition.UpstreamNotInventoried,
+            outcome.Disposition);
+        Assert.AreEqual("NotAkn", outcome.Detail);
+        Assert.IsNull(outcome.Coordinate);
+        Assert.IsNull(outcome.Article);
+        Assert.AreSame(inventory, outcome.SourceInventoryPopulation);
+        Assert.AreSame(inventory.Outcomes.Single(), outcome.SourceInventoryOutcome);
+        Assert.AreEqual(first.IdentitySha256, second.IdentitySha256);
+        Assert.AreEqual(
+            "0000000000000000000000000000000000000000000000000000000000000000",
+            first.IdentitySha256);
+    }
+
+    [TestMethod]
     public void PublicDoorAcceptsTheReviewedInventoryPopulationAndNoCallerTokenMap()
     {
         var parameters = typeof(LuxembourgAknLegalContentProfileProducer)
