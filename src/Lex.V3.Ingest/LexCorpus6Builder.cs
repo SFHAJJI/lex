@@ -129,24 +129,108 @@ public sealed record LexCorpus6EuropeRightsMatrix(
 }
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record LexCorpus6LuxembourgWemiBinding(
+    string RootIri,
+    string ExpressionIri,
+    string ManifestationIri,
+    string ItemIri,
+    string LanguageIri,
+    string FormatIri,
+    SourceArtifactRef ObservationRef,
+    string IdentitySha256)
+{
+    public LexCorpus6LuxembourgWemiBinding Validate()
+    {
+        RequireExactAbsoluteIri(RootIri, nameof(RootIri));
+        RequireExactAbsoluteIri(ExpressionIri, nameof(ExpressionIri));
+        RequireExactAbsoluteIri(ManifestationIri, nameof(ManifestationIri));
+        RequireExactAbsoluteIri(ItemIri, nameof(ItemIri));
+        RequireExactAbsoluteIri(LanguageIri, nameof(LanguageIri));
+        RequireExactAbsoluteIri(FormatIri, nameof(FormatIri));
+        ArgumentNullException.ThrowIfNull(ObservationRef);
+        if (!string.Equals(IdentitySha256, ComputeIdentitySha256(
+                RootIri, ExpressionIri, ManifestationIri, ItemIri,
+                LanguageIri, FormatIri, ObservationRef), StringComparison.Ordinal))
+        {
+            throw new ArgumentException(
+                "The selected WEMI identity does not match its six coordinates and observation evidence.",
+                nameof(IdentitySha256));
+        }
+
+        return this;
+    }
+
+    public static LexCorpus6LuxembourgWemiBinding From(LuxembourgWemiCandidate candidate)
+    {
+        ArgumentNullException.ThrowIfNull(candidate);
+        return new LexCorpus6LuxembourgWemiBinding(
+            candidate.RootIri,
+            candidate.ExpressionIri,
+            candidate.ManifestationIri,
+            candidate.ItemIri,
+            candidate.LanguageIri,
+            candidate.FormatIri,
+            candidate.ObservationRef,
+            ComputeIdentitySha256(
+                candidate.RootIri, candidate.ExpressionIri, candidate.ManifestationIri,
+                candidate.ItemIri, candidate.LanguageIri, candidate.FormatIri,
+                candidate.ObservationRef)).Validate();
+    }
+
+    private static string ComputeIdentitySha256(
+        string rootIri,
+        string expressionIri,
+        string manifestationIri,
+        string itemIri,
+        string languageIri,
+        string formatIri,
+        SourceArtifactRef observationRef)
+    {
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        foreach (var value in new[]
+        {
+            "lex-corpus/6/luxembourg-selected-wemi/1",
+            rootIri,
+            expressionIri,
+            manifestationIri,
+            itemIri,
+            languageIri,
+            formatIri,
+            observationRef.ResourceId,
+            observationRef.Sha256,
+        })
+        {
+            hash.AppendData(Encoding.UTF8.GetBytes(value));
+            hash.AppendData([(byte)'\n']);
+        }
+
+        return Convert.ToHexStringLower(hash.GetHashAndReset());
+    }
+
+    private static void RequireExactAbsoluteIri(string value, string name)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(value);
+        if (!Uri.TryCreate(value, UriKind.Absolute, out var parsed) ||
+            !string.Equals(parsed.AbsoluteUri, value, StringComparison.Ordinal) ||
+            !string.IsNullOrEmpty(parsed.UserInfo) || !string.IsNullOrEmpty(parsed.Query) ||
+            !string.IsNullOrEmpty(parsed.Fragment))
+        {
+            throw new ArgumentException("A selected WEMI coordinate must be one exact absolute IRI.", name);
+        }
+    }
+}
+
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record LexCorpus6LuxembourgRights(
-    string SelectedManifestationIri,
+    LexCorpus6LuxembourgWemiBinding SelectedWemi,
     SourceArtifactRef BoundRunIdentity,
     LuxembourgRightsChannelDisposition Disposition,
     IReadOnlyList<SourceArtifactRef> EvidenceRefs)
 {
     public LexCorpus6LuxembourgRights Validate(SourceArtifactRef memberRunIdentity)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(SelectedManifestationIri);
-        if (!Uri.TryCreate(SelectedManifestationIri, UriKind.Absolute, out var parsed) ||
-            !string.IsNullOrEmpty(parsed.UserInfo) ||
-            !string.IsNullOrEmpty(parsed.Query) ||
-            !string.IsNullOrEmpty(parsed.Fragment))
-        {
-            throw new ArgumentException(
-                "The selected Luxembourg manifestation must be an exact absolute IRI.",
-                nameof(SelectedManifestationIri));
-        }
+        ArgumentNullException.ThrowIfNull(SelectedWemi);
+        SelectedWemi.Validate();
 
         ArgumentNullException.ThrowIfNull(BoundRunIdentity);
         ArgumentNullException.ThrowIfNull(memberRunIdentity);
@@ -548,7 +632,7 @@ public static class LexCorpus6Builder
                 admitted ? LexCorpus6OutcomeKind.Acquired : LexCorpus6OutcomeKind.RightsWithheld,
                 null,
                 new LexCorpus6LuxembourgRights(
-                    rights.SelectedManifestationIri,
+                    LexCorpus6LuxembourgWemiBinding.From(input.SelectedWemiCandidate),
                     rights.BoundRunIdentity,
                     rights.Disposition,
                     SortArtifacts(rightsEvidence)),
@@ -633,7 +717,7 @@ public static class LexCorpus6Builder
                 else
                 {
                     writer.WriteStartObject("luxembourg_rights");
-                    writer.WriteString("selected_manifestation_iri", member.LuxembourgRights.SelectedManifestationIri);
+                    WriteLuxembourgWemiBinding(writer, member.LuxembourgRights.SelectedWemi);
                     WriteArtifact(writer, "bound_run_identity", member.LuxembourgRights.BoundRunIdentity);
                     writer.WriteString("disposition", ContractWire.NameOf(member.LuxembourgRights.Disposition));
                     writer.WriteStartArray("evidence_refs");
@@ -779,6 +863,23 @@ public static class LexCorpus6Builder
         }
 
         writer.WriteEndArray();
+        writer.WriteEndObject();
+    }
+
+    private static void WriteLuxembourgWemiBinding(
+        Utf8JsonWriter writer,
+        LexCorpus6LuxembourgWemiBinding binding)
+    {
+        binding.Validate();
+        writer.WriteStartObject("selected_wemi");
+        writer.WriteString("root_iri", binding.RootIri);
+        writer.WriteString("expression_iri", binding.ExpressionIri);
+        writer.WriteString("manifestation_iri", binding.ManifestationIri);
+        writer.WriteString("item_iri", binding.ItemIri);
+        writer.WriteString("language_iri", binding.LanguageIri);
+        writer.WriteString("format_iri", binding.FormatIri);
+        WriteArtifact(writer, "observation_ref", binding.ObservationRef);
+        writer.WriteString("identity_sha256", binding.IdentitySha256);
         writer.WriteEndObject();
     }
 }
