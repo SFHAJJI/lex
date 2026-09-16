@@ -22,9 +22,6 @@ public enum Canon2AliasArtifactRefusal
 
     [JsonStringEnumMemberName("coordinate_collision")]
     CoordinateCollision = 3,
-
-    [JsonStringEnumMemberName("non_direct_graph")]
-    NonDirectGraph = 4,
 }
 
 /// <summary>The coordinate a migration identity occupied before and after canonicalization.</summary>
@@ -103,8 +100,10 @@ public sealed class Canon2AliasArtifact
     public IReadOnlyList<Canon2AliasEntry> Entries { get; }
 
     /// <summary>
-    /// Builds one canonical direct graph. Source and target identities are each unique, no two
-    /// source identities occupy one coordinate, and no target is itself a source.
+    /// Builds one canonical direct graph. Identity uniqueness is coordinate-scoped and one alias
+    /// may occupy each coordinate. Because every entry preserves its coordinate and refuses a
+    /// self-edge, that one-edge-per-coordinate rule structurally excludes fan-in, fan-out, chains
+    /// and cycles.
     /// </summary>
     public static Canon2AliasArtifact? TryCreate(
         IEnumerable<Canon2AliasEntry> entries,
@@ -146,16 +145,6 @@ public sealed class Canon2AliasArtifact
             {
                 refusal = Canon2AliasArtifactRefusal.CoordinateCollision;
                 detail = CoordinateDetail(entry.SourceCoordinate);
-                return null;
-            }
-        }
-
-        foreach (var intermediate in sourceIdentities)
-        {
-            if (targetIdentities.Contains(intermediate))
-            {
-                refusal = Canon2AliasArtifactRefusal.NonDirectGraph;
-                detail = $"{CoordinateDetail(intermediate.Coordinate)}:{intermediate.Identity}";
                 return null;
             }
         }
