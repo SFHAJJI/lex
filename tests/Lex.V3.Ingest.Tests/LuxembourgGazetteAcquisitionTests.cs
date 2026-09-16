@@ -345,7 +345,13 @@ public sealed class LuxembourgGazetteAcquisitionTests
             pdf: null,
             ladderItem: ItemPdf,
             ladderBody: PdfBytes)).Result;
-        return CopyWithGazetteBodySets(held, rejected.GazetteBodySetsByOrdinal!);
+        var heldOrdinal = held.GazetteBodySetsByOrdinal!.Keys.Single();
+        return CopyWithGazetteBodySets(
+            held,
+            new Dictionary<int, LuxembourgGazetteBodySet>
+            {
+                [heldOrdinal] = rejected.GazetteBodySetsByOrdinal!.Values.Single(),
+            });
     }
 
     internal static async Task<LuxembourgQueryExecutionResult> CompleteWithUnretainedSelectedGazetteForStage3BodyCompositionAsync() =>
