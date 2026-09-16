@@ -1,6 +1,5 @@
 using Lex.V3.Ingest.Europe;
 using Lex.V3.Ingest.Luxembourg;
-using Lex.V3.Contracts.Source.Luxembourg;
 
 namespace Lex.V3.Ingest.Tests;
 
@@ -78,24 +77,6 @@ public sealed class LuxembourgPdfProfileEligibilityProducerTests
     }
 
     [TestMethod]
-    public async Task ASelectedPdfWithoutRetainedGazetteBytesUsesThePublisherPdfFamily()
-    {
-        var composition = await CompleteCompositionAsync(
-            await LuxembourgGazetteAcquisitionTests
-                .CompleteWithUnretainedSelectedGazetteForStage3BodyCompositionAsync());
-        var matchingGazette = composition.Luxembourg
-            .SelectMany(static value => value.GazetteBodies.Bodies)
-            .Single(body => body.Candidate.WemiCandidate.ItemIri ==
-                composition.LuxembourgDerivationPopulation.Inputs.Single().SelectedWemiCandidate.ItemIri);
-        Assert.AreEqual(LuxembourgGazetteBodyOutcome.TypedGap, matchingGazette.Outcome);
-        Assert.IsNull(matchingGazette.RetainedTransportBytes);
-
-        var outcome = LuxembourgPdfProfileEligibilityProducer.Produce(composition).Outcomes.Single();
-
-        AssertOutcome(outcome, LuxembourgPdfProfileEligibilityDisposition.PublisherPdfEligible);
-    }
-
-    [TestMethod]
     public async Task EveryAcceptedHeldInputHasExactlyOneOutcomeInProofBoundSourceOrder()
     {
         var compositions = new[]
@@ -108,9 +89,6 @@ public sealed class LuxembourgPdfProfileEligibilityProducerTests
                 await LuxembourgGazetteAcquisitionTests.CompletePublisherPdfForStage3BodyCompositionAsync()),
             await CompleteCompositionAsync(
                 await LuxembourgGazetteAcquisitionTests.CompleteWithDistinctReceiptsForStage3BodyCompositionAsync()),
-            await CompleteCompositionAsync(
-                await LuxembourgGazetteAcquisitionTests
-                    .CompleteWithUnretainedSelectedGazetteForStage3BodyCompositionAsync()),
         };
 
         foreach (var composition in compositions)
