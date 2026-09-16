@@ -532,6 +532,9 @@ public sealed class LuxembourgGazetteAcquisitionTests
             // disallows the listing ends that session there, and the GET is then unscripted.
             16 when pdf is not null => Response(request, Encoding.ASCII.GetBytes(pdfRobots ?? "User-agent: *\nAllow: /\n"), "text/plain"),
             17 when pdf is { } scripted && pdfRobots is null => Document(request, ItemPdf, scripted.Status, scripted.Body),
+            _ when ladderBodies is not null
+                && request.RequestUri?.AbsolutePath == "/robots.txt" =>
+                Response(request, "User-agent: *\nAllow: /\n"u8.ToArray(), "text/plain"),
             _ when ladderBodies is not null => DocumentFromMap(request, ladderBodies),
             _ => throw new AssertFailedException($"Unexpected HTTP request {ordinal}: {request.Method} {request.RequestUri}"),
         });
