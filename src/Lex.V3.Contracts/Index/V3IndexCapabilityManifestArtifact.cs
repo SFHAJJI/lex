@@ -1,8 +1,8 @@
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
-using System.Globalization;
 using Lex.V3.Contracts.Source.Core;
 
 namespace Lex.V3.Contracts.Index;
@@ -127,6 +127,13 @@ public static class V3IndexCapabilityManifestArtifact
         {
             throw new ArgumentException(
                 "Unexpected index capability period granularity.",
+                nameof(canonicalBytes));
+        }
+
+        if (wire.Cells is null || wire.Cells.Any(static cell => cell is null))
+        {
+            throw new ArgumentException(
+                "The index capability manifest contains a null cell.",
                 nameof(canonicalBytes));
         }
 

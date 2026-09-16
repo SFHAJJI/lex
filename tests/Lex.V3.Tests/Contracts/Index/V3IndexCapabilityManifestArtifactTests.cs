@@ -50,7 +50,7 @@ public sealed class V3IndexCapabilityManifestArtifactTests
     [TestMethod]
     public void ReaderRefusesDigestSchemaGranularityAndUnknownMemberDrift()
     {
-        var bytes = Write(Create(Cell("search", "fts_title", "title", "fra", 2020, 2024, 41)), out var digest);
+        var bytes = Write(Create(Cell("search", "fts_title", "title", "fra", 2020, 2024, 41)), out _);
 
         Assert.ThrowsExactly<ArgumentException>(() => V3IndexCapabilityManifestArtifact.ParseAndVerify(
             new SourceArtifactRef(ArtifactResourceId, new string('a', 64)),
@@ -60,6 +60,7 @@ public sealed class V3IndexCapabilityManifestArtifactTests
         AssertInvalid(Replace(bytes, V3IndexCapabilityManifestArtifact.SchemaId, "wrong-schema"));
         AssertInvalid(Replace(bytes, "\"period_granularity\":\"day\"", "\"period_granularity\":\"month\""));
         AssertInvalid(Replace(bytes, "\"population\":41", "\"population\":41,\"extra\":true"));
+        AssertInvalid(Replace(bytes, "\"cells\":[{", "\"cells\":[null,{"));
 
         void AssertInvalid(byte[] candidate)
         {
