@@ -110,6 +110,37 @@ public sealed class LuxembourgPdfLayoutEvidenceProducerTests
     }
 
     [TestMethod]
+    public void ArtifactCeilingStopsOnTheCrossingGlyphWriteWithoutGrowingTheBuffer()
+    {
+        const string ruleProfileSha256 =
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        const string sourceIdentitySha256 =
+            "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+        var page = new LuxembourgPdfPageEvidence(1, 612d, 792d, 0, 0);
+        var glyph = new LuxembourgPdfGlyphEvidence(
+            1, 0, "A", 10d, 20d, 30d, 40d, 12d, "FixtureFont", 0, 0);
+
+        int prefixLength;
+        using (var probe = new LuxembourgPdfLayoutEvidenceArtifactCodec.Writer(
+                   ruleProfileSha256, sourceIdentitySha256, 1, long.MaxValue))
+        {
+            probe.WritePage(page, glyphCount: 1);
+            prefixLength = probe.ToMemory().Length;
+        }
+
+        using var bounded = new LuxembourgPdfLayoutEvidenceArtifactCodec.Writer(
+            ruleProfileSha256, sourceIdentitySha256, 1, prefixLength);
+        bounded.WritePage(page, glyphCount: 1);
+        Assert.AreEqual(prefixLength, bounded.ToMemory().Length,
+            "The ceiling must admit the complete header and page prefix.");
+
+        Assert.ThrowsExactly<LayoutEvidenceArtifactTooLargeException>(() =>
+            bounded.WriteGlyph(glyph));
+        Assert.AreEqual(prefixLength, bounded.ToMemory().Length,
+            "The rejected crossing write must not grow the retained buffer beyond its ceiling.");
+    }
+
+    [TestMethod]
     public async Task UnreadableEligiblePdfIsAnExplicitGapRatherThanInventedText()
     {
         var bytes = "%PDF-1.7 deliberately unreadable\n%%EOF\n"u8.ToArray();
