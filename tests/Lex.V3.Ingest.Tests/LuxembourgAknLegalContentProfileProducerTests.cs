@@ -186,7 +186,7 @@ public sealed class LuxembourgAknLegalContentProfileProducerTests
         Assert.AreSame(inventory.Outcomes.Single(), outcome.SourceInventoryOutcome);
         Assert.AreEqual(first.IdentitySha256, second.IdentitySha256);
         Assert.AreEqual(
-            "0000000000000000000000000000000000000000000000000000000000000000",
+            "47f2c680fafa2b0a2c8bd1692ecb397c2cf31a3f829b4cb04be64af1536de6e7",
             first.IdentitySha256);
     }
 
