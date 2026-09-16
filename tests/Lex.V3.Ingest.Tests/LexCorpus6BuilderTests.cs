@@ -44,6 +44,16 @@ public sealed class LexCorpus6BuilderTests
         Assert.IsTrue(luxembourg.HeldBodyDerivationPopulation.Inputs.Count > 0);
         Assert.IsTrue(luxembourg.HeldBodyDerivationPopulation.Inputs.All(
             static input => input.RightsResolution is not null));
+        Assert.IsTrue(luxembourg.HeldBodyDerivationPopulation.Inputs.All(static input =>
+            string.Equals(
+                input.RightsResolution!.SelectedManifestationIri,
+                input.SelectedWemiCandidate.ManifestationIri,
+                StringComparison.Ordinal) &&
+            input.RightsResolution.BoundRunIdentity == input.RightsResolution.SparqlObservations.RunIdentity &&
+            input.RightsResolution.BoundRunIdentity == input.RightsResolution.InFileObservations.RunIdentity));
+        Assert.IsTrue(luxembourg.HeldBodyDerivationPopulation.Inputs.Any(static input =>
+            input.RightsResolution!.BoundRunIdentity != input.CorpusRecord.RunIdentity),
+            "The final rights observation run and the corpus acquisition run are distinct provenance domains.");
     }
 
     [TestMethod]
