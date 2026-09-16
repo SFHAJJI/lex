@@ -1,6 +1,7 @@
 using Lex.V3.Contracts.Custody;
 using Lex.V3.Contracts.Source.Corpus;
 using Lex.V3.Contracts.Source.Http;
+using Lex.V3.Contracts.Source.Luxembourg;
 using Lex.V3.Ingest.Luxembourg;
 
 namespace Lex.V3.Ingest.Tests;
@@ -20,6 +21,15 @@ public sealed class LuxembourgHeldBodyDerivationPopulationTests
         var input = population.Inputs.Single();
         Assert.AreEqual(CorpusBodyRecordKind.Held, input.CorpusRecord.Body.Kind);
         Assert.AreEqual(LuxembourgUserFormatToken.PdfA, input.Address.UserFormatToken);
+        Assert.AreEqual(
+            "http://data.legilux.public.lu/eli/etat/leg/loi/2026/01/01/a1/jo/fr/pdfa",
+            input.SelectedWemiCandidate.ManifestationIri);
+        Assert.AreEqual(
+            input.Address.StoreFileUri.Value.AbsoluteUri,
+            input.SelectedWemiCandidate.ItemIri);
+        Assert.AreEqual(
+            LuxembourgWemiCandidateDisposition.StructurallyConsistent,
+            input.SelectedWemiCandidate.Disposition);
         Assert.AreEqual(input.CorpusRecord.ObjectOrdinal, input.ObjectOrdinal);
         Assert.AreSame(input.CorpusRecord.Body.Receipt, input.Receipt);
         Assert.AreEqual(
