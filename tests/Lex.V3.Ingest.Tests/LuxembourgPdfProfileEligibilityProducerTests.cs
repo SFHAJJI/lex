@@ -77,7 +77,7 @@ public sealed class LuxembourgPdfProfileEligibilityProducerTests
     }
 
     [TestMethod]
-    public async Task EveryAcceptedHeldInputHasExactlyOneOutcomeInOrdinalOrder()
+    public async Task EveryAcceptedHeldInputHasExactlyOneOutcomeInProofBoundSourceOrder()
     {
         var compositions = new[]
         {
@@ -95,12 +95,12 @@ public sealed class LuxembourgPdfProfileEligibilityProducerTests
         {
             var population = LuxembourgPdfProfileEligibilityProducer.Produce(composition);
             Assert.HasCount(composition.LuxembourgDerivationPopulation.Inputs.Count, population.Outcomes);
-            CollectionAssert.AreEqual(
-                composition.LuxembourgDerivationPopulation.Inputs
-                    .OrderBy(static input => input.ObjectOrdinal)
-                    .Select(static input => input.ObjectOrdinal)
-                    .ToArray(),
-                population.Outcomes.Select(static outcome => outcome.Input.ObjectOrdinal).ToArray());
+            for (var index = 0; index < population.Outcomes.Count; index++)
+            {
+                Assert.AreSame(
+                    composition.LuxembourgDerivationPopulation.Inputs[index],
+                    population.Outcomes[index].Input);
+            }
         }
     }
 

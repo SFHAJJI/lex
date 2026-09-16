@@ -95,7 +95,10 @@ public sealed class LuxembourgPdfProfileEligibilityOutcome
         Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
 }
 
-/// <summary>Exactly one ordered PDF-family eligibility outcome per held Luxembourg body.</summary>
+/// <summary>
+/// Exactly one PDF-family eligibility outcome per held Luxembourg body, preserving the source
+/// population's already-verified ordinal order.
+/// </summary>
 public sealed class LuxembourgPdfProfileEligibilityPopulation
 {
     internal LuxembourgPdfProfileEligibilityPopulation(
@@ -143,7 +146,6 @@ public static class LuxembourgPdfProfileEligibilityProducer
             .SelectMany(static value => value.GazetteBodies.Bodies)
             .ToArray();
         var outcomes = composition.LuxembourgDerivationPopulation.Inputs
-            .OrderBy(static input => input.ObjectOrdinal)
             .Select(input => Classify(input, gazetteBodies))
             .ToArray();
         return new LuxembourgPdfProfileEligibilityPopulation(
