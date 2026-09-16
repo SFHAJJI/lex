@@ -64,27 +64,20 @@ public sealed class Canon2AliasArtifactTests
     }
 
     [TestMethod]
-    public void DuplicateSourceIsRefused()
+    public void IdentityTokensAreScopedToTheirCoordinates()
     {
         var artifact = Canon2AliasArtifact.TryCreate(
-            [Entry("old-a", "new-a", "article-1"), Entry("old-a", "new-b", "article-1")],
+            [
+                Entry("old-a", "middle", "article-1"),
+                Entry("old-a", "new-b", "article-2"),
+                Entry("old-c", "middle", "article-3"),
+                Entry("middle", "old-c", "article-4"),
+            ],
             out var refusal,
-            out _);
+            out var detail);
 
-        Assert.IsNull(artifact);
-        Assert.AreEqual(Canon2AliasArtifactRefusal.DuplicateSource, refusal);
-    }
-
-    [TestMethod]
-    public void DuplicateTargetIsRefused()
-    {
-        var artifact = Canon2AliasArtifact.TryCreate(
-            [Entry("old-a", "new-a", "article-1"), Entry("old-b", "new-a", "article-2")],
-            out var refusal,
-            out _);
-
-        Assert.IsNull(artifact);
-        Assert.AreEqual(Canon2AliasArtifactRefusal.DuplicateTarget, refusal);
+        Assert.IsNotNull(artifact, $"{refusal}: {detail}");
+        Assert.AreEqual(4, artifact.Entries.Count);
     }
 
     [TestMethod]
@@ -97,24 +90,6 @@ public sealed class Canon2AliasArtifactTests
 
         Assert.IsNull(artifact);
         Assert.AreEqual(Canon2AliasArtifactRefusal.CoordinateCollision, refusal);
-    }
-
-    [TestMethod]
-    public void ChainsAndCyclesAreRefused()
-    {
-        var chain = Canon2AliasArtifact.TryCreate(
-            [Entry("old-a", "middle", "article-1"), Entry("middle", "new-b", "article-2")],
-            out var chainRefusal,
-            out _);
-        var cycle = Canon2AliasArtifact.TryCreate(
-            [Entry("old-a", "old-b", "article-1"), Entry("old-b", "old-a", "article-2")],
-            out var cycleRefusal,
-            out _);
-
-        Assert.IsNull(chain);
-        Assert.AreEqual(Canon2AliasArtifactRefusal.NonDirectGraph, chainRefusal);
-        Assert.IsNull(cycle);
-        Assert.AreEqual(Canon2AliasArtifactRefusal.NonDirectGraph, cycleRefusal);
     }
 
     [TestMethod]
