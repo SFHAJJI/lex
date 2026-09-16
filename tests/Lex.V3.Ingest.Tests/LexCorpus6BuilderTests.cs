@@ -80,13 +80,13 @@ public sealed class LexCorpus6BuilderTests
             first.VerifiedSet.Set.EuropeRightsMatrix.ExceptionChannels);
         Assert.IsTrue(first.VerifiedSet.Set.Members
             .Where(static member =>
-                member.Publisher == Lex.V3.Contracts.Source.Scope.PublisherId.EuEurLex &&
+                member.Publisher == Lex.V3.Contracts.PublisherId.EuEurLex &&
                 member.BodySha256 is not null)
             .All(static member =>
                 member.EuropeContentClass is not null && member.LuxembourgRights is null));
         Assert.IsTrue(first.VerifiedSet.Set.Members
             .Where(static member =>
-                member.Publisher == Lex.V3.Contracts.Source.Scope.PublisherId.LuLegilux &&
+                member.Publisher == Lex.V3.Contracts.PublisherId.LuLegilux &&
                 member.BodySha256 is not null)
             .All(static member =>
                 member.EuropeContentClass is null &&
