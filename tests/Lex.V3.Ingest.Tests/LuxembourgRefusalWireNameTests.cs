@@ -104,6 +104,7 @@ public sealed class LuxembourgRefusalWireNameTests
                 "gazette_body_not_produced",
                 "population_ledger_not_completed",
                 "observed_object_identity_set_not_retained",
+                "held_body_derivation_population_not_completed",
             }),
             string.Join("\n", WireNames<LuxembourgQueryExecutionRefusal>()),
             "a wire name changing is a contract change; a number changing is not.");

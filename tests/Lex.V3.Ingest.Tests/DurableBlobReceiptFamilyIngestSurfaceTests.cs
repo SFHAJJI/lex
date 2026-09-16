@@ -113,6 +113,7 @@ public sealed class DurableBlobReceiptFamilyIngestSurfaceTests
                 // loop held for one Gazette-PDF body, beside its address, requests and route evidence, for
                 // the producer to verify. It HOLDS that receipt and never constructs one.
                 "field private instance Lex.V3.Ingest.Luxembourg.LuxembourgGazetteBodyAcquisition::<RetainedTransportBytes>k__BackingField -> " + Receipt,
+                "field private instance Lex.V3.Ingest.Luxembourg.LuxembourgHeldBodyDerivationInput::<Receipt>k__BackingField -> " + Receipt,
                 "field private instance Lex.V3.Ingest.Luxembourg."
                     + "LuxembourgObservedObjectIdentitySetWriteResult::"
                     + "<RetainedSetReceipt>k__BackingField -> " + Receipt + "?",
@@ -177,6 +178,7 @@ public sealed class DurableBlobReceiptFamilyIngestSurfaceTests
                 + "System.Collections.Generic.IReadOnlyList<" + Receipt + ">",
                 "property public instance Lex.V3.Ingest.Europe.EuXhtmlAnnexInventory::SourceReceipt() -> " + Receipt,
                 "property public instance Lex.V3.Ingest.Luxembourg.LuxembourgGazetteBodyAcquisition::RetainedTransportBytes() -> " + Receipt,
+                "property public instance Lex.V3.Ingest.Luxembourg.LuxembourgHeldBodyDerivationInput::Receipt() -> " + Receipt,
                 "property public instance Lex.V3.Ingest.Luxembourg."
                     + "LuxembourgObservedObjectIdentitySetWriteResult::RetainedSetReceipt() -> "
                     + Receipt + "?",

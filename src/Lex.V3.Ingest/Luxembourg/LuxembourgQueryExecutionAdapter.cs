@@ -550,6 +550,24 @@ public enum LuxembourgQueryExecutionRefusal
     /// </summary>
     [JsonStringEnumMemberName("observed_object_identity_set_not_retained")]
     ObservedObjectIdentitySetNotRetained = 18,
+
+    /// <summary>
+    /// The final verified corpus set's held-body subset could not be bound exactly to this run's
+    /// selected publisher addresses. Without that binding a derivation profile would have to guess
+    /// whether retained bytes are AKN/XML or PDF, so the run refuses instead.
+    /// </summary>
+    /// <remarks>
+    /// Defensive at the current production door rather than a separately reachable publisher
+    /// outcome. <c>RunCoreAsync</c> creates one <c>mintedAddressesByObjectRef</c> map, uses that exact
+    /// map to build the manifest, and hands the same instance to document acquisition. Acquisition
+    /// can produce a held outcome only after finding the row's object in that map; the corpus-set
+    /// writer then derives held records from those same outcomes. Consequently the three inputs to
+    /// <c>LuxembourgHeldBodyDerivationPopulation.TryCreate</c> are mutually consistent by
+    /// construction today. The typed refusal is retained as a fail-closed boundary for a future
+    /// acquisition or record-writer path that no longer shares that construction.
+    /// </remarks>
+    [JsonStringEnumMemberName("held_body_derivation_population_not_completed")]
+    HeldBodyDerivationPopulationNotCompleted = 19,
 }
 
 /// <summary>
@@ -738,6 +756,7 @@ public sealed class LuxembourgQueryExecutionResult
         SourceArtifactRef? observedObjectIdentitySetRef,
         DurableBlobWriteReceipt? observedObjectIdentitySetReceipt,
         VerifiedLuxembourgObservedObjectIdentitySet? observedObjectIdentitySet,
+        LuxembourgHeldBodyDerivationPopulation? heldBodyDerivationPopulation,
         IReadOnlyDictionary<int, LuxembourgGazetteBodySet>? gazetteBodySetsByOrdinal,
         IReadOnlyDictionary<int, IReadOnlyDictionary<string, CorpusAcquisitionRefusalReason>>? gazetteListingFetchRefusalsByOrdinal,
         IReadOnlyDictionary<int, IReadOnlyList<string>>? gazetteListingsWithContradictoryLegalValueByOrdinal,
@@ -762,6 +781,7 @@ public sealed class LuxembourgQueryExecutionResult
         ObservedObjectIdentitySetRef = observedObjectIdentitySetRef;
         ObservedObjectIdentitySetReceipt = observedObjectIdentitySetReceipt;
         ObservedObjectIdentitySet = observedObjectIdentitySet;
+        HeldBodyDerivationPopulation = heldBodyDerivationPopulation;
         GazetteBodySetsByOrdinal = gazetteBodySetsByOrdinal;
         GazetteListingFetchRefusalsByOrdinal = gazetteListingFetchRefusalsByOrdinal;
         GazetteListingsWithContradictoryLegalValueByOrdinal = gazetteListingsWithContradictoryLegalValueByOrdinal;
@@ -787,6 +807,7 @@ public sealed class LuxembourgQueryExecutionResult
         SourceArtifactRef observedObjectIdentitySetRef,
         DurableBlobWriteReceipt observedObjectIdentitySetReceipt,
         VerifiedLuxembourgObservedObjectIdentitySet observedObjectIdentitySet,
+        LuxembourgHeldBodyDerivationPopulation heldBodyDerivationPopulation,
         IReadOnlyDictionary<int, LuxembourgGazetteBodySet> gazetteBodySetsByOrdinal,
         IReadOnlyDictionary<int, IReadOnlyDictionary<string, CorpusAcquisitionRefusalReason>> gazetteListingFetchRefusalsByOrdinal,
         IReadOnlyDictionary<int, IReadOnlyList<string>> gazetteListingsWithContradictoryLegalValueByOrdinal,
@@ -807,6 +828,7 @@ public sealed class LuxembourgQueryExecutionResult
         ArgumentNullException.ThrowIfNull(observedObjectIdentitySetRef);
         ArgumentNullException.ThrowIfNull(observedObjectIdentitySetReceipt);
         ArgumentNullException.ThrowIfNull(observedObjectIdentitySet);
+        ArgumentNullException.ThrowIfNull(heldBodyDerivationPopulation);
         ArgumentNullException.ThrowIfNull(gazetteBodySetsByOrdinal);
         ArgumentNullException.ThrowIfNull(gazetteListingFetchRefusalsByOrdinal);
         ArgumentNullException.ThrowIfNull(gazetteListingsWithContradictoryLegalValueByOrdinal);
@@ -824,7 +846,7 @@ public sealed class LuxembourgQueryExecutionResult
             scopeManifestCanonicalSha256, completion, documentAcquisitionOutcomesByOrdinal,
             corpusRecordSetRef, corpusRecordSetReceipt, corpusRecordSet,
             observedObjectIdentitySetRef, observedObjectIdentitySetReceipt,
-            observedObjectIdentitySet,
+            observedObjectIdentitySet, heldBodyDerivationPopulation,
             gazetteBodySetsByOrdinal, gazetteListingFetchRefusalsByOrdinal,
             gazetteListingsWithContradictoryLegalValueByOrdinal, populationLedger, null);
     }
@@ -839,7 +861,7 @@ public sealed class LuxembourgQueryExecutionResult
         ArgumentNullException.ThrowIfNull(refusal);
         return new(
             topology, familyOutcomes, relationFamilyAcquisitions, [], [], [], [], [], null, null, null,
-            null, null, null, null, null, null, null, null, null, null, null, refusal);
+            null, null, null, null, null, null, null, null, null, null, null, null, refusal);
     }
 
     /// <summary>
@@ -866,6 +888,12 @@ public sealed class LuxembourgQueryExecutionResult
     /// the door before this was here.
     /// </summary>
     public VerifiedLuxembourgObservedObjectIdentitySet? ObservedObjectIdentitySet { get; }
+
+    /// <summary>
+    /// The exact held subset of <see cref="CorpusRecordSet"/>, bound to the publisher-selected
+    /// address and format from this run. Present if and only if this result is delivered.
+    /// </summary>
+    public LuxembourgHeldBodyDerivationPopulation? HeldBodyDerivationPopulation { get; }
 
     /// <summary>Always present: minting it cannot fail, and it is useful context on a refusal too.</summary>
     public SourceProfileTopology Topology { get; }
@@ -1826,6 +1854,22 @@ public sealed class LuxembourgQueryExecutionAdapter
                     recordSetResult.Refusal.Detail));
         }
 
+        var derivationPopulation = LuxembourgHeldBodyDerivationPopulation.TryCreate(
+            recordSetResult.VerifiedSet!, documentAcquisitionOutcomesByOrdinal!,
+            mintedAddressesByObjectRef, out var derivationRefusal, out var derivationDetail);
+        if (derivationPopulation is null)
+        {
+            // Defensive only at this production door today. The exact address map above built the
+            // manifest and drove acquisition; a held outcome (and therefore a held corpus record)
+            // can arise only after acquisition found that object's address in the same map. Keep a
+            // typed refusal for future producers instead of assuming that invariant forever.
+            return LuxembourgQueryExecutionResult.Refused(
+                topology, outcomes, relationAcquisitions,
+                new LuxembourgQueryExecutionRefusalDetail(
+                    LuxembourgQueryExecutionRefusal.HeldBodyDerivationPopulationNotCompleted,
+                    null, $"{derivationRefusal}: {derivationDetail}"));
+        }
+
         return LuxembourgQueryExecutionResult.Delivered(
             topology, outcomes, relationAcquisitions,
             resolved.Resources.SelectMany(static resource => resource.Relations).ToArray(),
@@ -1839,6 +1883,7 @@ public sealed class LuxembourgQueryExecutionAdapter
             identitySetResult.SetRef!,
             identitySetResult.RetainedSetReceipt!,
             identitySetResult.VerifiedSet!,
+            derivationPopulation,
             gazetteBodySetsByOrdinal!, gazetteListingFetchRefusalsByOrdinal!, gazetteContradictoryByOrdinal!,
             populationLedger!);
     }

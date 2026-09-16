@@ -217,6 +217,10 @@ public sealed class ClosedVocabularyCensusTests
                 "Lex.V3.Ingest.Luxembourg.LuxembourgGazetteBodyProductionRefusal: None, "
                     + "AcquisitionForUnlistedBody, AcquisitionDeliveredTwice, "
                     + "RetainedBytesUnavailable, RetentionNotEstablished",
+                "Lex.V3.Ingest.Luxembourg.LuxembourgHeldBodyDerivationPopulationRefusal: None, "
+                    + "HeldRecordHasNoHeldOutcome, HeldOutcomeHasNoRecord, "
+                    + "HeldOutcomeRecordIsNotHeld, HeldReceiptMismatch, "
+                    + "HeldRecordHasNoSelectedAddress",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgInFileRightsReadStatus: Observed, "
                     + "UnsupportedRepresentation, MalformedXml, ManifestationIdentityMismatch, "
                     + "InvalidLicenceIri",
@@ -258,7 +262,8 @@ public sealed class ClosedVocabularyCensusTests
                     + "RecordSetNotRetained, RelationRowTermNotIri, RelationRowPredicateNotAdmitted, "
                     + "RelationRowSubjectNotInCensus, AssertionFactNotRepresentable, "
                     + "GazetteBodyNotProduced, PopulationLedgerNotCompleted, "
-                    + "ObservedObjectIdentitySetNotRetained",
+                    + "ObservedObjectIdentitySetNotRetained, "
+                    + "HeldBodyDerivationPopulationNotCompleted",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgRelationFamilyAcquisitionState: "
                     + "AcquiredComplete, Unacquired, Incomplete, Uncertain",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgResourceObservationExclusionCause: "
@@ -290,7 +295,8 @@ public sealed class ClosedVocabularyCensusTests
                     + "LuxembourgNotComplete, EuropeFormexRunMismatch, "
                     + "EuropeFormexClassificationMismatch, "
                     + "EuropeFormexClassificationSourceOutsideCorpus, "
-                    + "EuropeFidelityPreservationMismatch, LuxembourgFidelityPreservationMismatch",
+                    + "EuropeFidelityPreservationMismatch, LuxembourgFidelityPreservationMismatch, "
+                    + "LuxembourgDerivationPopulationMismatch",
                 "Lex.V3.Ingest.Stage3EvidenceLineageRefusal: None, EuropeCorpusRecordSetMismatch, "
                     + "EuropeManifestMismatch, EuropeRunIdentityMismatch, "
                     + "LuxembourgCorpusRecordSetMismatch, LuxembourgManifestMismatch, "

@@ -51,6 +51,9 @@ public sealed class Stage3BodyCompositionTests
         Assert.AreEqual(ordinal, lu.Custody.ObjectOrdinal);
         Assert.AreSame(bodySet, lu.GazetteBodies);
         Assert.AreEqual(bodySet.PublisherActIri, lu.Custody.ObjectRef.PublisherUri);
+        Assert.AreSame(
+            luxembourg.HeldBodyDerivationPopulation,
+            composition.LuxembourgDerivationPopulation);
     }
 
     [TestMethod]
@@ -141,6 +144,7 @@ public sealed class Stage3BodyCompositionTests
             source.ObservedObjectIdentitySetRef!,
             source.ObservedObjectIdentitySetReceipt!,
             source.ObservedObjectIdentitySet!,
+            source.HeldBodyDerivationPopulation!,
             bodySets,
             source.GazetteListingFetchRefusalsByOrdinal!,
             source.GazetteListingsWithContradictoryLegalValueByOrdinal!,
