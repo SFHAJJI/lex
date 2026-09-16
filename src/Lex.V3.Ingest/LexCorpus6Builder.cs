@@ -524,7 +524,7 @@ public static class LexCorpus6Builder
                     StringComparison.Ordinal))
             {
                 refusal = LexCorpus6BuildRefusal.LuxembourgRightsBindingMissing;
-                detail = $"{record.ObjectRef.PublisherUri}: final rights bind a different run or manifestation";
+                detail = $"{record.ObjectRef.PublisherUri}: rights run {rights.BoundRunIdentity.ResourceId}/{rights.BoundRunIdentity.Sha256} vs member run {record.RunIdentity.ResourceId}/{record.RunIdentity.Sha256}; rights manifestation {rights.SelectedManifestationIri} vs selected {input.SelectedWemiCandidate.ManifestationIri}";
                 return null;
             }
             if (!LexCorpus6LuxembourgRights.IsTerminal(rights.Disposition))
