@@ -365,8 +365,13 @@ public sealed class LuxembourgGazetteAcquisitionTests
             ladderMediaType: "application/xml")).Result;
     }
 
-    internal static async Task<LuxembourgQueryExecutionResult> CompletePublisherPdfForStage3BodyCompositionAsync()
+    internal static Task<LuxembourgQueryExecutionResult> CompletePublisherPdfForStage3BodyCompositionAsync() =>
+        CompletePublisherPdfForStage3BodyCompositionAsync(PdfBytes);
+
+    internal static async Task<LuxembourgQueryExecutionResult> CompletePublisherPdfForStage3BodyCompositionAsync(
+        byte[] retainedPdfBytes)
     {
+        ArgumentNullException.ThrowIfNull(retainedPdfBytes);
         const string consolidation = Parent + "/consolide/20260201";
         const string expression = consolidation + "/fr";
         const string manifestation = expression + "/pdf";
@@ -394,7 +399,7 @@ public sealed class LuxembourgGazetteAcquisitionTests
             pdf: null,
             subjects: [consolidation, expression, manifestation, Act],
             ladderItem: item,
-            ladderBody: PdfBytes)).Result;
+            ladderBody: retainedPdfBytes)).Result;
     }
 
     private sealed record GazetteRun(LuxembourgQueryExecutionResult Result, int DocumentRequests);
