@@ -331,6 +331,8 @@ public sealed class LuxembourgGazetteAcquisitionTests
     internal static async Task<LuxembourgQueryExecutionResult> CompleteForStage3BodyCompositionAsync() =>
         (await RunAsync(GazetteAssertions(), pdf: (HttpStatusCode.OK, PdfBytes))).Result;
 
+    internal static byte[] GazetteSelectedPdfBytes() => PdfABytes.ToArray();
+
     internal static async Task<LuxembourgQueryExecutionResult> CompleteWithDistinctReceiptsForStage3BodyCompositionAsync() =>
         (await RunAsync(
             GazetteAssertions(),

@@ -59,6 +59,10 @@ public sealed class CensusPartitionTests
             + "artifact magic and strict UTF-8 codec state; the complete binary form is exercised "
             + "through the governed writer and reader and this is not a selectable vocabulary "
             + "registry.",
+        "Lex.V3.Ingest.Luxembourg.LuxembourgPublisherPdfTextLayerArtifactCodec: private canonical "
+            + "artifact magic and strict UTF-8 codec state; the complete binary form is exercised "
+            + "through the governed writer and reader and this is not a selectable vocabulary "
+            + "registry.",
     ];
 
     [TestMethod]
@@ -83,14 +87,14 @@ public sealed class CensusPartitionTests
     public void ThePartitionTotalsAreExactlyThese()
     {
         Assert.AreEqual(
-            208, ClosedSurfaceCensus.Candidates(CensusScope.SweptHere).Count, "candidates");
+            216, ClosedSurfaceCensus.Candidates(CensusScope.SweptHere).Count, "candidates");
         Assert.AreEqual(
-            83, ClosedSurfaceCensus.ClosedVocabularies(CensusScope.SweptHere).Count, "vocabularies");
+            86, ClosedSurfaceCensus.ClosedVocabularies(CensusScope.SweptHere).Count, "vocabularies");
         Assert.AreEqual(
-            117, ClosedSurfaceCensus.GuardedConstruction(CensusScope.SweptHere).Count, "guarded types");
+            121, ClosedSurfaceCensus.GuardedConstruction(CensusScope.SweptHere).Count, "guarded types");
         Assert.AreEqual(
             4, ClosedSurfaceCensus.VocabularyRegistries(CensusScope.SweptHere).Count, "registries");
-        Assert.AreEqual(4, Declined.Length, "declined");
+        Assert.AreEqual(5, Declined.Length, "declined");
     }
 
     private static string NameOf(string row) =>
