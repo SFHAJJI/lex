@@ -132,7 +132,7 @@ public sealed class LuxembourgPdfProfileEligibilityProducerTests
         var candidate = source.SelectedWemiCandidate;
         var item = candidate.ItemIri[..candidate.ItemIri.LastIndexOf('.')] + ".xml";
         var manifestation = candidate.ManifestationIri[..candidate.ManifestationIri.LastIndexOf('/')] + "/xml";
-        var format = candidate.FormatIri[..candidate.FormatIri.LastIndexOf('/') + 1] + "xml";
+        var format = candidate.FormatIri[..(candidate.FormatIri.LastIndexOf('/') + 1)] + "xml";
         var xml = new LuxembourgWemiCandidate(
             candidate.RootIri,
             candidate.ExpressionIri,
