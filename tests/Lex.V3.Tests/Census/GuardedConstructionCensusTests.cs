@@ -69,6 +69,10 @@ public sealed class GuardedConstructionCensusTests
                 "Lex.V3.Api.SyntheticIndexResolver: constructor private instance "
                     + "Lex.V3.Api.SyntheticIndexResolver::.ctor, "
                     + "method public static Lex.V3.Api.SyntheticIndexResolver::Open",
+                "Lex.V3.Api.V3PlatformSchemaDocuments: constructor private instance "
+                    + "Lex.V3.Api.V3PlatformSchemaDocuments::.ctor, "
+                    + "constructor private static Lex.V3.Api.V3PlatformSchemaDocuments::.cctor, "
+                    + "method private static Lex.V3.Api.V3PlatformSchemaDocuments::LoadReviewed",
                 "Lex.V3.Artifacts.ArtifactAdmissionFailure: by-ref-method public instance "
                     + "Lex.V3.Artifacts.HeaderReadResult::Deconstruct, "
                     + "constructor internal instance "
@@ -1675,7 +1679,7 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Contracts.SyntheticResolveRefusalEnvelope::Create, "
                     + "method public static "
                     + "Lex.V3.Contracts.SyntheticResolveSuccessEnvelope::Create",
-            },
+},
             ClosedSurfaceCensus.GuardedConstruction(CensusScope.SweptHere).ToArray());
     }
 
