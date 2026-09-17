@@ -635,7 +635,13 @@ public sealed record LexCorpus6CorrigendumProduction(
 {
     public LexCorpus6CorrigendumProduction Validate()
     {
-        LexCorpus6Member.RequireSha256(FamilyKey, nameof(FamilyKey));
+        const string familyPrefix = "eu-object-facts-batch-";
+        if (!FamilyKey.StartsWith(familyPrefix, StringComparison.Ordinal) ||
+            FamilyKey.Length != familyPrefix.Length + 24 ||
+            !FamilyKey.AsSpan(familyPrefix.Length).ContainsAnyExcept("0123456789abcdef"))
+        {
+            throw new ArgumentException("The corrigendum family key is not a canonical EU object-facts batch key.", nameof(FamilyKey));
+        }
         LexCorpus6Member.RequireSha256(CanonicalSha256, nameof(CanonicalSha256));
         LexCorpus6Member.RequireSha256(LineageSha256, nameof(LineageSha256));
         LexCorpus6Member.RequireSha256(TripwireReceiptSha256, nameof(TripwireReceiptSha256));
