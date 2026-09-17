@@ -153,7 +153,7 @@ public sealed class DurableBlobReceiptFamilyIngestSurfaceTests
                 "field private instance " + Session + "+ResolvedHeldBody::<Receipt>k__BackingField -> " + Receipt,
                 "field private instance Lex.V3.Ingest.Stage3EvidenceLineage::<EuropeScopeManifestReceipt>k__BackingField -> " + Receipt,
                 "field private instance Lex.V3.Ingest.Stage3EvidenceLineage::<LuxembourgScopeManifestReceipt>k__BackingField -> " + Receipt,
-                "method internal instance Lex.V3.Ingest.LexCorpus6Builder+<>c::<CorrigendumReceipts>b__19_0("
+                "method internal instance Lex.V3.Ingest.LexCorpus6Builder+<>c::<CorrigendumReceipts>b__21_0("
                     + "Lex.V3.Ingest.Europe.EuCorrigendumTripwireProductionResult) -> "
                     + "System.Collections.Generic.IEnumerable<" + Receipt + ">",
                 // The one place that decides what "held" means, for both publishers' acquisition
