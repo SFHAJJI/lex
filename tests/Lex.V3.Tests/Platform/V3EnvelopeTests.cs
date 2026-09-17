@@ -77,11 +77,17 @@ public sealed class V3EnvelopeTests
     {
         using var empty = JsonDocument.Parse("{}");
         using var scalar = JsonDocument.Parse("true");
+        using var missingOneRequiredField = JsonDocument.Parse(
+            "{\"requested_identifier\":\"unknown\","
+            + "\"official_search_actions\":[\"search the official register\"]}");
 
         Assert.ThrowsExactly<ArgumentException>(() => _builder.Refusal(
             "req", "resolve", RefusalContext(), V3OperationRegistry.RefusalSchema, "identifier_unknown", empty.RootElement));
         Assert.ThrowsExactly<ArgumentException>(() => _builder.Refusal(
             "req", "resolve", RefusalContext(), V3OperationRegistry.RefusalSchema, "identifier_unknown", scalar.RootElement));
+        Assert.ThrowsExactly<ArgumentException>(() => _builder.Refusal(
+            "req", "resolve", RefusalContext(), V3OperationRegistry.RefusalSchema,
+            "identifier_unknown", missingOneRequiredField.RootElement));
     }
 
     [TestMethod]
@@ -108,7 +114,7 @@ public sealed class V3EnvelopeTests
     }
 
     [TestMethod]
-    public void ContextRejectsPublisherTimelineJurisdictionAndStatusDrift()
+    public void ContextRejectsPublisherTimelineAndJurisdictionDrift()
     {
         Assert.ThrowsExactly<ArgumentException>(() => new V3EnvelopeContext(
             PublisherId.LuLegilux,
@@ -120,12 +126,36 @@ public sealed class V3EnvelopeTests
             new V3Freshness(DateTimeOffset.UtcNow, "current")));
         Assert.ThrowsExactly<ArgumentException>(() => new V3EnvelopeContext(
             PublisherId.EuEurLex,
-            "unknown",
+            "success",
             TimelineSemantics.OfficialConsolidationState,
             new V3SnapshotReference("snapshot", Digest),
             "lu",
             false,
             new V3Freshness(DateTimeOffset.UtcNow, "current")));
+    }
+
+    [TestMethod]
+    public void BuilderRejectsStatusAndEnvelopeBranchMismatchInBothDirections()
+    {
+        using var result = JsonDocument.Parse("{\"work_id\":\"lu-legilux:test\"}");
+        using var refusal = JsonDocument.Parse(
+            "{\"requested_identifier\":\"unknown\","
+            + "\"official_search_actions\":[\"search the official register\"],"
+            + "\"what_would_answer\":\"a reviewed identifier mapping\"}");
+
+        Assert.ThrowsExactly<ArgumentException>(() => _builder.Success(
+            "req", "resolve", RefusalContext(), V3Verdicts.Answer,
+            "lex-v3-resolve-result/1", "work_resolution", result.RootElement));
+        Assert.ThrowsExactly<ArgumentException>(() => _builder.Refusal(
+            "req", "resolve", SuccessContext(), V3OperationRegistry.RefusalSchema,
+            "identifier_unknown", refusal.RootElement));
+    }
+
+    [TestMethod]
+    public void FreshnessRejectsUnknownUpstreamHealth()
+    {
+        Assert.ThrowsExactly<ArgumentException>(() =>
+            new V3Freshness(DateTimeOffset.UtcNow, "banana"));
     }
 
     [TestMethod]
