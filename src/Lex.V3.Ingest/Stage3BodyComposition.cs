@@ -1,5 +1,7 @@
 using System.Globalization;
 using System.Text.Json.Serialization;
+using Lex.V3.Contracts.Custody;
+using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Corpus;
 using Lex.V3.Contracts.Source.Luxembourg;
 using Lex.V3.Ingest.Europe;
@@ -21,27 +23,33 @@ public enum Stage3BodyCompositionRefusal
 }
 
 /// <summary>
-/// One proof-complete EU Formex classification beside the three exact corpus records that carry
-/// its custody evidence. Member outcomes and gaps remain ordered and unmodified.
+/// One proof-complete EU Formex classification beside its selected held work body and the
+/// separately retained publisher evidence. Member outcomes and gaps remain ordered and unmodified.
 /// </summary>
 public sealed class Stage3EuropeBodyComposition
 {
     internal Stage3EuropeBodyComposition(EuBoundAnnexBodyClassification classification)
     {
         Classification = classification;
-        FormexCustody = classification.Binding.FormexSource;
-        XhtmlCustody = classification.Binding.XhtmlSource;
-        PdfCustody = classification.Binding.PdfSource;
+        WorkCustody = classification.Binding.WorkSource;
+        FormexCustody = classification.Binding.FormexSourceReceipt;
+        XhtmlCustody = classification.Binding.XhtmlSourceReceipt;
+        PdfManifestation = classification.Binding.PdfManifestation;
+        PdfCustody = classification.Binding.PdfReceipt;
         Annexes = classification.Members;
     }
 
     public EuBoundAnnexBodyClassification Classification { get; }
 
-    public CorpusRecord FormexCustody { get; }
+    public CorpusRecord WorkCustody { get; }
 
-    public CorpusRecord XhtmlCustody { get; }
+    public DurableBlobWriteReceipt FormexCustody { get; }
 
-    public CorpusRecord PdfCustody { get; }
+    public DurableBlobWriteReceipt XhtmlCustody { get; }
+
+    public SourceObjectRef PdfManifestation { get; }
+
+    public DurableBlobWriteReceipt PdfCustody { get; }
 
     /// <summary>
     /// The classifier's exact ordered <c>(outcome?, gap)</c> values. This is an image-only

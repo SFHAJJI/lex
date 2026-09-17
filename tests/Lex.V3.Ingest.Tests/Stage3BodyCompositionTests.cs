@@ -10,13 +10,7 @@ public sealed class Stage3BodyCompositionTests
     public async Task TheEnvelopeComposesCustodyAndBodyOutcomesWithoutFlatteningThem()
     {
         var acquired = await EuFormexAnnexClassificationReconciliationTests.AcquiredFixtureAsync();
-        var europe = new[]
-            {
-                acquired.Classification.Binding.FormexSource.ObjectRef,
-                acquired.Classification.Binding.XhtmlSource.ObjectRef,
-                acquired.Classification.Binding.PdfSource.ObjectRef,
-            }
-            .Aggregate(acquired.Run, Stage3EvidenceLineageTests.AddEuropeCorpusRecord);
+        var europe = acquired.Run;
         var luxembourg = await LuxembourgGazetteAcquisitionTests.CompleteForStage3BodyCompositionAsync();
         var formex = EuFormexAnnexClassificationReconciliationTests.Reconciliation(
             europe, [acquired.Outcome]);
@@ -42,9 +36,11 @@ public sealed class Stage3BodyCompositionTests
         Assert.IsTrue(eu.Annexes.All(static annex => annex.Outcome is null));
         Assert.IsTrue(eu.Annexes.All(static annex =>
             annex.Gap == EuBoundAnnexBodyClassificationGap.MappingUnresolved));
-        Assert.AreSame(acquired.Classification.Binding.FormexSource, eu.FormexCustody);
-        Assert.AreSame(acquired.Classification.Binding.XhtmlSource, eu.XhtmlCustody);
-        Assert.AreSame(acquired.Classification.Binding.PdfSource, eu.PdfCustody);
+        Assert.AreSame(acquired.Classification.Binding.WorkSource, eu.WorkCustody);
+        Assert.AreEqual(acquired.Classification.Binding.FormexSourceReceipt, eu.FormexCustody);
+        Assert.AreEqual(acquired.Classification.Binding.XhtmlSourceReceipt, eu.XhtmlCustody);
+        Assert.AreEqual(acquired.Classification.Binding.PdfManifestation, eu.PdfManifestation);
+        Assert.AreEqual(acquired.Classification.Binding.PdfReceipt, eu.PdfCustody);
 
         var lu = composition.Luxembourg.Single();
         var (ordinal, bodySet) = luxembourg.GazetteBodySetsByOrdinal!.Single();

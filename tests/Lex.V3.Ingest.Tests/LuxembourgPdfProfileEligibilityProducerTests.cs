@@ -120,13 +120,7 @@ public sealed class LuxembourgPdfProfileEligibilityProducerTests
         LuxembourgQueryExecutionResult luxembourg)
     {
         var acquired = await EuFormexAnnexClassificationReconciliationTests.AcquiredFixtureAsync();
-        var europe = new[]
-            {
-                acquired.Classification.Binding.FormexSource.ObjectRef,
-                acquired.Classification.Binding.XhtmlSource.ObjectRef,
-                acquired.Classification.Binding.PdfSource.ObjectRef,
-            }
-            .Aggregate(acquired.Run, Stage3EvidenceLineageTests.AddEuropeCorpusRecord);
+        var europe = acquired.Run;
         var formex = EuFormexAnnexClassificationReconciliationTests.Reconciliation(
             europe, [acquired.Outcome]);
         var classifications = Stage3EvidenceEnvelopeTests.CompleteClassifications(

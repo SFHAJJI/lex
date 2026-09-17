@@ -170,25 +170,53 @@ public sealed class EuFormexAnnexClassificationReconciliationTests
 
     internal static async Task<Fixture> AcquiredFixtureAsync(
         bool formexTwoMembers = false,
-        byte[]? formexBytes = null)
+        byte[]? formexBytes = null,
+        bool imageOnly = false)
     {
         var source = await EuAnnexEvidenceBinderTests.FixtureAsync(
-            EuAnnexEvidenceBinderTests.PageLabelPdf(7, "<< /S /D /St 1 >>"),
+            EuAnnexEvidenceBinderTests.PageLabelPdf(
+                7, "<< /S /D /St 1 >>", image: imageOnly),
             formexTwoMembers: formexTwoMembers,
             xhtmlTwoMembers: formexTwoMembers,
             formexBytes: formexBytes);
-        var bound = await source.RunAsync();
+        var run = await EuAxiomWiringHarness.RunAsync(
+            static root => EuAcquisitionTestFixture.AxiomAbsenceScriptFor(root));
+        run = Stage3EvidenceLineageTests.AddEuropeHeldCorpusRecord(
+            run, source.Work, source.Xhtml.SourceReceipt);
+        var production = new EuAnnexBodyProduction(source.Store);
+        var bound = await production.BindAsync(
+            source.Boundary, source.Package, source.PdfManifestation,
+            run.CorpusRecordSet!, source.Formex, source.Xhtml, source.PdfReceipt,
+            source.Profile.Bytes, source.Profile.Reference, CancellationToken.None);
         Assert.AreEqual(EuAnnexEvidenceBindingRefusal.None, bound.Refusal, bound.Detail);
         var binding = bound.Binding!;
         var address = EuDocumentFetchAddress.TryCreate(
             "cellar", binding.Work.CanonicalKey, EuManifestationMediaType.ApplicationPdf,
             EuDocumentLanguage.Eng, out var addressRefusal)!;
         Assert.AreEqual(EuDocumentFetchAddressRefusal.None, addressRefusal);
-        var classification = new EuBoundAnnexBodyClassification(
-            binding, address, null!, source.Profile.Reference,
-            binding.Members.Select(static member =>
-                new EuBoundAnnexBodyMemberClassification(
-                    member, null, EuBoundAnnexBodyClassificationGap.MappingUnresolved)).ToArray());
+        EuBoundAnnexBodyClassification classification;
+        if (imageOnly)
+        {
+            var route = EuBoundAnnexBodyClassifierTests.Route(
+                binding.Work.CanonicalKey, binding.PdfReceipt,
+                checked((int)binding.PdfReceipt.Reference.ByteLength));
+            var profile = EuBoundAnnexBodyClassifierTests.Profile(
+                binding.IdentitySha256, binding.PdfReceipt.Reference.ContentSha256);
+            var classified = await production.ClassifyAsync(
+                binding, route.Address, route.Request, route.Request, route.Evidence,
+                profile.Bytes, profile.Reference, CancellationToken.None);
+            Assert.AreEqual(EuBoundAnnexBodyClassificationRefusal.None,
+                classified.Refusal, classified.Detail);
+            classification = classified.Classification!;
+        }
+        else
+        {
+            classification = new EuBoundAnnexBodyClassification(
+                binding, address, null!, source.Profile.Reference,
+                binding.Members.Select(static member =>
+                    new EuBoundAnnexBodyMemberClassification(
+                        member, null, EuBoundAnnexBodyClassificationGap.MappingUnresolved)).ToArray());
+        }
         var expression = LanguageScopedExpression.FromRetainedSource(
             new LanguageScopedExpressionIdentity(
                 binding.Work.PublisherUri, binding.Expression.PublisherUri),
@@ -198,9 +226,8 @@ public sealed class EuFormexAnnexClassificationReconciliationTests
             LanguageScopedExpressionLineage.FromContributions(
                 [new(LanguageScopedExpressionContribution.IdentityAndLanguage,
                     source.Formex.SourceReceipt)]));
-        var run = await EuAxiomWiringHarness.RunAsync(
-            static root => EuAcquisitionTestFixture.AxiomAbsenceScriptFor(root));
         return new Fixture(
+            source.Store,
             run,
             source.Formex,
             EuFormexPackageOutcome.Acquired(expression, source.Formex),
@@ -225,6 +252,7 @@ public sealed class EuFormexAnnexClassificationReconciliationTests
     }
 
     internal sealed record Fixture(
+        ICustodyStore Store,
         EuQueryExecutionResult Run,
         EuFormexAnnexInventory Inventory,
         EuFormexPackageOutcome Outcome,

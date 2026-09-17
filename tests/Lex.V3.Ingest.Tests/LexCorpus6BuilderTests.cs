@@ -63,6 +63,41 @@ public sealed class LexCorpus6BuilderTests
     }
 
     [TestMethod]
+    public async Task ProductionShapedImageOnlyEuAnnexReachesCorpusOutcome()
+    {
+        var acquired = await EuFormexAnnexClassificationReconciliationTests
+            .AcquiredFixtureAsync(imageOnly: true);
+        var formex = EuFormexAnnexClassificationReconciliationTests.Reconciliation(
+            acquired.Run, [acquired.Outcome]);
+        var classifications = Stage3EvidenceEnvelopeTests.CompleteClassifications(
+            formex, [acquired.Classification]);
+        var envelope = await CompleteProfileEnvelopeAsync(
+            europeOverride: acquired.Run,
+            formexOverride: formex,
+            formexStore: acquired.Store,
+            formexClassifications: classifications);
+
+        var built = LexCorpus6Builder.TryBuild(envelope, out var refusal, out var detail);
+
+        Assert.IsNotNull(built, $"{refusal}: {detail}");
+        var binding = acquired.Classification.Binding;
+        var member = built.VerifiedSet.Set.Members.Single(value =>
+            value.ObjectRefSha256 ==
+            Lex.V3.Contracts.Source.Scope.ScopeManifestCanonicalWriter.ComputeObjectRefSha256(
+                binding.WorkSource.ObjectRef));
+        Assert.Contains(
+            new LexCorpus6Stage3Outcome(
+                LexCorpus6Stage3OutcomeDomain.EuropeAnnexBody,
+                acquired.Classification.Members.Single().SemanticIdentitySha256,
+                LexCorpus6Stage3Disposition.AnnexTextNotAvailable),
+            member.Stage3Outcomes);
+        Assert.IsFalse(acquired.Run.CorpusRecordSet!.Set.Records.Any(record =>
+            record.Body.Receipt == binding.FormexSourceReceipt));
+        Assert.IsFalse(acquired.Run.CorpusRecordSet.Set.Records.Any(record =>
+            record.Body.Receipt == binding.PdfReceipt));
+    }
+
+    [TestMethod]
     public void TerminalBuilderAndStrictReaderAreOneVerticalSlice()
     {
         var schema = (string)typeof(LexCorpus6Builder)
@@ -656,6 +691,7 @@ public sealed class LexCorpus6BuilderTests
         bool includeFormexMainBody = true,
         Europe.EuFormexRunOutcomeReconciliation? formexOverride = null,
         Lex.V3.Contracts.Custody.ICustodyStore? formexStore = null,
+        Europe.EuFormexAnnexClassificationReconciliation? formexClassifications = null,
         Func<Europe.EuFormexMainBodyLegalContentPopulation,
             Europe.EuFormexMainBodyLegalContentPopulation>? formexMainBodyTransform = null,
         Func<Luxembourg.LuxembourgAknLegalContentPopulation,
@@ -679,7 +715,8 @@ public sealed class LexCorpus6BuilderTests
             formexStore ?? new EuAcquisitionTestFixture.EuInMemoryCustodyStore())
             .RunAsync(formex, CancellationToken.None);
         formexMainBody = formexMainBodyTransform?.Invoke(formexMainBody) ?? formexMainBody;
-        var classifications = Stage3EvidenceEnvelopeTests.CompleteClassifications(formex);
+        var classifications = formexClassifications
+            ?? Stage3EvidenceEnvelopeTests.CompleteClassifications(formex);
         var fidelity = Stage3FidelityPreservationReconciliationTests.Complete(europe, luxembourg);
         var akn = await Stage3EvidenceEnvelopeTests.CompleteAknEvidenceAsync(
             luxembourg, luxembourgStore);

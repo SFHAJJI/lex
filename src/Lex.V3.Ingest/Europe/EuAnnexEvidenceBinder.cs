@@ -96,26 +96,23 @@ public sealed class EuBoundAnnexEvidence
 public sealed class EuAnnexEvidenceBinding
 {
     internal EuAnnexEvidenceBinding(
-        SourceObjectRef work,
+        CorpusRecord workSource,
         EuFormexPackage package,
-        CorpusRecord formexSource,
-        CorpusRecord xhtmlSource,
-        CorpusRecord pdfSource,
+        SourceObjectRef pdfManifestation,
         EuFormexAnnexInventory formexInventory,
         EuXhtmlAnnexInventory xhtmlInventory,
         DurableBlobWriteReceipt pdfReceipt,
         SourceArtifactRef reconciliationProfileRef,
         IReadOnlyList<EuBoundAnnexEvidence> members)
     {
-        Work = work;
+        WorkSource = workSource;
+        Work = workSource.ObjectRef;
         Expression = package.ExpressionRef;
         FormexManifestation = package.ManifestationRef;
         FormexBody = package.BodyRef;
         WorkCelex = package.WorkCelex;
         Language = package.Language;
-        FormexSource = formexSource;
-        XhtmlSource = xhtmlSource;
-        PdfSource = pdfSource;
+        PdfManifestation = pdfManifestation;
         FormexSourceReceipt = formexInventory.SourceReceipt;
         FormexProfileRef = formexInventory.ProfileRef;
         FormexInventoryIdentitySha256 = formexInventory.IdentitySha256;
@@ -135,9 +132,8 @@ public sealed class EuAnnexEvidenceBinding
     public SourceObjectRef FormexBody { get; }
     public string WorkCelex { get; }
     public string Language { get; }
-    public CorpusRecord FormexSource { get; }
-    public CorpusRecord XhtmlSource { get; }
-    public CorpusRecord PdfSource { get; }
+    public CorpusRecord WorkSource { get; }
+    public SourceObjectRef PdfManifestation { get; }
     public DurableBlobWriteReceipt FormexSourceReceipt { get; }
     public SourceArtifactRef FormexProfileRef { get; }
     public string FormexInventoryIdentitySha256 { get; }
@@ -158,12 +154,15 @@ public sealed class EuAnnexEvidenceBinding
         Append(hash, binding.Expression.CanonicalKeySha256);
         Append(hash, binding.FormexManifestation.CanonicalKeySha256);
         Append(hash, binding.FormexBody.CanonicalKeySha256);
+        Append(hash, binding.PdfManifestation.CanonicalKeySha256);
         Append(hash, binding.WorkCelex);
         Append(hash, binding.Language);
         Append(hash, binding.FormexInventoryIdentitySha256);
+        Append(hash, DurableBlobWriteReceiptDigest.Of(binding.FormexSourceReceipt));
         Append(hash, binding.XhtmlInventoryIdentitySha256);
+        Append(hash, DurableBlobWriteReceiptDigest.Of(binding.XhtmlSourceReceipt));
         Append(hash, binding.PublisherWorkEli);
-        Append(hash, binding.PdfReceipt.Reference.ContentSha256);
+        Append(hash, DurableBlobWriteReceiptDigest.Of(binding.PdfReceipt));
         Append(hash, binding.ReconciliationProfileRef.ResourceId);
         Append(hash, binding.ReconciliationProfileRef.Sha256);
         foreach (var member in binding.Members)
@@ -290,39 +289,27 @@ public sealed class EuAnnexEvidenceBinder
         }
 
         var records = corpusRecordSet.Set.Records;
-        var formexSource = UniqueHeldSource(records, formexInventory.SourceReceipt);
-        var xhtmlSource = UniqueHeldSource(records, xhtmlInventory.SourceReceipt);
-        var pdfSource = UniqueHeldSource(records, retainedPdfBytes);
-        if (formexSource is null || xhtmlSource is null || pdfSource is null)
-        {
-            return Refused(EuAnnexEvidenceBindingRefusal.SourceEvidenceMissingOrAmbiguous,
-                "each retained source must occur exactly once as a held body in the verified corpus set");
-        }
-
-        if (new[] { formexSource.ObjectRef, xhtmlSource.ObjectRef, pdfSource.ObjectRef }
-            .Distinct().Count() != 3)
-        {
-            return Refused(EuAnnexEvidenceBindingRefusal.SourceLineageMismatch,
-                "Formex, XHTML and PDF must be three distinct admitted source items");
-        }
-
-        if (formexSource.ObjectRef != package.BodyRef)
-        {
-            return Refused(EuAnnexEvidenceBindingRefusal.SourceLineageMismatch,
-                "the Formex inventory was not produced from the admitted package body");
-        }
-
         var expression = package.ExpressionRef;
         var work = FindByKey(records, expression.ParentKeyRef);
         if (work is null
+            || work.Body.Kind != CorpusBodyRecordKind.Held
+            || work.Body.Receipt != xhtmlInventory.SourceReceipt)
+        {
+            return Refused(EuAnnexEvidenceBindingRefusal.SourceEvidenceMissingOrAmbiguous,
+                "the retained XHTML inventory must be the selected held body of the package work");
+        }
+
+        if (!IsAdmitted(identityBoundary, package.BodyRef, EuWemiRole.Item)
+            || !IsAdmitted(identityBoundary, package.ManifestationRef, EuWemiRole.Manifestation)
             || !IsAdmitted(identityBoundary, expression, EuWemiRole.Expression)
             || !IsAdmitted(identityBoundary, work.ObjectRef, EuWemiRole.Work)
-            || !TryLineage(records, xhtmlSource.ObjectRef, expression, identityBoundary, null)
-            || !TryLineage(records, pdfSource.ObjectRef, expression, identityBoundary,
-                expectedPdfManifestation))
+            || !IsAdmitted(identityBoundary, expectedPdfManifestation, EuWemiRole.Manifestation)
+            || !HasParent(package.ManifestationRef, expression)
+            || !HasParent(package.BodyRef, package.ManifestationRef)
+            || !HasParent(expectedPdfManifestation, expression))
         {
             return Refused(EuAnnexEvidenceBindingRefusal.SourceLineageMismatch,
-                "the Formex, XHTML and PDF sources do not share the admitted expression and work lineage");
+                "the retained Formex package and PDF manifestation do not share the admitted expression and work lineage");
         }
 
         var xhtmlByEntry = xhtmlInventory.Members
@@ -397,17 +384,8 @@ public sealed class EuAnnexEvidenceBinder
         }
 
         return EuAnnexEvidenceBindingResult.Success(new EuAnnexEvidenceBinding(
-            work.ObjectRef, package, formexSource, xhtmlSource, pdfSource, formexInventory,
+            work, package, expectedPdfManifestation, formexInventory,
             xhtmlInventory, retainedPdfBytes, reconciliationProfileRef, bound));
-    }
-
-    private static CorpusRecord? UniqueHeldSource(
-        IReadOnlyList<CorpusRecord> records,
-        DurableBlobWriteReceipt receipt)
-    {
-        var matches = records.Where(record => record.Body.Kind == CorpusBodyRecordKind.Held
-            && record.Body.Receipt == receipt).Take(2).ToArray();
-        return matches.Length == 1 ? matches[0] : null;
     }
 
     private static CorpusRecord? FindByKey(
@@ -425,23 +403,12 @@ public sealed class EuAnnexEvidenceBinder
         return matches.Length == 1 ? matches[0] : null;
     }
 
-    private static bool TryLineage(
-        IReadOnlyList<CorpusRecord> records,
-        SourceObjectRef source,
-        SourceObjectRef expression,
-        EuWemiIdentityBoundary boundary,
-        SourceObjectRef? expectedManifestation)
-    {
-        var manifestation = FindByKey(records, source.ParentKeyRef);
-        return manifestation is not null
-            && IsAdmitted(boundary, source, EuWemiRole.Item)
-            && IsAdmitted(boundary, manifestation.ObjectRef, EuWemiRole.Manifestation)
-            && (expectedManifestation is null || manifestation.ObjectRef == expectedManifestation)
-            && manifestation.ObjectRef.ParentKeyRef is { } parent
-            && parent.EntityKind == expression.EntityKind
-            && string.Equals(parent.CanonicalKey, expression.CanonicalKey, StringComparison.Ordinal)
-            && string.Equals(parent.PublisherUri, expression.PublisherUri, StringComparison.Ordinal);
-    }
+
+    private static bool HasParent(SourceObjectRef child, SourceObjectRef parent) =>
+        child.ParentKeyRef is { } key
+        && key.EntityKind == parent.EntityKind
+        && string.Equals(key.CanonicalKey, parent.CanonicalKey, StringComparison.Ordinal)
+        && string.Equals(key.PublisherUri, parent.PublisherUri, StringComparison.Ordinal);
 
     private static bool IsAdmitted(
         EuWemiIdentityBoundary boundary,

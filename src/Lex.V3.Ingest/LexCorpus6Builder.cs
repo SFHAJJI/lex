@@ -1351,7 +1351,7 @@ public static class LexCorpus6Builder
         {
             foreach (var member in classification.Members)
             {
-                Add(classification.Binding.PdfSource.ObjectRef,
+                Add(classification.Binding.WorkSource.ObjectRef,
                     Stage3Outcome(member));
             }
         }
