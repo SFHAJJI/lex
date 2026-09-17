@@ -98,6 +98,37 @@ public sealed class V3OperationRegistry
         "upstream_unreachable",
     ];
 
+    private static readonly string[] RequiredOperationIds =
+    [
+        "answer_drift",
+        "article_history",
+        "as_observed",
+        "as_of",
+        "ask",
+        "browse",
+        "changes_in_period",
+        "citation",
+        "cited_by",
+        "classification",
+        "concepts",
+        "coverage",
+        "diff",
+        "dossier",
+        "events",
+        "evidence_bundle",
+        "in_force_on",
+        "knowable_on",
+        "manifestation",
+        "provenance",
+        "relations",
+        "resolve",
+        "search",
+        "status_on",
+        "timeline",
+        "transposition",
+        "verify",
+    ];
+
     private readonly IReadOnlyDictionary<string, V3OperationDefinition> _byId;
     private readonly HashSet<string> _refusalCodes;
     private readonly byte[] _canonicalUtf8;
@@ -125,10 +156,15 @@ public sealed class V3OperationRegistry
             throw new ArgumentException("Operation identifiers must be unique.", nameof(operations));
         }
 
-        var expectedOperations = V3ContractVocabulary.OperationIds.Order(StringComparer.Ordinal).ToArray();
-        if (!entries.Select(entry => entry.OperationId).SequenceEqual(expectedOperations, StringComparer.Ordinal))
+        if (!entries.Select(entry => entry.OperationId).SequenceEqual(RequiredOperationIds, StringComparer.Ordinal))
         {
             throw new ArgumentException("The production registry must contain the complete reviewed operation set.", nameof(operations));
+        }
+
+        if (!V3ContractVocabulary.OperationIds.Order(StringComparer.Ordinal)
+                .SequenceEqual(RequiredOperationIds, StringComparer.Ordinal))
+        {
+            throw new InvalidOperationException("The preview vocabulary and production operation registry have drifted.");
         }
 
         var refusals = refusalCodes?.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray()
@@ -211,7 +247,7 @@ public sealed class V3OperationRegistry
             ["ask"] = ["answer_dossier", "handoff_card"],
         };
 
-        foreach (var operationId in V3ContractVocabulary.OperationIds)
+        foreach (var operationId in RequiredOperationIds)
         {
             yield return new V3OperationDefinition(
                 operationId,

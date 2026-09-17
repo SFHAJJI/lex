@@ -14,7 +14,14 @@ public sealed class V3OperationRegistryTests
         var registry = V3OperationRegistry.Reviewed;
 
         CollectionAssert.AreEqual(
-            V3ContractVocabulary.OperationIds.Order(StringComparer.Ordinal).ToArray(),
+            new[]
+            {
+                "answer_drift", "article_history", "as_observed", "as_of", "ask", "browse",
+                "changes_in_period", "citation", "cited_by", "classification", "concepts", "coverage",
+                "diff", "dossier", "events", "evidence_bundle", "in_force_on", "knowable_on",
+                "manifestation", "provenance", "relations", "resolve", "search", "status_on", "timeline",
+                "transposition", "verify",
+            },
             registry.Operations.Select(entry => entry.OperationId).ToArray());
         Assert.IsTrue(registry.DeclaresRefusal("identifier_unknown"));
         Assert.IsTrue(registry.DeclaresRefusal("pinned_digest_mismatch"));
