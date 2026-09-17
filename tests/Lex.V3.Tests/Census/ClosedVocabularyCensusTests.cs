@@ -152,6 +152,7 @@ public sealed class ClosedVocabularyCensusTests
                     + "OverlappingPeriod",
                 "Lex.V3.Contracts.LuScopeTerminalState: AcceptedMetadata, AcceptedCandidate, Point, "
                     + "NeverIngest, TypedQuarantine, MissingPublisherValue, NotApplicable",
+                "Lex.V3.Contracts.Platform.V3EnvelopeProjectionKind: Rest, Mcp",
                 "Lex.V3.Contracts.PreviewBodyDispositionReason: SyntheticFixture, "
                     + "SyntheticFixtureWithheld, UnknownPendingEvidence",
                 "Lex.V3.Contracts.PreviewCapabilityState: MechanicsOnly",
