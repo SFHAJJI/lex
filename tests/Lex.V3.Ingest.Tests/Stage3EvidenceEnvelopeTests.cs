@@ -1,3 +1,4 @@
+using Lex.V3.Contracts.Custody;
 using Lex.V3.Contracts.Source.Scope;
 using Lex.V3.Ingest.Europe;
 using Lex.V3.Ingest.Luxembourg;
@@ -395,9 +396,10 @@ public sealed class Stage3EvidenceEnvelopeTests
     internal static async Task<(
         LuxembourgAknArticleInventoryPopulation Inventory,
         LuxembourgAknLegalContentPopulation LegalContent)> CompleteAknEvidenceAsync(
-            LuxembourgQueryExecutionResult luxembourg)
+            LuxembourgQueryExecutionResult luxembourg,
+            ICustodyStore? custody = null)
     {
-        var custody = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
+        custody ??= new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
         var inventory = await new LuxembourgAknArticleInventoryProducer(custody)
             .RunAsync(luxembourg.HeldBodyDerivationPopulation!, CancellationToken.None);
         var legalContent = await new LuxembourgAknLegalContentProfileProducer(custody)

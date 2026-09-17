@@ -159,12 +159,12 @@ public sealed class LuxembourgAknArticleInventoryProducer
     private const string SclNamespace = "http://www.scl.lu";
     private const long MaximumXmlCharacters = 64L * 1024 * 1024;
     private const string RuleProfile =
-        "lex-v3-luxembourg-akn-article-inventory-profile/1\n" +
+        "lex-v3-luxembourg-akn-article-inventory-profile/2\n" +
         "formats=xml-akomantoso,xml\n" +
         "namespace=http://docs.oasis-open.org/legaldocml/ns/akn/3.0/CSD13\n" +
         "articles=top-level-publisher-id-order\n" +
         "wid=verbatim-optional-distinct\n" +
-        "applicability=scl-jolux-dateApplicability-article-owned-single\n";
+        "applicability=scl-jolux-scl-name-dateApplicability-article-owned-single\n";
     private static readonly string RuleDigest = Convert.ToHexStringLower(
         SHA256.HashData(Encoding.UTF8.GetBytes(RuleProfile)));
     private readonly ICustodyStore _custodyStore;
@@ -300,7 +300,8 @@ public sealed class LuxembourgAknArticleInventoryProducer
 
             var applicabilityValues = element.Descendants(XName.Get("jolux", SclNamespace))
                 .Where(value => string.Equals(
-                    (string?)value.Attribute("name"), "dateApplicability", StringComparison.Ordinal))
+                    (string?)value.Attribute(XName.Get("name", SclNamespace)),
+                    "dateApplicability", StringComparison.Ordinal))
                 .Where(value => ReferenceEquals(
                     value.Ancestors(akn + "article").FirstOrDefault(), element))
                 .Select(static value => value.Value.Trim())
