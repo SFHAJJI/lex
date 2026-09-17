@@ -385,7 +385,7 @@ public sealed class EuFormexAnnexInventoryProducerTests
             binding, profile.Bytes, profile.Reference, CancellationToken.None);
     }
 
-    private static async Task<(EuAcquisitionTestFixture.EuInMemoryCustodyStore Store,
+    internal static async Task<(EuAcquisitionTestFixture.EuInMemoryCustodyStore Store,
         DurableBlobWriteReceipt Receipt, EuFormexAnnexTransportBinding Binding,
         (byte[] Bytes, SourceArtifactRef Reference) Profile)>
         FixtureAsync(byte[] bytes)

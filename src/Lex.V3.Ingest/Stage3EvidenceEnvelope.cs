@@ -51,6 +51,9 @@ public enum Stage3EvidenceEnvelopeRefusal
 
     [JsonStringEnumMemberName("europe_legal_notice_route_invalid")]
     EuropeLegalNoticeRouteInvalid = 13,
+
+    [JsonStringEnumMemberName("europe_formex_main_body_mismatch")]
+    EuropeFormexMainBodyMismatch = 14,
 }
 
 /// <summary>
@@ -64,6 +67,7 @@ public sealed class Stage3EvidenceEnvelope
         EuLegalNoticeEvidence? europeLegalNoticeEvidence,
         LuxembourgQueryExecutionResult luxembourg,
         EuFormexRunOutcomeReconciliation formex,
+        EuFormexMainBodyLegalContentPopulation? formexMainBodyLegalContent,
         EuFormexAnnexClassificationReconciliation formexAnnexClassifications,
         Stage3FidelityPreservationReconciliation fidelityPreservation,
         LuxembourgAknArticleInventoryPopulation luxembourgAknArticleInventoryPopulation,
@@ -73,6 +77,7 @@ public sealed class Stage3EvidenceEnvelope
         EuropeLegalNoticeEvidence = europeLegalNoticeEvidence;
         Luxembourg = luxembourg;
         Formex = formex;
+        FormexMainBodyLegalContent = formexMainBodyLegalContent;
         FormexAnnexClassifications = formexAnnexClassifications;
         FidelityPreservation = fidelityPreservation;
         LuxembourgAknArticleInventoryPopulation = luxembourgAknArticleInventoryPopulation;
@@ -94,6 +99,8 @@ public sealed class Stage3EvidenceEnvelope
     /// does not enter or alter the primary-body acquisition ladder.
     /// </summary>
     public EuFormexRunOutcomeReconciliation Formex { get; }
+
+    public EuFormexMainBodyLegalContentPopulation? FormexMainBodyLegalContent { get; }
 
     /// <summary>
     /// The proof-complete classifications for every acquired Formex inventory member in the exact
@@ -133,12 +140,29 @@ public sealed class Stage3EvidenceEnvelope
             europeLegalNoticeEvidence: null,
             luxembourg,
             formex,
+            formexMainBodyLegalContent: null,
             formexAnnexClassifications,
             fidelityPreservation,
             luxembourgAknArticleInventoryPopulation,
             luxembourgAknLegalContentPopulation,
             out refusal,
             out detail);
+
+    public static Stage3EvidenceEnvelope? TryCreateWithFormexMainBody(
+        EuQueryExecutionResult europe,
+        LuxembourgQueryExecutionResult luxembourg,
+        EuFormexRunOutcomeReconciliation formex,
+        EuFormexMainBodyLegalContentPopulation formexMainBodyLegalContent,
+        EuFormexAnnexClassificationReconciliation formexAnnexClassifications,
+        Stage3FidelityPreservationReconciliation fidelityPreservation,
+        LuxembourgAknArticleInventoryPopulation luxembourgAknArticleInventoryPopulation,
+        LuxembourgAknLegalContentPopulation? luxembourgAknLegalContentPopulation,
+        out Stage3EvidenceEnvelopeRefusal refusal,
+        out string? detail) => TryCreateCore(
+            europe, europeLegalNoticeEvidence: null, luxembourg, formex,
+            formexMainBodyLegalContent, formexAnnexClassifications, fidelityPreservation,
+            luxembourgAknArticleInventoryPopulation, luxembourgAknLegalContentPopulation,
+            out refusal, out detail);
 
     /// <summary>
     /// Terminal-builder door that binds strict-reopened retained EU legal-notice evidence into the
@@ -190,6 +214,7 @@ public sealed class Stage3EvidenceEnvelope
             europeLegalNoticeEvidence,
             luxembourg,
             formex,
+            formexMainBodyLegalContent: null,
             formexAnnexClassifications,
             fidelityPreservation,
             luxembourgAknArticleInventoryPopulation,
@@ -198,11 +223,45 @@ public sealed class Stage3EvidenceEnvelope
             out detail);
     }
 
+    public static Stage3EvidenceEnvelope? TryCreateWithEuropeLegalNoticeRouteAndFormexMainBody(
+        EuQueryExecutionResult europe,
+        RoutedHttpEvidence europeLegalNoticeRoute,
+        HttpLogicalRequest europeLegalNoticeRequest,
+        LuxembourgQueryExecutionResult luxembourg,
+        EuFormexRunOutcomeReconciliation formex,
+        EuFormexMainBodyLegalContentPopulation formexMainBodyLegalContent,
+        EuFormexAnnexClassificationReconciliation formexAnnexClassifications,
+        Stage3FidelityPreservationReconciliation fidelityPreservation,
+        LuxembourgAknArticleInventoryPopulation luxembourgAknArticleInventoryPopulation,
+        LuxembourgAknLegalContentPopulation? luxembourgAknLegalContentPopulation,
+        out Stage3EvidenceEnvelopeRefusal refusal,
+        out string? detail)
+    {
+        ArgumentNullException.ThrowIfNull(formexMainBodyLegalContent);
+        var envelope = TryCreateWithEuropeLegalNoticeRoute(
+            europe, europeLegalNoticeRoute, europeLegalNoticeRequest, luxembourg, formex,
+            formexAnnexClassifications, fidelityPreservation, luxembourgAknArticleInventoryPopulation,
+            luxembourgAknLegalContentPopulation, out refusal, out detail);
+        if (envelope is null) return null;
+        if (!ReferenceEquals(formexMainBodyLegalContent.Formex, formex))
+        {
+            refusal = Stage3EvidenceEnvelopeRefusal.EuropeFormexMainBodyMismatch;
+            detail = "the Formex main-body legal content belongs to a different reconciliation";
+            return null;
+        }
+        return new Stage3EvidenceEnvelope(
+            envelope.Europe, envelope.EuropeLegalNoticeEvidence, envelope.Luxembourg, envelope.Formex,
+            formexMainBodyLegalContent, envelope.FormexAnnexClassifications,
+            envelope.FidelityPreservation, envelope.LuxembourgAknArticleInventoryPopulation,
+            envelope.LuxembourgAknLegalContentPopulation);
+    }
+
     private static Stage3EvidenceEnvelope? TryCreateCore(
         EuQueryExecutionResult europe,
         EuLegalNoticeEvidence? europeLegalNoticeEvidence,
         LuxembourgQueryExecutionResult luxembourg,
         EuFormexRunOutcomeReconciliation formex,
+        EuFormexMainBodyLegalContentPopulation? formexMainBodyLegalContent,
         EuFormexAnnexClassificationReconciliation formexAnnexClassifications,
         Stage3FidelityPreservationReconciliation fidelityPreservation,
         LuxembourgAknArticleInventoryPopulation luxembourgAknArticleInventoryPopulation,
@@ -253,6 +312,14 @@ public sealed class Stage3EvidenceEnvelope
         {
             refusal = Stage3EvidenceEnvelopeRefusal.EuropeFormexClassificationMismatch;
             detail = "the Formex annex classifications belong to a different Formex reconciliation";
+            return null;
+        }
+
+        if (formexMainBodyLegalContent is not null &&
+            !ReferenceEquals(formexMainBodyLegalContent.Formex, formex))
+        {
+            refusal = Stage3EvidenceEnvelopeRefusal.EuropeFormexMainBodyMismatch;
+            detail = "the Formex main-body legal content belongs to a different reconciliation";
             return null;
         }
 
@@ -320,6 +387,7 @@ public sealed class Stage3EvidenceEnvelope
             europeLegalNoticeEvidence,
             luxembourg,
             formex,
+            formexMainBodyLegalContent,
             formexAnnexClassifications,
             fidelityPreservation,
             luxembourgAknArticleInventoryPopulation,

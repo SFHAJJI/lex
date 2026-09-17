@@ -260,6 +260,19 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Ingest.Europe.EuFormexEligibilityPopulation::.ctor, "
                     + "method public static "
                     + "Lex.V3.Ingest.Europe.EuFormexEligibilityPopulation::TryCreate",
+                "Lex.V3.Ingest.Europe.EuFormexMainBodyArticle: constructor internal instance "
+                    + "Lex.V3.Ingest.Europe.EuFormexMainBodyArticle::.ctor, "
+                    + "method private static "
+                    + "Lex.V3.Ingest.Europe.EuFormexMainBodyLegalContentProducer::Parse, "
+                    + "method private static "
+                    + "Lex.V3.Ingest.Europe.EuFormexMainBodyLegalContentProducer::Refused",
+                "Lex.V3.Ingest.Europe.EuFormexMainBodyLegalContentOutcome: constructor internal "
+                    + "instance Lex.V3.Ingest.Europe.EuFormexMainBodyLegalContentOutcome::.ctor",
+                "Lex.V3.Ingest.Europe.EuFormexMainBodyLegalContentPopulation: constructor internal "
+                    + "instance "
+                    + "Lex.V3.Ingest.Europe.EuFormexMainBodyLegalContentPopulation::.ctor, "
+                    + "method public instance "
+                    + "Lex.V3.Ingest.Europe.EuFormexMainBodyLegalContentProducer::RunAsync",
                 "Lex.V3.Ingest.Europe.EuFormexManifestationEnumerationResult: constructor private "
                     + "instance Lex.V3.Ingest.Europe.EuFormexManifestationEnumerationResult::.ctor, "
                     + "method internal static "
@@ -447,6 +460,9 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Ingest.Europe.EuXhtmlAnnexInventoryProductionResult::Success, "
                     + "method public instance "
                     + "Lex.V3.Ingest.Europe.EuXhtmlAnnexInventoryProducer::RunAsync",
+                "Lex.V3.Ingest.Europe.EuropeIndexReader: constructor private instance "
+                    + "Lex.V3.Ingest.Europe.EuropeIndexReader::.ctor, "
+                    + "method public static Lex.V3.Ingest.Europe.EuropeIndexReader::OpenAndVerify",
                 "Lex.V3.Ingest.Europe.LuxembourgDraftGraphRunRequest: constructor private instance "
                     + "Lex.V3.Ingest.Europe.LuxembourgDraftGraphRunRequest::.ctor, "
                     + "constructor private instance "
@@ -1021,7 +1037,12 @@ public sealed class GuardedConstructionCensusTests
                     + "method private static Lex.V3.Ingest.Stage3EvidenceEnvelope::TryCreateCore, "
                     + "method public static Lex.V3.Ingest.Stage3EvidenceEnvelope::TryCreate, "
                     + "method public static "
-                    + "Lex.V3.Ingest.Stage3EvidenceEnvelope::TryCreateWithEuropeLegalNoticeRoute",
+                    + "Lex.V3.Ingest.Stage3EvidenceEnvelope::TryCreateWithEuropeLegalNoticeRoute, "
+                    + "method public static "
+                    + "Lex.V3.Ingest.Stage3EvidenceEnvelope::TryCreateWithEuropeLegalNoticeRouteAnd"
+                    + "FormexMainBody, "
+                    + "method public static "
+                    + "Lex.V3.Ingest.Stage3EvidenceEnvelope::TryCreateWithFormexMainBody",
                 "Lex.V3.Ingest.Stage3EvidenceLineage: constructor private instance "
                     + "Lex.V3.Ingest.Stage3EvidenceLineage::.ctor, "
                     + "method public static Lex.V3.Ingest.Stage3EvidenceLineage::TryBind",

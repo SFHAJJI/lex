@@ -105,6 +105,10 @@ public sealed class ClosedVocabularyCensusTests
                     + "ExpressionProductionRefused, ExpressionEnumerationRefused, "
                     + "ExpressionEnumerationMissing, ExpressionEnumeratedTwice, "
                     + "ExpressionOutsidePopulation, ExpressionContentDisagrees",
+                "Lex.V3.Ingest.Europe.EuFormexMainBodyLegalContentDisposition: Admitted, "
+                    + "NotEligible, PackageUnavailable, PackageRefused, RetainedBytesUnavailable, "
+                    + "PackageUnreadable, XmlRejected, MainBodyMissing, UnsupportedContentShape",
+                "Lex.V3.Ingest.Europe.EuFormexMainBodyTokenKind: Text, Reference, Footnote",
                 "Lex.V3.Ingest.Europe.EuFormexManifestationEnumerationRefusal: None, "
                     + "EnumerationRefused, EnumerationProofRefused, VerifiedRowsRefused, "
                     + "RowNotAdmitted, RowNamesAnotherExpression, "
@@ -189,6 +193,8 @@ public sealed class ClosedVocabularyCensusTests
                     + "ProfileInvalid, ProfileDoesNotNameTransport, RetainedBytesUnavailable, "
                     + "XhtmlInvalid, PublisherAnnexConventionAbsent, "
                     + "PublisherAnnexConventionInvalid, WorkEliMissing",
+                "Lex.V3.Ingest.Europe.EuropeIndexBuildRefusal: None, CorpusRefused, "
+                    + "PopulationMismatch, DerivationMismatch, RightsIneligible, IndexInvalid",
                 "Lex.V3.Ingest.LexCorpus6BuildRefusal: None, EvidenceIncomplete, "
                     + "EuropeRightsBindingMissing, LuxembourgRightsBindingMissing, "
                     + "LuxembourgRightsEvidenceIncomplete, PopulationMismatch, "
@@ -201,9 +207,13 @@ public sealed class ClosedVocabularyCensusTests
                     + "PdfNotApplicable, PdfGazetteIssueScope, PdfUpstreamTextLayerGap, "
                     + "PdfActScopeUnproven, AnnexTextNotAvailable, AnnexMappingUnresolved, "
                     + "AnnexBodyContainsText, AnnexBodyContainsNoImage, "
-                    + "AnnexMappedPageOutsideDocument",
+                    + "AnnexMappedPageOutsideDocument, FormexMainBodyAdmitted, "
+                    + "FormexMainBodyNotEligible, FormexMainBodyPackageUnavailable, "
+                    + "FormexMainBodyPackageRefused, FormexMainBodyRetainedBytesUnavailable, "
+                    + "FormexMainBodyPackageUnreadable, FormexMainBodyXmlRejected, "
+                    + "FormexMainBodyMissing, FormexMainBodyUnsupportedContentShape",
                 "Lex.V3.Ingest.LexCorpus6Stage3OutcomeDomain: LuxembourgAknLegalContent, "
-                    + "LuxembourgPublisherPdfActScope, EuropeAnnexBody",
+                    + "LuxembourgPublisherPdfActScope, EuropeAnnexBody, EuropeFormexMainBody",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgAknArticleInventoryDisposition: Inventoried, "
                     + "NotAkn, RetainedBytesUnavailable, XmlRejected",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgAknLegalContentDisposition: Admitted, "
@@ -350,7 +360,7 @@ public sealed class ClosedVocabularyCensusTests
                     + "LuxembourgAknArticleInventoryPopulationMismatch, "
                     + "LuxembourgAknLegalContentPopulationMissing, "
                     + "LuxembourgAknLegalContentPopulationMismatch, EuropeLegalNoticeRunMismatch, "
-                    + "EuropeLegalNoticeRouteInvalid",
+                    + "EuropeLegalNoticeRouteInvalid, EuropeFormexMainBodyMismatch",
                 "Lex.V3.Ingest.Stage3EvidenceLineageRefusal: None, EuropeCorpusRecordSetMismatch, "
                     + "EuropeManifestMismatch, EuropeRunIdentityMismatch, "
                     + "LuxembourgCorpusRecordSetMismatch, LuxembourgManifestMismatch, "
