@@ -74,8 +74,9 @@ public sealed class V3EnvelopeJsonTests
             "\"schema\":\"lex-v3-envelope/1\",\"schema\":\"lex-v3-envelope/1\"",
             StringComparison.Ordinal);
 
-        Assert.ThrowsExactly<JsonException>(() =>
+        var exception = Assert.ThrowsExactly<JsonException>(() =>
             V3EnvelopeJson.ParseAndVerify(Encoding.UTF8.GetBytes(duplicate), _registry));
+        Assert.AreEqual("$.schema", exception.Path);
     }
 
     [TestMethod]
