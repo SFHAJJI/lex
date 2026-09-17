@@ -100,6 +100,9 @@ public sealed class VocabularyRegistryCensusTests
                 "Lex.V3.Contracts.Facts.FactsVocabularies: KindsByType=8, AllKinds=8",
                 "Lex.V3.Contracts.Index.V3IndexCapabilityManifestArtifact: Domain=35, "
                     + "const SchemaId",
+                "Lex.V3.Contracts.Platform.V3Verdicts: Known=6, const Answer, "
+                    + "const AnswerWithEnrichment, const Clarify, const Point, const Refuse, "
+                    + "const Split",
                 "Lex.V3.Contracts.PreviewOfficialPublisherLinks: const EuSearch, const LuSearch",
                 "Lex.V3.Contracts.PreviewSchemaExporter: SchemaFiles=6, SchemaTypes=6",
                 "Lex.V3.Contracts.PreviewSchemaGraph: ContractSetSchemaIds=4, SchemaIds=6",

@@ -205,6 +205,11 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Contracts.Index.V3IndexCapabilityManifest::.ctor, "
                     + "method public static "
                     + "Lex.V3.Contracts.Index.V3IndexCapabilityManifestArtifact::ParseAndVerify",
+                "Lex.V3.Contracts.Platform.V3Envelope: constructor internal instance "
+                    + "Lex.V3.Contracts.Platform.V3Envelope::.ctor, "
+                    + "method private instance Lex.V3.Contracts.Platform.V3EnvelopeBuilder::Create, "
+                    + "method public instance Lex.V3.Contracts.Platform.V3EnvelopeBuilder::Refusal, "
+                    + "method public instance Lex.V3.Contracts.Platform.V3EnvelopeBuilder::Success",
                 "Lex.V3.Contracts.PreviewEnvelope: constructor private-protected instance "
                     + "Lex.V3.Contracts.PreviewEnvelope::.ctor, "
                     + "constructor public instance Lex.V3.Contracts.PreviewRefusalEnvelope::.ctor, "
