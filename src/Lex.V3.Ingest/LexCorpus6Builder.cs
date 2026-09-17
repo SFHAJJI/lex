@@ -919,6 +919,15 @@ public static class LexCorpus6Builder
             {
                 continue;
             }
+            if (matches.Length == 0 &&
+                IsUnboundAlternateLanguage(
+                    outcome.Source.Expression,
+                    eu.CorpusRecordSet.Set.Records
+                        .Where(static record => record.Body.Kind == CorpusBodyRecordKind.Held)
+                        .Select(static record => record.ObjectRef)))
+            {
+                continue;
+            }
             if (matches.Length != 1)
             {
                 refusal = LexCorpus6BuildRefusal.PopulationMismatch;
@@ -1068,7 +1077,7 @@ public static class LexCorpus6Builder
             profileIdentities,
             CorrigendumReceipts(eu.CorrigendumTripwires),
             CorrigendumProductions(eu.CorrigendumTripwires),
-            TerminalUnresolvedFidelityObligations(evidence, profileIdentities),
+            TerminalUnresolvedFidelityObligations(evidence),
             members.OrderBy(static member => member, Comparer<LexCorpus6Member>.Create(LexCorpus6ManifestSet.CompareMembers)).ToArray()).Validate();
         var bytes = Write(set);
         var digest = ComputeSha256(bytes);
@@ -1270,7 +1279,7 @@ public static class LexCorpus6Builder
         IReadOnlyDictionary<SourceObjectRef, IReadOnlyList<LexCorpus6Stage3Outcome>> outcomes,
         SourceObjectRef objectRef) => outcomes.TryGetValue(objectRef, out var found) ? found : [];
 
-    private static bool FormexMainBodyBelongsTo(
+    internal static bool FormexMainBodyBelongsTo(
         Lex.V3.Contracts.Derivation.LanguageScopedExpression expression,
         SourceObjectRef corpusObject)
     {
@@ -1282,17 +1291,35 @@ public static class LexCorpus6Builder
             return true;
         }
 
-        var isEnglish = expression.OfficialLanguage is "EN" or "ENG" ||
-            string.Equals(
-                expression.OfficialLanguage,
-                "http://publications.europa.eu/resource/authority/language/ENG",
-                StringComparison.Ordinal);
-        return isEnglish &&
+        return IsEnglish(expression.OfficialLanguage) &&
             string.Equals(
                 expression.Identity.PublisherWorkId,
                 corpusObject.PublisherUri,
                 StringComparison.Ordinal);
     }
+
+    internal static bool IsUnboundAlternateLanguage(
+        Lex.V3.Contracts.Derivation.LanguageScopedExpression expression,
+        IEnumerable<SourceObjectRef> heldCorpusObjects)
+    {
+        ArgumentNullException.ThrowIfNull(expression);
+        ArgumentNullException.ThrowIfNull(heldCorpusObjects);
+        if (IsEnglish(expression.OfficialLanguage)) return false;
+
+        return heldCorpusObjects
+            .Where(value => string.Equals(
+                expression.Identity.PublisherWorkId,
+                value.PublisherUri,
+                StringComparison.Ordinal))
+            .Take(2)
+            .Count() == 1;
+    }
+
+    private static bool IsEnglish(string value) => value is "EN" or "ENG" ||
+        string.Equals(
+            value,
+            "http://publications.europa.eu/resource/authority/language/ENG",
+            StringComparison.Ordinal);
 
     private static IReadOnlyDictionary<SourceObjectRef, IReadOnlyList<LexCorpus6Stage3Outcome>>
         Stage3OutcomesByObjectRef(
@@ -1556,24 +1583,33 @@ public static class LexCorpus6Builder
     }
 
     private static IReadOnlyList<Stage3FidelityPreservationObligation>
-        TerminalUnresolvedFidelityObligations(
-            Stage3EvidenceEnvelope evidence,
-            IReadOnlyList<string> profileIdentities)
+        TerminalUnresolvedFidelityObligations(Stage3EvidenceEnvelope evidence)
     {
-        var hasFormexProfile = profileIdentities.Contains(
-            Europe.EuFormexMainBodyLegalContentProducer.ProfileSha256,
-            StringComparer.Ordinal);
-        var hasAknProfile = profileIdentities.Contains(
-            Luxembourg.LuxembourgAknLegalContentProfileProducer.RuleProfileSha256,
-            StringComparer.Ordinal);
+        var aknOutcomes = evidence.LuxembourgAknLegalContentPopulation.Outcomes;
+        var hasMarkerOnlyEvidence = aknOutcomes.Any(static outcome =>
+            outcome.Disposition == Luxembourg.LuxembourgAknLegalContentDisposition.MarkerOnlyEvidence);
+        var noteBodies = aknOutcomes
+            .Select(static outcome => outcome.Article)
+            .Where(static article => article is not null)
+            .SelectMany(static article => article!.Tokens)
+            .Where(static token => token.NoteBody is not null)
+            .SelectMany(static token => token.NoteBody!)
+            .ToArray();
+        var hasFootnoteEvidence = noteBodies.Length != 0;
+        var hasCitationEvidence = noteBodies.Any(static token =>
+            token.Kind == Luxembourg.LuxembourgAknLegalContentTokenKind.Reference &&
+            !string.IsNullOrWhiteSpace(token.Target));
         var retired = new HashSet<Stage3FidelityPreservationObligation>();
-        if (hasAknProfile)
+        if (hasMarkerOnlyEvidence)
         {
             retired.Add(Stage3FidelityPreservationObligation.MarkerOnlyRuleUnsupported);
         }
-        if (hasFormexProfile && hasAknProfile)
+        if (hasFootnoteEvidence)
         {
             retired.Add(Stage3FidelityPreservationObligation.FootnotePreservationUnproven);
+        }
+        if (hasCitationEvidence)
+        {
             retired.Add(Stage3FidelityPreservationObligation.CitationPreservationUnproven);
         }
 

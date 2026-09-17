@@ -53,6 +53,27 @@ public sealed class EuFormexMainBodyLegalContentProducerTests
         Assert.IsTrue(article4.Tokens.Any(static token =>
             token.Kind == EuFormexMainBodyTokenKind.Footnote),
             "Inline notes must remain separate ordered note tokens.");
+        var noteCitations = outcome.Articles.SelectMany(static article => article.Tokens)
+            .Where(static token => token.Kind == EuFormexMainBodyTokenKind.Footnote)
+            .SelectMany(static token => token.NoteBody ?? [])
+            .Where(static token => token.Kind == EuFormexMainBodyTokenKind.Reference)
+            .ToArray();
+        CollectionAssert.AreEquivalent(
+            new[]
+            {
+                "OJ L 241, 17.9.2015, p.\u00a01",
+                "OJ L 218, 13.8.2008, p.\u00a030",
+                "OJ L 145, 31.5.2001, p. 43",
+            },
+            noteCitations.Select(static token => token.Text).ToArray());
+        CollectionAssert.AreEquivalent(
+            new[]
+            {
+                "{\"COLL\":\"L\",\"DATE.PUB\":\"20150917\",\"NO.OJ\":\"241\",\"PAGE.FIRST\":\"1\"}",
+                "{\"COLL\":\"L\",\"DATE.PUB\":\"20080813\",\"NO.OJ\":\"218\",\"PAGE.FIRST\":\"30\"}",
+                "{\"COLL\":\"L\",\"DATE.PUB\":\"20010531\",\"NO.OJ\":\"145\",\"PAGE.FIRST\":\"43\"}",
+            },
+            noteCitations.Select(static token => token.Target).ToArray());
     }
 
     [TestMethod]

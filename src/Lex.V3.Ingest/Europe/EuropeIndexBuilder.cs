@@ -221,6 +221,14 @@ public static class EuropeIndexBuilder
             {
                 continue;
             }
+            if (matching.Length == 0 && LexCorpus6Builder.IsUnboundAlternateLanguage(
+                    outcome.Source.Expression,
+                    sourceRecords
+                        .Where(static record => record.Body.Kind == CorpusBodyRecordKind.Held)
+                        .Select(static record => record.ObjectRef)))
+            {
+                continue;
+            }
             if (matching.Length != 1)
             {
                 articles = [];
@@ -265,6 +273,12 @@ public static class EuropeIndexBuilder
                         kind = ContractWire.NameOf(token.Kind),
                         text = token.Text,
                         target = token.Target,
+                        note_body = token.NoteBody?.Select(static nested => new
+                        {
+                            kind = ContractWire.NameOf(nested.Kind),
+                            text = nested.Text,
+                            target = nested.Target,
+                        }),
                     }))));
             }
         }
@@ -534,14 +548,10 @@ public static class EuropeIndexBuilder
             var version = reader.GetString(0);
             var sourceId = reader.GetString(1);
             reader.Close();
-            using var options = connection.CreateCommand();
-            options.CommandText = "PRAGMA compile_options";
-            using var optionReader = options.ExecuteReader();
-            var values = new List<string>();
-            while (optionReader.Read()) values.Add(optionReader.GetString(0));
-            values.Sort(StringComparer.Ordinal);
-            var digest = Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(values)));
-            return new SqliteProvenance(version, sourceId, digest);
+            return new SqliteProvenance(
+                version,
+                sourceId,
+                SqlitePortableProvenance.CompileOptionsSha256(connection));
         }
     }
 }

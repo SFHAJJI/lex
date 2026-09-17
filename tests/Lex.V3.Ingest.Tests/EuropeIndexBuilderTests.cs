@@ -17,7 +17,23 @@ public sealed class EuropeIndexBuilderTests
     {
         var digest = Convert.ToHexStringLower(SHA256.HashData(
             EuropeIndexBuilder.BuildFixedInputDeterminismEvidence()));
-        Assert.AreEqual("252836e09862095bebdee361286154ae0241814e3db1445b46321c8a90041863", digest);
+        Assert.AreEqual("00bb3fb7ba6307ec376bac22050a66bcd682b01ae3d25fa61bc626e4cabe1df8", digest);
+    }
+
+    [TestMethod]
+    public void PlatformOnlySqliteOptionsDoNotChangePortableProvenance()
+    {
+        var common = new[] { "DEFAULT_PAGE_SIZE=4096", "ENABLE_FTS5", "THREADSAFE=1" };
+        var windows = common.Concat([
+            "ATOMIC_INTRINSICS=0", "COMPILER=msvc-1951", "MUTEX_W32",
+        ]);
+        var linux = common.Concat([
+            "ATOMIC_INTRINSICS=1", "COMPILER=gcc-13.3.0", "MUTEX_PTHREADS",
+        ]);
+
+        Assert.AreEqual(
+            SqlitePortableProvenance.CompileOptionsSha256(windows),
+            SqlitePortableProvenance.CompileOptionsSha256(linux));
     }
 
     [TestMethod]

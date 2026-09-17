@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Xml;
 using System.Xml.Linq;
@@ -32,7 +33,8 @@ public enum EuFormexMainBodyTokenKind
 public sealed record EuFormexMainBodyToken(
     EuFormexMainBodyTokenKind Kind,
     string Text,
-    string? Target);
+    string? Target,
+    IReadOnlyList<EuFormexMainBodyToken>? NoteBody = null);
 
 public sealed class EuFormexMainBodyArticle
 {
@@ -70,7 +72,7 @@ public sealed class EuFormexMainBodyArticle
     private static string IdentityOf(EuFormexMainBodyArticle article)
     {
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-        Append(hash, "lex-v3-eu-formex-main-body-article/1");
+        Append(hash, "lex-v3-eu-formex-main-body-article/2");
         Append(hash, article.PublisherExpressionId);
         Append(hash, article.PackageEntry);
         Append(hash, article.PublisherIdentifier);
@@ -78,13 +80,18 @@ public sealed class EuFormexMainBodyArticle
         Append(hash, article.Language);
         Append(hash, article.PublisherDate);
         Append(hash, article.SearchableText);
-        foreach (var token in article.Tokens)
-        {
-            Append(hash, ((int)token.Kind).ToString(System.Globalization.CultureInfo.InvariantCulture));
-            Append(hash, token.Text);
-            Append(hash, token.Target ?? "");
-        }
+        foreach (var token in article.Tokens) AppendToken(hash, token);
         return Convert.ToHexStringLower(hash.GetHashAndReset());
+    }
+
+    private static void AppendToken(IncrementalHash hash, EuFormexMainBodyToken token)
+    {
+        Append(hash, ((int)token.Kind).ToString(System.Globalization.CultureInfo.InvariantCulture));
+        Append(hash, token.Text);
+        Append(hash, token.Target ?? "");
+        Append(hash, (token.NoteBody?.Count ?? 0).ToString(System.Globalization.CultureInfo.InvariantCulture));
+        if (token.NoteBody is null) return;
+        foreach (var nested in token.NoteBody) AppendToken(hash, nested);
     }
 
     internal static void Append(IncrementalHash hash, string value)
@@ -145,8 +152,9 @@ public sealed class EuFormexMainBodyLegalContentPopulation
 public sealed class EuFormexMainBodyLegalContentProducer
 {
     public const string Profile =
-        "lex-v3-eu-formex-main-body-profile/1;root=ACT;units=ARTICLE;" +
-        "tokens=text,reference,footnote;exclude=recitals,final,annex";
+        "lex-v3-eu-formex-main-body-profile/2;root=ACT;units=ARTICLE;" +
+        "tokens=text,reference,footnote-with-body;oj-reference-target=publisher-attributes;" +
+        "exclude=recitals,final,annex";
     public static string ProfileSha256 { get; } = Convert.ToHexStringLower(
         SHA256.HashData(Encoding.UTF8.GetBytes(Profile)));
 
@@ -359,7 +367,10 @@ public sealed class EuFormexMainBodyLegalContentProducer
         if (builder.Length > 0 && !char.IsWhiteSpace(builder[^1])) builder.Append(' ');
     }
 
-    private static void AppendTokens(XElement element, List<EuFormexMainBodyToken> tokens)
+    private static void AppendTokens(
+        XElement element,
+        List<EuFormexMainBodyToken> tokens,
+        bool allowFootnotes = true)
     {
         foreach (var node in element.Nodes())
         {
@@ -378,22 +389,38 @@ public sealed class EuFormexMainBodyLegalContentProducer
             }
             if (child.Name.LocalName is "NOTE" or "FT")
             {
+                if (!allowFootnotes)
+                    throw new InvalidDataException("A Formex footnote cannot recursively contain another footnote.");
                 var note = DisplayText(child);
-                if (!string.IsNullOrWhiteSpace(note))
-                    tokens.Add(new(EuFormexMainBodyTokenKind.Footnote, note, null));
+                var noteBody = new List<EuFormexMainBodyToken>();
+                AppendTokens(child, noteBody, allowFootnotes: false);
+                if (!string.IsNullOrWhiteSpace(note) && noteBody.Count != 0)
+                    tokens.Add(new(EuFormexMainBodyTokenKind.Footnote, note, null,
+                        Array.AsReadOnly(noteBody.ToArray())));
                 continue;
             }
             if (child.Name.LocalName is "REF.DOC.OJ" or "REF.DOC" or "LINK")
             {
                 var reference = DisplayText(child);
-                var target = child.Attributes().FirstOrDefault(static value =>
-                    value.Name.LocalName is "REF" or "HREF" or "FILE")?.Value;
+                var target = ReferenceTarget(child);
                 if (!string.IsNullOrWhiteSpace(reference))
                     tokens.Add(new(EuFormexMainBodyTokenKind.Reference, reference, target));
                 continue;
             }
             AppendTokens(child, tokens);
         }
+    }
+
+    private static string? ReferenceTarget(XElement element)
+    {
+        var direct = element.Attributes().FirstOrDefault(static value =>
+            value.Name.LocalName is "REF" or "HREF" or "FILE")?.Value;
+        if (direct is not null || element.Name.LocalName != "REF.DOC.OJ") return direct;
+        var attributes = element.Attributes()
+            .OrderBy(static value => value.Name.LocalName, StringComparer.Ordinal)
+            .ToDictionary(static value => value.Name.LocalName, static value => value.Value,
+                StringComparer.Ordinal);
+        return attributes.Count == 0 ? null : JsonSerializer.Serialize(attributes);
     }
 
     private static string DisplayText(XElement element)

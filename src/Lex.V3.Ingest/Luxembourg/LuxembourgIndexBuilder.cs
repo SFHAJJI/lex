@@ -489,14 +489,10 @@ public static class LuxembourgIndexBuilder
             var version = reader.GetString(0);
             var sourceId = reader.GetString(1);
             reader.Close();
-            using var options = connection.CreateCommand();
-            options.CommandText = "PRAGMA compile_options";
-            using var optionReader = options.ExecuteReader();
-            var values = new List<string>();
-            while (optionReader.Read()) values.Add(optionReader.GetString(0));
-            values.Sort(StringComparer.Ordinal);
-            var digest = Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(values)));
-            return new SqliteProvenance(version, sourceId, digest);
+            return new SqliteProvenance(
+                version,
+                sourceId,
+                SqlitePortableProvenance.CompileOptionsSha256(connection));
         }
     }
 }
