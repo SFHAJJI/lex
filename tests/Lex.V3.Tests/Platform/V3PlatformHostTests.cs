@@ -51,7 +51,16 @@ public sealed class V3PlatformHostTests
                 bound.SchemaSha256);
             Assert.AreEqual("arrêté & co", bound.Parameters.GetProperty("identifier").GetString());
             using var result = JsonDocument.Parse("{\"work_id\":\"arrêté & co\"}");
-            return new V3PlatformOperationResult("work_resolution", result.RootElement);
+            var boundResult = new V3PlatformOperationResult(
+                bound,
+                "work_resolution",
+                result.RootElement);
+            Assert.AreEqual("resolve", boundResult.OperationId);
+            Assert.AreEqual("lex-v3-resolve-result/1", boundResult.Schema);
+            Assert.AreEqual(
+                V3OperationRegistry.Reviewed.Operation("resolve").ResultSchemaSha256,
+                boundResult.SchemaSha256);
+            return boundResult;
         }
     }
 
@@ -79,8 +88,7 @@ public sealed class V3PlatformHostTests
                     _ =>
                     {
                         calls++;
-                        using var result = JsonDocument.Parse("{}");
-                        return new V3PlatformOperationResult("work_resolution", result.RootElement);
+                        throw new AssertFailedException("The operation must not run.");
                     },
                     CancellationToken.None));
         }
@@ -99,7 +107,7 @@ public sealed class V3PlatformHostTests
                 Encoding.UTF8.GetBytes("{\"operation_id\":\"resolve\",\"parameters\":{}}"),
                 "req_host",
                 Context(),
-                _ => new V3PlatformOperationResult("quote", value.RootElement),
+                bound => new V3PlatformOperationResult(bound, "quote", value.RootElement),
                 CancellationToken.None));
     }
 

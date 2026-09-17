@@ -17,6 +17,7 @@ internal sealed class V3PlatformOperationRequest
         Schema = operation.RequestSchema;
         SchemaSha256 = operation.RequestSchemaSha256;
         Parameters = parameters.Clone();
+        Operation = operation;
     }
 
     public string OperationId { get; }
@@ -26,21 +27,36 @@ internal sealed class V3PlatformOperationRequest
     public string SchemaSha256 { get; }
 
     public JsonElement Parameters { get; }
+
+    internal V3OperationDefinition Operation { get; }
 }
 
 internal sealed class V3PlatformOperationResult
 {
-    public V3PlatformOperationResult(string objectType, JsonElement value)
+    public V3PlatformOperationResult(
+        V3PlatformOperationRequest request,
+        string objectType,
+        JsonElement value)
     {
+        ArgumentNullException.ThrowIfNull(request);
         ArgumentException.ThrowIfNullOrWhiteSpace(objectType);
         if (value.ValueKind != JsonValueKind.Object)
         {
             throw new ArgumentException("An operation result must be an object.", nameof(value));
         }
 
+        OperationId = request.OperationId;
+        Schema = request.Operation.ResultSchema;
+        SchemaSha256 = request.Operation.ResultSchemaSha256;
         ObjectType = objectType;
         Value = value.Clone();
     }
+
+    public string OperationId { get; }
+
+    public string Schema { get; }
+
+    public string SchemaSha256 { get; }
 
     public string ObjectType { get; }
 
@@ -138,12 +154,19 @@ internal sealed class V3PlatformHost
         var operation = _registry.Operation(request.OperationId);
         var result = execute(request) ?? throw new InvalidOperationException("The operation returned no result.");
         cancellationToken.ThrowIfCancellationRequested();
+        if (!string.Equals(result.OperationId, operation.OperationId, StringComparison.Ordinal) ||
+            !string.Equals(result.Schema, operation.ResultSchema, StringComparison.Ordinal) ||
+            !string.Equals(result.SchemaSha256, operation.ResultSchemaSha256, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("The operation result is not bound to its reviewed schema.");
+        }
+
         var envelope = _builder.Success(
             requestReference,
             operation.OperationId,
             context,
             V3Verdicts.Answer,
-            operation.ResultSchema,
+            result.Schema,
             result.ObjectType,
             result.Value);
         return V3EnvelopeJson.Project(envelope, _registry, projection);
@@ -163,7 +186,10 @@ internal sealed class V3PlatformHost
             throw new JsonException("An operation request must be an object.");
         }
 
-        var names = root.EnumerateObject().Select(static member => member.Name).Order().ToArray();
+        var names = root.EnumerateObject()
+            .Select(static member => member.Name)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
         if (!names.SequenceEqual(["operation_id", "parameters"], StringComparer.Ordinal))
         {
             throw new JsonException("The operation request members do not match the bound schema.");
