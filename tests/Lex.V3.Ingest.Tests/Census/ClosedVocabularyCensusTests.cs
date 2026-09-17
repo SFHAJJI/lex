@@ -245,6 +245,8 @@ public sealed class ClosedVocabularyCensusTests
                     + "HeldRecordHasNoSelectedAddress, HeldRecordSelectedIdentityMismatch, "
                     + "HeldRecordHasNoFinalRightsResolution, "
                     + "HeldRecordFinalRightsResolutionAmbiguous",
+                "Lex.V3.Ingest.Luxembourg.LuxembourgIndexBuildRefusal: None, CorpusRefused, "
+                    + "PopulationMismatch, DerivationMismatch, IndexInvalid",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgInFileRightsReadStatus: Observed, "
                     + "UnsupportedRepresentation, MalformedXml, ManifestationIdentityMismatch, "
                     + "InvalidLicenceIri",
