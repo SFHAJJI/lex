@@ -434,7 +434,9 @@ public sealed class LexCorpus6BuilderTests
     internal static async Task<Stage3DerivationProfileEnvelope> CompleteProfileEnvelopeAsync(
         bool includeLegalNotice = true,
         bool stripEuropeContentClasses = false,
-        Europe.EuQueryExecutionResult? europeOverride = null)
+        Europe.EuQueryExecutionResult? europeOverride = null,
+        Luxembourg.LuxembourgQueryExecutionResult? luxembourgOverride = null,
+        Lex.V3.Contracts.Custody.ICustodyStore? luxembourgStore = null)
     {
         var europe = europeOverride ?? await EuAxiomWiringHarness.RunAsync(
             static root => EuAcquisitionTestFixture.AxiomAbsenceScriptFor(root));
@@ -447,12 +449,13 @@ public sealed class LexCorpus6BuilderTests
             "Fixtures",
             "LuDocumentFetch",
             "lu-pdf-consolidated-2020-04-08-a265.bin"));
-        var luxembourg = await LuxembourgGazetteAcquisitionTests
+        var luxembourg = luxembourgOverride ?? await LuxembourgGazetteAcquisitionTests
             .CompletePublisherPdfForStage3BodyCompositionAsync(bytes);
         var formex = EuFormexRunOutcomeReconciliationTests.CompleteForEnvelope(europe);
         var classifications = Stage3EvidenceEnvelopeTests.CompleteClassifications(formex);
         var fidelity = Stage3FidelityPreservationReconciliationTests.Complete(europe, luxembourg);
-        var akn = await Stage3EvidenceEnvelopeTests.CompleteAknEvidenceAsync(luxembourg);
+        var akn = await Stage3EvidenceEnvelopeTests.CompleteAknEvidenceAsync(
+            luxembourg, luxembourgStore);
         Stage3EvidenceEnvelope? evidence;
         Stage3EvidenceEnvelopeRefusal evidenceRefusal;
         string? evidenceDetail;
@@ -477,9 +480,12 @@ public sealed class LexCorpus6BuilderTests
             out var compositionDetail);
         Assert.IsNotNull(composition, $"{compositionRefusal}: {compositionDetail}");
         var eligibility = Luxembourg.LuxembourgPdfProfileEligibilityProducer.Produce(composition);
-        Lex.V3.Contracts.Custody.ICustodyStore store =
-            new RoutedHttpAcquisitionSessionTests.MultiObjectCustodyStore();
-        _ = await store.CreateAsync(bytes, Lex.V3.Contracts.Custody.CustodyClass.NightlyFloor90d, CancellationToken.None);
+        Lex.V3.Contracts.Custody.ICustodyStore store = luxembourgStore
+            ?? new RoutedHttpAcquisitionSessionTests.MultiObjectCustodyStore();
+        if (luxembourgOverride is null)
+        {
+            _ = await store.CreateAsync(bytes, Lex.V3.Contracts.Custody.CustodyClass.NightlyFloor90d, CancellationToken.None);
+        }
         var layout = await new Luxembourg.LuxembourgPdfLayoutEvidenceProducer(store)
             .RunAsync(eligibility, CancellationToken.None);
         Assert.IsTrue(layout.Produced, $"{layout.Refusal}: {layout.Detail}");

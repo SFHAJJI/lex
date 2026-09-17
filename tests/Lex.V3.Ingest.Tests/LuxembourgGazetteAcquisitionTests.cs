@@ -341,6 +341,16 @@ public sealed class LuxembourgGazetteAcquisitionTests
 
     internal static async Task<LuxembourgQueryExecutionResult> CompleteXmlForStage3BodyCompositionAsync()
     {
+        ICustodyStore store = new RoutedHttpAcquisitionSessionTests.MultiObjectCustodyStore();
+        return await CompleteXmlForStage3BodyCompositionAsync("<akomaNtoso/>"u8.ToArray(), store);
+    }
+
+    internal static async Task<LuxembourgQueryExecutionResult> CompleteXmlForStage3BodyCompositionAsync(
+        byte[] retainedXmlBytes,
+        ICustodyStore store)
+    {
+        ArgumentNullException.ThrowIfNull(retainedXmlBytes);
+        ArgumentNullException.ThrowIfNull(store);
         const string manifestationXml = Expression + "/xml";
         const string itemXml = "http://data.legilux.public.lu/filestore/eli/etat/leg/loi/2026/01/01/a1/jo/fr/xml/eli-etat-leg-loi-2026-01-01-a1-jo-fr-xml.xml";
         (string, string, string)[] assertions =
@@ -363,8 +373,9 @@ public sealed class LuxembourgGazetteAcquisitionTests
             pdf: null,
             subjects: [Act, Expression, manifestationXml],
             ladderItem: itemXml,
-            ladderBody: "<akomaNtoso/>"u8.ToArray(),
-            ladderMediaType: "application/xml")).Result;
+            ladderBody: retainedXmlBytes,
+            ladderMediaType: "application/xml",
+            custodyStore: store)).Result;
     }
 
     internal static Task<LuxembourgQueryExecutionResult> CompletePublisherPdfForStage3BodyCompositionAsync() =>
@@ -507,14 +518,15 @@ public sealed class LuxembourgGazetteAcquisitionTests
         string? pdfRobots = null,
         Func<ICustodyStore, ICustodyStore>? decorate = null,
         string ladderMediaType = "application/pdf",
-        IReadOnlyDictionary<string, byte[]>? ladderBodies = null)
+        IReadOnlyDictionary<string, byte[]>? ladderBodies = null,
+        ICustodyStore? custodyStore = null)
     {
         // The census is a cursor-ordered enumeration: subjects in ascending ordinal order, or the
         // executor's own strict cursor check refuses the family as never advancing.
         subjects = (subjects ?? [Act, Expression, ManifestationPdfA, ManifestationPdf])
             .OrderBy(static subject => subject, StringComparer.Ordinal).ToArray();
         ladderBody ??= PdfABytes;
-        ICustodyStore store = new RoutedHttpAcquisitionSessionTests.MultiObjectCustodyStore();
+        ICustodyStore store = custodyStore ?? new RoutedHttpAcquisitionSessionTests.MultiObjectCustodyStore();
         store = decorate?.Invoke(store) ?? store;
         var profileReceipt = await store.CreateAsync(
             "synthetic vocabulary observation for the gazette acquisition"u8.ToArray(),
