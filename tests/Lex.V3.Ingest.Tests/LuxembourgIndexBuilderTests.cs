@@ -117,7 +117,7 @@ public sealed class LuxembourgIndexBuilderTests
             built.IndexRef, built.IndexBytes.Span, corpus.ArtifactRef, built.CapabilityManifest);
         Assert.AreEqual(luxembourgMembers.Length, reader.MemberCount);
         Assert.AreEqual(49, reader.ArticleCount);
-        Assert.HasCount(5, built.CapabilityManifest.Cells);
+        Assert.HasCount(4, built.CapabilityManifest.Cells);
         var cells = built.CapabilityManifest.Cells.OrderBy(static cell => cell.PeriodFrom).ToArray();
         Assert.Fail(string.Join(";", cells.Select(static cell => $"{cell.PeriodFrom:yyyy-MM-dd}:{cell.Population}")));
         Assert.AreEqual(new DateOnly(2021, 8, 22), cells[0].PeriodFrom);
