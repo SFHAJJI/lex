@@ -29,6 +29,10 @@ public sealed class V3OperationDefinition
         }
 
         ResultObjectTypes = Array.AsReadOnly(objectTypes);
+        RequestSchemaSha256 = V3PlatformSchemaExporter.Sha256(
+            V3PlatformSchemaExporter.ExportRequestUtf8(OperationId));
+        ResultSchemaSha256 = V3PlatformSchemaExporter.Sha256(
+            V3PlatformSchemaExporter.ExportResultUtf8(OperationId, ResultObjectTypes));
     }
 
     public string OperationId { get; }
@@ -38,6 +42,10 @@ public sealed class V3OperationDefinition
     public string ResultSchema { get; }
 
     public string RefusalSchema { get; }
+
+    public string RequestSchemaSha256 { get; }
+
+    public string ResultSchemaSha256 { get; }
 
     public ReadOnlyCollection<string> ResultObjectTypes { get; }
 
@@ -226,6 +234,12 @@ public sealed class V3OperationRegistry
 
     public string Sha256 { get; }
 
+    public string EnvelopeSchemaSha256 { get; } = V3PlatformSchemaExporter.Sha256(
+        V3PlatformSchemaExporter.ExportEnvelopeUtf8());
+
+    public string RefusalSchemaSha256 { get; } = V3PlatformSchemaExporter.Sha256(
+        V3PlatformSchemaExporter.ExportRefusalUtf8());
+
     public static V3OperationRegistry Reviewed { get; } = new(
         Schema,
         Version,
@@ -308,14 +322,27 @@ public sealed class V3OperationRegistry
             writer.WriteStartObject();
             writer.WriteString("schema", Schema);
             writer.WriteString("version", Version);
+            writer.WriteString("envelope_schema", V3PlatformSchemaExporter.EnvelopeSchemaId);
+            writer.WriteString(
+                "envelope_schema_sha256",
+                V3PlatformSchemaExporter.Sha256(V3PlatformSchemaExporter.ExportEnvelopeUtf8()));
+            writer.WriteString("refusal_schema", V3PlatformSchemaExporter.RefusalSchemaId);
+            writer.WriteString(
+                "refusal_schema_sha256",
+                V3PlatformSchemaExporter.Sha256(V3PlatformSchemaExporter.ExportRefusalUtf8()));
             writer.WriteStartArray("operations");
             foreach (var operation in operations)
             {
                 writer.WriteStartObject();
                 writer.WriteString("operation_id", operation.OperationId);
                 writer.WriteString("request_schema", operation.RequestSchema);
+                writer.WriteString("request_schema_sha256", operation.RequestSchemaSha256);
                 writer.WriteString("result_schema", operation.ResultSchema);
+                writer.WriteString("result_schema_sha256", operation.ResultSchemaSha256);
                 writer.WriteString("refusal_schema", operation.RefusalSchema);
+                writer.WriteString(
+                    "refusal_schema_sha256",
+                    V3PlatformSchemaExporter.Sha256(V3PlatformSchemaExporter.ExportRefusalUtf8()));
                 writer.WriteStartArray("result_object_types");
                 foreach (var objectType in operation.ResultObjectTypes)
                 {

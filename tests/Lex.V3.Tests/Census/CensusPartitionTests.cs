@@ -53,6 +53,7 @@ public sealed class CensusPartitionTests
         "Lex.V3.Contracts.ContractJson: stateful static, not a token registry",
         "Lex.V3.Contracts.ContractLine: stateful static, not a token registry",
         "Lex.V3.Contracts.Custody.CustodyBounds: stateful static, not a token registry",
+        "Lex.V3.Contracts.Platform.V3EnvelopeJson: stateful static, not a token registry",
         "Lex.V3.Contracts.PreviewContractLimits: constant table, not a vocabulary",
         "Lex.V3.Contracts.PreviewDocumentCanonicalizer: stateful static, not a token registry",
         "Lex.V3.Contracts.Source.Absence.AbsenceKey: stateful static, not a token registry",
@@ -117,14 +118,14 @@ public sealed class CensusPartitionTests
     public void ThePartitionTotalsAreExactlyThese()
     {
         Assert.AreEqual(
-            583, ClosedSurfaceCensus.Candidates(CensusScope.SweptHere).Count, "candidates");
+            586, ClosedSurfaceCensus.Candidates(CensusScope.SweptHere).Count, "candidates");
         Assert.AreEqual(
-            261, ClosedSurfaceCensus.ClosedVocabularies(CensusScope.SweptHere).Count, "vocabularies");
+            262, ClosedSurfaceCensus.ClosedVocabularies(CensusScope.SweptHere).Count, "vocabularies");
         Assert.AreEqual(
             203, ClosedSurfaceCensus.GuardedConstruction(CensusScope.SweptHere).Count, "guarded types");
         Assert.AreEqual(
-            70, ClosedSurfaceCensus.VocabularyRegistries(CensusScope.SweptHere).Count, "registries");
-        Assert.AreEqual(49, Declined.Length, "declined");
+            71, ClosedSurfaceCensus.VocabularyRegistries(CensusScope.SweptHere).Count, "registries");
+        Assert.AreEqual(50, Declined.Length, "declined");
     }
 
     private static string NameOf(string row) =>

@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lex-v3-as_of-result/1",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "operation_id": {
+      "const": "as_of"
+    },
+    "object_type": {
+      "type": "string",
+      "enum": [
+        "quote",
+        "version_state"
+      ]
+    },
+    "value": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "required": [
+    "operation_id",
+    "object_type",
+    "value"
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lex-v3-dossier-request/1",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "operation_id": {
+      "const": "dossier"
+    },
+    "parameters": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "required": [
+    "operation_id",
+    "parameters"
+  ]
+}

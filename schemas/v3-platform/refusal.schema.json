@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lex-v3-refusal/1",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "lex-v3-refusal/1"
+    },
+    "code": {
+      "type": "string"
+    },
+    "helpful_payload": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "required": [
+    "schema",
+    "code",
+    "helpful_payload"
+  ]
+}
