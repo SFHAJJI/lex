@@ -60,17 +60,18 @@ internal sealed class V3PlatformSchemaDocuments
         var schemas = new Dictionary<string, JsonSchema>(StringComparer.Ordinal);
         foreach (var operation in V3OperationRegistry.Reviewed.Operations)
         {
+            var fileStem = operation.OperationId.Replace('_', '-');
             Add(
                 schemas,
                 assembly,
                 operation.RequestSchema,
-                $"{operation.OperationId}-request.schema.json",
+                $"{fileStem}-request.schema.json",
                 operation.RequestSchemaSha256);
             Add(
                 schemas,
                 assembly,
                 operation.ResultSchema,
-                $"{operation.OperationId}-result.schema.json",
+                $"{fileStem}-result.schema.json",
                 operation.ResultSchemaSha256);
         }
 
