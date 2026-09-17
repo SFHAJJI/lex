@@ -48,6 +48,7 @@ public sealed class V3PlatformSchemaTests
             StringAssert.Contains(canonical, operation.ResultSchemaSha256);
         }
 
+        StringAssert.Contains(canonical, registry.EnvelopeSchemaSha256);
         StringAssert.Contains(canonical, registry.RefusalSchemaSha256);
     }
 

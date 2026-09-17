@@ -234,6 +234,9 @@ public sealed class V3OperationRegistry
 
     public string Sha256 { get; }
 
+    public string EnvelopeSchemaSha256 { get; } = V3PlatformSchemaExporter.Sha256(
+        V3PlatformSchemaExporter.ExportEnvelopeUtf8());
+
     public string RefusalSchemaSha256 { get; } = V3PlatformSchemaExporter.Sha256(
         V3PlatformSchemaExporter.ExportRefusalUtf8());
 
@@ -319,6 +322,14 @@ public sealed class V3OperationRegistry
             writer.WriteStartObject();
             writer.WriteString("schema", Schema);
             writer.WriteString("version", Version);
+            writer.WriteString("envelope_schema", V3PlatformSchemaExporter.EnvelopeSchemaId);
+            writer.WriteString(
+                "envelope_schema_sha256",
+                V3PlatformSchemaExporter.Sha256(V3PlatformSchemaExporter.ExportEnvelopeUtf8()));
+            writer.WriteString("refusal_schema", V3PlatformSchemaExporter.RefusalSchemaId);
+            writer.WriteString(
+                "refusal_schema_sha256",
+                V3PlatformSchemaExporter.Sha256(V3PlatformSchemaExporter.ExportRefusalUtf8()));
             writer.WriteStartArray("operations");
             foreach (var operation in operations)
             {
