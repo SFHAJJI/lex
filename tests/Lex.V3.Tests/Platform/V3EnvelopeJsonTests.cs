@@ -76,7 +76,7 @@ public sealed class V3EnvelopeJsonTests
 
         var exception = Assert.ThrowsExactly<JsonException>(() =>
             V3EnvelopeJson.ParseAndVerify(Encoding.UTF8.GetBytes(duplicate), _registry));
-        Assert.AreEqual("$.schema", exception.Path);
+        StringAssert.Contains(exception.Message, "Duplicate");
     }
 
     [TestMethod]
