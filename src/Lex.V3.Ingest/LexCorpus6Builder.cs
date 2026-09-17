@@ -41,6 +41,8 @@ public enum LexCorpus6Stage3OutcomeDomain
     LuxembourgPublisherPdfActScope = 2,
     [JsonStringEnumMemberName("europe_annex_body")]
     EuropeAnnexBody = 3,
+    [JsonStringEnumMemberName("europe_formex_main_body")]
+    EuropeFormexMainBody = 4,
 }
 
 public enum LexCorpus6Stage3Disposition
@@ -61,6 +63,15 @@ public enum LexCorpus6Stage3Disposition
     [JsonStringEnumMemberName("annex_body_contains_no_image")] AnnexBodyContainsNoImage = 14,
     [JsonStringEnumMemberName("annex_mapped_page_outside_document")]
     AnnexMappedPageOutsideDocument = 15,
+    [JsonStringEnumMemberName("formex_main_body_admitted")] FormexMainBodyAdmitted = 16,
+    [JsonStringEnumMemberName("formex_main_body_not_eligible")] FormexMainBodyNotEligible = 17,
+    [JsonStringEnumMemberName("formex_main_body_package_unavailable")] FormexMainBodyPackageUnavailable = 18,
+    [JsonStringEnumMemberName("formex_main_body_package_refused")] FormexMainBodyPackageRefused = 19,
+    [JsonStringEnumMemberName("formex_main_body_retained_bytes_unavailable")] FormexMainBodyRetainedBytesUnavailable = 20,
+    [JsonStringEnumMemberName("formex_main_body_package_unreadable")] FormexMainBodyPackageUnreadable = 21,
+    [JsonStringEnumMemberName("formex_main_body_xml_rejected")] FormexMainBodyXmlRejected = 22,
+    [JsonStringEnumMemberName("formex_main_body_missing")] FormexMainBodyMissing = 23,
+    [JsonStringEnumMemberName("formex_main_body_unsupported_content_shape")] FormexMainBodyUnsupportedContentShape = 24,
 }
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
@@ -92,6 +103,9 @@ public sealed record LexCorpus6Stage3Outcome(
             LexCorpus6Stage3OutcomeDomain.EuropeAnnexBody => disposition is >=
                 LexCorpus6Stage3Disposition.AnnexTextNotAvailable and <=
                 LexCorpus6Stage3Disposition.AnnexMappedPageOutsideDocument,
+            LexCorpus6Stage3OutcomeDomain.EuropeFormexMainBody => disposition is >=
+                LexCorpus6Stage3Disposition.FormexMainBodyAdmitted and <=
+                LexCorpus6Stage3Disposition.FormexMainBodyUnsupportedContentShape,
             _ => false,
         };
 }
@@ -835,10 +849,22 @@ public static class LexCorpus6Builder
         var eu = evidence.Europe;
         var lu = evidence.Luxembourg;
         if (eu.CorpusRecordSetRef is null || eu.CorpusRecordSet is null ||
-            lu.CorpusRecordSetRef is null || lu.CorpusRecordSet is null || eu.CorrigendumTripwires is null)
+            lu.CorpusRecordSetRef is null || lu.CorpusRecordSet is null || eu.CorrigendumTripwires is null ||
+            evidence.FormexMainBodyLegalContent is null)
         {
             refusal = LexCorpus6BuildRefusal.EvidenceIncomplete;
-            detail = "A source record set or corrigendum completion is missing.";
+            detail = "A source record set, corrigendum completion or Formex main-body population is missing.";
+            return null;
+        }
+
+        var formexMainBody = evidence.FormexMainBodyLegalContent;
+        if (!ReferenceEquals(formexMainBody.Formex, evidence.Formex) ||
+            formexMainBody.Outcomes.Count != evidence.Formex.Outcomes.Count ||
+            formexMainBody.Outcomes.Where((value, index) =>
+                !ReferenceEquals(value.Source, evidence.Formex.Outcomes[index])).Any())
+        {
+            refusal = LexCorpus6BuildRefusal.PopulationMismatch;
+            detail = "The Formex main-body population is missing, reordered, extra or unbound.";
             return null;
         }
 
@@ -869,6 +895,27 @@ public static class LexCorpus6Builder
             return null;
         }
 
+        var formexMainBodySources = new Dictionary<
+            Europe.EuFormexMainBodyLegalContentOutcome,
+            SourceObjectRef>();
+        foreach (var outcome in formexMainBody.Outcomes.Where(static value =>
+                     value.Source.Kind == Europe.EuFormexPackageOutcomeKind.Acquired))
+        {
+            var sourceReceipt = outcome.Source.AcquiredInventory!.SourceReceipt;
+            var matches = eu.CorpusRecordSet.Set.Records.Where(record =>
+                    record.Body.Kind == CorpusBodyRecordKind.Held &&
+                    record.Body.Receipt == sourceReceipt)
+                .Take(2)
+                .ToArray();
+            if (matches.Length != 1)
+            {
+                refusal = LexCorpus6BuildRefusal.PopulationMismatch;
+                detail = "An acquired Formex main-body outcome does not bind to exactly one held EU corpus body.";
+                return null;
+            }
+            formexMainBodySources.Add(outcome, matches[0].ObjectRef);
+        }
+
         var luInputs = new Dictionary<SourceObjectRef, Luxembourg.LuxembourgHeldBodyDerivationInput>();
         foreach (var input in composition.LuxembourgDerivationPopulation.Inputs)
         {
@@ -897,7 +944,7 @@ public static class LexCorpus6Builder
             return null;
         }
 
-        var stage3Outcomes = Stage3OutcomesByObjectRef(profileEnvelope);
+        var stage3Outcomes = Stage3OutcomesByObjectRef(profileEnvelope, formexMainBodySources);
         var members = new List<LexCorpus6Member>();
         foreach (var record in eu.CorpusRecordSet.Set.Records)
         {
@@ -1195,7 +1242,10 @@ public static class LexCorpus6Builder
         SourceObjectRef objectRef) => outcomes.TryGetValue(objectRef, out var found) ? found : [];
 
     private static IReadOnlyDictionary<SourceObjectRef, IReadOnlyList<LexCorpus6Stage3Outcome>>
-        Stage3OutcomesByObjectRef(Stage3DerivationProfileEnvelope envelope)
+        Stage3OutcomesByObjectRef(
+            Stage3DerivationProfileEnvelope envelope,
+            IReadOnlyDictionary<Europe.EuFormexMainBodyLegalContentOutcome, SourceObjectRef>
+                formexMainBodySources)
     {
         var collected = new Dictionary<SourceObjectRef, List<LexCorpus6Stage3Outcome>>();
         void Add(SourceObjectRef objectRef, LexCorpus6Stage3Outcome outcome)
@@ -1233,6 +1283,16 @@ public static class LexCorpus6Builder
                 Add(classification.Binding.PdfSource.ObjectRef,
                     Stage3Outcome(member));
             }
+        }
+
+        foreach (var pair in formexMainBodySources)
+        {
+            var outcome = pair.Key;
+            Add(pair.Value,
+                new LexCorpus6Stage3Outcome(
+                    LexCorpus6Stage3OutcomeDomain.EuropeFormexMainBody,
+                    outcome.SemanticIdentitySha256,
+                    FormexMainBodyDisposition(outcome.Disposition)));
         }
 
         return collected.ToDictionary(
@@ -1296,6 +1356,21 @@ public static class LexCorpus6Builder
             _ => throw new InvalidOperationException("Unknown EU annex body disposition."),
         };
     }
+
+    internal static LexCorpus6Stage3Disposition FormexMainBodyDisposition(
+        Europe.EuFormexMainBodyLegalContentDisposition disposition) => disposition switch
+        {
+            Europe.EuFormexMainBodyLegalContentDisposition.Admitted => LexCorpus6Stage3Disposition.FormexMainBodyAdmitted,
+            Europe.EuFormexMainBodyLegalContentDisposition.NotEligible => LexCorpus6Stage3Disposition.FormexMainBodyNotEligible,
+            Europe.EuFormexMainBodyLegalContentDisposition.PackageUnavailable => LexCorpus6Stage3Disposition.FormexMainBodyPackageUnavailable,
+            Europe.EuFormexMainBodyLegalContentDisposition.PackageRefused => LexCorpus6Stage3Disposition.FormexMainBodyPackageRefused,
+            Europe.EuFormexMainBodyLegalContentDisposition.RetainedBytesUnavailable => LexCorpus6Stage3Disposition.FormexMainBodyRetainedBytesUnavailable,
+            Europe.EuFormexMainBodyLegalContentDisposition.PackageUnreadable => LexCorpus6Stage3Disposition.FormexMainBodyPackageUnreadable,
+            Europe.EuFormexMainBodyLegalContentDisposition.XmlRejected => LexCorpus6Stage3Disposition.FormexMainBodyXmlRejected,
+            Europe.EuFormexMainBodyLegalContentDisposition.MainBodyMissing => LexCorpus6Stage3Disposition.FormexMainBodyMissing,
+            Europe.EuFormexMainBodyLegalContentDisposition.UnsupportedContentShape => LexCorpus6Stage3Disposition.FormexMainBodyUnsupportedContentShape,
+            _ => throw new InvalidOperationException("Unknown EU Formex main-body disposition."),
+        };
 
     private static LexCorpus6OutcomeKind OutcomeOf(CorpusRecord record) => record.Body.Kind switch
     {
