@@ -16,7 +16,7 @@ public sealed class V3PlatformSchemaTests
         Assert.AreEqual(56, documents.Select(document => document.FileName).Distinct(StringComparer.Ordinal).Count());
 
         var root = Path.Combine(RepositoryRoot(), "schemas", "v3-platform");
-        if (Environment.GetEnvironmentVariable("LEX_RENDER_V3_PLATFORM_SCHEMAS") == "1")
+        if (Environment.GetEnvironmentVariable("V3_RENDER_PLATFORM_SCHEMAS") == "1")
         {
             Directory.CreateDirectory(root);
             foreach (var document in documents)
