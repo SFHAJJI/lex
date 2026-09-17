@@ -161,6 +161,53 @@ public sealed class V3PlatformHostTests
     }
 
     [TestMethod]
+    public async Task HostInvokesRequestAndResultSchemaValidationAroundExecution()
+    {
+        var schemas = new RecordingSchemaDocuments();
+        var host = new V3PlatformHost(schemas);
+        using var result = JsonDocument.Parse("{\"work_id\":\"eli/example\"}");
+
+        await host.CreateMcpSuccessAsync(
+            Encoding.UTF8.GetBytes(
+                "{\"operation_id\":\"resolve\",\"parameters\":{\"identifier\":\"eli/example\"}}"),
+            "req_schema_calls",
+            Context(),
+            bound =>
+            {
+                Assert.AreEqual(1, schemas.RequestCalls);
+                Assert.AreEqual(0, schemas.ResultCalls);
+                return new V3PlatformOperationResult(bound, "work_resolution", result.RootElement);
+            },
+            CancellationToken.None);
+
+        Assert.AreEqual(1, schemas.RequestCalls);
+        Assert.AreEqual(1, schemas.ResultCalls);
+        Assert.AreEqual(0, schemas.RefusalCalls);
+    }
+
+    [TestMethod]
+    public async Task HostInvokesRefusalSchemaValidationAfterExecution()
+    {
+        var schemas = new RecordingSchemaDocuments();
+        var host = new V3PlatformHost(schemas);
+        using var helpful = JsonDocument.Parse("{\"required_corpus\":\"lu\"}");
+
+        await host.CreateMcpRefusalAsync(
+            Encoding.UTF8.GetBytes("{\"operation_id\":\"resolve\",\"parameters\":{}}"),
+            "req_refusal_schema_calls",
+            RefusalContext(),
+            bound => new V3PlatformOperationRefusal(
+                bound,
+                "no_corpus_mounted",
+                helpful.RootElement),
+            CancellationToken.None);
+
+        Assert.AreEqual(1, schemas.RequestCalls);
+        Assert.AreEqual(0, schemas.ResultCalls);
+        Assert.AreEqual(1, schemas.RefusalCalls);
+    }
+
+    [TestMethod]
     public async Task KnownRefusalUsesMandatoryHelpfulPayloadAndPreservesRestMcpBytes()
     {
         var host = new V3PlatformHost();
@@ -325,5 +372,20 @@ public sealed class V3PlatformHostTests
         context.Response.Body = new MemoryStream();
         context.Features.Get<IHttpRequestFeature>()!.RawTarget = V3ResolveRestRoute.RawTarget;
         return context;
+    }
+
+    private sealed class RecordingSchemaDocuments : IV3PlatformSchemaDocuments
+    {
+        public int RequestCalls { get; private set; }
+
+        public int ResultCalls { get; private set; }
+
+        public int RefusalCalls { get; private set; }
+
+        public void ValidateRequest(V3OperationDefinition operation, JsonElement document) => RequestCalls++;
+
+        public void ValidateResult(V3OperationDefinition operation, JsonElement document) => ResultCalls++;
+
+        public void ValidateRefusal(JsonElement document) => RefusalCalls++;
     }
 }
