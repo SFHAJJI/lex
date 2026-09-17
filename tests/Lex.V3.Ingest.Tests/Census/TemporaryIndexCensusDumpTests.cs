@@ -9,11 +9,11 @@ public sealed class TemporaryIndexCensusDumpTests
     public void Dump() => Assert.Fail(
         "VOCAB\n" + ClosedSurfaceCensus.RenderForTranscription(
             ClosedSurfaceCensus.ClosedVocabularies(CensusScope.SweptHere)
-                .Where(row => row.Contains("LuxembourgIndex", StringComparison.Ordinal)))
+                .Where(row => row.Contains("LuxembourgIndex", StringComparison.Ordinal)).ToArray())
         + "\nREGISTRY\n" + ClosedSurfaceCensus.RenderForTranscription(
             ClosedSurfaceCensus.VocabularyRegistries(CensusScope.SweptHere)
-                .Where(row => row.Contains("LuxembourgIndex", StringComparison.Ordinal)))
+                .Where(row => row.Contains("LuxembourgIndex", StringComparison.Ordinal)).ToArray())
         + "\nGUARDED\n" + ClosedSurfaceCensus.RenderForTranscription(
             ClosedSurfaceCensus.GuardedConstruction(CensusScope.SweptHere)
-                .Where(row => row.Contains("LuxembourgIndex", StringComparison.Ordinal))));
+                .Where(row => row.Contains("LuxembourgIndex", StringComparison.Ordinal)).ToArray()));
 }
