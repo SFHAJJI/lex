@@ -4,6 +4,7 @@ using Lex.V3.Contracts;
 using Lex.V3.Contracts.Index;
 using Lex.V3.Contracts.Custody;
 using Lex.V3.Contracts.Source.Core;
+using Lex.V3.Contracts.Source.Luxembourg;
 using Lex.V3.Ingest.Luxembourg;
 using Microsoft.Data.Sqlite;
 
