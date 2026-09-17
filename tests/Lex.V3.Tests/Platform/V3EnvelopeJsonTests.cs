@@ -12,7 +12,7 @@ public sealed class V3EnvelopeJsonTests
 {
     private const string Digest = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
     private const string RegistryDigest = "f956724ee90c13feebfa66cabe13d31c2796e409cee84e5c8b5af1b483f58987";
-    private const string ExpectedSuccess = """{"context":{"freshness":{"observed_at":"2026-09-17T00:00:00.0000000Z","upstream_health":"current"},"jurisdiction":"lu","provisional":false,"publisher":"lu-legilux","snapshot":{"snapshot_id":"snapshot","snapshot_sha256":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"},"status":"success","timeline_semantics":"publisher_applicability"},"object_type":"envelope","operation_id":"resolve","refusal":null,"registry_schema":"lex-v3-operation-registry/1","registry_sha256":"f956724ee90c13feebfa66cabe13d31c2796e409cee84e5c8b5af1b483f58987","request_ref":"req","result":{"object_type":"work_resolution","schema":"lex-v3-resolve-result/1","value":{"work_id":"lu-legilux:test"}},"schema":"lex-v3-envelope/1","verdict":"answer","version":"v3"}""" + "\n";
+    private const string ExpectedSuccess = """{"context":{"freshness":{"observed_at":"2026-09-17T00:00:00.0000000Z","upstream_health":"current"},"jurisdiction":"lu","provisional":false,"publisher":"lu-legilux","snapshot":{"snapshot_id":"snapshot","snapshot_sha256":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"},"status":"success","timeline_semantics":"publisher_applicability"},"object_type":"envelope","operation_id":"resolve","refusal":null,"registry_schema":"lex-v3-operation-registry/1","registry_sha256":"f956724ee90c13feebfa66cabe13d31c2796e409cee84e5c8b5af1b483f58987","request_ref":"req","result":{"object_type":"work_resolution","schema":"lex-v3-resolve-result/1","value":{"work_id":"lu-legilux:arr\u00EAt\u00E9 \u0026 co"}},"schema":"lex-v3-envelope/1","verdict":"answer","version":"v3"}""" + "\n";
     private const string ExpectedRefusal = """{"context":{"freshness":{"observed_at":"2026-09-17T00:00:00.0000000Z","upstream_health":"current"},"jurisdiction":"lu","provisional":false,"publisher":"lu-legilux","snapshot":{"snapshot_id":"snapshot","snapshot_sha256":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"},"status":"refusal","timeline_semantics":"publisher_applicability"},"object_type":"envelope","operation_id":"resolve","refusal":{"code":"no_corpus_mounted","helpful_payload":{"required_corpus":"lu"},"schema":"lex-v3-refusal/1"},"registry_schema":"lex-v3-operation-registry/1","registry_sha256":"f956724ee90c13feebfa66cabe13d31c2796e409cee84e5c8b5af1b483f58987","request_ref":"req","result":null,"schema":"lex-v3-envelope/1","verdict":"refuse","version":"v3"}""" + "\n";
     private readonly V3OperationRegistry _registry = V3OperationRegistry.Reviewed;
 
@@ -88,7 +88,7 @@ public sealed class V3EnvelopeJsonTests
 
     private V3Envelope Success()
     {
-        using var result = JsonDocument.Parse("{\"work_id\":\"lu-legilux:test\"}");
+        using var result = JsonDocument.Parse("{\"work_id\":\"lu-legilux:arrêté & co\"}");
         return new V3EnvelopeBuilder(_registry).Success(
             "req", "resolve", Context(), V3Verdicts.Answer,
             "lex-v3-resolve-result/1", "work_resolution", result.RootElement);
