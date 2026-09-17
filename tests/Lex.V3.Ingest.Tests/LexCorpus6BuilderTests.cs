@@ -59,7 +59,7 @@ public sealed class LexCorpus6BuilderTests
     [TestMethod]
     public async Task CompleteProductionEvidenceBuildsOneDeterministicStrictlyReopenableMemberPerSourceUnit()
     {
-        var envelope = await CompleteProfileEnvelopeAsync();
+        var envelope = await EuropeIndexBuilderTests.RetainedGdprEnvelopeAsync();
 
         var first = LexCorpus6Builder.TryBuild(envelope, out var firstRefusal, out var firstDetail);
         var second = LexCorpus6Builder.TryBuild(envelope, out var secondRefusal, out var secondDetail);
@@ -144,6 +144,8 @@ public sealed class LexCorpus6BuilderTests
         var acquiredMainBody = envelope.BodyComposition.Envelope.FormexMainBodyLegalContent!.Outcomes
             .Where(static outcome => outcome.Source.Kind == Europe.EuFormexPackageOutcomeKind.Acquired)
             .ToArray();
+        Assert.IsGreaterThan(0, acquiredMainBody.Length,
+            "The corpus/6 main-body projection test must exercise an acquired outcome.");
         Assert.HasCount(acquiredMainBody.Length, formexOutcomes);
         foreach (var sourceOutcome in acquiredMainBody)
         {
@@ -443,6 +445,59 @@ public sealed class LexCorpus6BuilderTests
         var envelope = await CompleteProfileEnvelopeAsync(includeFormexMainBody: false);
         Assert.IsNull(LexCorpus6Builder.TryBuild(envelope, out var refusal, out _));
         Assert.AreEqual(LexCorpus6BuildRefusal.EvidenceIncomplete, refusal);
+    }
+
+    [TestMethod]
+    public async Task AcquiredNonAdmittedFormexMainBodyKeepsItsExactCorpusDisposition()
+    {
+        var envelope = await EuropeIndexBuilderTests.RetainedGdprEnvelopeAsync(
+            reopenRetainedBytes: false);
+        var built = LexCorpus6Builder.TryBuild(envelope, out var refusal, out var detail);
+        Assert.IsNotNull(built, $"{refusal}: {detail}");
+        var sourceOutcome = envelope.BodyComposition.Envelope.FormexMainBodyLegalContent!.Outcomes
+            .Single(static outcome => outcome.Source.Kind == Europe.EuFormexPackageOutcomeKind.Acquired);
+        Assert.AreEqual(
+            Europe.EuFormexMainBodyLegalContentDisposition.RetainedBytesUnavailable,
+            sourceOutcome.Disposition);
+        var sourceRecord = envelope.BodyComposition.Envelope.Europe.CorpusRecordSet!.Set.Records.Single(
+            record => record.Body.Kind == Lex.V3.Contracts.Source.Corpus.CorpusBodyRecordKind.Held &&
+                record.Body.Receipt == sourceOutcome.Source.AcquiredInventory!.SourceReceipt);
+        var member = built.VerifiedSet.Set.Members.Single(value => value.ObjectRefSha256 ==
+            Lex.V3.Contracts.Source.Scope.ScopeManifestCanonicalWriter.ComputeObjectRefSha256(
+                sourceRecord.ObjectRef));
+        Assert.Contains(new LexCorpus6Stage3Outcome(
+            LexCorpus6Stage3OutcomeDomain.EuropeFormexMainBody,
+            sourceOutcome.SemanticIdentitySha256,
+            LexCorpus6Stage3Disposition.FormexMainBodyRetainedBytesUnavailable), member.Stage3Outcomes);
+    }
+
+    [TestMethod]
+    public async Task FormexMainBodyPopulationMustComeFromTheExactReconciliationAtBothDoors()
+    {
+        var profileEnvelope = await CompleteProfileEnvelopeAsync();
+        var evidence = profileEnvelope.BodyComposition.Envelope;
+        var foreignFormex = EuFormexRunOutcomeReconciliationTests.CompleteForEnvelope(evidence.Europe);
+        var foreignMainBody = await new Europe.EuFormexMainBodyLegalContentProducer(
+                new EuAcquisitionTestFixture.EuInMemoryCustodyStore())
+            .RunAsync(foreignFormex, CancellationToken.None);
+
+        Assert.IsNull(Stage3EvidenceEnvelope.TryCreateWithFormexMainBody(
+            evidence.Europe, evidence.Luxembourg, evidence.Formex, foreignMainBody,
+            evidence.FormexAnnexClassifications, evidence.FidelityPreservation,
+            evidence.LuxembourgAknArticleInventoryPopulation,
+            evidence.LuxembourgAknLegalContentPopulation,
+            out var refusal, out var detail));
+        Assert.AreEqual(Stage3EvidenceEnvelopeRefusal.EuropeFormexMainBodyMismatch, refusal, detail);
+
+        var (route, request) = CompleteLegalNoticeRoute(
+            evidence.Europe.CorpusRecordSet!.Set.Records[0].RunIdentity);
+        Assert.IsNull(Stage3EvidenceEnvelope.TryCreateWithEuropeLegalNoticeRouteAndFormexMainBody(
+            evidence.Europe, route, request, evidence.Luxembourg, evidence.Formex, foreignMainBody,
+            evidence.FormexAnnexClassifications, evidence.FidelityPreservation,
+            evidence.LuxembourgAknArticleInventoryPopulation,
+            evidence.LuxembourgAknLegalContentPopulation,
+            out refusal, out detail));
+        Assert.AreEqual(Stage3EvidenceEnvelopeRefusal.EuropeFormexMainBodyMismatch, refusal, detail);
     }
 
     private static void Reopen(string canonical, LexCorpus6BuildResult built)

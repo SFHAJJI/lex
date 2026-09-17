@@ -56,6 +56,21 @@ public sealed class EuropeIndexBuilderTests
             "This Regulation lays down rules relating to the protection of natural persons");
         Assert.AreEqual(V3IndexCapabilityLookupOutcome.Supported, hit.Outcome);
         Assert.HasCount(1, hit.ArticleIdentities);
+        foreach (var exactSpan in new[]
+                 {
+                     "It shall apply from 25 May 2018.",
+                     "identifiable natural person (‘data subject’)",
+                     "its publication in the Official Journal of the European Union.",
+                 })
+        {
+            var exactHit = reader.Search("eng", cell.PeriodFrom, cell.PeriodTo, exactSpan);
+            Assert.AreEqual(V3IndexCapabilityLookupOutcome.Supported, exactHit.Outcome);
+            Assert.HasCount(1, exactHit.ArticleIdentities, exactSpan);
+        }
+        var footnote = reader.Search("eng", cell.PeriodFrom, cell.PeriodTo,
+            "laying down a procedure for the provision of information in the field of technical regulations");
+        Assert.AreEqual(V3IndexCapabilityLookupOutcome.Supported, footnote.Outcome);
+        Assert.IsEmpty(footnote.ArticleIdentities, "Footnote text must not be searchable as article wording.");
         var gap = reader.Search("eng", new DateOnly(2016, 4, 28), new DateOnly(2016, 4, 28), "Regulation");
         Assert.AreEqual(V3IndexCapabilityLookupOutcome.FilterNotSupportedByIndex, gap.Outcome);
         Assert.IsEmpty(gap.ArticleIdentities);
@@ -127,7 +142,8 @@ public sealed class EuropeIndexBuilderTests
             "PRAGMA application_id=0");
     }
 
-    private static async Task<Stage3DerivationProfileEnvelope> RetainedGdprEnvelopeAsync()
+    internal static async Task<Stage3DerivationProfileEnvelope> RetainedGdprEnvelopeAsync(
+        bool reopenRetainedBytes = true)
     {
         var bytes = await File.ReadAllBytesAsync(Path.Combine(
             AppContext.BaseDirectory, "Fixtures", "EuDocumentFetch", "gdpr-fmx4-200-body.bin"));
@@ -155,7 +171,9 @@ public sealed class EuropeIndexBuilderTests
         return await LexCorpus6BuilderTests.CompleteProfileEnvelopeAsync(
             europeOverride: run,
             formexOverride: formex,
-            formexStore: fixture.Store);
+            formexStore: reopenRetainedBytes
+                ? fixture.Store
+                : new EuAcquisitionTestFixture.EuInMemoryCustodyStore());
     }
 
     private static void AssertHostileDatabaseRefused(
