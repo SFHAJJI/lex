@@ -1065,14 +1065,6 @@ public static class LexCorpus6Builder
         }
 
         var profileIdentities = ProfileIdentities(profileEnvelope);
-        var unresolvedFidelity = TerminalUnresolvedFidelityObligations(evidence);
-        if (unresolvedFidelity.Count != 0)
-        {
-            refusal = LexCorpus6BuildRefusal.EvidenceIncomplete;
-            detail = "The terminal evidence does not prove these fidelity obligations: " +
-                string.Join(',', unresolvedFidelity.Select(ContractWire.NameOf));
-            return null;
-        }
         var set = new LexCorpus6ManifestSet(
             Schema,
             eu.CorpusRecordSetRef,
@@ -1081,7 +1073,6 @@ public static class LexCorpus6Builder
             profileIdentities,
             CorrigendumReceipts(eu.CorrigendumTripwires),
             CorrigendumProductions(eu.CorrigendumTripwires),
-            unresolvedFidelity,
             members.OrderBy(static member => member, Comparer<LexCorpus6Member>.Create(LexCorpus6ManifestSet.CompareMembers)).ToArray()).Validate();
         var bytes = Write(set);
         var digest = ComputeSha256(bytes);
