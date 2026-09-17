@@ -83,14 +83,10 @@ public sealed class EuFormexPackageOutcome
         if (!string.Equals(
                 acquiredExpression.PublisherUri,
                 expression.Identity.PublisherExpressionId,
-                StringComparison.Ordinal)
-            || !string.Equals(
-                acquiredExpression.CanonicalKeySha256,
-                expression.SourceObject.CanonicalKeySha256,
                 StringComparison.Ordinal))
         {
             throw new ArgumentException(
-                "The acquired Formex inventory does not belong to this expression.",
+                "The acquired Formex inventory does not carry this run expression's publisher identity.",
                 nameof(inventory));
         }
 

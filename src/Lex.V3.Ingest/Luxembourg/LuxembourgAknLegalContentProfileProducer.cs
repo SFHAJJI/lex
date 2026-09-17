@@ -28,6 +28,9 @@ public enum LuxembourgAknLegalContentDisposition
 
     [JsonStringEnumMemberName("unsupported_content_shape")]
     UnsupportedContentShape = 6,
+
+    [JsonStringEnumMemberName("marker_only_evidence")]
+    MarkerOnlyEvidence = 7,
 }
 
 /// <summary>The evidence-preserving token kinds admitted by the reviewed AKN profile.</summary>
@@ -54,7 +57,8 @@ public sealed record LuxembourgAknLegalContentToken(
     LuxembourgAknLegalContentTokenKind Kind,
     string? Text,
     string? Target,
-    string? Marker);
+    string? Marker,
+    IReadOnlyList<LuxembourgAknLegalContentToken>? NoteBody = null);
 
 /// <summary>Legal content derived from one exact publisher article.</summary>
 public sealed class LuxembourgAknLegalContentArticle
@@ -93,10 +97,7 @@ public sealed class LuxembourgAknLegalContentArticle
         Append(hash, article.RuleProfileSha256);
         foreach (var token in article.Tokens)
         {
-            Append(hash, ((int)token.Kind).ToString(System.Globalization.CultureInfo.InvariantCulture));
-            Append(hash, token.Text ?? "");
-            Append(hash, token.Target ?? "");
-            Append(hash, token.Marker ?? "");
+            AppendToken(hash, token);
         }
         return Convert.ToHexStringLower(hash.GetHashAndReset());
     }
@@ -108,6 +109,19 @@ public sealed class LuxembourgAknLegalContentArticle
         BinaryPrimitives.WriteInt32BigEndian(length, bytes.Length);
         hash.AppendData(length);
         hash.AppendData(bytes);
+    }
+
+    private static void AppendToken(
+        IncrementalHash hash,
+        LuxembourgAknLegalContentToken token)
+    {
+        Append(hash, ((int)token.Kind).ToString(System.Globalization.CultureInfo.InvariantCulture));
+        Append(hash, token.Text ?? "");
+        Append(hash, token.Target ?? "");
+        Append(hash, token.Marker ?? "");
+        Append(hash, (token.NoteBody?.Count ?? 0).ToString(System.Globalization.CultureInfo.InvariantCulture));
+        if (token.NoteBody is null) return;
+        foreach (var nested in token.NoteBody) AppendToken(hash, nested);
     }
 }
 
@@ -231,9 +245,10 @@ public sealed class LuxembourgAknLegalContentProfileProducer
         "lex-v3-luxembourg-akn-legal-content-profile/1\n" +
         "source=exact-reviewed-article-inventory-and-retained-bytes\n" +
         "containers=num,heading,paragraph,alinea,content,p,ol,ul,li,b,i,sup\n" +
-        "tokens=text,reference,modification-start,modification-end,note-reference\n" +
+        "tokens=text,reference,modification-start,modification-end,note-reference-with-bound-body\n" +
         "whitespace=discard-whitespace-only-nodes-preserve-other-text-verbatim\n" +
         "modifications=paired-within-one-article\n" +
+        "marker-only=paired-modification-tokens-with-typed-evidence\n" +
         "unknown=typed-gap\n";
     private static readonly string RuleDigest = Convert.ToHexStringLower(
         SHA256.HashData(Encoding.UTF8.GetBytes(RuleProfile)));
@@ -320,8 +335,13 @@ public sealed class LuxembourgAknLegalContentProfileProducer
                     coordinate,
                     RuleDigest,
                     tokens!);
+                var disposition = tokens!.All(static token => token.Kind is
+                    LuxembourgAknLegalContentTokenKind.ModificationStart or
+                    LuxembourgAknLegalContentTokenKind.ModificationEnd)
+                    ? LuxembourgAknLegalContentDisposition.MarkerOnlyEvidence
+                    : LuxembourgAknLegalContentDisposition.Admitted;
                 outcomes.Add(new(inventoryPopulation, inventoryOutcome, coordinate,
-                    LuxembourgAknLegalContentDisposition.Admitted, article, null));
+                    disposition, article, null));
             }
         }
         return new LuxembourgAknLegalContentPopulation(inventoryPopulation, outcomes);
@@ -399,12 +419,10 @@ public sealed class LuxembourgAknLegalContentProfileProducer
                 + string.Join(",", openModifications.Order(StringComparer.Ordinal));
             return false;
         }
-        if (!collected.Any(static token => token.Kind is
-                LuxembourgAknLegalContentTokenKind.Text
-                or LuxembourgAknLegalContentTokenKind.Reference))
+        if (collected.Count == 0)
         {
             tokens = null;
-            failure = "article contains no publisher legal wording";
+            failure = "article contains no publisher legal wording or marker evidence";
             return false;
         }
         tokens = collected;
@@ -416,7 +434,8 @@ public sealed class LuxembourgAknLegalContentProfileProducer
         XNode node,
         List<LuxembourgAknLegalContentToken> tokens,
         HashSet<string> openModifications,
-        out string? failure)
+        out string? failure,
+        bool allowNoteReferences = true)
     {
         failure = null;
         if (node is XText text)
@@ -440,6 +459,11 @@ public sealed class LuxembourgAknLegalContentProfileProducer
             case "mod":
                 return TryModification(element, tokens, openModifications, out failure);
             case "noteRef":
+                if (!allowNoteReferences)
+                {
+                    failure = "publisher note bodies cannot recursively reference notes";
+                    return false;
+                }
                 return TryNoteReference(element, tokens, out failure);
         }
         if (!Containers.Contains(element.Name.LocalName))
@@ -449,7 +473,8 @@ public sealed class LuxembourgAknLegalContentProfileProducer
         }
         foreach (var child in element.Nodes())
         {
-            if (!TryTokenizeNode(child, tokens, openModifications, out failure))
+            if (!TryTokenizeNode(
+                    child, tokens, openModifications, out failure, allowNoteReferences))
             {
                 return false;
             }
@@ -531,7 +556,39 @@ public sealed class LuxembourgAknLegalContentProfileProducer
             failure = "note reference is not empty or lacks bounded publisher evidence";
             return false;
         }
-        tokens.Add(new(LuxembourgAknLegalContentTokenKind.NoteReference, null, target, marker));
+        var noteId = target[1..];
+        var matches = element.Document?.Root?.Descendants()
+            .Where(candidate => candidate.Name.NamespaceName == AknNamespace
+                && candidate.Name.LocalName == "note"
+                && string.Equals((string?)candidate.Attribute("id"), noteId, StringComparison.Ordinal))
+            .Take(2).ToArray() ?? [];
+        if (matches.Length != 1 ||
+            !string.Equals((string?)matches[0].Attribute("marker"), marker, StringComparison.Ordinal))
+        {
+            failure = "note reference does not bind exactly one publisher note with the same marker";
+            return false;
+        }
+        var noteTokens = new List<LuxembourgAknLegalContentToken>();
+        var noteModifications = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var child in matches[0].Nodes())
+        {
+            if (!TryTokenizeNode(
+                    child, noteTokens, noteModifications, out failure,
+                    allowNoteReferences: false)) return false;
+        }
+        if (noteModifications.Count != 0 ||
+            !noteTokens.Any(static token => token.Kind is
+                LuxembourgAknLegalContentTokenKind.Text or LuxembourgAknLegalContentTokenKind.Reference))
+        {
+            failure = "publisher note has no preserved wording or has an unclosed modification span";
+            return false;
+        }
+        tokens.Add(new(
+            LuxembourgAknLegalContentTokenKind.NoteReference,
+            null,
+            target,
+            marker,
+            Array.AsReadOnly(noteTokens.ToArray())));
         failure = null;
         return true;
     }

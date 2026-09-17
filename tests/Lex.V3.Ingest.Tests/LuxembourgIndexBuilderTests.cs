@@ -13,6 +13,14 @@ namespace Lex.V3.Ingest.Tests;
 [TestClass]
 public sealed class LuxembourgIndexBuilderTests
 {
+    [TestMethod]
+    public void FixedLogicalInputPinsTheExactLuxembourgIndexBytes()
+    {
+        var digest = Convert.ToHexStringLower(SHA256.HashData(
+            LuxembourgIndexBuilder.BuildFixedInputDeterminismEvidence()));
+        Assert.AreEqual("3495c1fd36b8e3eab10e1bea86e34849ea95bdb71102faedfd7a6abd1ca5a4bb", digest);
+    }
+
     private const string Retained1991 = "loi-1991-08-10-n3--2024-02-01--fr.bin";
 
     [TestMethod]

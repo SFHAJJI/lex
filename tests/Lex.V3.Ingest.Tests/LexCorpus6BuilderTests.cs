@@ -1,8 +1,68 @@
+using Lex.V3.Contracts;
+using Lex.V3.Contracts.Source.Core;
+
 namespace Lex.V3.Ingest.Tests;
 
 [TestClass]
 public sealed class LexCorpus6BuilderTests
 {
+    [TestMethod]
+    public void FixedTypedInputPinsTheExactCorpus6CanonicalBytes()
+    {
+        var fixedArtifact = new SourceArtifactRef(
+            "urn:uuid:00000000-0000-5000-8000-000000000001", new string('1', 64));
+        var legalNoticeRoute = CompleteLegalNoticeRoute(fixedArtifact);
+        var legalNotice = Lex.V3.Contracts.Source.Europe.EuLegalNoticeEvidence.FromRoute(
+            legalNoticeRoute.Evidence,
+            legalNoticeRoute.Request);
+        var rightsMatrix = LexCorpus6EuropeRightsMatrix.From(legalNotice);
+        var corrigendumDocument = new Lex.V3.Contracts.Derivation.EuCorrigendumTripwireSet.CanonicalSetDocument(
+            Lex.V3.Contracts.Derivation.EuCorrigendumTripwireSet.Schema,
+            [],
+            []);
+        var corrigendumProduction = new LexCorpus6CorrigendumProduction(
+            "eu-object-facts-batch-000000000000000000000000",
+            Lex.V3.Contracts.Derivation.EuCorrigendumTripwireSet.CanonicalSha256Of(corrigendumDocument),
+            new string('6', 64),
+            new string('7', 64),
+            new string('8', 64),
+            [],
+            []);
+        var member = new LexCorpus6Member(
+            PublisherId.EuEurLex,
+            new string('9', 64),
+            0,
+            fixedArtifact,
+            fixedArtifact,
+            Lex.V3.Contracts.Source.Scope.ScopeDisposition.AcceptedSelected,
+            LexCorpus6OutcomeKind.Acquired,
+            new string('a', 64),
+            123,
+            new string('b', 64),
+            new Lex.V3.Contracts.Source.Europe.EuContentClassObservation(
+                Lex.V3.Contracts.Source.Europe.EuContentClass.OriginalLegalText,
+                rightsMatrix.LegalNoticeEvidenceRef),
+            null,
+            [new LexCorpus6Stage3Outcome(
+                LexCorpus6Stage3OutcomeDomain.EuropeFormexMainBody,
+                new string('c', 64),
+                LexCorpus6Stage3Disposition.FormexMainBodyAdmitted)],
+            []);
+        var fixedSet = new LexCorpus6ManifestSet(
+            LexCorpus6Builder.Schema,
+            fixedArtifact,
+            new SourceArtifactRef(
+                "urn:uuid:00000000-0000-5000-8000-000000000002", new string('2', 64)),
+            rightsMatrix,
+            new[] { new string('3', 64), new string('4', 64) },
+            new[] { new string('5', 64) },
+            [corrigendumProduction],
+            [],
+            [member]);
+        var digest = LexCorpus6Builder.ComputeSha256(LexCorpus6Builder.Write(fixedSet));
+        Assert.AreEqual("6b7102e82a7006b6f6258f5d6982464308942ca9b10830f52c7b7f7f769bcca2", digest);
+    }
+
     [TestMethod]
     public void TerminalBuilderAndStrictReaderAreOneVerticalSlice()
     {
@@ -92,7 +152,9 @@ public sealed class LexCorpus6BuilderTests
                 member.Publisher == Lex.V3.Contracts.PublisherId.EuEurLex &&
                 member.BodySha256 is not null)
             .All(static member =>
-                member.EuropeContentClass is not null && member.LuxembourgRights is null));
+                member.EuropeContentClass is not null && member.LuxembourgRights is null &&
+                member.Stage3Outcomes.Count(outcome =>
+                    outcome.Domain == LexCorpus6Stage3OutcomeDomain.EuropeFormexMainBody) == 1));
         var luxembourgMembers = first.VerifiedSet.Set.Members
             .Where(static member =>
                 member.Publisher == Lex.V3.Contracts.PublisherId.LuLegilux &&
@@ -149,12 +211,9 @@ public sealed class LexCorpus6BuilderTests
         Assert.HasCount(acquiredMainBody.Length, formexOutcomes);
         foreach (var sourceOutcome in acquiredMainBody)
         {
-            var sourceRecord = envelope.BodyComposition.Envelope.Europe.CorpusRecordSet!.Set.Records.Single(
-                record => record.Body.Kind == Lex.V3.Contracts.Source.Corpus.CorpusBodyRecordKind.Held &&
-                    record.Body.Receipt == sourceOutcome.Source.AcquiredInventory!.SourceReceipt);
-            var member = first.VerifiedSet.Set.Members.Single(value => value.ObjectRefSha256 ==
-                Lex.V3.Contracts.Source.Scope.ScopeManifestCanonicalWriter.ComputeObjectRefSha256(
-                    sourceRecord.ObjectRef));
+            var member = first.VerifiedSet.Set.Members.Single(value => value.Stage3Outcomes.Any(outcome =>
+                outcome.Domain == LexCorpus6Stage3OutcomeDomain.EuropeFormexMainBody &&
+                outcome.SemanticIdentitySha256 == sourceOutcome.SemanticIdentitySha256));
             Assert.IsTrue(member.Stage3Outcomes.Contains(new LexCorpus6Stage3Outcome(
                 LexCorpus6Stage3OutcomeDomain.EuropeFormexMainBody,
                 sourceOutcome.SemanticIdentitySha256,
@@ -227,8 +286,18 @@ public sealed class LexCorpus6BuilderTests
             .SelectMany(static tripwire => tripwire.Lines)
             .Any(static line => line.DateState == Lex.V3.Contracts.Derivation.EuCorrigendumDateState.PublisherDated));
         CollectionAssert.AreEqual(
-            envelope.BodyComposition.Envelope.FidelityPreservation.UnresolvedObligations.ToArray(),
-            reopened.Set.UnresolvedFidelityObligations.ToArray());
+            Enum.GetValues<Stage3FidelityPreservationObligation>(),
+            envelope.BodyComposition.Envelope.FidelityPreservation.UnresolvedObligations.ToArray());
+        Assert.HasCount(0, reopened.Set.UnresolvedFidelityObligations);
+        Assert.IsTrue(reopened.Set.ProfileIdentities.Contains(
+            Europe.EuFormexMainBodyLegalContentProducer.ProfileSha256));
+        Assert.IsTrue(reopened.Set.ProfileIdentities.Contains(
+            Luxembourg.LuxembourgAknLegalContentProfileProducer.RuleProfileSha256));
+        Assert.AreEqual(
+            Lex.V3.Contracts.Derivation.DerivationProfileComparisonOutcome.ProfilesDiffer,
+            Lex.V3.Contracts.Derivation.DerivationProfileComparison.Compare(
+                Europe.EuFormexMainBodyLegalContentProducer.ProfileSha256,
+                Luxembourg.LuxembourgAknLegalContentProfileProducer.RuleProfileSha256));
     }
 
     [TestMethod]
@@ -246,7 +315,8 @@ public sealed class LexCorpus6BuilderTests
         Assert.ThrowsExactly<ArgumentException>(() => Reopen(projection.ToJsonString(), built));
 
         var obligations = System.Text.Json.Nodes.JsonNode.Parse(canonical)!.AsObject();
-        obligations["unresolved_fidelity_obligations"]!.AsArray().RemoveAt(0);
+        obligations["unresolved_fidelity_obligations"]!.AsArray().Add(
+            "marker_only_rule_unsupported");
         Assert.ThrowsExactly<ArgumentException>(() => Reopen(obligations.ToJsonString(), built));
 
         var listedCorrigendum = System.Text.Json.Nodes.JsonNode.Parse(canonical)!.AsObject();
@@ -289,6 +359,20 @@ public sealed class LexCorpus6BuilderTests
         duplicateOutcomes.Add(duplicateOutcomes[0]!.DeepClone());
         Assert.ThrowsExactly<ArgumentException>(() => Reopen(
             duplicateMembers.Parent!.ToJsonString(), built));
+
+        var missingEuMembers = Members(canonical);
+        var heldEu = missingEuMembers
+            .Select(static node => node!.AsObject())
+            .First(static member =>
+                member["publisher"]!.GetValue<string>() == "eu-eurlex" &&
+                member["body_sha256"] is not null);
+        var euOutcomes = heldEu["stage3_outcomes"]!.AsArray();
+        var formexIndex = euOutcomes.Select(static (node, index) => (node, index))
+            .Single(static value =>
+                value.node!["domain"]!.GetValue<string>() == "europe_formex_main_body").index;
+        euOutcomes.RemoveAt(formexIndex);
+        Assert.ThrowsExactly<ArgumentException>(() => Reopen(
+            missingEuMembers.Parent!.ToJsonString(), built));
 
         var reorderedMembers = Members(canonical);
         var reorderedOutcomes = reorderedMembers
@@ -461,7 +545,8 @@ public sealed class LexCorpus6BuilderTests
             sourceOutcome.Disposition);
         var sourceRecord = envelope.BodyComposition.Envelope.Europe.CorpusRecordSet!.Set.Records.Single(
             record => record.Body.Kind == Lex.V3.Contracts.Source.Corpus.CorpusBodyRecordKind.Held &&
-                record.Body.Receipt == sourceOutcome.Source.AcquiredInventory!.SourceReceipt);
+                (record.ObjectRef.PublisherUri == sourceOutcome.Source.ExpressionIdentity.PublisherExpressionId ||
+                 record.ObjectRef.PublisherUri == sourceOutcome.Source.ExpressionIdentity.PublisherWorkId));
         var member = built.VerifiedSet.Set.Members.Single(value => value.ObjectRefSha256 ==
             Lex.V3.Contracts.Source.Scope.ScopeManifestCanonicalWriter.ComputeObjectRefSha256(
                 sourceRecord.ObjectRef));

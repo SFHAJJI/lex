@@ -13,6 +13,14 @@ namespace Lex.V3.Ingest.Tests;
 public sealed class EuropeIndexBuilderTests
 {
     [TestMethod]
+    public void FixedLogicalInputPinsTheExactEuIndexBytes()
+    {
+        var digest = Convert.ToHexStringLower(SHA256.HashData(
+            EuropeIndexBuilder.BuildFixedInputDeterminismEvidence()));
+        Assert.AreEqual("252836e09862095bebdee361286154ae0241814e3db1445b46321c8a90041863", digest);
+    }
+
+    [TestMethod]
     public async Task CompleteEnvelopeBuildsDeterministicStrictlyReopenableEuOnlyIndex()
     {
         var envelope = await LexCorpus6BuilderTests.CompleteProfileEnvelopeAsync();
@@ -45,6 +53,11 @@ public sealed class EuropeIndexBuilderTests
             built.IndexRef, built.IndexBytes.Span, corpus.ArtifactRef, built.CapabilityManifest);
 
         Assert.AreEqual(99, reader.ArticleCount);
+        var admitted = envelope.BodyComposition.Envelope.FormexMainBodyLegalContent!.Outcomes
+            .Single(static outcome =>
+                outcome.Disposition == EuFormexMainBodyLegalContentDisposition.Admitted);
+        Assert.IsTrue(admitted.Articles.SelectMany(static article => article.Tokens)
+            .Any(static token => token.Kind == EuFormexMainBodyTokenKind.Footnote));
         Assert.HasCount(1, built.CapabilityManifest.Cells);
         var cell = built.CapabilityManifest.Cells.Single();
         Assert.AreEqual("eng", cell.Language);
@@ -149,26 +162,24 @@ public sealed class EuropeIndexBuilderTests
     {
         var bytes = await File.ReadAllBytesAsync(Path.Combine(
             AppContext.BaseDirectory, "Fixtures", "EuDocumentFetch", "gdpr-fmx4-200-body.bin"));
-        var fixture = await EuFormexAnnexInventoryProducerTests.FixtureAsync(bytes);
+        const string expressionIri =
+            "http://publications.europa.eu/resource/cellar/5f2552c2-11bd-11e6-ba9a-01aa75ed71a1.0001";
+        var run = await EuAxiomWiringHarness.RunAsync(
+            static root => EuAcquisitionTestFixture.AxiomAbsenceScriptFor(root),
+            seedCelex: "32016R0679",
+            expressionIri: expressionIri);
+        var expression = run.CorrigendumTripwires!.ProductionsByFamilyKey.Values
+            .SelectMany(static production => production.Expressions!.Derivation!.Expressions)
+            .Single(candidate => string.Equals(
+                candidate.Identity.PublisherExpressionId, expressionIri, StringComparison.Ordinal));
+        var fixture = await EuFormexAnnexInventoryProducerTests.FixtureAsync(bytes, expression);
         var inventoryResult = await new EuFormexAnnexInventoryProducer(fixture.Store).RunAsync(
             fixture.Binding, fixture.Profile.Bytes, fixture.Profile.Reference, CancellationToken.None);
         Assert.IsNotNull(inventoryResult.Inventory, inventoryResult.Detail);
         var inventory = inventoryResult.Inventory;
         Assert.AreEqual(0, inventory.Members.Count);
-        var expression = LanguageScopedExpression.FromRetainedSource(
-            new LanguageScopedExpressionIdentity(
-                fixture.Binding.Expression.ParentKeyRef!.PublisherUri,
-                fixture.Binding.Expression.PublisherUri),
-            "EN", null, fixture.Binding.Expression,
-            LanguageScopedExpressionLineage.FromContributions(
-                [new(LanguageScopedExpressionContribution.IdentityAndLanguage, fixture.Receipt)]));
         var acquired = EuFormexPackageOutcome.Acquired(expression, inventory);
-        var run = await EuAxiomWiringHarness.RunAsync(
-            static root => EuAcquisitionTestFixture.AxiomAbsenceScriptFor(root),
-            custodyStore: fixture.Store,
-            documentFetchResponse: request => EuAcquisitionTestFixture.BinaryResponse(
-                request, HttpStatusCode.OK, bytes, "application/zip;charset=UTF-8"));
-        var formex = EuFormexAnnexClassificationReconciliationTests.Reconciliation(run, [acquired]);
+        var formex = EuFormexRunOutcomeReconciliationTests.CompleteForEnvelope(run, acquired);
 
         return await LexCorpus6BuilderTests.CompleteProfileEnvelopeAsync(
             europeOverride: run,

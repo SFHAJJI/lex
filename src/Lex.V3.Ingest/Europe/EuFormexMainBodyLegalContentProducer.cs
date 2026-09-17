@@ -145,7 +145,10 @@ public sealed class EuFormexMainBodyLegalContentPopulation
 public sealed class EuFormexMainBodyLegalContentProducer
 {
     public const string Profile =
-        "lex-v3-eu-formex-main-body-profile/1;root=ACT;units=ARTICLE;exclude=recitals,final,annex";
+        "lex-v3-eu-formex-main-body-profile/1;root=ACT;units=ARTICLE;" +
+        "tokens=text,reference,footnote;exclude=recitals,final,annex";
+    public static string ProfileSha256 { get; } = Convert.ToHexStringLower(
+        SHA256.HashData(Encoding.UTF8.GetBytes(Profile)));
 
     private const int MaxEntries = 4_096;
     private const long MaxXmlEntryBytes = 16 * 1024 * 1024;

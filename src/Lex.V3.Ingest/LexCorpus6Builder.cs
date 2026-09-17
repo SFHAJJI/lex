@@ -72,6 +72,7 @@ public enum LexCorpus6Stage3Disposition
     [JsonStringEnumMemberName("formex_main_body_xml_rejected")] FormexMainBodyXmlRejected = 22,
     [JsonStringEnumMemberName("formex_main_body_missing")] FormexMainBodyMissing = 23,
     [JsonStringEnumMemberName("formex_main_body_unsupported_content_shape")] FormexMainBodyUnsupportedContentShape = 24,
+    [JsonStringEnumMemberName("akn_marker_only_evidence")] AknMarkerOnlyEvidence = 25,
 }
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
@@ -96,7 +97,8 @@ public sealed record LexCorpus6Stage3Outcome(
         {
             LexCorpus6Stage3OutcomeDomain.LuxembourgAknLegalContent => disposition is >=
                 LexCorpus6Stage3Disposition.AknAdmitted and <=
-                LexCorpus6Stage3Disposition.AknUnsupportedContentShape,
+                LexCorpus6Stage3Disposition.AknUnsupportedContentShape
+                or LexCorpus6Stage3Disposition.AknMarkerOnlyEvidence,
             LexCorpus6Stage3OutcomeDomain.LuxembourgPublisherPdfActScope => disposition is >=
                 LexCorpus6Stage3Disposition.PdfNotApplicable and <=
                 LexCorpus6Stage3Disposition.PdfActScopeUnproven,
@@ -452,6 +454,13 @@ public sealed record LexCorpus6Member(
             {
                 throw new ArgumentException("A held EU member requires only its EU class binding and an acquired outcome.");
             }
+            if (Stage3Outcomes.Count(static outcome =>
+                    outcome.Domain == LexCorpus6Stage3OutcomeDomain.EuropeFormexMainBody) != 1)
+            {
+                throw new ArgumentException(
+                    "A held EU member requires exactly one Formex main-body outcome.",
+                    nameof(Stage3Outcomes));
+            }
         }
         else if (Publisher == PublisherId.LuLegilux)
         {
@@ -800,9 +809,8 @@ public sealed record LexCorpus6ManifestSet(
             if (string.CompareOrdinal(CorrigendumProductions[i - 1].FamilyKey, CorrigendumProductions[i].FamilyKey) >= 0)
                 throw new ArgumentException("Corrigendum productions must be sorted and unique.", nameof(CorrigendumProductions));
         }
-        var expectedObligations = Enum.GetValues<Stage3FidelityPreservationObligation>();
-        if (!UnresolvedFidelityObligations.SequenceEqual(expectedObligations))
-            throw new ArgumentException("The unresolved fidelity obligations must carry the complete closed vocabulary in order.", nameof(UnresolvedFidelityObligations));
+        if (UnresolvedFidelityObligations.Count != 0)
+            throw new ArgumentException("The unresolved fidelity obligations do not match the accepted fidelity proof boundary.", nameof(UnresolvedFidelityObligations));
         if (Members.Count == 0 || Members.Any(static member => member is null))
         {
             throw new ArgumentException("A corpus manifest set requires members.", nameof(Members));
@@ -898,22 +906,43 @@ public static class LexCorpus6Builder
         var formexMainBodySources = new Dictionary<
             Europe.EuFormexMainBodyLegalContentOutcome,
             SourceObjectRef>();
-        foreach (var outcome in formexMainBody.Outcomes.Where(static value =>
-                     value.Source.Kind == Europe.EuFormexPackageOutcomeKind.Acquired))
+        var boundFormexRecords = new HashSet<SourceObjectRef>();
+        foreach (var outcome in formexMainBody.Outcomes)
         {
-            var sourceReceipt = outcome.Source.AcquiredInventory!.SourceReceipt;
             var matches = eu.CorpusRecordSet.Set.Records.Where(record =>
                     record.Body.Kind == CorpusBodyRecordKind.Held &&
-                    record.Body.Receipt == sourceReceipt)
+                    FormexMainBodyBelongsTo(outcome.Source.Expression, record.ObjectRef))
                 .Take(2)
                 .ToArray();
+            if (matches.Length == 0 &&
+                outcome.Source.Kind != Europe.EuFormexPackageOutcomeKind.Acquired)
+            {
+                continue;
+            }
             if (matches.Length != 1)
             {
                 refusal = LexCorpus6BuildRefusal.PopulationMismatch;
-                detail = "An acquired Formex main-body outcome does not bind to exactly one held EU corpus body.";
+                detail = $"A Formex main-body outcome does not bind by publisher identity to exactly one held EU corpus body: " +
+                    $"work={outcome.Source.ExpressionIdentity.PublisherWorkId}; " +
+                    $"expression={outcome.Source.ExpressionIdentity.PublisherExpressionId}; " +
+                    $"language={outcome.Source.Expression.OfficialLanguage}; " +
+                    $"held={string.Join(',', eu.CorpusRecordSet.Set.Records.Where(static record => record.Body.Kind == CorpusBodyRecordKind.Held).Select(static record => record.ObjectRef.PublisherUri))}.";
+                return null;
+            }
+            if (!boundFormexRecords.Add(matches[0].ObjectRef))
+            {
+                refusal = LexCorpus6BuildRefusal.PopulationMismatch;
+                detail = "A held EU corpus body is bound to more than one Formex main-body outcome.";
                 return null;
             }
             formexMainBodySources.Add(outcome, matches[0].ObjectRef);
+        }
+        if (boundFormexRecords.Count != euHeldRecords.Count ||
+            euHeldRecords.Any(record => !boundFormexRecords.Contains(record)))
+        {
+            refusal = LexCorpus6BuildRefusal.PopulationMismatch;
+            detail = "The held EU corpus population does not carry exactly one Formex main-body outcome per member.";
+            return null;
         }
 
         var luInputs = new Dictionary<SourceObjectRef, Luxembourg.LuxembourgHeldBodyDerivationInput>();
@@ -1030,16 +1059,16 @@ public static class LexCorpus6Builder
                 admitted ? [] : [rights.ReasonCode]));
         }
 
+        var profileIdentities = ProfileIdentities(profileEnvelope);
         var set = new LexCorpus6ManifestSet(
             Schema,
             eu.CorpusRecordSetRef,
             lu.CorpusRecordSetRef,
             LexCorpus6EuropeRightsMatrix.From(legalNotice),
-            ProfileIdentities(profileEnvelope),
+            profileIdentities,
             CorrigendumReceipts(eu.CorrigendumTripwires),
             CorrigendumProductions(eu.CorrigendumTripwires),
-            evidence.FidelityPreservation.UnresolvedObligations
-                .OrderBy(static value => value).ToArray(),
+            TerminalUnresolvedFidelityObligations(evidence, profileIdentities),
             members.OrderBy(static member => member, Comparer<LexCorpus6Member>.Create(LexCorpus6ManifestSet.CompareMembers)).ToArray()).Validate();
         var bytes = Write(set);
         var digest = ComputeSha256(bytes);
@@ -1241,6 +1270,30 @@ public static class LexCorpus6Builder
         IReadOnlyDictionary<SourceObjectRef, IReadOnlyList<LexCorpus6Stage3Outcome>> outcomes,
         SourceObjectRef objectRef) => outcomes.TryGetValue(objectRef, out var found) ? found : [];
 
+    private static bool FormexMainBodyBelongsTo(
+        Lex.V3.Contracts.Derivation.LanguageScopedExpression expression,
+        SourceObjectRef corpusObject)
+    {
+        if (string.Equals(
+                expression.Identity.PublisherExpressionId,
+                corpusObject.PublisherUri,
+                StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        var isEnglish = expression.OfficialLanguage is "EN" or "ENG" ||
+            string.Equals(
+                expression.OfficialLanguage,
+                "http://publications.europa.eu/resource/authority/language/ENG",
+                StringComparison.Ordinal);
+        return isEnglish &&
+            string.Equals(
+                expression.Identity.PublisherWorkId,
+                corpusObject.PublisherUri,
+                StringComparison.Ordinal);
+    }
+
     private static IReadOnlyDictionary<SourceObjectRef, IReadOnlyList<LexCorpus6Stage3Outcome>>
         Stage3OutcomesByObjectRef(
             Stage3DerivationProfileEnvelope envelope,
@@ -1312,6 +1365,7 @@ public static class LexCorpus6Builder
             Luxembourg.LuxembourgAknLegalContentDisposition.XmlRejected => LexCorpus6Stage3Disposition.AknXmlRejected,
             Luxembourg.LuxembourgAknLegalContentDisposition.ArticleCoordinatesMismatch => LexCorpus6Stage3Disposition.AknArticleCoordinatesMismatch,
             Luxembourg.LuxembourgAknLegalContentDisposition.UnsupportedContentShape => LexCorpus6Stage3Disposition.AknUnsupportedContentShape,
+            Luxembourg.LuxembourgAknLegalContentDisposition.MarkerOnlyEvidence => LexCorpus6Stage3Disposition.AknMarkerOnlyEvidence,
             _ => throw new InvalidOperationException("Unknown AKN legal-content disposition."),
         };
 
@@ -1392,9 +1446,20 @@ public static class LexCorpus6Builder
         .Distinct().OrderBy(static value => value.ResourceId, StringComparer.Ordinal)
         .ThenBy(static value => value.Sha256, StringComparer.Ordinal).ToArray();
 
-    private static IReadOnlyList<string> ProfileIdentities(Stage3DerivationProfileEnvelope envelope) =>
-        new[]
+    private static IReadOnlyList<string> ProfileIdentities(Stage3DerivationProfileEnvelope envelope)
+    {
+        if (Lex.V3.Contracts.Derivation.DerivationProfileComparison.Compare(
+                Europe.EuFormexMainBodyLegalContentProducer.ProfileSha256,
+                Luxembourg.LuxembourgAknLegalContentProfileProducer.RuleProfileSha256) !=
+            Lex.V3.Contracts.Derivation.DerivationProfileComparisonOutcome.ProfilesDiffer)
         {
+            throw new InvalidDataException(
+                "EU Formex and Luxembourg AKN legal content must remain bound to distinct profiles.");
+        }
+        return new[]
+        {
+            Europe.EuFormexMainBodyLegalContentProducer.ProfileSha256,
+            Luxembourg.LuxembourgAknLegalContentProfileProducer.RuleProfileSha256,
             envelope.BodyComposition.Envelope.LuxembourgAknArticleInventoryPopulation.IdentitySha256,
             envelope.BodyComposition.Envelope.LuxembourgAknLegalContentPopulation.IdentitySha256,
             envelope.PdfEligibility.IdentitySha256,
@@ -1402,6 +1467,7 @@ public static class LexCorpus6Builder
             envelope.PublisherPdfTextLayer.IdentitySha256,
             envelope.PublisherPdfActScope.IdentitySha256,
         }.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+    }
 
     private static IReadOnlyList<string> CorrigendumReceipts(Europe.EuCorrigendumTripwireCompletion completion) =>
         completion.ProductionsByFamilyKey.Values
@@ -1487,6 +1553,34 @@ public static class LexCorpus6Builder
         WriteArtifact(writer, "observation_ref", binding.ObservationRef);
         writer.WriteString("identity_sha256", binding.IdentitySha256);
         writer.WriteEndObject();
+    }
+
+    private static IReadOnlyList<Stage3FidelityPreservationObligation>
+        TerminalUnresolvedFidelityObligations(
+            Stage3EvidenceEnvelope evidence,
+            IReadOnlyList<string> profileIdentities)
+    {
+        var hasFormexProfile = profileIdentities.Contains(
+            Europe.EuFormexMainBodyLegalContentProducer.ProfileSha256,
+            StringComparer.Ordinal);
+        var hasAknProfile = profileIdentities.Contains(
+            Luxembourg.LuxembourgAknLegalContentProfileProducer.RuleProfileSha256,
+            StringComparer.Ordinal);
+        var retired = new HashSet<Stage3FidelityPreservationObligation>();
+        if (hasAknProfile)
+        {
+            retired.Add(Stage3FidelityPreservationObligation.MarkerOnlyRuleUnsupported);
+        }
+        if (hasFormexProfile && hasAknProfile)
+        {
+            retired.Add(Stage3FidelityPreservationObligation.FootnotePreservationUnproven);
+            retired.Add(Stage3FidelityPreservationObligation.CitationPreservationUnproven);
+        }
+
+        return evidence.FidelityPreservation.UnresolvedObligations
+            .Where(value => !retired.Contains(value))
+            .OrderBy(static value => value)
+            .ToArray();
     }
 }
 
