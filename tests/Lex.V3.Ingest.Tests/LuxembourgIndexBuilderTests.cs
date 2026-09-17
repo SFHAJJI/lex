@@ -98,7 +98,7 @@ public sealed class LuxembourgIndexBuilderTests
                   </scl:JOLUXManifestation>
                 </identification></meta>
                 <body><article id="art_1" wId="/eli/etat/leg/loi/2026/01/01/a1/art_1">
-                  <meta><scl:jolux name="dateApplicability">2026-02-03</scl:jolux></meta>
+                  <scl:JOLUXWork><scl:jolux name="dateApplicability">2026-02-03</scl:jolux></scl:JOLUXWork>
                   <num>Art. 1.</num><content><p>Indexable publisher words.</p></content>
                 </article></body>
               </act>
