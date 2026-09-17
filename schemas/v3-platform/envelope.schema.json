@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lex-v3-envelope/1",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "lex-v3-envelope/1"
+    },
+    "version": {
+      "const": "v3"
+    },
+    "object_type": {
+      "const": "envelope"
+    },
+    "request_ref": {
+      "type": "string",
+      "maxLength": 128
+    },
+    "operation_id": {
+      "type": "string"
+    },
+    "registry_schema": {
+      "const": "lex-v3-operation-registry/1"
+    },
+    "registry_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "context": {
+      "type": "object"
+    },
+    "verdict": {
+      "type": "string"
+    },
+    "result": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "refusal": {
+      "type": [
+        "object",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "schema",
+    "version",
+    "object_type",
+    "request_ref",
+    "operation_id",
+    "registry_schema",
+    "registry_sha256",
+    "context",
+    "verdict",
+    "result",
+    "refusal"
+  ]
+}

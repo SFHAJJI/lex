@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lex-v3-transposition-result/1",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "operation_id": {
+      "const": "transposition"
+    },
+    "object_type": {
+      "type": "string",
+      "enum": [
+        "relation_edge"
+      ]
+    },
+    "value": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "required": [
+    "operation_id",
+    "object_type",
+    "value"
+  ]
+}
