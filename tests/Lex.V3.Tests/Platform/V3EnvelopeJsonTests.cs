@@ -11,6 +11,9 @@ namespace Lex.V3.Tests.Platform;
 public sealed class V3EnvelopeJsonTests
 {
     private const string Digest = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+    private const string RegistryDigest = "f956724ee90c13feebfa66cabe13d31c2796e409cee84e5c8b5af1b483f58987";
+    private const string ExpectedSuccess = """{"context":{"freshness":{"observed_at":"2026-09-17T00:00:00.0000000Z","upstream_health":"current"},"jurisdiction":"lu","provisional":false,"publisher":"lu-legilux","snapshot":{"snapshot_id":"snapshot","snapshot_sha256":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"},"status":"success","timeline_semantics":"publisher_applicability"},"object_type":"envelope","operation_id":"resolve","refusal":null,"registry_schema":"lex-v3-operation-registry/1","registry_sha256":"f956724ee90c13feebfa66cabe13d31c2796e409cee84e5c8b5af1b483f58987","request_ref":"req","result":{"object_type":"work_resolution","schema":"lex-v3-resolve-result/1","value":{"work_id":"lu-legilux:test"}},"schema":"lex-v3-envelope/1","verdict":"answer","version":"v3"}""" + "\n";
+    private const string ExpectedRefusal = """{"context":{"freshness":{"observed_at":"2026-09-17T00:00:00.0000000Z","upstream_health":"current"},"jurisdiction":"lu","provisional":false,"publisher":"lu-legilux","snapshot":{"snapshot_id":"snapshot","snapshot_sha256":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"},"status":"refusal","timeline_semantics":"publisher_applicability"},"object_type":"envelope","operation_id":"resolve","refusal":{"code":"no_corpus_mounted","helpful_payload":{"required_corpus":"lu"},"schema":"lex-v3-refusal/1"},"registry_schema":"lex-v3-operation-registry/1","registry_sha256":"f956724ee90c13feebfa66cabe13d31c2796e409cee84e5c8b5af1b483f58987","request_ref":"req","result":null,"schema":"lex-v3-envelope/1","verdict":"refuse","version":"v3"}""" + "\n";
     private readonly V3OperationRegistry _registry = V3OperationRegistry.Reviewed;
 
     [TestMethod]
@@ -24,6 +27,14 @@ public sealed class V3EnvelopeJsonTests
         var reopened = V3EnvelopeJson.ParseAndVerify(rest, _registry);
         Assert.AreEqual(envelope.OperationId, reopened.OperationId);
         CollectionAssert.AreEqual(rest, V3EnvelopeJson.ProjectRest(reopened, _registry));
+    }
+
+    [TestMethod]
+    public void SuccessAndRefusalHaveLiteralCanonicalWireForms()
+    {
+        Assert.AreEqual(RegistryDigest, _registry.Sha256);
+        Assert.AreEqual(ExpectedSuccess, Encoding.UTF8.GetString(V3EnvelopeJson.ProjectRest(Success(), _registry)));
+        Assert.AreEqual(ExpectedRefusal, Encoding.UTF8.GetString(V3EnvelopeJson.ProjectMcp(Refusal(), _registry)));
     }
 
     [TestMethod]
@@ -56,6 +67,18 @@ public sealed class V3EnvelopeJsonTests
     }
 
     [TestMethod]
+    public void ReaderRejectsDuplicateMembers()
+    {
+        var duplicate = ExpectedSuccess.Replace(
+            "\"schema\":\"lex-v3-envelope/1\"",
+            "\"schema\":\"lex-v3-envelope/1\",\"schema\":\"lex-v3-envelope/1\"",
+            StringComparison.Ordinal);
+
+        Assert.ThrowsExactly<JsonException>(() =>
+            V3EnvelopeJson.ParseAndVerify(Encoding.UTF8.GetBytes(duplicate), _registry));
+    }
+
+    [TestMethod]
     public void UnknownProjectionFailsClosed()
     {
         Assert.ThrowsExactly<ArgumentOutOfRangeException>(() =>
@@ -70,9 +93,17 @@ public sealed class V3EnvelopeJsonTests
             "lex-v3-resolve-result/1", "work_resolution", result.RootElement);
     }
 
-    private static V3EnvelopeContext Context() => new(
+    private V3Envelope Refusal()
+    {
+        using var helpful = JsonDocument.Parse("{\"required_corpus\":\"lu\"}");
+        return new V3EnvelopeBuilder(_registry).Refusal(
+            "req", "resolve", Context("refusal"), "lex-v3-refusal/1",
+            "no_corpus_mounted", helpful.RootElement);
+    }
+
+    private static V3EnvelopeContext Context(string status = "success") => new(
         PublisherId.LuLegilux,
-        "success",
+        status,
         TimelineSemantics.PublisherApplicability,
         new V3SnapshotReference("snapshot", Digest),
         "lu",
