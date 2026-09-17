@@ -84,13 +84,25 @@ public sealed class LuxembourgIndexBuilderTests
     [TestMethod]
     public async Task AdmittedAknArticleProducesPublisherBoundTextDateAndMeasuredCapability()
     {
-        var xml = Encoding.UTF8.GetBytes(
-            "<akomaNtoso xmlns=\"http://docs.oasis-open.org/legaldocml/ns/akn/3.0/CSD13\" " +
-            "xmlns:scl=\"http://www.scl.lu\"><act><body>" +
-            "<article id=\"art_1\" wId=\"/eli/etat/leg/loi/2026/01/01/a1/art_1\">" +
-            "<meta><scl:jolux name=\"dateApplicability\">2026-02-03</scl:jolux></meta>" +
-            "<num>Art. 1.</num><content><p>Indexable publisher words.</p></content>" +
-            "</article></body></act></akomaNtoso>");
+        const string manifestation =
+            "http://data.legilux.public.lu/eli/etat/leg/loi/2026/01/01/a1/jo/fr/xml";
+        var xml = Encoding.UTF8.GetBytes($$"""
+            <akomaNtoso xmlns="http://docs.oasis-open.org/legaldocml/ns/akn/3.0/CSD13" xmlns:scl="http://www.scl.lu">
+              <act>
+                <meta><identification>
+                  <FRBRManifestation><FRBRthis value="{{manifestation}}"/></FRBRManifestation>
+                  <scl:JOLUXManifestation>
+                    <scl:jolux scl:name="uriThis">{{manifestation}}</scl:jolux>
+                    <scl:jolux scl:name="license">{{VerifiedLuxembourgSourceProfile.AdmittingLicence}}</scl:jolux>
+                  </scl:JOLUXManifestation>
+                </identification></meta>
+                <body><article id="art_1" wId="/eli/etat/leg/loi/2026/01/01/a1/art_1">
+                  <meta><scl:jolux name="dateApplicability">2026-02-03</scl:jolux></meta>
+                  <num>Art. 1.</num><content><p>Indexable publisher words.</p></content>
+                </article></body>
+              </act>
+            </akomaNtoso>
+            """);
         ICustodyStore store = new RoutedHttpAcquisitionSessionTests.MultiObjectCustodyStore();
         var luxembourg = await LuxembourgGazetteAcquisitionTests
             .CompleteXmlForStage3BodyCompositionAsync(xml, store);
