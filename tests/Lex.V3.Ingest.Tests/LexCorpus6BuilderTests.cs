@@ -638,6 +638,11 @@ public sealed class LexCorpus6BuilderTests
         Assert.IsGreaterThan(start, end);
         if (end + 1 < canonical.Length && canonical[end + 1] == ',') end++;
         else if (start > 0 && canonical[start - 1] == ',') start--;
+        else if (start > 0 && canonical[start - 1] == '[' &&
+                 end + 1 < canonical.Length && canonical[end + 1] == ']')
+        {
+            // The selected object is the array's only member; removing it leaves the canonical [].
+        }
         else Assert.Fail("The selected canonical array item has no adjacent separator.");
         return canonical.Remove(start, end - start + 1);
     }
