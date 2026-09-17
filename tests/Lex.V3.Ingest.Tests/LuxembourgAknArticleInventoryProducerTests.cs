@@ -50,7 +50,7 @@ public sealed class LuxembourgAknArticleInventoryProducerTests
     public async Task BothPublisherXmlTokensUseOneStableAknRuleProfile()
     {
         var xml = Akn("<article id=\"art_1\" wId=\"/eli/etat/leg/loi/2026/01/01/a1/art_1\">" +
-            "<meta><scl:jolux name=\"dateApplicability\">2026-02-03</scl:jolux></meta>" +
+            "<meta><scl:jolux scl:name=\"dateApplicability\">2026-02-03</scl:jolux></meta>" +
             "<num>Art. 1.</num></article>");
         var akn = await Fixture.CreateAsync(xml, LuxembourgUserFormatToken.XmlAkomaNtoso);
         var plain = await Fixture.CreateAsync(xml, LuxembourgUserFormatToken.Xml);
@@ -128,8 +128,8 @@ public sealed class LuxembourgAknArticleInventoryProducerTests
     public async Task ConflictingArticleApplicabilityValuesAreRejected()
     {
         var xml = Akn("<article id=\"art_1\"><meta>" +
-            "<scl:jolux name=\"dateApplicability\">2026-01-01</scl:jolux>" +
-            "<scl:jolux name=\"dateApplicability\">2026-02-01</scl:jolux>" +
+            "<scl:jolux scl:name=\"dateApplicability\">2026-01-01</scl:jolux>" +
+            "<scl:jolux scl:name=\"dateApplicability\">2026-02-01</scl:jolux>" +
             "</meta></article>");
 
         var outcome = await RunOne(xml);

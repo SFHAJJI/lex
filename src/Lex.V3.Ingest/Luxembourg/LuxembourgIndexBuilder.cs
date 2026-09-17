@@ -307,20 +307,22 @@ public static class LuxembourgIndexBuilder
         Execute(connection, "PRAGMA optimize");
     }
 
-    private static V3IndexCapabilityManifest MeasureCapabilities(string digest, IReadOnlyList<ArticleRow> articles)
+    internal static V3IndexCapabilityManifest MeasureCapabilities(
+        string digest,
+        IReadOnlyList<ArticleRow> articles)
     {
         var cells = articles
             .Where(static row => row.ApplicabilityDate is not null && row.SearchableText.Length != 0)
-            .GroupBy(static row => row.Language, StringComparer.Ordinal)
+            .GroupBy(static row => (row.Language, row.ApplicabilityDate))
             .Select(group => new V3IndexCapabilityCell(
                 PublisherId.LuLegilux,
                 digest,
                 "search",
                 "articles",
                 "searchable_text",
-                group.Key,
-                group.Min(static row => DateOnly.ParseExact(row.ApplicabilityDate!, "yyyy-MM-dd", CultureInfo.InvariantCulture)),
-                group.Max(static row => DateOnly.ParseExact(row.ApplicabilityDate!, "yyyy-MM-dd", CultureInfo.InvariantCulture)),
+                group.Key.Language,
+                DateOnly.ParseExact(group.Key.ApplicabilityDate!, "yyyy-MM-dd", CultureInfo.InvariantCulture),
+                DateOnly.ParseExact(group.Key.ApplicabilityDate!, "yyyy-MM-dd", CultureInfo.InvariantCulture),
                 group.LongCount()))
             .ToArray();
         if (!V3IndexCapabilityManifest.TryCreate(
@@ -548,7 +550,7 @@ public sealed class LuxembourgIndexReader : IDisposable
                     StringComparison.Ordinal))
                 throw new InvalidDataException("The Luxembourg index logical rows do not match their stamp.");
 
-            var measured = Measure(digest, articles);
+            var measured = LuxembourgIndexBuilder.MeasureCapabilities(digest, articles);
             if (!measured.Cells.SequenceEqual(capabilityManifest.Cells))
                 throw new InvalidDataException("The Luxembourg capability manifest was not measured from the index.");
 
@@ -644,20 +646,4 @@ public sealed class LuxembourgIndexReader : IDisposable
         return values.ToArray();
     }
 
-    private static V3IndexCapabilityManifest Measure(
-        string digest,
-        IReadOnlyList<LuxembourgIndexBuilder.ArticleRow> articles)
-    {
-        var cells = articles.Where(static row => row.ApplicabilityDate is not null && row.SearchableText.Length != 0)
-            .GroupBy(static row => row.Language, StringComparer.Ordinal)
-            .Select(group => new V3IndexCapabilityCell(
-                PublisherId.LuLegilux, digest, "search", "articles", "searchable_text", group.Key,
-                group.Min(static row => DateOnly.ParseExact(row.ApplicabilityDate!, "yyyy-MM-dd", CultureInfo.InvariantCulture)),
-                group.Max(static row => DateOnly.ParseExact(row.ApplicabilityDate!, "yyyy-MM-dd", CultureInfo.InvariantCulture)),
-                group.LongCount())).ToArray();
-        if (!V3IndexCapabilityManifest.TryCreate(PublisherId.LuLegilux, digest, cells,
-                out var manifest, out var refusal))
-            throw new InvalidDataException($"The mounted Luxembourg capabilities are invalid: {refusal}.");
-        return manifest!;
-    }
 }

@@ -347,31 +347,40 @@ public sealed class LuxembourgGazetteAcquisitionTests
 
     internal static async Task<LuxembourgQueryExecutionResult> CompleteXmlForStage3BodyCompositionAsync(
         byte[] retainedXmlBytes,
-        ICustodyStore store)
+        ICustodyStore store,
+        string? manifestationXml = null,
+        string? itemXml = null,
+        bool includeEndpointLicence = true)
     {
         ArgumentNullException.ThrowIfNull(retainedXmlBytes);
         ArgumentNullException.ThrowIfNull(store);
-        const string manifestationXml = Expression + "/xml";
-        const string itemXml = "http://data.legilux.public.lu/filestore/eli/etat/leg/loi/2026/01/01/a1/jo/fr/xml/eli-etat-leg-loi-2026-01-01-a1-jo-fr-xml.xml";
-        (string, string, string)[] assertions =
+        manifestationXml ??= Expression + "/xml";
+        itemXml ??= "http://data.legilux.public.lu/filestore/eli/etat/leg/loi/2026/01/01/a1/jo/fr/xml/eli-etat-leg-loi-2026-01-01-a1-jo-fr-xml.xml";
+        var expression = manifestationXml[..manifestationXml.LastIndexOf('/')];
+        var act = expression[..expression.LastIndexOf('/')];
+        var parent = act[..act.LastIndexOf('/')];
+        var assertions = new List<(string, string, string)>
         [
-            (Act, RdfType, Jolux + "Act"),
-            (Act, Jolux + "typeDocument", Types + "LOI"),
-            (Act, Jolux + "isMemberOf", Parent),
-            (Act, Jolux + "isRealizedBy", Expression),
-            (Expression, RdfType, Jolux + "Expression"),
-            (Expression, Jolux + "language", "http://publications.europa.eu/resource/authority/language/FRA"),
-            (Expression, Jolux + "isEmbodiedBy", manifestationXml),
+            (act, RdfType, Jolux + "Act"),
+            (act, Jolux + "typeDocument", Types + "LOI"),
+            (act, Jolux + "isMemberOf", parent),
+            (act, Jolux + "isRealizedBy", expression),
+            (expression, RdfType, Jolux + "Expression"),
+            (expression, Jolux + "language", "http://publications.europa.eu/resource/authority/language/FRA"),
+            (expression, Jolux + "isEmbodiedBy", manifestationXml),
             (manifestationXml, RdfType, Jolux + "Manifestation"),
             (manifestationXml, Jolux + "userFormat", Formats + "xml"),
             (manifestationXml, Jolux + "isExemplifiedBy", itemXml),
-            (manifestationXml, Jolux + "license", CcBy),
         ];
+        if (includeEndpointLicence)
+        {
+            assertions.Add((manifestationXml, Jolux + "license", CcBy));
+        }
 
         return (await RunAsync(
-            assertions,
+            assertions.ToArray(),
             pdf: null,
-            subjects: [Act, Expression, manifestationXml],
+            subjects: [act, expression, manifestationXml],
             ladderItem: itemXml,
             ladderBody: retainedXmlBytes,
             ladderMediaType: "application/xml",

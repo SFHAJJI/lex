@@ -13,6 +13,8 @@ namespace Lex.V3.Ingest.Tests;
 [TestClass]
 public sealed class LuxembourgIndexBuilderTests
 {
+    private const string Retained1984 = "loi-1984-02-24-n1--2020-09-01--fr.bin";
+
     [TestMethod]
     public void BuilderAndStrictReaderShipAsOneTerminalSlice()
     {
@@ -83,30 +85,20 @@ public sealed class LuxembourgIndexBuilderTests
     }
 
     [TestMethod]
-    public async Task AdmittedAknArticleProducesPublisherBoundTextDateAndMeasuredCapability()
+    public async Task RetainedPublisherAknProducesDayExactCapabilitiesWithoutAdvertisingTheGap()
     {
         const string manifestation =
-            "http://data.legilux.public.lu/eli/etat/leg/loi/2026/01/01/a1/jo/fr/xml";
-        var xml = Encoding.UTF8.GetBytes($$"""
-            <akomaNtoso xmlns="http://docs.oasis-open.org/legaldocml/ns/akn/3.0/CSD13" xmlns:scl="http://www.scl.lu">
-              <act>
-                <meta><identification>
-                  <FRBRManifestation><FRBRthis value="{{manifestation}}"/></FRBRManifestation>
-                  <scl:JOLUXManifestation>
-                    <scl:jolux scl:name="uriThis">{{manifestation}}</scl:jolux>
-                    <scl:jolux scl:name="license">{{VerifiedLuxembourgSourceProfile.AdmittingLicence}}</scl:jolux>
-                  </scl:JOLUXManifestation>
-                </identification></meta>
-                <body><article id="art_1" wId="/eli/etat/leg/loi/2026/01/01/a1/art_1">
-                  <scl:JOLUXWork><scl:jolux name="dateApplicability">2026-02-03</scl:jolux></scl:JOLUXWork>
-                  <num>Art. 1.</num><content><p>Indexable publisher words.</p></content>
-                </article></body>
-              </act>
-            </akomaNtoso>
-            """);
+            "http://data.legilux.public.lu/eli/etat/leg/loi/1984/02/24/n1/jo/fr/xml";
+        const string item =
+            "http://data.legilux.public.lu/filestore/eli/etat/leg/loi/1984/02/24/n1/jo/fr/xml/eli-etat-leg-loi-1984-02-24-n1-jo-fr-xml.xml";
+        var xml = await File.ReadAllBytesAsync(Path.Combine(
+            AppContext.BaseDirectory, "Fixtures", "LuAknLegalContent", Retained1984));
+        Assert.AreEqual(
+            "5d513304238bbda30578f59f963b227d54ca1fbce9283c55b9c5aa7b4436e48f",
+            Convert.ToHexStringLower(SHA256.HashData(xml)));
         ICustodyStore store = new RoutedHttpAcquisitionSessionTests.MultiObjectCustodyStore();
         var luxembourg = await LuxembourgGazetteAcquisitionTests
-            .CompleteXmlForStage3BodyCompositionAsync(xml, store);
+            .CompleteXmlForStage3BodyCompositionAsync(xml, store, manifestation, item);
         var envelope = await LexCorpus6BuilderTests.CompleteProfileEnvelopeAsync(
             luxembourgOverride: luxembourg,
             luxembourgStore: store);
@@ -124,20 +116,63 @@ public sealed class LuxembourgIndexBuilderTests
         using var reader = LuxembourgIndexReader.OpenAndVerify(
             built.IndexRef, built.IndexBytes.Span, corpus.ArtifactRef, built.CapabilityManifest);
         Assert.AreEqual(luxembourgMembers.Length, reader.MemberCount);
-        Assert.AreEqual(1, reader.ArticleCount);
-        var cell = built.CapabilityManifest.Cells.Single();
-        Assert.AreEqual("fra", cell.Language);
-        Assert.AreEqual(new DateOnly(2026, 2, 3), cell.PeriodFrom);
-        Assert.AreEqual(cell.PeriodFrom, cell.PeriodTo);
-        Assert.AreEqual(1, cell.Population);
-        var search = reader.Search(
-            "fra", cell.PeriodFrom, cell.PeriodTo, "Indexable publisher words");
-        Assert.AreEqual(V3IndexCapabilityLookupOutcome.Supported, search.Outcome);
-        Assert.HasCount(1, search.ArticleIdentities);
-        Assert.AreEqual(
-            envelope.BodyComposition.Envelope.LuxembourgAknLegalContentPopulation.Outcomes
-                .Single().Article!.IdentitySha256,
-            search.ArticleIdentities.Single());
+        Assert.AreEqual(6, reader.ArticleCount);
+        Assert.HasCount(2, built.CapabilityManifest.Cells);
+        var cells = built.CapabilityManifest.Cells.OrderBy(static cell => cell.PeriodFrom).ToArray();
+        Assert.AreEqual(new DateOnly(1984, 3, 2), cells[0].PeriodFrom);
+        Assert.AreEqual(cells[0].PeriodFrom, cells[0].PeriodTo);
+        Assert.AreEqual(5, cells[0].Population);
+        Assert.AreEqual(new DateOnly(2020, 9, 1), cells[1].PeriodFrom);
+        Assert.AreEqual(cells[1].PeriodFrom, cells[1].PeriodTo);
+        Assert.AreEqual(1, cells[1].Population);
+        var gap = reader.Search(
+            "fra", new DateOnly(1990, 1, 1), new DateOnly(2010, 12, 31), "langue");
+        Assert.AreEqual(V3IndexCapabilityLookupOutcome.FilterNotSupportedByIndex, gap.Outcome);
+        Assert.IsEmpty(gap.ArticleIdentities);
+    }
+
+    [TestMethod]
+    public async Task AdmittedAknTextWithoutAdmittingRightsNeverBecomesSearchable()
+    {
+        const string manifestation =
+            "http://data.legilux.public.lu/eli/etat/leg/loi/2026/01/01/a1/jo/fr/xml";
+        const string item =
+            "http://data.legilux.public.lu/filestore/eli/etat/leg/loi/2026/01/01/a1/jo/fr/xml/eli-etat-leg-loi-2026-01-01-a1-jo-fr-xml.xml";
+        var xml = Encoding.UTF8.GetBytes($$"""
+            <akomaNtoso xmlns="http://docs.oasis-open.org/legaldocml/ns/akn/3.0/CSD13" xmlns:scl="http://www.scl.lu">
+              <act><meta><identification>
+                <FRBRManifestation><FRBRthis value="{{manifestation}}"/></FRBRManifestation>
+                <scl:JOLUXManifestation>
+                  <scl:jolux scl:name="uriThis">{{manifestation}}</scl:jolux>
+                </scl:JOLUXManifestation>
+              </identification></meta><body>
+                <article id="art_1"><scl:JOLUXWork>
+                  <scl:jolux scl:name="dateApplicability">2026-02-03</scl:jolux>
+                </scl:JOLUXWork><content><p>Withheld publisher words.</p></content></article>
+              </body></act>
+            </akomaNtoso>
+            """);
+        ICustodyStore store = new RoutedHttpAcquisitionSessionTests.MultiObjectCustodyStore();
+        var luxembourg = await LuxembourgGazetteAcquisitionTests
+            .CompleteXmlForStage3BodyCompositionAsync(
+                xml, store, manifestation, item, includeEndpointLicence: false);
+        var envelope = await LexCorpus6BuilderTests.CompleteProfileEnvelopeAsync(
+            luxembourgOverride: luxembourg, luxembourgStore: store);
+        var corpus = LexCorpus6Builder.TryBuild(envelope, out var corpusRefusal, out var corpusDetail);
+        Assert.IsNotNull(corpus, $"{corpusRefusal}: {corpusDetail}");
+        Assert.IsTrue(envelope.BodyComposition.Envelope.LuxembourgAknLegalContentPopulation.Outcomes
+            .Any(static value => value.Disposition == LuxembourgAknLegalContentDisposition.Admitted));
+        Assert.IsTrue(corpus.VerifiedSet.Set.Members.Any(static value =>
+            value.Publisher == PublisherId.LuLegilux &&
+            value.Outcome == LexCorpus6OutcomeKind.RightsWithheld));
+
+        var built = LuxembourgIndexBuilder.TryBuild(envelope, out var refusal, out var detail);
+
+        Assert.IsNotNull(built, $"{refusal}: {detail}");
+        using var reader = LuxembourgIndexReader.OpenAndVerify(
+            built.IndexRef, built.IndexBytes.Span, corpus.ArtifactRef, built.CapabilityManifest);
+        Assert.AreEqual(0, reader.ArticleCount);
+        Assert.IsEmpty(built.CapabilityManifest.Cells);
     }
 
     [TestMethod]
@@ -190,6 +225,25 @@ public sealed class LuxembourgIndexBuilderTests
         var extendedManifest = RebindManifest(built.CapabilityManifest, extendedDigest);
         Assert.ThrowsExactly<InvalidDataException>(() => LuxembourgIndexReader.OpenAndVerify(
             extendedRef, extendedBytes, corpus.ArtifactRef, extendedManifest));
+
+        Assert.IsTrue(V3IndexCapabilityManifest.TryCreate(
+            PublisherId.LuLegilux,
+            built.IndexRef.Sha256,
+            [new V3IndexCapabilityCell(
+                PublisherId.LuLegilux, built.IndexRef.Sha256, "search", "articles",
+                "searchable_text", "fra", new DateOnly(2026, 1, 1),
+                new DateOnly(2026, 1, 1), 1)],
+            out var inventedManifest,
+            out var inventedRefusal), inventedRefusal.ToString());
+        Assert.ThrowsExactly<InvalidDataException>(() => LuxembourgIndexReader.OpenAndVerify(
+            built.IndexRef, built.IndexBytes.Span, corpus.ArtifactRef, inventedManifest!));
+
+        AssertTamperedDatabaseRejected(
+            built, corpus.ArtifactRef,
+            "UPDATE members SET outcome='invented' WHERE rowid=(SELECT min(rowid) FROM members)");
+        AssertTamperedDatabaseRejected(
+            built, corpus.ArtifactRef,
+            "UPDATE stamp SET sqlite_version='0.0.0' WHERE stamp_id=1");
     }
 
     private static V3IndexCapabilityManifest RebindManifest(
@@ -206,6 +260,22 @@ public sealed class LuxembourgIndexBuilderTests
     }
 
     private static byte[] AddUnexpectedTable(ReadOnlySpan<byte> source)
+        => MutateDatabase(source, "CREATE TABLE invented(value TEXT) STRICT");
+
+    private static void AssertTamperedDatabaseRejected(
+        LuxembourgIndexBuildResult built,
+        SourceArtifactRef corpusRef,
+        string sql)
+    {
+        var bytes = MutateDatabase(built.IndexBytes.Span, sql);
+        var digest = Convert.ToHexStringLower(SHA256.HashData(bytes));
+        var reference = new SourceArtifactRef(LexCorpus6Builder.ResourceIdOf(digest), digest);
+        var manifest = RebindManifest(built.CapabilityManifest, digest);
+        Assert.ThrowsExactly<InvalidDataException>(() => LuxembourgIndexReader.OpenAndVerify(
+            reference, bytes, corpusRef, manifest));
+    }
+
+    private static byte[] MutateDatabase(ReadOnlySpan<byte> source, string sql)
     {
         var path = Path.Combine(Path.GetTempPath(), $"lex-v3-lu-index-hostile-{Guid.NewGuid():N}.sqlite");
         try
@@ -219,7 +289,7 @@ public sealed class LuxembourgIndexBuilderTests
             }.ToString());
             connection.Open();
             using var command = connection.CreateCommand();
-            command.CommandText = "CREATE TABLE invented(value TEXT) STRICT";
+            command.CommandText = sql;
             command.ExecuteNonQuery();
             connection.Close();
             return File.ReadAllBytes(path);
