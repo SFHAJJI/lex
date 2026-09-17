@@ -566,6 +566,7 @@ public sealed class EuQueryExecutionResult
         SourceArtifactRef? corpusRecordSetRef,
         DurableBlobWriteReceipt? corpusRecordSetReceipt,
         VerifiedCorpusRecordSet? corpusRecordSet,
+        IReadOnlyDictionary<SourceObjectRef, EuContentClassObservation>? heldBodyContentClasses,
         EuQueryExecutionCompletion? completion,
         EuQueryExecutionRefusalDetail? refusal,
         EuCellarObjectDecodeRefusal? decodeRefusal,
@@ -597,6 +598,7 @@ public sealed class EuQueryExecutionResult
         CorpusRecordSetRef = corpusRecordSetRef;
         CorpusRecordSetReceipt = corpusRecordSetReceipt;
         CorpusRecordSet = corpusRecordSet;
+        HeldBodyContentClasses = heldBodyContentClasses;
         Completion = completion;
         Refusal = refusal;
         DecodeRefusal = decodeRefusal;
@@ -653,7 +655,7 @@ public sealed class EuQueryExecutionResult
             scopeManifestCanonicalSha256, documentAcquisitionOutcomesByOrdinal, documentLadderResultsByOrdinal,
             observedManifestationTypesByCelex, observedExpressionsByCelex, mintedRowsByOrdinal,
             dateAxioms, [], null, corrigendumTripwires, corpusRecordSetRef, corpusRecordSetReceipt,
-            corpusRecordSet, completion, null, null, null, null);
+            corpusRecordSet, null, completion, null, null, null, null);
     }
 
     /// <summary>
@@ -682,6 +684,54 @@ public sealed class EuQueryExecutionResult
         CorpusRecordSetWriteResult recordSetResult,
         EuCorrigendumTripwireCompletion corrigendumTripwires)
     {
+        if (!EuLocatedAmendmentProducer.TryGetCompleteCorpus(recordSetResult, out var corpusRecordSet))
+        {
+            throw new ArgumentException(
+                "Located amendment completion requires the same writer's complete reopened corpus set.",
+                nameof(recordSetResult));
+        }
+
+        var completion = familyOutcomes.All(static outcome => outcome.Kind == EuFamilyEnumerationOutcomeKind.Proven)
+            ? EuQueryExecutionCompletion.AllFamiliesProven
+            : EuQueryExecutionCompletion.PartialFamilyRefused;
+        return new(
+            topology, familyOutcomes, observedObjectCount, observedExpressionCount, reductionExclusions,
+            watermarkWitnessPlan, rootBinding, witnessReconciliation, witnessTerminations, scopeManifestReceipt,
+            scopeManifestCanonicalSha256, documentAcquisitionOutcomesByOrdinal, documentLadderResultsByOrdinal,
+            observedManifestationTypesByCelex, observedExpressionsByCelex, mintedRowsByOrdinal,
+            dateAxioms, locatedAmendmentObservations,
+            EuLocatedAmendmentProducer.Produce(locatedAmendmentObservations, recordSetResult),
+            corrigendumTripwires, recordSetResult.SetRef!, recordSetResult.RetainedSetReceipt!, corpusRecordSet,
+            null, completion, null, null, null, null);
+    }
+
+    /// <summary>
+    /// Production completion door. In addition to the retained corpus, it receives the adapter's
+    /// own decoded snapshots and derives the held-body class bindings internally.
+    /// </summary>
+    internal static EuQueryExecutionResult DeliveredWithLocatedAmendments(
+        SourceProfileTopology topology,
+        IReadOnlyList<EuFamilyEnumerationOutcome> familyOutcomes,
+        int observedObjectCount,
+        int observedExpressionCount,
+        IReadOnlyList<EuObjectReductionExclusion> reductionExclusions,
+        EuWatermarkWitnessPlan watermarkWitnessPlan,
+        EuPrimaryEnumerationRootBinding rootBinding,
+        EuPrimaryEnumerationWitnessReconciliation witnessReconciliation,
+        IReadOnlyList<EuFeedEntryTermination> witnessTerminations,
+        DurableBlobWriteReceipt scopeManifestReceipt,
+        string scopeManifestCanonicalSha256,
+        IReadOnlyDictionary<int, CorpusAcquisitionOutcome> documentAcquisitionOutcomesByOrdinal,
+        IReadOnlyDictionary<int, EuDocumentLadderResult> documentLadderResultsByOrdinal,
+        IReadOnlyDictionary<string, IReadOnlyList<string>> observedManifestationTypesByCelex,
+        IReadOnlyDictionary<string, EuObservedExpressionSplit> observedExpressionsByCelex,
+        IReadOnlyDictionary<int, EuMintedRowAccounting> mintedRowsByOrdinal,
+        IReadOnlyList<EuDateAxiomBinding> dateAxioms,
+        IReadOnlyList<EuLocatedAmendmentAxiomObservation> locatedAmendmentObservations,
+        IReadOnlyList<EuCellarObjectSnapshot> decodedSnapshots,
+        CorpusRecordSetWriteResult recordSetResult,
+        EuCorrigendumTripwireCompletion corrigendumTripwires)
+    {
         ArgumentNullException.ThrowIfNull(topology);
         ArgumentNullException.ThrowIfNull(watermarkWitnessPlan);
         ArgumentNullException.ThrowIfNull(rootBinding);
@@ -696,6 +746,7 @@ public sealed class EuQueryExecutionResult
         ArgumentNullException.ThrowIfNull(mintedRowsByOrdinal);
         ArgumentNullException.ThrowIfNull(dateAxioms);
         ArgumentNullException.ThrowIfNull(locatedAmendmentObservations);
+        ArgumentNullException.ThrowIfNull(decodedSnapshots);
         ArgumentNullException.ThrowIfNull(recordSetResult);
         ArgumentNullException.ThrowIfNull(corrigendumTripwires);
         if (!EuLocatedAmendmentProducer.TryGetCompleteCorpus(recordSetResult, out var corpusRecordSet))
@@ -709,6 +760,7 @@ public sealed class EuQueryExecutionResult
             : EuQueryExecutionCompletion.PartialFamilyRefused;
         var locatedAmendmentProduction = EuLocatedAmendmentProducer.Produce(
             locatedAmendmentObservations, recordSetResult);
+        var heldBodyContentClasses = BindHeldBodyContentClasses(corpusRecordSet, decodedSnapshots);
         return new(
             topology, familyOutcomes, observedObjectCount, observedExpressionCount, reductionExclusions,
             watermarkWitnessPlan, rootBinding, witnessReconciliation, witnessTerminations, scopeManifestReceipt,
@@ -716,7 +768,33 @@ public sealed class EuQueryExecutionResult
             observedManifestationTypesByCelex, observedExpressionsByCelex, mintedRowsByOrdinal,
             dateAxioms, locatedAmendmentObservations, locatedAmendmentProduction, corrigendumTripwires,
             recordSetResult.SetRef!, recordSetResult.RetainedSetReceipt!, corpusRecordSet,
-            completion, null, null, null, null);
+            heldBodyContentClasses, completion, null, null, null, null);
+    }
+
+    private static IReadOnlyDictionary<SourceObjectRef, EuContentClassObservation> BindHeldBodyContentClasses(
+        VerifiedCorpusRecordSet corpusRecordSet,
+        IReadOnlyList<EuCellarObjectSnapshot> decodedSnapshots)
+    {
+        var result = new Dictionary<SourceObjectRef, EuContentClassObservation>();
+        foreach (var record in corpusRecordSet.Set.Records.Where(
+                     static record => record.Body.Kind == CorpusBodyRecordKind.Held))
+        {
+            var matches = decodedSnapshots
+                .Where(snapshot => snapshot.ObjectRef == record.ObjectRef && snapshot.Rights is not null)
+                .Select(static snapshot => snapshot.Rights!)
+                .ToArray();
+            if (matches.Length != 1)
+            {
+                throw new ArgumentException(
+                    "Every held EU corpus body must bind to exactly one adapter-decoded content class.",
+                    nameof(decodedSnapshots));
+            }
+
+            result.Add(record.ObjectRef, matches[0]);
+        }
+
+        return new System.Collections.ObjectModel.ReadOnlyDictionary<SourceObjectRef, EuContentClassObservation>(
+            result);
     }
 
     public static EuQueryExecutionResult Refused(
@@ -732,7 +810,7 @@ public sealed class EuQueryExecutionResult
         ArgumentNullException.ThrowIfNull(refusal);
         return new(
             topology, familyOutcomes, 0, 0, [], null, null, null, null, null, null, null, null, null, null, null,
-            [], [], null, null, null, null, null, null, refusal, decodeRefusal, decodeOffendingIri, decodeSnapshotRefusal,
+            [], [], null, null, null, null, null, null, null, refusal, decodeRefusal, decodeOffendingIri, decodeSnapshotRefusal,
             witnessTraversalRefusal);
     }
 
@@ -949,6 +1027,13 @@ public sealed class EuQueryExecutionResult
     /// this run built. Present iff this result is delivered.
     /// </summary>
     public VerifiedCorpusRecordSet? CorpusRecordSet { get; }
+
+    /// <summary>
+    /// The exact decoded content class for every held EU body, derived inside the adapter from the
+    /// same snapshots that produced the scope manifest. Null on refused and public synthetic
+    /// results; callers cannot supply a per-object map.
+    /// </summary>
+    public IReadOnlyDictionary<SourceObjectRef, EuContentClassObservation>? HeldBodyContentClasses { get; }
 
     public EuQueryExecutionRefusalDetail? Refusal { get; }
 
@@ -1996,6 +2081,7 @@ public sealed class EuQueryExecutionAdapter
             documentLadderResultsByOrdinal: documentLadderResultsByOrdinal!,
             dateAxioms: dateAxioms,
             locatedAmendmentObservations: locatedAmendmentObservations,
+            decodedSnapshots: allSnapshots,
             recordSetResult: recordSetResult,
             corrigendumTripwires: corrigendumTripwires);
     }

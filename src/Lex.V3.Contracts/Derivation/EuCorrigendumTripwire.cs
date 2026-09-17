@@ -273,6 +273,8 @@ public sealed class EuCorrigendumTripwire
 {
     private const string TripwireSchema = "eu_corrigendum_tripwire/1";
 
+    public static string Schema => TripwireSchema;
+
     private EuCorrigendumTripwire(
         string correctedWorkRoot,
         ReadOnlyCollection<EuCorrigendumTripwireLine> lines,
@@ -281,12 +283,7 @@ public sealed class EuCorrigendumTripwire
         CorrectedWorkRoot = correctedWorkRoot;
         Lines = lines;
         CorrigendaWithoutDerivedExpressions = corrigendaWithoutDerivedExpressions;
-        TripwireSha256 = Convert.ToHexStringLower(
-            SHA256.HashData(
-                ContractCanonicalizer.Canonicalize(
-                    CanonicalTripwireDocument.Of(this),
-                    TripwireSchema + "-canonical-json",
-                    64)));
+        TripwireSha256 = CanonicalSha256Of(CanonicalTripwireDocument.Of(this));
     }
 
     public string CorrectedWorkRoot { get; }
@@ -337,7 +334,26 @@ public sealed class EuCorrigendumTripwire
         return new EuCorrigendumTripwire(correctedWorkRoot, ordered.AsReadOnly(), undecoded.AsReadOnly());
     }
 
-    internal sealed record CanonicalLineDocument(
+    public static string CanonicalSha256Of(CanonicalTripwireDocument document)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        ArgumentNullException.ThrowIfNull(document.Lines);
+        ArgumentNullException.ThrowIfNull(document.CorrigendaWithoutDerivedExpressions);
+        if (!string.Equals(document.Schema, TripwireSchema, StringComparison.Ordinal))
+        {
+            throw new ArgumentException("The canonical tripwire document has the wrong schema.", nameof(document));
+        }
+
+        return Convert.ToHexStringLower(SHA256.HashData(CanonicalBytesOf(document)));
+    }
+
+    internal static byte[] CanonicalBytesOf(CanonicalTripwireDocument document) =>
+        ContractCanonicalizer.Canonicalize(
+            document,
+            TripwireSchema + "-canonical-json",
+            64);
+
+    public sealed record CanonicalLineDocument(
         string CorrigendumWorkRoot,
         string PublisherExpressionId,
         string LanguageIri,
@@ -359,7 +375,7 @@ public sealed class EuCorrigendumTripwire
                 line.ExpressionContentSha256);
     }
 
-    internal sealed record CanonicalTripwireDocument(
+    public sealed record CanonicalTripwireDocument(
         string Schema,
         string CorrectedWorkRoot,
         IReadOnlyList<CanonicalLineDocument> Lines,
@@ -463,6 +479,28 @@ public sealed class EuCorrigendumTripwireSet
     public static string Schema => SetSchema;
 
     public static string LineageRecordSchema => LineageSchema;
+
+    public static string CanonicalSha256Of(CanonicalSetDocument document)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        ArgumentNullException.ThrowIfNull(document.Tripwires);
+        ArgumentNullException.ThrowIfNull(document.UnresolvedGaps);
+        if (!string.Equals(document.Schema, SetSchema, StringComparison.Ordinal) ||
+            document.Tripwires.Any(static tripwire =>
+                tripwire is null ||
+                !string.Equals(tripwire.Schema, EuCorrigendumTripwire.Schema, StringComparison.Ordinal)))
+        {
+            throw new ArgumentException("The canonical corrigendum set document has the wrong schema.", nameof(document));
+        }
+
+        return Convert.ToHexStringLower(SHA256.HashData(CanonicalBytesOf(document)));
+    }
+
+    private static byte[] CanonicalBytesOf(CanonicalSetDocument document) =>
+        ContractCanonicalizer.Canonicalize(
+            document,
+            SetSchema + "-canonical-json",
+            64);
 
     /// <summary>
     /// The expression derivation minted from the same two deliveries in the same call. Exposed so a
@@ -723,13 +761,11 @@ public sealed class EuCorrigendumTripwireSet
                 undecodedByCorrected.GetValueOrDefault(root) ?? []))
             .ToList();
 
-        var canonicalBytes = ContractCanonicalizer.Canonicalize(
+        var canonicalBytes = CanonicalBytesOf(
             new CanonicalSetDocument(
                 SetSchema,
                 [.. tripwires.Select(EuCorrigendumTripwire.CanonicalTripwireDocument.Of)],
-                [.. gaps.Select(CanonicalGapDocument.Of)]),
-            SetSchema + "-canonical-json",
-            64);
+                [.. gaps.Select(CanonicalGapDocument.Of)]));
         var lineageBytes = ContractCanonicalizer.Canonicalize(
             new CanonicalLineageDocument(
                 LineageSchema,
@@ -793,13 +829,13 @@ public sealed class EuCorrigendumTripwireSet
             .ToList()
             .AsReadOnly();
 
-    private sealed record CanonicalGapDocument(string WorkRoot, string Reason)
+    public sealed record CanonicalGapDocument(string WorkRoot, string Reason)
     {
         public static CanonicalGapDocument Of(EuCorrigendumTripwireUnresolvedGap gap) =>
             new(gap.WorkRoot, gap.Reason.ToString());
     }
 
-    private sealed record CanonicalSetDocument(
+    public sealed record CanonicalSetDocument(
         string Schema,
         IReadOnlyList<EuCorrigendumTripwire.CanonicalTripwireDocument> Tripwires,
         IReadOnlyList<CanonicalGapDocument> UnresolvedGaps);

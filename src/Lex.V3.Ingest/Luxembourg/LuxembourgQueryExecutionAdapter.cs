@@ -1872,9 +1872,9 @@ public sealed class LuxembourgQueryExecutionAdapter
                     recordSetResult.Refusal.Detail));
         }
 
-        var derivationPopulation = LuxembourgHeldBodyDerivationPopulation.TryCreate(
+        var derivationPopulation = LuxembourgHeldBodyDerivationPopulation.TryCreateWithFinalRights(
             recordSetResult.VerifiedSet!, documentAcquisitionOutcomesByOrdinal!,
-            selectedFetchesByObjectRef!, out var derivationRefusal, out var derivationDetail);
+            selectedFetchesByObjectRef!, resolved, out var derivationRefusal, out var derivationDetail);
         if (derivationPopulation is null)
         {
             // Defensive only at this production door today. The exact address map above built the

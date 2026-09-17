@@ -544,6 +544,17 @@ public sealed class EuCorrigendumTripwireWiringTests
 
     // ---- Fixtures. ----
 
+    internal static async Task<EuQueryExecutionResult> CompleteDatedResultAsync()
+    {
+        var closure = BuildClosure();
+        var run = await RunAsync(new Options(new Corrigendum(
+            closure.State(1),
+            [LanguageBase + "DEU", LanguageBase + "EST"])));
+        Assert.IsNull(run.Result.Refusal, Describe(run));
+        Assert.IsNotNull(run.Result.CorrigendumTripwires);
+        return run.Result;
+    }
+
 
     private sealed record Options(
         Corrigendum? Corrigendum = null,

@@ -189,6 +189,21 @@ public sealed class ClosedVocabularyCensusTests
                     + "ProfileInvalid, ProfileDoesNotNameTransport, RetainedBytesUnavailable, "
                     + "XhtmlInvalid, PublisherAnnexConventionAbsent, "
                     + "PublisherAnnexConventionInvalid, WorkEliMissing",
+                "Lex.V3.Ingest.LexCorpus6BuildRefusal: None, EvidenceIncomplete, "
+                    + "EuropeRightsBindingMissing, LuxembourgRightsBindingMissing, "
+                    + "LuxembourgRightsEvidenceIncomplete, PopulationMismatch, "
+                    + "EuropeRightsEvidenceMissing",
+                "Lex.V3.Ingest.LexCorpus6OutcomeKind: Acquired, Unavailable, Refused, "
+                    + "RightsWithheld",
+                "Lex.V3.Ingest.LexCorpus6Stage3Disposition: AknAdmitted, "
+                    + "AknUpstreamNotInventoried, AknRetainedBytesUnavailable, AknXmlRejected, "
+                    + "AknArticleCoordinatesMismatch, AknUnsupportedContentShape, "
+                    + "PdfNotApplicable, PdfGazetteIssueScope, PdfUpstreamTextLayerGap, "
+                    + "PdfActScopeUnproven, AnnexTextNotAvailable, AnnexMappingUnresolved, "
+                    + "AnnexBodyContainsText, AnnexBodyContainsNoImage, "
+                    + "AnnexMappedPageOutsideDocument",
+                "Lex.V3.Ingest.LexCorpus6Stage3OutcomeDomain: LuxembourgAknLegalContent, "
+                    + "LuxembourgPublisherPdfActScope, EuropeAnnexBody",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgAknArticleInventoryDisposition: Inventoried, "
                     + "NotAkn, RetainedBytesUnavailable, XmlRejected",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgAknLegalContentDisposition: Admitted, "
@@ -227,7 +242,9 @@ public sealed class ClosedVocabularyCensusTests
                 "Lex.V3.Ingest.Luxembourg.LuxembourgHeldBodyDerivationPopulationRefusal: None, "
                     + "HeldRecordHasNoHeldOutcome, HeldOutcomeHasNoRecord, "
                     + "HeldOutcomeRecordIsNotHeld, HeldReceiptMismatch, "
-                    + "HeldRecordHasNoSelectedAddress, HeldRecordSelectedIdentityMismatch",
+                    + "HeldRecordHasNoSelectedAddress, HeldRecordSelectedIdentityMismatch, "
+                    + "HeldRecordHasNoFinalRightsResolution, "
+                    + "HeldRecordFinalRightsResolutionAmbiguous",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgInFileRightsReadStatus: Observed, "
                     + "UnsupportedRepresentation, MalformedXml, ManifestationIdentityMismatch, "
                     + "InvalidLicenceIri",
@@ -330,7 +347,8 @@ public sealed class ClosedVocabularyCensusTests
                     + "LuxembourgDerivationPopulationMismatch, "
                     + "LuxembourgAknArticleInventoryPopulationMismatch, "
                     + "LuxembourgAknLegalContentPopulationMissing, "
-                    + "LuxembourgAknLegalContentPopulationMismatch",
+                    + "LuxembourgAknLegalContentPopulationMismatch, EuropeLegalNoticeRunMismatch, "
+                    + "EuropeLegalNoticeRouteInvalid",
                 "Lex.V3.Ingest.Stage3EvidenceLineageRefusal: None, EuropeCorpusRecordSetMismatch, "
                     + "EuropeManifestMismatch, EuropeRunIdentityMismatch, "
                     + "LuxembourgCorpusRecordSetMismatch, LuxembourgManifestMismatch, "

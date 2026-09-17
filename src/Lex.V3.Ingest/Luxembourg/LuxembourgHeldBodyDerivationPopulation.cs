@@ -30,6 +30,12 @@ public enum LuxembourgHeldBodyDerivationPopulationRefusal
 
     [JsonStringEnumMemberName("held_record_selected_identity_mismatch")]
     HeldRecordSelectedIdentityMismatch = 6,
+
+    [JsonStringEnumMemberName("held_record_has_no_final_rights_resolution")]
+    HeldRecordHasNoFinalRightsResolution = 7,
+
+    [JsonStringEnumMemberName("held_record_final_rights_resolution_ambiguous")]
+    HeldRecordFinalRightsResolutionAmbiguous = 8,
 }
 
 internal sealed class LuxembourgSelectedDocumentFetch
@@ -67,12 +73,14 @@ public sealed class LuxembourgHeldBodyDerivationInput
     internal LuxembourgHeldBodyDerivationInput(
         CorpusRecord corpusRecord,
         LuxembourgSelectedDocumentFetch selectedFetch,
-        DurableBlobWriteReceipt receipt)
+        DurableBlobWriteReceipt receipt,
+        LuxembourgRightsChannelResolution? rightsResolution = null)
     {
         CorpusRecord = corpusRecord;
         Address = selectedFetch.Address;
         SelectedWemiCandidate = selectedFetch.WemiCandidate;
         Receipt = receipt;
+        RightsResolution = rightsResolution;
     }
 
     public int ObjectOrdinal => CorpusRecord.ObjectOrdinal;
@@ -84,6 +92,13 @@ public sealed class LuxembourgHeldBodyDerivationInput
     public LuxembourgWemiCandidate SelectedWemiCandidate { get; }
 
     public DurableBlobWriteReceipt Receipt { get; }
+
+    /// <summary>
+    /// The final post-acquisition resolution of both publisher rights channels for this exact
+    /// selected manifestation. Null only on lower-layer synthetic populations constructed through
+    /// the legacy internal test door; terminal builders must refuse such a population.
+    /// </summary>
+    public LuxembourgRightsChannelResolution? RightsResolution { get; }
 }
 
 /// <summary>
@@ -109,11 +124,50 @@ public sealed class LuxembourgHeldBodyDerivationPopulation
         IReadOnlyDictionary<int, CorpusAcquisitionOutcome> outcomesByOrdinal,
         IReadOnlyDictionary<SourceObjectRef, LuxembourgSelectedDocumentFetch> selectedFetchesByObject,
         out LuxembourgHeldBodyDerivationPopulationRefusal refusal,
+        out string? detail) => TryCreateCore(
+            corpusRecordSet,
+            outcomesByOrdinal,
+            selectedFetchesByObject,
+            finalResolution: null,
+            requireFinalRights: false,
+            out refusal,
+            out detail);
+
+    /// <summary>
+    /// Adapter-only production door. It derives the rights binding from the final resolved
+    /// observations; no caller supplies a manifestation-to-rights map.
+    /// </summary>
+    internal static LuxembourgHeldBodyDerivationPopulation? TryCreateWithFinalRights(
+        VerifiedCorpusRecordSet corpusRecordSet,
+        IReadOnlyDictionary<int, CorpusAcquisitionOutcome> outcomesByOrdinal,
+        IReadOnlyDictionary<SourceObjectRef, LuxembourgSelectedDocumentFetch> selectedFetchesByObject,
+        LuxembourgProfileResolution.Resolved finalResolution,
+        out LuxembourgHeldBodyDerivationPopulationRefusal refusal,
+        out string? detail) => TryCreateCore(
+            corpusRecordSet,
+            outcomesByOrdinal,
+            selectedFetchesByObject,
+            finalResolution,
+            requireFinalRights: true,
+            out refusal,
+            out detail);
+
+    private static LuxembourgHeldBodyDerivationPopulation? TryCreateCore(
+        VerifiedCorpusRecordSet corpusRecordSet,
+        IReadOnlyDictionary<int, CorpusAcquisitionOutcome> outcomesByOrdinal,
+        IReadOnlyDictionary<SourceObjectRef, LuxembourgSelectedDocumentFetch> selectedFetchesByObject,
+        LuxembourgProfileResolution.Resolved? finalResolution,
+        bool requireFinalRights,
+        out LuxembourgHeldBodyDerivationPopulationRefusal refusal,
         out string? detail)
     {
         ArgumentNullException.ThrowIfNull(corpusRecordSet);
         ArgumentNullException.ThrowIfNull(outcomesByOrdinal);
         ArgumentNullException.ThrowIfNull(selectedFetchesByObject);
+        if (requireFinalRights)
+        {
+            ArgumentNullException.ThrowIfNull(finalResolution);
+        }
         refusal = LuxembourgHeldBodyDerivationPopulationRefusal.None;
         detail = null;
 
@@ -176,7 +230,38 @@ public sealed class LuxembourgHeldBodyDerivationPopulation
                 return null;
             }
 
-            inputs.Add(new LuxembourgHeldBodyDerivationInput(record, selectedFetch, record.Body.Receipt!));
+            LuxembourgRightsChannelResolution? rightsResolution = null;
+            if (requireFinalRights)
+            {
+                var resources = finalResolution!.Resources
+                    .Where(resource => resource.ObjectRef == record.ObjectRef)
+                    .ToArray();
+                var matches = resources
+                    .SelectMany(static resource => resource.BodyJoin.Candidates)
+                    .Where(candidate => candidate.WemiCandidate == selectedFetch.WemiCandidate)
+                    .ToArray();
+                if (matches.Length == 0)
+                {
+                    refusal = LuxembourgHeldBodyDerivationPopulationRefusal.HeldRecordHasNoFinalRightsResolution;
+                    detail = record.ObjectRef.PublisherUri;
+                    return null;
+                }
+
+                if (resources.Length != 1 || matches.Length != 1)
+                {
+                    refusal = LuxembourgHeldBodyDerivationPopulationRefusal.HeldRecordFinalRightsResolutionAmbiguous;
+                    detail = record.ObjectRef.PublisherUri;
+                    return null;
+                }
+
+                rightsResolution = matches[0].RightsResolution;
+            }
+
+            inputs.Add(new LuxembourgHeldBodyDerivationInput(
+                record,
+                selectedFetch,
+                record.Body.Receipt!,
+                rightsResolution));
         }
 
         return new LuxembourgHeldBodyDerivationPopulation(corpusRecordSet, inputs);
