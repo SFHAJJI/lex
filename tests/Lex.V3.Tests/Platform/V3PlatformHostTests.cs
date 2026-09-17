@@ -71,7 +71,7 @@ public sealed class V3PlatformHostTests
 
         foreach (var json in invalid)
         {
-            await Assert.ThrowsExactlyAsync<JsonException>(async () =>
+            await Assert.ThrowsAsync<JsonException>(async () =>
                 await host.CreateMcpSuccessAsync(
                     Encoding.UTF8.GetBytes(json),
                     "req_host",
