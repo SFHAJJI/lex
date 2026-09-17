@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Lex.V3.Contracts;
 using Lex.V3.Contracts.Custody;
+using Lex.V3.Contracts.Derivation;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Corpus;
 using Lex.V3.Contracts.Source.Europe;
@@ -528,6 +529,202 @@ public sealed record LexCorpus6Member(
 }
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record LexCorpus6CorrigendumLine(
+    string CorrigendumWorkRoot,
+    string PublisherExpressionId,
+    string LanguageIri,
+    EuCorrigendumLanguageReach Reach,
+    EuCorrigendumDateState DateState,
+    string? PublisherDateRawLexical,
+    string? PublisherDateDatatypeIri,
+    string ExpressionContentSha256)
+{
+    public LexCorpus6CorrigendumLine Validate()
+    {
+        RequireAbsoluteIri(CorrigendumWorkRoot, nameof(CorrigendumWorkRoot));
+        RequireAbsoluteIri(PublisherExpressionId, nameof(PublisherExpressionId));
+        RequireAbsoluteIri(LanguageIri, nameof(LanguageIri));
+        if (!Enum.IsDefined(Reach) || !Enum.IsDefined(DateState) ||
+            Reach != EuCorrigendumTripwireSet.ReachOf(LanguageIri))
+        {
+            throw new ArgumentException("The corrigendum language reach is not the reviewed reach of its language.");
+        }
+
+        var dated = DateState == EuCorrigendumDateState.PublisherDated;
+        if (dated != (PublisherDateRawLexical is not null) ||
+            dated != (PublisherDateDatatypeIri is not null))
+        {
+            throw new ArgumentException("Publisher date fields must be present exactly for publisher-dated corrigenda.");
+        }
+        if (dated)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(PublisherDateRawLexical);
+            RequireAbsoluteIri(PublisherDateDatatypeIri!, nameof(PublisherDateDatatypeIri));
+        }
+        LexCorpus6Member.RequireSha256(ExpressionContentSha256, nameof(ExpressionContentSha256));
+        return this;
+    }
+
+    internal static int Compare(LexCorpus6CorrigendumLine left, LexCorpus6CorrigendumLine right)
+    {
+        var work = string.CompareOrdinal(left.CorrigendumWorkRoot, right.CorrigendumWorkRoot);
+        return work != 0 ? work : string.CompareOrdinal(left.PublisherExpressionId, right.PublisherExpressionId);
+    }
+
+    internal static void RequireAbsoluteIri(string value, string name)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(value);
+        if (!Uri.TryCreate(value, UriKind.Absolute, out var parsed) ||
+            !string.Equals(parsed.AbsoluteUri, value, StringComparison.Ordinal))
+        {
+            throw new ArgumentException("The value must be one exact absolute IRI.", name);
+        }
+    }
+}
+
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record LexCorpus6CorrigendumTripwire(
+    string CorrectedWorkRoot,
+    string TripwireSha256,
+    IReadOnlyList<LexCorpus6CorrigendumLine> Lines,
+    IReadOnlyList<string> CorrigendaWithoutDerivedExpressions)
+{
+    public LexCorpus6CorrigendumTripwire Validate()
+    {
+        LexCorpus6CorrigendumLine.RequireAbsoluteIri(CorrectedWorkRoot, nameof(CorrectedWorkRoot));
+        LexCorpus6Member.RequireSha256(TripwireSha256, nameof(TripwireSha256));
+        ArgumentNullException.ThrowIfNull(Lines);
+        ArgumentNullException.ThrowIfNull(CorrigendaWithoutDerivedExpressions);
+        foreach (var line in Lines) (line ?? throw new ArgumentException("A corrigendum line is null.")).Validate();
+        for (var i = 1; i < Lines.Count; i++)
+        {
+            if (LexCorpus6CorrigendumLine.Compare(Lines[i - 1], Lines[i]) >= 0)
+                throw new ArgumentException("Corrigendum lines must be sorted and unique.", nameof(Lines));
+        }
+        foreach (var root in CorrigendaWithoutDerivedExpressions)
+            LexCorpus6CorrigendumLine.RequireAbsoluteIri(root, nameof(CorrigendaWithoutDerivedExpressions));
+        LexCorpus6Member.RequireSortedStrings(
+            CorrigendaWithoutDerivedExpressions, nameof(CorrigendaWithoutDerivedExpressions));
+        return this;
+    }
+}
+
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record LexCorpus6CorrigendumGap(
+    string WorkRoot,
+    EuCorrigendumTripwireGapReason Reason)
+{
+    public LexCorpus6CorrigendumGap Validate()
+    {
+        LexCorpus6CorrigendumLine.RequireAbsoluteIri(WorkRoot, nameof(WorkRoot));
+        if (!Enum.IsDefined(Reason)) throw new ArgumentOutOfRangeException(nameof(Reason));
+        return this;
+    }
+}
+
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record LexCorpus6CorrigendumProduction(
+    string FamilyKey,
+    string CanonicalSha256,
+    string LineageSha256,
+    string TripwireReceiptSha256,
+    string TripwireLineageReceiptSha256,
+    IReadOnlyList<LexCorpus6CorrigendumTripwire> Tripwires,
+    IReadOnlyList<LexCorpus6CorrigendumGap> UnresolvedGaps,
+    string ProjectionSha256)
+{
+    public LexCorpus6CorrigendumProduction Validate()
+    {
+        LexCorpus6Member.RequireSha256(FamilyKey, nameof(FamilyKey));
+        LexCorpus6Member.RequireSha256(CanonicalSha256, nameof(CanonicalSha256));
+        LexCorpus6Member.RequireSha256(LineageSha256, nameof(LineageSha256));
+        LexCorpus6Member.RequireSha256(TripwireReceiptSha256, nameof(TripwireReceiptSha256));
+        LexCorpus6Member.RequireSha256(TripwireLineageReceiptSha256, nameof(TripwireLineageReceiptSha256));
+        ArgumentNullException.ThrowIfNull(Tripwires);
+        ArgumentNullException.ThrowIfNull(UnresolvedGaps);
+        foreach (var tripwire in Tripwires)
+            (tripwire ?? throw new ArgumentException("A corrigendum tripwire is null.")).Validate();
+        for (var i = 1; i < Tripwires.Count; i++)
+        {
+            if (string.CompareOrdinal(Tripwires[i - 1].CorrectedWorkRoot, Tripwires[i].CorrectedWorkRoot) >= 0)
+                throw new ArgumentException("Corrigendum tripwires must be sorted and unique.", nameof(Tripwires));
+        }
+        foreach (var gap in UnresolvedGaps)
+            (gap ?? throw new ArgumentException("A corrigendum gap is null.")).Validate();
+        for (var i = 1; i < UnresolvedGaps.Count; i++)
+        {
+            if (string.CompareOrdinal(UnresolvedGaps[i - 1].WorkRoot, UnresolvedGaps[i].WorkRoot) >= 0)
+                throw new ArgumentException("Corrigendum gaps must be sorted and unique.", nameof(UnresolvedGaps));
+        }
+        if (!string.Equals(ProjectionSha256, ComputeProjectionSha256(this), StringComparison.Ordinal))
+            throw new ArgumentException("The corrigendum projection identity does not match its content.", nameof(ProjectionSha256));
+        return this;
+    }
+
+    public static LexCorpus6CorrigendumProduction From(
+        string familyKey,
+        Europe.EuCorrigendumTripwireProductionResult result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+        var set = result.TripwireSet ?? throw new ArgumentException("A delivered production requires a tripwire set.", nameof(result));
+        var production = new LexCorpus6CorrigendumProduction(
+            familyKey,
+            set.CanonicalSha256,
+            set.LineageSha256,
+            DurableBlobWriteReceiptDigest.Of(result.RetainedTripwire!),
+            DurableBlobWriteReceiptDigest.Of(result.RetainedTripwireLineage!),
+            set.Tripwires.Select(static tripwire => new LexCorpus6CorrigendumTripwire(
+                tripwire.CorrectedWorkRoot,
+                tripwire.TripwireSha256,
+                tripwire.Lines.Select(static line => new LexCorpus6CorrigendumLine(
+                    line.CorrigendumWorkRoot,
+                    line.PublisherExpressionId,
+                    line.LanguageIri,
+                    line.Reach,
+                    line.DateState,
+                    line.PublisherCorrigendumDate?.RawLexical,
+                    line.PublisherCorrigendumDate?.DatatypeIri,
+                    line.ExpressionContentSha256)).ToArray(),
+                tripwire.CorrigendaWithoutDerivedExpressions
+                    .Select(static value => value.CorrigendumWorkRoot).ToArray())).ToArray(),
+            set.UnresolvedGaps.Select(static gap =>
+                new LexCorpus6CorrigendumGap(gap.WorkRoot, gap.Reason)).ToArray(),
+            string.Empty);
+        return production with { ProjectionSha256 = ComputeProjectionSha256(production) };
+    }
+
+    private static string ComputeProjectionSha256(LexCorpus6CorrigendumProduction production)
+    {
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        void Add(string? value)
+        {
+            hash.AppendData(Encoding.UTF8.GetBytes(value ?? "<null>"));
+            hash.AppendData([(byte)'\n']);
+        }
+        Add("lex-corpus/6/corrigendum-projection/1");
+        Add(production.FamilyKey); Add(production.CanonicalSha256); Add(production.LineageSha256);
+        Add(production.TripwireReceiptSha256); Add(production.TripwireLineageReceiptSha256);
+        foreach (var tripwire in production.Tripwires)
+        {
+            Add(tripwire.CorrectedWorkRoot); Add(tripwire.TripwireSha256);
+            foreach (var line in tripwire.Lines)
+            {
+                Add(line.CorrigendumWorkRoot); Add(line.PublisherExpressionId); Add(line.LanguageIri);
+                Add(ContractWire.NameOf(line.Reach)); Add(ContractWire.NameOf(line.DateState));
+                Add(line.PublisherDateRawLexical); Add(line.PublisherDateDatatypeIri);
+                Add(line.ExpressionContentSha256);
+            }
+            foreach (var root in tripwire.CorrigendaWithoutDerivedExpressions) Add(root);
+        }
+        foreach (var gap in production.UnresolvedGaps)
+        {
+            Add(gap.WorkRoot); Add(ContractWire.NameOf(gap.Reason));
+        }
+        return Convert.ToHexStringLower(hash.GetHashAndReset());
+    }
+}
+
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record LexCorpus6ManifestSet(
     string Schema,
     SourceArtifactRef EuropeSourceSetRef,
@@ -535,6 +732,8 @@ public sealed record LexCorpus6ManifestSet(
     LexCorpus6EuropeRightsMatrix EuropeRightsMatrix,
     IReadOnlyList<string> ProfileIdentities,
     IReadOnlyList<string> CorrigendumEvidenceReceiptSha256,
+    IReadOnlyList<LexCorpus6CorrigendumProduction> CorrigendumProductions,
+    IReadOnlyList<Stage3FidelityPreservationObligation> UnresolvedFidelityObligations,
     IReadOnlyList<LexCorpus6Member> Members)
 {
     public LexCorpus6ManifestSet Validate()
@@ -550,6 +749,8 @@ public sealed record LexCorpus6ManifestSet(
         EuropeRightsMatrix.Validate();
         ArgumentNullException.ThrowIfNull(ProfileIdentities);
         ArgumentNullException.ThrowIfNull(CorrigendumEvidenceReceiptSha256);
+        ArgumentNullException.ThrowIfNull(CorrigendumProductions);
+        ArgumentNullException.ThrowIfNull(UnresolvedFidelityObligations);
         ArgumentNullException.ThrowIfNull(Members);
         foreach (var value in ProfileIdentities.Concat(CorrigendumEvidenceReceiptSha256))
         {
@@ -558,6 +759,18 @@ public sealed record LexCorpus6ManifestSet(
 
         LexCorpus6Member.RequireSortedStrings(ProfileIdentities, nameof(ProfileIdentities));
         LexCorpus6Member.RequireSortedStrings(CorrigendumEvidenceReceiptSha256, nameof(CorrigendumEvidenceReceiptSha256));
+        if (CorrigendumProductions.Count == 0)
+            throw new ArgumentException("The corpus must carry each completed corrigendum production.", nameof(CorrigendumProductions));
+        foreach (var production in CorrigendumProductions)
+            (production ?? throw new ArgumentException("A corrigendum production is null.")).Validate();
+        for (var i = 1; i < CorrigendumProductions.Count; i++)
+        {
+            if (string.CompareOrdinal(CorrigendumProductions[i - 1].FamilyKey, CorrigendumProductions[i].FamilyKey) >= 0)
+                throw new ArgumentException("Corrigendum productions must be sorted and unique.", nameof(CorrigendumProductions));
+        }
+        var expectedObligations = Enum.GetValues<Stage3FidelityPreservationObligation>();
+        if (!UnresolvedFidelityObligations.SequenceEqual(expectedObligations))
+            throw new ArgumentException("The unresolved fidelity obligations must carry the complete closed vocabulary in order.", nameof(UnresolvedFidelityObligations));
         if (Members.Count == 0 || Members.Any(static member => member is null))
         {
             throw new ArgumentException("A corpus manifest set requires members.", nameof(Members));
@@ -759,6 +972,9 @@ public static class LexCorpus6Builder
             LexCorpus6EuropeRightsMatrix.From(legalNotice),
             ProfileIdentities(profileEnvelope),
             CorrigendumReceipts(eu.CorrigendumTripwires),
+            CorrigendumProductions(eu.CorrigendumTripwires),
+            evidence.FidelityPreservation.UnresolvedObligations
+                .OrderBy(static value => value).ToArray(),
             members.OrderBy(static member => member, Comparer<LexCorpus6Member>.Create(LexCorpus6ManifestSet.CompareMembers)).ToArray()).Validate();
         var bytes = Write(set);
         var digest = ComputeSha256(bytes);
@@ -789,6 +1005,65 @@ public static class LexCorpus6Builder
             WriteEuropeRightsMatrix(writer, set.EuropeRightsMatrix);
             WriteStrings(writer, "profile_identities", set.ProfileIdentities);
             WriteStrings(writer, "corrigendum_evidence_receipt_sha256", set.CorrigendumEvidenceReceiptSha256);
+            writer.WriteStartArray("corrigendum_productions");
+            foreach (var production in set.CorrigendumProductions)
+            {
+                writer.WriteStartObject();
+                writer.WriteString("family_key", production.FamilyKey);
+                writer.WriteString("canonical_sha256", production.CanonicalSha256);
+                writer.WriteString("lineage_sha256", production.LineageSha256);
+                writer.WriteString("tripwire_receipt_sha256", production.TripwireReceiptSha256);
+                writer.WriteString("tripwire_lineage_receipt_sha256", production.TripwireLineageReceiptSha256);
+                writer.WriteStartArray("tripwires");
+                foreach (var tripwire in production.Tripwires)
+                {
+                    writer.WriteStartObject();
+                    writer.WriteString("corrected_work_root", tripwire.CorrectedWorkRoot);
+                    writer.WriteString("tripwire_sha256", tripwire.TripwireSha256);
+                    writer.WriteStartArray("lines");
+                    foreach (var line in tripwire.Lines)
+                    {
+                        writer.WriteStartObject();
+                        writer.WriteString("corrigendum_work_root", line.CorrigendumWorkRoot);
+                        writer.WriteString("publisher_expression_id", line.PublisherExpressionId);
+                        writer.WriteString("language_iri", line.LanguageIri);
+                        writer.WriteString("reach", ContractWire.NameOf(line.Reach));
+                        writer.WriteString("date_state", ContractWire.NameOf(line.DateState));
+                        if (line.PublisherDateRawLexical is null)
+                        {
+                            writer.WriteNull("publisher_date_raw_lexical");
+                            writer.WriteNull("publisher_date_datatype_iri");
+                        }
+                        else
+                        {
+                            writer.WriteString("publisher_date_raw_lexical", line.PublisherDateRawLexical);
+                            writer.WriteString("publisher_date_datatype_iri", line.PublisherDateDatatypeIri);
+                        }
+                        writer.WriteString("expression_content_sha256", line.ExpressionContentSha256);
+                        writer.WriteEndObject();
+                    }
+                    writer.WriteEndArray();
+                    WriteStrings(writer, "corrigenda_without_derived_expressions", tripwire.CorrigendaWithoutDerivedExpressions);
+                    writer.WriteEndObject();
+                }
+                writer.WriteEndArray();
+                writer.WriteStartArray("unresolved_gaps");
+                foreach (var gap in production.UnresolvedGaps)
+                {
+                    writer.WriteStartObject();
+                    writer.WriteString("work_root", gap.WorkRoot);
+                    writer.WriteString("reason", ContractWire.NameOf(gap.Reason));
+                    writer.WriteEndObject();
+                }
+                writer.WriteEndArray();
+                writer.WriteString("projection_sha256", production.ProjectionSha256);
+                writer.WriteEndObject();
+            }
+            writer.WriteEndArray();
+            writer.WriteStartArray("unresolved_fidelity_obligations");
+            foreach (var obligation in set.UnresolvedFidelityObligations)
+                writer.WriteStringValue(ContractWire.NameOf(obligation));
+            writer.WriteEndArray();
             writer.WriteStartArray("members");
             foreach (var member in set.Members)
             {
@@ -951,7 +1226,7 @@ public static class LexCorpus6Builder
                 .ToArray());
     }
 
-    private static LexCorpus6Stage3Disposition AknDisposition(
+    internal static LexCorpus6Stage3Disposition AknDisposition(
         Luxembourg.LuxembourgAknLegalContentDisposition disposition) => disposition switch
         {
             Luxembourg.LuxembourgAknLegalContentDisposition.Admitted => LexCorpus6Stage3Disposition.AknAdmitted,
@@ -963,7 +1238,7 @@ public static class LexCorpus6Builder
             _ => throw new InvalidOperationException("Unknown AKN legal-content disposition."),
         };
 
-    private static LexCorpus6Stage3Disposition PdfDisposition(
+    internal static LexCorpus6Stage3Disposition PdfDisposition(
         Luxembourg.LuxembourgPublisherPdfActScopeOutcome outcome) => outcome.Disposition switch
         {
             Luxembourg.LuxembourgPublisherPdfActScopeDisposition.NotApplicable => LexCorpus6Stage3Disposition.PdfNotApplicable,
@@ -1045,6 +1320,12 @@ public static class LexCorpus6Builder
             })
             .Select(static receipt => DurableBlobWriteReceiptDigest.Of(receipt!))
             .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+
+    private static IReadOnlyList<LexCorpus6CorrigendumProduction> CorrigendumProductions(
+        Europe.EuCorrigendumTripwireCompletion completion) => completion.ProductionsByFamilyKey
+            .OrderBy(static pair => pair.Key, StringComparer.Ordinal)
+            .Select(static pair => LexCorpus6CorrigendumProduction.From(pair.Key, pair.Value))
+            .ToArray();
 
     private static void WriteArtifact(Utf8JsonWriter writer, string name, SourceArtifactRef artifact)
     {

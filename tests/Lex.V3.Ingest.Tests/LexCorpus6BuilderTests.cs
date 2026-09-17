@@ -112,6 +112,26 @@ public sealed class LexCorpus6BuilderTests
             static outcome => outcome.Domain == LexCorpus6Stage3OutcomeDomain.LuxembourgAknLegalContent)));
         Assert.IsTrue(luxembourgMembers.All(static member => member.Stage3Outcomes.Any(
             static outcome => outcome.Domain == LexCorpus6Stage3OutcomeDomain.LuxembourgPublisherPdfActScope)));
+        foreach (var sourceOutcome in envelope.BodyComposition.Envelope.LuxembourgAknLegalContentPopulation.Outcomes)
+        {
+            var member = first.VerifiedSet.Set.Members.Single(value => value.ObjectRefSha256 ==
+                Lex.V3.Contracts.Source.Scope.ScopeManifestCanonicalWriter.ComputeObjectRefSha256(
+                    sourceOutcome.SourceInventoryOutcome.Input.CorpusRecord.ObjectRef));
+            Assert.IsTrue(member.Stage3Outcomes.Contains(new LexCorpus6Stage3Outcome(
+                LexCorpus6Stage3OutcomeDomain.LuxembourgAknLegalContent,
+                sourceOutcome.SemanticIdentitySha256,
+                LexCorpus6Builder.AknDisposition(sourceOutcome.Disposition))));
+        }
+        foreach (var sourceOutcome in envelope.PublisherPdfActScope.Outcomes)
+        {
+            var member = first.VerifiedSet.Set.Members.Single(value => value.ObjectRefSha256 ==
+                Lex.V3.Contracts.Source.Scope.ScopeManifestCanonicalWriter.ComputeObjectRefSha256(
+                    sourceOutcome.SourceTextLayer.SourceLayoutEvidence.SourceEligibility.Input.CorpusRecord.ObjectRef));
+            Assert.IsTrue(member.Stage3Outcomes.Contains(new LexCorpus6Stage3Outcome(
+                LexCorpus6Stage3OutcomeDomain.LuxembourgPublisherPdfActScope,
+                sourceOutcome.SemanticIdentitySha256,
+                LexCorpus6Builder.PdfDisposition(sourceOutcome))));
+        }
         Assert.HasCount(
             envelope.BodyComposition.Envelope.FormexAnnexClassifications.Classifications
                 .Sum(static classification => classification.Members.Count),
@@ -127,6 +147,129 @@ public sealed class LexCorpus6BuilderTests
         CollectionAssert.AreEqual(
             first.VerifiedSet.Set.Members.Select(static member => member.ObjectRefSha256).ToArray(),
             reopened.Set.Members.Select(static member => member.ObjectRefSha256).ToArray());
+    }
+
+    [TestMethod]
+    public async Task CorpusCarriesTheFullDatedCorrigendumProjectionAndFidelityObligations()
+    {
+        var europe = await EuCorrigendumTripwireWiringTests.CompleteDatedResultAsync();
+        var envelope = await CompleteProfileEnvelopeAsync(europeOverride: europe);
+        var built = LexCorpus6Builder.TryBuild(envelope, out var refusal, out var detail);
+        Assert.IsNotNull(built, $"{refusal}: {detail}");
+
+        var reopened = VerifiedLexCorpus6ManifestSet.ParseAndVerify(
+            built.ArtifactRef,
+            built.VerifiedSet.Set.EuropeSourceSetRef,
+            built.VerifiedSet.Set.LuxembourgSourceSetRef,
+            built.CanonicalBytes.Span);
+        var source = europe.CorrigendumTripwires!.ProductionsByFamilyKey;
+        Assert.HasCount(source.Count, reopened.Set.CorrigendumProductions);
+        foreach (var projected in reopened.Set.CorrigendumProductions)
+        {
+            var production = source[projected.FamilyKey];
+            var tripwireSet = production.TripwireSet!;
+            Assert.AreEqual(tripwireSet.CanonicalSha256, projected.CanonicalSha256);
+            Assert.AreEqual(tripwireSet.LineageSha256, projected.LineageSha256);
+            Assert.HasCount(tripwireSet.Tripwires.Count, projected.Tripwires);
+            foreach (var projectedTripwire in projected.Tripwires)
+            {
+                var sourceTripwire = tripwireSet.Tripwires.Single(value =>
+                    value.CorrectedWorkRoot == projectedTripwire.CorrectedWorkRoot);
+                Assert.AreEqual(sourceTripwire.TripwireSha256, projectedTripwire.TripwireSha256);
+                Assert.HasCount(sourceTripwire.Lines.Count, projectedTripwire.Lines);
+                foreach (var projectedLine in projectedTripwire.Lines)
+                {
+                    var sourceLine = sourceTripwire.Lines.Single(value =>
+                        value.CorrigendumWorkRoot == projectedLine.CorrigendumWorkRoot &&
+                        value.PublisherExpressionId == projectedLine.PublisherExpressionId);
+                    Assert.AreEqual(sourceLine.LanguageIri, projectedLine.LanguageIri);
+                    Assert.AreEqual(sourceLine.Reach, projectedLine.Reach);
+                    Assert.AreEqual(sourceLine.DateState, projectedLine.DateState);
+                    Assert.AreEqual(sourceLine.PublisherCorrigendumDate?.RawLexical, projectedLine.PublisherDateRawLexical);
+                    Assert.AreEqual(sourceLine.PublisherCorrigendumDate?.DatatypeIri, projectedLine.PublisherDateDatatypeIri);
+                    Assert.AreEqual(sourceLine.ExpressionContentSha256, projectedLine.ExpressionContentSha256);
+                }
+            }
+        }
+        Assert.IsTrue(reopened.Set.CorrigendumProductions
+            .SelectMany(static production => production.Tripwires)
+            .SelectMany(static tripwire => tripwire.Lines)
+            .Any(static line => line.DateState == Lex.V3.Contracts.Derivation.EuCorrigendumDateState.PublisherDated));
+        CollectionAssert.AreEqual(
+            envelope.BodyComposition.Envelope.FidelityPreservation.UnresolvedObligations.ToArray(),
+            reopened.Set.UnresolvedFidelityObligations.ToArray());
+    }
+
+    [TestMethod]
+    public async Task StrictReaderRejectsDeletedCorrigendumProjectionOrFidelityObligation()
+    {
+        var europe = await EuCorrigendumTripwireWiringTests.CompleteDatedResultAsync();
+        var envelope = await CompleteProfileEnvelopeAsync(europeOverride: europe);
+        var built = LexCorpus6Builder.TryBuild(envelope, out var refusal, out var detail);
+        Assert.IsNotNull(built, $"{refusal}: {detail}");
+        var canonical = System.Text.Encoding.UTF8.GetString(built.CanonicalBytes.Span);
+
+        var projection = System.Text.Json.Nodes.JsonNode.Parse(canonical)!.AsObject();
+        var lines = projection["corrigendum_productions"]!.AsArray()[0]!["tripwires"]!.AsArray()[0]!["lines"]!.AsArray();
+        lines.RemoveAt(0);
+        Assert.ThrowsExactly<ArgumentException>(() => Reopen(projection.ToJsonString(), built));
+
+        var obligations = System.Text.Json.Nodes.JsonNode.Parse(canonical)!.AsObject();
+        obligations["unresolved_fidelity_obligations"]!.AsArray().RemoveAt(0);
+        Assert.ThrowsExactly<ArgumentException>(() => Reopen(obligations.ToJsonString(), built));
+    }
+
+    [TestMethod]
+    public async Task StrictReaderRejectsInvalidDuplicateReorderedOrNonHeldStage3Outcomes()
+    {
+        var envelope = await CompleteProfileEnvelopeAsync();
+        var built = LexCorpus6Builder.TryBuild(envelope, out var refusal, out var detail);
+        Assert.IsNotNull(built, $"{refusal}: {detail}");
+        var canonical = System.Text.Encoding.UTF8.GetString(built.CanonicalBytes.Span);
+
+        static System.Text.Json.Nodes.JsonArray Members(string json) =>
+            System.Text.Json.Nodes.JsonNode.Parse(json)!.AsObject()["members"]!.AsArray();
+
+        var mismatchedMembers = Members(canonical);
+        var mismatchedOutcome = mismatchedMembers
+            .Select(static node => node!.AsObject())
+            .SelectMany(static member => member["stage3_outcomes"]!.AsArray()
+                .Select(static outcome => outcome!.AsObject()))
+            .First(static outcome => outcome["domain"]!.GetValue<string>() == "luxembourg_akn_legal_content");
+        mismatchedOutcome["disposition"] = "annex_text_not_available";
+        Assert.ThrowsExactly<ArgumentException>(() => Reopen(
+            mismatchedMembers.Parent!.ToJsonString(), built));
+
+        var duplicateMembers = Members(canonical);
+        var duplicateOutcomes = duplicateMembers
+            .Select(static node => node!.AsObject()["stage3_outcomes"]!.AsArray())
+            .First(static outcomes => outcomes.Count > 0);
+        duplicateOutcomes.Add(duplicateOutcomes[0]!.DeepClone());
+        Assert.ThrowsExactly<ArgumentException>(() => Reopen(
+            duplicateMembers.Parent!.ToJsonString(), built));
+
+        var reorderedMembers = Members(canonical);
+        var reorderedOutcomes = reorderedMembers
+            .Select(static node => node!.AsObject()["stage3_outcomes"]!.AsArray())
+            .First(static outcomes => outcomes.Count > 1);
+        var firstOutcome = reorderedOutcomes[0]!.DeepClone();
+        var secondOutcome = reorderedOutcomes[1]!.DeepClone();
+        reorderedOutcomes.Clear();
+        reorderedOutcomes.Add(secondOutcome);
+        reorderedOutcomes.Add(firstOutcome);
+        Assert.ThrowsExactly<ArgumentException>(() => Reopen(
+            reorderedMembers.Parent!.ToJsonString(), built));
+
+        var nonHeldMembers = Members(canonical);
+        var carriedOutcome = nonHeldMembers
+            .Select(static node => node!.AsObject()["stage3_outcomes"]!.AsArray())
+            .First(static outcomes => outcomes.Count > 0)[0]!.DeepClone();
+        var nonHeld = nonHeldMembers
+            .Select(static node => node!.AsObject())
+            .First(static member => member["body_sha256"] is null);
+        nonHeld["stage3_outcomes"]!.AsArray().Add(carriedOutcome);
+        Assert.ThrowsExactly<ArgumentException>(() => Reopen(
+            nonHeldMembers.Parent!.ToJsonString(), built));
     }
 
     [TestMethod]
@@ -270,9 +413,10 @@ public sealed class LexCorpus6BuilderTests
 
     private static async Task<Stage3DerivationProfileEnvelope> CompleteProfileEnvelopeAsync(
         bool includeLegalNotice = true,
-        bool stripEuropeContentClasses = false)
+        bool stripEuropeContentClasses = false,
+        Europe.EuQueryExecutionResult? europeOverride = null)
     {
-        var europe = await EuAxiomWiringHarness.RunAsync(
+        var europe = europeOverride ?? await EuAxiomWiringHarness.RunAsync(
             static root => EuAcquisitionTestFixture.AxiomAbsenceScriptFor(root));
         if (stripEuropeContentClasses)
         {
