@@ -351,7 +351,7 @@ public sealed class EuBoundAnnexBodyClassifierTests
         internal Fixture WithMembers(IReadOnlyList<EuBoundAnnexEvidence> members)
         {
             var binding = new EuAnnexEvidenceBinding(
-                Binding.WorkSource, Package, Binding.PdfManifestation,
+                Binding.WorkSource, Binding.Work, Package, Binding.PdfManifestation,
                 Formex, Xhtml, Binding.PdfReceipt,
                 Binding.ReconciliationProfileRef, members);
             var route = Route(binding.Work.CanonicalKey, binding.PdfReceipt, PdfLength);

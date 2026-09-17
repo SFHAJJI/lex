@@ -173,16 +173,26 @@ public sealed class EuFormexAnnexClassificationReconciliationTests
         byte[]? formexBytes = null,
         bool imageOnly = false)
     {
+        var xhtmlBytes = EuAnnexEvidenceBinderTests.XhtmlBytes("ANNEX", formexTwoMembers);
+        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
+        var run = await EuAxiomWiringHarness.RunAsync(
+            static root => EuAcquisitionTestFixture.AxiomAbsenceScriptFor(root),
+            custodyStore: store,
+            documentFetchResponse: request => EuAcquisitionTestFixture.BinaryResponse(
+                request, System.Net.HttpStatusCode.OK, xhtmlBytes,
+                "application/xhtml+xml;charset=UTF-8"));
+        var heldWork = run.CorpusRecordSet!.Set.Records.Single(static record =>
+            record.Body.Kind == Lex.V3.Contracts.Source.Corpus.CorpusBodyRecordKind.Held);
         var source = await EuAnnexEvidenceBinderTests.FixtureAsync(
             EuAnnexEvidenceBinderTests.PageLabelPdf(
                 7, "<< /S /D /St 1 >>", image: imageOnly),
             formexTwoMembers: formexTwoMembers,
             xhtmlTwoMembers: formexTwoMembers,
-            formexBytes: formexBytes);
-        var run = await EuAxiomWiringHarness.RunAsync(
-            static root => EuAcquisitionTestFixture.AxiomAbsenceScriptFor(root));
-        run = Stage3EvidenceLineageTests.AddEuropeHeldCorpusRecord(
-            run, source.Work, source.Xhtml.SourceReceipt);
+            formexBytes: formexBytes,
+            xhtmlBytes: xhtmlBytes,
+            custodyStore: store,
+            heldWork: heldWork,
+            productionCorpus: run.CorpusRecordSet);
         var production = new EuAnnexBodyProduction(source.Store);
         var bound = await production.BindAsync(
             source.Boundary, source.Package, source.PdfManifestation,

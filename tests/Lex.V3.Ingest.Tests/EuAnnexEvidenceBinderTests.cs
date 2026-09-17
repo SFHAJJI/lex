@@ -241,7 +241,7 @@ public sealed class EuAnnexEvidenceBinderTests
     }
 
     [TestMethod]
-    public async Task WorkMustBeAdmittedByTheExpressionIdentityBoundary()
+    public async Task SelectedHeldBodyIsNotMisrepresentedAsThePublisherWemiWork()
     {
         var fixture = await FixtureAsync(PageLabelPdf(7, "<< /S /D /St 1 >>"));
         var badWork = new SourceObjectRef(SourceCoreSchemaIds.SourceObjectRef,
@@ -253,8 +253,10 @@ public sealed class EuAnnexEvidenceBinderTests
 
         var result = await fixture.RunAsync(corpus: VerifiedCorpus(sources));
 
-        Assert.AreEqual(EuAnnexEvidenceBindingRefusal.SourceLineageMismatch, result.Refusal);
-        Assert.IsNull(result.Binding);
+        Assert.AreEqual(EuAnnexEvidenceBindingRefusal.None, result.Refusal, result.Detail);
+        Assert.IsNotNull(result.Binding);
+        Assert.AreEqual(badWork, result.Binding.WorkSource.ObjectRef);
+        Assert.AreEqual(fixture.Work, result.Binding.Work);
     }
 
     [TestMethod]
@@ -514,12 +516,15 @@ public sealed class EuAnnexEvidenceBinderTests
         var xhtml = (await new EuXhtmlAnnexInventoryProducer(store).RunAsync(
             xhtmlReceipt, xhtmlProfile.Bytes, xhtmlProfile.Reference, CancellationToken.None)).Inventory!;
 
-        const string fixtureWorkKey = "5f2552c2-11bd-11e6-ba9a-01aa75ed71a1";
-        var work = heldWork?.ObjectRef ?? Object(fixtureWorkKey, EuWemiRole.Work, null);
-        var registry = work.EntityKind.RegistryRef;
-        var identityProfile = work.IdentityProfileRef;
+        var workKey = heldWork is null
+            ? "5f2552c2-11bd-11e6-ba9a-01aa75ed71a1"
+            : heldWork.ObjectRef.PublisherUri[
+                (heldWork.ObjectRef.PublisherUri.LastIndexOf("/cellar/", StringComparison.Ordinal)
+                    + "/cellar/".Length)..];
+        var work = Object(workKey, EuWemiRole.Work, null);
+        var registry = Registry;
+        var identityProfile = IdentityProfile;
         var boundary = new EuWemiIdentityBoundary(registry, identityProfile);
-        var workKey = work.CanonicalKey;
         var expression = Object(workKey + ".0001", EuWemiRole.Expression, work, registry, identityProfile);
         var formexManifestation = Object(
             workKey + ".0001.01", EuWemiRole.Manifestation, expression, registry, identityProfile);

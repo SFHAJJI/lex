@@ -97,6 +97,7 @@ public sealed class EuAnnexEvidenceBinding
 {
     internal EuAnnexEvidenceBinding(
         CorpusRecord workSource,
+        SourceObjectRef publisherWork,
         EuFormexPackage package,
         SourceObjectRef pdfManifestation,
         EuFormexAnnexInventory formexInventory,
@@ -106,7 +107,7 @@ public sealed class EuAnnexEvidenceBinding
         IReadOnlyList<EuBoundAnnexEvidence> members)
     {
         WorkSource = workSource;
-        Work = workSource.ObjectRef;
+        Work = publisherWork;
         Expression = package.ExpressionRef;
         FormexManifestation = package.ManifestationRef;
         FormexBody = package.BodyRef;
@@ -150,6 +151,7 @@ public sealed class EuAnnexEvidenceBinding
     {
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         Append(hash, "lex-v3-eu-annex-evidence-binding/1");
+        Append(hash, binding.WorkSource.ObjectRef.CanonicalKeySha256);
         Append(hash, binding.Work.CanonicalKeySha256);
         Append(hash, binding.Expression.CanonicalKeySha256);
         Append(hash, binding.FormexManifestation.CanonicalKeySha256);
@@ -288,21 +290,24 @@ public sealed class EuAnnexEvidenceBinder
                 "the Formex inventory transport belongs to a different admitted package");
         }
 
-        var records = corpusRecordSet.Set.Records;
         var expression = package.ExpressionRef;
-        var work = FindByKey(records, expression.ParentKeyRef);
-        if (work is null
-            || work.Body.Kind != CorpusBodyRecordKind.Held
-            || work.Body.Receipt != xhtmlInventory.SourceReceipt)
+        var heldSources = corpusRecordSet.Set.Records.Where(record =>
+                record.Body.Kind == CorpusBodyRecordKind.Held
+                && record.Body.Receipt == xhtmlInventory.SourceReceipt)
+            .Take(2)
+            .ToArray();
+        if (heldSources.Length != 1)
         {
             return Refused(EuAnnexEvidenceBindingRefusal.SourceEvidenceMissingOrAmbiguous,
-                "the retained XHTML inventory must be the selected held body of the package work");
+                "the retained XHTML inventory must be exactly one selected held work body");
         }
+        var workSource = heldSources[0];
+        var publisherWork = TryGetPublisherWork(identityBoundary, expression);
 
         if (!IsAdmitted(identityBoundary, package.BodyRef, EuWemiRole.Item)
             || !IsAdmitted(identityBoundary, package.ManifestationRef, EuWemiRole.Manifestation)
             || !IsAdmitted(identityBoundary, expression, EuWemiRole.Expression)
-            || !IsAdmitted(identityBoundary, work.ObjectRef, EuWemiRole.Work)
+            || publisherWork is null
             || !IsAdmitted(identityBoundary, expectedPdfManifestation, EuWemiRole.Manifestation)
             || !HasParent(package.ManifestationRef, expression)
             || !HasParent(package.BodyRef, package.ManifestationRef)
@@ -384,23 +389,36 @@ public sealed class EuAnnexEvidenceBinder
         }
 
         return EuAnnexEvidenceBindingResult.Success(new EuAnnexEvidenceBinding(
-            work, package, expectedPdfManifestation, formexInventory,
+            workSource, publisherWork, package, expectedPdfManifestation, formexInventory,
             xhtmlInventory, retainedPdfBytes, reconciliationProfileRef, bound));
     }
 
-    private static CorpusRecord? FindByKey(
-        IReadOnlyList<CorpusRecord> records,
-        SourceObjectKeyRef? key)
+    private static SourceObjectRef? TryGetPublisherWork(
+        EuWemiIdentityBoundary boundary,
+        SourceObjectRef expression)
     {
-        if (key is null)
+        if (expression.ParentKeyRef is not { } key)
         {
             return null;
         }
-        var matches = records.Where(record => record.ObjectRef.EntityKind == key.EntityKind
-            && string.Equals(record.ObjectRef.CanonicalKey, key.CanonicalKey, StringComparison.Ordinal)
-            && string.Equals(record.ObjectRef.PublisherUri, key.PublisherUri, StringComparison.Ordinal))
-            .Take(2).ToArray();
-        return matches.Length == 1 ? matches[0] : null;
+
+        try
+        {
+            var work = new SourceObjectRef(
+                SourceCoreSchemaIds.SourceObjectRef,
+                SourceAuthority.Cellar,
+                key.EntityKind,
+                key.PublisherUri,
+                key.CanonicalKey,
+                key.CanonicalKeySha256,
+                expression.IdentityProfileRef,
+                null);
+            return boundary.Require(work, EuWemiRole.Work, nameof(expression));
+        }
+        catch (ArgumentException)
+        {
+            return null;
+        }
     }
 
 
