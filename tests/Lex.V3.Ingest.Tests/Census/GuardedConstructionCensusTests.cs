@@ -1017,7 +1017,7 @@ public sealed class GuardedConstructionCensusTests
                     + "method private static Lex.V3.Ingest.Stage3EvidenceEnvelope::TryCreateCore, "
                     + "method public static Lex.V3.Ingest.Stage3EvidenceEnvelope::TryCreate, "
                     + "method public static "
-                    + "Lex.V3.Ingest.Stage3EvidenceEnvelope::TryCreateWithEuropeLegalNoticeEvidence",
+                    + "Lex.V3.Ingest.Stage3EvidenceEnvelope::TryCreateWithEuropeLegalNoticeRoute",
                 "Lex.V3.Ingest.Stage3EvidenceLineage: constructor private instance "
                     + "Lex.V3.Ingest.Stage3EvidenceLineage::.ctor, "
                     + "method public static Lex.V3.Ingest.Stage3EvidenceLineage::TryBind",

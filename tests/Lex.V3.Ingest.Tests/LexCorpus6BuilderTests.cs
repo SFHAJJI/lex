@@ -60,10 +60,9 @@ public sealed class LexCorpus6BuilderTests
     public async Task CompleteProductionEvidenceBuildsOneDeterministicStrictlyReopenableMemberPerSourceUnit()
     {
         var envelope = await CompleteProfileEnvelopeAsync();
-        var matrix = CompleteEuropeRightsMatrix(envelope.BodyComposition.Envelope.EuropeLegalNoticeEvidence!);
 
-        var first = LexCorpus6Builder.TryBuild(envelope, matrix, out var firstRefusal, out var firstDetail);
-        var second = LexCorpus6Builder.TryBuild(envelope, matrix, out var secondRefusal, out var secondDetail);
+        var first = LexCorpus6Builder.TryBuild(envelope, out var firstRefusal, out var firstDetail);
+        var second = LexCorpus6Builder.TryBuild(envelope, out var secondRefusal, out var secondDetail);
 
         Assert.IsNotNull(first, $"{firstRefusal}: {firstDetail}");
         Assert.IsNotNull(second, $"{secondRefusal}: {secondDetail}");
@@ -109,6 +108,16 @@ public sealed class LexCorpus6BuilderTests
                         member.LuxembourgRights.SelectedWemi.IdentitySha256)));
         Assert.IsTrue(luxembourgMembers.Any(static member =>
             member.LuxembourgRights!.BoundRunIdentity != member.RunIdentity));
+        Assert.IsTrue(luxembourgMembers.All(static member => member.Stage3Outcomes.Any(
+            static outcome => outcome.Domain == LexCorpus6Stage3OutcomeDomain.LuxembourgAknLegalContent)));
+        Assert.IsTrue(luxembourgMembers.All(static member => member.Stage3Outcomes.Any(
+            static outcome => outcome.Domain == LexCorpus6Stage3OutcomeDomain.LuxembourgPublisherPdfActScope)));
+        Assert.HasCount(
+            envelope.BodyComposition.Envelope.FormexAnnexClassifications.Classifications
+                .Sum(static classification => classification.Members.Count),
+            first.VerifiedSet.Set.Members.SelectMany(static member => member.Stage3Outcomes)
+                .Where(static outcome => outcome.Domain == LexCorpus6Stage3OutcomeDomain.EuropeAnnexBody)
+                .ToArray());
         var reopened = VerifiedLexCorpus6ManifestSet.ParseAndVerify(
             first.ArtifactRef,
             first.VerifiedSet.Set.EuropeSourceSetRef,
@@ -126,7 +135,6 @@ public sealed class LexCorpus6BuilderTests
         var envelope = await CompleteProfileEnvelopeAsync();
         var built = LexCorpus6Builder.TryBuild(
             envelope,
-            CompleteEuropeRightsMatrix(envelope.BodyComposition.Envelope.EuropeLegalNoticeEvidence!),
             out var refusal,
             out var detail);
         Assert.IsNotNull(built, $"{refusal}: {detail}");
@@ -150,6 +158,101 @@ public sealed class LexCorpus6BuilderTests
         Assert.ThrowsExactly<ArgumentException>(() => Reopen(unbound, built));
     }
 
+    [TestMethod]
+    public async Task StrictReaderPinsCanonicalBytesArtifactAndExpectedSourceSets()
+    {
+        var envelope = await CompleteProfileEnvelopeAsync();
+        var built = LexCorpus6Builder.TryBuild(envelope, out var refusal, out var detail);
+        Assert.IsNotNull(built, $"{refusal}: {detail}");
+
+        var canonical = System.Text.Encoding.UTF8.GetString(built.CanonicalBytes.Span);
+        var noncanonical = System.Text.Encoding.UTF8.GetBytes(canonical.Replace("{\"schema\"", "{ \"schema\"", StringComparison.Ordinal));
+        var noncanonicalDigest = LexCorpus6Builder.ComputeSha256(noncanonical);
+        Assert.ThrowsExactly<ArgumentException>(() => VerifiedLexCorpus6ManifestSet.ParseAndVerify(
+            new Lex.V3.Contracts.Source.Core.SourceArtifactRef(
+                LexCorpus6Builder.ResourceIdOf(noncanonicalDigest), noncanonicalDigest),
+            built.VerifiedSet.Set.EuropeSourceSetRef,
+            built.VerifiedSet.Set.LuxembourgSourceSetRef,
+            noncanonical));
+
+        var wrongDigest = new string(built.ArtifactRef.Sha256[0] == 'a' ? 'b' : 'a', 64);
+        Assert.ThrowsExactly<ArgumentException>(() => VerifiedLexCorpus6ManifestSet.ParseAndVerify(
+            new Lex.V3.Contracts.Source.Core.SourceArtifactRef(built.ArtifactRef.ResourceId, wrongDigest),
+            built.VerifiedSet.Set.EuropeSourceSetRef,
+            built.VerifiedSet.Set.LuxembourgSourceSetRef,
+            built.CanonicalBytes.Span));
+
+        var wrongSource = new Lex.V3.Contracts.Source.Core.SourceArtifactRef(
+            "urn:uuid:99999999-9999-5999-8999-999999999999", new string('9', 64));
+        Assert.ThrowsExactly<ArgumentException>(() => VerifiedLexCorpus6ManifestSet.ParseAndVerify(
+            built.ArtifactRef,
+            wrongSource,
+            built.VerifiedSet.Set.LuxembourgSourceSetRef,
+            built.CanonicalBytes.Span));
+    }
+
+    [TestMethod]
+    public void EveryLuxembourgRightsDispositionHasOneExplicitTerminalClassification()
+    {
+        var terminal = new[]
+        {
+            Lex.V3.Contracts.Source.Luxembourg.LuxembourgRightsChannelDisposition.MissingValue,
+            Lex.V3.Contracts.Source.Luxembourg.LuxembourgRightsChannelDisposition.AgreedSameRunCcBy,
+            Lex.V3.Contracts.Source.Luxembourg.LuxembourgRightsChannelDisposition.NonAdmittingLicenceScl,
+            Lex.V3.Contracts.Source.Luxembourg.LuxembourgRightsChannelDisposition.TypedQuarantineUnruledLicence,
+            Lex.V3.Contracts.Source.Luxembourg.LuxembourgRightsChannelDisposition.TypedQuarantineUnrepresentableLicenceShape,
+            Lex.V3.Contracts.Source.Luxembourg.LuxembourgRightsChannelDisposition.TypedQuarantineInFileReadingRejected,
+        }.ToHashSet();
+        foreach (var disposition in Enum.GetValues<Lex.V3.Contracts.Source.Luxembourg.LuxembourgRightsChannelDisposition>())
+        {
+            Assert.AreEqual(terminal.Contains(disposition), LexCorpus6LuxembourgRights.IsTerminal(disposition),
+                disposition.ToString());
+        }
+    }
+
+    [TestMethod]
+    public async Task EveryAnnexClassificationMemberHasOneClosedSemanticOutcome()
+    {
+        var acquired = await EuFormexAnnexClassificationReconciliationTests.AcquiredFixtureAsync();
+        foreach (var member in acquired.Classification.Members)
+        {
+            var outcome = LexCorpus6Builder.Stage3Outcome(member);
+            Assert.AreEqual(LexCorpus6Stage3OutcomeDomain.EuropeAnnexBody, outcome.Domain);
+            Assert.AreEqual(member.SemanticIdentitySha256, outcome.SemanticIdentitySha256);
+            Assert.IsTrue(Enum.IsDefined(outcome.Disposition));
+        }
+    }
+
+    [TestMethod]
+    public async Task MissingOrForeignRunLegalNoticeRefusesBeforeCorpusBytes()
+    {
+        var withoutNotice = await CompleteProfileEnvelopeAsync(includeLegalNotice: false);
+        Assert.IsNull(LexCorpus6Builder.TryBuild(withoutNotice, out var refusal, out _));
+        Assert.AreEqual(LexCorpus6BuildRefusal.EuropeRightsEvidenceMissing, refusal);
+
+        var europe = withoutNotice.BodyComposition.Envelope.Europe;
+        var (route, request) = CompleteLegalNoticeRoute(
+            new Lex.V3.Contracts.Source.Core.SourceArtifactRef(
+                "urn:uuid:99999999-9999-5999-8999-999999999999", new string('9', 64)));
+        var source = withoutNotice.BodyComposition.Envelope;
+        var rejected = Stage3EvidenceEnvelope.TryCreateWithEuropeLegalNoticeRoute(
+            europe, route, request, source.Luxembourg, source.Formex,
+            source.FormexAnnexClassifications, source.FidelityPreservation,
+            source.LuxembourgAknArticleInventoryPopulation,
+            source.LuxembourgAknLegalContentPopulation,
+            out var envelopeRefusal, out _);
+        Assert.IsNull(rejected);
+        Assert.AreEqual(Stage3EvidenceEnvelopeRefusal.EuropeLegalNoticeRunMismatch, envelopeRefusal);
+    }
+
+    [TestMethod]
+    public async Task DeliveredEuropeWithoutContentClassBindingsRefusesBeforeCorpusBytes()
+    {
+        var envelope = await CompleteProfileEnvelopeAsync(stripEuropeContentClasses: true);
+        Assert.IsNull(LexCorpus6Builder.TryBuild(envelope, out var refusal, out _));
+        Assert.AreEqual(LexCorpus6BuildRefusal.EuropeRightsBindingMissing, refusal);
+    }
+
     private static void Reopen(string canonical, LexCorpus6BuildResult built)
     {
         var bytes = System.Text.Encoding.UTF8.GetBytes(canonical);
@@ -164,10 +267,16 @@ public sealed class LexCorpus6BuilderTests
             bytes);
     }
 
-    private static async Task<Stage3DerivationProfileEnvelope> CompleteProfileEnvelopeAsync()
+    private static async Task<Stage3DerivationProfileEnvelope> CompleteProfileEnvelopeAsync(
+        bool includeLegalNotice = true,
+        bool stripEuropeContentClasses = false)
     {
         var europe = await EuAxiomWiringHarness.RunAsync(
             static root => EuAcquisitionTestFixture.AxiomAbsenceScriptFor(root));
+        if (stripEuropeContentClasses)
+        {
+            europe = WithoutHeldBodyContentClasses(europe);
+        }
         var bytes = File.ReadAllBytes(Path.Combine(
             AppContext.BaseDirectory,
             "Fixtures",
@@ -179,17 +288,23 @@ public sealed class LexCorpus6BuilderTests
         var classifications = Stage3EvidenceEnvelopeTests.CompleteClassifications(formex);
         var fidelity = Stage3FidelityPreservationReconciliationTests.Complete(europe, luxembourg);
         var akn = await Stage3EvidenceEnvelopeTests.CompleteAknEvidenceAsync(luxembourg);
-        var evidence = Stage3EvidenceEnvelope.TryCreateWithEuropeLegalNoticeEvidence(
-            europe,
-            CompleteLegalNoticeEvidence(),
-            luxembourg,
-            formex,
-            classifications,
-            fidelity,
-            akn.Inventory,
-            akn.LegalContent,
-            out var evidenceRefusal,
-            out var evidenceDetail);
+        Stage3EvidenceEnvelope? evidence;
+        Stage3EvidenceEnvelopeRefusal evidenceRefusal;
+        string? evidenceDetail;
+        if (includeLegalNotice)
+        {
+            var (route, request) = CompleteLegalNoticeRoute(
+                europe.CorpusRecordSet!.Set.Records[0].RunIdentity);
+            evidence = Stage3EvidenceEnvelope.TryCreateWithEuropeLegalNoticeRoute(
+                europe, route, request, luxembourg, formex, classifications, fidelity,
+                akn.Inventory, akn.LegalContent, out evidenceRefusal, out evidenceDetail);
+        }
+        else
+        {
+            evidence = Stage3EvidenceEnvelope.TryCreate(
+                europe, luxembourg, formex, classifications, fidelity,
+                akn.Inventory, akn.LegalContent, out evidenceRefusal, out evidenceDetail);
+        }
         Assert.IsNotNull(evidence, $"{evidenceRefusal}: {evidenceDetail}");
         var composition = Stage3BodyComposition.TryCreate(
             evidence,
@@ -215,45 +330,108 @@ public sealed class LexCorpus6BuilderTests
         return envelope;
     }
 
-    private static Lex.V3.Contracts.Source.Europe.EuRightsMatrix CompleteEuropeRightsMatrix(
-        Lex.V3.Contracts.Source.Europe.EuLegalNoticeEvidence notice)
+    private static Europe.EuQueryExecutionResult WithoutHeldBodyContentClasses(
+        Europe.EuQueryExecutionResult source)
     {
-        var evidence = notice.ToArtifactRef(
-            "urn:uuid:11111111-1111-1111-1111-111111111111");
-        var classes = Enum.GetValues<Lex.V3.Contracts.Source.Europe.EuContentClass>()
-            .Select(value => new Lex.V3.Contracts.Source.Europe.EuRightsDisposition(
-                value,
-                Lex.V3.Contracts.Source.Europe.EuRightsDisposition.BasisFor(value),
-                evidence))
-            .ToArray();
-        var channels = Enum.GetValues<Lex.V3.Contracts.Source.Europe.EuRightsExceptionChannel>()
-            .Select(value => new Lex.V3.Contracts.Source.Europe.EuRightsExceptionDisposition(value, evidence))
-            .ToArray();
-        var matrix = Lex.V3.Contracts.Source.Europe.EuRightsMatrix.TryAdmit(
-            classes,
-            channels,
-            out var refusal);
-        Assert.IsNotNull(matrix, refusal.ToString());
-        return matrix;
+        var corpus = source.CorpusRecordSet!;
+        var entries = corpus.Set.Records.Select(record =>
+            new CorpusRecordOutcomeEntry(
+                record.ObjectRef,
+                record.ObjectOrdinal,
+                record.Body.Kind switch
+                {
+                    Lex.V3.Contracts.Source.Corpus.CorpusBodyRecordKind.Held =>
+                        CorpusRecordOutcomeKind.Held,
+                    Lex.V3.Contracts.Source.Corpus.CorpusBodyRecordKind.NotHeld =>
+                        CorpusRecordOutcomeKind.NotHeld,
+                    _ => CorpusRecordOutcomeKind.PendingAcquisition,
+                },
+                record.Body.NotHeldReason,
+                record.Body.PendingAcquisitionReason?.Kind,
+                record.Body.PendingAcquisitionReason?.Refusal)).ToArray();
+        var completion = new CorpusRecordSetCompletion(
+            CorpusRecordSetCompletionState.Complete,
+            entries.Length,
+            entries);
+        var recordSetResult = CorpusRecordSetWriteResult.Written(
+            source.CorpusRecordSetRef!,
+            source.CorpusRecordSetReceipt!,
+            corpus,
+            completion,
+            Lex.V3.Contracts.Custody.CustodyMembership.Floored);
+        return Europe.EuQueryExecutionResult.DeliveredWithLocatedAmendments(
+            source.Topology,
+            source.FamilyOutcomes,
+            source.ObservedObjectCount,
+            source.ObservedExpressionCount,
+            source.ReductionExclusions,
+            source.WatermarkWitnessPlan!,
+            source.RootBinding!,
+            source.WitnessReconciliation!,
+            source.WitnessTerminations!,
+            source.ScopeManifestReceipt!,
+            source.ScopeManifestCanonicalSha256!,
+            source.DocumentAcquisitionOutcomesByOrdinal!,
+            source.DocumentLadderResultsByOrdinal!,
+            source.ObservedManifestationTypesByCelex!,
+            source.ObservedExpressionsByCelex!,
+            source.MintedRowsByOrdinal!,
+            source.DateAxioms,
+            source.LocatedAmendmentObservations,
+            recordSetResult,
+            source.CorrigendumTripwires!);
     }
 
-    private static Lex.V3.Contracts.Source.Europe.EuLegalNoticeEvidence CompleteLegalNoticeEvidence()
+    private static (
+        Lex.V3.Contracts.Source.Http.RoutedHttpEvidence Evidence,
+        Lex.V3.Contracts.Source.Http.HttpLogicalRequest Request) CompleteLegalNoticeRoute(
+            Lex.V3.Contracts.Source.Core.SourceArtifactRef runIdentity)
     {
-        var json =
-            "{\"schema\":\"lex-eu-legal-notice-evidence/2\"," +
-            "\"requested_uri\":\"https://eur-lex.europa.eu/content/legal-notice/legal-notice.html?locale=en\"," +
-            "\"effective_uri\":\"https://eur-lex.europa.eu/content/legal-notice/legal-notice.html?locale=en\"," +
-            "\"language_selection\":\"en\"," +
-            "\"media_type\":{\"kind\":\"single\",\"value\":\"text/html; charset=UTF-8\"}," +
-            "\"observed_date\":{\"kind\":\"single\",\"value\":\"Thu, 03 Sep 2026 16:55:19 GMT\"}," +
-            "\"policy_effective_date\":{\"kind\":\"absent\"}," +
-            "\"source_policy_version\":{\"kind\":\"absent\"}," +
-            "\"byte_length\":135428," +
-            $"\"sha256\":\"{new string('a', 64)}\"," +
-            $"\"durable_write_receipt_sha256\":\"{new string('b', 64)}\"," +
-            $"\"routed_evidence_sha256\":\"{new string('c', 64)}\"," +
-            "\"captured_at\":\"2026-09-03T16:55:19.3670000Z\"}\n";
-        return Lex.V3.Contracts.Source.Europe.EuLegalNoticeEvidence.ParseAndVerify(
-            System.Text.Encoding.UTF8.GetBytes(json));
+        const string sha = "489c635573a9c4eb39e30702d0c2a62eaaff4632a0bd9b7e300d6e2a3111861f";
+        const ulong length = 135_428;
+        var emptySha = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData([])).ToLowerInvariant();
+        var request = Lex.V3.Contracts.Source.Http.HttpLogicalRequest.Create(
+            Lex.V3.Contracts.Source.Europe.EuLegalNoticeEvidence.RequestedUri,
+            Lex.V3.Contracts.Source.Core.HttpRequestMethod.Get,
+            [new Lex.V3.Contracts.Source.Http.HttpLogicalRequestHeader(
+                "user-agent", "Lex/0.1 (+https://github.com/SFHAJJI/lex)")],
+            new Lex.V3.Contracts.Source.Http.HttpLogicalRequestBody(0, emptySha),
+            new string('1', 64), new string('2', 64));
+        var requestDigest = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+            request.CopyCanonicalBytes())).ToLowerInvariant();
+        var reference = new Lex.V3.Contracts.Custody.DurableBlobRef(
+            Lex.V3.Contracts.Custody.CustodySchemaIds.DurableBlobRef,
+            sha, checked((long)length), Lex.V3.Contracts.Custody.CustodyClass.NightlyFloor90d);
+        var policy = new Lex.V3.Contracts.Custody.CustodyPolicyEvidence(
+            Lex.V3.Contracts.Custody.CustodySchemaIds.CustodyPolicyEvidence,
+            reference,
+            Lex.V3.Contracts.Custody.CustodyVerificationProfile.FileSystemUnenforced1,
+            null,
+            Lex.V3.Contracts.Custody.CustodyProtection.NotEnforced,
+            new DateTimeOffset(2026, 9, 3, 16, 55, 0, TimeSpan.Zero),
+            null);
+        var receipt = new Lex.V3.Contracts.Custody.DurableBlobWriteReceipt(
+            Lex.V3.Contracts.Custody.CustodySchemaIds.DurableBlobWriteReceipt, reference, policy);
+        var receiptDigest = Lex.V3.Contracts.Custody.DurableBlobWriteReceiptDigest.Of(receipt);
+        var absent = new Lex.V3.Contracts.Source.Http.RoutedHttpAbsentHeader();
+        var headers = new Lex.V3.Contracts.Source.Http.RoutedHttpResponseHeaders(
+            new Lex.V3.Contracts.Source.Http.RoutedHttpSingleHeader("text/html; charset=UTF-8"),
+            new Lex.V3.Contracts.Source.Http.RoutedHttpSingleHeader("135428"),
+            absent, absent, absent, absent, absent, absent, absent, absent,
+            new Lex.V3.Contracts.Source.Http.RoutedHttpSingleHeader("Thu, 03 Sep 2026 16:55:19 GMT"),
+            absent, absent);
+        var hop = Lex.V3.Contracts.Source.Http.RoutedHttpHop.Create(
+            0, "urn:uuid:11111111-1111-5111-8111-111111111111", null, requestDigest,
+            Lex.V3.Contracts.Source.Europe.EuLegalNoticeEvidence.RequestedUri, 200, headers,
+            "2026-09-03T16:55:19.3670000Z", "2026-09-03T16:55:19.3670000Z",
+            new Lex.V3.Contracts.Source.Http.DeclaredContentLengthHttpCompletion(length),
+            length, sha, receiptDigest, length, sha);
+        var evidence = Lex.V3.Contracts.Source.Http.RoutedHttpEvidence.Create(
+            runIdentity, 1, 0, [hop], new Lex.V3.Contracts.Source.Http.CompleteHttpRouteOutcome(),
+            new Dictionary<string, Lex.V3.Contracts.Custody.DurableBlobWriteReceipt>
+            {
+                [hop.ObservationId] = receipt,
+            });
+        return (evidence, request);
     }
 }

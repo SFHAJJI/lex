@@ -54,11 +54,13 @@ public sealed class EuBoundAnnexBodyMemberClassification
         Evidence = evidence;
         Outcome = outcome;
         Gap = gap;
+        SemanticIdentitySha256 = IdentityOf(this);
     }
 
     public EuBoundAnnexEvidence Evidence { get; }
     public EuAnnexBodyDispositionOutcome? Outcome { get; }
     public EuBoundAnnexBodyClassificationGap Gap { get; }
+    public string SemanticIdentitySha256 { get; }
     public string ReasonCode => Outcome == EuAnnexBodyDispositionOutcome.TextNotAvailable
         ? "image_only"
         : Gap switch
@@ -70,6 +72,21 @@ public sealed class EuBoundAnnexBodyMemberClassification
                 "mapped_page_outside_document",
             _ => throw new InvalidOperationException("The member has no body outcome or gap."),
         };
+
+    private static string IdentityOf(EuBoundAnnexBodyMemberClassification member)
+    {
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        EuBoundAnnexBodyClassification.Append(hash,
+            "lex-v3-eu-bound-annex-body-member-classification/1");
+        EuBoundAnnexBodyClassification.Append(hash, member.Evidence.Formex.PackageEntry);
+        EuBoundAnnexBodyClassification.Append(hash, member.Evidence.Formex.Sequence);
+        EuBoundAnnexBodyClassification.Append(hash, member.Evidence.PublisherAnnexId);
+        EuBoundAnnexBodyClassification.Append(hash,
+            ((int?)member.Outcome)?.ToString(CultureInfo.InvariantCulture) ?? "");
+        EuBoundAnnexBodyClassification.Append(hash,
+            ((int)member.Gap).ToString(CultureInfo.InvariantCulture));
+        return Convert.ToHexStringLower(hash.GetHashAndReset());
+    }
 }
 
 public sealed class EuBoundAnnexBodyClassification
@@ -117,7 +134,7 @@ public sealed class EuBoundAnnexBodyClassification
         return Convert.ToHexStringLower(hash.GetHashAndReset());
     }
 
-    private static void Append(IncrementalHash hash, string value)
+    internal static void Append(IncrementalHash hash, string value)
     {
         var bytes = Encoding.UTF8.GetBytes(value);
         Span<byte> length = stackalloc byte[sizeof(int)];

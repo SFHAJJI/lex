@@ -129,6 +129,7 @@ public sealed class LuxembourgAknLegalContentOutcome
         Disposition = disposition;
         Article = article;
         Detail = detail;
+        SemanticIdentitySha256 = IdentityOf(this);
     }
 
     public LuxembourgAknArticleInventoryPopulation SourceInventoryPopulation { get; }
@@ -144,6 +145,29 @@ public sealed class LuxembourgAknLegalContentOutcome
     public LuxembourgAknLegalContentArticle? Article { get; }
 
     public string? Detail { get; }
+
+    public string SemanticIdentitySha256 { get; }
+
+    private static string IdentityOf(LuxembourgAknLegalContentOutcome outcome)
+    {
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        LuxembourgAknLegalContentArticle.Append(
+            hash, "lex-v3-luxembourg-akn-legal-content-outcome/1");
+        LuxembourgAknLegalContentArticle.Append(
+            hash, outcome.SourceInventoryPopulation.IdentitySha256);
+        LuxembourgAknLegalContentArticle.Append(
+            hash, outcome.SourceInventoryOutcome.Input.CorpusRecord.ObjectRef.CanonicalKeySha256);
+        LuxembourgAknLegalContentArticle.Append(hash, outcome.Coordinate?.PublisherId ?? "");
+        LuxembourgAknLegalContentArticle.Append(hash, outcome.Coordinate?.PublisherWId ?? "");
+        LuxembourgAknLegalContentArticle.Append(
+            hash, outcome.Coordinate?.PublisherApplicability ?? "");
+        LuxembourgAknLegalContentArticle.Append(
+            hash, ((int)outcome.Disposition).ToString(System.Globalization.CultureInfo.InvariantCulture));
+        LuxembourgAknLegalContentArticle.Append(hash, outcome.Article?.IdentitySha256 ?? "");
+        LuxembourgAknLegalContentArticle.Append(
+            hash, LuxembourgAknLegalContentPopulation.SemanticDetail(outcome));
+        return Convert.ToHexStringLower(hash.GetHashAndReset());
+    }
 }
 
 /// <summary>The ordered, complete legal-content disposition population.</summary>
@@ -184,7 +208,7 @@ public sealed class LuxembourgAknLegalContentPopulation
         return Convert.ToHexStringLower(hash.GetHashAndReset());
     }
 
-    private static string SemanticDetail(LuxembourgAknLegalContentOutcome outcome) =>
+    internal static string SemanticDetail(LuxembourgAknLegalContentOutcome outcome) =>
         outcome.Disposition is LuxembourgAknLegalContentDisposition.UpstreamNotInventoried
             or LuxembourgAknLegalContentDisposition.XmlRejected
             or LuxembourgAknLegalContentDisposition.ArticleCoordinatesMismatch
