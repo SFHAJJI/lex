@@ -177,7 +177,8 @@ public sealed class LexCorpus6BuilderTests
 
         var wrongDigest = new string(built.ArtifactRef.Sha256[0] == 'a' ? 'b' : 'a', 64);
         Assert.ThrowsExactly<ArgumentException>(() => VerifiedLexCorpus6ManifestSet.ParseAndVerify(
-            new Lex.V3.Contracts.Source.Core.SourceArtifactRef(built.ArtifactRef.ResourceId, wrongDigest),
+            new Lex.V3.Contracts.Source.Core.SourceArtifactRef(
+                LexCorpus6Builder.ResourceIdOf(wrongDigest), wrongDigest),
             built.VerifiedSet.Set.EuropeSourceSetRef,
             built.VerifiedSet.Set.LuxembourgSourceSetRef,
             built.CanonicalBytes.Span));
