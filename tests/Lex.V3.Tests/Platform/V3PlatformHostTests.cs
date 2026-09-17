@@ -242,6 +242,63 @@ public sealed class V3PlatformHostTests
         Assert.AreEqual(StatusCodes.Status404NotFound, context.Response.StatusCode);
     }
 
+    [TestMethod]
+    public async Task RealResolveRouteWritesAReviewedDomainRefusal()
+    {
+        var context = RouteContext(
+            Encoding.UTF8.GetBytes("{\"operation_id\":\"resolve\",\"parameters\":{}}"));
+        using var helpful = JsonDocument.Parse("{\"required_corpus\":\"lu\"}");
+
+        await V3ResolveRestRoute.WriteRefusalAsync(
+            context,
+            new V3PlatformHost(),
+            "req_route_refusal",
+            RefusalContext(),
+            bound => new V3PlatformOperationRefusal(
+                bound,
+                "no_corpus_mounted",
+                helpful.RootElement),
+            CancellationToken.None);
+
+        var envelope = V3EnvelopeJson.ParseAndVerify(
+            ((MemoryStream)context.Response.Body).ToArray(),
+            V3OperationRegistry.Reviewed);
+        Assert.AreEqual("no_corpus_mounted", envelope.Refusal!.Code);
+    }
+
+    [TestMethod]
+    public async Task RealResolveRouteFailsClosedOnTransportDriftBeforeExecution()
+    {
+        var calls = 0;
+        foreach (var mutate in new Action<DefaultHttpContext>[]
+                 {
+                     context => context.Request.Method = HttpMethods.Get,
+                     context => context.Features.Get<IHttpRequestFeature>()!.RawTarget =
+                         V3ResolveRestRoute.RawTarget + "?operation=resolve",
+                     context => context.Request.ContentLength = V3PlatformHost.MaximumRequestBytes + 1L,
+                 })
+        {
+            var context = RouteContext(
+                Encoding.UTF8.GetBytes("{\"operation_id\":\"resolve\",\"parameters\":{}}"));
+            mutate(context);
+
+            await Assert.ThrowsAsync<JsonException>(async () =>
+                await V3ResolveRestRoute.WriteSuccessAsync(
+                    context,
+                    new V3PlatformHost(),
+                    "req_route",
+                    Context(),
+                    _ =>
+                    {
+                        calls++;
+                        throw new AssertFailedException("transport drift must not execute the operation");
+                    },
+                    CancellationToken.None));
+        }
+
+        Assert.AreEqual(0, calls);
+    }
+
     private static V3EnvelopeContext Context() => new(
         PublisherId.LuLegilux,
         "success",
