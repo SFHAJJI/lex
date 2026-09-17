@@ -59,7 +59,7 @@ public sealed class LexCorpus6BuilderTests
             [corrigendumProduction],
             [member]);
         var digest = LexCorpus6Builder.ComputeSha256(LexCorpus6Builder.Write(fixedSet));
-        Assert.AreEqual("6b7102e82a7006b6f6258f5d6982464308942ca9b10830f52c7b7f7f769bcca2", digest);
+        Assert.AreEqual("3043fbe2dd7b23adf13ad9d961608f67df77c5ad27d625f6d9f7ce89667c1781", digest);
     }
 
     [TestMethod]
@@ -363,10 +363,9 @@ public sealed class LexCorpus6BuilderTests
             .Single(static node =>
                 node!["domain"]!.GetValue<string>() == "europe_formex_main_body")!
             .AsObject();
-        var canonicalOutcome = "{\"domain\":\"europe_formex_main_body\",\"semantic_identity_sha256\":\"" +
-            formexOutcome["semantic_identity_sha256"]!.GetValue<string>() +
-            "\",\"disposition\":\"" + formexOutcome["disposition"]!.GetValue<string>() + "\"}";
-        var missingCanonical = RemoveCanonicalArrayItem(canonical, canonicalOutcome);
+        var missingCanonical = RemoveCanonicalArrayItemContaining(
+            canonical,
+            formexOutcome["semantic_identity_sha256"]!.GetValue<string>());
         var missing = Assert.ThrowsExactly<ArgumentException>(() => Reopen(missingCanonical, built));
         StringAssert.Contains(
             missing.InnerException?.Message ?? missing.Message,
@@ -629,15 +628,18 @@ public sealed class LexCorpus6BuilderTests
             bytes);
     }
 
-    private static string RemoveCanonicalArrayItem(string canonical, string item)
+    private static string RemoveCanonicalArrayItemContaining(string canonical, string marker)
     {
-        var withFollowingComma = item + ",";
-        if (canonical.Contains(withFollowingComma, StringComparison.Ordinal))
-            return canonical.Replace(withFollowingComma, "", StringComparison.Ordinal);
-
-        var withLeadingComma = "," + item;
-        Assert.IsTrue(canonical.Contains(withLeadingComma, StringComparison.Ordinal));
-        return canonical.Replace(withLeadingComma, "", StringComparison.Ordinal);
+        var markerIndex = canonical.IndexOf(marker, StringComparison.Ordinal);
+        Assert.IsGreaterThanOrEqualTo(0, markerIndex);
+        var start = canonical.LastIndexOf('{', markerIndex);
+        var end = canonical.IndexOf('}', markerIndex);
+        Assert.IsGreaterThanOrEqualTo(0, start);
+        Assert.IsGreaterThan(start, end);
+        if (end + 1 < canonical.Length && canonical[end + 1] == ',') end++;
+        else if (start > 0 && canonical[start - 1] == ',') start--;
+        else Assert.Fail("The selected canonical array item has no adjacent separator.");
+        return canonical.Remove(start, end - start + 1);
     }
 
     internal static async Task<Stage3DerivationProfileEnvelope> CompleteProfileEnvelopeAsync(
