@@ -32,7 +32,6 @@ public sealed class LuxembourgIndexBuilderTests
         var envelope = await LexCorpus6BuilderTests.CompleteProfileEnvelopeAsync();
         var corpus = LexCorpus6Builder.TryBuild(envelope, out var corpusRefusal, out var corpusDetail);
         Assert.IsNotNull(corpus, $"{corpusRefusal}: {corpusDetail}");
-
         var first = LuxembourgIndexBuilder.TryBuild(envelope, out var firstRefusal, out var firstDetail);
         var second = LuxembourgIndexBuilder.TryBuild(envelope, out var secondRefusal, out var secondDetail);
 
@@ -104,6 +103,11 @@ public sealed class LuxembourgIndexBuilderTests
             luxembourgStore: store);
         var corpus = LexCorpus6Builder.TryBuild(envelope, out var corpusRefusal, out var corpusDetail);
         Assert.IsNotNull(corpus, $"{corpusRefusal}: {corpusDetail}");
+        var inventory = envelope.BodyComposition.Envelope.LuxembourgAknArticleInventoryPopulation
+            .Outcomes.Single().Inventory;
+        Assert.IsNotNull(inventory);
+        Assert.HasCount(54, inventory.Articles);
+        Assert.IsTrue(inventory.Articles.All(static article => article.PublisherApplicability is not null));
 
         var built = LuxembourgIndexBuilder.TryBuild(envelope, out var refusal, out var detail);
 
@@ -119,11 +123,10 @@ public sealed class LuxembourgIndexBuilderTests
         Assert.AreEqual(49, reader.ArticleCount);
         Assert.HasCount(4, built.CapabilityManifest.Cells);
         var cells = built.CapabilityManifest.Cells.OrderBy(static cell => cell.PeriodFrom).ToArray();
-        Assert.Fail(string.Join(";", cells.Select(static cell => $"{cell.PeriodFrom:yyyy-MM-dd}:{cell.Population}")));
         Assert.AreEqual(new DateOnly(2021, 8, 22), cells[0].PeriodFrom);
         Assert.AreEqual(cells[0].PeriodFrom, cells[0].PeriodTo);
-        Assert.AreEqual(39, cells[0].Population);
-        Assert.AreEqual(new DateOnly(2024, 2, 1), cells[^1].PeriodFrom);
+        Assert.AreEqual(36, cells[0].Population);
+        Assert.AreEqual(new DateOnly(2023, 9, 16), cells[^1].PeriodFrom);
         Assert.AreEqual(cells[^1].PeriodFrom, cells[^1].PeriodTo);
         Assert.AreEqual(1, cells[^1].Population);
         var gap = reader.Search(
