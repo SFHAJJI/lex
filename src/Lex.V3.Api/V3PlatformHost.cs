@@ -232,6 +232,11 @@ internal sealed class V3PlatformHost
             throw new InvalidOperationException("The operation result is not bound to its reviewed schema.");
         }
 
+        if (!operation.ResultObjectTypes.Contains(result.ObjectType, StringComparer.Ordinal))
+        {
+            throw new ArgumentException("The result object type is not bound to this operation.", nameof(execute));
+        }
+
         using var resultDocument = ResultDocument(result);
         _schemas.ValidateResult(operation, resultDocument.RootElement);
 
