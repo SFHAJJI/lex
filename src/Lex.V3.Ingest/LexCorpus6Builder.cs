@@ -638,7 +638,7 @@ public sealed record LexCorpus6CorrigendumProduction(
         const string familyPrefix = "eu-object-facts-batch-";
         if (!FamilyKey.StartsWith(familyPrefix, StringComparison.Ordinal) ||
             FamilyKey.Length != familyPrefix.Length + 24 ||
-            !FamilyKey.AsSpan(familyPrefix.Length).ContainsAnyExcept("0123456789abcdef"))
+            !FamilyKey.AsSpan(familyPrefix.Length).ToArray().All(static value => char.IsAsciiHexDigitLower(value)))
         {
             throw new ArgumentException("The corrigendum family key is not a canonical EU object-facts batch key.", nameof(FamilyKey));
         }
