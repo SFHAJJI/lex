@@ -129,6 +129,36 @@ public sealed class V3OperationRegistry
         "verify",
     ];
 
+    private static readonly IReadOnlyDictionary<string, string[]> MandatoryRefusalPayloadFields =
+        new Dictionary<string, string[]>(StringComparer.Ordinal)
+        {
+            ["advice_boundary"] = ["descriptive_maximum", "handoff"],
+            ["ambiguous_identifier"] = ["requested_identifier", "candidates"],
+            ["ambiguous_version"] = ["requested_date", "candidates"],
+            ["anchor_not_in_version"] =
+                ["requested_anchor", "nearest_anchors", "do_not_fall_back_to_full_text_search"],
+            ["derivation_refused"] = ["derivation", "reason"],
+            ["format_not_available"] = ["requested_format", "available_formats"],
+            ["identifier_unknown"] =
+                ["requested_identifier", "official_search_actions", "what_would_answer"],
+            ["language_not_available"] = ["requested_language", "available_languages"],
+            ["no_corpus_mounted"] = ["required_corpus"],
+            ["no_version_for_date"] =
+                ["requested_date", "history_begins", "nearest_earlier", "nearest_later"],
+            ["not_transposable"] = ["instrument_type", "explanation"],
+            ["out_of_corpus_scope"] = ["requested_identifier", "official_source"],
+            ["pinned_digest_mismatch"] =
+                ["requested_digest", "current_digest", "stable_coordinate", "current_hash_pinned_url"],
+            ["profiles_differ"] = ["left_profile", "right_profile"],
+            ["rate_limited"] = ["retry_after", "retryable"],
+            ["retrieval_mode_unavailable"] = ["requested_mode", "available_modes"],
+            ["snapshot_unknown"] = ["snapshot_id", "what_would_answer"],
+            ["text_not_available"] =
+                ["official_identity", "official_source", "retained_transport_evidence"],
+            ["text_withheld"] = ["official_identity", "official_link", "content_sha256"],
+            ["upstream_unreachable"] = ["upstream", "retryable"],
+        };
+
     private readonly IReadOnlyDictionary<string, V3OperationDefinition> _byId;
     private readonly HashSet<string> _refusalCodes;
     private readonly byte[] _canonicalUtf8;
@@ -161,17 +191,17 @@ public sealed class V3OperationRegistry
             throw new ArgumentException("The production registry must contain the complete reviewed operation set.", nameof(operations));
         }
 
-        if (!V3ContractVocabulary.OperationIds.Order(StringComparer.Ordinal)
-                .SequenceEqual(RequiredOperationIds, StringComparer.Ordinal))
-        {
-            throw new InvalidOperationException("The preview vocabulary and production operation registry have drifted.");
-        }
-
         var refusals = refusalCodes?.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray()
             ?? throw new ArgumentNullException(nameof(refusalCodes));
         if (!refusals.SequenceEqual(RequiredRefusalCodes, StringComparer.Ordinal))
         {
             throw new ArgumentException("The production registry must contain the complete reviewed refusal set.", nameof(refusalCodes));
+        }
+
+        if (!MandatoryRefusalPayloadFields.Keys.Order(StringComparer.Ordinal)
+                .SequenceEqual(RequiredRefusalCodes, StringComparer.Ordinal))
+        {
+            throw new InvalidOperationException("Every refusal must declare exactly one mandatory payload shape.");
         }
 
         SchemaId = schema;
@@ -213,6 +243,16 @@ public sealed class V3OperationRegistry
     }
 
     public bool DeclaresRefusal(string refusalCode) => _refusalCodes.Contains(refusalCode);
+
+    public IReadOnlyList<string> MandatoryPayloadFields(string refusalCode)
+    {
+        if (!MandatoryRefusalPayloadFields.TryGetValue(refusalCode, out var fields))
+        {
+            throw new ArgumentException("The refusal code is not declared by the registry.", nameof(refusalCode));
+        }
+
+        return Array.AsReadOnly(fields.ToArray());
+    }
 
     private static IEnumerable<V3OperationDefinition> CreateReviewedOperations()
     {
@@ -290,7 +330,16 @@ public sealed class V3OperationRegistry
             writer.WriteStartArray("refusal_codes");
             foreach (var refusalCode in refusalCodes)
             {
-                writer.WriteStringValue(refusalCode);
+                writer.WriteStartObject();
+                writer.WriteString("code", refusalCode);
+                writer.WriteStartArray("mandatory_payload_fields");
+                foreach (var field in MandatoryRefusalPayloadFields[refusalCode].Order(StringComparer.Ordinal))
+                {
+                    writer.WriteStringValue(field);
+                }
+
+                writer.WriteEndArray();
+                writer.WriteEndObject();
             }
 
             writer.WriteEndArray();

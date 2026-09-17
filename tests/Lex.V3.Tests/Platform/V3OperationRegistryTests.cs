@@ -23,6 +23,10 @@ public sealed class V3OperationRegistryTests
                 "transposition", "verify",
             },
             registry.Operations.Select(entry => entry.OperationId).ToArray());
+        CollectionAssert.AreEqual(
+            registry.Operations.Select(entry => entry.OperationId).ToArray(),
+            V3ContractVocabulary.OperationIds.Order(StringComparer.Ordinal).ToArray(),
+            "the synthetic preview hint must follow the production registry, not govern it");
         Assert.IsTrue(registry.DeclaresRefusal("identifier_unknown"));
         Assert.IsTrue(registry.DeclaresRefusal("pinned_digest_mismatch"));
         Assert.IsTrue(registry.DeclaresRefusal("advice_boundary"));
