@@ -358,6 +358,38 @@ public static class LuxembourgIndexBuilder
         command.ExecuteNonQuery();
     }
 
+    internal static void EnsureExactSchema(SqliteConnection actual)
+    {
+        using var expected = new SqliteConnection(new SqliteConnectionStringBuilder
+        {
+            DataSource = ":memory:",
+            Mode = SqliteOpenMode.Memory,
+            Cache = SqliteCacheMode.Private,
+            Pooling = false,
+        }.ToString());
+        expected.Open();
+        Execute(expected, Ddl);
+        if (!ReadSchema(expected).SequenceEqual(ReadSchema(actual), StringComparer.Ordinal))
+        {
+            throw new InvalidDataException("The Luxembourg index schema differs from the exact terminal schema.");
+        }
+    }
+
+    private static string[] ReadSchema(SqliteConnection connection)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT type,name,tbl_name,coalesce(sql,'') FROM sqlite_schema " +
+            "WHERE name NOT LIKE 'sqlite_%' ORDER BY type,name,tbl_name";
+        using var reader = command.ExecuteReader();
+        var rows = new List<string>();
+        while (reader.Read())
+        {
+            rows.Add(string.Join('\n',
+                reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3)));
+        }
+        return rows.ToArray();
+    }
+
     private static void Insert(
         SqliteConnection connection,
         SqliteTransaction transaction,
@@ -469,6 +501,13 @@ public sealed class LuxembourgIndexReader : IDisposable
         {
             throw new ArgumentException("The Luxembourg index identity or capability binding is invalid.");
         }
+        if (!string.Equals(
+                expectedCorpusRef.ResourceId,
+                LexCorpus6Builder.ResourceIdOf(expectedCorpusRef.Sha256),
+                StringComparison.Ordinal))
+        {
+            throw new InvalidDataException("The expected corpus resource identity is not bound to its digest.");
+        }
 
         var path = Path.Combine(Path.GetTempPath(), $"lex-v3-lu-mount-{Guid.NewGuid():N}.sqlite");
         File.WriteAllBytes(path, indexBytes.ToArray());
@@ -476,6 +515,7 @@ public sealed class LuxembourgIndexReader : IDisposable
         try
         {
             connection = LuxembourgIndexBuilder.Open(path, SqliteOpenMode.ReadOnly);
+            LuxembourgIndexBuilder.EnsureExactSchema(connection);
             if (!string.Equals(Scalar(connection, "PRAGMA integrity_check"), "ok", StringComparison.Ordinal) ||
                 Convert.ToInt32(Scalar(connection, "PRAGMA application_id"), CultureInfo.InvariantCulture) != 0x4c563306 ||
                 Convert.ToInt32(Scalar(connection, "PRAGMA user_version"), CultureInfo.InvariantCulture) != 1)

@@ -103,12 +103,14 @@ public sealed class LuxembourgIndexBuilderTests
         var built = LuxembourgIndexBuilder.TryBuild(envelope, out var refusal, out var detail);
 
         Assert.IsNotNull(built, $"{refusal}: {detail}");
-        var member = corpus.VerifiedSet.Set.Members.Single(static value =>
-            value.Publisher == PublisherId.LuLegilux);
+        var luxembourgMembers = corpus.VerifiedSet.Set.Members.Where(static value =>
+            value.Publisher == PublisherId.LuLegilux).ToArray();
+        var member = luxembourgMembers.Single(static value =>
+            value.Outcome == LexCorpus6OutcomeKind.Acquired);
         Assert.AreEqual(LexCorpus6OutcomeKind.Acquired, member.Outcome);
         using var reader = LuxembourgIndexReader.OpenAndVerify(
             built.IndexRef, built.IndexBytes.Span, corpus.ArtifactRef, built.CapabilityManifest);
-        Assert.AreEqual(1, reader.MemberCount);
+        Assert.AreEqual(luxembourgMembers.Length, reader.MemberCount);
         Assert.AreEqual(1, reader.ArticleCount);
         var cell = built.CapabilityManifest.Cells.Single();
         Assert.AreEqual("fra", cell.Language);
