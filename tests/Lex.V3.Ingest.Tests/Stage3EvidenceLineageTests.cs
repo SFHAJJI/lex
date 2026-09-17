@@ -258,6 +258,21 @@ public sealed class Stage3EvidenceLineageTests
         EuQueryExecutionResult source,
         SourceObjectRef objectRef)
     {
+        var template = source.CorpusRecordSet!.Set.Records[^1];
+        return AddEuropeCorpusRecord(source, objectRef, template.Body);
+    }
+
+    internal static EuQueryExecutionResult AddEuropeHeldCorpusRecord(
+        EuQueryExecutionResult source,
+        SourceObjectRef objectRef,
+        DurableBlobWriteReceipt receipt) =>
+        AddEuropeCorpusRecord(source, objectRef, CorpusBodyRecord.Held(receipt));
+
+    private static EuQueryExecutionResult AddEuropeCorpusRecord(
+        EuQueryExecutionResult source,
+        SourceObjectRef objectRef,
+        CorpusBodyRecord body)
+    {
         var set = source.CorpusRecordSet!.Set;
         var template = set.Records[^1];
         var record = new CorpusRecord(
@@ -268,7 +283,7 @@ public sealed class Stage3EvidenceLineageTests
             template.BodyDisposition,
             template.RelationDisposition,
             template.SupportingDocumentDisposition,
-            template.Body,
+            body,
             set.ManifestRef,
             set.RunIdentity);
         var rebuilt = new CorpusRecordSet(

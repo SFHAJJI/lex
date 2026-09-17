@@ -53,6 +53,26 @@ public sealed class EuAnnexEvidenceBinderTests
     }
 
     [TestMethod]
+    public async Task ProductionHeldWorkBodyBindsSeparatelyRetainedFormexAndPdfEvidence()
+    {
+        var fixture = await FixtureAsync(PageLabelPdf(7, "<< /S /D /St 1 >>"));
+        var productionCorpus = VerifiedCorpus([
+            (fixture.Work, fixture.Xhtml.SourceReceipt),
+        ]);
+
+        var result = await fixture.RunAsync(corpus: productionCorpus);
+
+        Assert.AreEqual(EuAnnexEvidenceBindingRefusal.None, result.Refusal, result.Detail);
+        Assert.IsNotNull(result.Binding);
+        Assert.AreEqual(fixture.Work, result.Binding.Work);
+        Assert.AreEqual(fixture.Xhtml.SourceReceipt, result.Binding.XhtmlSourceReceipt);
+        Assert.IsFalse(productionCorpus.Set.Records.Any(record =>
+            record.Body.Receipt == fixture.Formex.SourceReceipt));
+        Assert.IsFalse(productionCorpus.Set.Records.Any(record =>
+            record.Body.Receipt == fixture.PdfReceipt));
+    }
+
+    [TestMethod]
     public async Task RepeatedRunIsDeterministicAndExposedCollectionsAreImmutable()
     {
         var fixture = await FixtureAsync(PageLabelPdf(7, "<< /S /D /St 1 >>"));
@@ -114,20 +134,14 @@ public sealed class EuAnnexEvidenceBinderTests
     }
 
     [TestMethod]
-    public async Task MissingDuplicateAndUnavailablePdfEvidenceAreRefused()
+    public async Task MissingHeldWorkBodyAndUnavailablePdfEvidenceAreRefused()
     {
         var fixture = await FixtureAsync(PageLabelPdf(7, "<< /S /D /St 1 >>"));
-        var sources = Sources(fixture);
-        var missing = VerifiedCorpus(sources.Where(source => source.Receipt != fixture.PdfReceipt).ToArray());
-        var duplicateObject = Object("duplicate-pdf", EuWemiRole.Item,
-            fixture.Corpus.Set.Records.Single(record =>
-                record.ObjectRef.CanonicalKey.EndsWith(".0001.03", StringComparison.Ordinal)).ObjectRef);
-        var ambiguous = VerifiedCorpus([.. sources, (duplicateObject, fixture.PdfReceipt)]);
+        var wrongReceipt = await Hold(fixture.Store, "not the selected XHTML"u8.ToArray());
+        var missing = VerifiedCorpus([(fixture.Work, wrongReceipt)]);
 
         Assert.AreEqual(EuAnnexEvidenceBindingRefusal.SourceEvidenceMissingOrAmbiguous,
             (await fixture.RunAsync(corpus: missing)).Refusal);
-        Assert.AreEqual(EuAnnexEvidenceBindingRefusal.SourceEvidenceMissingOrAmbiguous,
-            (await fixture.RunAsync(corpus: ambiguous)).Refusal);
         Assert.AreEqual(EuAnnexEvidenceBindingRefusal.RetainedPdfUnavailable,
             (await fixture.RunAsync(store: new EuAcquisitionTestFixture.EuInMemoryCustodyStore())).Refusal);
     }
@@ -156,24 +170,37 @@ public sealed class EuAnnexEvidenceBinderTests
     }
 
     [TestMethod]
-    public async Task SubstitutedXhtmlLineageIsRefusedBeforeReadingPages()
+    public async Task XhtmlInventoryMustBeTheSelectedHeldWorkBody()
     {
-        var fixture = await FixtureAsync(
-            PageLabelPdf(7, "<< /S /D /St 1 >>"), xhtmlInOtherExpression: true);
+        var fixture = await FixtureAsync(PageLabelPdf(7, "<< /S /D /St 1 >>"));
+        var otherReceipt = await Hold(fixture.Store, "other held body"u8.ToArray());
 
-        var result = await fixture.RunAsync();
+        var result = await fixture.RunAsync(
+            corpus: VerifiedCorpus([(fixture.Work, otherReceipt)]));
+
+        Assert.AreEqual(EuAnnexEvidenceBindingRefusal.SourceEvidenceMissingOrAmbiguous, result.Refusal);
+        Assert.IsNull(result.Binding);
+    }
+
+    [TestMethod]
+    public async Task HeldXhtmlBodyUnderAnotherPublisherWorkIsRefused()
+    {
+        var fixture = await FixtureAsync(PageLabelPdf(7, "<< /S /D /St 1 >>"));
+        var otherWork = Object(
+            "11111111-2222-3333-4444-555555555555", EuWemiRole.Work, null);
+
+        var result = await fixture.RunAsync(
+            corpus: VerifiedCorpus([(otherWork, fixture.Xhtml.SourceReceipt)]));
 
         Assert.AreEqual(EuAnnexEvidenceBindingRefusal.SourceLineageMismatch, result.Refusal);
         Assert.IsNull(result.Binding);
     }
 
     [TestMethod]
-    public async Task FormexInventoryMustNameTheAdmittedPackageBody()
+    public async Task FormexTransportBindsSeparatelyRetainedBytesWithoutCorpusMembership()
     {
         var fixture = await FixtureAsync(PageLabelPdf(7, "<< /S /D /St 1 >>"));
         var otherReceipt = await Hold(fixture.Store, "other formex"u8.ToArray());
-        var otherBody = Object("other-formex", EuWemiRole.Item, fixture.Package.ManifestationRef);
-        var corpus = VerifiedCorpus([.. Sources(fixture), (otherBody, otherReceipt)]);
         var formex = new EuFormexAnnexInventory(
             new EuFormexAnnexTransportBinding(
                 fixture.Package,
@@ -185,10 +212,10 @@ public sealed class EuAnnexEvidenceBinderTests
             fixture.Formex.Members);
         var profile = ReconciliationProfile(formex, fixture.Xhtml, fixture.PdfReceipt, '3');
 
-        var result = await fixture.RunAsync(profile, corpus, formex);
+        var result = await fixture.RunAsync(profile, formex: formex);
 
-        Assert.AreEqual(EuAnnexEvidenceBindingRefusal.SourceLineageMismatch, result.Refusal);
-        Assert.IsNull(result.Binding);
+        Assert.AreEqual(EuAnnexEvidenceBindingRefusal.None, result.Refusal, result.Detail);
+        Assert.AreEqual(otherReceipt, result.Binding!.FormexSourceReceipt);
     }
 
     [TestMethod]
@@ -228,7 +255,7 @@ public sealed class EuAnnexEvidenceBinderTests
     }
 
     [TestMethod]
-    public async Task WorkMustBeAdmittedByTheExpressionIdentityBoundary()
+    public async Task SelectedHeldBodyIsNotMisrepresentedAsThePublisherWemiWork()
     {
         var fixture = await FixtureAsync(PageLabelPdf(7, "<< /S /D /St 1 >>"));
         var badWork = new SourceObjectRef(SourceCoreSchemaIds.SourceObjectRef,
@@ -240,8 +267,10 @@ public sealed class EuAnnexEvidenceBinderTests
 
         var result = await fixture.RunAsync(corpus: VerifiedCorpus(sources));
 
-        Assert.AreEqual(EuAnnexEvidenceBindingRefusal.SourceLineageMismatch, result.Refusal);
-        Assert.IsNull(result.Binding);
+        Assert.AreEqual(EuAnnexEvidenceBindingRefusal.None, result.Refusal, result.Detail);
+        Assert.IsNotNull(result.Binding);
+        Assert.AreEqual(badWork, result.Binding.WorkSource.ObjectRef);
+        Assert.AreEqual(fixture.Work, result.Binding.Work);
     }
 
     [TestMethod]
@@ -255,35 +284,6 @@ public sealed class EuAnnexEvidenceBinderTests
 
         Assert.AreEqual(EuAnnexEvidenceBindingRefusal.SourceLineageMismatch, result.Refusal);
         Assert.IsNull(result.Binding);
-    }
-
-    [TestMethod]
-    public async Task EvidenceLegsMustBeDistinctAndPdfMustMatchTheExpectedManifestation()
-    {
-        var fixture = await FixtureAsync(PageLabelPdf(7, "<< /S /D /St 1 >>"));
-        var collapsedProfile = ReconciliationProfile(
-            fixture.Formex, fixture.Xhtml, fixture.Formex.SourceReceipt, '4');
-        var collapsed = await fixture.RunAsync(
-            collapsedProfile, pdfReceipt: fixture.Formex.SourceReceipt);
-
-        var decoyReceipt = await Hold(fixture.Store, PageLabelPdf(9, "<< /S /D /St 1 >>"));
-        var decoyManifestation = Object(
-            fixture.Package.ExpressionRef.CanonicalKey + ".04",
-            EuWemiRole.Manifestation, fixture.Package.ExpressionRef);
-        var decoyItem = Object(decoyManifestation.CanonicalKey + "/PDF",
-            EuWemiRole.Item, decoyManifestation);
-        var corpus = VerifiedCorpus([
-            .. Sources(fixture),
-            (decoyManifestation, await Hold(fixture.Store, "decoy manifestation"u8.ToArray())),
-            (decoyItem, decoyReceipt),
-        ]);
-        var decoyProfile = ReconciliationProfile(
-            fixture.Formex, fixture.Xhtml, decoyReceipt, '5');
-        var decoy = await fixture.RunAsync(decoyProfile, corpus,
-            pdfReceipt: decoyReceipt);
-
-        Assert.AreEqual(EuAnnexEvidenceBindingRefusal.SourceLineageMismatch, collapsed.Refusal);
-        Assert.AreEqual(EuAnnexEvidenceBindingRefusal.SourceLineageMismatch, decoy.Refusal);
     }
 
     [TestMethod]
@@ -496,19 +496,30 @@ public sealed class EuAnnexEvidenceBinderTests
     internal static async Task<Fixture> FixtureAsync(
         byte[] pdfBytes,
         bool pdfInOtherExpression = false,
-        bool xhtmlInOtherExpression = false,
         string xhtmlTitle = "ANNEX",
         bool formexTwoMembers = false,
         bool xhtmlTwoMembers = false,
         bool secondMemberAfterFirst = false,
         byte[]? formexBytes = null,
-        byte[]? xhtmlBytes = null)
+        byte[]? xhtmlBytes = null,
+        ICustodyStore? custodyStore = null,
+        CorpusRecord? heldWork = null,
+        VerifiedCorpusRecordSet? productionCorpus = null)
     {
-        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
+        var store = custodyStore ?? new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
         formexBytes ??= FormexPackage(formexTwoMembers, secondMemberAfterFirst);
-        xhtmlBytes ??= Encoding.UTF8.GetBytes(Xhtml(xhtmlTitle, xhtmlTwoMembers));
+        xhtmlBytes ??= XhtmlBytes(xhtmlTitle, xhtmlTwoMembers);
         var formexReceipt = await Hold(store, formexBytes);
-        var xhtmlReceipt = await Hold(store, xhtmlBytes);
+        var xhtmlReceipt = heldWork?.Body.Receipt ?? await Hold(store, xhtmlBytes);
+        if (heldWork is not null)
+        {
+            Assert.AreEqual(CorpusBodyRecordKind.Held, heldWork.Body.Kind);
+            Assert.IsNotNull(xhtmlReceipt);
+            Assert.AreEqual(
+                Convert.ToHexStringLower(SHA256.HashData(xhtmlBytes)),
+                xhtmlReceipt.Reference.ContentSha256,
+                "The production work receipt must hold the XHTML inventoried by this fixture.");
+        }
         var pdfReceipt = await Hold(store, pdfBytes);
 
         var formexProfile = FormexProfile('8');
@@ -518,24 +529,28 @@ public sealed class EuAnnexEvidenceBinderTests
         var xhtml = (await new EuXhtmlAnnexInventoryProducer(store).RunAsync(
             xhtmlReceipt, xhtmlProfile.Bytes, xhtmlProfile.Reference, CancellationToken.None)).Inventory!;
 
-        var boundary = new EuWemiIdentityBoundary(Registry, IdentityProfile);
-        const string workKey = "5f2552c2-11bd-11e6-ba9a-01aa75ed71a1";
+        var workKey = heldWork is null
+            ? "5f2552c2-11bd-11e6-ba9a-01aa75ed71a1"
+            : heldWork.ObjectRef.PublisherUri[
+                (heldWork.ObjectRef.PublisherUri.LastIndexOf("/cellar/", StringComparison.Ordinal)
+                    + "/cellar/".Length)..];
         var work = Object(workKey, EuWemiRole.Work, null);
-        var expression = Object(workKey + ".0001", EuWemiRole.Expression, work);
-        var formexManifestation = Object(workKey + ".0001.01", EuWemiRole.Manifestation, expression);
-        var formexItem = Object(workKey + ".0001.01/FORMEX", EuWemiRole.Item, formexManifestation);
-        var xhtmlExpression = xhtmlInOtherExpression
-            ? Object(workKey + ".0003", EuWemiRole.Expression, work) : expression;
-        var xhtmlManifestation = Object(
-            xhtmlInOtherExpression ? workKey + ".0003.01" : workKey + ".0001.02",
-            EuWemiRole.Manifestation, xhtmlExpression);
-        var xhtmlItem = Object(workKey + ".0001.02/XHTML", EuWemiRole.Item, xhtmlManifestation);
+        var registry = Registry;
+        var identityProfile = IdentityProfile;
+        var boundary = new EuWemiIdentityBoundary(registry, identityProfile);
+        var expression = Object(workKey + ".0001", EuWemiRole.Expression, work, registry, identityProfile);
+        var formexManifestation = Object(
+            workKey + ".0001.01", EuWemiRole.Manifestation, expression, registry, identityProfile);
+        var formexItem = Object(
+            workKey + ".0001.01/FORMEX", EuWemiRole.Item, formexManifestation, registry, identityProfile);
         var pdfExpression = pdfInOtherExpression
-            ? Object(workKey + ".0002", EuWemiRole.Expression, work) : expression;
+            ? Object(workKey + ".0002", EuWemiRole.Expression, work, registry, identityProfile) : expression;
         var pdfManifestation = Object(
             pdfInOtherExpression ? workKey + ".0002.01" : workKey + ".0001.03",
-            EuWemiRole.Manifestation, pdfExpression);
-        var pdfItem = Object(pdfManifestation.CanonicalKey + "/PDF", EuWemiRole.Item, pdfManifestation);
+            EuWemiRole.Manifestation, pdfExpression, registry, identityProfile);
+        var pdfItem = Object(
+            pdfManifestation.CanonicalKey + "/PDF", EuWemiRole.Item, pdfManifestation,
+            registry, identityProfile);
 
         var stream = EuFormexStreamName.TryParse(
             "CL2026R1965EN0000010.0001.xml", "32026R1965", out var roleRefusal)!;
@@ -556,26 +571,9 @@ public sealed class EuAnnexEvidenceBinderTests
             formexTransport, formexProfile.Bytes, formexProfile.Reference,
             CancellationToken.None)).Inventory!;
 
-        var all = new List<(SourceObjectRef Object, DurableBlobWriteReceipt Receipt)>
-        {
-            (work, await Hold(store, "work"u8.ToArray())),
-            (expression, await Hold(store, "expression"u8.ToArray())),
-            (formexManifestation, await Hold(store, "formex-manifestation"u8.ToArray())),
-            (formexItem, formexReceipt),
-            (xhtmlManifestation, await Hold(store, "xhtml-manifestation"u8.ToArray())),
-            (xhtmlItem, xhtmlReceipt),
-        };
-        if (xhtmlInOtherExpression)
-        {
-            all.Insert(4, (xhtmlExpression, await Hold(store, "other-xhtml-expression"u8.ToArray())));
-        }
-        if (pdfInOtherExpression)
-        {
-            all.Add((pdfExpression, await Hold(store, "other-expression"u8.ToArray())));
-        }
-        all.Add((pdfManifestation, await Hold(store, "pdf-manifestation"u8.ToArray())));
-        all.Add((pdfItem, pdfReceipt));
-        var corpus = VerifiedCorpus(all);
+        Assert.AreEqual(heldWork is null, productionCorpus is null,
+            "A production work and its exact reopened corpus must travel together.");
+        var corpus = productionCorpus ?? VerifiedCorpus([(work, xhtmlReceipt)]);
         var profileBytes = ProfileBytes(
             formex.IdentitySha256, xhtml.IdentitySha256, pdfReceipt.Reference.ContentSha256);
         var profile = new Profile(profileBytes, Artifact('f', Sha(profileBytes)));
@@ -613,17 +611,24 @@ public sealed class EuAnnexEvidenceBinderTests
         return new Profile(bytes, Artifact(resource, Sha(bytes)));
     }
 
-    private static Task<byte[]> FixtureBytesAsync(string name) => File.ReadAllBytesAsync(
+    internal static Task<byte[]> FixtureBytesAsync(string name) => File.ReadAllBytesAsync(
         Path.Combine(AppContext.BaseDirectory, "Fixtures", "EuDocumentFetch", name));
 
-    private static SourceObjectRef Object(string key, EuWemiRole role, SourceObjectRef? parent)
+    private static SourceObjectRef Object(
+        string key,
+        EuWemiRole role,
+        SourceObjectRef? parent,
+        SourceArtifactRef? registry = null,
+        SourceArtifactRef? identityProfile = null)
     {
-        var kind = new SourceRegistryMemberRef(Registry, EuWemiIdentityBoundary.MemberKeyOf(role));
+        registry ??= Registry;
+        identityProfile ??= IdentityProfile;
+        var kind = new SourceRegistryMemberRef(registry, EuWemiIdentityBoundary.MemberKeyOf(role));
         var parentKey = parent is null ? null : new SourceObjectKeyRef(
             parent.EntityKind, parent.PublisherUri, parent.CanonicalKey, parent.CanonicalKeySha256);
         return new SourceObjectRef(SourceCoreSchemaIds.SourceObjectRef, SourceAuthority.Cellar, kind,
             "http://publications.europa.eu/resource/cellar/" + key, key, Sha(Encoding.UTF8.GetBytes(key)),
-            IdentityProfile, parentKey);
+            identityProfile, parentKey);
     }
 
     private static async Task<DurableBlobWriteReceipt> Hold(
@@ -747,6 +752,9 @@ public sealed class EuAnnexEvidenceBinderTests
           </BIB.INSTANCE><TITLE><TI><P>ANNEX</P></TI></TITLE>
         </ANNEX>
         """;
+
+    internal static byte[] XhtmlBytes(string title, bool twoMembers) =>
+        Encoding.UTF8.GetBytes(Xhtml(title, twoMembers));
 
     private static string Xhtml(string title, bool twoMembers) => $$"""
         <?xml version="1.0" encoding="UTF-8"?>

@@ -255,7 +255,7 @@ public sealed class EuBoundAnnexBodyClassifierTests
                 binding.PdfReceipt.Reference.ContentSha256), pdf.Length);
     }
 
-    private static RouteValues Route(
+    internal static RouteValues Route(
         string cellarKey, DurableBlobWriteReceipt receipt, int length)
     {
         var address = EuDocumentFetchAddress.TryCreate(
@@ -298,7 +298,7 @@ public sealed class EuBoundAnnexBodyClassifierTests
             new string('1', 64),
             contextDigest);
 
-    private static ProfileValue Profile(string bindingIdentity, string pdfDigest,
+    internal static ProfileValue Profile(string bindingIdentity, string pdfDigest,
         string rule = "classification=pdfpig-0.1.11:no_glyphs+image")
     {
         var bytes = Encoding.UTF8.GetBytes(string.Join('\n',
@@ -323,8 +323,8 @@ public sealed class EuBoundAnnexBodyClassifierTests
 
     private static string Sha(byte[] bytes) => Convert.ToHexStringLower(SHA256.HashData(bytes));
 
-    private sealed record ProfileValue(byte[] Bytes, SourceArtifactRef Reference);
-    private sealed record RouteValues(
+    internal sealed record ProfileValue(byte[] Bytes, SourceArtifactRef Reference);
+    internal sealed record RouteValues(
         EuDocumentFetchAddress Address, HttpLogicalRequest Request, RoutedHttpEvidence Evidence);
     private sealed record Fixture(
         ICustodyStore Store,
@@ -351,8 +351,8 @@ public sealed class EuBoundAnnexBodyClassifierTests
         internal Fixture WithMembers(IReadOnlyList<EuBoundAnnexEvidence> members)
         {
             var binding = new EuAnnexEvidenceBinding(
-                Binding.Work, Package, Binding.FormexSource, Binding.XhtmlSource,
-                Binding.PdfSource, Formex, Xhtml, Binding.PdfReceipt,
+                Binding.WorkSource, Binding.Work, Package, Binding.PdfManifestation,
+                Formex, Xhtml, Binding.PdfReceipt,
                 Binding.ReconciliationProfileRef, members);
             var route = Route(binding.Work.CanonicalKey, binding.PdfReceipt, PdfLength);
             return this with

@@ -170,25 +170,72 @@ public sealed class EuFormexAnnexClassificationReconciliationTests
 
     internal static async Task<Fixture> AcquiredFixtureAsync(
         bool formexTwoMembers = false,
-        byte[]? formexBytes = null)
+        byte[]? formexBytes = null,
+        bool imageOnly = false,
+        bool retainedPublisherSpecimens = false)
     {
+        var xhtmlBytes = retainedPublisherSpecimens
+            ? await EuAnnexEvidenceBinderTests.FixtureBytesAsync("new-xhtml-200-body.bin")
+            : EuAnnexEvidenceBinderTests.XhtmlBytes("ANNEX", formexTwoMembers);
+        var pdfBytes = retainedPublisherSpecimens
+            ? await EuAnnexEvidenceBinderTests.FixtureBytesAsync("new-pdfa2a-200-body.bin")
+            : EuAnnexEvidenceBinderTests.PageLabelPdf(
+                7, "<< /S /D /St 1 >>", image: imageOnly);
+        formexBytes ??= retainedPublisherSpecimens
+            ? await EuAnnexEvidenceBinderTests.FixtureBytesAsync("new-fmx4-200-body.bin")
+            : null;
+        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
+        var run = await EuAxiomWiringHarness.RunAsync(
+            static root => EuAcquisitionTestFixture.AxiomAbsenceScriptFor(root),
+            custodyStore: store,
+            documentFetchResponse: request => EuAcquisitionTestFixture.BinaryResponse(
+                request, System.Net.HttpStatusCode.OK, xhtmlBytes,
+                "application/xhtml+xml;charset=UTF-8"));
+        var heldWork = run.CorpusRecordSet!.Set.Records.Single(static record =>
+            record.Body.Kind == Lex.V3.Contracts.Source.Corpus.CorpusBodyRecordKind.Held);
         var source = await EuAnnexEvidenceBinderTests.FixtureAsync(
-            EuAnnexEvidenceBinderTests.PageLabelPdf(7, "<< /S /D /St 1 >>"),
+            pdfBytes,
             formexTwoMembers: formexTwoMembers,
             xhtmlTwoMembers: formexTwoMembers,
-            formexBytes: formexBytes);
-        var bound = await source.RunAsync();
+            formexBytes: formexBytes,
+            xhtmlBytes: xhtmlBytes,
+            custodyStore: store,
+            heldWork: heldWork,
+            productionCorpus: run.CorpusRecordSet);
+        var production = new EuAnnexBodyProduction(source.Store);
+        var bound = await production.BindAsync(
+            source.Boundary, source.Package, source.PdfManifestation,
+            run.CorpusRecordSet!, source.Formex, source.Xhtml, source.PdfReceipt,
+            source.Profile.Bytes, source.Profile.Reference, CancellationToken.None);
         Assert.AreEqual(EuAnnexEvidenceBindingRefusal.None, bound.Refusal, bound.Detail);
         var binding = bound.Binding!;
         var address = EuDocumentFetchAddress.TryCreate(
             "cellar", binding.Work.CanonicalKey, EuManifestationMediaType.ApplicationPdf,
             EuDocumentLanguage.Eng, out var addressRefusal)!;
         Assert.AreEqual(EuDocumentFetchAddressRefusal.None, addressRefusal);
-        var classification = new EuBoundAnnexBodyClassification(
-            binding, address, null!, source.Profile.Reference,
-            binding.Members.Select(static member =>
-                new EuBoundAnnexBodyMemberClassification(
-                    member, null, EuBoundAnnexBodyClassificationGap.MappingUnresolved)).ToArray());
+        EuBoundAnnexBodyClassification classification;
+        if (imageOnly || retainedPublisherSpecimens)
+        {
+            var route = EuBoundAnnexBodyClassifierTests.Route(
+                binding.Work.CanonicalKey, binding.PdfReceipt,
+                checked((int)binding.PdfReceipt.Reference.ByteLength));
+            var profile = EuBoundAnnexBodyClassifierTests.Profile(
+                binding.IdentitySha256, binding.PdfReceipt.Reference.ContentSha256);
+            var classified = await production.ClassifyAsync(
+                binding, route.Address, route.Request, route.Request, route.Evidence,
+                profile.Bytes, profile.Reference, CancellationToken.None);
+            Assert.AreEqual(EuBoundAnnexBodyClassificationRefusal.None,
+                classified.Refusal, classified.Detail);
+            classification = classified.Classification!;
+        }
+        else
+        {
+            classification = new EuBoundAnnexBodyClassification(
+                binding, address, null!, source.Profile.Reference,
+                binding.Members.Select(static member =>
+                    new EuBoundAnnexBodyMemberClassification(
+                        member, null, EuBoundAnnexBodyClassificationGap.MappingUnresolved)).ToArray());
+        }
         var expression = LanguageScopedExpression.FromRetainedSource(
             new LanguageScopedExpressionIdentity(
                 binding.Work.PublisherUri, binding.Expression.PublisherUri),
@@ -198,9 +245,8 @@ public sealed class EuFormexAnnexClassificationReconciliationTests
             LanguageScopedExpressionLineage.FromContributions(
                 [new(LanguageScopedExpressionContribution.IdentityAndLanguage,
                     source.Formex.SourceReceipt)]));
-        var run = await EuAxiomWiringHarness.RunAsync(
-            static root => EuAcquisitionTestFixture.AxiomAbsenceScriptFor(root));
         return new Fixture(
+            source.Store,
             run,
             source.Formex,
             EuFormexPackageOutcome.Acquired(expression, source.Formex),
@@ -225,6 +271,7 @@ public sealed class EuFormexAnnexClassificationReconciliationTests
     }
 
     internal sealed record Fixture(
+        ICustodyStore Store,
         EuQueryExecutionResult Run,
         EuFormexAnnexInventory Inventory,
         EuFormexPackageOutcome Outcome,

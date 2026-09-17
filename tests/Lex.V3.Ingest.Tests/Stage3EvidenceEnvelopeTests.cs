@@ -206,7 +206,7 @@ public sealed class Stage3EvidenceEnvelopeTests
     public async Task EveryClassificationSourceMustBelongToTheEuropeCorpus()
     {
         var acquired = await EuFormexAnnexClassificationReconciliationTests.AcquiredFixtureAsync();
-        var eu = acquired.Run;
+        var eu = await CompleteEuropeAsync();
         var luxembourg = await LuxembourgQueryExecutionAdapterTests.RunEmptyDeliveredForEnvelopeAsync();
         var formex = EuFormexAnnexClassificationReconciliationTests.Reconciliation(
             eu, [acquired.Outcome]);
@@ -220,7 +220,7 @@ public sealed class Stage3EvidenceEnvelopeTests
             refusal);
         Assert.AreEqual(
             ScopeManifestCanonicalWriter.ComputeObjectRefSha256(
-                acquired.Classification.Binding.FormexSource.ObjectRef),
+                acquired.Classification.Binding.WorkSource.ObjectRef),
             detail);
     }
 
@@ -228,13 +228,7 @@ public sealed class Stage3EvidenceEnvelopeTests
     public async Task AcquiredClassificationsWhoseSourcesBelongToEuropeMintTheEnvelope()
     {
         var acquired = await EuFormexAnnexClassificationReconciliationTests.AcquiredFixtureAsync();
-        var eu = new[]
-            {
-                acquired.Classification.Binding.FormexSource.ObjectRef,
-                acquired.Classification.Binding.XhtmlSource.ObjectRef,
-                acquired.Classification.Binding.PdfSource.ObjectRef,
-            }
-            .Aggregate(acquired.Run, Stage3EvidenceLineageTests.AddEuropeCorpusRecord);
+        var eu = acquired.Run;
         var luxembourg = await LuxembourgQueryExecutionAdapterTests.RunEmptyDeliveredForEnvelopeAsync();
         var formex = EuFormexAnnexClassificationReconciliationTests.Reconciliation(
             eu, [acquired.Outcome]);
@@ -247,60 +241,6 @@ public sealed class Stage3EvidenceEnvelopeTests
         Assert.AreEqual(Stage3EvidenceEnvelopeRefusal.None, refusal, detail);
         Assert.IsNotNull(envelope);
         Assert.AreSame(classifications, envelope.FormexAnnexClassifications);
-    }
-
-    [TestMethod]
-    public async Task XhtmlClassificationSourceMustBelongToTheEuropeCorpus()
-    {
-        var acquired = await EuFormexAnnexClassificationReconciliationTests.AcquiredFixtureAsync();
-        var eu = new[]
-            {
-                acquired.Classification.Binding.FormexSource.ObjectRef,
-                acquired.Classification.Binding.PdfSource.ObjectRef,
-            }
-            .Aggregate(acquired.Run, Stage3EvidenceLineageTests.AddEuropeCorpusRecord);
-        var luxembourg = await LuxembourgQueryExecutionAdapterTests.RunEmptyDeliveredForEnvelopeAsync();
-        var formex = EuFormexAnnexClassificationReconciliationTests.Reconciliation(
-            eu, [acquired.Outcome]);
-        var classifications = CompleteClassifications(formex, [acquired.Classification]);
-        var fidelity = Stage3FidelityPreservationReconciliationTests.Complete(eu, luxembourg);
-
-        Assert.IsNull(TryCreate(
-            eu, luxembourg, formex, classifications, fidelity, out var refusal, out var detail));
-        Assert.AreEqual(
-            Stage3EvidenceEnvelopeRefusal.EuropeFormexClassificationSourceOutsideCorpus,
-            refusal);
-        Assert.AreEqual(
-            ScopeManifestCanonicalWriter.ComputeObjectRefSha256(
-                acquired.Classification.Binding.XhtmlSource.ObjectRef),
-            detail);
-    }
-
-    [TestMethod]
-    public async Task PdfClassificationSourceMustBelongToTheEuropeCorpus()
-    {
-        var acquired = await EuFormexAnnexClassificationReconciliationTests.AcquiredFixtureAsync();
-        var eu = new[]
-            {
-                acquired.Classification.Binding.FormexSource.ObjectRef,
-                acquired.Classification.Binding.XhtmlSource.ObjectRef,
-            }
-            .Aggregate(acquired.Run, Stage3EvidenceLineageTests.AddEuropeCorpusRecord);
-        var luxembourg = await LuxembourgQueryExecutionAdapterTests.RunEmptyDeliveredForEnvelopeAsync();
-        var formex = EuFormexAnnexClassificationReconciliationTests.Reconciliation(
-            eu, [acquired.Outcome]);
-        var classifications = CompleteClassifications(formex, [acquired.Classification]);
-        var fidelity = Stage3FidelityPreservationReconciliationTests.Complete(eu, luxembourg);
-
-        Assert.IsNull(TryCreate(
-            eu, luxembourg, formex, classifications, fidelity, out var refusal, out var detail));
-        Assert.AreEqual(
-            Stage3EvidenceEnvelopeRefusal.EuropeFormexClassificationSourceOutsideCorpus,
-            refusal);
-        Assert.AreEqual(
-            ScopeManifestCanonicalWriter.ComputeObjectRefSha256(
-                acquired.Classification.Binding.PdfSource.ObjectRef),
-            detail);
     }
 
     [TestMethod]

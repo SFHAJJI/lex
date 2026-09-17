@@ -364,21 +364,13 @@ public sealed class Stage3EvidenceEnvelope
             return null;
         }
 
-        var europeObjectRefs = europe.CorpusRecordSet!.Set.Records
-            .Select(static record => record.ObjectRef)
-            .ToHashSet();
         var sourceOutsideCorpus = formexAnnexClassifications.Classifications
-            .SelectMany(static classification => new[]
-            {
-                classification.Binding.FormexSource.ObjectRef,
-                classification.Binding.XhtmlSource.ObjectRef,
-                classification.Binding.PdfSource.ObjectRef,
-            })
-            .FirstOrDefault(source => !europeObjectRefs.Contains(source));
+            .Select(static classification => classification.Binding.WorkSource)
+            .FirstOrDefault(source => !europe.CorpusRecordSet!.Set.Records.Contains(source));
         if (sourceOutsideCorpus is not null)
         {
             refusal = Stage3EvidenceEnvelopeRefusal.EuropeFormexClassificationSourceOutsideCorpus;
-            detail = ScopeManifestCanonicalWriter.ComputeObjectRefSha256(sourceOutsideCorpus);
+            detail = ScopeManifestCanonicalWriter.ComputeObjectRefSha256(sourceOutsideCorpus.ObjectRef);
             return null;
         }
 
