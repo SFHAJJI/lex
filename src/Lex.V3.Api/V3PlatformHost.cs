@@ -63,6 +63,35 @@ internal sealed class V3PlatformOperationResult
     public JsonElement Value { get; }
 }
 
+internal sealed class V3PlatformOperationRefusal
+{
+    public V3PlatformOperationRefusal(
+        V3PlatformOperationRequest request,
+        string code,
+        JsonElement helpfulPayload)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentException.ThrowIfNullOrWhiteSpace(code);
+        if (helpfulPayload.ValueKind != JsonValueKind.Object)
+        {
+            throw new ArgumentException("A refusal helpful payload must be an object.", nameof(helpfulPayload));
+        }
+
+        OperationId = request.OperationId;
+        Schema = request.Operation.RefusalSchema;
+        Code = code;
+        HelpfulPayload = helpfulPayload.Clone();
+    }
+
+    public string OperationId { get; }
+
+    public string Schema { get; }
+
+    public string Code { get; }
+
+    public JsonElement HelpfulPayload { get; }
+}
+
 internal sealed class V3McpToolResult
 {
     private readonly byte[] _jsonUtf8;
@@ -96,6 +125,7 @@ internal sealed class V3PlatformHost
 
     private readonly V3OperationRegistry _registry = V3OperationRegistry.Reviewed;
     private readonly V3EnvelopeBuilder _builder = new(V3OperationRegistry.Reviewed);
+    private readonly V3PlatformSchemaDocuments _schemas = V3PlatformSchemaDocuments.Reviewed;
 
     public async Task WriteRestSuccessAsync(
         HttpResponse response,
@@ -138,6 +168,47 @@ internal sealed class V3PlatformHost
         return Task.FromResult(new V3McpToolResult(bytes));
     }
 
+    public async Task WriteRestRefusalAsync(
+        HttpResponse response,
+        ReadOnlyMemory<byte> requestUtf8,
+        string requestReference,
+        V3EnvelopeContext context,
+        Func<V3PlatformOperationRequest, V3PlatformOperationRefusal> execute,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(response);
+        var bytes = ExecuteRefusal(
+            requestUtf8,
+            requestReference,
+            context,
+            execute,
+            V3EnvelopeProjectionKind.Rest,
+            cancellationToken);
+        await BufferedHttpResponse.WritePreparedJsonAsync(
+            response,
+            StatusCodes.Status200OK,
+            "application/json;charset=utf-8",
+            bytes,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public Task<V3McpToolResult> CreateMcpRefusalAsync(
+        ReadOnlyMemory<byte> requestUtf8,
+        string requestReference,
+        V3EnvelopeContext context,
+        Func<V3PlatformOperationRequest, V3PlatformOperationRefusal> execute,
+        CancellationToken cancellationToken)
+    {
+        var bytes = ExecuteRefusal(
+            requestUtf8,
+            requestReference,
+            context,
+            execute,
+            V3EnvelopeProjectionKind.Mcp,
+            cancellationToken);
+        return Task.FromResult(new V3McpToolResult(bytes));
+    }
+
     private byte[] ExecuteSuccess(
         ReadOnlyMemory<byte> requestUtf8,
         string requestReference,
@@ -161,6 +232,9 @@ internal sealed class V3PlatformHost
             throw new InvalidOperationException("The operation result is not bound to its reviewed schema.");
         }
 
+        using var resultDocument = ResultDocument(result);
+        _schemas.ValidateResult(operation, resultDocument.RootElement);
+
         var envelope = _builder.Success(
             requestReference,
             operation.OperationId,
@@ -169,6 +243,40 @@ internal sealed class V3PlatformHost
             result.Schema,
             result.ObjectType,
             result.Value);
+        return V3EnvelopeJson.Project(envelope, _registry, projection);
+    }
+
+    private byte[] ExecuteRefusal(
+        ReadOnlyMemory<byte> requestUtf8,
+        string requestReference,
+        V3EnvelopeContext context,
+        Func<V3PlatformOperationRequest, V3PlatformOperationRefusal> execute,
+        V3EnvelopeProjectionKind projection,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(execute);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var request = ParseRequest(requestUtf8);
+        var operation = _registry.Operation(request.OperationId);
+        var refusal = execute(request) ?? throw new InvalidOperationException("The operation returned no refusal.");
+        cancellationToken.ThrowIfCancellationRequested();
+        if (!string.Equals(refusal.OperationId, operation.OperationId, StringComparison.Ordinal) ||
+            !string.Equals(refusal.Schema, operation.RefusalSchema, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("The operation refusal is not bound to its reviewed schema.");
+        }
+
+        using var refusalDocument = RefusalDocument(refusal);
+        _schemas.ValidateRefusal(refusalDocument.RootElement);
+        var envelope = _builder.Refusal(
+            requestReference,
+            operation.OperationId,
+            context,
+            refusal.Schema,
+            refusal.Code,
+            refusal.HelpfulPayload);
         return V3EnvelopeJson.Project(envelope, _registry, projection);
     }
 
@@ -211,6 +319,26 @@ internal sealed class V3PlatformHost
             throw new JsonException("The operation is not declared by the reviewed registry.", exception);
         }
 
+        _schemas.ValidateRequest(operation, root);
+
         return new V3PlatformOperationRequest(operation, root.GetProperty("parameters"));
     }
+
+    private static JsonDocument ResultDocument(V3PlatformOperationResult result) =>
+        JsonDocument.Parse(
+            JsonSerializer.SerializeToUtf8Bytes(new
+            {
+                operation_id = result.OperationId,
+                object_type = result.ObjectType,
+                value = result.Value,
+            }));
+
+    private static JsonDocument RefusalDocument(V3PlatformOperationRefusal refusal) =>
+        JsonDocument.Parse(
+            JsonSerializer.SerializeToUtf8Bytes(new
+            {
+                schema = refusal.Schema,
+                code = refusal.Code,
+                helpful_payload = refusal.HelpfulPayload,
+            }));
 }

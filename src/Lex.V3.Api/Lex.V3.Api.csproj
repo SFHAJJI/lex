@@ -10,6 +10,7 @@
     <ContainerRepository>lex-v3-s0-05</ContainerRepository>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="JsonSchema.Net" Version="9.4.0" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.11" />
   </ItemGroup>
   <ItemGroup>
@@ -17,6 +18,9 @@
     <ProjectReference Include="../Lex.V3.Contracts/Lex.V3.Contracts.csproj" />
   </ItemGroup>
   <ItemGroup>
+    <EmbeddedResource Include="../../schemas/v3-platform/*.schema.json">
+      <LogicalName>Lex.V3.Api.PlatformSchemas.%(Filename)%(Extension)</LogicalName>
+    </EmbeddedResource>
     <None Remove="preview-graph/**/*" />
     <None Remove="preview-trust/**/*" />
     <Content Remove="preview-graph/**/*" />
