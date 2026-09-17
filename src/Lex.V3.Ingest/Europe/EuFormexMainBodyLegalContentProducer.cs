@@ -43,6 +43,7 @@ public sealed class EuFormexMainBodyArticle
         string heading,
         string language,
         string publisherDate,
+        string searchableText,
         IReadOnlyList<EuFormexMainBodyToken> tokens)
     {
         PublisherExpressionId = publisherExpressionId;
@@ -51,6 +52,7 @@ public sealed class EuFormexMainBodyArticle
         Heading = heading;
         Language = language;
         PublisherDate = publisherDate;
+        SearchableText = searchableText;
         Tokens = Array.AsReadOnly(tokens.ToArray());
         IdentitySha256 = IdentityOf(this);
     }
@@ -61,6 +63,7 @@ public sealed class EuFormexMainBodyArticle
     public string Heading { get; }
     public string Language { get; }
     public string PublisherDate { get; }
+    public string SearchableText { get; }
     public IReadOnlyList<EuFormexMainBodyToken> Tokens { get; }
     public string IdentitySha256 { get; }
 
@@ -74,6 +77,7 @@ public sealed class EuFormexMainBodyArticle
         Append(hash, article.Heading);
         Append(hash, article.Language);
         Append(hash, article.PublisherDate);
+        Append(hash, article.SearchableText);
         foreach (var token in article.Tokens)
         {
             Append(hash, ((int)token.Kind).ToString(System.Globalization.CultureInfo.InvariantCulture));
@@ -281,6 +285,7 @@ public sealed class EuFormexMainBodyLegalContentProducer
                         heading,
                         language,
                         publisherDate,
+                        SearchableTextOf(element),
                         tokens);
                     if (!identities.Add(article.IdentitySha256))
                         return Refused(EuFormexMainBodyLegalContentDisposition.UnsupportedContentShape,
@@ -312,6 +317,43 @@ public sealed class EuFormexMainBodyLegalContentProducer
         var tokens = new List<EuFormexMainBodyToken>();
         AppendTokens(article, tokens);
         return Array.AsReadOnly(tokens.ToArray());
+    }
+
+    private static string SearchableTextOf(XElement article)
+    {
+        var builder = new StringBuilder();
+        AppendSearchableText(article, builder);
+        return string.Join(' ', builder.ToString()
+            .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+    }
+
+    private static void AppendSearchableText(XElement element, StringBuilder builder)
+    {
+        if (element.Name.LocalName is "NOTE" or "FT") return;
+        var block = element.Name.LocalName is "TI.ART" or "STI.ART" or "PARAG" or "NO.PARAG"
+            or "ALINEA" or "LIST" or "ITEM" or "NP" or "NO.P" or "P" or "TXT";
+        if (block) AppendSearchBoundary(builder);
+        foreach (var node in element.Nodes())
+        {
+            if (node is XText text)
+            {
+                builder.Append(text.Value);
+            }
+            else if (node is XElement child && child.Name.LocalName is "QUOT.START" or "QUOT.END")
+            {
+                builder.Append(QuoteCharacter(child));
+            }
+            else if (node is XElement childElement)
+            {
+                AppendSearchableText(childElement, builder);
+            }
+        }
+        if (block) AppendSearchBoundary(builder);
+    }
+
+    private static void AppendSearchBoundary(StringBuilder builder)
+    {
+        if (builder.Length > 0 && !char.IsWhiteSpace(builder[^1])) builder.Append(' ');
     }
 
     private static void AppendTokens(XElement element, List<EuFormexMainBodyToken> tokens)

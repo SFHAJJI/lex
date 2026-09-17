@@ -264,9 +264,7 @@ public static class EuropeIndexBuilder
                     article.Heading,
                     WordingDate(article.PublisherDate),
                     LanguageToken(article.Language),
-                    string.Join(' ', article.Tokens
-                        .Where(static token => token.Kind != EuFormexMainBodyTokenKind.Footnote)
-                        .Select(static token => token.Text)),
+                    article.SearchableText,
                     JsonSerializer.Serialize(article.Tokens.Select(static token => new
                     {
                         kind = ContractWire.NameOf(token.Kind),
