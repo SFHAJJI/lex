@@ -85,7 +85,7 @@ internal static class EuAxiomWiringHarness
             ["P"] = EuAcquisitionTestFixture.ScriptFor(
                 "P", pRows.Count, pRows, EuAcquisitionTestFixture.ObjectFactsProjection),
             ["X"] = EuAcquisitionTestFixture.ScriptFor(
-                "X", xRows.Length, xRows, EuAcquisitionTestFixture.ExpressionFactsProjection),
+                "X", xRows.Count, xRows, EuAcquisitionTestFixture.ExpressionFactsProjection),
             ["W"] = EuAcquisitionTestFixture.ScriptFor(
                 "W", wRows.Length, wRows, EuAcquisitionTestFixture.RootWatermarkProjection),
             ["M"] = EuAcquisitionTestFixture.ManifestationScriptFor(rootIri),

@@ -57,7 +57,6 @@ public sealed class LexCorpus6BuilderTests
             new[] { new string('3', 64), new string('4', 64) },
             new[] { new string('5', 64) },
             [corrigendumProduction],
-            [],
             [member]);
         var digest = LexCorpus6Builder.ComputeSha256(LexCorpus6Builder.Write(fixedSet));
         Assert.AreEqual("6b7102e82a7006b6f6258f5d6982464308942ca9b10830f52c7b7f7f769bcca2", digest);
