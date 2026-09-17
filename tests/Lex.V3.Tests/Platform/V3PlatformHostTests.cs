@@ -134,9 +134,81 @@ public sealed class V3PlatformHostTests
                 CancellationToken.None));
     }
 
+    [TestMethod]
+    public void ReviewedSchemaDocumentsExecuteAgainstRequestAndResultPayloads()
+    {
+        var schemas = V3PlatformSchemaDocuments.Reviewed;
+        var operation = V3OperationRegistry.Reviewed.Operation("resolve");
+        using var request = JsonDocument.Parse(
+            "{\"operation_id\":\"resolve\",\"parameters\":{\"identifier\":\"eli/example\"}}");
+        using var result = JsonDocument.Parse(
+            "{\"operation_id\":\"resolve\",\"object_type\":\"work_resolution\",\"value\":{}}");
+
+        schemas.ValidateRequest(operation, request.RootElement);
+        schemas.ValidateResult(operation, result.RootElement);
+    }
+
+    [TestMethod]
+    public void ResultSchemaCanRejectIndependentlyOfRegistryIdentityBinding()
+    {
+        var schemas = V3PlatformSchemaDocuments.Reviewed;
+        var operation = V3OperationRegistry.Reviewed.Operation("resolve");
+        using var invalid = JsonDocument.Parse(
+            "{\"operation_id\":\"resolve\",\"object_type\":\"work_resolution\"}");
+
+        Assert.ThrowsExactly<JsonException>(() => schemas.ValidateResult(operation, invalid.RootElement));
+    }
+
+    [TestMethod]
+    public async Task KnownRefusalUsesMandatoryHelpfulPayloadAndPreservesRestMcpBytes()
+    {
+        var host = new V3PlatformHost();
+        var request = Encoding.UTF8.GetBytes(
+            "{\"operation_id\":\"resolve\",\"parameters\":{\"identifier\":\"eli/example\"}}");
+        using var helpful = JsonDocument.Parse("{\"required_corpus\":\"lu\"}");
+
+        var restContext = new DefaultHttpContext();
+        await using var restBody = new MemoryStream();
+        restContext.Response.Body = restBody;
+        await host.WriteRestRefusalAsync(
+            restContext.Response,
+            request,
+            "req_refusal",
+            RefusalContext(),
+            bound => new V3PlatformOperationRefusal(
+                bound,
+                "no_corpus_mounted",
+                helpful.RootElement),
+            CancellationToken.None);
+        var mcp = await host.CreateMcpRefusalAsync(
+            request,
+            "req_refusal",
+            RefusalContext(),
+            bound => new V3PlatformOperationRefusal(
+                bound,
+                "no_corpus_mounted",
+                helpful.RootElement),
+            CancellationToken.None);
+
+        CollectionAssert.AreEqual(restBody.ToArray(), mcp.JsonUtf8);
+        var envelope = V3EnvelopeJson.ParseAndVerify(mcp.JsonUtf8, V3OperationRegistry.Reviewed);
+        Assert.AreEqual(V3Verdicts.Refuse, envelope.Verdict);
+        Assert.AreEqual("no_corpus_mounted", envelope.Refusal!.Code);
+        Assert.AreEqual("lu", envelope.Refusal.HelpfulPayload.GetProperty("required_corpus").GetString());
+    }
+
     private static V3EnvelopeContext Context() => new(
         PublisherId.LuLegilux,
         "success",
+        TimelineSemantics.PublisherApplicability,
+        new V3SnapshotReference("snapshot", Digest),
+        "lu",
+        false,
+        new V3Freshness(DateTimeOffset.Parse("2026-09-17T00:00:00Z"), "current"));
+
+    private static V3EnvelopeContext RefusalContext() => new(
+        PublisherId.LuLegilux,
+        "refusal",
         TimelineSemantics.PublisherApplicability,
         new V3SnapshotReference("snapshot", Digest),
         "lu",
