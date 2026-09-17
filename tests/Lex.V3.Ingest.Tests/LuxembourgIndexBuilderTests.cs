@@ -13,7 +13,7 @@ namespace Lex.V3.Ingest.Tests;
 [TestClass]
 public sealed class LuxembourgIndexBuilderTests
 {
-    private const string Retained1984 = "loi-1984-02-24-n1--2020-09-01--fr.bin";
+    private const string Retained1991 = "loi-1991-08-10-n3--2024-02-01--fr.bin";
 
     [TestMethod]
     public void BuilderAndStrictReaderShipAsOneTerminalSlice()
@@ -88,13 +88,13 @@ public sealed class LuxembourgIndexBuilderTests
     public async Task RetainedPublisherAknProducesDayExactCapabilitiesWithoutAdvertisingTheGap()
     {
         const string manifestation =
-            "http://data.legilux.public.lu/eli/etat/leg/loi/1984/02/24/n1/jo/fr/xml";
+            "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo/fr/xml";
         const string item =
-            "http://data.legilux.public.lu/filestore/eli/etat/leg/loi/1984/02/24/n1/jo/fr/xml/eli-etat-leg-loi-1984-02-24-n1-jo-fr-xml.xml";
+            "http://data.legilux.public.lu/filestore/eli/etat/leg/loi/1991/08/10/n3/jo/fr/xml/eli-etat-leg-loi-1991-08-10-n3-jo-fr-xml.xml";
         var xml = await File.ReadAllBytesAsync(Path.Combine(
-            AppContext.BaseDirectory, "Fixtures", "LuAknLegalContent", Retained1984));
+            AppContext.BaseDirectory, "Fixtures", "LuAknLegalContent", Retained1991));
         Assert.AreEqual(
-            "5d513304238bbda30578f59f963b227d54ca1fbce9283c55b9c5aa7b4436e48f",
+            "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
             Convert.ToHexStringLower(SHA256.HashData(xml)));
         ICustodyStore store = new RoutedHttpAcquisitionSessionTests.MultiObjectCustodyStore();
         var luxembourg = await LuxembourgGazetteAcquisitionTests
@@ -116,17 +116,17 @@ public sealed class LuxembourgIndexBuilderTests
         using var reader = LuxembourgIndexReader.OpenAndVerify(
             built.IndexRef, built.IndexBytes.Span, corpus.ArtifactRef, built.CapabilityManifest);
         Assert.AreEqual(luxembourgMembers.Length, reader.MemberCount);
-        Assert.AreEqual(6, reader.ArticleCount);
-        Assert.HasCount(2, built.CapabilityManifest.Cells);
+        Assert.AreEqual(54, reader.ArticleCount);
+        Assert.HasCount(5, built.CapabilityManifest.Cells);
         var cells = built.CapabilityManifest.Cells.OrderBy(static cell => cell.PeriodFrom).ToArray();
-        Assert.AreEqual(new DateOnly(1984, 3, 2), cells[0].PeriodFrom);
+        Assert.AreEqual(new DateOnly(2021, 8, 22), cells[0].PeriodFrom);
         Assert.AreEqual(cells[0].PeriodFrom, cells[0].PeriodTo);
-        Assert.AreEqual(5, cells[0].Population);
-        Assert.AreEqual(new DateOnly(2020, 9, 1), cells[1].PeriodFrom);
-        Assert.AreEqual(cells[1].PeriodFrom, cells[1].PeriodTo);
-        Assert.AreEqual(1, cells[1].Population);
+        Assert.AreEqual(39, cells[0].Population);
+        Assert.AreEqual(new DateOnly(2024, 2, 1), cells[^1].PeriodFrom);
+        Assert.AreEqual(cells[^1].PeriodFrom, cells[^1].PeriodTo);
+        Assert.AreEqual(1, cells[^1].Population);
         var gap = reader.Search(
-            "fra", new DateOnly(1990, 1, 1), new DateOnly(2010, 12, 31), "langue");
+            "fra", new DateOnly(2022, 1, 1), new DateOnly(2022, 12, 31), "article");
         Assert.AreEqual(V3IndexCapabilityLookupOutcome.FilterNotSupportedByIndex, gap.Outcome);
         Assert.IsEmpty(gap.ArticleIdentities);
     }
