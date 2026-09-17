@@ -177,6 +177,10 @@ public sealed class LexCorpus6BuilderTests
                     value.CorrectedWorkRoot == projectedTripwire.CorrectedWorkRoot);
                 Assert.AreEqual(sourceTripwire.TripwireSha256, projectedTripwire.TripwireSha256);
                 Assert.HasCount(sourceTripwire.Lines.Count, projectedTripwire.Lines);
+                CollectionAssert.AreEqual(
+                    sourceTripwire.CorrigendaWithoutDerivedExpressions
+                        .Select(static value => value.CorrigendumWorkRoot).ToArray(),
+                    projectedTripwire.CorrigendaWithoutDerivedExpressions.ToArray());
                 foreach (var projectedLine in projectedTripwire.Lines)
                 {
                     var sourceLine = sourceTripwire.Lines.Single(value =>
@@ -190,6 +194,11 @@ public sealed class LexCorpus6BuilderTests
                     Assert.AreEqual(sourceLine.ExpressionContentSha256, projectedLine.ExpressionContentSha256);
                 }
             }
+            CollectionAssert.AreEqual(
+                tripwireSet.UnresolvedGaps
+                    .Select(static gap => (gap.WorkRoot, gap.Reason)).ToArray(),
+                projected.UnresolvedGaps
+                    .Select(static gap => (gap.WorkRoot, gap.Reason)).ToArray());
         }
         Assert.IsTrue(reopened.Set.CorrigendumProductions
             .SelectMany(static production => production.Tripwires)
@@ -217,6 +226,17 @@ public sealed class LexCorpus6BuilderTests
         var obligations = System.Text.Json.Nodes.JsonNode.Parse(canonical)!.AsObject();
         obligations["unresolved_fidelity_obligations"]!.AsArray().RemoveAt(0);
         Assert.ThrowsExactly<ArgumentException>(() => Reopen(obligations.ToJsonString(), built));
+
+        var listedCorrigendum = System.Text.Json.Nodes.JsonNode.Parse(canonical)!.AsObject();
+        listedCorrigendum["corrigendum_productions"]!.AsArray()[0]!["tripwires"]!.AsArray()[0]!
+            ["corrigenda_without_derived_expressions"]!.AsArray().Add("https://example.invalid/corrigendum");
+        Assert.ThrowsExactly<ArgumentException>(() => Reopen(listedCorrigendum.ToJsonString(), built));
+
+        var gap = System.Text.Json.Nodes.JsonNode.Parse(canonical)!.AsObject();
+        gap["corrigendum_productions"]!.AsArray()[0]!["unresolved_gaps"]!.AsArray().Add(
+            System.Text.Json.Nodes.JsonNode.Parse(
+                "{\"work_root\":\"https://example.invalid/work\",\"reason\":\"corrects_not_stated_by_consulted_delivery\"}"));
+        Assert.ThrowsExactly<ArgumentException>(() => Reopen(gap.ToJsonString(), built));
     }
 
     [TestMethod]

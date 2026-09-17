@@ -605,6 +605,26 @@ public sealed record LexCorpus6CorrigendumTripwire(
             LexCorpus6CorrigendumLine.RequireAbsoluteIri(root, nameof(CorrigendaWithoutDerivedExpressions));
         LexCorpus6Member.RequireSortedStrings(
             CorrigendaWithoutDerivedExpressions, nameof(CorrigendaWithoutDerivedExpressions));
+        var canonical = new EuCorrigendumTripwire.CanonicalTripwireDocument(
+            EuCorrigendumTripwire.Schema,
+            CorrectedWorkRoot,
+            Lines.Select(static line => new EuCorrigendumTripwire.CanonicalLineDocument(
+                line.CorrigendumWorkRoot,
+                line.PublisherExpressionId,
+                line.LanguageIri,
+                line.Reach.ToString(),
+                line.DateState.ToString(),
+                line.PublisherDateRawLexical,
+                line.PublisherDateDatatypeIri,
+                line.ExpressionContentSha256)).ToArray(),
+            CorrigendaWithoutDerivedExpressions);
+        if (!string.Equals(
+                TripwireSha256,
+                EuCorrigendumTripwire.CanonicalSha256Of(canonical),
+                StringComparison.Ordinal))
+        {
+            throw new ArgumentException("The tripwire identity does not match its canonical projection.", nameof(TripwireSha256));
+        }
         return this;
     }
 }
@@ -630,8 +650,7 @@ public sealed record LexCorpus6CorrigendumProduction(
     string TripwireReceiptSha256,
     string TripwireLineageReceiptSha256,
     IReadOnlyList<LexCorpus6CorrigendumTripwire> Tripwires,
-    IReadOnlyList<LexCorpus6CorrigendumGap> UnresolvedGaps,
-    string ProjectionSha256)
+    IReadOnlyList<LexCorpus6CorrigendumGap> UnresolvedGaps)
 {
     public LexCorpus6CorrigendumProduction Validate()
     {
@@ -662,8 +681,32 @@ public sealed record LexCorpus6CorrigendumProduction(
             if (string.CompareOrdinal(UnresolvedGaps[i - 1].WorkRoot, UnresolvedGaps[i].WorkRoot) >= 0)
                 throw new ArgumentException("Corrigendum gaps must be sorted and unique.", nameof(UnresolvedGaps));
         }
-        if (!string.Equals(ProjectionSha256, ComputeProjectionSha256(this), StringComparison.Ordinal))
-            throw new ArgumentException("The corrigendum projection identity does not match its content.", nameof(ProjectionSha256));
+        var canonical = new EuCorrigendumTripwireSet.CanonicalSetDocument(
+            EuCorrigendumTripwireSet.Schema,
+            Tripwires.Select(static tripwire => new EuCorrigendumTripwire.CanonicalTripwireDocument(
+                EuCorrigendumTripwire.Schema,
+                tripwire.CorrectedWorkRoot,
+                tripwire.Lines.Select(static line => new EuCorrigendumTripwire.CanonicalLineDocument(
+                    line.CorrigendumWorkRoot,
+                    line.PublisherExpressionId,
+                    line.LanguageIri,
+                    line.Reach.ToString(),
+                    line.DateState.ToString(),
+                    line.PublisherDateRawLexical,
+                    line.PublisherDateDatatypeIri,
+                    line.ExpressionContentSha256)).ToArray(),
+                tripwire.CorrigendaWithoutDerivedExpressions)).ToArray(),
+            UnresolvedGaps.Select(static gap =>
+                new EuCorrigendumTripwireSet.CanonicalGapDocument(
+                    gap.WorkRoot,
+                    gap.Reason.ToString())).ToArray());
+        if (!string.Equals(
+                CanonicalSha256,
+                EuCorrigendumTripwireSet.CanonicalSha256Of(canonical),
+                StringComparison.Ordinal))
+        {
+            throw new ArgumentException("The corrigendum set identity does not match its canonical projection.", nameof(CanonicalSha256));
+        }
         return this;
     }
 
@@ -694,39 +737,8 @@ public sealed record LexCorpus6CorrigendumProduction(
                 tripwire.CorrigendaWithoutDerivedExpressions
                     .Select(static value => value.CorrigendumWorkRoot).ToArray())).ToArray(),
             set.UnresolvedGaps.Select(static gap =>
-                new LexCorpus6CorrigendumGap(gap.WorkRoot, gap.Reason)).ToArray(),
-            string.Empty);
-        return production with { ProjectionSha256 = ComputeProjectionSha256(production) };
-    }
-
-    private static string ComputeProjectionSha256(LexCorpus6CorrigendumProduction production)
-    {
-        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-        void Add(string? value)
-        {
-            hash.AppendData(Encoding.UTF8.GetBytes(value ?? "<null>"));
-            hash.AppendData([(byte)'\n']);
-        }
-        Add("lex-corpus/6/corrigendum-projection/1");
-        Add(production.FamilyKey); Add(production.CanonicalSha256); Add(production.LineageSha256);
-        Add(production.TripwireReceiptSha256); Add(production.TripwireLineageReceiptSha256);
-        foreach (var tripwire in production.Tripwires)
-        {
-            Add(tripwire.CorrectedWorkRoot); Add(tripwire.TripwireSha256);
-            foreach (var line in tripwire.Lines)
-            {
-                Add(line.CorrigendumWorkRoot); Add(line.PublisherExpressionId); Add(line.LanguageIri);
-                Add(ContractWire.NameOf(line.Reach)); Add(ContractWire.NameOf(line.DateState));
-                Add(line.PublisherDateRawLexical); Add(line.PublisherDateDatatypeIri);
-                Add(line.ExpressionContentSha256);
-            }
-            foreach (var root in tripwire.CorrigendaWithoutDerivedExpressions) Add(root);
-        }
-        foreach (var gap in production.UnresolvedGaps)
-        {
-            Add(gap.WorkRoot); Add(ContractWire.NameOf(gap.Reason));
-        }
-        return Convert.ToHexStringLower(hash.GetHashAndReset());
+                new LexCorpus6CorrigendumGap(gap.WorkRoot, gap.Reason)).ToArray());
+        return production;
     }
 }
 
@@ -1062,7 +1074,6 @@ public static class LexCorpus6Builder
                     writer.WriteEndObject();
                 }
                 writer.WriteEndArray();
-                writer.WriteString("projection_sha256", production.ProjectionSha256);
                 writer.WriteEndObject();
             }
             writer.WriteEndArray();
