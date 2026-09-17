@@ -98,6 +98,38 @@ public sealed class LexCorpus6BuilderTests
     }
 
     [TestMethod]
+    public async Task ProductionShapedRetainedPublisherAnnexReachesCorpusOutcome()
+    {
+        var acquired = await EuFormexAnnexClassificationReconciliationTests
+            .AcquiredFixtureAsync(retainedPublisherSpecimens: true);
+        var formex = EuFormexAnnexClassificationReconciliationTests.Reconciliation(
+            acquired.Run, [acquired.Outcome]);
+        var classifications = Stage3EvidenceEnvelopeTests.CompleteClassifications(
+            formex, [acquired.Classification]);
+        var envelope = await CompleteProfileEnvelopeAsync(
+            europeOverride: acquired.Run,
+            formexOverride: formex,
+            formexStore: acquired.Store,
+            formexClassifications: classifications);
+
+        var built = LexCorpus6Builder.TryBuild(envelope, out var refusal, out var detail);
+
+        Assert.IsNotNull(built, $"{refusal}: {detail}");
+        var binding = acquired.Classification.Binding;
+        var member = built.VerifiedSet.Set.Members.Single(value =>
+            value.ObjectRefSha256 ==
+            Lex.V3.Contracts.Source.Scope.ScopeManifestCanonicalWriter.ComputeObjectRefSha256(
+                binding.WorkSource.ObjectRef));
+        Assert.Contains(
+            LexCorpus6Builder.Stage3Outcome(acquired.Classification.Members.Single()),
+            member.Stage3Outcomes);
+        Assert.IsFalse(acquired.Run.CorpusRecordSet!.Set.Records.Any(record =>
+            record.Body.Receipt == binding.FormexSourceReceipt));
+        Assert.IsFalse(acquired.Run.CorpusRecordSet.Set.Records.Any(record =>
+            record.Body.Receipt == binding.PdfReceipt));
+    }
+
+    [TestMethod]
     public void TerminalBuilderAndStrictReaderAreOneVerticalSlice()
     {
         var schema = (string)typeof(LexCorpus6Builder)

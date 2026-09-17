@@ -171,9 +171,19 @@ public sealed class EuFormexAnnexClassificationReconciliationTests
     internal static async Task<Fixture> AcquiredFixtureAsync(
         bool formexTwoMembers = false,
         byte[]? formexBytes = null,
-        bool imageOnly = false)
+        bool imageOnly = false,
+        bool retainedPublisherSpecimens = false)
     {
-        var xhtmlBytes = EuAnnexEvidenceBinderTests.XhtmlBytes("ANNEX", formexTwoMembers);
+        var xhtmlBytes = retainedPublisherSpecimens
+            ? await EuAnnexEvidenceBinderTests.FixtureBytesAsync("new-xhtml-200-body.bin")
+            : EuAnnexEvidenceBinderTests.XhtmlBytes("ANNEX", formexTwoMembers);
+        var pdfBytes = retainedPublisherSpecimens
+            ? await EuAnnexEvidenceBinderTests.FixtureBytesAsync("new-pdfa2a-200-body.bin")
+            : EuAnnexEvidenceBinderTests.PageLabelPdf(
+                7, "<< /S /D /St 1 >>", image: imageOnly);
+        formexBytes ??= retainedPublisherSpecimens
+            ? await EuAnnexEvidenceBinderTests.FixtureBytesAsync("new-fmx4-200-body.bin")
+            : null;
         var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
         var run = await EuAxiomWiringHarness.RunAsync(
             static root => EuAcquisitionTestFixture.AxiomAbsenceScriptFor(root),
@@ -184,8 +194,7 @@ public sealed class EuFormexAnnexClassificationReconciliationTests
         var heldWork = run.CorpusRecordSet!.Set.Records.Single(static record =>
             record.Body.Kind == Lex.V3.Contracts.Source.Corpus.CorpusBodyRecordKind.Held);
         var source = await EuAnnexEvidenceBinderTests.FixtureAsync(
-            EuAnnexEvidenceBinderTests.PageLabelPdf(
-                7, "<< /S /D /St 1 >>", image: imageOnly),
+            pdfBytes,
             formexTwoMembers: formexTwoMembers,
             xhtmlTwoMembers: formexTwoMembers,
             formexBytes: formexBytes,
@@ -205,7 +214,7 @@ public sealed class EuFormexAnnexClassificationReconciliationTests
             EuDocumentLanguage.Eng, out var addressRefusal)!;
         Assert.AreEqual(EuDocumentFetchAddressRefusal.None, addressRefusal);
         EuBoundAnnexBodyClassification classification;
-        if (imageOnly)
+        if (imageOnly || retainedPublisherSpecimens)
         {
             var route = EuBoundAnnexBodyClassifierTests.Route(
                 binding.Work.CanonicalKey, binding.PdfReceipt,

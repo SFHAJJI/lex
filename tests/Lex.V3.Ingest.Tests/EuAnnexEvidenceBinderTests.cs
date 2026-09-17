@@ -605,7 +605,7 @@ public sealed class EuAnnexEvidenceBinderTests
         return new Profile(bytes, Artifact(resource, Sha(bytes)));
     }
 
-    private static Task<byte[]> FixtureBytesAsync(string name) => File.ReadAllBytesAsync(
+    internal static Task<byte[]> FixtureBytesAsync(string name) => File.ReadAllBytesAsync(
         Path.Combine(AppContext.BaseDirectory, "Fixtures", "EuDocumentFetch", name));
 
     private static SourceObjectRef Object(
