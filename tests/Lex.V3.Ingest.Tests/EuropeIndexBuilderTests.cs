@@ -61,6 +61,8 @@ public sealed class EuropeIndexBuilderTests
                      "It shall apply from 25 May 2018.",
                      "identifiable natural person (‘data subject’)",
                      "its publication in the Official Journal of the European Union.",
+                     "Article 99 Entry into force and application",
+                     "(1) ‘personal data’ means any information",
                  })
         {
             var exactHit = reader.Search("eng", cell.PeriodFrom, cell.PeriodTo, exactSpan);
