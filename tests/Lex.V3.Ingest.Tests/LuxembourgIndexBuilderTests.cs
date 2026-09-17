@@ -129,6 +129,15 @@ public sealed class LuxembourgIndexBuilderTests
         Assert.AreEqual(new DateOnly(2023, 9, 16), cells[^1].PeriodFrom);
         Assert.AreEqual(cells[^1].PeriodFrom, cells[^1].PeriodTo);
         Assert.AreEqual(1, cells[^1].Population);
+        var expectedArticle = envelope.BodyComposition.Envelope.LuxembourgAknLegalContentPopulation
+            .Outcomes.Single(static value => value.Article?.Coordinate.PublisherId == "art_1er")
+            .Article!;
+        var supported = reader.Search(
+            "fra", new DateOnly(2021, 8, 22), new DateOnly(2021, 8, 22),
+            "La profession d’avocat est une profession libérale et indépendante.");
+        Assert.AreEqual(V3IndexCapabilityLookupOutcome.Supported, supported.Outcome);
+        CollectionAssert.AreEqual(
+            new[] { expectedArticle.IdentitySha256 }, supported.ArticleIdentities.ToArray());
         var gap = reader.Search(
             "fra", new DateOnly(2022, 1, 1), new DateOnly(2022, 12, 31), "article");
         Assert.AreEqual(V3IndexCapabilityLookupOutcome.FilterNotSupportedByIndex, gap.Outcome);
