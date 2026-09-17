@@ -307,7 +307,7 @@ public sealed class LuxembourgGazetteAcquisitionTests
             (Expression, Jolux + "isEmbodiedBy", manifestationXml),
             (manifestationXml, RdfType, Jolux + "Manifestation"),
             (manifestationXml, Jolux + "userFormat", Formats + "xml"),
-            (manifestationXml, Jolux + "isExemplifiedBy", itemXml)
+            (manifestationXml, Jolux + "isExemplifiedBy", itemXml),
             (manifestationXml, Jolux + "license", CcBy),
         ];
 
