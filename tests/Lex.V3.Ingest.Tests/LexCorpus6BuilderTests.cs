@@ -431,7 +431,7 @@ public sealed class LexCorpus6BuilderTests
             bytes);
     }
 
-    private static async Task<Stage3DerivationProfileEnvelope> CompleteProfileEnvelopeAsync(
+    internal static async Task<Stage3DerivationProfileEnvelope> CompleteProfileEnvelopeAsync(
         bool includeLegalNotice = true,
         bool stripEuropeContentClasses = false,
         Europe.EuQueryExecutionResult? europeOverride = null)
