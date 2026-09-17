@@ -360,7 +360,7 @@ public sealed class LuxembourgGazetteAcquisitionTests
         var act = expression[..expression.LastIndexOf('/')];
         var parent = act[..act.LastIndexOf('/')];
         var assertions = new List<(string, string, string)>
-        [
+        {
             (act, RdfType, Jolux + "Act"),
             (act, Jolux + "typeDocument", Types + "LOI"),
             (act, Jolux + "isMemberOf", parent),
@@ -371,7 +371,7 @@ public sealed class LuxembourgGazetteAcquisitionTests
             (manifestationXml, RdfType, Jolux + "Manifestation"),
             (manifestationXml, Jolux + "userFormat", Formats + "xml"),
             (manifestationXml, Jolux + "isExemplifiedBy", itemXml),
-        ];
+        };
         if (includeEndpointLicence)
         {
             assertions.Add((manifestationXml, Jolux + "license", CcBy));
