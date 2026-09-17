@@ -323,6 +323,8 @@ public sealed class V3PlatformHostTests
                      context => context.Features.Get<IHttpRequestFeature>()!.RawTarget =
                          V3ResolveRestRoute.RawTarget + "?operation=resolve",
                      context => context.Request.ContentLength = V3PlatformHost.MaximumRequestBytes + 1L,
+                     context => context.Request.Body = new MemoryStream(
+                         new byte[V3PlatformHost.MaximumRequestBytes + 1]),
                  })
         {
             var context = RouteContext(
