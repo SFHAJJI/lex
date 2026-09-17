@@ -465,7 +465,9 @@ public sealed class LexCorpus6BuilderTests
         Europe.EuQueryExecutionResult? europeOverride = null,
         Luxembourg.LuxembourgQueryExecutionResult? luxembourgOverride = null,
         Lex.V3.Contracts.Custody.ICustodyStore? luxembourgStore = null,
-        bool includeFormexMainBody = true)
+        bool includeFormexMainBody = true,
+        Europe.EuFormexRunOutcomeReconciliation? formexOverride = null,
+        Lex.V3.Contracts.Custody.ICustodyStore? formexStore = null)
     {
         var europe = europeOverride ?? await EuAxiomWiringHarness.RunAsync(
             static root => EuAcquisitionTestFixture.AxiomAbsenceScriptFor(root));
@@ -480,9 +482,9 @@ public sealed class LexCorpus6BuilderTests
             "lu-pdf-consolidated-2020-04-08-a265.bin"));
         var luxembourg = luxembourgOverride ?? await LuxembourgGazetteAcquisitionTests
             .CompletePublisherPdfForStage3BodyCompositionAsync(bytes);
-        var formex = EuFormexRunOutcomeReconciliationTests.CompleteForEnvelope(europe);
+        var formex = formexOverride ?? EuFormexRunOutcomeReconciliationTests.CompleteForEnvelope(europe);
         var formexMainBody = await new Europe.EuFormexMainBodyLegalContentProducer(
-            new EuAcquisitionTestFixture.EuInMemoryCustodyStore())
+            formexStore ?? new EuAcquisitionTestFixture.EuInMemoryCustodyStore())
             .RunAsync(formex, CancellationToken.None);
         var classifications = Stage3EvidenceEnvelopeTests.CompleteClassifications(formex);
         var fidelity = Stage3FidelityPreservationReconciliationTests.Complete(europe, luxembourg);

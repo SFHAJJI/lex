@@ -71,6 +71,7 @@ public sealed class VocabularyRegistryCensusTests
                     + "DigestDomain, const Schema",
                 "Lex.V3.Ingest.Europe.EuObjectFactsBatchFactory: SetsOverObservedObjects=5, "
                     + "SetsOverPackRootsOnly=1",
+                "Lex.V3.Ingest.Europe.EuropeIndexBuilder: const Ddl, const Schema",
                 "Lex.V3.Ingest.LexCorpus6Builder: Domain=13, const Schema",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgIndexBuilder: const Ddl, const Schema",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgPublisherPdfActScopeProducer: const "

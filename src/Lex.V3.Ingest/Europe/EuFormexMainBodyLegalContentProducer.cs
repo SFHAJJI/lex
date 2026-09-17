@@ -107,6 +107,7 @@ public sealed class EuFormexMainBodyLegalContentOutcome
         Detail = detail;
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         EuFormexMainBodyArticle.Append(hash, "lex-v3-eu-formex-main-body-outcome/1");
+        EuFormexMainBodyArticle.Append(hash, EuFormexMainBodyLegalContentProducer.Profile);
         EuFormexMainBodyArticle.Append(hash, source.ExpressionIdentity.PublisherWorkId);
         EuFormexMainBodyArticle.Append(hash, source.ExpressionIdentity.PublisherExpressionId);
         EuFormexMainBodyArticle.Append(hash, ((int)disposition).ToString(System.Globalization.CultureInfo.InvariantCulture));
@@ -139,6 +140,9 @@ public sealed class EuFormexMainBodyLegalContentPopulation
 /// <summary>Reopens acquired Formex packages and derives ordered main-body ARTICLE content.</summary>
 public sealed class EuFormexMainBodyLegalContentProducer
 {
+    public const string Profile =
+        "lex-v3-eu-formex-main-body-profile/1;root=ACT;units=ARTICLE;exclude=recitals,final,annex";
+
     private const int MaxEntries = 4_096;
     private const long MaxXmlEntryBytes = 16 * 1024 * 1024;
     private const long MaxXmlPackageBytes = 64 * 1024 * 1024;
@@ -288,6 +292,9 @@ public sealed class EuFormexMainBodyLegalContentProducer
             if (actCount == 0)
                 return Refused(EuFormexMainBodyLegalContentDisposition.MainBodyMissing,
                     "the retained Formex package contains no ACT unit");
+            if (actCount != 1)
+                return Refused(EuFormexMainBodyLegalContentDisposition.UnsupportedContentShape,
+                    "the retained Formex package contains more than one ACT main-body unit");
             if (articles.Count == 0)
                 return Refused(EuFormexMainBodyLegalContentDisposition.UnsupportedContentShape,
                     "the retained Formex ACT contains no ARTICLE unit");
@@ -303,23 +310,66 @@ public sealed class EuFormexMainBodyLegalContentProducer
     private static IReadOnlyList<EuFormexMainBodyToken> TokensOf(XElement article)
     {
         var tokens = new List<EuFormexMainBodyToken>();
-        foreach (var text in article.DescendantNodes().OfType<XText>())
-        {
-            if (string.IsNullOrWhiteSpace(text.Value)) continue;
-            var ancestors = text.Ancestors().ToArray();
-            var reference = ancestors.FirstOrDefault(static value => value.Name.LocalName is
-                "REF.DOC.OJ" or "REF.DOC" or "LINK");
-            var footnote = ancestors.Any(static value => value.Name.LocalName is "NOTE" or "FT");
-            var target = reference?.Attributes().FirstOrDefault(static value =>
-                value.Name.LocalName is "REF" or "HREF" or "FILE")?.Value;
-            tokens.Add(new(
-                footnote ? EuFormexMainBodyTokenKind.Footnote :
-                reference is not null ? EuFormexMainBodyTokenKind.Reference :
-                EuFormexMainBodyTokenKind.Text,
-                text.Value,
-                target));
-        }
+        AppendTokens(article, tokens);
         return Array.AsReadOnly(tokens.ToArray());
+    }
+
+    private static void AppendTokens(XElement element, List<EuFormexMainBodyToken> tokens)
+    {
+        foreach (var node in element.Nodes())
+        {
+            if (node is XText text)
+            {
+                if (!string.IsNullOrWhiteSpace(text.Value))
+                    tokens.Add(new(EuFormexMainBodyTokenKind.Text, text.Value, null));
+                continue;
+            }
+            if (node is not XElement child) continue;
+
+            if (child.Name.LocalName is "QUOT.START" or "QUOT.END")
+            {
+                tokens.Add(new(EuFormexMainBodyTokenKind.Text, QuoteCharacter(child), null));
+                continue;
+            }
+            if (child.Name.LocalName is "NOTE" or "FT")
+            {
+                var note = DisplayText(child);
+                if (!string.IsNullOrWhiteSpace(note))
+                    tokens.Add(new(EuFormexMainBodyTokenKind.Footnote, note, null));
+                continue;
+            }
+            if (child.Name.LocalName is "REF.DOC.OJ" or "REF.DOC" or "LINK")
+            {
+                var reference = DisplayText(child);
+                var target = child.Attributes().FirstOrDefault(static value =>
+                    value.Name.LocalName is "REF" or "HREF" or "FILE")?.Value;
+                if (!string.IsNullOrWhiteSpace(reference))
+                    tokens.Add(new(EuFormexMainBodyTokenKind.Reference, reference, target));
+                continue;
+            }
+            AppendTokens(child, tokens);
+        }
+    }
+
+    private static string DisplayText(XElement element)
+    {
+        var builder = new StringBuilder();
+        foreach (var node in element.DescendantNodesAndSelf())
+        {
+            if (node is XText text) builder.Append(text.Value);
+            else if (node is XElement marker && marker.Name.LocalName is "QUOT.START" or "QUOT.END")
+                builder.Append(QuoteCharacter(marker));
+        }
+        return builder.ToString();
+    }
+
+    private static string QuoteCharacter(XElement element)
+    {
+        var code = element.Attribute("CODE")?.Value;
+        if (code is null || !int.TryParse(code, System.Globalization.NumberStyles.HexNumber,
+                System.Globalization.CultureInfo.InvariantCulture, out var scalar) || !Rune.IsValid(scalar))
+            throw new InvalidDataException("A Formex quotation marker has no valid Unicode CODE.");
+        return new Rune(scalar).ToString();
     }
 
     private static string? RequiredSingleValue(XElement root, string localName)

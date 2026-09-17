@@ -1,3 +1,4 @@
+using Lex.V3.Contracts.Custody;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Europe;
 using Lex.V3.Contracts.Source.Scope;
@@ -29,7 +30,9 @@ internal static class EuAxiomWiringHarness
     /// </summary>
     internal static async Task<EuQueryExecutionResult> RunAsync(
         Func<string, EuAcquisitionTestFixture.FamilyScript?> axiomScript,
-        Func<string, EuAcquisitionTestFixture.FamilyScript>? locatedAmendmentScript = null)
+        Func<string, EuAcquisitionTestFixture.FamilyScript>? locatedAmendmentScript = null,
+        ICustodyStore? custodyStore = null,
+        Func<HttpRequestMessage, HttpResponseMessage>? documentFetchResponse = null)
     {
         // ONE BUDGET FOR THE WHOLE RUN. The adapter refuses a census request
         // carrying a different instance, because two counters reading the same
@@ -78,8 +81,8 @@ internal static class EuAxiomWiringHarness
             ? EuAcquisitionTestFixture.LocatedAmendmentAbsenceScriptFor(rootIri)
             : locatedAmendmentScript(rootIri);
 
-        var handler = new EuAcquisitionTestFixture.ClassifyingHandler(scripts);
-        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
+        var handler = new EuAcquisitionTestFixture.ClassifyingHandler(scripts, documentFetchResponse);
+        var store = custodyStore ?? new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
         var executor = new EuRepeatedEnumerationExecutor(
             store, new EuAcquisitionTestFixture.FixedTimeProvider(), handler);
         var adapter = new EuQueryExecutionAdapter(store, executor);

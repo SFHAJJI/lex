@@ -58,6 +58,48 @@ public sealed class EuFormexAnnexClassificationReconciliationTests
     }
 
     [TestMethod]
+    public async Task AcquiredInventoryThatProvesZeroAnnexesNeedsNoClassification()
+    {
+        var acquired = await AcquiredFixtureAsync();
+        var zeroInventory = new EuFormexAnnexInventory(
+            acquired.Inventory.TransportBinding,
+            acquired.Inventory.InterpretationRuleProfileRef,
+            []);
+        var zeroOutcome = EuFormexPackageOutcome.Acquired(
+            acquired.Outcome.Expression,
+            zeroInventory);
+        var formex = Reconciliation(acquired.Run, [zeroOutcome]);
+
+        var reconciliation = EuFormexAnnexClassificationReconciliation.TryClose(
+            formex, [], out var refusal, out var detail);
+
+        Assert.AreEqual(EuFormexAnnexClassificationReconciliationRefusal.None, refusal, detail);
+        Assert.IsNotNull(reconciliation);
+        Assert.HasCount(0, reconciliation.Classifications);
+    }
+
+    [TestMethod]
+    public async Task AcquiredInventoryThatProvesZeroAnnexesRejectsAClassification()
+    {
+        var acquired = await AcquiredFixtureAsync();
+        var zeroInventory = new EuFormexAnnexInventory(
+            acquired.Inventory.TransportBinding,
+            acquired.Inventory.InterpretationRuleProfileRef,
+            []);
+        var zeroOutcome = EuFormexPackageOutcome.Acquired(
+            acquired.Outcome.Expression,
+            zeroInventory);
+
+        Assert.IsNull(EuFormexAnnexClassificationReconciliation.TryClose(
+            Reconciliation(acquired.Run, [zeroOutcome]),
+            [acquired.Classification], out var refusal, out var detail));
+        Assert.AreEqual(
+            EuFormexAnnexClassificationReconciliationRefusal.ClassificationOutsideAcquiredPopulation,
+            refusal);
+        Assert.AreEqual(acquired.Inventory.IdentitySha256, detail);
+    }
+
+    [TestMethod]
     public async Task OneAcquiredInventoryCannotBeClassifiedTwice()
     {
         var acquired = await AcquiredFixtureAsync();

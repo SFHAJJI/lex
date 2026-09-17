@@ -26,8 +26,9 @@ public enum EuFormexAnnexClassificationReconciliationRefusal
 }
 
 /// <summary>
-/// Proves that every acquired inventory in a total Formex run reconciliation has exactly one
-/// complete bound-annex classification, and that no other Formex outcome has one.
+/// Proves that every acquired inventory containing annex members in a total Formex run
+/// reconciliation has exactly one complete bound-annex classification, and that no inventory
+/// proving zero annex members or other Formex outcome has one.
 /// </summary>
 /// <remarks>
 /// The join uses the stable semantic inventory digest because the outcome and classification can
@@ -48,7 +49,10 @@ public sealed class EuFormexAnnexClassificationReconciliation
 
     public EuFormexRunOutcomeReconciliation Formex { get; }
 
-    /// <summary>One classification per acquired inventory, in Formex outcome order.</summary>
+    /// <summary>
+    /// One classification per acquired inventory containing annex members, in Formex outcome
+    /// order. An acquired inventory proving zero annex members contributes no classification.
+    /// </summary>
     public IReadOnlyList<EuBoundAnnexBodyClassification> Classifications { get; }
 
     public static EuFormexAnnexClassificationReconciliation? TryClose(
@@ -62,7 +66,7 @@ public sealed class EuFormexAnnexClassificationReconciliation
         refusal = EuFormexAnnexClassificationReconciliationRefusal.None;
         detail = null;
 
-        var expected = new Dictionary<string, EuFormexAnnexInventory>(StringComparer.Ordinal);
+        var acquired = new Dictionary<string, EuFormexAnnexInventory>(StringComparer.Ordinal);
         foreach (var outcome in formex.Outcomes)
         {
             if (outcome.Kind != EuFormexPackageOutcomeKind.Acquired)
@@ -71,13 +75,17 @@ public sealed class EuFormexAnnexClassificationReconciliation
             }
 
             var inventory = outcome.AcquiredInventory!;
-            if (!expected.TryAdd(inventory.IdentitySha256, inventory))
+            if (!acquired.TryAdd(inventory.IdentitySha256, inventory))
             {
                 refusal = EuFormexAnnexClassificationReconciliationRefusal.AcquiredInventoryClaimedTwice;
                 detail = inventory.IdentitySha256;
                 return null;
             }
         }
+
+        var expected = acquired.Values
+            .Where(static inventory => inventory.Members.Count > 0)
+            .ToDictionary(static inventory => inventory.IdentitySha256, StringComparer.Ordinal);
 
         var delivered = new Dictionary<string, EuBoundAnnexBodyClassification>(StringComparer.Ordinal);
         foreach (var classification in classifications)
@@ -113,7 +121,13 @@ public sealed class EuFormexAnnexClassificationReconciliation
                 continue;
             }
 
-            var inventoryIdentity = outcome.AcquiredInventory!.IdentitySha256;
+            var inventory = outcome.AcquiredInventory!;
+            if (inventory.Members.Count == 0)
+            {
+                continue;
+            }
+
+            var inventoryIdentity = inventory.IdentitySha256;
             if (!delivered.ContainsKey(inventoryIdentity))
             {
                 refusal = EuFormexAnnexClassificationReconciliationRefusal.ClassificationMissing;
@@ -125,7 +139,8 @@ public sealed class EuFormexAnnexClassificationReconciliation
         var ordered = new List<EuBoundAnnexBodyClassification>(expected.Count);
         foreach (var outcome in formex.Outcomes)
         {
-            if (outcome.Kind == EuFormexPackageOutcomeKind.Acquired)
+            if (outcome.Kind == EuFormexPackageOutcomeKind.Acquired
+                && outcome.AcquiredInventory!.Members.Count > 0)
             {
                 ordered.Add(delivered[outcome.AcquiredInventory!.IdentitySha256]);
             }
