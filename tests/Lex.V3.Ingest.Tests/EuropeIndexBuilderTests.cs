@@ -108,6 +108,30 @@ public sealed class EuropeIndexBuilderTests
     }
 
     [TestMethod]
+    public async Task AcquiredNonEnglishFormexPackageRemainsTypedWithoutBindingToEnglishWorkBody()
+    {
+        var envelope = await RetainedGdprEnvelopeAsync(acquireFrenchExpression: true);
+        var acquired = envelope.BodyComposition.Envelope.FormexMainBodyLegalContent!.Outcomes
+            .Single(static outcome => outcome.Source.Kind == EuFormexPackageOutcomeKind.Acquired);
+        Assert.AreEqual(
+            "http://publications.europa.eu/resource/authority/language/FRA",
+            acquired.Source.Expression.OfficialLanguage);
+
+        var corpus = LexCorpus6Builder.TryBuild(envelope, out var corpusRefusal, out var corpusDetail);
+        Assert.IsNotNull(corpus, $"{corpusRefusal}: {corpusDetail}");
+        Assert.IsFalse(corpus.VerifiedSet.Set.Members.SelectMany(static member => member.Stage3Outcomes)
+            .Any(outcome => outcome.SemanticIdentitySha256 == acquired.SemanticIdentitySha256),
+            "An alternate-language Formex package remains typed in the evidence population but is not " +
+            "misrepresented as the selected work-level body outcome.");
+
+        var built = EuropeIndexBuilder.TryBuild(envelope, out var refusal, out var detail);
+        Assert.IsNotNull(built, $"{refusal}: {detail}");
+        using var reader = EuropeIndexReader.OpenAndVerify(
+            built.IndexRef, built.IndexBytes.Span, corpus.ArtifactRef, built.CapabilityManifest);
+        Assert.AreEqual(0, reader.ArticleCount);
+    }
+
+    [TestMethod]
     public async Task AcceptedDatedCorrigendumProjectionIsCarriedExactly()
     {
         var europe = await EuCorrigendumTripwireWiringTests.CompleteDatedResultAsync();
@@ -174,20 +198,27 @@ public sealed class EuropeIndexBuilderTests
     }
 
     internal static async Task<Stage3DerivationProfileEnvelope> RetainedGdprEnvelopeAsync(
-        bool reopenRetainedBytes = true)
+        bool reopenRetainedBytes = true,
+        bool acquireFrenchExpression = false)
     {
         var bytes = await File.ReadAllBytesAsync(Path.Combine(
             AppContext.BaseDirectory, "Fixtures", "EuDocumentFetch", "gdpr-fmx4-200-body.bin"));
         const string expressionIri =
             "http://publications.europa.eu/resource/cellar/5f2552c2-11bd-11e6-ba9a-01aa75ed71a1.0001";
+        const string frenchExpressionIri =
+            "http://publications.europa.eu/resource/cellar/5f2552c2-11bd-11e6-ba9a-01aa75ed71a1.0002";
         var run = await EuAxiomWiringHarness.RunAsync(
             static root => EuAcquisitionTestFixture.AxiomAbsenceScriptFor(root),
             seedCelex: "32016R0679",
-            expressionIri: expressionIri);
+            expressionIri: expressionIri,
+            additionalExpressionIri: acquireFrenchExpression ? frenchExpressionIri : null,
+            additionalExpressionLanguageAuthority: acquireFrenchExpression
+                ? "http://publications.europa.eu/resource/authority/language/FRA" : null);
+        var acquiredExpressionIri = acquireFrenchExpression ? frenchExpressionIri : expressionIri;
         var expression = run.CorrigendumTripwires!.ProductionsByFamilyKey.Values
             .SelectMany(static production => production.Expressions!.Derivation!.Expressions)
             .Single(candidate => string.Equals(
-                candidate.Identity.PublisherExpressionId, expressionIri, StringComparison.Ordinal));
+                candidate.Identity.PublisherExpressionId, acquiredExpressionIri, StringComparison.Ordinal));
         var fixture = await EuFormexAnnexInventoryProducerTests.FixtureAsync(bytes, expression);
         var inventoryResult = await new EuFormexAnnexInventoryProducer(fixture.Store).RunAsync(
             fixture.Binding, fixture.Profile.Bytes, fixture.Profile.Reference, CancellationToken.None);

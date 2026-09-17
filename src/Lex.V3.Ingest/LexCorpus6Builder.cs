@@ -774,7 +774,6 @@ public sealed record LexCorpus6ManifestSet(
     IReadOnlyList<string> ProfileIdentities,
     IReadOnlyList<string> CorrigendumEvidenceReceiptSha256,
     IReadOnlyList<LexCorpus6CorrigendumProduction> CorrigendumProductions,
-    IReadOnlyList<Stage3FidelityPreservationObligation> UnresolvedFidelityObligations,
     IReadOnlyList<LexCorpus6Member> Members)
 {
     public LexCorpus6ManifestSet Validate()
@@ -791,7 +790,6 @@ public sealed record LexCorpus6ManifestSet(
         ArgumentNullException.ThrowIfNull(ProfileIdentities);
         ArgumentNullException.ThrowIfNull(CorrigendumEvidenceReceiptSha256);
         ArgumentNullException.ThrowIfNull(CorrigendumProductions);
-        ArgumentNullException.ThrowIfNull(UnresolvedFidelityObligations);
         ArgumentNullException.ThrowIfNull(Members);
         foreach (var value in ProfileIdentities.Concat(CorrigendumEvidenceReceiptSha256))
         {
@@ -809,8 +807,6 @@ public sealed record LexCorpus6ManifestSet(
             if (string.CompareOrdinal(CorrigendumProductions[i - 1].FamilyKey, CorrigendumProductions[i].FamilyKey) >= 0)
                 throw new ArgumentException("Corrigendum productions must be sorted and unique.", nameof(CorrigendumProductions));
         }
-        if (UnresolvedFidelityObligations.Count != 0)
-            throw new ArgumentException("The unresolved fidelity obligations do not match the accepted fidelity proof boundary.", nameof(UnresolvedFidelityObligations));
         if (Members.Count == 0 || Members.Any(static member => member is null))
         {
             throw new ArgumentException("A corpus manifest set requires members.", nameof(Members));
@@ -1069,6 +1065,14 @@ public static class LexCorpus6Builder
         }
 
         var profileIdentities = ProfileIdentities(profileEnvelope);
+        var unresolvedFidelity = TerminalUnresolvedFidelityObligations(evidence);
+        if (unresolvedFidelity.Count != 0)
+        {
+            refusal = LexCorpus6BuildRefusal.EvidenceIncomplete;
+            detail = "The terminal evidence does not prove these fidelity obligations: " +
+                string.Join(',', unresolvedFidelity.Select(ContractWire.NameOf));
+            return null;
+        }
         var set = new LexCorpus6ManifestSet(
             Schema,
             eu.CorpusRecordSetRef,
@@ -1077,7 +1081,7 @@ public static class LexCorpus6Builder
             profileIdentities,
             CorrigendumReceipts(eu.CorrigendumTripwires),
             CorrigendumProductions(eu.CorrigendumTripwires),
-            TerminalUnresolvedFidelityObligations(evidence),
+            unresolvedFidelity,
             members.OrderBy(static member => member, Comparer<LexCorpus6Member>.Create(LexCorpus6ManifestSet.CompareMembers)).ToArray()).Validate();
         var bytes = Write(set);
         var digest = ComputeSha256(bytes);
@@ -1161,10 +1165,6 @@ public static class LexCorpus6Builder
                 writer.WriteEndArray();
                 writer.WriteEndObject();
             }
-            writer.WriteEndArray();
-            writer.WriteStartArray("unresolved_fidelity_obligations");
-            foreach (var obligation in set.UnresolvedFidelityObligations)
-                writer.WriteStringValue(ContractWire.NameOf(obligation));
             writer.WriteEndArray();
             writer.WriteStartArray("members");
             foreach (var member in set.Members)
@@ -1582,42 +1582,6 @@ public static class LexCorpus6Builder
         writer.WriteEndObject();
     }
 
-    private static IReadOnlyList<Stage3FidelityPreservationObligation>
-        TerminalUnresolvedFidelityObligations(Stage3EvidenceEnvelope evidence)
-    {
-        var aknOutcomes = evidence.LuxembourgAknLegalContentPopulation.Outcomes;
-        var hasMarkerOnlyEvidence = aknOutcomes.Any(static outcome =>
-            outcome.Disposition == Luxembourg.LuxembourgAknLegalContentDisposition.MarkerOnlyEvidence);
-        var noteBodies = aknOutcomes
-            .Select(static outcome => outcome.Article)
-            .Where(static article => article is not null)
-            .SelectMany(static article => article!.Tokens)
-            .Where(static token => token.NoteBody is not null)
-            .SelectMany(static token => token.NoteBody!)
-            .ToArray();
-        var hasFootnoteEvidence = noteBodies.Length != 0;
-        var hasCitationEvidence = noteBodies.Any(static token =>
-            token.Kind == Luxembourg.LuxembourgAknLegalContentTokenKind.Reference &&
-            !string.IsNullOrWhiteSpace(token.Target));
-        var retired = new HashSet<Stage3FidelityPreservationObligation>();
-        if (hasMarkerOnlyEvidence)
-        {
-            retired.Add(Stage3FidelityPreservationObligation.MarkerOnlyRuleUnsupported);
-        }
-        if (hasFootnoteEvidence)
-        {
-            retired.Add(Stage3FidelityPreservationObligation.FootnotePreservationUnproven);
-        }
-        if (hasCitationEvidence)
-        {
-            retired.Add(Stage3FidelityPreservationObligation.CitationPreservationUnproven);
-        }
-
-        return evidence.FidelityPreservation.UnresolvedObligations
-            .Where(value => !retired.Contains(value))
-            .OrderBy(static value => value)
-            .ToArray();
-    }
 }
 
 public sealed record LexCorpus6BuildResult(

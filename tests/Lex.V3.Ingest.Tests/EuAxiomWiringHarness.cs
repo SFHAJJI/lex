@@ -34,7 +34,10 @@ internal static class EuAxiomWiringHarness
         ICustodyStore? custodyStore = null,
         Func<HttpRequestMessage, HttpResponseMessage>? documentFetchResponse = null,
         string? seedCelex = null,
-        string? expressionIri = null)
+        string? expressionIri = null,
+        string? expressionLanguageAuthority = null,
+        string? additionalExpressionIri = null,
+        string? additionalExpressionLanguageAuthority = null)
     {
         // ONE BUDGET FOR THE WHOLE RUN. The adapter refuses a census request
         // carrying a different instance, because two counters reading the same
@@ -57,8 +60,22 @@ internal static class EuAxiomWiringHarness
             .Concat(EuAcquisitionTestFixture.RelationPredicates.Select(predicate => (predicate, (string?)null)))
             .ToArray();
         var pRows = EuAcquisitionTestFixture.SortedObjectFactRows(rootIri, pOutcomes);
-        var xRows = EuAcquisitionTestFixture.EnglishExpressionFactRows(
-            rootIri, expressionIri ?? DefaultExpressionIri).ToArray();
+        var selectedExpressionIri = expressionIri ?? DefaultExpressionIri;
+        var xRows = (expressionLanguageAuthority is null
+            ? EuAcquisitionTestFixture.EnglishExpressionFactRows(rootIri, selectedExpressionIri).ToArray()
+            :
+            [
+                EuAcquisitionTestFixture.ExpressionFactRow(rootIri, selectedExpressionIri),
+                EuAcquisitionTestFixture.ExpressionLanguageRow(
+                    rootIri, selectedExpressionIri, expressionLanguageAuthority),
+            ]).ToList();
+        if (additionalExpressionIri is not null)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(additionalExpressionLanguageAuthority);
+            xRows.Add(EuAcquisitionTestFixture.ExpressionFactRow(rootIri, additionalExpressionIri));
+            xRows.Add(EuAcquisitionTestFixture.ExpressionLanguageRow(
+                rootIri, additionalExpressionIri, additionalExpressionLanguageAuthority));
+        }
         var wRows = new[] { EuAcquisitionTestFixture.RootWatermarkRow(rootIri, WatermarkLexical) };
 
         var scripts = new Dictionary<string, EuAcquisitionTestFixture.FamilyScript>(StringComparer.Ordinal)
