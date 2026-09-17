@@ -4,6 +4,7 @@ using Lex.V3.Api;
 using Lex.V3.Contracts;
 using Lex.V3.Contracts.Platform;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Features;
 
 namespace Lex.V3.Tests.Platform;
 
@@ -197,6 +198,50 @@ public sealed class V3PlatformHostTests
         Assert.AreEqual("lu", envelope.Refusal.HelpfulPayload.GetProperty("required_corpus").GetString());
     }
 
+    [TestMethod]
+    public async Task RealResolveRouteReadsThePostBodyAndReachesTheReviewedHost()
+    {
+        var request = Encoding.UTF8.GetBytes(
+            "{\"operation_id\":\"resolve\",\"parameters\":{\"identifier\":\"eli/example\"}}");
+        var context = RouteContext(request);
+        var called = false;
+
+        await V3ResolveRestRoute.WriteSuccessAsync(
+            context,
+            new V3PlatformHost(),
+            "req_route",
+            Context(),
+            bound =>
+            {
+                called = true;
+                using var value = JsonDocument.Parse(
+                    $"{{\"work_id\":{JsonSerializer.Serialize(bound.Parameters.GetProperty("identifier").GetString())}}}");
+                return new V3PlatformOperationResult(bound, "work_resolution", value.RootElement);
+            },
+            CancellationToken.None);
+
+        Assert.IsTrue(called);
+        context.Response.Body.Position = 0;
+        var envelope = V3EnvelopeJson.ParseAndVerify(
+            ((MemoryStream)context.Response.Body).ToArray(),
+            V3OperationRegistry.Reviewed);
+        Assert.AreEqual("eli/example", envelope.Result!.Value.GetProperty("work_id").GetString());
+    }
+
+    [TestMethod]
+    public async Task SyntheticPreviewHandlerCannotAnswerTheRealResolveRoute()
+    {
+        var context = RouteContext(
+            Encoding.UTF8.GetBytes("{\"operation_id\":\"resolve\",\"parameters\":{}}"));
+
+        await SyntheticApiHandler.HandleAsync(
+            context,
+            SyntheticApiState.Unavailable,
+            CancellationToken.None);
+
+        Assert.AreEqual(StatusCodes.Status404NotFound, context.Response.StatusCode);
+    }
+
     private static V3EnvelopeContext Context() => new(
         PublisherId.LuLegilux,
         "success",
@@ -214,4 +259,14 @@ public sealed class V3PlatformHostTests
         "lu",
         false,
         new V3Freshness(DateTimeOffset.Parse("2026-09-17T00:00:00Z"), "current"));
+
+    private static DefaultHttpContext RouteContext(byte[] request)
+    {
+        var context = new DefaultHttpContext();
+        context.Request.Method = HttpMethods.Post;
+        context.Request.Body = new MemoryStream(request);
+        context.Response.Body = new MemoryStream();
+        context.Features.Get<IHttpRequestFeature>()!.RawTarget = V3ResolveRestRoute.RawTarget;
+        return context;
+    }
 }
