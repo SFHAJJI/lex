@@ -13,6 +13,14 @@ namespace Lex.V3.Ingest.Tests;
 [TestClass]
 public sealed class LuxembourgIndexBuilderTests
 {
+    [TestMethod]
+    public void FixedLogicalInputPinsTheExactLuxembourgIndexBytes()
+    {
+        var digest = Convert.ToHexStringLower(SHA256.HashData(
+            LuxembourgIndexBuilder.BuildFixedInputDeterminismEvidence()));
+        Assert.AreEqual("1af5be74dc8b129a3f72972bf5431076d057bb33b155b112311d3386c612a550", digest);
+    }
+
     private const string Retained1991 = "loi-1991-08-10-n3--2024-02-01--fr.bin";
 
     [TestMethod]
@@ -257,6 +265,9 @@ public sealed class LuxembourgIndexBuilderTests
         AssertTamperedDatabaseRejected(
             built, corpus.ArtifactRef,
             "UPDATE stamp SET sqlite_version='0.0.0' WHERE stamp_id=1");
+        AssertTamperedDatabaseRejected(
+            built, corpus.ArtifactRef,
+            "UPDATE stamp SET sqlite_source_id='substituted' WHERE stamp_id=1");
     }
 
     private static V3IndexCapabilityManifest RebindManifest(

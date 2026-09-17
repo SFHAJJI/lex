@@ -211,14 +211,15 @@ public sealed class ClosedVocabularyCensusTests
                     + "FormexMainBodyNotEligible, FormexMainBodyPackageUnavailable, "
                     + "FormexMainBodyPackageRefused, FormexMainBodyRetainedBytesUnavailable, "
                     + "FormexMainBodyPackageUnreadable, FormexMainBodyXmlRejected, "
-                    + "FormexMainBodyMissing, FormexMainBodyUnsupportedContentShape",
+                    + "FormexMainBodyMissing, FormexMainBodyUnsupportedContentShape, "
+                    + "AknMarkerOnlyEvidence",
                 "Lex.V3.Ingest.LexCorpus6Stage3OutcomeDomain: LuxembourgAknLegalContent, "
                     + "LuxembourgPublisherPdfActScope, EuropeAnnexBody, EuropeFormexMainBody",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgAknArticleInventoryDisposition: Inventoried, "
                     + "NotAkn, RetainedBytesUnavailable, XmlRejected",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgAknLegalContentDisposition: Admitted, "
                     + "UpstreamNotInventoried, RetainedBytesUnavailable, XmlRejected, "
-                    + "ArticleCoordinatesMismatch, UnsupportedContentShape",
+                    + "ArticleCoordinatesMismatch, UnsupportedContentShape, MarkerOnlyEvidence",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgAknLegalContentTokenKind: Text, Reference, "
                     + "ModificationStart, ModificationEnd, NoteReference",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgConsolidationByActRefusal: None, "

@@ -13,6 +13,30 @@ namespace Lex.V3.Ingest.Tests;
 public sealed class EuropeIndexBuilderTests
 {
     [TestMethod]
+    public void FixedLogicalInputPinsTheExactEuIndexBytes()
+    {
+        var digest = Convert.ToHexStringLower(SHA256.HashData(
+            EuropeIndexBuilder.BuildFixedInputDeterminismEvidence()));
+        Assert.AreEqual("00bb3fb7ba6307ec376bac22050a66bcd682b01ae3d25fa61bc626e4cabe1df8", digest);
+    }
+
+    [TestMethod]
+    public void PlatformOnlySqliteOptionsDoNotChangePortableProvenance()
+    {
+        var common = new[] { "DEFAULT_PAGE_SIZE=4096", "ENABLE_FTS5", "THREADSAFE=1" };
+        var windows = common.Concat([
+            "ATOMIC_INTRINSICS=0", "COMPILER=msvc-1951", "MUTEX_W32",
+        ]);
+        var linux = common.Concat([
+            "ATOMIC_INTRINSICS=1", "COMPILER=gcc-13.3.0", "MUTEX_PTHREADS",
+        ]);
+
+        Assert.AreEqual(
+            SqlitePortableProvenance.CompileOptionsSha256(windows),
+            SqlitePortableProvenance.CompileOptionsSha256(linux));
+    }
+
+    [TestMethod]
     public async Task CompleteEnvelopeBuildsDeterministicStrictlyReopenableEuOnlyIndex()
     {
         var envelope = await LexCorpus6BuilderTests.CompleteProfileEnvelopeAsync();
@@ -45,6 +69,11 @@ public sealed class EuropeIndexBuilderTests
             built.IndexRef, built.IndexBytes.Span, corpus.ArtifactRef, built.CapabilityManifest);
 
         Assert.AreEqual(99, reader.ArticleCount);
+        var admitted = envelope.BodyComposition.Envelope.FormexMainBodyLegalContent!.Outcomes
+            .Single(static outcome =>
+                outcome.Disposition == EuFormexMainBodyLegalContentDisposition.Admitted);
+        Assert.IsTrue(admitted.Articles.SelectMany(static article => article.Tokens)
+            .Any(static token => token.Kind == EuFormexMainBodyTokenKind.Footnote));
         Assert.HasCount(1, built.CapabilityManifest.Cells);
         var cell = built.CapabilityManifest.Cells.Single();
         Assert.AreEqual("eng", cell.Language);
@@ -76,6 +105,30 @@ public sealed class EuropeIndexBuilderTests
         var gap = reader.Search("eng", new DateOnly(2016, 4, 28), new DateOnly(2016, 4, 28), "Regulation");
         Assert.AreEqual(V3IndexCapabilityLookupOutcome.FilterNotSupportedByIndex, gap.Outcome);
         Assert.IsEmpty(gap.ArticleIdentities);
+    }
+
+    [TestMethod]
+    public async Task AcquiredNonEnglishFormexPackageRemainsTypedWithoutBindingToEnglishWorkBody()
+    {
+        var envelope = await RetainedGdprEnvelopeAsync(acquireFrenchExpression: true);
+        var acquired = envelope.BodyComposition.Envelope.FormexMainBodyLegalContent!.Outcomes
+            .Single(static outcome => outcome.Source.Kind == EuFormexPackageOutcomeKind.Acquired);
+        Assert.AreEqual(
+            "http://publications.europa.eu/resource/authority/language/FRA",
+            acquired.Source.Expression.OfficialLanguage);
+
+        var corpus = LexCorpus6Builder.TryBuild(envelope, out var corpusRefusal, out var corpusDetail);
+        Assert.IsNotNull(corpus, $"{corpusRefusal}: {corpusDetail}");
+        Assert.IsFalse(corpus.VerifiedSet.Set.Members.SelectMany(static member => member.Stage3Outcomes)
+            .Any(outcome => outcome.SemanticIdentitySha256 == acquired.SemanticIdentitySha256),
+            "An alternate-language Formex package remains typed in the evidence population but is not " +
+            "misrepresented as the selected work-level body outcome.");
+
+        var built = EuropeIndexBuilder.TryBuild(envelope, out var refusal, out var detail);
+        Assert.IsNotNull(built, $"{refusal}: {detail}");
+        using var reader = EuropeIndexReader.OpenAndVerify(
+            built.IndexRef, built.IndexBytes.Span, corpus.ArtifactRef, built.CapabilityManifest);
+        Assert.AreEqual(0, reader.ArticleCount);
     }
 
     [TestMethod]
@@ -139,36 +192,43 @@ public sealed class EuropeIndexBuilderTests
         AssertHostileDatabaseRefused(built, corpus.ArtifactRef,
             "UPDATE stamp SET sqlite_version='substituted' WHERE stamp_id=1");
         AssertHostileDatabaseRefused(built, corpus.ArtifactRef,
+            "UPDATE stamp SET sqlite_source_id='substituted' WHERE stamp_id=1");
+        AssertHostileDatabaseRefused(built, corpus.ArtifactRef,
             "CREATE TABLE injected(value TEXT) STRICT");
         AssertHostileDatabaseRefused(built, corpus.ArtifactRef,
             "PRAGMA application_id=0");
     }
 
     internal static async Task<Stage3DerivationProfileEnvelope> RetainedGdprEnvelopeAsync(
-        bool reopenRetainedBytes = true)
+        bool reopenRetainedBytes = true,
+        bool acquireFrenchExpression = false)
     {
         var bytes = await File.ReadAllBytesAsync(Path.Combine(
             AppContext.BaseDirectory, "Fixtures", "EuDocumentFetch", "gdpr-fmx4-200-body.bin"));
-        var fixture = await EuFormexAnnexInventoryProducerTests.FixtureAsync(bytes);
+        const string expressionIri =
+            "http://publications.europa.eu/resource/cellar/5f2552c2-11bd-11e6-ba9a-01aa75ed71a1.0001";
+        const string frenchExpressionIri =
+            "http://publications.europa.eu/resource/cellar/5f2552c2-11bd-11e6-ba9a-01aa75ed71a1.0002";
+        var run = await EuAxiomWiringHarness.RunAsync(
+            static root => EuAcquisitionTestFixture.AxiomAbsenceScriptFor(root),
+            seedCelex: "32016R0679",
+            expressionIri: expressionIri,
+            additionalExpressionIri: acquireFrenchExpression ? frenchExpressionIri : null,
+            additionalExpressionLanguageAuthority: acquireFrenchExpression
+                ? "http://publications.europa.eu/resource/authority/language/FRA" : null);
+        var acquiredExpressionIri = acquireFrenchExpression ? frenchExpressionIri : expressionIri;
+        var expression = run.CorrigendumTripwires!.ProductionsByFamilyKey.Values
+            .SelectMany(static production => production.Expressions!.Derivation!.Expressions)
+            .Single(candidate => string.Equals(
+                candidate.Identity.PublisherExpressionId, acquiredExpressionIri, StringComparison.Ordinal));
+        var fixture = await EuFormexAnnexInventoryProducerTests.FixtureAsync(bytes, expression);
         var inventoryResult = await new EuFormexAnnexInventoryProducer(fixture.Store).RunAsync(
             fixture.Binding, fixture.Profile.Bytes, fixture.Profile.Reference, CancellationToken.None);
         Assert.IsNotNull(inventoryResult.Inventory, inventoryResult.Detail);
         var inventory = inventoryResult.Inventory;
         Assert.AreEqual(0, inventory.Members.Count);
-        var expression = LanguageScopedExpression.FromRetainedSource(
-            new LanguageScopedExpressionIdentity(
-                fixture.Binding.Expression.ParentKeyRef!.PublisherUri,
-                fixture.Binding.Expression.PublisherUri),
-            "EN", null, fixture.Binding.Expression,
-            LanguageScopedExpressionLineage.FromContributions(
-                [new(LanguageScopedExpressionContribution.IdentityAndLanguage, fixture.Receipt)]));
         var acquired = EuFormexPackageOutcome.Acquired(expression, inventory);
-        var run = await EuAxiomWiringHarness.RunAsync(
-            static root => EuAcquisitionTestFixture.AxiomAbsenceScriptFor(root),
-            custodyStore: fixture.Store,
-            documentFetchResponse: request => EuAcquisitionTestFixture.BinaryResponse(
-                request, HttpStatusCode.OK, bytes, "application/zip;charset=UTF-8"));
-        var formex = EuFormexAnnexClassificationReconciliationTests.Reconciliation(run, [acquired]);
+        var formex = EuFormexRunOutcomeReconciliationTests.CompleteForEnvelope(run, acquired);
 
         return await LexCorpus6BuilderTests.CompleteProfileEnvelopeAsync(
             europeOverride: run,

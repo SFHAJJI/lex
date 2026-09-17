@@ -201,7 +201,9 @@ public static class LuxembourgIndexBuilder
                 return false;
             }
 
-            if (outcome.Disposition != LuxembourgAknLegalContentDisposition.Admitted ||
+            if (outcome.Disposition is not (
+                    LuxembourgAknLegalContentDisposition.Admitted or
+                    LuxembourgAknLegalContentDisposition.MarkerOnlyEvidence) ||
                 member.Outcome != LexCorpus6OutcomeKind.Acquired)
             {
                 continue;
@@ -226,13 +228,24 @@ public static class LuxembourgIndexBuilder
                 article.Coordinate.PublisherWId,
                 date,
                 language,
-                string.Concat(article.Tokens.Select(static token => token.Text)),
+                string.Concat(article.Tokens
+                    .Where(static token => token.Kind is
+                        LuxembourgAknLegalContentTokenKind.Text or
+                        LuxembourgAknLegalContentTokenKind.Reference)
+                    .Select(static token => token.Text)),
                 JsonSerializer.Serialize(article.Tokens.Select(static token => new
                 {
                     kind = ContractWire.NameOf(token.Kind),
                     text = token.Text,
                     target = token.Target,
                     marker = token.Marker,
+                    note_body = token.NoteBody?.Select(static nested => new
+                    {
+                        kind = ContractWire.NameOf(nested.Kind),
+                        text = nested.Text,
+                        target = nested.Target,
+                        marker = nested.Marker,
+                    }),
                 }))));
         }
 
@@ -305,6 +318,29 @@ public static class LuxembourgIndexBuilder
             provenance.SourceId, provenance.CompileOptionsSha256);
         transaction.Commit();
         Execute(connection, "PRAGMA optimize");
+    }
+
+    internal static byte[] BuildFixedInputDeterminismEvidence()
+    {
+        var member = new MemberRow(
+            new string('1', 64), 0, "acquired", "agreed_same_run_cc_by", "[]", "[]");
+        var article = new ArticleRow(
+            new string('2', 64), member.ObjectRefSha256,
+            "https://example.invalid/expression", "art_1", "wid-1", "2024-01-01",
+            "fra", "libellé fixe", "[]");
+        var members = new[] { member };
+        var articles = new[] { article };
+        var path = Path.Combine(Path.GetTempPath(), $"lex-v3-lu-index-pin-{Guid.NewGuid():N}.sqlite");
+        try
+        {
+            BuildDatabase(path, new string('a', 64), HashLogicalRows(members, articles),
+                members, articles);
+            return File.ReadAllBytes(path);
+        }
+        finally
+        {
+            DeleteDatabase(path);
+        }
     }
 
     internal static V3IndexCapabilityManifest MeasureCapabilities(
@@ -453,14 +489,10 @@ public static class LuxembourgIndexBuilder
             var version = reader.GetString(0);
             var sourceId = reader.GetString(1);
             reader.Close();
-            using var options = connection.CreateCommand();
-            options.CommandText = "PRAGMA compile_options";
-            using var optionReader = options.ExecuteReader();
-            var values = new List<string>();
-            while (optionReader.Read()) values.Add(optionReader.GetString(0));
-            values.Sort(StringComparer.Ordinal);
-            var digest = Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(values)));
-            return new SqliteProvenance(version, sourceId, digest);
+            return new SqliteProvenance(
+                version,
+                sourceId,
+                SqlitePortableProvenance.CompileOptionsSha256(connection));
         }
     }
 }

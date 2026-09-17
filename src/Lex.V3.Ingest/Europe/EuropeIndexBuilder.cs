@@ -212,35 +212,38 @@ public static class EuropeIndexBuilder
                 detail = "The Formex main-body population contains a duplicate outcome.";
                 return false;
             }
+            var matching = euMembers.Where(member => member.Stage3Outcomes.Any(value =>
+                    value.Domain == LexCorpus6Stage3OutcomeDomain.EuropeFormexMainBody &&
+                    string.Equals(value.SemanticIdentitySha256, outcome.SemanticIdentitySha256,
+                        StringComparison.Ordinal)))
+                .Take(2).ToArray();
+            if (matching.Length == 0 && outcome.Source.Kind != EuFormexPackageOutcomeKind.Acquired)
+            {
+                continue;
+            }
+            if (matching.Length == 0 && LexCorpus6Builder.IsUnboundAlternateLanguage(
+                    outcome.Source.Expression,
+                    sourceRecords
+                        .Where(static record => record.Body.Kind == CorpusBodyRecordKind.Held)
+                        .Select(static record => record.ObjectRef)))
+            {
+                continue;
+            }
+            if (matching.Length != 1)
+            {
+                articles = [];
+                refusal = EuropeIndexBuildRefusal.DerivationMismatch;
+                detail = "A Formex main-body outcome does not bind to exactly one corpus member.";
+                return false;
+            }
+            var member = matching[0];
+            var objectRef = member.ObjectRefSha256;
+
             if (outcome.Source.Kind != EuFormexPackageOutcomeKind.Acquired)
             {
                 if (outcome.Disposition == EuFormexMainBodyLegalContentDisposition.Admitted)
                     throw new InvalidDataException("A non-acquired Formex outcome claims admitted legal content.");
                 continue;
-            }
-
-            var receipt = outcome.Source.AcquiredInventory!.SourceReceipt;
-            var matching = sourceRecords.Where(record =>
-                    record.Body.Kind == CorpusBodyRecordKind.Held && record.Body.Receipt == receipt)
-                .Take(2).ToArray();
-            if (matching.Length != 1)
-            {
-                articles = [];
-                refusal = EuropeIndexBuildRefusal.PopulationMismatch;
-                detail = "An acquired Formex outcome does not bind to exactly one held EU corpus body.";
-                return false;
-            }
-            var objectRef = ScopeManifestCanonicalWriter.ComputeObjectRefSha256(matching[0].ObjectRef);
-            if (!memberByObject.TryGetValue(objectRef, out var member) ||
-                !member.Stage3Outcomes.Any(value =>
-                    value.Domain == LexCorpus6Stage3OutcomeDomain.EuropeFormexMainBody &&
-                    string.Equals(value.SemanticIdentitySha256, outcome.SemanticIdentitySha256,
-                        StringComparison.Ordinal)))
-            {
-                articles = [];
-                refusal = EuropeIndexBuildRefusal.DerivationMismatch;
-                detail = objectRef;
-                return false;
             }
             if (outcome.Disposition != EuFormexMainBodyLegalContentDisposition.Admitted) continue;
             if (member.Outcome != LexCorpus6OutcomeKind.Acquired ||
@@ -270,6 +273,12 @@ public static class EuropeIndexBuilder
                         kind = ContractWire.NameOf(token.Kind),
                         text = token.Text,
                         target = token.Target,
+                        note_body = token.NoteBody?.Select(static nested => new
+                        {
+                            kind = ContractWire.NameOf(nested.Kind),
+                            text = nested.Text,
+                            target = nested.Target,
+                        }),
                     }))));
             }
         }
@@ -344,6 +353,40 @@ public static class EuropeIndexBuilder
             provenance.SourceId, provenance.CompileOptionsSha256);
         transaction.Commit();
         Execute(connection, "PRAGMA optimize");
+    }
+
+    internal static byte[] BuildFixedInputDeterminismEvidence()
+    {
+        var member = new MemberRow(
+            new string('1', 64), 0, "acquired", "original_legal_text", "[]", "[]");
+        var line = new CorrigendumLineRow(
+            new string('2', 64), "eu-object-facts-batch-000000000000000000000000",
+            "https://example.invalid/work", "https://example.invalid/corrigendum",
+            "https://example.invalid/expression", "https://example.invalid/language/ENG",
+            "english_only", "publisher_dated", "2024-01-01",
+            "http://www.w3.org/2001/XMLSchema#date", new string('3', 64));
+        var gap = new CorrigendumGapRow(
+            new string('4', 64), line.FamilyKey, "https://example.invalid/gap",
+            "corrects_not_stated_by_consulted_delivery");
+        var article = new ArticleRow(
+            new string('5', 64), member.ObjectRefSha256,
+            "https://example.invalid/work", "https://example.invalid/expression", "body.xml",
+            "1", "Article 1", "2024-01-01", "eng", "fixed wording", "[]");
+        var members = new[] { member };
+        var lines = new[] { line };
+        var gaps = new[] { gap };
+        var articles = new[] { article };
+        var path = Path.Combine(Path.GetTempPath(), $"lex-v3-eu-index-pin-{Guid.NewGuid():N}.sqlite");
+        try
+        {
+            BuildDatabase(path, new string('a', 64),
+                HashLogicalRows(members, lines, gaps, articles), members, lines, gaps, articles);
+            return File.ReadAllBytes(path);
+        }
+        finally
+        {
+            DeleteDatabase(path);
+        }
     }
 
     internal static V3IndexCapabilityManifest MeasureCapabilities(
@@ -505,14 +548,10 @@ public static class EuropeIndexBuilder
             var version = reader.GetString(0);
             var sourceId = reader.GetString(1);
             reader.Close();
-            using var options = connection.CreateCommand();
-            options.CommandText = "PRAGMA compile_options";
-            using var optionReader = options.ExecuteReader();
-            var values = new List<string>();
-            while (optionReader.Read()) values.Add(optionReader.GetString(0));
-            values.Sort(StringComparer.Ordinal);
-            var digest = Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(values)));
-            return new SqliteProvenance(version, sourceId, digest);
+            return new SqliteProvenance(
+                version,
+                sourceId,
+                SqlitePortableProvenance.CompileOptionsSha256(connection));
         }
     }
 }

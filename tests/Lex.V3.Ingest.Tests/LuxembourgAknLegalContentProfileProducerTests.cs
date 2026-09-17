@@ -41,6 +41,13 @@ public sealed class LuxembourgAknLegalContentProfileProducerTests
             && token.Target == "#pm2");
         var note = tokens.Single(token => token.Kind == LuxembourgAknLegalContentTokenKind.NoteReference
             && token.Target == "#M2");
+        Assert.IsNotNull(note.NoteBody);
+        var noteCitation = note.NoteBody.Single(token =>
+            token.Kind == LuxembourgAknLegalContentTokenKind.Reference);
+        Assert.AreEqual(
+            "http://data.legilux.public.lu/eli/etat/leg/loi/2022/11/30/a588/jo",
+            noteCitation.Target);
+        StringAssert.StartsWith(noteCitation.Text, "Loi du 30 novembre 2022 relative à la concurrence");
         Assert.IsTrue(tokens.IndexOf(start) < tokens.IndexOf(end));
         Assert.IsTrue(tokens.IndexOf(end) < tokens.IndexOf(note));
         Assert.IsTrue(tokens.Any(token => token.Kind == LuxembourgAknLegalContentTokenKind.Text
@@ -152,15 +159,16 @@ public sealed class LuxembourgAknLegalContentProfileProducerTests
             "<article id=\"art_1\"><content><p>" +
             "<mod class=\"mod-start\" for=\"#pm1\"/>" +
             "<mod class=\"mod-end\" for=\"#pm1\"/>" +
-            "<noteRef href=\"#M1\" marker=\"1\"/>" +
             "</p></content></article>"), "marker-only");
 
         var outcome = result.Outcomes.Single();
         Assert.AreEqual(
-            LuxembourgAknLegalContentDisposition.UnsupportedContentShape,
+            LuxembourgAknLegalContentDisposition.MarkerOnlyEvidence,
             outcome.Disposition);
-        Assert.IsNull(outcome.Article);
-        StringAssert.Contains(outcome.Detail, "no publisher legal wording");
+        Assert.IsNotNull(outcome.Article);
+        Assert.IsTrue(outcome.Article.Tokens.All(static token => token.Kind is
+            LuxembourgAknLegalContentTokenKind.ModificationStart or
+            LuxembourgAknLegalContentTokenKind.ModificationEnd));
     }
 
     [TestMethod]
@@ -186,7 +194,7 @@ public sealed class LuxembourgAknLegalContentProfileProducerTests
         Assert.AreSame(inventory.Outcomes.Single(), outcome.SourceInventoryOutcome);
         Assert.AreEqual(first.IdentitySha256, second.IdentitySha256);
         Assert.AreEqual(
-            "47f2c680fafa2b0a2c8bd1692ecb397c2cf31a3f829b4cb04be64af1536de6e7",
+            "f94f91825481ef57d76ef18794782e99caed79a859510c6794d39bf807bfa945",
             first.IdentitySha256);
     }
 

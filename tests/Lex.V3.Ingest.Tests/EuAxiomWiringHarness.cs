@@ -19,7 +19,7 @@ namespace Lex.V3.Ingest.Tests;
 /// </remarks>
 internal static class EuAxiomWiringHarness
 {
-    private const string ExpressionIri =
+    private const string DefaultExpressionIri =
         "http://publications.europa.eu/resource/cellar/00000000-0000-0000-0000-000000000001.0001.01/DOC_1";
 
     private const string WatermarkLexical = "2026-01-01T00:00:00.0000000+01:00";
@@ -32,14 +32,22 @@ internal static class EuAxiomWiringHarness
         Func<string, EuAcquisitionTestFixture.FamilyScript?> axiomScript,
         Func<string, EuAcquisitionTestFixture.FamilyScript>? locatedAmendmentScript = null,
         ICustodyStore? custodyStore = null,
-        Func<HttpRequestMessage, HttpResponseMessage>? documentFetchResponse = null)
+        Func<HttpRequestMessage, HttpResponseMessage>? documentFetchResponse = null,
+        string? seedCelex = null,
+        string? expressionIri = null,
+        string? expressionLanguageAuthority = null,
+        string? additionalExpressionIri = null,
+        string? additionalExpressionLanguageAuthority = null)
     {
         // ONE BUDGET FOR THE WHOLE RUN. The adapter refuses a census request
         // carrying a different instance, because two counters reading the same
         // limit bound that many requests each and neither bounds the run.
         var runWireBudget = EuAcquisitionTestFixture.TestWireBudget();
 
-        var seed = EuAppendixASeedMap.SeedsInCelexOrder[0];
+        var seed = seedCelex is null
+            ? EuAppendixASeedMap.SeedsInCelexOrder[0]
+            : EuAppendixASeedMap.SeedsInCelexOrder.Single(candidate =>
+                string.Equals(candidate.Celex, seedCelex, StringComparison.Ordinal));
         var rootIri = EuPackRootCanonicalForm.TryCanonicalize(seed.WorkRoot, out _)
             ?? throw new AssertFailedException("Appendix A's own seed root failed to canonicalize.");
 
@@ -52,7 +60,22 @@ internal static class EuAxiomWiringHarness
             .Concat(EuAcquisitionTestFixture.RelationPredicates.Select(predicate => (predicate, (string?)null)))
             .ToArray();
         var pRows = EuAcquisitionTestFixture.SortedObjectFactRows(rootIri, pOutcomes);
-        var xRows = EuAcquisitionTestFixture.EnglishExpressionFactRows(rootIri, ExpressionIri).ToArray();
+        var selectedExpressionIri = expressionIri ?? DefaultExpressionIri;
+        var xRows = (expressionLanguageAuthority is null
+            ? EuAcquisitionTestFixture.EnglishExpressionFactRows(rootIri, selectedExpressionIri).ToArray()
+            :
+            [
+                EuAcquisitionTestFixture.ExpressionFactRow(rootIri, selectedExpressionIri),
+                EuAcquisitionTestFixture.ExpressionLanguageRow(
+                    rootIri, selectedExpressionIri, expressionLanguageAuthority),
+            ]).ToList();
+        if (additionalExpressionIri is not null)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(additionalExpressionLanguageAuthority);
+            xRows.Add(EuAcquisitionTestFixture.ExpressionFactRow(rootIri, additionalExpressionIri));
+            xRows.Add(EuAcquisitionTestFixture.ExpressionLanguageRow(
+                rootIri, additionalExpressionIri, additionalExpressionLanguageAuthority));
+        }
         var wRows = new[] { EuAcquisitionTestFixture.RootWatermarkRow(rootIri, WatermarkLexical) };
 
         var scripts = new Dictionary<string, EuAcquisitionTestFixture.FamilyScript>(StringComparer.Ordinal)
@@ -62,7 +85,7 @@ internal static class EuAxiomWiringHarness
             ["P"] = EuAcquisitionTestFixture.ScriptFor(
                 "P", pRows.Count, pRows, EuAcquisitionTestFixture.ObjectFactsProjection),
             ["X"] = EuAcquisitionTestFixture.ScriptFor(
-                "X", xRows.Length, xRows, EuAcquisitionTestFixture.ExpressionFactsProjection),
+                "X", xRows.Count, xRows, EuAcquisitionTestFixture.ExpressionFactsProjection),
             ["W"] = EuAcquisitionTestFixture.ScriptFor(
                 "W", wRows.Length, wRows, EuAcquisitionTestFixture.RootWatermarkProjection),
             ["M"] = EuAcquisitionTestFixture.ManifestationScriptFor(rootIri),

@@ -3,6 +3,7 @@ using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using Lex.V3.Contracts.Custody;
+using Lex.V3.Contracts.Derivation;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Europe;
 using Lex.V3.Contracts.Source.Http;
@@ -389,10 +390,18 @@ public sealed class EuFormexAnnexInventoryProducerTests
         DurableBlobWriteReceipt Receipt, EuFormexAnnexTransportBinding Binding,
         (byte[] Bytes, SourceArtifactRef Reference) Profile)>
         FixtureAsync(byte[] bytes)
+        => await FixtureAsync(bytes, expression: null);
+
+    internal static async Task<(EuAcquisitionTestFixture.EuInMemoryCustodyStore Store,
+        DurableBlobWriteReceipt Receipt, EuFormexAnnexTransportBinding Binding,
+        (byte[] Bytes, SourceArtifactRef Reference) Profile)>
+        FixtureAsync(byte[] bytes, LanguageScopedExpression? expression)
     {
         var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
         var receipt = await store.CreateAsync(bytes, CustodyClass.NightlyFloor90d, CancellationToken.None);
-        var package = FormexPackage();
+        var package = expression is null
+            ? FormexPackage()
+            : FormexPackage(expression.SourceObject, "32016R0679");
         var request = Request(package.BodyRef);
         var response = Response(request, receipt);
         return (store, receipt,
@@ -444,6 +453,57 @@ public sealed class EuFormexAnnexInventoryProducerTests
             EuWemiRole.Item, manifestation);
         var stream = EuFormexStreamName.TryParse(
             "CL2026R1965EN0000010.0001.xml", "32026R1965", out var roleRefusal)!;
+        Assert.AreEqual(EuFormexRoleRefusal.None, roleRefusal);
+        var items = EuFormexItemSet.TryAdmit(
+            [new EuFormexItem(boundary, stream, item, 0)], out roleRefusal)!;
+        Assert.AreEqual(EuFormexRoleRefusal.None, roleRefusal);
+        var package = EuFormexPackage.TryAdmit(
+            boundary, manifestation, expression, items, "EN", out var packageRefusal)!;
+        Assert.AreEqual(EuFormexPackageRefusal.None, packageRefusal);
+        return package;
+    }
+
+    private static EuFormexPackage FormexPackage(
+        SourceObjectRef languageScopedExpression,
+        string celex)
+    {
+        var registry = languageScopedExpression.EntityKind.RegistryRef;
+        var identityProfile = languageScopedExpression.IdentityProfileRef;
+        var boundary = new EuWemiIdentityBoundary(registry, identityProfile);
+        var expressionKey = languageScopedExpression.PublisherUri[
+            (languageScopedExpression.PublisherUri.LastIndexOf("/cellar/", StringComparison.Ordinal)
+                + "/cellar/".Length)..];
+        var workKey = expressionKey[..expressionKey.LastIndexOf('.')];
+        var work = new SourceObjectRef(
+            SourceCoreSchemaIds.SourceObjectRef,
+            SourceAuthority.Cellar,
+            new SourceRegistryMemberRef(registry, EuWemiIdentityBoundary.MemberKeyOf(EuWemiRole.Work)),
+            "http://publications.europa.eu/resource/cellar/" + workKey,
+            workKey,
+            Sha(Encoding.UTF8.GetBytes(workKey)),
+            identityProfile,
+            null);
+        var expression = new SourceObjectRef(
+            SourceCoreSchemaIds.SourceObjectRef,
+            SourceAuthority.Cellar,
+            new SourceRegistryMemberRef(
+                registry, EuWemiIdentityBoundary.MemberKeyOf(EuWemiRole.Expression)),
+            languageScopedExpression.PublisherUri,
+            expressionKey,
+            Sha(Encoding.UTF8.GetBytes(expressionKey)),
+            identityProfile,
+            new SourceObjectKeyRef(
+                work.EntityKind, work.PublisherUri, work.CanonicalKey, work.CanonicalKeySha256));
+        boundary.Require(expression, EuWemiRole.Expression, nameof(expression));
+        var manifestationKey = expression.CanonicalKey + ".01";
+        var manifestation = Object(
+            boundary, registry, identityProfile, manifestationKey,
+            EuWemiRole.Manifestation, expression);
+        var item = Object(
+            boundary, registry, identityProfile, manifestationKey + "/FORMEX",
+            EuWemiRole.Item, manifestation);
+        var stream = EuFormexStreamName.TryParse(
+            "CL2016R0679EN0000010.0001.xml", celex, out var roleRefusal)!;
         Assert.AreEqual(EuFormexRoleRefusal.None, roleRefusal);
         var items = EuFormexItemSet.TryAdmit(
             [new EuFormexItem(boundary, stream, item, 0)], out roleRefusal)!;

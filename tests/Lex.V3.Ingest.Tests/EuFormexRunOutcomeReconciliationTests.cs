@@ -440,23 +440,46 @@ public sealed class EuFormexRunOutcomeReconciliationTests
             static root => EuAcquisitionTestFixture.AxiomAbsenceScriptFor(root));
 
     internal static EuFormexRunOutcomeReconciliation CompleteForEnvelope(
-        EuQueryExecutionResult run) =>
+        EuQueryExecutionResult run,
+        EuFormexPackageOutcome? replacement = null) =>
         EuFormexRunOutcomeReconciliation.TryClose(
             run,
-            PopulationsOf(run),
+            PopulationsOf(run, replacement),
             out var refusal,
             out var detail)
         ?? throw new AssertFailedException($"{refusal}: {detail}");
 
     private static IReadOnlyList<EuFormexPackageOutcomePopulation> PopulationsOf(
-        EuQueryExecutionResult run) =>
-        run.CorrigendumTripwires!.ProductionsByFamilyKey
+        EuQueryExecutionResult run) => PopulationsOf(run, replacement: null);
+
+    private static IReadOnlyList<EuFormexPackageOutcomePopulation> PopulationsOf(
+        EuQueryExecutionResult run,
+        EuFormexPackageOutcome? replacement)
+    {
+        var replacementCount = 0;
+        var populations = run.CorrigendumTripwires!.ProductionsByFamilyKey
             .OrderBy(static pair => pair.Key, StringComparer.Ordinal)
-            .Select(static pair => PopulationOf(pair.Value.Expressions!))
+            .Select(pair => PopulationOf(pair.Value.Expressions!, replacement, ref replacementCount))
             .ToArray();
+        if (replacement is not null && replacementCount != 1)
+        {
+            throw new AssertFailedException(
+                $"The replacement Formex outcome matched {replacementCount} run expressions instead of one.");
+        }
+        return populations;
+    }
 
     private static EuFormexPackageOutcomePopulation PopulationOf(
         EuLanguageScopedExpressionProductionResult production)
+    {
+        var replacementCount = 0;
+        return PopulationOf(production, replacement: null, ref replacementCount);
+    }
+
+    private static EuFormexPackageOutcomePopulation PopulationOf(
+        EuLanguageScopedExpressionProductionResult production,
+        EuFormexPackageOutcome? replacement,
+        ref int replacementCount)
     {
         var enumerations = production.Derivation!.Expressions.Select(static expression =>
             EuFormexManifestationEnumerationResult.Success(
@@ -472,11 +495,21 @@ public sealed class EuFormexRunOutcomeReconciliationTests
         var eligibility = EuFormexEligibilityPopulation.TryCreate(
             production, enumerations, out var eligibilityRefusal, out var eligibilityDetail)
             ?? throw new AssertFailedException($"{eligibilityRefusal}: {eligibilityDetail}");
-        var outcomes = eligibility.Enumerations.Select(static enumeration =>
-            EuFormexPackageOutcome.Refused(
+        var outcomes = new List<EuFormexPackageOutcome>(eligibility.Enumerations.Count);
+        foreach (var enumeration in eligibility.Enumerations)
+        {
+            if (replacement is not null
+                && replacement.ExpressionIdentity == enumeration.ExpressionIdentity)
+            {
+                replacementCount++;
+                outcomes.Add(replacement);
+                continue;
+            }
+            outcomes.Add(EuFormexPackageOutcome.Refused(
                 enumeration.Expression,
                 EuDocumentFetchAttemptRefusal.ObservationNotExecuted,
-                "offline fixture")).ToArray();
+                "offline fixture"));
+        }
         return EuFormexPackageOutcomePopulation.TryClose(
             eligibility, outcomes, out var outcomeRefusal, out var outcomeDetail)
             ?? throw new AssertFailedException($"{outcomeRefusal}: {outcomeDetail}");

@@ -1,8 +1,67 @@
+using Lex.V3.Contracts;
+using Lex.V3.Contracts.Source.Core;
+
 namespace Lex.V3.Ingest.Tests;
 
 [TestClass]
 public sealed class LexCorpus6BuilderTests
 {
+    [TestMethod]
+    public void FixedTypedInputPinsTheExactCorpus6CanonicalBytes()
+    {
+        var fixedArtifact = new SourceArtifactRef(
+            "urn:uuid:00000000-0000-5000-8000-000000000001", new string('1', 64));
+        var legalNoticeRoute = CompleteLegalNoticeRoute(fixedArtifact);
+        var legalNotice = Lex.V3.Contracts.Source.Europe.EuLegalNoticeEvidence.FromRoute(
+            legalNoticeRoute.Evidence,
+            legalNoticeRoute.Request);
+        var rightsMatrix = LexCorpus6EuropeRightsMatrix.From(legalNotice);
+        var corrigendumDocument = new Lex.V3.Contracts.Derivation.EuCorrigendumTripwireSet.CanonicalSetDocument(
+            Lex.V3.Contracts.Derivation.EuCorrigendumTripwireSet.Schema,
+            [],
+            []);
+        var corrigendumProduction = new LexCorpus6CorrigendumProduction(
+            "eu-object-facts-batch-000000000000000000000000",
+            Lex.V3.Contracts.Derivation.EuCorrigendumTripwireSet.CanonicalSha256Of(corrigendumDocument),
+            new string('6', 64),
+            new string('7', 64),
+            new string('8', 64),
+            [],
+            []);
+        var member = new LexCorpus6Member(
+            PublisherId.EuEurLex,
+            new string('9', 64),
+            0,
+            fixedArtifact,
+            fixedArtifact,
+            Lex.V3.Contracts.Source.Scope.ScopeDisposition.AcceptedSelected,
+            LexCorpus6OutcomeKind.Acquired,
+            new string('a', 64),
+            123,
+            new string('b', 64),
+            new Lex.V3.Contracts.Source.Europe.EuContentClassObservation(
+                Lex.V3.Contracts.Source.Europe.EuContentClass.OriginalLegalText,
+                rightsMatrix.LegalNoticeEvidenceRef),
+            null,
+            [new LexCorpus6Stage3Outcome(
+                LexCorpus6Stage3OutcomeDomain.EuropeFormexMainBody,
+                new string('c', 64),
+                LexCorpus6Stage3Disposition.FormexMainBodyAdmitted)],
+            []);
+        var fixedSet = new LexCorpus6ManifestSet(
+            LexCorpus6Builder.Schema,
+            fixedArtifact,
+            new SourceArtifactRef(
+                "urn:uuid:00000000-0000-5000-8000-000000000002", new string('2', 64)),
+            rightsMatrix,
+            new[] { new string('3', 64), new string('4', 64) },
+            new[] { new string('5', 64) },
+            [corrigendumProduction],
+            [member]);
+        var digest = LexCorpus6Builder.ComputeSha256(LexCorpus6Builder.Write(fixedSet));
+        Assert.AreEqual("3043fbe2dd7b23adf13ad9d961608f67df77c5ad27d625f6d9f7ce89667c1781", digest);
+    }
+
     [TestMethod]
     public void TerminalBuilderAndStrictReaderAreOneVerticalSlice()
     {
@@ -92,7 +151,9 @@ public sealed class LexCorpus6BuilderTests
                 member.Publisher == Lex.V3.Contracts.PublisherId.EuEurLex &&
                 member.BodySha256 is not null)
             .All(static member =>
-                member.EuropeContentClass is not null && member.LuxembourgRights is null));
+                member.EuropeContentClass is not null && member.LuxembourgRights is null &&
+                member.Stage3Outcomes.Count(outcome =>
+                    outcome.Domain == LexCorpus6Stage3OutcomeDomain.EuropeFormexMainBody) == 1));
         var luxembourgMembers = first.VerifiedSet.Set.Members
             .Where(static member =>
                 member.Publisher == Lex.V3.Contracts.PublisherId.LuLegilux &&
@@ -149,12 +210,9 @@ public sealed class LexCorpus6BuilderTests
         Assert.HasCount(acquiredMainBody.Length, formexOutcomes);
         foreach (var sourceOutcome in acquiredMainBody)
         {
-            var sourceRecord = envelope.BodyComposition.Envelope.Europe.CorpusRecordSet!.Set.Records.Single(
-                record => record.Body.Kind == Lex.V3.Contracts.Source.Corpus.CorpusBodyRecordKind.Held &&
-                    record.Body.Receipt == sourceOutcome.Source.AcquiredInventory!.SourceReceipt);
-            var member = first.VerifiedSet.Set.Members.Single(value => value.ObjectRefSha256 ==
-                Lex.V3.Contracts.Source.Scope.ScopeManifestCanonicalWriter.ComputeObjectRefSha256(
-                    sourceRecord.ObjectRef));
+            var member = first.VerifiedSet.Set.Members.Single(value => value.Stage3Outcomes.Any(outcome =>
+                outcome.Domain == LexCorpus6Stage3OutcomeDomain.EuropeFormexMainBody &&
+                outcome.SemanticIdentitySha256 == sourceOutcome.SemanticIdentitySha256));
             Assert.IsTrue(member.Stage3Outcomes.Contains(new LexCorpus6Stage3Outcome(
                 LexCorpus6Stage3OutcomeDomain.EuropeFormexMainBody,
                 sourceOutcome.SemanticIdentitySha256,
@@ -227,12 +285,21 @@ public sealed class LexCorpus6BuilderTests
             .SelectMany(static tripwire => tripwire.Lines)
             .Any(static line => line.DateState == Lex.V3.Contracts.Derivation.EuCorrigendumDateState.PublisherDated));
         CollectionAssert.AreEqual(
-            envelope.BodyComposition.Envelope.FidelityPreservation.UnresolvedObligations.ToArray(),
-            reopened.Set.UnresolvedFidelityObligations.ToArray());
+            Enum.GetValues<Stage3FidelityPreservationObligation>(),
+            envelope.BodyComposition.Envelope.FidelityPreservation.UnresolvedObligations.ToArray());
+        Assert.IsTrue(reopened.Set.ProfileIdentities.Contains(
+            Europe.EuFormexMainBodyLegalContentProducer.ProfileSha256));
+        Assert.IsTrue(reopened.Set.ProfileIdentities.Contains(
+            Luxembourg.LuxembourgAknLegalContentProfileProducer.RuleProfileSha256));
+        Assert.AreEqual(
+            Lex.V3.Contracts.Derivation.DerivationProfileComparisonOutcome.ProfilesDiffer,
+            Lex.V3.Contracts.Derivation.DerivationProfileComparison.Compare(
+                Europe.EuFormexMainBodyLegalContentProducer.ProfileSha256,
+                Luxembourg.LuxembourgAknLegalContentProfileProducer.RuleProfileSha256));
     }
 
     [TestMethod]
-    public async Task StrictReaderRejectsDeletedCorrigendumProjectionOrFidelityObligation()
+    public async Task StrictReaderRejectsDeletedCorrigendumProjection()
     {
         var europe = await EuCorrigendumTripwireWiringTests.CompleteDatedResultAsync();
         var envelope = await CompleteProfileEnvelopeAsync(europeOverride: europe);
@@ -244,10 +311,6 @@ public sealed class LexCorpus6BuilderTests
         var lines = projection["corrigendum_productions"]!.AsArray()[0]!["tripwires"]!.AsArray()[0]!["lines"]!.AsArray();
         lines.RemoveAt(0);
         Assert.ThrowsExactly<ArgumentException>(() => Reopen(projection.ToJsonString(), built));
-
-        var obligations = System.Text.Json.Nodes.JsonNode.Parse(canonical)!.AsObject();
-        obligations["unresolved_fidelity_obligations"]!.AsArray().RemoveAt(0);
-        Assert.ThrowsExactly<ArgumentException>(() => Reopen(obligations.ToJsonString(), built));
 
         var listedCorrigendum = System.Text.Json.Nodes.JsonNode.Parse(canonical)!.AsObject();
         listedCorrigendum["corrigendum_productions"]!.AsArray()[0]!["tripwires"]!.AsArray()[0]!
@@ -289,6 +352,24 @@ public sealed class LexCorpus6BuilderTests
         duplicateOutcomes.Add(duplicateOutcomes[0]!.DeepClone());
         Assert.ThrowsExactly<ArgumentException>(() => Reopen(
             duplicateMembers.Parent!.ToJsonString(), built));
+
+        var heldEu = Members(canonical)
+            .Select(static node => node!.AsObject())
+            .First(static member =>
+                member["publisher"]!.GetValue<string>() == "eu-eurlex" &&
+                member["body_sha256"] is not null);
+        var euOutcomes = heldEu["stage3_outcomes"]!.AsArray();
+        var formexOutcome = euOutcomes
+            .Single(static node =>
+                node!["domain"]!.GetValue<string>() == "europe_formex_main_body")!
+            .AsObject();
+        var missingCanonical = RemoveCanonicalArrayItemContaining(
+            canonical,
+            formexOutcome["semantic_identity_sha256"]!.GetValue<string>());
+        var missing = Assert.ThrowsExactly<ArgumentException>(() => Reopen(missingCanonical, built));
+        StringAssert.Contains(
+            missing.InnerException?.Message ?? missing.Message,
+            "exactly one Formex main-body outcome");
 
         var reorderedMembers = Members(canonical);
         var reorderedOutcomes = reorderedMembers
@@ -448,6 +529,38 @@ public sealed class LexCorpus6BuilderTests
     }
 
     [TestMethod]
+    public async Task HeldEuMemberWithoutPrimaryFormexOutcomeRefusesBeforeCorpusBytes()
+    {
+        var europe = await EuAxiomWiringHarness.RunAsync(
+            static root => EuAcquisitionTestFixture.AxiomAbsenceScriptFor(root),
+            expressionIri: "http://publications.europa.eu/resource/cellar/test-french-expression",
+            expressionLanguageAuthority:
+                "http://publications.europa.eu/resource/authority/language/FRA");
+        var envelope = await CompleteProfileEnvelopeAsync(europeOverride: europe);
+
+        Assert.IsNull(LexCorpus6Builder.TryBuild(envelope, out var refusal, out var detail));
+        Assert.AreEqual(LexCorpus6BuildRefusal.PopulationMismatch, refusal, detail);
+        StringAssert.Contains(detail, "exactly one Formex main-body outcome per member");
+    }
+
+    [TestMethod]
+    public async Task TwoPrimaryFormexOutcomesForOneHeldEuMemberRefuseBeforeCorpusBytes()
+    {
+        var europe = await EuAxiomWiringHarness.RunAsync(
+            static root => EuAcquisitionTestFixture.AxiomAbsenceScriptFor(root),
+            expressionIri: "http://publications.europa.eu/resource/cellar/test-english-expression-1",
+            additionalExpressionIri:
+                "http://publications.europa.eu/resource/cellar/test-english-expression-2",
+            additionalExpressionLanguageAuthority:
+                EuAcquisitionTestFixture.EnglishLanguageAuthority);
+        var envelope = await CompleteProfileEnvelopeAsync(europeOverride: europe);
+
+        Assert.IsNull(LexCorpus6Builder.TryBuild(envelope, out var refusal, out var detail));
+        Assert.AreEqual(LexCorpus6BuildRefusal.PopulationMismatch, refusal, detail);
+        StringAssert.Contains(detail, "more than one Formex main-body outcome");
+    }
+
+    [TestMethod]
     public async Task AcquiredNonAdmittedFormexMainBodyKeepsItsExactCorpusDisposition()
     {
         var envelope = await EuropeIndexBuilderTests.RetainedGdprEnvelopeAsync(
@@ -461,7 +574,8 @@ public sealed class LexCorpus6BuilderTests
             sourceOutcome.Disposition);
         var sourceRecord = envelope.BodyComposition.Envelope.Europe.CorpusRecordSet!.Set.Records.Single(
             record => record.Body.Kind == Lex.V3.Contracts.Source.Corpus.CorpusBodyRecordKind.Held &&
-                record.Body.Receipt == sourceOutcome.Source.AcquiredInventory!.SourceReceipt);
+                (record.ObjectRef.PublisherUri == sourceOutcome.Source.ExpressionIdentity.PublisherExpressionId ||
+                 record.ObjectRef.PublisherUri == sourceOutcome.Source.ExpressionIdentity.PublisherWorkId));
         var member = built.VerifiedSet.Set.Members.Single(value => value.ObjectRefSha256 ==
             Lex.V3.Contracts.Source.Scope.ScopeManifestCanonicalWriter.ComputeObjectRefSha256(
                 sourceRecord.ObjectRef));
@@ -514,6 +628,25 @@ public sealed class LexCorpus6BuilderTests
             bytes);
     }
 
+    private static string RemoveCanonicalArrayItemContaining(string canonical, string marker)
+    {
+        var markerIndex = canonical.IndexOf(marker, StringComparison.Ordinal);
+        Assert.IsGreaterThanOrEqualTo(0, markerIndex);
+        var start = canonical.LastIndexOf('{', markerIndex);
+        var end = canonical.IndexOf('}', markerIndex);
+        Assert.IsGreaterThanOrEqualTo(0, start);
+        Assert.IsGreaterThan(start, end);
+        if (end + 1 < canonical.Length && canonical[end + 1] == ',') end++;
+        else if (start > 0 && canonical[start - 1] == ',') start--;
+        else if (start > 0 && canonical[start - 1] == '[' &&
+                 end + 1 < canonical.Length && canonical[end + 1] == ']')
+        {
+            // The selected object is the array's only member; removing it leaves the canonical [].
+        }
+        else Assert.Fail("The selected canonical array item has no adjacent separator.");
+        return canonical.Remove(start, end - start + 1);
+    }
+
     internal static async Task<Stage3DerivationProfileEnvelope> CompleteProfileEnvelopeAsync(
         bool includeLegalNotice = true,
         bool stripEuropeContentClasses = false,
@@ -522,7 +655,11 @@ public sealed class LexCorpus6BuilderTests
         Lex.V3.Contracts.Custody.ICustodyStore? luxembourgStore = null,
         bool includeFormexMainBody = true,
         Europe.EuFormexRunOutcomeReconciliation? formexOverride = null,
-        Lex.V3.Contracts.Custody.ICustodyStore? formexStore = null)
+        Lex.V3.Contracts.Custody.ICustodyStore? formexStore = null,
+        Func<Europe.EuFormexMainBodyLegalContentPopulation,
+            Europe.EuFormexMainBodyLegalContentPopulation>? formexMainBodyTransform = null,
+        Func<Luxembourg.LuxembourgAknLegalContentPopulation,
+            Luxembourg.LuxembourgAknLegalContentPopulation>? aknLegalContentTransform = null)
     {
         var europe = europeOverride ?? await EuAxiomWiringHarness.RunAsync(
             static root => EuAcquisitionTestFixture.AxiomAbsenceScriptFor(root));
@@ -541,10 +678,12 @@ public sealed class LexCorpus6BuilderTests
         var formexMainBody = await new Europe.EuFormexMainBodyLegalContentProducer(
             formexStore ?? new EuAcquisitionTestFixture.EuInMemoryCustodyStore())
             .RunAsync(formex, CancellationToken.None);
+        formexMainBody = formexMainBodyTransform?.Invoke(formexMainBody) ?? formexMainBody;
         var classifications = Stage3EvidenceEnvelopeTests.CompleteClassifications(formex);
         var fidelity = Stage3FidelityPreservationReconciliationTests.Complete(europe, luxembourg);
         var akn = await Stage3EvidenceEnvelopeTests.CompleteAknEvidenceAsync(
             luxembourg, luxembourgStore);
+        var aknLegalContent = aknLegalContentTransform?.Invoke(akn.LegalContent) ?? akn.LegalContent;
         Stage3EvidenceEnvelope? evidence;
         Stage3EvidenceEnvelopeRefusal evidenceRefusal;
         string? evidenceDetail;
@@ -555,21 +694,21 @@ public sealed class LexCorpus6BuilderTests
             evidence = includeFormexMainBody
                 ? Stage3EvidenceEnvelope.TryCreateWithEuropeLegalNoticeRouteAndFormexMainBody(
                     europe, route, request, luxembourg, formex, formexMainBody,
-                    classifications, fidelity, akn.Inventory, akn.LegalContent,
+                    classifications, fidelity, akn.Inventory, aknLegalContent,
                     out evidenceRefusal, out evidenceDetail)
                 : Stage3EvidenceEnvelope.TryCreateWithEuropeLegalNoticeRoute(
                     europe, route, request, luxembourg, formex, classifications, fidelity,
-                    akn.Inventory, akn.LegalContent, out evidenceRefusal, out evidenceDetail);
+                    akn.Inventory, aknLegalContent, out evidenceRefusal, out evidenceDetail);
         }
         else
         {
             evidence = includeFormexMainBody
                 ? Stage3EvidenceEnvelope.TryCreateWithFormexMainBody(
                     europe, luxembourg, formex, formexMainBody, classifications, fidelity,
-                    akn.Inventory, akn.LegalContent, out evidenceRefusal, out evidenceDetail)
+                    akn.Inventory, aknLegalContent, out evidenceRefusal, out evidenceDetail)
                 : Stage3EvidenceEnvelope.TryCreate(
                     europe, luxembourg, formex, classifications, fidelity,
-                    akn.Inventory, akn.LegalContent, out evidenceRefusal, out evidenceDetail);
+                    akn.Inventory, aknLegalContent, out evidenceRefusal, out evidenceDetail);
         }
         Assert.IsNotNull(evidence, $"{evidenceRefusal}: {evidenceDetail}");
         var composition = Stage3BodyComposition.TryCreate(
