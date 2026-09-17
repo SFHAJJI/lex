@@ -7,7 +7,16 @@ using Lex.V3.Contracts.Platform;
 
 namespace Lex.V3.Api;
 
-internal sealed class V3PlatformSchemaDocuments
+internal interface IV3PlatformSchemaDocuments
+{
+    void ValidateRequest(V3OperationDefinition operation, JsonElement document);
+
+    void ValidateResult(V3OperationDefinition operation, JsonElement document);
+
+    void ValidateRefusal(JsonElement document);
+}
+
+internal sealed class V3PlatformSchemaDocuments : IV3PlatformSchemaDocuments
 {
     private const string ResourcePrefix = "Lex.V3.Api.PlatformSchemas.";
     private readonly IReadOnlyDictionary<string, JsonSchema> _schemas;

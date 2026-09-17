@@ -125,7 +125,17 @@ internal sealed class V3PlatformHost
 
     private readonly V3OperationRegistry _registry = V3OperationRegistry.Reviewed;
     private readonly V3EnvelopeBuilder _builder = new(V3OperationRegistry.Reviewed);
-    private readonly V3PlatformSchemaDocuments _schemas = V3PlatformSchemaDocuments.Reviewed;
+    private readonly IV3PlatformSchemaDocuments _schemas;
+
+    public V3PlatformHost()
+        : this(V3PlatformSchemaDocuments.Reviewed)
+    {
+    }
+
+    internal V3PlatformHost(IV3PlatformSchemaDocuments schemas)
+    {
+        _schemas = schemas ?? throw new ArgumentNullException(nameof(schemas));
+    }
 
     public async Task WriteRestSuccessAsync(
         HttpResponse response,
