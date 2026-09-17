@@ -40,6 +40,7 @@ public sealed class V3PlatformHostTests
         Assert.AreEqual("application/json;charset=utf-8", restContext.Response.ContentType);
         Assert.AreEqual("application/json;charset=utf-8", mcp.ContentType);
         var envelope = V3EnvelopeJson.ParseAndVerify(mcp.JsonUtf8, V3OperationRegistry.Reviewed);
+        Assert.AreEqual(V3Verdicts.Answer, envelope.Verdict);
         Assert.AreEqual("arrêté & co", envelope.Result!.Value.GetProperty("work_id").GetString());
 
         static V3PlatformOperationResult Execute(V3PlatformOperationRequest bound)
@@ -75,6 +76,9 @@ public sealed class V3PlatformHostTests
             "{\"operation_id\":\"resolve\",\"parameters\":[]}",
             "{\"operation_id\":\"resolve\",\"operation_id\":\"search\",\"parameters\":{}}",
             "{\"operation_id\":\"resolve\",\"parameters\":{}}{}",
+            "{\"operation_id\":\"resolve\",\"parameters\":{},}",
+            OversizedRequest(),
+            DeepRequest(),
         };
         var calls = 0;
 
@@ -94,6 +98,25 @@ public sealed class V3PlatformHostTests
         }
 
         Assert.AreEqual(0, calls);
+    }
+
+    private static string OversizedRequest() =>
+        "{\"operation_id\":\"resolve\",\"parameters\":{\"value\":\"" +
+        new string('x', V3PlatformHost.MaximumRequestBytes) +
+        "\"}}";
+
+    private static string DeepRequest()
+    {
+        var request = new StringBuilder("{\"operation_id\":\"resolve\",\"parameters\":");
+        for (var index = 0; index < 32; index++)
+        {
+            request.Append("{\"nested\":");
+        }
+
+        request.Append("{}");
+        request.Append('}', 32);
+        request.Append('}');
+        return request.ToString();
     }
 
     [TestMethod]

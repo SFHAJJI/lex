@@ -85,7 +85,7 @@ internal sealed class V3McpToolResult
 
 internal sealed class V3PlatformHost
 {
-    private const int MaximumRequestBytes = 1024 * 1024;
+    internal const int MaximumRequestBytes = 1024 * 1024;
     private static readonly JsonDocumentOptions RequestOptions = new()
     {
         AllowTrailingCommas = false,
