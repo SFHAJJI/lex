@@ -205,7 +205,10 @@ public sealed class V3EnvelopeBuilder
 
     private static void RequireRequestRef(string requestRef)
     {
-        if (string.IsNullOrWhiteSpace(requestRef) || requestRef.Length > 128)
+        if (string.IsNullOrWhiteSpace(requestRef) ||
+            requestRef.Length > 128 ||
+            requestRef.Any(character => !(char.IsAsciiLetterOrDigit(character) || character is '_' or '-')) ||
+            !string.Equals(requestRef, requestRef.ToLowerInvariant(), StringComparison.Ordinal))
         {
             throw new ArgumentException("An opaque bounded request reference is required.", nameof(requestRef));
         }

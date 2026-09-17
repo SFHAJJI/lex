@@ -100,6 +100,7 @@ public sealed class V3OperationRegistry
 
     private readonly IReadOnlyDictionary<string, V3OperationDefinition> _byId;
     private readonly HashSet<string> _refusalCodes;
+    private readonly byte[] _canonicalUtf8;
 
     public V3OperationRegistry(
         string schema,
@@ -143,8 +144,8 @@ public sealed class V3OperationRegistry
         RefusalCodes = Array.AsReadOnly(refusals);
         _byId = entries.ToDictionary(entry => entry.OperationId, StringComparer.Ordinal);
         _refusalCodes = new HashSet<string>(refusals, StringComparer.Ordinal);
-        CanonicalUtf8 = WriteCanonicalUtf8(entries, refusals);
-        Sha256 = Convert.ToHexStringLower(SHA256.HashData(CanonicalUtf8));
+        _canonicalUtf8 = WriteCanonicalUtf8(entries, refusals);
+        Sha256 = Convert.ToHexStringLower(SHA256.HashData(_canonicalUtf8));
     }
 
     public string SchemaId { get; }
@@ -155,7 +156,7 @@ public sealed class V3OperationRegistry
 
     public ReadOnlyCollection<string> RefusalCodes { get; }
 
-    public byte[] CanonicalUtf8 { get; }
+    public byte[] CanonicalUtf8 => _canonicalUtf8.ToArray();
 
     public string Sha256 { get; }
 
@@ -221,7 +222,7 @@ public sealed class V3OperationRegistry
         }
     }
 
-    private byte[] WriteCanonicalUtf8(
+    private static byte[] WriteCanonicalUtf8(
         IReadOnlyList<V3OperationDefinition> operations,
         IReadOnlyList<string> refusalCodes)
     {

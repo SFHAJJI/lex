@@ -72,4 +72,25 @@ public sealed class V3EnvelopeTests
         Assert.ThrowsExactly<ArgumentException>(() => _builder.Refusal(
             "req", "resolve", V3OperationRegistry.RefusalSchema, "identifier_unknown", scalar.RootElement));
     }
+
+    [TestMethod]
+    public void RequestReferenceCannotCarryQueryTextOrClientIdentifiers()
+    {
+        using var payload = JsonDocument.Parse("{\"work_id\":\"lu-legilux:test\"}");
+
+        Assert.ThrowsExactly<ArgumentException>(() => _builder.Success(
+            "what is my deadline?",
+            "resolve",
+            V3Verdicts.Answer,
+            "lex-v3-resolve-result/1",
+            "work_resolution",
+            payload.RootElement));
+        Assert.ThrowsExactly<ArgumentException>(() => _builder.Success(
+            "client@example.com",
+            "resolve",
+            V3Verdicts.Answer,
+            "lex-v3-resolve-result/1",
+            "work_resolution",
+            payload.RootElement));
+    }
 }

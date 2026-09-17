@@ -38,6 +38,18 @@ public sealed class V3OperationRegistryTests
     }
 
     [TestMethod]
+    public void CanonicalBytesCannotBeMutatedThroughThePublicArtifact()
+    {
+        var registry = V3OperationRegistry.Reviewed;
+        var digest = registry.Sha256;
+        var bytes = registry.CanonicalUtf8;
+        bytes[0] = (byte)'[';
+
+        Assert.AreEqual((byte)'{', registry.CanonicalUtf8[0]);
+        Assert.AreEqual(digest, registry.Sha256);
+    }
+
+    [TestMethod]
     public void RegistryRejectsUnknownVersionIncompleteOperationsAndRefusals()
     {
         var reviewed = V3OperationRegistry.Reviewed;
