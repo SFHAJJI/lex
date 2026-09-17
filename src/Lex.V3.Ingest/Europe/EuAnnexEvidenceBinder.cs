@@ -308,13 +308,17 @@ public sealed class EuAnnexEvidenceBinder
             || !IsAdmitted(identityBoundary, package.ManifestationRef, EuWemiRole.Manifestation)
             || !IsAdmitted(identityBoundary, expression, EuWemiRole.Expression)
             || publisherWork is null
+            || !string.Equals(
+                workSource.ObjectRef.PublisherUri,
+                publisherWork.PublisherUri,
+                StringComparison.Ordinal)
             || !IsAdmitted(identityBoundary, expectedPdfManifestation, EuWemiRole.Manifestation)
             || !HasParent(package.ManifestationRef, expression)
             || !HasParent(package.BodyRef, package.ManifestationRef)
             || !HasParent(expectedPdfManifestation, expression))
         {
             return Refused(EuAnnexEvidenceBindingRefusal.SourceLineageMismatch,
-                "the retained Formex package and PDF manifestation do not share the admitted expression and work lineage");
+                "the held work body, retained Formex package and PDF manifestation do not share the admitted work and expression lineage");
         }
 
         var xhtmlByEntry = xhtmlInventory.Members

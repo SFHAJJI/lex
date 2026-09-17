@@ -183,6 +183,20 @@ public sealed class EuAnnexEvidenceBinderTests
     }
 
     [TestMethod]
+    public async Task HeldXhtmlBodyUnderAnotherPublisherWorkIsRefused()
+    {
+        var fixture = await FixtureAsync(PageLabelPdf(7, "<< /S /D /St 1 >>"));
+        var otherWork = Object(
+            "11111111-2222-3333-4444-555555555555", EuWemiRole.Work, null);
+
+        var result = await fixture.RunAsync(
+            corpus: VerifiedCorpus([(otherWork, fixture.Xhtml.SourceReceipt)]));
+
+        Assert.AreEqual(EuAnnexEvidenceBindingRefusal.SourceLineageMismatch, result.Refusal);
+        Assert.IsNull(result.Binding);
+    }
+
+    [TestMethod]
     public async Task FormexTransportBindsSeparatelyRetainedBytesWithoutCorpusMembership()
     {
         var fixture = await FixtureAsync(PageLabelPdf(7, "<< /S /D /St 1 >>"));
@@ -482,7 +496,6 @@ public sealed class EuAnnexEvidenceBinderTests
     internal static async Task<Fixture> FixtureAsync(
         byte[] pdfBytes,
         bool pdfInOtherExpression = false,
-        bool xhtmlInOtherExpression = false,
         string xhtmlTitle = "ANNEX",
         bool formexTwoMembers = false,
         bool xhtmlTwoMembers = false,
@@ -530,13 +543,6 @@ public sealed class EuAnnexEvidenceBinderTests
             workKey + ".0001.01", EuWemiRole.Manifestation, expression, registry, identityProfile);
         var formexItem = Object(
             workKey + ".0001.01/FORMEX", EuWemiRole.Item, formexManifestation, registry, identityProfile);
-        var xhtmlExpression = xhtmlInOtherExpression
-            ? Object(workKey + ".0003", EuWemiRole.Expression, work, registry, identityProfile) : expression;
-        var xhtmlManifestation = Object(
-            xhtmlInOtherExpression ? workKey + ".0003.01" : workKey + ".0001.02",
-            EuWemiRole.Manifestation, xhtmlExpression, registry, identityProfile);
-        var xhtmlItem = Object(
-            workKey + ".0001.02/XHTML", EuWemiRole.Item, xhtmlManifestation, registry, identityProfile);
         var pdfExpression = pdfInOtherExpression
             ? Object(workKey + ".0002", EuWemiRole.Expression, work, registry, identityProfile) : expression;
         var pdfManifestation = Object(
