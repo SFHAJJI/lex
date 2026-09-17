@@ -192,6 +192,8 @@ public sealed class EuropeIndexBuilderTests
         AssertHostileDatabaseRefused(built, corpus.ArtifactRef,
             "UPDATE stamp SET sqlite_version='substituted' WHERE stamp_id=1");
         AssertHostileDatabaseRefused(built, corpus.ArtifactRef,
+            "UPDATE stamp SET sqlite_source_id='substituted' WHERE stamp_id=1");
+        AssertHostileDatabaseRefused(built, corpus.ArtifactRef,
             "CREATE TABLE injected(value TEXT) STRICT");
         AssertHostileDatabaseRefused(built, corpus.ArtifactRef,
             "PRAGMA application_id=0");

@@ -265,6 +265,9 @@ public sealed class LuxembourgIndexBuilderTests
         AssertTamperedDatabaseRejected(
             built, corpus.ArtifactRef,
             "UPDATE stamp SET sqlite_version='0.0.0' WHERE stamp_id=1");
+        AssertTamperedDatabaseRejected(
+            built, corpus.ArtifactRef,
+            "UPDATE stamp SET sqlite_source_id='substituted' WHERE stamp_id=1");
     }
 
     private static V3IndexCapabilityManifest RebindManifest(
