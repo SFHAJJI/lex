@@ -512,14 +512,17 @@ public sealed class V3CorpusResolveMountTests
             Assert.IsNotNull(index, $"{indexRefusal}: {indexDetail}");
             var article = envelope.BodyComposition.Envelope.LuxembourgAknLegalContentPopulation
                 .Outcomes.First(static value => value.Article is not null).Article!;
-            using var reader = LuxembourgIndexReader.OpenAndVerify(
-                index.IndexRef, index.IndexBytes.Span, corpus.ArtifactRef, index.CapabilityManifest);
-            var state = reader.ResolveState("loi-1991-08-10-n3", "2024-02-01").Single();
             var directory = Path.Combine(Path.GetTempPath(), $"lex-v3-corpus-mount-{Guid.NewGuid():N}");
             System.IO.Directory.CreateDirectory(directory);
             await File.WriteAllBytesAsync(
                 Path.Combine(directory, V3CorpusMount.IndexFileName),
                 index.IndexBytes.ToArray());
+            LuxembourgIndexBuilder.StateRow state;
+            using (var connection = LuxembourgIndexBuilder.Open(
+                       Path.Combine(directory, V3CorpusMount.IndexFileName), SqliteOpenMode.ReadOnly))
+            {
+                state = ReadStates(connection).Single();
+            }
             var capabilityBytes = index.CapabilityManifestBytes.ToArray();
             await File.WriteAllBytesAsync(
                 Path.Combine(directory, V3CorpusMount.CapabilityManifestFileName),
