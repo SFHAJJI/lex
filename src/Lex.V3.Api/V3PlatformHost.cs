@@ -338,7 +338,7 @@ internal sealed class V3PlatformHost
 
         if (!operation.ResultObjectTypes.Contains(result.ObjectType, StringComparer.Ordinal))
         {
-            throw new ArgumentException("The result object type is not bound to this operation.", nameof(execute));
+            throw new ArgumentException("The result object type is not bound to this operation.", nameof(result));
         }
 
         using var resultDocument = ResultDocument(result);
