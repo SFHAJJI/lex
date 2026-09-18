@@ -72,6 +72,7 @@ public sealed class V3CorpusResolveMountTests
     {
         var fixture = await MountedFixture.CreateAsync();
         await using var cleanup = fixture;
+        await fixture.AddWorkTitleAsync();
         using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
         Assert.IsNotNull(mount);
         var context = Request(fixture.WorkTitle.ToUpperInvariant() + "...");
@@ -316,13 +317,6 @@ public sealed class V3CorpusResolveMountTests
             Assert.IsNotNull(index, $"{indexRefusal}: {indexDetail}");
             var article = envelope.BodyComposition.Envelope.LuxembourgAknLegalContentPopulation
                 .Outcomes.First(static value => value.Article is not null).Article!;
-            var title = envelope.BodyComposition.Envelope.Luxembourg.TypedAssertions
-                .Where(static value => value.FactDisposition.Predicate is
-                    Lex.V3.Contracts.Source.Luxembourg.LuxembourgAssertionPredicate.Title or
-                    Lex.V3.Contracts.Source.Luxembourg.LuxembourgAssertionPredicate.TitleShort)
-                .Select(static value => value.Assertion.ObjectIriOrLexical)
-                .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
-            Assert.IsNotNull(title, "The fixture must carry a publisher title for R1 work discovery.");
             var directory = Path.Combine(Path.GetTempPath(), $"lex-v3-corpus-mount-{Guid.NewGuid():N}");
             System.IO.Directory.CreateDirectory(directory);
             await File.WriteAllBytesAsync(
@@ -340,7 +334,7 @@ public sealed class V3CorpusResolveMountTests
                 directory,
                 article.PublisherExpressionIri,
                 "fixture-work-identifier",
-                title,
+                "Règlement sur l'épreuve terminale",
                 corpus.ArtifactRef.Sha256,
                 index.IndexRef.Sha256,
                 capabilityBytes,
@@ -353,6 +347,7 @@ public sealed class V3CorpusResolveMountTests
             LuxembourgIndexBuilder.ArticleRow source;
             LuxembourgIndexBuilder.MemberRow[] members;
             LuxembourgIndexBuilder.ArticleRow[] articles;
+            LuxembourgIndexBuilder.WorkTitleRow[] titles;
             var alternateExpression = ExpressionIri + "/alternate-expression";
             using (var connection = LuxembourgIndexBuilder.Open(indexPath, SqliteOpenMode.ReadWrite))
             {
@@ -386,21 +381,71 @@ public sealed class V3CorpusResolveMountTests
 
                 members = ReadMembers(connection);
                 articles = ReadArticles(connection);
+                titles = ReadWorkTitles(connection);
                 using var stamp = connection.CreateCommand();
                 stamp.CommandText = "UPDATE stamp SET logical_rows_sha256=$digest WHERE stamp_id=1";
-                stamp.Parameters.AddWithValue("$digest", LuxembourgIndexBuilder.HashLogicalRows(members, articles));
+                stamp.Parameters.AddWithValue(
+                    "$digest", LuxembourgIndexBuilder.HashLogicalRows(members, articles, titles));
                 Assert.AreEqual(1, stamp.ExecuteNonQuery());
             }
 
             var indexBytes = await File.ReadAllBytesAsync(indexPath);
             var indexDigest = Convert.ToHexStringLower(SHA256.HashData(indexBytes));
-            var manifest = LuxembourgIndexBuilder.MeasureCapabilities(indexDigest, articles);
+            var manifest = LuxembourgIndexBuilder.MeasureCapabilities(indexDigest, articles, titles);
             using var stream = new MemoryStream();
             _ = V3IndexCapabilityManifestArtifact.Write(stream, manifest);
             await File.WriteAllBytesAsync(
                 Path.Combine(Directory, V3CorpusMount.CapabilityManifestFileName),
                 stream.ToArray());
             return alternateExpression;
+        }
+
+        public async Task AddWorkTitleAsync()
+        {
+            var indexPath = Path.Combine(Directory, V3CorpusMount.IndexFileName);
+            LuxembourgIndexBuilder.MemberRow[] members;
+            LuxembourgIndexBuilder.ArticleRow[] articles;
+            LuxembourgIndexBuilder.WorkTitleRow[] titles;
+            using (var connection = LuxembourgIndexBuilder.Open(indexPath, SqliteOpenMode.ReadWrite))
+            {
+                using (var bindWork = connection.CreateCommand())
+                {
+                    bindWork.CommandText =
+                        "UPDATE articles SET publisher_wid=$wid WHERE expression_iri=$expression";
+                    bindWork.Parameters.AddWithValue("$wid", PublisherWid);
+                    bindWork.Parameters.AddWithValue("$expression", ExpressionIri);
+                    Assert.IsGreaterThan(0, bindWork.ExecuteNonQuery());
+                }
+                using (var insert = connection.CreateCommand())
+                {
+                    insert.CommandText = "INSERT INTO work_titles VALUES($wid,$expression,$language,$title,$normalized,$date,'title')";
+                    insert.Parameters.AddWithValue("$wid", PublisherWid);
+                    insert.Parameters.AddWithValue("$expression", ExpressionIri);
+                    insert.Parameters.AddWithValue("$language", "fra");
+                    insert.Parameters.AddWithValue("$title", WorkTitle);
+                    insert.Parameters.AddWithValue("$normalized", LuxembourgIndexBuilder.NormalizeTitle(WorkTitle));
+                    insert.Parameters.AddWithValue("$date", "2024-02-01");
+                    Assert.AreEqual(1, insert.ExecuteNonQuery());
+                }
+
+                members = ReadMembers(connection);
+                articles = ReadArticles(connection);
+                titles = ReadWorkTitles(connection);
+                using var stamp = connection.CreateCommand();
+                stamp.CommandText = "UPDATE stamp SET logical_rows_sha256=$digest WHERE stamp_id=1";
+                stamp.Parameters.AddWithValue(
+                    "$digest", LuxembourgIndexBuilder.HashLogicalRows(members, articles, titles));
+                Assert.AreEqual(1, stamp.ExecuteNonQuery());
+            }
+
+            var indexBytes = await File.ReadAllBytesAsync(indexPath);
+            var indexDigest = Convert.ToHexStringLower(SHA256.HashData(indexBytes));
+            var manifest = LuxembourgIndexBuilder.MeasureCapabilities(indexDigest, articles, titles);
+            using var stream = new MemoryStream();
+            _ = V3IndexCapabilityManifestArtifact.Write(stream, manifest);
+            await File.WriteAllBytesAsync(
+                Path.Combine(Directory, V3CorpusMount.CapabilityManifestFileName),
+                stream.ToArray());
         }
 
         private static LuxembourgIndexBuilder.MemberRow[] ReadMembers(SqliteConnection connection)
@@ -426,6 +471,18 @@ public sealed class V3CorpusResolveMountTests
                 reader.IsDBNull(4) ? null : reader.GetString(4),
                 reader.IsDBNull(5) ? null : reader.GetString(5),
                 reader.GetString(6), reader.GetString(7), reader.GetString(8)));
+            return values.ToArray();
+        }
+
+        private static LuxembourgIndexBuilder.WorkTitleRow[] ReadWorkTitles(SqliteConnection connection)
+        {
+            using var command = connection.CreateCommand();
+            command.CommandText = "SELECT work_identifier,expression_iri,language,title,normalized_title,document_date,title_kind FROM work_titles ORDER BY work_identifier,expression_iri,language,title,title_kind";
+            using var reader = command.ExecuteReader();
+            var values = new List<LuxembourgIndexBuilder.WorkTitleRow>();
+            while (reader.Read()) values.Add(new(
+                reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3),
+                reader.GetString(4), reader.IsDBNull(5) ? null : reader.GetString(5), reader.GetString(6)));
             return values.ToArray();
         }
 

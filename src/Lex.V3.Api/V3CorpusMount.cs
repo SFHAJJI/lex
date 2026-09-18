@@ -98,7 +98,62 @@ internal sealed class V3CorpusMount : IDisposable
         var candidates = _reader.ResolveExact(identifier);
         if (candidates.Count == 0)
         {
-            return Unknown(request, identifier, observedAt);
+            if (LooksLikeIdentifier(identifier))
+            {
+                return Unknown(request, identifier, observedAt);
+            }
+
+            var workResolution = _reader.ResolveWorkTitle(identifier);
+            if (!workResolution.Available)
+            {
+                using var unavailable = JsonSerializer.SerializeToDocument(new
+                {
+                    requested_mode = "r1_work_discovery",
+                    available_modes = new[] { "r0_exact_coordinate" },
+                });
+                return V3PlatformOperationOutcome.Refused(
+                    Context("refusal", observedAt),
+                    new V3PlatformOperationRefusal(
+                        request, "retrieval_mode_unavailable", unavailable.RootElement));
+            }
+
+            if (workResolution.Candidates.Count == 0)
+            {
+                return Unknown(request, identifier, observedAt);
+            }
+
+            if (workResolution.Candidates.Count > 1)
+            {
+                using var ambiguous = JsonSerializer.SerializeToDocument(new
+                {
+                    requested_identifier = identifier,
+                    candidates = workResolution.Candidates
+                        .Select(static candidate => candidate.WorkIdentifier).ToArray(),
+                    match_reason = workResolution.Candidates[0].MatchReason,
+                });
+                return V3PlatformOperationOutcome.Refused(
+                    Context("refusal", observedAt),
+                    new V3PlatformOperationRefusal(
+                        request, "ambiguous_identifier", ambiguous.RootElement));
+            }
+
+            var work = workResolution.Candidates[0];
+            using var workResult = JsonSerializer.SerializeToDocument(new
+            {
+                requested_identifier = identifier,
+                publisher = "lu-legilux",
+                work_identifier = work.WorkIdentifier,
+                expressions = work.ExpressionIris,
+                languages = work.Languages,
+                matched_title = work.MatchedTitle,
+                retrieval_lane = "r1_work_discovery",
+                match_reason = work.MatchReason,
+                corpus_sha256 = _corpus.ArtifactRef.Sha256,
+                index_sha256 = _reader.IndexRef.Sha256,
+            });
+            return V3PlatformOperationOutcome.Success(
+                Context("success", observedAt),
+                new V3PlatformOperationResult(request, "work_resolution", workResult.RootElement));
         }
 
         if (candidates.Count > 1)
@@ -131,6 +186,12 @@ internal sealed class V3CorpusMount : IDisposable
     }
 
     public void Dispose() => _reader.Dispose();
+
+    private static bool LooksLikeIdentifier(string value) =>
+        value.Contains('/', StringComparison.Ordinal) ||
+        value.Contains(':', StringComparison.Ordinal) ||
+        value.Length == 64 && value.All(static character =>
+            character is >= '0' and <= '9' or >= 'a' and <= 'f');
 
     private V3PlatformOperationOutcome Unknown(
         V3PlatformOperationRequest request,

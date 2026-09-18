@@ -36,13 +36,24 @@ public sealed record LuxembourgIndexResolvedExpression(
     string Language,
     IReadOnlyList<string> ArticleIdentities);
 
+public sealed record LuxembourgIndexResolvedWork(
+    string WorkIdentifier,
+    IReadOnlyList<string> ExpressionIris,
+    IReadOnlyList<string> Languages,
+    string MatchedTitle,
+    string MatchReason);
+
+public sealed record LuxembourgIndexWorkResolution(
+    bool Available,
+    IReadOnlyList<LuxembourgIndexResolvedWork> Candidates);
+
 /// <summary>
 /// Builds the immutable Luxembourg index from the same proof-complete envelope that builds
 /// lex-corpus/6. Callers cannot provide index rows or capability counts.
 /// </summary>
 public static class LuxembourgIndexBuilder
 {
-    public const string Schema = "lex-v3-luxembourg-index/1";
+    public const string Schema = "lex-v3-luxembourg-index/2";
     private const int ApplicationId = 0x4c563306;
     private const string Ddl = """
         CREATE TABLE stamp (
@@ -75,6 +86,17 @@ public static class LuxembourgIndexBuilder
         ) STRICT;
         CREATE INDEX articles_object_ref ON articles(object_ref_sha256);
         CREATE INDEX articles_language_date ON articles(language, applicability_date);
+        CREATE TABLE work_titles (
+          work_identifier TEXT COLLATE BINARY NOT NULL,
+          expression_iri TEXT COLLATE BINARY NOT NULL,
+          language TEXT COLLATE BINARY NOT NULL,
+          title TEXT COLLATE BINARY NOT NULL,
+          normalized_title TEXT COLLATE BINARY NOT NULL,
+          document_date TEXT COLLATE BINARY,
+          title_kind TEXT COLLATE BINARY NOT NULL CHECK (title_kind IN ('title','title_short')),
+          PRIMARY KEY (work_identifier, expression_iri, language, title, title_kind)
+        ) STRICT;
+        CREATE INDEX work_titles_normalized ON work_titles(normalized_title, work_identifier);
         """;
 
     public static LuxembourgIndexBuildResult? TryBuild(
@@ -96,9 +118,12 @@ public static class LuxembourgIndexBuilder
 
         MemberRow[] members;
         ArticleRow[] articles;
+        WorkTitleRow[] workTitles;
         try
         {
-            if (!TryProjectRows(envelope, corpus, out members, out articles, out refusal, out detail))
+            if (!TryProjectRows(
+                    envelope, corpus, out members, out articles, out workTitles,
+                    out refusal, out detail))
             {
                 return null;
             }
@@ -110,15 +135,16 @@ public static class LuxembourgIndexBuilder
             return null;
         }
 
-        var logicalRowsSha256 = HashLogicalRows(members, articles);
+        var logicalRowsSha256 = HashLogicalRows(members, articles, workTitles);
         var path = Path.Combine(Path.GetTempPath(), $"lex-v3-lu-index-{Guid.NewGuid():N}.sqlite");
         try
         {
-            BuildDatabase(path, corpus.ArtifactRef.Sha256, logicalRowsSha256, members, articles);
+            BuildDatabase(
+                path, corpus.ArtifactRef.Sha256, logicalRowsSha256, members, articles, workTitles);
             var bytes = File.ReadAllBytes(path);
             var digest = Convert.ToHexStringLower(SHA256.HashData(bytes));
             var indexRef = new SourceArtifactRef(LexCorpus6Builder.ResourceIdOf(digest), digest);
-            var manifest = MeasureCapabilities(digest, articles);
+            var manifest = MeasureCapabilities(digest, articles, workTitles);
             using var manifestStream = new MemoryStream();
             var manifestDigest = V3IndexCapabilityManifestArtifact.Write(manifestStream, manifest);
             var manifestBytes = manifestStream.ToArray();
@@ -148,6 +174,7 @@ public static class LuxembourgIndexBuilder
         LexCorpus6BuildResult corpus,
         out MemberRow[] members,
         out ArticleRow[] articles,
+        out WorkTitleRow[] workTitles,
         out LuxembourgIndexBuildRefusal refusal,
         out string? detail)
     {
@@ -177,6 +204,7 @@ public static class LuxembourgIndexBuilder
         if (members.Length != sourceRecords.Count || memberByObject.Count != sourceRecords.Count)
         {
             articles = [];
+            workTitles = [];
             refusal = LuxembourgIndexBuildRefusal.PopulationMismatch;
             detail = "The Luxembourg corpus population is missing, duplicated or extra.";
             return false;
@@ -189,6 +217,7 @@ public static class LuxembourgIndexBuilder
             if (!seenOutcomes.Add(outcome.SemanticIdentitySha256))
             {
                 articles = [];
+                workTitles = [];
                 refusal = LuxembourgIndexBuildRefusal.PopulationMismatch;
                 detail = "The Luxembourg legal-content population contains a duplicate outcome.";
                 return false;
@@ -202,6 +231,7 @@ public static class LuxembourgIndexBuilder
                     string.Equals(value.SemanticIdentitySha256, outcome.SemanticIdentitySha256, StringComparison.Ordinal)))
             {
                 articles = [];
+                workTitles = [];
                 refusal = LuxembourgIndexBuildRefusal.DerivationMismatch;
                 detail = objectRefSha256;
                 return false;
@@ -218,6 +248,7 @@ public static class LuxembourgIndexBuilder
             if (outcome.Article is null || member.LuxembourgRights is null)
             {
                 articles = [];
+                workTitles = [];
                 refusal = LuxembourgIndexBuildRefusal.DerivationMismatch;
                 detail = "An admitted article lacks its article or rights-bound WEMI.";
                 return false;
@@ -256,6 +287,35 @@ public static class LuxembourgIndexBuilder
         }
 
         articles = projected.OrderBy(static row => row.ArticleIdentitySha256, StringComparer.Ordinal).ToArray();
+        var articlesByExpression = articles
+            .GroupBy(static row => row.ExpressionIri, StringComparer.Ordinal)
+            .ToDictionary(static group => group.Key, static group => group.ToArray(), StringComparer.Ordinal);
+        workTitles = envelope.BodyComposition.Envelope.Luxembourg.TypedAssertions
+            .Where(static value => value.FactDisposition.Predicate is
+                Lex.V3.Contracts.Source.Luxembourg.LuxembourgAssertionPredicate.Title or
+                Lex.V3.Contracts.Source.Luxembourg.LuxembourgAssertionPredicate.TitleShort)
+            .SelectMany(assertion => articlesByExpression.TryGetValue(
+                    assertion.Assertion.SubjectIri, out var matches)
+                ? matches.Select(article => new WorkTitleRow(
+                    article.PublisherWid ?? article.ExpressionIri,
+                    article.ExpressionIri,
+                    article.Language,
+                    assertion.Assertion.ObjectIriOrLexical,
+                    NormalizeTitle(assertion.Assertion.ObjectIriOrLexical),
+                    article.ApplicabilityDate,
+                    assertion.FactDisposition.Predicate ==
+                        Lex.V3.Contracts.Source.Luxembourg.LuxembourgAssertionPredicate.Title
+                        ? "title"
+                        : "title_short"))
+                : [])
+            .Where(static row => row.NormalizedTitle.Length != 0)
+            .Distinct()
+            .OrderBy(static row => row.WorkIdentifier, StringComparer.Ordinal)
+            .ThenBy(static row => row.ExpressionIri, StringComparer.Ordinal)
+            .ThenBy(static row => row.Language, StringComparer.Ordinal)
+            .ThenBy(static row => row.Title, StringComparer.Ordinal)
+            .ThenBy(static row => row.TitleKind, StringComparer.Ordinal)
+            .ToArray();
         refusal = LuxembourgIndexBuildRefusal.None;
         detail = null;
         return true;
@@ -290,7 +350,8 @@ public static class LuxembourgIndexBuilder
         string corpusSha256,
         string logicalRowsSha256,
         IReadOnlyList<MemberRow> members,
-        IReadOnlyList<ArticleRow> articles)
+        IReadOnlyList<ArticleRow> articles,
+        IReadOnlyList<WorkTitleRow> workTitles)
     {
         using var connection = Open(path, SqliteOpenMode.ReadWriteCreate);
         Execute(connection, "PRAGMA page_size=4096");
@@ -300,7 +361,7 @@ public static class LuxembourgIndexBuilder
         Execute(connection, "PRAGMA synchronous=FULL");
         Execute(connection, "PRAGMA foreign_keys=ON");
         Execute(connection, $"PRAGMA application_id={ApplicationId}");
-        Execute(connection, "PRAGMA user_version=1");
+        Execute(connection, "PRAGMA user_version=2");
         using var transaction = connection.BeginTransaction();
         Execute(connection, Ddl, transaction);
         foreach (var member in members)
@@ -317,6 +378,13 @@ public static class LuxembourgIndexBuilder
                 article.ArticleIdentitySha256, article.ObjectRefSha256, article.ExpressionIri,
                 article.PublisherId, article.PublisherWid, article.ApplicabilityDate,
                 article.Language, article.SearchableText, article.TokensJson);
+        }
+        foreach (var title in workTitles)
+        {
+            Insert(connection, transaction,
+                "INSERT INTO work_titles VALUES($p0,$p1,$p2,$p3,$p4,$p5,$p6)",
+                title.WorkIdentifier, title.ExpressionIri, title.Language, title.Title,
+                title.NormalizedTitle, title.DocumentDate, title.TitleKind);
         }
         var provenance = SqliteProvenance.Read(connection);
         Insert(connection, transaction, "INSERT INTO stamp VALUES(1,$p0,$p1,$p2,$p3,$p4,$p5)",
@@ -336,11 +404,14 @@ public static class LuxembourgIndexBuilder
             "fra", "libellé fixe", "[]");
         var members = new[] { member };
         var articles = new[] { article };
+        var titles = new[] { new WorkTitleRow(
+            "wid-1", article.ExpressionIri, "fra", "Titre fixe", "titre fixe",
+            "2024-01-01", "title") };
         var path = Path.Combine(Path.GetTempPath(), $"lex-v3-lu-index-pin-{Guid.NewGuid():N}.sqlite");
         try
         {
-            BuildDatabase(path, new string('a', 64), HashLogicalRows(members, articles),
-                members, articles);
+            BuildDatabase(path, new string('a', 64), HashLogicalRows(members, articles, titles),
+                members, articles, titles);
             return File.ReadAllBytes(path);
         }
         finally
@@ -351,7 +422,8 @@ public static class LuxembourgIndexBuilder
 
     internal static V3IndexCapabilityManifest MeasureCapabilities(
         string digest,
-        IReadOnlyList<ArticleRow> articles)
+        IReadOnlyList<ArticleRow> articles,
+        IReadOnlyList<WorkTitleRow>? workTitles = null)
     {
         var cells = articles
             .Where(static row => row.ApplicabilityDate is not null && row.SearchableText.Length != 0)
@@ -366,6 +438,19 @@ public static class LuxembourgIndexBuilder
                 DateOnly.ParseExact(group.Key.ApplicabilityDate!, "yyyy-MM-dd", CultureInfo.InvariantCulture),
                 DateOnly.ParseExact(group.Key.ApplicabilityDate!, "yyyy-MM-dd", CultureInfo.InvariantCulture),
                 group.LongCount()))
+            .Concat((workTitles ?? Array.Empty<WorkTitleRow>())
+                .Where(static row => row.DocumentDate is not null)
+                .GroupBy(static row => (row.Language, row.DocumentDate))
+                .Select(group => new V3IndexCapabilityCell(
+                    PublisherId.LuLegilux,
+                    digest,
+                    "resolve",
+                    "work_titles",
+                    "normalized_title",
+                    group.Key.Language,
+                    DateOnly.ParseExact(group.Key.DocumentDate!, "yyyy-MM-dd", CultureInfo.InvariantCulture),
+                    DateOnly.ParseExact(group.Key.DocumentDate!, "yyyy-MM-dd", CultureInfo.InvariantCulture),
+                    group.LongCount())))
             .ToArray();
         if (!V3IndexCapabilityManifest.TryCreate(
                 PublisherId.LuLegilux, digest, cells, out var manifest, out var refusal))
@@ -375,9 +460,13 @@ public static class LuxembourgIndexBuilder
         return manifest!;
     }
 
-    internal static string HashLogicalRows(IReadOnlyList<MemberRow> members, IReadOnlyList<ArticleRow> articles)
+    internal static string HashLogicalRows(
+        IReadOnlyList<MemberRow> members,
+        IReadOnlyList<ArticleRow> articles,
+        IReadOnlyList<WorkTitleRow>? workTitles = null)
     {
-        var bytes = JsonSerializer.SerializeToUtf8Bytes(new LogicalRows(members, articles));
+        var bytes = JsonSerializer.SerializeToUtf8Bytes(
+            new LogicalRows(members, articles, workTitles ?? Array.Empty<WorkTitleRow>()));
         return Convert.ToHexStringLower(SHA256.HashData(bytes));
     }
 
@@ -480,9 +569,48 @@ public static class LuxembourgIndexBuilder
         string SearchableText,
         string TokensJson);
 
+    internal sealed record WorkTitleRow(
+        string WorkIdentifier,
+        string ExpressionIri,
+        string Language,
+        string Title,
+        string NormalizedTitle,
+        string? DocumentDate,
+        string TitleKind);
+
     private sealed record LogicalRows(
         IReadOnlyList<MemberRow> Members,
-        IReadOnlyList<ArticleRow> Articles);
+        IReadOnlyList<ArticleRow> Articles,
+        IReadOnlyList<WorkTitleRow> WorkTitles);
+
+    internal static string NormalizeTitle(string value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        var builder = new StringBuilder(value.Length);
+        var pendingSpace = false;
+        foreach (var character in value.Normalize(NormalizationForm.FormD))
+        {
+            if (CharUnicodeInfo.GetUnicodeCategory(character) == UnicodeCategory.NonSpacingMark)
+            {
+                continue;
+            }
+
+            if (char.IsLetterOrDigit(character))
+            {
+                if (pendingSpace && builder.Length != 0)
+                {
+                    builder.Append(' ');
+                }
+                builder.Append(char.ToLowerInvariant(character));
+                pendingSpace = false;
+            }
+            else
+            {
+                pendingSpace = true;
+            }
+        }
+        return builder.ToString().Normalize(NormalizationForm.FormC);
+    }
 
     internal sealed record SqliteProvenance(string Version, string SourceId, string CompileOptionsSha256)
     {
@@ -644,7 +772,7 @@ public sealed class LuxembourgIndexReader : IDisposable
             LuxembourgIndexBuilder.EnsureExactSchema(connection);
             if (!string.Equals(Scalar(connection, "PRAGMA integrity_check"), "ok", StringComparison.Ordinal) ||
                 Convert.ToInt32(Scalar(connection, "PRAGMA application_id"), CultureInfo.InvariantCulture) != 0x4c563306 ||
-                Convert.ToInt32(Scalar(connection, "PRAGMA user_version"), CultureInfo.InvariantCulture) != 1)
+                Convert.ToInt32(Scalar(connection, "PRAGMA user_version"), CultureInfo.InvariantCulture) != 2)
             {
                 throw new InvalidDataException("The Luxembourg index failed SQLite integrity or schema identity checks.");
             }
@@ -674,13 +802,14 @@ public sealed class LuxembourgIndexReader : IDisposable
 
             var members = ReadMembers(connection);
             var articles = ReadArticles(connection);
+            var workTitles = ReadWorkTitles(connection);
             if (!string.Equals(
-                    LuxembourgIndexBuilder.HashLogicalRows(members, articles),
+                    LuxembourgIndexBuilder.HashLogicalRows(members, articles, workTitles),
                     expectedLogical,
                     StringComparison.Ordinal))
                 throw new InvalidDataException("The Luxembourg index logical rows do not match their stamp.");
 
-            var measured = LuxembourgIndexBuilder.MeasureCapabilities(indexRef.Sha256, articles);
+            var measured = LuxembourgIndexBuilder.MeasureCapabilities(indexRef.Sha256, articles, workTitles);
             if (!measured.Cells.SequenceEqual(capabilityManifest.Cells))
                 throw new InvalidDataException("The Luxembourg capability manifest was not measured from the index.");
 
@@ -736,6 +865,59 @@ public sealed class LuxembourgIndexReader : IDisposable
                     group.Key.Language,
                     Array.AsReadOnly(group.Select(static row => row.Article).ToArray())))
                 .ToArray();
+        }
+    }
+
+    public LuxembourgIndexWorkResolution ResolveWorkTitle(string title)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(title);
+        var normalized = LuxembourgIndexBuilder.NormalizeTitle(title);
+        if (normalized.Length == 0)
+        {
+            return new LuxembourgIndexWorkResolution(false, Array.Empty<LuxembourgIndexResolvedWork>());
+        }
+
+        lock (_gate)
+        {
+            var rows = ReadWorkTitles(_connection);
+            if (rows.Length == 0)
+            {
+                return new LuxembourgIndexWorkResolution(false, Array.Empty<LuxembourgIndexResolvedWork>());
+            }
+
+            var exact = rows.Where(row => string.Equals(
+                row.NormalizedTitle, normalized, StringComparison.Ordinal)).ToArray();
+            var reason = "exact_normalized_title";
+            var selected = exact;
+            if (selected.Length == 0)
+            {
+                selected = rows.Where(row => row.NormalizedTitle.StartsWith(
+                    normalized, StringComparison.Ordinal)).ToArray();
+                reason = "unique_prefix";
+            }
+            if (selected.Length == 0)
+            {
+                var tokens = normalized.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                selected = rows.Where(row => tokens.All(token =>
+                    row.NormalizedTitle.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+                        .Contains(token, StringComparer.Ordinal))).ToArray();
+                reason = "all_tokens_contained";
+            }
+
+            var candidates = selected
+                .GroupBy(static row => row.WorkIdentifier, StringComparer.Ordinal)
+                .OrderByDescending(static group => group.Max(row => row.DocumentDate), StringComparer.Ordinal)
+                .ThenBy(static group => group.Key, StringComparer.Ordinal)
+                .Select(group => new LuxembourgIndexResolvedWork(
+                    group.Key,
+                    Array.AsReadOnly(group.Select(static row => row.ExpressionIri)
+                        .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray()),
+                    Array.AsReadOnly(group.Select(static row => row.Language)
+                        .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray()),
+                    group.OrderBy(static row => row.Title, StringComparer.Ordinal).First().Title,
+                    reason))
+                .ToArray();
+            return new LuxembourgIndexWorkResolution(true, Array.AsReadOnly(candidates));
         }
     }
 
@@ -821,6 +1003,18 @@ public sealed class LuxembourgIndexReader : IDisposable
             reader.IsDBNull(4) ? null : reader.GetString(4),
             reader.IsDBNull(5) ? null : reader.GetString(5),
             reader.GetString(6), reader.GetString(7), reader.GetString(8)));
+        return values.ToArray();
+    }
+
+    private static LuxembourgIndexBuilder.WorkTitleRow[] ReadWorkTitles(SqliteConnection connection)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT work_identifier,expression_iri,language,title,normalized_title,document_date,title_kind FROM work_titles ORDER BY work_identifier,expression_iri,language,title,title_kind";
+        using var reader = command.ExecuteReader();
+        var values = new List<LuxembourgIndexBuilder.WorkTitleRow>();
+        while (reader.Read()) values.Add(new(
+            reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3),
+            reader.GetString(4), reader.IsDBNull(5) ? null : reader.GetString(5), reader.GetString(6)));
         return values.ToArray();
     }
 
