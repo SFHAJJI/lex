@@ -900,14 +900,15 @@ public sealed class V3CorpusResolveMountTests
                 gaps = ReadEuropeGaps(connection);
                 var member = members[0];
                 var inserted = new EuropeIndexBuilder.ArticleRow(
-                    new string('c', 64), member.ObjectRefSha256, PublisherWid, expression,
+                    new string('c', 64), member.ObjectRefSha256, PublisherWid, "32024R0001", expression,
                     "collision.xml", "collision-provision", "Collision", "2024-02-01",
                     "eng", "collision", "[]");
                 using var insert = connection.CreateCommand();
-                insert.CommandText = "INSERT INTO articles VALUES($identity,$object,$work,$expression,$entry,$identifier,$heading,$date,$language,$text,$tokens)";
+                insert.CommandText = "INSERT INTO articles VALUES($identity,$object,$work,$celex,$expression,$entry,$identifier,$heading,$date,$language,$text,$tokens)";
                 insert.Parameters.AddWithValue("$identity", inserted.ArticleIdentitySha256);
                 insert.Parameters.AddWithValue("$object", inserted.ObjectRefSha256);
                 insert.Parameters.AddWithValue("$work", inserted.PublisherWorkId);
+                insert.Parameters.AddWithValue("$celex", inserted.PublisherWorkCelex);
                 insert.Parameters.AddWithValue("$expression", inserted.PublisherExpressionId);
                 insert.Parameters.AddWithValue("$entry", inserted.PackageEntry);
                 insert.Parameters.AddWithValue("$identifier", inserted.PublisherIdentifier);
@@ -962,10 +963,11 @@ public sealed class V3CorpusResolveMountTests
                     PublisherIdentifier = "eu-ambiguity-provision",
                 };
                 using var insert = connection.CreateCommand();
-                insert.CommandText = "INSERT INTO articles VALUES($identity,$object,$work,$expression,$entry,$identifier,$heading,$date,$language,$text,$tokens)";
+                insert.CommandText = "INSERT INTO articles VALUES($identity,$object,$work,$celex,$expression,$entry,$identifier,$heading,$date,$language,$text,$tokens)";
                 insert.Parameters.AddWithValue("$identity", inserted.ArticleIdentitySha256);
                 insert.Parameters.AddWithValue("$object", inserted.ObjectRefSha256);
                 insert.Parameters.AddWithValue("$work", inserted.PublisherWorkId);
+                insert.Parameters.AddWithValue("$celex", inserted.PublisherWorkCelex);
                 insert.Parameters.AddWithValue("$expression", inserted.PublisherExpressionId);
                 insert.Parameters.AddWithValue("$entry", inserted.PackageEntry);
                 insert.Parameters.AddWithValue("$identifier", inserted.PublisherIdentifier);
@@ -1390,13 +1392,13 @@ public sealed class V3CorpusResolveMountTests
         internal static EuropeIndexBuilder.ArticleRow[] ReadEuropeArticles(SqliteConnection connection)
         {
             using var command = connection.CreateCommand();
-            command.CommandText = "SELECT article_identity_sha256,object_ref_sha256,publisher_work_id,publisher_expression_id,package_entry,publisher_identifier,heading,wording_date,language,searchable_text,tokens_json FROM articles ORDER BY article_identity_sha256";
+            command.CommandText = "SELECT article_identity_sha256,object_ref_sha256,publisher_work_id,publisher_work_celex,publisher_expression_id,package_entry,publisher_identifier,heading,wording_date,language,searchable_text,tokens_json FROM articles ORDER BY article_identity_sha256";
             using var reader = command.ExecuteReader();
             var values = new List<EuropeIndexBuilder.ArticleRow>();
             while (reader.Read()) values.Add(new(
                 reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3),
                 reader.GetString(4), reader.GetString(5), reader.GetString(6), reader.GetString(7),
-                reader.GetString(8), reader.GetString(9), reader.GetString(10)));
+                reader.GetString(8), reader.GetString(9), reader.GetString(10), reader.GetString(11)));
             return values.ToArray();
         }
 
@@ -1523,14 +1525,15 @@ public sealed class V3CorpusResolveMountTests
                 var source = articles[0];
                 var inserted = new EuropeIndexBuilder.ArticleRow(
                     new string('d', 64), source.ObjectRefSha256, publisherWorkId ?? secondWork,
-                    secondExpression,
+                    "32026R0002", secondExpression,
                     "second-act.xml", PublisherProvisionIdentifier, "Article 1", "2026-01-01",
                     "eng", "second act wording", "[]");
                 using var insert = connection.CreateCommand();
-                insert.CommandText = "INSERT INTO articles VALUES($identity,$object,$work,$expression,$entry,$identifier,$heading,$date,$language,$text,$tokens)";
+                insert.CommandText = "INSERT INTO articles VALUES($identity,$object,$work,$celex,$expression,$entry,$identifier,$heading,$date,$language,$text,$tokens)";
                 insert.Parameters.AddWithValue("$identity", inserted.ArticleIdentitySha256);
                 insert.Parameters.AddWithValue("$object", inserted.ObjectRefSha256);
                 insert.Parameters.AddWithValue("$work", inserted.PublisherWorkId);
+                insert.Parameters.AddWithValue("$celex", inserted.PublisherWorkCelex);
                 insert.Parameters.AddWithValue("$expression", inserted.PublisherExpressionId);
                 insert.Parameters.AddWithValue("$entry", inserted.PackageEntry);
                 insert.Parameters.AddWithValue("$identifier", inserted.PublisherIdentifier);
