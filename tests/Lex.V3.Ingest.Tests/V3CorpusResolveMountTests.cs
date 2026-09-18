@@ -589,6 +589,13 @@ public sealed class V3CorpusResolveMountTests
         Assert.AreEqual("retrieval_mode_unavailable", unavailable.Refusal!.Code);
         Assert.AreEqual(PublisherId.EuEurLex, unavailable.Context.Publisher);
         Assert.AreEqual("eu", unavailable.Context.Jurisdiction);
+
+        var luPermalinkMiss = await ResolveAsync(
+            mount, $"/lu-legilux/unknown/2000-01-01--{new string('a', 64)}");
+        Assert.AreEqual(V3Verdicts.Refuse, luPermalinkMiss.Verdict);
+        Assert.AreEqual("identifier_unknown", luPermalinkMiss.Refusal!.Code);
+        Assert.AreEqual(PublisherId.LuLegilux, luPermalinkMiss.Context.Publisher);
+        Assert.AreEqual("lu", luPermalinkMiss.Context.Jurisdiction);
     }
 
     [TestMethod]
