@@ -5,6 +5,8 @@ using Lex.V3.Contracts;
 using Lex.V3.Contracts.Custody;
 using Lex.V3.Contracts.Index;
 using Lex.V3.Contracts.Platform;
+using Lex.V3.Contracts.Source.Europe;
+using Lex.V3.Ingest.Europe;
 using Lex.V3.Ingest.Luxembourg;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
@@ -512,6 +514,49 @@ public sealed class V3CorpusResolveMountTests
     }
 
     [TestMethod]
+    public async Task MountedEuropeIndexServesExactWorkExpressionAndProvisionCoordinates()
+    {
+        var fixture = await EuropeMountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+
+        foreach (var identifier in new[]
+                 {
+                     fixture.PublisherWorkId,
+                     fixture.PublisherExpressionId,
+                     fixture.PublisherProvisionIdentifier,
+                 })
+        {
+            var envelope = await ResolveAsync(mount, identifier);
+            Assert.AreEqual(V3Verdicts.Answer, envelope.Verdict, identifier);
+            Assert.AreEqual(PublisherId.EuEurLex, envelope.Context.Publisher, identifier);
+            Assert.AreEqual(TimelineSemantics.OfficialConsolidationState,
+                envelope.Context.TimelineSemantics, identifier);
+            Assert.AreEqual(fixture.CorpusSha256, envelope.Context.Snapshot.SnapshotSha256, identifier);
+            Assert.AreEqual("eu-eurlex", envelope.Result!.Value.GetProperty("publisher").GetString());
+            Assert.AreEqual(fixture.PublisherWorkId,
+                envelope.Result.Value.GetProperty("publisher_work_iri").GetString());
+            Assert.AreEqual(fixture.PublisherExpressionId,
+                envelope.Result.Value.GetProperty("expression_iri").GetString());
+            Assert.AreEqual(fixture.IndexSha256,
+                envelope.Result.Value.GetProperty("index_sha256").GetString());
+        }
+    }
+
+    [TestMethod]
+    public async Task PartialEuropeMountFailsClosed()
+    {
+        var fixture = await EuropeMountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        File.Delete(Path.Combine(
+            fixture.Directory, V3CorpusMount.EuropeCapabilityManifestFileName));
+
+        await Assert.ThrowsExactlyAsync<InvalidDataException>(async () =>
+            await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None));
+    }
+
+    [TestMethod]
     public async Task AbsentMountPreservesNoCorpusMountedRefusal()
     {
         var directory = Path.Combine(Path.GetTempPath(), $"lex-v3-no-mount-{Guid.NewGuid():N}");
@@ -1003,6 +1048,72 @@ public sealed class V3CorpusResolveMountTests
                 System.IO.Directory.Delete(Directory, recursive: true);
             }
 
+            return ValueTask.CompletedTask;
+        }
+    }
+
+    private sealed class EuropeMountedFixture : IAsyncDisposable
+    {
+        private EuropeMountedFixture(
+            string directory,
+            string publisherWorkId,
+            string publisherExpressionId,
+            string publisherProvisionIdentifier,
+            string corpusSha256,
+            string indexSha256)
+        {
+            Directory = directory;
+            PublisherWorkId = publisherWorkId;
+            PublisherExpressionId = publisherExpressionId;
+            PublisherProvisionIdentifier = publisherProvisionIdentifier;
+            CorpusSha256 = corpusSha256;
+            IndexSha256 = indexSha256;
+        }
+
+        public string Directory { get; }
+        public string PublisherWorkId { get; }
+        public string PublisherExpressionId { get; }
+        public string PublisherProvisionIdentifier { get; }
+        public string CorpusSha256 { get; }
+        public string IndexSha256 { get; }
+
+        public static async Task<EuropeMountedFixture> CreateAsync()
+        {
+            var envelope = await EuropeIndexBuilderTests.RetainedGdprEnvelopeAsync();
+            var corpus = LexCorpus6Builder.TryBuild(
+                envelope, out var corpusRefusal, out var corpusDetail);
+            Assert.IsNotNull(corpus, $"{corpusRefusal}: {corpusDetail}");
+            var index = EuropeIndexBuilder.TryBuild(
+                envelope, out var indexRefusal, out var indexDetail);
+            Assert.IsNotNull(index, $"{indexRefusal}: {indexDetail}");
+            var admitted = envelope.BodyComposition.Envelope.FormexMainBodyLegalContent!.Outcomes
+                .Single(static outcome =>
+                    outcome.Disposition == EuFormexMainBodyLegalContentDisposition.Admitted);
+            var directory = Path.Combine(
+                Path.GetTempPath(), $"lex-v3-europe-mount-{Guid.NewGuid():N}");
+            System.IO.Directory.CreateDirectory(directory);
+            await File.WriteAllBytesAsync(
+                Path.Combine(directory, V3CorpusMount.EuropeIndexFileName),
+                index.IndexBytes.ToArray());
+            await File.WriteAllBytesAsync(
+                Path.Combine(directory, V3CorpusMount.EuropeCapabilityManifestFileName),
+                index.CapabilityManifestBytes.ToArray());
+            await File.WriteAllBytesAsync(
+                Path.Combine(directory, V3CorpusMount.CorpusFileName),
+                corpus.CanonicalBytes.ToArray());
+            return new EuropeMountedFixture(
+                directory,
+                admitted.Source.ExpressionIdentity.PublisherWorkId,
+                admitted.Source.ExpressionIdentity.PublisherExpressionId,
+                admitted.Articles[0].PublisherIdentifier,
+                corpus.ArtifactRef.Sha256,
+                index.IndexRef.Sha256);
+        }
+
+        public ValueTask DisposeAsync()
+        {
+            if (System.IO.Directory.Exists(Directory))
+                System.IO.Directory.Delete(Directory, recursive: true);
             return ValueTask.CompletedTask;
         }
     }

@@ -34,6 +34,13 @@ public sealed record EuropeIndexSearchResult(
     V3IndexCapabilityLookupOutcome Outcome,
     IReadOnlyList<string> ArticleIdentities);
 
+public sealed record EuropeIndexResolvedExpression(
+    string PublisherWorkId,
+    string PublisherExpressionId,
+    string Language,
+    IReadOnlyList<string> PublisherProvisionIdentifiers,
+    IReadOnlyList<string> ArticleIdentities);
+
 /// <summary>Builds the immutable EU index from one proof-complete Stage 3 envelope.</summary>
 public static class EuropeIndexBuilder
 {
@@ -562,15 +569,22 @@ public sealed class EuropeIndexReader : IDisposable
     private readonly string _path;
     private readonly SqliteConnection _connection;
     private readonly V3IndexCapabilityManifest _capabilityManifest;
+    private readonly SourceArtifactRef _indexRef;
+    private readonly SourceArtifactRef _corpusRef;
 
     private EuropeIndexReader(string path, SqliteConnection connection,
-        V3IndexCapabilityManifest capabilityManifest) =>
-        (_path, _connection, _capabilityManifest) = (path, connection, capabilityManifest);
+        V3IndexCapabilityManifest capabilityManifest,
+        SourceArtifactRef indexRef,
+        SourceArtifactRef corpusRef) =>
+        (_path, _connection, _capabilityManifest, _indexRef, _corpusRef) =
+        (path, connection, capabilityManifest, indexRef, corpusRef);
 
     public long MemberCount => Count("members");
     public long ArticleCount => Count("articles");
     public long CorrigendumLineCount => Count("corrigendum_lines");
     public long CorrigendumGapCount => Count("corrigendum_gaps");
+    public SourceArtifactRef IndexRef => _indexRef;
+    public SourceArtifactRef CorpusRef => _corpusRef;
 
     public static EuropeIndexReader OpenAndVerify(
         SourceArtifactRef indexRef,
@@ -628,7 +642,8 @@ public sealed class EuropeIndexReader : IDisposable
             var measured = EuropeIndexBuilder.MeasureCapabilities(digest, articles);
             if (!measured.Cells.SequenceEqual(capabilityManifest.Cells))
                 throw new InvalidDataException("The EU capability manifest was not measured from the index.");
-            return new EuropeIndexReader(path, connection, capabilityManifest);
+            return new EuropeIndexReader(
+                path, connection, capabilityManifest, indexRef, expectedCorpusRef);
         }
         catch
         {
@@ -636,6 +651,41 @@ public sealed class EuropeIndexReader : IDisposable
             EuropeIndexBuilder.DeleteDatabase(path);
             throw;
         }
+    }
+
+    public IReadOnlyList<EuropeIndexResolvedExpression> ResolveExact(string identifier)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(identifier);
+        using var command = _connection.CreateCommand();
+        command.CommandText = """
+            SELECT publisher_work_id,publisher_expression_id,language,
+                   publisher_identifier,article_identity_sha256
+            FROM articles
+            WHERE publisher_work_id=$identifier OR publisher_expression_id=$identifier
+               OR publisher_identifier=$identifier OR article_identity_sha256=$identifier
+            ORDER BY publisher_work_id,publisher_expression_id,language,
+                     publisher_identifier,article_identity_sha256
+            """;
+        command.Parameters.AddWithValue("$identifier", identifier);
+        using var reader = command.ExecuteReader();
+        var rows = new List<(string Work, string Expression, string Language,
+            string Provision, string Article)>();
+        while (reader.Read())
+        {
+            rows.Add((reader.GetString(0), reader.GetString(1), reader.GetString(2),
+                reader.GetString(3), reader.GetString(4)));
+        }
+
+        return rows
+            .GroupBy(static row => (row.Work, row.Expression, row.Language))
+            .Select(static group => new EuropeIndexResolvedExpression(
+                group.Key.Work,
+                group.Key.Expression,
+                group.Key.Language,
+                Array.AsReadOnly(group.Select(static row => row.Provision)
+                    .Distinct(StringComparer.Ordinal).ToArray()),
+                Array.AsReadOnly(group.Select(static row => row.Article).ToArray())))
+            .ToArray();
     }
 
     public EuropeIndexSearchResult Search(string language, DateOnly from, DateOnly to, string query)

@@ -108,6 +108,38 @@ public sealed class EuropeIndexBuilderTests
     }
 
     [TestMethod]
+    public async Task ExactPublisherWorkExpressionAndProvisionCoordinatesResolveFromVerifiedRows()
+    {
+        var envelope = await RetainedGdprEnvelopeAsync();
+        var built = EuropeIndexBuilder.TryBuild(envelope, out var refusal, out var detail);
+        Assert.IsNotNull(built, $"{refusal}: {detail}");
+        var corpus = LexCorpus6Builder.TryBuild(envelope, out _, out _)!;
+        using var reader = EuropeIndexReader.OpenAndVerify(
+            built.IndexRef, built.IndexBytes.Span, corpus.ArtifactRef, built.CapabilityManifest);
+        var admitted = envelope.BodyComposition.Envelope.FormexMainBodyLegalContent!.Outcomes
+            .Single(static outcome =>
+                outcome.Disposition == EuFormexMainBodyLegalContentDisposition.Admitted);
+        var article = admitted.Articles[0];
+        var work = admitted.Source.ExpressionIdentity.PublisherWorkId;
+        var expression = admitted.Source.ExpressionIdentity.PublisherExpressionId;
+
+        var byWork = reader.ResolveExact(work);
+        var byExpression = reader.ResolveExact(expression);
+        var byProvision = reader.ResolveExact(article.PublisherIdentifier);
+
+        Assert.HasCount(1, byWork);
+        Assert.HasCount(1, byExpression);
+        Assert.HasCount(1, byProvision);
+        Assert.AreEqual(work, byWork[0].PublisherWorkId);
+        Assert.AreEqual(expression, byWork[0].PublisherExpressionId);
+        Assert.AreEqual(99, byWork[0].ArticleIdentities.Count);
+        Assert.AreEqual(article.IdentitySha256, byProvision[0].ArticleIdentities.Single());
+        Assert.AreEqual(article.PublisherIdentifier,
+            byProvision[0].PublisherProvisionIdentifiers.Single());
+        Assert.IsEmpty(reader.ResolveExact("https://example.invalid/not-in-the-index"));
+    }
+
+    [TestMethod]
     public async Task AcquiredNonEnglishFormexPackageRemainsTypedWithoutBindingToEnglishWorkBody()
     {
         var envelope = await RetainedGdprEnvelopeAsync(acquireFrenchExpression: true);
