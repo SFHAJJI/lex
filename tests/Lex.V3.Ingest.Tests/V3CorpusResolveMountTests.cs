@@ -283,7 +283,7 @@ public sealed class V3CorpusResolveMountTests
             var index = LuxembourgIndexBuilder.TryBuild(envelope, out var indexRefusal, out var indexDetail);
             Assert.IsNotNull(index, $"{indexRefusal}: {indexDetail}");
             var article = envelope.BodyComposition.Envelope.LuxembourgAknLegalContentPopulation
-                .Outcomes.First(static value => value.Article?.Coordinate.PublisherWId is not null).Article!;
+                .Outcomes.First(static value => value.Article is not null).Article!;
             var directory = Path.Combine(Path.GetTempPath(), $"lex-v3-corpus-mount-{Guid.NewGuid():N}");
             System.IO.Directory.CreateDirectory(directory);
             await File.WriteAllBytesAsync(
@@ -300,7 +300,7 @@ public sealed class V3CorpusResolveMountTests
             return new MountedFixture(
                 directory,
                 article.PublisherExpressionIri,
-                article.Coordinate.PublisherWId!,
+                "fixture-work-identifier",
                 corpus.ArtifactRef.Sha256,
                 index.IndexRef.Sha256,
                 capabilityBytes,
@@ -318,6 +318,14 @@ public sealed class V3CorpusResolveMountTests
             {
                 source = ReadArticles(connection).First(value =>
                     string.Equals(value.ExpressionIri, ExpressionIri, StringComparison.Ordinal));
+                using (var bindWork = connection.CreateCommand())
+                {
+                    bindWork.CommandText =
+                        "UPDATE articles SET publisher_wid=$wid WHERE expression_iri=$expression";
+                    bindWork.Parameters.AddWithValue("$wid", PublisherWid);
+                    bindWork.Parameters.AddWithValue("$expression", ExpressionIri);
+                    Assert.IsGreaterThan(0, bindWork.ExecuteNonQuery());
+                }
                 using (var insert = connection.CreateCommand())
                 {
                     insert.CommandText = """
@@ -328,7 +336,7 @@ public sealed class V3CorpusResolveMountTests
                     insert.Parameters.AddWithValue("$object", source.ObjectRefSha256);
                     insert.Parameters.AddWithValue("$expression", alternateExpression);
                     insert.Parameters.AddWithValue("$publisher", source.PublisherId);
-                    insert.Parameters.AddWithValue("$wid", (object?)source.PublisherWid ?? DBNull.Value);
+                    insert.Parameters.AddWithValue("$wid", PublisherWid);
                     insert.Parameters.AddWithValue("$date", (object?)source.ApplicabilityDate ?? DBNull.Value);
                     insert.Parameters.AddWithValue("$language", source.Language);
                     insert.Parameters.AddWithValue("$text", source.SearchableText);
