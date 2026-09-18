@@ -423,16 +423,18 @@ public static class LuxembourgIndexBuilder
             {
                 continue;
             }
-            if (group.Select(static article => article.ExpressionIri)
-                    .Distinct(StringComparer.Ordinal).Single() != source.ExpressionIri ||
-                group.Select(static article => article.Language)
-                    .Distinct(StringComparer.Ordinal).Count() != 1)
+            var expressions = group.Select(static article => article.ExpressionIri)
+                .Distinct(StringComparer.Ordinal).ToArray();
+            var languages = group.Select(static article => article.Language)
+                .Distinct(StringComparer.Ordinal).ToArray();
+            if (expressions.Length != 1 || languages.Length != 1 ||
+                !string.Equals(expressions[0], source.ExpressionIri, StringComparison.Ordinal))
             {
                 throw new InvalidDataException(
                     "A Luxembourg expression-state source does not match its admitted articles.");
             }
 
-            var language = group.First().Language;
+            var language = languages[0];
             var workKey = WorkKeyOf(source.PublisherWorkIri);
             var profiles = group.Select(static article => article.RuleProfileSha256)
                 .Append(source.RuleProfileSha256)
