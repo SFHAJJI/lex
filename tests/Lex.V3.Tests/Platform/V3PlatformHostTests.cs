@@ -70,22 +70,23 @@ public sealed class V3PlatformHostTests
     public async Task RequestsFailClosedBeforeTheOperationRuns()
     {
         var host = new V3PlatformHost();
-        var invalid = new[]
+        var invalid = new (string Json, V3TransportFailureKind Kind)[]
         {
-            "{\"operation_id\":\"unknown\",\"parameters\":{}}",
-            "{\"operation_id\":\"resolve\",\"parameters\":{},\"extra\":true}",
-            "{\"operation_id\":\"resolve\",\"parameters\":[]}",
-            "{\"operation_id\":\"resolve\",\"operation_id\":\"search\",\"parameters\":{}}",
-            "{\"operation_id\":\"resolve\",\"parameters\":{}}{}",
-            "{\"operation_id\":\"resolve\",\"parameters\":{},}",
-            OversizedRequest(),
-            DeepRequest(),
+            ("{", V3TransportFailureKind.MalformedJson),
+            ("{\"operation_id\":\"unknown\",\"parameters\":{}}", V3TransportFailureKind.UnknownOperation),
+            ("{\"operation_id\":\"resolve\",\"parameters\":{},\"extra\":true}", V3TransportFailureKind.RequestSchemaInvalid),
+            ("{\"operation_id\":\"resolve\",\"parameters\":[]}", V3TransportFailureKind.ParametersNotObject),
+            ("{\"operation_id\":\"resolve\",\"operation_id\":\"search\",\"parameters\":{}}", V3TransportFailureKind.DuplicateJsonMember),
+            ("{\"operation_id\":\"resolve\",\"parameters\":{}}{}", V3TransportFailureKind.TrailingJsonContent),
+            ("{\"operation_id\":\"resolve\",\"parameters\":{},}", V3TransportFailureKind.MalformedJson),
+            (OversizedRequest(), V3TransportFailureKind.RequestTooLarge),
+            (DeepRequest(), V3TransportFailureKind.RequestTooDeep),
         };
         var calls = 0;
 
-        foreach (var json in invalid)
+        foreach (var (json, kind) in invalid)
         {
-            await Assert.ThrowsAsync<JsonException>(async () =>
+            var exception = await Assert.ThrowsExactlyAsync<V3TransportFailureException>(async () =>
                 await host.CreateMcpSuccessAsync(
                     Encoding.UTF8.GetBytes(json),
                     "req_host",
@@ -96,6 +97,7 @@ public sealed class V3PlatformHostTests
                         throw new AssertFailedException("The operation must not run.");
                     },
                     CancellationToken.None));
+            Assert.AreEqual(kind, exception.Kind);
         }
 
         Assert.AreEqual(0, calls);
@@ -331,7 +333,7 @@ public sealed class V3PlatformHostTests
                 Encoding.UTF8.GetBytes("{\"operation_id\":\"resolve\",\"parameters\":{}}"));
             mutate(context);
 
-            await Assert.ThrowsAsync<JsonException>(async () =>
+            await Assert.ThrowsExactlyAsync<V3TransportFailureException>(async () =>
                 await V3ResolveRestRoute.WriteSuccessAsync(
                     context,
                     new V3PlatformHost(),
@@ -346,6 +348,140 @@ public sealed class V3PlatformHostTests
         }
 
         Assert.AreEqual(0, calls);
+    }
+
+    [TestMethod]
+    [DataRow("malformed", "malformed_json", StatusCodes.Status400BadRequest)]
+    [DataRow("duplicate", "duplicate_json_member", StatusCodes.Status400BadRequest)]
+    [DataRow("trailing", "trailing_json_content", StatusCodes.Status400BadRequest)]
+    [DataRow("too_large", "request_too_large", StatusCodes.Status413PayloadTooLarge)]
+    [DataRow("too_deep", "request_too_deep", StatusCodes.Status400BadRequest)]
+    [DataRow("parameters", "parameters_not_object", StatusCodes.Status400BadRequest)]
+    [DataRow("schema", "request_schema_invalid", StatusCodes.Status400BadRequest)]
+    [DataRow("operation", "unknown_operation", StatusCodes.Status400BadRequest)]
+    public async Task EveryCallerProtocolFailureUsesItsClosedTransportCode(
+        string scenario,
+        string expectedCode,
+        int expectedStatus)
+    {
+        var body = scenario switch
+        {
+            "malformed" => "{",
+            "duplicate" => "{\"operation_id\":\"resolve\",\"operation_id\":\"resolve\",\"parameters\":{}}",
+            "trailing" => "{\"operation_id\":\"resolve\",\"parameters\":{}}{}",
+            "too_large" => OversizedRequest(),
+            "too_deep" => DeepRequest(),
+            "parameters" => "{\"operation_id\":\"resolve\",\"parameters\":[]}",
+            "schema" => "{\"operation_id\":\"resolve\",\"parameters\":{},\"extra\":true}",
+            "operation" => "{\"operation_id\":\"unknown\",\"parameters\":{}}",
+            _ => throw new ArgumentOutOfRangeException(nameof(scenario)),
+        };
+        var context = RouteContext(Encoding.UTF8.GetBytes(body));
+        var calls = 0;
+
+        await V3ResolveRestRoute.HandleSuccessAsync(
+            context,
+            new V3PlatformHost(),
+            "req_transport",
+            Context(),
+            _ =>
+            {
+                calls++;
+                throw new AssertFailedException("A protocol failure must not execute the operation.");
+            },
+            CancellationToken.None);
+
+        Assert.AreEqual(0, calls);
+        AssertTransportProblem(context, expectedCode, expectedStatus);
+    }
+
+    [TestMethod]
+    public async Task MethodAndRouteFailuresRemainBelowTheEnvelope()
+    {
+        var method = RouteContext(Encoding.UTF8.GetBytes("{}"));
+        method.Request.Method = HttpMethods.Get;
+        await V3ResolveRestRoute.HandleSuccessAsync(
+            method,
+            new V3PlatformHost(),
+            "req_method",
+            Context(),
+            _ => throw new AssertFailedException("The operation must not run."),
+            CancellationToken.None);
+        AssertTransportProblem(method, "method_not_allowed", StatusCodes.Status405MethodNotAllowed);
+        Assert.AreEqual(HttpMethods.Post, method.Response.Headers.Allow.ToString());
+
+        var route = RouteContext(Encoding.UTF8.GetBytes("{}"));
+        route.Features.Get<IHttpRequestFeature>()!.RawTarget = "/api/v3/unknown";
+        var application = new V3ApiHandler(
+            SyntheticApiState.Unavailable,
+            DateTimeOffset.Parse("2026-09-18T00:00:00Z"));
+        await application.HandleAsync(route, CancellationToken.None);
+        AssertTransportProblem(route, "unknown_route", StatusCodes.Status404NotFound);
+    }
+
+    [TestMethod]
+    public async Task SchemaInvalidResultCannotLeakAnEnvelopeOrPartialResult()
+    {
+        var context = RouteContext(Encoding.UTF8.GetBytes(
+            "{\"operation_id\":\"resolve\",\"parameters\":{}}"));
+        using var value = JsonDocument.Parse("{\"work_id\":\"eli/example\"}");
+
+        await V3ResolveRestRoute.HandleSuccessAsync(
+            context,
+            new V3PlatformHost(new RejectingResultSchemaDocuments()),
+            "req_invalid_result",
+            Context(),
+            bound => new V3PlatformOperationResult(bound, "work_resolution", value.RootElement),
+            CancellationToken.None);
+
+        AssertTransportProblem(
+            context,
+            "internal_response_invalid",
+            StatusCodes.Status500InternalServerError);
+        var body = ((MemoryStream)context.Response.Body).ToArray();
+        using var problem = JsonDocument.Parse(body);
+        Assert.IsFalse(problem.RootElement.TryGetProperty("result", out _));
+        Assert.IsFalse(problem.RootElement.TryGetProperty("refusal", out _));
+        Assert.IsFalse(problem.RootElement.TryGetProperty("verdict", out _));
+    }
+
+    [TestMethod]
+    public async Task ApplicationRoutesRealResolveToReviewedDomainRefusalBeforeSyntheticPreview()
+    {
+        var context = RouteContext(Encoding.UTF8.GetBytes(
+            "{\"operation_id\":\"resolve\",\"parameters\":{\"identifier\":\"eli/example\"}}"));
+        context.TraceIdentifier = "trace-real-resolve";
+        var application = new V3ApiHandler(
+            SyntheticApiState.Unavailable,
+            DateTimeOffset.Parse("2026-09-18T00:00:00Z"));
+
+        await application.HandleAsync(context, CancellationToken.None);
+
+        Assert.AreEqual(StatusCodes.Status200OK, context.Response.StatusCode);
+        var bytes = ((MemoryStream)context.Response.Body).ToArray();
+        var envelope = V3EnvelopeJson.ParseAndVerify(bytes, V3OperationRegistry.Reviewed);
+        Assert.AreEqual(V3Verdicts.Refuse, envelope.Verdict);
+        Assert.AreEqual("no_corpus_mounted", envelope.Refusal!.Code);
+        Assert.AreEqual("lu", envelope.Refusal.HelpfulPayload.GetProperty("required_corpus").GetString());
+    }
+
+    private static void AssertTransportProblem(
+        DefaultHttpContext context,
+        string expectedCode,
+        int expectedStatus)
+    {
+        Assert.AreEqual(expectedStatus, context.Response.StatusCode);
+        Assert.AreEqual("application/problem+json", context.Response.ContentType);
+        Assert.AreEqual("no-store", context.Response.Headers.CacheControl.ToString());
+        Assert.AreEqual("nosniff", context.Response.Headers.XContentTypeOptions.ToString());
+        var bytes = ((MemoryStream)context.Response.Body).ToArray();
+        using var document = JsonDocument.Parse(bytes);
+        var root = document.RootElement;
+        Assert.AreEqual(V3TransportResponse.Schema, root.GetProperty("schema").GetString());
+        Assert.AreEqual(expectedCode, root.GetProperty("code").GetString());
+        Assert.AreEqual(expectedStatus, root.GetProperty("status").GetInt32());
+        Assert.IsFalse(root.TryGetProperty("version", out _));
+        Assert.IsFalse(root.TryGetProperty("operation_id", out _));
     }
 
     private static V3EnvelopeContext Context() => new(
@@ -389,5 +525,19 @@ public sealed class V3PlatformHostTests
         public void ValidateResult(V3OperationDefinition operation, JsonElement document) => ResultCalls++;
 
         public void ValidateRefusal(JsonElement document) => RefusalCalls++;
+    }
+
+    private sealed class RejectingResultSchemaDocuments : IV3PlatformSchemaDocuments
+    {
+        public void ValidateRequest(V3OperationDefinition operation, JsonElement document)
+        {
+        }
+
+        public void ValidateResult(V3OperationDefinition operation, JsonElement document) =>
+            throw new JsonException("synthetic result-schema rejection");
+
+        public void ValidateRefusal(JsonElement document)
+        {
+        }
     }
 }

@@ -8,6 +8,80 @@ internal static class V3ResolveRestRoute
 {
     public const string RawTarget = "/api/v3/resolve";
 
+    public static async Task HandleSuccessAsync(
+        HttpContext context,
+        V3PlatformHost host,
+        string requestReference,
+        V3EnvelopeContext envelopeContext,
+        Func<V3PlatformOperationRequest, V3PlatformOperationResult> execute,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await WriteSuccessAsync(
+                context,
+                host,
+                requestReference,
+                envelopeContext,
+                execute,
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (V3TransportFailureException exception)
+        {
+            await V3TransportResponse.WriteAsync(context.Response, exception.Kind, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch
+        {
+            await V3TransportResponse.WriteAsync(
+                    context.Response,
+                    V3TransportFailureKind.InternalFailure,
+                    cancellationToken)
+                .ConfigureAwait(false);
+        }
+    }
+
+    public static async Task HandleRefusalAsync(
+        HttpContext context,
+        V3PlatformHost host,
+        string requestReference,
+        V3EnvelopeContext envelopeContext,
+        Func<V3PlatformOperationRequest, V3PlatformOperationRefusal> execute,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await WriteRefusalAsync(
+                context,
+                host,
+                requestReference,
+                envelopeContext,
+                execute,
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (V3TransportFailureException exception)
+        {
+            await V3TransportResponse.WriteAsync(context.Response, exception.Kind, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch
+        {
+            await V3TransportResponse.WriteAsync(
+                    context.Response,
+                    V3TransportFailureKind.InternalFailure,
+                    cancellationToken)
+                .ConfigureAwait(false);
+        }
+    }
+
     public static async Task WriteSuccessAsync(
         HttpContext context,
         V3PlatformHost host,
@@ -56,7 +130,10 @@ internal static class V3ResolveRestRoute
         if (!string.Equals(context.Request.Method, HttpMethods.Post, StringComparison.Ordinal) ||
             !string.Equals(rawTarget, RawTarget, StringComparison.Ordinal))
         {
-            throw new JsonException("The request does not match the reviewed resolve REST route.");
+            var kind = string.Equals(rawTarget, RawTarget, StringComparison.Ordinal)
+                ? V3TransportFailureKind.MethodNotAllowed
+                : V3TransportFailureKind.UnknownRoute;
+            throw new V3TransportFailureException(kind, "The request does not match the reviewed resolve REST route.");
         }
     }
 
@@ -66,7 +143,9 @@ internal static class V3ResolveRestRoute
     {
         if (request.ContentLength is > V3PlatformHost.MaximumRequestBytes)
         {
-            throw new JsonException("The operation request exceeds its byte ceiling.");
+            throw new V3TransportFailureException(
+                V3TransportFailureKind.RequestTooLarge,
+                "The operation request exceeds its byte ceiling.");
         }
 
         using var body = new MemoryStream();
@@ -81,7 +160,9 @@ internal static class V3ResolveRestRoute
 
             if (body.Length + read > V3PlatformHost.MaximumRequestBytes)
             {
-                throw new JsonException("The operation request exceeds its byte ceiling.");
+                throw new V3TransportFailureException(
+                    V3TransportFailureKind.RequestTooLarge,
+                    "The operation request exceeds its byte ceiling.");
             }
 
             body.Write(buffer, 0, read);

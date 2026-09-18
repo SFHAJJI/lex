@@ -248,7 +248,17 @@ internal sealed class V3PlatformHost
         }
 
         using var resultDocument = ResultDocument(result);
-        _schemas.ValidateResult(operation, resultDocument.RootElement);
+        try
+        {
+            _schemas.ValidateResult(operation, resultDocument.RootElement);
+        }
+        catch (JsonException exception)
+        {
+            throw new V3TransportFailureException(
+                V3TransportFailureKind.InternalResponseInvalid,
+                "The operation result does not satisfy its reviewed schema.",
+                exception);
+        }
 
         var envelope = _builder.Success(
             requestReference,
@@ -284,7 +294,17 @@ internal sealed class V3PlatformHost
         }
 
         using var refusalDocument = RefusalDocument(refusal);
-        _schemas.ValidateRefusal(refusalDocument.RootElement);
+        try
+        {
+            _schemas.ValidateRefusal(refusalDocument.RootElement);
+        }
+        catch (JsonException exception)
+        {
+            throw new V3TransportFailureException(
+                V3TransportFailureKind.InternalResponseInvalid,
+                "The operation refusal does not satisfy its reviewed schema.",
+                exception);
+        }
         var envelope = _builder.Refusal(
             requestReference,
             operation.OperationId,
@@ -297,16 +317,27 @@ internal sealed class V3PlatformHost
 
     private V3PlatformOperationRequest ParseRequest(ReadOnlyMemory<byte> utf8)
     {
-        if (utf8.IsEmpty || utf8.Length > MaximumRequestBytes)
+        if (utf8.IsEmpty)
         {
-            throw new JsonException("The operation request is empty or exceeds its byte ceiling.");
+            throw new V3TransportFailureException(
+                V3TransportFailureKind.MalformedJson,
+                "The operation request is empty.");
         }
 
-        using var document = JsonDocument.Parse(utf8, RequestOptions);
+        if (utf8.Length > MaximumRequestBytes)
+        {
+            throw new V3TransportFailureException(
+                V3TransportFailureKind.RequestTooLarge,
+                "The operation request exceeds its byte ceiling.");
+        }
+
+        using var document = ParseTransportJson(utf8.Span);
         var root = document.RootElement;
         if (root.ValueKind != JsonValueKind.Object)
         {
-            throw new JsonException("An operation request must be an object.");
+            throw new V3TransportFailureException(
+                V3TransportFailureKind.RequestSchemaInvalid,
+                "An operation request must be an object.");
         }
 
         var names = root.EnumerateObject()
@@ -315,13 +346,17 @@ internal sealed class V3PlatformHost
             .ToArray();
         if (!names.SequenceEqual(["operation_id", "parameters"], StringComparer.Ordinal))
         {
-            throw new JsonException("The operation request members do not match the bound schema.");
+            throw new V3TransportFailureException(
+                V3TransportFailureKind.RequestSchemaInvalid,
+                "The operation request members do not match the bound schema.");
         }
 
-        var operationId = root.GetProperty("operation_id").GetString();
-        if (operationId is null)
+        var operationElement = root.GetProperty("operation_id");
+        if (operationElement.ValueKind != JsonValueKind.String || operationElement.GetString() is not { } operationId)
         {
-            throw new JsonException("The operation identifier must be a string.");
+            throw new V3TransportFailureException(
+                V3TransportFailureKind.RequestSchemaInvalid,
+                "The operation identifier must be a string.");
         }
 
         V3OperationDefinition operation;
@@ -331,13 +366,114 @@ internal sealed class V3PlatformHost
         }
         catch (ArgumentException exception)
         {
-            throw new JsonException("The operation is not declared by the reviewed registry.", exception);
+            throw new V3TransportFailureException(
+                V3TransportFailureKind.UnknownOperation,
+                "The operation is not declared by the reviewed registry.",
+                exception);
         }
 
-        _schemas.ValidateRequest(operation, root);
+        var parameters = root.GetProperty("parameters");
+        if (parameters.ValueKind != JsonValueKind.Object)
+        {
+            throw new V3TransportFailureException(
+                V3TransportFailureKind.ParametersNotObject,
+                "Operation parameters must be an object.");
+        }
 
-        return new V3PlatformOperationRequest(operation, root.GetProperty("parameters"));
+        try
+        {
+            _schemas.ValidateRequest(operation, root);
+        }
+        catch (JsonException exception)
+        {
+            throw new V3TransportFailureException(
+                V3TransportFailureKind.RequestSchemaInvalid,
+                "The operation request does not satisfy its reviewed schema.",
+                exception);
+        }
+
+        return new V3PlatformOperationRequest(operation, parameters);
     }
+
+    private static JsonDocument ParseTransportJson(ReadOnlySpan<byte> utf8)
+    {
+        try
+        {
+            ValidateJsonTokens(utf8);
+            return JsonDocument.Parse(utf8, RequestOptions);
+        }
+        catch (V3TransportFailureException)
+        {
+            throw;
+        }
+        catch (JsonException exception)
+        {
+            throw new V3TransportFailureException(
+                V3TransportFailureKind.MalformedJson,
+                "The operation request is not valid JSON.",
+                exception);
+        }
+    }
+
+    private static void ValidateJsonTokens(ReadOnlySpan<byte> utf8)
+    {
+        var reader = new Utf8JsonReader(
+            utf8,
+            new JsonReaderOptions
+            {
+                AllowTrailingCommas = false,
+                CommentHandling = JsonCommentHandling.Disallow,
+                MaxDepth = 33,
+                AllowMultipleValues = true,
+            });
+        var objectMembers = new Stack<HashSet<string>>();
+        var roots = 0;
+
+        while (reader.Read())
+        {
+            if (reader.TokenType is JsonTokenType.StartObject or JsonTokenType.StartArray &&
+                reader.CurrentDepth >= 32)
+            {
+                throw new V3TransportFailureException(
+                    V3TransportFailureKind.RequestTooDeep,
+                    "The operation request exceeds its depth ceiling.");
+            }
+
+            if (reader.CurrentDepth == 0 && IsValueStart(reader.TokenType) && ++roots > 1)
+            {
+                throw new V3TransportFailureException(
+                    V3TransportFailureKind.TrailingJsonContent,
+                    "The operation request contains trailing JSON content.");
+            }
+
+            if (reader.TokenType == JsonTokenType.StartObject)
+            {
+                objectMembers.Push(new HashSet<string>(StringComparer.Ordinal));
+            }
+            else if (reader.TokenType == JsonTokenType.PropertyName)
+            {
+                if (!objectMembers.Peek().Add(reader.GetString()!))
+                {
+                    throw new V3TransportFailureException(
+                        V3TransportFailureKind.DuplicateJsonMember,
+                        "The operation request contains a duplicate JSON member.");
+                }
+            }
+            else if (reader.TokenType == JsonTokenType.EndObject)
+            {
+                objectMembers.Pop();
+            }
+        }
+    }
+
+    private static bool IsValueStart(JsonTokenType tokenType) => tokenType is
+        JsonTokenType.StartObject or
+        JsonTokenType.StartArray or
+        JsonTokenType.String or
+        JsonTokenType.Number or
+        JsonTokenType.True or
+        JsonTokenType.False or
+        JsonTokenType.Null;
 
     private static JsonDocument ResultDocument(V3PlatformOperationResult result) =>
         JsonDocument.Parse(
