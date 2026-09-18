@@ -61,7 +61,7 @@ internal sealed class V3CorpusMount : IDisposable
 
         var corpusBytes = await File.ReadAllBytesAsync(corpusPath, cancellationToken)
             .ConfigureAwait(false);
-        var corpus = VerifiedLexCorpus6ManifestSet.ParseAndVerify(corpusBytes);
+        var corpus = VerifiedLexCorpus6ManifestSet.ParseCanonicalAndVerify(corpusBytes);
         var reader = await LuxembourgIndexReader.OpenAndVerifyFileAsync(
                 indexPath,
                 capabilityBytes,

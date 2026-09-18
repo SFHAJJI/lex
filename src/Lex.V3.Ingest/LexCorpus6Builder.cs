@@ -1594,7 +1594,7 @@ public sealed class VerifiedLexCorpus6ManifestSet
 
     public LexCorpus6ManifestSet Set { get; }
 
-    public static VerifiedLexCorpus6ManifestSet ParseAndVerify(ReadOnlySpan<byte> canonicalBytes)
+    public static VerifiedLexCorpus6ManifestSet ParseCanonicalAndVerify(ReadOnlySpan<byte> canonicalBytes)
     {
         LexCorpus6ManifestSet set;
         try

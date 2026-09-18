@@ -1070,7 +1070,7 @@ public sealed class GuardedConstructionCensusTests
                     + "method public static "
                     + "Lex.V3.Ingest.VerifiedLexCorpus6ManifestSet::ParseAndVerify, "
                     + "method public static "
-                    + "Lex.V3.Ingest.VerifiedLexCorpus6ManifestSet::ParseAndVerify",
+                    + "Lex.V3.Ingest.VerifiedLexCorpus6ManifestSet::ParseCanonicalAndVerify",
                 "Lex.V3.Ingest.WireBudgetSnapshot: constructor private instance "
                     + "Lex.V3.Ingest.WireBudgetSnapshot::.ctor, "
                     + "constructor private instance Lex.V3.Ingest.WireBudgetSnapshot::.ctor, "
