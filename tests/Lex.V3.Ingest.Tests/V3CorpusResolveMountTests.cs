@@ -119,12 +119,7 @@ public sealed class V3CorpusResolveMountTests
         context.Request.Method = HttpMethods.Post;
         context.Request.Body = new MemoryStream(bytes);
         context.Request.ContentLength = bytes.Length;
-        context.Features.Set<IHttpRequestFeature>(new HttpRequestFeature
-        {
-            Method = HttpMethods.Post,
-            RawTarget = V3ResolveRestRoute.RawTarget,
-            Path = V3ResolveRestRoute.RawTarget,
-        });
+        context.Features.Get<IHttpRequestFeature>()!.RawTarget = V3ResolveRestRoute.RawTarget;
         context.Response.Body = new MemoryStream();
         return context;
     }
