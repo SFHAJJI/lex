@@ -15,6 +15,100 @@ namespace Lex.V3.Ingest.Tests;
 public sealed class LuxembourgAknArticleInventoryProducerTests
 {
     [TestMethod]
+    public async Task ConsolidatedAknBindsTheStableWorkAndApplicabilityToTheSelectedExpression()
+    {
+        const string work =
+            "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3";
+        const string legalResource = work + "/jo";
+        const string expression = legalResource + "/fr";
+        var bytes = await File.ReadAllBytesAsync(Path.Combine(
+            AppContext.BaseDirectory, "Fixtures", "LuAknLegalContent",
+            "loi-1991-08-10-n3--2024-02-01--fr.bin"));
+        var fixture = await Fixture.CreateAsync(
+            bytes, LuxembourgUserFormatToken.Xml, legalResource, expression);
+
+        var outcome = (await new LuxembourgAknArticleInventoryProducer(fixture.Store)
+            .RunAsync(fixture.Population, CancellationToken.None)).Outcomes.Single();
+
+        Assert.AreEqual(LuxembourgAknArticleInventoryDisposition.Inventoried, outcome.Disposition);
+        Assert.IsNotNull(outcome.Inventory);
+        Assert.AreEqual(work, outcome.Inventory.PublisherWorkIri);
+        Assert.AreEqual(legalResource, outcome.Inventory.PublisherLegalResourceIri);
+        Assert.AreEqual("2024-02-01", outcome.Inventory.PublisherApplicabilityDate);
+    }
+
+    [TestMethod]
+    public async Task ConsolidatedAknCoordinateMustMatchTheProofBoundSelectedWemi()
+    {
+        const string legalResource =
+            "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo";
+        const string expression = legalResource + "/fr";
+        var bytes = await File.ReadAllBytesAsync(Path.Combine(
+            AppContext.BaseDirectory, "Fixtures", "LuAknLegalContent",
+            "loi-1991-08-10-n3--2024-02-01--fr.bin"));
+        var fixture = await Fixture.CreateAsync(
+            bytes, LuxembourgUserFormatToken.Xml, legalResource + "/other", expression);
+
+        var outcome = (await new LuxembourgAknArticleInventoryProducer(fixture.Store)
+            .RunAsync(fixture.Population, CancellationToken.None)).Outcomes.Single();
+
+        Assert.AreEqual(LuxembourgAknArticleInventoryDisposition.XmlRejected, outcome.Disposition);
+        StringAssert.Contains(outcome.Detail, "selected WEMI");
+        Assert.IsNull(outcome.Inventory);
+    }
+
+    [TestMethod]
+    [DataRow("jolux-expression", "selected WEMI")]
+    [DataRow("frbr-expression", "selected WEMI")]
+    [DataRow("duplicate-identification", "exactly one identification")]
+    [DataRow("duplicate-frbr-expression", "incomplete or ambiguous")]
+    [DataRow("complex-work", "selected WEMI")]
+    [DataRow("multiple-member-of", "incomplete or ambiguous")]
+    public async Task ConsolidatedAknRejectsEachAmbiguousOrCrossedCoordinate(
+        string mutation,
+        string expected)
+    {
+        const string work =
+            "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3";
+        const string legalResource = work + "/jo";
+        const string expression = legalResource + "/fr";
+        var xml = Encoding.UTF8.GetString(await File.ReadAllBytesAsync(Path.Combine(
+            AppContext.BaseDirectory, "Fixtures", "LuAknLegalContent",
+            "loi-1991-08-10-n3--2024-02-01--fr.bin")))
+            .Replace("\r\n", "\n", StringComparison.Ordinal);
+        xml = mutation switch
+        {
+            "jolux-expression" => ReplaceOnce(xml,
+                "<scl:JOLUXExpression>\n<scl:jolux scl:name=\"uriThis\">" + expression,
+                "<scl:JOLUXExpression>\n<scl:jolux scl:name=\"uriThis\">" + expression + "/other"),
+            "frbr-expression" => ReplaceOnce(xml,
+                "<FRBRExpression>\n<FRBRthis value=\"" + expression,
+                "<FRBRExpression>\n<FRBRthis value=\"" + expression + "/other"),
+            "duplicate-identification" => ReplaceOnce(xml, "</identification>",
+                "</identification><identification source=\"#duplicate\"/>") ,
+            "duplicate-frbr-expression" => ReplaceOnce(xml, "</FRBRExpression>",
+                "</FRBRExpression><FRBRExpression><FRBRthis value=\"" + expression + "/other\"/></FRBRExpression>"),
+            "complex-work" => ReplaceOnce(xml,
+                "<scl:JOLUXComplexWork>\n<scl:jolux scl:name=\"uriThis\">" + work,
+                "<scl:JOLUXComplexWork>\n<scl:jolux scl:name=\"uriThis\">" + work + "/other"),
+            "multiple-member-of" => ReplaceOnce(xml,
+                "<scl:jolux scl:name=\"isMemberOf\">" + work + "</scl:jolux>",
+                "<scl:jolux scl:name=\"isMemberOf\">" + work + "</scl:jolux>" +
+                "<scl:jolux scl:name=\"isMemberOf\">" + work + "/other</scl:jolux>"),
+            _ => throw new AssertFailedException(mutation),
+        };
+        var fixture = await Fixture.CreateAsync(
+            Encoding.UTF8.GetBytes(xml), LuxembourgUserFormatToken.Xml, legalResource, expression);
+
+        var outcome = (await new LuxembourgAknArticleInventoryProducer(fixture.Store)
+            .RunAsync(fixture.Population, CancellationToken.None)).Outcomes.Single();
+
+        Assert.AreEqual(LuxembourgAknArticleInventoryDisposition.XmlRejected, outcome.Disposition);
+        StringAssert.Contains(outcome.Detail, expected);
+        Assert.IsNull(outcome.Inventory);
+    }
+
+    [TestMethod]
     public async Task TheRetainedPublisherAknBodyProducesStablePublisherArticleCoordinates()
     {
         var bytes = await File.ReadAllBytesAsync(Path.Combine(
@@ -34,6 +128,10 @@ public sealed class LuxembourgAknArticleInventoryProducerTests
         Assert.AreEqual(
             outcome.Input.SelectedWemiCandidate.ExpressionIri,
             outcome.Inventory.PublisherExpressionIri);
+        Assert.IsNull(outcome.Inventory.PublisherWorkIri,
+            "An original publication without publisher applicability is not a dated expression state.");
+        Assert.IsNull(outcome.Inventory.PublisherLegalResourceIri);
+        Assert.IsNull(outcome.Inventory.PublisherApplicabilityDate);
         CollectionAssert.AreEqual(
             new[] { "art_1er", "art_2", "art_3", "art_4", "art_5", "art_6", "art_7", "art_8" },
             outcome.Inventory.Articles.Select(static article => article.PublisherId).ToArray());
@@ -180,21 +278,33 @@ public sealed class LuxembourgAknArticleInventoryProducerTests
         "xmlns:scl=\"http://www.scl.lu\"><act><body>" + articles +
         "</body></act></akomaNtoso>");
 
+    private static string ReplaceOnce(string value, string oldValue, string newValue)
+    {
+        var index = value.IndexOf(oldValue, StringComparison.Ordinal);
+        Assert.IsGreaterThanOrEqualTo(0, index, oldValue);
+        return string.Concat(value.AsSpan(0, index), newValue,
+            value.AsSpan(index + oldValue.Length));
+    }
+
     private sealed record Fixture(
         EuAcquisitionTestFixture.EuInMemoryCustodyStore Store,
         LuxembourgHeldBodyDerivationPopulation Population)
     {
         internal static async Task<Fixture> CreateAsync(
             byte[] body,
-            LuxembourgUserFormatToken token)
+            LuxembourgUserFormatToken token,
+            string? rootIri = null,
+            string? expressionIri = null)
         {
             var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
             var receipt = await store.CreateAsync(
                 body, CustodyClass.NightlyFloor90d, CancellationToken.None);
             var enumeration = Artifact('a', "enumeration"u8);
             var kind = new SourceRegistryMemberRef(enumeration, "lu_document_get_root");
-            const string publisherUri =
+            rootIri ??=
                 "http://data.legilux.public.lu/eli/etat/leg/loi/2017/03/14/a439/jo/fr";
+            expressionIri ??= rootIri + "/expression";
+            var publisherUri = rootIri;
             var key = "lu-akn:" + publisherUri;
             var objectRef = new SourceObjectRef(
                 SourceCoreSchemaIds.SourceObjectRef,
@@ -232,9 +342,9 @@ public sealed class LuxembourgAknArticleInventoryProducerTests
                 LuxembourgLegalValue.Unstated,
                 "/eli/etat/leg/loi/2017/03/14/a439/jo/fr");
             var candidate = new LuxembourgWemiCandidate(
-                publisherUri,
-                publisherUri + "/expression",
-                publisherUri + "/expression/manifestation",
+                rootIri,
+                expressionIri,
+                expressionIri + "/manifestation",
                 address.StoreFileUri.Value.AbsoluteUri,
                 "http://publications.europa.eu/resource/authority/language/FRA",
                 "http://data.legilux.public.lu/resource/authority/user-format/" +

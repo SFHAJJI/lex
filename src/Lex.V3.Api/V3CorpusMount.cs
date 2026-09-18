@@ -95,6 +95,72 @@ internal sealed class V3CorpusMount : IDisposable
             return Unknown(request, identifier, observedAt);
         }
 
+        if (TryParsePinnedPermalink(
+                identifier,
+                out var workKey,
+                out var applicabilityDate,
+                out var requestedDigest))
+        {
+            var states = _reader.ResolveState(workKey, applicabilityDate);
+            if (states.Count == 0)
+            {
+                return Unknown(request, identifier, observedAt);
+            }
+
+            var matching = states.Where(state => string.Equals(
+                requestedDigest, state.StateSha256, StringComparison.Ordinal)).ToArray();
+            if (matching.Length == 0 && states.Count > 1)
+            {
+                using var ambiguous = JsonSerializer.SerializeToDocument(new
+                {
+                    requested_identifier = identifier,
+                    candidates = states.Select(StateUrl).ToArray(),
+                });
+                return V3PlatformOperationOutcome.Refused(
+                    Context("refusal", observedAt),
+                    new V3PlatformOperationRefusal(request, "ambiguous_identifier", ambiguous.RootElement));
+            }
+
+            var current = matching.Length == 1 ? matching[0] : states[0];
+            var stableCoordinate = StableCoordinate(current);
+            var currentUrl = StateUrl(current);
+            if (!string.Equals(requestedDigest, current.StateSha256, StringComparison.Ordinal))
+            {
+                using var mismatch = JsonSerializer.SerializeToDocument(new
+                {
+                    requested_digest = requestedDigest,
+                    current_digest = current.StateSha256,
+                    stable_coordinate = stableCoordinate,
+                    current_hash_pinned_url = currentUrl,
+                    rule_profile_sha256s = current.RuleProfileSha256s,
+                });
+                return V3PlatformOperationOutcome.Refused(
+                    Context("refusal", observedAt),
+                    new V3PlatformOperationRefusal(request, "pinned_digest_mismatch", mismatch.RootElement));
+            }
+
+            using var pinnedResult = JsonSerializer.SerializeToDocument(new
+            {
+                requested_identifier = identifier,
+                publisher = "lu-legilux",
+                work_key = current.WorkKey,
+                applicability_date = current.ApplicabilityDate,
+                state_sha256 = current.StateSha256,
+                expression_iri = current.ExpressionIri,
+                publisher_work_iri = current.PublisherWorkIri,
+                publisher_legal_resource_iri = current.PublisherLegalResourceIri,
+                language = current.Language,
+                article_identities = current.ArticleIdentities,
+                stable_coordinate = stableCoordinate,
+                permalink = currentUrl,
+                corpus_sha256 = _corpus.ArtifactRef.Sha256,
+                index_sha256 = _reader.IndexRef.Sha256,
+            });
+            return V3PlatformOperationOutcome.Success(
+                Context("success", observedAt),
+                new V3PlatformOperationResult(request, "work_resolution", pinnedResult.RootElement));
+        }
+
         var candidates = _reader.ResolveExact(identifier);
         if (candidates.Count == 0)
         {
@@ -186,6 +252,63 @@ internal sealed class V3CorpusMount : IDisposable
     }
 
     public void Dispose() => _reader.Dispose();
+
+    private static string StableCoordinate(LuxembourgIndexResolvedState state) =>
+        $"/lu-legilux/{state.WorkKey}/{state.ApplicabilityDate}";
+
+    private static string StateUrl(LuxembourgIndexResolvedState state) =>
+        StableCoordinate(state) + "--" + state.StateSha256;
+
+    private static bool TryParsePinnedPermalink(
+        string value,
+        out string workKey,
+        out string applicabilityDate,
+        out string requestedDigest)
+    {
+        workKey = string.Empty;
+        applicabilityDate = string.Empty;
+        requestedDigest = string.Empty;
+        string path;
+        if (value.StartsWith("/", StringComparison.Ordinal))
+        {
+            path = value;
+        }
+        else if (Uri.TryCreate(value, UriKind.Absolute, out var uri) &&
+                 string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.Ordinal) &&
+                 string.Equals(uri.Host, "law.soufien.lu", StringComparison.Ordinal) &&
+                 uri.IsDefaultPort && uri.UserInfo.Length == 0 && uri.Query.Length == 0 &&
+                 uri.Fragment.Length == 0)
+        {
+            path = uri.AbsolutePath;
+        }
+        else
+        {
+            return false;
+        }
+
+        var segments = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (segments.Length != 3 ||
+            !string.Equals(segments[0], "lu-legilux", StringComparison.Ordinal) ||
+            !IsWorkKey(segments[1]) || segments[2].Length != 10 + 2 + 64 ||
+            !string.Equals(segments[2].Substring(10, 2), "--", StringComparison.Ordinal) ||
+            !DateOnly.TryParseExact(
+                segments[2][..10], "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.None, out _) ||
+            !segments[2][12..].All(static character =>
+                character is >= '0' and <= '9' or >= 'a' and <= 'f'))
+        {
+            return false;
+        }
+
+        workKey = segments[1];
+        applicabilityDate = segments[2][..10];
+        requestedDigest = segments[2][12..];
+        return true;
+    }
+
+    private static bool IsWorkKey(string value) => value.Length is > 0 and <= 512 &&
+        value.All(static character =>
+            character is >= 'a' and <= 'z' or >= '0' and <= '9' or '-' or '_');
 
     private static bool LooksLikeIdentifier(string value) =>
         Uri.TryCreate(value, UriKind.Absolute, out _) ||
