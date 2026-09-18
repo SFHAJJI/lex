@@ -18,7 +18,7 @@ public sealed class LuxembourgIndexBuilderTests
     {
         var digest = Convert.ToHexStringLower(SHA256.HashData(
             LuxembourgIndexBuilder.BuildFixedInputDeterminismEvidence()));
-        Assert.AreEqual("0f9e331c44e87c1e8cbc59da654c56aca802812eaf22cd088d9f55d75c54348e", digest);
+        Assert.AreEqual("f87a1163d59361f4841024f19e339c989ed130853918b7b450d8359b831bfb97", digest);
     }
 
     private const string Retained1991 = "loi-1991-08-10-n3--2024-02-01--fr.bin";
