@@ -107,7 +107,9 @@ internal sealed class V3CorpusMount : IDisposable
                 return Unknown(request, identifier, observedAt);
             }
 
-            if (states.Count > 1)
+            var matching = states.Where(state => string.Equals(
+                requestedDigest, state.StateSha256, StringComparison.Ordinal)).ToArray();
+            if (matching.Length == 0 && states.Count > 1)
             {
                 using var ambiguous = JsonSerializer.SerializeToDocument(new
                 {
@@ -119,7 +121,7 @@ internal sealed class V3CorpusMount : IDisposable
                     new V3PlatformOperationRefusal(request, "ambiguous_identifier", ambiguous.RootElement));
             }
 
-            var current = states[0];
+            var current = matching.Length == 1 ? matching[0] : states[0];
             var stableCoordinate = StableCoordinate(current);
             var currentUrl = StateUrl(current);
             if (!string.Equals(requestedDigest, current.StateSha256, StringComparison.Ordinal))
@@ -130,7 +132,6 @@ internal sealed class V3CorpusMount : IDisposable
                     current_digest = current.StateSha256,
                     stable_coordinate = stableCoordinate,
                     current_hash_pinned_url = currentUrl,
-                    reason = "expression_state_identity_changed",
                     rule_profile_sha256s = current.RuleProfileSha256s,
                 });
                 return V3PlatformOperationOutcome.Refused(

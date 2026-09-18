@@ -74,7 +74,7 @@ public sealed class V3CorpusResolveMountTests
         await using var cleanup = fixture;
         using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
         Assert.IsNotNull(mount);
-        var requested = new string(fixture.StateSha256[0] == '0' ? '1' : '0', 64);
+        var requested = fixture.StateSha256[..^1] + (fixture.StateSha256[^1] == '0' ? '1' : '0');
         var identifier = $"/lu-legilux/{fixture.WorkKey}/{fixture.ApplicabilityDate}--{requested}";
         var context = Request(identifier);
         var handler = new V3ApiHandler(
@@ -94,7 +94,7 @@ public sealed class V3CorpusResolveMountTests
         Assert.AreEqual(fixture.StateSha256, payload.GetProperty("current_digest").GetString());
         Assert.AreEqual(fixture.StableCoordinate, payload.GetProperty("stable_coordinate").GetString());
         Assert.AreEqual(fixture.Permalink, payload.GetProperty("current_hash_pinned_url").GetString());
-        Assert.AreEqual("expression_state_identity_changed", payload.GetProperty("reason").GetString());
+        Assert.IsFalse(payload.TryGetProperty("reason", out _));
         Assert.IsGreaterThan(0, payload.GetProperty("rule_profile_sha256s").GetArrayLength());
         Assert.IsFalse(
             System.Text.Json.JsonSerializer.Serialize(envelope).Contains("searchable_text", StringComparison.Ordinal));
@@ -121,6 +121,82 @@ public sealed class V3CorpusResolveMountTests
         Assert.AreEqual(fixture.StateSha256, envelope.Result!.Value.GetProperty("state_sha256").GetString());
         Assert.AreEqual(fixture.ExpressionIri, envelope.Result.Value.GetProperty("expression_iri").GetString());
         Assert.AreEqual(fixture.Permalink, envelope.Result.Value.GetProperty("permalink").GetString());
+    }
+
+    [TestMethod]
+    public async Task ExactHashSelectsItsStateWhenWorkAndDateHaveTwoLanguages()
+    {
+        var fixture = await MountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        var alternate = await fixture.AddSecondLanguageStateAtSameDateAsync();
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+
+        var envelope = await ResolveAsync(mount, fixture.Permalink);
+
+        Assert.AreEqual(V3Verdicts.Answer, envelope.Verdict);
+        Assert.AreEqual(fixture.StateSha256, envelope.Result!.Value.GetProperty("state_sha256").GetString());
+        Assert.AreNotEqual(alternate.StateSha256, envelope.Result.Value.GetProperty("state_sha256").GetString());
+    }
+
+    [TestMethod]
+    public async Task UnknownHashAcrossSeveralCurrentStatesReturnsAmbiguousCandidates()
+    {
+        var fixture = await MountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        var alternate = await fixture.AddSecondLanguageStateAtSameDateAsync();
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+        var unknown = new string('0', 64);
+        if (unknown == fixture.StateSha256 || unknown == alternate.StateSha256) unknown = new string('1', 64);
+
+        var envelope = await ResolveAsync(mount, fixture.StableCoordinate + "--" + unknown);
+
+        Assert.AreEqual(V3Verdicts.Refuse, envelope.Verdict);
+        Assert.AreEqual("ambiguous_identifier", envelope.Refusal!.Code);
+        CollectionAssert.AreEquivalent(
+            new[] { fixture.Permalink, fixture.StableCoordinate + "--" + alternate.StateSha256 },
+            envelope.Refusal.HelpfulPayload.GetProperty("candidates").EnumerateArray()
+                .Select(static value => value.GetString()).ToArray());
+    }
+
+    [TestMethod]
+    [DataRow("http")]
+    [DataRow("userinfo")]
+    [DataRow("port")]
+    [DataRow("query")]
+    [DataRow("fragment")]
+    [DataRow("host")]
+    [DataRow("segment-count")]
+    [DataRow("publisher")]
+    [DataRow("uppercase-digest")]
+    [DataRow("invalid-date")]
+    public async Task PinnedPermalinkGrammarRejectsEachNonCanonicalForm(string mutation)
+    {
+        var fixture = await MountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+        var identifier = mutation switch
+        {
+            "http" => "http://law.soufien.lu" + fixture.Permalink,
+            "userinfo" => "https://user@law.soufien.lu" + fixture.Permalink,
+            "port" => "https://law.soufien.lu:444" + fixture.Permalink,
+            "query" => "https://law.soufien.lu" + fixture.Permalink + "?x=1",
+            "fragment" => "https://law.soufien.lu" + fixture.Permalink + "#x",
+            "host" => "https://evillaw.soufien.lu" + fixture.Permalink,
+            "segment-count" => fixture.Permalink + "/extra",
+            "publisher" => fixture.Permalink.Replace("/lu-legilux/", "/other/", StringComparison.Ordinal),
+            "uppercase-digest" => fixture.StableCoordinate + "--" + fixture.StateSha256.ToUpperInvariant(),
+            "invalid-date" => fixture.StableCoordinate.Replace(fixture.ApplicabilityDate, "2024-02-30", StringComparison.Ordinal) + "--" + fixture.StateSha256,
+            _ => throw new AssertFailedException(mutation),
+        };
+
+        var envelope = await ResolveAsync(mount, identifier);
+
+        Assert.AreEqual(V3Verdicts.Refuse, envelope.Verdict);
+        Assert.AreEqual("identifier_unknown", envelope.Refusal!.Code);
+        Assert.IsFalse(envelope.Refusal.HelpfulPayload.TryGetProperty("current_digest", out _));
     }
 
     [TestMethod]
@@ -468,6 +544,15 @@ public sealed class V3CorpusResolveMountTests
     private static byte[] ResponseBytes(DefaultHttpContext context) =>
         ((MemoryStream)context.Response.Body).ToArray();
 
+    private static async Task<V3Envelope> ResolveAsync(V3CorpusMount mount, string identifier)
+    {
+        var context = Request(identifier);
+        var handler = new V3ApiHandler(
+            SyntheticApiState.Unavailable, new V3PlatformHost(), static () => ObservedAt, mount);
+        await handler.HandleAsync(context, CancellationToken.None);
+        return V3EnvelopeJson.ParseAndVerify(ResponseBytes(context), V3OperationRegistry.Reviewed);
+    }
+
     private sealed class MountedFixture : IAsyncDisposable
     {
         private readonly byte[] _capabilityManifestBytes;
@@ -628,6 +713,84 @@ public sealed class V3CorpusResolveMountTests
                 Path.Combine(Directory, V3CorpusMount.CapabilityManifestFileName),
                 stream.ToArray());
             return alternateExpression;
+        }
+
+        public async Task<LuxembourgIndexBuilder.StateRow> AddSecondLanguageStateAtSameDateAsync()
+        {
+            var indexPath = Path.Combine(Directory, V3CorpusMount.IndexFileName);
+            LuxembourgIndexBuilder.MemberRow[] members;
+            LuxembourgIndexBuilder.ArticleRow[] articles;
+            LuxembourgIndexBuilder.StateRow[] states;
+            LuxembourgIndexBuilder.WorkTitleRow[] titles;
+            LuxembourgIndexBuilder.StateRow alternate;
+            using (var connection = LuxembourgIndexBuilder.Open(indexPath, SqliteOpenMode.ReadWrite))
+            {
+                var sourceState = ReadStates(connection).Single();
+                var sourceArticles = ReadArticles(connection)
+                    .Where(article => sourceState.ArticleIdentitiesJson.Contains(
+                        article.ArticleIdentitySha256, StringComparison.Ordinal)).ToArray();
+                var expression = sourceState.PublisherLegalResourceIri + "/de";
+                var identities = new List<string>();
+                foreach (var source in sourceArticles)
+                {
+                    var identity = Convert.ToHexStringLower(SHA256.HashData(
+                        Encoding.UTF8.GetBytes("de:" + source.ArticleIdentitySha256)));
+                    identities.Add(identity);
+                    using var insert = connection.CreateCommand();
+                    insert.CommandText = "INSERT INTO articles VALUES($identity,$object,$expression,$publisher,$wid,$date,'deu',$profile,$text,$tokens)";
+                    insert.Parameters.AddWithValue("$identity", identity);
+                    insert.Parameters.AddWithValue("$object", source.ObjectRefSha256);
+                    insert.Parameters.AddWithValue("$expression", expression);
+                    insert.Parameters.AddWithValue("$publisher", source.PublisherId);
+                    insert.Parameters.AddWithValue("$wid", (object?)source.PublisherWid ?? DBNull.Value);
+                    insert.Parameters.AddWithValue("$date", (object?)source.ApplicabilityDate ?? DBNull.Value);
+                    insert.Parameters.AddWithValue("$profile", source.RuleProfileSha256);
+                    insert.Parameters.AddWithValue("$text", source.SearchableText);
+                    insert.Parameters.AddWithValue("$tokens", source.TokensJson);
+                    Assert.AreEqual(1, insert.ExecuteNonQuery());
+                }
+                identities.Sort(StringComparer.Ordinal);
+                var profiles = System.Text.Json.JsonSerializer.Deserialize<string[]>(sourceState.RuleProfilesJson)!;
+                var digest = LuxembourgIndexBuilder.StateSha256(
+                    sourceState.WorkKey, sourceState.ApplicabilityDate, expression,
+                    sourceState.PublisherWorkIri, sourceState.PublisherLegalResourceIri, "deu",
+                    profiles, identities);
+                alternate = new LuxembourgIndexBuilder.StateRow(
+                    sourceState.WorkKey, sourceState.ApplicabilityDate, digest, expression,
+                    sourceState.PublisherWorkIri, sourceState.PublisherLegalResourceIri, "deu",
+                    sourceState.RuleProfilesJson, System.Text.Json.JsonSerializer.Serialize(identities));
+                using (var insertState = connection.CreateCommand())
+                {
+                    insertState.CommandText = "INSERT INTO states VALUES($work,$date,$digest,$expression,$workIri,$resource,'deu',$profiles,$identities)";
+                    insertState.Parameters.AddWithValue("$work", alternate.WorkKey);
+                    insertState.Parameters.AddWithValue("$date", alternate.ApplicabilityDate);
+                    insertState.Parameters.AddWithValue("$digest", alternate.StateSha256);
+                    insertState.Parameters.AddWithValue("$expression", alternate.ExpressionIri);
+                    insertState.Parameters.AddWithValue("$workIri", alternate.PublisherWorkIri);
+                    insertState.Parameters.AddWithValue("$resource", alternate.PublisherLegalResourceIri);
+                    insertState.Parameters.AddWithValue("$profiles", alternate.RuleProfilesJson);
+                    insertState.Parameters.AddWithValue("$identities", alternate.ArticleIdentitiesJson);
+                    Assert.AreEqual(1, insertState.ExecuteNonQuery());
+                }
+                members = ReadMembers(connection);
+                articles = ReadArticles(connection);
+                states = ReadStates(connection);
+                titles = ReadWorkTitles(connection);
+                using var stamp = connection.CreateCommand();
+                stamp.CommandText = "UPDATE stamp SET logical_rows_sha256=$digest WHERE stamp_id=1";
+                stamp.Parameters.AddWithValue(
+                    "$digest", LuxembourgIndexBuilder.HashLogicalRows(members, articles, states, titles));
+                Assert.AreEqual(1, stamp.ExecuteNonQuery());
+            }
+
+            var indexBytes = await File.ReadAllBytesAsync(indexPath);
+            var indexDigest = Convert.ToHexStringLower(SHA256.HashData(indexBytes));
+            var manifest = LuxembourgIndexBuilder.MeasureCapabilities(indexDigest, articles, titles);
+            using var stream = new MemoryStream();
+            _ = V3IndexCapabilityManifestArtifact.Write(stream, manifest);
+            await File.WriteAllBytesAsync(
+                Path.Combine(Directory, V3CorpusMount.CapabilityManifestFileName), stream.ToArray());
+            return alternate;
         }
 
         public async Task AddWorkTitleAsync()
