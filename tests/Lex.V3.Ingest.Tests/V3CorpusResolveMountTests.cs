@@ -675,6 +675,7 @@ public sealed class V3CorpusResolveMountTests
         foreach (var identifier in new[]
                  {
                      fixture.PublisherWorkId,
+                     "32016R0679",
                      fixture.PublisherExpressionId,
                      qualifiedProvision,
                      fixture.ArticleIdentitySha256,
