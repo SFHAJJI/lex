@@ -566,6 +566,7 @@ public static class EuropeIndexBuilder
 /// <summary>A verified read-only mount of one exact EU index.</summary>
 public sealed class EuropeIndexReader : IDisposable
 {
+    private const string ProvisionCoordinateMarker = "#lex-provision=";
     private readonly string _path;
     private readonly SqliteConnection _connection;
     private readonly V3IndexCapabilityManifest _capabilityManifest;
@@ -683,6 +684,8 @@ public sealed class EuropeIndexReader : IDisposable
     public IReadOnlyList<EuropeIndexResolvedExpression> ResolveExact(string identifier)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(identifier);
+        var hasQualifiedProvision = TryParseQualifiedProvisionIdentifier(
+            identifier, out var provisionExpression, out var provisionIdentifier);
         lock (_gate)
         {
             using var command = _connection.CreateCommand();
@@ -691,11 +694,18 @@ public sealed class EuropeIndexReader : IDisposable
                        publisher_identifier,article_identity_sha256
                 FROM articles
                 WHERE publisher_work_id=$identifier OR publisher_expression_id=$identifier
-                   OR publisher_identifier=$identifier OR article_identity_sha256=$identifier
+                   OR article_identity_sha256=$identifier
+                   OR ($has_qualified_provision=1
+                       AND publisher_expression_id=$provision_expression
+                       AND publisher_identifier=$provision_identifier)
                 ORDER BY publisher_work_id,publisher_expression_id,language,
                          publisher_identifier,article_identity_sha256
                 """;
             command.Parameters.AddWithValue("$identifier", identifier);
+            command.Parameters.AddWithValue(
+                "$has_qualified_provision", hasQualifiedProvision ? 1 : 0);
+            command.Parameters.AddWithValue("$provision_expression", provisionExpression);
+            command.Parameters.AddWithValue("$provision_identifier", provisionIdentifier);
             using var reader = command.ExecuteReader();
             var rows = new List<(string Work, string Expression, string Language,
                 string Provision, string Article)>();
@@ -716,6 +726,38 @@ public sealed class EuropeIndexReader : IDisposable
                     Array.AsReadOnly(group.Select(static row => row.Article).ToArray())))
                 .ToArray();
         }
+    }
+
+    internal static string QualifiedProvisionIdentifierOf(
+        string publisherExpressionId,
+        string publisherIdentifier)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(publisherExpressionId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(publisherIdentifier);
+        return publisherExpressionId + ProvisionCoordinateMarker
+            + Uri.EscapeDataString(publisherIdentifier);
+    }
+
+    private static bool TryParseQualifiedProvisionIdentifier(
+        string identifier,
+        out string publisherExpressionId,
+        out string publisherIdentifier)
+    {
+        var marker = identifier.LastIndexOf(ProvisionCoordinateMarker, StringComparison.Ordinal);
+        if (marker <= 0 || marker + ProvisionCoordinateMarker.Length >= identifier.Length)
+        {
+            publisherExpressionId = string.Empty;
+            publisherIdentifier = string.Empty;
+            return false;
+        }
+
+        publisherExpressionId = identifier[..marker];
+        var encoded = identifier[(marker + ProvisionCoordinateMarker.Length)..];
+        publisherIdentifier = Uri.UnescapeDataString(encoded);
+        return publisherIdentifier.Length != 0 && string.Equals(
+            identifier,
+            QualifiedProvisionIdentifierOf(publisherExpressionId, publisherIdentifier),
+            StringComparison.Ordinal);
     }
 
     public EuropeIndexSearchResult Search(string language, DateOnly from, DateOnly to, string query)
