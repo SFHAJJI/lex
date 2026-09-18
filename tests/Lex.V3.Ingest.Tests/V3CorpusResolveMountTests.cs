@@ -596,7 +596,7 @@ public sealed class V3CorpusResolveMountTests
             "The retained EU fixture must prove the publisher coordinate family under test.");
         StringAssert.StartsWith(
             fixture.PublisherExpressionId,
-            fixture.PublisherWorkId[..fixture.PublisherWorkId.LastIndexOf('/') + 1],
+            fixture.PublisherWorkId[..(fixture.PublisherWorkId.LastIndexOf('/') + 1)],
             "The retained EU expression must be a Cellar publisher coordinate.");
         using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
         Assert.IsNotNull(mount);
