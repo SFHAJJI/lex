@@ -108,6 +108,40 @@ public sealed class EuropeIndexBuilderTests
     }
 
     [TestMethod]
+    public async Task ExactPublisherWorkExpressionAndArticleIdentitiesResolveDeterministically()
+    {
+        var envelope = await RetainedGdprEnvelopeAsync();
+        var built = EuropeIndexBuilder.TryBuild(envelope, out var refusal, out var detail);
+        Assert.IsNotNull(built, $"{refusal}: {detail}");
+        var corpus = LexCorpus6Builder.TryBuild(envelope, out _, out _)!;
+        using var reader = EuropeIndexReader.OpenAndVerify(
+            built.IndexRef, built.IndexBytes.Span, corpus.ArtifactRef, built.CapabilityManifest);
+        var admitted = envelope.BodyComposition.Envelope.FormexMainBodyLegalContent!.Outcomes
+            .Single(static outcome =>
+                outcome.Disposition == EuFormexMainBodyLegalContentDisposition.Admitted);
+        var article = admitted.Articles[0];
+
+        foreach (var identifier in new[]
+                 {
+                     admitted.Source.ExpressionIdentity.PublisherWorkId,
+                     article.PublisherExpressionId,
+                     article.IdentitySha256,
+                 })
+        {
+            var resolved = reader.ResolveExact(identifier);
+            Assert.HasCount(1, resolved, identifier);
+            Assert.AreEqual(
+                admitted.Source.ExpressionIdentity.PublisherWorkId,
+                resolved[0].PublisherWorkId,
+                identifier);
+            Assert.AreEqual(article.PublisherExpressionId, resolved[0].PublisherExpressionId, identifier);
+            CollectionAssert.Contains(resolved[0].ArticleIdentities.ToArray(), article.IdentitySha256);
+        }
+
+        Assert.IsEmpty(reader.ResolveExact("http://publications.europa.eu/resource/cellar/unknown"));
+    }
+
+    [TestMethod]
     public async Task AcquiredNonEnglishFormexPackageRemainsTypedWithoutBindingToEnglishWorkBody()
     {
         var envelope = await RetainedGdprEnvelopeAsync(acquireFrenchExpression: true);

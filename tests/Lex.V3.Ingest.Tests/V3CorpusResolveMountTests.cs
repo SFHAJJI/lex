@@ -5,6 +5,7 @@ using Lex.V3.Contracts;
 using Lex.V3.Contracts.Custody;
 using Lex.V3.Contracts.Index;
 using Lex.V3.Contracts.Platform;
+using Lex.V3.Ingest.Europe;
 using Lex.V3.Ingest.Luxembourg;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
@@ -42,6 +43,49 @@ public sealed class V3CorpusResolveMountTests
         Assert.AreEqual(fixture.ExpressionIri, envelope.Result!.Value.GetProperty("expression_iri").GetString());
         Assert.AreEqual(fixture.IndexSha256, envelope.Result.Value.GetProperty("index_sha256").GetString());
         Assert.IsGreaterThan(0, envelope.Result.Value.GetProperty("article_identities").GetArrayLength());
+    }
+
+    [TestMethod]
+    public async Task MountedEuropeExactIndexServesPublisherBoundResolveSuccess()
+    {
+        var fixture = await EuropeMountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+        var context = Request(fixture.ExpressionIri);
+        var handler = new V3ApiHandler(
+            SyntheticApiState.Unavailable,
+            new V3PlatformHost(),
+            static () => ObservedAt,
+            mount);
+
+        await handler.HandleAsync(context, CancellationToken.None);
+
+        var envelope = V3EnvelopeJson.ParseAndVerify(ResponseBytes(context), V3OperationRegistry.Reviewed);
+        Assert.AreEqual(V3Verdicts.Answer, envelope.Verdict);
+        Assert.AreEqual(PublisherId.EuEurLex, envelope.Context.Publisher);
+        Assert.AreEqual(TimelineSemantics.OfficialConsolidationState, envelope.Context.TimelineSemantics);
+        Assert.AreEqual("eu", envelope.Context.Jurisdiction);
+        Assert.AreEqual(fixture.CorpusSha256, envelope.Context.Snapshot.SnapshotSha256);
+        Assert.AreEqual(fixture.WorkIri, envelope.Result!.Value.GetProperty("publisher_work_id").GetString());
+        Assert.AreEqual(fixture.ExpressionIri,
+            envelope.Result.Value.GetProperty("publisher_expression_id").GetString());
+        Assert.AreEqual(fixture.IndexSha256, envelope.Result.Value.GetProperty("index_sha256").GetString());
+        CollectionAssert.Contains(
+            envelope.Result.Value.GetProperty("article_identities")
+                .EnumerateArray().Select(static value => value.GetString()).ToArray(),
+            fixture.ArticleIdentity);
+    }
+
+    [TestMethod]
+    public async Task IncompleteEuropeMountFailsClosedBeforeAReaderIsReturned()
+    {
+        var fixture = await EuropeMountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        File.Delete(Path.Combine(fixture.Directory, V3CorpusMount.EuropeCapabilityManifestFileName));
+
+        await Assert.ThrowsExactlyAsync<InvalidDataException>(async () =>
+            await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None));
     }
 
     [TestMethod]
@@ -695,6 +739,73 @@ public sealed class V3CorpusResolveMountTests
         public Task RestoreCorpusAsync() => File.WriteAllBytesAsync(
             Path.Combine(Directory, V3CorpusMount.CorpusFileName),
             _corpusBytes);
+
+        public ValueTask DisposeAsync()
+        {
+            if (System.IO.Directory.Exists(Directory))
+            {
+                System.IO.Directory.Delete(Directory, recursive: true);
+            }
+
+            return ValueTask.CompletedTask;
+        }
+    }
+
+    private sealed class EuropeMountedFixture : IAsyncDisposable
+    {
+        private EuropeMountedFixture(
+            string directory,
+            string workIri,
+            string expressionIri,
+            string articleIdentity,
+            string corpusSha256,
+            string indexSha256)
+        {
+            Directory = directory;
+            WorkIri = workIri;
+            ExpressionIri = expressionIri;
+            ArticleIdentity = articleIdentity;
+            CorpusSha256 = corpusSha256;
+            IndexSha256 = indexSha256;
+        }
+
+        public string Directory { get; }
+        public string WorkIri { get; }
+        public string ExpressionIri { get; }
+        public string ArticleIdentity { get; }
+        public string CorpusSha256 { get; }
+        public string IndexSha256 { get; }
+
+        public static async Task<EuropeMountedFixture> CreateAsync()
+        {
+            var envelope = await EuropeIndexBuilderTests.RetainedGdprEnvelopeAsync();
+            var corpus = LexCorpus6Builder.TryBuild(envelope, out var corpusRefusal, out var corpusDetail);
+            Assert.IsNotNull(corpus, $"{corpusRefusal}: {corpusDetail}");
+            var index = EuropeIndexBuilder.TryBuild(envelope, out var indexRefusal, out var indexDetail);
+            Assert.IsNotNull(index, $"{indexRefusal}: {indexDetail}");
+            var admitted = envelope.BodyComposition.Envelope.FormexMainBodyLegalContent!.Outcomes
+                .Single(static outcome =>
+                    outcome.Disposition == EuFormexMainBodyLegalContentDisposition.Admitted);
+            var article = admitted.Articles[0];
+            var directory = Path.Combine(Path.GetTempPath(), $"lex-v3-eu-corpus-mount-{Guid.NewGuid():N}");
+            System.IO.Directory.CreateDirectory(directory);
+            await File.WriteAllBytesAsync(
+                Path.Combine(directory, V3CorpusMount.EuropeIndexFileName),
+                index.IndexBytes.ToArray());
+            await File.WriteAllBytesAsync(
+                Path.Combine(directory, V3CorpusMount.EuropeCapabilityManifestFileName),
+                index.CapabilityManifestBytes.ToArray());
+            await File.WriteAllBytesAsync(
+                Path.Combine(directory, V3CorpusMount.CorpusFileName),
+                corpus.CanonicalBytes.ToArray());
+            return new EuropeMountedFixture(
+                directory,
+                admitted.Source.ExpressionIdentity.PublisherWorkId,
+                article.PublisherExpressionId,
+                article.IdentitySha256,
+                corpus.ArtifactRef.Sha256,
+                index.IndexRef.Sha256);
+        }
 
         public ValueTask DisposeAsync()
         {
