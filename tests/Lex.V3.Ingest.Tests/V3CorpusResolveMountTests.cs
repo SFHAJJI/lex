@@ -695,7 +695,7 @@ public sealed class V3CorpusResolveMountTests
         public string StableCoordinate => $"/lu-legilux/{WorkKey}/{ApplicabilityDate}";
         public string Permalink => StableCoordinate + "--" + StateSha256;
         public string CorpusSha256 { get; }
-        public string IndexSha256 { get; private set; }
+        public string IndexSha256 { get; }
         public byte[] CorpusBytes => _corpusBytes.ToArray();
 
         public static async Task<MountedFixture> CreateAsync()
@@ -1166,7 +1166,7 @@ public sealed class V3CorpusResolveMountTests
             return values.ToArray();
         }
 
-        private static EuropeIndexBuilder.MemberRow[] ReadEuropeMembers(SqliteConnection connection)
+        internal static EuropeIndexBuilder.MemberRow[] ReadEuropeMembers(SqliteConnection connection)
         {
             using var command = connection.CreateCommand();
             command.CommandText = "SELECT object_ref_sha256,source_ordinal,outcome,content_class,stage3_outcomes_json,gaps_json FROM members ORDER BY object_ref_sha256";
@@ -1178,7 +1178,7 @@ public sealed class V3CorpusResolveMountTests
             return values.ToArray();
         }
 
-        private static EuropeIndexBuilder.CorrigendumLineRow[] ReadEuropeLines(SqliteConnection connection)
+        internal static EuropeIndexBuilder.CorrigendumLineRow[] ReadEuropeLines(SqliteConnection connection)
         {
             using var command = connection.CreateCommand();
             command.CommandText = "SELECT line_identity_sha256,family_key,corrected_work_root,corrigendum_work_root,publisher_expression_id,language_iri,reach,date_state,publisher_date_raw_lexical,publisher_date_datatype_iri,expression_content_sha256 FROM corrigendum_lines ORDER BY line_identity_sha256";
@@ -1192,7 +1192,7 @@ public sealed class V3CorpusResolveMountTests
             return values.ToArray();
         }
 
-        private static EuropeIndexBuilder.CorrigendumGapRow[] ReadEuropeGaps(SqliteConnection connection)
+        internal static EuropeIndexBuilder.CorrigendumGapRow[] ReadEuropeGaps(SqliteConnection connection)
         {
             using var command = connection.CreateCommand();
             command.CommandText = "SELECT gap_identity_sha256,family_key,work_root,reason FROM corrigendum_gaps ORDER BY gap_identity_sha256";
@@ -1203,7 +1203,7 @@ public sealed class V3CorpusResolveMountTests
             return values.ToArray();
         }
 
-        private static EuropeIndexBuilder.ArticleRow[] ReadEuropeArticles(SqliteConnection connection)
+        internal static EuropeIndexBuilder.ArticleRow[] ReadEuropeArticles(SqliteConnection connection)
         {
             using var command = connection.CreateCommand();
             command.CommandText = "SELECT article_identity_sha256,object_ref_sha256,publisher_work_id,publisher_expression_id,package_entry,publisher_identifier,heading,wording_date,language,searchable_text,tokens_json FROM articles ORDER BY article_identity_sha256";
@@ -1258,7 +1258,7 @@ public sealed class V3CorpusResolveMountTests
         public string PublisherExpressionId { get; }
         public string PublisherProvisionIdentifier { get; }
         public string CorpusSha256 { get; }
-        public string IndexSha256 { get; }
+        public string IndexSha256 { get; private set; }
 
         public static async Task<EuropeMountedFixture> CreateAsync()
         {
