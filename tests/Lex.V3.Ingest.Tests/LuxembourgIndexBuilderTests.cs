@@ -282,6 +282,40 @@ public sealed class LuxembourgIndexBuilderTests
             "UPDATE stamp SET sqlite_source_id='substituted' WHERE stamp_id=1");
     }
 
+    [TestMethod]
+    [DataRow("PRAGMA user_version=2", "schema identity")]
+    [DataRow("UPDATE states SET state_sha256='aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'", "digest is not derived")]
+    [DataRow("UPDATE articles SET expression_iri=expression_iri || '/other'", "does not bind its exact article population")]
+    [DataRow("UPDATE states SET work_key='wrong-work-key'", "not canonical")]
+    [DataRow("UPDATE states SET publisher_legal_resource_iri=expression_iri", "omits or crosses")]
+    [DataRow("UPDATE states SET expression_iri=publisher_legal_resource_iri || '/de'", "does not bind its exact article population")]
+    public async Task StrictReaderRejectsEachStateInvariantIndependently(string sql, string expected)
+    {
+        var envelope = await LexCorpus6BuilderTests.CompleteProfileEnvelopeAsync();
+        var corpus = LexCorpus6Builder.TryBuild(envelope, out var corpusRefusal, out var corpusDetail);
+        Assert.IsNotNull(corpus, $"{corpusRefusal}: {corpusDetail}");
+        var built = LuxembourgIndexBuilder.TryBuild(envelope, out var refusal, out var detail);
+        Assert.IsNotNull(built, $"{refusal}: {detail}");
+
+        AssertTamperedDatabaseRejected(built, corpus.ArtifactRef, sql, expected);
+    }
+
+    [TestMethod]
+    public async Task StrictReaderRejectsAnArticleClaimedByTwoStates()
+    {
+        var envelope = await LexCorpus6BuilderTests.CompleteProfileEnvelopeAsync();
+        var corpus = LexCorpus6Builder.TryBuild(envelope, out var corpusRefusal, out var corpusDetail);
+        Assert.IsNotNull(corpus, $"{corpusRefusal}: {corpusDetail}");
+        var built = LuxembourgIndexBuilder.TryBuild(envelope, out var refusal, out var detail);
+        Assert.IsNotNull(built, $"{refusal}: {detail}");
+
+        AssertTamperedDatabaseRejected(
+            built,
+            corpus.ArtifactRef,
+            "INSERT INTO states SELECT work_key,applicability_date,'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',expression_iri,publisher_work_iri,publisher_legal_resource_iri,'deu',rule_profiles_json,article_identities_json FROM states LIMIT 1",
+            "does not bind its exact article population");
+    }
+
     private static V3IndexCapabilityManifest RebindManifest(
         V3IndexCapabilityManifest source,
         string indexSha256)
@@ -301,14 +335,16 @@ public sealed class LuxembourgIndexBuilderTests
     private static void AssertTamperedDatabaseRejected(
         LuxembourgIndexBuildResult built,
         SourceArtifactRef corpusRef,
-        string sql)
+        string sql,
+        string? expectedMessage = null)
     {
         var bytes = MutateDatabase(built.IndexBytes.Span, sql);
         var digest = Convert.ToHexStringLower(SHA256.HashData(bytes));
         var reference = new SourceArtifactRef(LexCorpus6Builder.ResourceIdOf(digest), digest);
         var manifest = RebindManifest(built.CapabilityManifest, digest);
-        Assert.ThrowsExactly<InvalidDataException>(() => LuxembourgIndexReader.OpenAndVerify(
+        var exception = Assert.ThrowsExactly<InvalidDataException>(() => LuxembourgIndexReader.OpenAndVerify(
             reference, bytes, corpusRef, manifest));
+        if (expectedMessage is not null) StringAssert.Contains(exception.Message, expectedMessage);
     }
 
     private static byte[] MutateDatabase(ReadOnlySpan<byte> source, string sql)
