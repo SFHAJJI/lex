@@ -176,6 +176,32 @@ public sealed class V3CorpusResolveMountTests
     }
 
     [TestMethod]
+    public async Task AmbiguousCandidatesAreOrderedNewestFirst()
+    {
+        var fixture = await MountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        var secondWork = await fixture.AddTwoWorkTitlesAsync(equalDates: false);
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+        var context = Request("Reglement sur l'epreuve");
+        var handler = new V3ApiHandler(
+            SyntheticApiState.Unavailable,
+            new V3PlatformHost(),
+            static () => ObservedAt,
+            mount);
+
+        await handler.HandleAsync(context, CancellationToken.None);
+
+        var envelope = V3EnvelopeJson.ParseAndVerify(ResponseBytes(context), V3OperationRegistry.Reviewed);
+        Assert.AreEqual(V3Verdicts.Refuse, envelope.Verdict);
+        Assert.AreEqual("ambiguous_identifier", envelope.Refusal!.Code);
+        CollectionAssert.AreEqual(
+            new[] { fixture.PublisherWid, secondWork },
+            envelope.Refusal.HelpfulPayload.GetProperty("candidates")
+                .EnumerateArray().Select(static value => value.GetString()).ToArray());
+    }
+
+    [TestMethod]
     public async Task OutOfOrderTitleWordsReachAllTokensContainedTier()
     {
         var fixture = await MountedFixture.CreateAsync();
@@ -551,7 +577,7 @@ public sealed class V3CorpusResolveMountTests
                 stream.ToArray());
         }
 
-        public async Task<string> AddTwoWorkTitlesAsync()
+        public async Task<string> AddTwoWorkTitlesAsync(bool equalDates = true)
         {
             const string secondWork = "fixture-work-identifier-two";
             var indexPath = Path.Combine(Directory, V3CorpusMount.IndexFileName);
@@ -587,7 +613,7 @@ public sealed class V3CorpusResolveMountTests
                 foreach (var row in new[]
                 {
                     (PublisherWid, ExpressionIri, WorkTitle + " zeta", "2024-02-01"),
-                    (secondWork, ExpressionIri + "/second-work", WorkTitle + " alpha", "2024-02-01"),
+                    (secondWork, ExpressionIri + "/second-work", WorkTitle + " alpha", equalDates ? "2024-02-01" : "2024-01-01"),
                 })
                 {
                     using var insertTitle = connection.CreateCommand();
