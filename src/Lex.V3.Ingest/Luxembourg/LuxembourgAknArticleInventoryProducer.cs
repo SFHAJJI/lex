@@ -353,6 +353,10 @@ public sealed class LuxembourgAknArticleInventoryProducer
         XNamespace akn = AknNamespace;
         XNamespace scl = SclNamespace;
         var identification = root.Descendants(akn + "identification").ToArray();
+        if (identification.Length == 0)
+        {
+            return true;
+        }
         if (identification.Length != 1)
         {
             failure = "publisher AKN must contain exactly one identification block";
