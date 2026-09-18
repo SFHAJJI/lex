@@ -35,6 +35,15 @@ public sealed class LuxembourgIndexBuilderTests
     }
 
     [TestMethod]
+    [DataRow("https://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3")]
+    [DataRow("http://example.invalid/eli/etat/leg/loi/1991/08/10/n3")]
+    [DataRow("http://data.legilux.public.lu/eli/other/loi/1991/08/10/n3")]
+    public void WorkKeyProjectionRejectsWrongSchemeHostOrLegalPath(string workIri)
+    {
+        Assert.ThrowsExactly<InvalidDataException>(() => LuxembourgIndexBuilder.WorkKeyOf(workIri));
+    }
+
+    [TestMethod]
     public async Task CompleteEnvelopeBuildsDeterministicLuOnlyIndexAndMeasuredManifest()
     {
         var envelope = await LexCorpus6BuilderTests.CompleteProfileEnvelopeAsync();

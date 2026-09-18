@@ -58,6 +58,57 @@ public sealed class LuxembourgAknArticleInventoryProducerTests
     }
 
     [TestMethod]
+    [DataRow("jolux-expression", "selected WEMI")]
+    [DataRow("frbr-expression", "selected WEMI")]
+    [DataRow("duplicate-identification", "exactly one identification")]
+    [DataRow("duplicate-frbr-expression", "incomplete or ambiguous")]
+    [DataRow("complex-work", "selected WEMI")]
+    [DataRow("multiple-member-of", "incomplete or ambiguous")]
+    public async Task ConsolidatedAknRejectsEachAmbiguousOrCrossedCoordinate(
+        string mutation,
+        string expected)
+    {
+        const string work =
+            "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3";
+        const string legalResource = work + "/jo";
+        const string expression = legalResource + "/fr";
+        var xml = Encoding.UTF8.GetString(await File.ReadAllBytesAsync(Path.Combine(
+            AppContext.BaseDirectory, "Fixtures", "LuAknLegalContent",
+            "loi-1991-08-10-n3--2024-02-01--fr.bin")))
+            .Replace("\r\n", "\n", StringComparison.Ordinal);
+        xml = mutation switch
+        {
+            "jolux-expression" => ReplaceOnce(xml,
+                "<scl:JOLUXExpression>\n<scl:jolux scl:name=\"uriThis\">" + expression,
+                "<scl:JOLUXExpression>\n<scl:jolux scl:name=\"uriThis\">" + expression + "/other"),
+            "frbr-expression" => ReplaceOnce(xml,
+                "<FRBRExpression>\n<FRBRthis value=\"" + expression,
+                "<FRBRExpression>\n<FRBRthis value=\"" + expression + "/other"),
+            "duplicate-identification" => ReplaceOnce(xml, "</identification>",
+                "</identification><identification source=\"#duplicate\"/>") ,
+            "duplicate-frbr-expression" => ReplaceOnce(xml, "</FRBRExpression>",
+                "</FRBRExpression><FRBRExpression><FRBRthis value=\"" + expression + "/other\"/></FRBRExpression>"),
+            "complex-work" => ReplaceOnce(xml,
+                "<scl:JOLUXComplexWork>\n<scl:jolux scl:name=\"uriThis\">" + work,
+                "<scl:JOLUXComplexWork>\n<scl:jolux scl:name=\"uriThis\">" + work + "/other"),
+            "multiple-member-of" => ReplaceOnce(xml,
+                "<scl:jolux scl:name=\"isMemberOf\">" + work + "</scl:jolux>",
+                "<scl:jolux scl:name=\"isMemberOf\">" + work + "</scl:jolux>" +
+                "<scl:jolux scl:name=\"isMemberOf\">" + work + "/other</scl:jolux>"),
+            _ => throw new AssertFailedException(mutation),
+        };
+        var fixture = await Fixture.CreateAsync(
+            Encoding.UTF8.GetBytes(xml), LuxembourgUserFormatToken.Xml, legalResource, expression);
+
+        var outcome = (await new LuxembourgAknArticleInventoryProducer(fixture.Store)
+            .RunAsync(fixture.Population, CancellationToken.None)).Outcomes.Single();
+
+        Assert.AreEqual(LuxembourgAknArticleInventoryDisposition.XmlRejected, outcome.Disposition);
+        StringAssert.Contains(outcome.Detail, expected);
+        Assert.IsNull(outcome.Inventory);
+    }
+
+    [TestMethod]
     public async Task TheRetainedPublisherAknBodyProducesStablePublisherArticleCoordinates()
     {
         var bytes = await File.ReadAllBytesAsync(Path.Combine(
@@ -226,6 +277,14 @@ public sealed class LuxembourgAknArticleInventoryProducerTests
         "<akomaNtoso xmlns=\"http://docs.oasis-open.org/legaldocml/ns/akn/3.0/CSD13\" " +
         "xmlns:scl=\"http://www.scl.lu\"><act><body>" + articles +
         "</body></act></akomaNtoso>");
+
+    private static string ReplaceOnce(string value, string oldValue, string newValue)
+    {
+        var index = value.IndexOf(oldValue, StringComparison.Ordinal);
+        Assert.IsGreaterThanOrEqualTo(0, index, oldValue);
+        return string.Concat(value.AsSpan(0, index), newValue,
+            value.AsSpan(index + oldValue.Length));
+    }
 
     private sealed record Fixture(
         EuAcquisitionTestFixture.EuInMemoryCustodyStore Store,
