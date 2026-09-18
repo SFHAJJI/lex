@@ -304,7 +304,7 @@ public sealed class LuxembourgIndexBuilderTests
         AssertTamperedDatabaseRejected(
             built,
             corpusRef,
-            "INSERT INTO states SELECT work_key,applicability_date,'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',expression_iri,publisher_work_iri,publisher_legal_resource_iri,'deu',rule_profiles_json,article_identities_json FROM states LIMIT 1",
+            "INSERT INTO states SELECT work_key,applicability_date,'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',expression_iri || '/z',publisher_work_iri,publisher_legal_resource_iri,language,rule_profiles_json,article_identities_json FROM states LIMIT 1",
             "does not bind its exact article population");
     }
 
