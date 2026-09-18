@@ -15,9 +15,10 @@ internal sealed class V3ApiHandler
     private readonly SyntheticApiState _syntheticState;
     private readonly V3PlatformHost _host;
     private readonly Func<DateTimeOffset> _utcNow;
+    private readonly V3CorpusMount? _corpusMount;
 
     public V3ApiHandler(SyntheticApiState syntheticState, Func<DateTimeOffset> utcNow)
-        : this(syntheticState, new V3PlatformHost(), utcNow)
+        : this(syntheticState, new V3PlatformHost(), utcNow, null)
     {
     }
 
@@ -25,17 +26,28 @@ internal sealed class V3ApiHandler
         SyntheticApiState syntheticState,
         V3PlatformHost host,
         Func<DateTimeOffset> utcNow)
+        : this(syntheticState, host, utcNow, null)
+    {
+    }
+
+    internal V3ApiHandler(
+        SyntheticApiState syntheticState,
+        V3PlatformHost host,
+        Func<DateTimeOffset> utcNow,
+        V3CorpusMount? corpusMount)
     {
         _syntheticState = syntheticState ?? throw new ArgumentNullException(nameof(syntheticState));
         _host = host ?? throw new ArgumentNullException(nameof(host));
         _utcNow = utcNow ?? throw new ArgumentNullException(nameof(utcNow));
+        _corpusMount = corpusMount;
     }
 
     internal static RequestDelegate CreateRequestDelegate(
         SyntheticApiState syntheticState,
-        Func<DateTimeOffset> utcNow)
+        Func<DateTimeOffset> utcNow,
+        V3CorpusMount? corpusMount = null)
     {
-        var api = new V3ApiHandler(syntheticState, utcNow);
+        var api = new V3ApiHandler(syntheticState, new V3PlatformHost(), utcNow, corpusMount);
         return context => api.HandleAsync(context, context.RequestAborted);
     }
 
@@ -56,6 +68,18 @@ internal sealed class V3ApiHandler
         if (string.Equals(rawTarget, V3ResolveRestRoute.RawTarget, StringComparison.Ordinal) ||
             rawTarget.StartsWith(V3ResolveRestRoute.RawTarget + "?", StringComparison.Ordinal))
         {
+            if (_corpusMount is not null)
+            {
+                await V3ResolveRestRoute.HandleOutcomeAsync(
+                        context,
+                        _host,
+                        RequestReference(context.TraceIdentifier),
+                        request => _corpusMount.Resolve(request, _utcNow()),
+                        cancellationToken)
+                    .ConfigureAwait(false);
+                return;
+            }
+
             await V3ResolveRestRoute.HandleRefusalAsync(
                     context,
                     _host,

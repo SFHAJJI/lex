@@ -35,7 +35,7 @@ public sealed class V3CorpusResolveMountTests
         Assert.AreEqual(V3Verdicts.Answer, envelope.Verdict);
         Assert.AreEqual(fixture.CorpusSha256, envelope.Context.Snapshot.SnapshotSha256);
         Assert.AreEqual(ObservedAt, envelope.Context.Freshness.ObservedAt);
-        Assert.AreEqual("unknown", envelope.Context.Freshness.UpstreamHealth);
+        Assert.AreEqual("stale", envelope.Context.Freshness.UpstreamHealth);
         Assert.AreEqual(fixture.ExpressionIri, envelope.Result!.Value.GetProperty("expression_iri").GetString());
         Assert.AreEqual(fixture.IndexSha256, envelope.Result.Value.GetProperty("index_sha256").GetString());
         Assert.IsGreaterThan(0, envelope.Result.Value.GetProperty("article_identities").GetArrayLength());
@@ -78,7 +78,7 @@ public sealed class V3CorpusResolveMountTests
         var bytes = await File.ReadAllBytesAsync(indexPath);
         bytes[^1] ^= 0xff;
         await File.WriteAllBytesAsync(indexPath, bytes);
-        await Assert.ThrowsExceptionAsync<Exception>(async () =>
+        await Assert.ThrowsExactlyAsync<ArgumentException>(async () =>
             await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None));
     }
 

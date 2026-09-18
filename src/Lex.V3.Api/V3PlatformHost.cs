@@ -92,6 +92,38 @@ internal sealed class V3PlatformOperationRefusal
     public JsonElement HelpfulPayload { get; }
 }
 
+internal sealed class V3PlatformOperationOutcome
+{
+    private V3PlatformOperationOutcome(
+        V3EnvelopeContext context,
+        V3PlatformOperationResult? result,
+        V3PlatformOperationRefusal? refusal)
+    {
+        Context = context ?? throw new ArgumentNullException(nameof(context));
+        if ((result is null) == (refusal is null))
+        {
+            throw new ArgumentException("An operation outcome must contain exactly one result or refusal.");
+        }
+
+        Result = result;
+        Refusal = refusal;
+    }
+
+    public V3EnvelopeContext Context { get; }
+
+    public V3PlatformOperationResult? Result { get; }
+
+    public V3PlatformOperationRefusal? Refusal { get; }
+
+    public static V3PlatformOperationOutcome Success(
+        V3EnvelopeContext context,
+        V3PlatformOperationResult result) => new(context, result, null);
+
+    public static V3PlatformOperationOutcome Refused(
+        V3EnvelopeContext context,
+        V3PlatformOperationRefusal refusal) => new(context, null, refusal);
+}
+
 internal sealed class V3McpToolResult
 {
     private readonly byte[] _jsonUtf8;
@@ -150,6 +182,28 @@ internal sealed class V3PlatformHost
             requestUtf8,
             requestReference,
             context,
+            execute,
+            V3EnvelopeProjectionKind.Rest,
+            cancellationToken);
+        await BufferedHttpResponse.WritePreparedJsonAsync(
+            response,
+            StatusCodes.Status200OK,
+            "application/json;charset=utf-8",
+            bytes,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task WriteRestOutcomeAsync(
+        HttpResponse response,
+        ReadOnlyMemory<byte> requestUtf8,
+        string requestReference,
+        Func<V3PlatformOperationRequest, V3PlatformOperationOutcome> execute,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(response);
+        var bytes = ExecuteOutcome(
+            requestUtf8,
+            requestReference,
             execute,
             V3EnvelopeProjectionKind.Rest,
             cancellationToken);
@@ -232,8 +286,48 @@ internal sealed class V3PlatformHost
         cancellationToken.ThrowIfCancellationRequested();
 
         var request = ParseRequest(requestUtf8);
+        return ProjectSuccess(request, requestReference, context, execute(request), projection, cancellationToken);
+    }
+
+    private byte[] ExecuteOutcome(
+        ReadOnlyMemory<byte> requestUtf8,
+        string requestReference,
+        Func<V3PlatformOperationRequest, V3PlatformOperationOutcome> execute,
+        V3EnvelopeProjectionKind projection,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(execute);
+        cancellationToken.ThrowIfCancellationRequested();
+        var request = ParseRequest(requestUtf8);
+        var outcome = execute(request) ?? throw new InvalidOperationException("The operation returned no outcome.");
+        return outcome.Result is not null
+            ? ProjectSuccess(
+                request,
+                requestReference,
+                outcome.Context,
+                outcome.Result,
+                projection,
+                cancellationToken)
+            : ProjectRefusal(
+                request,
+                requestReference,
+                outcome.Context,
+                outcome.Refusal!,
+                projection,
+                cancellationToken);
+    }
+
+    private byte[] ProjectSuccess(
+        V3PlatformOperationRequest request,
+        string requestReference,
+        V3EnvelopeContext context,
+        V3PlatformOperationResult result,
+        V3EnvelopeProjectionKind projection,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(result);
         var operation = _registry.Operation(request.OperationId);
-        var result = execute(request) ?? throw new InvalidOperationException("The operation returned no result.");
         cancellationToken.ThrowIfCancellationRequested();
         if (!string.Equals(result.OperationId, operation.OperationId, StringComparison.Ordinal) ||
             !string.Equals(result.Schema, operation.ResultSchema, StringComparison.Ordinal) ||
@@ -284,8 +378,20 @@ internal sealed class V3PlatformHost
         cancellationToken.ThrowIfCancellationRequested();
 
         var request = ParseRequest(requestUtf8);
+        return ProjectRefusal(request, requestReference, context, execute(request), projection, cancellationToken);
+    }
+
+    private byte[] ProjectRefusal(
+        V3PlatformOperationRequest request,
+        string requestReference,
+        V3EnvelopeContext context,
+        V3PlatformOperationRefusal refusal,
+        V3EnvelopeProjectionKind projection,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(refusal);
         var operation = _registry.Operation(request.OperationId);
-        var refusal = execute(request) ?? throw new InvalidOperationException("The operation returned no refusal.");
         cancellationToken.ThrowIfCancellationRequested();
         if (!string.Equals(refusal.OperationId, operation.OperationId, StringComparison.Ordinal) ||
             !string.Equals(refusal.Schema, operation.RefusalSchema, StringComparison.Ordinal))
