@@ -38,7 +38,7 @@ catch (Exception exception)
 }
 
 app.Lifetime.ApplicationStopped.Register(state.Dispose);
-app.Run(context => SyntheticApiHandler.HandleAsync(context, state, context.RequestAborted));
+app.Run(V3ApiHandler.CreateRequestDelegate(state, static () => DateTimeOffset.UtcNow));
 await app.RunAsync();
 
 public partial class Program;
