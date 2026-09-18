@@ -98,6 +98,61 @@ public sealed class V3CorpusResolveMountTests
     }
 
     [TestMethod]
+    public async Task MissingTitleCapabilityRefusesR1WithoutGuessing()
+    {
+        var fixture = await MountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+        var context = Request("ordinary unknown words");
+        var handler = new V3ApiHandler(
+            SyntheticApiState.Unavailable,
+            new V3PlatformHost(),
+            static () => ObservedAt,
+            mount);
+
+        await handler.HandleAsync(context, CancellationToken.None);
+
+        var envelope = V3EnvelopeJson.ParseAndVerify(ResponseBytes(context), V3OperationRegistry.Reviewed);
+        Assert.AreEqual(V3Verdicts.Refuse, envelope.Verdict);
+        Assert.AreEqual("retrieval_mode_unavailable", envelope.Refusal!.Code);
+        Assert.AreEqual(
+            "r1_work_discovery",
+            envelope.Refusal.HelpfulPayload.GetProperty("requested_mode").GetString());
+        CollectionAssert.AreEqual(
+            new[] { "r0_exact_coordinate" },
+            envelope.Refusal.HelpfulPayload.GetProperty("available_modes")
+                .EnumerateArray().Select(static value => value.GetString()).ToArray());
+    }
+
+    [TestMethod]
+    public async Task PrefixMatchingMultipleWorksReturnsDeterministicAmbiguity()
+    {
+        var fixture = await MountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        var secondWork = await fixture.AddTwoWorkTitlesAsync();
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+        var context = Request("Reglement sur l'epreuve");
+        var handler = new V3ApiHandler(
+            SyntheticApiState.Unavailable,
+            new V3PlatformHost(),
+            static () => ObservedAt,
+            mount);
+
+        await handler.HandleAsync(context, CancellationToken.None);
+
+        var envelope = V3EnvelopeJson.ParseAndVerify(ResponseBytes(context), V3OperationRegistry.Reviewed);
+        Assert.AreEqual(V3Verdicts.Refuse, envelope.Verdict);
+        Assert.AreEqual("ambiguous_identifier", envelope.Refusal!.Code);
+        Assert.AreEqual("unique_prefix", envelope.Refusal.HelpfulPayload.GetProperty("match_reason").GetString());
+        CollectionAssert.AreEqual(
+            new[] { fixture.PublisherWid, secondWork }.Order(StringComparer.Ordinal).ToArray(),
+            envelope.Refusal.HelpfulPayload.GetProperty("candidates")
+                .EnumerateArray().Select(static value => value.GetString()).ToArray());
+    }
+
+    [TestMethod]
     [DataRow("{\"operation_id\":\"resolve\",\"parameters\":{}}")]
     [DataRow("{\"operation_id\":\"resolve\",\"parameters\":{\"identifier\":7}}")]
     [DataRow("{\"operation_id\":\"resolve\",\"parameters\":{\"identifier\":\" \\t\"}}")]
@@ -446,6 +501,76 @@ public sealed class V3CorpusResolveMountTests
             await File.WriteAllBytesAsync(
                 Path.Combine(Directory, V3CorpusMount.CapabilityManifestFileName),
                 stream.ToArray());
+        }
+
+        public async Task<string> AddTwoWorkTitlesAsync()
+        {
+            const string secondWork = "fixture-work-identifier-two";
+            var indexPath = Path.Combine(Directory, V3CorpusMount.IndexFileName);
+            LuxembourgIndexBuilder.MemberRow[] members;
+            LuxembourgIndexBuilder.ArticleRow[] articles;
+            LuxembourgIndexBuilder.WorkTitleRow[] titles;
+            using (var connection = LuxembourgIndexBuilder.Open(indexPath, SqliteOpenMode.ReadWrite))
+            {
+                var source = ReadArticles(connection).First(value =>
+                    string.Equals(value.ExpressionIri, ExpressionIri, StringComparison.Ordinal));
+                using (var bindWork = connection.CreateCommand())
+                {
+                    bindWork.CommandText =
+                        "UPDATE articles SET publisher_wid=$wid WHERE expression_iri=$expression";
+                    bindWork.Parameters.AddWithValue("$wid", PublisherWid);
+                    bindWork.Parameters.AddWithValue("$expression", ExpressionIri);
+                    Assert.IsGreaterThan(0, bindWork.ExecuteNonQuery());
+                }
+                using (var insertArticle = connection.CreateCommand())
+                {
+                    insertArticle.CommandText = "INSERT INTO articles VALUES($identity,$object,$expression,$publisher,$wid,$date,$language,$text,$tokens)";
+                    insertArticle.Parameters.AddWithValue("$identity", new string('e', 64));
+                    insertArticle.Parameters.AddWithValue("$object", source.ObjectRefSha256);
+                    insertArticle.Parameters.AddWithValue("$expression", ExpressionIri + "/second-work");
+                    insertArticle.Parameters.AddWithValue("$publisher", source.PublisherId);
+                    insertArticle.Parameters.AddWithValue("$wid", secondWork);
+                    insertArticle.Parameters.AddWithValue("$date", (object?)source.ApplicabilityDate ?? DBNull.Value);
+                    insertArticle.Parameters.AddWithValue("$language", source.Language);
+                    insertArticle.Parameters.AddWithValue("$text", source.SearchableText);
+                    insertArticle.Parameters.AddWithValue("$tokens", source.TokensJson);
+                    Assert.AreEqual(1, insertArticle.ExecuteNonQuery());
+                }
+                foreach (var row in new[]
+                {
+                    (PublisherWid, ExpressionIri, WorkTitle, "2024-02-01"),
+                    (secondWork, ExpressionIri + "/second-work", WorkTitle + " complément", "2024-01-01"),
+                })
+                {
+                    using var insertTitle = connection.CreateCommand();
+                    insertTitle.CommandText = "INSERT INTO work_titles VALUES($wid,$expression,'fra',$title,$normalized,$date,'title')";
+                    insertTitle.Parameters.AddWithValue("$wid", row.Item1);
+                    insertTitle.Parameters.AddWithValue("$expression", row.Item2);
+                    insertTitle.Parameters.AddWithValue("$title", row.Item3);
+                    insertTitle.Parameters.AddWithValue("$normalized", LuxembourgIndexBuilder.NormalizeTitle(row.Item3));
+                    insertTitle.Parameters.AddWithValue("$date", row.Item4);
+                    Assert.AreEqual(1, insertTitle.ExecuteNonQuery());
+                }
+
+                members = ReadMembers(connection);
+                articles = ReadArticles(connection);
+                titles = ReadWorkTitles(connection);
+                using var stamp = connection.CreateCommand();
+                stamp.CommandText = "UPDATE stamp SET logical_rows_sha256=$digest WHERE stamp_id=1";
+                stamp.Parameters.AddWithValue(
+                    "$digest", LuxembourgIndexBuilder.HashLogicalRows(members, articles, titles));
+                Assert.AreEqual(1, stamp.ExecuteNonQuery());
+            }
+
+            var indexBytes = await File.ReadAllBytesAsync(indexPath);
+            var indexDigest = Convert.ToHexStringLower(SHA256.HashData(indexBytes));
+            var manifest = LuxembourgIndexBuilder.MeasureCapabilities(indexDigest, articles, titles);
+            using var stream = new MemoryStream();
+            _ = V3IndexCapabilityManifestArtifact.Write(stream, manifest);
+            await File.WriteAllBytesAsync(
+                Path.Combine(Directory, V3CorpusMount.CapabilityManifestFileName),
+                stream.ToArray());
+            return secondWork;
         }
 
         private static LuxembourgIndexBuilder.MemberRow[] ReadMembers(SqliteConnection connection)
