@@ -68,6 +68,35 @@ public sealed class V3CorpusResolveMountTests
     }
 
     [TestMethod]
+    public async Task NormalizedPublisherTitleUsesR1WithoutSelectingAnExpression()
+    {
+        var fixture = await MountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+        var context = Request(fixture.WorkTitle.ToUpperInvariant() + "...");
+        var handler = new V3ApiHandler(
+            SyntheticApiState.Unavailable,
+            new V3PlatformHost(),
+            static () => ObservedAt,
+            mount);
+
+        await handler.HandleAsync(context, CancellationToken.None);
+
+        var envelope = V3EnvelopeJson.ParseAndVerify(ResponseBytes(context), V3OperationRegistry.Reviewed);
+        Assert.AreEqual(V3Verdicts.Answer, envelope.Verdict);
+        Assert.AreEqual("r1_work_discovery", envelope.Result!.Value.GetProperty("retrieval_lane").GetString());
+        Assert.AreEqual("exact_normalized_title", envelope.Result.Value.GetProperty("match_reason").GetString());
+        Assert.AreEqual(fixture.PublisherWid, envelope.Result.Value.GetProperty("work_identifier").GetString());
+        CollectionAssert.Contains(
+            envelope.Result.Value.GetProperty("expressions")
+                .EnumerateArray().Select(static value => value.GetString()).ToArray(),
+            fixture.ExpressionIri);
+        Assert.IsFalse(envelope.Result.Value.TryGetProperty("expression_iri", out _),
+            "R1 resolves a work and must not silently select one expression.");
+    }
+
+    [TestMethod]
     [DataRow("{\"operation_id\":\"resolve\",\"parameters\":{}}")]
     [DataRow("{\"operation_id\":\"resolve\",\"parameters\":{\"identifier\":7}}")]
     [DataRow("{\"operation_id\":\"resolve\",\"parameters\":{\"identifier\":\" \\t\"}}")]
@@ -240,6 +269,7 @@ public sealed class V3CorpusResolveMountTests
             string directory,
             string expressionIri,
             string publisherWid,
+            string workTitle,
             string corpusSha256,
             string indexSha256,
             byte[] capabilityManifestBytes,
@@ -248,6 +278,7 @@ public sealed class V3CorpusResolveMountTests
             Directory = directory;
             ExpressionIri = expressionIri;
             PublisherWid = publisherWid;
+            WorkTitle = workTitle;
             CorpusSha256 = corpusSha256;
             IndexSha256 = indexSha256;
             _capabilityManifestBytes = capabilityManifestBytes;
@@ -257,6 +288,7 @@ public sealed class V3CorpusResolveMountTests
         public string Directory { get; }
         public string ExpressionIri { get; }
         public string PublisherWid { get; }
+        public string WorkTitle { get; }
         public string CorpusSha256 { get; }
         public string IndexSha256 { get; }
         public byte[] CorpusBytes => _corpusBytes.ToArray();
@@ -284,6 +316,13 @@ public sealed class V3CorpusResolveMountTests
             Assert.IsNotNull(index, $"{indexRefusal}: {indexDetail}");
             var article = envelope.BodyComposition.Envelope.LuxembourgAknLegalContentPopulation
                 .Outcomes.First(static value => value.Article is not null).Article!;
+            var title = envelope.BodyComposition.Envelope.Luxembourg.TypedAssertions
+                .Where(static value => value.FactDisposition.Predicate is
+                    Lex.V3.Contracts.Source.Luxembourg.LuxembourgAssertionPredicate.Title or
+                    Lex.V3.Contracts.Source.Luxembourg.LuxembourgAssertionPredicate.TitleShort)
+                .Select(static value => value.Assertion.ObjectIriOrLexical)
+                .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
+            Assert.IsNotNull(title, "The fixture must carry a publisher title for R1 work discovery.");
             var directory = Path.Combine(Path.GetTempPath(), $"lex-v3-corpus-mount-{Guid.NewGuid():N}");
             System.IO.Directory.CreateDirectory(directory);
             await File.WriteAllBytesAsync(
@@ -301,6 +340,7 @@ public sealed class V3CorpusResolveMountTests
                 directory,
                 article.PublisherExpressionIri,
                 "fixture-work-identifier",
+                title,
                 corpus.ArtifactRef.Sha256,
                 index.IndexRef.Sha256,
                 capabilityBytes,
