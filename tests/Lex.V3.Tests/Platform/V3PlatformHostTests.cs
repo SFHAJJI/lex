@@ -451,7 +451,7 @@ public sealed class V3PlatformHostTests
         var context = RouteContext(Encoding.UTF8.GetBytes(
             "{\"operation_id\":\"resolve\",\"parameters\":{\"identifier\":\"eli/example\"}}"));
         context.TraceIdentifier = "trace-real-resolve";
-        var application = Program.CreateRequestDelegate(
+        var application = V3ApiHandler.CreateRequestDelegate(
             SyntheticApiState.Unavailable,
             DateTimeOffset.Parse("2026-09-18T00:00:00Z"));
 

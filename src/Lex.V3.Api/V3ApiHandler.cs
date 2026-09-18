@@ -38,6 +38,14 @@ internal sealed class V3ApiHandler
             new V3Freshness(observedAt, "unreachable"));
     }
 
+    internal static RequestDelegate CreateRequestDelegate(
+        SyntheticApiState syntheticState,
+        DateTimeOffset observedAt)
+    {
+        var api = new V3ApiHandler(syntheticState, observedAt);
+        return context => api.HandleAsync(context, context.RequestAborted);
+    }
+
     public async Task HandleAsync(HttpContext context, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(context);
