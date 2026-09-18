@@ -331,7 +331,7 @@ internal sealed class V3PlatformHost
                 "The operation request exceeds its byte ceiling.");
         }
 
-        using var document = ParseTransportJson(utf8.Span);
+        using var document = ParseTransportJson(utf8);
         var root = document.RootElement;
         if (root.ValueKind != JsonValueKind.Object)
         {
@@ -395,11 +395,11 @@ internal sealed class V3PlatformHost
         return new V3PlatformOperationRequest(operation, parameters);
     }
 
-    private static JsonDocument ParseTransportJson(ReadOnlySpan<byte> utf8)
+    private static JsonDocument ParseTransportJson(ReadOnlyMemory<byte> utf8)
     {
         try
         {
-            ValidateJsonTokens(utf8);
+            ValidateJsonTokens(utf8.Span);
             return JsonDocument.Parse(utf8, RequestOptions);
         }
         catch (V3TransportFailureException)
