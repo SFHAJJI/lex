@@ -585,6 +585,49 @@ public sealed class V3CorpusResolveMountTests
     }
 
     [TestMethod]
+    public async Task AbsentCellarCoordinatesOnCombinedMountKeepEuropeContext()
+    {
+        var fixture = await MountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        _ = await fixture.AddEuropeCollisionAsync();
+        await fixture.AddWorkTitleAsync();
+        var held = fixture.EuropeCoordinates();
+        StringAssert.StartsWith(
+            held.Work,
+            "http://publications.europa.eu/resource/cellar/",
+            "The retained EU fixture must prove the publisher coordinate family under test.");
+        StringAssert.StartsWith(
+            held.Expression,
+            held.Work,
+            "The retained EU expression must be a Cellar publisher coordinate.");
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+
+        const string absentWork =
+            "http://publications.europa.eu/resource/cellar/00000000-0000-0000-0000-000000000000";
+        const string absentExpression = absentWork + ".0001";
+        var absentProvision = EuropeIndexReader.QualifiedProvisionIdentifierOf(
+            absentExpression, "001");
+
+        foreach (var identifier in new[]
+                 {
+                     absentWork,
+                     absentExpression,
+                     absentProvision,
+                     "http://publications.europa.eu/resource/celex/32099R9999",
+                 })
+        {
+            var envelope = await ResolveAsync(mount, identifier);
+            Assert.AreEqual(V3Verdicts.Refuse, envelope.Verdict, identifier);
+            Assert.AreEqual("identifier_unknown", envelope.Refusal!.Code, identifier);
+            Assert.AreEqual(PublisherId.EuEurLex, envelope.Context.Publisher, identifier);
+            Assert.AreEqual("eu", envelope.Context.Jurisdiction, identifier);
+            Assert.AreEqual(TimelineSemantics.OfficialConsolidationState,
+                envelope.Context.TimelineSemantics, identifier);
+        }
+    }
+
+    [TestMethod]
     public async Task EuropeOnlyRefusalsCarryEuropeContext()
     {
         var fixture = await EuropeMountedFixture.CreateAsync();
@@ -893,6 +936,18 @@ public sealed class V3CorpusResolveMountTests
                 Path.Combine(Directory, V3CorpusMount.EuropeCapabilityManifestFileName),
                 stream.ToArray());
             return expression;
+        }
+
+        public (string Work, string Expression) EuropeCoordinates()
+        {
+            using var connection = EuropeIndexBuilder.Open(
+                Path.Combine(Directory, V3CorpusMount.EuropeIndexFileName),
+                SqliteOpenMode.ReadOnly);
+            var row = ReadEuropeArticles(connection).First(article =>
+                article.PublisherWorkId.StartsWith(
+                    "http://publications.europa.eu/resource/cellar/",
+                    StringComparison.Ordinal));
+            return (row.PublisherWorkId, row.PublisherExpressionId);
         }
 
         public async Task<(string First, string Second)> AddEuropeAmbiguityAsync()
