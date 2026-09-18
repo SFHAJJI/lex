@@ -16,6 +16,7 @@ internal sealed class V3CorpusMount : IDisposable
     public const string EuropeCapabilityManifestFileName = "europe-capability-manifest.json";
     public const string CorpusFileName = "lex-corpus-6.json";
     private const int MaximumCapabilityManifestBytes = 4 * 1024 * 1024;
+    private const string EuropeanUnionPublisherDomain = "europa.eu";
 
     private readonly LuxembourgIndexReader? _reader;
     private readonly EuropeIndexReader? _europeReader;
@@ -406,23 +407,28 @@ internal sealed class V3CorpusMount : IDisposable
     private PublisherId PublisherFor(string identifier) =>
         OfficialIdentifier.EliMintedBy(identifier) ??
         (OfficialIdentifier.ProfileOf(identifier) is not null ||
-         IsPublicationsOfficeIdentifier(identifier)
+         IsEuropeanUnionPublisherAddress(identifier)
             ? PublisherId.EuEurLex
             : _reader is null ? PublisherId.EuEurLex : PublisherId.LuLegilux);
 
-    private static bool IsPublicationsOfficeIdentifier(string value)
+    /// <summary>
+    /// An absolute web address on an EU publisher host names EU law whatever its path: an EUR-Lex
+    /// page link, an Official Journal address, or a Publications Office Cellar or CELEX address.
+    /// Attribution is decided by the host alone so that a miss on any of those spellings is
+    /// refused as an unknown EU identifier rather than labelled as Luxembourg law. This admits
+    /// nothing: exact lookup still requires the spelling the index stores.
+    /// </summary>
+    private static bool IsEuropeanUnionPublisherAddress(string value)
     {
         if (!Uri.TryCreate(value, UriKind.Absolute, out var uri) ||
             (!string.Equals(uri.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase) &&
-             !string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)) ||
-            !string.Equals(uri.Host, "publications.europa.eu", StringComparison.OrdinalIgnoreCase) ||
-            !uri.IsDefaultPort || uri.UserInfo.Length != 0 || uri.Query.Length != 0)
+             !string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)))
         {
             return false;
         }
 
-        return uri.AbsolutePath.StartsWith("/resource/cellar/", StringComparison.Ordinal) ||
-               uri.AbsolutePath.StartsWith("/resource/celex/", StringComparison.Ordinal);
+        return string.Equals(uri.Host, EuropeanUnionPublisherDomain, StringComparison.OrdinalIgnoreCase) ||
+               uri.Host.EndsWith("." + EuropeanUnionPublisherDomain, StringComparison.OrdinalIgnoreCase);
     }
 
     private V3EnvelopeContext Context(
