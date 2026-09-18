@@ -14,37 +14,40 @@ internal sealed class V3ApiHandler
 
     private readonly SyntheticApiState _syntheticState;
     private readonly V3PlatformHost _host;
-    private readonly V3EnvelopeContext _unmountedLuxembourgContext;
+    private readonly Func<DateTimeOffset> _utcNow;
 
-    public V3ApiHandler(SyntheticApiState syntheticState, DateTimeOffset observedAt)
-        : this(syntheticState, observedAt, new V3PlatformHost())
+    public V3ApiHandler(SyntheticApiState syntheticState, Func<DateTimeOffset> utcNow)
+        : this(syntheticState, new V3PlatformHost(), utcNow)
     {
     }
 
     internal V3ApiHandler(
         SyntheticApiState syntheticState,
-        DateTimeOffset observedAt,
-        V3PlatformHost host)
+        V3PlatformHost host,
+        Func<DateTimeOffset> utcNow)
     {
         _syntheticState = syntheticState ?? throw new ArgumentNullException(nameof(syntheticState));
         _host = host ?? throw new ArgumentNullException(nameof(host));
-        _unmountedLuxembourgContext = new V3EnvelopeContext(
+        _utcNow = utcNow ?? throw new ArgumentNullException(nameof(utcNow));
+    }
+
+    internal static RequestDelegate CreateRequestDelegate(
+        SyntheticApiState syntheticState,
+        Func<DateTimeOffset> utcNow)
+    {
+        var api = new V3ApiHandler(syntheticState, utcNow);
+        return context => api.HandleAsync(context, context.RequestAborted);
+    }
+
+    private V3EnvelopeContext UnmountedLuxembourgContext() =>
+        new(
             PublisherId.LuLegilux,
             "refusal",
             TimelineSemantics.PublisherApplicability,
             new V3SnapshotReference("no-corpus-mounted", EmptySha256),
             "lu",
             false,
-            new V3Freshness(observedAt, "unreachable"));
-    }
-
-    internal static RequestDelegate CreateRequestDelegate(
-        SyntheticApiState syntheticState,
-        DateTimeOffset observedAt)
-    {
-        var api = new V3ApiHandler(syntheticState, observedAt);
-        return context => api.HandleAsync(context, context.RequestAborted);
-    }
+            new V3Freshness(_utcNow(), "unreachable"));
 
     public async Task HandleAsync(HttpContext context, CancellationToken cancellationToken)
     {
@@ -57,7 +60,7 @@ internal sealed class V3ApiHandler
                     context,
                     _host,
                     RequestReference(context.TraceIdentifier),
-                    _unmountedLuxembourgContext,
+                    UnmountedLuxembourgContext(),
                     static request => NoCorpusMounted(request),
                     cancellationToken)
                 .ConfigureAwait(false);

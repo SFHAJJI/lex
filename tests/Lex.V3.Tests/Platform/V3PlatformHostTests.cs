@@ -414,7 +414,7 @@ public sealed class V3PlatformHostTests
         route.Features.Get<IHttpRequestFeature>()!.RawTarget = "/api/v3/unknown";
         var application = new V3ApiHandler(
             SyntheticApiState.Unavailable,
-            DateTimeOffset.Parse("2026-09-18T00:00:00Z"));
+            static () => DateTimeOffset.Parse("2026-09-18T00:00:00Z"));
         await application.HandleAsync(route, CancellationToken.None);
         AssertTransportProblem(route, "unknown_route", StatusCodes.Status404NotFound);
     }
@@ -448,12 +448,13 @@ public sealed class V3PlatformHostTests
     [TestMethod]
     public async Task ApplicationRoutesRealResolveToReviewedDomainRefusalBeforeSyntheticPreview()
     {
+        var observedAt = DateTimeOffset.Parse("2026-09-18T00:00:00Z");
         var context = RouteContext(Encoding.UTF8.GetBytes(
             "{\"operation_id\":\"resolve\",\"parameters\":{\"identifier\":\"eli/example\"}}"));
         context.TraceIdentifier = "trace-real-resolve";
         var application = V3ApiHandler.CreateRequestDelegate(
             SyntheticApiState.Unavailable,
-            DateTimeOffset.Parse("2026-09-18T00:00:00Z"));
+            () => observedAt);
 
         await application(context);
 
@@ -463,6 +464,45 @@ public sealed class V3PlatformHostTests
         Assert.AreEqual(V3Verdicts.Refuse, envelope.Verdict);
         Assert.AreEqual("no_corpus_mounted", envelope.Refusal!.Code);
         Assert.AreEqual("lu", envelope.Refusal.HelpfulPayload.GetProperty("required_corpus").GetString());
+        Assert.AreEqual(observedAt, envelope.Context.Freshness.ObservedAt);
+        Assert.AreEqual("unreachable", envelope.Context.Freshness.UpstreamHealth);
+
+        observedAt = DateTimeOffset.Parse("2026-09-18T00:01:00Z");
+        var later = RouteContext(Encoding.UTF8.GetBytes(
+            "{\"operation_id\":\"resolve\",\"parameters\":{\"identifier\":\"eli/example\"}}"));
+        await application(later);
+        var laterEnvelope = V3EnvelopeJson.ParseAndVerify(
+            ((MemoryStream)later.Response.Body).ToArray(),
+            V3OperationRegistry.Reviewed);
+        Assert.AreEqual(observedAt, laterEnvelope.Context.Freshness.ObservedAt);
+        Assert.AreEqual("unreachable", laterEnvelope.Context.Freshness.UpstreamHealth);
+    }
+
+    [TestMethod]
+    public async Task StreamingCeilingStopsAnUndeclaredOversizedBodyBeforeItIsFullyConsumed()
+    {
+        var request = new byte[V3PlatformHost.MaximumRequestBytes * 2];
+        var context = RouteContext(request);
+        Assert.IsNull(context.Request.ContentLength);
+        var calls = 0;
+
+        await V3ResolveRestRoute.HandleSuccessAsync(
+            context,
+            new V3PlatformHost(),
+            "req_streaming_ceiling",
+            Context(),
+            _ =>
+            {
+                calls++;
+                throw new AssertFailedException("An oversized request must not execute the operation.");
+            },
+            CancellationToken.None);
+
+        Assert.AreEqual(0, calls);
+        AssertTransportProblem(context, "request_too_large", StatusCodes.Status413PayloadTooLarge);
+        Assert.IsTrue(
+            context.Request.Body.Position < context.Request.Body.Length,
+            "the route buffered the entire undeclared oversized body before refusing it");
     }
 
     private static void AssertTransportProblem(
