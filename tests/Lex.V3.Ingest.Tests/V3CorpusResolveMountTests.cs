@@ -74,6 +74,14 @@ public sealed class V3CorpusResolveMountTests
             await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None));
 
         await fixture.RestoreCapabilityManifestAsync();
+        var corpusPath = Path.Combine(fixture.Directory, V3CorpusMount.CorpusFileName);
+        var corpusBytes = await File.ReadAllBytesAsync(corpusPath);
+        corpusBytes[^2] ^= 0x01;
+        await File.WriteAllBytesAsync(corpusPath, corpusBytes);
+        await Assert.ThrowsExactlyAsync<ArgumentException>(async () =>
+            await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None));
+
+        await fixture.RestoreCorpusAsync();
         var indexPath = Path.Combine(fixture.Directory, V3CorpusMount.IndexFileName);
         var bytes = await File.ReadAllBytesAsync(indexPath);
         bytes[^1] ^= 0xff;
@@ -130,19 +138,22 @@ public sealed class V3CorpusResolveMountTests
     private sealed class MountedFixture : IAsyncDisposable
     {
         private readonly byte[] _capabilityManifestBytes;
+        private readonly byte[] _corpusBytes;
 
         private MountedFixture(
             string directory,
             string expressionIri,
             string corpusSha256,
             string indexSha256,
-            byte[] capabilityManifestBytes)
+            byte[] capabilityManifestBytes,
+            byte[] corpusBytes)
         {
             Directory = directory;
             ExpressionIri = expressionIri;
             CorpusSha256 = corpusSha256;
             IndexSha256 = indexSha256;
             _capabilityManifestBytes = capabilityManifestBytes;
+            _corpusBytes = corpusBytes;
         }
 
         public string Directory { get; }
@@ -182,17 +193,26 @@ public sealed class V3CorpusResolveMountTests
             await File.WriteAllBytesAsync(
                 Path.Combine(directory, V3CorpusMount.CapabilityManifestFileName),
                 capabilityBytes);
+            var corpusBytes = corpus.CanonicalBytes.ToArray();
+            await File.WriteAllBytesAsync(
+                Path.Combine(directory, V3CorpusMount.CorpusFileName),
+                corpusBytes);
             return new MountedFixture(
                 directory,
                 expression,
                 corpus.ArtifactRef.Sha256,
                 index.IndexRef.Sha256,
-                capabilityBytes);
+                capabilityBytes,
+                corpusBytes);
         }
 
         public Task RestoreCapabilityManifestAsync() => File.WriteAllBytesAsync(
             Path.Combine(Directory, V3CorpusMount.CapabilityManifestFileName),
             _capabilityManifestBytes);
+
+        public Task RestoreCorpusAsync() => File.WriteAllBytesAsync(
+            Path.Combine(Directory, V3CorpusMount.CorpusFileName),
+            _corpusBytes);
 
         public ValueTask DisposeAsync()
         {

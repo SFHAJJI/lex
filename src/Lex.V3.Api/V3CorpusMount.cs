@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Lex.V3.Contracts;
 using Lex.V3.Contracts.Platform;
+using Lex.V3.Ingest;
 using Lex.V3.Ingest.Luxembourg;
 
 namespace Lex.V3.Api;
@@ -9,12 +10,19 @@ internal sealed class V3CorpusMount : IDisposable
 {
     public const string IndexFileName = "luxembourg-index.sqlite3";
     public const string CapabilityManifestFileName = "luxembourg-capability-manifest.json";
+    public const string CorpusFileName = "lex-corpus-6.json";
     private const int MaximumCapabilityManifestBytes = 4 * 1024 * 1024;
 
     private readonly LuxembourgIndexReader _reader;
+    private readonly VerifiedLexCorpus6ManifestSet _corpus;
 
-    private V3CorpusMount(LuxembourgIndexReader reader) =>
+    private V3CorpusMount(
+        LuxembourgIndexReader reader,
+        VerifiedLexCorpus6ManifestSet corpus)
+    {
         _reader = reader ?? throw new ArgumentNullException(nameof(reader));
+        _corpus = corpus ?? throw new ArgumentNullException(nameof(corpus));
+    }
 
     public static async Task<V3CorpusMount?> OpenAsync(
         string directory,
@@ -23,17 +31,19 @@ internal sealed class V3CorpusMount : IDisposable
         ArgumentException.ThrowIfNullOrWhiteSpace(directory);
         var indexPath = Path.Combine(directory, IndexFileName);
         var capabilityPath = Path.Combine(directory, CapabilityManifestFileName);
+        var corpusPath = Path.Combine(directory, CorpusFileName);
         var hasIndex = File.Exists(indexPath);
         var hasCapability = File.Exists(capabilityPath);
-        if (!hasIndex && !hasCapability)
+        var hasCorpus = File.Exists(corpusPath);
+        if (!hasIndex && !hasCapability && !hasCorpus)
         {
             return null;
         }
 
-        if (!hasIndex || !hasCapability)
+        if (!hasIndex || !hasCapability || !hasCorpus)
         {
             throw new InvalidDataException(
-                "A V3 corpus mount requires both the exact index and its capability manifest.");
+                "A V3 corpus mount requires the exact corpus, index and capability manifest.");
         }
 
         var capabilityInfo = new FileInfo(capabilityPath);
@@ -49,11 +59,21 @@ internal sealed class V3CorpusMount : IDisposable
             throw new InvalidDataException("The V3 capability manifest changed while it was read.");
         }
 
+        var corpusBytes = await File.ReadAllBytesAsync(corpusPath, cancellationToken)
+            .ConfigureAwait(false);
+        var corpus = VerifiedLexCorpus6ManifestSet.ParseAndVerify(corpusBytes);
         var reader = await LuxembourgIndexReader.OpenAndVerifyFileAsync(
-            indexPath,
-            capabilityBytes,
-            cancellationToken).ConfigureAwait(false);
-        return new V3CorpusMount(reader);
+                indexPath,
+                capabilityBytes,
+                cancellationToken)
+            .ConfigureAwait(false);
+        if (reader.CorpusRef != corpus.ArtifactRef)
+        {
+            reader.Dispose();
+            throw new InvalidDataException("The mounted index does not bind the mounted corpus/6 artifact.");
+        }
+
+        return new V3CorpusMount(reader, corpus);
     }
 
     public V3PlatformOperationOutcome Resolve(
@@ -102,7 +122,7 @@ internal sealed class V3CorpusMount : IDisposable
             publisher_wid = resolved.PublisherWid,
             language = resolved.Language,
             article_identities = resolved.ArticleIdentities,
-            corpus_sha256 = _reader.CorpusRef.Sha256,
+            corpus_sha256 = _corpus.ArtifactRef.Sha256,
             index_sha256 = _reader.IndexRef.Sha256,
         });
         return V3PlatformOperationOutcome.Success(
@@ -133,8 +153,8 @@ internal sealed class V3CorpusMount : IDisposable
         status,
         TimelineSemantics.PublisherApplicability,
         new V3SnapshotReference(
-            "corpus-" + _reader.CorpusRef.Sha256[..16],
-            _reader.CorpusRef.Sha256),
+            "corpus-" + _corpus.ArtifactRef.Sha256[..16],
+            _corpus.ArtifactRef.Sha256),
         "lu",
         false,
         new V3Freshness(observedAt, "stale"));
