@@ -587,18 +587,16 @@ public sealed class V3CorpusResolveMountTests
     [TestMethod]
     public async Task AbsentCellarCoordinatesOnCombinedMountKeepEuropeContext()
     {
-        var fixture = await MountedFixture.CreateAsync();
+        var fixture = await EuropeMountedFixture.CreateAsync();
         await using var cleanup = fixture;
-        _ = await fixture.AddEuropeCollisionAsync();
-        await fixture.AddWorkTitleAsync();
-        var held = fixture.EuropeCoordinates();
+        await fixture.AddLuxembourgMountAsync();
         StringAssert.StartsWith(
-            held.Work,
+            fixture.PublisherWorkId,
             "http://publications.europa.eu/resource/cellar/",
             "The retained EU fixture must prove the publisher coordinate family under test.");
         StringAssert.StartsWith(
-            held.Expression,
-            held.Work,
+            fixture.PublisherExpressionId,
+            fixture.PublisherWorkId[..fixture.PublisherWorkId.LastIndexOf('/') + 1],
             "The retained EU expression must be a Cellar publisher coordinate.");
         using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
         Assert.IsNotNull(mount);
@@ -936,18 +934,6 @@ public sealed class V3CorpusResolveMountTests
                 Path.Combine(Directory, V3CorpusMount.EuropeCapabilityManifestFileName),
                 stream.ToArray());
             return expression;
-        }
-
-        public (string Work, string Expression) EuropeCoordinates()
-        {
-            using var connection = EuropeIndexBuilder.Open(
-                Path.Combine(Directory, V3CorpusMount.EuropeIndexFileName),
-                SqliteOpenMode.ReadOnly);
-            var row = ReadEuropeArticles(connection).First(article =>
-                article.PublisherWorkId.StartsWith(
-                    "http://publications.europa.eu/resource/cellar/",
-                    StringComparison.Ordinal));
-            return (row.PublisherWorkId, row.PublisherExpressionId);
         }
 
         public async Task<(string First, string Second)> AddEuropeAmbiguityAsync()
@@ -1435,6 +1421,8 @@ public sealed class V3CorpusResolveMountTests
 
     private sealed class EuropeMountedFixture : IAsyncDisposable
     {
+        private readonly Stage3DerivationProfileEnvelope _envelope;
+
         private EuropeMountedFixture(
             string directory,
             string publisherWorkId,
@@ -1442,7 +1430,8 @@ public sealed class V3CorpusResolveMountTests
             string publisherProvisionIdentifier,
             string articleIdentitySha256,
             string corpusSha256,
-            string indexSha256)
+            string indexSha256,
+            Stage3DerivationProfileEnvelope envelope)
         {
             Directory = directory;
             PublisherWorkId = publisherWorkId;
@@ -1451,6 +1440,7 @@ public sealed class V3CorpusResolveMountTests
             ArticleIdentitySha256 = articleIdentitySha256;
             CorpusSha256 = corpusSha256;
             IndexSha256 = indexSha256;
+            _envelope = envelope;
         }
 
         public string Directory { get; }
@@ -1492,7 +1482,21 @@ public sealed class V3CorpusResolveMountTests
                 admitted.Articles[0].PublisherIdentifier,
                 admitted.Articles[0].IdentitySha256,
                 corpus.ArtifactRef.Sha256,
-                index.IndexRef.Sha256);
+                index.IndexRef.Sha256,
+                envelope);
+        }
+
+        public async Task AddLuxembourgMountAsync()
+        {
+            var index = LuxembourgIndexBuilder.TryBuild(
+                _envelope, out var refusal, out var detail);
+            Assert.IsNotNull(index, $"{refusal}: {detail}");
+            await File.WriteAllBytesAsync(
+                Path.Combine(Directory, V3CorpusMount.IndexFileName),
+                index.IndexBytes.ToArray());
+            await File.WriteAllBytesAsync(
+                Path.Combine(Directory, V3CorpusMount.CapabilityManifestFileName),
+                index.CapabilityManifestBytes.ToArray());
         }
 
         public Task<string> AddSecondActWithSamePublisherProvisionIdentifierAsync() =>
