@@ -762,12 +762,13 @@ public sealed class V3CorpusResolveMountTests
         private static LuxembourgIndexBuilder.StateRow[] ReadStates(SqliteConnection connection)
         {
             using var command = connection.CreateCommand();
-            command.CommandText = "SELECT work_key,applicability_date,state_sha256,expression_iri,publisher_wid,language,rule_profiles_json,article_identities_json FROM states ORDER BY work_key,applicability_date,expression_iri,language";
+            command.CommandText = "SELECT work_key,applicability_date,state_sha256,expression_iri,publisher_wid,publisher_legal_resource_iri,language,rule_profiles_json,article_identities_json FROM states ORDER BY work_key,applicability_date,expression_iri,language";
             using var reader = command.ExecuteReader();
             var values = new List<LuxembourgIndexBuilder.StateRow>();
             while (reader.Read()) values.Add(new(
                 reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3),
-                reader.GetString(4), reader.GetString(5), reader.GetString(6), reader.GetString(7)));
+                reader.GetString(4), reader.GetString(5), reader.GetString(6), reader.GetString(7),
+                reader.GetString(8)));
             return values.ToArray();
         }
 

@@ -42,6 +42,7 @@ public sealed record LuxembourgIndexResolvedState(
     string StateSha256,
     string ExpressionIri,
     string PublisherWid,
+    string PublisherLegalResourceIri,
     string Language,
     IReadOnlyList<string> RuleProfileSha256s,
     IReadOnlyList<string> ArticleIdentities);
@@ -103,6 +104,7 @@ public static class LuxembourgIndexBuilder
           state_sha256 TEXT COLLATE BINARY NOT NULL CHECK (length(state_sha256) = 64),
           expression_iri TEXT COLLATE BINARY NOT NULL,
           publisher_wid TEXT COLLATE BINARY NOT NULL,
+          publisher_legal_resource_iri TEXT COLLATE BINARY NOT NULL,
           language TEXT COLLATE BINARY NOT NULL,
           rule_profiles_json TEXT COLLATE BINARY NOT NULL,
           article_identities_json TEXT COLLATE BINARY NOT NULL,
@@ -317,8 +319,21 @@ public static class LuxembourgIndexBuilder
                 }))));
         }
 
-        states = ProjectStates(projected);
         articles = projected.OrderBy(static row => row.ArticleIdentitySha256, StringComparer.Ordinal).ToArray();
+        var stateSources = envelope.BodyComposition.Envelope.LuxembourgAknArticleInventoryPopulation
+            .Outcomes
+            .Where(static outcome => outcome.Inventory?.ExpressionCoordinate is not null)
+            .ToDictionary(
+                static outcome => Lex.V3.Contracts.Source.Scope.ScopeManifestCanonicalWriter
+                    .ComputeObjectRefSha256(outcome.Input.CorpusRecord.ObjectRef),
+                static outcome => new StateSource(
+                    outcome.Inventory!.PublisherExpressionIri,
+                    outcome.Inventory.ExpressionCoordinate!.PublisherWorkIri,
+                    outcome.Inventory.ExpressionCoordinate.PublisherLegalResourceIri,
+                    outcome.Inventory.ExpressionCoordinate.PublisherApplicabilityDate,
+                    outcome.Inventory.RuleProfileSha256),
+                StringComparer.Ordinal);
+        states = ProjectStates(articles, stateSources);
         var assertions = envelope.BodyComposition.Envelope.Luxembourg.TypedAssertions;
         var articlesBySubject = articles
             .SelectMany(static article => new[] { article.ExpressionIri, article.PublisherWid }
@@ -396,39 +411,51 @@ public static class LuxembourgIndexBuilder
         return date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
     }
 
-    private static StateRow[] ProjectStates(IReadOnlyList<ArticleRow> articles)
+    private static StateRow[] ProjectStates(
+        IReadOnlyList<ArticleRow> articles,
+        IReadOnlyDictionary<string, StateSource> sources)
     {
         var rows = new List<StateRow>();
-        foreach (var group in articles.GroupBy(static article => (
-                     article.ExpressionIri,
-                     article.PublisherWid,
-                     article.ApplicabilityDate,
-                     article.Language)))
+        foreach (var group in articles.GroupBy(static article => article.ObjectRefSha256,
+                     StringComparer.Ordinal))
         {
-            if (group.Key.PublisherWid is null || group.Key.ApplicabilityDate is null)
+            if (!sources.TryGetValue(group.Key, out var source))
             {
                 continue;
             }
+            if (group.Select(static article => article.ExpressionIri)
+                    .Distinct(StringComparer.Ordinal).Single() != source.ExpressionIri ||
+                group.Select(static article => article.Language)
+                    .Distinct(StringComparer.Ordinal).Count() != 1)
+            {
+                throw new InvalidDataException(
+                    "A Luxembourg expression-state source does not match its admitted articles.");
+            }
 
-            var workKey = WorkKeyOf(group.Key.PublisherWid);
+            var language = group.First().Language;
+            var workKey = WorkKeyOf(source.PublisherWorkIri);
             var profiles = group.Select(static article => article.RuleProfileSha256)
+                .Append(source.RuleProfileSha256)
                 .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
-            var identities = group.Select(static article => article.ArticleIdentitySha256).ToArray();
+            var identities = group.Select(static article => article.ArticleIdentitySha256)
+                .Order(StringComparer.Ordinal).ToArray();
             var digest = StateSha256(
                 workKey,
-                group.Key.ApplicabilityDate,
-                group.Key.ExpressionIri,
-                group.Key.PublisherWid,
-                group.Key.Language,
+                source.PublisherApplicabilityDate,
+                source.ExpressionIri,
+                source.PublisherWorkIri,
+                source.PublisherLegalResourceIri,
+                language,
                 profiles,
                 identities);
             rows.Add(new StateRow(
                 workKey,
-                group.Key.ApplicabilityDate,
+                source.PublisherApplicabilityDate,
                 digest,
-                group.Key.ExpressionIri,
-                group.Key.PublisherWid,
-                group.Key.Language,
+                source.ExpressionIri,
+                source.PublisherWorkIri,
+                source.PublisherLegalResourceIri,
+                language,
                 JsonSerializer.Serialize(profiles),
                 JsonSerializer.Serialize(identities)));
         }
@@ -440,7 +467,7 @@ public static class LuxembourgIndexBuilder
             .ToArray();
     }
 
-    private static string WorkKeyOf(string publisherWid)
+    internal static string WorkKeyOf(string publisherWid)
     {
         if (!Uri.TryCreate(publisherWid, UriKind.Absolute, out var uri) ||
             !string.Equals(uri.Scheme, Uri.UriSchemeHttp, StringComparison.Ordinal) ||
@@ -464,11 +491,12 @@ public static class LuxembourgIndexBuilder
         return string.Join('-', segments.Skip(prefix.Length));
     }
 
-    private static string StateSha256(
+    internal static string StateSha256(
         string workKey,
         string applicabilityDate,
         string expressionIri,
         string publisherWid,
+        string publisherLegalResourceIri,
         string language,
         IReadOnlyList<string> profiles,
         IReadOnlyList<string> articleIdentities)
@@ -489,6 +517,7 @@ public static class LuxembourgIndexBuilder
         Append(hash, applicabilityDate);
         Append(hash, expressionIri);
         Append(hash, publisherWid);
+        Append(hash, publisherLegalResourceIri);
         Append(hash, language);
         foreach (var profile in profiles) Append(hash, profile);
         foreach (var identity in articleIdentities) Append(hash, identity);
@@ -544,9 +573,9 @@ public static class LuxembourgIndexBuilder
         foreach (var state in states)
         {
             Insert(connection, transaction,
-                "INSERT INTO states VALUES($p0,$p1,$p2,$p3,$p4,$p5,$p6,$p7)",
+                "INSERT INTO states VALUES($p0,$p1,$p2,$p3,$p4,$p5,$p6,$p7,$p8)",
                 state.WorkKey, state.ApplicabilityDate, state.StateSha256, state.ExpressionIri,
-                state.PublisherWid, state.Language, state.RuleProfilesJson,
+                state.PublisherWid, state.PublisherLegalResourceIri, state.Language, state.RuleProfilesJson,
                 state.ArticleIdentitiesJson);
         }
         foreach (var title in workTitles)
@@ -575,7 +604,15 @@ public static class LuxembourgIndexBuilder
             "fra", new string('4', 64), "libellé fixe", "[]");
         var members = new[] { member };
         var articles = new[] { article };
-        var states = ProjectStates(articles);
+        var states = ProjectStates(articles, new Dictionary<string, StateSource>(StringComparer.Ordinal)
+        {
+            [member.ObjectRefSha256] = new(
+                article.ExpressionIri,
+                article.PublisherWid!,
+                article.PublisherWid! + "/jo",
+                "2024-01-01",
+                new string('5', 64)),
+        });
         var titles = new[] { new WorkTitleRow(
             article.PublisherWid!, article.ExpressionIri, "fra", "Titre fixe", "titre fixe",
             "2024-01-01", "title", new string('3', 64)) };
@@ -749,9 +786,17 @@ public static class LuxembourgIndexBuilder
         string StateSha256,
         string ExpressionIri,
         string PublisherWid,
+        string PublisherLegalResourceIri,
         string Language,
         string RuleProfilesJson,
         string ArticleIdentitiesJson);
+
+    private sealed record StateSource(
+        string ExpressionIri,
+        string PublisherWorkIri,
+        string PublisherLegalResourceIri,
+        string PublisherApplicabilityDate,
+        string RuleProfileSha256);
 
     internal sealed record WorkTitleRow(
         string WorkIdentifier,
@@ -990,6 +1035,7 @@ public sealed class LuxembourgIndexReader : IDisposable
             var articles = ReadArticles(connection);
             var states = ReadStates(connection);
             var workTitles = ReadWorkTitles(connection);
+            ValidateStates(articles, states);
             if (!string.Equals(
                     LuxembourgIndexBuilder.HashLogicalRows(members, articles, states, workTitles),
                     expectedLogical,
@@ -1064,7 +1110,7 @@ public sealed class LuxembourgIndexReader : IDisposable
             using var command = _connection.CreateCommand();
             command.CommandText = """
                 SELECT work_key,applicability_date,state_sha256,expression_iri,publisher_wid,
-                       language,rule_profiles_json,article_identities_json
+                       publisher_legal_resource_iri,language,rule_profiles_json,article_identities_json
                 FROM states
                 WHERE work_key=$work AND applicability_date=$date
                 ORDER BY expression_iri,language,state_sha256
@@ -1077,10 +1123,10 @@ public sealed class LuxembourgIndexReader : IDisposable
             {
                 values.Add(new LuxembourgIndexResolvedState(
                     reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3),
-                    reader.GetString(4), reader.GetString(5),
-                    JsonSerializer.Deserialize<string[]>(reader.GetString(6))
-                        ?? throw new InvalidDataException("A state has no rule-profile population."),
+                    reader.GetString(4), reader.GetString(5), reader.GetString(6),
                     JsonSerializer.Deserialize<string[]>(reader.GetString(7))
+                        ?? throw new InvalidDataException("A state has no rule-profile population."),
+                    JsonSerializer.Deserialize<string[]>(reader.GetString(8))
                         ?? throw new InvalidDataException("A state has no article-identity population.")));
             }
             return Array.AsReadOnly(values.ToArray());
@@ -1229,14 +1275,74 @@ public sealed class LuxembourgIndexReader : IDisposable
     private static LuxembourgIndexBuilder.StateRow[] ReadStates(SqliteConnection connection)
     {
         using var command = connection.CreateCommand();
-        command.CommandText = "SELECT work_key,applicability_date,state_sha256,expression_iri,publisher_wid,language,rule_profiles_json,article_identities_json FROM states ORDER BY work_key,applicability_date,expression_iri,language";
+        command.CommandText = "SELECT work_key,applicability_date,state_sha256,expression_iri,publisher_wid,publisher_legal_resource_iri,language,rule_profiles_json,article_identities_json FROM states ORDER BY work_key,applicability_date,expression_iri,language";
         using var reader = command.ExecuteReader();
         var values = new List<LuxembourgIndexBuilder.StateRow>();
         while (reader.Read()) values.Add(new(
             reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3),
-            reader.GetString(4), reader.GetString(5), reader.GetString(6), reader.GetString(7)));
+            reader.GetString(4), reader.GetString(5), reader.GetString(6), reader.GetString(7),
+            reader.GetString(8)));
         return values.ToArray();
     }
+
+    private static void ValidateStates(
+        IReadOnlyList<LuxembourgIndexBuilder.ArticleRow> articles,
+        IReadOnlyList<LuxembourgIndexBuilder.StateRow> states)
+    {
+        var articleByIdentity = articles.ToDictionary(
+            static article => article.ArticleIdentitySha256, StringComparer.Ordinal);
+        var seenArticles = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var state in states)
+        {
+            var profiles = JsonSerializer.Deserialize<string[]>(state.RuleProfilesJson)
+                ?? throw new InvalidDataException("A state has no rule-profile population.");
+            var identities = JsonSerializer.Deserialize<string[]>(state.ArticleIdentitiesJson)
+                ?? throw new InvalidDataException("A state has no article-identity population.");
+            if (profiles.Length == 0 || identities.Length == 0 ||
+                !profiles.SequenceEqual(profiles.Distinct(StringComparer.Ordinal)
+                    .Order(StringComparer.Ordinal), StringComparer.Ordinal) ||
+                !identities.SequenceEqual(identities.Distinct(StringComparer.Ordinal)
+                    .Order(StringComparer.Ordinal), StringComparer.Ordinal) ||
+                profiles.Any(static value => !IsSha256(value)) ||
+                identities.Any(static value => !IsSha256(value)) ||
+                !DateOnly.TryParseExact(
+                    state.ApplicabilityDate, "yyyy-MM-dd", CultureInfo.InvariantCulture,
+                    DateTimeStyles.None, out _) ||
+                !string.Equals(
+                    LuxembourgIndexBuilder.WorkKeyOf(state.PublisherWid), state.WorkKey,
+                    StringComparison.Ordinal) ||
+                !state.PublisherLegalResourceIri.StartsWith(
+                    state.PublisherWid + "/", StringComparison.Ordinal))
+            {
+                throw new InvalidDataException("A Luxembourg expression state is not canonical.");
+            }
+
+            foreach (var identity in identities)
+            {
+                if (!seenArticles.Add(identity) ||
+                    !articleByIdentity.TryGetValue(identity, out var article) ||
+                    !string.Equals(article.ExpressionIri, state.ExpressionIri, StringComparison.Ordinal) ||
+                    !profiles.Contains(article.RuleProfileSha256, StringComparer.Ordinal))
+                {
+                    throw new InvalidDataException(
+                        "A Luxembourg expression state does not bind its exact article population.");
+                }
+            }
+            if (!string.Equals(
+                    LuxembourgIndexBuilder.StateSha256(
+                        state.WorkKey, state.ApplicabilityDate, state.ExpressionIri,
+                        state.PublisherWid, state.PublisherLegalResourceIri, state.Language,
+                        profiles, identities),
+                    state.StateSha256,
+                    StringComparison.Ordinal))
+            {
+                throw new InvalidDataException("A Luxembourg expression state digest is not derived from its row.");
+            }
+        }
+    }
+
+    private static bool IsSha256(string value) => value.Length == 64 &&
+        value.All(static character => character is >= '0' and <= '9' or >= 'a' and <= 'f');
 
     private static LuxembourgIndexBuilder.WorkTitleRow[] ReadWorkTitles(SqliteConnection connection)
     {
