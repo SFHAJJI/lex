@@ -34,10 +34,17 @@ public sealed record EuropeIndexSearchResult(
     V3IndexCapabilityLookupOutcome Outcome,
     IReadOnlyList<string> ArticleIdentities);
 
+public sealed record EuropeIndexResolvedExpression(
+    string PublisherWorkId,
+    string PublisherExpressionId,
+    string Language,
+    IReadOnlyList<string> PublisherProvisionIdentifiers,
+    IReadOnlyList<string> ArticleIdentities);
+
 /// <summary>Builds the immutable EU index from one proof-complete Stage 3 envelope.</summary>
 public static class EuropeIndexBuilder
 {
-    public const string Schema = "lex-v3-europe-index/1";
+    public const string Schema = "lex-v3-europe-index/2";
     private const int ApplicationId = 0x4c563307;
     private const string Ddl = """
         CREATE TABLE stamp (
@@ -80,6 +87,7 @@ public static class EuropeIndexBuilder
           article_identity_sha256 TEXT COLLATE BINARY NOT NULL PRIMARY KEY CHECK (length(article_identity_sha256) = 64),
           object_ref_sha256 TEXT COLLATE BINARY NOT NULL REFERENCES members(object_ref_sha256),
           publisher_work_id TEXT COLLATE BINARY NOT NULL,
+          publisher_work_celex TEXT COLLATE BINARY NOT NULL,
           publisher_expression_id TEXT COLLATE BINARY NOT NULL,
           package_entry TEXT COLLATE BINARY NOT NULL,
           publisher_identifier TEXT COLLATE BINARY NOT NULL,
@@ -254,6 +262,18 @@ public static class EuropeIndexBuilder
                 detail = objectRef;
                 return false;
             }
+            var celexMatches = EuAppendixASeedMap.SeedsInCelexOrder.Where(seed =>
+                    string.Equals(seed.WorkRoot,
+                        outcome.Source.ExpressionIdentity.PublisherWorkId,
+                        StringComparison.Ordinal))
+                .Take(2).ToArray();
+            if (celexMatches.Length != 1)
+            {
+                articles = [];
+                refusal = EuropeIndexBuildRefusal.DerivationMismatch;
+                detail = "An admitted Formex work does not bind to exactly one reviewed CELEX seed.";
+                return false;
+            }
 
             foreach (var article in outcome.Articles)
             {
@@ -261,6 +281,7 @@ public static class EuropeIndexBuilder
                     article.IdentitySha256,
                     objectRef,
                     outcome.Source.ExpressionIdentity.PublisherWorkId,
+                    celexMatches[0].Celex,
                     article.PublisherExpressionId,
                     article.PackageEntry,
                     article.PublisherIdentifier,
@@ -327,7 +348,7 @@ public static class EuropeIndexBuilder
         Execute(connection, "PRAGMA synchronous=FULL");
         Execute(connection, "PRAGMA foreign_keys=ON");
         Execute(connection, $"PRAGMA application_id={ApplicationId}");
-        Execute(connection, "PRAGMA user_version=1");
+        Execute(connection, "PRAGMA user_version=2");
         using var transaction = connection.BeginTransaction();
         Execute(connection, Ddl, transaction);
         foreach (var row in members)
@@ -343,10 +364,11 @@ public static class EuropeIndexBuilder
             Insert(connection, transaction, "INSERT INTO corrigendum_gaps VALUES($p0,$p1,$p2,$p3)",
                 row.GapIdentitySha256, row.FamilyKey, row.WorkRoot, row.Reason);
         foreach (var row in articles)
-            Insert(connection, transaction, "INSERT INTO articles VALUES($p0,$p1,$p2,$p3,$p4,$p5,$p6,$p7,$p8,$p9,$p10)",
+            Insert(connection, transaction, "INSERT INTO articles VALUES($p0,$p1,$p2,$p3,$p4,$p5,$p6,$p7,$p8,$p9,$p10,$p11)",
                 row.ArticleIdentitySha256, row.ObjectRefSha256, row.PublisherWorkId,
-                row.PublisherExpressionId, row.PackageEntry, row.PublisherIdentifier, row.Heading,
-                row.WordingDate, row.Language, row.SearchableText, row.TokensJson);
+                row.PublisherWorkCelex, row.PublisherExpressionId, row.PackageEntry,
+                row.PublisherIdentifier, row.Heading, row.WordingDate, row.Language,
+                row.SearchableText, row.TokensJson);
         var provenance = SqliteProvenance.Read(connection);
         Insert(connection, transaction, "INSERT INTO stamp VALUES(1,$p0,$p1,$p2,$p3,$p4,$p5)",
             Schema, corpusSha256, logicalRowsSha256, provenance.Version,
@@ -370,8 +392,8 @@ public static class EuropeIndexBuilder
             "corrects_not_stated_by_consulted_delivery");
         var article = new ArticleRow(
             new string('5', 64), member.ObjectRefSha256,
-            "https://example.invalid/work", "https://example.invalid/expression", "body.xml",
-            "1", "Article 1", "2024-01-01", "eng", "fixed wording", "[]");
+            "https://example.invalid/work", "32024R0001", "https://example.invalid/expression",
+            "body.xml", "1", "Article 1", "2024-01-01", "eng", "fixed wording", "[]");
         var members = new[] { member };
         var lines = new[] { line };
         var gaps = new[] { gap };
@@ -521,7 +543,8 @@ public static class EuropeIndexBuilder
 
     internal sealed record ArticleRow(
         string ArticleIdentitySha256, string ObjectRefSha256, string PublisherWorkId,
-        string PublisherExpressionId, string PackageEntry, string PublisherIdentifier,
+        string PublisherWorkCelex, string PublisherExpressionId, string PackageEntry,
+        string PublisherIdentifier,
         string Heading, string WordingDate, string Language, string SearchableText, string TokensJson);
 
     private sealed record LogicalRows(IReadOnlyList<MemberRow> Members,
@@ -559,18 +582,27 @@ public static class EuropeIndexBuilder
 /// <summary>A verified read-only mount of one exact EU index.</summary>
 public sealed class EuropeIndexReader : IDisposable
 {
+    private const string ProvisionCoordinateMarker = "#lex-provision=";
     private readonly string _path;
     private readonly SqliteConnection _connection;
     private readonly V3IndexCapabilityManifest _capabilityManifest;
+    private readonly SourceArtifactRef _indexRef;
+    private readonly SourceArtifactRef _corpusRef;
+    private readonly object _gate = new();
 
     private EuropeIndexReader(string path, SqliteConnection connection,
-        V3IndexCapabilityManifest capabilityManifest) =>
-        (_path, _connection, _capabilityManifest) = (path, connection, capabilityManifest);
+        V3IndexCapabilityManifest capabilityManifest,
+        SourceArtifactRef indexRef,
+        SourceArtifactRef corpusRef) =>
+        (_path, _connection, _capabilityManifest, _indexRef, _corpusRef) =
+        (path, connection, capabilityManifest, indexRef, corpusRef);
 
     public long MemberCount => Count("members");
     public long ArticleCount => Count("articles");
     public long CorrigendumLineCount => Count("corrigendum_lines");
     public long CorrigendumGapCount => Count("corrigendum_gaps");
+    public SourceArtifactRef IndexRef => _indexRef;
+    public SourceArtifactRef CorpusRef => _corpusRef;
 
     public static EuropeIndexReader OpenAndVerify(
         SourceArtifactRef indexRef,
@@ -600,7 +632,7 @@ public sealed class EuropeIndexReader : IDisposable
             EuropeIndexBuilder.EnsureExactSchema(connection);
             if (!string.Equals(Scalar(connection, "PRAGMA integrity_check"), "ok", StringComparison.Ordinal) ||
                 Convert.ToInt32(Scalar(connection, "PRAGMA application_id"), CultureInfo.InvariantCulture) != 0x4c563307 ||
-                Convert.ToInt32(Scalar(connection, "PRAGMA user_version"), CultureInfo.InvariantCulture) != 1)
+                Convert.ToInt32(Scalar(connection, "PRAGMA user_version"), CultureInfo.InvariantCulture) != 2)
                 throw new InvalidDataException("The EU index failed SQLite integrity or schema identity checks.");
 
             using var stamp = connection.CreateCommand();
@@ -628,7 +660,8 @@ public sealed class EuropeIndexReader : IDisposable
             var measured = EuropeIndexBuilder.MeasureCapabilities(digest, articles);
             if (!measured.Cells.SequenceEqual(capabilityManifest.Cells))
                 throw new InvalidDataException("The EU capability manifest was not measured from the index.");
-            return new EuropeIndexReader(path, connection, capabilityManifest);
+            return new EuropeIndexReader(
+                path, connection, capabilityManifest, indexRef, expectedCorpusRef);
         }
         catch
         {
@@ -636,6 +669,112 @@ public sealed class EuropeIndexReader : IDisposable
             EuropeIndexBuilder.DeleteDatabase(path);
             throw;
         }
+    }
+
+    public static async Task<EuropeIndexReader> OpenAndVerifyFileAsync(
+        string indexPath,
+        ReadOnlyMemory<byte> capabilityManifestBytes,
+        SourceArtifactRef expectedCorpusRef,
+        CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(indexPath);
+        ArgumentNullException.ThrowIfNull(expectedCorpusRef);
+        if (!File.Exists(indexPath))
+            throw new FileNotFoundException("The EU index artifact is missing.", indexPath);
+        var indexBytes = await File.ReadAllBytesAsync(indexPath, cancellationToken)
+            .ConfigureAwait(false);
+        var digest = Convert.ToHexStringLower(SHA256.HashData(indexBytes));
+        var indexRef = new SourceArtifactRef(LexCorpus6Builder.ResourceIdOf(digest), digest);
+        var capabilityDigest = V3IndexCapabilityManifestArtifact.ComputeSha256(
+            capabilityManifestBytes.Span);
+        var capabilityRef = new SourceArtifactRef(
+            LexCorpus6Builder.ResourceIdOf(capabilityDigest), capabilityDigest);
+        var capability = V3IndexCapabilityManifestArtifact.ParseAndVerify(
+            capabilityRef,
+            capabilityManifestBytes.Span,
+            PublisherId.EuEurLex,
+            digest);
+        return OpenAndVerify(indexRef, indexBytes, expectedCorpusRef, capability);
+    }
+
+    public IReadOnlyList<EuropeIndexResolvedExpression> ResolveExact(string identifier)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(identifier);
+        var hasQualifiedProvision = TryParseQualifiedProvisionIdentifier(
+            identifier, out var provisionExpression, out var provisionIdentifier);
+        lock (_gate)
+        {
+            using var command = _connection.CreateCommand();
+            command.CommandText = """
+                SELECT publisher_work_id,publisher_expression_id,language,
+                       publisher_identifier,article_identity_sha256
+                FROM articles
+                WHERE publisher_work_id=$identifier OR publisher_work_celex=$identifier
+                   OR publisher_expression_id=$identifier
+                   OR article_identity_sha256=$identifier
+                   OR ($has_qualified_provision=1
+                       AND publisher_expression_id=$provision_expression
+                       AND publisher_identifier=$provision_identifier)
+                ORDER BY publisher_work_id,publisher_expression_id,language,
+                         publisher_identifier,article_identity_sha256
+                """;
+            command.Parameters.AddWithValue("$identifier", identifier);
+            command.Parameters.AddWithValue(
+                "$has_qualified_provision", hasQualifiedProvision ? 1 : 0);
+            command.Parameters.AddWithValue("$provision_expression", provisionExpression);
+            command.Parameters.AddWithValue("$provision_identifier", provisionIdentifier);
+            using var reader = command.ExecuteReader();
+            var rows = new List<(string Work, string Expression, string Language,
+                string Provision, string Article)>();
+            while (reader.Read())
+            {
+                rows.Add((reader.GetString(0), reader.GetString(1), reader.GetString(2),
+                    reader.GetString(3), reader.GetString(4)));
+            }
+
+            return rows
+                .GroupBy(static row => (row.Work, row.Expression, row.Language))
+                .Select(static group => new EuropeIndexResolvedExpression(
+                    group.Key.Work,
+                    group.Key.Expression,
+                    group.Key.Language,
+                    Array.AsReadOnly(group.Select(static row => row.Provision)
+                        .Distinct(StringComparer.Ordinal).ToArray()),
+                    Array.AsReadOnly(group.Select(static row => row.Article).ToArray())))
+                .ToArray();
+        }
+    }
+
+    internal static string QualifiedProvisionIdentifierOf(
+        string publisherExpressionId,
+        string publisherIdentifier)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(publisherExpressionId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(publisherIdentifier);
+        return publisherExpressionId + ProvisionCoordinateMarker
+            + Uri.EscapeDataString(publisherIdentifier);
+    }
+
+    private static bool TryParseQualifiedProvisionIdentifier(
+        string identifier,
+        out string publisherExpressionId,
+        out string publisherIdentifier)
+    {
+        var marker = identifier.LastIndexOf(ProvisionCoordinateMarker, StringComparison.Ordinal);
+        if (marker <= 0 || marker + ProvisionCoordinateMarker.Length >= identifier.Length)
+        {
+            publisherExpressionId = string.Empty;
+            publisherIdentifier = string.Empty;
+            return false;
+        }
+
+        publisherExpressionId = identifier[..marker];
+        var encoded = identifier[(marker + ProvisionCoordinateMarker.Length)..];
+        publisherIdentifier = Uri.UnescapeDataString(encoded);
+        return publisherIdentifier.Length != 0 && string.Equals(
+            identifier,
+            QualifiedProvisionIdentifierOf(publisherExpressionId, publisherIdentifier),
+            StringComparison.Ordinal);
     }
 
     public EuropeIndexSearchResult Search(string language, DateOnly from, DateOnly to, string query)
@@ -726,12 +865,13 @@ public sealed class EuropeIndexReader : IDisposable
     private static EuropeIndexBuilder.ArticleRow[] ReadArticles(SqliteConnection connection)
     {
         using var command = connection.CreateCommand();
-        command.CommandText = "SELECT article_identity_sha256,object_ref_sha256,publisher_work_id,publisher_expression_id,package_entry,publisher_identifier,heading,wording_date,language,searchable_text,tokens_json FROM articles ORDER BY article_identity_sha256";
+        command.CommandText = "SELECT article_identity_sha256,object_ref_sha256,publisher_work_id,publisher_work_celex,publisher_expression_id,package_entry,publisher_identifier,heading,wording_date,language,searchable_text,tokens_json FROM articles ORDER BY article_identity_sha256";
         using var reader = command.ExecuteReader();
         var values = new List<EuropeIndexBuilder.ArticleRow>();
         while (reader.Read()) values.Add(new(reader.GetString(0), reader.GetString(1), reader.GetString(2),
             reader.GetString(3), reader.GetString(4), reader.GetString(5), reader.GetString(6),
-            reader.GetString(7), reader.GetString(8), reader.GetString(9), reader.GetString(10)));
+            reader.GetString(7), reader.GetString(8), reader.GetString(9), reader.GetString(10),
+            reader.GetString(11)));
         return values.ToArray();
     }
 }

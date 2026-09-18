@@ -3,8 +3,11 @@ using System.Security.Cryptography;
 using Lex.V3.Api;
 using Lex.V3.Contracts;
 using Lex.V3.Contracts.Custody;
+using Lex.V3.Contracts.Derivation;
 using Lex.V3.Contracts.Index;
 using Lex.V3.Contracts.Platform;
+using Lex.V3.Contracts.Source.Europe;
+using Lex.V3.Ingest.Europe;
 using Lex.V3.Ingest.Luxembourg;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
@@ -173,6 +176,8 @@ public sealed class V3CorpusResolveMountTests
 
         Assert.AreEqual(V3Verdicts.Refuse, envelope.Verdict);
         Assert.AreEqual("identifier_unknown", envelope.Refusal!.Code);
+        Assert.AreEqual(PublisherId.LuLegilux, envelope.Context.Publisher);
+        Assert.AreEqual("lu", envelope.Context.Jurisdiction);
         Assert.AreEqual(identifier,
             envelope.Refusal.HelpfulPayload.GetProperty("requested_identifier").GetString());
     }
@@ -501,6 +506,8 @@ public sealed class V3CorpusResolveMountTests
         var envelope = V3EnvelopeJson.ParseAndVerify(ResponseBytes(context), V3OperationRegistry.Reviewed);
         Assert.AreEqual(V3Verdicts.Refuse, envelope.Verdict);
         Assert.AreEqual("ambiguous_identifier", envelope.Refusal!.Code);
+        Assert.AreEqual(PublisherId.LuLegilux, envelope.Context.Publisher);
+        Assert.AreEqual("lu", envelope.Context.Jurisdiction);
         Assert.AreEqual(
             fixture.PublisherWid,
             envelope.Refusal.HelpfulPayload.GetProperty("requested_identifier").GetString());
@@ -509,6 +516,269 @@ public sealed class V3CorpusResolveMountTests
         CollectionAssert.AreEqual(
             new[] { fixture.ExpressionIri, alternateExpression }.Order(StringComparer.Ordinal).ToArray(),
             candidates);
+    }
+
+    [TestMethod]
+    public async Task ExactIdentifierPresentInBothPublisherIndexesRefusesCrossPublisherSelection()
+    {
+        var fixture = await MountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        await fixture.BindPublisherWorkIdentifierAsync();
+        var europeExpression = await fixture.AddEuropeCollisionAsync();
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+
+        var envelope = await ResolveAsync(mount, fixture.PublisherWid);
+
+        Assert.AreEqual(V3Verdicts.Refuse, envelope.Verdict);
+        Assert.AreEqual("ambiguous_identifier", envelope.Refusal!.Code);
+        CollectionAssert.AreEqual(
+            new[] { fixture.ExpressionIri, europeExpression }
+                .Order(StringComparer.Ordinal).ToArray(),
+            envelope.Refusal.HelpfulPayload.GetProperty("candidates")
+                .EnumerateArray().Select(static value => value.GetString()).ToArray());
+    }
+
+    [TestMethod]
+    public async Task EuropeAmbiguityKeepsEuropeContextWhenLuxembourgIsMounted()
+    {
+        var fixture = await MountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        var expressions = await fixture.AddEuropeAmbiguityAsync();
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+
+        var envelope = await ResolveAsync(mount, fixture.PublisherWid);
+
+        Assert.AreEqual(V3Verdicts.Refuse, envelope.Verdict);
+        Assert.AreEqual("ambiguous_identifier", envelope.Refusal!.Code);
+        Assert.AreEqual(PublisherId.EuEurLex, envelope.Context.Publisher);
+        Assert.AreEqual("eu", envelope.Context.Jurisdiction);
+        CollectionAssert.AreEquivalent(
+            new[] { expressions.First, expressions.Second },
+            envelope.Refusal.HelpfulPayload.GetProperty("candidates")
+                .EnumerateArray().Select(static value => value.GetString()).ToArray());
+    }
+
+    [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task AbsentCelexOnCombinedMountNeverFallsThroughToLuxembourgDiscovery(
+        bool addLuxembourgTitleCapability)
+    {
+        var fixture = await MountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        _ = await fixture.AddEuropeCollisionAsync();
+        if (addLuxembourgTitleCapability)
+        {
+            await fixture.AddWorkTitleAsync();
+        }
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+
+        var envelope = await ResolveAsync(mount, "32099R9999");
+
+        Assert.AreEqual(V3Verdicts.Refuse, envelope.Verdict);
+        Assert.AreEqual("identifier_unknown", envelope.Refusal!.Code);
+        Assert.AreEqual(PublisherId.EuEurLex, envelope.Context.Publisher);
+        Assert.AreEqual("eu", envelope.Context.Jurisdiction);
+        Assert.AreEqual(TimelineSemantics.OfficialConsolidationState,
+            envelope.Context.TimelineSemantics);
+    }
+
+    [TestMethod]
+    public async Task AbsentCellarCoordinatesOnCombinedMountKeepEuropeContext()
+    {
+        var fixture = await EuropeMountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        await fixture.AddLuxembourgMountAsync();
+        StringAssert.StartsWith(
+            fixture.PublisherWorkId,
+            "http://publications.europa.eu/resource/cellar/",
+            "The retained EU fixture must prove the publisher coordinate family under test.");
+        StringAssert.StartsWith(
+            fixture.PublisherExpressionId,
+            fixture.PublisherWorkId[..(fixture.PublisherWorkId.LastIndexOf('/') + 1)],
+            "The retained EU expression must be a Cellar publisher coordinate.");
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+
+        const string absentWork =
+            "http://publications.europa.eu/resource/cellar/00000000-0000-0000-0000-000000000000";
+        const string absentExpression = absentWork + ".0001";
+        var absentProvision = EuropeIndexReader.QualifiedProvisionIdentifierOf(
+            absentExpression, "001");
+
+        foreach (var identifier in new[]
+                 {
+                     absentWork,
+                     absentExpression,
+                     absentProvision,
+                     "http://publications.europa.eu/resource/celex/32099R9999",
+                 })
+        {
+            var envelope = await ResolveAsync(mount, identifier);
+            Assert.AreEqual(V3Verdicts.Refuse, envelope.Verdict, identifier);
+            Assert.AreEqual("identifier_unknown", envelope.Refusal!.Code, identifier);
+            Assert.AreEqual(PublisherId.EuEurLex, envelope.Context.Publisher, identifier);
+            Assert.AreEqual("eu", envelope.Context.Jurisdiction, identifier);
+            Assert.AreEqual(TimelineSemantics.OfficialConsolidationState,
+                envelope.Context.TimelineSemantics, identifier);
+        }
+    }
+
+    [TestMethod]
+    public async Task AddressesOnEuropeanUnionPublisherHostsKeepEuropeContextOnCombinedMount()
+    {
+        var fixture = await EuropeMountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        await fixture.AddLuxembourgMountAsync();
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+        var mountedCelex = await ResolveAsync(mount, "32016R0679");
+        Assert.AreEqual(V3Verdicts.Answer, mountedCelex.Verdict,
+            "The retained GDPR must be mounted so the EUR-Lex link under test names a mounted act.");
+
+        foreach (var identifier in new[]
+                 {
+                     "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32016R0679",
+                     "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32099R9999",
+                     "https://eur-lex.europa.eu/legal-content/FR/ALL/?uri=CELEX%3A32016R0679&qid=1",
+                     "http://publications.europa.eu/resource/oj/JOL_2016_119_R_0001",
+                     "https://publications.europa.eu/resource/cellar/00000000-0000-0000-0000-000000000000",
+                     "https://op.europa.eu/en/publication-detail/-/publication/3e485e15-11bd-11e6-ba9a-01aa75ed71a1",
+                     "https://europa.eu/",
+                 })
+        {
+            var envelope = await ResolveAsync(mount, identifier);
+            Assert.AreEqual(V3Verdicts.Refuse, envelope.Verdict, identifier);
+            Assert.AreEqual("identifier_unknown", envelope.Refusal!.Code, identifier);
+            Assert.AreEqual(identifier,
+                envelope.Refusal.HelpfulPayload.GetProperty("requested_identifier").GetString());
+            Assert.AreEqual(PublisherId.EuEurLex, envelope.Context.Publisher, identifier);
+            Assert.AreEqual("eu", envelope.Context.Jurisdiction, identifier);
+            Assert.AreEqual(TimelineSemantics.OfficialConsolidationState,
+                envelope.Context.TimelineSemantics, identifier);
+        }
+    }
+
+    [TestMethod]
+    public async Task AddressesOutsideEuropeanUnionPublisherHostsDoNotBorrowEuropeContext()
+    {
+        var fixture = await EuropeMountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        await fixture.AddLuxembourgMountAsync();
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+
+        foreach (var identifier in new[]
+                 {
+                     "https://eur-lex.europa.eu.example.invalid/legal-content/EN/TXT/?uri=CELEX:32016R0679",
+                     "https://example.invalid/legal-content/EN/TXT/?uri=CELEX:32016R0679",
+                     "https://noteuropa.eu/resource/cellar/3e485e15-11bd-11e6-ba9a-01aa75ed71a1",
+                     "ftp://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32016R0679",
+                 })
+        {
+            var envelope = await ResolveAsync(mount, identifier);
+            Assert.AreEqual(V3Verdicts.Refuse, envelope.Verdict, identifier);
+            Assert.AreEqual("identifier_unknown", envelope.Refusal!.Code, identifier);
+            Assert.AreEqual(PublisherId.LuLegilux, envelope.Context.Publisher, identifier);
+            Assert.AreEqual("lu", envelope.Context.Jurisdiction, identifier);
+        }
+    }
+
+    [TestMethod]
+    public async Task EuropeOnlyRefusalsCarryEuropeContext()
+    {
+        var fixture = await EuropeMountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        var secondExpression = await fixture
+            .AddSecondExpressionWithSamePublisherProvisionIdentifierAsync(
+                fixture.PublisherWorkId);
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+
+        var ambiguous = await ResolveAsync(mount, fixture.PublisherWorkId);
+        Assert.AreEqual(V3Verdicts.Refuse, ambiguous.Verdict);
+        Assert.AreEqual("ambiguous_identifier", ambiguous.Refusal!.Code);
+        Assert.AreEqual(PublisherId.EuEurLex, ambiguous.Context.Publisher);
+        Assert.AreEqual("eu", ambiguous.Context.Jurisdiction);
+        CollectionAssert.AreEquivalent(
+            new[] { fixture.PublisherExpressionId, secondExpression },
+            ambiguous.Refusal.HelpfulPayload.GetProperty("candidates")
+                .EnumerateArray().Select(static value => value.GetString()).ToArray());
+
+        var unavailable = await ResolveAsync(mount, "ordinary unknown words");
+        Assert.AreEqual(V3Verdicts.Refuse, unavailable.Verdict);
+        Assert.AreEqual("retrieval_mode_unavailable", unavailable.Refusal!.Code);
+        Assert.AreEqual(PublisherId.EuEurLex, unavailable.Context.Publisher);
+        Assert.AreEqual("eu", unavailable.Context.Jurisdiction);
+
+        var luPermalinkMiss = await ResolveAsync(
+            mount, $"/lu-legilux/unknown/2000-01-01--{new string('a', 64)}");
+        Assert.AreEqual(V3Verdicts.Refuse, luPermalinkMiss.Verdict);
+        Assert.AreEqual("identifier_unknown", luPermalinkMiss.Refusal!.Code);
+        Assert.AreEqual(PublisherId.LuLegilux, luPermalinkMiss.Context.Publisher);
+        Assert.AreEqual("lu", luPermalinkMiss.Context.Jurisdiction);
+    }
+
+    [TestMethod]
+    public async Task MountedEuropeIndexServesExactWorkExpressionAndProvisionCoordinates()
+    {
+        var fixture = await EuropeMountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        var secondExpression = await fixture.AddSecondActWithSamePublisherProvisionIdentifierAsync();
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+
+        var qualifiedProvision = EuropeIndexReader.QualifiedProvisionIdentifierOf(
+            fixture.PublisherExpressionId, fixture.PublisherProvisionIdentifier);
+
+        foreach (var identifier in new[]
+                 {
+                     fixture.PublisherWorkId,
+                     "32016R0679",
+                     fixture.PublisherExpressionId,
+                     qualifiedProvision,
+                     fixture.ArticleIdentitySha256,
+                 })
+        {
+            var envelope = await ResolveAsync(mount, identifier);
+            Assert.AreEqual(V3Verdicts.Answer, envelope.Verdict, identifier);
+            Assert.AreEqual(PublisherId.EuEurLex, envelope.Context.Publisher, identifier);
+            Assert.AreEqual(TimelineSemantics.OfficialConsolidationState,
+                envelope.Context.TimelineSemantics, identifier);
+            Assert.AreEqual(fixture.CorpusSha256, envelope.Context.Snapshot.SnapshotSha256, identifier);
+            Assert.AreEqual("eu-eurlex", envelope.Result!.Value.GetProperty("publisher").GetString());
+            Assert.AreEqual(fixture.PublisherWorkId,
+                envelope.Result.Value.GetProperty("publisher_work_id").GetString());
+            Assert.AreEqual(fixture.PublisherExpressionId,
+                envelope.Result.Value.GetProperty("expression_iri").GetString());
+            Assert.AreEqual(fixture.IndexSha256,
+                envelope.Result.Value.GetProperty("index_sha256").GetString());
+        }
+
+        var second = await ResolveAsync(mount, EuropeIndexReader.QualifiedProvisionIdentifierOf(
+            secondExpression, fixture.PublisherProvisionIdentifier));
+        Assert.AreEqual(V3Verdicts.Answer, second.Verdict);
+        Assert.AreEqual(secondExpression,
+            second.Result!.Value.GetProperty("expression_iri").GetString());
+
+        var bare = await ResolveAsync(mount, fixture.PublisherProvisionIdentifier);
+        Assert.AreNotEqual(V3Verdicts.Answer, bare.Verdict,
+            "A document-local Formex ARTICLE identifier must not resolve as a global coordinate.");
+    }
+
+    [TestMethod]
+    public async Task PartialEuropeMountFailsClosed()
+    {
+        var fixture = await EuropeMountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        File.Delete(Path.Combine(
+            fixture.Directory, V3CorpusMount.EuropeCapabilityManifestFileName));
+
+        await Assert.ThrowsExactlyAsync<InvalidDataException>(async () =>
+            await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None));
     }
 
     [TestMethod]
@@ -574,6 +844,7 @@ public sealed class V3CorpusResolveMountTests
     {
         private readonly byte[] _capabilityManifestBytes;
         private readonly byte[] _corpusBytes;
+        private readonly Stage3DerivationProfileEnvelope _envelope;
 
         private MountedFixture(
             string directory,
@@ -586,7 +857,8 @@ public sealed class V3CorpusResolveMountTests
             string corpusSha256,
             string indexSha256,
             byte[] capabilityManifestBytes,
-            byte[] corpusBytes)
+            byte[] corpusBytes,
+            Stage3DerivationProfileEnvelope envelope)
         {
             Directory = directory;
             ExpressionIri = expressionIri;
@@ -599,6 +871,7 @@ public sealed class V3CorpusResolveMountTests
             IndexSha256 = indexSha256;
             _capabilityManifestBytes = capabilityManifestBytes;
             _corpusBytes = corpusBytes;
+            _envelope = envelope;
         }
 
         public string Directory { get; }
@@ -667,7 +940,123 @@ public sealed class V3CorpusResolveMountTests
                 corpus.ArtifactRef.Sha256,
                 index.IndexRef.Sha256,
                 capabilityBytes,
-                corpusBytes);
+                corpusBytes,
+                envelope);
+        }
+
+        public async Task<string> AddEuropeCollisionAsync()
+        {
+            var built = EuropeIndexBuilder.TryBuild(
+                _envelope, out var refusal, out var detail);
+            Assert.IsNotNull(built, $"{refusal}: {detail}");
+            var indexPath = Path.Combine(Directory, V3CorpusMount.EuropeIndexFileName);
+            await File.WriteAllBytesAsync(indexPath, built.IndexBytes.ToArray());
+            var expression = "http://publications.europa.eu/resource/cellar/cross-publisher-expression";
+            EuropeIndexBuilder.MemberRow[] members;
+            EuropeIndexBuilder.CorrigendumLineRow[] lines;
+            EuropeIndexBuilder.CorrigendumGapRow[] gaps;
+            EuropeIndexBuilder.ArticleRow[] articles;
+            using (var connection = EuropeIndexBuilder.Open(indexPath, SqliteOpenMode.ReadWrite))
+            {
+                members = ReadEuropeMembers(connection);
+                lines = ReadEuropeLines(connection);
+                gaps = ReadEuropeGaps(connection);
+                var member = members[0];
+                var inserted = new EuropeIndexBuilder.ArticleRow(
+                    new string('c', 64), member.ObjectRefSha256, PublisherWid, "32024R0001", expression,
+                    "collision.xml", "collision-provision", "Collision", "2024-02-01",
+                    "eng", "collision", "[]");
+                using var insert = connection.CreateCommand();
+                insert.CommandText = "INSERT INTO articles VALUES($identity,$object,$work,$celex,$expression,$entry,$identifier,$heading,$date,$language,$text,$tokens)";
+                insert.Parameters.AddWithValue("$identity", inserted.ArticleIdentitySha256);
+                insert.Parameters.AddWithValue("$object", inserted.ObjectRefSha256);
+                insert.Parameters.AddWithValue("$work", inserted.PublisherWorkId);
+                insert.Parameters.AddWithValue("$celex", inserted.PublisherWorkCelex);
+                insert.Parameters.AddWithValue("$expression", inserted.PublisherExpressionId);
+                insert.Parameters.AddWithValue("$entry", inserted.PackageEntry);
+                insert.Parameters.AddWithValue("$identifier", inserted.PublisherIdentifier);
+                insert.Parameters.AddWithValue("$heading", inserted.Heading);
+                insert.Parameters.AddWithValue("$date", inserted.WordingDate);
+                insert.Parameters.AddWithValue("$language", inserted.Language);
+                insert.Parameters.AddWithValue("$text", inserted.SearchableText);
+                insert.Parameters.AddWithValue("$tokens", inserted.TokensJson);
+                Assert.AreEqual(1, insert.ExecuteNonQuery());
+                articles = ReadEuropeArticles(connection);
+                using var stamp = connection.CreateCommand();
+                stamp.CommandText = "UPDATE stamp SET logical_rows_sha256=$logical WHERE stamp_id=1";
+                stamp.Parameters.AddWithValue(
+                    "$logical", EuropeIndexBuilder.HashLogicalRows(members, lines, gaps, articles));
+                Assert.AreEqual(1, stamp.ExecuteNonQuery());
+            }
+
+            var indexBytes = await File.ReadAllBytesAsync(indexPath);
+            var digest = Convert.ToHexStringLower(SHA256.HashData(indexBytes));
+            var manifest = EuropeIndexBuilder.MeasureCapabilities(digest, articles);
+            using var stream = new MemoryStream();
+            _ = V3IndexCapabilityManifestArtifact.Write(stream, manifest);
+            await File.WriteAllBytesAsync(
+                Path.Combine(Directory, V3CorpusMount.EuropeCapabilityManifestFileName),
+                stream.ToArray());
+            return expression;
+        }
+
+        public async Task<(string First, string Second)> AddEuropeAmbiguityAsync()
+        {
+            var first = await AddEuropeCollisionAsync();
+            const string second =
+                "http://publications.europa.eu/resource/cellar/eu-ambiguity-expression";
+            var indexPath = Path.Combine(Directory, V3CorpusMount.EuropeIndexFileName);
+            EuropeIndexBuilder.MemberRow[] members;
+            EuropeIndexBuilder.CorrigendumLineRow[] lines;
+            EuropeIndexBuilder.CorrigendumGapRow[] gaps;
+            EuropeIndexBuilder.ArticleRow[] articles;
+            using (var connection = EuropeIndexBuilder.Open(indexPath, SqliteOpenMode.ReadWrite))
+            {
+                members = ReadEuropeMembers(connection);
+                lines = ReadEuropeLines(connection);
+                gaps = ReadEuropeGaps(connection);
+                articles = ReadEuropeArticles(connection);
+                var source = articles.Single(article => string.Equals(
+                    article.PublisherExpressionId, first, StringComparison.Ordinal));
+                var inserted = source with
+                {
+                    ArticleIdentitySha256 = new string('e', 64),
+                    PublisherExpressionId = second,
+                    PackageEntry = "eu-ambiguity.xml",
+                    PublisherIdentifier = "eu-ambiguity-provision",
+                };
+                using var insert = connection.CreateCommand();
+                insert.CommandText = "INSERT INTO articles VALUES($identity,$object,$work,$celex,$expression,$entry,$identifier,$heading,$date,$language,$text,$tokens)";
+                insert.Parameters.AddWithValue("$identity", inserted.ArticleIdentitySha256);
+                insert.Parameters.AddWithValue("$object", inserted.ObjectRefSha256);
+                insert.Parameters.AddWithValue("$work", inserted.PublisherWorkId);
+                insert.Parameters.AddWithValue("$celex", inserted.PublisherWorkCelex);
+                insert.Parameters.AddWithValue("$expression", inserted.PublisherExpressionId);
+                insert.Parameters.AddWithValue("$entry", inserted.PackageEntry);
+                insert.Parameters.AddWithValue("$identifier", inserted.PublisherIdentifier);
+                insert.Parameters.AddWithValue("$heading", inserted.Heading);
+                insert.Parameters.AddWithValue("$date", inserted.WordingDate);
+                insert.Parameters.AddWithValue("$language", inserted.Language);
+                insert.Parameters.AddWithValue("$text", inserted.SearchableText);
+                insert.Parameters.AddWithValue("$tokens", inserted.TokensJson);
+                Assert.AreEqual(1, insert.ExecuteNonQuery());
+                articles = ReadEuropeArticles(connection);
+                using var stamp = connection.CreateCommand();
+                stamp.CommandText = "UPDATE stamp SET logical_rows_sha256=$logical WHERE stamp_id=1";
+                stamp.Parameters.AddWithValue(
+                    "$logical", EuropeIndexBuilder.HashLogicalRows(members, lines, gaps, articles));
+                Assert.AreEqual(1, stamp.ExecuteNonQuery());
+            }
+
+            var indexBytes = await File.ReadAllBytesAsync(indexPath);
+            var digest = Convert.ToHexStringLower(SHA256.HashData(indexBytes));
+            var manifest = EuropeIndexBuilder.MeasureCapabilities(digest, articles);
+            using var stream = new MemoryStream();
+            _ = V3IndexCapabilityManifestArtifact.Write(stream, manifest);
+            await File.WriteAllBytesAsync(
+                Path.Combine(Directory, V3CorpusMount.EuropeCapabilityManifestFileName),
+                stream.ToArray());
+            return (first, second);
         }
 
         public async Task<string> AddAlternateExpressionForSameWorkAsync()
@@ -730,6 +1119,44 @@ public sealed class V3CorpusResolveMountTests
                 Path.Combine(Directory, V3CorpusMount.CapabilityManifestFileName),
                 stream.ToArray());
             return alternateExpression;
+        }
+
+        public async Task BindPublisherWorkIdentifierAsync()
+        {
+            var indexPath = Path.Combine(Directory, V3CorpusMount.IndexFileName);
+            LuxembourgIndexBuilder.MemberRow[] members;
+            LuxembourgIndexBuilder.ArticleRow[] articles;
+            LuxembourgIndexBuilder.StateRow[] states;
+            LuxembourgIndexBuilder.WorkTitleRow[] titles;
+            using (var connection = LuxembourgIndexBuilder.Open(indexPath, SqliteOpenMode.ReadWrite))
+            {
+                using var bindWork = connection.CreateCommand();
+                bindWork.CommandText =
+                    "UPDATE articles SET publisher_wid=$wid WHERE expression_iri=$expression";
+                bindWork.Parameters.AddWithValue("$wid", PublisherWid);
+                bindWork.Parameters.AddWithValue("$expression", ExpressionIri);
+                Assert.IsGreaterThan(0, bindWork.ExecuteNonQuery());
+                members = ReadMembers(connection);
+                articles = ReadArticles(connection);
+                states = ReadStates(connection);
+                titles = ReadWorkTitles(connection);
+                using var stamp = connection.CreateCommand();
+                stamp.CommandText =
+                    "UPDATE stamp SET logical_rows_sha256=$digest WHERE stamp_id=1";
+                stamp.Parameters.AddWithValue(
+                    "$digest", LuxembourgIndexBuilder.HashLogicalRows(
+                        members, articles, states, titles));
+                Assert.AreEqual(1, stamp.ExecuteNonQuery());
+            }
+
+            var indexBytes = await File.ReadAllBytesAsync(indexPath);
+            var indexDigest = Convert.ToHexStringLower(SHA256.HashData(indexBytes));
+            var manifest = LuxembourgIndexBuilder.MeasureCapabilities(indexDigest, articles, titles);
+            using var stream = new MemoryStream();
+            _ = V3IndexCapabilityManifestArtifact.Write(stream, manifest);
+            await File.WriteAllBytesAsync(
+                Path.Combine(Directory, V3CorpusMount.CapabilityManifestFileName),
+                stream.ToArray());
         }
 
         public async Task<LuxembourgIndexBuilder.StateRow> AddSecondLanguageStateAtSameDateAsync()
@@ -988,6 +1415,56 @@ public sealed class V3CorpusResolveMountTests
             return values.ToArray();
         }
 
+        internal static EuropeIndexBuilder.MemberRow[] ReadEuropeMembers(SqliteConnection connection)
+        {
+            using var command = connection.CreateCommand();
+            command.CommandText = "SELECT object_ref_sha256,source_ordinal,outcome,content_class,stage3_outcomes_json,gaps_json FROM members ORDER BY object_ref_sha256";
+            using var reader = command.ExecuteReader();
+            var values = new List<EuropeIndexBuilder.MemberRow>();
+            while (reader.Read()) values.Add(new(
+                reader.GetString(0), reader.GetInt32(1), reader.GetString(2),
+                reader.IsDBNull(3) ? null : reader.GetString(3), reader.GetString(4), reader.GetString(5)));
+            return values.ToArray();
+        }
+
+        internal static EuropeIndexBuilder.CorrigendumLineRow[] ReadEuropeLines(SqliteConnection connection)
+        {
+            using var command = connection.CreateCommand();
+            command.CommandText = "SELECT line_identity_sha256,family_key,corrected_work_root,corrigendum_work_root,publisher_expression_id,language_iri,reach,date_state,publisher_date_raw_lexical,publisher_date_datatype_iri,expression_content_sha256 FROM corrigendum_lines ORDER BY line_identity_sha256";
+            using var reader = command.ExecuteReader();
+            var values = new List<EuropeIndexBuilder.CorrigendumLineRow>();
+            while (reader.Read()) values.Add(new(
+                reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3),
+                reader.GetString(4), reader.GetString(5), reader.GetString(6), reader.GetString(7),
+                reader.IsDBNull(8) ? null : reader.GetString(8),
+                reader.IsDBNull(9) ? null : reader.GetString(9), reader.GetString(10)));
+            return values.ToArray();
+        }
+
+        internal static EuropeIndexBuilder.CorrigendumGapRow[] ReadEuropeGaps(SqliteConnection connection)
+        {
+            using var command = connection.CreateCommand();
+            command.CommandText = "SELECT gap_identity_sha256,family_key,work_root,reason FROM corrigendum_gaps ORDER BY gap_identity_sha256";
+            using var reader = command.ExecuteReader();
+            var values = new List<EuropeIndexBuilder.CorrigendumGapRow>();
+            while (reader.Read()) values.Add(new(
+                reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3)));
+            return values.ToArray();
+        }
+
+        internal static EuropeIndexBuilder.ArticleRow[] ReadEuropeArticles(SqliteConnection connection)
+        {
+            using var command = connection.CreateCommand();
+            command.CommandText = "SELECT article_identity_sha256,object_ref_sha256,publisher_work_id,publisher_work_celex,publisher_expression_id,package_entry,publisher_identifier,heading,wording_date,language,searchable_text,tokens_json FROM articles ORDER BY article_identity_sha256";
+            using var reader = command.ExecuteReader();
+            var values = new List<EuropeIndexBuilder.ArticleRow>();
+            while (reader.Read()) values.Add(new(
+                reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3),
+                reader.GetString(4), reader.GetString(5), reader.GetString(6), reader.GetString(7),
+                reader.GetString(8), reader.GetString(9), reader.GetString(10), reader.GetString(11)));
+            return values.ToArray();
+        }
+
         public Task RestoreCapabilityManifestAsync() => File.WriteAllBytesAsync(
             Path.Combine(Directory, V3CorpusMount.CapabilityManifestFileName),
             _capabilityManifestBytes);
@@ -1003,6 +1480,155 @@ public sealed class V3CorpusResolveMountTests
                 System.IO.Directory.Delete(Directory, recursive: true);
             }
 
+            return ValueTask.CompletedTask;
+        }
+    }
+
+    private sealed class EuropeMountedFixture : IAsyncDisposable
+    {
+        private readonly Stage3DerivationProfileEnvelope _envelope;
+
+        private EuropeMountedFixture(
+            string directory,
+            string publisherWorkId,
+            string publisherExpressionId,
+            string publisherProvisionIdentifier,
+            string articleIdentitySha256,
+            string corpusSha256,
+            string indexSha256,
+            Stage3DerivationProfileEnvelope envelope)
+        {
+            Directory = directory;
+            PublisherWorkId = publisherWorkId;
+            PublisherExpressionId = publisherExpressionId;
+            PublisherProvisionIdentifier = publisherProvisionIdentifier;
+            ArticleIdentitySha256 = articleIdentitySha256;
+            CorpusSha256 = corpusSha256;
+            IndexSha256 = indexSha256;
+            _envelope = envelope;
+        }
+
+        public string Directory { get; }
+        public string PublisherWorkId { get; }
+        public string PublisherExpressionId { get; }
+        public string PublisherProvisionIdentifier { get; }
+        public string ArticleIdentitySha256 { get; }
+        public string CorpusSha256 { get; }
+        public string IndexSha256 { get; private set; }
+
+        public static async Task<EuropeMountedFixture> CreateAsync()
+        {
+            var envelope = await EuropeIndexBuilderTests.RetainedGdprEnvelopeAsync();
+            var corpus = LexCorpus6Builder.TryBuild(
+                envelope, out var corpusRefusal, out var corpusDetail);
+            Assert.IsNotNull(corpus, $"{corpusRefusal}: {corpusDetail}");
+            var index = EuropeIndexBuilder.TryBuild(
+                envelope, out var indexRefusal, out var indexDetail);
+            Assert.IsNotNull(index, $"{indexRefusal}: {indexDetail}");
+            var admitted = envelope.BodyComposition.Envelope.FormexMainBodyLegalContent!.Outcomes
+                .Single(static outcome =>
+                    outcome.Disposition == EuFormexMainBodyLegalContentDisposition.Admitted);
+            var directory = Path.Combine(
+                Path.GetTempPath(), $"lex-v3-europe-mount-{Guid.NewGuid():N}");
+            System.IO.Directory.CreateDirectory(directory);
+            await File.WriteAllBytesAsync(
+                Path.Combine(directory, V3CorpusMount.EuropeIndexFileName),
+                index.IndexBytes.ToArray());
+            await File.WriteAllBytesAsync(
+                Path.Combine(directory, V3CorpusMount.EuropeCapabilityManifestFileName),
+                index.CapabilityManifestBytes.ToArray());
+            await File.WriteAllBytesAsync(
+                Path.Combine(directory, V3CorpusMount.CorpusFileName),
+                corpus.CanonicalBytes.ToArray());
+            return new EuropeMountedFixture(
+                directory,
+                admitted.Source.ExpressionIdentity.PublisherWorkId,
+                admitted.Source.ExpressionIdentity.PublisherExpressionId,
+                admitted.Articles[0].PublisherIdentifier,
+                admitted.Articles[0].IdentitySha256,
+                corpus.ArtifactRef.Sha256,
+                index.IndexRef.Sha256,
+                envelope);
+        }
+
+        public async Task AddLuxembourgMountAsync()
+        {
+            var index = LuxembourgIndexBuilder.TryBuild(
+                _envelope, out var refusal, out var detail);
+            Assert.IsNotNull(index, $"{refusal}: {detail}");
+            await File.WriteAllBytesAsync(
+                Path.Combine(Directory, V3CorpusMount.IndexFileName),
+                index.IndexBytes.ToArray());
+            await File.WriteAllBytesAsync(
+                Path.Combine(Directory, V3CorpusMount.CapabilityManifestFileName),
+                index.CapabilityManifestBytes.ToArray());
+        }
+
+        public Task<string> AddSecondActWithSamePublisherProvisionIdentifierAsync() =>
+            AddSecondExpressionWithSamePublisherProvisionIdentifierAsync();
+
+        public async Task<string> AddSecondExpressionWithSamePublisherProvisionIdentifierAsync(
+            string? publisherWorkId = null)
+        {
+            const string secondWork =
+                "http://publications.europa.eu/resource/celex/32026R1965";
+            const string secondExpression =
+                "http://publications.europa.eu/resource/cellar/00000000-0000-0000-0000-000000000001.0001";
+            var indexPath = Path.Combine(Directory, V3CorpusMount.EuropeIndexFileName);
+            EuropeIndexBuilder.MemberRow[] members;
+            EuropeIndexBuilder.CorrigendumLineRow[] lines;
+            EuropeIndexBuilder.CorrigendumGapRow[] gaps;
+            EuropeIndexBuilder.ArticleRow[] articles;
+            using (var connection = EuropeIndexBuilder.Open(indexPath, SqliteOpenMode.ReadWrite))
+            {
+                members = MountedFixture.ReadEuropeMembers(connection);
+                lines = MountedFixture.ReadEuropeLines(connection);
+                gaps = MountedFixture.ReadEuropeGaps(connection);
+                articles = MountedFixture.ReadEuropeArticles(connection);
+                var source = articles[0];
+                var inserted = new EuropeIndexBuilder.ArticleRow(
+                    new string('d', 64), source.ObjectRefSha256, publisherWorkId ?? secondWork,
+                    "32026R0002", secondExpression,
+                    "second-act.xml", PublisherProvisionIdentifier, "Article 1", "2026-01-01",
+                    "eng", "second act wording", "[]");
+                using var insert = connection.CreateCommand();
+                insert.CommandText = "INSERT INTO articles VALUES($identity,$object,$work,$celex,$expression,$entry,$identifier,$heading,$date,$language,$text,$tokens)";
+                insert.Parameters.AddWithValue("$identity", inserted.ArticleIdentitySha256);
+                insert.Parameters.AddWithValue("$object", inserted.ObjectRefSha256);
+                insert.Parameters.AddWithValue("$work", inserted.PublisherWorkId);
+                insert.Parameters.AddWithValue("$celex", inserted.PublisherWorkCelex);
+                insert.Parameters.AddWithValue("$expression", inserted.PublisherExpressionId);
+                insert.Parameters.AddWithValue("$entry", inserted.PackageEntry);
+                insert.Parameters.AddWithValue("$identifier", inserted.PublisherIdentifier);
+                insert.Parameters.AddWithValue("$heading", inserted.Heading);
+                insert.Parameters.AddWithValue("$date", inserted.WordingDate);
+                insert.Parameters.AddWithValue("$language", inserted.Language);
+                insert.Parameters.AddWithValue("$text", inserted.SearchableText);
+                insert.Parameters.AddWithValue("$tokens", inserted.TokensJson);
+                Assert.AreEqual(1, insert.ExecuteNonQuery());
+                articles = MountedFixture.ReadEuropeArticles(connection);
+                using var stamp = connection.CreateCommand();
+                stamp.CommandText = "UPDATE stamp SET logical_rows_sha256=$logical WHERE stamp_id=1";
+                stamp.Parameters.AddWithValue(
+                    "$logical", EuropeIndexBuilder.HashLogicalRows(members, lines, gaps, articles));
+                Assert.AreEqual(1, stamp.ExecuteNonQuery());
+            }
+
+            var indexBytes = await File.ReadAllBytesAsync(indexPath);
+            IndexSha256 = Convert.ToHexStringLower(SHA256.HashData(indexBytes));
+            var manifest = EuropeIndexBuilder.MeasureCapabilities(IndexSha256, articles);
+            using var stream = new MemoryStream();
+            _ = V3IndexCapabilityManifestArtifact.Write(stream, manifest);
+            await File.WriteAllBytesAsync(
+                Path.Combine(Directory, V3CorpusMount.EuropeCapabilityManifestFileName),
+                stream.ToArray());
+            return secondExpression;
+        }
+
+        public ValueTask DisposeAsync()
+        {
+            if (System.IO.Directory.Exists(Directory))
+                System.IO.Directory.Delete(Directory, recursive: true);
             return ValueTask.CompletedTask;
         }
     }
