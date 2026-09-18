@@ -125,15 +125,20 @@ public sealed class EuropeIndexBuilderTests
 
         var byWork = reader.ResolveExact(work);
         var byExpression = reader.ResolveExact(expression);
+        var byCelex = reader.ResolveExact("32016R0679");
         var qualifiedProvision = EuropeIndexReader.QualifiedProvisionIdentifierOf(
             expression, article.PublisherIdentifier);
         var byProvision = reader.ResolveExact(qualifiedProvision);
 
         Assert.HasCount(1, byWork);
         Assert.HasCount(1, byExpression);
+        Assert.HasCount(1, byCelex,
+            "The publisher CELEX carried by the admitted Formex package is an R0 exact coordinate.");
         Assert.HasCount(1, byProvision);
         Assert.AreEqual(work, byWork[0].PublisherWorkId);
         Assert.AreEqual(expression, byWork[0].PublisherExpressionId);
+        Assert.AreEqual(work, byCelex[0].PublisherWorkId);
+        Assert.AreEqual(expression, byCelex[0].PublisherExpressionId);
         Assert.AreEqual(99, byWork[0].ArticleIdentities.Count);
         Assert.AreEqual(article.IdentitySha256, byProvision[0].ArticleIdentities.Single());
         Assert.AreEqual(article.PublisherIdentifier,
