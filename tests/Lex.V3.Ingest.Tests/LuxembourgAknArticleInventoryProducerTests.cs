@@ -15,6 +15,30 @@ namespace Lex.V3.Ingest.Tests;
 public sealed class LuxembourgAknArticleInventoryProducerTests
 {
     [TestMethod]
+    public async Task ConsolidatedAknBindsTheStableWorkAndApplicabilityToTheSelectedExpression()
+    {
+        const string work =
+            "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3";
+        const string legalResource = work + "/jo";
+        const string expression = legalResource + "/fr";
+        var bytes = await File.ReadAllBytesAsync(Path.Combine(
+            AppContext.BaseDirectory, "Fixtures", "LuAknLegalContent",
+            "loi-1991-08-10-n3--2024-02-01--fr.bin"));
+        var fixture = await Fixture.CreateAsync(
+            bytes, LuxembourgUserFormatToken.Xml, legalResource, expression);
+
+        var outcome = (await new LuxembourgAknArticleInventoryProducer(fixture.Store)
+            .RunAsync(fixture.Population, CancellationToken.None)).Outcomes.Single();
+
+        Assert.AreEqual(LuxembourgAknArticleInventoryDisposition.Inventoried, outcome.Disposition);
+        Assert.IsNotNull(outcome.Inventory);
+        Assert.IsNotNull(outcome.Inventory.ExpressionCoordinate);
+        Assert.AreEqual(work, outcome.Inventory.ExpressionCoordinate.PublisherWorkIri);
+        Assert.AreEqual(legalResource, outcome.Inventory.ExpressionCoordinate.PublisherLegalResourceIri);
+        Assert.AreEqual("2024-02-01", outcome.Inventory.ExpressionCoordinate.PublisherApplicabilityDate);
+    }
+
+    [TestMethod]
     public async Task TheRetainedPublisherAknBodyProducesStablePublisherArticleCoordinates()
     {
         var bytes = await File.ReadAllBytesAsync(Path.Combine(
@@ -34,6 +58,8 @@ public sealed class LuxembourgAknArticleInventoryProducerTests
         Assert.AreEqual(
             outcome.Input.SelectedWemiCandidate.ExpressionIri,
             outcome.Inventory.PublisherExpressionIri);
+        Assert.IsNull(outcome.Inventory.ExpressionCoordinate,
+            "An original publication without publisher applicability is not a dated expression state.");
         CollectionAssert.AreEqual(
             new[] { "art_1er", "art_2", "art_3", "art_4", "art_5", "art_6", "art_7", "art_8" },
             outcome.Inventory.Articles.Select(static article => article.PublisherId).ToArray());
@@ -186,15 +212,19 @@ public sealed class LuxembourgAknArticleInventoryProducerTests
     {
         internal static async Task<Fixture> CreateAsync(
             byte[] body,
-            LuxembourgUserFormatToken token)
+            LuxembourgUserFormatToken token,
+            string? rootIri = null,
+            string? expressionIri = null)
         {
             var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
             var receipt = await store.CreateAsync(
                 body, CustodyClass.NightlyFloor90d, CancellationToken.None);
             var enumeration = Artifact('a', "enumeration"u8);
             var kind = new SourceRegistryMemberRef(enumeration, "lu_document_get_root");
-            const string publisherUri =
+            rootIri ??=
                 "http://data.legilux.public.lu/eli/etat/leg/loi/2017/03/14/a439/jo/fr";
+            expressionIri ??= rootIri + "/expression";
+            var publisherUri = rootIri;
             var key = "lu-akn:" + publisherUri;
             var objectRef = new SourceObjectRef(
                 SourceCoreSchemaIds.SourceObjectRef,
@@ -232,9 +262,9 @@ public sealed class LuxembourgAknArticleInventoryProducerTests
                 LuxembourgLegalValue.Unstated,
                 "/eli/etat/leg/loi/2017/03/14/a439/jo/fr");
             var candidate = new LuxembourgWemiCandidate(
-                publisherUri,
-                publisherUri + "/expression",
-                publisherUri + "/expression/manifestation",
+                rootIri,
+                expressionIri,
+                expressionIri + "/manifestation",
                 address.StoreFileUri.Value.AbsoluteUri,
                 "http://publications.europa.eu/resource/authority/language/FRA",
                 "http://data.legilux.public.lu/resource/authority/user-format/" +
