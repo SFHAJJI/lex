@@ -628,6 +628,66 @@ public sealed class V3CorpusResolveMountTests
     }
 
     [TestMethod]
+    public async Task AddressesOnEuropeanUnionPublisherHostsKeepEuropeContextOnCombinedMount()
+    {
+        var fixture = await EuropeMountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        await fixture.AddLuxembourgMountAsync();
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+        var mountedCelex = await ResolveAsync(mount, "32016R0679");
+        Assert.AreEqual(V3Verdicts.Answer, mountedCelex.Verdict,
+            "The retained GDPR must be mounted so the EUR-Lex link under test names a mounted act.");
+
+        foreach (var identifier in new[]
+                 {
+                     "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32016R0679",
+                     "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32099R9999",
+                     "https://eur-lex.europa.eu/legal-content/FR/ALL/?uri=CELEX%3A32016R0679&qid=1",
+                     "http://publications.europa.eu/resource/oj/JOL_2016_119_R_0001",
+                     "https://publications.europa.eu/resource/cellar/00000000-0000-0000-0000-000000000000",
+                     "https://op.europa.eu/en/publication-detail/-/publication/3e485e15-11bd-11e6-ba9a-01aa75ed71a1",
+                     "https://europa.eu/",
+                 })
+        {
+            var envelope = await ResolveAsync(mount, identifier);
+            Assert.AreEqual(V3Verdicts.Refuse, envelope.Verdict, identifier);
+            Assert.AreEqual("identifier_unknown", envelope.Refusal!.Code, identifier);
+            Assert.AreEqual(identifier,
+                envelope.Refusal.HelpfulPayload.GetProperty("requested_identifier").GetString());
+            Assert.AreEqual(PublisherId.EuEurLex, envelope.Context.Publisher, identifier);
+            Assert.AreEqual("eu", envelope.Context.Jurisdiction, identifier);
+            Assert.AreEqual(TimelineSemantics.OfficialConsolidationState,
+                envelope.Context.TimelineSemantics, identifier);
+        }
+    }
+
+    [TestMethod]
+    public async Task AddressesOutsideEuropeanUnionPublisherHostsDoNotBorrowEuropeContext()
+    {
+        var fixture = await EuropeMountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        await fixture.AddLuxembourgMountAsync();
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+
+        foreach (var identifier in new[]
+                 {
+                     "https://eur-lex.europa.eu.example.invalid/legal-content/EN/TXT/?uri=CELEX:32016R0679",
+                     "https://example.invalid/legal-content/EN/TXT/?uri=CELEX:32016R0679",
+                     "https://noteuropa.eu/resource/cellar/3e485e15-11bd-11e6-ba9a-01aa75ed71a1",
+                     "ftp://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32016R0679",
+                 })
+        {
+            var envelope = await ResolveAsync(mount, identifier);
+            Assert.AreEqual(V3Verdicts.Refuse, envelope.Verdict, identifier);
+            Assert.AreEqual("identifier_unknown", envelope.Refusal!.Code, identifier);
+            Assert.AreEqual(PublisherId.LuLegilux, envelope.Context.Publisher, identifier);
+            Assert.AreEqual("lu", envelope.Context.Jurisdiction, identifier);
+        }
+    }
+
+    [TestMethod]
     public async Task EuropeOnlyRefusalsCarryEuropeContext()
     {
         var fixture = await EuropeMountedFixture.CreateAsync();
