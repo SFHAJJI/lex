@@ -286,7 +286,7 @@ internal sealed class V3CorpusMount : IDisposable
             {
                 requested_identifier = identifier,
                 publisher = "eu-eurlex",
-                publisher_work_iri = resolvedEurope.PublisherWorkId,
+                publisher_work_id = resolvedEurope.PublisherWorkId,
                 expression_iri = resolvedEurope.PublisherExpressionId,
                 language = resolvedEurope.Language,
                 provision_identifiers = resolvedEurope.PublisherProvisionIdentifiers,

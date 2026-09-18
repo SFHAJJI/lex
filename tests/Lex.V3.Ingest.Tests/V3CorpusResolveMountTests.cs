@@ -559,7 +559,7 @@ public sealed class V3CorpusResolveMountTests
             Assert.AreEqual(fixture.CorpusSha256, envelope.Context.Snapshot.SnapshotSha256, identifier);
             Assert.AreEqual("eu-eurlex", envelope.Result!.Value.GetProperty("publisher").GetString());
             Assert.AreEqual(fixture.PublisherWorkId,
-                envelope.Result.Value.GetProperty("publisher_work_iri").GetString());
+                envelope.Result.Value.GetProperty("publisher_work_id").GetString());
             Assert.AreEqual(fixture.PublisherExpressionId,
                 envelope.Result.Value.GetProperty("expression_iri").GetString());
             Assert.AreEqual(fixture.IndexSha256,
