@@ -382,6 +382,7 @@ internal sealed class V3CorpusMount : IDisposable
     private static bool LooksLikeIdentifier(string value) =>
         Uri.TryCreate(value, UriKind.Absolute, out _) ||
         value.StartsWith("eli/", StringComparison.OrdinalIgnoreCase) ||
+        OfficialIdentifier.ProfileOf(value) is not null ||
         value.Length == 64 && value.All(static character =>
             character is >= '0' and <= '9' or >= 'a' and <= 'f');
 
@@ -404,7 +405,9 @@ internal sealed class V3CorpusMount : IDisposable
 
     private PublisherId PublisherFor(string identifier) =>
         OfficialIdentifier.EliMintedBy(identifier) ??
-        (_reader is null ? PublisherId.EuEurLex : PublisherId.LuLegilux);
+        (OfficialIdentifier.ProfileOf(identifier) is not null
+            ? PublisherId.EuEurLex
+            : _reader is null ? PublisherId.EuEurLex : PublisherId.LuLegilux);
 
     private V3EnvelopeContext Context(
         string status,
