@@ -475,6 +475,7 @@ public sealed class V3CorpusResolveMountTests
             LuxembourgIndexBuilder.ArticleRow source;
             LuxembourgIndexBuilder.MemberRow[] members;
             LuxembourgIndexBuilder.ArticleRow[] articles;
+            LuxembourgIndexBuilder.StateRow[] states;
             LuxembourgIndexBuilder.WorkTitleRow[] titles;
             var alternateExpression = ExpressionIri + "/alternate-expression";
             using (var connection = LuxembourgIndexBuilder.Open(indexPath, SqliteOpenMode.ReadWrite))
@@ -493,7 +494,7 @@ public sealed class V3CorpusResolveMountTests
                 {
                     insert.CommandText = """
                         INSERT INTO articles VALUES(
-                          $identity,$object,$expression,$publisher,$wid,$date,$language,$text,$tokens)
+                          $identity,$object,$expression,$publisher,$wid,$date,$language,$profile,$text,$tokens)
                         """;
                     insert.Parameters.AddWithValue("$identity", new string('f', 64));
                     insert.Parameters.AddWithValue("$object", source.ObjectRefSha256);
@@ -502,6 +503,7 @@ public sealed class V3CorpusResolveMountTests
                     insert.Parameters.AddWithValue("$wid", PublisherWid);
                     insert.Parameters.AddWithValue("$date", (object?)source.ApplicabilityDate ?? DBNull.Value);
                     insert.Parameters.AddWithValue("$language", source.Language);
+                    insert.Parameters.AddWithValue("$profile", source.RuleProfileSha256);
                     insert.Parameters.AddWithValue("$text", source.SearchableText);
                     insert.Parameters.AddWithValue("$tokens", source.TokensJson);
                     Assert.AreEqual(1, insert.ExecuteNonQuery());
@@ -509,11 +511,12 @@ public sealed class V3CorpusResolveMountTests
 
                 members = ReadMembers(connection);
                 articles = ReadArticles(connection);
+                states = ReadStates(connection);
                 titles = ReadWorkTitles(connection);
                 using var stamp = connection.CreateCommand();
                 stamp.CommandText = "UPDATE stamp SET logical_rows_sha256=$digest WHERE stamp_id=1";
                 stamp.Parameters.AddWithValue(
-                    "$digest", LuxembourgIndexBuilder.HashLogicalRows(members, articles, titles));
+                    "$digest", LuxembourgIndexBuilder.HashLogicalRows(members, articles, states, titles));
                 Assert.AreEqual(1, stamp.ExecuteNonQuery());
             }
 
@@ -533,6 +536,7 @@ public sealed class V3CorpusResolveMountTests
             var indexPath = Path.Combine(Directory, V3CorpusMount.IndexFileName);
             LuxembourgIndexBuilder.MemberRow[] members;
             LuxembourgIndexBuilder.ArticleRow[] articles;
+            LuxembourgIndexBuilder.StateRow[] states;
             LuxembourgIndexBuilder.WorkTitleRow[] titles;
             using (var connection = LuxembourgIndexBuilder.Open(indexPath, SqliteOpenMode.ReadWrite))
             {
@@ -559,11 +563,12 @@ public sealed class V3CorpusResolveMountTests
 
                 members = ReadMembers(connection);
                 articles = ReadArticles(connection);
+                states = ReadStates(connection);
                 titles = ReadWorkTitles(connection);
                 using var stamp = connection.CreateCommand();
                 stamp.CommandText = "UPDATE stamp SET logical_rows_sha256=$digest WHERE stamp_id=1";
                 stamp.Parameters.AddWithValue(
-                    "$digest", LuxembourgIndexBuilder.HashLogicalRows(members, articles, titles));
+                    "$digest", LuxembourgIndexBuilder.HashLogicalRows(members, articles, states, titles));
                 Assert.AreEqual(1, stamp.ExecuteNonQuery());
             }
 
@@ -583,6 +588,7 @@ public sealed class V3CorpusResolveMountTests
             var indexPath = Path.Combine(Directory, V3CorpusMount.IndexFileName);
             LuxembourgIndexBuilder.MemberRow[] members;
             LuxembourgIndexBuilder.ArticleRow[] articles;
+            LuxembourgIndexBuilder.StateRow[] states;
             LuxembourgIndexBuilder.WorkTitleRow[] titles;
             using (var connection = LuxembourgIndexBuilder.Open(indexPath, SqliteOpenMode.ReadWrite))
             {
@@ -598,7 +604,7 @@ public sealed class V3CorpusResolveMountTests
                 }
                 using (var insertArticle = connection.CreateCommand())
                 {
-                    insertArticle.CommandText = "INSERT INTO articles VALUES($identity,$object,$expression,$publisher,$wid,$date,$language,$text,$tokens)";
+                    insertArticle.CommandText = "INSERT INTO articles VALUES($identity,$object,$expression,$publisher,$wid,$date,$language,$profile,$text,$tokens)";
                     insertArticle.Parameters.AddWithValue("$identity", new string('e', 64));
                     insertArticle.Parameters.AddWithValue("$object", source.ObjectRefSha256);
                     insertArticle.Parameters.AddWithValue("$expression", ExpressionIri + "/second-work");
@@ -606,6 +612,7 @@ public sealed class V3CorpusResolveMountTests
                     insertArticle.Parameters.AddWithValue("$wid", secondWork);
                     insertArticle.Parameters.AddWithValue("$date", (object?)source.ApplicabilityDate ?? DBNull.Value);
                     insertArticle.Parameters.AddWithValue("$language", source.Language);
+                    insertArticle.Parameters.AddWithValue("$profile", source.RuleProfileSha256);
                     insertArticle.Parameters.AddWithValue("$text", source.SearchableText);
                     insertArticle.Parameters.AddWithValue("$tokens", source.TokensJson);
                     Assert.AreEqual(1, insertArticle.ExecuteNonQuery());
@@ -630,11 +637,12 @@ public sealed class V3CorpusResolveMountTests
 
                 members = ReadMembers(connection);
                 articles = ReadArticles(connection);
+                states = ReadStates(connection);
                 titles = ReadWorkTitles(connection);
                 using var stamp = connection.CreateCommand();
                 stamp.CommandText = "UPDATE stamp SET logical_rows_sha256=$digest WHERE stamp_id=1";
                 stamp.Parameters.AddWithValue(
-                    "$digest", LuxembourgIndexBuilder.HashLogicalRows(members, articles, titles));
+                    "$digest", LuxembourgIndexBuilder.HashLogicalRows(members, articles, states, titles));
                 Assert.AreEqual(1, stamp.ExecuteNonQuery());
             }
 
@@ -664,14 +672,26 @@ public sealed class V3CorpusResolveMountTests
         private static LuxembourgIndexBuilder.ArticleRow[] ReadArticles(SqliteConnection connection)
         {
             using var command = connection.CreateCommand();
-            command.CommandText = "SELECT article_identity_sha256,object_ref_sha256,expression_iri,publisher_id,publisher_wid,applicability_date,language,searchable_text,tokens_json FROM articles ORDER BY article_identity_sha256";
+            command.CommandText = "SELECT article_identity_sha256,object_ref_sha256,expression_iri,publisher_id,publisher_wid,applicability_date,language,rule_profile_sha256,searchable_text,tokens_json FROM articles ORDER BY article_identity_sha256";
             using var reader = command.ExecuteReader();
             var values = new List<LuxembourgIndexBuilder.ArticleRow>();
             while (reader.Read()) values.Add(new(
                 reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3),
                 reader.IsDBNull(4) ? null : reader.GetString(4),
                 reader.IsDBNull(5) ? null : reader.GetString(5),
-                reader.GetString(6), reader.GetString(7), reader.GetString(8)));
+                reader.GetString(6), reader.GetString(7), reader.GetString(8), reader.GetString(9)));
+            return values.ToArray();
+        }
+
+        private static LuxembourgIndexBuilder.StateRow[] ReadStates(SqliteConnection connection)
+        {
+            using var command = connection.CreateCommand();
+            command.CommandText = "SELECT work_key,applicability_date,state_sha256,expression_iri,publisher_wid,language,rule_profiles_json,article_identities_json FROM states ORDER BY work_key,applicability_date,expression_iri,language";
+            using var reader = command.ExecuteReader();
+            var values = new List<LuxembourgIndexBuilder.StateRow>();
+            while (reader.Read()) values.Add(new(
+                reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3),
+                reader.GetString(4), reader.GetString(5), reader.GetString(6), reader.GetString(7)));
             return values.ToArray();
         }
 
