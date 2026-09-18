@@ -611,7 +611,9 @@ public sealed class GuardedConstructionCensusTests
                 "Lex.V3.Ingest.Luxembourg.LuxembourgIndexReader: constructor private instance "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgIndexReader::.ctor, "
                     + "method public static "
-                    + "Lex.V3.Ingest.Luxembourg.LuxembourgIndexReader::OpenAndVerify",
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgIndexReader::OpenAndVerify, "
+                    + "method public static "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgIndexReader::OpenAndVerifyFileAsync",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgInitialDraftInventoryResult: constructor "
                     + "private instance "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgInitialDraftInventoryResult::.ctor, "
@@ -1064,6 +1066,8 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Ingest.LexCorpus6BuildResult::Deconstruct, "
                     + "constructor private instance "
                     + "Lex.V3.Ingest.VerifiedLexCorpus6ManifestSet::.ctor, "
+                    + "method public static "
+                    + "Lex.V3.Ingest.VerifiedLexCorpus6ManifestSet::ParseAndVerify, "
                     + "method public static "
                     + "Lex.V3.Ingest.VerifiedLexCorpus6ManifestSet::ParseAndVerify",
                 "Lex.V3.Ingest.WireBudgetSnapshot: constructor private instance "

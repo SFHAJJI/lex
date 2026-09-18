@@ -14,8 +14,8 @@ namespace Lex.V3.Tests.Census;
 /// the surface is transcribed. Nothing here is narrowed by the contents anyone expects.
 /// </para>
 /// <para>
-/// Every Lex assembly deployed beside these tests is swept here, so <see cref="SweptBySibling"/>
-/// is empty. Lex.V3.Ingest is deployed beside Lex.V3.Ingest.Tests and swept there.
+/// Lex.V3.Ingest is deployed beside both test projects and swept by Lex.V3.Ingest.Tests. Every
+/// other Lex assembly deployed beside these tests is swept here.
 /// </para>
 /// </remarks>
 internal static class CensusScope
@@ -30,7 +30,7 @@ internal static class CensusScope
         "Lex.V3.Preview",
     ];
 
-    internal static readonly string[] SweptBySibling = [];
+    internal static readonly string[] SweptBySibling = ["Lex.V3.Ingest"];
 
     /// <summary>
     /// Types this repository holds that no census here can reach, with the reason. Each entry is

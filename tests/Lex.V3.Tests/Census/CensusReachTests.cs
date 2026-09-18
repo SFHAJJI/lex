@@ -48,6 +48,7 @@ public sealed class CensusReachTests
                 "Lex.V3.Contracts",
                 "Lex.V3.Custody.Azure",
                 "Lex.V3.Custody.Probe",
+                "Lex.V3.Ingest",
                 "Lex.V3.Preview",
             },
             ClosedSurfaceCensus.LexAssembliesBeside(typeof(CensusReachTests).Assembly).ToArray());
