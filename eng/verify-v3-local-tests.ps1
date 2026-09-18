@@ -9,7 +9,13 @@ param(
     [Parameter()][ValidateRange(0, [int]::MaxValue)][int]$ExpectedContractsSkipped,
     [Parameter()][ValidateRange(0, 86400)][int]$MutexWaitSeconds = 0,
     [Parameter()][string]$OutputRoot,
-    [Parameter()][ValidateSet('FormexManifestationIriCanary')][string]$AuthorizedPublisherRun
+    [Parameter()][ValidateSet('FormexManifestationIriCanary')][string]$AuthorizedPublisherRun,
+    # Mutation mode only. Keeps bin/obj after the run so the next mutant of the same sweep builds
+    # incrementally. The receipt records KeptBuildOutputs. Purging stays the default; omit the switch
+    # on the last mutant of a sweep so no mutated build output outlives the sweep. Evidence is bound
+    # to the source fingerprint, never to build outputs, so a kept output cannot change what a
+    # receipt proves.
+    [Parameter()][switch]$KeepBuildOutputs
 )
 
 $ErrorActionPreference = 'Stop'
@@ -169,6 +175,10 @@ if ($Mode -eq 'Mutation' -and -not $hasExpectedTests) {
     throw 'Mutation mode requires -ExpectedTests to prevent ambiguous mutation attribution.'
 }
 
+if ($KeepBuildOutputs -and $Mode -ne 'Mutation') {
+    throw 'KeepBuildOutputs is honoured only in Mutation mode; Full and Focused evidence always starts from purged outputs of any earlier mutation.'
+}
+
 $dotnet = Find-GovernedDotnet
 $env:PATH = "$($dotnet.Root);$env:PATH"
 $env:DOTNET_ROOT = $dotnet.Root
@@ -234,6 +244,7 @@ $receipt = [ordered]@{
     AuthorizedPublisherRun = if ($hasAuthorizedPublisherRun) { $AuthorizedPublisherRun } else { $null }
     Sdk = $actualSdk
     MaxParallelTestModules = if ($Mode -eq 'Full') { 2 } else { 1 }
+    KeptBuildOutputs = [bool]$KeepBuildOutputs
     RestoreSeconds = $null
     BuildSeconds = $null
     TestSeconds = $null
@@ -370,7 +381,7 @@ try {
 finally {
     $cleanupError = $null
     try {
-        if ($ownsMutex -and $Mode -eq 'Mutation') {
+        if ($ownsMutex -and $Mode -eq 'Mutation' -and -not $KeepBuildOutputs) {
             Remove-WorktreeBuildOutputs
         }
     }
