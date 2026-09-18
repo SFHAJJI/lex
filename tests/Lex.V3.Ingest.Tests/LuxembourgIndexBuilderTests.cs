@@ -317,6 +317,46 @@ public sealed class LuxembourgIndexBuilderTests
             "does not bind its exact article population");
     }
 
+    [TestMethod]
+    [DataRow(true)]
+    [DataRow(false)]
+    public void StateProjectionRejectsAnObjectWhoseArticlesMixExpressionsOrLanguages(
+        bool mixExpression)
+    {
+        const string objectRef = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        const string expression = "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo/fr";
+        var articles = new[]
+        {
+            new LuxembourgIndexBuilder.ArticleRow(
+                new string('b', 64), objectRef, expression, "art_1", null, "2024-02-01",
+                "fra", new string('c', 64), "one", "[]"),
+            new LuxembourgIndexBuilder.ArticleRow(
+                new string('d', 64), objectRef,
+                mixExpression ? expression + "/other" : expression,
+                "art_2", null, "2024-02-01", mixExpression ? "fra" : "deu",
+                new string('c', 64), "two", "[]"),
+        };
+        var builderType = typeof(LuxembourgIndexBuilder);
+        var sourceType = builderType.GetNestedType(
+            "StateSource", System.Reflection.BindingFlags.NonPublic)!;
+        var source = Activator.CreateInstance(sourceType,
+            expression,
+            "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3",
+            "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
+            "2024-02-01",
+            new string('c', 64))!;
+        var dictionaryType = typeof(Dictionary<,>).MakeGenericType(typeof(string), sourceType);
+        var sources = (System.Collections.IDictionary)Activator.CreateInstance(dictionaryType)!;
+        sources.Add(objectRef, source);
+        var method = builderType.GetMethod(
+            "ProjectStates", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+
+        var exception = Assert.ThrowsExactly<System.Reflection.TargetInvocationException>(() =>
+            method.Invoke(null, new object[] { articles, sources }));
+        Assert.IsInstanceOfType<InvalidDataException>(exception.InnerException);
+        StringAssert.Contains(exception.InnerException.Message, "does not match its admitted articles");
+    }
+
     private static async Task<(LuxembourgIndexBuildResult Built, SourceArtifactRef CorpusRef)>
         BuildStateIndexAsync()
     {
