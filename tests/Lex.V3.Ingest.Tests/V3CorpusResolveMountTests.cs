@@ -89,10 +89,9 @@ public sealed class V3CorpusResolveMountTests
         Assert.AreEqual("request_schema_invalid", problem.RootElement.GetProperty("code").GetString());
         Assert.IsFalse(problem.RootElement.TryGetProperty("verdict", out _));
         Assert.IsFalse(problem.RootElement.TryGetProperty("refusal", out _));
-        StringAssert.DoesNotContain(
-            System.Text.Json.JsonSerializer.Serialize(problem.RootElement),
-            "requested_identifier",
-            StringComparison.Ordinal);
+        Assert.IsFalse(
+            System.Text.Json.JsonSerializer.Serialize(problem.RootElement)
+                .Contains("requested_identifier", StringComparison.Ordinal));
     }
 
     [TestMethod]
