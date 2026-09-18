@@ -32,12 +32,6 @@ public sealed record LuxembourgAknArticleCoordinate(
     string? PublisherWId,
     string? PublisherApplicability);
 
-/// <summary>One proof-bound dated publisher expression coordinate from retained AKN metadata.</summary>
-public sealed record LuxembourgAknExpressionCoordinate(
-    string PublisherWorkIri,
-    string PublisherLegalResourceIri,
-    string PublisherApplicabilityDate);
-
 /// <summary>
 /// The deterministic publisher-coordinate inventory for one retained AKN expression.
 /// </summary>
@@ -53,12 +47,22 @@ public sealed class LuxembourgAknArticleInventory
         string publisherExpressionIri,
         string ruleProfileSha256,
         IReadOnlyList<LuxembourgAknArticleCoordinate> articles,
-        LuxembourgAknExpressionCoordinate? expressionCoordinate)
+        string? publisherWorkIri,
+        string? publisherLegalResourceIri,
+        string? publisherApplicabilityDate)
     {
+        if ((publisherWorkIri is null) != (publisherLegalResourceIri is null) ||
+            (publisherWorkIri is null) != (publisherApplicabilityDate is null))
+        {
+            throw new ArgumentException("Publisher expression-state coordinates must be complete or absent.");
+        }
+
         PublisherExpressionIri = publisherExpressionIri;
         RuleProfileSha256 = ruleProfileSha256;
         Articles = Array.AsReadOnly(articles.ToArray());
-        ExpressionCoordinate = expressionCoordinate;
+        PublisherWorkIri = publisherWorkIri;
+        PublisherLegalResourceIri = publisherLegalResourceIri;
+        PublisherApplicabilityDate = publisherApplicabilityDate;
         IdentitySha256 = IdentityOf(this);
     }
 
@@ -68,7 +72,11 @@ public sealed class LuxembourgAknArticleInventory
 
     public IReadOnlyList<LuxembourgAknArticleCoordinate> Articles { get; }
 
-    public LuxembourgAknExpressionCoordinate? ExpressionCoordinate { get; }
+    public string? PublisherWorkIri { get; }
+
+    public string? PublisherLegalResourceIri { get; }
+
+    public string? PublisherApplicabilityDate { get; }
 
     public string IdentitySha256 { get; }
 
@@ -78,9 +86,9 @@ public sealed class LuxembourgAknArticleInventory
         Append(hash, "lex-v3-luxembourg-akn-article-inventory/2");
         Append(hash, inventory.PublisherExpressionIri);
         Append(hash, inventory.RuleProfileSha256);
-        Append(hash, inventory.ExpressionCoordinate?.PublisherWorkIri ?? "");
-        Append(hash, inventory.ExpressionCoordinate?.PublisherLegalResourceIri ?? "");
-        Append(hash, inventory.ExpressionCoordinate?.PublisherApplicabilityDate ?? "");
+        Append(hash, inventory.PublisherWorkIri ?? "");
+        Append(hash, inventory.PublisherLegalResourceIri ?? "");
+        Append(hash, inventory.PublisherApplicabilityDate ?? "");
         foreach (var article in inventory.Articles)
         {
             Append(hash, article.PublisherId);
@@ -285,7 +293,12 @@ public sealed class LuxembourgAknArticleInventoryProducer
         }
 
         if (!TryExpressionCoordinate(
-                root, input, out var expressionCoordinate, out failure))
+                root,
+                input,
+                out var publisherWorkIri,
+                out var publisherLegalResourceIri,
+                out var publisherApplicabilityDate,
+                out failure))
         {
             return false;
         }
@@ -338,17 +351,26 @@ public sealed class LuxembourgAknArticleInventoryProducer
         }
 
         inventory = new LuxembourgAknArticleInventory(
-            input.SelectedWemiCandidate.ExpressionIri, RuleDigest, articles, expressionCoordinate);
+            input.SelectedWemiCandidate.ExpressionIri,
+            RuleDigest,
+            articles,
+            publisherWorkIri,
+            publisherLegalResourceIri,
+            publisherApplicabilityDate);
         return true;
     }
 
     private static bool TryExpressionCoordinate(
         XElement root,
         LuxembourgHeldBodyDerivationInput input,
-        out LuxembourgAknExpressionCoordinate? coordinate,
+        out string? publisherWorkIri,
+        out string? publisherLegalResourceIri,
+        out string? publisherApplicabilityDate,
         out string? failure)
     {
-        coordinate = null;
+        publisherWorkIri = null;
+        publisherLegalResourceIri = null;
+        publisherApplicabilityDate = null;
         failure = null;
         XNamespace akn = AknNamespace;
         XNamespace scl = SclNamespace;
@@ -428,8 +450,9 @@ public sealed class LuxembourgAknArticleInventoryProducer
             return false;
         }
 
-        coordinate = new LuxembourgAknExpressionCoordinate(
-            memberOfIris[0], legalResourceIris[0], rawDate);
+        publisherWorkIri = memberOfIris[0];
+        publisherLegalResourceIri = legalResourceIris[0];
+        publisherApplicabilityDate = rawDate;
         return true;
     }
 

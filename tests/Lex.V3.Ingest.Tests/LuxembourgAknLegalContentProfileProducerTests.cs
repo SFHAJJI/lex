@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Xml.Linq;
 using Lex.V3.Contracts.Custody;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Corpus;
@@ -251,7 +252,8 @@ public sealed class LuxembourgAknLegalContentProfileProducerTests
                 body, CustodyClass.NightlyFloor90d, CancellationToken.None);
             var enumeration = Artifact(artifactSuffix, "enumeration"u8);
             var kind = new SourceRegistryMemberRef(enumeration, "lu_document_get_root");
-            var publisherUri = "http://data.legilux.public.lu/eli/etat/leg/loi/" + key + "/jo/fr";
+            var fallbackRoot = "http://data.legilux.public.lu/eli/etat/leg/loi/" + key + "/jo";
+            var (publisherUri, expressionUri, manifestationUri) = PublisherWemi(body, fallbackRoot);
             var objectRef = new SourceObjectRef(
                 SourceCoreSchemaIds.SourceObjectRef,
                 SourceAuthority.Jolux,
@@ -289,8 +291,8 @@ public sealed class LuxembourgAknLegalContentProfileProducerTests
                 "/eli/etat/leg/loi/" + key + "/jo/fr");
             var candidate = new LuxembourgWemiCandidate(
                 publisherUri,
-                publisherUri + "/expression",
-                publisherUri + "/expression/manifestation",
+                expressionUri,
+                manifestationUri,
                 address.StoreFileUri.Value.AbsoluteUri,
                 "http://publications.europa.eu/resource/authority/language/FRA",
                 "http://data.legilux.public.lu/resource/authority/user-format/xml-akomantoso",
@@ -310,6 +312,31 @@ public sealed class LuxembourgAknLegalContentProfileProducerTests
             Assert.IsNotNull(population);
             return new Fixture(store, population);
         }
+
+        private static (string Root, string Expression, string Manifestation) PublisherWemi(
+            byte[] body,
+            string fallbackRoot)
+        {
+            using var stream = new MemoryStream(body, writable: false);
+            var identification = XDocument.Load(stream).Descendants()
+                .SingleOrDefault(static element => element.Name.LocalName == "identification");
+            if (identification is null)
+            {
+                return (fallbackRoot, fallbackRoot + "/fr", fallbackRoot + "/fr/xml");
+            }
+
+            return (
+                ReadFrbrThis(identification, "FRBRWork"),
+                ReadFrbrThis(identification, "FRBRExpression"),
+                ReadFrbrThis(identification, "FRBRManifestation"));
+        }
+
+        private static string ReadFrbrThis(XElement identification, string groupName) =>
+            (string)identification.Descendants()
+                .Single(element => element.Name.LocalName == groupName)
+                .Elements()
+                .Single(element => element.Name.LocalName == "FRBRthis")
+                .Attribute("value")!;
     }
 
     private static SourceArtifactRef Artifact(char suffix, ReadOnlySpan<byte> bytes) => new(

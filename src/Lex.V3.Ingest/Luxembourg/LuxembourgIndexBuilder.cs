@@ -322,15 +322,17 @@ public static class LuxembourgIndexBuilder
         articles = projected.OrderBy(static row => row.ArticleIdentitySha256, StringComparer.Ordinal).ToArray();
         var stateSources = envelope.BodyComposition.Envelope.LuxembourgAknArticleInventoryPopulation
             .Outcomes
-            .Where(static outcome => outcome.Inventory?.ExpressionCoordinate is not null)
+            .Where(static outcome => outcome.Inventory?.PublisherWorkIri is not null &&
+                                     outcome.Inventory.PublisherLegalResourceIri is not null &&
+                                     outcome.Inventory.PublisherApplicabilityDate is not null)
             .ToDictionary(
                 static outcome => Lex.V3.Contracts.Source.Scope.ScopeManifestCanonicalWriter
                     .ComputeObjectRefSha256(outcome.Input.CorpusRecord.ObjectRef),
                 static outcome => new StateSource(
                     outcome.Inventory!.PublisherExpressionIri,
-                    outcome.Inventory.ExpressionCoordinate!.PublisherWorkIri,
-                    outcome.Inventory.ExpressionCoordinate.PublisherLegalResourceIri,
-                    outcome.Inventory.ExpressionCoordinate.PublisherApplicabilityDate,
+                    outcome.Inventory.PublisherWorkIri!,
+                    outcome.Inventory.PublisherLegalResourceIri!,
+                    outcome.Inventory.PublisherApplicabilityDate!,
                     outcome.Inventory.RuleProfileSha256),
                 StringComparer.Ordinal);
         states = ProjectStates(articles, stateSources);

@@ -32,10 +32,9 @@ public sealed class LuxembourgAknArticleInventoryProducerTests
 
         Assert.AreEqual(LuxembourgAknArticleInventoryDisposition.Inventoried, outcome.Disposition);
         Assert.IsNotNull(outcome.Inventory);
-        Assert.IsNotNull(outcome.Inventory.ExpressionCoordinate);
-        Assert.AreEqual(work, outcome.Inventory.ExpressionCoordinate.PublisherWorkIri);
-        Assert.AreEqual(legalResource, outcome.Inventory.ExpressionCoordinate.PublisherLegalResourceIri);
-        Assert.AreEqual("2024-02-01", outcome.Inventory.ExpressionCoordinate.PublisherApplicabilityDate);
+        Assert.AreEqual(work, outcome.Inventory.PublisherWorkIri);
+        Assert.AreEqual(legalResource, outcome.Inventory.PublisherLegalResourceIri);
+        Assert.AreEqual("2024-02-01", outcome.Inventory.PublisherApplicabilityDate);
     }
 
     [TestMethod]
@@ -78,8 +77,10 @@ public sealed class LuxembourgAknArticleInventoryProducerTests
         Assert.AreEqual(
             outcome.Input.SelectedWemiCandidate.ExpressionIri,
             outcome.Inventory.PublisherExpressionIri);
-        Assert.IsNull(outcome.Inventory.ExpressionCoordinate,
+        Assert.IsNull(outcome.Inventory.PublisherWorkIri,
             "An original publication without publisher applicability is not a dated expression state.");
+        Assert.IsNull(outcome.Inventory.PublisherLegalResourceIri);
+        Assert.IsNull(outcome.Inventory.PublisherApplicabilityDate);
         CollectionAssert.AreEqual(
             new[] { "art_1er", "art_2", "art_3", "art_4", "art_5", "art_6", "art_7", "art_8" },
             outcome.Inventory.Articles.Select(static article => article.PublisherId).ToArray());
