@@ -506,6 +506,8 @@ public sealed class V3CorpusResolveMountTests
         var envelope = V3EnvelopeJson.ParseAndVerify(ResponseBytes(context), V3OperationRegistry.Reviewed);
         Assert.AreEqual(V3Verdicts.Refuse, envelope.Verdict);
         Assert.AreEqual("ambiguous_identifier", envelope.Refusal!.Code);
+        Assert.AreEqual(PublisherId.LuLegilux, envelope.Context.Publisher);
+        Assert.AreEqual("lu", envelope.Context.Jurisdiction);
         Assert.AreEqual(
             fixture.PublisherWid,
             envelope.Refusal.HelpfulPayload.GetProperty("requested_identifier").GetString());
