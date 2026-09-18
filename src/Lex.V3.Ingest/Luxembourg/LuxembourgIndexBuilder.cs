@@ -625,7 +625,7 @@ public sealed class LuxembourgIndexReader : IDisposable
         }
         catch
         {
-            DeleteDatabase(privatePath);
+            LuxembourgIndexBuilder.DeleteDatabase(privatePath);
             throw;
         }
     }
@@ -680,7 +680,7 @@ public sealed class LuxembourgIndexReader : IDisposable
                     StringComparison.Ordinal))
                 throw new InvalidDataException("The Luxembourg index logical rows do not match their stamp.");
 
-            var measured = LuxembourgIndexBuilder.MeasureCapabilities(digest, articles);
+            var measured = LuxembourgIndexBuilder.MeasureCapabilities(indexRef.Sha256, articles);
             if (!measured.Cells.SequenceEqual(capabilityManifest.Cells))
                 throw new InvalidDataException("The Luxembourg capability manifest was not measured from the index.");
 
