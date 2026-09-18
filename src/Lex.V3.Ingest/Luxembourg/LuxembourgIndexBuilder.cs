@@ -1328,6 +1328,19 @@ public sealed class LuxembourgIndexReader : IDisposable
                         "A Luxembourg expression state does not bind its exact article population.");
                 }
             }
+            var expectedIdentities = articles
+                .Where(article => string.Equals(
+                    article.ExpressionIri, state.ExpressionIri, StringComparison.Ordinal))
+                .Select(static article => article.ArticleIdentitySha256)
+                .Order(StringComparer.Ordinal)
+                .ToArray();
+            if (!identities.SequenceEqual(expectedIdentities, StringComparer.Ordinal) ||
+                !state.ExpressionIri.StartsWith(
+                    state.PublisherLegalResourceIri + "/", StringComparison.Ordinal))
+            {
+                throw new InvalidDataException(
+                    "A Luxembourg expression state omits or crosses its expression population.");
+            }
             if (!string.Equals(
                     LuxembourgIndexBuilder.StateSha256(
                         state.WorkKey, state.ApplicabilityDate, state.ExpressionIri,

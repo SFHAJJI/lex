@@ -124,6 +124,29 @@ public sealed class V3CorpusResolveMountTests
     }
 
     [TestMethod]
+    public async Task ForeignOriginCannotPresentAPathAsACanonicalPinnedPermalink()
+    {
+        var fixture = await MountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+        var context = Request("https://example.invalid" + fixture.Permalink);
+        var handler = new V3ApiHandler(
+            SyntheticApiState.Unavailable,
+            new V3PlatformHost(),
+            static () => ObservedAt,
+            mount);
+
+        await handler.HandleAsync(context, CancellationToken.None);
+
+        var envelope = V3EnvelopeJson.ParseAndVerify(ResponseBytes(context), V3OperationRegistry.Reviewed);
+        Assert.AreEqual(V3Verdicts.Refuse, envelope.Verdict);
+        Assert.AreEqual("identifier_unknown", envelope.Refusal!.Code);
+        Assert.IsFalse(envelope.Refusal.HelpfulPayload.TryGetProperty("current_digest", out _));
+        Assert.IsFalse(envelope.Refusal.HelpfulPayload.TryGetProperty("current_hash_pinned_url", out _));
+    }
+
+    [TestMethod]
     public async Task NormalizedPublisherTitleUsesR1WithoutSelectingAnExpression()
     {
         var fixture = await MountedFixture.CreateAsync();

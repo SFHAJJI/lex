@@ -18,7 +18,7 @@ public sealed class LuxembourgIndexBuilderTests
     {
         var digest = Convert.ToHexStringLower(SHA256.HashData(
             LuxembourgIndexBuilder.BuildFixedInputDeterminismEvidence()));
-        Assert.AreEqual("348c8960febf2989d1553db9a4542849354f3b15f930cb423751d849ee21e91b", digest);
+        Assert.AreEqual("1f8d1ec07810a4deabc149f9c53167fbd741e60bd46a58cdd462daae8b5dd734", digest);
     }
 
     private const string Retained1991 = "loi-1991-08-10-n3--2024-02-01--fr.bin";
@@ -129,6 +129,18 @@ public sealed class LuxembourgIndexBuilderTests
             built.IndexRef, built.IndexBytes.Span, corpus.ArtifactRef, built.CapabilityManifest);
         Assert.AreEqual(luxembourgMembers.Length, reader.MemberCount);
         Assert.AreEqual(49, reader.ArticleCount);
+        var state = reader.ResolveState("loi-1991-08-10-n3", "2024-02-01").Single();
+        Assert.AreEqual(
+            "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3",
+            state.PublisherWid);
+        Assert.AreEqual(
+            "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
+            state.PublisherLegalResourceIri);
+        Assert.AreEqual(manifestation[..manifestation.LastIndexOf('/')], state.ExpressionIri);
+        Assert.HasCount(49, state.ArticleIdentities);
+        CollectionAssert.Contains(
+            state.RuleProfileSha256s.ToArray(),
+            LuxembourgAknArticleInventoryProducer.RuleProfileSha256);
         Assert.HasCount(4, built.CapabilityManifest.Cells);
         var cells = built.CapabilityManifest.Cells.OrderBy(static cell => cell.PeriodFrom).ToArray();
         Assert.AreEqual(new DateOnly(2021, 8, 22), cells[0].PeriodFrom);
