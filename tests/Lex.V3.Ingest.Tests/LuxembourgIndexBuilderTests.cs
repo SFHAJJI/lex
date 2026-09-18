@@ -132,7 +132,7 @@ public sealed class LuxembourgIndexBuilderTests
         var state = reader.ResolveState("loi-1991-08-10-n3", "2024-02-01").Single();
         Assert.AreEqual(
             "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3",
-            state.PublisherWid);
+            state.PublisherWorkIri);
         Assert.AreEqual(
             "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
             state.PublisherLegalResourceIri);

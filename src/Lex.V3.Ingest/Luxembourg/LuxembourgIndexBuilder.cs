@@ -41,7 +41,7 @@ public sealed record LuxembourgIndexResolvedState(
     string ApplicabilityDate,
     string StateSha256,
     string ExpressionIri,
-    string PublisherWid,
+    string PublisherWorkIri,
     string PublisherLegalResourceIri,
     string Language,
     IReadOnlyList<string> RuleProfileSha256s,
@@ -103,7 +103,7 @@ public static class LuxembourgIndexBuilder
           applicability_date TEXT COLLATE BINARY NOT NULL,
           state_sha256 TEXT COLLATE BINARY NOT NULL CHECK (length(state_sha256) = 64),
           expression_iri TEXT COLLATE BINARY NOT NULL,
-          publisher_wid TEXT COLLATE BINARY NOT NULL,
+          publisher_work_iri TEXT COLLATE BINARY NOT NULL,
           publisher_legal_resource_iri TEXT COLLATE BINARY NOT NULL,
           language TEXT COLLATE BINARY NOT NULL,
           rule_profiles_json TEXT COLLATE BINARY NOT NULL,
@@ -577,7 +577,7 @@ public static class LuxembourgIndexBuilder
             Insert(connection, transaction,
                 "INSERT INTO states VALUES($p0,$p1,$p2,$p3,$p4,$p5,$p6,$p7,$p8)",
                 state.WorkKey, state.ApplicabilityDate, state.StateSha256, state.ExpressionIri,
-                state.PublisherWid, state.PublisherLegalResourceIri, state.Language, state.RuleProfilesJson,
+                state.PublisherWorkIri, state.PublisherLegalResourceIri, state.Language, state.RuleProfilesJson,
                 state.ArticleIdentitiesJson);
         }
         foreach (var title in workTitles)
@@ -787,7 +787,7 @@ public static class LuxembourgIndexBuilder
         string ApplicabilityDate,
         string StateSha256,
         string ExpressionIri,
-        string PublisherWid,
+        string PublisherWorkIri,
         string PublisherLegalResourceIri,
         string Language,
         string RuleProfilesJson,
@@ -1111,7 +1111,7 @@ public sealed class LuxembourgIndexReader : IDisposable
         {
             using var command = _connection.CreateCommand();
             command.CommandText = """
-                SELECT work_key,applicability_date,state_sha256,expression_iri,publisher_wid,
+                SELECT work_key,applicability_date,state_sha256,expression_iri,publisher_work_iri,
                        publisher_legal_resource_iri,language,rule_profiles_json,article_identities_json
                 FROM states
                 WHERE work_key=$work AND applicability_date=$date
@@ -1277,7 +1277,7 @@ public sealed class LuxembourgIndexReader : IDisposable
     private static LuxembourgIndexBuilder.StateRow[] ReadStates(SqliteConnection connection)
     {
         using var command = connection.CreateCommand();
-        command.CommandText = "SELECT work_key,applicability_date,state_sha256,expression_iri,publisher_wid,publisher_legal_resource_iri,language,rule_profiles_json,article_identities_json FROM states ORDER BY work_key,applicability_date,expression_iri,language";
+        command.CommandText = "SELECT work_key,applicability_date,state_sha256,expression_iri,publisher_work_iri,publisher_legal_resource_iri,language,rule_profiles_json,article_identities_json FROM states ORDER BY work_key,applicability_date,expression_iri,language";
         using var reader = command.ExecuteReader();
         var values = new List<LuxembourgIndexBuilder.StateRow>();
         while (reader.Read()) values.Add(new(
@@ -1311,10 +1311,10 @@ public sealed class LuxembourgIndexReader : IDisposable
                     state.ApplicabilityDate, "yyyy-MM-dd", CultureInfo.InvariantCulture,
                     DateTimeStyles.None, out _) ||
                 !string.Equals(
-                    LuxembourgIndexBuilder.WorkKeyOf(state.PublisherWid), state.WorkKey,
+                    LuxembourgIndexBuilder.WorkKeyOf(state.PublisherWorkIri), state.WorkKey,
                     StringComparison.Ordinal) ||
                 !state.PublisherLegalResourceIri.StartsWith(
-                    state.PublisherWid + "/", StringComparison.Ordinal))
+                    state.PublisherWorkIri + "/", StringComparison.Ordinal))
             {
                 throw new InvalidDataException("A Luxembourg expression state is not canonical.");
             }
@@ -1346,7 +1346,7 @@ public sealed class LuxembourgIndexReader : IDisposable
             if (!string.Equals(
                     LuxembourgIndexBuilder.StateSha256(
                         state.WorkKey, state.ApplicabilityDate, state.ExpressionIri,
-                        state.PublisherWid, state.PublisherLegalResourceIri, state.Language,
+                        state.PublisherWorkIri, state.PublisherLegalResourceIri, state.Language,
                         profiles, identities),
                     state.StateSha256,
                     StringComparison.Ordinal))

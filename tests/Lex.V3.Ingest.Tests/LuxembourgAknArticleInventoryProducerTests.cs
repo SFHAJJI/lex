@@ -39,6 +39,26 @@ public sealed class LuxembourgAknArticleInventoryProducerTests
     }
 
     [TestMethod]
+    public async Task ConsolidatedAknCoordinateMustMatchTheProofBoundSelectedWemi()
+    {
+        const string legalResource =
+            "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo";
+        const string expression = legalResource + "/fr";
+        var bytes = await File.ReadAllBytesAsync(Path.Combine(
+            AppContext.BaseDirectory, "Fixtures", "LuAknLegalContent",
+            "loi-1991-08-10-n3--2024-02-01--fr.bin"));
+        var fixture = await Fixture.CreateAsync(
+            bytes, LuxembourgUserFormatToken.Xml, legalResource + "/other", expression);
+
+        var outcome = (await new LuxembourgAknArticleInventoryProducer(fixture.Store)
+            .RunAsync(fixture.Population, CancellationToken.None)).Outcomes.Single();
+
+        Assert.AreEqual(LuxembourgAknArticleInventoryDisposition.XmlRejected, outcome.Disposition);
+        StringAssert.Contains(outcome.Detail, "selected WEMI");
+        Assert.IsNull(outcome.Inventory);
+    }
+
+    [TestMethod]
     public async Task TheRetainedPublisherAknBodyProducesStablePublisherArticleCoordinates()
     {
         var bytes = await File.ReadAllBytesAsync(Path.Combine(
