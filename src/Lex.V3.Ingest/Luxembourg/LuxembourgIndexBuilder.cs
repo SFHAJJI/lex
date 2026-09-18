@@ -373,7 +373,7 @@ public static class LuxembourgIndexBuilder
             throw new InvalidDataException(
                 "A title subject has conflicting publisher document dates.");
         }
-        return dates[0];
+        return dates[0]!;
     }
 
     private static void BuildDatabase(
