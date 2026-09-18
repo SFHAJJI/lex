@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using Lex.V3.Api;
 using Lex.V3.Contracts;
 using Lex.V3.Contracts.Custody;
+using Lex.V3.Contracts.Index;
 using Lex.V3.Contracts.Platform;
 using Lex.V3.Ingest.Luxembourg;
 using Microsoft.AspNetCore.Http;
