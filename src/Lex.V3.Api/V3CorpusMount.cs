@@ -188,8 +188,8 @@ internal sealed class V3CorpusMount : IDisposable
     public void Dispose() => _reader.Dispose();
 
     private static bool LooksLikeIdentifier(string value) =>
-        value.Contains('/', StringComparison.Ordinal) ||
-        value.Contains(':', StringComparison.Ordinal) ||
+        Uri.TryCreate(value, UriKind.Absolute, out _) ||
+        value.StartsWith("eli/", StringComparison.OrdinalIgnoreCase) ||
         value.Length == 64 && value.All(static character =>
             character is >= '0' and <= '9' or >= 'a' and <= 'f');
 
