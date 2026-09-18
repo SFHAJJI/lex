@@ -473,13 +473,14 @@ public sealed class V3CorpusResolveMountTests
                 }
                 using (var insert = connection.CreateCommand())
                 {
-                    insert.CommandText = "INSERT INTO work_titles VALUES($wid,$expression,$language,$title,$normalized,$date,'title')";
+                    insert.CommandText = "INSERT INTO work_titles VALUES($wid,$expression,$language,$title,$normalized,$date,'title',$evidence)";
                     insert.Parameters.AddWithValue("$wid", PublisherWid);
                     insert.Parameters.AddWithValue("$expression", ExpressionIri);
                     insert.Parameters.AddWithValue("$language", "fra");
                     insert.Parameters.AddWithValue("$title", WorkTitle);
                     insert.Parameters.AddWithValue("$normalized", LuxembourgIndexBuilder.NormalizeTitle(WorkTitle));
                     insert.Parameters.AddWithValue("$date", "2024-02-01");
+                    insert.Parameters.AddWithValue("$evidence", new string('d', 64));
                     Assert.AreEqual(1, insert.ExecuteNonQuery());
                 }
 
@@ -543,12 +544,14 @@ public sealed class V3CorpusResolveMountTests
                 })
                 {
                     using var insertTitle = connection.CreateCommand();
-                    insertTitle.CommandText = "INSERT INTO work_titles VALUES($wid,$expression,'fra',$title,$normalized,$date,'title')";
+                    insertTitle.CommandText = "INSERT INTO work_titles VALUES($wid,$expression,'fra',$title,$normalized,$date,'title',$evidence)";
                     insertTitle.Parameters.AddWithValue("$wid", row.Item1);
                     insertTitle.Parameters.AddWithValue("$expression", row.Item2);
                     insertTitle.Parameters.AddWithValue("$title", row.Item3);
                     insertTitle.Parameters.AddWithValue("$normalized", LuxembourgIndexBuilder.NormalizeTitle(row.Item3));
                     insertTitle.Parameters.AddWithValue("$date", row.Item4);
+                    insertTitle.Parameters.AddWithValue(
+                        "$evidence", row.Item1 == PublisherWid ? new string('d', 64) : new string('c', 64));
                     Assert.AreEqual(1, insertTitle.ExecuteNonQuery());
                 }
 
@@ -602,12 +605,13 @@ public sealed class V3CorpusResolveMountTests
         private static LuxembourgIndexBuilder.WorkTitleRow[] ReadWorkTitles(SqliteConnection connection)
         {
             using var command = connection.CreateCommand();
-            command.CommandText = "SELECT work_identifier,expression_iri,language,title,normalized_title,document_date,title_kind FROM work_titles ORDER BY work_identifier,expression_iri,language,title,title_kind";
+            command.CommandText = "SELECT work_identifier,expression_iri,language,title,normalized_title,document_date,title_kind,evidence_sha256 FROM work_titles ORDER BY work_identifier,expression_iri,language,title,title_kind,evidence_sha256";
             using var reader = command.ExecuteReader();
             var values = new List<LuxembourgIndexBuilder.WorkTitleRow>();
             while (reader.Read()) values.Add(new(
                 reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3),
-                reader.GetString(4), reader.IsDBNull(5) ? null : reader.GetString(5), reader.GetString(6)));
+                reader.GetString(4), reader.IsDBNull(5) ? null : reader.GetString(5), reader.GetString(6),
+                reader.GetString(7)));
             return values.ToArray();
         }
 

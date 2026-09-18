@@ -94,7 +94,8 @@ public static class LuxembourgIndexBuilder
           normalized_title TEXT COLLATE BINARY NOT NULL,
           document_date TEXT COLLATE BINARY,
           title_kind TEXT COLLATE BINARY NOT NULL CHECK (title_kind IN ('title','title_short')),
-          PRIMARY KEY (work_identifier, expression_iri, language, title, title_kind)
+          evidence_sha256 TEXT COLLATE BINARY NOT NULL CHECK (length(evidence_sha256) = 64),
+          PRIMARY KEY (work_identifier, expression_iri, language, title, title_kind, evidence_sha256)
         ) STRICT;
         CREATE INDEX work_titles_normalized ON work_titles(normalized_title, work_identifier);
         """;
@@ -287,14 +288,30 @@ public static class LuxembourgIndexBuilder
         }
 
         articles = projected.OrderBy(static row => row.ArticleIdentitySha256, StringComparer.Ordinal).ToArray();
-        var articlesByExpression = articles
-            .GroupBy(static row => row.ExpressionIri, StringComparer.Ordinal)
-            .ToDictionary(static group => group.Key, static group => group.ToArray(), StringComparer.Ordinal);
-        workTitles = envelope.BodyComposition.Envelope.Luxembourg.TypedAssertions
+        var assertions = envelope.BodyComposition.Envelope.Luxembourg.TypedAssertions;
+        var articlesBySubject = articles
+            .SelectMany(static article => new[] { article.ExpressionIri, article.PublisherWid }
+                .Where(static subject => subject is not null)
+                .Select(subject => (Subject: subject!, Article: article)))
+            .GroupBy(static value => value.Subject, StringComparer.Ordinal)
+            .ToDictionary(
+                static group => group.Key,
+                static group => group.Select(static value => value.Article).Distinct().ToArray(),
+                StringComparer.Ordinal);
+        var datesBySubject = assertions
+            .Where(static value => value.FactDisposition.Predicate ==
+                Lex.V3.Contracts.Source.Luxembourg.LuxembourgAssertionPredicate.DateDocument)
+            .GroupBy(static value => value.Assertion.SubjectIri, StringComparer.Ordinal)
+            .ToDictionary(
+                static group => group.Key,
+                static group => ExactDocumentDate(group.Select(
+                    static value => value.Assertion.ObjectIriOrLexical)),
+                StringComparer.Ordinal);
+        workTitles = assertions
             .Where(static value => value.FactDisposition.Predicate is
                 Lex.V3.Contracts.Source.Luxembourg.LuxembourgAssertionPredicate.Title or
                 Lex.V3.Contracts.Source.Luxembourg.LuxembourgAssertionPredicate.TitleShort)
-            .SelectMany(assertion => articlesByExpression.TryGetValue(
+            .SelectMany(assertion => articlesBySubject.TryGetValue(
                     assertion.Assertion.SubjectIri, out var matches)
                 ? matches.Select(article => new WorkTitleRow(
                     article.PublisherWid ?? article.ExpressionIri,
@@ -302,11 +319,14 @@ public static class LuxembourgIndexBuilder
                     article.Language,
                     assertion.Assertion.ObjectIriOrLexical,
                     NormalizeTitle(assertion.Assertion.ObjectIriOrLexical),
-                    article.ApplicabilityDate,
+                    datesBySubject.GetValueOrDefault(assertion.Assertion.SubjectIri) ??
+                        datesBySubject.GetValueOrDefault(article.PublisherWid ?? article.ExpressionIri) ??
+                        article.ApplicabilityDate,
                     assertion.FactDisposition.Predicate ==
                         Lex.V3.Contracts.Source.Luxembourg.LuxembourgAssertionPredicate.Title
                         ? "title"
-                        : "title_short"))
+                        : "title_short",
+                    assertion.FactDisposition.EvidenceRef.Sha256))
                 : [])
             .Where(static row => row.NormalizedTitle.Length != 0)
             .Distinct()
@@ -343,6 +363,17 @@ public static class LuxembourgIndexBuilder
             throw new InvalidDataException("A publisher applicability value is not an exact civil date.");
         }
         return date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+    }
+
+    private static string ExactDocumentDate(IEnumerable<string> values)
+    {
+        var dates = values.Select(ApplicabilityDate).Distinct(StringComparer.Ordinal).ToArray();
+        if (dates.Length != 1 || dates[0] is null)
+        {
+            throw new InvalidDataException(
+                "A title subject has conflicting publisher document dates.");
+        }
+        return dates[0];
     }
 
     private static void BuildDatabase(
@@ -382,9 +413,9 @@ public static class LuxembourgIndexBuilder
         foreach (var title in workTitles)
         {
             Insert(connection, transaction,
-                "INSERT INTO work_titles VALUES($p0,$p1,$p2,$p3,$p4,$p5,$p6)",
+                "INSERT INTO work_titles VALUES($p0,$p1,$p2,$p3,$p4,$p5,$p6,$p7)",
                 title.WorkIdentifier, title.ExpressionIri, title.Language, title.Title,
-                title.NormalizedTitle, title.DocumentDate, title.TitleKind);
+                title.NormalizedTitle, title.DocumentDate, title.TitleKind, title.EvidenceSha256);
         }
         var provenance = SqliteProvenance.Read(connection);
         Insert(connection, transaction, "INSERT INTO stamp VALUES(1,$p0,$p1,$p2,$p3,$p4,$p5)",
@@ -406,7 +437,7 @@ public static class LuxembourgIndexBuilder
         var articles = new[] { article };
         var titles = new[] { new WorkTitleRow(
             "wid-1", article.ExpressionIri, "fra", "Titre fixe", "titre fixe",
-            "2024-01-01", "title") };
+            "2024-01-01", "title", new string('3', 64)) };
         var path = Path.Combine(Path.GetTempPath(), $"lex-v3-lu-index-pin-{Guid.NewGuid():N}.sqlite");
         try
         {
@@ -576,7 +607,8 @@ public static class LuxembourgIndexBuilder
         string Title,
         string NormalizedTitle,
         string? DocumentDate,
-        string TitleKind);
+        string TitleKind,
+        string EvidenceSha256);
 
     private sealed record LogicalRows(
         IReadOnlyList<MemberRow> Members,
@@ -1009,12 +1041,13 @@ public sealed class LuxembourgIndexReader : IDisposable
     private static LuxembourgIndexBuilder.WorkTitleRow[] ReadWorkTitles(SqliteConnection connection)
     {
         using var command = connection.CreateCommand();
-        command.CommandText = "SELECT work_identifier,expression_iri,language,title,normalized_title,document_date,title_kind FROM work_titles ORDER BY work_identifier,expression_iri,language,title,title_kind";
+        command.CommandText = "SELECT work_identifier,expression_iri,language,title,normalized_title,document_date,title_kind,evidence_sha256 FROM work_titles ORDER BY work_identifier,expression_iri,language,title,title_kind,evidence_sha256";
         using var reader = command.ExecuteReader();
         var values = new List<LuxembourgIndexBuilder.WorkTitleRow>();
         while (reader.Read()) values.Add(new(
             reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3),
-            reader.GetString(4), reader.IsDBNull(5) ? null : reader.GetString(5), reader.GetString(6)));
+            reader.GetString(4), reader.IsDBNull(5) ? null : reader.GetString(5), reader.GetString(6),
+            reader.GetString(7)));
         return values.ToArray();
     }
 
