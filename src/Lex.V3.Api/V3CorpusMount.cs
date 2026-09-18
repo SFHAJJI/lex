@@ -265,7 +265,7 @@ internal sealed class V3CorpusMount : IDisposable
     {
         pinned = default;
         string path;
-        if (value.StartsWith('/', StringComparison.Ordinal))
+        if (value.StartsWith("/", StringComparison.Ordinal))
         {
             path = value;
         }
