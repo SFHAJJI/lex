@@ -467,7 +467,8 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Ingest.Europe.EuXhtmlAnnexInventoryProducer::RunAsync",
                 "Lex.V3.Ingest.Europe.EuropeIndexReader: constructor private instance "
                     + "Lex.V3.Ingest.Europe.EuropeIndexReader::.ctor, "
-                    + "method public static Lex.V3.Ingest.Europe.EuropeIndexReader::OpenAndVerify",
+                    + "method public static Lex.V3.Ingest.Europe.EuropeIndexReader::OpenAndVerify, "
+                    + "method public static Lex.V3.Ingest.Europe.EuropeIndexReader::OpenAndVerifyFileAsync",
                 "Lex.V3.Ingest.Europe.LuxembourgDraftGraphRunRequest: constructor private instance "
                     + "Lex.V3.Ingest.Europe.LuxembourgDraftGraphRunRequest::.ctor, "
                     + "constructor private instance "
