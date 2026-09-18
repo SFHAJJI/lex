@@ -161,6 +161,23 @@ public sealed class V3CorpusResolveMountTests
     }
 
     [TestMethod]
+    public async Task WellFormedPinWithoutAStateReturnsDomainRefusal()
+    {
+        var fixture = await MountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+        var identifier = $"/lu-legilux/{fixture.WorkKey}/2000-01-01--{new string('a', 64)}";
+
+        var envelope = await ResolveAsync(mount, identifier);
+
+        Assert.AreEqual(V3Verdicts.Refuse, envelope.Verdict);
+        Assert.AreEqual("identifier_unknown", envelope.Refusal!.Code);
+        Assert.AreEqual(identifier,
+            envelope.Refusal.HelpfulPayload.GetProperty("requested_identifier").GetString());
+    }
+
+    [TestMethod]
     [DataRow("http")]
     [DataRow("userinfo")]
     [DataRow("port")]

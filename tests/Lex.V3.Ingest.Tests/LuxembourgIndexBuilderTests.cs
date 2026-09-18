@@ -310,11 +310,85 @@ public sealed class LuxembourgIndexBuilderTests
     {
         var (built, corpusRef) = await BuildStateIndexAsync();
 
-        AssertTamperedDatabaseRejected(
-            built,
-            corpusRef,
-            "INSERT INTO states SELECT work_key,applicability_date,'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',expression_iri || '/z',publisher_work_iri,publisher_legal_resource_iri,language,rule_profiles_json,article_identities_json FROM states LIMIT 1",
-            "does not bind its exact article population");
+        AssertRecomputedStateTamperRejected(built, corpusRef, connection =>
+        {
+            var state = ReadStates(connection).Single();
+            const string secondDate = "2024-02-02";
+            var profiles = System.Text.Json.JsonSerializer.Deserialize<string[]>(state.RuleProfilesJson)!;
+            var identities = System.Text.Json.JsonSerializer.Deserialize<string[]>(state.ArticleIdentitiesJson)!;
+            var digest = LuxembourgIndexBuilder.StateSha256(
+                state.WorkKey, secondDate, state.ExpressionIri, state.PublisherWorkIri,
+                state.PublisherLegalResourceIri, state.Language, profiles, identities);
+            Execute(connection,
+                "INSERT INTO states VALUES($work,$date,$digest,$expression,$workIri,$resource,$language,$profiles,$identities)",
+                ("$work", state.WorkKey), ("$date", secondDate), ("$digest", digest),
+                ("$expression", state.ExpressionIri), ("$workIri", state.PublisherWorkIri),
+                ("$resource", state.PublisherLegalResourceIri), ("$language", state.Language),
+                ("$profiles", state.RuleProfilesJson), ("$identities", state.ArticleIdentitiesJson));
+        }, "does not bind its exact article population");
+    }
+
+    [TestMethod]
+    public async Task StrictReaderRejectsAStateWhoseLanguageContradictsItsArticles()
+    {
+        var (built, corpusRef) = await BuildStateIndexAsync();
+
+        AssertRecomputedStateTamperRejected(built, corpusRef, connection =>
+        {
+            var state = ReadStates(connection).Single();
+            const string language = "deu";
+            var profiles = System.Text.Json.JsonSerializer.Deserialize<string[]>(state.RuleProfilesJson)!;
+            var identities = System.Text.Json.JsonSerializer.Deserialize<string[]>(state.ArticleIdentitiesJson)!;
+            var digest = LuxembourgIndexBuilder.StateSha256(
+                state.WorkKey, state.ApplicabilityDate, state.ExpressionIri, state.PublisherWorkIri,
+                state.PublisherLegalResourceIri, language, profiles, identities);
+            Execute(connection,
+                "UPDATE states SET language=$language,state_sha256=$digest",
+                ("$language", language), ("$digest", digest));
+        }, "language contradicts its articles");
+    }
+
+    [TestMethod]
+    public async Task StrictReaderRejectsAStateThatOmitsOneOfItsExpressionArticles()
+    {
+        var (built, corpusRef) = await BuildStateIndexAsync();
+
+        AssertRecomputedStateTamperRejected(built, corpusRef, connection =>
+        {
+            var state = ReadStates(connection).Single();
+            var profiles = System.Text.Json.JsonSerializer.Deserialize<string[]>(state.RuleProfilesJson)!;
+            var identities = System.Text.Json.JsonSerializer.Deserialize<string[]>(state.ArticleIdentitiesJson)!;
+            Assert.IsGreaterThan(1, identities.Length);
+            identities = [identities[0]];
+            var identitiesJson = System.Text.Json.JsonSerializer.Serialize(identities);
+            var digest = LuxembourgIndexBuilder.StateSha256(
+                state.WorkKey, state.ApplicabilityDate, state.ExpressionIri, state.PublisherWorkIri,
+                state.PublisherLegalResourceIri, state.Language, profiles, identities);
+            Execute(connection,
+                "UPDATE states SET article_identities_json=$identities,state_sha256=$digest",
+                ("$identities", identitiesJson), ("$digest", digest));
+        }, "omits or crosses its expression population");
+    }
+
+    [TestMethod]
+    public async Task StrictReaderRejectsALegalResourceOutsideItsWork()
+    {
+        var (built, corpusRef) = await BuildStateIndexAsync();
+
+        AssertRecomputedStateTamperRejected(built, corpusRef, connection =>
+        {
+            var state = ReadStates(connection).Single();
+            const string workIri = "http://data.legilux.public.lu/eli/etat/leg/loi/2000/01/01/n1";
+            var workKey = LuxembourgIndexBuilder.WorkKeyOf(workIri);
+            var profiles = System.Text.Json.JsonSerializer.Deserialize<string[]>(state.RuleProfilesJson)!;
+            var identities = System.Text.Json.JsonSerializer.Deserialize<string[]>(state.ArticleIdentitiesJson)!;
+            var digest = LuxembourgIndexBuilder.StateSha256(
+                workKey, state.ApplicabilityDate, state.ExpressionIri, workIri,
+                state.PublisherLegalResourceIri, state.Language, profiles, identities);
+            Execute(connection,
+                "UPDATE states SET work_key=$work, publisher_work_iri=$workIri, state_sha256=$digest",
+                ("$work", workKey), ("$workIri", workIri), ("$digest", digest));
+        }, "not canonical");
     }
 
     [TestMethod]
@@ -409,7 +483,35 @@ public sealed class LuxembourgIndexBuilderTests
         if (expectedMessage is not null) StringAssert.Contains(exception.Message, expectedMessage);
     }
 
+    private static void AssertRecomputedStateTamperRejected(
+        LuxembourgIndexBuildResult built,
+        SourceArtifactRef corpusRef,
+        Action<SqliteConnection> tamper,
+        string expectedMessage)
+    {
+        var bytes = MutateDatabase(built.IndexBytes.Span, connection =>
+        {
+            tamper(connection);
+            var logicalRows = LuxembourgIndexBuilder.HashLogicalRows(
+                ReadMembers(connection), ReadArticles(connection), ReadStates(connection),
+                ReadWorkTitles(connection));
+            Execute(connection, "UPDATE stamp SET logical_rows_sha256=$digest WHERE stamp_id=1",
+                ("$digest", logicalRows));
+        });
+        var digest = Convert.ToHexStringLower(SHA256.HashData(bytes));
+        var reference = new SourceArtifactRef(LexCorpus6Builder.ResourceIdOf(digest), digest);
+        var manifest = RebindManifest(built.CapabilityManifest, digest);
+        var exception = Assert.ThrowsExactly<InvalidDataException>(() => LuxembourgIndexReader.OpenAndVerify(
+            reference, bytes, corpusRef, manifest));
+        StringAssert.Contains(exception.Message, expectedMessage);
+    }
+
     private static byte[] MutateDatabase(ReadOnlySpan<byte> source, string sql)
+        => MutateDatabase(source, connection => Execute(connection, sql));
+
+    private static byte[] MutateDatabase(
+        ReadOnlySpan<byte> source,
+        Action<SqliteConnection> mutate)
     {
         var path = Path.Combine(Path.GetTempPath(), $"lex-v3-lu-index-hostile-{Guid.NewGuid():N}.sqlite");
         try
@@ -422,9 +524,7 @@ public sealed class LuxembourgIndexBuilderTests
                 Pooling = false,
             }.ToString());
             connection.Open();
-            using var command = connection.CreateCommand();
-            command.CommandText = sql;
-            command.ExecuteNonQuery();
+            mutate(connection);
             connection.Close();
             return File.ReadAllBytes(path);
         }
@@ -432,5 +532,69 @@ public sealed class LuxembourgIndexBuilderTests
         {
             LuxembourgIndexBuilder.DeleteDatabase(path);
         }
+    }
+
+    private static void Execute(
+        SqliteConnection connection,
+        string sql,
+        params (string Name, object Value)[] parameters)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = sql;
+        foreach (var parameter in parameters)
+            command.Parameters.AddWithValue(parameter.Name, parameter.Value);
+        command.ExecuteNonQuery();
+    }
+
+    private static LuxembourgIndexBuilder.MemberRow[] ReadMembers(SqliteConnection connection)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT object_ref_sha256,source_ordinal,outcome,rights_disposition,stage3_outcomes_json,gaps_json FROM members ORDER BY object_ref_sha256";
+        using var reader = command.ExecuteReader();
+        var rows = new List<LuxembourgIndexBuilder.MemberRow>();
+        while (reader.Read()) rows.Add(new(
+            reader.GetString(0), reader.GetInt32(1), reader.GetString(2),
+            reader.IsDBNull(3) ? null : reader.GetString(3), reader.GetString(4), reader.GetString(5)));
+        return rows.ToArray();
+    }
+
+    private static LuxembourgIndexBuilder.ArticleRow[] ReadArticles(SqliteConnection connection)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT article_identity_sha256,object_ref_sha256,expression_iri,publisher_id,publisher_wid,applicability_date,language,rule_profile_sha256,searchable_text,tokens_json FROM articles ORDER BY article_identity_sha256";
+        using var reader = command.ExecuteReader();
+        var rows = new List<LuxembourgIndexBuilder.ArticleRow>();
+        while (reader.Read()) rows.Add(new(
+            reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3),
+            reader.IsDBNull(4) ? null : reader.GetString(4),
+            reader.IsDBNull(5) ? null : reader.GetString(5),
+            reader.GetString(6), reader.GetString(7), reader.GetString(8), reader.GetString(9)));
+        return rows.ToArray();
+    }
+
+    private static LuxembourgIndexBuilder.StateRow[] ReadStates(SqliteConnection connection)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT work_key,applicability_date,state_sha256,expression_iri,publisher_work_iri,publisher_legal_resource_iri,language,rule_profiles_json,article_identities_json FROM states ORDER BY work_key,applicability_date,expression_iri,language";
+        using var reader = command.ExecuteReader();
+        var rows = new List<LuxembourgIndexBuilder.StateRow>();
+        while (reader.Read()) rows.Add(new(
+            reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3),
+            reader.GetString(4), reader.GetString(5), reader.GetString(6), reader.GetString(7),
+            reader.GetString(8)));
+        return rows.ToArray();
+    }
+
+    private static LuxembourgIndexBuilder.WorkTitleRow[] ReadWorkTitles(SqliteConnection connection)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT work_identifier,expression_iri,language,title,normalized_title,document_date,title_kind,evidence_sha256 FROM work_titles ORDER BY work_identifier,expression_iri,language,title,title_kind,evidence_sha256";
+        using var reader = command.ExecuteReader();
+        var rows = new List<LuxembourgIndexBuilder.WorkTitleRow>();
+        while (reader.Read()) rows.Add(new(
+            reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3),
+            reader.GetString(4), reader.IsDBNull(5) ? null : reader.GetString(5), reader.GetString(6),
+            reader.GetString(7)));
+        return rows.ToArray();
     }
 }
