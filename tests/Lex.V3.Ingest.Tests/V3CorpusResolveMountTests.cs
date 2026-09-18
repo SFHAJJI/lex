@@ -519,6 +519,8 @@ public sealed class V3CorpusResolveMountTests
     {
         var fixture = await MountedFixture.CreateAsync();
         await using var cleanup = fixture;
+        var alternateLuxembourgExpression =
+            await fixture.AddAlternateExpressionForSameWorkAsync();
         var europeExpression = await fixture.AddEuropeCollisionAsync();
         using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
         Assert.IsNotNull(mount);
@@ -528,7 +530,8 @@ public sealed class V3CorpusResolveMountTests
         Assert.AreEqual(V3Verdicts.Refuse, envelope.Verdict);
         Assert.AreEqual("ambiguous_identifier", envelope.Refusal!.Code);
         CollectionAssert.AreEqual(
-            new[] { fixture.ExpressionIri, europeExpression }.Order(StringComparer.Ordinal).ToArray(),
+            new[] { fixture.ExpressionIri, alternateLuxembourgExpression, europeExpression }
+                .Order(StringComparer.Ordinal).ToArray(),
             envelope.Refusal.HelpfulPayload.GetProperty("candidates")
                 .EnumerateArray().Select(static value => value.GetString()).ToArray());
     }
