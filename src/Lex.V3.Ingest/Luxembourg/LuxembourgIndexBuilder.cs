@@ -30,6 +30,12 @@ public sealed record LuxembourgIndexSearchResult(
     V3IndexCapabilityLookupOutcome Outcome,
     IReadOnlyList<string> ArticleIdentities);
 
+public sealed record LuxembourgIndexResolvedExpression(
+    string ExpressionIri,
+    string? PublisherWid,
+    string Language,
+    IReadOnlyList<string> ArticleIdentities);
+
 /// <summary>
 /// Builds the immutable Luxembourg index from the same proof-complete envelope that builds
 /// lex-corpus/6. Callers cannot provide index rows or capability counts.
@@ -503,16 +509,28 @@ public sealed class LuxembourgIndexReader : IDisposable
     private readonly string _path;
     private readonly SqliteConnection _connection;
     private readonly V3IndexCapabilityManifest _capabilityManifest;
+    private readonly bool _deleteOnDispose;
+    private readonly object _gate = new();
 
     private LuxembourgIndexReader(
         string path,
         SqliteConnection connection,
-        V3IndexCapabilityManifest capabilityManifest)
+        V3IndexCapabilityManifest capabilityManifest,
+        SourceArtifactRef indexRef,
+        SourceArtifactRef corpusRef,
+        bool deleteOnDispose)
     {
         _path = path;
         _connection = connection;
         _capabilityManifest = capabilityManifest;
+        IndexRef = indexRef;
+        CorpusRef = corpusRef;
+        _deleteOnDispose = deleteOnDispose;
     }
+
+    public SourceArtifactRef IndexRef { get; }
+
+    public SourceArtifactRef CorpusRef { get; }
 
     public long MemberCount => Count("members");
 
@@ -545,6 +563,80 @@ public sealed class LuxembourgIndexReader : IDisposable
 
         var path = Path.Combine(Path.GetTempPath(), $"lex-v3-lu-mount-{Guid.NewGuid():N}.sqlite");
         File.WriteAllBytes(path, indexBytes.ToArray());
+        return OpenVerifiedFile(
+            path,
+            indexRef,
+            expectedCorpusRef,
+            capabilityManifest,
+            deleteOnDispose: true);
+    }
+
+    public static async Task<LuxembourgIndexReader> OpenAndVerifyFileAsync(
+        string indexPath,
+        ReadOnlyMemory<byte> capabilityManifestBytes,
+        CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(indexPath);
+        if (!File.Exists(indexPath))
+        {
+            throw new FileNotFoundException("The Luxembourg index artifact is missing.", indexPath);
+        }
+
+        var privatePath = Path.Combine(
+            Path.GetTempPath(), $"lex-v3-lu-mount-{Guid.NewGuid():N}.sqlite");
+        try
+        {
+            await using (var source = new FileStream(
+                indexPath, FileMode.Open, FileAccess.Read, FileShare.Read,
+                bufferSize: 64 * 1024, FileOptions.Asynchronous | FileOptions.SequentialScan))
+            await using (var destination = new FileStream(
+                privatePath, FileMode.CreateNew, FileAccess.Write, FileShare.None,
+                bufferSize: 64 * 1024, FileOptions.Asynchronous | FileOptions.SequentialScan))
+            {
+                await source.CopyToAsync(destination, cancellationToken).ConfigureAwait(false);
+                await destination.FlushAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            string digest;
+            await using (var copied = new FileStream(
+                privatePath, FileMode.Open, FileAccess.Read, FileShare.Read,
+                bufferSize: 64 * 1024, FileOptions.Asynchronous | FileOptions.SequentialScan))
+            {
+                digest = Convert.ToHexStringLower(
+                    await SHA256.HashDataAsync(copied, cancellationToken).ConfigureAwait(false));
+            }
+
+            var indexRef = new SourceArtifactRef(LexCorpus6Builder.ResourceIdOf(digest), digest);
+            var capabilityDigest = V3IndexCapabilityManifestArtifact.ComputeSha256(
+                capabilityManifestBytes.Span);
+            var capabilityRef = new SourceArtifactRef(
+                LexCorpus6Builder.ResourceIdOf(capabilityDigest), capabilityDigest);
+            var capabilityManifest = V3IndexCapabilityManifestArtifact.ParseAndVerify(
+                capabilityRef,
+                capabilityManifestBytes.Span,
+                PublisherId.LuLegilux,
+                digest);
+            return OpenVerifiedFile(
+                privatePath,
+                indexRef,
+                expectedCorpusRef: null,
+                capabilityManifest,
+                deleteOnDispose: true);
+        }
+        catch
+        {
+            LuxembourgIndexBuilder.DeleteDatabase(privatePath);
+            throw;
+        }
+    }
+
+    private static LuxembourgIndexReader OpenVerifiedFile(
+        string path,
+        SourceArtifactRef indexRef,
+        SourceArtifactRef? expectedCorpusRef,
+        V3IndexCapabilityManifest capabilityManifest,
+        bool deleteOnDispose)
+    {
         SqliteConnection? connection = null;
         try
         {
@@ -561,8 +653,14 @@ public sealed class LuxembourgIndexReader : IDisposable
             stamp.CommandText = "SELECT schema_identity,corpus_sha256,logical_rows_sha256,sqlite_version,sqlite_source_id,compile_options_sha256 FROM stamp WHERE stamp_id=1";
             using var stampReader = stamp.ExecuteReader();
             if (!stampReader.Read() ||
-                !string.Equals(stampReader.GetString(0), LuxembourgIndexBuilder.Schema, StringComparison.Ordinal) ||
-                !string.Equals(stampReader.GetString(1), expectedCorpusRef.Sha256, StringComparison.Ordinal))
+                !string.Equals(stampReader.GetString(0), LuxembourgIndexBuilder.Schema, StringComparison.Ordinal))
+            {
+                throw new InvalidDataException("The Luxembourg index stamp does not bind the expected corpus.");
+            }
+            var corpusSha256 = stampReader.GetString(1);
+            var corpusRef = new SourceArtifactRef(
+                LexCorpus6Builder.ResourceIdOf(corpusSha256), corpusSha256);
+            if (expectedCorpusRef is not null && expectedCorpusRef != corpusRef)
             {
                 throw new InvalidDataException("The Luxembourg index stamp does not bind the expected corpus.");
             }
@@ -582,17 +680,62 @@ public sealed class LuxembourgIndexReader : IDisposable
                     StringComparison.Ordinal))
                 throw new InvalidDataException("The Luxembourg index logical rows do not match their stamp.");
 
-            var measured = LuxembourgIndexBuilder.MeasureCapabilities(digest, articles);
+            var measured = LuxembourgIndexBuilder.MeasureCapabilities(indexRef.Sha256, articles);
             if (!measured.Cells.SequenceEqual(capabilityManifest.Cells))
                 throw new InvalidDataException("The Luxembourg capability manifest was not measured from the index.");
 
-            return new LuxembourgIndexReader(path, connection, capabilityManifest);
+            return new LuxembourgIndexReader(
+                path,
+                connection,
+                capabilityManifest,
+                indexRef,
+                corpusRef,
+                deleteOnDispose);
         }
         catch
         {
             connection?.Dispose();
-            LuxembourgIndexBuilder.DeleteDatabase(path);
+            if (deleteOnDispose)
+            {
+                LuxembourgIndexBuilder.DeleteDatabase(path);
+            }
             throw;
+        }
+    }
+
+    public IReadOnlyList<LuxembourgIndexResolvedExpression> ResolveExact(string identifier)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(identifier);
+        lock (_gate)
+        {
+            using var command = _connection.CreateCommand();
+            command.CommandText = """
+                SELECT expression_iri,publisher_wid,language,article_identity_sha256
+                FROM articles
+                WHERE expression_iri=$identifier OR publisher_wid=$identifier
+                  OR article_identity_sha256=$identifier
+                ORDER BY expression_iri,publisher_wid,language,article_identity_sha256
+                """;
+            command.Parameters.AddWithValue("$identifier", identifier);
+            using var reader = command.ExecuteReader();
+            var rows = new List<(string Expression, string? Wid, string Language, string Article)>();
+            while (reader.Read())
+            {
+                rows.Add((
+                    reader.GetString(0),
+                    reader.IsDBNull(1) ? null : reader.GetString(1),
+                    reader.GetString(2),
+                    reader.GetString(3)));
+            }
+
+            return rows
+                .GroupBy(static row => (row.Expression, row.Wid, row.Language))
+                .Select(static group => new LuxembourgIndexResolvedExpression(
+                    group.Key.Expression,
+                    group.Key.Wid,
+                    group.Key.Language,
+                    Array.AsReadOnly(group.Select(static row => row.Article).ToArray())))
+                .ToArray();
         }
     }
 
@@ -630,7 +773,10 @@ public sealed class LuxembourgIndexReader : IDisposable
     public void Dispose()
     {
         _connection.Dispose();
-        LuxembourgIndexBuilder.DeleteDatabase(_path);
+        if (_deleteOnDispose)
+        {
+            LuxembourgIndexBuilder.DeleteDatabase(_path);
+        }
     }
 
     private long Count(string table)

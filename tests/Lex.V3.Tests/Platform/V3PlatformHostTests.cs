@@ -74,7 +74,7 @@ public sealed class V3PlatformHostTests
         {
             ("{", V3TransportFailureKind.MalformedJson),
             ("{\"operation_id\":\"unknown\",\"parameters\":{}}", V3TransportFailureKind.UnknownOperation),
-            ("{\"operation_id\":\"resolve\",\"parameters\":{},\"extra\":true}", V3TransportFailureKind.RequestSchemaInvalid),
+            ("{\"operation_id\":\"resolve\",\"parameters\":{\"identifier\":\"eli/example\"},\"extra\":true}", V3TransportFailureKind.RequestSchemaInvalid),
             ("{\"operation_id\":\"resolve\",\"parameters\":[]}", V3TransportFailureKind.ParametersNotObject),
             ("{\"operation_id\":\"resolve\",\"operation_id\":\"search\",\"parameters\":{}}", V3TransportFailureKind.DuplicateJsonMember),
             ("{\"operation_id\":\"resolve\",\"parameters\":{}}{}", V3TransportFailureKind.TrailingJsonContent),
@@ -130,7 +130,7 @@ public sealed class V3PlatformHostTests
 
         await Assert.ThrowsExactlyAsync<ArgumentException>(async () =>
             await host.CreateMcpSuccessAsync(
-                Encoding.UTF8.GetBytes("{\"operation_id\":\"resolve\",\"parameters\":{}}"),
+                Encoding.UTF8.GetBytes("{\"operation_id\":\"resolve\",\"parameters\":{\"identifier\":\"eli/example\"}}"),
                 "req_host",
                 Context(),
                 bound => new V3PlatformOperationResult(bound, "quote", value.RootElement),
@@ -195,7 +195,7 @@ public sealed class V3PlatformHostTests
         using var helpful = JsonDocument.Parse("{\"required_corpus\":\"lu\"}");
 
         await host.CreateMcpRefusalAsync(
-            Encoding.UTF8.GetBytes("{\"operation_id\":\"resolve\",\"parameters\":{}}"),
+            Encoding.UTF8.GetBytes("{\"operation_id\":\"resolve\",\"parameters\":{\"identifier\":\"eli/example\"}}"),
             "req_refusal_schema_calls",
             RefusalContext(),
             bound => new V3PlatformOperationRefusal(
@@ -281,7 +281,7 @@ public sealed class V3PlatformHostTests
     public async Task SyntheticPreviewHandlerCannotAnswerTheRealResolveRoute()
     {
         var context = RouteContext(
-            Encoding.UTF8.GetBytes("{\"operation_id\":\"resolve\",\"parameters\":{}}"));
+            Encoding.UTF8.GetBytes("{\"operation_id\":\"resolve\",\"parameters\":{\"identifier\":\"eli/example\"}}"));
 
         await SyntheticApiHandler.HandleAsync(
             context,
@@ -295,7 +295,7 @@ public sealed class V3PlatformHostTests
     public async Task RealResolveRouteWritesAReviewedDomainRefusal()
     {
         var context = RouteContext(
-            Encoding.UTF8.GetBytes("{\"operation_id\":\"resolve\",\"parameters\":{}}"));
+            Encoding.UTF8.GetBytes("{\"operation_id\":\"resolve\",\"parameters\":{\"identifier\":\"eli/example\"}}"));
         using var helpful = JsonDocument.Parse("{\"required_corpus\":\"lu\"}");
 
         await V3ResolveRestRoute.WriteRefusalAsync(
@@ -330,7 +330,7 @@ public sealed class V3PlatformHostTests
                  })
         {
             var context = RouteContext(
-                Encoding.UTF8.GetBytes("{\"operation_id\":\"resolve\",\"parameters\":{}}"));
+                Encoding.UTF8.GetBytes("{\"operation_id\":\"resolve\",\"parameters\":{\"identifier\":\"eli/example\"}}"));
             mutate(context);
 
             await Assert.ThrowsExactlyAsync<V3TransportFailureException>(async () =>
@@ -372,7 +372,7 @@ public sealed class V3PlatformHostTests
             "too_large" => OversizedRequest(),
             "too_deep" => DeepRequest(),
             "parameters" => "{\"operation_id\":\"resolve\",\"parameters\":[]}",
-            "schema" => "{\"operation_id\":\"resolve\",\"parameters\":{},\"extra\":true}",
+            "schema" => "{\"operation_id\":\"resolve\",\"parameters\":{\"identifier\":\"eli/example\"},\"extra\":true}",
             "operation" => "{\"operation_id\":\"unknown\",\"parameters\":{}}",
             _ => throw new ArgumentOutOfRangeException(nameof(scenario)),
         };
@@ -423,7 +423,7 @@ public sealed class V3PlatformHostTests
     public async Task SchemaInvalidResultCannotLeakAnEnvelopeOrPartialResult()
     {
         var context = RouteContext(Encoding.UTF8.GetBytes(
-            "{\"operation_id\":\"resolve\",\"parameters\":{}}"));
+            "{\"operation_id\":\"resolve\",\"parameters\":{\"identifier\":\"eli/example\"}}"));
         using var value = JsonDocument.Parse("{\"work_id\":\"eli/example\"}");
 
         await V3ResolveRestRoute.HandleSuccessAsync(

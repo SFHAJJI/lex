@@ -69,6 +69,16 @@ public sealed class GuardedConstructionCensusTests
                 "Lex.V3.Api.SyntheticIndexResolver: constructor private instance "
                     + "Lex.V3.Api.SyntheticIndexResolver::.ctor, "
                     + "method public static Lex.V3.Api.SyntheticIndexResolver::Open",
+                "Lex.V3.Api.V3CorpusMount: constructor private instance "
+                    + "Lex.V3.Api.V3CorpusMount::.ctor, "
+                    + "method public static Lex.V3.Api.V3CorpusMount::OpenAsync",
+                "Lex.V3.Api.V3PlatformOperationOutcome: constructor private instance "
+                    + "Lex.V3.Api.V3PlatformOperationOutcome::.ctor, "
+                    + "method private instance Lex.V3.Api.V3ApiHandler::<HandleAsync>b__10_0, "
+                    + "method private instance Lex.V3.Api.V3CorpusMount::Unknown, "
+                    + "method public instance Lex.V3.Api.V3CorpusMount::Resolve, "
+                    + "method public static Lex.V3.Api.V3PlatformOperationOutcome::Refused, "
+                    + "method public static Lex.V3.Api.V3PlatformOperationOutcome::Success",
                 "Lex.V3.Api.V3PlatformSchemaDocuments: constructor private instance "
                     + "Lex.V3.Api.V3PlatformSchemaDocuments::.ctor, "
                     + "constructor private static Lex.V3.Api.V3PlatformSchemaDocuments::.cctor, "

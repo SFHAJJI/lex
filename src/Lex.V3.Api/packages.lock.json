@@ -49,6 +49,11 @@
           "SQLitePCLRaw.core": "2.1.12"
         }
       },
+      "PdfPig": {
+        "type": "Transitive",
+        "resolved": "0.1.11",
+        "contentHash": "pGAhccH2pXU5SzNPs94kGD+HnChHWrW/234en2Ky+RSAAui4o7msOiUdePErOmM2FY/wnyfj3MY/WRAhjnlRVw=="
+      },
       "SQLitePCLRaw.bundle_e_sqlite3": {
         "type": "Transitive",
         "resolved": "2.1.12",
@@ -84,6 +89,14 @@
       },
       "lex.v3.contracts": {
         "type": "Project"
+      },
+      "lex.v3.ingest": {
+        "type": "Project",
+        "dependencies": {
+          "Lex.V3.Contracts": "[1.0.0, )",
+          "Microsoft.Data.Sqlite": "[10.0.11, )",
+          "PdfPig": "[0.1.11, 0.1.11]"
+        }
       }
     },
     "net10.0/linux-x64": {

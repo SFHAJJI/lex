@@ -1582,8 +1582,42 @@ public sealed record LexCorpus6BuildResult(
 
 public sealed class VerifiedLexCorpus6ManifestSet
 {
-    private VerifiedLexCorpus6ManifestSet(LexCorpus6ManifestSet set) => Set = set;
+    private VerifiedLexCorpus6ManifestSet(
+        SourceArtifactRef artifactRef,
+        LexCorpus6ManifestSet set)
+    {
+        ArtifactRef = artifactRef;
+        Set = set;
+    }
+
+    public SourceArtifactRef ArtifactRef { get; }
+
     public LexCorpus6ManifestSet Set { get; }
+
+    public static VerifiedLexCorpus6ManifestSet ParseCanonicalAndVerify(ReadOnlySpan<byte> canonicalBytes)
+    {
+        LexCorpus6ManifestSet set;
+        try
+        {
+            set = ContractJson.Deserialize<LexCorpus6ManifestSet>(
+                new UTF8Encoding(false, true).GetString(canonicalBytes)).Validate();
+        }
+        catch (Exception exception) when (
+            exception is JsonException or DecoderFallbackException or ArgumentException)
+        {
+            throw new ArgumentException(
+                "The corpus manifest-set bytes are not one valid typed document.",
+                nameof(canonicalBytes),
+                exception);
+        }
+
+        var digest = LexCorpus6Builder.ComputeSha256(canonicalBytes);
+        return ParseAndVerify(
+            new SourceArtifactRef(LexCorpus6Builder.ResourceIdOf(digest), digest),
+            set.EuropeSourceSetRef,
+            set.LuxembourgSourceSetRef,
+            canonicalBytes);
+    }
 
     public static VerifiedLexCorpus6ManifestSet ParseAndVerify(
         SourceArtifactRef artifactRef,
@@ -1632,6 +1666,6 @@ public sealed class VerifiedLexCorpus6ManifestSet
                 nameof(canonicalBytes));
         }
 
-        return new VerifiedLexCorpus6ManifestSet(set);
+        return new VerifiedLexCorpus6ManifestSet(artifactRef, set);
     }
 }

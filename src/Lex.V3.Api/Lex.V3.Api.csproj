@@ -16,6 +16,7 @@
   <ItemGroup>
     <ProjectReference Include="../Lex.V3.Artifacts/Lex.V3.Artifacts.csproj" />
     <ProjectReference Include="../Lex.V3.Contracts/Lex.V3.Contracts.csproj" />
+    <ProjectReference Include="../Lex.V3.Ingest/Lex.V3.Ingest.csproj" />
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="../../schemas/v3-platform/*.schema.json">

@@ -8,6 +8,41 @@ internal static class V3ResolveRestRoute
 {
     public const string RawTarget = "/api/v3/resolve";
 
+    public static async Task HandleOutcomeAsync(
+        HttpContext context,
+        V3PlatformHost host,
+        string requestReference,
+        Func<V3PlatformOperationRequest, V3PlatformOperationOutcome> execute,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await WriteOutcomeAsync(
+                context,
+                host,
+                requestReference,
+                execute,
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (V3TransportFailureException exception)
+        {
+            await V3TransportResponse.WriteAsync(context.Response, exception.Kind, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch
+        {
+            await V3TransportResponse.WriteAsync(
+                    context.Response,
+                    V3TransportFailureKind.InternalFailure,
+                    cancellationToken)
+                .ConfigureAwait(false);
+        }
+    }
+
     public static async Task HandleSuccessAsync(
         HttpContext context,
         V3PlatformHost host,
@@ -99,6 +134,25 @@ internal static class V3ResolveRestRoute
             request,
             requestReference,
             envelopeContext,
+            execute,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public static async Task WriteOutcomeAsync(
+        HttpContext context,
+        V3PlatformHost host,
+        string requestReference,
+        Func<V3PlatformOperationRequest, V3PlatformOperationOutcome> execute,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(host);
+        RequireClaimedRequest(context);
+        var request = await ReadBoundedBodyAsync(context.Request, cancellationToken).ConfigureAwait(false);
+        await host.WriteRestOutcomeAsync(
+            context.Response,
+            request,
+            requestReference,
             execute,
             cancellationToken).ConfigureAwait(false);
     }

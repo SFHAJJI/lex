@@ -9,7 +9,17 @@
     },
     "parameters": {
       "type": "object",
-      "additionalProperties": true
+      "additionalProperties": false,
+      "properties": {
+        "identifier": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        }
+      },
+      "required": [
+        "identifier"
+      ]
     }
   },
   "required": [

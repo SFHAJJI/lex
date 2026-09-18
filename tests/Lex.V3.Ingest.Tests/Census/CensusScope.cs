@@ -15,7 +15,7 @@ namespace Lex.V3.Ingest.Tests.Census;
 /// </para>
 /// <para>
 /// Lex.V3.Ingest is deployed only beside these tests, so it is swept here.
-/// Lex.V3.Contracts and Lex.V3.Artifacts are deployed beside both test projects and are
+/// Lex.V3.Api, Lex.V3.Contracts and Lex.V3.Artifacts are deployed beside both test projects and are
 /// swept by Lex.V3.Tests. Sweeping them again here would duplicate tens of thousands of
 /// characters of pinned surface in a second place, which is two places to update and one
 /// to forget.
@@ -30,6 +30,7 @@ internal static class CensusScope
 
     internal static readonly string[] SweptBySibling =
     [
+        "Lex.V3.Api",
         "Lex.V3.Artifacts",
         "Lex.V3.Contracts",
     ];

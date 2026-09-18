@@ -43,6 +43,7 @@ public sealed class CensusReachTests
         CollectionAssert.AreEqual(
             new[]
             {
+                "Lex.V3.Api",
                 "Lex.V3.Artifacts",
                 "Lex.V3.Contracts",
                 "Lex.V3.Ingest",

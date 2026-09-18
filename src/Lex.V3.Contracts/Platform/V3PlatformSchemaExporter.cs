@@ -94,7 +94,23 @@ public static class V3PlatformSchemaExporter
         JsonArray required;
         if (kind == "request")
         {
-            properties["parameters"] = ClosedObject();
+            properties["parameters"] = operationId == "resolve"
+                ? new JsonObject
+                {
+                    ["type"] = "object",
+                    ["additionalProperties"] = false,
+                    ["properties"] = new JsonObject
+                    {
+                        ["identifier"] = new JsonObject
+                        {
+                            ["type"] = "string",
+                            ["minLength"] = 1,
+                            ["pattern"] = "\\S",
+                        },
+                    },
+                    ["required"] = new JsonArray("identifier"),
+                }
+                : ClosedObject();
             required = new("operation_id", "parameters");
         }
         else

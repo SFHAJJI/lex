@@ -37,8 +37,27 @@ catch (Exception exception)
     state = SyntheticApiState.Unavailable;
 }
 
-app.Lifetime.ApplicationStopped.Register(state.Dispose);
-app.Run(V3ApiHandler.CreateRequestDelegate(state, static () => DateTimeOffset.UtcNow));
+V3CorpusMount? corpusMount = null;
+try
+{
+    corpusMount = await V3CorpusMount.OpenAsync(
+        Path.Combine(AppContext.BaseDirectory, "v3-corpus"),
+        app.Lifetime.ApplicationStopping);
+}
+catch (Exception exception)
+{
+    Console.Error.WriteLine($"V3 corpus mount refused: {exception.GetType().Name}: {exception.Message}");
+}
+
+app.Lifetime.ApplicationStopped.Register(() =>
+{
+    corpusMount?.Dispose();
+    state.Dispose();
+});
+app.Run(V3ApiHandler.CreateRequestDelegate(
+    state,
+    static () => DateTimeOffset.UtcNow,
+    corpusMount));
 await app.RunAsync();
 
 public partial class Program;
