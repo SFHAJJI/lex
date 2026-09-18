@@ -38,8 +38,16 @@ catch (Exception exception)
 }
 
 app.Lifetime.ApplicationStopped.Register(state.Dispose);
-var api = new V3ApiHandler(state, DateTimeOffset.UtcNow);
-app.Run(context => api.HandleAsync(context, context.RequestAborted));
+app.Run(Program.CreateRequestDelegate(state, DateTimeOffset.UtcNow));
 await app.RunAsync();
 
-public partial class Program;
+public partial class Program
+{
+    internal static RequestDelegate CreateRequestDelegate(
+        SyntheticApiState state,
+        DateTimeOffset observedAt)
+    {
+        var api = new V3ApiHandler(state, observedAt);
+        return context => api.HandleAsync(context, context.RequestAborted);
+    }
+}

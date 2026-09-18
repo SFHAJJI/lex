@@ -451,11 +451,11 @@ public sealed class V3PlatformHostTests
         var context = RouteContext(Encoding.UTF8.GetBytes(
             "{\"operation_id\":\"resolve\",\"parameters\":{\"identifier\":\"eli/example\"}}"));
         context.TraceIdentifier = "trace-real-resolve";
-        var application = new V3ApiHandler(
+        var application = Program.CreateRequestDelegate(
             SyntheticApiState.Unavailable,
             DateTimeOffset.Parse("2026-09-18T00:00:00Z"));
 
-        await application.HandleAsync(context, CancellationToken.None);
+        await application(context);
 
         Assert.AreEqual(StatusCodes.Status200OK, context.Response.StatusCode);
         var bytes = ((MemoryStream)context.Response.Body).ToArray();
