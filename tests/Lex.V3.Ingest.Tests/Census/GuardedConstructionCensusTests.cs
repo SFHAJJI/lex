@@ -275,8 +275,7 @@ public sealed class GuardedConstructionCensusTests
                 "Lex.V3.Ingest.Europe.EuFormexMainBodyLegalContentOutcome: constructor internal "
                     + "instance Lex.V3.Ingest.Europe.EuFormexMainBodyLegalContentOutcome::.ctor",
                 "Lex.V3.Ingest.Europe.EuFormexMainBodyLegalContentPopulation: constructor internal "
-                    + "instance "
-                    + "Lex.V3.Ingest.Europe.EuFormexMainBodyLegalContentPopulation::.ctor, "
+                    + "instance Lex.V3.Ingest.Europe.EuFormexMainBodyLegalContentPopulation::.ctor, "
                     + "method public instance "
                     + "Lex.V3.Ingest.Europe.EuFormexMainBodyLegalContentProducer::RunAsync",
                 "Lex.V3.Ingest.Europe.EuFormexManifestationEnumerationResult: constructor private "
@@ -610,6 +609,8 @@ public sealed class GuardedConstructionCensusTests
                     + "re",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgIndexReader: constructor private instance "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgIndexReader::.ctor, "
+                    + "method private static "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgIndexReader::OpenVerifiedFile, "
                     + "method public static "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgIndexReader::OpenAndVerify, "
                     + "method public static "
