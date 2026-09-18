@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json.Serialization;
@@ -31,6 +32,12 @@ public sealed record LuxembourgAknArticleCoordinate(
     string? PublisherWId,
     string? PublisherApplicability);
 
+/// <summary>One proof-bound dated publisher expression coordinate from retained AKN metadata.</summary>
+public sealed record LuxembourgAknExpressionCoordinate(
+    string PublisherWorkIri,
+    string PublisherLegalResourceIri,
+    string PublisherApplicabilityDate);
+
 /// <summary>
 /// The deterministic publisher-coordinate inventory for one retained AKN expression.
 /// </summary>
@@ -45,11 +52,13 @@ public sealed class LuxembourgAknArticleInventory
     internal LuxembourgAknArticleInventory(
         string publisherExpressionIri,
         string ruleProfileSha256,
-        IReadOnlyList<LuxembourgAknArticleCoordinate> articles)
+        IReadOnlyList<LuxembourgAknArticleCoordinate> articles,
+        LuxembourgAknExpressionCoordinate? expressionCoordinate)
     {
         PublisherExpressionIri = publisherExpressionIri;
         RuleProfileSha256 = ruleProfileSha256;
         Articles = Array.AsReadOnly(articles.ToArray());
+        ExpressionCoordinate = expressionCoordinate;
         IdentitySha256 = IdentityOf(this);
     }
 
@@ -59,14 +68,19 @@ public sealed class LuxembourgAknArticleInventory
 
     public IReadOnlyList<LuxembourgAknArticleCoordinate> Articles { get; }
 
+    public LuxembourgAknExpressionCoordinate? ExpressionCoordinate { get; }
+
     public string IdentitySha256 { get; }
 
     private static string IdentityOf(LuxembourgAknArticleInventory inventory)
     {
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-        Append(hash, "lex-v3-luxembourg-akn-article-inventory/1");
+        Append(hash, "lex-v3-luxembourg-akn-article-inventory/2");
         Append(hash, inventory.PublisherExpressionIri);
         Append(hash, inventory.RuleProfileSha256);
+        Append(hash, inventory.ExpressionCoordinate?.PublisherWorkIri ?? "");
+        Append(hash, inventory.ExpressionCoordinate?.PublisherLegalResourceIri ?? "");
+        Append(hash, inventory.ExpressionCoordinate?.PublisherApplicabilityDate ?? "");
         foreach (var article in inventory.Articles)
         {
             Append(hash, article.PublisherId);
@@ -159,12 +173,13 @@ public sealed class LuxembourgAknArticleInventoryProducer
     private const string SclNamespace = "http://www.scl.lu";
     private const long MaximumXmlCharacters = 64L * 1024 * 1024;
     private const string RuleProfile =
-        "lex-v3-luxembourg-akn-article-inventory-profile/2\n" +
+        "lex-v3-luxembourg-akn-article-inventory-profile/3\n" +
         "formats=xml-akomantoso,xml\n" +
         "namespace=http://docs.oasis-open.org/legaldocml/ns/akn/3.0/CSD13\n" +
         "articles=top-level-publisher-id-order\n" +
         "wid=verbatim-optional-distinct\n" +
-        "applicability=scl-jolux-scl-name-dateApplicability-article-owned-single\n";
+        "applicability=scl-jolux-scl-name-dateApplicability-article-owned-single\n" +
+        "expression-state=frbr-and-jolux-work-expression-membership-exact-date-optional\n";
     private static readonly string RuleDigest = Convert.ToHexStringLower(
         SHA256.HashData(Encoding.UTF8.GetBytes(RuleProfile)));
     private readonly ICustodyStore _custodyStore;
@@ -269,6 +284,12 @@ public sealed class LuxembourgAknArticleInventoryProducer
             return false;
         }
 
+        if (!TryExpressionCoordinate(
+                root, input, out var expressionCoordinate, out failure))
+        {
+            return false;
+        }
+
         var ids = new HashSet<string>(StringComparer.Ordinal);
         var wids = new HashSet<string>(StringComparer.Ordinal);
         var articles = new List<LuxembourgAknArticleCoordinate>(elements.Length);
@@ -317,9 +338,106 @@ public sealed class LuxembourgAknArticleInventoryProducer
         }
 
         inventory = new LuxembourgAknArticleInventory(
-            input.SelectedWemiCandidate.ExpressionIri, RuleDigest, articles);
+            input.SelectedWemiCandidate.ExpressionIri, RuleDigest, articles, expressionCoordinate);
         return true;
     }
+
+    private static bool TryExpressionCoordinate(
+        XElement root,
+        LuxembourgHeldBodyDerivationInput input,
+        out LuxembourgAknExpressionCoordinate? coordinate,
+        out string? failure)
+    {
+        coordinate = null;
+        failure = null;
+        XNamespace akn = AknNamespace;
+        XNamespace scl = SclNamespace;
+        var identification = root.Descendants(akn + "identification").ToArray();
+        if (identification.Length != 1)
+        {
+            failure = "publisher AKN must contain exactly one identification block";
+            return false;
+        }
+
+        var datedLegalResources = identification[0].Descendants(scl + "JOLUXLegalResource")
+            .Select(element => (Element: element, Dates: NamedValues(element, "dateApplicability")))
+            .Where(static value => value.Dates.Length != 0)
+            .ToArray();
+        if (datedLegalResources.Length == 0)
+        {
+            return true;
+        }
+        if (datedLegalResources.Length != 1 || datedLegalResources[0].Dates.Length != 1)
+        {
+            failure = "publisher AKN has conflicting expression applicability coordinates";
+            return false;
+        }
+
+        var rawDate = datedLegalResources[0].Dates[0];
+        if (!DateOnly.TryParseExact(
+                rawDate, "yyyy-MM-dd", CultureInfo.InvariantCulture,
+                DateTimeStyles.None, out var parsedDate) ||
+            !string.Equals(
+                rawDate, parsedDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                StringComparison.Ordinal))
+        {
+            failure = "publisher expression applicability is not one exact civil date";
+            return false;
+        }
+
+        var legalResourceIris = NamedValues(datedLegalResources[0].Element, "uriThis");
+        var memberOfIris = NamedValues(datedLegalResources[0].Element, "isMemberOf");
+        var frbrWorkIris = identification[0].Descendants(akn + "FRBRWork")
+            .SelectMany(static element => element.Elements()
+                .Where(static child => child.Name.LocalName == "FRBRthis")
+                .Select(static child => ((string?)child.Attribute("value"))?.Trim()))
+            .Where(static value => !string.IsNullOrEmpty(value)).Cast<string>()
+            .Distinct(StringComparer.Ordinal).ToArray();
+        var frbrExpressionIris = identification[0].Descendants(akn + "FRBRExpression")
+            .SelectMany(static element => element.Elements()
+                .Where(static child => child.Name.LocalName == "FRBRthis")
+                .Select(static child => ((string?)child.Attribute("value"))?.Trim()))
+            .Where(static value => !string.IsNullOrEmpty(value)).Cast<string>()
+            .Distinct(StringComparer.Ordinal).ToArray();
+        var joluxExpressionIris = identification[0].Descendants(scl + "JOLUXExpression")
+            .SelectMany(static element => NamedValues(element, "uriThis"))
+            .Distinct(StringComparer.Ordinal).ToArray();
+        if (legalResourceIris.Length != 1 || memberOfIris.Length != 1 ||
+            frbrWorkIris.Length != 1 || frbrExpressionIris.Length != 1 ||
+            joluxExpressionIris.Length != 1)
+        {
+            failure = "publisher AKN expression coordinate is incomplete or ambiguous";
+            return false;
+        }
+
+        var complexWorkMatches = identification[0].Descendants(scl + "JOLUXComplexWork")
+            .SelectMany(static element => NamedValues(element, "uriThis"))
+            .Where(value => string.Equals(value, memberOfIris[0], StringComparison.Ordinal))
+            .Distinct(StringComparer.Ordinal).ToArray();
+        if (complexWorkMatches.Length != 1 ||
+            !string.Equals(legalResourceIris[0], frbrWorkIris[0], StringComparison.Ordinal) ||
+            !string.Equals(legalResourceIris[0], input.SelectedWemiCandidate.RootIri, StringComparison.Ordinal) ||
+            !string.Equals(frbrExpressionIris[0], input.SelectedWemiCandidate.ExpressionIri, StringComparison.Ordinal) ||
+            !string.Equals(joluxExpressionIris[0], input.SelectedWemiCandidate.ExpressionIri, StringComparison.Ordinal))
+        {
+            failure = "publisher AKN expression coordinate does not match the selected WEMI";
+            return false;
+        }
+
+        coordinate = new LuxembourgAknExpressionCoordinate(
+            memberOfIris[0], legalResourceIris[0], rawDate);
+        return true;
+    }
+
+    private static string[] NamedValues(XElement element, string name) =>
+        element.Descendants(XName.Get("jolux", SclNamespace))
+            .Where(value => string.Equals(
+                (string?)value.Attribute(XName.Get("name", SclNamespace)), name,
+                StringComparison.Ordinal))
+            .Select(static value => value.Value.Trim())
+            .Where(static value => value.Length != 0)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
 
     private static bool BoundVerbatim(string? value) => value is
     {
