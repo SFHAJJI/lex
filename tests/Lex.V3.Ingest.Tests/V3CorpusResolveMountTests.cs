@@ -519,8 +519,7 @@ public sealed class V3CorpusResolveMountTests
     {
         var fixture = await MountedFixture.CreateAsync();
         await using var cleanup = fixture;
-        var alternateLuxembourgExpression =
-            await fixture.AddAlternateExpressionForSameWorkAsync();
+        await fixture.BindPublisherWorkIdentifierAsync();
         var europeExpression = await fixture.AddEuropeCollisionAsync();
         using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
         Assert.IsNotNull(mount);
@@ -530,7 +529,7 @@ public sealed class V3CorpusResolveMountTests
         Assert.AreEqual(V3Verdicts.Refuse, envelope.Verdict);
         Assert.AreEqual("ambiguous_identifier", envelope.Refusal!.Code);
         CollectionAssert.AreEqual(
-            new[] { fixture.ExpressionIri, alternateLuxembourgExpression, europeExpression }
+            new[] { fixture.ExpressionIri, europeExpression }
                 .Order(StringComparer.Ordinal).ToArray(),
             envelope.Refusal.HelpfulPayload.GetProperty("candidates")
                 .EnumerateArray().Select(static value => value.GetString()).ToArray());
@@ -857,6 +856,44 @@ public sealed class V3CorpusResolveMountTests
                 Path.Combine(Directory, V3CorpusMount.CapabilityManifestFileName),
                 stream.ToArray());
             return alternateExpression;
+        }
+
+        public async Task BindPublisherWorkIdentifierAsync()
+        {
+            var indexPath = Path.Combine(Directory, V3CorpusMount.IndexFileName);
+            LuxembourgIndexBuilder.MemberRow[] members;
+            LuxembourgIndexBuilder.ArticleRow[] articles;
+            LuxembourgIndexBuilder.StateRow[] states;
+            LuxembourgIndexBuilder.WorkTitleRow[] titles;
+            using (var connection = LuxembourgIndexBuilder.Open(indexPath, SqliteOpenMode.ReadWrite))
+            {
+                using var bindWork = connection.CreateCommand();
+                bindWork.CommandText =
+                    "UPDATE articles SET publisher_wid=$wid WHERE expression_iri=$expression";
+                bindWork.Parameters.AddWithValue("$wid", PublisherWid);
+                bindWork.Parameters.AddWithValue("$expression", ExpressionIri);
+                Assert.IsGreaterThan(0, bindWork.ExecuteNonQuery());
+                members = ReadMembers(connection);
+                articles = ReadArticles(connection);
+                states = ReadStates(connection);
+                titles = ReadWorkTitles(connection);
+                using var stamp = connection.CreateCommand();
+                stamp.CommandText =
+                    "UPDATE stamp SET logical_rows_sha256=$digest WHERE stamp_id=1";
+                stamp.Parameters.AddWithValue(
+                    "$digest", LuxembourgIndexBuilder.HashLogicalRows(
+                        members, articles, states, titles));
+                Assert.AreEqual(1, stamp.ExecuteNonQuery());
+            }
+
+            var indexBytes = await File.ReadAllBytesAsync(indexPath);
+            var indexDigest = Convert.ToHexStringLower(SHA256.HashData(indexBytes));
+            var manifest = LuxembourgIndexBuilder.MeasureCapabilities(indexDigest, articles, titles);
+            using var stream = new MemoryStream();
+            _ = V3IndexCapabilityManifestArtifact.Write(stream, manifest);
+            await File.WriteAllBytesAsync(
+                Path.Combine(Directory, V3CorpusMount.CapabilityManifestFileName),
+                stream.ToArray());
         }
 
         public async Task<LuxembourgIndexBuilder.StateRow> AddSecondLanguageStateAtSameDateAsync()
