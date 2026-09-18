@@ -65,6 +65,37 @@ public sealed class V3CorpusResolveMountTests
     }
 
     [TestMethod]
+    [DataRow("{\"operation_id\":\"resolve\",\"parameters\":{}}")]
+    [DataRow("{\"operation_id\":\"resolve\",\"parameters\":{\"identifier\":7}}")]
+    [DataRow("{\"operation_id\":\"resolve\",\"parameters\":{\"identifier\":\" \\t\"}}")]
+    public async Task UnusableIdentifierRemainsABelowEnvelopeTransportFailure(string body)
+    {
+        var fixture = await MountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+        var context = RequestBody(body);
+        var handler = new V3ApiHandler(
+            SyntheticApiState.Unavailable,
+            new V3PlatformHost(),
+            static () => ObservedAt,
+            mount);
+
+        await handler.HandleAsync(context, CancellationToken.None);
+
+        Assert.AreEqual(StatusCodes.Status400BadRequest, context.Response.StatusCode);
+        Assert.AreEqual("application/problem+json", context.Response.ContentType);
+        using var problem = System.Text.Json.JsonDocument.Parse(ResponseBytes(context));
+        Assert.AreEqual("request_schema_invalid", problem.RootElement.GetProperty("code").GetString());
+        Assert.IsFalse(problem.RootElement.TryGetProperty("verdict", out _));
+        Assert.IsFalse(problem.RootElement.TryGetProperty("refusal", out _));
+        StringAssert.DoesNotContain(
+            System.Text.Json.JsonSerializer.Serialize(problem.RootElement),
+            "requested_identifier",
+            StringComparison.Ordinal);
+    }
+
+    [TestMethod]
     public async Task MissingOrChangedMountInputsFailClosedBeforeAReaderIsReturned()
     {
         var fixture = await MountedFixture.CreateAsync();
@@ -119,9 +150,14 @@ public sealed class V3CorpusResolveMountTests
 
     private static DefaultHttpContext Request(string identifier)
     {
-        var bytes = Encoding.UTF8.GetBytes(
+        return RequestBody(
             "{\"operation_id\":\"resolve\",\"parameters\":{\"identifier\":" +
             System.Text.Json.JsonSerializer.Serialize(identifier) + "}}");
+    }
+
+    private static DefaultHttpContext RequestBody(string body)
+    {
+        var bytes = Encoding.UTF8.GetBytes(body);
         var context = new DefaultHttpContext();
         context.TraceIdentifier = "mounted-corpus-request";
         context.Request.Method = HttpMethods.Post;
