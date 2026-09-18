@@ -176,6 +176,8 @@ public sealed class V3CorpusResolveMountTests
 
         Assert.AreEqual(V3Verdicts.Refuse, envelope.Verdict);
         Assert.AreEqual("identifier_unknown", envelope.Refusal!.Code);
+        Assert.AreEqual(PublisherId.LuLegilux, envelope.Context.Publisher);
+        Assert.AreEqual("lu", envelope.Context.Jurisdiction);
         Assert.AreEqual(identifier,
             envelope.Refusal.HelpfulPayload.GetProperty("requested_identifier").GetString());
     }
@@ -536,6 +538,60 @@ public sealed class V3CorpusResolveMountTests
     }
 
     [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task AbsentCelexOnCombinedMountNeverFallsThroughToLuxembourgDiscovery(
+        bool addLuxembourgTitleCapability)
+    {
+        var fixture = await MountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        _ = await fixture.AddEuropeCollisionAsync();
+        if (addLuxembourgTitleCapability)
+        {
+            await fixture.AddWorkTitleAsync();
+        }
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+
+        var envelope = await ResolveAsync(mount, "32099R9999");
+
+        Assert.AreEqual(V3Verdicts.Refuse, envelope.Verdict);
+        Assert.AreEqual("identifier_unknown", envelope.Refusal!.Code);
+        Assert.AreEqual(PublisherId.EuEurLex, envelope.Context.Publisher);
+        Assert.AreEqual("eu", envelope.Context.Jurisdiction);
+        Assert.AreEqual(TimelineSemantics.OfficialConsolidationState,
+            envelope.Context.TimelineSemantics);
+    }
+
+    [TestMethod]
+    public async Task EuropeOnlyRefusalsCarryEuropeContext()
+    {
+        var fixture = await EuropeMountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        var secondExpression = await fixture
+            .AddSecondExpressionWithSamePublisherProvisionIdentifierAsync(
+                fixture.PublisherWorkId);
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+
+        var ambiguous = await ResolveAsync(mount, fixture.PublisherWorkId);
+        Assert.AreEqual(V3Verdicts.Refuse, ambiguous.Verdict);
+        Assert.AreEqual("ambiguous_identifier", ambiguous.Refusal!.Code);
+        Assert.AreEqual(PublisherId.EuEurLex, ambiguous.Context.Publisher);
+        Assert.AreEqual("eu", ambiguous.Context.Jurisdiction);
+        CollectionAssert.AreEquivalent(
+            new[] { fixture.PublisherExpressionId, secondExpression },
+            ambiguous.Refusal.HelpfulPayload.GetProperty("candidates")
+                .EnumerateArray().Select(static value => value.GetString()).ToArray());
+
+        var unavailable = await ResolveAsync(mount, "ordinary unknown words");
+        Assert.AreEqual(V3Verdicts.Refuse, unavailable.Verdict);
+        Assert.AreEqual("retrieval_mode_unavailable", unavailable.Refusal!.Code);
+        Assert.AreEqual(PublisherId.EuEurLex, unavailable.Context.Publisher);
+        Assert.AreEqual("eu", unavailable.Context.Jurisdiction);
+    }
+
+    [TestMethod]
     public async Task MountedEuropeIndexServesExactWorkExpressionAndProvisionCoordinates()
     {
         var fixture = await EuropeMountedFixture.CreateAsync();
@@ -552,6 +608,7 @@ public sealed class V3CorpusResolveMountTests
                      fixture.PublisherWorkId,
                      fixture.PublisherExpressionId,
                      qualifiedProvision,
+                     fixture.ArticleIdentitySha256,
                  })
         {
             var envelope = await ResolveAsync(mount, identifier);
@@ -1242,6 +1299,7 @@ public sealed class V3CorpusResolveMountTests
             string publisherWorkId,
             string publisherExpressionId,
             string publisherProvisionIdentifier,
+            string articleIdentitySha256,
             string corpusSha256,
             string indexSha256)
         {
@@ -1249,6 +1307,7 @@ public sealed class V3CorpusResolveMountTests
             PublisherWorkId = publisherWorkId;
             PublisherExpressionId = publisherExpressionId;
             PublisherProvisionIdentifier = publisherProvisionIdentifier;
+            ArticleIdentitySha256 = articleIdentitySha256;
             CorpusSha256 = corpusSha256;
             IndexSha256 = indexSha256;
         }
@@ -1257,6 +1316,7 @@ public sealed class V3CorpusResolveMountTests
         public string PublisherWorkId { get; }
         public string PublisherExpressionId { get; }
         public string PublisherProvisionIdentifier { get; }
+        public string ArticleIdentitySha256 { get; }
         public string CorpusSha256 { get; }
         public string IndexSha256 { get; private set; }
 
@@ -1289,11 +1349,16 @@ public sealed class V3CorpusResolveMountTests
                 admitted.Source.ExpressionIdentity.PublisherWorkId,
                 admitted.Source.ExpressionIdentity.PublisherExpressionId,
                 admitted.Articles[0].PublisherIdentifier,
+                admitted.Articles[0].IdentitySha256,
                 corpus.ArtifactRef.Sha256,
                 index.IndexRef.Sha256);
         }
 
-        public async Task<string> AddSecondActWithSamePublisherProvisionIdentifierAsync()
+        public Task<string> AddSecondActWithSamePublisherProvisionIdentifierAsync() =>
+            AddSecondExpressionWithSamePublisherProvisionIdentifierAsync();
+
+        public async Task<string> AddSecondExpressionWithSamePublisherProvisionIdentifierAsync(
+            string? publisherWorkId = null)
         {
             const string secondWork =
                 "http://publications.europa.eu/resource/celex/32026R1965";
@@ -1312,7 +1377,8 @@ public sealed class V3CorpusResolveMountTests
                 articles = MountedFixture.ReadEuropeArticles(connection);
                 var source = articles[0];
                 var inserted = new EuropeIndexBuilder.ArticleRow(
-                    new string('d', 64), source.ObjectRefSha256, secondWork, secondExpression,
+                    new string('d', 64), source.ObjectRefSha256, publisherWorkId ?? secondWork,
+                    secondExpression,
                     "second-act.xml", PublisherProvisionIdentifier, "Article 1", "2026-01-01",
                     "eng", "second act wording", "[]");
                 using var insert = connection.CreateCommand();
