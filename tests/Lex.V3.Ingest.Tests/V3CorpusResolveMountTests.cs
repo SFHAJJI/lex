@@ -1,4 +1,5 @@
 using System.Text;
+using System.Security.Cryptography;
 using Lex.V3.Api;
 using Lex.V3.Contracts;
 using Lex.V3.Contracts.Custody;
@@ -6,6 +7,7 @@ using Lex.V3.Contracts.Platform;
 using Lex.V3.Ingest.Luxembourg;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
+using Microsoft.Data.Sqlite;
 
 namespace Lex.V3.Ingest.Tests;
 
@@ -121,6 +123,64 @@ public sealed class V3CorpusResolveMountTests
     }
 
     [TestMethod]
+    public async Task ValidCorpusFromAnotherBuildIsRejectedByTheIndexCorpusBinding()
+    {
+        var fixture = await MountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        var original = VerifiedLexCorpus6ManifestSet.ParseCanonicalAndVerify(fixture.CorpusBytes);
+        var replacementProfiles = original.Set.ProfileIdentities.ToArray();
+        replacementProfiles[0] = replacementProfiles[0] == new string('f', 64)
+            ? new string('e', 64)
+            : new string('f', 64);
+        Array.Sort(replacementProfiles, StringComparer.Ordinal);
+        var foreignBytes = LexCorpus6Builder.Write(original.Set with
+        {
+            ProfileIdentities = replacementProfiles,
+        });
+        var foreign = VerifiedLexCorpus6ManifestSet.ParseCanonicalAndVerify(foreignBytes);
+        Assert.AreNotEqual(original.ArtifactRef, foreign.ArtifactRef);
+        await File.WriteAllBytesAsync(
+            Path.Combine(fixture.Directory, V3CorpusMount.CorpusFileName),
+            foreignBytes);
+
+        var exception = await Assert.ThrowsExactlyAsync<InvalidDataException>(async () =>
+            await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None));
+
+        StringAssert.Contains(exception.Message, "does not bind the mounted corpus/6 artifact");
+    }
+
+    [TestMethod]
+    public async Task WorkIdentifierMatchingMultipleExpressionsReturnsAllAmbiguousCandidates()
+    {
+        var fixture = await MountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        var alternateExpression = await fixture.AddAlternateExpressionForSameWorkAsync();
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+        Assert.IsNotNull(fixture.PublisherWid);
+        var context = Request(fixture.PublisherWid);
+        var handler = new V3ApiHandler(
+            SyntheticApiState.Unavailable,
+            new V3PlatformHost(),
+            static () => ObservedAt,
+            mount);
+
+        await handler.HandleAsync(context, CancellationToken.None);
+
+        var envelope = V3EnvelopeJson.ParseAndVerify(ResponseBytes(context), V3OperationRegistry.Reviewed);
+        Assert.AreEqual(V3Verdicts.Refuse, envelope.Verdict);
+        Assert.AreEqual("ambiguous_identifier", envelope.Refusal!.Code);
+        Assert.AreEqual(
+            fixture.PublisherWid,
+            envelope.Refusal.HelpfulPayload.GetProperty("requested_identifier").GetString());
+        var candidates = envelope.Refusal.HelpfulPayload.GetProperty("candidates")
+            .EnumerateArray().Select(static value => value.GetString()).ToArray();
+        CollectionAssert.AreEqual(
+            new[] { fixture.ExpressionIri, alternateExpression }.Order(StringComparer.Ordinal).ToArray(),
+            candidates);
+    }
+
+    [TestMethod]
     public async Task AbsentMountPreservesNoCorpusMountedRefusal()
     {
         var directory = Path.Combine(Path.GetTempPath(), $"lex-v3-no-mount-{Guid.NewGuid():N}");
@@ -178,6 +238,7 @@ public sealed class V3CorpusResolveMountTests
         private MountedFixture(
             string directory,
             string expressionIri,
+            string publisherWid,
             string corpusSha256,
             string indexSha256,
             byte[] capabilityManifestBytes,
@@ -185,6 +246,7 @@ public sealed class V3CorpusResolveMountTests
         {
             Directory = directory;
             ExpressionIri = expressionIri;
+            PublisherWid = publisherWid;
             CorpusSha256 = corpusSha256;
             IndexSha256 = indexSha256;
             _capabilityManifestBytes = capabilityManifestBytes;
@@ -193,8 +255,10 @@ public sealed class V3CorpusResolveMountTests
 
         public string Directory { get; }
         public string ExpressionIri { get; }
+        public string PublisherWid { get; }
         public string CorpusSha256 { get; }
         public string IndexSha256 { get; }
+        public byte[] CorpusBytes => _corpusBytes.ToArray();
 
         public static async Task<MountedFixture> CreateAsync()
         {
@@ -217,8 +281,8 @@ public sealed class V3CorpusResolveMountTests
             Assert.IsNotNull(corpus, $"{corpusRefusal}: {corpusDetail}");
             var index = LuxembourgIndexBuilder.TryBuild(envelope, out var indexRefusal, out var indexDetail);
             Assert.IsNotNull(index, $"{indexRefusal}: {indexDetail}");
-            var expression = envelope.BodyComposition.Envelope.LuxembourgAknLegalContentPopulation
-                .Outcomes.First(static value => value.Article is not null).Article!.PublisherExpressionIri;
+            var article = envelope.BodyComposition.Envelope.LuxembourgAknLegalContentPopulation
+                .Outcomes.First(static value => value.Article is not null).Article!;
             var directory = Path.Combine(Path.GetTempPath(), $"lex-v3-corpus-mount-{Guid.NewGuid():N}");
             System.IO.Directory.CreateDirectory(directory);
             await File.WriteAllBytesAsync(
@@ -234,11 +298,86 @@ public sealed class V3CorpusResolveMountTests
                 corpusBytes);
             return new MountedFixture(
                 directory,
-                expression,
+                article.PublisherExpressionIri,
+                article.Coordinate.PublisherWId!,
                 corpus.ArtifactRef.Sha256,
                 index.IndexRef.Sha256,
                 capabilityBytes,
                 corpusBytes);
+        }
+
+        public async Task<string> AddAlternateExpressionForSameWorkAsync()
+        {
+            var indexPath = Path.Combine(Directory, V3CorpusMount.IndexFileName);
+            LuxembourgIndexBuilder.ArticleRow source;
+            LuxembourgIndexBuilder.MemberRow[] members;
+            LuxembourgIndexBuilder.ArticleRow[] articles;
+            var alternateExpression = ExpressionIri + "/alternate-expression";
+            using (var connection = LuxembourgIndexBuilder.Open(indexPath, SqliteOpenMode.ReadWrite))
+            {
+                source = ReadArticles(connection).First(value =>
+                    string.Equals(value.ExpressionIri, ExpressionIri, StringComparison.Ordinal));
+                using (var insert = connection.CreateCommand())
+                {
+                    insert.CommandText = """
+                        INSERT INTO articles VALUES(
+                          $identity,$object,$expression,$publisher,$wid,$date,$language,$text,$tokens)
+                        """;
+                    insert.Parameters.AddWithValue("$identity", new string('f', 64));
+                    insert.Parameters.AddWithValue("$object", source.ObjectRefSha256);
+                    insert.Parameters.AddWithValue("$expression", alternateExpression);
+                    insert.Parameters.AddWithValue("$publisher", source.PublisherId);
+                    insert.Parameters.AddWithValue("$wid", source.PublisherWid!);
+                    insert.Parameters.AddWithValue("$date", source.ApplicabilityDate!);
+                    insert.Parameters.AddWithValue("$language", source.Language);
+                    insert.Parameters.AddWithValue("$text", source.SearchableText);
+                    insert.Parameters.AddWithValue("$tokens", source.TokensJson);
+                    Assert.AreEqual(1, insert.ExecuteNonQuery());
+                }
+
+                members = ReadMembers(connection);
+                articles = ReadArticles(connection);
+                using var stamp = connection.CreateCommand();
+                stamp.CommandText = "UPDATE stamp SET logical_rows_sha256=$digest WHERE stamp_id=1";
+                stamp.Parameters.AddWithValue("$digest", LuxembourgIndexBuilder.HashLogicalRows(members, articles));
+                Assert.AreEqual(1, stamp.ExecuteNonQuery());
+            }
+
+            var indexBytes = await File.ReadAllBytesAsync(indexPath);
+            var indexDigest = Convert.ToHexStringLower(SHA256.HashData(indexBytes));
+            var manifest = LuxembourgIndexBuilder.MeasureCapabilities(indexDigest, articles);
+            using var stream = new MemoryStream();
+            _ = V3IndexCapabilityManifestArtifact.Write(stream, manifest);
+            await File.WriteAllBytesAsync(
+                Path.Combine(Directory, V3CorpusMount.CapabilityManifestFileName),
+                stream.ToArray());
+            return alternateExpression;
+        }
+
+        private static LuxembourgIndexBuilder.MemberRow[] ReadMembers(SqliteConnection connection)
+        {
+            using var command = connection.CreateCommand();
+            command.CommandText = "SELECT object_ref_sha256,source_ordinal,outcome,rights_disposition,stage3_outcomes_json,gaps_json FROM members ORDER BY object_ref_sha256";
+            using var reader = command.ExecuteReader();
+            var values = new List<LuxembourgIndexBuilder.MemberRow>();
+            while (reader.Read()) values.Add(new(
+                reader.GetString(0), reader.GetInt32(1), reader.GetString(2),
+                reader.IsDBNull(3) ? null : reader.GetString(3), reader.GetString(4), reader.GetString(5)));
+            return values.ToArray();
+        }
+
+        private static LuxembourgIndexBuilder.ArticleRow[] ReadArticles(SqliteConnection connection)
+        {
+            using var command = connection.CreateCommand();
+            command.CommandText = "SELECT article_identity_sha256,object_ref_sha256,expression_iri,publisher_id,publisher_wid,applicability_date,language,searchable_text,tokens_json FROM articles ORDER BY article_identity_sha256";
+            using var reader = command.ExecuteReader();
+            var values = new List<LuxembourgIndexBuilder.ArticleRow>();
+            while (reader.Read()) values.Add(new(
+                reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3),
+                reader.IsDBNull(4) ? null : reader.GetString(4),
+                reader.IsDBNull(5) ? null : reader.GetString(5),
+                reader.GetString(6), reader.GetString(7), reader.GetString(8)));
+            return values.ToArray();
         }
 
         public Task RestoreCapabilityManifestAsync() => File.WriteAllBytesAsync(
