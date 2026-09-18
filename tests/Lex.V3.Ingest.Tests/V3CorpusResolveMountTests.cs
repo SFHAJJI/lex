@@ -540,14 +540,18 @@ public sealed class V3CorpusResolveMountTests
     {
         var fixture = await EuropeMountedFixture.CreateAsync();
         await using var cleanup = fixture;
+        var secondExpression = await fixture.AddSecondActWithSamePublisherProvisionIdentifierAsync();
         using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
         Assert.IsNotNull(mount);
+
+        var qualifiedProvision = EuropeIndexReader.QualifiedProvisionIdentifierOf(
+            fixture.PublisherExpressionId, fixture.PublisherProvisionIdentifier);
 
         foreach (var identifier in new[]
                  {
                      fixture.PublisherWorkId,
                      fixture.PublisherExpressionId,
-                     fixture.PublisherProvisionIdentifier,
+                     qualifiedProvision,
                  })
         {
             var envelope = await ResolveAsync(mount, identifier);
@@ -564,6 +568,16 @@ public sealed class V3CorpusResolveMountTests
             Assert.AreEqual(fixture.IndexSha256,
                 envelope.Result.Value.GetProperty("index_sha256").GetString());
         }
+
+        var second = await ResolveAsync(mount, EuropeIndexReader.QualifiedProvisionIdentifierOf(
+            secondExpression, fixture.PublisherProvisionIdentifier));
+        Assert.AreEqual(V3Verdicts.Answer, second.Verdict);
+        Assert.AreEqual(secondExpression,
+            second.Result!.Value.GetProperty("expression_iri").GetString());
+
+        var bare = await ResolveAsync(mount, fixture.PublisherProvisionIdentifier);
+        Assert.AreNotEqual(V3Verdicts.Answer, bare.Verdict,
+            "A document-local Formex ARTICLE identifier must not resolve as a global coordinate.");
     }
 
     [TestMethod]
@@ -681,7 +695,7 @@ public sealed class V3CorpusResolveMountTests
         public string StableCoordinate => $"/lu-legilux/{WorkKey}/{ApplicabilityDate}";
         public string Permalink => StableCoordinate + "--" + StateSha256;
         public string CorpusSha256 { get; }
-        public string IndexSha256 { get; }
+        public string IndexSha256 { get; private set; }
         public byte[] CorpusBytes => _corpusBytes.ToArray();
 
         public static async Task<MountedFixture> CreateAsync()
@@ -1277,6 +1291,61 @@ public sealed class V3CorpusResolveMountTests
                 admitted.Articles[0].PublisherIdentifier,
                 corpus.ArtifactRef.Sha256,
                 index.IndexRef.Sha256);
+        }
+
+        public async Task<string> AddSecondActWithSamePublisherProvisionIdentifierAsync()
+        {
+            const string secondWork =
+                "http://publications.europa.eu/resource/celex/32026R1965";
+            const string secondExpression =
+                "http://publications.europa.eu/resource/cellar/00000000-0000-0000-0000-000000000001.0001";
+            var indexPath = Path.Combine(Directory, V3CorpusMount.EuropeIndexFileName);
+            EuropeIndexBuilder.MemberRow[] members;
+            EuropeIndexBuilder.CorrigendumLineRow[] lines;
+            EuropeIndexBuilder.CorrigendumGapRow[] gaps;
+            EuropeIndexBuilder.ArticleRow[] articles;
+            using (var connection = EuropeIndexBuilder.Open(indexPath, SqliteOpenMode.ReadWrite))
+            {
+                members = MountedFixture.ReadEuropeMembers(connection);
+                lines = MountedFixture.ReadEuropeLines(connection);
+                gaps = MountedFixture.ReadEuropeGaps(connection);
+                articles = MountedFixture.ReadEuropeArticles(connection);
+                var source = articles[0];
+                var inserted = new EuropeIndexBuilder.ArticleRow(
+                    new string('d', 64), source.ObjectRefSha256, secondWork, secondExpression,
+                    "second-act.xml", PublisherProvisionIdentifier, "Article 1", "2026-01-01",
+                    "eng", "second act wording", "[]");
+                using var insert = connection.CreateCommand();
+                insert.CommandText = "INSERT INTO articles VALUES($identity,$object,$work,$expression,$entry,$identifier,$heading,$date,$language,$text,$tokens)";
+                insert.Parameters.AddWithValue("$identity", inserted.ArticleIdentitySha256);
+                insert.Parameters.AddWithValue("$object", inserted.ObjectRefSha256);
+                insert.Parameters.AddWithValue("$work", inserted.PublisherWorkId);
+                insert.Parameters.AddWithValue("$expression", inserted.PublisherExpressionId);
+                insert.Parameters.AddWithValue("$entry", inserted.PackageEntry);
+                insert.Parameters.AddWithValue("$identifier", inserted.PublisherIdentifier);
+                insert.Parameters.AddWithValue("$heading", inserted.Heading);
+                insert.Parameters.AddWithValue("$date", inserted.WordingDate);
+                insert.Parameters.AddWithValue("$language", inserted.Language);
+                insert.Parameters.AddWithValue("$text", inserted.SearchableText);
+                insert.Parameters.AddWithValue("$tokens", inserted.TokensJson);
+                Assert.AreEqual(1, insert.ExecuteNonQuery());
+                articles = MountedFixture.ReadEuropeArticles(connection);
+                using var stamp = connection.CreateCommand();
+                stamp.CommandText = "UPDATE stamp SET logical_rows_sha256=$logical WHERE stamp_id=1";
+                stamp.Parameters.AddWithValue(
+                    "$logical", EuropeIndexBuilder.HashLogicalRows(members, lines, gaps, articles));
+                Assert.AreEqual(1, stamp.ExecuteNonQuery());
+            }
+
+            var indexBytes = await File.ReadAllBytesAsync(indexPath);
+            IndexSha256 = Convert.ToHexStringLower(SHA256.HashData(indexBytes));
+            var manifest = EuropeIndexBuilder.MeasureCapabilities(IndexSha256, articles);
+            using var stream = new MemoryStream();
+            _ = V3IndexCapabilityManifestArtifact.Write(stream, manifest);
+            await File.WriteAllBytesAsync(
+                Path.Combine(Directory, V3CorpusMount.EuropeCapabilityManifestFileName),
+                stream.ToArray());
+            return secondExpression;
         }
 
         public ValueTask DisposeAsync()

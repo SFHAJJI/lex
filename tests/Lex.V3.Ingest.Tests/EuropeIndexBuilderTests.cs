@@ -125,7 +125,9 @@ public sealed class EuropeIndexBuilderTests
 
         var byWork = reader.ResolveExact(work);
         var byExpression = reader.ResolveExact(expression);
-        var byProvision = reader.ResolveExact(article.PublisherIdentifier);
+        var qualifiedProvision = EuropeIndexReader.QualifiedProvisionIdentifierOf(
+            expression, article.PublisherIdentifier);
+        var byProvision = reader.ResolveExact(qualifiedProvision);
 
         Assert.HasCount(1, byWork);
         Assert.HasCount(1, byExpression);
@@ -136,6 +138,8 @@ public sealed class EuropeIndexBuilderTests
         Assert.AreEqual(article.IdentitySha256, byProvision[0].ArticleIdentities.Single());
         Assert.AreEqual(article.PublisherIdentifier,
             byProvision[0].PublisherProvisionIdentifiers.Single());
+        Assert.IsEmpty(reader.ResolveExact(article.PublisherIdentifier),
+            "A Formex ARTICLE identifier is document-local and is not an exact coordinate alone.");
         Assert.IsEmpty(reader.ResolveExact("https://example.invalid/not-in-the-index"));
     }
 
