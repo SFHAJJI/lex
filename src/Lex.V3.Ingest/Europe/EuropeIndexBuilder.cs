@@ -653,6 +653,32 @@ public sealed class EuropeIndexReader : IDisposable
         }
     }
 
+    public static async Task<EuropeIndexReader> OpenAndVerifyFileAsync(
+        string indexPath,
+        ReadOnlyMemory<byte> capabilityManifestBytes,
+        SourceArtifactRef expectedCorpusRef,
+        CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(indexPath);
+        ArgumentNullException.ThrowIfNull(expectedCorpusRef);
+        if (!File.Exists(indexPath))
+            throw new FileNotFoundException("The EU index artifact is missing.", indexPath);
+        var indexBytes = await File.ReadAllBytesAsync(indexPath, cancellationToken)
+            .ConfigureAwait(false);
+        var digest = Convert.ToHexStringLower(SHA256.HashData(indexBytes));
+        var indexRef = new SourceArtifactRef(LexCorpus6Builder.ResourceIdOf(digest), digest);
+        var capabilityDigest = V3IndexCapabilityManifestArtifact.ComputeSha256(
+            capabilityManifestBytes.Span);
+        var capabilityRef = new SourceArtifactRef(
+            LexCorpus6Builder.ResourceIdOf(capabilityDigest), capabilityDigest);
+        var capability = V3IndexCapabilityManifestArtifact.ParseAndVerify(
+            capabilityRef,
+            capabilityManifestBytes.Span,
+            PublisherId.EuEurLex,
+            digest);
+        return OpenAndVerify(indexRef, indexBytes, expectedCorpusRef, capability);
+    }
+
     public IReadOnlyList<EuropeIndexResolvedExpression> ResolveExact(string identifier)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(identifier);

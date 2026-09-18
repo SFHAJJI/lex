@@ -1,10 +1,7 @@
-using System.Security.Cryptography;
 using System.Text.Json;
 using Lex.V3.Contracts;
 using Lex.V3.Contracts.Facts;
-using Lex.V3.Contracts.Index;
 using Lex.V3.Contracts.Platform;
-using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Ingest;
 using Lex.V3.Ingest.Europe;
 using Lex.V3.Ingest.Luxembourg;
@@ -86,22 +83,9 @@ internal sealed class V3CorpusMount : IDisposable
             {
                 var capabilityBytes = await ReadCapabilityAsync(
                     europeCapabilityPath, cancellationToken).ConfigureAwait(false);
-                var indexBytes = await File.ReadAllBytesAsync(
-                    europeIndexPath, cancellationToken).ConfigureAwait(false);
-                var indexDigest = Convert.ToHexStringLower(SHA256.HashData(indexBytes));
-                var indexRef = new SourceArtifactRef(
-                    LexCorpus6Builder.ResourceIdOf(indexDigest), indexDigest);
-                var capabilityDigest = V3IndexCapabilityManifestArtifact.ComputeSha256(
-                    capabilityBytes.Span);
-                var capabilityRef = new SourceArtifactRef(
-                    LexCorpus6Builder.ResourceIdOf(capabilityDigest), capabilityDigest);
-                var capability = V3IndexCapabilityManifestArtifact.ParseAndVerify(
-                    capabilityRef,
-                    capabilityBytes.Span,
-                    PublisherId.EuEurLex,
-                    indexDigest);
-                europeReader = EuropeIndexReader.OpenAndVerify(
-                    indexRef, indexBytes, corpus.ArtifactRef, capability);
+                europeReader = await EuropeIndexReader.OpenAndVerifyFileAsync(
+                        europeIndexPath, capabilityBytes, corpus.ArtifactRef, cancellationToken)
+                    .ConfigureAwait(false);
             }
 
             return new V3CorpusMount(reader, europeReader, corpus);
@@ -192,7 +176,7 @@ internal sealed class V3CorpusMount : IDisposable
                 stable_coordinate = stableCoordinate,
                 permalink = currentUrl,
                 corpus_sha256 = _corpus.ArtifactRef.Sha256,
-                index_sha256 = _reader.IndexRef.Sha256,
+                index_sha256 = _reader!.IndexRef.Sha256,
             });
             return V3PlatformOperationOutcome.Success(
                 Context("success", observedAt),
@@ -267,7 +251,7 @@ internal sealed class V3CorpusMount : IDisposable
                 retrieval_lane = "r1_work_discovery",
                 match_reason = work.MatchReason,
                 corpus_sha256 = _corpus.ArtifactRef.Sha256,
-                index_sha256 = _reader.IndexRef.Sha256,
+                index_sha256 = _reader!.IndexRef.Sha256,
             });
             return V3PlatformOperationOutcome.Success(
                 Context("success", observedAt),
@@ -320,7 +304,7 @@ internal sealed class V3CorpusMount : IDisposable
             language = resolved.Language,
             article_identities = resolved.ArticleIdentities,
             corpus_sha256 = _corpus.ArtifactRef.Sha256,
-            index_sha256 = _reader.IndexRef.Sha256,
+            index_sha256 = _reader!.IndexRef.Sha256,
         });
         return V3PlatformOperationOutcome.Success(
             Context("success", observedAt),
