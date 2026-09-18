@@ -126,7 +126,7 @@ internal sealed class V3CorpusMount : IDisposable
             var states = _reader?.ResolveState(workKey, applicabilityDate) ?? [];
             if (states.Count == 0)
             {
-                return Unknown(request, identifier, observedAt);
+                return Unknown(request, identifier, observedAt, PublisherId.LuLegilux);
             }
 
             var matching = states.Where(state => string.Equals(
@@ -260,6 +260,11 @@ internal sealed class V3CorpusMount : IDisposable
 
         if (exactCandidateCount > 1)
         {
+            var ambiguityPublisher = candidates.Count == 0
+                ? PublisherId.EuEurLex
+                : europeCandidates.Count == 0
+                    ? PublisherId.LuLegilux
+                    : PublisherFor(identifier);
             using var helpful = JsonSerializer.SerializeToDocument(new
             {
                 requested_identifier = identifier,
@@ -270,7 +275,7 @@ internal sealed class V3CorpusMount : IDisposable
                     .ToArray(),
             });
             return V3PlatformOperationOutcome.Refused(
-                Context("refusal", observedAt, PublisherFor(identifier)),
+                Context("refusal", observedAt, ambiguityPublisher),
                 new V3PlatformOperationRefusal(request, "ambiguous_identifier", helpful.RootElement));
         }
 
@@ -383,7 +388,8 @@ internal sealed class V3CorpusMount : IDisposable
     private V3PlatformOperationOutcome Unknown(
         V3PlatformOperationRequest request,
         string identifier,
-        DateTimeOffset observedAt)
+        DateTimeOffset observedAt,
+        PublisherId? publisher = null)
     {
         using var helpful = JsonSerializer.SerializeToDocument(new
         {
@@ -392,7 +398,7 @@ internal sealed class V3CorpusMount : IDisposable
             what_would_answer = "an exact identifier present in the mounted corpus",
         });
         return V3PlatformOperationOutcome.Refused(
-            Context("refusal", observedAt, PublisherFor(identifier)),
+            Context("refusal", observedAt, publisher ?? PublisherFor(identifier)),
             new V3PlatformOperationRefusal(request, "identifier_unknown", helpful.RootElement));
     }
 

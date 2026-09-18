@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using Lex.V3.Api;
 using Lex.V3.Contracts;
 using Lex.V3.Contracts.Custody;
+using Lex.V3.Contracts.Derivation;
 using Lex.V3.Contracts.Index;
 using Lex.V3.Contracts.Platform;
 using Lex.V3.Contracts.Source.Europe;
@@ -514,6 +515,25 @@ public sealed class V3CorpusResolveMountTests
     }
 
     [TestMethod]
+    public async Task ExactIdentifierPresentInBothPublisherIndexesRefusesCrossPublisherSelection()
+    {
+        var fixture = await MountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        var europeExpression = await fixture.AddEuropeCollisionAsync();
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+
+        var envelope = await ResolveAsync(mount, fixture.PublisherWid);
+
+        Assert.AreEqual(V3Verdicts.Refuse, envelope.Verdict);
+        Assert.AreEqual("ambiguous_identifier", envelope.Refusal!.Code);
+        CollectionAssert.AreEqual(
+            new[] { fixture.ExpressionIri, europeExpression }.Order(StringComparer.Ordinal).ToArray(),
+            envelope.Refusal.HelpfulPayload.GetProperty("candidates")
+                .EnumerateArray().Select(static value => value.GetString()).ToArray());
+    }
+
+    [TestMethod]
     public async Task MountedEuropeIndexServesExactWorkExpressionAndProvisionCoordinates()
     {
         var fixture = await EuropeMountedFixture.CreateAsync();
@@ -619,6 +639,7 @@ public sealed class V3CorpusResolveMountTests
     {
         private readonly byte[] _capabilityManifestBytes;
         private readonly byte[] _corpusBytes;
+        private readonly Stage3DerivationProfileEnvelope _envelope;
 
         private MountedFixture(
             string directory,
@@ -631,7 +652,8 @@ public sealed class V3CorpusResolveMountTests
             string corpusSha256,
             string indexSha256,
             byte[] capabilityManifestBytes,
-            byte[] corpusBytes)
+            byte[] corpusBytes,
+            Stage3DerivationProfileEnvelope envelope)
         {
             Directory = directory;
             ExpressionIri = expressionIri;
@@ -644,6 +666,7 @@ public sealed class V3CorpusResolveMountTests
             IndexSha256 = indexSha256;
             _capabilityManifestBytes = capabilityManifestBytes;
             _corpusBytes = corpusBytes;
+            _envelope = envelope;
         }
 
         public string Directory { get; }
@@ -712,7 +735,63 @@ public sealed class V3CorpusResolveMountTests
                 corpus.ArtifactRef.Sha256,
                 index.IndexRef.Sha256,
                 capabilityBytes,
-                corpusBytes);
+                corpusBytes,
+                envelope);
+        }
+
+        public async Task<string> AddEuropeCollisionAsync()
+        {
+            var built = EuropeIndexBuilder.TryBuild(
+                _envelope, out var refusal, out var detail);
+            Assert.IsNotNull(built, $"{refusal}: {detail}");
+            var indexPath = Path.Combine(Directory, V3CorpusMount.EuropeIndexFileName);
+            await File.WriteAllBytesAsync(indexPath, built.IndexBytes.ToArray());
+            var expression = "http://publications.europa.eu/resource/cellar/cross-publisher-expression";
+            EuropeIndexBuilder.MemberRow[] members;
+            EuropeIndexBuilder.CorrigendumLineRow[] lines;
+            EuropeIndexBuilder.CorrigendumGapRow[] gaps;
+            EuropeIndexBuilder.ArticleRow[] articles;
+            using (var connection = EuropeIndexBuilder.Open(indexPath, SqliteOpenMode.ReadWrite))
+            {
+                members = ReadEuropeMembers(connection);
+                lines = ReadEuropeLines(connection);
+                gaps = ReadEuropeGaps(connection);
+                var member = members[0];
+                var inserted = new EuropeIndexBuilder.ArticleRow(
+                    new string('c', 64), member.ObjectRefSha256, PublisherWid, expression,
+                    "collision.xml", "collision-provision", "Collision", "2024-02-01",
+                    "eng", "collision", "[]");
+                using var insert = connection.CreateCommand();
+                insert.CommandText = "INSERT INTO articles VALUES($identity,$object,$work,$expression,$entry,$identifier,$heading,$date,$language,$text,$tokens)";
+                insert.Parameters.AddWithValue("$identity", inserted.ArticleIdentitySha256);
+                insert.Parameters.AddWithValue("$object", inserted.ObjectRefSha256);
+                insert.Parameters.AddWithValue("$work", inserted.PublisherWorkId);
+                insert.Parameters.AddWithValue("$expression", inserted.PublisherExpressionId);
+                insert.Parameters.AddWithValue("$entry", inserted.PackageEntry);
+                insert.Parameters.AddWithValue("$identifier", inserted.PublisherIdentifier);
+                insert.Parameters.AddWithValue("$heading", inserted.Heading);
+                insert.Parameters.AddWithValue("$date", inserted.WordingDate);
+                insert.Parameters.AddWithValue("$language", inserted.Language);
+                insert.Parameters.AddWithValue("$text", inserted.SearchableText);
+                insert.Parameters.AddWithValue("$tokens", inserted.TokensJson);
+                Assert.AreEqual(1, insert.ExecuteNonQuery());
+                articles = ReadEuropeArticles(connection);
+                using var stamp = connection.CreateCommand();
+                stamp.CommandText = "UPDATE stamp SET logical_rows_sha256=$logical WHERE stamp_id=1";
+                stamp.Parameters.AddWithValue(
+                    "$logical", EuropeIndexBuilder.HashLogicalRows(members, lines, gaps, articles));
+                Assert.AreEqual(1, stamp.ExecuteNonQuery());
+            }
+
+            var indexBytes = await File.ReadAllBytesAsync(indexPath);
+            var digest = Convert.ToHexStringLower(SHA256.HashData(indexBytes));
+            var manifest = EuropeIndexBuilder.MeasureCapabilities(digest, articles);
+            using var stream = new MemoryStream();
+            _ = V3IndexCapabilityManifestArtifact.Write(stream, manifest);
+            await File.WriteAllBytesAsync(
+                Path.Combine(Directory, V3CorpusMount.EuropeCapabilityManifestFileName),
+                stream.ToArray());
+            return expression;
         }
 
         public async Task<string> AddAlternateExpressionForSameWorkAsync()
@@ -1030,6 +1109,56 @@ public sealed class V3CorpusResolveMountTests
                 reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3),
                 reader.GetString(4), reader.IsDBNull(5) ? null : reader.GetString(5), reader.GetString(6),
                 reader.GetString(7)));
+            return values.ToArray();
+        }
+
+        private static EuropeIndexBuilder.MemberRow[] ReadEuropeMembers(SqliteConnection connection)
+        {
+            using var command = connection.CreateCommand();
+            command.CommandText = "SELECT object_ref_sha256,source_ordinal,outcome,content_class,stage3_outcomes_json,gaps_json FROM members ORDER BY object_ref_sha256";
+            using var reader = command.ExecuteReader();
+            var values = new List<EuropeIndexBuilder.MemberRow>();
+            while (reader.Read()) values.Add(new(
+                reader.GetString(0), reader.GetInt32(1), reader.GetString(2),
+                reader.IsDBNull(3) ? null : reader.GetString(3), reader.GetString(4), reader.GetString(5)));
+            return values.ToArray();
+        }
+
+        private static EuropeIndexBuilder.CorrigendumLineRow[] ReadEuropeLines(SqliteConnection connection)
+        {
+            using var command = connection.CreateCommand();
+            command.CommandText = "SELECT line_identity_sha256,family_key,corrected_work_root,corrigendum_work_root,publisher_expression_id,language_iri,reach,date_state,publisher_date_raw_lexical,publisher_date_datatype_iri,expression_content_sha256 FROM corrigendum_lines ORDER BY line_identity_sha256";
+            using var reader = command.ExecuteReader();
+            var values = new List<EuropeIndexBuilder.CorrigendumLineRow>();
+            while (reader.Read()) values.Add(new(
+                reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3),
+                reader.GetString(4), reader.GetString(5), reader.GetString(6), reader.GetString(7),
+                reader.IsDBNull(8) ? null : reader.GetString(8),
+                reader.IsDBNull(9) ? null : reader.GetString(9), reader.GetString(10)));
+            return values.ToArray();
+        }
+
+        private static EuropeIndexBuilder.CorrigendumGapRow[] ReadEuropeGaps(SqliteConnection connection)
+        {
+            using var command = connection.CreateCommand();
+            command.CommandText = "SELECT gap_identity_sha256,family_key,work_root,reason FROM corrigendum_gaps ORDER BY gap_identity_sha256";
+            using var reader = command.ExecuteReader();
+            var values = new List<EuropeIndexBuilder.CorrigendumGapRow>();
+            while (reader.Read()) values.Add(new(
+                reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3)));
+            return values.ToArray();
+        }
+
+        private static EuropeIndexBuilder.ArticleRow[] ReadEuropeArticles(SqliteConnection connection)
+        {
+            using var command = connection.CreateCommand();
+            command.CommandText = "SELECT article_identity_sha256,object_ref_sha256,publisher_work_id,publisher_expression_id,package_entry,publisher_identifier,heading,wording_date,language,searchable_text,tokens_json FROM articles ORDER BY article_identity_sha256";
+            using var reader = command.ExecuteReader();
+            var values = new List<EuropeIndexBuilder.ArticleRow>();
+            while (reader.Read()) values.Add(new(
+                reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3),
+                reader.GetString(4), reader.GetString(5), reader.GetString(6), reader.GetString(7),
+                reader.GetString(8), reader.GetString(9), reader.GetString(10)));
             return values.ToArray();
         }
 

@@ -571,6 +571,7 @@ public sealed class EuropeIndexReader : IDisposable
     private readonly V3IndexCapabilityManifest _capabilityManifest;
     private readonly SourceArtifactRef _indexRef;
     private readonly SourceArtifactRef _corpusRef;
+    private readonly object _gate = new();
 
     private EuropeIndexReader(string path, SqliteConnection connection,
         V3IndexCapabilityManifest capabilityManifest,
@@ -682,36 +683,39 @@ public sealed class EuropeIndexReader : IDisposable
     public IReadOnlyList<EuropeIndexResolvedExpression> ResolveExact(string identifier)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(identifier);
-        using var command = _connection.CreateCommand();
-        command.CommandText = """
-            SELECT publisher_work_id,publisher_expression_id,language,
-                   publisher_identifier,article_identity_sha256
-            FROM articles
-            WHERE publisher_work_id=$identifier OR publisher_expression_id=$identifier
-               OR publisher_identifier=$identifier OR article_identity_sha256=$identifier
-            ORDER BY publisher_work_id,publisher_expression_id,language,
-                     publisher_identifier,article_identity_sha256
-            """;
-        command.Parameters.AddWithValue("$identifier", identifier);
-        using var reader = command.ExecuteReader();
-        var rows = new List<(string Work, string Expression, string Language,
-            string Provision, string Article)>();
-        while (reader.Read())
+        lock (_gate)
         {
-            rows.Add((reader.GetString(0), reader.GetString(1), reader.GetString(2),
-                reader.GetString(3), reader.GetString(4)));
-        }
+            using var command = _connection.CreateCommand();
+            command.CommandText = """
+                SELECT publisher_work_id,publisher_expression_id,language,
+                       publisher_identifier,article_identity_sha256
+                FROM articles
+                WHERE publisher_work_id=$identifier OR publisher_expression_id=$identifier
+                   OR publisher_identifier=$identifier OR article_identity_sha256=$identifier
+                ORDER BY publisher_work_id,publisher_expression_id,language,
+                         publisher_identifier,article_identity_sha256
+                """;
+            command.Parameters.AddWithValue("$identifier", identifier);
+            using var reader = command.ExecuteReader();
+            var rows = new List<(string Work, string Expression, string Language,
+                string Provision, string Article)>();
+            while (reader.Read())
+            {
+                rows.Add((reader.GetString(0), reader.GetString(1), reader.GetString(2),
+                    reader.GetString(3), reader.GetString(4)));
+            }
 
-        return rows
-            .GroupBy(static row => (row.Work, row.Expression, row.Language))
-            .Select(static group => new EuropeIndexResolvedExpression(
-                group.Key.Work,
-                group.Key.Expression,
-                group.Key.Language,
-                Array.AsReadOnly(group.Select(static row => row.Provision)
-                    .Distinct(StringComparer.Ordinal).ToArray()),
-                Array.AsReadOnly(group.Select(static row => row.Article).ToArray())))
-            .ToArray();
+            return rows
+                .GroupBy(static row => (row.Work, row.Expression, row.Language))
+                .Select(static group => new EuropeIndexResolvedExpression(
+                    group.Key.Work,
+                    group.Key.Expression,
+                    group.Key.Language,
+                    Array.AsReadOnly(group.Select(static row => row.Provision)
+                        .Distinct(StringComparer.Ordinal).ToArray()),
+                    Array.AsReadOnly(group.Select(static row => row.Article).ToArray())))
+                .ToArray();
+        }
     }
 
     public EuropeIndexSearchResult Search(string language, DateOnly from, DateOnly to, string query)
