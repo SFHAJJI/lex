@@ -291,29 +291,42 @@ public sealed class LuxembourgIndexBuilderTests
     [DataRow("UPDATE states SET expression_iri=publisher_legal_resource_iri || '/de'", "does not bind its exact article population")]
     public async Task StrictReaderRejectsEachStateInvariantIndependently(string sql, string expected)
     {
-        var envelope = await LexCorpus6BuilderTests.CompleteProfileEnvelopeAsync();
-        var corpus = LexCorpus6Builder.TryBuild(envelope, out var corpusRefusal, out var corpusDetail);
-        Assert.IsNotNull(corpus, $"{corpusRefusal}: {corpusDetail}");
-        var built = LuxembourgIndexBuilder.TryBuild(envelope, out var refusal, out var detail);
-        Assert.IsNotNull(built, $"{refusal}: {detail}");
+        var (built, corpusRef) = await BuildStateIndexAsync();
 
-        AssertTamperedDatabaseRejected(built, corpus.ArtifactRef, sql, expected);
+        AssertTamperedDatabaseRejected(built, corpusRef, sql, expected);
     }
 
     [TestMethod]
     public async Task StrictReaderRejectsAnArticleClaimedByTwoStates()
     {
-        var envelope = await LexCorpus6BuilderTests.CompleteProfileEnvelopeAsync();
+        var (built, corpusRef) = await BuildStateIndexAsync();
+
+        AssertTamperedDatabaseRejected(
+            built,
+            corpusRef,
+            "INSERT INTO states SELECT work_key,applicability_date,'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',expression_iri,publisher_work_iri,publisher_legal_resource_iri,'deu',rule_profiles_json,article_identities_json FROM states LIMIT 1",
+            "does not bind its exact article population");
+    }
+
+    private static async Task<(LuxembourgIndexBuildResult Built, SourceArtifactRef CorpusRef)>
+        BuildStateIndexAsync()
+    {
+        const string manifestation =
+            "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo/fr/xml";
+        const string item =
+            "http://data.legilux.public.lu/filestore/eli/etat/leg/loi/1991/08/10/n3/jo/fr/xml/eli-etat-leg-loi-1991-08-10-n3-jo-fr-xml.xml";
+        var xml = await File.ReadAllBytesAsync(Path.Combine(
+            AppContext.BaseDirectory, "Fixtures", "LuAknLegalContent", Retained1991));
+        ICustodyStore store = new RoutedHttpAcquisitionSessionTests.MultiObjectCustodyStore();
+        var luxembourg = await LuxembourgGazetteAcquisitionTests
+            .CompleteXmlForStage3BodyCompositionAsync(xml, store, manifestation, item);
+        var envelope = await LexCorpus6BuilderTests.CompleteProfileEnvelopeAsync(
+            luxembourgOverride: luxembourg, luxembourgStore: store);
         var corpus = LexCorpus6Builder.TryBuild(envelope, out var corpusRefusal, out var corpusDetail);
         Assert.IsNotNull(corpus, $"{corpusRefusal}: {corpusDetail}");
         var built = LuxembourgIndexBuilder.TryBuild(envelope, out var refusal, out var detail);
         Assert.IsNotNull(built, $"{refusal}: {detail}");
-
-        AssertTamperedDatabaseRejected(
-            built,
-            corpus.ArtifactRef,
-            "INSERT INTO states SELECT work_key,applicability_date,'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',expression_iri,publisher_work_iri,publisher_legal_resource_iri,'deu',rule_profiles_json,article_identities_json FROM states LIMIT 1",
-            "does not bind its exact article population");
+        return (built, corpus.ArtifactRef);
     }
 
     private static V3IndexCapabilityManifest RebindManifest(
