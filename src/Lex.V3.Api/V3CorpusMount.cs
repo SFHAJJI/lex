@@ -405,9 +405,25 @@ internal sealed class V3CorpusMount : IDisposable
 
     private PublisherId PublisherFor(string identifier) =>
         OfficialIdentifier.EliMintedBy(identifier) ??
-        (OfficialIdentifier.ProfileOf(identifier) is not null
+        (OfficialIdentifier.ProfileOf(identifier) is not null ||
+         IsPublicationsOfficeIdentifier(identifier)
             ? PublisherId.EuEurLex
             : _reader is null ? PublisherId.EuEurLex : PublisherId.LuLegilux);
+
+    private static bool IsPublicationsOfficeIdentifier(string value)
+    {
+        if (!Uri.TryCreate(value, UriKind.Absolute, out var uri) ||
+            (!string.Equals(uri.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase) &&
+             !string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)) ||
+            !string.Equals(uri.Host, "publications.europa.eu", StringComparison.OrdinalIgnoreCase) ||
+            !uri.IsDefaultPort || uri.UserInfo.Length != 0 || uri.Query.Length != 0)
+        {
+            return false;
+        }
+
+        return uri.AbsolutePath.StartsWith("/resource/cellar/", StringComparison.Ordinal) ||
+               uri.AbsolutePath.StartsWith("/resource/celex/", StringComparison.Ordinal);
+    }
 
     private V3EnvelopeContext Context(
         string status,
