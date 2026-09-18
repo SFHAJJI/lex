@@ -68,6 +68,62 @@ public sealed class V3CorpusResolveMountTests
     }
 
     [TestMethod]
+    public async Task StaleHashPinnedPermalinkReturnsTypedMismatchWithoutSubstitution()
+    {
+        var fixture = await MountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+        var requested = new string(fixture.StateSha256[0] == '0' ? '1' : '0', 64);
+        var identifier = $"/lu-legilux/{fixture.WorkKey}/{fixture.ApplicabilityDate}--{requested}";
+        var context = Request(identifier);
+        var handler = new V3ApiHandler(
+            SyntheticApiState.Unavailable,
+            new V3PlatformHost(),
+            static () => ObservedAt,
+            mount);
+
+        await handler.HandleAsync(context, CancellationToken.None);
+
+        var envelope = V3EnvelopeJson.ParseAndVerify(ResponseBytes(context), V3OperationRegistry.Reviewed);
+        Assert.AreEqual(V3Verdicts.Refuse, envelope.Verdict);
+        Assert.IsNull(envelope.Result);
+        Assert.AreEqual("pinned_digest_mismatch", envelope.Refusal!.Code);
+        var payload = envelope.Refusal.HelpfulPayload;
+        Assert.AreEqual(requested, payload.GetProperty("requested_digest").GetString());
+        Assert.AreEqual(fixture.StateSha256, payload.GetProperty("current_digest").GetString());
+        Assert.AreEqual(fixture.StableCoordinate, payload.GetProperty("stable_coordinate").GetString());
+        Assert.AreEqual(fixture.Permalink, payload.GetProperty("current_hash_pinned_url").GetString());
+        Assert.AreEqual("expression_state_identity_changed", payload.GetProperty("reason").GetString());
+        Assert.IsGreaterThan(0, payload.GetProperty("rule_profile_sha256s").GetArrayLength());
+        Assert.IsFalse(
+            System.Text.Json.JsonSerializer.Serialize(envelope).Contains("searchable_text", StringComparison.Ordinal));
+    }
+
+    [TestMethod]
+    public async Task ExactHashPinnedPermalinkResolvesOnlyItsCurrentExpressionState()
+    {
+        var fixture = await MountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+        var context = Request("https://law.soufien.lu" + fixture.Permalink);
+        var handler = new V3ApiHandler(
+            SyntheticApiState.Unavailable,
+            new V3PlatformHost(),
+            static () => ObservedAt,
+            mount);
+
+        await handler.HandleAsync(context, CancellationToken.None);
+
+        var envelope = V3EnvelopeJson.ParseAndVerify(ResponseBytes(context), V3OperationRegistry.Reviewed);
+        Assert.AreEqual(V3Verdicts.Answer, envelope.Verdict);
+        Assert.AreEqual(fixture.StateSha256, envelope.Result!.Value.GetProperty("state_sha256").GetString());
+        Assert.AreEqual(fixture.ExpressionIri, envelope.Result.Value.GetProperty("expression_iri").GetString());
+        Assert.AreEqual(fixture.Permalink, envelope.Result.Value.GetProperty("permalink").GetString());
+    }
+
+    [TestMethod]
     public async Task NormalizedPublisherTitleUsesR1WithoutSelectingAnExpression()
     {
         var fixture = await MountedFixture.CreateAsync();
@@ -399,6 +455,9 @@ public sealed class V3CorpusResolveMountTests
             string expressionIri,
             string publisherWid,
             string workTitle,
+            string workKey,
+            string applicabilityDate,
+            string stateSha256,
             string corpusSha256,
             string indexSha256,
             byte[] capabilityManifestBytes,
@@ -408,6 +467,9 @@ public sealed class V3CorpusResolveMountTests
             ExpressionIri = expressionIri;
             PublisherWid = publisherWid;
             WorkTitle = workTitle;
+            WorkKey = workKey;
+            ApplicabilityDate = applicabilityDate;
+            StateSha256 = stateSha256;
             CorpusSha256 = corpusSha256;
             IndexSha256 = indexSha256;
             _capabilityManifestBytes = capabilityManifestBytes;
@@ -418,6 +480,11 @@ public sealed class V3CorpusResolveMountTests
         public string ExpressionIri { get; }
         public string PublisherWid { get; }
         public string WorkTitle { get; }
+        public string WorkKey { get; }
+        public string ApplicabilityDate { get; }
+        public string StateSha256 { get; }
+        public string StableCoordinate => $"/lu-legilux/{WorkKey}/{ApplicabilityDate}";
+        public string Permalink => StableCoordinate + "--" + StateSha256;
         public string CorpusSha256 { get; }
         public string IndexSha256 { get; }
         public byte[] CorpusBytes => _corpusBytes.ToArray();
@@ -445,6 +512,9 @@ public sealed class V3CorpusResolveMountTests
             Assert.IsNotNull(index, $"{indexRefusal}: {indexDetail}");
             var article = envelope.BodyComposition.Envelope.LuxembourgAknLegalContentPopulation
                 .Outcomes.First(static value => value.Article is not null).Article!;
+            using var reader = LuxembourgIndexReader.OpenAndVerify(
+                index.IndexRef, index.IndexBytes.Span, corpus.ArtifactRef, index.CapabilityManifest);
+            var state = reader.ResolveState("loi-1991-08-10-n3", "2024-02-01").Single();
             var directory = Path.Combine(Path.GetTempPath(), $"lex-v3-corpus-mount-{Guid.NewGuid():N}");
             System.IO.Directory.CreateDirectory(directory);
             await File.WriteAllBytesAsync(
@@ -463,6 +533,9 @@ public sealed class V3CorpusResolveMountTests
                 article.PublisherExpressionIri,
                 "fixture-work-identifier",
                 "Règlement sur l'épreuve terminale",
+                state.WorkKey,
+                state.ApplicabilityDate,
+                state.StateSha256,
                 corpus.ArtifactRef.Sha256,
                 index.IndexRef.Sha256,
                 capabilityBytes,

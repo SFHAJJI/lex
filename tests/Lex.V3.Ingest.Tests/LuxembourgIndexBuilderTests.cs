@@ -18,7 +18,7 @@ public sealed class LuxembourgIndexBuilderTests
     {
         var digest = Convert.ToHexStringLower(SHA256.HashData(
             LuxembourgIndexBuilder.BuildFixedInputDeterminismEvidence()));
-        Assert.AreEqual("f87a1163d59361f4841024f19e339c989ed130853918b7b450d8359b831bfb97", digest);
+        Assert.AreEqual("348c8960febf2989d1553db9a4542849354f3b15f930cb423751d849ee21e91b", digest);
     }
 
     private const string Retained1991 = "loi-1991-08-10-n3--2024-02-01--fr.bin";
@@ -29,7 +29,7 @@ public sealed class LuxembourgIndexBuilderTests
         var schema = (string)typeof(LuxembourgIndexBuilder)
             .GetField(nameof(LuxembourgIndexBuilder.Schema))!
             .GetRawConstantValue()!;
-        Assert.AreEqual("lex-v3-luxembourg-index/2", schema);
+        Assert.AreEqual("lex-v3-luxembourg-index/3", schema);
         Assert.IsNotNull(typeof(LuxembourgIndexBuilder).GetMethod(nameof(LuxembourgIndexBuilder.TryBuild)));
         Assert.IsNotNull(typeof(LuxembourgIndexReader).GetMethod(nameof(LuxembourgIndexReader.OpenAndVerify)));
     }
