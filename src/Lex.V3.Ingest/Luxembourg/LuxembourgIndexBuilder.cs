@@ -904,17 +904,16 @@ public sealed class LuxembourgIndexReader : IDisposable
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(title);
         var normalized = LuxembourgIndexBuilder.NormalizeTitle(title);
-        if (normalized.Length == 0)
-        {
-            return new LuxembourgIndexWorkResolution(false, Array.Empty<LuxembourgIndexResolvedWork>());
-        }
-
         lock (_gate)
         {
             var rows = ReadWorkTitles(_connection);
             if (rows.Length == 0)
             {
                 return new LuxembourgIndexWorkResolution(false, Array.Empty<LuxembourgIndexResolvedWork>());
+            }
+            if (normalized.Length == 0)
+            {
+                return new LuxembourgIndexWorkResolution(true, Array.Empty<LuxembourgIndexResolvedWork>());
             }
 
             var exact = rows.Where(row => string.Equals(
@@ -925,7 +924,7 @@ public sealed class LuxembourgIndexReader : IDisposable
             {
                 selected = rows.Where(row => row.NormalizedTitle.StartsWith(
                     normalized, StringComparison.Ordinal)).ToArray();
-                reason = "unique_prefix";
+                reason = "prefix";
             }
             if (selected.Length == 0)
             {
@@ -937,6 +936,8 @@ public sealed class LuxembourgIndexReader : IDisposable
             }
 
             var candidates = selected
+                .OrderBy(static row => row.NormalizedTitle, StringComparer.Ordinal)
+                .ThenBy(static row => row.WorkIdentifier, StringComparer.Ordinal)
                 .GroupBy(static row => row.WorkIdentifier, StringComparer.Ordinal)
                 .OrderByDescending(static group => group.Max(row => row.DocumentDate), StringComparer.Ordinal)
                 .ThenBy(static group => group.Key, StringComparer.Ordinal)

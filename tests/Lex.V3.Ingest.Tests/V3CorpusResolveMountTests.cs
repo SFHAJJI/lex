@@ -126,6 +126,29 @@ public sealed class V3CorpusResolveMountTests
     }
 
     [TestMethod]
+    public async Task PunctuationOnlyQueryDoesNotMisreportPresentTitleCapabilityAsUnavailable()
+    {
+        var fixture = await MountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        await fixture.AddWorkTitleAsync();
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+        var context = Request("!!!");
+        var handler = new V3ApiHandler(
+            SyntheticApiState.Unavailable,
+            new V3PlatformHost(),
+            static () => ObservedAt,
+            mount);
+
+        await handler.HandleAsync(context, CancellationToken.None);
+
+        var envelope = V3EnvelopeJson.ParseAndVerify(ResponseBytes(context), V3OperationRegistry.Reviewed);
+        Assert.AreEqual(V3Verdicts.Refuse, envelope.Verdict);
+        Assert.AreEqual("identifier_unknown", envelope.Refusal!.Code);
+        Assert.AreEqual("!!!", envelope.Refusal.HelpfulPayload.GetProperty("requested_identifier").GetString());
+    }
+
+    [TestMethod]
     public async Task PrefixMatchingMultipleWorksReturnsDeterministicAmbiguity()
     {
         var fixture = await MountedFixture.CreateAsync();
@@ -145,11 +168,35 @@ public sealed class V3CorpusResolveMountTests
         var envelope = V3EnvelopeJson.ParseAndVerify(ResponseBytes(context), V3OperationRegistry.Reviewed);
         Assert.AreEqual(V3Verdicts.Refuse, envelope.Verdict);
         Assert.AreEqual("ambiguous_identifier", envelope.Refusal!.Code);
-        Assert.AreEqual("unique_prefix", envelope.Refusal.HelpfulPayload.GetProperty("match_reason").GetString());
+        Assert.AreEqual("prefix", envelope.Refusal.HelpfulPayload.GetProperty("match_reason").GetString());
         CollectionAssert.AreEqual(
             new[] { fixture.PublisherWid, secondWork }.Order(StringComparer.Ordinal).ToArray(),
             envelope.Refusal.HelpfulPayload.GetProperty("candidates")
                 .EnumerateArray().Select(static value => value.GetString()).ToArray());
+    }
+
+    [TestMethod]
+    public async Task OutOfOrderTitleWordsReachAllTokensContainedTier()
+    {
+        var fixture = await MountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        await fixture.AddWorkTitleAsync();
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+        var context = Request("terminale reglement");
+        var handler = new V3ApiHandler(
+            SyntheticApiState.Unavailable,
+            new V3PlatformHost(),
+            static () => ObservedAt,
+            mount);
+
+        await handler.HandleAsync(context, CancellationToken.None);
+
+        var envelope = V3EnvelopeJson.ParseAndVerify(ResponseBytes(context), V3OperationRegistry.Reviewed);
+        Assert.AreEqual(V3Verdicts.Answer, envelope.Verdict);
+        Assert.AreEqual("r1_work_discovery", envelope.Result!.Value.GetProperty("retrieval_lane").GetString());
+        Assert.AreEqual("all_tokens_contained", envelope.Result.Value.GetProperty("match_reason").GetString());
+        Assert.AreEqual(fixture.PublisherWid, envelope.Result.Value.GetProperty("work_identifier").GetString());
     }
 
     [TestMethod]
@@ -539,8 +586,8 @@ public sealed class V3CorpusResolveMountTests
                 }
                 foreach (var row in new[]
                 {
-                    (PublisherWid, ExpressionIri, WorkTitle, "2024-02-01"),
-                    (secondWork, ExpressionIri + "/second-work", WorkTitle + " complément", "2024-01-01"),
+                    (PublisherWid, ExpressionIri, WorkTitle + " zeta", "2024-02-01"),
+                    (secondWork, ExpressionIri + "/second-work", WorkTitle + " alpha", "2024-02-01"),
                 })
                 {
                     using var insertTitle = connection.CreateCommand();
