@@ -1323,14 +1323,17 @@ public sealed class LuxembourgIndexReader : IDisposable
 
             foreach (var identity in identities)
             {
-                if (!seenArticles.Add(identity) ||
-                    !articleByIdentity.TryGetValue(identity, out var article) ||
+                if (!articleByIdentity.TryGetValue(identity, out var article) ||
+                    !seenArticles.Add(identity) ||
                     !string.Equals(article.ExpressionIri, state.ExpressionIri, StringComparison.Ordinal) ||
                     !profiles.Contains(article.RuleProfileSha256, StringComparer.Ordinal))
                 {
                     throw new InvalidDataException(
                         "A Luxembourg expression state does not bind its exact article population.");
                 }
+                if (!string.Equals(article.Language, state.Language, StringComparison.Ordinal))
+                    throw new InvalidDataException(
+                        "A Luxembourg expression state language contradicts its articles.");
             }
             var expectedIdentities = articles
                 .Where(article => string.Equals(
