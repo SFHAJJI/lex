@@ -207,6 +207,35 @@ const MUTATIONS = [
     },
   },
   {
+    // The sentence still in the page, resolved by aria-describedby, and shown to nobody. Every
+    // attribute the probe used to read survives this, so only reading what the page renders can
+    // see it. A sighted keyboard reader meets a button that does nothing and no reason.
+    name: "the compare control's sentence hidden from the page",
+    expect:
+      /the compare control's sentence is in the page and not shown \(the hidden attribute, 0x0 box, the words "[^"]*" in the document only\); a reason a reader cannot see is not a reason/,
+    async apply(root) {
+      await replaceOnce(
+        join(root, "search-react.html"),
+        /<p class="compare-arming-state"/,
+        '<p hidden class="compare-arming-state"',
+      );
+    },
+  },
+  {
+    // The control kept out of the accessibility tree, with the DOM untouched. A screen reader is
+    // given neither the button nor its sentence; every attribute check still passes.
+    name: "the compare control hidden from assistive technology",
+    expect:
+      /the Compare button is not in the accessibility tree; a control a screen reader is never given cannot tell anyone why states cannot be compared/,
+    async apply(root) {
+      await replaceOnce(
+        join(root, "search-react.html"),
+        /<div class="compare-arming">/,
+        '<div class="compare-arming" aria-hidden="true">',
+      );
+    },
+  },
+  {
     // The whole control gone from the built page, with the list and its selection intact. The
     // probe finds nothing to drive, and a page declared for it must not read that as clean. Both
     // the served markup and the bundle change: a production hydrate keeps the server's attributes,

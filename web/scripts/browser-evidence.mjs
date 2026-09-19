@@ -603,7 +603,7 @@ const PROBE = `(() => {
  * Returns null for pages carrying none of the three, so the gates stay silent where there is
  * nothing to drive rather than inventing a pass.
  */
-export async function drivenBehaviour(session, sessionId, rows = null) {
+export async function drivenBehaviour(session, sessionId, rows = null, compareAtLoad = null) {
   const read = async (expression) => {
     const { result } = await session.send(
       "Runtime.evaluate",
@@ -699,6 +699,7 @@ export async function drivenBehaviour(session, sessionId, rows = null) {
     if (Object.keys(drift).length > 0) {
       compare = { rows, drift };
     } else {
+      opening.exposed = compareAtLoad ?? (await comparePresence(session, sessionId));
       const steps = [opening];
       for (const step of COMPARE_STEPS.slice(1)) {
         await read(`(() => {
@@ -714,7 +715,9 @@ export async function drivenBehaviour(session, sessionId, rows = null) {
           return true;
         })()`);
         await press(" ");
-        steps.push(await read(compareSnapshot(rows)));
+        const seen = await read(compareSnapshot(rows));
+        if (seen) seen.exposed = await comparePresence(session, sessionId);
+        steps.push(seen);
       }
       compare = { rows, steps };
     }
@@ -833,6 +836,41 @@ const NOT_ARMED_BECAUSE = Object.freeze({
  * through the button's `aria-describedby` rather than by class, so a sentence the button no longer
  * points at is a sentence nobody hears. `matches` counts the rows carrying each declared title.
  */
+/**
+ * The compare control as assistive technology is given it: what the browser's own accessibility
+ * tree holds for the button, not what the DOM holds.
+ *
+ * A control under `aria-hidden`, or otherwise out of the tree, is a control a screen reader is
+ * never offered. The DOM read cannot see that: every attribute it reads is still there. The
+ * description is what `aria-describedby` resolves to in the tree, which is the sentence a reader
+ * hears, so it is compared with the sentence on the page.
+ */
+async function comparePresence(session, sessionId) {
+  const { result } = await session.send(
+    "Runtime.evaluate",
+    {
+      expression: `(() => {
+        const box = document.querySelector('[role=listbox]');
+        const section = box ? box.closest('section.results') : null;
+        const control = (section ?? document).querySelector('.compare-arming');
+        return control ? control.querySelector('button') : null;
+      })()`,
+    },
+    sessionId,
+  );
+  if (!result.objectId) return { inTree: false, role: null, name: null, description: null };
+  const { nodes } = await session.send("Accessibility.queryAXTree", { objectId: result.objectId }, sessionId);
+  await session.send("Runtime.releaseObject", { objectId: result.objectId }, sessionId);
+  const node = (nodes ?? []).find((candidate) => candidate.ignored !== true);
+  if (!node) return { inTree: false, role: null, name: null, description: null };
+  return {
+    inTree: true,
+    role: node.role?.value ?? null,
+    name: (node.name?.value ?? "").trim(),
+    description: (node.description?.value ?? "").trim(),
+  };
+}
+
 function compareSnapshot(rows) {
   return `(() => {
     const rows = ${JSON.stringify(rows)};
@@ -854,8 +892,28 @@ function compareSnapshot(rows) {
       matches[key] = found.length;
       selected[key] = found.length === 1 ? found[0].getAttribute('aria-selected') : null;
     }
+    // The sentence as a reader is given it, not as the DOM holds it: innerText is what is
+    // rendered, and a hidden element renders nothing. The box and the computed style say why.
+    let shown = null;
+    if (described) {
+      const rect = described.getBoundingClientRect();
+      const style = getComputedStyle(described);
+      const visible = typeof described.checkVisibility === 'function'
+        ? described.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })
+        : style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0';
+      shown = {
+        text: described.innerText.trim(),
+        visible,
+        hiddenAttr: described.hasAttribute('hidden'),
+        width: Math.round(rect.width),
+        height: Math.round(rect.height),
+        display: style.display,
+        visibility: style.visibility,
+      };
+    }
     return {
       sentence: described ? described.textContent.trim() : null,
+      shown,
       ariaDisabled: button ? button.getAttribute('aria-disabled') : null,
       disabledAttr: button ? button.hasAttribute('disabled') : false,
       selected,
@@ -939,6 +997,36 @@ export function compareFailures(where, compare) {
       failures.push(
         `${where}: ${step.label}, the Compare button carries the disabled attribute, so it leaves ` +
           "the Tab order and the reason it cannot be pressed is out of reach",
+      );
+    }
+    // The sentence as a reader is given it. The DOM holding the right words says nothing: a
+    // hidden element holds them and shows nobody, and `textContent` reads them all the same.
+    const shown = seen.shown ?? null;
+    if (shown !== null && (!shown.visible || shown.text === "" || shown.width === 0 || shown.height === 0)) {
+      failures.push(
+        `${where}: ${step.label}, the compare control's sentence is in the page and not shown ` +
+          `(${shown.hiddenAttr ? "the hidden attribute" : `display ${shown.display}, visibility ${shown.visibility}`}, ` +
+          `${shown.width}x${shown.height} box, the words "${shown.text}" in the document only); ` +
+          "a reason a reader cannot see is not a reason",
+      );
+    } else if (shown !== null && shown.text !== s) {
+      failures.push(
+        `${where}: ${step.label}, the compare control shows "${shown.text}" and its sentence is ` +
+          `"${s}"; what a reader sees and what the control says must be one sentence`,
+      );
+    }
+    // The control as assistive technology is given it. Every attribute this probe reads survives
+    // aria-hidden, so only the browser's own accessibility tree can say the control is offered.
+    const exposed = seen.exposed ?? null;
+    if (exposed !== null && !exposed.inTree) {
+      failures.push(
+        `${where}: ${step.label}, the Compare button is not in the accessibility tree; a control a ` +
+          "screen reader is never given cannot tell anyone why states cannot be compared",
+      );
+    } else if (exposed !== null && exposed.description !== s) {
+      failures.push(
+        `${where}: ${step.label}, the Compare button's description is "${exposed.description}" and ` +
+          `the sentence on the page is "${s}"; a screen reader is told something else`,
       );
     }
   });
@@ -1468,7 +1556,9 @@ export async function serveDist(root) {
     Promise.all([realpath(file), realpath(root)])
       .then(([realFile, realRoot]) => {
         if (!withinRoot(realRoot, realFile)) {
-          throw new Error("resolved outside the distribution root");
+          // Refused as absent, not as an error of this server's: what is outside the root is
+          // nothing this site has, and an escape attempt learns nothing from the answer.
+          throw Object.assign(new Error("resolved outside the distribution root"), { code: "ENOENT" });
         }
         return readFile(realFile);
       })
@@ -1480,9 +1570,14 @@ export async function serveDist(root) {
           });
           response.end(body);
         },
-        () => {
-          response.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
-          response.end("not found");
+        (error) => {
+          // A file that is not there is 404. Any other read failure is this server's, not the
+          // page's: one clean run reported a built page and its stylesheet "answered 404" while
+          // both were on disk, which reads as a defect in the product. It now answers 500 and
+          // names the error, so a harness failure can never be read as a missing page.
+          const missing = error?.code === "ENOENT" || error?.code === "ENOTDIR";
+          response.writeHead(missing ? 404 : 500, { "content-type": "text/plain; charset=utf-8" });
+          response.end(missing ? "not found" : `the evidence server could not read it: ${error?.code ?? error}`);
         },
       );
   });
@@ -1672,6 +1767,10 @@ async function main() {
           sessionId,
         );
         const observed = result.value;
+        // The compare control as served, read before anything focuses into it. Chrome ignores
+        // `aria-hidden` on a subtree that holds focus, and the tab walk below puts focus on the
+        // button, so a control hidden from assistive technology is only visible as hidden here.
+        const compareAtLoad = COMPARE_ROWS[page] ? await comparePresence(session, sessionId) : null;
 
         // The accessibility tree is what a screen reader actually receives. Reading the
         // DOM and asserting it "should" expose a name is a different claim.
@@ -1946,7 +2045,7 @@ async function main() {
         // served in. Run earlier it silently changed what every later check measured -- the tab
         // walk reported 6 stops on a page with 15 focusable elements, which was my probe's own
         // click and not a defect in the page.
-        const behaviour = await drivenBehaviour(session, sessionId, COMPARE_ROWS[page] ?? null);
+        const behaviour = await drivenBehaviour(session, sessionId, COMPARE_ROWS[page] ?? null, compareAtLoad);
         // The behavioural half. The two checks above still earn their place -- they catch malformed
         // markup an inert page would also produce -- but on their own they pass a page whose
         // handlers are dead, so neither is allowed to stand as the evidence for its clause.

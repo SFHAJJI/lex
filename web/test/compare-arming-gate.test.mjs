@@ -36,6 +36,23 @@ async function cleanSteps() {
   const { COMPARE_STEPS, COMPARE_SENTENCES } = await gate();
   return COMPARE_STEPS.map((step) => ({
     sentence: COMPARE_SENTENCES[step.expect],
+    // What the page renders, and what the accessibility tree holds, on a page where both agree
+    // with the sentence the DOM carries.
+    shown: {
+      text: COMPARE_SENTENCES[step.expect],
+      visible: true,
+      hiddenAttr: false,
+      width: 320,
+      height: 19,
+      display: "block",
+      visibility: "visible",
+    },
+    exposed: {
+      inTree: true,
+      role: "button",
+      name: "Compare",
+      description: COMPARE_SENTENCES[step.expect],
+    },
     ariaDisabled: step.expect === "armed" ? "false" : "true",
     disabledAttr: false,
     selected: Object.fromEntries(
@@ -45,10 +62,24 @@ async function cleanSteps() {
   }));
 }
 
-/** The clean sequence with one step's reading changed. */
+/**
+ * The clean sequence with one step's reading changed.
+ *
+ * A page that says a different sentence shows it and describes the button with it, so a change of
+ * `sentence` carries both along unless the change sets them itself: those three moving apart is
+ * its own defect, with its own tests.
+ */
 async function withStep(index, change) {
   const steps = await cleanSteps();
-  steps[index] = { ...steps[index], ...change(steps[index]) };
+  const changed = change(steps[index]);
+  const step = { ...steps[index], ...changed };
+  if (changed.sentence !== undefined && changed.shown === undefined) {
+    step.shown = { ...step.shown, text: changed.sentence };
+  }
+  if (changed.sentence !== undefined && changed.exposed === undefined) {
+    step.exposed = { ...step.exposed, description: changed.sentence };
+  }
+  steps[index] = step;
   return { rows: ROWS, steps };
 }
 
@@ -191,6 +222,60 @@ test("an armed control is one defect, not two: the sentence it says is not judge
   );
   assert.equal(failures.length, 1, JSON.stringify(failures));
   assert.match(failures[0], /after Space on one state, Compare was armed .*one state is not a comparison$/);
+});
+
+test("a sentence the page holds and never shows fails, whatever the DOM says", async () => {
+  const { compareFailures, COMPARE_SENTENCES } = await gate();
+  // The hidden attribute: aria-describedby still resolves, so the DOM read is satisfied.
+  const hidden = compareFailures(
+    WHERE,
+    await withStep(0, (step) => ({
+      shown: { ...step.shown, text: "", visible: false, hiddenAttr: true, width: 0, height: 0 },
+    })),
+  );
+  assert.equal(hidden.length, 1, JSON.stringify(hidden));
+  assert.match(
+    hidden[0],
+    /at load, the compare control's sentence is in the page and not shown \(the hidden attribute, 0x0 box, the words "" in the document only\); a reason a reader cannot see is not a reason/,
+  );
+  // A stylesheet that renders it to nothing, with its words still in the DOM.
+  const collapsed = compareFailures(
+    WHERE,
+    await withStep(1, (step) => ({
+      shown: { ...step.shown, visible: false, width: 0, height: 0, display: "none" },
+    })),
+  );
+  assert.equal(collapsed.length, 1, JSON.stringify(collapsed));
+  assert.match(collapsed[0], /display none, visibility visible, 0x0 box/);
+  // Shown, but not the words the control says.
+  const other = compareFailures(
+    WHERE,
+    await withStep(2, () => ({ shown: { text: "Compare these", visible: true, hiddenAttr: false, width: 200, height: 19, display: "block", visibility: "visible" } })),
+  );
+  assert.deepEqual(other, [
+    `${WHERE}: with two states of one work selected, the compare control shows "Compare these" and ` +
+      `its sentence is "${COMPARE_SENTENCES.armed}"; what a reader sees and what the control says must be one sentence`,
+  ]);
+});
+
+test("a control assistive technology is never given fails, and so does one described otherwise", async () => {
+  const { compareFailures, COMPARE_SENTENCES } = await gate();
+  const gone = compareFailures(
+    WHERE,
+    await withStep(3, () => ({ exposed: { inTree: false, role: null, name: null, description: null } })),
+  );
+  assert.deepEqual(gone, [
+    `${WHERE}: with three rows selected, the Compare button is not in the accessibility tree; a ` +
+      "control a screen reader is never given cannot tell anyone why states cannot be compared",
+  ]);
+  const elsewhere = compareFailures(
+    WHERE,
+    await withStep(0, (step) => ({ exposed: { ...step.exposed, description: "Compare two states" } })),
+  );
+  assert.deepEqual(elsewhere, [
+    `${WHERE}: at load, the Compare button's description is "Compare two states" and the sentence ` +
+      `on the page is "${COMPARE_SENTENCES.none}"; a screen reader is told something else`,
+  ]);
 });
 
 // ---------------------------------------------------------------------------------------------
