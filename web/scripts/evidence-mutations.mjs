@@ -105,6 +105,20 @@ const MUTATIONS = [
     },
   },
   {
+    // The clamp replaced by a stop that jumps to the first row whenever the list shortens under it.
+    // Exactly one option stays tabbable, so the "drops out of the Tab order" check passes; only the
+    // check that the stop stays on the nearest row that exists can see the reader was moved.
+    name: "the tab stop sent to the first row when a filter shortens the list",
+    expect: /the tab stop moved to option \d+; it should stay on the nearest row that exists/i,
+    async apply(root) {
+      await replaceOnce(
+        join(root, "client.js"),
+        /Math\.min\(([A-Za-z_$][A-Za-z0-9_$]*),([A-Za-z_$][A-Za-z0-9_$]*)\.length-1\)/,
+        "($1<$2.length?$1:0)",
+      );
+    },
+  },
+  {
     // A handler that logs is invisible at load: the load-time console check had already passed
     // and the next navigation cleared the buffer. This listener only ever fires on a key, so the
     // load check stays clean and only the check after the tab walk and driven probe can see it.

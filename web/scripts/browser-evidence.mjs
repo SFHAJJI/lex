@@ -1353,6 +1353,20 @@ async function main() {
                 `${after.count} options while its tab stop was on option ${before.active}, and ` +
                 `${after.tabbable} options are tabbable; the listbox drops out of the Tab order`,
             );
+          } else if (after && after.count < before.count) {
+            // One tabbable option is not enough: it has to be the right one. A stop that jumps to the
+            // first row whenever the list shortens keeps exactly one option tabbable and would pass
+            // the check above, while moving the reader away from where they stood. The nearest row
+            // that still exists is the stop the component promises.
+            const expected = Math.min(before.active, after.count - 1);
+            if (after.tab !== expected) {
+              failures.push(
+                `${page} @${viewport.label}: a filter shortened the listbox from ${before.count} to ` +
+                  `${after.count} options while the reader stood on option ${before.active}, and the ` +
+                  `tab stop moved to option ${after.tab}; it should stay on the nearest row that ` +
+                  `exists, option ${expected}`,
+              );
+            }
           }
         }
         const late = logged.slice(consoleAtLoad);
