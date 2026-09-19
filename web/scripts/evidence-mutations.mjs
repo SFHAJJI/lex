@@ -81,6 +81,60 @@ const MUTATIONS = [
     },
   },
   {
+    // Home is declared in the movement table and was never pressed by any gate, so a dead Home
+    // stayed green. The mutation keeps the key in the table and makes it move nowhere, which is
+    // what a handler bug looks like; deleting the key would only exercise the browser default.
+    name: "the Home key made to stay put, so it moves nothing",
+    expect: /Home moved focus to option \d+, expected 0/i,
+    async apply(root) {
+      await replaceOnce(join(root, "client.js"), /Home:\(\)=>0/, "Home:(e)=>e");
+    },
+  },
+  {
+    // The tab stop is clamped to the rows that exist. Removing the clamp restores the defect the
+    // gate was written against: stand on the last row, filter the list shorter, and no option is
+    // tabbable. The pattern is the clamp's shape, not its minified names, and must match once.
+    name: "the tab-stop clamp removed, so a shortened list loses its tab stop",
+    expect: /options are tabbable; the listbox drops out of the Tab order/i,
+    async apply(root) {
+      await replaceOnce(
+        join(root, "client.js"),
+        /Math\.min\(([A-Za-z_$][A-Za-z0-9_$]*),[A-Za-z_$][A-Za-z0-9_$]*\.length-1\)/,
+        "$1",
+      );
+    },
+  },
+  {
+    // The clamp replaced by a stop that jumps to the first row whenever the list shortens under it.
+    // Exactly one option stays tabbable, so the "drops out of the Tab order" check passes; only the
+    // check that the stop stays on the nearest row that exists can see the reader was moved.
+    name: "the tab stop sent to the first row when a filter shortens the list",
+    expect: /the tab stop moved to option \d+; it should stay on the nearest row that exists/i,
+    async apply(root) {
+      await replaceOnce(
+        join(root, "client.js"),
+        /Math\.min\(([A-Za-z_$][A-Za-z0-9_$]*),([A-Za-z_$][A-Za-z0-9_$]*)\.length-1\)/,
+        "($1<$2.length?$1:0)",
+      );
+    },
+  },
+  {
+    // A handler that logs is invisible at load: the load-time console check had already passed
+    // and the next navigation cleared the buffer. This listener only ever fires on a key, so the
+    // load check stays clean and only the check after the tab walk and driven probe can see it.
+    name: "a console error raised by every key press after load",
+    expect: /console output during the tab walk or driven actions/i,
+    async apply(root) {
+      const file = join(root, "client.js");
+      const code = await readFile(file, "utf8");
+      await writeFile(
+        file,
+        `${code}\n;document.addEventListener("keydown",function(){console.error("induced: keydown");});\n`,
+        "utf8",
+      );
+    },
+  },
+  {
     name: "a toggle whose pressed state is not a boolean",
     expect: /aria-pressed="[^"]*" is not a boolean/i,
     async apply(root) {
@@ -214,6 +268,21 @@ const MUTATIONS = [
     },
   },
 ];
+
+/**
+ * Replaces exactly one match. A pattern that matches nothing leaves the copy unmutated and the run
+ * green, which would read as a gate that failed to catch a mutation; one that matches twice
+ * mutates more than the property the mutation names. Either way the mutation proves nothing, so
+ * both stop the run.
+ */
+async function replaceOnce(file, pattern, replacement) {
+  const code = await readFile(file, "utf8");
+  const matches = code.match(new RegExp(pattern.source, `${pattern.flags.replace("g", "")}g`)) ?? [];
+  if (matches.length !== 1) {
+    throw new Error(`${pattern} matched ${matches.length} times in ${file}; expected exactly one`);
+  }
+  await writeFile(file, code.replace(pattern, replacement), "utf8");
+}
 
 function run(root) {
   return new Promise((resolveRun) => {
