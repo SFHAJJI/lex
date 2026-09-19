@@ -207,6 +207,15 @@ const MUTATIONS = [
     },
   },
   {
+    // The whole control gone from the built page, with the list and its selection intact. The
+    // probe finds nothing to drive, and a page declared for it must not read that as clean.
+    name: "the compare control no longer rendered",
+    expect: /the compare probe declares rows for this page and the page has no compare control/,
+    async apply(root) {
+      await replaceOnce(join(root, "client.js"), /className:"compare-arming",/, 'className:"compare-gone",');
+    },
+  },
+  {
     // S5-A10: translation is never the default view. The trust surface carries exactly one
     // unofficial rendering; opening it in the served markup is the defect in its plainest form.
     name: "an unofficial rendering served open, so it is the default view",

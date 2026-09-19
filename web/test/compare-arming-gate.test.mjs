@@ -70,6 +70,30 @@ test("a compare control with no declared rows fails as never driven", async () =
   ]);
 });
 
+test("a page declared for the probe that has no compare control fails, and no step is judged", async () => {
+  const { compareFailures } = await gate();
+  assert.deepEqual(compareFailures(WHERE, { rows: ROWS, missing: true }), [
+    `${WHERE}: the compare probe declares rows for this page and the page has no compare control, ` +
+      "so two states of one work cannot be compared here",
+  ]);
+});
+
+test("a compare control that disappears partway fails at every step it is gone, and only there", async () => {
+  const { compareFailures } = await gate();
+  const drive = await withStep(0, () => ({}));
+  drive.steps = drive.steps.slice(0, 3);
+  assert.deepEqual(compareFailures(WHERE, drive), [
+    `${WHERE}: with three rows selected, the compare control was gone; a control that disappears ` +
+      "while rows are selected cannot say why they cannot be compared",
+    `${WHERE}: with rows of two different works selected, the compare control was gone; a control ` +
+      "that disappears while rows are selected cannot say why they cannot be compared",
+    `${WHERE}: after deselecting down to one state, the compare control was gone; a control that ` +
+      "disappears while rows are selected cannot say why they cannot be compared",
+    `${WHERE}: after deselecting every row, the compare control was gone; a control that ` +
+      "disappears while rows are selected cannot say why they cannot be compared",
+  ]);
+});
+
 test("a declared row the page does not carry exactly once fails as drift, and no step is judged", async () => {
   const { compareFailures } = await gate();
   for (const count of [0, 2]) {

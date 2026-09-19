@@ -671,6 +671,10 @@ export async function drivenBehaviour(session, sessionId, rows = null) {
   const opening = await read(compareSnapshot(rows ?? {}));
   if (opening && rows === null) {
     compare = { undeclared: true };
+  } else if (rows !== null && !opening) {
+    // Declared and absent is not "nothing to drive": the page lost the control the probe was
+    // written for, and passing it would read a page without comparison as one where it works.
+    compare = { rows, missing: true };
   } else if (opening) {
     const drift = Object.fromEntries(
       Object.entries(opening.matches).filter(([, count]) => count !== 1),
@@ -682,7 +686,9 @@ export async function drivenBehaviour(session, sessionId, rows = null) {
       for (const step of COMPARE_STEPS.slice(1)) {
         await read(`(() => {
           const title = ${JSON.stringify(rows[step.press])};
-          const row = [...document.querySelectorAll('[role=listbox] [role=option]')].find((option) => {
+          // The same listbox the snapshot reads, so a press can never land in another list.
+          const box = document.querySelector('[role=listbox]');
+          const row = [...(box ? box.querySelectorAll('[role=option]') : [])].find((option) => {
             const own = option.querySelector('.results-title');
             return own !== null && own.textContent.trim() === title;
           });
@@ -861,6 +867,12 @@ export function compareFailures(where, compare) {
     ];
   }
   const { rows } = compare;
+  if (compare.missing) {
+    return [
+      `${where}: the compare probe declares rows for this page and the page has no compare control, ` +
+        "so two states of one work cannot be compared here",
+    ];
+  }
   if (compare.drift) {
     return Object.entries(compare.drift).map(
       ([key, count]) =>
