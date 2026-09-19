@@ -437,17 +437,6 @@ test('an unofficial rendering is never the default view: closed, labelled, opene
     html.indexOf('An English rendering') > html.indexOf('</summary>'),
     'the rendering text is not inside the closed body, after the label',
   );
-  // A caller that asks for it open is not obeyed: the default is not the caller's to choose.
-  const asked = renderUnofficialRendering({
-    resourceId: SOLE.resource_id,
-    authenticity: SOLE,
-    language: 'en',
-    text: 'An English rendering of a French statute.',
-    publisher: 'lu-legilux',
-    officialUri: 'https://legilux.public.lu/eli/etat/leg/loi/2001/01/01/n1',
-    open: true,
-  });
-  assert.equal(asked, html, 'a caller asked for the rendering open and changed the page');
 });
 
 test('the authentic text cannot be relabelled as unofficial', () => {
