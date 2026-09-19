@@ -229,6 +229,45 @@ public sealed class V3CorpusDiffMountTests
     }
 
     [TestMethod]
+    public async Task AnAmbiguityOrAProfileMismatchInOneLanguageRefusesTheWholeDiff()
+    {
+        var fixture = await MountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        var laterDate = Shift(fixture.ApplicabilityDate, 400);
+        // German covers both bounds with one state; French has two states on the later date.
+        var german = await fixture.AddSecondLanguageStateAtSameDateAsync();
+        var later = await fixture.AddStateAsync(laterDate, "later");
+        var twin = await fixture.AddStateAsync(laterDate, "twin");
+        using (var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None))
+        {
+            Assert.IsNotNull(mount);
+            var envelope = await DiffAsync(mount, $"/lu-legilux/{fixture.WorkKey}", fixture.ApplicabilityDate, laterDate);
+            Assert.AreEqual(V3Verdicts.Refuse, envelope.Verdict, "German compares cleanly, but French is ambiguous: the whole diff refuses, as as_of does.");
+            Assert.AreEqual("ambiguous_version", envelope.Refusal!.Code);
+            Assert.AreEqual("to", envelope.Refusal.HelpfulPayload.GetProperty("bound").GetString());
+            CollectionAssert.AreEquivalent(
+                new[] { later.StateSha256, twin.StateSha256 }.Select(digest => fixture.StableCoordinate.Replace("/" + fixture.ApplicabilityDate, "/" + laterDate) + "--" + digest).ToArray(),
+                envelope.Refusal.HelpfulPayload.GetProperty("candidates").EnumerateArray().Select(static v => v.GetString()).ToArray());
+            // German alone still answers.
+            var germanOnly = await DiffAsync(mount, $"/lu-legilux/{fixture.WorkKey}", fixture.ApplicabilityDate, laterDate, "deu");
+            Assert.IsTrue(germanOnly.Result!.Value.GetProperty("comparisons").EnumerateArray().Single().GetProperty("same_state").GetBoolean());
+            Assert.AreEqual(german.StateSha256, germanOnly.Result.Value.GetProperty("comparisons").EnumerateArray().Single().GetProperty("from").GetProperty("state_sha256").GetString());
+        }
+
+        // The same shape with a profile mismatch instead: German clean, French with a changed profile set.
+        var profiles = await MountedFixture.CreateAsync();
+        await using var cleanupProfiles = profiles;
+        await profiles.AddSecondLanguageStateAtSameDateAsync();
+        var frenchLater = await profiles.AddStateAsync(laterDate, "later");
+        await profiles.AddRuleProfileToStateAsync(frenchLater.ExpressionIri, new string('b', 64));
+        using var mountProfiles = await V3CorpusMount.OpenAsync(profiles.Directory, CancellationToken.None);
+        Assert.IsNotNull(mountProfiles);
+        var mismatch = await DiffAsync(mountProfiles, $"/lu-legilux/{profiles.WorkKey}", profiles.ApplicabilityDate, laterDate);
+        Assert.AreEqual("profiles_differ", mismatch.Refusal!.Code, "German compares cleanly, but the French pair differs in profiles: the whole diff refuses.");
+        Assert.AreEqual("fra", mismatch.Refusal.HelpfulPayload.GetProperty("language").GetString());
+    }
+
+    [TestMethod]
     public async Task EuIdentifiersRefuseTheModeAndAMissingMountRefusesTheCorpus()
     {
         var fixture = await MountedFixture.CreateAsync();

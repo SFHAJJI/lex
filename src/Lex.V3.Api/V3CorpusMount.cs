@@ -467,7 +467,9 @@ internal sealed class V3CorpusMount : IDisposable
     /// compared; one state covering both bounds answers "the same version applied on both dates"; two
     /// states with the same rule profiles are compared article by article by publisher-minted id and
     /// wording digest (unchanged, changed, added, removed). Two states with different rule profiles
-    /// refuse <c>profiles_differ</c>, which nothing overrides. No text is diffed, no legal effect is
+    /// refuse <c>profiles_differ</c>, which nothing overrides. Refusals follow <c>as_of</c>'s rule: an
+    /// ambiguity or a profile mismatch in any served language refuses the whole answer, while a language
+    /// with no state at a bound is listed as not compared. No text is diffed, no legal effect is
     /// asserted: a changed article is a changed digest, and the note says so.
     /// </summary>
     public V3PlatformOperationOutcome Diff(
@@ -579,7 +581,10 @@ internal sealed class V3CorpusMount : IDisposable
             });
         }
 
-        if (comparisons.Count == 0 && ambiguous is { } ambiguity)
+        // One rule for refusals, the one as_of follows: an ambiguity or a profile mismatch in any served
+        // language refuses the whole answer; a language with no state at a bound is not a refusal and is
+        // listed as not compared.
+        if (ambiguous is { } ambiguity)
         {
             using var ambiguousVersion = JsonSerializer.SerializeToDocument(new
             {
