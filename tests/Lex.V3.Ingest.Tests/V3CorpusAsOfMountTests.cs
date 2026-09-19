@@ -260,23 +260,14 @@ public sealed class V3CorpusAsOfMountTests
                     .Select(static value => value.GetString()).ToArray());
         }
 
-        // Combined mount: the Luxembourg work answers with Luxembourg context and the EU act still
-        // refuses the mode with EU context; neither publisher borrows the other's.
-        await europe.AddLuxembourgMountAsync();
-        string combinedWorkKey, combinedDate;
-        using (var connection = LuxembourgIndexBuilder.Open(
-                   Path.Combine(europe.Directory, V3CorpusMount.IndexFileName), SqliteOpenMode.ReadOnly))
-        {
-            using var command = connection.CreateCommand();
-            command.CommandText = "SELECT work_key, applicability_date FROM states ORDER BY work_key, applicability_date LIMIT 1";
-            using var reader = command.ExecuteReader();
-            Assert.IsTrue(reader.Read(), "The combined mount's Luxembourg index must hold a state.");
-            combinedWorkKey = reader.GetString(0);
-            combinedDate = reader.GetString(1);
-        }
-        using var combined = await V3CorpusMount.OpenAsync(europe.Directory, CancellationToken.None);
+        // Combined mount, built as the resolve tests build it: the Luxembourg fixture with the EU index
+        // added. The Luxembourg work answers with Luxembourg context and the EU act still refuses the
+        // mode with EU context; neither publisher borrows the other's.
+        _ = await luxembourg.AddEuropeCollisionAsync();
+        using var combined = await V3CorpusMount.OpenAsync(luxembourg.Directory, CancellationToken.None);
         Assert.IsNotNull(combined);
-        var luxembourgOnCombined = await AsOfAsync(combined, $"/lu-legilux/{combinedWorkKey}", combinedDate);
+        var luxembourgOnCombined = await AsOfAsync(
+            combined, $"/lu-legilux/{luxembourg.WorkKey}", luxembourg.ApplicabilityDate);
         Assert.AreEqual(V3Verdicts.Answer, luxembourgOnCombined.Verdict);
         Assert.AreEqual(PublisherId.LuLegilux, luxembourgOnCombined.Context.Publisher);
         Assert.AreEqual(TimelineSemantics.PublisherApplicability, luxembourgOnCombined.Context.TimelineSemantics);
