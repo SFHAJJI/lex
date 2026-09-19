@@ -567,7 +567,7 @@ const PROBE = `(() => {
  * reached at all. This presses Tab and records where focus lands.
  */
 /**
- * Drives the two interactive contracts this sweep claims, rather than reading their opening
+ * Drives the three interactive contracts this sweep claims, rather than reading their opening
  * attributes.
  *
  * Roving tabindex is a behaviour: pressing ArrowDown must move BOTH the active element and the
@@ -577,10 +577,16 @@ const PROBE = `(() => {
  * `aria-pressed` can hold a correct boolean that no click will ever flip, which a no-op `onClick`
  * produces and an attribute check cannot see.
  *
- * Returns null for pages carrying neither control, so the gates stay silent where there is nothing
- * to drive rather than inventing a pass.
+ * Compare arming is the third, and the one that was claimed longest without being reachable: the
+ * page said a pair of rows arms the comparison while its only two rows of one work shared a
+ * lex_id, so selecting the second deselected the first and the armed state could never be shown.
+ * Space is pressed on declared rows (`COMPARE_ROWS`) and every step is read back through the
+ * button's own description, so the sentence judged is the one a screen reader hears.
+ *
+ * Returns null for pages carrying none of the three, so the gates stay silent where there is
+ * nothing to drive rather than inventing a pass.
  */
-export async function drivenBehaviour(session, sessionId) {
+export async function drivenBehaviour(session, sessionId, rows = null) {
   const read = async (expression) => {
     const { result } = await session.send(
       "Runtime.evaluate",
@@ -606,7 +612,9 @@ export async function drivenBehaviour(session, sessionId) {
   })()`;
   const listbox = listboxAt(2);
 
-  const KEY_CODES = { ArrowDown: 40, ArrowUp: 38, Home: 36, End: 35 };
+  // Space arms a row. Its `key` is a literal space and its `code` is the word, which is the one
+  // key in this table where the two differ.
+  const KEY_CODES = { ArrowDown: 40, ArrowUp: 38, Home: 36, End: 35, " ": 32 };
   const press = async (key) => {
     for (const type of ["rawKeyDown", "keyUp"]) {
       await session.send(
@@ -614,7 +622,7 @@ export async function drivenBehaviour(session, sessionId) {
         {
           type,
           key,
-          code: key,
+          code: key === " " ? "Space" : key,
           windowsVirtualKeyCode: KEY_CODES[key],
           nativeVirtualKeyCode: KEY_CODES[key],
         },
@@ -654,6 +662,41 @@ export async function drivenBehaviour(session, sessionId) {
     }
   }
 
+  // Compare arming, before the chip click and before standing on the last row: the "main-work"
+  // chip hides the annex row this probe needs, and the sequence ends with nothing selected so the
+  // probes after it measure the page as it was served. Rows are found by title and focused
+  // directly, the way the roving probe finds its tab stop, because arrow travel would make every
+  // step depend on the movement table this probe is not about.
+  let compare = null;
+  const opening = await read(compareSnapshot(rows ?? {}));
+  if (opening && rows === null) {
+    compare = { undeclared: true };
+  } else if (opening) {
+    const drift = Object.fromEntries(
+      Object.entries(opening.matches).filter(([, count]) => count !== 1),
+    );
+    if (Object.keys(drift).length > 0) {
+      compare = { rows, drift };
+    } else {
+      const steps = [opening];
+      for (const step of COMPARE_STEPS.slice(1)) {
+        await read(`(() => {
+          const title = ${JSON.stringify(rows[step.press])};
+          const row = [...document.querySelectorAll('[role=listbox] [role=option]')].find((option) => {
+            const own = option.querySelector('.results-title');
+            return own !== null && own.textContent.trim() === title;
+          });
+          if (!row) return false;
+          row.focus();
+          return true;
+        })()`);
+        await press(" ");
+        steps.push(await read(compareSnapshot(rows)));
+      }
+      compare = { rows, steps };
+    }
+  }
+
   // The pressed contract is two claims at once: the control's own state flips, and the thing it
   // controls changes with it. A toggle that announces itself pressed while filtering nothing is
   // still broken, so the represented count is read alongside it.
@@ -683,7 +726,194 @@ export async function drivenBehaviour(session, sessionId) {
     if (standing) shrink = { before: standing, after: await read(listboxAt(1)) };
   }
 
-  return roving || pressed ? { roving, keys, pressed, shrink } : null;
+  return roving || pressed || compare ? { roving, keys, pressed, shrink, compare } : null;
+}
+
+/**
+ * What the compare control says, in each state the probe drives it through. The component's own
+ * words, bound to it by `compare-arming-gate.test.mjs`, so a reworded sentence fails there, once,
+ * rather than in every combination of the browser run.
+ */
+export const COMPARE_SENTENCES = Object.freeze({
+  none: "Select two states to compare them.",
+  one: "One state selected. Select a second to compare.",
+  armed: "Two states of one work selected.",
+  three: "A comparison is between two states. Deselect one before comparing.",
+  works:
+    "These are two different works. Two unrelated instruments are not states of each other, " +
+    "and their differences are not legislation.",
+});
+
+/**
+ * The rows the compare probe presses Space on, per page, by title.
+ *
+ * Declared rather than discovered, because which rows share a work is the thing under test: a
+ * probe that picked "two rows of one work" by reading lex_ids off the page would find none on a
+ * page where arming is unreachable, and pass by driving nothing. The titles are guarded instead:
+ * each must name exactly one row, or the probe reports the fixture changed under it.
+ *
+ * `first` and `sameWork` are two states of one work; `otherWork` is a different work. The preview
+ * also carries "article 2", which shares `first`'s lex_id because two provisions of one state
+ * share it. It is never driven: selecting either of those rows marks both, which is selection
+ * keyed by state rather than by row, and re-keying it is search-hit identity, not this probe.
+ */
+export const COMPARE_ROWS = Object.freeze({
+  "search-react.html": Object.freeze({
+    first: "Acte synthetique de demonstration, article 1",
+    sameWork: "Acte synthetique de demonstration, article 1, etat anterieur",
+    otherWork: "Annexe synthetique de demonstration",
+  }),
+});
+
+/**
+ * The drive, in order. Step 0 is the page at load; every later step is one Space press on the
+ * named row. Selection toggles, so the walk goes up to three rows and back down to none.
+ */
+export const COMPARE_STEPS = Object.freeze([
+  { press: null, label: "at load", expect: "none", selected: [] },
+  { press: "first", label: "after Space on one state", expect: "one", selected: ["first"] },
+  {
+    press: "sameWork",
+    label: "with two states of one work selected",
+    expect: "armed",
+    selected: ["first", "sameWork"],
+  },
+  {
+    press: "otherWork",
+    label: "with three rows selected",
+    expect: "three",
+    selected: ["first", "sameWork", "otherWork"],
+  },
+  {
+    press: "sameWork",
+    label: "with rows of two different works selected",
+    expect: "works",
+    selected: ["first", "otherWork"],
+  },
+  { press: "otherWork", label: "after deselecting down to one state", expect: "one", selected: ["first"] },
+  { press: "first", label: "after deselecting every row", expect: "none", selected: [] },
+]);
+
+// Why an armed control is wrong in each state that must not arm. Said in the failure so the
+// reader of the log does not have to know the rule to know which half of it broke.
+const NOT_ARMED_BECAUSE = Object.freeze({
+  none: "nothing is selected",
+  one: "one state is not a comparison",
+  three: "a comparison is between two states",
+  works: "two unrelated instruments are not states of each other",
+});
+
+/**
+ * An in-page read of the compare control and the declared rows.
+ *
+ * The control is the one in the same results section as the listbox, and its sentence is read
+ * through the button's `aria-describedby` rather than by class, so a sentence the button no longer
+ * points at is a sentence nobody hears. `matches` counts the rows carrying each declared title.
+ */
+function compareSnapshot(rows) {
+  return `(() => {
+    const rows = ${JSON.stringify(rows)};
+    const box = document.querySelector('[role=listbox]');
+    const section = box ? box.closest('section.results') : null;
+    const control = (section ?? document).querySelector('.compare-arming');
+    if (!control) return null;
+    const button = control.querySelector('button');
+    const described = button ? document.getElementById(button.getAttribute('aria-describedby')) : null;
+    const options = box ? [...box.querySelectorAll('[role=option]')] : [];
+    const titled = (title) => options.filter((option) => {
+      const own = option.querySelector('.results-title');
+      return own !== null && own.textContent.trim() === title;
+    });
+    const selected = {};
+    const matches = {};
+    for (const [key, title] of Object.entries(rows)) {
+      const found = titled(title);
+      matches[key] = found.length;
+      selected[key] = found.length === 1 ? found[0].getAttribute('aria-selected') : null;
+    }
+    return {
+      sentence: described ? described.textContent.trim() : null,
+      ariaDisabled: button ? button.getAttribute('aria-disabled') : null,
+      disabledAttr: button ? button.hasAttribute('disabled') : false,
+      selected,
+      matches,
+    };
+  })()`;
+}
+
+/**
+ * The compare-arming verdict, as failure sentences. Pure, so the node tests hold every sentence
+ * without a browser.
+ *
+ * Per step, at most one line about the control itself -- whether it armed, else what it said --
+ * because an armed control saying the armed sentence is one defect, not two. Row state and the
+ * `disabled` attribute are separate claims and get their own lines.
+ *
+ * @param {string} where  the page, viewport and scheme, as every other failure names them
+ * @param {object|null} compare  what `drivenBehaviour` measured as `compare`
+ */
+export function compareFailures(where, compare) {
+  if (compare === null) return [];
+  if (compare.undeclared) {
+    return [
+      `${where}: a compare control is on this page and the compare probe declares no rows for it, ` +
+        "so arming was never driven",
+    ];
+  }
+  const { rows } = compare;
+  if (compare.drift) {
+    return Object.entries(compare.drift).map(
+      ([key, count]) =>
+        `${where}: the compare probe drives the row "${rows[key]}" and the page shows ${count} ` +
+        "row(s) with that title; the fixture it was written for has changed, so arming was not driven",
+    );
+  }
+  const failures = [];
+  COMPARE_STEPS.forEach((step, index) => {
+    const seen = compare.steps?.[index] ?? null;
+    if (seen === null) {
+      failures.push(
+        `${where}: ${step.label}, the compare control was gone; a control that disappears while ` +
+          "rows are selected cannot say why they cannot be compared",
+      );
+      return;
+    }
+    const d = seen.ariaDisabled;
+    const s = seen.sentence;
+    const armed = d === "false";
+    if (step.expect === "armed" && !armed) {
+      failures.push(
+        `${where}: ${step.label} ("${rows.first}", "${rows.sameWork}"), Compare stayed ` +
+          `aria-disabled="${d}" and said "${s}"; the armed state is unreachable`,
+      );
+    } else if (step.expect !== "armed" && armed) {
+      failures.push(
+        `${where}: ${step.label}, Compare was armed (aria-disabled="${d}") and said "${s}"; ` +
+          NOT_ARMED_BECAUSE[step.expect],
+      );
+    } else if (s !== COMPARE_SENTENCES[step.expect]) {
+      failures.push(
+        `${where}: ${step.label}, the compare control said "${s}", not "${COMPARE_SENTENCES[step.expect]}"`,
+      );
+    }
+    for (const key of Object.keys(rows)) {
+      const want = step.selected.includes(key) ? "true" : "false";
+      const value = seen.selected?.[key] ?? null;
+      if (value !== want) {
+        failures.push(
+          `${where}: ${step.label}, row "${rows[key]}" is aria-selected="${value}", not "${want}"; ` +
+            "the list does not say which rows are armed",
+        );
+      }
+    }
+    if (seen.disabledAttr) {
+      failures.push(
+        `${where}: ${step.label}, the Compare button carries the disabled attribute, so it leaves ` +
+          "the Tab order and the reason it cannot be pressed is out of reach",
+      );
+    }
+  });
+  return failures;
 }
 
 /**
@@ -1626,7 +1856,7 @@ async function main() {
         // served in. Run earlier it silently changed what every later check measured -- the tab
         // walk reported 6 stops on a page with 15 focusable elements, which was my probe's own
         // click and not a defect in the page.
-        const behaviour = await drivenBehaviour(session, sessionId);
+        const behaviour = await drivenBehaviour(session, sessionId, COMPARE_ROWS[page] ?? null);
         // The behavioural half. The two checks above still earn their place -- they catch malformed
         // markup an inert page would also produce -- but on their own they pass a page whose
         // handlers are dead, so neither is allowed to stand as the evidence for its clause.
@@ -1697,6 +1927,9 @@ async function main() {
             }
           }
         }
+        // Compare arming. Unlike the listbox lines above, it names the scheme like every newer
+        // failure does, so a mutation expectation can hold the whole sentence.
+        failures.push(...compareFailures(`${page} @${viewport.label}/${scheme}`, behaviour?.compare ?? null));
         // S5-A10, driven after the listbox probe: it opens and closes a disclosure, and pages with
         // unofficial renderings carry no listbox, so neither probe changes what the other measures.
         failures.push(...unofficialFailures(
