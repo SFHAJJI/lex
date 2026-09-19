@@ -413,6 +413,71 @@ public sealed class V3CorpusAsOfMountTests
         Assert.AreEqual("as_of", envelope.OperationId);
     }
 
+    [TestMethod]
+    public async Task ArticleDatesAndValidityConflictsAreServedFromThePublisherColumnsUnresolved()
+    {
+        var fixture = await MountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        var laterDate = Shift(fixture.ApplicabilityDate, 400);
+        await fixture.AddStateAsync(laterDate, "later");
+        var blanked = await fixture.NullOneArticleDateAsync();
+        var stored = fixture.ArticleDatesOfOwnState();
+        Assert.IsGreaterThan(1, stored.Count, "The retained fixture must hold several articles.");
+        Assert.IsTrue(stored.Values.Any(date => date is not null && date != fixture.ApplicabilityDate),
+            "The retained fixture must exhibit at least one publisher-stated conflict.");
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+
+        // The fixture's own state: every article carries the publisher's own date, the flag is true
+        // exactly where a stated date differs from the state date, a blank date is never a conflict.
+        var own = await AsOfAsync(mount, $"/lu-legilux/{fixture.WorkKey}", fixture.ApplicabilityDate);
+        var ownState = own.Result!.Value.GetProperty("states").EnumerateArray().Single();
+        var articles = ownState.GetProperty("articles").EnumerateArray().ToArray();
+        Assert.HasCount(stored.Count, articles);
+        var expectedConflicts = 0;
+        foreach (var article in articles)
+        {
+            var identity = article.GetProperty("article_identity_sha256").GetString()!;
+            var storedDate = stored[identity];
+            var served = article.GetProperty("article_valid_from");
+            Assert.AreEqual(storedDate, served.ValueKind == JsonValueKind.Null ? null : served.GetString(), identity);
+            var expected = storedDate is not null && storedDate != fixture.ApplicabilityDate;
+            Assert.AreEqual(expected, article.GetProperty("validity_conflict").GetBoolean(), identity);
+            if (expected) expectedConflicts++;
+        }
+        Assert.IsGreaterThan(0, expectedConflicts);
+        Assert.AreEqual(expectedConflicts, ownState.GetProperty("validity_conflict_count").GetInt32());
+        Assert.IsNull(stored[blanked]);
+        Assert.IsFalse(articles.Single(article =>
+                article.GetProperty("article_identity_sha256").GetString() == blanked)
+            .GetProperty("validity_conflict").GetBoolean(), "A date the publisher did not state is not a conflict.");
+        StringAssert.Contains(ownState.GetProperty("validity_conflict_rule").GetString(), "differs from the state's applicability_date");
+
+        // The later state was inserted with every article dated on the state date: no conflict.
+        var later = await AsOfAsync(mount, $"/lu-legilux/{fixture.WorkKey}", laterDate);
+        var laterState = later.Result!.Value.GetProperty("states").EnumerateArray().Single();
+        Assert.AreEqual(0, laterState.GetProperty("validity_conflict_count").GetInt32());
+        Assert.IsTrue(laterState.GetProperty("articles").EnumerateArray()
+            .All(article => !article.GetProperty("validity_conflict").GetBoolean() &&
+                            article.GetProperty("article_valid_from").GetString() == laterDate));
+
+        // The hash-pinned permalink of the same state carries the identical values.
+        var pinned = await ResolveAsync(mount, fixture.Permalink);
+        Assert.AreEqual(V3Verdicts.Answer, pinned.Verdict);
+        Assert.AreEqual(expectedConflicts, pinned.Result!.Value.GetProperty("validity_conflict_count").GetInt32());
+        CollectionAssert.AreEqual(
+            articles.Select(static article => article.GetRawText()).ToArray(),
+            pinned.Result.Value.GetProperty("articles").EnumerateArray().Select(static article => article.GetRawText()).ToArray());
+    }
+
+    private static async Task<V3Envelope> ResolveAsync(V3CorpusMount mount, string identifier)
+    {
+        var body = JsonSerializer.Serialize(new { operation_id = "resolve", parameters = new { identifier } });
+        var context = await PostAsync(mount, V3ResolveRestRoute.RawTarget, body);
+        Assert.AreEqual(StatusCodes.Status200OK, context.Response.StatusCode);
+        return V3EnvelopeJson.ParseAndVerify(ResponseBytes(context), V3OperationRegistry.Reviewed);
+    }
+
     private static string Shift(string date, int days) =>
         DateOnly.ParseExact(date, "yyyy-MM-dd", CultureInfo.InvariantCulture)
             .AddDays(days).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);

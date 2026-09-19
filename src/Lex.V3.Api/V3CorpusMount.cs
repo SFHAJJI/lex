@@ -163,6 +163,7 @@ internal sealed class V3CorpusMount : IDisposable
                     new V3PlatformOperationRefusal(request, "pinned_digest_mismatch", mismatch.RootElement));
             }
 
+            var pinnedDates = ArticleDates(current);
             using var pinnedResult = JsonSerializer.SerializeToDocument(new
             {
                 requested_identifier = identifier,
@@ -175,6 +176,9 @@ internal sealed class V3CorpusMount : IDisposable
                 publisher_legal_resource_iri = current.PublisherLegalResourceIri,
                 language = current.Language,
                 article_identities = current.ArticleIdentities,
+                articles = pinnedDates.Articles,
+                validity_conflict_count = pinnedDates.ConflictCount,
+                validity_conflict_rule = ValidityConflictRule,
                 stable_coordinate = stableCoordinate,
                 permalink = currentUrl,
                 corpus_sha256 = _corpus.ArtifactRef.Sha256,
@@ -432,6 +436,7 @@ internal sealed class V3CorpusMount : IDisposable
                 .Order(StringComparer.Ordinal)
                 .FirstOrDefault();
             var state = selected[0];
+            var dates = ArticleDates(state);
             served.Add(new
             {
                 language = state.Language,
@@ -442,6 +447,9 @@ internal sealed class V3CorpusMount : IDisposable
                 publisher_work_iri = state.PublisherWorkIri,
                 publisher_legal_resource_iri = state.PublisherLegalResourceIri,
                 article_identities = state.ArticleIdentities,
+                articles = dates.Articles,
+                validity_conflict_count = dates.ConflictCount,
+                validity_conflict_rule = ValidityConflictRule,
                 stable_coordinate = StableCoordinate(state),
                 permalink = StateUrl(state),
             });
@@ -564,6 +572,40 @@ internal sealed class V3CorpusMount : IDisposable
 
         workKey = segments[1];
         return true;
+    }
+
+    /// <summary>
+    /// The pack's per-state rule (B34-L0143: the conflict is computed against the version date). It is
+    /// not V2's rule, which compared the article date with the state where that wording run began and
+    /// which this index cannot reconstruct; the rule text travels with every answer so a consumer can
+    /// tell the two apart. Both dates are the publisher's; neither is resolved or preferred.
+    /// </summary>
+    private const string ValidityConflictRule =
+        "article_valid_from is the publisher's article-level applicability date; validity_conflict is true when it is stated and differs from the state's applicability_date";
+
+    private (IReadOnlyList<object> Articles, int ConflictCount) ArticleDates(LuxembourgIndexResolvedState state)
+    {
+        var dates = _reader!.ResolveArticleDates(state.ArticleIdentities);
+        var conflicts = 0;
+        var articles = new List<object>(dates.Count);
+        foreach (var date in dates)
+        {
+            var conflict = date.ApplicabilityDate is not null &&
+                           !string.Equals(date.ApplicabilityDate, state.ApplicabilityDate, StringComparison.Ordinal);
+            if (conflict)
+            {
+                conflicts++;
+            }
+
+            articles.Add(new
+            {
+                article_identity_sha256 = date.ArticleIdentitySha256,
+                article_valid_from = date.ApplicabilityDate,
+                validity_conflict = conflict,
+            });
+        }
+
+        return (articles, conflicts);
     }
 
     private static string StableCoordinate(LuxembourgIndexResolvedState state) =>
