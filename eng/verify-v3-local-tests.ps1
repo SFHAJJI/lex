@@ -32,6 +32,12 @@ $hasExpectedIngestSkipped = $PSBoundParameters.ContainsKey('ExpectedIngestSkippe
 $hasExpectedContractsSkipped = $PSBoundParameters.ContainsKey('ExpectedContractsSkipped')
 $hasAuthorizedPublisherRun = $PSBoundParameters.ContainsKey('AuthorizedPublisherRun')
 
+# Git prints paths as UTF-8 bytes. Decoding them with the host's console encoding is right in an
+# interactive pwsh and wrong on a host whose console is the OEM code page (a pwsh started through WMI,
+# for one), where a non-ASCII path decodes to a name that is not on disk and the recompile check would
+# skip its project silently. One encoding for every host.
+[Console]::OutputEncoding = [Text.Encoding]::UTF8
+
 function Invoke-Git {
     param([Parameter(Mandatory)][string[]]$Arguments)
 
