@@ -169,10 +169,25 @@ internal sealed class V3PlatformHost
         _schemas = schemas ?? throw new ArgumentNullException(nameof(schemas));
     }
 
+    public Task WriteRestSuccessAsync(
+        HttpResponse response,
+        ReadOnlyMemory<byte> requestUtf8,
+        string requestReference,
+        V3EnvelopeContext context,
+        Func<V3PlatformOperationRequest, V3PlatformOperationResult> execute,
+        CancellationToken cancellationToken) =>
+        WriteRestSuccessAsync(response, requestUtf8, requestReference, null, context, execute, cancellationToken);
+
+    /// <summary>
+    /// REST projection for a route that binds one operation. The body is validated against the bound
+    /// operation's request document, so a body naming any other operation fails that document's
+    /// <c>operation_id</c> constant and is refused as <c>request_schema_invalid</c> below the envelope.
+    /// </summary>
     public async Task WriteRestSuccessAsync(
         HttpResponse response,
         ReadOnlyMemory<byte> requestUtf8,
         string requestReference,
+        string? boundOperationId,
         V3EnvelopeContext context,
         Func<V3PlatformOperationRequest, V3PlatformOperationResult> execute,
         CancellationToken cancellationToken)
@@ -181,6 +196,7 @@ internal sealed class V3PlatformHost
         var bytes = ExecuteSuccess(
             requestUtf8,
             requestReference,
+            boundOperationId,
             context,
             execute,
             V3EnvelopeProjectionKind.Rest,
@@ -193,10 +209,19 @@ internal sealed class V3PlatformHost
             cancellationToken).ConfigureAwait(false);
     }
 
+    public Task WriteRestOutcomeAsync(
+        HttpResponse response,
+        ReadOnlyMemory<byte> requestUtf8,
+        string requestReference,
+        Func<V3PlatformOperationRequest, V3PlatformOperationOutcome> execute,
+        CancellationToken cancellationToken) =>
+        WriteRestOutcomeAsync(response, requestUtf8, requestReference, null, execute, cancellationToken);
+
     public async Task WriteRestOutcomeAsync(
         HttpResponse response,
         ReadOnlyMemory<byte> requestUtf8,
         string requestReference,
+        string? boundOperationId,
         Func<V3PlatformOperationRequest, V3PlatformOperationOutcome> execute,
         CancellationToken cancellationToken)
     {
@@ -204,6 +229,7 @@ internal sealed class V3PlatformHost
         var bytes = ExecuteOutcome(
             requestUtf8,
             requestReference,
+            boundOperationId,
             execute,
             V3EnvelopeProjectionKind.Rest,
             cancellationToken);
@@ -225,6 +251,7 @@ internal sealed class V3PlatformHost
         var bytes = ExecuteSuccess(
             requestUtf8,
             requestReference,
+            null,
             context,
             execute,
             V3EnvelopeProjectionKind.Mcp,
@@ -232,10 +259,20 @@ internal sealed class V3PlatformHost
         return Task.FromResult(new V3McpToolResult(bytes));
     }
 
+    public Task WriteRestRefusalAsync(
+        HttpResponse response,
+        ReadOnlyMemory<byte> requestUtf8,
+        string requestReference,
+        V3EnvelopeContext context,
+        Func<V3PlatformOperationRequest, V3PlatformOperationRefusal> execute,
+        CancellationToken cancellationToken) =>
+        WriteRestRefusalAsync(response, requestUtf8, requestReference, null, context, execute, cancellationToken);
+
     public async Task WriteRestRefusalAsync(
         HttpResponse response,
         ReadOnlyMemory<byte> requestUtf8,
         string requestReference,
+        string? boundOperationId,
         V3EnvelopeContext context,
         Func<V3PlatformOperationRequest, V3PlatformOperationRefusal> execute,
         CancellationToken cancellationToken)
@@ -244,6 +281,7 @@ internal sealed class V3PlatformHost
         var bytes = ExecuteRefusal(
             requestUtf8,
             requestReference,
+            boundOperationId,
             context,
             execute,
             V3EnvelopeProjectionKind.Rest,
@@ -266,6 +304,7 @@ internal sealed class V3PlatformHost
         var bytes = ExecuteRefusal(
             requestUtf8,
             requestReference,
+            null,
             context,
             execute,
             V3EnvelopeProjectionKind.Mcp,
@@ -276,6 +315,7 @@ internal sealed class V3PlatformHost
     private byte[] ExecuteSuccess(
         ReadOnlyMemory<byte> requestUtf8,
         string requestReference,
+        string? boundOperationId,
         V3EnvelopeContext context,
         Func<V3PlatformOperationRequest, V3PlatformOperationResult> execute,
         V3EnvelopeProjectionKind projection,
@@ -285,20 +325,21 @@ internal sealed class V3PlatformHost
         ArgumentNullException.ThrowIfNull(execute);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var request = ParseRequest(requestUtf8);
+        var request = ParseRequest(requestUtf8, boundOperationId);
         return ProjectSuccess(request, requestReference, context, execute(request), projection, cancellationToken);
     }
 
     private byte[] ExecuteOutcome(
         ReadOnlyMemory<byte> requestUtf8,
         string requestReference,
+        string? boundOperationId,
         Func<V3PlatformOperationRequest, V3PlatformOperationOutcome> execute,
         V3EnvelopeProjectionKind projection,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(execute);
         cancellationToken.ThrowIfCancellationRequested();
-        var request = ParseRequest(requestUtf8);
+        var request = ParseRequest(requestUtf8, boundOperationId);
         var outcome = execute(request) ?? throw new InvalidOperationException("The operation returned no outcome.");
         return outcome.Result is not null
             ? ProjectSuccess(
@@ -368,6 +409,7 @@ internal sealed class V3PlatformHost
     private byte[] ExecuteRefusal(
         ReadOnlyMemory<byte> requestUtf8,
         string requestReference,
+        string? boundOperationId,
         V3EnvelopeContext context,
         Func<V3PlatformOperationRequest, V3PlatformOperationRefusal> execute,
         V3EnvelopeProjectionKind projection,
@@ -377,7 +419,7 @@ internal sealed class V3PlatformHost
         ArgumentNullException.ThrowIfNull(execute);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var request = ParseRequest(requestUtf8);
+        var request = ParseRequest(requestUtf8, boundOperationId);
         return ProjectRefusal(request, requestReference, context, execute(request), projection, cancellationToken);
     }
 
@@ -421,7 +463,7 @@ internal sealed class V3PlatformHost
         return V3EnvelopeJson.Project(envelope, _registry, projection);
     }
 
-    private V3PlatformOperationRequest ParseRequest(ReadOnlyMemory<byte> utf8)
+    private V3PlatformOperationRequest ParseRequest(ReadOnlyMemory<byte> utf8, string? boundOperationId)
     {
         if (utf8.IsEmpty)
         {
@@ -484,6 +526,13 @@ internal sealed class V3PlatformHost
             throw new V3TransportFailureException(
                 V3TransportFailureKind.ParametersNotObject,
                 "Operation parameters must be an object.");
+        }
+
+        if (boundOperationId is not null)
+        {
+            // The route binds one operation; its request document decides, and its operation_id
+            // constant refuses a body that names any other declared operation.
+            operation = _registry.Operation(boundOperationId);
         }
 
         try
