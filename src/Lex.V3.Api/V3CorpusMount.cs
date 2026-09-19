@@ -503,11 +503,11 @@ internal sealed class V3CorpusMount : IDisposable
     /// through the publisher-dated states of one work, per language. One row per state that carries
     /// the anchor, in the reader's order; the states that do not carry it are listed as absent, so a
     /// lineage that begins after the work does is visible and never implied to be the whole history.
-    /// "The wording changed" is byte equality of the article's Text and Reference tokens (label and
-    /// target) between consecutive rows of one language and nothing looser: a changed apostrophe or a
-    /// retargeted reference is a new wording; a note or a modification marker is the publisher's
-    /// apparatus and is not; a paragraph break is not retained at ingest and so is not seen. The rule
-    /// travels with the answer. Nothing is derived: no end date, no "in force", no repeal, no diff text.
+    /// "The wording changed" is byte equality of the article's merged text and its references (label
+    /// and target) between consecutive rows of one language and nothing looser: a changed apostrophe
+    /// or a retargeted reference is a new wording; a note or a modification marker is the publisher's
+    /// apparatus and is not; a paragraph or inline-formatting boundary is not a word and is not seen.
+    /// The rule travels with the answer. Nothing is derived: no end date, no "in force", no repeal, no diff text.
     /// </summary>
     public V3PlatformOperationOutcome ArticleHistory(
         V3PlatformOperationRequest request,
@@ -631,7 +631,7 @@ internal sealed class V3CorpusMount : IDisposable
     }
 
     private const string WordingRule =
-        "wording_sha256 is the SHA-256 of a canonical JSON array of [kind, text, target] for the Text and Reference tokens of the article's stored token stream, in order (reference labels and targets included; note references, note bodies and modification markers excluded); wording_changed is true when it differs from the previous state of the same language, and any byte difference in those tokens counts; paragraph structure and whitespace-only nodes are not retained at ingest and are not compared; wording_runs counts the first state and every change per language; distinct_wordings counts distinct digests per language";
+        "wording_sha256 is the SHA-256 of a canonical JSON array of [kind, text, target] for the Text and Reference tokens of the article's stored token stream, in order, with consecutive text merged into one entry (reference labels and targets included; note references, note bodies and modification markers excluded); wording_changed is true when it differs from the previous state of the same language, and any byte difference in the merged text or in a reference counts; paragraph and inline-formatting boundaries and whitespace-only nodes are not compared; wording_runs counts the first state and every change per language; distinct_wordings counts distinct digests per language";
 
     /// <summary>
     /// The publisher ids of one state that share the longest non-empty common prefix with the
@@ -870,18 +870,18 @@ internal sealed class V3CorpusMount : IDisposable
     }
 
     /// <summary>
-    /// The pack's per-state rule (B34-L0143: the conflict is computed against the version date). It is
-    /// not V2's rule, which compared the article date with the state where that wording run began and
-    /// which this index cannot reconstruct; the rule text travels with every answer so a consumer can
-    /// tell the two apart. Both dates are the publisher's; neither is resolved or preferred.
-    /// </summary>
-    /// <summary>
     /// The one conflict rule (B34-L0143), used by every answer that carries an article date: a stated
     /// article date that differs from the state's date; a blank date is never a conflict.
     /// </summary>
     private static bool ValidityConflict(string? articleDate, string stateDate) =>
         articleDate is not null && !string.Equals(articleDate, stateDate, StringComparison.Ordinal);
 
+    /// <summary>
+    /// The pack's per-state rule (B34-L0143: the conflict is computed against the version date). It is
+    /// not V2's rule, which compared the article date with the state where that wording run began and
+    /// which this index cannot reconstruct; the rule text travels with every answer so a consumer can
+    /// tell the two apart. Both dates are the publisher's; neither is resolved or preferred.
+    /// </summary>
     private const string ValidityConflictRule =
         "article_valid_from is the publisher's article-level applicability date; validity_conflict is true when it is stated and differs from the state's applicability_date";
 

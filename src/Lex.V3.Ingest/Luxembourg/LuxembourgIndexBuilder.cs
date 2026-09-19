@@ -328,20 +328,7 @@ public static class LuxembourgIndexBuilder
                         LuxembourgAknLegalContentTokenKind.Text or
                         LuxembourgAknLegalContentTokenKind.Reference)
                     .Select(static token => token.Text)),
-                JsonSerializer.Serialize(article.Tokens.Select(static token => new
-                {
-                    kind = ContractWire.NameOf(token.Kind),
-                    text = token.Text,
-                    target = token.Target,
-                    marker = token.Marker,
-                    note_body = token.NoteBody?.Select(static nested => new
-                    {
-                        kind = ContractWire.NameOf(nested.Kind),
-                        text = nested.Text,
-                        target = nested.Target,
-                        marker = nested.Marker,
-                    }),
-                }))));
+                TokensJson(article.Tokens)));
         }
 
         articles = projected.OrderBy(static row => row.ArticleIdentitySha256, StringComparer.Ordinal).ToArray();
@@ -423,6 +410,26 @@ public static class LuxembourgIndexBuilder
         }
         return token;
     }
+
+    /// <summary>
+    /// The stored token stream of one article, exactly as the <c>articles.tokens_json</c> column
+    /// holds it. One function, so a test can digest what the index stores.
+    /// </summary>
+    internal static string TokensJson(IReadOnlyList<LuxembourgAknLegalContentToken> tokens) =>
+        JsonSerializer.Serialize(tokens.Select(static token => new
+        {
+            kind = ContractWire.NameOf(token.Kind),
+            text = token.Text,
+            target = token.Target,
+            marker = token.Marker,
+            note_body = token.NoteBody?.Select(static nested => new
+            {
+                kind = ContractWire.NameOf(nested.Kind),
+                text = nested.Text,
+                target = nested.Target,
+                marker = nested.Marker,
+            }),
+        }));
 
     private static string? ApplicabilityDate(string? value)
     {
@@ -1256,29 +1263,54 @@ public sealed class LuxembourgIndexReader : IDisposable
 
     /// <summary>
     /// The wording digest of one stored token stream: SHA-256 over the canonical JSON array of
-    /// <c>[kind, text, target]</c> for its Text and Reference tokens, in order. Notes and markers
-    /// are not words of the article and are left out.
+    /// <c>[kind, text, target]</c> for its Text and Reference tokens, in order, with consecutive
+    /// text merged into one entry first. The producer emits one text token per XML text node, so a
+    /// paragraph or inline-formatting boundary splits text without changing a word; merging makes the
+    /// digest blind to the boundary and to nothing else. Notes and markers are not words of the
+    /// article and are left out before merging.
     /// </summary>
     internal static string WordingSha256(string tokensJson)
     {
         using var stream = JsonDocument.Parse(tokensJson);
         var words = new List<string?[]>();
+        var pendingText = new StringBuilder();
+        var hasPendingText = false;
+        void FlushText()
+        {
+            if (hasPendingText)
+            {
+                words.Add(["text", pendingText.ToString(), null]);
+                pendingText.Clear();
+                hasPendingText = false;
+            }
+        }
+
         foreach (var token in stream.RootElement.EnumerateArray())
         {
             var kind = token.GetProperty("kind").GetString();
-            if (kind is not ("text" or "reference"))
+            var text = token.TryGetProperty("text", out var textValue) && textValue.ValueKind == JsonValueKind.String ? textValue.GetString() : null;
+            if (kind == "text")
+            {
+                pendingText.Append(text);
+                hasPendingText = true;
+                continue;
+            }
+
+            if (kind != "reference")
             {
                 continue;
             }
 
+            FlushText();
             words.Add(
             [
                 kind,
-                token.TryGetProperty("text", out var text) && text.ValueKind == JsonValueKind.String ? text.GetString() : null,
+                text,
                 token.TryGetProperty("target", out var target) && target.ValueKind == JsonValueKind.String ? target.GetString() : null,
             ]);
         }
 
+        FlushText();
         return Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(words)));
     }
 

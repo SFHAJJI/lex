@@ -138,6 +138,44 @@ public sealed class LuxembourgAknLegalContentProfileProducerTests
     }
 
     [TestMethod]
+    public async Task TheWordingDigestIgnoresContainerBoundariesAndSeesReferenceTargets()
+    {
+        // Reviewer probes P1, P3 and P2 on #687, through the real producer and the exact tokens_json
+        // the index stores: a paragraph split and inline formatting are not a change of wording; a
+        // reference retargeted under the same label is.
+        var oneParagraph = await DigestAsync("<p>les cas suivants : 1° le premier</p>", "p1a");
+        var twoParagraphs = await DigestAsync("<p>les cas suivants : </p><p>1° le premier</p>", "p1b");
+        Assert.AreEqual(oneParagraph, twoParagraphs, "P1: a paragraph break with the same characters");
+
+        var plain = await DigestAsync("<p>le premier alinéa</p>", "p3a");
+        var bold = await DigestAsync("<p>le <b>premier</b> alinéa</p>", "p3b");
+        Assert.AreEqual(plain, bold, "P3: one word set in bold");
+
+        var toN1 = await DigestAsync("<p>voir <ref href=\"/eli/etat/leg/loi/2001/01/01/n1\">la loi</ref></p>", "p2a");
+        var toN2 = await DigestAsync("<p>voir <ref href=\"/eli/etat/leg/loi/2002/02/02/n2\">la loi</ref></p>", "p2b");
+        Assert.AreNotEqual(toN1, toN2, "P2: the same label pointing at another act");
+
+        // A reference moved to another place among the same characters is a change: the text on
+        // either side of it is never merged across it (the two texts here concatenate to the same
+        // string, so only the position of the reference tells them apart).
+        var referenceBetween = await DigestAsync("<p>voir<ref href=\"/eli/etat/leg/loi/2001/01/01/n1\">la loi</ref>ensuite</p>", "p4a");
+        var referenceAfter = await DigestAsync("<p>voirensuite<ref href=\"/eli/etat/leg/loi/2001/01/01/n1\">la loi</ref></p>", "p4b");
+        Assert.AreNotEqual(referenceBetween, referenceAfter, "a reference moved among the same characters");
+
+        var otherWords = await DigestAsync("<p>les cas suivants : 1° le second</p>", "p1c");
+        Assert.AreNotEqual(oneParagraph, otherWords, "a changed word is a change");
+        Assert.AreNotEqual(plain, oneParagraph);
+    }
+
+    private static async Task<string> DigestAsync(string content, string key)
+    {
+        var result = await RunAsync(Akn("<article id=\"art_1\"><content>" + content + "</content></article>"), key);
+        var outcome = result.Outcomes.Single();
+        Assert.IsNotNull(outcome.Article, outcome.Detail);
+        return LuxembourgIndexReader.WordingSha256(LuxembourgIndexBuilder.TokensJson(outcome.Article.Tokens));
+    }
+
+    [TestMethod]
     public async Task PopulationHasOneOutcomePerInventoriedArticleInPublisherOrder()
     {
         var result = await RunAsync(Akn(

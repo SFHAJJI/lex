@@ -64,7 +64,8 @@ public sealed class V3CorpusArticleHistoryMountTests
             value.GetProperty("index_sha256").GetString(),
             "The digest of the index as mounted, which the added state changed.");
         StringAssert.Contains(value.GetProperty("wording_rule").GetString(), "stored token stream");
-        StringAssert.Contains(value.GetProperty("wording_rule").GetString(), "paragraph structure and whitespace-only nodes are not retained at ingest and are not compared");
+        StringAssert.Contains(value.GetProperty("wording_rule").GetString(), "with consecutive text merged into one entry");
+        StringAssert.Contains(value.GetProperty("wording_rule").GetString(), "paragraph and inline-formatting boundaries and whitespace-only nodes are not compared");
         StringAssert.Contains(value.GetProperty("wording_rule").GetString(), "reference labels and targets included; note references, note bodies and modification markers excluded");
         StringAssert.Contains(value.GetProperty("wording_rule").GetString(), "[kind, text, target]");
         StringAssert.Contains(value.GetProperty("validity_conflict_rule").GetString(), "differs from the state's applicability_date");
