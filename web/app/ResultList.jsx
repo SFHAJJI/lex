@@ -258,6 +258,13 @@ export function ResultList({ hits, relaxations, selected, onOpen, onToggleSelect
 
   const armed = new Set(selected.map((one) => one.lex_id));
 
+  // The tab stop has to sit on a row that exists. A filter can shorten the list under it -- the
+  // reader stands on the last of three rows and turns on a chip that leaves two -- and without
+  // this the stop points past the end, no row is tabbable, and Tab jumps over the whole listbox.
+  // The browser gate drives exactly that sequence. `focused` itself is left alone, so widening
+  // the filter again returns the stop to the row the reader last stood on.
+  const stop = Math.min(focused, hits.length - 1);
+
   return (
     <>
       <Interpretation relaxations={relaxations} />
@@ -295,7 +302,7 @@ export function ResultList({ hits, relaxations, selected, onOpen, onToggleSelect
               className="results-row"
               // Exactly one row is reachable by Tab, and nothing inside a row is focusable at
               // all. That is what makes the content after a long list reachable in one press.
-              tabIndex={index === focused ? 0 : -1}
+              tabIndex={index === stop ? 0 : -1}
               ref={(el) => {
                 rows.current[index] = el;
               }}
