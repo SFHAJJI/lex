@@ -15,6 +15,7 @@ const closed = (overrides = {}) => ({
   open: false,
   label: "◰ UNOFFICIAL Rendering in en",
   labelHidden: null,
+  ink: { pixels: 412, share: 0.22, width: 86, height: 21 },
   visible: false,
   shown: false,
   ...overrides,
@@ -75,24 +76,32 @@ test("a control that does not say UNOFFICIAL fails", async () => {
   assert.ok(failures.some((line) => /does not say UNOFFICIAL/.test(line)), JSON.stringify(failures));
 });
 
-test("a label in the markup that the page does not show fails, and names why", async () => {
+test("a label is judged by its pixels, and the named reason only explains", async () => {
   const unofficialFailures = await gate();
-  for (const why of [
-    "display, visibility or opacity hides it",
-    "its box is 0x0 px",
-    "its text colour is transparent",
-    "something else is on top of it, or it is clipped or off the page",
+  // No ink: fails, whatever the styles said, and carries the diagnosis when there is one.
+  for (const [ink, why] of [
+    [{ pixels: 0, share: 0, width: 86, height: 21 }, null],
+    [{ pixels: 0, share: 0, width: 86, height: 0 }, "its box is 86x0 px"],
+    [{ pixels: 1, share: 1, width: 1, height: 1 }, "its box is 1x1 px"],
+    [{ pixels: 4, share: 0.002, width: 86, height: 21 }, null],
+    [{ pixels: 40, share: 0.02, width: 120, height: 17 }, null],
   ]) {
-    const failures = unofficialFailures(WHERE, measured(1, { load: [closed({ labelHidden: why })] }), [false]);
-    assert.deepEqual(
-      failures,
-      [
-        `${WHERE}: the UNOFFICIAL label of unofficial rendering 1 of 1 is in the markup but not shown: ` +
-          `${why}; S5-A10 says clearly labelled unofficial`,
-      ],
-      why,
+    const failures = unofficialFailures(WHERE, measured(1, { load: [closed({ ink, labelHidden: why })] }), [false]);
+    assert.equal(failures.length, 1, JSON.stringify(failures));
+    assert.match(
+      failures[0],
+      new RegExp(`the UNOFFICIAL label of unofficial rendering 1 of 1 is not painted: ${ink.pixels} ink pixel\\(s\\)`),
     );
+    if (why) assert.ok(failures[0].includes(`(${why})`), failures[0]);
+    assert.ok(failures[0].endsWith("S5-A10 says clearly labelled unofficial"), failures[0]);
   }
+  // Ink enough to draw a word passes, even if a style check had a doubt.
+  const inked = unofficialFailures(
+    WHERE,
+    measured(1, { load: [closed({ labelHidden: "something else is on top of it, or it is clipped or off the page" })] }),
+    [false],
+  );
+  assert.deepEqual(inked, []);
 });
 
 test("the accessibility tree must hold one collapsed UNOFFICIAL control per rendering", async () => {
