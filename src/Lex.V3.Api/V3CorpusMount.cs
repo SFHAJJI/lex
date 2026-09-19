@@ -475,9 +475,10 @@ internal sealed class V3CorpusMount : IDisposable
             : states.Where(state => string.Equals(state.Language, requestedLanguage, StringComparison.Ordinal))
                 .ToArray();
         var rows = new List<object>(scope.Count);
+        var datesByIdentity = ArticleDateMap(scope);
         foreach (var state in scope)
         {
-            rows.Add(StateRow(state, NextDateInLanguage(scope, state)));
+            rows.Add(StateRow(state, NextDateInLanguage(scope, state), datesByIdentity));
         }
 
         using var result = JsonSerializer.SerializeToDocument(new
@@ -759,9 +760,13 @@ internal sealed class V3CorpusMount : IDisposable
     /// stable coordinate and the hash-pinned permalink. <paramref name="nextDate"/> is the next
     /// publisher-dated state in the same language, or <c>null</c>: never an inferred end.
     /// </summary>
-    private object StateRow(LuxembourgIndexResolvedState state, string? nextDate)
+    private object StateRow(LuxembourgIndexResolvedState state, string? nextDate) =>
+        StateRow(state, nextDate, ArticleDateMap([state]));
+
+    private static object StateRow(
+        LuxembourgIndexResolvedState state, string? nextDate, IReadOnlyDictionary<string, string?> datesByIdentity)
     {
-        var dates = ArticleDates(state);
+        var dates = ArticleDates(state, datesByIdentity);
         return new
         {
             language = state.Language,
@@ -828,8 +833,16 @@ internal sealed class V3CorpusMount : IDisposable
     private static bool IsLuxembourgShaped(string identifier) =>
         OfficialIdentifier.EliMintedBy(identifier) == PublisherId.LuLegilux ||
         TryParsePinnedPermalink(identifier, out _, out _, out _) ||
-        (Uri.TryCreate(identifier, UriKind.Absolute, out var uri) &&
-         uri.Host.EndsWith("legilux.public.lu", StringComparison.OrdinalIgnoreCase));
+        (Uri.TryCreate(identifier, UriKind.Absolute, out var uri) && IsLegiluxHost(uri.Host));
+
+    /// <summary>
+    /// The publisher's host or one of its subdomains, on a dot boundary: <c>legilux.public.lu</c> and
+    /// <c>data.legilux.public.lu</c> are the publisher; <c>notlegilux.public.lu</c> is not (the rule
+    /// #678 settled for <c>europa.eu</c>).
+    /// </summary>
+    private static bool IsLegiluxHost(string host) =>
+        string.Equals(host, "legilux.public.lu", StringComparison.OrdinalIgnoreCase) ||
+        host.EndsWith(".legilux.public.lu", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// The stable work coordinate <c>/lu-legilux/{work_key}</c>, on this origin or as a bare path.
@@ -885,14 +898,31 @@ internal sealed class V3CorpusMount : IDisposable
     private const string ValidityConflictRule =
         "article_valid_from is the publisher's article-level applicability date; validity_conflict is true when it is stated and differs from the state's applicability_date";
 
-    private (IReadOnlyList<object> Articles, int ConflictCount) ArticleDates(LuxembourgIndexResolvedState state)
+    private (IReadOnlyList<object> Articles, int ConflictCount) ArticleDates(LuxembourgIndexResolvedState state) =>
+        ArticleDates(state, ArticleDateMap([state]));
+
+    /// <summary>
+    /// The publisher's article-level dates of every article of the given states, read in one query
+    /// (#685 remark 2: one round trip per answer, not per state). An identity the index does not hold
+    /// maps to <c>null</c>, as the reader reports it.
+    /// </summary>
+    private IReadOnlyDictionary<string, string?> ArticleDateMap(IReadOnlyList<LuxembourgIndexResolvedState> states)
     {
-        var dates = _reader!.ResolveArticleDates(state.ArticleIdentities);
+        var identities = states.SelectMany(static state => state.ArticleIdentities)
+            .Distinct(StringComparer.Ordinal).ToArray();
+        return _reader!.ResolveArticleDates(identities)
+            .ToDictionary(static date => date.ArticleIdentitySha256, static date => date.ApplicabilityDate, StringComparer.Ordinal);
+    }
+
+    private static (IReadOnlyList<object> Articles, int ConflictCount) ArticleDates(
+        LuxembourgIndexResolvedState state, IReadOnlyDictionary<string, string?> datesByIdentity)
+    {
         var conflicts = 0;
-        var articles = new List<object>(dates.Count);
-        foreach (var date in dates)
+        var articles = new List<object>(state.ArticleIdentities.Count);
+        foreach (var identity in state.ArticleIdentities)
         {
-            var conflict = ValidityConflict(date.ApplicabilityDate, state.ApplicabilityDate);
+            var date = datesByIdentity.GetValueOrDefault(identity);
+            var conflict = ValidityConflict(date, state.ApplicabilityDate);
             if (conflict)
             {
                 conflicts++;
@@ -900,8 +930,8 @@ internal sealed class V3CorpusMount : IDisposable
 
             articles.Add(new
             {
-                article_identity_sha256 = date.ArticleIdentitySha256,
-                article_valid_from = date.ApplicabilityDate,
+                article_identity_sha256 = identity,
+                article_valid_from = date,
                 validity_conflict = conflict,
             });
         }
