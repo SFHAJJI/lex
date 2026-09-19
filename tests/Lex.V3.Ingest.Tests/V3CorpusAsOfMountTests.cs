@@ -140,6 +140,9 @@ public sealed class V3CorpusAsOfMountTests
         var english = await AsOfAsync(mount, $"/lu-legilux/{fixture.WorkKey}", laterDate, "eng");
         Assert.AreEqual(V3Verdicts.Refuse, english.Verdict);
         Assert.AreEqual("language_not_available", english.Refusal!.Code);
+        Assert.AreEqual(PublisherId.LuLegilux, english.Context.Publisher);
+        Assert.AreEqual("lu", english.Context.Jurisdiction);
+        Assert.AreEqual(TimelineSemantics.PublisherApplicability, english.Context.TimelineSemantics);
         Assert.AreEqual("eng", english.Refusal.HelpfulPayload.GetProperty("requested_language").GetString());
         CollectionAssert.AreEqual(new[] { "deu", "fra" },
             english.Refusal.HelpfulPayload.GetProperty("available_languages").EnumerateArray()
@@ -159,6 +162,9 @@ public sealed class V3CorpusAsOfMountTests
 
         Assert.AreEqual(V3Verdicts.Refuse, envelope.Verdict);
         Assert.AreEqual("ambiguous_version", envelope.Refusal!.Code);
+        Assert.AreEqual(PublisherId.LuLegilux, envelope.Context.Publisher);
+        Assert.AreEqual("lu", envelope.Context.Jurisdiction);
+        Assert.AreEqual(TimelineSemantics.PublisherApplicability, envelope.Context.TimelineSemantics);
         Assert.AreEqual(fixture.ApplicabilityDate,
             envelope.Refusal.HelpfulPayload.GetProperty("requested_date").GetString());
         CollectionAssert.AreEquivalent(
@@ -195,6 +201,47 @@ public sealed class V3CorpusAsOfMountTests
             Assert.AreEqual(fixture.StateSha256,
                 envelope.Result!.Value.GetProperty("states").EnumerateArray().Single()
                     .GetProperty("state_sha256").GetString());
+        }
+
+        // Only this origin over https spells the coordinate; another host, or http, is a foreign
+        // address that names nothing here, however familiar its path looks.
+        foreach (var foreign in new[]
+                 {
+                     $"https://any-host.example/lu-legilux/{fixture.WorkKey}",
+                     $"http://law.soufien.lu/lu-legilux/{fixture.WorkKey}",
+                     $"https://law.soufien.lu:8443/lu-legilux/{fixture.WorkKey}",
+                     $"https://user@law.soufien.lu/lu-legilux/{fixture.WorkKey}",
+                     $"https://law.soufien.lu/lu-legilux/{fixture.WorkKey}?x=1",
+                 })
+        {
+            var envelope = await AsOfAsync(mount, foreign, fixture.ApplicabilityDate);
+            Assert.AreEqual(V3Verdicts.Refuse, envelope.Verdict, foreign);
+            Assert.AreEqual("identifier_unknown", envelope.Refusal!.Code, foreign);
+        }
+    }
+
+    [TestMethod]
+    public async Task ARouteWithAQueryStringIsStillTheSameRoute()
+    {
+        var fixture = await MountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+        var asOfBody = "{\"operation_id\":\"as_of\",\"parameters\":{\"identifier\":\"/lu-legilux/"
+            + fixture.WorkKey + "\",\"date\":\"" + fixture.ApplicabilityDate + "\"}}";
+        var resolveBody = "{\"operation_id\":\"resolve\",\"parameters\":{\"identifier\":"
+            + JsonSerializer.Serialize(fixture.ExpressionIri) + "}}";
+
+        foreach (var (rawTarget, body) in new[]
+                 {
+                     (AsOfRawTarget + "?x=1", asOfBody),
+                     (V3ResolveRestRoute.RawTarget + "?operation=resolve", resolveBody),
+                 })
+        {
+            var context = await PostAsync(mount, rawTarget, body);
+            Assert.AreEqual(StatusCodes.Status200OK, context.Response.StatusCode, rawTarget);
+            var envelope = V3EnvelopeJson.ParseAndVerify(ResponseBytes(context), V3OperationRegistry.Reviewed);
+            Assert.AreEqual(V3Verdicts.Answer, envelope.Verdict, rawTarget);
         }
     }
 
