@@ -47,6 +47,15 @@ public sealed record LuxembourgIndexResolvedState(
     IReadOnlyList<string> RuleProfileSha256s,
     IReadOnlyList<string> ArticleIdentities);
 
+/// <summary>
+/// One article's publisher-stated applicability date, or <c>null</c> where the publisher stated none
+/// for that article. Read from the article-level <c>scl:dateApplicability</c> the inventory retained;
+/// never derived from the state.
+/// </summary>
+public sealed record LuxembourgIndexArticleDate(
+    string ArticleIdentitySha256,
+    string? ApplicabilityDate);
+
 public sealed record LuxembourgIndexResolvedWork(
     string WorkIdentifier,
     IReadOnlyList<string> ExpressionIris,
@@ -1146,6 +1155,42 @@ public sealed class LuxembourgIndexReader : IDisposable
                 """;
             command.Parameters.AddWithValue("$identifier", workIdentifier);
             return ReadResolvedStates(command);
+        }
+    }
+
+    /// <summary>
+    /// The publisher's article-level applicability date for each of the given article identities, in
+    /// the order given. An identity the index does not hold is reported with a <c>null</c> date; the
+    /// caller decides whether that is a defect. Nothing is compared here.
+    /// </summary>
+    public IReadOnlyList<LuxembourgIndexArticleDate> ResolveArticleDates(IReadOnlyList<string> articleIdentities)
+    {
+        ArgumentNullException.ThrowIfNull(articleIdentities);
+        if (articleIdentities.Count == 0)
+        {
+            return Array.Empty<LuxembourgIndexArticleDate>();
+        }
+
+        lock (_gate)
+        {
+            using var command = _connection.CreateCommand();
+            command.CommandText = """
+                SELECT article_identity_sha256, applicability_date
+                FROM articles
+                WHERE article_identity_sha256 IN (SELECT value FROM json_each($identities))
+                """;
+            command.Parameters.AddWithValue("$identities", JsonSerializer.Serialize(articleIdentities));
+            using var reader = command.ExecuteReader();
+            var dates = new Dictionary<string, string?>(StringComparer.Ordinal);
+            while (reader.Read())
+            {
+                dates[reader.GetString(0)] = reader.IsDBNull(1) ? null : reader.GetString(1);
+            }
+
+            return Array.AsReadOnly(articleIdentities
+                .Select(identity => new LuxembourgIndexArticleDate(
+                    identity, dates.TryGetValue(identity, out var date) ? date : null))
+                .ToArray());
         }
     }
 
