@@ -202,6 +202,16 @@ const MUTATIONS = [
     },
   },
   {
+    // A summary with nothing to say. The accessible-name check listed the role as "disclosure
+    // triangle" while Chrome reports `DisclosureTriangle`, so no summary was ever held to having
+    // a name. The expected sentence names the role, so only the corrected spelling can match it.
+    name: "a summary emptied of its name",
+    expect: /interactive node\(s\) with no accessible name: DisclosureTriangle/i,
+    async apply(root) {
+      await replaceOnce(join(root, "state-success.html"), /<summary>[\s\S]*?<\/summary>/, "<summary></summary>");
+    },
+  },
+  {
     name: "a toggle whose pressed state is not a boolean",
     expect: /aria-pressed="[^"]*" is not a boolean/i,
     async apply(root) {

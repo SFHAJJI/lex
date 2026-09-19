@@ -428,8 +428,12 @@ const PROBE = `(() => {
       .filter((href) => href && href.startsWith('/')),
   )];
 
+  // The content of a closed disclosure is not rendered, so Tab never reaches it: it is not a
+  // focusable element of the page as served. Its summary is. (S5-A10 puts each unofficial
+  // rendering, with its link to the authentic text, inside a closed disclosure.)
   const focusable = [...document.querySelectorAll(
-    'a[href],button,input,select,textarea,summary,[tabindex]:not([tabindex="-1"])')];
+    'a[href],button,input,select,textarea,summary,[tabindex]:not([tabindex="-1"])')]
+    .filter((el) => !el.closest('details:not([open]) > :not(summary)'));
   const headingEls = [...document.querySelectorAll('h1,h2,h3,h4,h5,h6')];
   const heads = headingEls.map((h) => h.tagName + ':' + h.textContent.trim().slice(0, 40));
   const headingLevels = headingEls.map((h) => Number(h.tagName.slice(1)));
@@ -1170,10 +1174,12 @@ async function main() {
         const ignored = (node) => node.ignored === true;
         const axNodes = nodes.filter((node) => !ignored(node));
         const roles = axNodes.map((node) => node.role?.value).filter(Boolean);
+        // Chrome reports a summary's role as `DisclosureTriangle`. The list said "disclosure
+        // triangle", which no node ever matched, so a summary was never held to having a name.
+        const disclosure = (node) => node.role?.value === "DisclosureTriangle";
         const interactive = axNodes.filter((node) =>
-          ["link", "button", "textbox", "checkbox", "combobox", "disclosure triangle"].includes(
-            node.role?.value,
-          ),
+          ["link", "button", "textbox", "checkbox", "combobox"].includes(node.role?.value) ||
+            disclosure(node),
         );
         const unnamedInteractive = interactive.filter((node) => !named(node));
         const headings = axNodes.filter((node) => node.role?.value === "heading");
@@ -1185,8 +1191,7 @@ async function main() {
         // S5-A10's control as a screen reader receives it: one disclosure per unofficial rendering,
         // named UNOFFICIAL, and collapsed when the page is served.
         observed.unofficialControls = axNodes
-          .filter((node) => node.role?.value === "disclosure triangle" &&
-            (node.name?.value ?? "").includes("UNOFFICIAL"))
+          .filter((node) => disclosure(node) && (node.name?.value ?? "").includes("UNOFFICIAL"))
           .map((node) => node.properties?.find((property) => property.name === "expanded")?.value?.value ?? null);
 
         if (axNodes.length === 0) {
