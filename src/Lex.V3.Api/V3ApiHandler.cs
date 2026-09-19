@@ -65,22 +65,30 @@ internal sealed class V3ApiHandler
     {
         ArgumentNullException.ThrowIfNull(context);
         var rawTarget = context.Features.Get<IHttpRequestFeature>()?.RawTarget ?? string.Empty;
-        if (string.Equals(rawTarget, V3ResolveRestRoute.RawTarget, StringComparison.Ordinal) ||
-            rawTarget.StartsWith(V3ResolveRestRoute.RawTarget + "?", StringComparison.Ordinal))
+        var binding = V3RestRouteBinding.Served.FirstOrDefault(served => served.Claims(rawTarget));
+        if (binding is not null)
         {
             if (_corpusMount is not null)
             {
+                // The host has already validated the body against the bound operation's request
+                // document, so the request that reaches the mount is that operation's.
+                Func<V3PlatformOperationRequest, V3PlatformOperationOutcome> execute =
+                    string.Equals(binding.OperationId, "as_of", StringComparison.Ordinal)
+                        ? AsOfOutcome
+                        : ResolveOutcome;
                 await V3ResolveRestRoute.HandleOutcomeAsync(
+                        binding,
                         context,
                         _host,
                         RequestReference(context.TraceIdentifier),
-                        request => _corpusMount.Resolve(request, _utcNow()),
+                        execute,
                         cancellationToken)
                     .ConfigureAwait(false);
                 return;
             }
 
             await V3ResolveRestRoute.HandleRefusalAsync(
+                    binding,
                     context,
                     _host,
                     RequestReference(context.TraceIdentifier),
@@ -103,6 +111,12 @@ internal sealed class V3ApiHandler
 
         await SyntheticApiHandler.HandleAsync(context, _syntheticState, cancellationToken).ConfigureAwait(false);
     }
+
+    private V3PlatformOperationOutcome ResolveOutcome(V3PlatformOperationRequest request) =>
+        _corpusMount!.Resolve(request, _utcNow());
+
+    private V3PlatformOperationOutcome AsOfOutcome(V3PlatformOperationRequest request) =>
+        _corpusMount!.AsOf(request, _utcNow());
 
     private static V3PlatformOperationRefusal NoCorpusMounted(V3PlatformOperationRequest request)
     {

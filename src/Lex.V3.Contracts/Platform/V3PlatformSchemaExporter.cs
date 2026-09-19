@@ -94,23 +94,7 @@ public static class V3PlatformSchemaExporter
         JsonArray required;
         if (kind == "request")
         {
-            properties["parameters"] = operationId == "resolve"
-                ? new JsonObject
-                {
-                    ["type"] = "object",
-                    ["additionalProperties"] = false,
-                    ["properties"] = new JsonObject
-                    {
-                        ["identifier"] = new JsonObject
-                        {
-                            ["type"] = "string",
-                            ["minLength"] = 1,
-                            ["pattern"] = "\\S",
-                        },
-                    },
-                    ["required"] = new JsonArray("identifier"),
-                }
-                : ClosedObject();
+            properties["parameters"] = RequestParameters(operationId);
             required = new("operation_id", "parameters");
         }
         else
@@ -180,6 +164,60 @@ public static class V3PlatformSchemaExporter
             "schema", "version", "object_type", "request_ref", "operation_id",
             "registry_schema", "registry_sha256", "context", "verdict", "result", "refusal"),
     });
+
+    /// <summary>
+    /// The reviewed parameter shape of each operation whose request document says what the operation
+    /// requires. An operation absent here still admits any parameters object, which is recorded as
+    /// open work: "validated against the reviewed schema document" means nothing for it yet.
+    /// </summary>
+    private static JsonObject RequestParameters(string operationId) => operationId switch
+    {
+        "resolve" => Parameters(
+            ["identifier"],
+            ("identifier", NonBlankString())),
+        "as_of" => Parameters(
+            ["identifier", "date"],
+            ("identifier", NonBlankString()),
+            ("date", CivilDate()),
+            ("language", NonBlankString())),
+        _ => ClosedObject(),
+    };
+
+    private static JsonObject Parameters(
+        string[] required,
+        params (string Name, JsonObject Schema)[] properties)
+    {
+        var declared = new JsonObject();
+        foreach (var (name, schema) in properties)
+        {
+            declared[name] = schema;
+        }
+
+        return new JsonObject
+        {
+            ["type"] = "object",
+            ["additionalProperties"] = false,
+            ["properties"] = declared,
+            ["required"] = new JsonArray(required.Select(static value => (JsonNode)value).ToArray()),
+        };
+    }
+
+    private static JsonObject NonBlankString() => new()
+    {
+        ["type"] = "string",
+        ["minLength"] = 1,
+        ["pattern"] = "\\S",
+    };
+
+    /// <summary>
+    /// A civil date in the publisher's own <c>yyyy-MM-dd</c> spelling. Calendar validity is the
+    /// operation's check, answered as the same request-schema rejection.
+    /// </summary>
+    private static JsonObject CivilDate() => new()
+    {
+        ["type"] = "string",
+        ["pattern"] = "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+    };
 
     private static JsonObject ClosedObject() => new()
     {

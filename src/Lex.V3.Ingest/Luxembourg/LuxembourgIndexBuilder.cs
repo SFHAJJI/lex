@@ -1121,20 +1121,49 @@ public sealed class LuxembourgIndexReader : IDisposable
                 """;
             command.Parameters.AddWithValue("$work", workKey);
             command.Parameters.AddWithValue("$date", applicabilityDate);
-            using var reader = command.ExecuteReader();
-            var values = new List<LuxembourgIndexResolvedState>();
-            while (reader.Read())
-            {
-                values.Add(new LuxembourgIndexResolvedState(
-                    reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3),
-                    reader.GetString(4), reader.GetString(5), reader.GetString(6),
-                    JsonSerializer.Deserialize<string[]>(reader.GetString(7))
-                        ?? throw new InvalidDataException("A state has no rule-profile population."),
-                    JsonSerializer.Deserialize<string[]>(reader.GetString(8))
-                        ?? throw new InvalidDataException("A state has no article-identity population.")));
-            }
-            return Array.AsReadOnly(values.ToArray());
+            return ReadResolvedStates(command);
         }
+    }
+
+    /// <summary>
+    /// Every publisher-dated state of one work, in date order, then language, expression and digest.
+    /// The work is named either by its product work key or by the publisher's own work IRI as
+    /// stored; nothing is normalised. Temporal operations select over this list; the reader asserts
+    /// nothing about an end date, which the publisher does not state.
+    /// </summary>
+    public IReadOnlyList<LuxembourgIndexResolvedState> ResolveWorkStates(string workIdentifier)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workIdentifier);
+        lock (_gate)
+        {
+            using var command = _connection.CreateCommand();
+            command.CommandText = """
+                SELECT work_key,applicability_date,state_sha256,expression_iri,publisher_work_iri,
+                       publisher_legal_resource_iri,language,rule_profiles_json,article_identities_json
+                FROM states
+                WHERE work_key=$identifier OR publisher_work_iri=$identifier
+                ORDER BY applicability_date,language,expression_iri,state_sha256
+                """;
+            command.Parameters.AddWithValue("$identifier", workIdentifier);
+            return ReadResolvedStates(command);
+        }
+    }
+
+    private static IReadOnlyList<LuxembourgIndexResolvedState> ReadResolvedStates(SqliteCommand command)
+    {
+        using var reader = command.ExecuteReader();
+        var values = new List<LuxembourgIndexResolvedState>();
+        while (reader.Read())
+        {
+            values.Add(new LuxembourgIndexResolvedState(
+                reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3),
+                reader.GetString(4), reader.GetString(5), reader.GetString(6),
+                JsonSerializer.Deserialize<string[]>(reader.GetString(7))
+                    ?? throw new InvalidDataException("A state has no rule-profile population."),
+                JsonSerializer.Deserialize<string[]>(reader.GetString(8))
+                    ?? throw new InvalidDataException("A state has no article-identity population.")));
+        }
+        return Array.AsReadOnly(values.ToArray());
     }
 
     public LuxembourgIndexWorkResolution ResolveWorkTitle(string title)

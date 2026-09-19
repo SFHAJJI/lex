@@ -74,8 +74,11 @@ public sealed class GuardedConstructionCensusTests
                     + "method public static Lex.V3.Api.V3CorpusMount::OpenAsync",
                 "Lex.V3.Api.V3PlatformOperationOutcome: constructor private instance "
                     + "Lex.V3.Api.V3PlatformOperationOutcome::.ctor, "
-                    + "method private instance Lex.V3.Api.V3ApiHandler::<HandleAsync>b__10_0, "
+                    + "method private instance Lex.V3.Api.V3ApiHandler::AsOfOutcome, "
+                    + "method private instance Lex.V3.Api.V3ApiHandler::ResolveOutcome, "
+                    + "method private instance Lex.V3.Api.V3CorpusMount::ModeUnavailable, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::Unknown, "
+                    + "method public instance Lex.V3.Api.V3CorpusMount::AsOf, "
                     + "method public instance Lex.V3.Api.V3CorpusMount::Resolve, "
                     + "method public static Lex.V3.Api.V3PlatformOperationOutcome::Refused, "
                     + "method public static Lex.V3.Api.V3PlatformOperationOutcome::Success",
