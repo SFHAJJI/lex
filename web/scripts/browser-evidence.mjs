@@ -940,10 +940,16 @@ async function waitForSettled(session, sessionId, deadlineMs = 10000) {
   throw new Error("a page never reached a settled state within 10s");
 }
 
+// `client.js` was served as application/octet-stream. A classic script runs anyway, so every gate
+// stayed green, but the product's own responses carry `nosniff` (BufferedHttpResponse), under which
+// a browser refuses to run a script that is not typed as one. The harness now types every file it
+// serves and sends `nosniff` too, so it measures the pages under the rule they will be served by.
 const CONTENT_TYPES = new Map([
   [".woff2", "font/woff2"],
   [".html", "text/html; charset=utf-8"],
   [".css", "text/css; charset=utf-8"],
+  [".js", "text/javascript; charset=utf-8"],
+  [".json", "application/json; charset=utf-8"],
   [".svg", "image/svg+xml"],
 ]);
 
@@ -1058,6 +1064,7 @@ export async function serveDist(root) {
         (body) => {
           response.writeHead(200, {
             "content-type": CONTENT_TYPES.get(extname(file)) ?? "application/octet-stream",
+            "x-content-type-options": "nosniff",
           });
           response.end(body);
         },
