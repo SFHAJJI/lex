@@ -416,6 +416,29 @@ test('a body that is not authentic has somewhere to live, labelled', () => {
   assert.ok(html.includes('href="https://legilux.public.lu/eli/etat/leg/loi/2001/01/01/n1"'));
 });
 
+test('an unofficial rendering is never the default view: closed, labelled, opened only by the reader', () => {
+  // S5-A10. The page shows the label unasked and the text only on a reader's action, so the
+  // rendering sits in a native disclosure that is closed and has no way to be asked for open.
+  const html = renderUnofficialRendering({
+    resourceId: SOLE.resource_id,
+    authenticity: SOLE,
+    language: 'en',
+    text: 'An English rendering of a French statute.',
+    publisher: 'lu-legilux',
+    officialUri: 'https://legilux.public.lu/eli/etat/leg/loi/2001/01/01/n1',
+  });
+  assert.ok(html.startsWith('<details class="unofficial-rendering">'), html.slice(0, 60));
+  assert.ok(!/<details[^>]*\sopen/.test(html), 'the rendering is open by default');
+  const summary = /<summary class="unofficial-head">(.*?)<\/summary>/.exec(html);
+  assert.ok(summary, 'the rendering has no summary to open it by');
+  assert.ok(summary[1].includes('token--unofficial'), 'the control is not labelled unofficial');
+  assert.ok(!summary[1].includes('An English rendering'), 'the text is in the label, shown unasked');
+  assert.ok(
+    html.indexOf('An English rendering') > html.indexOf('</summary>'),
+    'the rendering text is not inside the closed body, after the label',
+  );
+});
+
 test('the authentic text cannot be relabelled as unofficial', () => {
   assert.throws(
     () =>
