@@ -221,7 +221,7 @@ public sealed class V3CorpusAsOfMountTests
     }
 
     [TestMethod]
-    public async Task ARouteWithAQueryStringIsStillTheSameRoute()
+    public async Task AQueryStringOnEitherRouteIsTransportDriftAndRunsNothing()
     {
         var fixture = await MountedFixture.CreateAsync();
         await using var cleanup = fixture;
@@ -232,6 +232,9 @@ public sealed class V3CorpusAsOfMountTests
         var resolveBody = "{\"operation_id\":\"resolve\",\"parameters\":{\"identifier\":"
             + JsonSerializer.Serialize(fixture.ExpressionIri) + "}}";
 
+        // The route claims the request so that it, and not the synthetic preview, answers; it then
+        // refuses the drift below the envelope, as the resolve route always has (the host test
+        // RealResolveRouteFailsClosedOnTransportDriftBeforeExecution pins the same rule at that level).
         foreach (var (rawTarget, body) in new[]
                  {
                      (AsOfRawTarget + "?x=1", asOfBody),
@@ -239,9 +242,7 @@ public sealed class V3CorpusAsOfMountTests
                  })
         {
             var context = await PostAsync(mount, rawTarget, body);
-            Assert.AreEqual(StatusCodes.Status200OK, context.Response.StatusCode, rawTarget);
-            var envelope = V3EnvelopeJson.ParseAndVerify(ResponseBytes(context), V3OperationRegistry.Reviewed);
-            Assert.AreEqual(V3Verdicts.Answer, envelope.Verdict, rawTarget);
+            AssertTransportProblem(context, "unknown_route", StatusCodes.Status404NotFound);
         }
     }
 
