@@ -47,6 +47,15 @@ public sealed record LuxembourgIndexResolvedState(
     IReadOnlyList<string> RuleProfileSha256s,
     IReadOnlyList<string> ArticleIdentities);
 
+/// <summary>
+/// One article's publisher-stated applicability date, or <c>null</c> where the publisher stated none
+/// for that article. Read from the article-level <c>scl:dateApplicability</c> the inventory retained;
+/// never derived from the state.
+/// </summary>
+public sealed record LuxembourgIndexArticleDate(
+    string ArticleIdentitySha256,
+    string? ApplicabilityDate);
+
 public sealed record LuxembourgIndexResolvedWork(
     string WorkIdentifier,
     IReadOnlyList<string> ExpressionIris,
@@ -1149,6 +1158,42 @@ public sealed class LuxembourgIndexReader : IDisposable
         }
     }
 
+    /// <summary>
+    /// The publisher's article-level applicability date for each of the given article identities, in
+    /// the order given. An identity the index does not hold is reported with a <c>null</c> date; the
+    /// caller decides whether that is a defect. Nothing is compared here.
+    /// </summary>
+    public IReadOnlyList<LuxembourgIndexArticleDate> ResolveArticleDates(IReadOnlyList<string> articleIdentities)
+    {
+        ArgumentNullException.ThrowIfNull(articleIdentities);
+        if (articleIdentities.Count == 0)
+        {
+            return Array.Empty<LuxembourgIndexArticleDate>();
+        }
+
+        lock (_gate)
+        {
+            using var command = _connection.CreateCommand();
+            command.CommandText = """
+                SELECT article_identity_sha256, applicability_date
+                FROM articles
+                WHERE article_identity_sha256 IN (SELECT value FROM json_each($identities))
+                """;
+            command.Parameters.AddWithValue("$identities", JsonSerializer.Serialize(articleIdentities));
+            using var reader = command.ExecuteReader();
+            var dates = new Dictionary<string, string?>(StringComparer.Ordinal);
+            while (reader.Read())
+            {
+                dates[reader.GetString(0)] = reader.IsDBNull(1) ? null : reader.GetString(1);
+            }
+
+            return Array.AsReadOnly(articleIdentities
+                .Select(identity => new LuxembourgIndexArticleDate(
+                    identity, dates.TryGetValue(identity, out var date) ? date : null))
+                .ToArray());
+        }
+    }
+
     private static IReadOnlyList<LuxembourgIndexResolvedState> ReadResolvedStates(SqliteCommand command)
     {
         using var reader = command.ExecuteReader();
@@ -1322,6 +1367,20 @@ public sealed class LuxembourgIndexReader : IDisposable
         IReadOnlyList<LuxembourgIndexBuilder.ArticleRow> articles,
         IReadOnlyList<LuxembourgIndexBuilder.StateRow> states)
     {
+        // The article-level publisher date is served and compared with the state date as text; both
+        // sides are checked here as exact civil dates so a malformed index is refused, never served.
+        // A null date is the publisher stating none, which is allowed.
+        foreach (var article in articles)
+        {
+            if (article.ApplicabilityDate is not null &&
+                !DateOnly.TryParseExact(
+                    article.ApplicabilityDate, "yyyy-MM-dd", CultureInfo.InvariantCulture,
+                    DateTimeStyles.None, out _))
+            {
+                throw new InvalidDataException("A Luxembourg article applicability date is not an exact civil date.");
+            }
+        }
+
         var articleByIdentity = articles.ToDictionary(
             static article => article.ArticleIdentitySha256, StringComparer.Ordinal);
         var seenArticles = new HashSet<string>(StringComparer.Ordinal);

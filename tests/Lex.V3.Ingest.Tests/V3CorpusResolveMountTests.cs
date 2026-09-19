@@ -459,6 +459,34 @@ public sealed class V3CorpusResolveMountTests
     }
 
     [TestMethod]
+    public async Task AMalformedArticleDateRefusesTheMountAtOpenWhileABlankOneIsAllowed()
+    {
+        var fixture = await MountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        // The last article in identity order, which is the order the reader validates in: a check that
+        // stops after the first article, or exits early, must fail here (reviewer mutant D3 on #686).
+        var dates = fixture.ArticleDatesOfOwnState();
+        Assert.IsGreaterThan(1, dates.Count, "The check must be proven to reach past the first article.");
+        var identity = dates.Keys.Order(StringComparer.Ordinal).Last();
+
+        // The index is re-stamped by the helper, so the logical-row hash holds and only the date
+        // check can refuse: a served-and-compared column that is not a date is a malformed index.
+        foreach (var malformed in new[] { "2026-1-1", "2026-02-30", "01/02/2026", " 2026-01-02", "" })
+        {
+            await fixture.SetMalformedArticleDateAsync(identity, malformed);
+            var exception = await Assert.ThrowsExactlyAsync<InvalidDataException>(async () =>
+                await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None), malformed);
+            StringAssert.Contains(exception.Message, "article applicability date", malformed);
+        }
+
+        // Blank is the publisher stating no date; the mount opens and serves it as null.
+        await fixture.SetArticleDateAsync(identity, null);
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+        Assert.IsNull(fixture.ArticleDatesOfOwnState()[identity]);
+    }
+
+    [TestMethod]
     public async Task ValidCorpusFromAnotherBuildIsRejectedByTheIndexCorpusBinding()
     {
         var fixture = await MountedFixture.CreateAsync();
@@ -1241,7 +1269,105 @@ public sealed class V3CorpusResolveMountTests
             return later;
         }
 
-        public async Task<LuxembourgIndexBuilder.StateRow> AddSecondLanguageStateAtSameDateAsync()
+        /// <summary>
+        /// Blanks the publisher's article-level date on one article of the fixture's own state, so the
+        /// index holds an article whose date the publisher did not state. Returns that article's identity.
+        /// </summary>
+        public async Task<string> NullOneArticleDateAsync()
+        {
+            string identity;
+            using (var connection = LuxembourgIndexBuilder.Open(
+                       Path.Combine(Directory, V3CorpusMount.IndexFileName), SqliteOpenMode.ReadOnly))
+            {
+                var state = ReadStates(connection).Single(row =>
+                    string.Equals(row.ExpressionIri, ExpressionIri, StringComparison.Ordinal));
+                identity = System.Text.Json.JsonSerializer.Deserialize<string[]>(state.ArticleIdentitiesJson)![0];
+            }
+
+            await SetArticleDateAsync(identity, null);
+            return identity;
+        }
+
+        /// <summary>
+        /// Sets one article's publisher-level date in the index (null blanks it) and re-stamps the
+        /// index and manifest so the mount still verifies. The state rows are untouched.
+        /// </summary>
+        public Task SetArticleDateAsync(string identity, string? applicabilityDate) =>
+            SetArticleDateAsync(identity, applicabilityDate, measureManifestWithBlankDate: false);
+
+        /// <summary>
+        /// Writes a value that is not a date into one article's publisher-level date column, so the
+        /// index is malformed exactly there. The logical-row stamp is recomputed (it hashes text), and
+        /// the capability manifest is re-bound to the new index digest but measured with that article's
+        /// date treated as blank, because measuring a date that is not a date cannot be done; the
+        /// open-time date check must therefore be what refuses this index.
+        /// </summary>
+        public Task SetMalformedArticleDateAsync(string identity, string text) =>
+            SetArticleDateAsync(identity, text, measureManifestWithBlankDate: true);
+
+        private async Task SetArticleDateAsync(string identity, string? applicabilityDate, bool measureManifestWithBlankDate)
+        {
+            var indexPath = Path.Combine(Directory, V3CorpusMount.IndexFileName);
+            LuxembourgIndexBuilder.MemberRow[] members;
+            LuxembourgIndexBuilder.ArticleRow[] articles;
+            LuxembourgIndexBuilder.StateRow[] states;
+            LuxembourgIndexBuilder.WorkTitleRow[] titles;
+            using (var connection = LuxembourgIndexBuilder.Open(indexPath, SqliteOpenMode.ReadWrite))
+            {
+                using (var set = connection.CreateCommand())
+                {
+                    set.CommandText = "UPDATE articles SET applicability_date=$date WHERE article_identity_sha256=$identity";
+                    set.Parameters.AddWithValue("$date", (object?)applicabilityDate ?? DBNull.Value);
+                    set.Parameters.AddWithValue("$identity", identity);
+                    Assert.AreEqual(1, set.ExecuteNonQuery());
+                }
+                members = ReadMembers(connection);
+                articles = ReadArticles(connection);
+                states = ReadStates(connection);
+                titles = ReadWorkTitles(connection);
+                using var stamp = connection.CreateCommand();
+                stamp.CommandText = "UPDATE stamp SET logical_rows_sha256=$digest WHERE stamp_id=1";
+                stamp.Parameters.AddWithValue(
+                    "$digest", LuxembourgIndexBuilder.HashLogicalRows(members, articles, states, titles));
+                Assert.AreEqual(1, stamp.ExecuteNonQuery());
+            }
+
+            var indexBytes = await File.ReadAllBytesAsync(indexPath);
+            var indexDigest = Convert.ToHexStringLower(SHA256.HashData(indexBytes));
+            var measured = measureManifestWithBlankDate
+                ? articles.Select(article => string.Equals(article.ArticleIdentitySha256, identity, StringComparison.Ordinal)
+                    ? article with { ApplicabilityDate = null }
+                    : article).ToArray()
+                : articles;
+            var manifest = LuxembourgIndexBuilder.MeasureCapabilities(indexDigest, measured, titles);
+            using var stream = new MemoryStream();
+            _ = V3IndexCapabilityManifestArtifact.Write(stream, manifest);
+            await File.WriteAllBytesAsync(
+                Path.Combine(Directory, V3CorpusMount.CapabilityManifestFileName), stream.ToArray());
+        }
+
+        /// <summary>The publisher's article-level dates of the fixture's own state, by identity.</summary>
+        public IReadOnlyDictionary<string, string?> ArticleDatesOfOwnState()
+        {
+            using var connection = LuxembourgIndexBuilder.Open(
+                Path.Combine(Directory, V3CorpusMount.IndexFileName), SqliteOpenMode.ReadOnly);
+            var state = ReadStates(connection).Single(row =>
+                string.Equals(row.ExpressionIri, ExpressionIri, StringComparison.Ordinal));
+            var identities = System.Text.Json.JsonSerializer.Deserialize<string[]>(state.ArticleIdentitiesJson)!;
+            return ReadArticles(connection)
+                .Where(article => identities.Contains(article.ArticleIdentitySha256, StringComparer.Ordinal))
+                .ToDictionary(static article => article.ArticleIdentitySha256, static article => article.ApplicabilityDate, StringComparer.Ordinal);
+        }
+
+        public Task<LuxembourgIndexBuilder.StateRow> AddSecondLanguageStateAtSameDateAsync() =>
+            AddSecondLanguageStateAsync(null);
+
+        /// <summary>
+        /// Adds a German state of the fixture's work, dated <paramref name="applicabilityDate"/> or the
+        /// fixture's own date when null, with its own article identities. Must run while the index holds
+        /// the fixture's state alone, which it copies.
+        /// </summary>
+        public async Task<LuxembourgIndexBuilder.StateRow> AddSecondLanguageStateAsync(string? applicabilityDate)
         {
             var indexPath = Path.Combine(Directory, V3CorpusMount.IndexFileName);
             LuxembourgIndexBuilder.MemberRow[] members;
@@ -1277,12 +1403,13 @@ public sealed class V3CorpusResolveMountTests
                 }
                 identities.Sort(StringComparer.Ordinal);
                 var profiles = System.Text.Json.JsonSerializer.Deserialize<string[]>(sourceState.RuleProfilesJson)!;
+                var stateDate = applicabilityDate ?? sourceState.ApplicabilityDate;
                 var digest = LuxembourgIndexBuilder.StateSha256(
-                    sourceState.WorkKey, sourceState.ApplicabilityDate, expression,
+                    sourceState.WorkKey, stateDate, expression,
                     sourceState.PublisherWorkIri, sourceState.PublisherLegalResourceIri, "deu",
                     profiles, identities);
                 alternate = new LuxembourgIndexBuilder.StateRow(
-                    sourceState.WorkKey, sourceState.ApplicabilityDate, digest, expression,
+                    sourceState.WorkKey, stateDate, digest, expression,
                     sourceState.PublisherWorkIri, sourceState.PublisherLegalResourceIri, "deu",
                     sourceState.RuleProfilesJson, System.Text.Json.JsonSerializer.Serialize(identities));
                 using (var insertState = connection.CreateCommand())

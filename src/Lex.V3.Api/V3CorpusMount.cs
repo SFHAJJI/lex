@@ -163,6 +163,7 @@ internal sealed class V3CorpusMount : IDisposable
                     new V3PlatformOperationRefusal(request, "pinned_digest_mismatch", mismatch.RootElement));
             }
 
+            var pinnedDates = ArticleDates(current);
             using var pinnedResult = JsonSerializer.SerializeToDocument(new
             {
                 requested_identifier = identifier,
@@ -175,6 +176,9 @@ internal sealed class V3CorpusMount : IDisposable
                 publisher_legal_resource_iri = current.PublisherLegalResourceIri,
                 language = current.Language,
                 article_identities = current.ArticleIdentities,
+                articles = pinnedDates.Articles,
+                validity_conflict_count = pinnedDates.ConflictCount,
+                validity_conflict_rule = ValidityConflictRule,
                 stable_coordinate = stableCoordinate,
                 permalink = currentUrl,
                 corpus_sha256 = _corpus.ArtifactRef.Sha256,
@@ -337,10 +341,7 @@ internal sealed class V3CorpusMount : IDisposable
 
         var identifier = RequiredString(request.Parameters, "identifier");
         var requestedDate = RequiredString(request.Parameters, "date");
-        var requestedLanguage = request.Parameters.TryGetProperty("language", out var languageValue) &&
-                                languageValue.ValueKind == JsonValueKind.String
-            ? languageValue.GetString()
-            : null;
+        var requestedLanguage = OptionalLanguage(request.Parameters);
         if (!DateOnly.TryParseExact(
                 requestedDate, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out _))
         {
@@ -350,47 +351,10 @@ internal sealed class V3CorpusMount : IDisposable
                 "The requested date is not a civil calendar date.");
         }
 
-        var isStableWorkCoordinate = TryParseStableWorkCoordinate(identifier, out var workKey);
-        if (_reader is null)
+        if (RefuseUnlessWorkStates(request, identifier, observedAt, "r6_as_of", requestedLanguage,
+                out var states, out var availableLanguages) is { } refused)
         {
-            // Attribution follows the identifier, never the mount. A Luxembourg-shaped identifier on a
-            // mount without the Luxembourg index is Luxembourg law whose corpus is not mounted; an EU
-            // or unrecognised identifier is refused the mode with EU context.
-            if (isStableWorkCoordinate || IsLuxembourgShaped(identifier))
-            {
-                using var unmounted = JsonSerializer.SerializeToDocument(new { required_corpus = "lu" });
-                return V3PlatformOperationOutcome.Refused(
-                    Context("refusal", observedAt, PublisherId.LuLegilux),
-                    new V3PlatformOperationRefusal(request, "no_corpus_mounted", unmounted.RootElement));
-            }
-
-            return ModeUnavailable(request, observedAt, PublisherId.EuEurLex);
-        }
-
-        var workIdentifier = isStableWorkCoordinate ? workKey : identifier;
-        var states = _reader.ResolveWorkStates(workIdentifier);
-        if (states.Count == 0)
-        {
-            return PublisherFor(identifier) == PublisherId.EuEurLex
-                ? ModeUnavailable(request, observedAt, PublisherId.EuEurLex)
-                : Unknown(request, identifier, observedAt, PublisherId.LuLegilux,
-                    "a Luxembourg work identifier present in the mounted index");
-        }
-
-        var availableLanguages = states.Select(static state => state.Language)
-            .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
-        if (requestedLanguage is not null &&
-            !availableLanguages.Contains(requestedLanguage, StringComparer.Ordinal))
-        {
-            using var unavailableLanguage = JsonSerializer.SerializeToDocument(new
-            {
-                requested_language = requestedLanguage,
-                available_languages = availableLanguages,
-            });
-            return V3PlatformOperationOutcome.Refused(
-                Context("refusal", observedAt),
-                new V3PlatformOperationRefusal(
-                    request, "language_not_available", unavailableLanguage.RootElement));
+            return refused;
         }
 
         var scope = requestedLanguage is null
@@ -431,20 +395,7 @@ internal sealed class V3CorpusMount : IDisposable
                 .Select(static state => state.ApplicabilityDate)
                 .Order(StringComparer.Ordinal)
                 .FirstOrDefault();
-            var state = selected[0];
-            served.Add(new
-            {
-                language = state.Language,
-                applicability_date = state.ApplicabilityDate,
-                next_applicability_date = nextDate,
-                state_sha256 = state.StateSha256,
-                expression_iri = state.ExpressionIri,
-                publisher_work_iri = state.PublisherWorkIri,
-                publisher_legal_resource_iri = state.PublisherLegalResourceIri,
-                article_identities = state.ArticleIdentities,
-                stable_coordinate = StableCoordinate(state),
-                permalink = StateUrl(state),
-            });
+            served.Add(StateRow(selected[0], nextDate));
         }
 
         if (ambiguous.Count != 0)
@@ -485,12 +436,172 @@ internal sealed class V3CorpusMount : IDisposable
             states = served,
             available_languages = availableLanguages,
             corpus_sha256 = _corpus.ArtifactRef.Sha256,
-            index_sha256 = _reader.IndexRef.Sha256,
+            index_sha256 = _reader!.IndexRef.Sha256,
         });
         return V3PlatformOperationOutcome.Success(
             Context("success", observedAt),
             new V3PlatformOperationResult(request, "version_state", result.RootElement));
     }
+
+    /// <summary>
+    /// R6 <c>timeline</c> for Luxembourg: the inventory of every publisher-dated state of one work,
+    /// per language, in the reader's order (date, language, expression, digest). Each row is the same
+    /// dated-state vocabulary <c>as_of</c> serves, so the two operations never describe one state in
+    /// two ways. Nothing is selected, so nothing is refused for a date: two states on one date and
+    /// language are both listed. Nothing is derived: no end date, no "in force", no gap or overlap
+    /// label; <c>next_applicability_date</c> is the publisher's next dated state in the same language
+    /// or <c>null</c>. The index holds no publication date, so none is served.
+    /// </summary>
+    public V3PlatformOperationOutcome Timeline(
+        V3PlatformOperationRequest request,
+        DateTimeOffset observedAt)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (!string.Equals(request.OperationId, "timeline", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("The mounted corpus inventory operation only accepts timeline/1.");
+        }
+
+        var identifier = RequiredString(request.Parameters, "identifier");
+        var requestedLanguage = OptionalLanguage(request.Parameters);
+        if (RefuseUnlessWorkStates(request, identifier, observedAt, "r6_timeline", requestedLanguage,
+                out var states, out var availableLanguages) is { } refused)
+        {
+            return refused;
+        }
+
+        var scope = requestedLanguage is null
+            ? states
+            : states.Where(state => string.Equals(state.Language, requestedLanguage, StringComparison.Ordinal))
+                .ToArray();
+        var rows = new List<object>(scope.Count);
+        foreach (var state in scope)
+        {
+            // The next dated state in this row's own language: a date on which another language's
+            // text changes never bounds this one.
+            var nextDate = scope
+                .Where(other => string.Equals(other.Language, state.Language, StringComparison.Ordinal) &&
+                                string.CompareOrdinal(other.ApplicabilityDate, state.ApplicabilityDate) > 0)
+                .Select(static other => other.ApplicabilityDate)
+                .Order(StringComparer.Ordinal)
+                .FirstOrDefault();
+            rows.Add(StateRow(state, nextDate));
+        }
+
+        using var result = JsonSerializer.SerializeToDocument(new
+        {
+            requested_identifier = identifier,
+            requested_language = requestedLanguage,
+            publisher = "lu-legilux",
+            work_key = states[0].WorkKey,
+            history_begins = scope[0].ApplicabilityDate,
+            state_count = rows.Count,
+            states = rows,
+            available_languages = availableLanguages,
+            corpus_sha256 = _corpus.ArtifactRef.Sha256,
+            index_sha256 = _reader!.IndexRef.Sha256,
+        });
+        return V3PlatformOperationOutcome.Success(
+            Context("success", observedAt),
+            new V3PlatformOperationResult(request, "timeline", result.RootElement));
+    }
+
+    /// <summary>
+    /// Locates the Luxembourg work a temporal operation names, or returns the refusal that stands in
+    /// for it: <c>no_corpus_mounted</c> or the mode refusal on a mount without the Luxembourg index,
+    /// <c>identifier_unknown</c> or the mode refusal for a work the index does not hold, and
+    /// <c>language_not_available</c> for a language the work has no state in. Attribution follows the
+    /// identifier, never the mount. Returns <c>null</c> when the states are served.
+    /// </summary>
+    private V3PlatformOperationOutcome? RefuseUnlessWorkStates(
+        V3PlatformOperationRequest request,
+        string identifier,
+        DateTimeOffset observedAt,
+        string requestedMode,
+        string? requestedLanguage,
+        out IReadOnlyList<LuxembourgIndexResolvedState> states,
+        out string[] availableLanguages)
+    {
+        states = Array.Empty<LuxembourgIndexResolvedState>();
+        availableLanguages = Array.Empty<string>();
+        var isStableWorkCoordinate = TryParseStableWorkCoordinate(identifier, out var workKey);
+        if (_reader is null)
+        {
+            // A Luxembourg-shaped identifier on a mount without the Luxembourg index is Luxembourg law
+            // whose corpus is not mounted; an EU or unrecognised identifier is refused the mode with EU
+            // context.
+            if (isStableWorkCoordinate || IsLuxembourgShaped(identifier))
+            {
+                using var unmounted = JsonSerializer.SerializeToDocument(new { required_corpus = "lu" });
+                return V3PlatformOperationOutcome.Refused(
+                    Context("refusal", observedAt, PublisherId.LuLegilux),
+                    new V3PlatformOperationRefusal(request, "no_corpus_mounted", unmounted.RootElement));
+            }
+
+            return ModeUnavailable(request, observedAt, PublisherId.EuEurLex, requestedMode);
+        }
+
+        var workIdentifier = isStableWorkCoordinate ? workKey : identifier;
+        var located = _reader.ResolveWorkStates(workIdentifier);
+        if (located.Count == 0)
+        {
+            return PublisherFor(identifier) == PublisherId.EuEurLex
+                ? ModeUnavailable(request, observedAt, PublisherId.EuEurLex, requestedMode)
+                : Unknown(request, identifier, observedAt, PublisherId.LuLegilux,
+                    "a Luxembourg work identifier present in the mounted index");
+        }
+
+        var languages = located.Select(static state => state.Language)
+            .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+        if (requestedLanguage is not null && !languages.Contains(requestedLanguage, StringComparer.Ordinal))
+        {
+            using var unavailableLanguage = JsonSerializer.SerializeToDocument(new
+            {
+                requested_language = requestedLanguage,
+                available_languages = languages,
+            });
+            return V3PlatformOperationOutcome.Refused(
+                Context("refusal", observedAt),
+                new V3PlatformOperationRefusal(
+                    request, "language_not_available", unavailableLanguage.RootElement));
+        }
+
+        states = located;
+        availableLanguages = languages;
+        return null;
+    }
+
+    /// <summary>
+    /// One publisher-dated state as every temporal operation serves it. The publisher's dates and
+    /// digests as stored; the article-level dates and the conflict flag from the same columns; the
+    /// stable coordinate and the hash-pinned permalink. <paramref name="nextDate"/> is the next
+    /// publisher-dated state in the same language, or <c>null</c>: never an inferred end.
+    /// </summary>
+    private object StateRow(LuxembourgIndexResolvedState state, string? nextDate)
+    {
+        var dates = ArticleDates(state);
+        return new
+        {
+            language = state.Language,
+            applicability_date = state.ApplicabilityDate,
+            next_applicability_date = nextDate,
+            state_sha256 = state.StateSha256,
+            expression_iri = state.ExpressionIri,
+            publisher_work_iri = state.PublisherWorkIri,
+            publisher_legal_resource_iri = state.PublisherLegalResourceIri,
+            article_identities = state.ArticleIdentities,
+            articles = dates.Articles,
+            validity_conflict_count = dates.ConflictCount,
+            validity_conflict_rule = ValidityConflictRule,
+            stable_coordinate = StableCoordinate(state),
+            permalink = StateUrl(state),
+        };
+    }
+
+    private static string? OptionalLanguage(JsonElement parameters) =>
+        parameters.TryGetProperty("language", out var value) && value.ValueKind == JsonValueKind.String
+            ? value.GetString()
+            : null;
 
     public void Dispose()
     {
@@ -509,11 +620,12 @@ internal sealed class V3CorpusMount : IDisposable
     private V3PlatformOperationOutcome ModeUnavailable(
         V3PlatformOperationRequest request,
         DateTimeOffset observedAt,
-        PublisherId publisher)
+        PublisherId publisher,
+        string requestedMode)
     {
         using var unavailable = JsonSerializer.SerializeToDocument(new
         {
-            requested_mode = "r6_as_of",
+            requested_mode = requestedMode,
             available_modes = new[] { "r0_exact_coordinate" },
         });
         return V3PlatformOperationOutcome.Refused(
@@ -564,6 +676,40 @@ internal sealed class V3CorpusMount : IDisposable
 
         workKey = segments[1];
         return true;
+    }
+
+    /// <summary>
+    /// The pack's per-state rule (B34-L0143: the conflict is computed against the version date). It is
+    /// not V2's rule, which compared the article date with the state where that wording run began and
+    /// which this index cannot reconstruct; the rule text travels with every answer so a consumer can
+    /// tell the two apart. Both dates are the publisher's; neither is resolved or preferred.
+    /// </summary>
+    private const string ValidityConflictRule =
+        "article_valid_from is the publisher's article-level applicability date; validity_conflict is true when it is stated and differs from the state's applicability_date";
+
+    private (IReadOnlyList<object> Articles, int ConflictCount) ArticleDates(LuxembourgIndexResolvedState state)
+    {
+        var dates = _reader!.ResolveArticleDates(state.ArticleIdentities);
+        var conflicts = 0;
+        var articles = new List<object>(dates.Count);
+        foreach (var date in dates)
+        {
+            var conflict = date.ApplicabilityDate is not null &&
+                           !string.Equals(date.ApplicabilityDate, state.ApplicabilityDate, StringComparison.Ordinal);
+            if (conflict)
+            {
+                conflicts++;
+            }
+
+            articles.Add(new
+            {
+                article_identity_sha256 = date.ArticleIdentitySha256,
+                article_valid_from = date.ApplicabilityDate,
+                validity_conflict = conflict,
+            });
+        }
+
+        return (articles, conflicts);
     }
 
     private static string StableCoordinate(LuxembourgIndexResolvedState state) =>

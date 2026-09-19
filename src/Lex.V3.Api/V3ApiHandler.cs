@@ -72,10 +72,12 @@ internal sealed class V3ApiHandler
             {
                 // The host has already validated the body against the bound operation's request
                 // document, so the request that reaches the mount is that operation's.
-                Func<V3PlatformOperationRequest, V3PlatformOperationOutcome> execute =
-                    string.Equals(binding.OperationId, "as_of", StringComparison.Ordinal)
-                        ? AsOfOutcome
-                        : ResolveOutcome;
+                Func<V3PlatformOperationRequest, V3PlatformOperationOutcome> execute = binding.OperationId switch
+                {
+                    "as_of" => AsOfOutcome,
+                    "timeline" => TimelineOutcome,
+                    _ => ResolveOutcome,
+                };
                 await V3ResolveRestRoute.HandleOutcomeAsync(
                         binding,
                         context,
@@ -117,6 +119,9 @@ internal sealed class V3ApiHandler
 
     private V3PlatformOperationOutcome AsOfOutcome(V3PlatformOperationRequest request) =>
         _corpusMount!.AsOf(request, _utcNow());
+
+    private V3PlatformOperationOutcome TimelineOutcome(V3PlatformOperationRequest request) =>
+        _corpusMount!.Timeline(request, _utcNow());
 
     private static V3PlatformOperationRefusal NoCorpusMounted(V3PlatformOperationRequest request)
     {
