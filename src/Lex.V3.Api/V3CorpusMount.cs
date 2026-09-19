@@ -736,16 +736,19 @@ internal sealed class V3CorpusMount : IDisposable
     /// R6 <c>changes_in_period</c> for Luxembourg, the change radar: every publisher-dated state whose
     /// date lies in a closed window, across the mounted works or for one, per language, in publisher
     /// date, work key, language, expression and digest order. The window is the closed interval between
-    /// the two dates whichever is given first. Each row names the state compactly (the full row is one
-    /// <c>as_of</c> away, and the row carries its parameters), the <c>baseline</c> it replaced (the
+    /// the two dates whichever is given first. Each row names the state compactly (the full state is one
+    /// <c>resolve</c> away, and the row carries its parameters: the hash-pinned permalink, which reaches
+    /// that state and no other even where its date has twins), the <c>baseline</c> it replaced (the
     /// state of the same work and language on the greatest earlier publisher date), and
     /// <c>wording_changed</c> from the article-level comparison <c>diff</c> makes, with its counts and
     /// the parameters that ask <c>diff</c> for the pair.
     /// <para>
-    /// <c>wording_changed</c> is null with a <c>reason</c> wherever comparing would be dishonest: the
-    /// first held state has no baseline; a state or a baseline that is one of several on its date and
-    /// language is ambiguous and none is chosen; states with different rule-profile sets are never
-    /// compared, as <c>diff</c> refuses. These are facts about one row and not refusals of the whole
+    /// <c>wording_changed</c> is null with a <c>reason</c> wherever comparing would be dishonest. The
+    /// row's own date is judged first: a state that is one of several on its date and language is
+    /// ambiguous, whether or not anything precedes it, since <c>as_of</c> and <c>diff</c> refuse that
+    /// date. Then: the first held state has no baseline; a baseline date holding several states is
+    /// ambiguous and none is chosen; states with different rule-profile sets are never compared, as
+    /// <c>diff</c> refuses. These are facts about one row and not refusals of the whole
     /// radar: <c>diff</c> answers about one work and refuses whole, but a radar that one ambiguous
     /// work could silence would hide every other work's change from the reader.
     /// </para>
@@ -909,14 +912,17 @@ internal sealed class V3CorpusMount : IDisposable
             object? counts = null;
             object? diff = null;
             string[]? candidates = null;
-            if (baselines.Length == 0)
-            {
-                reason = "first_held_state";
-            }
-            else if (sameDate.Length > 1)
+            // The row's own date is judged first. A twin on the earliest date held has no baseline
+            // either, but "first held state" would hide the fact that decides what the reader may do
+            // with the date: as_of and diff refuse it as ambiguous, and the row must predict that.
+            if (sameDate.Length > 1)
             {
                 reason = "ambiguous_version";
                 candidates = sameDate.Select(StateUrl).Order(StringComparer.Ordinal).ToArray();
+            }
+            else if (baselines.Length == 0)
+            {
+                reason = "first_held_state";
             }
             else if (baselines.Length > 1)
             {
@@ -953,12 +959,9 @@ internal sealed class V3CorpusMount : IDisposable
                 candidates,
                 counts,
                 diff,
-                as_of = new
-                {
-                    identifier = $"/lu-legilux/{state.WorkKey}",
-                    date = state.ApplicabilityDate,
-                    language = state.Language,
-                },
+                // The hash-pinned permalink names this state and no other, so resolve serves it in full
+                // even where its date has twins, which as_of would refuse as ambiguous.
+                resolve = new { identifier = StateUrl(state) },
             });
         }
 
@@ -1005,7 +1008,7 @@ internal sealed class V3CorpusMount : IDisposable
 
     /// <summary>
     /// A state named compactly for a list: what identifies it and where it is read in full. The article
-    /// lists stay with <c>as_of</c> and <c>timeline</c>, which serve the whole dated-state row.
+    /// lists stay with <c>resolve</c>, <c>as_of</c> and <c>timeline</c>, which serve the whole state.
     /// </summary>
     private static object StateReference(LuxembourgIndexResolvedState state, string? nextDate) => new
     {

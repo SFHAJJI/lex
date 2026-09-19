@@ -95,7 +95,14 @@ public sealed class V3CorpusChangesInPeriodMountTests
         Assert.AreEqual(fixture.StateSha256, comparison.GetProperty("from").GetProperty("state_sha256").GetString());
         Assert.AreEqual(amended.StateSha256, comparison.GetProperty("to").GetProperty("state_sha256").GetString());
         Assert.AreEqual(counts.GetRawText(), comparison.GetProperty("counts").GetRawText());
-        Assert.AreEqual(amendedDate, first.GetProperty("as_of").GetProperty("date").GetString());
+        Assert.AreEqual(amendedDate, first.GetProperty("baseline").GetProperty("next_applicability_date").GetString(),
+            "A baseline says the date it was replaced on, which is the row's.");
+
+        // The row's resolve parameters reach the row's own state, in full.
+        var resolved = await ResolveAsync(mount, first.GetProperty("resolve"));
+        Assert.AreEqual(V3Verdicts.Answer, resolved.Verdict);
+        Assert.AreEqual(amended.StateSha256, resolved.Result!.Value.GetProperty("state_sha256").GetString());
+        Assert.AreEqual(own.Count, resolved.Result.Value.GetProperty("article_identities").GetArrayLength());
     }
 
     [TestMethod]
@@ -195,6 +202,17 @@ public sealed class V3CorpusChangesInPeriodMountTests
         CollectionAssert.AreEquivalent(
             new[] { later.StateSha256, twin.StateSha256 },
             rows.Take(2).Select(static row => row.GetProperty("state").GetProperty("state_sha256").GetString()).ToArray());
+        // An ambiguous row still hands the reader a pointer that resolves: each twin's own permalink
+        // reaches that twin and not the other, where as_of on the date refuses.
+        foreach (var row in rows.Take(2))
+        {
+            var reached = await ResolveAsync(mount, row.GetProperty("resolve"));
+            Assert.AreEqual(V3Verdicts.Answer, reached.Verdict);
+            Assert.AreEqual(
+                row.GetProperty("state").GetProperty("state_sha256").GetString(),
+                reached.Result!.Value.GetProperty("state_sha256").GetString());
+            Assert.IsFalse(row.TryGetProperty("as_of", out _), "No pointer that would be refused is offered.");
+        }
 
         // The state after the twins: its baseline date has two states, so none is chosen.
         var last = rows[2];
@@ -203,6 +221,39 @@ public sealed class V3CorpusChangesInPeriodMountTests
         Assert.AreEqual("ambiguous_baseline", last.GetProperty("reason").GetString());
         Assert.AreEqual(JsonValueKind.Null, last.GetProperty("baseline").ValueKind);
         CollectionAssert.AreEqual(twins, last.GetProperty("candidates").EnumerateArray().Select(static v => v.GetString()).ToArray());
+    }
+
+    [TestMethod]
+    public async Task ATwinOnTheEarliestDateHeldIsAmbiguousBeforeItIsFirst()
+    {
+        var fixture = await MountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        var twin = await fixture.AddStateAsync(fixture.ApplicabilityDate, "twin-first");
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+
+        var rows = (await RadarAsync(mount, fixture.ApplicabilityDate, fixture.ApplicabilityDate))
+            .Result!.Value.GetProperty("changes").EnumerateArray().ToArray();
+
+        Assert.AreEqual(2, rows.Length);
+        var twins = new[] { fixture.Permalink, fixture.StableCoordinate + "--" + twin.StateSha256 }.Order(StringComparer.Ordinal).ToArray();
+        foreach (var row in rows)
+        {
+            Assert.AreEqual("ambiguous_version", row.GetProperty("reason").GetString(),
+                "Nothing precedes these states, but what decides the date is that it has two: as_of refuses it.");
+            CollectionAssert.AreEqual(twins, row.GetProperty("candidates").EnumerateArray().Select(static v => v.GetString()).ToArray());
+            Assert.AreEqual(JsonValueKind.Null, row.GetProperty("baseline").ValueKind);
+            Assert.AreEqual(JsonValueKind.Null, row.GetProperty("wording_changed").ValueKind);
+        }
+
+        // as_of on that date refuses exactly what the rows predict.
+        var asOf = await PostAsync(mount, "/api/v3/as_of", JsonSerializer.Serialize(new
+        {
+            operation_id = "as_of",
+            parameters = new { identifier = $"/lu-legilux/{fixture.WorkKey}", date = fixture.ApplicabilityDate },
+        }));
+        Assert.AreEqual("ambiguous_version",
+            V3EnvelopeJson.ParseAndVerify(ResponseBytes(asOf), V3OperationRegistry.Reviewed).Refusal!.Code);
     }
 
     [TestMethod]
@@ -275,6 +326,14 @@ public sealed class V3CorpusChangesInPeriodMountTests
             everything.GetProperty("changes").EnumerateArray().Select(StateDigest).ToArray(),
             pages.ToArray());
 
+        // Dates that fill the limit exactly are served, not deferred: 1 + 2 rows under a limit of three,
+        // with a date still to come.
+        var exactFill = (await RadarAsync(mount, fixture.ApplicabilityDate, lastDate, limit: 3)).Result!.Value;
+        Assert.AreEqual(3, exactFill.GetProperty("changes").GetArrayLength());
+        Assert.IsTrue(exactFill.GetProperty("truncated").GetBoolean());
+        Assert.AreEqual(lastDate, exactFill.GetProperty("continue_from").GetString());
+        Assert.IsFalse(exactFill.GetProperty("whole_date_over_limit").GetBoolean());
+
         // One date alone holding more rows than the limit is served whole, and the answer says so.
         var overLimit = (await RadarAsync(mount, sharedDate, sharedDate, limit: 1)).Result!.Value;
         Assert.AreEqual(2, overLimit.GetProperty("changes").GetArrayLength());
@@ -322,6 +381,15 @@ public sealed class V3CorpusChangesInPeriodMountTests
         var inside = (await RadarAsync(mount, Shift(fixture.ApplicabilityDate, 1), Shift(germanDate, -1))).Result!.Value;
         Assert.AreEqual(0, inside.GetProperty("changes").GetArrayLength());
         Assert.IsTrue(inside.GetProperty("population").GetProperty("window_overlaps_what_is_held").GetBoolean());
+        // A window that only touches the last date held, or the first, overlaps what is held.
+        var touchingLast = (await RadarAsync(mount, germanDate, Shift(germanDate, 20))).Result!.Value;
+        Assert.IsTrue(touchingLast.GetProperty("population").GetProperty("window_overlaps_what_is_held").GetBoolean());
+        Assert.AreEqual(1, touchingLast.GetProperty("changes").GetArrayLength());
+        var touchingFirst = (await RadarAsync(mount, Shift(fixture.ApplicabilityDate, -20), fixture.ApplicabilityDate)).Result!.Value;
+        Assert.IsTrue(touchingFirst.GetProperty("population").GetProperty("window_overlaps_what_is_held").GetBoolean());
+        Assert.AreEqual(1, touchingFirst.GetProperty("changes").GetArrayLength());
+        var before = (await RadarAsync(mount, Shift(fixture.ApplicabilityDate, -20), Shift(fixture.ApplicabilityDate, -1))).Result!.Value;
+        Assert.IsFalse(before.GetProperty("population").GetProperty("window_overlaps_what_is_held").GetBoolean());
         var outside = (await RadarAsync(mount, Shift(germanDate, 10), Shift(germanDate, 20))).Result!.Value;
         Assert.AreEqual(0, outside.GetProperty("changes").GetArrayLength());
         Assert.IsFalse(outside.GetProperty("population").GetProperty("window_overlaps_what_is_held").GetBoolean());
@@ -399,6 +467,13 @@ public sealed class V3CorpusChangesInPeriodMountTests
         AssertTransportProblem(await PostAsync(mount, DiffRawTarget, radarBody), "request_schema_invalid", StatusCodes.Status400BadRequest);
         AssertTransportProblem(await PostAsync(mount, RadarRawTarget, diffBody), "request_schema_invalid", StatusCodes.Status400BadRequest);
         AssertTransportProblem(await PostAsync(mount, RadarRawTarget + "?x=1", radarBody), "unknown_route", StatusCodes.Status404NotFound);
+    }
+
+    private static async Task<V3Envelope> ResolveAsync(V3CorpusMount mount, JsonElement parameters)
+    {
+        var context = await PostAsync(mount, "/api/v3/resolve", JsonSerializer.Serialize(new { operation_id = "resolve", parameters }));
+        Assert.AreEqual(StatusCodes.Status200OK, context.Response.StatusCode, Encoding.UTF8.GetString(ResponseBytes(context)));
+        return V3EnvelopeJson.ParseAndVerify(ResponseBytes(context), V3OperationRegistry.Reviewed);
     }
 
     private static string StateDigest(JsonElement row) =>
