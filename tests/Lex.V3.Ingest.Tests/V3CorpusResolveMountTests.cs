@@ -463,7 +463,11 @@ public sealed class V3CorpusResolveMountTests
     {
         var fixture = await MountedFixture.CreateAsync();
         await using var cleanup = fixture;
-        var identity = fixture.ArticleDatesOfOwnState().Keys.Order(StringComparer.Ordinal).First();
+        // The last article in identity order, which is the order the reader validates in: a check that
+        // stops after the first article, or exits early, must fail here (reviewer mutant D3 on #686).
+        var dates = fixture.ArticleDatesOfOwnState();
+        Assert.IsGreaterThan(1, dates.Count, "The check must be proven to reach past the first article.");
+        var identity = dates.Keys.Order(StringComparer.Ordinal).Last();
 
         // The index is re-stamped by the helper, so the logical-row hash holds and only the date
         // check can refuse: a served-and-compared column that is not a date is a malformed index.
