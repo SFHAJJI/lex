@@ -15,7 +15,8 @@ internal sealed record V3RestRouteBinding(string RawTarget, string OperationId)
     public static readonly V3RestRouteBinding AsOf = new("/api/v3/as_of", "as_of");
     public static readonly V3RestRouteBinding Timeline = new("/api/v3/timeline", "timeline");
     public static readonly V3RestRouteBinding ArticleHistory = new("/api/v3/article_history", "article_history");
-    public static readonly IReadOnlyList<V3RestRouteBinding> Served = [Resolve, AsOf, Timeline, ArticleHistory];
+    public static readonly V3RestRouteBinding Diff = new("/api/v3/diff", "diff");
+    public static readonly IReadOnlyList<V3RestRouteBinding> Served = [Resolve, AsOf, Timeline, ArticleHistory, Diff];
 
     public bool Claims(string rawTarget) =>
         string.Equals(rawTarget, RawTarget, StringComparison.Ordinal) ||

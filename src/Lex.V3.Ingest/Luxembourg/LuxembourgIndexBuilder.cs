@@ -64,6 +64,15 @@ public sealed record LuxembourgIndexArticleDate(
 /// and stay out; paragraph structure and whitespace-only nodes are not retained at ingest, so they
 /// are not in it either. Nothing is compared here.
 /// </summary>
+/// <summary>
+/// One article of one state: its identity, the publisher-minted article id and the wording digest
+/// (<see cref="LuxembourgIndexReader.WordingSha256"/>). Nothing is compared here.
+/// </summary>
+public sealed record LuxembourgIndexStateArticle(
+    string ArticleIdentitySha256,
+    string PublisherId,
+    string WordingSha256);
+
 public sealed record LuxembourgIndexAnchorArticle(
     string StateSha256,
     string ArticleIdentitySha256,
@@ -1312,6 +1321,35 @@ public sealed class LuxembourgIndexReader : IDisposable
 
         FlushText();
         return Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(words)));
+    }
+
+    /// <summary>
+    /// Every article one state binds, with its publisher-minted id and wording digest, ordered by
+    /// publisher id then identity, in one query.
+    /// </summary>
+    public IReadOnlyList<LuxembourgIndexStateArticle> ResolveStateArticles(string stateSha256)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(stateSha256);
+        lock (_gate)
+        {
+            using var command = _connection.CreateCommand();
+            command.CommandText = """
+                SELECT a.article_identity_sha256, a.publisher_id, a.tokens_json
+                FROM states s, json_each(s.article_identities_json) j
+                JOIN articles a ON a.article_identity_sha256 = j.value
+                WHERE s.state_sha256 = $digest
+                ORDER BY a.publisher_id, a.article_identity_sha256
+                """;
+            command.Parameters.AddWithValue("$digest", stateSha256);
+            using var reader = command.ExecuteReader();
+            var values = new List<LuxembourgIndexStateArticle>();
+            while (reader.Read())
+            {
+                values.Add(new LuxembourgIndexStateArticle(
+                    reader.GetString(0), reader.GetString(1), WordingSha256(reader.GetString(2))));
+            }
+            return Array.AsReadOnly(values.ToArray());
+        }
     }
 
     /// <summary>The distinct publisher-minted article ids of one state, in ordinal order.</summary>

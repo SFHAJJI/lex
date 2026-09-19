@@ -1399,6 +1399,30 @@ public sealed class V3CorpusResolveMountTests
                 string.Equals(article.PublisherId, publisherId, StringComparison.Ordinal)).TokensJson;
         }
 
+        /// <summary>
+        /// Adds a rule-profile digest to one state's population (sorted, distinct), so two states of the
+        /// same work carry different profile sets. Articles are untouched; the state is re-stamped.
+        /// </summary>
+        public Task AddRuleProfileToStateAsync(string expressionIri, string profileSha256) =>
+            MutateArticlesAsync(connection =>
+            {
+                var state = ReadStates(connection).Single(row =>
+                    string.Equals(row.ExpressionIri, expressionIri, StringComparison.Ordinal));
+                var profiles = System.Text.Json.JsonSerializer.Deserialize<string[]>(state.RuleProfilesJson)!
+                    .Append(profileSha256).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+                var identities = System.Text.Json.JsonSerializer.Deserialize<string[]>(state.ArticleIdentitiesJson)!;
+                // The state digest is derived from its row, profiles included, and the reader checks it.
+                var digest = LuxembourgIndexBuilder.StateSha256(
+                    state.WorkKey, state.ApplicabilityDate, state.ExpressionIri, state.PublisherWorkIri,
+                    state.PublisherLegalResourceIri, state.Language, profiles, identities);
+                using var set = connection.CreateCommand();
+                set.CommandText = "UPDATE states SET rule_profiles_json=$profiles, state_sha256=$digest WHERE expression_iri=$expression";
+                set.Parameters.AddWithValue("$profiles", System.Text.Json.JsonSerializer.Serialize(profiles));
+                set.Parameters.AddWithValue("$digest", digest);
+                set.Parameters.AddWithValue("$expression", expressionIri);
+                Assert.AreEqual(1, set.ExecuteNonQuery());
+            });
+
         /// <summary>Renames the publisher-minted id of the article with this id in one expression.</summary>
         public Task RenameArticleIdAsync(string expressionIri, string publisherId, string newPublisherId) =>
             MutateArticlesAsync(connection =>
