@@ -123,7 +123,7 @@ const MUTATIONS = [
     // and the next navigation cleared the buffer. This listener only ever fires on a key, so the
     // load check stays clean and only the check after the tab walk and driven probe can see it.
     name: "a console error raised by every key press after load",
-    expect: /console output during the tab walk or driven actions/i,
+    expect: /console output during the tab walk, driven actions or the minute of page time run after them/i,
     async apply(root) {
       const file = join(root, "client.js");
       const code = await readFile(file, "utf8");
@@ -314,6 +314,44 @@ const MUTATIONS = [
     expect: /interactive node\(s\) with no accessible name: DisclosureTriangle/i,
     async apply(root) {
       await replaceOnce(join(root, "state-success.html"), /<summary>[\s\S]*?<\/summary>/, "<summary></summary>");
+    },
+  },
+  {
+    // A page that keeps reaching out after it has everything it needs. Silent in the console and
+    // invisible in every screenshot; only a count of requests after the page settled can see it.
+    // Ten seconds, not a fraction of one: a real polling loop is slow, and a gate that watched the
+    // page only while the harness happened to be on it saw nothing slower than it stayed.
+    name: "a same-origin polling loop after load, every ten seconds",
+    expect: /request\(s\) after the page settled, during the tab walk, the driven actions or the minute of page time run after them: \/pages\.json/i,
+    async apply(root) {
+      const file = join(root, "client.js");
+      const code = await readFile(file, "utf8");
+      await writeFile(file, `${code}\n;setInterval(function(){fetch("/pages.json");},10000);\n`, "utf8");
+    },
+  },
+  {
+    // One request, once, half a minute after load: no loop to catch in the act, only a timer the
+    // page left armed.
+    name: "a single same-origin request thirty seconds after load",
+    expect: /: 1 request\(s\) after the page settled, during the tab walk, the driven actions or the minute of page time run after them: \/pages\.json/i,
+    async apply(root) {
+      const file = join(root, "client.js");
+      const code = await readFile(file, "utf8");
+      await writeFile(file, `${code}\n;setTimeout(function(){fetch("/pages.json");},30000);\n`, "utf8");
+    },
+  },
+  {
+    // A missing file under the object-URL grammar is answered 200 with the stand-in page, so a status
+    // check reads it as present. A broken image logs nothing either; only its media type says an
+    // image is not what came back.
+    name: "an image whose file is missing, answered 200 by the stand-in page",
+    expect: /an Image request for \/images\/missing\.png was answered with text\/html/i,
+    async apply(root) {
+      await replaceOnce(
+        join(root, "trust-surface.html"),
+        /<\/main>/,
+        '<img src="/images/missing.png" alt="An image that is missing on purpose"></main>',
+      );
     },
   },
   {
