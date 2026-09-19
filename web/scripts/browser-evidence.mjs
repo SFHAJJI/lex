@@ -282,11 +282,43 @@ export class Session {
     this.#listeners.add(listener);
   }
 
-  send(method, params = {}, sessionId) {
+  // A command the browser never answers stalled a whole mutation sweep for twenty minutes with no
+  // output. Every command now has a deadline, so a hung browser is a named failure, not a silence.
+  send(method, params = {}, sessionId, deadlineMs = 60000) {
     const id = this.#next++;
     return new Promise((resolve, reject) => {
-      this.#pending.set(id, { resolve, reject });
+      const timer = setTimeout(() => {
+        this.#pending.delete(id);
+        reject(new Error(`the browser did not answer ${method} within ${deadlineMs / 1000} s`));
+      }, deadlineMs);
+      this.#pending.set(id, {
+        resolve: (value) => {
+          clearTimeout(timer);
+          resolve(value);
+        },
+        reject: (error) => {
+          clearTimeout(timer);
+          reject(error);
+        },
+      });
       this.#socket.send(JSON.stringify({ id, method, params, sessionId }));
+    });
+  }
+
+  /** The next event `method` on `sessionId`, or a named failure if the browser never reports it. */
+  waitFor(method, sessionId, deadlineMs = 60000) {
+    return new Promise((resolve, reject) => {
+      const listener = (message) => {
+        if (message.method !== method || message.sessionId !== sessionId) return;
+        this.#listeners.delete(listener);
+        clearTimeout(timer);
+        resolve(message.params);
+      };
+      const timer = setTimeout(() => {
+        this.#listeners.delete(listener);
+        reject(new Error(`the browser did not report ${method} within ${deadlineMs / 1000} s`));
+      }, deadlineMs);
+      this.#listeners.add(listener);
     });
   }
 
@@ -885,6 +917,123 @@ export function unofficialFailures(where, measured, controls = []) {
   return failures;
 }
 
+/**
+ * How much page time a settled page is run forward, on virtual time, before its network is judged.
+ *
+ * Watching the page for a fixed stretch of wall time only sees what the page does within that
+ * stretch: a 400 ms window saw a loop polling every 150 ms and nothing slower, and a page that
+ * reached out once, five seconds after load, passed every combination. Virtual time jumps to each
+ * timer the page armed, holds while a request it made is in flight, and stops when this budget is
+ * spent, so every timer due within the minute fires before the verdict, in well under a second.
+ */
+export const PAGE_CLOCK_BUDGET_MS = 60000;
+
+/**
+ * Run the page's clock forward by `budgetMs` of virtual time. The tab stays on virtual time for
+ * good afterwards, so this is the last thing done on it. Returns null, or why it could not.
+ */
+export async function runPageClock(session, sessionId, budgetMs = PAGE_CLOCK_BUDGET_MS) {
+  const expired = session.waitFor("Emulation.virtualTimeBudgetExpired", sessionId, 30000);
+  // The wait's deadline can pass while the policy command is still unanswered. Handled here, so
+  // that rejection is never unhandled -- which would end the whole run -- and is still awaited
+  // below, where it becomes this combination's named failure.
+  expired.catch(() => {});
+  try {
+    await session.send(
+      "Emulation.setVirtualTimePolicy",
+      { policy: "pauseIfNetworkFetchesPending", budget: budgetMs },
+      sessionId,
+    );
+    await expired;
+    return null;
+  } catch (error) {
+    return error.message;
+  }
+}
+
+// The media type each kind of request has to be answered with. A missing asset under the object-URL
+// grammar is answered 200 with the stand-in page, so a status check alone reads it as present; the
+// type is what says a font, a script or an image was not what came back. `Other` is the browser's
+// own requests (the favicon) and is not typed; any other kind this map does not name is refused,
+// because a response nothing can judge is not one the gate may pass.
+const EXPECTED_MEDIA = new Map([
+  ["Document", /^text\/html$/],
+  ["Stylesheet", /^text\/css$/],
+  ["Script", /^(text|application)\/javascript$/],
+  ["Font", /^font\/(woff2|woff|ttf|otf)$/],
+  ["Image", /^image\//],
+  ["Media", /^(audio|video)\//],
+  ["TextTrack", /^text\/vtt$/],
+  ["Manifest", /^application\/(manifest\+)?json$/],
+  ["EventSource", /^text\/event-stream$/],
+  ["Fetch", /^application\/json$/],
+  ["XHR", /^application\/json$/],
+]);
+
+/**
+ * The bounded-network verdict on one navigation, as failure sentences. Pure, so the node tests hold
+ * every sentence without a browser.
+ *
+ * @param {string} where  the page, viewport and scheme, as every other failure names them
+ * @param {Array<object>} events  what the browser reported: `{kind: 'request', type, url}` and
+ *   `{kind: 'response', type, url, status, mime}`, in order
+ * @param {number} settledAt  how many events had arrived when the page settled
+ */
+export function networkFailures(where, events, settledAt) {
+  const failures = [];
+  const pathOf = (url) => {
+    try {
+      const parsed = new URL(url);
+      return parsed.protocol === "data:" ? "data:" : parsed.pathname;
+    } catch {
+      return url;
+    }
+  };
+  // "an Image", "a Font": the sentence is matched by the induced mutations, so it is spelled right.
+  const article = (word) => (/^[AEIOU]/.test(word) ? "an" : "a");
+  for (const event of events) {
+    if (event.kind !== "response" || pathOf(event.url) === "data:") continue;
+    if (event.status >= 400) {
+      failures.push(`${where}: ${article(event.type)} ${event.type} request for ${pathOf(event.url)} was answered ${event.status}`);
+      continue;
+    }
+    if (event.type === "Other") continue;
+    const expected = EXPECTED_MEDIA.get(event.type);
+    if (!expected) {
+      failures.push(
+        `${where}: ${article(event.type)} ${event.type} request for ${pathOf(event.url)} is of a kind ` +
+          "no page here makes, and the gate has no media type to judge its answer by",
+      );
+    } else if (!expected.test(event.mime ?? "")) {
+      failures.push(
+        `${where}: ${article(event.type)} ${event.type} request for ${pathOf(event.url)} was answered with ` +
+          `${event.mime}; a missing or mistyped asset is not the asset`,
+      );
+    }
+  }
+  // The browser's own favicon request is not the page reaching out, whenever it lands. It is
+  // excused by kind and exact address together: a script fetching the same path is still counted,
+  // and so is an icon link swapped to carry a query string.
+  const isFavicon = (event) => {
+    if (event.type !== "Other") return false;
+    try {
+      const parsed = new URL(event.url);
+      return parsed.pathname === "/favicon.svg" && parsed.search === "";
+    } catch {
+      return false;
+    }
+  };
+  const late = events.slice(settledAt).filter((event) => event.kind === "request" && !isFavicon(event));
+  if (late.length > 0) {
+    failures.push(
+      `${where}: ${late.length} request(s) after the page settled, during the tab walk, the ` +
+        `driven actions or the minute of page time run after them: ` +
+        [...new Set(late.map((event) => pathOf(event.url)))].join(", "),
+    );
+  }
+  return failures;
+}
+
 export async function keyboardWalk(session, sessionId, expected) {
   // Start from a known place. Focus survives a navigation in a reused target, so without
   // this the first Tab can land mid-document and the walk measures the wrong sequence.
@@ -961,10 +1110,16 @@ async function waitForSettled(session, sessionId, deadlineMs = 10000) {
   throw new Error("a page never reached a settled state within 10s");
 }
 
+// `client.js` was served as application/octet-stream. A classic script runs anyway, so every gate
+// stayed green, but the product's own responses carry `nosniff` (BufferedHttpResponse), under which
+// a browser refuses to run a script that is not typed as one. The harness now types every file it
+// serves and sends `nosniff` too, so it measures the pages under the rule they will be served by.
 const CONTENT_TYPES = new Map([
   [".woff2", "font/woff2"],
   [".html", "text/html; charset=utf-8"],
   [".css", "text/css; charset=utf-8"],
+  [".js", "text/javascript; charset=utf-8"],
+  [".json", "application/json; charset=utf-8"],
   [".svg", "image/svg+xml"],
 ]);
 
@@ -1079,6 +1234,7 @@ export async function serveDist(root) {
         (body) => {
           response.writeHead(200, {
             "content-type": CONTENT_TYPES.get(extname(file)) ?? "application/octet-stream",
+            "x-content-type-options": "nosniff",
           });
           response.end(body);
         },
@@ -1183,12 +1339,36 @@ async function main() {
   const rows = [];
   try {
     const session = await Session.open(await waitForDebugger(port));
-    const { targetId } = await session.send("Target.createTarget", { url: "about:blank" });
-    const { sessionId } = await session.send("Target.attachToTarget", { targetId, flatten: true });
+    // Every combination gets a tab of its own. The bounded-network check runs the page's clock on
+    // virtual time, and a page cannot leave virtual time once it is in it: "advance" does not
+    // return it to the wall clock, it fast-forwards to each next timer for as long as the page
+    // lives. Reusing the tab fired the next page's timers the moment it loaded, before it settled,
+    // and a ten-second poll spun until the page stopped answering.
+    let targetId = null;
+    let sessionId = null;
+    const freshTab = async () => {
+      const previous = targetId;
+      ({ targetId } = await session.send("Target.createTarget", { url: "about:blank" }));
+      ({ sessionId } = await session.send("Target.attachToTarget", { targetId, flatten: true }));
+      for (const domain of ["Accessibility", "Log", "Runtime", "Page", "Network"]) {
+        await session.send(`${domain}.enable`, {}, sessionId);
+      }
+      if (previous) await session.send("Target.closeTarget", { targetId: previous });
+    };
 
     let logged = [];
+    // Every request and response of the current navigation, as the browser saw them. The server
+    // alone cannot tell a navigation from a subresource, or what the browser asked for.
+    let network = [];
     session.on((message) => {
       if (message.sessionId !== sessionId) return;
+      if (message.method === "Network.requestWillBeSent") {
+        network.push({ kind: "request", type: message.params.type, url: message.params.request.url });
+      }
+      if (message.method === "Network.responseReceived") {
+        const { response, type } = message.params;
+        network.push({ kind: "response", type, url: response.url, status: response.status, mime: response.mimeType });
+      }
       if (message.method === "Log.entryAdded") {
         logged.push(`${message.params.entry.level}: ${message.params.entry.text}`);
       }
@@ -1200,11 +1380,6 @@ async function main() {
       }
     });
 
-    await session.send("Accessibility.enable", {}, sessionId);
-    await session.send("Log.enable", {}, sessionId);
-    await session.send("Runtime.enable", {}, sessionId);
-    await session.send("Page.enable", {}, sessionId);
-
     for (const page of await pagesFrom(root)) {
       const url = `${site.origin}/${page}`;
       for (const viewport of WIDTHS) {
@@ -1214,6 +1389,7 @@ async function main() {
        // timeline hatches its gaps with a repeating gradient, and a gap that becomes invisible
        // is the one mark on that screen whose absence asserts something false.
        for (const scheme of FAST ? ["light"] : ["light", "dark", "forced"]) {
+        await freshTab();
         await session.send(
           "Emulation.setEmulatedMedia",
           {
@@ -1237,6 +1413,7 @@ async function main() {
           sessionId,
         );
         logged = [];
+        network = [];
         await session.send("Page.navigate", { url }, sessionId);
         // Wait for the document to be complete and its fonts resolved, rather than for a
         // fixed 250 ms. A fixed wait measures whatever has arrived: one combination reported
@@ -1244,6 +1421,9 @@ async function main() {
         // stylesheet not yet applied rather than a layout defect. A harness that sometimes
         // measures an unstyled page produces both false failures and false passes.
         await waitForSettled(session, sessionId);
+        // Everything the page needed has arrived by now; any request after this mark is the page
+        // reaching back out on its own, which the bounded-network gate below refuses.
+        const settledAt = network.length;
         const { result } = await session.send(
           "Runtime.evaluate",
           { expression: PROBE, returnByValue: true, awaitPromise: true },
@@ -1602,11 +1782,23 @@ async function main() {
           await unofficialDisclosure(session, sessionId),
           observed.unofficialControls,
         ));
+        // Bounded network. The page's clock is run a minute forward on virtual time first, on every
+        // combination and last on its tab, so a request the page would make on its own within that
+        // minute has been made before the verdict, however slowly it polls.
+        const clock = await runPageClock(session, sessionId);
+        if (clock !== null) {
+          failures.push(
+            `${page} @${viewport.label}/${scheme}: the page's clock could not be run a minute ` +
+              `forward (${clock}), so what it would request after settling is unjudged`,
+          );
+        }
+        failures.push(...networkFailures(`${page} @${viewport.label}/${scheme}`, network, settledAt));
+        row.requests = network.filter((event) => event.kind === "request").length;
         const late = logged.slice(consoleAtLoad);
         if (late.length > 0) {
           failures.push(
-            `${page} @${viewport.label}/${scheme}: console output during the tab walk or driven ` +
-              `actions ${JSON.stringify(late)}`,
+            `${page} @${viewport.label}/${scheme}: console output during the tab walk, driven ` +
+              `actions or the minute of page time run after them ${JSON.stringify(late)}`,
           );
         }
        }
@@ -1625,6 +1817,8 @@ async function main() {
         if (!destinations.has(href)) destinations.set(href, row.page);
       }
     }
+    // The last combination's tab is on virtual time; the destinations get one on the wall clock.
+    await freshTab();
     for (const [href, fromPage] of destinations) {
       let status = 0;
       try {
@@ -1643,6 +1837,7 @@ async function main() {
       // Follow it the way a reader would. `logged` is the same per-page buffer the main loop
       // fills from the CDP listener, so clearing it here scopes it to this one navigation.
       logged = [];
+      network = [];
       await session.send("Page.navigate", { url: `${site.origin}${href}` }, sessionId);
       await waitForSettled(session, sessionId);
       const { result } = await session.send(
@@ -1696,7 +1891,7 @@ async function main() {
       `${row.page.replace('state-','').replace('.html','').padEnd(18)} ${row.viewport.padEnd(8)} ${row.scheme.padEnd(6)} ` +
         `console=${row.console} h1=${row.h1Count} overflow=${row.horizontalOverflow} scripts=${row.scriptCount} ` +
         `contrast=${row.contrastChecked} worst=${row.worstContrast} ` +
-        `ax=${row.axNodes} named-interactive=${row.axInteractive} landmarks=${row.axLandmarks} main=${row.axMain} glued=${row.gluedCount} inert=${row.inertControls} small=${row.smallTargetCount}`,
+        `ax=${row.axNodes} named-interactive=${row.axInteractive} landmarks=${row.axLandmarks} main=${row.axMain} glued=${row.gluedCount} inert=${row.inertControls} small=${row.smallTargetCount} requests=${row.requests}`,
     );
   }
 
