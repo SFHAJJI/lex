@@ -626,7 +626,15 @@ for (const mutation of MUTATIONS) {
     } else if (!mutation.expect.test(output)) {
       console.log(`WRONG REASON ${mutation.name}`);
       // Every failure line, not the first four, so a wrong reason can be told from a flake.
-      console.log(output.split("\n").filter((l) => /^\s+\S.*: /.test(l)).join("\n"));
+      const lines = output.split("\n").filter((l) => /^\s+\S.*: /.test(l));
+      // A run that ended without judging anything is not a wrong reason, and it has no failure
+      // lines to print: its last words are what names the crash.
+      console.log(
+        lines.length > 0
+          ? lines.join("\n")
+          : `             it judged nothing and ended ${code}; its last output:\n` +
+            output.split("\n").filter((l) => l.trim() !== "").slice(-12).map((l) => `             ${l}`).join("\n"),
+      );
       failures += 1;
     } else {
       const line = output.split("\n").find((l) => mutation.expect.test(l)) ?? "";
