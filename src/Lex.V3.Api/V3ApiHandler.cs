@@ -76,6 +76,7 @@ internal sealed class V3ApiHandler
                 {
                     "as_of" => AsOfOutcome,
                     "timeline" => TimelineOutcome,
+                    "article_history" => ArticleHistoryOutcome,
                     _ => ResolveOutcome,
                 };
                 await V3ResolveRestRoute.HandleOutcomeAsync(
@@ -122,6 +123,9 @@ internal sealed class V3ApiHandler
 
     private V3PlatformOperationOutcome TimelineOutcome(V3PlatformOperationRequest request) =>
         _corpusMount!.Timeline(request, _utcNow());
+
+    private V3PlatformOperationOutcome ArticleHistoryOutcome(V3PlatformOperationRequest request) =>
+        _corpusMount!.ArticleHistory(request, _utcNow());
 
     private static V3PlatformOperationRefusal NoCorpusMounted(V3PlatformOperationRequest request)
     {

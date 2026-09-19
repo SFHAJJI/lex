@@ -56,6 +56,19 @@ public sealed record LuxembourgIndexArticleDate(
     string ArticleIdentitySha256,
     string? ApplicabilityDate);
 
+/// <summary>
+/// One article of one state that carries a publisher-minted article id: the publisher's ids and
+/// article-level date as stored, and the SHA-256 of the retained searchable text, which is the only
+/// wording identity the index has. Nothing is compared here.
+/// </summary>
+public sealed record LuxembourgIndexAnchorArticle(
+    string StateSha256,
+    string ArticleIdentitySha256,
+    string PublisherId,
+    string? PublisherWid,
+    string? ApplicabilityDate,
+    string TextSha256);
+
 public sealed record LuxembourgIndexResolvedWork(
     string WorkIdentifier,
     IReadOnlyList<string> ExpressionIris,
@@ -1191,6 +1204,75 @@ public sealed class LuxembourgIndexReader : IDisposable
                 .Select(identity => new LuxembourgIndexArticleDate(
                     identity, dates.TryGetValue(identity, out var date) ? date : null))
                 .ToArray());
+        }
+    }
+
+    /// <summary>
+    /// The articles carrying the publisher-minted article id <paramref name="anchor"/> in each of the
+    /// given states, ordered by state digest then article identity. A state that does not carry the
+    /// anchor contributes no row; a state that carries it more than once contributes each article.
+    /// </summary>
+    public IReadOnlyList<LuxembourgIndexAnchorArticle> ResolveAnchorArticles(
+        IReadOnlyList<string> stateDigests, string anchor)
+    {
+        ArgumentNullException.ThrowIfNull(stateDigests);
+        ArgumentException.ThrowIfNullOrWhiteSpace(anchor);
+        if (stateDigests.Count == 0)
+        {
+            return Array.Empty<LuxembourgIndexAnchorArticle>();
+        }
+
+        lock (_gate)
+        {
+            using var command = _connection.CreateCommand();
+            command.CommandText = """
+                SELECT s.state_sha256, a.article_identity_sha256, a.publisher_id, a.publisher_wid,
+                       a.applicability_date, a.searchable_text
+                FROM states s, json_each(s.article_identities_json) j
+                JOIN articles a ON a.article_identity_sha256 = j.value
+                WHERE s.state_sha256 IN (SELECT value FROM json_each($states)) AND a.publisher_id = $anchor
+                ORDER BY s.state_sha256, a.article_identity_sha256
+                """;
+            command.Parameters.AddWithValue("$states", JsonSerializer.Serialize(stateDigests));
+            command.Parameters.AddWithValue("$anchor", anchor);
+            using var reader = command.ExecuteReader();
+            var values = new List<LuxembourgIndexAnchorArticle>();
+            while (reader.Read())
+            {
+                values.Add(new LuxembourgIndexAnchorArticle(
+                    reader.GetString(0),
+                    reader.GetString(1),
+                    reader.GetString(2),
+                    reader.IsDBNull(3) ? null : reader.GetString(3),
+                    reader.IsDBNull(4) ? null : reader.GetString(4),
+                    Convert.ToHexStringLower(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(reader.GetString(5))))));
+            }
+            return Array.AsReadOnly(values.ToArray());
+        }
+    }
+
+    /// <summary>The distinct publisher-minted article ids of one state, in ordinal order.</summary>
+    public IReadOnlyList<string> ResolveArticleIds(string stateSha256)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(stateSha256);
+        lock (_gate)
+        {
+            using var command = _connection.CreateCommand();
+            command.CommandText = """
+                SELECT DISTINCT a.publisher_id
+                FROM states s, json_each(s.article_identities_json) j
+                JOIN articles a ON a.article_identity_sha256 = j.value
+                WHERE s.state_sha256 = $digest
+                ORDER BY a.publisher_id
+                """;
+            command.Parameters.AddWithValue("$digest", stateSha256);
+            using var reader = command.ExecuteReader();
+            var values = new List<string>();
+            while (reader.Read())
+            {
+                values.Add(reader.GetString(0));
+            }
+            return Array.AsReadOnly(values.ToArray());
         }
     }
 
