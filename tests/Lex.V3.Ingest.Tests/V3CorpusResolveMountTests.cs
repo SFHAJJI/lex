@@ -1247,22 +1247,38 @@ public sealed class V3CorpusResolveMountTests
         /// </summary>
         public async Task<string> NullOneArticleDateAsync()
         {
+            string identity;
+            using (var connection = LuxembourgIndexBuilder.Open(
+                       Path.Combine(Directory, V3CorpusMount.IndexFileName), SqliteOpenMode.ReadOnly))
+            {
+                var state = ReadStates(connection).Single(row =>
+                    string.Equals(row.ExpressionIri, ExpressionIri, StringComparison.Ordinal));
+                identity = System.Text.Json.JsonSerializer.Deserialize<string[]>(state.ArticleIdentitiesJson)![0];
+            }
+
+            await SetArticleDateAsync(identity, null);
+            return identity;
+        }
+
+        /// <summary>
+        /// Sets one article's publisher-level date in the index (null blanks it) and re-stamps the
+        /// index and manifest so the mount still verifies. The state rows are untouched.
+        /// </summary>
+        public async Task SetArticleDateAsync(string identity, string? applicabilityDate)
+        {
             var indexPath = Path.Combine(Directory, V3CorpusMount.IndexFileName);
             LuxembourgIndexBuilder.MemberRow[] members;
             LuxembourgIndexBuilder.ArticleRow[] articles;
             LuxembourgIndexBuilder.StateRow[] states;
             LuxembourgIndexBuilder.WorkTitleRow[] titles;
-            string identity;
             using (var connection = LuxembourgIndexBuilder.Open(indexPath, SqliteOpenMode.ReadWrite))
             {
-                var state = ReadStates(connection).Single(row =>
-                    string.Equals(row.ExpressionIri, ExpressionIri, StringComparison.Ordinal));
-                identity = System.Text.Json.JsonSerializer.Deserialize<string[]>(state.ArticleIdentitiesJson)![0];
-                using (var blank = connection.CreateCommand())
+                using (var set = connection.CreateCommand())
                 {
-                    blank.CommandText = "UPDATE articles SET applicability_date=NULL WHERE article_identity_sha256=$identity";
-                    blank.Parameters.AddWithValue("$identity", identity);
-                    Assert.AreEqual(1, blank.ExecuteNonQuery());
+                    set.CommandText = "UPDATE articles SET applicability_date=$date WHERE article_identity_sha256=$identity";
+                    set.Parameters.AddWithValue("$date", (object?)applicabilityDate ?? DBNull.Value);
+                    set.Parameters.AddWithValue("$identity", identity);
+                    Assert.AreEqual(1, set.ExecuteNonQuery());
                 }
                 members = ReadMembers(connection);
                 articles = ReadArticles(connection);
@@ -1282,7 +1298,6 @@ public sealed class V3CorpusResolveMountTests
             _ = V3IndexCapabilityManifestArtifact.Write(stream, manifest);
             await File.WriteAllBytesAsync(
                 Path.Combine(Directory, V3CorpusMount.CapabilityManifestFileName), stream.ToArray());
-            return identity;
         }
 
         /// <summary>The publisher's article-level dates of the fixture's own state, by identity.</summary>

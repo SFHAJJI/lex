@@ -419,7 +419,14 @@ public sealed class V3CorpusAsOfMountTests
         var fixture = await MountedFixture.CreateAsync();
         await using var cleanup = fixture;
         var laterDate = Shift(fixture.ApplicabilityDate, 400);
-        await fixture.AddStateAsync(laterDate, "later");
+        var later = await fixture.AddStateAsync(laterDate, "later");
+        var laterIdentities = JsonSerializer.Deserialize<string[]>(later.ArticleIdentitiesJson)!;
+        Assert.IsGreaterThan(2, laterIdentities.Length, "The inserted state needs three articles: after, before, and on the date.");
+        // Both directions of "differs": one article dated after the state, one before, the rest on it.
+        var afterDate = Shift(laterDate, 30);
+        var beforeDate = Shift(laterDate, -30);
+        await fixture.SetArticleDateAsync(laterIdentities[0], afterDate);
+        await fixture.SetArticleDateAsync(laterIdentities[1], beforeDate);
         var blanked = await fixture.NullOneArticleDateAsync();
         var stored = fixture.ArticleDatesOfOwnState();
         Assert.IsGreaterThan(1, stored.Count, "The retained fixture must hold several articles.");
@@ -430,8 +437,12 @@ public sealed class V3CorpusAsOfMountTests
 
         // The fixture's own state: every article carries the publisher's own date, the flag is true
         // exactly where a stated date differs from the state date, a blank date is never a conflict.
-        var own = await AsOfAsync(mount, $"/lu-legilux/{fixture.WorkKey}", fixture.ApplicabilityDate);
+        // Asked for a date strictly inside the interval, not the state's own date, so the comparison
+        // is proven to be against the state's date and not the requested one.
+        var inside = Shift(fixture.ApplicabilityDate, 10);
+        var own = await AsOfAsync(mount, $"/lu-legilux/{fixture.WorkKey}", inside);
         var ownState = own.Result!.Value.GetProperty("states").EnumerateArray().Single();
+        Assert.AreEqual(fixture.ApplicabilityDate, ownState.GetProperty("applicability_date").GetString());
         var articles = ownState.GetProperty("articles").EnumerateArray().ToArray();
         Assert.HasCount(stored.Count, articles);
         var expectedConflicts = 0;
@@ -453,13 +464,29 @@ public sealed class V3CorpusAsOfMountTests
             .GetProperty("validity_conflict").GetBoolean(), "A date the publisher did not state is not a conflict.");
         StringAssert.Contains(ownState.GetProperty("validity_conflict_rule").GetString(), "differs from the state's applicability_date");
 
-        // The later state was inserted with every article dated on the state date: no conflict.
-        var later = await AsOfAsync(mount, $"/lu-legilux/{fixture.WorkKey}", laterDate);
-        var laterState = later.Result!.Value.GetProperty("states").EnumerateArray().Single();
-        Assert.AreEqual(0, laterState.GetProperty("validity_conflict_count").GetInt32());
-        Assert.IsTrue(laterState.GetProperty("articles").EnumerateArray()
-            .All(article => !article.GetProperty("validity_conflict").GetBoolean() &&
-                            article.GetProperty("article_valid_from").GetString() == laterDate));
+        // The later state, asked for on its own date and for a date inside its interval: the article
+        // dated after the state and the one dated before are both conflicts; the rest, dated on the
+        // state, are not. The answer must not change with the requested date.
+        foreach (var requested in new[] { laterDate, Shift(laterDate, 200) })
+        {
+            var laterAnswer = await AsOfAsync(mount, $"/lu-legilux/{fixture.WorkKey}", requested);
+            var laterState = laterAnswer.Result!.Value.GetProperty("states").EnumerateArray().Single();
+            Assert.AreEqual(laterDate, laterState.GetProperty("applicability_date").GetString(), requested);
+            var byIdentity = laterState.GetProperty("articles").EnumerateArray()
+                .ToDictionary(a => a.GetProperty("article_identity_sha256").GetString()!, a => a);
+            Assert.AreEqual(afterDate, byIdentity[laterIdentities[0]].GetProperty("article_valid_from").GetString());
+            Assert.IsTrue(byIdentity[laterIdentities[0]].GetProperty("validity_conflict").GetBoolean(),
+                "An article dated after its state's date is a conflict.");
+            Assert.AreEqual(beforeDate, byIdentity[laterIdentities[1]].GetProperty("article_valid_from").GetString());
+            Assert.IsTrue(byIdentity[laterIdentities[1]].GetProperty("validity_conflict").GetBoolean(),
+                "An article dated before its state's date is a conflict.");
+            foreach (var identity in laterIdentities.Skip(2))
+            {
+                Assert.AreEqual(laterDate, byIdentity[identity].GetProperty("article_valid_from").GetString());
+                Assert.IsFalse(byIdentity[identity].GetProperty("validity_conflict").GetBoolean());
+            }
+            Assert.AreEqual(2, laterState.GetProperty("validity_conflict_count").GetInt32(), requested);
+        }
 
         // The hash-pinned permalink of the same state carries the identical values.
         var pinned = await ResolveAsync(mount, fixture.Permalink);
