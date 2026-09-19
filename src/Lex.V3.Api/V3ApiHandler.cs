@@ -78,6 +78,7 @@ internal sealed class V3ApiHandler
                     "timeline" => TimelineOutcome,
                     "article_history" => ArticleHistoryOutcome,
                     "diff" => DiffOutcome,
+                    "changes_in_period" => ChangesInPeriodOutcome,
                     _ => ResolveOutcome,
                 };
                 await V3ResolveRestRoute.HandleOutcomeAsync(
@@ -130,6 +131,9 @@ internal sealed class V3ApiHandler
 
     private V3PlatformOperationOutcome DiffOutcome(V3PlatformOperationRequest request) =>
         _corpusMount!.Diff(request, _utcNow());
+
+    private V3PlatformOperationOutcome ChangesInPeriodOutcome(V3PlatformOperationRequest request) =>
+        _corpusMount!.ChangesInPeriod(request, _utcNow());
 
     private static V3PlatformOperationRefusal NoCorpusMounted(V3PlatformOperationRequest request)
     {

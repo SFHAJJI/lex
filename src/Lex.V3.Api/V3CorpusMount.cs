@@ -610,7 +610,7 @@ internal sealed class V3CorpusMount : IDisposable
                 continue;
             }
 
-            var (articles, counts) = CompareArticles(
+            var (articles, counts, _) = CompareArticles(
                 _reader!.ResolveStateArticles(from.StateSha256), _reader.ResolveStateArticles(to.StateSha256));
             comparisons.Add(new
             {
@@ -682,7 +682,7 @@ internal sealed class V3CorpusMount : IDisposable
     /// wording digests is unchanged, with different digests changed; only in the later state added;
     /// only in the earlier removed. An id minted twice in one state compares as its ordered digests.
     /// </summary>
-    private static (IReadOnlyList<object> Articles, object Counts) CompareArticles(
+    private static (IReadOnlyList<object> Articles, object Counts, bool Differs) CompareArticles(
         IReadOnlyList<LuxembourgIndexStateArticle> from, IReadOnlyList<LuxembourgIndexStateArticle> to)
     {
         static Dictionary<string, LuxembourgIndexStateArticle[]> ById(IReadOnlyList<LuxembourgIndexStateArticle> articles) =>
@@ -723,8 +723,302 @@ internal sealed class V3CorpusMount : IDisposable
             rows.Add(new { publisher_id = id, status, from = Side(before), to = Side(after) });
         }
 
-        return (rows, new { unchanged, changed, added, removed });
+        return (rows, new { unchanged, changed, added, removed }, changed + added + removed > 0);
     }
+
+    /// <summary>The ceiling on the rows one <c>changes_in_period</c> answer carries.</summary>
+    public const int ChangesInPeriodMaxRows = 200;
+
+    internal const string ChangesInPeriodCaveat =
+        "a version row does not by itself assert a wording change, legal effect, or entry into force";
+
+    /// <summary>
+    /// R6 <c>changes_in_period</c> for Luxembourg, the change radar: every publisher-dated state whose
+    /// date lies in a closed window, across the mounted works or for one, per language, in publisher
+    /// date, work key, language, expression and digest order. The window is the closed interval between
+    /// the two dates whichever is given first. Each row names the state compactly (the full row is one
+    /// <c>as_of</c> away, and the row carries its parameters), the <c>baseline</c> it replaced (the
+    /// state of the same work and language on the greatest earlier publisher date), and
+    /// <c>wording_changed</c> from the article-level comparison <c>diff</c> makes, with its counts and
+    /// the parameters that ask <c>diff</c> for the pair.
+    /// <para>
+    /// <c>wording_changed</c> is null with a <c>reason</c> wherever comparing would be dishonest: the
+    /// first held state has no baseline; a state or a baseline that is one of several on its date and
+    /// language is ambiguous and none is chosen; states with different rule-profile sets are never
+    /// compared, as <c>diff</c> refuses. These are facts about one row and not refusals of the whole
+    /// radar: <c>diff</c> answers about one work and refuses whole, but a radar that one ambiguous
+    /// work could silence would hide every other work's change from the reader.
+    /// </para>
+    /// <para>
+    /// Rows are bounded and the bound is said: at most <c>limit</c> rows (the ceiling when absent),
+    /// never cut within a publisher date, with <c>truncated</c> and <c>continue_from</c>, the first date
+    /// not served, which a next request uses as its <c>date_from</c> and neither repeats nor skips a
+    /// row. A single date holding more rows than the limit is served whole and
+    /// <c>whole_date_over_limit</c> says so. The population block counts the whole window in the scope
+    /// asked for (the work, the language), not the rows served. Nothing is derived: no legal
+    /// effect, no amending act, no entry into force, and the fixed caveat says so in every answer.
+    /// </para>
+    /// </summary>
+    public V3PlatformOperationOutcome ChangesInPeriod(
+        V3PlatformOperationRequest request,
+        DateTimeOffset observedAt)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (!string.Equals(request.OperationId, "changes_in_period", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("The mounted corpus radar operation only accepts changes_in_period/1.");
+        }
+
+        var dateFrom = RequiredString(request.Parameters, "date_from");
+        var dateTo = RequiredString(request.Parameters, "date_to");
+        var requestedLanguage = OptionalLanguage(request.Parameters);
+        var identifier = request.Parameters.TryGetProperty("identifier", out var identifierValue) &&
+            identifierValue.ValueKind == JsonValueKind.String
+                ? RequiredString(request.Parameters, "identifier")
+                : null;
+        var limit = ChangesInPeriodMaxRows;
+        if (request.Parameters.TryGetProperty("limit", out var limitValue))
+        {
+            if (limitValue.ValueKind != JsonValueKind.Number || !limitValue.TryGetInt32(out limit) ||
+                limit < 1 || limit > ChangesInPeriodMaxRows)
+            {
+                throw new V3TransportFailureException(
+                    V3TransportFailureKind.RequestSchemaInvalid,
+                    "The operation request's 'limit' is not a whole number of rows within the ceiling.");
+            }
+        }
+
+        foreach (var date in new[] { dateFrom, dateTo })
+        {
+            if (!DateOnly.TryParseExact(date, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out _))
+            {
+                throw new V3TransportFailureException(
+                    V3TransportFailureKind.RequestSchemaInvalid,
+                    "A requested date is not a civil calendar date.");
+            }
+        }
+
+        var windowFrom = string.CompareOrdinal(dateFrom, dateTo) <= 0 ? dateFrom : dateTo;
+        var windowTo = string.CompareOrdinal(dateFrom, dateTo) <= 0 ? dateTo : dateFrom;
+
+        IReadOnlyList<LuxembourgIndexResolvedState> inWindow;
+        string[] languagesHeld;
+        long worksHeld;
+        string? firstHeld;
+        string? lastHeld;
+        var statesByWork = new Dictionary<string, IReadOnlyList<LuxembourgIndexResolvedState>>(StringComparer.Ordinal);
+        if (identifier is not null)
+        {
+            if (RefuseUnlessWorkStates(request, identifier, observedAt, "r6_changes_in_period", requestedLanguage,
+                    out var states, out var availableLanguages) is { } refused)
+            {
+                return refused;
+            }
+
+            statesByWork[states[0].WorkKey] = states;
+            inWindow = states
+                .Where(state => string.CompareOrdinal(state.ApplicabilityDate, windowFrom) >= 0 &&
+                    string.CompareOrdinal(state.ApplicabilityDate, windowTo) <= 0)
+                .ToArray();
+            languagesHeld = availableLanguages;
+            worksHeld = 1;
+            var heldDates = states
+                .Where(state => requestedLanguage is null || string.Equals(state.Language, requestedLanguage, StringComparison.Ordinal))
+                .Select(static state => state.ApplicabilityDate).Order(StringComparer.Ordinal).ToArray();
+            firstHeld = heldDates[0];
+            lastHeld = heldDates[^1];
+        }
+        else
+        {
+            if (_reader is null)
+            {
+                // The radar reads the Luxembourg index. Without it there is nothing to read a window
+                // against, whatever else is mounted; the refusal says which corpus is required.
+                using var unmounted = JsonSerializer.SerializeToDocument(new { required_corpus = "lu" });
+                return V3PlatformOperationOutcome.Refused(
+                    Context("refusal", observedAt, PublisherId.LuLegilux),
+                    new V3PlatformOperationRefusal(request, "no_corpus_mounted", unmounted.RootElement));
+            }
+
+            languagesHeld = _reader.ResolveStatePopulation().Languages.ToArray();
+            if (requestedLanguage is not null && !languagesHeld.Contains(requestedLanguage, StringComparer.Ordinal))
+            {
+                using var unavailableLanguage = JsonSerializer.SerializeToDocument(new
+                {
+                    requested_language = requestedLanguage,
+                    available_languages = languagesHeld,
+                });
+                return V3PlatformOperationOutcome.Refused(
+                    Context("refusal", observedAt),
+                    new V3PlatformOperationRefusal(request, "language_not_available", unavailableLanguage.RootElement));
+            }
+
+            inWindow = _reader.ResolveStatesInPeriod(windowFrom, windowTo);
+            var population = _reader.ResolveStatePopulation(requestedLanguage);
+            worksHeld = population.Works;
+            firstHeld = population.FirstDate;
+            lastHeld = population.LastDate;
+        }
+
+        var versions = requestedLanguage is null
+            ? inWindow
+            : inWindow.Where(state => string.Equals(state.Language, requestedLanguage, StringComparison.Ordinal)).ToArray();
+
+        // Rows are never cut within a publisher date: whole dates are served until the limit is reached,
+        // and the first date not served is where the reader continues.
+        var served = new List<LuxembourgIndexResolvedState>();
+        string? continueFrom = null;
+        foreach (var byDate in versions.GroupBy(static state => state.ApplicabilityDate, StringComparer.Ordinal))
+        {
+            if (served.Count > 0 && served.Count + byDate.Count() > limit)
+            {
+                continueFrom = byDate.Key;
+                break;
+            }
+
+            served.AddRange(byDate);
+        }
+
+        var rows = new List<object>();
+        foreach (var state in served)
+        {
+            if (!statesByWork.TryGetValue(state.WorkKey, out var ofWork))
+            {
+                ofWork = _reader!.ResolveWorkStates(state.WorkKey);
+                statesByWork[state.WorkKey] = ofWork;
+            }
+
+            var ofLanguage = ofWork
+                .Where(other => string.Equals(other.Language, state.Language, StringComparison.Ordinal))
+                .ToArray();
+            var sameDate = ofLanguage
+                .Where(other => string.Equals(other.ApplicabilityDate, state.ApplicabilityDate, StringComparison.Ordinal))
+                .ToArray();
+            var earlier = ofLanguage
+                .Where(other => string.CompareOrdinal(other.ApplicabilityDate, state.ApplicabilityDate) < 0)
+                .ToArray();
+            var baselineDate = earlier.Length == 0
+                ? null
+                : earlier.Select(static other => other.ApplicabilityDate).Order(StringComparer.Ordinal).Last();
+            var baselines = earlier
+                .Where(other => string.Equals(other.ApplicabilityDate, baselineDate, StringComparison.Ordinal))
+                .ToArray();
+
+            bool? wordingChanged = null;
+            string? reason = null;
+            object? counts = null;
+            object? diff = null;
+            string[]? candidates = null;
+            if (baselines.Length == 0)
+            {
+                reason = "first_held_state";
+            }
+            else if (sameDate.Length > 1)
+            {
+                reason = "ambiguous_version";
+                candidates = sameDate.Select(StateUrl).Order(StringComparer.Ordinal).ToArray();
+            }
+            else if (baselines.Length > 1)
+            {
+                reason = "ambiguous_baseline";
+                candidates = baselines.Select(StateUrl).Order(StringComparer.Ordinal).ToArray();
+            }
+            else if (!baselines[0].RuleProfileSha256s.SequenceEqual(state.RuleProfileSha256s, StringComparer.Ordinal))
+            {
+                reason = "profiles_differ";
+            }
+            else
+            {
+                var (_, compared, differs) = CompareArticles(
+                    _reader!.ResolveStateArticles(baselines[0].StateSha256), _reader.ResolveStateArticles(state.StateSha256));
+                wordingChanged = differs;
+                counts = compared;
+                diff = new
+                {
+                    identifier = $"/lu-legilux/{state.WorkKey}",
+                    date_from = baselines[0].ApplicabilityDate,
+                    date_to = state.ApplicabilityDate,
+                    language = state.Language,
+                };
+            }
+
+            rows.Add(new
+            {
+                work_key = state.WorkKey,
+                publisher_work_iri = state.PublisherWorkIri,
+                state = StateReference(state, NextDateInLanguage(ofWork, state)),
+                baseline = baselines.Length == 1 ? StateReference(baselines[0], state.ApplicabilityDate) : null,
+                wording_changed = wordingChanged,
+                reason,
+                candidates,
+                counts,
+                diff,
+                as_of = new
+                {
+                    identifier = $"/lu-legilux/{state.WorkKey}",
+                    date = state.ApplicabilityDate,
+                    language = state.Language,
+                },
+            });
+        }
+
+        using var result = JsonSerializer.SerializeToDocument(new
+        {
+            requested_date_from = dateFrom,
+            requested_date_to = dateTo,
+            requested_identifier = identifier,
+            requested_language = requestedLanguage,
+            window_from = windowFrom,
+            window_to = windowTo,
+            publisher = "lu-legilux",
+            caveat = ChangesInPeriodCaveat,
+            population = new
+            {
+                // The population is the scope asked for: the one work when an identifier is given, the
+                // one language when a language is given, the whole mounted index otherwise. The languages
+                // listed are every language of that work or index, since they are what could be asked.
+                scope = new { identifier, language = requestedLanguage },
+                works_held = worksHeld,
+                first_date_held = firstHeld,
+                last_date_held = lastHeld,
+                languages_held = languagesHeld,
+                works_in_window = versions.Select(static state => state.WorkKey).Distinct(StringComparer.Ordinal).Count(),
+                versions_in_window = versions.Count,
+                window_overlaps_what_is_held = firstHeld is not null && lastHeld is not null &&
+                    string.CompareOrdinal(windowFrom, lastHeld) <= 0 && string.CompareOrdinal(windowTo, firstHeld) >= 0,
+            },
+            limit,
+            truncated = continueFrom is not null,
+            continue_from = continueFrom,
+            // A publisher date is never cut: when one date alone holds more rows than the limit it is
+            // served whole, and this says the limit was exceeded for that reason.
+            whole_date_over_limit = served.Count > limit,
+            changes = rows,
+            wording_rule = WordingRule,
+            corpus_sha256 = _corpus.ArtifactRef.Sha256,
+            index_sha256 = _reader!.IndexRef.Sha256,
+        });
+        return V3PlatformOperationOutcome.Success(
+            Context("success", observedAt),
+            new V3PlatformOperationResult(request, "change_list", result.RootElement));
+    }
+
+    /// <summary>
+    /// A state named compactly for a list: what identifies it and where it is read in full. The article
+    /// lists stay with <c>as_of</c> and <c>timeline</c>, which serve the whole dated-state row.
+    /// </summary>
+    private static object StateReference(LuxembourgIndexResolvedState state, string? nextDate) => new
+    {
+        language = state.Language,
+        applicability_date = state.ApplicabilityDate,
+        next_applicability_date = nextDate,
+        state_sha256 = state.StateSha256,
+        expression_iri = state.ExpressionIri,
+        article_count = state.ArticleIdentities.Count,
+        rule_profile_sha256s = state.RuleProfileSha256s,
+        stable_coordinate = StableCoordinate(state),
+        permalink = StateUrl(state),
+    };
 
     /// <summary>
     /// R6 <c>timeline</c> for Luxembourg: the inventory of every publisher-dated state of one work,
