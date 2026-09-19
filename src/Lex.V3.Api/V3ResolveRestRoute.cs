@@ -4,11 +4,36 @@ using Microsoft.AspNetCore.Http.Features;
 
 namespace Lex.V3.Api;
 
+/// <summary>
+/// One governed REST route and the single reviewed operation it serves. The host validates every
+/// body against the request schema of the bound operation, whose <c>operation_id</c> constant
+/// refuses a body naming any other operation as a request-schema failure below the envelope.
+/// </summary>
+internal sealed record V3RestRouteBinding(string RawTarget, string OperationId)
+{
+    public static readonly V3RestRouteBinding Resolve = new("/api/v3/resolve", "resolve");
+    public static readonly V3RestRouteBinding AsOf = new("/api/v3/as_of", "as_of");
+    public static readonly IReadOnlyList<V3RestRouteBinding> Served = [Resolve, AsOf];
+
+    public bool Claims(string rawTarget) =>
+        string.Equals(rawTarget, RawTarget, StringComparison.Ordinal) ||
+        rawTarget.StartsWith(RawTarget + "?", StringComparison.Ordinal);
+}
+
 internal static class V3ResolveRestRoute
 {
     public const string RawTarget = "/api/v3/resolve";
 
+    public static Task HandleOutcomeAsync(
+        HttpContext context,
+        V3PlatformHost host,
+        string requestReference,
+        Func<V3PlatformOperationRequest, V3PlatformOperationOutcome> execute,
+        CancellationToken cancellationToken) =>
+        HandleOutcomeAsync(V3RestRouteBinding.Resolve, context, host, requestReference, execute, cancellationToken);
+
     public static async Task HandleOutcomeAsync(
+        V3RestRouteBinding binding,
         HttpContext context,
         V3PlatformHost host,
         string requestReference,
@@ -18,6 +43,7 @@ internal static class V3ResolveRestRoute
         try
         {
             await WriteOutcomeAsync(
+                binding,
                 context,
                 host,
                 requestReference,
@@ -43,7 +69,17 @@ internal static class V3ResolveRestRoute
         }
     }
 
+    public static Task HandleSuccessAsync(
+        HttpContext context,
+        V3PlatformHost host,
+        string requestReference,
+        V3EnvelopeContext envelopeContext,
+        Func<V3PlatformOperationRequest, V3PlatformOperationResult> execute,
+        CancellationToken cancellationToken) =>
+        HandleSuccessAsync(V3RestRouteBinding.Resolve, context, host, requestReference, envelopeContext, execute, cancellationToken);
+
     public static async Task HandleSuccessAsync(
+        V3RestRouteBinding binding,
         HttpContext context,
         V3PlatformHost host,
         string requestReference,
@@ -54,6 +90,7 @@ internal static class V3ResolveRestRoute
         try
         {
             await WriteSuccessAsync(
+                binding,
                 context,
                 host,
                 requestReference,
@@ -80,7 +117,17 @@ internal static class V3ResolveRestRoute
         }
     }
 
+    public static Task HandleRefusalAsync(
+        HttpContext context,
+        V3PlatformHost host,
+        string requestReference,
+        V3EnvelopeContext envelopeContext,
+        Func<V3PlatformOperationRequest, V3PlatformOperationRefusal> execute,
+        CancellationToken cancellationToken) =>
+        HandleRefusalAsync(V3RestRouteBinding.Resolve, context, host, requestReference, envelopeContext, execute, cancellationToken);
+
     public static async Task HandleRefusalAsync(
+        V3RestRouteBinding binding,
         HttpContext context,
         V3PlatformHost host,
         string requestReference,
@@ -91,6 +138,7 @@ internal static class V3ResolveRestRoute
         try
         {
             await WriteRefusalAsync(
+                binding,
                 context,
                 host,
                 requestReference,
@@ -117,7 +165,17 @@ internal static class V3ResolveRestRoute
         }
     }
 
+    public static Task WriteSuccessAsync(
+        HttpContext context,
+        V3PlatformHost host,
+        string requestReference,
+        V3EnvelopeContext envelopeContext,
+        Func<V3PlatformOperationRequest, V3PlatformOperationResult> execute,
+        CancellationToken cancellationToken) =>
+        WriteSuccessAsync(V3RestRouteBinding.Resolve, context, host, requestReference, envelopeContext, execute, cancellationToken);
+
     public static async Task WriteSuccessAsync(
+        V3RestRouteBinding binding,
         HttpContext context,
         V3PlatformHost host,
         string requestReference,
@@ -127,18 +185,28 @@ internal static class V3ResolveRestRoute
     {
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(host);
-        RequireClaimedRequest(context);
+        RequireClaimedRequest(context, binding);
         var request = await ReadBoundedBodyAsync(context.Request, cancellationToken).ConfigureAwait(false);
         await host.WriteRestSuccessAsync(
             context.Response,
             request,
             requestReference,
+            binding.OperationId,
             envelopeContext,
             execute,
             cancellationToken).ConfigureAwait(false);
     }
 
+    public static Task WriteOutcomeAsync(
+        HttpContext context,
+        V3PlatformHost host,
+        string requestReference,
+        Func<V3PlatformOperationRequest, V3PlatformOperationOutcome> execute,
+        CancellationToken cancellationToken) =>
+        WriteOutcomeAsync(V3RestRouteBinding.Resolve, context, host, requestReference, execute, cancellationToken);
+
     public static async Task WriteOutcomeAsync(
+        V3RestRouteBinding binding,
         HttpContext context,
         V3PlatformHost host,
         string requestReference,
@@ -147,17 +215,28 @@ internal static class V3ResolveRestRoute
     {
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(host);
-        RequireClaimedRequest(context);
+        RequireClaimedRequest(context, binding);
         var request = await ReadBoundedBodyAsync(context.Request, cancellationToken).ConfigureAwait(false);
         await host.WriteRestOutcomeAsync(
             context.Response,
             request,
             requestReference,
+            binding.OperationId,
             execute,
             cancellationToken).ConfigureAwait(false);
     }
 
+    public static Task WriteRefusalAsync(
+        HttpContext context,
+        V3PlatformHost host,
+        string requestReference,
+        V3EnvelopeContext envelopeContext,
+        Func<V3PlatformOperationRequest, V3PlatformOperationRefusal> execute,
+        CancellationToken cancellationToken) =>
+        WriteRefusalAsync(V3RestRouteBinding.Resolve, context, host, requestReference, envelopeContext, execute, cancellationToken);
+
     public static async Task WriteRefusalAsync(
+        V3RestRouteBinding binding,
         HttpContext context,
         V3PlatformHost host,
         string requestReference,
@@ -167,27 +246,30 @@ internal static class V3ResolveRestRoute
     {
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(host);
-        RequireClaimedRequest(context);
+        RequireClaimedRequest(context, binding);
         var request = await ReadBoundedBodyAsync(context.Request, cancellationToken).ConfigureAwait(false);
         await host.WriteRestRefusalAsync(
             context.Response,
             request,
             requestReference,
+            binding.OperationId,
             envelopeContext,
             execute,
             cancellationToken).ConfigureAwait(false);
     }
 
-    private static void RequireClaimedRequest(HttpContext context)
+    private static void RequireClaimedRequest(HttpContext context, V3RestRouteBinding binding)
     {
+        ArgumentNullException.ThrowIfNull(binding);
         var rawTarget = context.Features.Get<IHttpRequestFeature>()?.RawTarget ?? string.Empty;
         if (!string.Equals(context.Request.Method, HttpMethods.Post, StringComparison.Ordinal) ||
-            !string.Equals(rawTarget, RawTarget, StringComparison.Ordinal))
+            !string.Equals(rawTarget, binding.RawTarget, StringComparison.Ordinal))
         {
-            var kind = string.Equals(rawTarget, RawTarget, StringComparison.Ordinal)
+            var kind = string.Equals(rawTarget, binding.RawTarget, StringComparison.Ordinal)
                 ? V3TransportFailureKind.MethodNotAllowed
                 : V3TransportFailureKind.UnknownRoute;
-            throw new V3TransportFailureException(kind, "The request does not match the reviewed resolve REST route.");
+            throw new V3TransportFailureException(
+                kind, $"The request does not match the reviewed {binding.OperationId} REST route.");
         }
     }
 

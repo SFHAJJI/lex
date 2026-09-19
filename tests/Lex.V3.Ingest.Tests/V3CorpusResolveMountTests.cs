@@ -18,7 +18,7 @@ namespace Lex.V3.Ingest.Tests;
 [TestClass]
 public sealed class V3CorpusResolveMountTests
 {
-    private static readonly DateTimeOffset ObservedAt =
+    internal static readonly DateTimeOffset ObservedAt =
         new(2026, 9, 18, 7, 0, 0, TimeSpan.Zero);
 
     [TestMethod]
@@ -815,7 +815,7 @@ public sealed class V3CorpusResolveMountTests
             System.Text.Json.JsonSerializer.Serialize(identifier) + "}}");
     }
 
-    private static DefaultHttpContext RequestBody(string body)
+    internal static DefaultHttpContext RequestBody(string body)
     {
         var bytes = Encoding.UTF8.GetBytes(body);
         var context = new DefaultHttpContext();
@@ -828,7 +828,7 @@ public sealed class V3CorpusResolveMountTests
         return context;
     }
 
-    private static byte[] ResponseBytes(DefaultHttpContext context) =>
+    internal static byte[] ResponseBytes(DefaultHttpContext context) =>
         ((MemoryStream)context.Response.Body).ToArray();
 
     private static async Task<V3Envelope> ResolveAsync(V3CorpusMount mount, string identifier)
@@ -840,7 +840,7 @@ public sealed class V3CorpusResolveMountTests
         return V3EnvelopeJson.ParseAndVerify(ResponseBytes(context), V3OperationRegistry.Reviewed);
     }
 
-    private sealed class MountedFixture : IAsyncDisposable
+    internal sealed class MountedFixture : IAsyncDisposable
     {
         private readonly byte[] _capabilityManifestBytes;
         private readonly byte[] _corpusBytes;
@@ -1157,6 +1157,88 @@ public sealed class V3CorpusResolveMountTests
             await File.WriteAllBytesAsync(
                 Path.Combine(Directory, V3CorpusMount.CapabilityManifestFileName),
                 stream.ToArray());
+        }
+
+        public async Task<LuxembourgIndexBuilder.StateRow> AddStateAsync(string applicabilityDate, string expressionSuffix)
+        {
+            var indexPath = Path.Combine(Directory, V3CorpusMount.IndexFileName);
+            LuxembourgIndexBuilder.MemberRow[] members;
+            LuxembourgIndexBuilder.ArticleRow[] articles;
+            LuxembourgIndexBuilder.StateRow[] states;
+            LuxembourgIndexBuilder.WorkTitleRow[] titles;
+            LuxembourgIndexBuilder.StateRow later;
+            using (var connection = LuxembourgIndexBuilder.Open(indexPath, SqliteOpenMode.ReadWrite))
+            {
+                var sourceState = ReadStates(connection)
+                    .OrderBy(static state => state.ApplicabilityDate, StringComparer.Ordinal).First();
+                var sourceArticles = ReadArticles(connection)
+                    .Where(article => sourceState.ArticleIdentitiesJson.Contains(
+                        article.ArticleIdentitySha256, StringComparison.Ordinal)).ToArray();
+                var expression = sourceState.PublisherLegalResourceIri + "/" + expressionSuffix;
+                var identities = new List<string>();
+                foreach (var source in sourceArticles)
+                {
+                    var identity = Convert.ToHexStringLower(SHA256.HashData(
+                        Encoding.UTF8.GetBytes(expressionSuffix + ":" + source.ArticleIdentitySha256)));
+                    identities.Add(identity);
+                    using var insert = connection.CreateCommand();
+                    insert.CommandText = "INSERT INTO articles VALUES($identity,$object,$expression,$publisher,$wid,$date,$language,$profile,$text,$tokens)";
+                    insert.Parameters.AddWithValue("$identity", identity);
+                    insert.Parameters.AddWithValue("$object", source.ObjectRefSha256);
+                    insert.Parameters.AddWithValue("$expression", expression);
+                    insert.Parameters.AddWithValue("$publisher", source.PublisherId);
+                    insert.Parameters.AddWithValue("$wid", (object?)source.PublisherWid ?? DBNull.Value);
+                    insert.Parameters.AddWithValue("$date", applicabilityDate);
+                    insert.Parameters.AddWithValue("$language", sourceState.Language);
+                    insert.Parameters.AddWithValue("$profile", source.RuleProfileSha256);
+                    insert.Parameters.AddWithValue("$text", source.SearchableText);
+                    insert.Parameters.AddWithValue("$tokens", source.TokensJson);
+                    Assert.AreEqual(1, insert.ExecuteNonQuery());
+                }
+                identities.Sort(StringComparer.Ordinal);
+                var profiles = System.Text.Json.JsonSerializer.Deserialize<string[]>(sourceState.RuleProfilesJson)!;
+                var digest = LuxembourgIndexBuilder.StateSha256(
+                    sourceState.WorkKey, applicabilityDate, expression,
+                    sourceState.PublisherWorkIri, sourceState.PublisherLegalResourceIri, sourceState.Language,
+                    profiles, identities);
+                later = new LuxembourgIndexBuilder.StateRow(
+                    sourceState.WorkKey, applicabilityDate, digest, expression,
+                    sourceState.PublisherWorkIri, sourceState.PublisherLegalResourceIri, sourceState.Language,
+                    sourceState.RuleProfilesJson, System.Text.Json.JsonSerializer.Serialize(identities));
+                using (var insertState = connection.CreateCommand())
+                {
+                    insertState.CommandText = "INSERT INTO states VALUES($work,$date,$digest,$expression,$workIri,$resource,$language,$profiles,$identities)";
+                    insertState.Parameters.AddWithValue("$work", later.WorkKey);
+                    insertState.Parameters.AddWithValue("$date", later.ApplicabilityDate);
+                    insertState.Parameters.AddWithValue("$digest", later.StateSha256);
+                    insertState.Parameters.AddWithValue("$expression", later.ExpressionIri);
+                    insertState.Parameters.AddWithValue("$workIri", later.PublisherWorkIri);
+                    insertState.Parameters.AddWithValue("$resource", later.PublisherLegalResourceIri);
+                    insertState.Parameters.AddWithValue("$language", later.Language);
+                    insertState.Parameters.AddWithValue("$profiles", later.RuleProfilesJson);
+                    insertState.Parameters.AddWithValue("$identities", later.ArticleIdentitiesJson);
+                    Assert.AreEqual(1, insertState.ExecuteNonQuery());
+                }
+                members = ReadMembers(connection);
+                articles = ReadArticles(connection);
+                states = ReadStates(connection);
+                titles = ReadWorkTitles(connection);
+                using var stamp = connection.CreateCommand();
+                stamp.CommandText = "UPDATE stamp SET logical_rows_sha256=$digest WHERE stamp_id=1";
+                stamp.Parameters.AddWithValue(
+                    "$digest", LuxembourgIndexBuilder.HashLogicalRows(members, articles, states, titles));
+                Assert.AreEqual(1, stamp.ExecuteNonQuery());
+            }
+
+            var indexBytes = await File.ReadAllBytesAsync(indexPath);
+            var indexDigest = Convert.ToHexStringLower(SHA256.HashData(indexBytes));
+            var manifest = LuxembourgIndexBuilder.MeasureCapabilities(indexDigest, articles, titles);
+            using var stream = new MemoryStream();
+            _ = V3IndexCapabilityManifestArtifact.Write(stream, manifest);
+            await File.WriteAllBytesAsync(
+                Path.Combine(Directory, V3CorpusMount.CapabilityManifestFileName),
+                stream.ToArray());
+            return later;
         }
 
         public async Task<LuxembourgIndexBuilder.StateRow> AddSecondLanguageStateAtSameDateAsync()
@@ -1484,7 +1566,7 @@ public sealed class V3CorpusResolveMountTests
         }
     }
 
-    private sealed class EuropeMountedFixture : IAsyncDisposable
+    internal sealed class EuropeMountedFixture : IAsyncDisposable
     {
         private readonly Stage3DerivationProfileEnvelope _envelope;
 

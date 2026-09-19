@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using Lex.V3.Contracts;
 using Lex.V3.Contracts.Facts;
@@ -317,10 +318,233 @@ internal sealed class V3CorpusMount : IDisposable
             new V3PlatformOperationResult(request, "work_resolution", result.RootElement));
     }
 
+    /// <summary>
+    /// R6 <c>as_of</c> for Luxembourg: the publisher-dated state of one work that applies on the
+    /// requested date, per language. Pure selection over the index's <c>states</c> rows: the greatest
+    /// <c>applicability_date</c> at or before the date selects the state; the next publisher-dated
+    /// state, if any, bounds it. Nothing is derived beyond that: no end date the publisher did not
+    /// state, no "in force" claim, and Luxembourg timeline semantics remain publisher applicability.
+    /// </summary>
+    public V3PlatformOperationOutcome AsOf(
+        V3PlatformOperationRequest request,
+        DateTimeOffset observedAt)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (!string.Equals(request.OperationId, "as_of", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("The mounted corpus temporal operation only accepts as_of/1.");
+        }
+
+        var identifier = RequiredString(request.Parameters, "identifier");
+        var requestedDate = RequiredString(request.Parameters, "date");
+        var requestedLanguage = request.Parameters.TryGetProperty("language", out var languageValue) &&
+                                languageValue.ValueKind == JsonValueKind.String
+            ? languageValue.GetString()
+            : null;
+        if (!DateOnly.TryParseExact(
+                requestedDate, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out _))
+        {
+            // The document admits the spelling; the calendar refuses the value. Same rejection class.
+            throw new V3TransportFailureException(
+                V3TransportFailureKind.RequestSchemaInvalid,
+                "The requested date is not a civil calendar date.");
+        }
+
+        if (_reader is null)
+        {
+            return ModeUnavailable(request, observedAt, PublisherId.EuEurLex);
+        }
+
+        var workIdentifier = TryParseStableWorkCoordinate(identifier, out var workKey) ? workKey : identifier;
+        var states = _reader.ResolveWorkStates(workIdentifier);
+        if (states.Count == 0)
+        {
+            return PublisherFor(identifier) == PublisherId.EuEurLex
+                ? ModeUnavailable(request, observedAt, PublisherId.EuEurLex)
+                : Unknown(request, identifier, observedAt, PublisherId.LuLegilux,
+                    "a Luxembourg work identifier present in the mounted index");
+        }
+
+        var availableLanguages = states.Select(static state => state.Language)
+            .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+        if (requestedLanguage is not null &&
+            !availableLanguages.Contains(requestedLanguage, StringComparer.Ordinal))
+        {
+            using var unavailableLanguage = JsonSerializer.SerializeToDocument(new
+            {
+                requested_language = requestedLanguage,
+                available_languages = availableLanguages,
+            });
+            return V3PlatformOperationOutcome.Refused(
+                Context("refusal", observedAt),
+                new V3PlatformOperationRefusal(
+                    request, "language_not_available", unavailableLanguage.RootElement));
+        }
+
+        var scope = requestedLanguage is null
+            ? states
+            : states.Where(state => string.Equals(state.Language, requestedLanguage, StringComparison.Ordinal))
+                .ToArray();
+        var servedLanguages = requestedLanguage is null ? availableLanguages : new[] { requestedLanguage };
+
+        // Every selection is per language: a date on which another language's text changes is never
+        // reported as a change of the text being served.
+        var served = new List<object>();
+        var ambiguous = new List<string>();
+        foreach (var language in servedLanguages)
+        {
+            var ofLanguage = scope
+                .Where(state => string.Equals(state.Language, language, StringComparison.Ordinal))
+                .ToArray();
+            var atOrBefore = ofLanguage
+                .Where(state => string.CompareOrdinal(state.ApplicabilityDate, requestedDate) <= 0)
+                .ToArray();
+            if (atOrBefore.Length == 0)
+            {
+                continue;
+            }
+
+            var selectedDate = atOrBefore.Select(static state => state.ApplicabilityDate).Max(StringComparer.Ordinal)!;
+            var selected = atOrBefore
+                .Where(state => string.Equals(state.ApplicabilityDate, selectedDate, StringComparison.Ordinal))
+                .ToArray();
+            if (selected.Length > 1)
+            {
+                ambiguous.AddRange(selected.Select(StateUrl));
+                continue;
+            }
+
+            var nextDate = ofLanguage
+                .Where(state => string.CompareOrdinal(state.ApplicabilityDate, requestedDate) > 0)
+                .Select(static state => state.ApplicabilityDate)
+                .Order(StringComparer.Ordinal)
+                .FirstOrDefault();
+            var state = selected[0];
+            served.Add(new
+            {
+                language = state.Language,
+                applicability_date = state.ApplicabilityDate,
+                next_applicability_date = nextDate,
+                state_sha256 = state.StateSha256,
+                expression_iri = state.ExpressionIri,
+                publisher_work_iri = state.PublisherWorkIri,
+                publisher_legal_resource_iri = state.PublisherLegalResourceIri,
+                article_identities = state.ArticleIdentities,
+                stable_coordinate = StableCoordinate(state),
+                permalink = StateUrl(state),
+            });
+        }
+
+        if (ambiguous.Count != 0)
+        {
+            using var ambiguousVersion = JsonSerializer.SerializeToDocument(new
+            {
+                requested_date = requestedDate,
+                candidates = ambiguous.Order(StringComparer.Ordinal).ToArray(),
+            });
+            return V3PlatformOperationOutcome.Refused(
+                Context("refusal", observedAt),
+                new V3PlatformOperationRefusal(request, "ambiguous_version", ambiguousVersion.RootElement));
+        }
+
+        if (served.Count == 0)
+        {
+            var dates = scope.Select(static state => state.ApplicabilityDate)
+                .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+            using var noVersion = JsonSerializer.SerializeToDocument(new
+            {
+                requested_date = requestedDate,
+                history_begins = dates[0],
+                nearest_earlier = (string?)null,
+                nearest_later = dates.FirstOrDefault(date => string.CompareOrdinal(date, requestedDate) > 0),
+            });
+            return V3PlatformOperationOutcome.Refused(
+                Context("refusal", observedAt),
+                new V3PlatformOperationRefusal(request, "no_version_for_date", noVersion.RootElement));
+        }
+
+        using var result = JsonSerializer.SerializeToDocument(new
+        {
+            requested_identifier = identifier,
+            requested_date = requestedDate,
+            requested_language = requestedLanguage,
+            publisher = "lu-legilux",
+            work_key = states[0].WorkKey,
+            states = served,
+            available_languages = availableLanguages,
+            corpus_sha256 = _corpus.ArtifactRef.Sha256,
+            index_sha256 = _reader.IndexRef.Sha256,
+        });
+        return V3PlatformOperationOutcome.Success(
+            Context("success", observedAt),
+            new V3PlatformOperationResult(request, "version_state", result.RootElement));
+    }
+
     public void Dispose()
     {
         _reader?.Dispose();
         _europeReader?.Dispose();
+    }
+
+    private static string RequiredString(JsonElement parameters, string name) =>
+        parameters.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String &&
+        value.GetString() is { } text && !string.IsNullOrWhiteSpace(text)
+            ? text
+            : throw new V3TransportFailureException(
+                V3TransportFailureKind.RequestSchemaInvalid,
+                $"The operation request lacks a usable '{name}'.");
+
+    private V3PlatformOperationOutcome ModeUnavailable(
+        V3PlatformOperationRequest request,
+        DateTimeOffset observedAt,
+        PublisherId publisher)
+    {
+        using var unavailable = JsonSerializer.SerializeToDocument(new
+        {
+            requested_mode = "r6_as_of",
+            available_modes = new[] { "r0_exact_coordinate" },
+        });
+        return V3PlatformOperationOutcome.Refused(
+            Context("refusal", observedAt, publisher),
+            new V3PlatformOperationRefusal(request, "retrieval_mode_unavailable", unavailable.RootElement));
+    }
+
+    /// <summary>
+    /// The stable work coordinate <c>/lu-legilux/{work_key}</c>, on this origin or as a bare path.
+    /// Two segments only; the three-segment hash-pinned permalink is a different grammar.
+    /// </summary>
+    private static bool TryParseStableWorkCoordinate(string value, out string workKey)
+    {
+        workKey = string.Empty;
+        string path;
+        if (value.StartsWith("/", StringComparison.Ordinal))
+        {
+            path = value;
+        }
+        else if (Uri.TryCreate(value, UriKind.Absolute, out var uri) &&
+                 string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.Ordinal) &&
+                 string.Equals(uri.Host, "law.soufien.lu", StringComparison.Ordinal) &&
+                 uri.IsDefaultPort && uri.UserInfo.Length == 0 && uri.Query.Length == 0 &&
+                 uri.Fragment.Length == 0)
+        {
+            path = uri.AbsolutePath;
+        }
+        else
+        {
+            return false;
+        }
+
+        var segments = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (segments.Length != 2 ||
+            !string.Equals(segments[0], "lu-legilux", StringComparison.Ordinal) ||
+            !IsWorkKey(segments[1]) ||
+            !string.Equals(path, "/lu-legilux/" + segments[1], StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        workKey = segments[1];
+        return true;
     }
 
     private static string StableCoordinate(LuxembourgIndexResolvedState state) =>
@@ -391,13 +615,14 @@ internal sealed class V3CorpusMount : IDisposable
         V3PlatformOperationRequest request,
         string identifier,
         DateTimeOffset observedAt,
-        PublisherId? publisher = null)
+        PublisherId? publisher = null,
+        string whatWouldAnswer = "an exact identifier present in the mounted corpus")
     {
         using var helpful = JsonSerializer.SerializeToDocument(new
         {
             requested_identifier = identifier,
             official_search_actions = new[] { "search" },
-            what_would_answer = "an exact identifier present in the mounted corpus",
+            what_would_answer = whatWouldAnswer,
         });
         return V3PlatformOperationOutcome.Refused(
             Context("refusal", observedAt, publisher ?? PublisherFor(identifier)),

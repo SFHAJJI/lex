@@ -65,22 +65,26 @@ internal sealed class V3ApiHandler
     {
         ArgumentNullException.ThrowIfNull(context);
         var rawTarget = context.Features.Get<IHttpRequestFeature>()?.RawTarget ?? string.Empty;
-        if (string.Equals(rawTarget, V3ResolveRestRoute.RawTarget, StringComparison.Ordinal) ||
-            rawTarget.StartsWith(V3ResolveRestRoute.RawTarget + "?", StringComparison.Ordinal))
+        var binding = V3RestRouteBinding.Served.FirstOrDefault(served => served.Claims(rawTarget));
+        if (binding is not null)
         {
             if (_corpusMount is not null)
             {
+                var mount = _corpusMount;
+                var observedAt = _utcNow();
                 await V3ResolveRestRoute.HandleOutcomeAsync(
+                        binding,
                         context,
                         _host,
                         RequestReference(context.TraceIdentifier),
-                        request => _corpusMount.Resolve(request, _utcNow()),
+                        request => Execute(mount, binding, request, observedAt),
                         cancellationToken)
                     .ConfigureAwait(false);
                 return;
             }
 
             await V3ResolveRestRoute.HandleRefusalAsync(
+                    binding,
                     context,
                     _host,
                     RequestReference(context.TraceIdentifier),
@@ -102,6 +106,30 @@ internal sealed class V3ApiHandler
         }
 
         await SyntheticApiHandler.HandleAsync(context, _syntheticState, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// The one place a served route reaches the mount. The host has already validated the body
+    /// against the bound operation's request document, so the request here is that operation's.
+    /// </summary>
+    private static V3PlatformOperationOutcome Execute(
+        V3CorpusMount mount,
+        V3RestRouteBinding binding,
+        V3PlatformOperationRequest request,
+        DateTimeOffset observedAt)
+    {
+        if (!string.Equals(request.OperationId, binding.OperationId, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                $"The host bound '{request.OperationId}' to the {binding.OperationId} route.");
+        }
+
+        return binding.OperationId switch
+        {
+            "resolve" => mount.Resolve(request, observedAt),
+            "as_of" => mount.AsOf(request, observedAt),
+            _ => throw new InvalidOperationException($"No mount operation serves {binding.OperationId}."),
+        };
     }
 
     private static V3PlatformOperationRefusal NoCorpusMounted(V3PlatformOperationRequest request)
