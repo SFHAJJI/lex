@@ -440,6 +440,19 @@ public sealed class V3CorpusDiffMountTests
             Assert.AreEqual("no_version_for_date", envelope.Refusal!.Code);
             Assert.AreEqual("from", envelope.Refusal.HelpfulPayload.GetProperty("bound").GetString(), "deu comes first and is missing at date_from.");
             Assert.AreEqual(dateFrom, envelope.Refusal.HelpfulPayload.GetProperty("requested_date").GetString());
+            Assert.AreEqual(germanBegins, envelope.Refusal.HelpfulPayload.GetProperty("history_begins").GetString(),
+                "The refusal is about German, so the history it names is German's, not the French one that begins earlier.");
+            Assert.AreEqual(germanBegins, envelope.Refusal.HelpfulPayload.GetProperty("nearest_later").GetString());
+
+            // date_from on the very date of the French state: French resolves there and fails at date_to,
+            // German has nothing yet. A payload built from every language's dates would say the history
+            // begins on the date it refuses.
+            var onFrenchDate = await DiffAsync(mount, $"/lu-legilux/{reversed.WorkKey}", reversed.ApplicabilityDate, dateTo);
+            Assert.AreEqual("no_version_for_date", onFrenchDate.Refusal!.Code);
+            Assert.AreEqual("from", onFrenchDate.Refusal.HelpfulPayload.GetProperty("bound").GetString());
+            Assert.AreEqual(reversed.ApplicabilityDate, onFrenchDate.Refusal.HelpfulPayload.GetProperty("requested_date").GetString());
+            Assert.AreEqual(germanBegins, onFrenchDate.Refusal.HelpfulPayload.GetProperty("history_begins").GetString());
+            Assert.AreEqual(germanBegins, onFrenchDate.Refusal.HelpfulPayload.GetProperty("nearest_later").GetString());
         }
     }
 

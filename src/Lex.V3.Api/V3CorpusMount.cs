@@ -552,7 +552,7 @@ internal sealed class V3CorpusMount : IDisposable
         (string Bound, string Date, string[] Candidates)? ambiguous = null;
         (string Language, LuxembourgIndexResolvedState From, LuxembourgIndexResolvedState To)? profilesDiffer = null;
         string? firstRefusal = null;
-        (string Bound, string Date)? missing = null;
+        (string Bound, string Date, IReadOnlyList<LuxembourgIndexResolvedState> OfLanguage)? missing = null;
         foreach (var language in servedLanguages)
         {
             var ofLanguage = scope
@@ -576,7 +576,7 @@ internal sealed class V3CorpusMount : IDisposable
             var failing = fromSelected.Length == 0 ? "from" : toSelected.Length == 0 ? "to" : null;
             if (failing is not null)
             {
-                missing ??= (failing, failing == "from" ? dateFrom : dateTo);
+                missing ??= (failing, failing == "from" ? dateFrom : dateTo, ofLanguage);
                 notCompared.Add(new { language, bound = failing, reason = "no state at or before the date" });
                 continue;
             }
@@ -644,8 +644,11 @@ internal sealed class V3CorpusMount : IDisposable
 
         if (comparisons.Count == 0)
         {
-            var (bound, date) = missing!.Value;
-            return RefuseNoVersionForDate(request, observedAt, scope, date, bound);
+            // The refusal speaks for the language that misses the bound: its own history, not the whole
+            // scope's. Another served language can hold a state on or before the very date refused here
+            // (it fails at its other bound), and its dates would make this payload contradict itself.
+            var (bound, date, ofMissingLanguage) = missing!.Value;
+            return RefuseNoVersionForDate(request, observedAt, ofMissingLanguage, date, bound);
         }
 
         using var result = JsonSerializer.SerializeToDocument(new
