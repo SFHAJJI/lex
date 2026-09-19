@@ -40,14 +40,50 @@ test("a request after the page settled fails and names the path", async () => {
   const networkFailures = await gate();
   const events = [...SETTLED, request("/pages.json", "Fetch"), response("/pages.json", "Fetch", "application/json")];
   const failures = networkFailures(WHERE, events, SETTLED.length);
-  assert.equal(failures.length, 1, JSON.stringify(failures));
-  assert.match(failures[0], /1 request\(s\) after the page settled.*: \/pages\.json$/);
+  assert.deepEqual(failures, [
+    `${WHERE}: 1 request(s) after the page settled, during the tab walk, the driven actions or the ` +
+      "minute of page time run after them: /pages.json",
+  ]);
 });
 
 test("the browser's own favicon request is not the page reaching out", async () => {
   const networkFailures = await gate();
   const events = [...SETTLED, request("/favicon.svg", "Other"), response("/favicon.svg", "Other", "image/svg+xml")];
   assert.deepEqual(networkFailures(WHERE, events, SETTLED.length), []);
+});
+
+test("a page script fetching the favicon's path is still the page reaching out", async () => {
+  const networkFailures = await gate();
+  const events = [...SETTLED, request("/favicon.svg", "Fetch"), response("/favicon.svg", "Fetch", "application/json")];
+  const failures = networkFailures(WHERE, events, SETTLED.length);
+  assert.equal(failures.length, 1, JSON.stringify(failures));
+  assert.match(failures[0], /: 1 request\(s\) after the page settled.*: \/favicon\.svg$/);
+});
+
+test("media, text tracks, manifests and event streams are held to their own types", async () => {
+  const networkFailures = await gate();
+  for (const [path, type, good, bad] of [
+    ["/clip.mp4", "Media", "video/mp4", "text/html"],
+    ["/captions.vtt", "TextTrack", "text/vtt", "text/html"],
+    ["/app.webmanifest", "Manifest", "application/manifest+json", "text/html"],
+    ["/events", "EventSource", "text/event-stream", "text/html"],
+  ]) {
+    assert.deepEqual(networkFailures(WHERE, [request(path, type), response(path, type, good)], 2), [], path);
+    const failures = networkFailures(WHERE, [request(path, type), response(path, type, bad)], 2);
+    assert.equal(failures.length, 1, `${path}: ${JSON.stringify(failures)}`);
+    assert.ok(failures[0].includes(`request for ${path} was answered with ${bad}`), failures[0]);
+  }
+});
+
+test("a response of a kind the gate has no media type for fails rather than passing unjudged", async () => {
+  const networkFailures = await gate();
+  for (const type of ["WebSocket", "Ping", "Prefetch"]) {
+    const failures = networkFailures(WHERE, [response("/x", type, "application/octet-stream")], 1);
+    assert.deepEqual(failures, [
+      `${WHERE}: a ${type} request for /x is of a kind no page here makes, and the gate has no media ` +
+        "type to judge its answer by",
+    ]);
+  }
 });
 
 test("an asset answered with the wrong media type fails, whatever its status", async () => {
@@ -73,7 +109,7 @@ test("an error status fails and names the path", async () => {
   assert.deepEqual(failures, [`${WHERE}: a Font request for /fonts/gone.woff2 was answered 404`]);
 });
 
-test("a data: URL and an untyped request are not held to a media type", async () => {
+test("a data: URL and the browser's own untyped requests are not held to a media type", async () => {
   const networkFailures = await gate();
   const events = [
     { kind: "response", type: "Image", url: "data:image/png;base64,AAAA", status: 200, mime: "image/png" },

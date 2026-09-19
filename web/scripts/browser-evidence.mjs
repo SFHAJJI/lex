@@ -305,6 +305,23 @@ export class Session {
     });
   }
 
+  /** The next event `method` on `sessionId`, or a named failure if the browser never reports it. */
+  waitFor(method, sessionId, deadlineMs = 60000) {
+    return new Promise((resolve, reject) => {
+      const listener = (message) => {
+        if (message.method !== method || message.sessionId !== sessionId) return;
+        this.#listeners.delete(listener);
+        clearTimeout(timer);
+        resolve(message.params);
+      };
+      const timer = setTimeout(() => {
+        this.#listeners.delete(listener);
+        reject(new Error(`the browser did not report ${method} within ${deadlineMs / 1000} s`));
+      }, deadlineMs);
+      this.#listeners.add(listener);
+    });
+  }
+
   close() {
     this.#socket.close();
   }
@@ -900,19 +917,52 @@ export function unofficialFailures(where, measured, controls = []) {
   return failures;
 }
 
-/** How long a settled page is watched for requests of its own, once per page. */
-export const QUIET_WINDOW_MS = 400;
+/**
+ * How much page time a settled page is run forward, on virtual time, before its network is judged.
+ *
+ * Watching the page for a fixed stretch of wall time only sees what the page does within that
+ * stretch: a 400 ms window saw a loop polling every 150 ms and nothing slower, and a page that
+ * reached out once, five seconds after load, passed every combination. Virtual time jumps to each
+ * timer the page armed, holds while a request it made is in flight, and stops when this budget is
+ * spent, so every timer due within the minute fires before the verdict, in well under a second.
+ */
+export const PAGE_CLOCK_BUDGET_MS = 60000;
+
+/**
+ * Run the page's clock forward by `budgetMs` of virtual time. The tab stays on virtual time for
+ * good afterwards, so this is the last thing done on it. Returns null, or why it could not.
+ */
+async function runPageClock(session, sessionId, budgetMs = PAGE_CLOCK_BUDGET_MS) {
+  const expired = session.waitFor("Emulation.virtualTimeBudgetExpired", sessionId, 30000);
+  try {
+    await session.send(
+      "Emulation.setVirtualTimePolicy",
+      { policy: "pauseIfNetworkFetchesPending", budget: budgetMs },
+      sessionId,
+    );
+    await expired;
+    return null;
+  } catch (error) {
+    expired.catch(() => {});
+    return error.message;
+  }
+}
 
 // The media type each kind of request has to be answered with. A missing asset under the object-URL
 // grammar is answered 200 with the stand-in page, so a status check alone reads it as present; the
-// type is what says a font, a script or an image was not what came back. `Other` (the browser's own
-// favicon request) and the navigation's redirects are not typed here.
+// type is what says a font, a script or an image was not what came back. `Other` is the browser's
+// own requests (the favicon) and is not typed; any other kind this map does not name is refused,
+// because a response nothing can judge is not one the gate may pass.
 const EXPECTED_MEDIA = new Map([
   ["Document", /^text\/html$/],
   ["Stylesheet", /^text\/css$/],
   ["Script", /^(text|application)\/javascript$/],
   ["Font", /^font\/(woff2|woff|ttf|otf)$/],
   ["Image", /^image\//],
+  ["Media", /^(audio|video)\//],
+  ["TextTrack", /^text\/vtt$/],
+  ["Manifest", /^application\/(manifest\+)?json$/],
+  ["EventSource", /^text\/event-stream$/],
   ["Fetch", /^application\/json$/],
   ["XHR", /^application\/json$/],
 ]);
@@ -944,22 +994,33 @@ export function networkFailures(where, events, settledAt) {
       failures.push(`${where}: ${article(event.type)} ${event.type} request for ${pathOf(event.url)} was answered ${event.status}`);
       continue;
     }
+    if (event.type === "Other") continue;
     const expected = EXPECTED_MEDIA.get(event.type);
-    if (expected && !expected.test(event.mime ?? "")) {
+    if (!expected) {
+      failures.push(
+        `${where}: ${article(event.type)} ${event.type} request for ${pathOf(event.url)} is of a kind ` +
+          "no page here makes, and the gate has no media type to judge its answer by",
+      );
+    } else if (!expected.test(event.mime ?? "")) {
       failures.push(
         `${where}: ${article(event.type)} ${event.type} request for ${pathOf(event.url)} was answered with ` +
           `${event.mime}; a missing or mistyped asset is not the asset`,
       );
     }
   }
-  // The browser's own favicon request is not the page reaching out, whenever it lands.
+  // The browser's own favicon request is not the page reaching out, whenever it lands. It is
+  // excused by kind and path together, so a script fetching the same path is still counted.
   const late = events
     .slice(settledAt)
-    .filter((event) => event.kind === "request" && pathOf(event.url) !== "/favicon.svg");
+    .filter(
+      (event) =>
+        event.kind === "request" && !(event.type === "Other" && pathOf(event.url) === "/favicon.svg"),
+    );
   if (late.length > 0) {
     failures.push(
       `${where}: ${late.length} request(s) after the page settled, during the tab walk, the ` +
-        `driven actions or a quiet window: ${[...new Set(late.map((event) => pathOf(event.url)))].join(", ")}`,
+        `driven actions or the minute of page time run after them: ` +
+        [...new Set(late.map((event) => pathOf(event.url)))].join(", "),
     );
   }
   return failures;
@@ -1270,8 +1331,22 @@ async function main() {
   const rows = [];
   try {
     const session = await Session.open(await waitForDebugger(port));
-    const { targetId } = await session.send("Target.createTarget", { url: "about:blank" });
-    const { sessionId } = await session.send("Target.attachToTarget", { targetId, flatten: true });
+    // Every combination gets a tab of its own. The bounded-network check runs the page's clock on
+    // virtual time, and a page cannot leave virtual time once it is in it: "advance" does not
+    // return it to the wall clock, it fast-forwards to each next timer for as long as the page
+    // lives. Reusing the tab fired the next page's timers the moment it loaded, before it settled,
+    // and a ten-second poll spun until the page stopped answering.
+    let targetId = null;
+    let sessionId = null;
+    const freshTab = async () => {
+      const previous = targetId;
+      ({ targetId } = await session.send("Target.createTarget", { url: "about:blank" }));
+      ({ sessionId } = await session.send("Target.attachToTarget", { targetId, flatten: true }));
+      for (const domain of ["Accessibility", "Log", "Runtime", "Page", "Network"]) {
+        await session.send(`${domain}.enable`, {}, sessionId);
+      }
+      if (previous) await session.send("Target.closeTarget", { targetId: previous });
+    };
 
     let logged = [];
     // Every request and response of the current navigation, as the browser saw them. The server
@@ -1297,12 +1372,6 @@ async function main() {
       }
     });
 
-    await session.send("Accessibility.enable", {}, sessionId);
-    await session.send("Log.enable", {}, sessionId);
-    await session.send("Runtime.enable", {}, sessionId);
-    await session.send("Page.enable", {}, sessionId);
-    await session.send("Network.enable", {}, sessionId);
-
     for (const page of await pagesFrom(root)) {
       const url = `${site.origin}/${page}`;
       for (const viewport of WIDTHS) {
@@ -1312,6 +1381,7 @@ async function main() {
        // timeline hatches its gaps with a repeating gradient, and a gap that becomes invisible
        // is the one mark on that screen whose absence asserts something false.
        for (const scheme of FAST ? ["light"] : ["light", "dark", "forced"]) {
+        await freshTab();
         await session.send(
           "Emulation.setEmulatedMedia",
           {
@@ -1704,18 +1774,23 @@ async function main() {
           await unofficialDisclosure(session, sessionId),
           observed.unofficialControls,
         ));
-        // Bounded network. The quiet window runs once per page, on its first combination, because
-        // a loop that polls shows up in any one of them and the window costs time in all 495.
-        if (viewport === WIDTHS[0] && scheme === "light") {
-          await new Promise((resolve) => setTimeout(resolve, QUIET_WINDOW_MS));
+        // Bounded network. The page's clock is run a minute forward on virtual time first, on every
+        // combination and last on its tab, so a request the page would make on its own within that
+        // minute has been made before the verdict, however slowly it polls.
+        const clock = await runPageClock(session, sessionId);
+        if (clock !== null) {
+          failures.push(
+            `${page} @${viewport.label}/${scheme}: the page's clock could not be run a minute ` +
+              `forward (${clock}), so what it would request after settling is unjudged`,
+          );
         }
         failures.push(...networkFailures(`${page} @${viewport.label}/${scheme}`, network, settledAt));
         row.requests = network.filter((event) => event.kind === "request").length;
         const late = logged.slice(consoleAtLoad);
         if (late.length > 0) {
           failures.push(
-            `${page} @${viewport.label}/${scheme}: console output during the tab walk or driven ` +
-              `actions ${JSON.stringify(late)}`,
+            `${page} @${viewport.label}/${scheme}: console output during the tab walk, driven ` +
+              `actions or the minute of page time run after them ${JSON.stringify(late)}`,
           );
         }
        }
@@ -1734,6 +1809,8 @@ async function main() {
         if (!destinations.has(href)) destinations.set(href, row.page);
       }
     }
+    // The last combination's tab is on virtual time; the destinations get one on the wall clock.
+    await freshTab();
     for (const [href, fromPage] of destinations) {
       let status = 0;
       try {
