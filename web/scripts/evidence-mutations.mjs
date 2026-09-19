@@ -208,10 +208,13 @@ const MUTATIONS = [
   },
   {
     // The whole control gone from the built page, with the list and its selection intact. The
-    // probe finds nothing to drive, and a page declared for it must not read that as clean.
+    // probe finds nothing to drive, and a page declared for it must not read that as clean. Both
+    // the served markup and the bundle change: a production hydrate keeps the server's attributes,
+    // so renaming the class in the bundle alone leaves the control on the page.
     name: "the compare control no longer rendered",
     expect: /the compare probe declares rows for this page and the page has no compare control/,
     async apply(root) {
+      await replaceOnce(join(root, "search-react.html"), /class="compare-arming"/, 'class="compare-gone"');
       await replaceOnce(join(root, "client.js"), /className:"compare-arming",/, 'className:"compare-gone",');
     },
   },
