@@ -1367,6 +1367,20 @@ public sealed class LuxembourgIndexReader : IDisposable
         IReadOnlyList<LuxembourgIndexBuilder.ArticleRow> articles,
         IReadOnlyList<LuxembourgIndexBuilder.StateRow> states)
     {
+        // The article-level publisher date is served and compared with the state date as text; both
+        // sides are checked here as exact civil dates so a malformed index is refused, never served.
+        // A null date is the publisher stating none, which is allowed.
+        foreach (var article in articles)
+        {
+            if (article.ApplicabilityDate is not null &&
+                !DateOnly.TryParseExact(
+                    article.ApplicabilityDate, "yyyy-MM-dd", CultureInfo.InvariantCulture,
+                    DateTimeStyles.None, out _))
+            {
+                throw new InvalidDataException("A Luxembourg article applicability date is not an exact civil date.");
+            }
+        }
+
         var articleByIdentity = articles.ToDictionary(
             static article => article.ArticleIdentitySha256, StringComparer.Ordinal);
         var seenArticles = new HashSet<string>(StringComparer.Ordinal);

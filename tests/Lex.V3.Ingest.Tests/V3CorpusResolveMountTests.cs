@@ -459,6 +459,34 @@ public sealed class V3CorpusResolveMountTests
     }
 
     [TestMethod]
+    public async Task AMalformedArticleDateRefusesTheMountAtOpenWhileABlankOneIsAllowed()
+    {
+        var fixture = await MountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        // The last article in identity order, which is the order the reader validates in: a check that
+        // stops after the first article, or exits early, must fail here (reviewer mutant D3 on #686).
+        var dates = fixture.ArticleDatesOfOwnState();
+        Assert.IsGreaterThan(1, dates.Count, "The check must be proven to reach past the first article.");
+        var identity = dates.Keys.Order(StringComparer.Ordinal).Last();
+
+        // The index is re-stamped by the helper, so the logical-row hash holds and only the date
+        // check can refuse: a served-and-compared column that is not a date is a malformed index.
+        foreach (var malformed in new[] { "2026-1-1", "2026-02-30", "01/02/2026", " 2026-01-02", "" })
+        {
+            await fixture.SetMalformedArticleDateAsync(identity, malformed);
+            var exception = await Assert.ThrowsExactlyAsync<InvalidDataException>(async () =>
+                await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None), malformed);
+            StringAssert.Contains(exception.Message, "article applicability date", malformed);
+        }
+
+        // Blank is the publisher stating no date; the mount opens and serves it as null.
+        await fixture.SetArticleDateAsync(identity, null);
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+        Assert.IsNull(fixture.ArticleDatesOfOwnState()[identity]);
+    }
+
+    [TestMethod]
     public async Task ValidCorpusFromAnotherBuildIsRejectedByTheIndexCorpusBinding()
     {
         var fixture = await MountedFixture.CreateAsync();
@@ -1264,7 +1292,20 @@ public sealed class V3CorpusResolveMountTests
         /// Sets one article's publisher-level date in the index (null blanks it) and re-stamps the
         /// index and manifest so the mount still verifies. The state rows are untouched.
         /// </summary>
-        public async Task SetArticleDateAsync(string identity, string? applicabilityDate)
+        public Task SetArticleDateAsync(string identity, string? applicabilityDate) =>
+            SetArticleDateAsync(identity, applicabilityDate, measureManifestWithBlankDate: false);
+
+        /// <summary>
+        /// Writes a value that is not a date into one article's publisher-level date column, so the
+        /// index is malformed exactly there. The logical-row stamp is recomputed (it hashes text), and
+        /// the capability manifest is re-bound to the new index digest but measured with that article's
+        /// date treated as blank, because measuring a date that is not a date cannot be done; the
+        /// open-time date check must therefore be what refuses this index.
+        /// </summary>
+        public Task SetMalformedArticleDateAsync(string identity, string text) =>
+            SetArticleDateAsync(identity, text, measureManifestWithBlankDate: true);
+
+        private async Task SetArticleDateAsync(string identity, string? applicabilityDate, bool measureManifestWithBlankDate)
         {
             var indexPath = Path.Combine(Directory, V3CorpusMount.IndexFileName);
             LuxembourgIndexBuilder.MemberRow[] members;
@@ -1293,7 +1334,12 @@ public sealed class V3CorpusResolveMountTests
 
             var indexBytes = await File.ReadAllBytesAsync(indexPath);
             var indexDigest = Convert.ToHexStringLower(SHA256.HashData(indexBytes));
-            var manifest = LuxembourgIndexBuilder.MeasureCapabilities(indexDigest, articles, titles);
+            var measured = measureManifestWithBlankDate
+                ? articles.Select(article => string.Equals(article.ArticleIdentitySha256, identity, StringComparison.Ordinal)
+                    ? article with { ApplicabilityDate = null }
+                    : article).ToArray()
+                : articles;
+            var manifest = LuxembourgIndexBuilder.MeasureCapabilities(indexDigest, measured, titles);
             using var stream = new MemoryStream();
             _ = V3IndexCapabilityManifestArtifact.Write(stream, manifest);
             await File.WriteAllBytesAsync(
