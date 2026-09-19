@@ -468,8 +468,10 @@ internal sealed class V3CorpusMount : IDisposable
     /// states with the same rule profiles are compared article by article by publisher-minted id and
     /// wording digest (unchanged, changed, added, removed). Two states with different rule profiles
     /// refuse <c>profiles_differ</c>, which nothing overrides. Refusals follow <c>as_of</c>'s rule: an
-    /// ambiguity or a profile mismatch in any served language refuses the whole answer, while a language
-    /// with no state at a bound is listed as not compared. No text is diffed, no legal effect is
+    /// ambiguity or a profile mismatch in any served language refuses the whole answer, the first found in
+    /// language order when both apply, while a language with no state at a bound is listed as not
+    /// compared; both bounds are resolved before a language is classified, so a missing bound never masks
+    /// an ambiguity on the other. No text is diffed, no legal effect is
     /// asserted: a changed article is a changed digest, and the note says so.
     /// </summary>
     public V3PlatformOperationOutcome Diff(
@@ -511,6 +513,8 @@ internal sealed class V3CorpusMount : IDisposable
         var comparisons = new List<object>();
         var notCompared = new List<object>();
         (string Bound, string Date, string[] Candidates)? ambiguous = null;
+        (string Language, LuxembourgIndexResolvedState From, LuxembourgIndexResolvedState To)? profilesDiffer = null;
+        string? firstRefusal = null;
         (string Bound, string Date)? missing = null;
         foreach (var language in servedLanguages)
         {
@@ -519,19 +523,24 @@ internal sealed class V3CorpusMount : IDisposable
                 .ToArray();
             var (fromSelected, fromNext) = SelectAtDate(ofLanguage, dateFrom);
             var (toSelected, toNext) = SelectAtDate(ofLanguage, dateTo);
-            var failing = fromSelected.Length == 0 ? "from" : toSelected.Length == 0 ? "to" : null;
-            if (failing is not null)
-            {
-                missing ??= (failing, failing == "from" ? dateFrom : dateTo);
-                notCompared.Add(new { language, bound = failing, reason = "no state at or before the date" });
-                continue;
-            }
 
+            // Both bounds are resolved before the language is classified: an ambiguity at either bound is
+            // recorded first, so a bound with no state cannot mask a twin on the other; only then does a
+            // missing bound list the language as not compared.
             if (fromSelected.Length > 1 || toSelected.Length > 1)
             {
                 var bound = fromSelected.Length > 1 ? "from" : "to";
                 ambiguous ??= (bound, bound == "from" ? dateFrom : dateTo,
                     (bound == "from" ? fromSelected : toSelected).Select(StateUrl).Order(StringComparer.Ordinal).ToArray());
+                firstRefusal ??= "ambiguous_version";
+                continue;
+            }
+
+            var failing = fromSelected.Length == 0 ? "from" : toSelected.Length == 0 ? "to" : null;
+            if (failing is not null)
+            {
+                missing ??= (failing, failing == "from" ? dateFrom : dateTo);
+                notCompared.Add(new { language, bound = failing, reason = "no state at or before the date" });
                 continue;
             }
 
@@ -554,17 +563,9 @@ internal sealed class V3CorpusMount : IDisposable
 
             if (!from.RuleProfileSha256s.SequenceEqual(to.RuleProfileSha256s, StringComparer.Ordinal))
             {
-                using var differ = JsonSerializer.SerializeToDocument(new
-                {
-                    left_profile = from.RuleProfileSha256s,
-                    right_profile = to.RuleProfileSha256s,
-                    left = StateUrl(from),
-                    right = StateUrl(to),
-                    language,
-                });
-                return V3PlatformOperationOutcome.Refused(
-                    Context("refusal", observedAt),
-                    new V3PlatformOperationRefusal(request, "profiles_differ", differ.RootElement));
+                profilesDiffer ??= (language, from, to);
+                firstRefusal ??= "profiles_differ";
+                continue;
             }
 
             var (articles, counts) = CompareArticles(
@@ -583,7 +584,22 @@ internal sealed class V3CorpusMount : IDisposable
 
         // One rule for refusals, the one as_of follows: an ambiguity or a profile mismatch in any served
         // language refuses the whole answer; a language with no state at a bound is not a refusal and is
-        // listed as not compared.
+        // listed as not compared. When both apply, the first found in language order is the answer.
+        if (profilesDiffer is { } mismatch && firstRefusal == "profiles_differ")
+        {
+            using var differ = JsonSerializer.SerializeToDocument(new
+            {
+                left_profile = mismatch.From.RuleProfileSha256s,
+                right_profile = mismatch.To.RuleProfileSha256s,
+                left = StateUrl(mismatch.From),
+                right = StateUrl(mismatch.To),
+                language = mismatch.Language,
+            });
+            return V3PlatformOperationOutcome.Refused(
+                Context("refusal", observedAt),
+                new V3PlatformOperationRefusal(request, "profiles_differ", differ.RootElement));
+        }
+
         if (ambiguous is { } ambiguity)
         {
             using var ambiguousVersion = JsonSerializer.SerializeToDocument(new

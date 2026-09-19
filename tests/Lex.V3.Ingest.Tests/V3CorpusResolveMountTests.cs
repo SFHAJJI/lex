@@ -1187,7 +1187,12 @@ public sealed class V3CorpusResolveMountTests
                 stream.ToArray());
         }
 
-        public async Task<LuxembourgIndexBuilder.StateRow> AddStateAsync(string applicabilityDate, string expressionSuffix)
+        /// <summary>
+        /// Adds a state copied from the fixture's own state, or from the state named by
+        /// <paramref name="sourceExpressionIri"/> (a German state added earlier, for one), in the source's
+        /// language, with its own article identities.
+        /// </summary>
+        public async Task<LuxembourgIndexBuilder.StateRow> AddStateAsync(string applicabilityDate, string expressionSuffix, string? sourceExpressionIri = null)
         {
             var indexPath = Path.Combine(Directory, V3CorpusMount.IndexFileName);
             LuxembourgIndexBuilder.MemberRow[] members;
@@ -1198,7 +1203,7 @@ public sealed class V3CorpusResolveMountTests
             using (var connection = LuxembourgIndexBuilder.Open(indexPath, SqliteOpenMode.ReadWrite))
             {
                 var sourceState = ReadStates(connection).Single(state =>
-                    string.Equals(state.ExpressionIri, ExpressionIri, StringComparison.Ordinal));
+                    string.Equals(state.ExpressionIri, sourceExpressionIri ?? ExpressionIri, StringComparison.Ordinal));
                 var sourceArticles = ReadArticles(connection)
                     .Where(article => sourceState.ArticleIdentitiesJson.Contains(
                         article.ArticleIdentitySha256, StringComparison.Ordinal)).ToArray();
