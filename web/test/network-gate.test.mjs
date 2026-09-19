@@ -60,6 +60,38 @@ test("a page script fetching the favicon's path is still the page reaching out",
   assert.match(failures[0], /: 1 request\(s\) after the page settled.*: \/favicon\.svg$/);
 });
 
+test("an icon link swapped to carry a query string is the page reaching out", async () => {
+  const networkFailures = await gate();
+  const events = [...SETTLED, request("/favicon.svg?leak=1", "Other")];
+  const failures = networkFailures(WHERE, events, SETTLED.length);
+  assert.equal(failures.length, 1, JSON.stringify(failures));
+  assert.match(failures[0], /: 1 request\(s\) after the page settled.*: \/favicon\.svg$/);
+});
+
+test("a clock whose wait runs out while the policy is unanswered is a named failure, not a crash", async () => {
+  const { runPageClock } = await import("../scripts/browser-evidence.mjs");
+  const unhandled = [];
+  const onUnhandled = (reason) => unhandled.push(reason);
+  process.on("unhandledRejection", onUnhandled);
+  try {
+    // The wait gives up after 10 ms; the policy command answers after 50 ms.
+    const session = {
+      waitFor: () => new Promise((_, reject) => setTimeout(() => reject(new Error("no budget event")), 10)),
+      send: () => new Promise((resolve) => setTimeout(resolve, 50)),
+    };
+    assert.equal(await runPageClock(session, "s", 1000), "no budget event");
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.deepEqual(unhandled, []);
+    // A policy the browser refuses is named the same way, and a clock that runs returns null.
+    const refused = { waitFor: () => new Promise(() => {}), send: async () => { throw new Error("refused"); } };
+    assert.equal(await runPageClock(refused, "s", 1000), "refused");
+    const runs = { waitFor: async () => ({}), send: async () => ({}) };
+    assert.equal(await runPageClock(runs, "s", 1000), null);
+  } finally {
+    process.off("unhandledRejection", onUnhandled);
+  }
+});
+
 test("media, text tracks, manifests and event streams are held to their own types", async () => {
   const networkFailures = await gate();
   for (const [path, type, good, bad] of [

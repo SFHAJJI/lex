@@ -932,8 +932,12 @@ export const PAGE_CLOCK_BUDGET_MS = 60000;
  * Run the page's clock forward by `budgetMs` of virtual time. The tab stays on virtual time for
  * good afterwards, so this is the last thing done on it. Returns null, or why it could not.
  */
-async function runPageClock(session, sessionId, budgetMs = PAGE_CLOCK_BUDGET_MS) {
+export async function runPageClock(session, sessionId, budgetMs = PAGE_CLOCK_BUDGET_MS) {
   const expired = session.waitFor("Emulation.virtualTimeBudgetExpired", sessionId, 30000);
+  // The wait's deadline can pass while the policy command is still unanswered. Handled here, so
+  // that rejection is never unhandled -- which would end the whole run -- and is still awaited
+  // below, where it becomes this combination's named failure.
+  expired.catch(() => {});
   try {
     await session.send(
       "Emulation.setVirtualTimePolicy",
@@ -943,7 +947,6 @@ async function runPageClock(session, sessionId, budgetMs = PAGE_CLOCK_BUDGET_MS)
     await expired;
     return null;
   } catch (error) {
-    expired.catch(() => {});
     return error.message;
   }
 }
@@ -1009,13 +1012,18 @@ export function networkFailures(where, events, settledAt) {
     }
   }
   // The browser's own favicon request is not the page reaching out, whenever it lands. It is
-  // excused by kind and path together, so a script fetching the same path is still counted.
-  const late = events
-    .slice(settledAt)
-    .filter(
-      (event) =>
-        event.kind === "request" && !(event.type === "Other" && pathOf(event.url) === "/favicon.svg"),
-    );
+  // excused by kind and exact address together: a script fetching the same path is still counted,
+  // and so is an icon link swapped to carry a query string.
+  const isFavicon = (event) => {
+    if (event.type !== "Other") return false;
+    try {
+      const parsed = new URL(event.url);
+      return parsed.pathname === "/favicon.svg" && parsed.search === "";
+    } catch {
+      return false;
+    }
+  };
+  const late = events.slice(settledAt).filter((event) => event.kind === "request" && !isFavicon(event));
   if (late.length > 0) {
     failures.push(
       `${where}: ${late.length} request(s) after the page settled, during the tab walk, the ` +
