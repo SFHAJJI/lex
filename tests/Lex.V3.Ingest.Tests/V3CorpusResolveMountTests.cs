@@ -1346,6 +1346,105 @@ public sealed class V3CorpusResolveMountTests
                 Path.Combine(Directory, V3CorpusMount.CapabilityManifestFileName), stream.ToArray());
         }
 
+        /// <summary>
+        /// The articles of the fixture's own state: identity, publisher-minted article id and retained
+        /// text, in identity order.
+        /// </summary>
+        public IReadOnlyList<(string Identity, string PublisherId, string Text)> ArticlesOfOwnState()
+        {
+            using var connection = LuxembourgIndexBuilder.Open(
+                Path.Combine(Directory, V3CorpusMount.IndexFileName), SqliteOpenMode.ReadOnly);
+            var state = ReadStates(connection).Single(row =>
+                string.Equals(row.ExpressionIri, ExpressionIri, StringComparison.Ordinal));
+            var identities = System.Text.Json.JsonSerializer.Deserialize<string[]>(state.ArticleIdentitiesJson)!;
+            return ReadArticles(connection)
+                .Where(article => identities.Contains(article.ArticleIdentitySha256, StringComparer.Ordinal))
+                .OrderBy(static article => article.ArticleIdentitySha256, StringComparer.Ordinal)
+                .Select(static article => (article.ArticleIdentitySha256, article.PublisherId, article.SearchableText))
+                .ToArray();
+        }
+
+        /// <summary>
+        /// Rewrites the article with this publisher id in one expression to one text token: both the
+        /// searchable text and the stored token stream change, as the producer would write them.
+        /// </summary>
+        public Task RewriteArticleTextAsync(string expressionIri, string publisherId, string text) =>
+            SetArticleTokensAsync(expressionIri, publisherId, text,
+                System.Text.Json.JsonSerializer.Serialize(new[] { new { kind = "text", text, target = (string?)null, marker = (string?)null, note_body = (object?)null } }));
+
+        /// <summary>
+        /// Sets the stored token stream and the searchable text of the article with this publisher id in
+        /// one expression independently, so a stream that differs while the text stays the same (a
+        /// retargeted reference) can be written.
+        /// </summary>
+        public Task SetArticleTokensAsync(string expressionIri, string publisherId, string searchableText, string tokensJson) =>
+            MutateArticlesAsync(connection =>
+            {
+                using var set = connection.CreateCommand();
+                set.CommandText = "UPDATE articles SET searchable_text=$text, tokens_json=$tokens WHERE expression_iri=$expression AND publisher_id=$id";
+                set.Parameters.AddWithValue("$text", searchableText);
+                set.Parameters.AddWithValue("$tokens", tokensJson);
+                set.Parameters.AddWithValue("$expression", expressionIri);
+                set.Parameters.AddWithValue("$id", publisherId);
+                Assert.AreEqual(1, set.ExecuteNonQuery());
+            });
+
+        /// <summary>The stored token stream of the article with this publisher id in one expression.</summary>
+        public string ArticleTokensJson(string expressionIri, string publisherId)
+        {
+            using var connection = LuxembourgIndexBuilder.Open(
+                Path.Combine(Directory, V3CorpusMount.IndexFileName), SqliteOpenMode.ReadOnly);
+            return ReadArticles(connection).Single(article =>
+                string.Equals(article.ExpressionIri, expressionIri, StringComparison.Ordinal) &&
+                string.Equals(article.PublisherId, publisherId, StringComparison.Ordinal)).TokensJson;
+        }
+
+        /// <summary>Renames the publisher-minted id of the article with this id in one expression.</summary>
+        public Task RenameArticleIdAsync(string expressionIri, string publisherId, string newPublisherId) =>
+            MutateArticlesAsync(connection =>
+            {
+                using var set = connection.CreateCommand();
+                set.CommandText = "UPDATE articles SET publisher_id=$new WHERE expression_iri=$expression AND publisher_id=$id";
+                set.Parameters.AddWithValue("$new", newPublisherId);
+                set.Parameters.AddWithValue("$expression", expressionIri);
+                set.Parameters.AddWithValue("$id", publisherId);
+                Assert.AreEqual(1, set.ExecuteNonQuery());
+            });
+
+        /// <summary>
+        /// Applies one change to the articles table, then re-stamps the logical rows and re-measures
+        /// the capability manifest so the mount still verifies. The state rows are untouched.
+        /// </summary>
+        private async Task MutateArticlesAsync(Action<SqliteConnection> mutate)
+        {
+            var indexPath = Path.Combine(Directory, V3CorpusMount.IndexFileName);
+            LuxembourgIndexBuilder.MemberRow[] members;
+            LuxembourgIndexBuilder.ArticleRow[] articles;
+            LuxembourgIndexBuilder.StateRow[] states;
+            LuxembourgIndexBuilder.WorkTitleRow[] titles;
+            using (var connection = LuxembourgIndexBuilder.Open(indexPath, SqliteOpenMode.ReadWrite))
+            {
+                mutate(connection);
+                members = ReadMembers(connection);
+                articles = ReadArticles(connection);
+                states = ReadStates(connection);
+                titles = ReadWorkTitles(connection);
+                using var stamp = connection.CreateCommand();
+                stamp.CommandText = "UPDATE stamp SET logical_rows_sha256=$digest WHERE stamp_id=1";
+                stamp.Parameters.AddWithValue(
+                    "$digest", LuxembourgIndexBuilder.HashLogicalRows(members, articles, states, titles));
+                Assert.AreEqual(1, stamp.ExecuteNonQuery());
+            }
+
+            var indexBytes = await File.ReadAllBytesAsync(indexPath);
+            var indexDigest = Convert.ToHexStringLower(SHA256.HashData(indexBytes));
+            var manifest = LuxembourgIndexBuilder.MeasureCapabilities(indexDigest, articles, titles);
+            using var stream = new MemoryStream();
+            _ = V3IndexCapabilityManifestArtifact.Write(stream, manifest);
+            await File.WriteAllBytesAsync(
+                Path.Combine(Directory, V3CorpusMount.CapabilityManifestFileName), stream.ToArray());
+        }
+
         /// <summary>The publisher's article-level dates of the fixture's own state, by identity.</summary>
         public IReadOnlyDictionary<string, string?> ArticleDatesOfOwnState()
         {

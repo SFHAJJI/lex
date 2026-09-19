@@ -138,6 +138,82 @@ public sealed class LuxembourgAknLegalContentProfileProducerTests
     }
 
     [TestMethod]
+    public async Task TheWordingDigestIgnoresContainerBoundariesAndSeesReferenceTargets()
+    {
+        // Reviewer probes P1, P3 and P2 on #687, through the real producer and the exact tokens_json
+        // the index stores: a paragraph split and inline formatting are not a change of wording; a
+        // reference retargeted under the same label is.
+        var oneParagraph = await DigestAsync("<p>les cas suivants : 1° le premier</p>", "p1a");
+        var twoParagraphs = await DigestAsync("<p>les cas suivants : </p><p>1° le premier</p>", "p1b");
+        Assert.AreEqual(oneParagraph, twoParagraphs, "P1: a paragraph break with the same characters");
+
+        var plain = await DigestAsync("<p>le premier alinéa</p>", "p3a");
+        var bold = await DigestAsync("<p>le <b>premier</b> alinéa</p>", "p3b");
+        Assert.AreEqual(plain, bold, "P3: one word set in bold");
+
+        var toN1 = await DigestAsync("<p>voir <ref href=\"/eli/etat/leg/loi/2001/01/01/n1\">la loi</ref></p>", "p2a");
+        var toN2 = await DigestAsync("<p>voir <ref href=\"/eli/etat/leg/loi/2002/02/02/n2\">la loi</ref></p>", "p2b");
+        Assert.AreNotEqual(toN1, toN2, "P2: the same label pointing at another act");
+
+        // A reference moved to another place among the same characters is a change: the text on
+        // either side of it is never merged across it (the two texts here concatenate to the same
+        // string, so only the position of the reference tells them apart).
+        var referenceBetween = await DigestAsync("<p>voir<ref href=\"/eli/etat/leg/loi/2001/01/01/n1\">la loi</ref>ensuite</p>", "p4a");
+        var referenceAfter = await DigestAsync("<p>voirensuite<ref href=\"/eli/etat/leg/loi/2001/01/01/n1\">la loi</ref></p>", "p4b");
+        Assert.AreNotEqual(referenceBetween, referenceAfter, "a reference moved among the same characters");
+
+        var otherWords = await DigestAsync("<p>les cas suivants : 1° le second</p>", "p1c");
+        Assert.AreNotEqual(oneParagraph, otherWords, "a changed word is a change");
+        Assert.AreNotEqual(plain, oneParagraph);
+    }
+
+    [TestMethod]
+    public async Task TheWordingDigestIgnoresMarkersInsideTheTextAndSeesReferenceLabelsAndEdgeWhitespace()
+    {
+        // Reviewer Z1, Z4 and Z3 on #687, through the real producer.
+        // Z1: a modification span around a middle word splits the text into three nodes; the merged
+        // digest equals the unmarked article's.
+        var unmarked = await DigestAsync("<p>voir ensuite la fin</p>", "z1a");
+        var marked = await DigestAsync(
+            "<p>voir <mod class=\"mod-start\" for=\"#pm1\"/>ensuite<mod class=\"mod-end\" for=\"#pm1\"/> la fin</p>", "z1b");
+        Assert.AreEqual(unmarked, marked, "Z1: a modification span inside the text is not a word");
+
+        // Z1, note form: a note reference between two words, with its note elsewhere in the act; the
+        // note and its body are the publisher's apparatus.
+        var noted = await DigestNotedAsync(
+            "<p>voir <noteRef href=\"#n1\" marker=\"1\"/>ensuite la fin</p>",
+            "<note id=\"n1\" marker=\"1\"><p>Note du publisher.</p></note>", "z1c");
+        Assert.AreEqual(unmarked, noted, "Z1: a note reference inside the text is not a word");
+
+        // Z4: the same target under a changed label is a change of wording.
+        var label = await DigestAsync("<p>voir <ref href=\"/eli/etat/leg/loi/2001/01/01/n1\">la loi du 1er janvier</ref></p>", "z4a");
+        var otherLabel = await DigestAsync("<p>voir <ref href=\"/eli/etat/leg/loi/2001/01/01/n1\">la loi modifiée du 1er janvier</ref></p>", "z4b");
+        Assert.AreNotEqual(label, otherLabel, "Z4: a reference label is the article's words");
+
+        // Z3: any byte of the retained text counts, a trailing space included.
+        var trailing = await DigestAsync("<p>voir ensuite la fin </p>", "z3a");
+        Assert.AreNotEqual(unmarked, trailing, "Z3: a trailing space inside the last text node is a change");
+    }
+
+    private static async Task<string> DigestNotedAsync(string content, string note, string key)
+    {
+        var result = await RunAsync(Akn("<article id=\"art_1\"><content>" + content + "</content></article>" + note), key);
+        var outcome = result.Outcomes.Single(value => value.Coordinate?.PublisherId == "art_1");
+        Assert.IsNotNull(outcome.Article, outcome.Detail);
+        Assert.IsTrue(outcome.Article.Tokens.Any(static token => token.Kind == LuxembourgAknLegalContentTokenKind.NoteReference),
+            "the note reference must be retained as a token for this pin to mean anything");
+        return LuxembourgIndexReader.WordingSha256(LuxembourgIndexBuilder.TokensJson(outcome.Article.Tokens));
+    }
+
+    private static async Task<string> DigestAsync(string content, string key)
+    {
+        var result = await RunAsync(Akn("<article id=\"art_1\"><content>" + content + "</content></article>"), key);
+        var outcome = result.Outcomes.Single();
+        Assert.IsNotNull(outcome.Article, outcome.Detail);
+        return LuxembourgIndexReader.WordingSha256(LuxembourgIndexBuilder.TokensJson(outcome.Article.Tokens));
+    }
+
+    [TestMethod]
     public async Task PopulationHasOneOutcomePerInventoriedArticleInPublisherOrder()
     {
         var result = await RunAsync(Akn(
