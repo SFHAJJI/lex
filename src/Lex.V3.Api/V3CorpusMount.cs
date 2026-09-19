@@ -350,12 +350,24 @@ internal sealed class V3CorpusMount : IDisposable
                 "The requested date is not a civil calendar date.");
         }
 
+        var isStableWorkCoordinate = TryParseStableWorkCoordinate(identifier, out var workKey);
         if (_reader is null)
         {
+            // Attribution follows the identifier, never the mount. A Luxembourg-shaped identifier on a
+            // mount without the Luxembourg index is Luxembourg law whose corpus is not mounted; an EU
+            // or unrecognised identifier is refused the mode with EU context.
+            if (isStableWorkCoordinate || IsLuxembourgShaped(identifier))
+            {
+                using var unmounted = JsonSerializer.SerializeToDocument(new { required_corpus = "lu" });
+                return V3PlatformOperationOutcome.Refused(
+                    Context("refusal", observedAt, PublisherId.LuLegilux),
+                    new V3PlatformOperationRefusal(request, "no_corpus_mounted", unmounted.RootElement));
+            }
+
             return ModeUnavailable(request, observedAt, PublisherId.EuEurLex);
         }
 
-        var workIdentifier = TryParseStableWorkCoordinate(identifier, out var workKey) ? workKey : identifier;
+        var workIdentifier = isStableWorkCoordinate ? workKey : identifier;
         var states = _reader.ResolveWorkStates(workIdentifier);
         if (states.Count == 0)
         {
@@ -508,6 +520,13 @@ internal sealed class V3CorpusMount : IDisposable
             Context("refusal", observedAt, publisher),
             new V3PlatformOperationRefusal(request, "retrieval_mode_unavailable", unavailable.RootElement));
     }
+
+    /// <summary>The identifier forms this product and Legilux mint for Luxembourg law.</summary>
+    private static bool IsLuxembourgShaped(string identifier) =>
+        OfficialIdentifier.EliMintedBy(identifier) == PublisherId.LuLegilux ||
+        TryParsePinnedPermalink(identifier, out _, out _, out _) ||
+        (Uri.TryCreate(identifier, UriKind.Absolute, out var uri) &&
+         uri.Host.EndsWith("legilux.public.lu", StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
     /// The stable work coordinate <c>/lu-legilux/{work_key}</c>, on this origin or as a bare path.

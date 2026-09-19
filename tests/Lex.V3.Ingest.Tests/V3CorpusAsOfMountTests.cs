@@ -251,12 +251,31 @@ public sealed class V3CorpusAsOfMountTests
         using (var europeMount = await V3CorpusMount.OpenAsync(europe.Directory, CancellationToken.None))
         {
             Assert.IsNotNull(europeMount);
-            var onEuropeOnly = await AsOfAsync(europeMount, $"/lu-legilux/{luxembourg.WorkKey}", "2024-01-01");
-            Assert.AreEqual(V3Verdicts.Refuse, onEuropeOnly.Verdict);
-            Assert.AreEqual("retrieval_mode_unavailable", onEuropeOnly.Refusal!.Code);
-            Assert.AreEqual(PublisherId.EuEurLex, onEuropeOnly.Context.Publisher);
+            // A Luxembourg identifier on a mount without the Luxembourg index is Luxembourg law whose
+            // corpus is not mounted; it never borrows EU context (the rule #678 pinned as E11).
+            foreach (var luxembourgIdentifier in new[]
+                     {
+                         $"/lu-legilux/{luxembourg.WorkKey}",
+                         luxembourg.Permalink,
+                         "eli/etat/leg/loi/2004/07/30/n1/jo",
+                     })
+            {
+                var onEuropeOnly = await AsOfAsync(europeMount, luxembourgIdentifier, "2024-01-01");
+                Assert.AreEqual(V3Verdicts.Refuse, onEuropeOnly.Verdict, luxembourgIdentifier);
+                Assert.AreEqual("no_corpus_mounted", onEuropeOnly.Refusal!.Code, luxembourgIdentifier);
+                Assert.AreEqual("lu", onEuropeOnly.Refusal.HelpfulPayload.GetProperty("required_corpus").GetString());
+                Assert.AreEqual(PublisherId.LuLegilux, onEuropeOnly.Context.Publisher, luxembourgIdentifier);
+                Assert.AreEqual("lu", onEuropeOnly.Context.Jurisdiction, luxembourgIdentifier);
+                Assert.AreEqual(TimelineSemantics.PublisherApplicability,
+                    onEuropeOnly.Context.TimelineSemantics, luxembourgIdentifier);
+            }
+
+            // An EU identifier on the same mount is refused the mode, with EU context.
+            var euOnEuropeOnly = await AsOfAsync(europeMount, "32016R0679", "2024-01-01");
+            Assert.AreEqual("retrieval_mode_unavailable", euOnEuropeOnly.Refusal!.Code);
+            Assert.AreEqual(PublisherId.EuEurLex, euOnEuropeOnly.Context.Publisher);
             CollectionAssert.AreEqual(new[] { "r0_exact_coordinate" },
-                onEuropeOnly.Refusal.HelpfulPayload.GetProperty("available_modes").EnumerateArray()
+                euOnEuropeOnly.Refusal.HelpfulPayload.GetProperty("available_modes").EnumerateArray()
                     .Select(static value => value.GetString()).ToArray());
         }
 
