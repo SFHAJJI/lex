@@ -1169,8 +1169,8 @@ public sealed class V3CorpusResolveMountTests
             LuxembourgIndexBuilder.StateRow later;
             using (var connection = LuxembourgIndexBuilder.Open(indexPath, SqliteOpenMode.ReadWrite))
             {
-                var sourceState = ReadStates(connection)
-                    .OrderBy(static state => state.ApplicabilityDate, StringComparer.Ordinal).First();
+                var sourceState = ReadStates(connection).Single(state =>
+                    string.Equals(state.ExpressionIri, ExpressionIri, StringComparison.Ordinal));
                 var sourceArticles = ReadArticles(connection)
                     .Where(article => sourceState.ArticleIdentitiesJson.Contains(
                         article.ArticleIdentitySha256, StringComparison.Ordinal)).ToArray();
