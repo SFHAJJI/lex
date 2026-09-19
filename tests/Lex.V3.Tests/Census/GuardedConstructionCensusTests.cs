@@ -80,6 +80,8 @@ public sealed class GuardedConstructionCensusTests
                     + "method private instance Lex.V3.Api.V3ApiHandler::ResolveOutcome, "
                     + "method private instance Lex.V3.Api.V3ApiHandler::TimelineOutcome, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::ModeUnavailable, "
+                    + "method private instance Lex.V3.Api.V3CorpusMount::RefuseAmbiguousVersion, "
+                    + "method private instance Lex.V3.Api.V3CorpusMount::RefuseNoVersionForDate, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseUnlessWorkStates, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::Unknown, "
                     + "method public instance Lex.V3.Api.V3CorpusMount::ArticleHistory, "

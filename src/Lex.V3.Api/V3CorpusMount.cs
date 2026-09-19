@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Lex.V3.Contracts;
 using Lex.V3.Contracts.Facts;
 using Lex.V3.Contracts.Platform;
@@ -389,30 +390,12 @@ internal sealed class V3CorpusMount : IDisposable
 
         if (ambiguous.Count != 0)
         {
-            using var ambiguousVersion = JsonSerializer.SerializeToDocument(new
-            {
-                requested_date = requestedDate,
-                candidates = ambiguous.Order(StringComparer.Ordinal).ToArray(),
-            });
-            return V3PlatformOperationOutcome.Refused(
-                Context("refusal", observedAt),
-                new V3PlatformOperationRefusal(request, "ambiguous_version", ambiguousVersion.RootElement));
+            return RefuseAmbiguousVersion(request, observedAt, requestedDate, ambiguous.Order(StringComparer.Ordinal).ToArray(), bound: null);
         }
 
         if (served.Count == 0)
         {
-            var dates = scope.Select(static state => state.ApplicabilityDate)
-                .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
-            using var noVersion = JsonSerializer.SerializeToDocument(new
-            {
-                requested_date = requestedDate,
-                history_begins = dates[0],
-                nearest_earlier = (string?)null,
-                nearest_later = dates.FirstOrDefault(date => string.CompareOrdinal(date, requestedDate) > 0),
-            });
-            return V3PlatformOperationOutcome.Refused(
-                Context("refusal", observedAt),
-                new V3PlatformOperationRefusal(request, "no_version_for_date", noVersion.RootElement));
+            return RefuseNoVersionForDate(request, observedAt, scope, requestedDate, bound: null);
         }
 
         using var result = JsonSerializer.SerializeToDocument(new
@@ -438,6 +421,60 @@ internal sealed class V3CorpusMount : IDisposable
     /// (more than one is an ambiguity the caller refuses); the next publisher date after the requested
     /// date, or <c>null</c>, bounds it. Nothing else is derived.
     /// </summary>
+    /// <summary>
+    /// The one <c>ambiguous_version</c> refusal for every operation that resolves a date to a state: the
+    /// requested date, the bound it belongs to when the operation has more than one (<c>diff</c>), and the
+    /// candidate permalinks in ordinal order. <c>as_of</c> passes no bound and its payload has none.
+    /// </summary>
+    private V3PlatformOperationOutcome RefuseAmbiguousVersion(
+        V3PlatformOperationRequest request,
+        DateTimeOffset observedAt,
+        string requestedDate,
+        IReadOnlyList<string> candidates,
+        string? bound)
+    {
+        var payload = new JsonObject { ["requested_date"] = requestedDate };
+        if (bound is not null)
+        {
+            payload["bound"] = bound;
+        }
+
+        payload["candidates"] = new JsonArray(candidates.Select(static candidate => (JsonNode?)JsonValue.Create(candidate)).ToArray());
+        using var document = JsonSerializer.SerializeToDocument(payload);
+        return V3PlatformOperationOutcome.Refused(
+            Context("refusal", observedAt),
+            new V3PlatformOperationRefusal(request, "ambiguous_version", document.RootElement));
+    }
+
+    /// <summary>
+    /// The one <c>no_version_for_date</c> refusal: the requested date, its bound when the operation has more
+    /// than one, the date the work's history begins, and the nearest later publisher date. There is never a
+    /// nearest earlier date, since a state at or before the date would have answered.
+    /// </summary>
+    private V3PlatformOperationOutcome RefuseNoVersionForDate(
+        V3PlatformOperationRequest request,
+        DateTimeOffset observedAt,
+        IReadOnlyList<LuxembourgIndexResolvedState> scope,
+        string requestedDate,
+        string? bound)
+    {
+        var dates = scope.Select(static state => state.ApplicabilityDate)
+            .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+        var payload = new JsonObject { ["requested_date"] = requestedDate };
+        if (bound is not null)
+        {
+            payload["bound"] = bound;
+        }
+
+        payload["history_begins"] = dates[0];
+        payload["nearest_earlier"] = null;
+        payload["nearest_later"] = dates.FirstOrDefault(date => string.CompareOrdinal(date, requestedDate) > 0);
+        using var document = JsonSerializer.SerializeToDocument(payload);
+        return V3PlatformOperationOutcome.Refused(
+            Context("refusal", observedAt),
+            new V3PlatformOperationRefusal(request, "no_version_for_date", document.RootElement));
+    }
+
     private static (LuxembourgIndexResolvedState[] Selected, string? NextDate) SelectAtDate(
         IReadOnlyList<LuxembourgIndexResolvedState> ofLanguage, string requestedDate)
     {
@@ -515,7 +552,7 @@ internal sealed class V3CorpusMount : IDisposable
         (string Bound, string Date, string[] Candidates)? ambiguous = null;
         (string Language, LuxembourgIndexResolvedState From, LuxembourgIndexResolvedState To)? profilesDiffer = null;
         string? firstRefusal = null;
-        (string Bound, string Date)? missing = null;
+        (string Bound, string Date, IReadOnlyList<LuxembourgIndexResolvedState> OfLanguage)? missing = null;
         foreach (var language in servedLanguages)
         {
             var ofLanguage = scope
@@ -539,7 +576,7 @@ internal sealed class V3CorpusMount : IDisposable
             var failing = fromSelected.Length == 0 ? "from" : toSelected.Length == 0 ? "to" : null;
             if (failing is not null)
             {
-                missing ??= (failing, failing == "from" ? dateFrom : dateTo);
+                missing ??= (failing, failing == "from" ? dateFrom : dateTo, ofLanguage);
                 notCompared.Add(new { language, bound = failing, reason = "no state at or before the date" });
                 continue;
             }
@@ -602,33 +639,16 @@ internal sealed class V3CorpusMount : IDisposable
 
         if (ambiguous is { } ambiguity)
         {
-            using var ambiguousVersion = JsonSerializer.SerializeToDocument(new
-            {
-                requested_date = ambiguity.Date,
-                bound = ambiguity.Bound,
-                candidates = ambiguity.Candidates,
-            });
-            return V3PlatformOperationOutcome.Refused(
-                Context("refusal", observedAt),
-                new V3PlatformOperationRefusal(request, "ambiguous_version", ambiguousVersion.RootElement));
+            return RefuseAmbiguousVersion(request, observedAt, ambiguity.Date, ambiguity.Candidates, ambiguity.Bound);
         }
 
         if (comparisons.Count == 0)
         {
-            var (bound, date) = missing!.Value;
-            var dates = scope.Select(static state => state.ApplicabilityDate)
-                .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
-            using var noVersion = JsonSerializer.SerializeToDocument(new
-            {
-                requested_date = date,
-                bound,
-                history_begins = dates[0],
-                nearest_earlier = (string?)null,
-                nearest_later = dates.FirstOrDefault(value => string.CompareOrdinal(value, date) > 0),
-            });
-            return V3PlatformOperationOutcome.Refused(
-                Context("refusal", observedAt),
-                new V3PlatformOperationRefusal(request, "no_version_for_date", noVersion.RootElement));
+            // The refusal speaks for the language that misses the bound: its own history, not the whole
+            // scope's. Another served language can hold a state on or before the very date refused here
+            // (it fails at its other bound), and its dates would make this payload contradict itself.
+            var (bound, date, ofMissingLanguage) = missing!.Value;
+            return RefuseNoVersionForDate(request, observedAt, ofMissingLanguage, date, bound);
         }
 
         using var result = JsonSerializer.SerializeToDocument(new
