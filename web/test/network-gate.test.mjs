@@ -61,7 +61,7 @@ test("an asset answered with the wrong media type fails, whatever its status", a
     const failures = networkFailures(WHERE, [request(path, type), response(path, type, mime)], 2);
     assert.equal(failures.length, 1, `${path}: ${JSON.stringify(failures)}`);
     assert.ok(
-      failures[0].includes(`a ${type} request for ${path} was answered with ${mime}`),
+      failures[0].includes(`${/^[AEIOU]/.test(type) ? "an" : "a"} ${type} request for ${path} was answered with ${mime}`),
       failures[0],
     );
   }

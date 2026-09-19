@@ -881,16 +881,18 @@ export function networkFailures(where, events, settledAt) {
       return url;
     }
   };
+  // "an Image", "a Font": the sentence is matched by the induced mutations, so it is spelled right.
+  const article = (word) => (/^[AEIOU]/.test(word) ? "an" : "a");
   for (const event of events) {
     if (event.kind !== "response" || pathOf(event.url) === "data:") continue;
     if (event.status >= 400) {
-      failures.push(`${where}: a ${event.type} request for ${pathOf(event.url)} was answered ${event.status}`);
+      failures.push(`${where}: ${article(event.type)} ${event.type} request for ${pathOf(event.url)} was answered ${event.status}`);
       continue;
     }
     const expected = EXPECTED_MEDIA.get(event.type);
     if (expected && !expected.test(event.mime ?? "")) {
       failures.push(
-        `${where}: a ${event.type} request for ${pathOf(event.url)} was answered with ` +
+        `${where}: ${article(event.type)} ${event.type} request for ${pathOf(event.url)} was answered with ` +
           `${event.mime}; a missing or mistyped asset is not the asset`,
       );
     }
