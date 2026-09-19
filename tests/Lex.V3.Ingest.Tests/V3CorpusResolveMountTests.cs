@@ -1364,17 +1364,40 @@ public sealed class V3CorpusResolveMountTests
                 .ToArray();
         }
 
-        /// <summary>Rewrites the retained text of the article with this publisher id in one expression.</summary>
+        /// <summary>
+        /// Rewrites the article with this publisher id in one expression to one text token: both the
+        /// searchable text and the stored token stream change, as the producer would write them.
+        /// </summary>
         public Task RewriteArticleTextAsync(string expressionIri, string publisherId, string text) =>
+            SetArticleTokensAsync(expressionIri, publisherId, text,
+                System.Text.Json.JsonSerializer.Serialize(new[] { new { kind = "text", text, target = (string?)null, marker = (string?)null, note_body = (object?)null } }));
+
+        /// <summary>
+        /// Sets the stored token stream and the searchable text of the article with this publisher id in
+        /// one expression independently, so a stream that differs while the text stays the same (a
+        /// retargeted reference) can be written.
+        /// </summary>
+        public Task SetArticleTokensAsync(string expressionIri, string publisherId, string searchableText, string tokensJson) =>
             MutateArticlesAsync(connection =>
             {
                 using var set = connection.CreateCommand();
-                set.CommandText = "UPDATE articles SET searchable_text=$text WHERE expression_iri=$expression AND publisher_id=$id";
-                set.Parameters.AddWithValue("$text", text);
+                set.CommandText = "UPDATE articles SET searchable_text=$text, tokens_json=$tokens WHERE expression_iri=$expression AND publisher_id=$id";
+                set.Parameters.AddWithValue("$text", searchableText);
+                set.Parameters.AddWithValue("$tokens", tokensJson);
                 set.Parameters.AddWithValue("$expression", expressionIri);
                 set.Parameters.AddWithValue("$id", publisherId);
                 Assert.AreEqual(1, set.ExecuteNonQuery());
             });
+
+        /// <summary>The stored token stream of the article with this publisher id in one expression.</summary>
+        public string ArticleTokensJson(string expressionIri, string publisherId)
+        {
+            using var connection = LuxembourgIndexBuilder.Open(
+                Path.Combine(Directory, V3CorpusMount.IndexFileName), SqliteOpenMode.ReadOnly);
+            return ReadArticles(connection).Single(article =>
+                string.Equals(article.ExpressionIri, expressionIri, StringComparison.Ordinal) &&
+                string.Equals(article.PublisherId, publisherId, StringComparison.Ordinal)).TokensJson;
+        }
 
         /// <summary>Renames the publisher-minted id of the article with this id in one expression.</summary>
         public Task RenameArticleIdAsync(string expressionIri, string publisherId, string newPublisherId) =>

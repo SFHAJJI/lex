@@ -503,10 +503,11 @@ internal sealed class V3CorpusMount : IDisposable
     /// through the publisher-dated states of one work, per language. One row per state that carries
     /// the anchor, in the reader's order; the states that do not carry it are listed as absent, so a
     /// lineage that begins after the work does is visible and never implied to be the whole history.
-    /// "The wording changed" is byte equality of the retained searchable text between consecutive
-    /// rows of one language and nothing looser: a changed apostrophe or paragraph break is a new
-    /// wording, and the rule travels with the answer. Nothing is derived: no end date, no "in force",
-    /// no repeal, no diff text.
+    /// "The wording changed" is byte equality of the article's Text and Reference tokens (label and
+    /// target) between consecutive rows of one language and nothing looser: a changed apostrophe or a
+    /// retargeted reference is a new wording; a note or a modification marker is the publisher's
+    /// apparatus and is not; a paragraph break is not retained at ingest and so is not seen. The rule
+    /// travels with the answer. Nothing is derived: no end date, no "in force", no repeal, no diff text.
     /// </summary>
     public V3PlatformOperationOutcome ArticleHistory(
         V3PlatformOperationRequest request,
@@ -539,7 +540,8 @@ internal sealed class V3CorpusMount : IDisposable
         var absent = new List<object>();
         string? historyBegins = null;
         var previousWording = new Dictionary<string, string>(StringComparer.Ordinal);
-        var distinct = new SortedDictionary<string, int>(StringComparer.Ordinal);
+        var runs = new SortedDictionary<string, int>(StringComparer.Ordinal);
+        var distinct = new SortedDictionary<string, HashSet<string>>(StringComparer.Ordinal);
         foreach (var state in scope)
         {
             if (!carried.TryGetValue(state.StateSha256, out var articles))
@@ -554,15 +556,20 @@ internal sealed class V3CorpusMount : IDisposable
                 continue;
             }
 
-            // The wording identity of this row: the text digests of every article carrying the anchor,
-            // in identity order (one, unless the publisher minted the id twice in one state).
-            var wording = string.Join("\n", articles.Select(static article => article.TextSha256));
+            // The wording identity of this row: the token-stream digests of every article carrying the
+            // anchor, in identity order (one, unless the publisher minted the id twice in one state).
+            var wording = string.Join("\n", articles.Select(static article => article.WordingSha256));
             var changed = previousWording.TryGetValue(state.Language, out var previous) &&
                           !string.Equals(previous, wording, StringComparison.Ordinal);
             if (!previousWording.ContainsKey(state.Language) || changed)
             {
-                distinct[state.Language] = distinct.GetValueOrDefault(state.Language) + 1;
+                runs[state.Language] = runs.GetValueOrDefault(state.Language) + 1;
             }
+            if (!distinct.TryGetValue(state.Language, out var seen))
+            {
+                distinct[state.Language] = seen = new HashSet<string>(StringComparer.Ordinal);
+            }
+            seen.Add(wording);
             previousWording[state.Language] = wording;
             historyBegins ??= state.ApplicabilityDate;
 
@@ -580,9 +587,8 @@ internal sealed class V3CorpusMount : IDisposable
                     publisher_id = article.PublisherId,
                     publisher_wid = article.PublisherWid,
                     article_valid_from = article.ApplicabilityDate,
-                    validity_conflict = article.ApplicabilityDate is not null &&
-                                        !string.Equals(article.ApplicabilityDate, state.ApplicabilityDate, StringComparison.Ordinal),
-                    text_sha256 = article.TextSha256,
+                    validity_conflict = ValidityConflict(article.ApplicabilityDate, state.ApplicabilityDate),
+                    wording_sha256 = article.WordingSha256,
                 }).ToArray(),
                 wording_changed = changed,
             });
@@ -610,7 +616,8 @@ internal sealed class V3CorpusMount : IDisposable
             work_key = states[0].WorkKey,
             history_begins = historyBegins,
             wording_rule = WordingRule,
-            distinct_wordings = distinct.Select(static pair => new { language = pair.Key, count = pair.Value }).ToArray(),
+            wording_runs = runs.Select(static pair => new { language = pair.Key, count = pair.Value }).ToArray(),
+            distinct_wordings = distinct.Select(static pair => new { language = pair.Key, count = pair.Value.Count }).ToArray(),
             states = rows,
             absent_in_states = absent,
             available_languages = availableLanguages,
@@ -624,7 +631,7 @@ internal sealed class V3CorpusMount : IDisposable
     }
 
     private const string WordingRule =
-        "wording_changed is true when the SHA-256 of the retained article text differs from the previous state of the same language; any byte difference counts, including punctuation and line breaks";
+        "wording_sha256 is the SHA-256 of a canonical JSON array of [kind, text, target] for the Text and Reference tokens of the article's stored token stream, in order (reference labels and targets included; note references, note bodies and modification markers excluded); wording_changed is true when it differs from the previous state of the same language, and any byte difference in those tokens counts; paragraph structure and whitespace-only nodes are not retained at ingest and are not compared; wording_runs counts the first state and every change per language; distinct_wordings counts distinct digests per language";
 
     /// <summary>
     /// The publisher ids of one state that share the longest non-empty common prefix with the
@@ -868,6 +875,13 @@ internal sealed class V3CorpusMount : IDisposable
     /// which this index cannot reconstruct; the rule text travels with every answer so a consumer can
     /// tell the two apart. Both dates are the publisher's; neither is resolved or preferred.
     /// </summary>
+    /// <summary>
+    /// The one conflict rule (B34-L0143), used by every answer that carries an article date: a stated
+    /// article date that differs from the state's date; a blank date is never a conflict.
+    /// </summary>
+    private static bool ValidityConflict(string? articleDate, string stateDate) =>
+        articleDate is not null && !string.Equals(articleDate, stateDate, StringComparison.Ordinal);
+
     private const string ValidityConflictRule =
         "article_valid_from is the publisher's article-level applicability date; validity_conflict is true when it is stated and differs from the state's applicability_date";
 
@@ -878,8 +892,7 @@ internal sealed class V3CorpusMount : IDisposable
         var articles = new List<object>(dates.Count);
         foreach (var date in dates)
         {
-            var conflict = date.ApplicabilityDate is not null &&
-                           !string.Equals(date.ApplicabilityDate, state.ApplicabilityDate, StringComparison.Ordinal);
+            var conflict = ValidityConflict(date.ApplicabilityDate, state.ApplicabilityDate);
             if (conflict)
             {
                 conflicts++;

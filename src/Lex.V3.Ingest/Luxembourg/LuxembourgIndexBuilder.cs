@@ -58,8 +58,11 @@ public sealed record LuxembourgIndexArticleDate(
 
 /// <summary>
 /// One article of one state that carries a publisher-minted article id: the publisher's ids and
-/// article-level date as stored, and the SHA-256 of the retained searchable text, which is the only
-/// wording identity the index has. Nothing is compared here.
+/// article-level date as stored, and the wording digest: the SHA-256 of a canonical JSON array of
+/// <c>[kind, text, target]</c> for the Text and Reference tokens of the stored stream, in order.
+/// Note references, note bodies and modification markers are the publisher's editorial apparatus
+/// and stay out; paragraph structure and whitespace-only nodes are not retained at ingest, so they
+/// are not in it either. Nothing is compared here.
 /// </summary>
 public sealed record LuxembourgIndexAnchorArticle(
     string StateSha256,
@@ -67,7 +70,7 @@ public sealed record LuxembourgIndexAnchorArticle(
     string PublisherId,
     string? PublisherWid,
     string? ApplicabilityDate,
-    string TextSha256);
+    string WordingSha256);
 
 public sealed record LuxembourgIndexResolvedWork(
     string WorkIdentifier,
@@ -1227,7 +1230,7 @@ public sealed class LuxembourgIndexReader : IDisposable
             using var command = _connection.CreateCommand();
             command.CommandText = """
                 SELECT s.state_sha256, a.article_identity_sha256, a.publisher_id, a.publisher_wid,
-                       a.applicability_date, a.searchable_text
+                       a.applicability_date, a.tokens_json
                 FROM states s, json_each(s.article_identities_json) j
                 JOIN articles a ON a.article_identity_sha256 = j.value
                 WHERE s.state_sha256 IN (SELECT value FROM json_each($states)) AND a.publisher_id = $anchor
@@ -1245,10 +1248,38 @@ public sealed class LuxembourgIndexReader : IDisposable
                     reader.GetString(2),
                     reader.IsDBNull(3) ? null : reader.GetString(3),
                     reader.IsDBNull(4) ? null : reader.GetString(4),
-                    Convert.ToHexStringLower(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(reader.GetString(5))))));
+                    WordingSha256(reader.GetString(5))));
             }
             return Array.AsReadOnly(values.ToArray());
         }
+    }
+
+    /// <summary>
+    /// The wording digest of one stored token stream: SHA-256 over the canonical JSON array of
+    /// <c>[kind, text, target]</c> for its Text and Reference tokens, in order. Notes and markers
+    /// are not words of the article and are left out.
+    /// </summary>
+    internal static string WordingSha256(string tokensJson)
+    {
+        using var stream = JsonDocument.Parse(tokensJson);
+        var words = new List<string?[]>();
+        foreach (var token in stream.RootElement.EnumerateArray())
+        {
+            var kind = token.GetProperty("kind").GetString();
+            if (kind is not ("text" or "reference"))
+            {
+                continue;
+            }
+
+            words.Add(
+            [
+                kind,
+                token.TryGetProperty("text", out var text) && text.ValueKind == JsonValueKind.String ? text.GetString() : null,
+                token.TryGetProperty("target", out var target) && target.ValueKind == JsonValueKind.String ? target.GetString() : null,
+            ]);
+        }
+
+        return Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(words)));
     }
 
     /// <summary>The distinct publisher-minted article ids of one state, in ordinal order.</summary>
