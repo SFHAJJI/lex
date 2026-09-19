@@ -801,6 +801,69 @@ export function unofficialFailures(where, measured, controls = []) {
   return failures;
 }
 
+/** How long a settled page is watched for requests of its own, once per page. */
+export const QUIET_WINDOW_MS = 400;
+
+// The media type each kind of request has to be answered with. A missing asset under the object-URL
+// grammar is answered 200 with the stand-in page, so a status check alone reads it as present; the
+// type is what says a font, a script or an image was not what came back. `Other` (the browser's own
+// favicon request) and the navigation's redirects are not typed here.
+const EXPECTED_MEDIA = new Map([
+  ["Document", /^text\/html$/],
+  ["Stylesheet", /^text\/css$/],
+  ["Script", /^(text|application)\/javascript$/],
+  ["Font", /^font\/(woff2|woff|ttf|otf)$/],
+  ["Image", /^image\//],
+  ["Fetch", /^application\/json$/],
+  ["XHR", /^application\/json$/],
+]);
+
+/**
+ * The bounded-network verdict on one navigation, as failure sentences. Pure, so the node tests hold
+ * every sentence without a browser.
+ *
+ * @param {string} where  the page, viewport and scheme, as every other failure names them
+ * @param {Array<object>} events  what the browser reported: `{kind: 'request', type, url}` and
+ *   `{kind: 'response', type, url, status, mime}`, in order
+ * @param {number} settledAt  how many events had arrived when the page settled
+ */
+export function networkFailures(where, events, settledAt) {
+  const failures = [];
+  const pathOf = (url) => {
+    try {
+      const parsed = new URL(url);
+      return parsed.protocol === "data:" ? "data:" : parsed.pathname;
+    } catch {
+      return url;
+    }
+  };
+  for (const event of events) {
+    if (event.kind !== "response" || pathOf(event.url) === "data:") continue;
+    if (event.status >= 400) {
+      failures.push(`${where}: a ${event.type} request for ${pathOf(event.url)} was answered ${event.status}`);
+      continue;
+    }
+    const expected = EXPECTED_MEDIA.get(event.type);
+    if (expected && !expected.test(event.mime ?? "")) {
+      failures.push(
+        `${where}: a ${event.type} request for ${pathOf(event.url)} was answered with ` +
+          `${event.mime}; a missing or mistyped asset is not the asset`,
+      );
+    }
+  }
+  // The browser's own favicon request is not the page reaching out, whenever it lands.
+  const late = events
+    .slice(settledAt)
+    .filter((event) => event.kind === "request" && pathOf(event.url) !== "/favicon.svg");
+  if (late.length > 0) {
+    failures.push(
+      `${where}: ${late.length} request(s) after the page settled, during the tab walk, the ` +
+        `driven actions or a quiet window: ${[...new Set(late.map((event) => pathOf(event.url)))].join(", ")}`,
+    );
+  }
+  return failures;
+}
+
 export async function keyboardWalk(session, sessionId, expected) {
   // Start from a known place. Focus survives a navigation in a reused target, so without
   // this the first Tab can land mid-document and the walk measures the wrong sequence.
@@ -1103,8 +1166,18 @@ async function main() {
     const { sessionId } = await session.send("Target.attachToTarget", { targetId, flatten: true });
 
     let logged = [];
+    // Every request and response of the current navigation, as the browser saw them. The server
+    // alone cannot tell a navigation from a subresource, or what the browser asked for.
+    let network = [];
     session.on((message) => {
       if (message.sessionId !== sessionId) return;
+      if (message.method === "Network.requestWillBeSent") {
+        network.push({ kind: "request", type: message.params.type, url: message.params.request.url });
+      }
+      if (message.method === "Network.responseReceived") {
+        const { response, type } = message.params;
+        network.push({ kind: "response", type, url: response.url, status: response.status, mime: response.mimeType });
+      }
       if (message.method === "Log.entryAdded") {
         logged.push(`${message.params.entry.level}: ${message.params.entry.text}`);
       }
@@ -1120,6 +1193,7 @@ async function main() {
     await session.send("Log.enable", {}, sessionId);
     await session.send("Runtime.enable", {}, sessionId);
     await session.send("Page.enable", {}, sessionId);
+    await session.send("Network.enable", {}, sessionId);
 
     for (const page of await pagesFrom(root)) {
       const url = `${site.origin}/${page}`;
@@ -1153,6 +1227,7 @@ async function main() {
           sessionId,
         );
         logged = [];
+        network = [];
         await session.send("Page.navigate", { url }, sessionId);
         // Wait for the document to be complete and its fonts resolved, rather than for a
         // fixed 250 ms. A fixed wait measures whatever has arrived: one combination reported
@@ -1160,6 +1235,9 @@ async function main() {
         // stylesheet not yet applied rather than a layout defect. A harness that sometimes
         // measures an unstyled page produces both false failures and false passes.
         await waitForSettled(session, sessionId);
+        // Everything the page needed has arrived by now; any request after this mark is the page
+        // reaching back out on its own, which the bounded-network gate below refuses.
+        const settledAt = network.length;
         const { result } = await session.send(
           "Runtime.evaluate",
           { expression: PROBE, returnByValue: true, awaitPromise: true },
@@ -1518,6 +1596,13 @@ async function main() {
           await unofficialDisclosure(session, sessionId),
           observed.unofficialControls,
         ));
+        // Bounded network. The quiet window runs once per page, on its first combination, because
+        // a loop that polls shows up in any one of them and the window costs time in all 495.
+        if (viewport === WIDTHS[0] && scheme === "light") {
+          await new Promise((resolve) => setTimeout(resolve, QUIET_WINDOW_MS));
+        }
+        failures.push(...networkFailures(`${page} @${viewport.label}/${scheme}`, network, settledAt));
+        row.requests = network.filter((event) => event.kind === "request").length;
         const late = logged.slice(consoleAtLoad);
         if (late.length > 0) {
           failures.push(
@@ -1559,6 +1644,7 @@ async function main() {
       // Follow it the way a reader would. `logged` is the same per-page buffer the main loop
       // fills from the CDP listener, so clearing it here scopes it to this one navigation.
       logged = [];
+      network = [];
       await session.send("Page.navigate", { url: `${site.origin}${href}` }, sessionId);
       await waitForSettled(session, sessionId);
       const { result } = await session.send(
@@ -1612,7 +1698,7 @@ async function main() {
       `${row.page.replace('state-','').replace('.html','').padEnd(18)} ${row.viewport.padEnd(8)} ${row.scheme.padEnd(6)} ` +
         `console=${row.console} h1=${row.h1Count} overflow=${row.horizontalOverflow} scripts=${row.scriptCount} ` +
         `contrast=${row.contrastChecked} worst=${row.worstContrast} ` +
-        `ax=${row.axNodes} named-interactive=${row.axInteractive} landmarks=${row.axLandmarks} main=${row.axMain} glued=${row.gluedCount} inert=${row.inertControls} small=${row.smallTargetCount}`,
+        `ax=${row.axNodes} named-interactive=${row.axInteractive} landmarks=${row.axLandmarks} main=${row.axMain} glued=${row.gluedCount} inert=${row.inertControls} small=${row.smallTargetCount} requests=${row.requests}`,
     );
   }
 

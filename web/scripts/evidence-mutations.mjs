@@ -212,6 +212,31 @@ const MUTATIONS = [
     },
   },
   {
+    // A page that keeps reaching out after it has everything it needs. Silent in the console and
+    // invisible in every screenshot; only a count of requests after the page settled can see it.
+    name: "a same-origin polling loop after load",
+    expect: /request\(s\) after the page settled, during the tab walk, the driven actions or a quiet window: \/pages\.json/i,
+    async apply(root) {
+      const file = join(root, "client.js");
+      const code = await readFile(file, "utf8");
+      await writeFile(file, `${code}\n;setInterval(function(){fetch("/pages.json");},150);\n`, "utf8");
+    },
+  },
+  {
+    // A missing file under the object-URL grammar is answered 200 with the stand-in page, so a status
+    // check reads it as present. A broken image logs nothing either; only its media type says an
+    // image is not what came back.
+    name: "an image whose file is missing, answered 200 by the stand-in page",
+    expect: /an Image request for \/images\/missing\.png was answered with text\/html/i,
+    async apply(root) {
+      await replaceOnce(
+        join(root, "trust-surface.html"),
+        /<\/main>/,
+        '<img src="/images/missing.png" alt="An image that is missing on purpose"></main>',
+      );
+    },
+  },
+  {
     name: "a toggle whose pressed state is not a boolean",
     expect: /aria-pressed="[^"]*" is not a boolean/i,
     async apply(root) {
