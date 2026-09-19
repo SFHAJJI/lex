@@ -535,6 +535,12 @@ export function unofficialRenderingParts({
 /**
  * A body that is not the authentic text, labelled as one and routed to the text that counts.
  *
+ * Closed until the reader opens it (S5-A10: never the default view). What the page shows unasked
+ * is the label, which says UNOFFICIAL; the text arrives only on a reader's own action. A native
+ * disclosure rather than a scripted one, because both pages that carry this ship no script, and
+ * the browser already tells a screen reader whether a `summary` is expanded. There is no way to
+ * ask for it open: a caller that could would make the default a caller's choice again.
+ *
  * @see unofficialRenderingParts, which holds every rule this renders.
  */
 export function renderUnofficialRendering({
@@ -554,13 +560,15 @@ export function renderUnofficialRendering({
     officialUri,
   });
   return (
-    '<section class="unofficial-rendering">' +
-    `<p class="unofficial-head">${mark('--unofficial', rendering.heading)}</p>` +
+    '<details class="unofficial-rendering">' +
+    `<summary class="unofficial-head">${mark('--unofficial', rendering.heading)}</summary>` +
+    '<div class="unofficial-body">' +
     `<blockquote class="body" lang="${escapeHtml(rendering.language)}">` +
     `${escapeHtml(rendering.text)}</blockquote>` +
     `<p class="unofficial-note">${escapeHtml(rendering.note)}</p>` +
     `<p class="unofficial-official"><a href="${escapeHtml(rendering.official)}" rel="external">` +
     'The authentic text, at the publisher</a></p>' +
-    '</section>'
+    '</div>' +
+    '</details>'
   );
 }

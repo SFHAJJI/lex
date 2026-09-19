@@ -214,6 +214,19 @@ test('both renderers produce the same page, in every shape this screen has', () 
   sameBytes(reading(UNION), 'a Union record, which speaks the Union publisher vocabulary');
 });
 
+test('an unofficial rendering is the same closed disclosure in both renderers (S5-A10)', () => {
+  // Named rather than incidental: the default fixture happens to carry a rendering, and this is
+  // the test that says so and fails if React's shape ever drifts from the string surface's.
+  const props = reading();
+  const markup = react(props);
+  assert.ok(
+    markup.includes('<details class="unofficial-rendering"><summary class="unofficial-head">'),
+    'React does not put the unofficial rendering behind a closed disclosure',
+  );
+  assert.ok(!/<details[^>]*\sopen/.test(markup), 'React serves the unofficial rendering open');
+  sameBytes(props, 'the unofficial rendering differs between the two renderers');
+});
+
 test('the comparison would notice a page that lost a claim', () => {
   // A passing equality test is worth nothing if the two sides are equally empty. These pin
   // the comparison to a page that actually says the things this screen exists to say.

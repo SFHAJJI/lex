@@ -511,13 +511,20 @@ summary {
 }
 
 /* An unofficial rendering. Structurally distinct from a quotation, because the difference
-   between the authentic text and a convenience is the difference this product exists for. */
+   between the authentic text and a convenience is the difference this product exists for.
+   It is a closed disclosure (S5-A10), so the grid sits on the body inside it: a `details`
+   element is not reliably a grid container, and its closed state must stay the browser's. */
 .unofficial-rendering {
-  display: grid;
-  gap: 0.5rem;
   min-inline-size: 0;
   padding: 0.75rem;
   border: 1px dashed currentColor;
+}
+
+.unofficial-body {
+  display: grid;
+  gap: 0.5rem;
+  min-inline-size: 0;
+  margin-block-start: 0.5rem;
 }
 
 .unofficial-head,
