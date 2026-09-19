@@ -135,6 +135,73 @@ const MUTATIONS = [
     },
   },
   {
+    // S5-A10: translation is never the default view. The trust surface carries exactly one
+    // unofficial rendering; opening it in the served markup is the defect in its plainest form.
+    name: "an unofficial rendering served open, so it is the default view",
+    expect: /unofficial rendering 1 of 1 is shown by default \(open true/i,
+    async apply(root) {
+      await replaceOnce(
+        join(root, "trust-surface.html"),
+        /<details class="unofficial-rendering">/,
+        '<details class="unofficial-rendering" open>',
+      );
+    },
+  },
+  {
+    // The shape this slice replaced: the rendering in a plain section, visible with no action.
+    name: "an unofficial rendering taken out of its disclosure",
+    expect: /unofficial rendering 1 of 1 is a <section>, not a closed disclosure/i,
+    async apply(root) {
+      await replaceOnce(
+        join(root, "trust-surface.html"),
+        /<details class="unofficial-rendering"><summary class="unofficial-head">([\s\S]*?)<\/summary>([\s\S]*?)<\/details>/,
+        '<section class="unofficial-rendering"><p class="unofficial-head">$1</p>$2</section>',
+      );
+    },
+  },
+  {
+    // The disclosure stays closed and the stylesheet shows its content anyway. The `open`
+    // attribute is false throughout, so only a gate that measures what is rendered, rather than
+    // what the markup says, can see the text on screen.
+    name: "an unofficial rendering shown by the stylesheet while its disclosure stays closed",
+    expect: /is shown by default \(open false, text visible true, text on screen true\)/i,
+    async apply(root) {
+      const file = join(root, "styles.css");
+      const css = await readFile(file, "utf8");
+      await writeFile(
+        file,
+        `${css}\ndetails.unofficial-rendering::details-content { content-visibility: visible; display: block; }\n`,
+        "utf8",
+      );
+    },
+  },
+  {
+    // The control keeps its icon and heading and loses the word. A reader then opens a body that
+    // is not the law without having been told so first.
+    name: "the UNOFFICIAL label removed from the control that opens a rendering",
+    expect: /the control that opens unofficial rendering 1 of 1 does not say UNOFFICIAL/i,
+    async apply(root) {
+      await replaceOnce(
+        join(root, "trust-surface.html"),
+        /<span class="token-label">UNOFFICIAL<\/span>/,
+        "",
+      );
+    },
+  },
+  {
+    // Out of the Tab order. Focus by script still lands on it, which is why the probe also
+    // requires a tab stop; without that this mutation would pass.
+    name: "the control that opens a rendering taken out of the Tab order",
+    expect: /the UNOFFICIAL control cannot take keyboard focus/i,
+    async apply(root) {
+      await replaceOnce(
+        join(root, "trust-surface.html"),
+        /<summary class="unofficial-head">/,
+        '<summary class="unofficial-head" tabindex="-1">',
+      );
+    },
+  },
+  {
     name: "a toggle whose pressed state is not a boolean",
     expect: /aria-pressed="[^"]*" is not a boolean/i,
     async apply(root) {

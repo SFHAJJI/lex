@@ -666,6 +666,137 @@ export async function drivenBehaviour(session, sessionId) {
   return roving || pressed ? { roving, keys, pressed, shrink } : null;
 }
 
+/**
+ * S5-A10, driven: an unofficial rendering is never the default view.
+ *
+ * Measured, not inferred from markup. At load, for every `.unofficial-rendering`: that it is a
+ * `details`, whether it is open, whether its text is visible, and whether that text is in what the
+ * page shows (`innerText`, which leaves out what the browser does not render). Then the first one is
+ * opened the way a keyboard reader would -- focus its summary, press Enter -- and closed again, so a
+ * rendering that can never be reached fails as surely as one that is shown unasked.
+ */
+export async function unofficialDisclosure(session, sessionId) {
+  const read = async (expression) => {
+    const { result } = await session.send(
+      "Runtime.evaluate",
+      { expression, returnByValue: true },
+      sessionId,
+    );
+    return result.value;
+  };
+  const STATE = `(() => [...document.querySelectorAll('.unofficial-rendering')].map((el) => {
+    const body = el.querySelector('blockquote');
+    const text = body ? body.textContent.trim() : '';
+    const summary = el.querySelector(':scope > summary');
+    return {
+      tag: el.tagName.toLowerCase(),
+      open: el.open === true,
+      label: summary ? summary.textContent.replace(/\\s+/g, ' ').trim() : null,
+      visible: body ? body.checkVisibility({ visibilityProperty: true, opacityProperty: true }) : false,
+      shown: text.length > 0 && document.body.innerText.includes(text),
+    };
+  }))()`;
+
+  const load = await read(STATE);
+  if (!load || load.length === 0) return null;
+
+  const focused = await read(`(() => {
+    const summary = document.querySelector('.unofficial-rendering > summary');
+    if (!summary) return false;
+    summary.focus();
+    // Focus by script reaches a tabindex=-1 element that Tab never does, so the tab stop is
+    // required too: a control only a script can reach is not one a keyboard reader has.
+    return document.activeElement === summary && summary.tabIndex >= 0;
+  })()`);
+  const enter = async () => {
+    for (const [type, extra] of [["keyDown", { text: "\r", unmodifiedText: "\r" }], ["keyUp", {}]]) {
+      await session.send(
+        "Input.dispatchKeyEvent",
+        { type, key: "Enter", code: "Enter", windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13, ...extra },
+        sessionId,
+      );
+    }
+  };
+  let opened = null;
+  let closed = null;
+  if (focused) {
+    await enter();
+    opened = (await read(STATE))[0];
+    await enter();
+    closed = (await read(STATE))[0];
+  }
+  return { load, focused, opened, closed };
+}
+
+/**
+ * The S5-A10 verdict on one measured page, as failure sentences. Pure, so the node tests can hold
+ * every sentence without a browser.
+ *
+ * @param {string} where  the page, viewport and scheme, as every other failure names them
+ * @param {object|null} measured  what `unofficialDisclosure` returned
+ * @param {Array<boolean|null>} controls  the `expanded` state of every disclosure control in the
+ *   accessibility tree whose name says UNOFFICIAL, at load
+ */
+export function unofficialFailures(where, measured, controls = []) {
+  const failures = [];
+  const load = measured?.load ?? [];
+  if (load.length === 0) {
+    if (controls.length > 0) {
+      failures.push(`${where}: ${controls.length} UNOFFICIAL disclosure control(s) with no rendering behind them`);
+    }
+    return failures;
+  }
+  load.forEach((one, index) => {
+    const which = `unofficial rendering ${index + 1} of ${load.length}`;
+    if (one.tag !== "details") {
+      failures.push(
+        `${where}: ${which} is a <${one.tag}>, not a closed disclosure; S5-A10 says translation is ` +
+          "never the default view",
+      );
+    }
+    if (one.open || one.visible || one.shown) {
+      failures.push(
+        `${where}: ${which} is shown by default (open ${one.open}, text visible ${one.visible}, ` +
+          `text on screen ${one.shown}); S5-A10 says translation is never the default view`,
+      );
+    }
+    if (!/UNOFFICIAL/.test(one.label ?? "")) {
+      failures.push(
+        `${where}: the control that opens ${which} does not say UNOFFICIAL ` +
+          `(${JSON.stringify(one.label)})`,
+      );
+    }
+  });
+  if (controls.length !== load.length) {
+    failures.push(
+      `${where}: ${load.length} unofficial rendering(s) and ${controls.length} disclosure ` +
+        "control(s) named UNOFFICIAL in the accessibility tree; a screen reader cannot find one",
+    );
+  }
+  const expanded = controls.filter((state) => state !== false).length;
+  if (expanded > 0) {
+    failures.push(
+      `${where}: ${expanded} UNOFFICIAL disclosure control(s) are not reported collapsed to a ` +
+        "screen reader at load",
+    );
+  }
+  if (!measured.focused) {
+    failures.push(`${where}: the UNOFFICIAL control cannot take keyboard focus`);
+  } else {
+    if (!measured.opened?.open || !measured.opened?.shown) {
+      failures.push(
+        `${where}: Enter on the UNOFFICIAL control did not show the rendering (open ` +
+          `${measured.opened?.open}, text on screen ${measured.opened?.shown}); a reader who asks ` +
+          "for it can never read it",
+      );
+    }
+    if (measured.closed?.open || measured.closed?.shown) {
+      failures.push(`${where}: Enter again on the UNOFFICIAL control did not close the rendering`);
+    }
+  }
+  return failures;
+}
+
 export async function keyboardWalk(session, sessionId, expected) {
   // Start from a known place. Focus survives a navigation in a reused target, so without
   // this the first Tab can land mid-document and the walk measures the wrong sequence.
@@ -1051,6 +1182,12 @@ async function main() {
         observed.axInteractive = interactive.length;
         observed.axHeadings = headings.length;
         observed.axLandmarks = roles.filter((role) => ["main", "note", "group", "complementary"].includes(role)).length;
+        // S5-A10's control as a screen reader receives it: one disclosure per unofficial rendering,
+        // named UNOFFICIAL, and collapsed when the page is served.
+        observed.unofficialControls = axNodes
+          .filter((node) => node.role?.value === "disclosure triangle" &&
+            (node.name?.value ?? "").includes("UNOFFICIAL"))
+          .map((node) => node.properties?.find((property) => property.name === "expanded")?.value?.value ?? null);
 
         if (axNodes.length === 0) {
           failures.push(`${page} @${viewport.label}/${scheme}: the accessibility tree is empty`);
@@ -1369,6 +1506,13 @@ async function main() {
             }
           }
         }
+        // S5-A10, driven after the listbox probe: it opens and closes a disclosure, and pages with
+        // unofficial renderings carry no listbox, so neither probe changes what the other measures.
+        failures.push(...unofficialFailures(
+          `${page} @${viewport.label}/${scheme}`,
+          await unofficialDisclosure(session, sessionId),
+          observed.unofficialControls,
+        ));
         const late = logged.slice(consoleAtLoad);
         if (late.length > 0) {
           failures.push(
