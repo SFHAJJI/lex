@@ -570,19 +570,41 @@ export async function drivenBehaviour(session, sessionId) {
     return result.value;
   };
 
-  const listbox = `(() => {
+  // `minimum` is 2 for the roving probe, where a one-option list proves nothing about movement, and
+  // 1 for the shrink probe, where a single surviving option must still be reachable.
+  const listboxAt = (minimum) => `(() => {
     const box = document.querySelector('[role=listbox]');
     if (!box) return null;
     const options = [...box.querySelectorAll('[role=option]')];
-    if (options.length < 2) return null;
+    if (options.length < ${minimum}) return null;
     return {
       tab: options.findIndex((o) => o.getAttribute('tabindex') === '0'),
+      tabbable: options.filter((o) => o.getAttribute('tabindex') === '0').length,
       active: options.indexOf(document.activeElement),
       count: options.length,
     };
   })()`;
+  const listbox = listboxAt(2);
+
+  const KEY_CODES = { ArrowDown: 40, ArrowUp: 38, Home: 36, End: 35 };
+  const press = async (key) => {
+    for (const type of ["rawKeyDown", "keyUp"]) {
+      await session.send(
+        "Input.dispatchKeyEvent",
+        {
+          type,
+          key,
+          code: key,
+          windowsVirtualKeyCode: KEY_CODES[key],
+          nativeVirtualKeyCode: KEY_CODES[key],
+        },
+        sessionId,
+      );
+    }
+  };
 
   let roving = null;
+  let keys = null;
   const start = await read(listbox);
   if (start && start.tab >= 0) {
     // Focus the real tab stop first: an arrow key sent to the body proves nothing about the group.
@@ -592,21 +614,24 @@ export async function drivenBehaviour(session, sessionId) {
       options[${start.tab}].focus();
       return true;
     })()`);
-    for (const type of ["rawKeyDown", "keyUp"]) {
-      await session.send(
-        "Input.dispatchKeyEvent",
-        {
-          type,
-          key: "ArrowDown",
-          code: "ArrowDown",
-          windowsVirtualKeyCode: 40,
-          nativeVirtualKeyCode: 40,
-        },
-        sessionId,
-      );
-    }
+    await press("ArrowDown");
     const after = await read(listbox);
     roving = { before: { ...start, active: start.tab }, after };
+
+    // Every key in the movement table is driven, not only ArrowDown. ArrowUp, Home and End were
+    // declared and never pressed, so any of them could be dead while every gate stayed green --
+    // the same defect the ArrowDown probe exists to catch. End goes first so ArrowUp starts from
+    // a known place and Home has somewhere to come back from.
+    keys = [];
+    const last = start.count - 1;
+    for (const [key, expected] of [
+      ["End", last],
+      ["ArrowUp", Math.max(last - 1, 0)],
+      ["Home", 0],
+    ]) {
+      await press(key);
+      keys.push({ key, expected, state: await read(listbox) });
+    }
   }
 
   // The pressed contract is two claims at once: the control's own state flips, and the thing it
@@ -619,14 +644,26 @@ export async function drivenBehaviour(session, sessionId) {
     return { pressed: el.getAttribute('aria-pressed'), represented: count ? count.textContent.trim() : null };
   })()`;
 
+  // Stand on the last row before the filter runs. A filter that shortens the list must leave the
+  // single tab stop on a row that still exists; otherwise no option is tabbable and Tab jumps over
+  // the whole listbox. Standing on the first row would never expose that, because every filter
+  // keeps index 0 in range.
+  let standing = null;
+  if (keys) {
+    await press("End");
+    standing = await read(listboxAt(1));
+  }
+
   let pressed = null;
+  let shrink = null;
   const chipBefore = await read(chip);
   if (chipBefore) {
     await read("(() => { document.querySelector('[aria-pressed]').click(); return true; })()");
     pressed = { before: chipBefore, after: await read(chip) };
+    if (standing) shrink = { before: standing, after: await read(listboxAt(1)) };
   }
 
-  return roving || pressed ? { roving, pressed } : null;
+  return roving || pressed ? { roving, keys, pressed, shrink } : null;
 }
 
 export async function keyboardWalk(session, sessionId, expected) {
@@ -1072,6 +1109,12 @@ async function main() {
         const row = { page, viewport: viewport.label, scheme, console: logged.length, ...observed };
         rows.push(row);
 
+        // Everything logged from here on comes from the tab walk and the driven probe below, which
+        // run handlers the page load never runs. This check alone read the buffer before either of
+        // them, and the next navigation clears it, so an exception thrown by a key or click handler
+        // was never gated at all. `consoleAtLoad` marks the split; the second check is after the
+        // driven probe.
+        const consoleAtLoad = logged.length;
         if (logged.length > 0) failures.push(`${page} @${viewport.label}: console output ${JSON.stringify(logged)}`);
         if (observed.horizontalOverflow) {
           failures.push(
@@ -1287,6 +1330,37 @@ async function main() {
                 "itself on and filters nothing is worse than one that does neither",
             );
           }
+        }
+        for (const { key, expected, state } of behaviour?.keys ?? []) {
+          if (!state || state.active !== expected) {
+            failures.push(
+              `${page} @${viewport.label}: ${key} moved focus to option ${state?.active ?? "none"}, ` +
+                `expected ${expected}; the movement table names the key and the handler does not honour it`,
+            );
+          } else if (state.tabbable !== 1 || state.tab !== state.active) {
+            failures.push(
+              `${page} @${viewport.label}: after ${key}, ${state.tabbable} option(s) are tabbable and ` +
+                `the tab stop is on ${state.tab} while focus is on ${state.active}; roving means one ` +
+                "tab stop that follows focus",
+            );
+          }
+        }
+        if (behaviour?.shrink) {
+          const { before, after } = behaviour.shrink;
+          if (after && after.count < before.count && after.tabbable !== 1) {
+            failures.push(
+              `${page} @${viewport.label}: a filter shortened the listbox from ${before.count} to ` +
+                `${after.count} options while its tab stop was on option ${before.active}, and ` +
+                `${after.tabbable} options are tabbable; the listbox drops out of the Tab order`,
+            );
+          }
+        }
+        const late = logged.slice(consoleAtLoad);
+        if (late.length > 0) {
+          failures.push(
+            `${page} @${viewport.label}/${scheme}: console output during the tab walk or driven ` +
+              `actions ${JSON.stringify(late)}`,
+          );
         }
        }
       }
