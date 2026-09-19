@@ -100,6 +100,10 @@ public sealed class V3CorpusAsOfMountTests
         Assert.AreEqual("no_version_for_date", envelope.Refusal!.Code);
         Assert.AreEqual(PublisherId.LuLegilux, envelope.Context.Publisher);
         var payload = envelope.Refusal.HelpfulPayload;
+        Assert.AreEqual(
+            "history_begins,nearest_earlier,nearest_later,requested_date",
+            string.Join(",", payload.EnumerateObject().Select(static property => property.Name)),
+            "as_of has one date, so its refusal names no bound: exactly these properties, as served in the envelope's canonical order.");
         Assert.AreEqual(before, payload.GetProperty("requested_date").GetString());
         Assert.AreEqual(fixture.ApplicabilityDate, payload.GetProperty("history_begins").GetString());
         Assert.AreEqual(JsonValueKind.Null, payload.GetProperty("nearest_earlier").ValueKind);
@@ -162,6 +166,10 @@ public sealed class V3CorpusAsOfMountTests
 
         Assert.AreEqual(V3Verdicts.Refuse, envelope.Verdict);
         Assert.AreEqual("ambiguous_version", envelope.Refusal!.Code);
+        Assert.AreEqual(
+            "candidates,requested_date",
+            string.Join(",", envelope.Refusal.HelpfulPayload.EnumerateObject().Select(static property => property.Name)),
+            "as_of has one date, so its refusal names no bound: exactly these properties, as served in the envelope's canonical order.");
         Assert.AreEqual(PublisherId.LuLegilux, envelope.Context.Publisher);
         Assert.AreEqual("lu", envelope.Context.Jurisdiction);
         Assert.AreEqual(TimelineSemantics.PublisherApplicability, envelope.Context.TimelineSemantics);
