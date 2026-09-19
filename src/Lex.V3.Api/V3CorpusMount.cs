@@ -372,29 +372,18 @@ internal sealed class V3CorpusMount : IDisposable
             var ofLanguage = scope
                 .Where(state => string.Equals(state.Language, language, StringComparison.Ordinal))
                 .ToArray();
-            var atOrBefore = ofLanguage
-                .Where(state => string.CompareOrdinal(state.ApplicabilityDate, requestedDate) <= 0)
-                .ToArray();
-            if (atOrBefore.Length == 0)
+            var (selected, nextDate) = SelectAtDate(ofLanguage, requestedDate);
+            if (selected.Length == 0)
             {
                 continue;
             }
 
-            var selectedDate = atOrBefore.Select(static state => state.ApplicabilityDate).Max(StringComparer.Ordinal)!;
-            var selected = atOrBefore
-                .Where(state => string.Equals(state.ApplicabilityDate, selectedDate, StringComparison.Ordinal))
-                .ToArray();
             if (selected.Length > 1)
             {
                 ambiguous.AddRange(selected.Select(StateUrl));
                 continue;
             }
 
-            var nextDate = ofLanguage
-                .Where(state => string.CompareOrdinal(state.ApplicabilityDate, requestedDate) > 0)
-                .Select(static state => state.ApplicabilityDate)
-                .Order(StringComparer.Ordinal)
-                .FirstOrDefault();
             served.Add(StateRow(selected[0], nextDate));
         }
 
@@ -444,6 +433,275 @@ internal sealed class V3CorpusMount : IDisposable
     }
 
     /// <summary>
+    /// The selection rule of every dated answer, over the states of one language: the greatest
+    /// publisher date at or before the requested date selects; every state on that date is returned
+    /// (more than one is an ambiguity the caller refuses); the next publisher date after the requested
+    /// date, or <c>null</c>, bounds it. Nothing else is derived.
+    /// </summary>
+    private static (LuxembourgIndexResolvedState[] Selected, string? NextDate) SelectAtDate(
+        IReadOnlyList<LuxembourgIndexResolvedState> ofLanguage, string requestedDate)
+    {
+        var atOrBefore = ofLanguage
+            .Where(state => string.CompareOrdinal(state.ApplicabilityDate, requestedDate) <= 0)
+            .ToArray();
+        if (atOrBefore.Length == 0)
+        {
+            return ([], null);
+        }
+
+        var selectedDate = atOrBefore.Select(static state => state.ApplicabilityDate).Max(StringComparer.Ordinal)!;
+        var selected = atOrBefore
+            .Where(state => string.Equals(state.ApplicabilityDate, selectedDate, StringComparison.Ordinal))
+            .ToArray();
+        var nextDate = ofLanguage
+            .Where(state => string.CompareOrdinal(state.ApplicabilityDate, requestedDate) > 0)
+            .Select(static state => state.ApplicabilityDate)
+            .Order(StringComparer.Ordinal)
+            .FirstOrDefault();
+        return (selected, nextDate);
+    }
+
+    /// <summary>
+    /// R6 <c>diff</c> for Luxembourg, at article level: each bound resolves to a state exactly as
+    /// <c>as_of</c> resolves it, per language; both states are served in full before anything is
+    /// compared; one state covering both bounds answers "the same version applied on both dates"; two
+    /// states with the same rule profiles are compared article by article by publisher-minted id and
+    /// wording digest (unchanged, changed, added, removed). Two states with different rule profiles
+    /// refuse <c>profiles_differ</c>, which nothing overrides. Refusals follow <c>as_of</c>'s rule: an
+    /// ambiguity or a profile mismatch in any served language refuses the whole answer, the first found in
+    /// language order when both apply, while a language with no state at a bound is listed as not
+    /// compared; both bounds are resolved before a language is classified, so a missing bound never masks
+    /// an ambiguity on the other. No text is diffed, no legal effect is
+    /// asserted: a changed article is a changed digest, and the note says so.
+    /// </summary>
+    public V3PlatformOperationOutcome Diff(
+        V3PlatformOperationRequest request,
+        DateTimeOffset observedAt)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (!string.Equals(request.OperationId, "diff", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("The mounted corpus comparison operation only accepts diff/1.");
+        }
+
+        var identifier = RequiredString(request.Parameters, "identifier");
+        var dateFrom = RequiredString(request.Parameters, "date_from");
+        var dateTo = RequiredString(request.Parameters, "date_to");
+        var requestedLanguage = OptionalLanguage(request.Parameters);
+        foreach (var date in new[] { dateFrom, dateTo })
+        {
+            if (!DateOnly.TryParseExact(date, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out _))
+            {
+                throw new V3TransportFailureException(
+                    V3TransportFailureKind.RequestSchemaInvalid,
+                    "A requested date is not a civil calendar date.");
+            }
+        }
+
+        if (RefuseUnlessWorkStates(request, identifier, observedAt, "r6_diff", requestedLanguage,
+                out var states, out var availableLanguages) is { } refused)
+        {
+            return refused;
+        }
+
+        var scope = requestedLanguage is null
+            ? states
+            : states.Where(state => string.Equals(state.Language, requestedLanguage, StringComparison.Ordinal))
+                .ToArray();
+        var servedLanguages = requestedLanguage is null ? availableLanguages : new[] { requestedLanguage };
+
+        var comparisons = new List<object>();
+        var notCompared = new List<object>();
+        (string Bound, string Date, string[] Candidates)? ambiguous = null;
+        (string Language, LuxembourgIndexResolvedState From, LuxembourgIndexResolvedState To)? profilesDiffer = null;
+        string? firstRefusal = null;
+        (string Bound, string Date)? missing = null;
+        foreach (var language in servedLanguages)
+        {
+            var ofLanguage = scope
+                .Where(state => string.Equals(state.Language, language, StringComparison.Ordinal))
+                .ToArray();
+            var (fromSelected, fromNext) = SelectAtDate(ofLanguage, dateFrom);
+            var (toSelected, toNext) = SelectAtDate(ofLanguage, dateTo);
+
+            // Both bounds are resolved before the language is classified: an ambiguity at either bound is
+            // recorded first, so a bound with no state cannot mask a twin on the other; only then does a
+            // missing bound list the language as not compared.
+            if (fromSelected.Length > 1 || toSelected.Length > 1)
+            {
+                var bound = fromSelected.Length > 1 ? "from" : "to";
+                ambiguous ??= (bound, bound == "from" ? dateFrom : dateTo,
+                    (bound == "from" ? fromSelected : toSelected).Select(StateUrl).Order(StringComparer.Ordinal).ToArray());
+                firstRefusal ??= "ambiguous_version";
+                continue;
+            }
+
+            var failing = fromSelected.Length == 0 ? "from" : toSelected.Length == 0 ? "to" : null;
+            if (failing is not null)
+            {
+                missing ??= (failing, failing == "from" ? dateFrom : dateTo);
+                notCompared.Add(new { language, bound = failing, reason = "no state at or before the date" });
+                continue;
+            }
+
+            var from = fromSelected[0];
+            var to = toSelected[0];
+            if (string.Equals(from.StateSha256, to.StateSha256, StringComparison.Ordinal))
+            {
+                comparisons.Add(new
+                {
+                    language,
+                    from = StateRow(from, fromNext),
+                    to = StateRow(to, toNext),
+                    same_state = true,
+                    note = "the same version applied on both dates",
+                    articles = (object?)null,
+                    counts = (object?)null,
+                });
+                continue;
+            }
+
+            if (!from.RuleProfileSha256s.SequenceEqual(to.RuleProfileSha256s, StringComparer.Ordinal))
+            {
+                profilesDiffer ??= (language, from, to);
+                firstRefusal ??= "profiles_differ";
+                continue;
+            }
+
+            var (articles, counts) = CompareArticles(
+                _reader!.ResolveStateArticles(from.StateSha256), _reader.ResolveStateArticles(to.StateSha256));
+            comparisons.Add(new
+            {
+                language,
+                from = StateRow(from, fromNext),
+                to = StateRow(to, toNext),
+                same_state = false,
+                note = "two publisher-dated states; each article is compared by its publisher-minted id and wording digest, and nothing about legal effect is asserted",
+                articles = (object?)articles,
+                counts = (object?)counts,
+            });
+        }
+
+        // One rule for refusals, the one as_of follows: an ambiguity or a profile mismatch in any served
+        // language refuses the whole answer; a language with no state at a bound is not a refusal and is
+        // listed as not compared. When both apply, the first found in language order is the answer.
+        if (profilesDiffer is { } mismatch && firstRefusal == "profiles_differ")
+        {
+            using var differ = JsonSerializer.SerializeToDocument(new
+            {
+                left_profile = mismatch.From.RuleProfileSha256s,
+                right_profile = mismatch.To.RuleProfileSha256s,
+                left = StateUrl(mismatch.From),
+                right = StateUrl(mismatch.To),
+                language = mismatch.Language,
+            });
+            return V3PlatformOperationOutcome.Refused(
+                Context("refusal", observedAt),
+                new V3PlatformOperationRefusal(request, "profiles_differ", differ.RootElement));
+        }
+
+        if (ambiguous is { } ambiguity)
+        {
+            using var ambiguousVersion = JsonSerializer.SerializeToDocument(new
+            {
+                requested_date = ambiguity.Date,
+                bound = ambiguity.Bound,
+                candidates = ambiguity.Candidates,
+            });
+            return V3PlatformOperationOutcome.Refused(
+                Context("refusal", observedAt),
+                new V3PlatformOperationRefusal(request, "ambiguous_version", ambiguousVersion.RootElement));
+        }
+
+        if (comparisons.Count == 0)
+        {
+            var (bound, date) = missing!.Value;
+            var dates = scope.Select(static state => state.ApplicabilityDate)
+                .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+            using var noVersion = JsonSerializer.SerializeToDocument(new
+            {
+                requested_date = date,
+                bound,
+                history_begins = dates[0],
+                nearest_earlier = (string?)null,
+                nearest_later = dates.FirstOrDefault(value => string.CompareOrdinal(value, date) > 0),
+            });
+            return V3PlatformOperationOutcome.Refused(
+                Context("refusal", observedAt),
+                new V3PlatformOperationRefusal(request, "no_version_for_date", noVersion.RootElement));
+        }
+
+        using var result = JsonSerializer.SerializeToDocument(new
+        {
+            requested_identifier = identifier,
+            requested_date_from = dateFrom,
+            requested_date_to = dateTo,
+            requested_language = requestedLanguage,
+            publisher = "lu-legilux",
+            work_key = states[0].WorkKey,
+            comparisons,
+            languages_not_compared = notCompared,
+            available_languages = availableLanguages,
+            wording_rule = WordingRule,
+            validity_conflict_rule = ValidityConflictRule,
+            corpus_sha256 = _corpus.ArtifactRef.Sha256,
+            index_sha256 = _reader!.IndexRef.Sha256,
+        });
+        return V3PlatformOperationOutcome.Success(
+            Context("success", observedAt),
+            new V3PlatformOperationResult(request, "diff", result.RootElement));
+    }
+
+    /// <summary>
+    /// Article-level comparison of two states by publisher-minted id: present in both with the same
+    /// wording digests is unchanged, with different digests changed; only in the later state added;
+    /// only in the earlier removed. An id minted twice in one state compares as its ordered digests.
+    /// </summary>
+    private static (IReadOnlyList<object> Articles, object Counts) CompareArticles(
+        IReadOnlyList<LuxembourgIndexStateArticle> from, IReadOnlyList<LuxembourgIndexStateArticle> to)
+    {
+        static Dictionary<string, LuxembourgIndexStateArticle[]> ById(IReadOnlyList<LuxembourgIndexStateArticle> articles) =>
+            articles.GroupBy(static article => article.PublisherId, StringComparer.Ordinal)
+                .ToDictionary(static group => group.Key, static group => group.ToArray(), StringComparer.Ordinal);
+        static object[] Side(LuxembourgIndexStateArticle[]? side) =>
+            side is null
+                ? []
+                : side.Select(static article => (object)new { article_identity_sha256 = article.ArticleIdentitySha256, wording_sha256 = article.WordingSha256 }).ToArray();
+
+        var left = ById(from);
+        var right = ById(to);
+        var ids = left.Keys.Concat(right.Keys).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal);
+        var rows = new List<object>();
+        int unchanged = 0, changed = 0, added = 0, removed = 0;
+        foreach (var id in ids)
+        {
+            left.TryGetValue(id, out var before);
+            right.TryGetValue(id, out var after);
+            string status;
+            if (before is null)
+            {
+                status = "added"; added++;
+            }
+            else if (after is null)
+            {
+                status = "removed"; removed++;
+            }
+            else if (before.Select(static a => a.WordingSha256).SequenceEqual(after.Select(static a => a.WordingSha256), StringComparer.Ordinal))
+            {
+                status = "unchanged"; unchanged++;
+            }
+            else
+            {
+                status = "changed"; changed++;
+            }
+
+            rows.Add(new { publisher_id = id, status, from = Side(before), to = Side(after) });
+        }
+
+        return (rows, new { unchanged, changed, added, removed });
+    }
+
+    /// <summary>
     /// R6 <c>timeline</c> for Luxembourg: the inventory of every publisher-dated state of one work,
     /// per language, in the reader's order (date, language, expression, digest). Each row is the same
     /// dated-state vocabulary <c>as_of</c> serves, so the two operations never describe one state in
@@ -475,17 +733,10 @@ internal sealed class V3CorpusMount : IDisposable
             : states.Where(state => string.Equals(state.Language, requestedLanguage, StringComparison.Ordinal))
                 .ToArray();
         var rows = new List<object>(scope.Count);
+        var datesByIdentity = ArticleDateMap(scope);
         foreach (var state in scope)
         {
-            // The next dated state in this row's own language: a date on which another language's
-            // text changes never bounds this one.
-            var nextDate = scope
-                .Where(other => string.Equals(other.Language, state.Language, StringComparison.Ordinal) &&
-                                string.CompareOrdinal(other.ApplicabilityDate, state.ApplicabilityDate) > 0)
-                .Select(static other => other.ApplicabilityDate)
-                .Order(StringComparer.Ordinal)
-                .FirstOrDefault();
-            rows.Add(StateRow(state, nextDate));
+            rows.Add(StateRow(state, NextDateInLanguage(scope, state), datesByIdentity));
         }
 
         using var result = JsonSerializer.SerializeToDocument(new
@@ -505,6 +756,191 @@ internal sealed class V3CorpusMount : IDisposable
             Context("success", observedAt),
             new V3PlatformOperationResult(request, "timeline", result.RootElement));
     }
+
+    /// <summary>
+    /// R6 <c>article_history</c> for Luxembourg: the lineage of one publisher-minted article id
+    /// through the publisher-dated states of one work, per language. One row per state that carries
+    /// the anchor, in the reader's order; the states that do not carry it are listed as absent, so a
+    /// lineage that begins after the work does is visible and never implied to be the whole history.
+    /// "The wording changed" is byte equality of the article's merged text and its references (label
+    /// and target) between consecutive rows of one language and nothing looser: a changed apostrophe
+    /// or a retargeted reference is a new wording; a note or a modification marker is the publisher's
+    /// apparatus and is not; a paragraph or inline-formatting boundary is not a word and is not seen.
+    /// The rule travels with the answer. Nothing is derived: no end date, no "in force", no repeal, no diff text.
+    /// </summary>
+    public V3PlatformOperationOutcome ArticleHistory(
+        V3PlatformOperationRequest request,
+        DateTimeOffset observedAt)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (!string.Equals(request.OperationId, "article_history", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("The mounted corpus lineage operation only accepts article_history/1.");
+        }
+
+        var identifier = RequiredString(request.Parameters, "identifier");
+        var anchor = RequiredString(request.Parameters, "anchor");
+        var requestedLanguage = OptionalLanguage(request.Parameters);
+        if (RefuseUnlessWorkStates(request, identifier, observedAt, "r6_article_history", requestedLanguage,
+                out var states, out var availableLanguages) is { } refused)
+        {
+            return refused;
+        }
+
+        var scope = requestedLanguage is null
+            ? states
+            : states.Where(state => string.Equals(state.Language, requestedLanguage, StringComparison.Ordinal))
+                .ToArray();
+        var carried = _reader!.ResolveAnchorArticles(scope.Select(static state => state.StateSha256).ToArray(), anchor)
+            .GroupBy(static article => article.StateSha256, StringComparer.Ordinal)
+            .ToDictionary(static group => group.Key, static group => group.ToArray(), StringComparer.Ordinal);
+
+        var rows = new List<object>();
+        var absent = new List<object>();
+        string? historyBegins = null;
+        var previousWording = new Dictionary<string, string>(StringComparer.Ordinal);
+        var runs = new SortedDictionary<string, int>(StringComparer.Ordinal);
+        var distinct = new SortedDictionary<string, HashSet<string>>(StringComparer.Ordinal);
+        foreach (var state in scope)
+        {
+            if (!carried.TryGetValue(state.StateSha256, out var articles))
+            {
+                absent.Add(new
+                {
+                    language = state.Language,
+                    applicability_date = state.ApplicabilityDate,
+                    state_sha256 = state.StateSha256,
+                    permalink = StateUrl(state),
+                });
+                continue;
+            }
+
+            // The wording identity of this row: the token-stream digests of every article carrying the
+            // anchor, in identity order (one, unless the publisher minted the id twice in one state).
+            var wording = string.Join("\n", articles.Select(static article => article.WordingSha256));
+            var changed = previousWording.TryGetValue(state.Language, out var previous) &&
+                          !string.Equals(previous, wording, StringComparison.Ordinal);
+            if (!previousWording.ContainsKey(state.Language) || changed)
+            {
+                runs[state.Language] = runs.GetValueOrDefault(state.Language) + 1;
+            }
+            if (!distinct.TryGetValue(state.Language, out var seen))
+            {
+                distinct[state.Language] = seen = new HashSet<string>(StringComparer.Ordinal);
+            }
+            seen.Add(wording);
+            previousWording[state.Language] = wording;
+            historyBegins ??= state.ApplicabilityDate;
+
+            rows.Add(new
+            {
+                language = state.Language,
+                applicability_date = state.ApplicabilityDate,
+                next_applicability_date = NextDateInLanguage(scope, state),
+                state_sha256 = state.StateSha256,
+                stable_coordinate = StableCoordinate(state),
+                permalink = StateUrl(state),
+                articles = articles.Select(article => new
+                {
+                    article_identity_sha256 = article.ArticleIdentitySha256,
+                    publisher_id = article.PublisherId,
+                    publisher_wid = article.PublisherWid,
+                    article_valid_from = article.ApplicabilityDate,
+                    validity_conflict = ValidityConflict(article.ApplicabilityDate, state.ApplicabilityDate),
+                    wording_sha256 = article.WordingSha256,
+                }).ToArray(),
+                wording_changed = changed,
+            });
+        }
+
+        if (rows.Count == 0)
+        {
+            using var notInVersion = JsonSerializer.SerializeToDocument(new
+            {
+                requested_anchor = anchor,
+                nearest_anchors = NearestAnchors(_reader.ResolveArticleIds(scope[^1].StateSha256), anchor),
+                do_not_fall_back_to_full_text_search = true,
+            });
+            return V3PlatformOperationOutcome.Refused(
+                Context("refusal", observedAt),
+                new V3PlatformOperationRefusal(request, "anchor_not_in_version", notInVersion.RootElement));
+        }
+
+        using var result = JsonSerializer.SerializeToDocument(new
+        {
+            requested_identifier = identifier,
+            requested_anchor = anchor,
+            requested_language = requestedLanguage,
+            publisher = "lu-legilux",
+            work_key = states[0].WorkKey,
+            history_begins = historyBegins,
+            wording_rule = WordingRule,
+            wording_runs = runs.Select(static pair => new { language = pair.Key, count = pair.Value }).ToArray(),
+            distinct_wordings = distinct.Select(static pair => new { language = pair.Key, count = pair.Value.Count }).ToArray(),
+            states = rows,
+            absent_in_states = absent,
+            available_languages = availableLanguages,
+            validity_conflict_rule = ValidityConflictRule,
+            corpus_sha256 = _corpus.ArtifactRef.Sha256,
+            index_sha256 = _reader.IndexRef.Sha256,
+        });
+        return V3PlatformOperationOutcome.Success(
+            Context("success", observedAt),
+            new V3PlatformOperationResult(request, "provision_history", result.RootElement));
+    }
+
+    private const string WordingRule =
+        "wording_sha256 is the SHA-256 of a canonical JSON array of [kind, text, target] for the Text and Reference tokens of the article's stored token stream, in order, with consecutive text merged into one entry (reference labels and targets included; note references, note bodies and modification markers excluded); wording_changed is true when it differs from the previous state of the same language, and any byte difference in the merged text or in a reference counts; paragraph and inline-formatting boundaries and whitespace-only nodes are not compared; wording_runs counts the first state and every change per language; distinct_wordings counts distinct digests per language";
+
+    /// <summary>
+    /// The publisher ids of one state that share the longest non-empty common prefix with the
+    /// requested anchor, at most ten, in ordinal order. When none shares a prefix, the first ten ids
+    /// of that state in ordinal order, because the reviewed refusal contract always names a
+    /// neighbourhood (an empty list is refused by the envelope). A stated rule, not a search: nothing
+    /// is matched by content.
+    /// </summary>
+    private static string[] NearestAnchors(IReadOnlyList<string> anchors, string requested)
+    {
+        var scored = anchors
+            .Select(anchor => (Anchor: anchor, Prefix: CommonPrefixLength(anchor, requested)))
+            .Where(static pair => pair.Prefix > 0)
+            .ToArray();
+        if (scored.Length == 0)
+        {
+            return anchors.Order(StringComparer.Ordinal).Take(10).ToArray();
+        }
+
+        var longest = scored.Max(static pair => pair.Prefix);
+        return scored
+            .Where(pair => pair.Prefix == longest)
+            .Select(static pair => pair.Anchor)
+            .Order(StringComparer.Ordinal)
+            .Take(10)
+            .ToArray();
+    }
+
+    private static int CommonPrefixLength(string left, string right)
+    {
+        var length = 0;
+        while (length < left.Length && length < right.Length && left[length] == right[length])
+        {
+            length++;
+        }
+        return length;
+    }
+
+    /// <summary>
+    /// The next publisher-dated state in the same language as <paramref name="state"/> within the
+    /// served scope, or <c>null</c>: a date on which another language's text changes never bounds
+    /// this one.
+    /// </summary>
+    private static string? NextDateInLanguage(IReadOnlyList<LuxembourgIndexResolvedState> scope, LuxembourgIndexResolvedState state) =>
+        scope
+            .Where(other => string.Equals(other.Language, state.Language, StringComparison.Ordinal) &&
+                            string.CompareOrdinal(other.ApplicabilityDate, state.ApplicabilityDate) > 0)
+            .Select(static other => other.ApplicabilityDate)
+            .Order(StringComparer.Ordinal)
+            .FirstOrDefault();
 
     /// <summary>
     /// Locates the Luxembourg work a temporal operation names, or returns the refusal that stands in
@@ -528,8 +964,9 @@ internal sealed class V3CorpusMount : IDisposable
         if (_reader is null)
         {
             // A Luxembourg-shaped identifier on a mount without the Luxembourg index is Luxembourg law
-            // whose corpus is not mounted; an EU or unrecognised identifier is refused the mode with EU
-            // context.
+            // whose corpus is not mounted; an EU-shaped identifier is refused the mode with EU context;
+            // an identifier with no publisher shape is unknown with Luxembourg context on every mount,
+            // as it is on a mounted index below, so the mount never decides the attribution.
             if (isStableWorkCoordinate || IsLuxembourgShaped(identifier))
             {
                 using var unmounted = JsonSerializer.SerializeToDocument(new { required_corpus = "lu" });
@@ -538,17 +975,21 @@ internal sealed class V3CorpusMount : IDisposable
                     new V3PlatformOperationRefusal(request, "no_corpus_mounted", unmounted.RootElement));
             }
 
-            return ModeUnavailable(request, observedAt, PublisherId.EuEurLex, requestedMode);
+            return IsEuropeanUnionShaped(identifier)
+                ? ModeUnavailable(request, observedAt, PublisherId.EuEurLex, requestedMode)
+                : Unknown(request, identifier, observedAt, PublisherId.LuLegilux, ShapelessIdentifierWhatWouldAnswer);
         }
 
         var workIdentifier = isStableWorkCoordinate ? workKey : identifier;
         var located = _reader.ResolveWorkStates(workIdentifier);
         if (located.Count == 0)
         {
-            return PublisherFor(identifier) == PublisherId.EuEurLex
+            return IsEuropeanUnionShaped(identifier)
                 ? ModeUnavailable(request, observedAt, PublisherId.EuEurLex, requestedMode)
                 : Unknown(request, identifier, observedAt, PublisherId.LuLegilux,
-                    "a Luxembourg work identifier present in the mounted index");
+                    isStableWorkCoordinate || IsLuxembourgShaped(identifier)
+                        ? "a Luxembourg work identifier present in the mounted index"
+                        : ShapelessIdentifierWhatWouldAnswer);
         }
 
         var languages = located.Select(static state => state.Language)
@@ -577,9 +1018,13 @@ internal sealed class V3CorpusMount : IDisposable
     /// stable coordinate and the hash-pinned permalink. <paramref name="nextDate"/> is the next
     /// publisher-dated state in the same language, or <c>null</c>: never an inferred end.
     /// </summary>
-    private object StateRow(LuxembourgIndexResolvedState state, string? nextDate)
+    private object StateRow(LuxembourgIndexResolvedState state, string? nextDate) =>
+        StateRow(state, nextDate, ArticleDateMap([state]));
+
+    private static object StateRow(
+        LuxembourgIndexResolvedState state, string? nextDate, IReadOnlyDictionary<string, string?> datesByIdentity)
     {
-        var dates = ArticleDates(state);
+        var dates = ArticleDates(state, datesByIdentity);
         return new
         {
             language = state.Language,
@@ -633,12 +1078,29 @@ internal sealed class V3CorpusMount : IDisposable
             new V3PlatformOperationRefusal(request, "retrieval_mode_unavailable", unavailable.RootElement));
     }
 
+    private const string ShapelessIdentifierWhatWouldAnswer =
+        "a Luxembourg work identifier (the stable coordinate /lu-legilux/{work_key} on this origin, or the publisher's work IRI) or an EU coordinate; this identifier has no publisher shape";
+
+    /// <summary>The identifier forms EUR-Lex, the Publications Office and this product mint for EU law.</summary>
+    private static bool IsEuropeanUnionShaped(string identifier) =>
+        OfficialIdentifier.EliMintedBy(identifier) == PublisherId.EuEurLex ||
+        OfficialIdentifier.ProfileOf(identifier) is not null ||
+        IsEuropeanUnionPublisherAddress(identifier);
+
     /// <summary>The identifier forms this product and Legilux mint for Luxembourg law.</summary>
     private static bool IsLuxembourgShaped(string identifier) =>
         OfficialIdentifier.EliMintedBy(identifier) == PublisherId.LuLegilux ||
         TryParsePinnedPermalink(identifier, out _, out _, out _) ||
-        (Uri.TryCreate(identifier, UriKind.Absolute, out var uri) &&
-         uri.Host.EndsWith("legilux.public.lu", StringComparison.OrdinalIgnoreCase));
+        (Uri.TryCreate(identifier, UriKind.Absolute, out var uri) && IsLegiluxHost(uri.Host));
+
+    /// <summary>
+    /// The publisher's host or one of its subdomains, on a dot boundary: <c>legilux.public.lu</c> and
+    /// <c>data.legilux.public.lu</c> are the publisher; <c>notlegilux.public.lu</c> is not (the rule
+    /// #678 settled for <c>europa.eu</c>).
+    /// </summary>
+    private static bool IsLegiluxHost(string host) =>
+        string.Equals(host, "legilux.public.lu", StringComparison.OrdinalIgnoreCase) ||
+        host.EndsWith(".legilux.public.lu", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// The stable work coordinate <c>/lu-legilux/{work_key}</c>, on this origin or as a bare path.
@@ -679,6 +1141,13 @@ internal sealed class V3CorpusMount : IDisposable
     }
 
     /// <summary>
+    /// The one conflict rule (B34-L0143), used by every answer that carries an article date: a stated
+    /// article date that differs from the state's date; a blank date is never a conflict.
+    /// </summary>
+    private static bool ValidityConflict(string? articleDate, string stateDate) =>
+        articleDate is not null && !string.Equals(articleDate, stateDate, StringComparison.Ordinal);
+
+    /// <summary>
     /// The pack's per-state rule (B34-L0143: the conflict is computed against the version date). It is
     /// not V2's rule, which compared the article date with the state where that wording run began and
     /// which this index cannot reconstruct; the rule text travels with every answer so a consumer can
@@ -687,15 +1156,31 @@ internal sealed class V3CorpusMount : IDisposable
     private const string ValidityConflictRule =
         "article_valid_from is the publisher's article-level applicability date; validity_conflict is true when it is stated and differs from the state's applicability_date";
 
-    private (IReadOnlyList<object> Articles, int ConflictCount) ArticleDates(LuxembourgIndexResolvedState state)
+    private (IReadOnlyList<object> Articles, int ConflictCount) ArticleDates(LuxembourgIndexResolvedState state) =>
+        ArticleDates(state, ArticleDateMap([state]));
+
+    /// <summary>
+    /// The publisher's article-level dates of every article of the given states, read in one query
+    /// (#685 remark 2: one round trip per answer, not per state). An identity the index does not hold
+    /// maps to <c>null</c>, as the reader reports it.
+    /// </summary>
+    private IReadOnlyDictionary<string, string?> ArticleDateMap(IReadOnlyList<LuxembourgIndexResolvedState> states)
     {
-        var dates = _reader!.ResolveArticleDates(state.ArticleIdentities);
+        var identities = states.SelectMany(static state => state.ArticleIdentities)
+            .Distinct(StringComparer.Ordinal).ToArray();
+        return _reader!.ResolveArticleDates(identities)
+            .ToDictionary(static date => date.ArticleIdentitySha256, static date => date.ApplicabilityDate, StringComparer.Ordinal);
+    }
+
+    private static (IReadOnlyList<object> Articles, int ConflictCount) ArticleDates(
+        LuxembourgIndexResolvedState state, IReadOnlyDictionary<string, string?> datesByIdentity)
+    {
         var conflicts = 0;
-        var articles = new List<object>(dates.Count);
-        foreach (var date in dates)
+        var articles = new List<object>(state.ArticleIdentities.Count);
+        foreach (var identity in state.ArticleIdentities)
         {
-            var conflict = date.ApplicabilityDate is not null &&
-                           !string.Equals(date.ApplicabilityDate, state.ApplicabilityDate, StringComparison.Ordinal);
+            var date = datesByIdentity.GetValueOrDefault(identity);
+            var conflict = ValidityConflict(date, state.ApplicabilityDate);
             if (conflict)
             {
                 conflicts++;
@@ -703,8 +1188,8 @@ internal sealed class V3CorpusMount : IDisposable
 
             articles.Add(new
             {
-                article_identity_sha256 = date.ArticleIdentitySha256,
-                article_valid_from = date.ApplicabilityDate,
+                article_identity_sha256 = identity,
+                article_valid_from = date,
                 validity_conflict = conflict,
             });
         }

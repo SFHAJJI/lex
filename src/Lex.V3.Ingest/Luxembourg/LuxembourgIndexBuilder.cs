@@ -56,6 +56,31 @@ public sealed record LuxembourgIndexArticleDate(
     string ArticleIdentitySha256,
     string? ApplicabilityDate);
 
+/// <summary>
+/// One article of one state that carries a publisher-minted article id: the publisher's ids and
+/// article-level date as stored, and the wording digest: the SHA-256 of a canonical JSON array of
+/// <c>[kind, text, target]</c> for the Text and Reference tokens of the stored stream, in order.
+/// Note references, note bodies and modification markers are the publisher's editorial apparatus
+/// and stay out; paragraph structure and whitespace-only nodes are not retained at ingest, so they
+/// are not in it either. Nothing is compared here.
+/// </summary>
+/// <summary>
+/// One article of one state: its identity, the publisher-minted article id and the wording digest
+/// (<see cref="LuxembourgIndexReader.WordingSha256"/>). Nothing is compared here.
+/// </summary>
+public sealed record LuxembourgIndexStateArticle(
+    string ArticleIdentitySha256,
+    string PublisherId,
+    string WordingSha256);
+
+public sealed record LuxembourgIndexAnchorArticle(
+    string StateSha256,
+    string ArticleIdentitySha256,
+    string PublisherId,
+    string? PublisherWid,
+    string? ApplicabilityDate,
+    string WordingSha256);
+
 public sealed record LuxembourgIndexResolvedWork(
     string WorkIdentifier,
     IReadOnlyList<string> ExpressionIris,
@@ -312,20 +337,7 @@ public static class LuxembourgIndexBuilder
                         LuxembourgAknLegalContentTokenKind.Text or
                         LuxembourgAknLegalContentTokenKind.Reference)
                     .Select(static token => token.Text)),
-                JsonSerializer.Serialize(article.Tokens.Select(static token => new
-                {
-                    kind = ContractWire.NameOf(token.Kind),
-                    text = token.Text,
-                    target = token.Target,
-                    marker = token.Marker,
-                    note_body = token.NoteBody?.Select(static nested => new
-                    {
-                        kind = ContractWire.NameOf(nested.Kind),
-                        text = nested.Text,
-                        target = nested.Target,
-                        marker = nested.Marker,
-                    }),
-                }))));
+                TokensJson(article.Tokens)));
         }
 
         articles = projected.OrderBy(static row => row.ArticleIdentitySha256, StringComparer.Ordinal).ToArray();
@@ -407,6 +419,26 @@ public static class LuxembourgIndexBuilder
         }
         return token;
     }
+
+    /// <summary>
+    /// The stored token stream of one article, exactly as the <c>articles.tokens_json</c> column
+    /// holds it. One function, so a test can digest what the index stores.
+    /// </summary>
+    internal static string TokensJson(IReadOnlyList<LuxembourgAknLegalContentToken> tokens) =>
+        JsonSerializer.Serialize(tokens.Select(static token => new
+        {
+            kind = ContractWire.NameOf(token.Kind),
+            text = token.Text,
+            target = token.Target,
+            marker = token.Marker,
+            note_body = token.NoteBody?.Select(static nested => new
+            {
+                kind = ContractWire.NameOf(nested.Kind),
+                text = nested.Text,
+                target = nested.Target,
+                marker = nested.Marker,
+            }),
+        }));
 
     private static string? ApplicabilityDate(string? value)
     {
@@ -1191,6 +1223,157 @@ public sealed class LuxembourgIndexReader : IDisposable
                 .Select(identity => new LuxembourgIndexArticleDate(
                     identity, dates.TryGetValue(identity, out var date) ? date : null))
                 .ToArray());
+        }
+    }
+
+    /// <summary>
+    /// The articles carrying the publisher-minted article id <paramref name="anchor"/> in each of the
+    /// given states, ordered by state digest then article identity. A state that does not carry the
+    /// anchor contributes no row; a state that carries it more than once contributes each article.
+    /// </summary>
+    public IReadOnlyList<LuxembourgIndexAnchorArticle> ResolveAnchorArticles(
+        IReadOnlyList<string> stateDigests, string anchor)
+    {
+        ArgumentNullException.ThrowIfNull(stateDigests);
+        ArgumentException.ThrowIfNullOrWhiteSpace(anchor);
+        if (stateDigests.Count == 0)
+        {
+            return Array.Empty<LuxembourgIndexAnchorArticle>();
+        }
+
+        lock (_gate)
+        {
+            using var command = _connection.CreateCommand();
+            command.CommandText = """
+                SELECT s.state_sha256, a.article_identity_sha256, a.publisher_id, a.publisher_wid,
+                       a.applicability_date, a.tokens_json
+                FROM states s, json_each(s.article_identities_json) j
+                JOIN articles a ON a.article_identity_sha256 = j.value
+                WHERE s.state_sha256 IN (SELECT value FROM json_each($states)) AND a.publisher_id = $anchor
+                ORDER BY s.state_sha256, a.article_identity_sha256
+                """;
+            command.Parameters.AddWithValue("$states", JsonSerializer.Serialize(stateDigests));
+            command.Parameters.AddWithValue("$anchor", anchor);
+            using var reader = command.ExecuteReader();
+            var values = new List<LuxembourgIndexAnchorArticle>();
+            while (reader.Read())
+            {
+                values.Add(new LuxembourgIndexAnchorArticle(
+                    reader.GetString(0),
+                    reader.GetString(1),
+                    reader.GetString(2),
+                    reader.IsDBNull(3) ? null : reader.GetString(3),
+                    reader.IsDBNull(4) ? null : reader.GetString(4),
+                    WordingSha256(reader.GetString(5))));
+            }
+            return Array.AsReadOnly(values.ToArray());
+        }
+    }
+
+    /// <summary>
+    /// The wording digest of one stored token stream: SHA-256 over the canonical JSON array of
+    /// <c>[kind, text, target]</c> for its Text and Reference tokens, in order, with consecutive
+    /// text merged into one entry first. The producer emits one text token per XML text node, so a
+    /// paragraph or inline-formatting boundary splits text without changing a word; merging makes the
+    /// digest blind to the boundary and to nothing else. Notes and markers are not words of the
+    /// article and are left out before merging.
+    /// </summary>
+    internal static string WordingSha256(string tokensJson)
+    {
+        using var stream = JsonDocument.Parse(tokensJson);
+        var words = new List<string?[]>();
+        var pendingText = new StringBuilder();
+        var hasPendingText = false;
+        void FlushText()
+        {
+            if (hasPendingText)
+            {
+                words.Add(["text", pendingText.ToString(), null]);
+                pendingText.Clear();
+                hasPendingText = false;
+            }
+        }
+
+        foreach (var token in stream.RootElement.EnumerateArray())
+        {
+            var kind = token.GetProperty("kind").GetString();
+            var text = token.TryGetProperty("text", out var textValue) && textValue.ValueKind == JsonValueKind.String ? textValue.GetString() : null;
+            if (kind == "text")
+            {
+                pendingText.Append(text);
+                hasPendingText = true;
+                continue;
+            }
+
+            if (kind != "reference")
+            {
+                continue;
+            }
+
+            FlushText();
+            words.Add(
+            [
+                kind,
+                text,
+                token.TryGetProperty("target", out var target) && target.ValueKind == JsonValueKind.String ? target.GetString() : null,
+            ]);
+        }
+
+        FlushText();
+        return Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(words)));
+    }
+
+    /// <summary>
+    /// Every article one state binds, with its publisher-minted id and wording digest, ordered by
+    /// publisher id then identity, in one query.
+    /// </summary>
+    public IReadOnlyList<LuxembourgIndexStateArticle> ResolveStateArticles(string stateSha256)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(stateSha256);
+        lock (_gate)
+        {
+            using var command = _connection.CreateCommand();
+            command.CommandText = """
+                SELECT a.article_identity_sha256, a.publisher_id, a.tokens_json
+                FROM states s, json_each(s.article_identities_json) j
+                JOIN articles a ON a.article_identity_sha256 = j.value
+                WHERE s.state_sha256 = $digest
+                ORDER BY a.publisher_id, a.article_identity_sha256
+                """;
+            command.Parameters.AddWithValue("$digest", stateSha256);
+            using var reader = command.ExecuteReader();
+            var values = new List<LuxembourgIndexStateArticle>();
+            while (reader.Read())
+            {
+                values.Add(new LuxembourgIndexStateArticle(
+                    reader.GetString(0), reader.GetString(1), WordingSha256(reader.GetString(2))));
+            }
+            return Array.AsReadOnly(values.ToArray());
+        }
+    }
+
+    /// <summary>The distinct publisher-minted article ids of one state, in ordinal order.</summary>
+    public IReadOnlyList<string> ResolveArticleIds(string stateSha256)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(stateSha256);
+        lock (_gate)
+        {
+            using var command = _connection.CreateCommand();
+            command.CommandText = """
+                SELECT DISTINCT a.publisher_id
+                FROM states s, json_each(s.article_identities_json) j
+                JOIN articles a ON a.article_identity_sha256 = j.value
+                WHERE s.state_sha256 = $digest
+                ORDER BY a.publisher_id
+                """;
+            command.Parameters.AddWithValue("$digest", stateSha256);
+            using var reader = command.ExecuteReader();
+            var values = new List<string>();
+            while (reader.Read())
+            {
+                values.Add(reader.GetString(0));
+            }
+            return Array.AsReadOnly(values.ToArray());
         }
     }
 

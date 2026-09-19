@@ -184,6 +184,17 @@ public static class V3PlatformSchemaExporter
             ["identifier"],
             ("identifier", NonBlankString()),
             ("language", NonBlankString())),
+        "article_history" => Parameters(
+            ["identifier", "anchor"],
+            ("identifier", NonBlankString()),
+            ("anchor", NonBlankString()),
+            ("language", NonBlankString())),
+        "diff" => Parameters(
+            ["identifier", "date_from", "date_to"],
+            ("identifier", NonBlankString()),
+            ("date_from", CivilDate()),
+            ("date_to", CivilDate()),
+            ("language", NonBlankString())),
         _ => ClosedObject(),
     };
 
