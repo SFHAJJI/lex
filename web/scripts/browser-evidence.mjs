@@ -16,6 +16,7 @@ import { existsSync } from "node:fs";
 import { resolve as resolvePath } from "node:path";
 import { extname, join as joinPath, sep as pathSep } from "node:path";
 import { CSP_DIRECTIVES, FORBIDDEN_SOURCES, cspValue } from "./csp.mjs";
+import { decodePng, inkMeasure } from "./png-ink.mjs";
 import { mkdtemp, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -736,6 +737,34 @@ export async function unofficialDisclosure(session, sessionId) {
   const load = await read(STATE);
   if (!load || load.length === 0) return null;
 
+  // The verdict on the label comes from pixels. Every property list leaves a way out (a filter, a
+  // text fill colour, a clip path, an alpha of 0.01), so the label's box is photographed by the
+  // browser that painted it and must carry enough ink to draw a word. The named reasons above stay
+  // as the diagnosis of why a label that is not painted is not painted.
+  for (let index = 0; index < load.length; index++) {
+    const box = await read(`(() => {
+      const el = document.querySelectorAll('.unofficial-rendering')[${index}];
+      const summary = el ? el.querySelector(':scope > summary') : null;
+      const word = summary
+        ? [...summary.querySelectorAll('*')].find((node) =>
+            [...node.childNodes].some((child) => child.nodeType === 3 && child.textContent.includes('UNOFFICIAL')))
+        : null;
+      if (!word) return null;
+      word.scrollIntoView({ block: 'center', inline: 'nearest' });
+      const r = word.getBoundingClientRect();
+      return { x: r.left + window.scrollX, y: r.top + window.scrollY, width: r.width, height: r.height };
+    })()`);
+    load[index].ink = { pixels: 0, share: 0, width: Math.round(box?.width ?? 0), height: Math.round(box?.height ?? 0) };
+    if (box && box.width >= 1 && box.height >= 1) {
+      const { data } = await session.send(
+        "Page.captureScreenshot",
+        { format: "png", clip: { ...box, scale: 1 }, captureBeyondViewport: false },
+        sessionId,
+      );
+      load[index].ink = { ...inkMeasure(decodePng(Buffer.from(data, "base64"))), width: Math.round(box.width), height: Math.round(box.height) };
+    }
+  }
+
   const enter = async () => {
     for (const [type, extra] of [["keyDown", { text: "\r", unmodifiedText: "\r" }], ["keyUp", {}]]) {
       await session.send(
@@ -779,6 +808,14 @@ export async function unofficialDisclosure(session, sessionId) {
  * @param {Array<boolean|null>} controls  the `expanded` state of every disclosure control in the
  *   accessibility tree whose name says UNOFFICIAL, at load
  */
+/**
+ * Enough ink to draw a word: at least 30 pixels and 3% of the label's box differ clearly from the
+ * background. A word in the product's smallest type leaves hundreds; a one-pixel clip, a clip-path
+ * sliver or text at an alpha of 0.01 leaves almost none.
+ */
+export const LABEL_INK = Object.freeze({ pixels: 30, share: 0.03 });
+const painted = (ink) => (ink?.pixels ?? 0) >= LABEL_INK.pixels && (ink?.share ?? 0) >= LABEL_INK.share;
+
 export function unofficialFailures(where, measured, controls = []) {
   const failures = [];
   const load = measured?.load ?? [];
@@ -807,10 +844,13 @@ export function unofficialFailures(where, measured, controls = []) {
         `${where}: the control that opens ${which} does not say UNOFFICIAL ` +
           `(${JSON.stringify(one.label)})`,
       );
-    } else if (one.labelHidden) {
+    } else if (!painted(one.ink)) {
+      // The verdict is the pixels'. The named reason, when one applies, says why.
       failures.push(
-        `${where}: the UNOFFICIAL label of ${which} is in the markup but not shown: ` +
-          `${one.labelHidden}; S5-A10 says clearly labelled unofficial`,
+        `${where}: the UNOFFICIAL label of ${which} is not painted: ${one.ink?.pixels ?? 0} ink ` +
+          `pixel(s), ${Math.round((one.ink?.share ?? 0) * 1000) / 10}% of its ` +
+          `${one.ink?.width ?? 0}x${one.ink?.height ?? 0} box, differ from the background` +
+          `${one.labelHidden ? ` (${one.labelHidden})` : ""}; S5-A10 says clearly labelled unofficial`,
       );
     }
     const drive = measured.drives?.[index];
