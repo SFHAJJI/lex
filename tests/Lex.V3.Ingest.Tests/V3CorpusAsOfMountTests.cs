@@ -248,15 +248,33 @@ public sealed class V3CorpusAsOfMountTests
 
         var europe = await EuropeMountedFixture.CreateAsync();
         await using var cleanupEurope = europe;
-        using var europeMount = await V3CorpusMount.OpenAsync(europe.Directory, CancellationToken.None);
-        Assert.IsNotNull(europeMount);
-        var onEuropeOnly = await AsOfAsync(europeMount, $"/lu-legilux/{luxembourg.WorkKey}", "2024-01-01");
-        Assert.AreEqual(V3Verdicts.Refuse, onEuropeOnly.Verdict);
-        Assert.AreEqual("retrieval_mode_unavailable", onEuropeOnly.Refusal!.Code);
-        Assert.AreEqual(PublisherId.EuEurLex, onEuropeOnly.Context.Publisher);
-        CollectionAssert.AreEqual(new[] { "r0_exact_coordinate" },
-            onEuropeOnly.Refusal.HelpfulPayload.GetProperty("available_modes").EnumerateArray()
-                .Select(static value => value.GetString()).ToArray());
+        using (var europeMount = await V3CorpusMount.OpenAsync(europe.Directory, CancellationToken.None))
+        {
+            Assert.IsNotNull(europeMount);
+            var onEuropeOnly = await AsOfAsync(europeMount, $"/lu-legilux/{luxembourg.WorkKey}", "2024-01-01");
+            Assert.AreEqual(V3Verdicts.Refuse, onEuropeOnly.Verdict);
+            Assert.AreEqual("retrieval_mode_unavailable", onEuropeOnly.Refusal!.Code);
+            Assert.AreEqual(PublisherId.EuEurLex, onEuropeOnly.Context.Publisher);
+            CollectionAssert.AreEqual(new[] { "r0_exact_coordinate" },
+                onEuropeOnly.Refusal.HelpfulPayload.GetProperty("available_modes").EnumerateArray()
+                    .Select(static value => value.GetString()).ToArray());
+        }
+
+        // Combined mount: the Luxembourg work answers with Luxembourg context and the EU act still
+        // refuses the mode with EU context; neither publisher borrows the other's.
+        await europe.AddLuxembourgMountAsync();
+        using var combined = await V3CorpusMount.OpenAsync(europe.Directory, CancellationToken.None);
+        Assert.IsNotNull(combined);
+        var luxembourgOnCombined = await AsOfAsync(
+            combined, $"/lu-legilux/{luxembourg.WorkKey}", luxembourg.ApplicabilityDate);
+        Assert.AreEqual(V3Verdicts.Answer, luxembourgOnCombined.Verdict);
+        Assert.AreEqual(PublisherId.LuLegilux, luxembourgOnCombined.Context.Publisher);
+        Assert.AreEqual(TimelineSemantics.PublisherApplicability, luxembourgOnCombined.Context.TimelineSemantics);
+        var euOnCombined = await AsOfAsync(combined, "32016R0679", "2024-01-01");
+        Assert.AreEqual(V3Verdicts.Refuse, euOnCombined.Verdict);
+        Assert.AreEqual("retrieval_mode_unavailable", euOnCombined.Refusal!.Code);
+        Assert.AreEqual(PublisherId.EuEurLex, euOnCombined.Context.Publisher);
+        Assert.AreEqual(TimelineSemantics.OfficialConsolidationState, euOnCombined.Context.TimelineSemantics);
     }
 
     [TestMethod]
