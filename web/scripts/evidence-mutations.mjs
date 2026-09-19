@@ -192,12 +192,72 @@ const MUTATIONS = [
     // Out of the Tab order. Focus by script still lands on it, which is why the probe also
     // requires a tab stop; without that this mutation would pass.
     name: "the control that opens a rendering taken out of the Tab order",
-    expect: /the UNOFFICIAL control cannot take keyboard focus/i,
+    expect: /the UNOFFICIAL control of unofficial rendering 1 of 1 cannot take keyboard focus/i,
     async apply(root) {
       await replaceOnce(
         join(root, "trust-surface.html"),
         /<summary class="unofficial-head">/,
         '<summary class="unofficial-head" tabindex="-1">',
+      );
+    },
+  },
+  {
+    // The second of two renderings out of the Tab order. The first version of the probe drove only
+    // the first summary on a page, so this passed every gate while the load-time checks held.
+    name: "the second rendering's control taken out of the Tab order",
+    expect: /the UNOFFICIAL control of unofficial rendering 2 of 2 cannot take keyboard focus/i,
+    async apply(root) {
+      await replaceOnce(
+        join(root, "reading.html"),
+        /(<summary class="unofficial-head">[\s\S]*?)<summary class="unofficial-head">/,
+        '$1<summary class="unofficial-head" tabindex="-1">',
+      );
+    },
+  },
+  {
+    // The word stays in the markup, the accessible name keeps it, and a sighted reader never sees
+    // it. `textContent` ignores CSS, so the first version of the label check passed this; only
+    // measuring the rendered label catches it.
+    name: "the UNOFFICIAL label shrunk to nothing by the stylesheet",
+    expect: /the UNOFFICIAL label of unofficial rendering \d+ of \d+ is in the markup but not shown/i,
+    async apply(root) {
+      const file = join(root, "styles.css");
+      const css = await readFile(file, "utf8");
+      await writeFile(file, `${css}\n.unofficial-head .token-label { font-size: 0; line-height: 0; }\n`, "utf8");
+    },
+  },
+  {
+    name: "the UNOFFICIAL label made fully transparent by the stylesheet",
+    expect: /the UNOFFICIAL label of unofficial rendering \d+ of \d+ is in the markup but not shown: display, visibility or opacity hides it/i,
+    async apply(root) {
+      const file = join(root, "styles.css");
+      const css = await readFile(file, "utf8");
+      await writeFile(file, `${css}\n.unofficial-head .token-label { opacity: 0; }\n`, "utf8");
+    },
+  },
+  {
+    // Text coloured transparent. The contrast sweep catches this too; the label check has to catch it
+    // on its own, and names the reason.
+    name: "the UNOFFICIAL label's text made transparent by the stylesheet",
+    expect: /the UNOFFICIAL label of unofficial rendering \d+ of \d+ is in the markup but not shown: its text colour is transparent/i,
+    async apply(root) {
+      const file = join(root, "styles.css");
+      const css = await readFile(file, "utf8");
+      await writeFile(file, `${css}\n.unofficial-head .token-label { color: transparent; }\n`, "utf8");
+    },
+  },
+  {
+    // The screen-reader-only pattern: one pixel, clipped. A screen reader still announces the word;
+    // no sighted reader can see it.
+    name: "the UNOFFICIAL label clipped to one pixel by the stylesheet",
+    expect: /the UNOFFICIAL label of unofficial rendering \d+ of \d+ is in the markup but not shown: its box is/i,
+    async apply(root) {
+      const file = join(root, "styles.css");
+      const css = await readFile(file, "utf8");
+      await writeFile(
+        file,
+        `${css}\n.unofficial-head .token-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }\n`,
+        "utf8",
       );
     },
   },

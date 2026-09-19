@@ -671,13 +671,18 @@ export async function drivenBehaviour(session, sessionId) {
 }
 
 /**
- * S5-A10, driven: an unofficial rendering is never the default view.
+ * S5-A10, driven: an unofficial rendering is never the default view, and is clearly labelled.
  *
  * Measured, not inferred from markup. At load, for every `.unofficial-rendering`: that it is a
  * `details`, whether it is open, whether its text is visible, and whether that text is in what the
- * page shows (`innerText`, which leaves out what the browser does not render). Then the first one is
- * opened the way a keyboard reader would -- focus its summary, press Enter -- and closed again, so a
- * rendering that can never be reached fails as surely as one that is shown unasked.
+ * page shows (`innerText`, which leaves out what the browser does not render). The UNOFFICIAL label
+ * is measured the same way: the element whose own text carries the word is scrolled into view and
+ * must render (no display, visibility or opacity hiding it), have a box and a font size a reader can
+ * see, a colour that is not transparent, and be what the browser hits at its centre (so nothing
+ * covers, clips or pushes it off the page). `textContent` ignores CSS, so a label a stylesheet hid
+ * passed the first version of this check. Then every rendering is opened the way a keyboard reader
+ * would -- focus its summary, press Enter -- and closed again, so a rendering that can never be
+ * reached fails as surely as one that is shown unasked.
  */
 export async function unofficialDisclosure(session, sessionId) {
   const read = async (expression) => {
@@ -692,10 +697,37 @@ export async function unofficialDisclosure(session, sessionId) {
     const body = el.querySelector('blockquote');
     const text = body ? body.textContent.trim() : '';
     const summary = el.querySelector(':scope > summary');
+    const word = summary
+      ? [...summary.querySelectorAll('*')].find((node) =>
+          [...node.childNodes].some((child) => child.nodeType === 3 && child.textContent.includes('UNOFFICIAL')))
+      : null;
+    let labelHidden = word ? null : 'no element carries the word';
+    if (word) {
+      word.scrollIntoView({ block: 'center', inline: 'nearest' });
+      const box = word.getBoundingClientRect();
+      const style = getComputedStyle(word);
+      const channels = (style.color.match(/rgba?\\(([^)]*)\\)/) || [null, ''])[1].split(/[\\s,\\/]+/).filter(Boolean);
+      const alpha = channels.length === 4 ? parseFloat(channels[3]) : 1;
+      const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+      if (!word.checkVisibility({ visibilityProperty: true, opacityProperty: true })) {
+        labelHidden = 'display, visibility or opacity hides it';
+      } else if (box.width < 8 || box.height < 8) {
+        labelHidden = 'its box is ' + Math.round(box.width) + 'x' + Math.round(box.height) + ' px';
+      } else if (parseFloat(style.fontSize) < 8) {
+        labelHidden = 'its font size is ' + style.fontSize;
+      } else if (alpha === 0) {
+        labelHidden = 'its text colour is transparent';
+      } else if (!hit || !(hit === word || word.contains(hit))) {
+        labelHidden = 'something else is on top of it, or it is clipped or off the page';
+      } else if (!summary.innerText.includes('UNOFFICIAL')) {
+        labelHidden = 'it is not in the rendered text of the control';
+      }
+    }
     return {
       tag: el.tagName.toLowerCase(),
       open: el.open === true,
       label: summary ? summary.textContent.replace(/\\s+/g, ' ').trim() : null,
+      labelHidden,
       visible: body ? body.checkVisibility({ visibilityProperty: true, opacityProperty: true }) : false,
       shown: text.length > 0 && document.body.innerText.includes(text),
     };
@@ -704,14 +736,6 @@ export async function unofficialDisclosure(session, sessionId) {
   const load = await read(STATE);
   if (!load || load.length === 0) return null;
 
-  const focused = await read(`(() => {
-    const summary = document.querySelector('.unofficial-rendering > summary');
-    if (!summary) return false;
-    summary.focus();
-    // Focus by script reaches a tabindex=-1 element that Tab never does, so the tab stop is
-    // required too: a control only a script can reach is not one a keyboard reader has.
-    return document.activeElement === summary && summary.tabIndex >= 0;
-  })()`);
   const enter = async () => {
     for (const [type, extra] of [["keyDown", { text: "\r", unmodifiedText: "\r" }], ["keyUp", {}]]) {
       await session.send(
@@ -721,15 +745,29 @@ export async function unofficialDisclosure(session, sessionId) {
       );
     }
   };
-  let opened = null;
-  let closed = null;
-  if (focused) {
-    await enter();
-    opened = (await read(STATE))[0];
-    await enter();
-    closed = (await read(STATE))[0];
+  // Every rendering, not the first: a page with two can hide the second from the keyboard.
+  const drives = [];
+  for (let index = 0; index < load.length; index++) {
+    const focused = await read(`(() => {
+      const el = document.querySelectorAll('.unofficial-rendering')[${index}];
+      const summary = el ? el.querySelector(':scope > summary') : null;
+      if (!summary) return false;
+      summary.focus();
+      // Focus by script reaches a tabindex=-1 element that Tab never does, so the tab stop is
+      // required too: a control only a script can reach is not one a keyboard reader has.
+      return document.activeElement === summary && summary.tabIndex >= 0;
+    })()`);
+    let opened = null;
+    let closed = null;
+    if (focused) {
+      await enter();
+      opened = (await read(STATE))[index];
+      await enter();
+      closed = (await read(STATE))[index];
+    }
+    drives.push({ focused, opened, closed });
   }
-  return { load, focused, opened, closed };
+  return { load, drives };
 }
 
 /**
@@ -769,6 +807,26 @@ export function unofficialFailures(where, measured, controls = []) {
         `${where}: the control that opens ${which} does not say UNOFFICIAL ` +
           `(${JSON.stringify(one.label)})`,
       );
+    } else if (one.labelHidden) {
+      failures.push(
+        `${where}: the UNOFFICIAL label of ${which} is in the markup but not shown: ` +
+          `${one.labelHidden}; S5-A10 says clearly labelled unofficial`,
+      );
+    }
+    const drive = measured.drives?.[index];
+    if (!drive?.focused) {
+      failures.push(`${where}: the UNOFFICIAL control of ${which} cannot take keyboard focus`);
+    } else {
+      if (!drive.opened?.open || !drive.opened?.shown) {
+        failures.push(
+          `${where}: Enter on the UNOFFICIAL control of ${which} did not show the rendering (open ` +
+            `${drive.opened?.open}, text on screen ${drive.opened?.shown}); a reader who asks for it ` +
+            "can never read it",
+        );
+      }
+      if (drive.closed?.open || drive.closed?.shown) {
+        failures.push(`${where}: Enter again on the UNOFFICIAL control of ${which} did not close the rendering`);
+      }
     }
   });
   if (controls.length !== load.length) {
@@ -783,20 +841,6 @@ export function unofficialFailures(where, measured, controls = []) {
       `${where}: ${expanded} UNOFFICIAL disclosure control(s) are not reported collapsed to a ` +
         "screen reader at load",
     );
-  }
-  if (!measured.focused) {
-    failures.push(`${where}: the UNOFFICIAL control cannot take keyboard focus`);
-  } else {
-    if (!measured.opened?.open || !measured.opened?.shown) {
-      failures.push(
-        `${where}: Enter on the UNOFFICIAL control did not show the rendering (open ` +
-          `${measured.opened?.open}, text on screen ${measured.opened?.shown}); a reader who asks ` +
-          "for it can never read it",
-      );
-    }
-    if (measured.closed?.open || measured.closed?.shown) {
-      failures.push(`${where}: Enter again on the UNOFFICIAL control did not close the rendering`);
-    }
   }
   return failures;
 }
