@@ -180,6 +180,10 @@ public static class V3PlatformSchemaExporter
             ("identifier", NonBlankString()),
             ("date", CivilDate()),
             ("language", NonBlankString())),
+        "timeline" => Parameters(
+            ["identifier"],
+            ("identifier", NonBlankString()),
+            ("language", NonBlankString())),
         _ => ClosedObject(),
     };
 

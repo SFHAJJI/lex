@@ -1313,7 +1313,15 @@ public sealed class V3CorpusResolveMountTests
                 .ToDictionary(static article => article.ArticleIdentitySha256, static article => article.ApplicabilityDate, StringComparer.Ordinal);
         }
 
-        public async Task<LuxembourgIndexBuilder.StateRow> AddSecondLanguageStateAtSameDateAsync()
+        public Task<LuxembourgIndexBuilder.StateRow> AddSecondLanguageStateAtSameDateAsync() =>
+            AddSecondLanguageStateAsync(null);
+
+        /// <summary>
+        /// Adds a German state of the fixture's work, dated <paramref name="applicabilityDate"/> or the
+        /// fixture's own date when null, with its own article identities. Must run while the index holds
+        /// the fixture's state alone, which it copies.
+        /// </summary>
+        public async Task<LuxembourgIndexBuilder.StateRow> AddSecondLanguageStateAsync(string? applicabilityDate)
         {
             var indexPath = Path.Combine(Directory, V3CorpusMount.IndexFileName);
             LuxembourgIndexBuilder.MemberRow[] members;
@@ -1349,12 +1357,13 @@ public sealed class V3CorpusResolveMountTests
                 }
                 identities.Sort(StringComparer.Ordinal);
                 var profiles = System.Text.Json.JsonSerializer.Deserialize<string[]>(sourceState.RuleProfilesJson)!;
+                var stateDate = applicabilityDate ?? sourceState.ApplicabilityDate;
                 var digest = LuxembourgIndexBuilder.StateSha256(
-                    sourceState.WorkKey, sourceState.ApplicabilityDate, expression,
+                    sourceState.WorkKey, stateDate, expression,
                     sourceState.PublisherWorkIri, sourceState.PublisherLegalResourceIri, "deu",
                     profiles, identities);
                 alternate = new LuxembourgIndexBuilder.StateRow(
-                    sourceState.WorkKey, sourceState.ApplicabilityDate, digest, expression,
+                    sourceState.WorkKey, stateDate, digest, expression,
                     sourceState.PublisherWorkIri, sourceState.PublisherLegalResourceIri, "deu",
                     sourceState.RuleProfilesJson, System.Text.Json.JsonSerializer.Serialize(identities));
                 using (var insertState = connection.CreateCommand())
