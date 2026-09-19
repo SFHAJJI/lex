@@ -416,15 +416,11 @@ internal sealed class V3CorpusMount : IDisposable
     }
 
     /// <summary>
-    /// The selection rule of every dated answer, over the states of one language: the greatest
-    /// publisher date at or before the requested date selects; every state on that date is returned
-    /// (more than one is an ambiguity the caller refuses); the next publisher date after the requested
-    /// date, or <c>null</c>, bounds it. Nothing else is derived.
-    /// </summary>
-    /// <summary>
     /// The one <c>ambiguous_version</c> refusal for every operation that resolves a date to a state: the
     /// requested date, the bound it belongs to when the operation has more than one (<c>diff</c>), and the
-    /// candidate permalinks in ordinal order. <c>as_of</c> passes no bound and its payload has none.
+    /// candidate permalinks in ordinal order. <c>as_of</c> passes no bound and its payload has none. The
+    /// envelope serialises every object's properties in ordinal order, so the order they are added in here
+    /// is not what a reader sees.
     /// </summary>
     private V3PlatformOperationOutcome RefuseAmbiguousVersion(
         V3PlatformOperationRequest request,
@@ -448,8 +444,11 @@ internal sealed class V3CorpusMount : IDisposable
 
     /// <summary>
     /// The one <c>no_version_for_date</c> refusal: the requested date, its bound when the operation has more
-    /// than one, the date the work's history begins, and the nearest later publisher date. There is never a
-    /// nearest earlier date, since a state at or before the date would have answered.
+    /// than one, the date the history of the states it is given begins, and their nearest later publisher
+    /// date. <c>as_of</c> gives every served language's states, since it refuses only when none answered;
+    /// <c>diff</c> gives the states of the one language that misses the bound, so the history named is that
+    /// language's. There is never a nearest earlier date, since a state at or before the date would have
+    /// answered.
     /// </summary>
     private V3PlatformOperationOutcome RefuseNoVersionForDate(
         V3PlatformOperationRequest request,
@@ -475,6 +474,12 @@ internal sealed class V3CorpusMount : IDisposable
             new V3PlatformOperationRefusal(request, "no_version_for_date", document.RootElement));
     }
 
+    /// <summary>
+    /// The selection rule of every dated answer, over the states of one language: the greatest
+    /// publisher date at or before the requested date selects; every state on that date is returned
+    /// (more than one is an ambiguity the caller refuses); the next publisher date after the requested
+    /// date, or <c>null</c>, bounds it. Nothing else is derived.
+    /// </summary>
     private static (LuxembourgIndexResolvedState[] Selected, string? NextDate) SelectAtDate(
         IReadOnlyList<LuxembourgIndexResolvedState> ofLanguage, string requestedDate)
     {

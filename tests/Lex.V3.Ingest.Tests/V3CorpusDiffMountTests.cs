@@ -185,6 +185,10 @@ public sealed class V3CorpusDiffMountTests
 
         var beforeHistory = await DiffAsync(mount, $"/lu-legilux/{fixture.WorkKey}", Shift(fixture.ApplicabilityDate, -1), laterDate);
         Assert.AreEqual("no_version_for_date", beforeHistory.Refusal!.Code);
+        Assert.AreEqual(
+            "bound,history_begins,nearest_earlier,nearest_later,requested_date",
+            string.Join(",", beforeHistory.Refusal.HelpfulPayload.EnumerateObject().Select(static property => property.Name)),
+            "diff names the bound: exactly these properties, as served in the envelope's canonical order.");
         Assert.AreEqual(PublisherId.LuLegilux, beforeHistory.Context.Publisher);
         Assert.AreEqual("lu", beforeHistory.Context.Jurisdiction);
         Assert.AreEqual("from", beforeHistory.Refusal.HelpfulPayload.GetProperty("bound").GetString());
@@ -201,6 +205,10 @@ public sealed class V3CorpusDiffMountTests
         Assert.IsNotNull(mountWithTwin);
         var ambiguous = await DiffAsync(mountWithTwin, $"/lu-legilux/{fixture.WorkKey}", fixture.ApplicabilityDate, laterDate);
         Assert.AreEqual("ambiguous_version", ambiguous.Refusal!.Code);
+        Assert.AreEqual(
+            "bound,candidates,requested_date",
+            string.Join(",", ambiguous.Refusal.HelpfulPayload.EnumerateObject().Select(static property => property.Name)),
+            "diff names the bound: exactly these properties, as served in the envelope's canonical order.");
         Assert.AreEqual(PublisherId.LuLegilux, ambiguous.Context.Publisher);
         Assert.AreEqual("to", ambiguous.Refusal.HelpfulPayload.GetProperty("bound").GetString());
         Assert.AreEqual(laterDate, ambiguous.Refusal.HelpfulPayload.GetProperty("requested_date").GetString());
