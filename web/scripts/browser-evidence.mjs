@@ -282,11 +282,43 @@ export class Session {
     this.#listeners.add(listener);
   }
 
-  send(method, params = {}, sessionId) {
+  // A command the browser never answers stalled a whole mutation sweep for twenty minutes with no
+  // output. Every command now has a deadline, so a hung browser is a named failure, not a silence.
+  send(method, params = {}, sessionId, deadlineMs = 60000) {
     const id = this.#next++;
     return new Promise((resolve, reject) => {
-      this.#pending.set(id, { resolve, reject });
+      const timer = setTimeout(() => {
+        this.#pending.delete(id);
+        reject(new Error(`the browser did not answer ${method} within ${deadlineMs / 1000} s`));
+      }, deadlineMs);
+      this.#pending.set(id, {
+        resolve: (value) => {
+          clearTimeout(timer);
+          resolve(value);
+        },
+        reject: (error) => {
+          clearTimeout(timer);
+          reject(error);
+        },
+      });
       this.#socket.send(JSON.stringify({ id, method, params, sessionId }));
+    });
+  }
+
+  /** The next event `method` on `sessionId`, or a named failure if the browser never reports it. */
+  waitFor(method, sessionId, deadlineMs = 60000) {
+    return new Promise((resolve, reject) => {
+      const listener = (message) => {
+        if (message.method !== method || message.sessionId !== sessionId) return;
+        this.#listeners.delete(listener);
+        clearTimeout(timer);
+        resolve(message.params);
+      };
+      const timer = setTimeout(() => {
+        this.#listeners.delete(listener);
+        reject(new Error(`the browser did not report ${method} within ${deadlineMs / 1000} s`));
+      }, deadlineMs);
+      this.#listeners.add(listener);
     });
   }
 
@@ -552,7 +584,7 @@ const PROBE = `(() => {
  * reached at all. This presses Tab and records where focus lands.
  */
 /**
- * Drives the two interactive contracts this sweep claims, rather than reading their opening
+ * Drives the three interactive contracts this sweep claims, rather than reading their opening
  * attributes.
  *
  * Roving tabindex is a behaviour: pressing ArrowDown must move BOTH the active element and the
@@ -562,10 +594,16 @@ const PROBE = `(() => {
  * `aria-pressed` can hold a correct boolean that no click will ever flip, which a no-op `onClick`
  * produces and an attribute check cannot see.
  *
- * Returns null for pages carrying neither control, so the gates stay silent where there is nothing
- * to drive rather than inventing a pass.
+ * Compare arming is the third, and the one that was claimed longest without being reachable: the
+ * page said a pair of rows arms the comparison while its only two rows of one work shared a
+ * lex_id, so selecting the second deselected the first and the armed state could never be shown.
+ * Space is pressed on declared rows (`COMPARE_ROWS`) and every step is read back through the
+ * button's own description, so the sentence judged is the one a screen reader hears.
+ *
+ * Returns null for pages carrying none of the three, so the gates stay silent where there is
+ * nothing to drive rather than inventing a pass.
  */
-export async function drivenBehaviour(session, sessionId) {
+export async function drivenBehaviour(session, sessionId, rows = null) {
   const read = async (expression) => {
     const { result } = await session.send(
       "Runtime.evaluate",
@@ -591,7 +629,9 @@ export async function drivenBehaviour(session, sessionId) {
   })()`;
   const listbox = listboxAt(2);
 
-  const KEY_CODES = { ArrowDown: 40, ArrowUp: 38, Home: 36, End: 35 };
+  // Space arms a row. Its `key` is a literal space and its `code` is the word, which is the one
+  // key in this table where the two differ.
+  const KEY_CODES = { ArrowDown: 40, ArrowUp: 38, Home: 36, End: 35, " ": 32 };
   const press = async (key) => {
     for (const type of ["rawKeyDown", "keyUp"]) {
       await session.send(
@@ -599,7 +639,7 @@ export async function drivenBehaviour(session, sessionId) {
         {
           type,
           key,
-          code: key,
+          code: key === " " ? "Space" : key,
           windowsVirtualKeyCode: KEY_CODES[key],
           nativeVirtualKeyCode: KEY_CODES[key],
         },
@@ -639,6 +679,47 @@ export async function drivenBehaviour(session, sessionId) {
     }
   }
 
+  // Compare arming, before the chip click and before standing on the last row: the "main-work"
+  // chip hides the annex row this probe needs, and the sequence ends with nothing selected so the
+  // probes after it measure the page as it was served. Rows are found by title and focused
+  // directly, the way the roving probe finds its tab stop, because arrow travel would make every
+  // step depend on the movement table this probe is not about.
+  let compare = null;
+  const opening = await read(compareSnapshot(rows ?? {}));
+  if (opening && rows === null) {
+    compare = { undeclared: true };
+  } else if (rows !== null && !opening) {
+    // Declared and absent is not "nothing to drive": the page lost the control the probe was
+    // written for, and passing it would read a page without comparison as one where it works.
+    compare = { rows, missing: true };
+  } else if (opening) {
+    const drift = Object.fromEntries(
+      Object.entries(opening.matches).filter(([, count]) => count !== 1),
+    );
+    if (Object.keys(drift).length > 0) {
+      compare = { rows, drift };
+    } else {
+      const steps = [opening];
+      for (const step of COMPARE_STEPS.slice(1)) {
+        await read(`(() => {
+          const title = ${JSON.stringify(rows[step.press])};
+          // The same listbox the snapshot reads, so a press can never land in another list.
+          const box = document.querySelector('[role=listbox]');
+          const row = [...(box ? box.querySelectorAll('[role=option]') : [])].find((option) => {
+            const own = option.querySelector('.results-title');
+            return own !== null && own.textContent.trim() === title;
+          });
+          if (!row) return false;
+          row.focus();
+          return true;
+        })()`);
+        await press(" ");
+        steps.push(await read(compareSnapshot(rows)));
+      }
+      compare = { rows, steps };
+    }
+  }
+
   // The pressed contract is two claims at once: the control's own state flips, and the thing it
   // controls changes with it. A toggle that announces itself pressed while filtering nothing is
   // still broken, so the represented count is read alongside it.
@@ -668,7 +749,200 @@ export async function drivenBehaviour(session, sessionId) {
     if (standing) shrink = { before: standing, after: await read(listboxAt(1)) };
   }
 
-  return roving || pressed ? { roving, keys, pressed, shrink } : null;
+  return roving || pressed || compare ? { roving, keys, pressed, shrink, compare } : null;
+}
+
+/**
+ * What the compare control says, in each state the probe drives it through. The component's own
+ * words, bound to it by `compare-arming-gate.test.mjs`, so a reworded sentence fails there, once,
+ * rather than in every combination of the browser run.
+ */
+export const COMPARE_SENTENCES = Object.freeze({
+  none: "Select two states to compare them.",
+  one: "One state selected. Select a second to compare.",
+  armed: "Two states of one work selected.",
+  three: "A comparison is between two states. Deselect one before comparing.",
+  works:
+    "These are two different works. Two unrelated instruments are not states of each other, " +
+    "and their differences are not legislation.",
+});
+
+/**
+ * The rows the compare probe presses Space on, per page, by title.
+ *
+ * Declared rather than discovered, because which rows share a work is the thing under test: a
+ * probe that picked "two rows of one work" by reading lex_ids off the page would find none on a
+ * page where arming is unreachable, and pass by driving nothing. The titles are guarded instead:
+ * each must name exactly one row, or the probe reports the fixture changed under it.
+ *
+ * `first` and `sameWork` are two states of one work; `otherWork` is a different work. The preview
+ * also carries "article 2", which shares `first`'s lex_id because two provisions of one state
+ * share it. It is never driven: selecting either of those rows marks both, which is selection
+ * keyed by state rather than by row, and re-keying it is search-hit identity, not this probe.
+ */
+export const COMPARE_ROWS = Object.freeze({
+  "search-react.html": Object.freeze({
+    first: "Acte synthetique de demonstration, article 1",
+    sameWork: "Acte synthetique de demonstration, article 1, etat anterieur",
+    otherWork: "Annexe synthetique de demonstration",
+  }),
+});
+
+/**
+ * The drive, in order. Step 0 is the page at load; every later step is one Space press on the
+ * named row. Selection toggles, so the walk goes up to three rows and back down to none.
+ */
+export const COMPARE_STEPS = Object.freeze([
+  { press: null, label: "at load", expect: "none", selected: [] },
+  { press: "first", label: "after Space on one state", expect: "one", selected: ["first"] },
+  {
+    press: "sameWork",
+    label: "with two states of one work selected",
+    expect: "armed",
+    selected: ["first", "sameWork"],
+  },
+  {
+    press: "otherWork",
+    label: "with three rows selected",
+    expect: "three",
+    selected: ["first", "sameWork", "otherWork"],
+  },
+  {
+    press: "sameWork",
+    label: "with rows of two different works selected",
+    expect: "works",
+    selected: ["first", "otherWork"],
+  },
+  { press: "otherWork", label: "after deselecting down to one state", expect: "one", selected: ["first"] },
+  { press: "first", label: "after deselecting every row", expect: "none", selected: [] },
+]);
+
+// Why an armed control is wrong in each state that must not arm. Said in the failure so the
+// reader of the log does not have to know the rule to know which half of it broke.
+const NOT_ARMED_BECAUSE = Object.freeze({
+  none: "nothing is selected",
+  one: "one state is not a comparison",
+  three: "a comparison is between two states",
+  works: "two unrelated instruments are not states of each other",
+});
+
+/**
+ * An in-page read of the compare control and the declared rows.
+ *
+ * The control is the one in the same results section as the listbox, and its sentence is read
+ * through the button's `aria-describedby` rather than by class, so a sentence the button no longer
+ * points at is a sentence nobody hears. `matches` counts the rows carrying each declared title.
+ */
+function compareSnapshot(rows) {
+  return `(() => {
+    const rows = ${JSON.stringify(rows)};
+    const box = document.querySelector('[role=listbox]');
+    const section = box ? box.closest('section.results') : null;
+    const control = (section ?? document).querySelector('.compare-arming');
+    if (!control) return null;
+    const button = control.querySelector('button');
+    const described = button ? document.getElementById(button.getAttribute('aria-describedby')) : null;
+    const options = box ? [...box.querySelectorAll('[role=option]')] : [];
+    const titled = (title) => options.filter((option) => {
+      const own = option.querySelector('.results-title');
+      return own !== null && own.textContent.trim() === title;
+    });
+    const selected = {};
+    const matches = {};
+    for (const [key, title] of Object.entries(rows)) {
+      const found = titled(title);
+      matches[key] = found.length;
+      selected[key] = found.length === 1 ? found[0].getAttribute('aria-selected') : null;
+    }
+    return {
+      sentence: described ? described.textContent.trim() : null,
+      ariaDisabled: button ? button.getAttribute('aria-disabled') : null,
+      disabledAttr: button ? button.hasAttribute('disabled') : false,
+      selected,
+      matches,
+    };
+  })()`;
+}
+
+/**
+ * The compare-arming verdict, as failure sentences. Pure, so the node tests hold every sentence
+ * without a browser.
+ *
+ * Per step, at most one line about the control itself -- whether it armed, else what it said --
+ * because an armed control saying the armed sentence is one defect, not two. Row state and the
+ * `disabled` attribute are separate claims and get their own lines.
+ *
+ * @param {string} where  the page, viewport and scheme, as every other failure names them
+ * @param {object|null} compare  what `drivenBehaviour` measured as `compare`
+ */
+export function compareFailures(where, compare) {
+  if (compare === null) return [];
+  if (compare.undeclared) {
+    return [
+      `${where}: a compare control is on this page and the compare probe declares no rows for it, ` +
+        "so arming was never driven",
+    ];
+  }
+  const { rows } = compare;
+  if (compare.missing) {
+    return [
+      `${where}: the compare probe declares rows for this page and the page has no compare control, ` +
+        "so two states of one work cannot be compared here",
+    ];
+  }
+  if (compare.drift) {
+    return Object.entries(compare.drift).map(
+      ([key, count]) =>
+        `${where}: the compare probe drives the row "${rows[key]}" and the page shows ${count} ` +
+        "row(s) with that title; the fixture it was written for has changed, so arming was not driven",
+    );
+  }
+  const failures = [];
+  COMPARE_STEPS.forEach((step, index) => {
+    const seen = compare.steps?.[index] ?? null;
+    if (seen === null) {
+      failures.push(
+        `${where}: ${step.label}, the compare control was gone; a control that disappears while ` +
+          "rows are selected cannot say why they cannot be compared",
+      );
+      return;
+    }
+    const d = seen.ariaDisabled;
+    const s = seen.sentence;
+    const armed = d === "false";
+    if (step.expect === "armed" && !armed) {
+      failures.push(
+        `${where}: ${step.label} ("${rows.first}", "${rows.sameWork}"), Compare stayed ` +
+          `aria-disabled="${d}" and said "${s}"; the armed state is unreachable`,
+      );
+    } else if (step.expect !== "armed" && armed) {
+      failures.push(
+        `${where}: ${step.label}, Compare was armed (aria-disabled="${d}") and said "${s}"; ` +
+          NOT_ARMED_BECAUSE[step.expect],
+      );
+    } else if (s !== COMPARE_SENTENCES[step.expect]) {
+      failures.push(
+        `${where}: ${step.label}, the compare control said "${s}", not "${COMPARE_SENTENCES[step.expect]}"`,
+      );
+    }
+    for (const key of Object.keys(rows)) {
+      const want = step.selected.includes(key) ? "true" : "false";
+      const value = seen.selected?.[key] ?? null;
+      if (value !== want) {
+        failures.push(
+          `${where}: ${step.label}, row "${rows[key]}" is aria-selected="${value}", not "${want}"; ` +
+            "the list does not say which rows are armed",
+        );
+      }
+    }
+    if (seen.disabledAttr) {
+      failures.push(
+        `${where}: ${step.label}, the Compare button carries the disabled attribute, so it leaves ` +
+          "the Tab order and the reason it cannot be pressed is out of reach",
+      );
+    }
+  });
+  return failures;
 }
 
 /**
@@ -885,6 +1159,123 @@ export function unofficialFailures(where, measured, controls = []) {
   return failures;
 }
 
+/**
+ * How much page time a settled page is run forward, on virtual time, before its network is judged.
+ *
+ * Watching the page for a fixed stretch of wall time only sees what the page does within that
+ * stretch: a 400 ms window saw a loop polling every 150 ms and nothing slower, and a page that
+ * reached out once, five seconds after load, passed every combination. Virtual time jumps to each
+ * timer the page armed, holds while a request it made is in flight, and stops when this budget is
+ * spent, so every timer due within the minute fires before the verdict, in well under a second.
+ */
+export const PAGE_CLOCK_BUDGET_MS = 60000;
+
+/**
+ * Run the page's clock forward by `budgetMs` of virtual time. The tab stays on virtual time for
+ * good afterwards, so this is the last thing done on it. Returns null, or why it could not.
+ */
+export async function runPageClock(session, sessionId, budgetMs = PAGE_CLOCK_BUDGET_MS) {
+  const expired = session.waitFor("Emulation.virtualTimeBudgetExpired", sessionId, 30000);
+  // The wait's deadline can pass while the policy command is still unanswered. Handled here, so
+  // that rejection is never unhandled -- which would end the whole run -- and is still awaited
+  // below, where it becomes this combination's named failure.
+  expired.catch(() => {});
+  try {
+    await session.send(
+      "Emulation.setVirtualTimePolicy",
+      { policy: "pauseIfNetworkFetchesPending", budget: budgetMs },
+      sessionId,
+    );
+    await expired;
+    return null;
+  } catch (error) {
+    return error.message;
+  }
+}
+
+// The media type each kind of request has to be answered with. A missing asset under the object-URL
+// grammar is answered 200 with the stand-in page, so a status check alone reads it as present; the
+// type is what says a font, a script or an image was not what came back. `Other` is the browser's
+// own requests (the favicon) and is not typed; any other kind this map does not name is refused,
+// because a response nothing can judge is not one the gate may pass.
+const EXPECTED_MEDIA = new Map([
+  ["Document", /^text\/html$/],
+  ["Stylesheet", /^text\/css$/],
+  ["Script", /^(text|application)\/javascript$/],
+  ["Font", /^font\/(woff2|woff|ttf|otf)$/],
+  ["Image", /^image\//],
+  ["Media", /^(audio|video)\//],
+  ["TextTrack", /^text\/vtt$/],
+  ["Manifest", /^application\/(manifest\+)?json$/],
+  ["EventSource", /^text\/event-stream$/],
+  ["Fetch", /^application\/json$/],
+  ["XHR", /^application\/json$/],
+]);
+
+/**
+ * The bounded-network verdict on one navigation, as failure sentences. Pure, so the node tests hold
+ * every sentence without a browser.
+ *
+ * @param {string} where  the page, viewport and scheme, as every other failure names them
+ * @param {Array<object>} events  what the browser reported: `{kind: 'request', type, url}` and
+ *   `{kind: 'response', type, url, status, mime}`, in order
+ * @param {number} settledAt  how many events had arrived when the page settled
+ */
+export function networkFailures(where, events, settledAt) {
+  const failures = [];
+  const pathOf = (url) => {
+    try {
+      const parsed = new URL(url);
+      return parsed.protocol === "data:" ? "data:" : parsed.pathname;
+    } catch {
+      return url;
+    }
+  };
+  // "an Image", "a Font": the sentence is matched by the induced mutations, so it is spelled right.
+  const article = (word) => (/^[AEIOU]/.test(word) ? "an" : "a");
+  for (const event of events) {
+    if (event.kind !== "response" || pathOf(event.url) === "data:") continue;
+    if (event.status >= 400) {
+      failures.push(`${where}: ${article(event.type)} ${event.type} request for ${pathOf(event.url)} was answered ${event.status}`);
+      continue;
+    }
+    if (event.type === "Other") continue;
+    const expected = EXPECTED_MEDIA.get(event.type);
+    if (!expected) {
+      failures.push(
+        `${where}: ${article(event.type)} ${event.type} request for ${pathOf(event.url)} is of a kind ` +
+          "no page here makes, and the gate has no media type to judge its answer by",
+      );
+    } else if (!expected.test(event.mime ?? "")) {
+      failures.push(
+        `${where}: ${article(event.type)} ${event.type} request for ${pathOf(event.url)} was answered with ` +
+          `${event.mime}; a missing or mistyped asset is not the asset`,
+      );
+    }
+  }
+  // The browser's own favicon request is not the page reaching out, whenever it lands. It is
+  // excused by kind and exact address together: a script fetching the same path is still counted,
+  // and so is an icon link swapped to carry a query string.
+  const isFavicon = (event) => {
+    if (event.type !== "Other") return false;
+    try {
+      const parsed = new URL(event.url);
+      return parsed.pathname === "/favicon.svg" && parsed.search === "";
+    } catch {
+      return false;
+    }
+  };
+  const late = events.slice(settledAt).filter((event) => event.kind === "request" && !isFavicon(event));
+  if (late.length > 0) {
+    failures.push(
+      `${where}: ${late.length} request(s) after the page settled, during the tab walk, the ` +
+        `driven actions or the minute of page time run after them: ` +
+        [...new Set(late.map((event) => pathOf(event.url)))].join(", "),
+    );
+  }
+  return failures;
+}
+
 export async function keyboardWalk(session, sessionId, expected) {
   // Start from a known place. Focus survives a navigation in a reused target, so without
   // this the first Tab can land mid-document and the walk measures the wrong sequence.
@@ -961,10 +1352,16 @@ async function waitForSettled(session, sessionId, deadlineMs = 10000) {
   throw new Error("a page never reached a settled state within 10s");
 }
 
+// `client.js` was served as application/octet-stream. A classic script runs anyway, so every gate
+// stayed green, but the product's own responses carry `nosniff` (BufferedHttpResponse), under which
+// a browser refuses to run a script that is not typed as one. The harness now types every file it
+// serves and sends `nosniff` too, so it measures the pages under the rule they will be served by.
 const CONTENT_TYPES = new Map([
   [".woff2", "font/woff2"],
   [".html", "text/html; charset=utf-8"],
   [".css", "text/css; charset=utf-8"],
+  [".js", "text/javascript; charset=utf-8"],
+  [".json", "application/json; charset=utf-8"],
   [".svg", "image/svg+xml"],
 ]);
 
@@ -1079,6 +1476,7 @@ export async function serveDist(root) {
         (body) => {
           response.writeHead(200, {
             "content-type": CONTENT_TYPES.get(extname(file)) ?? "application/octet-stream",
+            "x-content-type-options": "nosniff",
           });
           response.end(body);
         },
@@ -1183,12 +1581,36 @@ async function main() {
   const rows = [];
   try {
     const session = await Session.open(await waitForDebugger(port));
-    const { targetId } = await session.send("Target.createTarget", { url: "about:blank" });
-    const { sessionId } = await session.send("Target.attachToTarget", { targetId, flatten: true });
+    // Every combination gets a tab of its own. The bounded-network check runs the page's clock on
+    // virtual time, and a page cannot leave virtual time once it is in it: "advance" does not
+    // return it to the wall clock, it fast-forwards to each next timer for as long as the page
+    // lives. Reusing the tab fired the next page's timers the moment it loaded, before it settled,
+    // and a ten-second poll spun until the page stopped answering.
+    let targetId = null;
+    let sessionId = null;
+    const freshTab = async () => {
+      const previous = targetId;
+      ({ targetId } = await session.send("Target.createTarget", { url: "about:blank" }));
+      ({ sessionId } = await session.send("Target.attachToTarget", { targetId, flatten: true }));
+      for (const domain of ["Accessibility", "Log", "Runtime", "Page", "Network"]) {
+        await session.send(`${domain}.enable`, {}, sessionId);
+      }
+      if (previous) await session.send("Target.closeTarget", { targetId: previous });
+    };
 
     let logged = [];
+    // Every request and response of the current navigation, as the browser saw them. The server
+    // alone cannot tell a navigation from a subresource, or what the browser asked for.
+    let network = [];
     session.on((message) => {
       if (message.sessionId !== sessionId) return;
+      if (message.method === "Network.requestWillBeSent") {
+        network.push({ kind: "request", type: message.params.type, url: message.params.request.url });
+      }
+      if (message.method === "Network.responseReceived") {
+        const { response, type } = message.params;
+        network.push({ kind: "response", type, url: response.url, status: response.status, mime: response.mimeType });
+      }
       if (message.method === "Log.entryAdded") {
         logged.push(`${message.params.entry.level}: ${message.params.entry.text}`);
       }
@@ -1200,11 +1622,6 @@ async function main() {
       }
     });
 
-    await session.send("Accessibility.enable", {}, sessionId);
-    await session.send("Log.enable", {}, sessionId);
-    await session.send("Runtime.enable", {}, sessionId);
-    await session.send("Page.enable", {}, sessionId);
-
     for (const page of await pagesFrom(root)) {
       const url = `${site.origin}/${page}`;
       for (const viewport of WIDTHS) {
@@ -1214,6 +1631,7 @@ async function main() {
        // timeline hatches its gaps with a repeating gradient, and a gap that becomes invisible
        // is the one mark on that screen whose absence asserts something false.
        for (const scheme of FAST ? ["light"] : ["light", "dark", "forced"]) {
+        await freshTab();
         await session.send(
           "Emulation.setEmulatedMedia",
           {
@@ -1237,6 +1655,7 @@ async function main() {
           sessionId,
         );
         logged = [];
+        network = [];
         await session.send("Page.navigate", { url }, sessionId);
         // Wait for the document to be complete and its fonts resolved, rather than for a
         // fixed 250 ms. A fixed wait measures whatever has arrived: one combination reported
@@ -1244,6 +1663,9 @@ async function main() {
         // stylesheet not yet applied rather than a layout defect. A harness that sometimes
         // measures an unstyled page produces both false failures and false passes.
         await waitForSettled(session, sessionId);
+        // Everything the page needed has arrived by now; any request after this mark is the page
+        // reaching back out on its own, which the bounded-network gate below refuses.
+        const settledAt = network.length;
         const { result } = await session.send(
           "Runtime.evaluate",
           { expression: PROBE, returnByValue: true, awaitPromise: true },
@@ -1524,7 +1946,7 @@ async function main() {
         // served in. Run earlier it silently changed what every later check measured -- the tab
         // walk reported 6 stops on a page with 15 focusable elements, which was my probe's own
         // click and not a defect in the page.
-        const behaviour = await drivenBehaviour(session, sessionId);
+        const behaviour = await drivenBehaviour(session, sessionId, COMPARE_ROWS[page] ?? null);
         // The behavioural half. The two checks above still earn their place -- they catch malformed
         // markup an inert page would also produce -- but on their own they pass a page whose
         // handlers are dead, so neither is allowed to stand as the evidence for its clause.
@@ -1595,6 +2017,9 @@ async function main() {
             }
           }
         }
+        // Compare arming. Unlike the listbox lines above, it names the scheme like every newer
+        // failure does, so a mutation expectation can hold the whole sentence.
+        failures.push(...compareFailures(`${page} @${viewport.label}/${scheme}`, behaviour?.compare ?? null));
         // S5-A10, driven after the listbox probe: it opens and closes a disclosure, and pages with
         // unofficial renderings carry no listbox, so neither probe changes what the other measures.
         failures.push(...unofficialFailures(
@@ -1602,11 +2027,23 @@ async function main() {
           await unofficialDisclosure(session, sessionId),
           observed.unofficialControls,
         ));
+        // Bounded network. The page's clock is run a minute forward on virtual time first, on every
+        // combination and last on its tab, so a request the page would make on its own within that
+        // minute has been made before the verdict, however slowly it polls.
+        const clock = await runPageClock(session, sessionId);
+        if (clock !== null) {
+          failures.push(
+            `${page} @${viewport.label}/${scheme}: the page's clock could not be run a minute ` +
+              `forward (${clock}), so what it would request after settling is unjudged`,
+          );
+        }
+        failures.push(...networkFailures(`${page} @${viewport.label}/${scheme}`, network, settledAt));
+        row.requests = network.filter((event) => event.kind === "request").length;
         const late = logged.slice(consoleAtLoad);
         if (late.length > 0) {
           failures.push(
-            `${page} @${viewport.label}/${scheme}: console output during the tab walk or driven ` +
-              `actions ${JSON.stringify(late)}`,
+            `${page} @${viewport.label}/${scheme}: console output during the tab walk, driven ` +
+              `actions or the minute of page time run after them ${JSON.stringify(late)}`,
           );
         }
        }
@@ -1625,6 +2062,8 @@ async function main() {
         if (!destinations.has(href)) destinations.set(href, row.page);
       }
     }
+    // The last combination's tab is on virtual time; the destinations get one on the wall clock.
+    await freshTab();
     for (const [href, fromPage] of destinations) {
       let status = 0;
       try {
@@ -1643,6 +2082,7 @@ async function main() {
       // Follow it the way a reader would. `logged` is the same per-page buffer the main loop
       // fills from the CDP listener, so clearing it here scopes it to this one navigation.
       logged = [];
+      network = [];
       await session.send("Page.navigate", { url: `${site.origin}${href}` }, sessionId);
       await waitForSettled(session, sessionId);
       const { result } = await session.send(
@@ -1696,7 +2136,7 @@ async function main() {
       `${row.page.replace('state-','').replace('.html','').padEnd(18)} ${row.viewport.padEnd(8)} ${row.scheme.padEnd(6)} ` +
         `console=${row.console} h1=${row.h1Count} overflow=${row.horizontalOverflow} scripts=${row.scriptCount} ` +
         `contrast=${row.contrastChecked} worst=${row.worstContrast} ` +
-        `ax=${row.axNodes} named-interactive=${row.axInteractive} landmarks=${row.axLandmarks} main=${row.axMain} glued=${row.gluedCount} inert=${row.inertControls} small=${row.smallTargetCount}`,
+        `ax=${row.axNodes} named-interactive=${row.axInteractive} landmarks=${row.axLandmarks} main=${row.axMain} glued=${row.gluedCount} inert=${row.inertControls} small=${row.smallTargetCount} requests=${row.requests}`,
     );
   }
 

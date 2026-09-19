@@ -123,7 +123,7 @@ const MUTATIONS = [
     // and the next navigation cleared the buffer. This listener only ever fires on a key, so the
     // load check stays clean and only the check after the tab walk and driven probe can see it.
     name: "a console error raised by every key press after load",
-    expect: /console output during the tab walk or driven actions/i,
+    expect: /console output during the tab walk, driven actions or the minute of page time run after them/i,
     async apply(root) {
       const file = join(root, "client.js");
       const code = await readFile(file, "utf8");
@@ -132,6 +132,90 @@ const MUTATIONS = [
         `${code}\n;document.addEventListener("keydown",function(){console.error("induced: keydown");});\n`,
         "utf8",
       );
+    },
+  },
+  // Compare arming. With nothing selected at load and no lex_id in the markup, the server HTML under
+  // each of these is the HTML a rebuild from the mutated source would serve, so mutating the bundle
+  // alone is not a hydration mismatch the page could be failed for instead.
+  {
+    // The defect this probe was written against: the preview's only second row of the work shared
+    // the first row's lex_id, so selecting it deselected the first and nothing could ever arm.
+    name: "the second synthetic state collapsed onto the first lex_id",
+    expect:
+      /with two states of one work selected \("[^"]+", "[^"]+"\), Compare stayed aria-disabled="true"/,
+    async apply(root) {
+      await replaceOnce(
+        join(root, "client.js"),
+        /(?<head>lex_id:`\$\{[A-Za-z_$][\w$]*\}:)1998-07-01`/,
+        "$<head>2001-01-01`",
+      );
+    },
+  },
+  {
+    // The work comparison removed from the rule, so any two rows arm. The sentence for two works
+    // survives in the bundle; only the condition that chooses it is gone.
+    name: "the arming rule made to ignore the work",
+    expect: /with rows of two different works selected, Compare was armed \(aria-disabled="false"\)/,
+    async apply(root) {
+      await replaceOnce(
+        join(root, "client.js"),
+        /[A-Za-z_$][\w$]*!==[A-Za-z_$][\w$]*\?"These are two different works/,
+        '!1?"These are two different works',
+      );
+    },
+  },
+  {
+    // Three rows still do not arm, because `armedBy` counts to two on its own; what goes is the
+    // sentence that tells the reader why. The control then says a pair is selected over three rows.
+    name: "the three-row refusal removed",
+    expect:
+      /with three rows selected, the compare control said "Two states of one work selected\.", not "A comparison is between two states/,
+    async apply(root) {
+      await replaceOnce(
+        join(root, "client.js"),
+        /if\([A-Za-z_$][\w$]*\.length>2\)return"A comparison is between two states/,
+        'if(!1)return"A comparison is between two states',
+      );
+    },
+  },
+  {
+    // Space still claims the key -- preventDefault stays -- and selects nothing, which is what a
+    // handler bug looks like. Every step after load then reads a list nobody could arm.
+    name: "Space made inert on a result row",
+    expect:
+      /after Space on one state, the compare control said "Select two states to compare them\.", not "One state selected/,
+    async apply(root) {
+      await replaceOnce(
+        join(root, "client.js"),
+        /(\.key==="Spacebar"\)\{[A-Za-z_$][\w$]*\.preventDefault\(\)),[A-Za-z_$][\w$]*\([A-Za-z_$][\w$]*\[[A-Za-z_$][\w$]*\]\);return\}/,
+        "$1;return}",
+      );
+    },
+  },
+  {
+    // The selection works and the control arms, and the list never says which rows are chosen. A
+    // screen reader hears "Two states of one work selected" and cannot find either of them.
+    name: "rows never say they are selected",
+    expect:
+      /after Space on one state, row "[^"]+" is aria-selected="false", not "true"; the list does not say which rows are armed/,
+    async apply(root) {
+      await replaceOnce(
+        join(root, "client.js"),
+        /"aria-selected":[A-Za-z_$][\w$]*\.has\([A-Za-z_$][\w$]*\.lex_id\)/,
+        '"aria-selected":!1',
+      );
+    },
+  },
+  {
+    // The whole control gone from the built page, with the list and its selection intact. The
+    // probe finds nothing to drive, and a page declared for it must not read that as clean. Both
+    // the served markup and the bundle change: a production hydrate keeps the server's attributes,
+    // so renaming the class in the bundle alone leaves the control on the page.
+    name: "the compare control no longer rendered",
+    expect: /the compare probe declares rows for this page and the page has no compare control/,
+    async apply(root) {
+      await replaceOnce(join(root, "search-react.html"), /class="compare-arming"/, 'class="compare-gone"');
+      await replaceOnce(join(root, "client.js"), /className:"compare-arming",/, 'className:"compare-gone",');
     },
   },
   {
@@ -314,6 +398,44 @@ const MUTATIONS = [
     expect: /interactive node\(s\) with no accessible name: DisclosureTriangle/i,
     async apply(root) {
       await replaceOnce(join(root, "state-success.html"), /<summary>[\s\S]*?<\/summary>/, "<summary></summary>");
+    },
+  },
+  {
+    // A page that keeps reaching out after it has everything it needs. Silent in the console and
+    // invisible in every screenshot; only a count of requests after the page settled can see it.
+    // Ten seconds, not a fraction of one: a real polling loop is slow, and a gate that watched the
+    // page only while the harness happened to be on it saw nothing slower than it stayed.
+    name: "a same-origin polling loop after load, every ten seconds",
+    expect: /request\(s\) after the page settled, during the tab walk, the driven actions or the minute of page time run after them: \/pages\.json/i,
+    async apply(root) {
+      const file = join(root, "client.js");
+      const code = await readFile(file, "utf8");
+      await writeFile(file, `${code}\n;setInterval(function(){fetch("/pages.json");},10000);\n`, "utf8");
+    },
+  },
+  {
+    // One request, once, half a minute after load: no loop to catch in the act, only a timer the
+    // page left armed.
+    name: "a single same-origin request thirty seconds after load",
+    expect: /: 1 request\(s\) after the page settled, during the tab walk, the driven actions or the minute of page time run after them: \/pages\.json/i,
+    async apply(root) {
+      const file = join(root, "client.js");
+      const code = await readFile(file, "utf8");
+      await writeFile(file, `${code}\n;setTimeout(function(){fetch("/pages.json");},30000);\n`, "utf8");
+    },
+  },
+  {
+    // A missing file under the object-URL grammar is answered 200 with the stand-in page, so a status
+    // check reads it as present. A broken image logs nothing either; only its media type says an
+    // image is not what came back.
+    name: "an image whose file is missing, answered 200 by the stand-in page",
+    expect: /an Image request for \/images\/missing\.png was answered with text\/html/i,
+    async apply(root) {
+      await replaceOnce(
+        join(root, "trust-surface.html"),
+        /<\/main>/,
+        '<img src="/images/missing.png" alt="An image that is missing on purpose"></main>',
+      );
     },
   },
   {
