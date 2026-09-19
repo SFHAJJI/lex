@@ -14,7 +14,9 @@ param(
     # incrementally. The receipt records KeptBuildOutputs. Purging stays the default; omit the switch
     # on the last mutant of a sweep so no mutated build output outlives the sweep. Evidence is bound
     # to the source fingerprint, never to build outputs, so a kept output cannot change what a
-    # receipt proves.
+    # receipt proves. Every mutation run also verifies, after its build, that the assembly of each
+    # mutated project was recompiled during this run, in the project's own output and in the test
+    # target's output; otherwise the run is an infrastructure failure, never a Survived result.
     [Parameter()][switch]$KeepBuildOutputs
 )
 
@@ -142,6 +144,48 @@ function Remove-WorktreeBuildOutputs {
     }
 }
 
+function Get-MutatedProjects {
+    # Maps each tracked changed file to the single .csproj directory nearest above it. A changed file
+    # under no project directory is not mapped, so this check speaks only for project assemblies.
+    $changed = @((Invoke-Git -Arguments @('diff', '--name-only', 'HEAD', '--')) -split "`n" | Where-Object { $_ })
+    $projects = [ordered]@{}
+    foreach ($file in $changed) {
+        $directory = [IO.DirectoryInfo](Split-Path -Parent (Join-Path $repositoryRoot $file))
+        while ($null -ne $directory -and
+               $directory.FullName.StartsWith($repositoryRoot, [StringComparison]::OrdinalIgnoreCase)) {
+            $csproj = @(Get-ChildItem -LiteralPath $directory.FullName -Filter '*.csproj' -File -ErrorAction SilentlyContinue)
+            if ($csproj.Count -eq 1) {
+                $projects[$csproj[0].BaseName] = $directory.FullName
+                break
+            }
+            $directory = $directory.Parent
+        }
+    }
+    return $projects
+}
+
+function Assert-MutatedProjectsRecompiled {
+    # A mutant in a project outside the test target's build graph is never compiled by that target's
+    # build, so its tests would pass against the unmutated assembly and report a false Survived. Each
+    # mutated project's assembly must have been written during this build, both in the project's own
+    # output and in the test target's output.
+    param(
+        [Parameter(Mandatory)][DateTime]$BuildStartedUtc,
+        [Parameter(Mandatory)][System.Collections.IDictionary]$Projects,
+        [Parameter(Mandatory)][string]$TestProjectDirectory)
+
+    foreach ($name in @($Projects.Keys)) {
+        foreach ($root in @($Projects[$name], $TestProjectDirectory) | Select-Object -Unique) {
+            $binRoot = Join-Path $root "bin\$Configuration"
+            $assemblies = @(Get-ChildItem -LiteralPath $binRoot -Recurse -File -Filter "$name.dll" -ErrorAction SilentlyContinue)
+            $fresh = @($assemblies | Where-Object { $_.LastWriteTimeUtc -ge $BuildStartedUtc })
+            if ($fresh.Count -eq 0) {
+                throw "The build did not recompile mutated project $name under $root during this run; the mutant was never exercised by this test target, so the run cannot be evidence."
+            }
+        }
+    }
+}
+
 if ($Mode -eq 'Full') {
     if (-not $hasExpectedIngestSkipped -or -not $hasExpectedContractsSkipped) {
         throw 'Full mode requires -ExpectedIngestSkipped and -ExpectedContractsSkipped so each module is accounted explicitly.'
@@ -176,7 +220,7 @@ if ($Mode -eq 'Mutation' -and -not $hasExpectedTests) {
 }
 
 if ($KeepBuildOutputs -and $Mode -ne 'Mutation') {
-    throw 'KeepBuildOutputs is honoured only in Mutation mode; Full and Focused evidence always starts from purged outputs of any earlier mutation.'
+    throw 'KeepBuildOutputs is honoured only in Mutation mode.'
 }
 
 $dotnet = Find-GovernedDotnet
@@ -245,6 +289,7 @@ $receipt = [ordered]@{
     Sdk = $actualSdk
     MaxParallelTestModules = if ($Mode -eq 'Full') { 2 } else { 1 }
     KeptBuildOutputs = [bool]$KeepBuildOutputs
+    RecompiledProjects = $null
     RestoreSeconds = $null
     BuildSeconds = $null
     TestSeconds = $null
@@ -289,12 +334,19 @@ try {
         throw "Restore failed with exit code $restoreExit."
     }
 
+    $mutatedProjects = if ($Mode -eq 'Mutation') { Get-MutatedProjects } else { $null }
+    $buildStartedUtc = [DateTime]::UtcNow
     $timer.Restart()
     $buildExit = Invoke-Dotnet -Arguments @('build', $target, '--configuration', $Configuration, '--no-restore')
     $timer.Stop()
     $receipt.BuildSeconds = [Math]::Round($timer.Elapsed.TotalSeconds, 3)
     if ($buildExit -ne 0) {
         throw "Build failed with exit code $buildExit; no mutation result was recorded."
+    }
+    if ($Mode -eq 'Mutation') {
+        Assert-MutatedProjectsRecompiled -BuildStartedUtc $buildStartedUtc -Projects $mutatedProjects `
+            -TestProjectDirectory (Split-Path -Parent $target)
+        $receipt.RecompiledProjects = @($mutatedProjects.Keys)
     }
 
     $testArguments = if ($Mode -eq 'Full') {
