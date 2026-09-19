@@ -35,7 +35,21 @@ $hasAuthorizedPublisherRun = $PSBoundParameters.ContainsKey('AuthorizedPublisher
 function Invoke-Git {
     param([Parameter(Mandatory)][string[]]$Arguments)
 
-    $output = @(& git -C $repositoryRoot @Arguments)
+    # Git prints paths as UTF-8 bytes, and pwsh decodes a native command's output with the console's
+    # output encoding. On a console at the OEM code page (a pwsh started through WMI, or the hosts these
+    # seats run in) a non-ASCII path decodes to a name that is not on disk, and the recompile check would
+    # skip its project silently. The encoding is the console's, shared with the caller and kept after
+    # this script exits, so it is set around the git call only and put back: set for the whole script,
+    # it garbles every non-ASCII character this wrapper prints for a caller still reading at the OEM page.
+    $previousEncoding = [Console]::OutputEncoding
+    [Console]::OutputEncoding = [Text.Encoding]::UTF8
+    try {
+        $output = @(& git -C $repositoryRoot @Arguments)
+    }
+    finally {
+        [Console]::OutputEncoding = $previousEncoding
+    }
+
     if ($LASTEXITCODE -ne 0) {
         throw "git $($Arguments -join ' ') failed with exit code $LASTEXITCODE."
     }
