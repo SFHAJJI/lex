@@ -185,6 +185,10 @@ public sealed class V3CorpusDiffMountTests
 
         var beforeHistory = await DiffAsync(mount, $"/lu-legilux/{fixture.WorkKey}", Shift(fixture.ApplicabilityDate, -1), laterDate);
         Assert.AreEqual("no_version_for_date", beforeHistory.Refusal!.Code);
+        Assert.AreEqual(
+            "bound,history_begins,nearest_earlier,nearest_later,requested_date",
+            string.Join(",", beforeHistory.Refusal.HelpfulPayload.EnumerateObject().Select(static property => property.Name)),
+            "diff names the bound: exactly these properties, as served in the envelope's canonical order.");
         Assert.AreEqual(PublisherId.LuLegilux, beforeHistory.Context.Publisher);
         Assert.AreEqual("lu", beforeHistory.Context.Jurisdiction);
         Assert.AreEqual("from", beforeHistory.Refusal.HelpfulPayload.GetProperty("bound").GetString());
@@ -201,6 +205,10 @@ public sealed class V3CorpusDiffMountTests
         Assert.IsNotNull(mountWithTwin);
         var ambiguous = await DiffAsync(mountWithTwin, $"/lu-legilux/{fixture.WorkKey}", fixture.ApplicabilityDate, laterDate);
         Assert.AreEqual("ambiguous_version", ambiguous.Refusal!.Code);
+        Assert.AreEqual(
+            "bound,candidates,requested_date",
+            string.Join(",", ambiguous.Refusal.HelpfulPayload.EnumerateObject().Select(static property => property.Name)),
+            "diff names the bound: exactly these properties, as served in the envelope's canonical order.");
         Assert.AreEqual(PublisherId.LuLegilux, ambiguous.Context.Publisher);
         Assert.AreEqual("to", ambiguous.Refusal.HelpfulPayload.GetProperty("bound").GetString());
         Assert.AreEqual(laterDate, ambiguous.Refusal.HelpfulPayload.GetProperty("requested_date").GetString());
@@ -378,6 +386,81 @@ public sealed class V3CorpusDiffMountTests
             Assert.AreEqual("deu", envelope.Refusal.HelpfulPayload.GetProperty("language").GetString());
             var french = await DiffAsync(mount, $"/lu-legilux/{mismatchFirst.WorkKey}", mismatchFirst.ApplicabilityDate, laterDate, "fra");
             Assert.AreEqual("ambiguous_version", french.Refusal!.Code);
+        }
+    }
+
+    [TestMethod]
+    public async Task WithinOneRefusalTheFirstLanguageInOrderIsTheOneNamed()
+    {
+        // Two ambiguous languages: the payload names the first language's bound and candidates, in ordinal order.
+        var twins = await MountedFixture.CreateAsync();
+        await using (twins)
+        {
+            var laterDate = Shift(twins.ApplicabilityDate, 400);
+            var german = await twins.AddSecondLanguageStateAtSameDateAsync();
+            var germanLater = await twins.AddStateAsync(laterDate, "de-later", german.ExpressionIri);
+            var germanTwin = await twins.AddStateAsync(laterDate, "de-twin", german.ExpressionIri);
+            await twins.AddStateAsync(laterDate, "later");
+            await twins.AddStateAsync(laterDate, "twin");
+            using var mount = await V3CorpusMount.OpenAsync(twins.Directory, CancellationToken.None);
+            Assert.IsNotNull(mount);
+            var envelope = await DiffAsync(mount, $"/lu-legilux/{twins.WorkKey}", twins.ApplicabilityDate, laterDate);
+            Assert.AreEqual("ambiguous_version", envelope.Refusal!.Code);
+            var coordinate = twins.StableCoordinate.Replace("/" + twins.ApplicabilityDate, "/" + laterDate) + "--";
+            CollectionAssert.AreEqual(
+                new[] { coordinate + germanLater.StateSha256, coordinate + germanTwin.StateSha256 }.Order(StringComparer.Ordinal).ToArray(),
+                envelope.Refusal.HelpfulPayload.GetProperty("candidates").EnumerateArray().Select(static v => v.GetString()).ToArray(),
+                "Both languages are ambiguous; deu comes first, and its candidates are served in ordinal order.");
+        }
+
+        // Two languages whose pairs differ in profiles: the payload names deu.
+        var mismatches = await MountedFixture.CreateAsync();
+        await using (mismatches)
+        {
+            var laterDate = Shift(mismatches.ApplicabilityDate, 400);
+            var german = await mismatches.AddSecondLanguageStateAtSameDateAsync();
+            var germanLater = await mismatches.AddStateAsync(laterDate, "de-later", german.ExpressionIri);
+            await mismatches.AddRuleProfileToStateAsync(germanLater.ExpressionIri, new string('e', 64));
+            var frenchLater = await mismatches.AddStateAsync(laterDate, "later");
+            await mismatches.AddRuleProfileToStateAsync(frenchLater.ExpressionIri, new string('f', 64));
+            using var mount = await V3CorpusMount.OpenAsync(mismatches.Directory, CancellationToken.None);
+            Assert.IsNotNull(mount);
+            var envelope = await DiffAsync(mount, $"/lu-legilux/{mismatches.WorkKey}", mismatches.ApplicabilityDate, laterDate);
+            Assert.AreEqual("profiles_differ", envelope.Refusal!.Code);
+            Assert.AreEqual("deu", envelope.Refusal.HelpfulPayload.GetProperty("language").GetString());
+            CollectionAssert.Contains(
+                envelope.Refusal.HelpfulPayload.GetProperty("right_profile").EnumerateArray().Select(static v => v.GetString()).ToArray(),
+                new string('e', 64));
+        }
+
+        // Reversed dates: deu has no state at date_from, fra has none at date_to; nothing is compared, and
+        // the refusal names the first language's missing bound.
+        var reversed = await MountedFixture.CreateAsync();
+        await using (reversed)
+        {
+            var germanBegins = Shift(reversed.ApplicabilityDate, 400);
+            await reversed.AddSecondLanguageStateAsync(germanBegins);
+            using var mount = await V3CorpusMount.OpenAsync(reversed.Directory, CancellationToken.None);
+            Assert.IsNotNull(mount);
+            var dateFrom = Shift(reversed.ApplicabilityDate, 100);
+            var dateTo = Shift(reversed.ApplicabilityDate, -10);
+            var envelope = await DiffAsync(mount, $"/lu-legilux/{reversed.WorkKey}", dateFrom, dateTo);
+            Assert.AreEqual("no_version_for_date", envelope.Refusal!.Code);
+            Assert.AreEqual("from", envelope.Refusal.HelpfulPayload.GetProperty("bound").GetString(), "deu comes first and is missing at date_from.");
+            Assert.AreEqual(dateFrom, envelope.Refusal.HelpfulPayload.GetProperty("requested_date").GetString());
+            Assert.AreEqual(germanBegins, envelope.Refusal.HelpfulPayload.GetProperty("history_begins").GetString(),
+                "The refusal is about German, so the history it names is German's, not the French one that begins earlier.");
+            Assert.AreEqual(germanBegins, envelope.Refusal.HelpfulPayload.GetProperty("nearest_later").GetString());
+
+            // date_from on the very date of the French state: French resolves there and fails at date_to,
+            // German has nothing yet. A payload built from every language's dates would say the history
+            // begins on the date it refuses.
+            var onFrenchDate = await DiffAsync(mount, $"/lu-legilux/{reversed.WorkKey}", reversed.ApplicabilityDate, dateTo);
+            Assert.AreEqual("no_version_for_date", onFrenchDate.Refusal!.Code);
+            Assert.AreEqual("from", onFrenchDate.Refusal.HelpfulPayload.GetProperty("bound").GetString());
+            Assert.AreEqual(reversed.ApplicabilityDate, onFrenchDate.Refusal.HelpfulPayload.GetProperty("requested_date").GetString());
+            Assert.AreEqual(germanBegins, onFrenchDate.Refusal.HelpfulPayload.GetProperty("history_begins").GetString());
+            Assert.AreEqual(germanBegins, onFrenchDate.Refusal.HelpfulPayload.GetProperty("nearest_later").GetString());
         }
     }
 
