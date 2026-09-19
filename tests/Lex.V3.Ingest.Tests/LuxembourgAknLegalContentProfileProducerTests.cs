@@ -167,6 +167,44 @@ public sealed class LuxembourgAknLegalContentProfileProducerTests
         Assert.AreNotEqual(plain, oneParagraph);
     }
 
+    [TestMethod]
+    public async Task TheWordingDigestIgnoresMarkersInsideTheTextAndSeesReferenceLabelsAndEdgeWhitespace()
+    {
+        // Reviewer Z1, Z4 and Z3 on #687, through the real producer.
+        // Z1: a modification span around a middle word splits the text into three nodes; the merged
+        // digest equals the unmarked article's.
+        var unmarked = await DigestAsync("<p>voir ensuite la fin</p>", "z1a");
+        var marked = await DigestAsync(
+            "<p>voir <mod class=\"mod-start\" for=\"#pm1\"/>ensuite<mod class=\"mod-end\" for=\"#pm1\"/> la fin</p>", "z1b");
+        Assert.AreEqual(unmarked, marked, "Z1: a modification span inside the text is not a word");
+
+        // Z1, note form: a note reference between two words, with its note elsewhere in the act; the
+        // note and its body are the publisher's apparatus.
+        var noted = await DigestNotedAsync(
+            "<p>voir <noteRef href=\"#n1\" marker=\"1\"/>ensuite la fin</p>",
+            "<note id=\"n1\" marker=\"1\"><p>Note du publisher.</p></note>", "z1c");
+        Assert.AreEqual(unmarked, noted, "Z1: a note reference inside the text is not a word");
+
+        // Z4: the same target under a changed label is a change of wording.
+        var label = await DigestAsync("<p>voir <ref href=\"/eli/etat/leg/loi/2001/01/01/n1\">la loi du 1er janvier</ref></p>", "z4a");
+        var otherLabel = await DigestAsync("<p>voir <ref href=\"/eli/etat/leg/loi/2001/01/01/n1\">la loi modifiée du 1er janvier</ref></p>", "z4b");
+        Assert.AreNotEqual(label, otherLabel, "Z4: a reference label is the article's words");
+
+        // Z3: any byte of the retained text counts, a trailing space included.
+        var trailing = await DigestAsync("<p>voir ensuite la fin </p>", "z3a");
+        Assert.AreNotEqual(unmarked, trailing, "Z3: a trailing space inside the last text node is a change");
+    }
+
+    private static async Task<string> DigestNotedAsync(string content, string note, string key)
+    {
+        var result = await RunAsync(Akn("<article id=\"art_1\"><content>" + content + "</content></article>" + note), key);
+        var outcome = result.Outcomes.Single(value => value.Coordinate?.PublisherId == "art_1");
+        Assert.IsNotNull(outcome.Article, outcome.Detail);
+        Assert.IsTrue(outcome.Article.Tokens.Any(static token => token.Kind == LuxembourgAknLegalContentTokenKind.NoteReference),
+            "the note reference must be retained as a token for this pin to mean anything");
+        return LuxembourgIndexReader.WordingSha256(LuxembourgIndexBuilder.TokensJson(outcome.Article.Tokens));
+    }
+
     private static async Task<string> DigestAsync(string content, string key)
     {
         var result = await RunAsync(Akn("<article id=\"art_1\"><content>" + content + "</content></article>"), key);
