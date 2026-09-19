@@ -135,6 +135,188 @@ const MUTATIONS = [
     },
   },
   {
+    // S5-A10: translation is never the default view. The trust surface carries exactly one
+    // unofficial rendering; opening it in the served markup is the defect in its plainest form.
+    name: "an unofficial rendering served open, so it is the default view",
+    expect: /unofficial rendering 1 of 1 is shown by default \(open true/i,
+    async apply(root) {
+      await replaceOnce(
+        join(root, "trust-surface.html"),
+        /<details class="unofficial-rendering">/,
+        '<details class="unofficial-rendering" open>',
+      );
+    },
+  },
+  {
+    // The shape this slice replaced: the rendering in a plain section, visible with no action.
+    name: "an unofficial rendering taken out of its disclosure",
+    expect: /unofficial rendering 1 of 1 is a <section>, not a closed disclosure/i,
+    async apply(root) {
+      await replaceOnce(
+        join(root, "trust-surface.html"),
+        /<details class="unofficial-rendering"><summary class="unofficial-head">([\s\S]*?)<\/summary>([\s\S]*?)<\/details>/,
+        '<section class="unofficial-rendering"><p class="unofficial-head">$1</p>$2</section>',
+      );
+    },
+  },
+  {
+    // The disclosure stays closed and the stylesheet shows its content anyway. The `open`
+    // attribute is false throughout, so only a gate that measures what is rendered, rather than
+    // what the markup says, can see the text on screen.
+    name: "an unofficial rendering shown by the stylesheet while its disclosure stays closed",
+    expect: /is shown by default \(open false, text visible true, text on screen true\)/i,
+    async apply(root) {
+      const file = join(root, "styles.css");
+      const css = await readFile(file, "utf8");
+      await writeFile(
+        file,
+        `${css}\ndetails.unofficial-rendering::details-content { content-visibility: visible; display: block; }\n`,
+        "utf8",
+      );
+    },
+  },
+  {
+    // The control keeps its icon and heading and loses the word. A reader then opens a body that
+    // is not the law without having been told so first.
+    name: "the UNOFFICIAL label removed from the control that opens a rendering",
+    expect: /the control that opens unofficial rendering 1 of 1 does not say UNOFFICIAL/i,
+    async apply(root) {
+      await replaceOnce(
+        join(root, "trust-surface.html"),
+        /<span class="token-label">UNOFFICIAL<\/span>/,
+        "",
+      );
+    },
+  },
+  {
+    // Out of the Tab order. Focus by script still lands on it, which is why the probe also
+    // requires a tab stop; without that this mutation would pass.
+    name: "the control that opens a rendering taken out of the Tab order",
+    expect: /the UNOFFICIAL control of unofficial rendering 1 of 1 cannot take keyboard focus/i,
+    async apply(root) {
+      await replaceOnce(
+        join(root, "trust-surface.html"),
+        /<summary class="unofficial-head">/,
+        '<summary class="unofficial-head" tabindex="-1">',
+      );
+    },
+  },
+  {
+    // The second of two renderings out of the Tab order. The first version of the probe drove only
+    // the first summary on a page, so this passed every gate while the load-time checks held.
+    name: "the second rendering's control taken out of the Tab order",
+    expect: /the UNOFFICIAL control of unofficial rendering 2 of 2 cannot take keyboard focus/i,
+    async apply(root) {
+      await replaceOnce(
+        join(root, "reading.html"),
+        /(<summary class="unofficial-head">[\s\S]*?)<summary class="unofficial-head">/,
+        '$1<summary class="unofficial-head" tabindex="-1">',
+      );
+    },
+  },
+  {
+    // The word stays in the markup, the accessible name keeps it, and a sighted reader never sees
+    // it. `textContent` ignores CSS, so the first version of the label check passed this; only
+    // measuring the rendered label catches it.
+    name: "the UNOFFICIAL label shrunk to nothing by the stylesheet",
+    expect: /the UNOFFICIAL label of unofficial rendering \d+ of \d+ is not painted: \d+ ink pixel\(s\)/i,
+    async apply(root) {
+      const file = join(root, "styles.css");
+      const css = await readFile(file, "utf8");
+      await writeFile(file, `${css}\n.unofficial-head .token-label { font-size: 0; line-height: 0; }\n`, "utf8");
+    },
+  },
+  {
+    name: "the UNOFFICIAL label made fully transparent by the stylesheet",
+    expect: /the UNOFFICIAL label of unofficial rendering \d+ of \d+ is not painted: \d+ ink pixel\(s\).*\(display, visibility or opacity hides it\)/i,
+    async apply(root) {
+      const file = join(root, "styles.css");
+      const css = await readFile(file, "utf8");
+      await writeFile(file, `${css}\n.unofficial-head .token-label { opacity: 0; }\n`, "utf8");
+    },
+  },
+  {
+    // Text coloured transparent. The contrast sweep catches this too; the label check has to catch it
+    // on its own, and names the reason.
+    name: "the UNOFFICIAL label's text made transparent by the stylesheet",
+    expect: /the UNOFFICIAL label of unofficial rendering \d+ of \d+ is not painted: \d+ ink pixel\(s\).*\(its text colour is transparent\)/i,
+    async apply(root) {
+      const file = join(root, "styles.css");
+      const css = await readFile(file, "utf8");
+      await writeFile(file, `${css}\n.unofficial-head .token-label { color: transparent; }\n`, "utf8");
+    },
+  },
+  {
+    // The screen-reader-only pattern: one pixel, clipped. A screen reader still announces the word;
+    // no sighted reader can see it.
+    name: "the UNOFFICIAL label clipped to one pixel by the stylesheet",
+    expect: /the UNOFFICIAL label of unofficial rendering \d+ of \d+ is not painted: \d+ ink pixel\(s\).*\(its box is/i,
+    async apply(root) {
+      const file = join(root, "styles.css");
+      const css = await readFile(file, "utf8");
+      await writeFile(
+        file,
+        `${css}\n.unofficial-head .token-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }\n`,
+        "utf8",
+      );
+    },
+  },
+  {
+    // Four more ways to hide the word that no property list named: a filter, a text fill colour, a
+    // clip path and an alpha of 0.01. Each leaves the label's box, font size, colour alpha and centre
+    // hit-test looking fine, and the reviewer ran each with every gate green. Only the pixels the
+    // browser painted can see them.
+    name: "the UNOFFICIAL label hidden by a filter",
+    expect: /the UNOFFICIAL label of unofficial rendering \d+ of \d+ is not painted: \d+ ink pixel\(s\)/i,
+    async apply(root) {
+      const file = join(root, "styles.css");
+      const css = await readFile(file, "utf8");
+      await writeFile(file, `${css}\n.unofficial-head .token-label { filter: opacity(0); }\n`, "utf8");
+    },
+  },
+  {
+    name: "the UNOFFICIAL label's text filled transparent",
+    expect: /the UNOFFICIAL label of unofficial rendering \d+ of \d+ is not painted: \d+ ink pixel\(s\)/i,
+    async apply(root) {
+      const file = join(root, "styles.css");
+      const css = await readFile(file, "utf8");
+      await writeFile(file, `${css}\n.unofficial-head .token-label { -webkit-text-fill-color: transparent; }\n`, "utf8");
+    },
+  },
+  {
+    name: "the UNOFFICIAL label clipped to a one-pixel circle",
+    expect: /the UNOFFICIAL label of unofficial rendering \d+ of \d+ is not painted: \d+ ink pixel\(s\)/i,
+    async apply(root) {
+      const file = join(root, "styles.css");
+      const css = await readFile(file, "utf8");
+      await writeFile(file, `${css}\n.unofficial-head .token-label { clip-path: circle(1px at 50% 50%); }\n`, "utf8");
+    },
+  },
+  {
+    name: "the UNOFFICIAL label drawn at an alpha of 0.01",
+    expect: /the UNOFFICIAL label of unofficial rendering \d+ of \d+ is not painted: \d+ ink pixel\(s\)/i,
+    async apply(root) {
+      const file = join(root, "styles.css");
+      const css = await readFile(file, "utf8");
+      await writeFile(
+        file,
+        `${css}\n.unofficial-head .token-label { color: rgba(0, 0, 0, 0.01); }\n` +
+          "@media (prefers-color-scheme: dark) { .unofficial-head .token-label { color: rgba(255, 255, 255, 0.01); } }\n",
+        "utf8",
+      );
+    },
+  },
+  {
+    // A summary with nothing to say. The accessible-name check listed the role as "disclosure
+    // triangle" while Chrome reports `DisclosureTriangle`, so no summary was ever held to having
+    // a name. The expected sentence names the role, so only the corrected spelling can match it.
+    name: "a summary emptied of its name",
+    expect: /interactive node\(s\) with no accessible name: DisclosureTriangle/i,
+    async apply(root) {
+      await replaceOnce(join(root, "state-success.html"), /<summary>[\s\S]*?<\/summary>/, "<summary></summary>");
+    },
+  },
+  {
     name: "a toggle whose pressed state is not a boolean",
     expect: /aria-pressed="[^"]*" is not a boolean/i,
     async apply(root) {
@@ -302,11 +484,18 @@ function run(root) {
   });
 }
 
+// One private copy of dist, taken before the first mutation. Every mutation starts from it rather
+// than from the live dist: a build in the same checkout during the sweep (`npm run evidence`
+// rebuilds dist) leaked a hand-applied stylesheet into later mutations and reported them caught for
+// the wrong reason.
+const base = await mkdtemp(join(tmpdir(), "lex-evidence-base-"));
+await cp(join(process.cwd(), "dist"), base, { recursive: true });
+
 let failures = 0;
 for (const mutation of MUTATIONS) {
   const root = await mkdtemp(join(tmpdir(), "lex-evidence-"));
   try {
-    await cp(join(process.cwd(), "dist"), root, { recursive: true });
+    await cp(base, root, { recursive: true });
     await mutation.apply(root);
     const { code, output } = await run(root);
     if (code === 0) {
@@ -314,7 +503,8 @@ for (const mutation of MUTATIONS) {
       failures += 1;
     } else if (!mutation.expect.test(output)) {
       console.log(`WRONG REASON ${mutation.name}`);
-      console.log(output.split("\n").filter((l) => /:/.test(l)).slice(0, 4).join("\n"));
+      // Every failure line, not the first four, so a wrong reason can be told from a flake.
+      console.log(output.split("\n").filter((l) => /^\s+\S.*: /.test(l)).join("\n"));
       failures += 1;
     } else {
       const line = output.split("\n").find((l) => mutation.expect.test(l)) ?? "";
@@ -325,6 +515,8 @@ for (const mutation of MUTATIONS) {
     await rm(root, { recursive: true, force: true });
   }
 }
+
+await rm(base, { recursive: true, force: true });
 
 if (failures > 0) {
   console.error(`\n${failures} induced mutation(s) were not caught.`);

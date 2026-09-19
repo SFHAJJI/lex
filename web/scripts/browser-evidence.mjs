@@ -16,6 +16,7 @@ import { existsSync } from "node:fs";
 import { resolve as resolvePath } from "node:path";
 import { extname, join as joinPath, sep as pathSep } from "node:path";
 import { CSP_DIRECTIVES, FORBIDDEN_SOURCES, cspValue } from "./csp.mjs";
+import { decodePng, inkMeasure } from "./png-ink.mjs";
 import { mkdtemp, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -428,8 +429,12 @@ const PROBE = `(() => {
       .filter((href) => href && href.startsWith('/')),
   )];
 
+  // The content of a closed disclosure is not rendered, so Tab never reaches it: it is not a
+  // focusable element of the page as served. Its summary is. (S5-A10 puts each unofficial
+  // rendering, with its link to the authentic text, inside a closed disclosure.)
   const focusable = [...document.querySelectorAll(
-    'a[href],button,input,select,textarea,summary,[tabindex]:not([tabindex="-1"])')];
+    'a[href],button,input,select,textarea,summary,[tabindex]:not([tabindex="-1"])')]
+    .filter((el) => !el.closest('details:not([open]) > :not(summary)'));
   const headingEls = [...document.querySelectorAll('h1,h2,h3,h4,h5,h6')];
   const heads = headingEls.map((h) => h.tagName + ':' + h.textContent.trim().slice(0, 40));
   const headingLevels = headingEls.map((h) => Number(h.tagName.slice(1)));
@@ -664,6 +669,220 @@ export async function drivenBehaviour(session, sessionId) {
   }
 
   return roving || pressed ? { roving, keys, pressed, shrink } : null;
+}
+
+/**
+ * S5-A10, driven: an unofficial rendering is never the default view, and is clearly labelled.
+ *
+ * Measured, not inferred from markup. At load, for every `.unofficial-rendering`: that it is a
+ * `details`, whether it is open, whether its text is visible, and whether that text is in what the
+ * page shows (`innerText`, which leaves out what the browser does not render). The UNOFFICIAL label
+ * is measured the same way: the element whose own text carries the word is scrolled into view and
+ * must render (no display, visibility or opacity hiding it), have a box and a font size a reader can
+ * see, a colour that is not transparent, and be what the browser hits at its centre (so nothing
+ * covers, clips or pushes it off the page). `textContent` ignores CSS, so a label a stylesheet hid
+ * passed the first version of this check. Then every rendering is opened the way a keyboard reader
+ * would -- focus its summary, press Enter -- and closed again, so a rendering that can never be
+ * reached fails as surely as one that is shown unasked.
+ */
+export async function unofficialDisclosure(session, sessionId) {
+  const read = async (expression) => {
+    const { result } = await session.send(
+      "Runtime.evaluate",
+      { expression, returnByValue: true },
+      sessionId,
+    );
+    return result.value;
+  };
+  const STATE = `(() => [...document.querySelectorAll('.unofficial-rendering')].map((el) => {
+    const body = el.querySelector('blockquote');
+    const text = body ? body.textContent.trim() : '';
+    const summary = el.querySelector(':scope > summary');
+    const word = summary
+      ? [...summary.querySelectorAll('*')].find((node) =>
+          [...node.childNodes].some((child) => child.nodeType === 3 && child.textContent.includes('UNOFFICIAL')))
+      : null;
+    let labelHidden = word ? null : 'no element carries the word';
+    if (word) {
+      word.scrollIntoView({ block: 'center', inline: 'nearest' });
+      const box = word.getBoundingClientRect();
+      const style = getComputedStyle(word);
+      const channels = (style.color.match(/rgba?\\(([^)]*)\\)/) || [null, ''])[1].split(/[\\s,\\/]+/).filter(Boolean);
+      const alpha = channels.length === 4 ? parseFloat(channels[3]) : 1;
+      const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+      if (!word.checkVisibility({ visibilityProperty: true, opacityProperty: true })) {
+        labelHidden = 'display, visibility or opacity hides it';
+      } else if (box.width < 8 || box.height < 8) {
+        labelHidden = 'its box is ' + Math.round(box.width) + 'x' + Math.round(box.height) + ' px';
+      } else if (parseFloat(style.fontSize) < 8) {
+        labelHidden = 'its font size is ' + style.fontSize;
+      } else if (alpha === 0) {
+        labelHidden = 'its text colour is transparent';
+      } else if (!hit || !(hit === word || word.contains(hit))) {
+        labelHidden = 'something else is on top of it, or it is clipped or off the page';
+      } else if (!summary.innerText.includes('UNOFFICIAL')) {
+        labelHidden = 'it is not in the rendered text of the control';
+      }
+    }
+    return {
+      tag: el.tagName.toLowerCase(),
+      open: el.open === true,
+      label: summary ? summary.textContent.replace(/\\s+/g, ' ').trim() : null,
+      labelHidden,
+      visible: body ? body.checkVisibility({ visibilityProperty: true, opacityProperty: true }) : false,
+      shown: text.length > 0 && document.body.innerText.includes(text),
+    };
+  }))()`;
+
+  const load = await read(STATE);
+  if (!load || load.length === 0) return null;
+
+  // The verdict on the label comes from pixels. Every property list leaves a way out (a filter, a
+  // text fill colour, a clip path, an alpha of 0.01), so the label's box is photographed by the
+  // browser that painted it and must carry enough ink to draw a word. The named reasons above stay
+  // as the diagnosis of why a label that is not painted is not painted.
+  for (let index = 0; index < load.length; index++) {
+    const box = await read(`(() => {
+      const el = document.querySelectorAll('.unofficial-rendering')[${index}];
+      const summary = el ? el.querySelector(':scope > summary') : null;
+      const word = summary
+        ? [...summary.querySelectorAll('*')].find((node) =>
+            [...node.childNodes].some((child) => child.nodeType === 3 && child.textContent.includes('UNOFFICIAL')))
+        : null;
+      if (!word) return null;
+      word.scrollIntoView({ block: 'center', inline: 'nearest' });
+      const r = word.getBoundingClientRect();
+      return { x: r.left + window.scrollX, y: r.top + window.scrollY, width: r.width, height: r.height };
+    })()`);
+    load[index].ink = { pixels: 0, share: 0, width: Math.round(box?.width ?? 0), height: Math.round(box?.height ?? 0) };
+    if (box && box.width >= 1 && box.height >= 1) {
+      const { data } = await session.send(
+        "Page.captureScreenshot",
+        { format: "png", clip: { ...box, scale: 1 }, captureBeyondViewport: false },
+        sessionId,
+      );
+      load[index].ink = { ...inkMeasure(decodePng(Buffer.from(data, "base64"))), width: Math.round(box.width), height: Math.round(box.height) };
+    }
+  }
+
+  const enter = async () => {
+    for (const [type, extra] of [["keyDown", { text: "\r", unmodifiedText: "\r" }], ["keyUp", {}]]) {
+      await session.send(
+        "Input.dispatchKeyEvent",
+        { type, key: "Enter", code: "Enter", windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13, ...extra },
+        sessionId,
+      );
+    }
+  };
+  // Every rendering, not the first: a page with two can hide the second from the keyboard.
+  const drives = [];
+  for (let index = 0; index < load.length; index++) {
+    const focused = await read(`(() => {
+      const el = document.querySelectorAll('.unofficial-rendering')[${index}];
+      const summary = el ? el.querySelector(':scope > summary') : null;
+      if (!summary) return false;
+      summary.focus();
+      // Focus by script reaches a tabindex=-1 element that Tab never does, so the tab stop is
+      // required too: a control only a script can reach is not one a keyboard reader has.
+      return document.activeElement === summary && summary.tabIndex >= 0;
+    })()`);
+    let opened = null;
+    let closed = null;
+    if (focused) {
+      await enter();
+      opened = (await read(STATE))[index];
+      await enter();
+      closed = (await read(STATE))[index];
+    }
+    drives.push({ focused, opened, closed });
+  }
+  return { load, drives };
+}
+
+/**
+ * The S5-A10 verdict on one measured page, as failure sentences. Pure, so the node tests can hold
+ * every sentence without a browser.
+ *
+ * @param {string} where  the page, viewport and scheme, as every other failure names them
+ * @param {object|null} measured  what `unofficialDisclosure` returned
+ * @param {Array<boolean|null>} controls  the `expanded` state of every disclosure control in the
+ *   accessibility tree whose name says UNOFFICIAL, at load
+ */
+/**
+ * Enough ink to draw a word: at least 30 pixels and 3% of the label's box differ clearly from the
+ * background. A word in the product's smallest type leaves hundreds; a one-pixel clip, a clip-path
+ * sliver or text at an alpha of 0.01 leaves almost none.
+ */
+export const LABEL_INK = Object.freeze({ pixels: 30, share: 0.03 });
+const painted = (ink) => (ink?.pixels ?? 0) >= LABEL_INK.pixels && (ink?.share ?? 0) >= LABEL_INK.share;
+
+export function unofficialFailures(where, measured, controls = []) {
+  const failures = [];
+  const load = measured?.load ?? [];
+  if (load.length === 0) {
+    if (controls.length > 0) {
+      failures.push(`${where}: ${controls.length} UNOFFICIAL disclosure control(s) with no rendering behind them`);
+    }
+    return failures;
+  }
+  load.forEach((one, index) => {
+    const which = `unofficial rendering ${index + 1} of ${load.length}`;
+    if (one.tag !== "details") {
+      failures.push(
+        `${where}: ${which} is a <${one.tag}>, not a closed disclosure; S5-A10 says translation is ` +
+          "never the default view",
+      );
+    }
+    if (one.open || one.visible || one.shown) {
+      failures.push(
+        `${where}: ${which} is shown by default (open ${one.open}, text visible ${one.visible}, ` +
+          `text on screen ${one.shown}); S5-A10 says translation is never the default view`,
+      );
+    }
+    if (!/UNOFFICIAL/.test(one.label ?? "")) {
+      failures.push(
+        `${where}: the control that opens ${which} does not say UNOFFICIAL ` +
+          `(${JSON.stringify(one.label)})`,
+      );
+    } else if (!painted(one.ink)) {
+      // The verdict is the pixels'. The named reason, when one applies, says why.
+      failures.push(
+        `${where}: the UNOFFICIAL label of ${which} is not painted: ${one.ink?.pixels ?? 0} ink ` +
+          `pixel(s), ${Math.round((one.ink?.share ?? 0) * 1000) / 10}% of its ` +
+          `${one.ink?.width ?? 0}x${one.ink?.height ?? 0} box, differ from the background` +
+          `${one.labelHidden ? ` (${one.labelHidden})` : ""}; S5-A10 says clearly labelled unofficial`,
+      );
+    }
+    const drive = measured.drives?.[index];
+    if (!drive?.focused) {
+      failures.push(`${where}: the UNOFFICIAL control of ${which} cannot take keyboard focus`);
+    } else {
+      if (!drive.opened?.open || !drive.opened?.shown) {
+        failures.push(
+          `${where}: Enter on the UNOFFICIAL control of ${which} did not show the rendering (open ` +
+            `${drive.opened?.open}, text on screen ${drive.opened?.shown}); a reader who asks for it ` +
+            "can never read it",
+        );
+      }
+      if (drive.closed?.open || drive.closed?.shown) {
+        failures.push(`${where}: Enter again on the UNOFFICIAL control of ${which} did not close the rendering`);
+      }
+    }
+  });
+  if (controls.length !== load.length) {
+    failures.push(
+      `${where}: ${load.length} unofficial rendering(s) and ${controls.length} disclosure ` +
+        "control(s) named UNOFFICIAL in the accessibility tree; a screen reader cannot find one",
+    );
+  }
+  const expanded = controls.filter((state) => state !== false).length;
+  if (expanded > 0) {
+    failures.push(
+      `${where}: ${expanded} UNOFFICIAL disclosure control(s) are not reported collapsed to a ` +
+        "screen reader at load",
+    );
+  }
+  return failures;
 }
 
 export async function keyboardWalk(session, sessionId, expected) {
@@ -1039,10 +1258,12 @@ async function main() {
         const ignored = (node) => node.ignored === true;
         const axNodes = nodes.filter((node) => !ignored(node));
         const roles = axNodes.map((node) => node.role?.value).filter(Boolean);
+        // Chrome reports a summary's role as `DisclosureTriangle`. The list said "disclosure
+        // triangle", which no node ever matched, so a summary was never held to having a name.
+        const disclosure = (node) => node.role?.value === "DisclosureTriangle";
         const interactive = axNodes.filter((node) =>
-          ["link", "button", "textbox", "checkbox", "combobox", "disclosure triangle"].includes(
-            node.role?.value,
-          ),
+          ["link", "button", "textbox", "checkbox", "combobox"].includes(node.role?.value) ||
+            disclosure(node),
         );
         const unnamedInteractive = interactive.filter((node) => !named(node));
         const headings = axNodes.filter((node) => node.role?.value === "heading");
@@ -1051,6 +1272,11 @@ async function main() {
         observed.axInteractive = interactive.length;
         observed.axHeadings = headings.length;
         observed.axLandmarks = roles.filter((role) => ["main", "note", "group", "complementary"].includes(role)).length;
+        // S5-A10's control as a screen reader receives it: one disclosure per unofficial rendering,
+        // named UNOFFICIAL, and collapsed when the page is served.
+        observed.unofficialControls = axNodes
+          .filter((node) => disclosure(node) && (node.name?.value ?? "").includes("UNOFFICIAL"))
+          .map((node) => node.properties?.find((property) => property.name === "expanded")?.value?.value ?? null);
 
         if (axNodes.length === 0) {
           failures.push(`${page} @${viewport.label}/${scheme}: the accessibility tree is empty`);
@@ -1369,6 +1595,13 @@ async function main() {
             }
           }
         }
+        // S5-A10, driven after the listbox probe: it opens and closes a disclosure, and pages with
+        // unofficial renderings carry no listbox, so neither probe changes what the other measures.
+        failures.push(...unofficialFailures(
+          `${page} @${viewport.label}/${scheme}`,
+          await unofficialDisclosure(session, sessionId),
+          observed.unofficialControls,
+        ));
         const late = logged.slice(consoleAtLoad);
         if (late.length > 0) {
           failures.push(

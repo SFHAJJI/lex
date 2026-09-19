@@ -75,24 +75,31 @@ function QuotedLaw({ quotation }) {
   );
 }
 
-/** A body that is not the authentic text, labelled as one and routed to the text that is. */
+/**
+ * A body that is not the authentic text, labelled as one and routed to the text that is.
+ *
+ * Closed until the reader opens it (S5-A10: never the default view), as the string renderer
+ * does; `open` is never set here, so neither React nor a caller can make it the default.
+ */
 function UnofficialRendering({ rendering }) {
   const parts = unofficialRenderingParts(rendering);
   return (
-    <section className="unofficial-rendering">
-      <p className="unofficial-head">
+    <details className="unofficial-rendering">
+      <summary className="unofficial-head">
         <Mark name="--unofficial">{parts.heading}</Mark>
-      </p>
-      <blockquote className="body" lang={parts.language}>
-        {parts.text}
-      </blockquote>
-      <p className="unofficial-note">{parts.note}</p>
-      <p className="unofficial-official">
-        <a href={parts.official} rel="external">
-          The authentic text, at the publisher
-        </a>
-      </p>
-    </section>
+      </summary>
+      <div className="unofficial-body">
+        <blockquote className="body" lang={parts.language}>
+          {parts.text}
+        </blockquote>
+        <p className="unofficial-note">{parts.note}</p>
+        <p className="unofficial-official">
+          <a href={parts.official} rel="external">
+            The authentic text, at the publisher
+          </a>
+        </p>
+      </div>
+    </details>
   );
 }
 
