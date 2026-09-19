@@ -445,6 +445,10 @@ public sealed class V3CorpusAsOfMountTests
         Assert.AreEqual(fixture.ApplicabilityDate, ownState.GetProperty("applicability_date").GetString());
         var articles = ownState.GetProperty("articles").EnumerateArray().ToArray();
         Assert.HasCount(stored.Count, articles);
+        CollectionAssert.AreEqual(
+            ownState.GetProperty("article_identities").EnumerateArray().Select(static value => value.GetString()).ToArray(),
+            articles.Select(static article => article.GetProperty("article_identity_sha256").GetString()).ToArray(),
+            "Articles are served in the state's own order.");
         var expectedConflicts = 0;
         foreach (var article in articles)
         {
@@ -486,12 +490,14 @@ public sealed class V3CorpusAsOfMountTests
                 Assert.IsFalse(byIdentity[identity].GetProperty("validity_conflict").GetBoolean());
             }
             Assert.AreEqual(2, laterState.GetProperty("validity_conflict_count").GetInt32(), requested);
+            StringAssert.Contains(laterState.GetProperty("validity_conflict_rule").GetString(), "differs from the state's applicability_date");
         }
 
         // The hash-pinned permalink of the same state carries the identical values.
         var pinned = await ResolveAsync(mount, fixture.Permalink);
         Assert.AreEqual(V3Verdicts.Answer, pinned.Verdict);
         Assert.AreEqual(expectedConflicts, pinned.Result!.Value.GetProperty("validity_conflict_count").GetInt32());
+        StringAssert.Contains(pinned.Result.Value.GetProperty("validity_conflict_rule").GetString(), "differs from the state's applicability_date");
         CollectionAssert.AreEqual(
             articles.Select(static article => article.GetRawText()).ToArray(),
             pinned.Result.Value.GetProperty("articles").EnumerateArray().Select(static article => article.GetRawText()).ToArray());
