@@ -282,10 +282,25 @@ export class Session {
     this.#listeners.add(listener);
   }
 
-  send(method, params = {}, sessionId) {
+  // A command the browser never answers stalled a whole mutation sweep for twenty minutes with no
+  // output. Every command now has a deadline, so a hung browser is a named failure, not a silence.
+  send(method, params = {}, sessionId, deadlineMs = 60000) {
     const id = this.#next++;
     return new Promise((resolve, reject) => {
-      this.#pending.set(id, { resolve, reject });
+      const timer = setTimeout(() => {
+        this.#pending.delete(id);
+        reject(new Error(`the browser did not answer ${method} within ${deadlineMs / 1000} s`));
+      }, deadlineMs);
+      this.#pending.set(id, {
+        resolve: (value) => {
+          clearTimeout(timer);
+          resolve(value);
+        },
+        reject: (error) => {
+          clearTimeout(timer);
+          reject(error);
+        },
+      });
       this.#socket.send(JSON.stringify({ id, method, params, sessionId }));
     });
   }
