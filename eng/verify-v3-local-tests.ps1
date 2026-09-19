@@ -16,7 +16,11 @@ param(
     # to the source fingerprint, never to build outputs, so a kept output cannot change what a
     # receipt proves. Every mutation run also verifies, after its build, that the assembly of each
     # mutated project was recompiled during this run, in the project's own output and in the test
-    # target's output; otherwise the run is an infrastructure failure, never a Survived result.
+    # target's output; otherwise the run is an infrastructure failure, never a Survived result. Two
+    # cases fail that check safe rather than test the mutant: a project whose AssemblyName differs
+    # from its project file name (no such project today), and an edit to a file inside a project
+    # that is not compiled into its assembly, such as content copied to the output. Both end as an
+    # infrastructure failure, never as a false Survived; give such a change its own evidence.
     [Parameter()][switch]$KeepBuildOutputs
 )
 
@@ -147,7 +151,9 @@ function Remove-WorktreeBuildOutputs {
 function Get-MutatedProjects {
     # Maps each tracked changed file to the single .csproj directory nearest above it. A changed file
     # under no project directory is not mapped, so this check speaks only for project assemblies.
-    $changed = @((Invoke-Git -Arguments @('diff', '--name-only', 'HEAD', '--')) -split "`n" | Where-Object { $_ })
+    # core.quotePath off, so a path with non-ASCII characters is printed as it is and maps to its
+    # project like any other instead of being quoted and skipped.
+    $changed = @((Invoke-Git -Arguments @('-c', 'core.quotePath=false', 'diff', '--name-only', 'HEAD', '--')) -split "`n" | Where-Object { $_ })
     $projects = [ordered]@{}
     foreach ($file in $changed) {
         $directory = [IO.DirectoryInfo](Split-Path -Parent (Join-Path $repositoryRoot $file))
