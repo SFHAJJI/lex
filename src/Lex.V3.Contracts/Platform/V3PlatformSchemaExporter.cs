@@ -184,6 +184,10 @@ public static class V3PlatformSchemaExporter
             ["identifier"],
             ("identifier", NonBlankString()),
             ("language", NonBlankString())),
+        "dossier" => Parameters(
+            ["identifier"],
+            ("identifier", NonBlankString()),
+            ("language", NonBlankString())),
         "article_history" => Parameters(
             ["identifier", "anchor"],
             ("identifier", NonBlankString()),

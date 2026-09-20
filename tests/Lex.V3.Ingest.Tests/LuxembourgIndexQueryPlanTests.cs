@@ -12,7 +12,9 @@ namespace Lex.V3.Ingest.Tests;
 /// by digest, its identities, then each article and its member by primary key. Which order SQLite
 /// picks depends on the statistics in the index file, and under the ones a fixture build leaves it scanned
 /// every article first for one of these and <c>members</c> first for another, so this asks the engine
-/// rather than reading the SQL.
+/// rather than reading the SQL. The one per-work query, the titles of a work, is held differently and says
+/// why in <see cref="TitleProblems"/>: it scans the title table once, which is what it is measured to do and
+/// no more.
 /// </summary>
 [TestClass]
 public sealed class LuxembourgIndexQueryPlanTests
@@ -27,6 +29,38 @@ public sealed class LuxembourgIndexQueryPlanTests
         ("ArticleIds", LuxembourgIndexQueries.ArticleIds, [("$digest", Digest)], false),
         ("StateSources", LuxembourgIndexQueries.StateSources, [("$state", Digest)], true),
     ];
+
+    private static readonly (string Sql, (string, object)[] Parameters) TitleQuery =
+        (LuxembourgIndexQueries.WorkTitles, [("$expressions", "[\"" + Digest + "\"]")]);
+
+    /// <summary>
+    /// The title lookup is not bounded by the work: the title table's key starts with a column that does not
+    /// reliably name a state's work, and there is no index on the expression IRI, so it reads the table once and
+    /// keeps the rows whose expression is the work's. This holds it to exactly that, and to no more: one scan of
+    /// the title table, never a nested one (a probe of the table per expression would be a table pass each), and
+    /// no other index chosen for it. If the index ever gains one on the expression IRI the plan becomes a search
+    /// and this fails, which is the moment to tighten it into the bound the per-state queries have.
+    /// </summary>
+    private static IEnumerable<string> TitleProblems(string label, string[] plan)
+    {
+        var shown = $"{label}, WorkTitles: {string.Join(" | ", plan)}";
+        var scans = plan.Count(static line => Regex.IsMatch(line, @"^SCAN t\b"));
+        if (scans != 1)
+        {
+            yield return $"work_titles is scanned {scans} times, not once. " + shown;
+        }
+
+        if (plan.Any(static line => Regex.IsMatch(line, @"^SEARCH t\b")))
+        {
+            yield return "work_titles is searched by an index, which is not the plan this test was written for: tighten it. " + shown;
+        }
+
+        // The rows kept by the work's expressions are the ones asked for, and they are compared to the list, not joined to it per row.
+        if (!plan.Any(static line => line.StartsWith("LIST SUBQUERY", StringComparison.Ordinal)))
+        {
+            yield return "the expressions are not a list the scan is compared with. " + shown;
+        }
+    }
 
     private static string[] Plan(SqliteConnection connection, string sql, (string Name, object Value)[] parameters)
     {
@@ -104,7 +138,8 @@ public sealed class LuxembourgIndexQueryPlanTests
             Path.Combine(fixture.Directory, V3CorpusMount.IndexFileName), SqliteOpenMode.ReadOnly);
 
         var problems = Queries.SelectMany(query =>
-            Problems("the index as built", query.Name, Plan(connection, query.Sql, query.Parameters), query.ReadsMembers, stateIsSearched: false)).ToArray();
+            Problems("the index as built", query.Name, Plan(connection, query.Sql, query.Parameters), query.ReadsMembers, stateIsSearched: false))
+            .Concat(TitleProblems("the index as built", Plan(connection, TitleQuery.Sql, TitleQuery.Parameters))).ToArray();
         Assert.AreEqual(0, problems.Length, string.Join(Environment.NewLine, problems));
     }
 
@@ -131,6 +166,8 @@ public sealed class LuxembourgIndexQueryPlanTests
                          "INSERT INTO sqlite_stat1 VALUES ('articles','articles_object_ref','24000 8')",
                          "INSERT INTO sqlite_stat1 VALUES ('articles','articles_language_date','24000 12000 30')",
                          "INSERT INTO sqlite_stat1 VALUES ('members','sqlite_autoindex_members_1','3000 1')",
+                         "INSERT INTO sqlite_stat1 VALUES ('work_titles','sqlite_autoindex_work_titles_1','30000 5 5 4 2 1 1')",
+                         "INSERT INTO sqlite_stat1 VALUES ('work_titles','work_titles_normalized','30000 3 1')",
                      ], true),
                  })
         {
@@ -153,6 +190,7 @@ public sealed class LuxembourgIndexQueryPlanTests
             using var connection = LuxembourgIndexBuilder.Open(copy, SqliteOpenMode.ReadOnly);
             problems.AddRange(Queries.SelectMany(query =>
                 Problems(label, query.Name, Plan(connection, query.Sql, query.Parameters), query.ReadsMembers, stateIsSearched)));
+            problems.AddRange(TitleProblems(label, Plan(connection, TitleQuery.Sql, TitleQuery.Parameters)));
         }
 
         Assert.AreEqual(0, problems.Count, string.Join(Environment.NewLine, problems));
@@ -169,6 +207,11 @@ public sealed class LuxembourgIndexQueryPlanTests
                 Occurrences(reader, $"command.CommandText = LuxembourgIndexQueries.{name};"),
                 $"The reader does not run LuxembourgIndexQueries.{name} exactly once, so the plan asked of it is not the plan it gets.");
         }
+
+        Assert.AreEqual(
+            1,
+            Occurrences(reader, "command.CommandText = LuxembourgIndexQueries.WorkTitles;"),
+            "The reader does not run LuxembourgIndexQueries.WorkTitles exactly once, so the plan asked of it is not the plan it gets.");
 
         // The one per-state join left inline is search's, which scans a whole language on its own connection by design.
         Assert.AreEqual(

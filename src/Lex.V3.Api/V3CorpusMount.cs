@@ -2066,6 +2066,120 @@ internal sealed class V3CorpusMount : IDisposable
     }
 
     /// <summary>
+    /// R6 <c>dossier</c> for Luxembourg: the work record the mounted index can honestly give for one work,
+    /// and what it does not hold, said. The titles the publisher stated, by expression and language, with
+    /// the digest of the evidence each was read from; the publisher-dated states of the work in
+    /// <c>timeline</c>'s vocabulary (a state's article count in place of its article list); and a fixed
+    /// list of what the index does not hold: a document type, a current-state flag, a publication date,
+    /// an entry-into-force or application date, historical identifiers, a responsible ministry, an
+    /// observation time, and any statement about gaps between states. Nothing is derived: the states are
+    /// the ones <c>timeline</c> lists, refused as it refuses, and a title or a state absent here may exist
+    /// at the publisher.
+    /// </summary>
+    public V3PlatformOperationOutcome Dossier(
+        V3PlatformOperationRequest request,
+        DateTimeOffset observedAt)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (!string.Equals(request.OperationId, "dossier", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("The mounted corpus work-record operation only accepts dossier/1.");
+        }
+
+        var identifier = RequiredString(request.Parameters, "identifier");
+        var requestedLanguage = OptionalLanguage(request.Parameters);
+        if (RefuseUnlessWorkStates(request, identifier, observedAt, "r6_dossier", requestedLanguage,
+                out var states, out var availableLanguages) is { } refused)
+        {
+            return refused;
+        }
+
+        var scope = requestedLanguage is null
+            ? states
+            : states.Where(state => string.Equals(state.Language, requestedLanguage, StringComparison.Ordinal))
+                .ToArray();
+        // A title row names the expression it was read for, which a state names too; the title table's own
+        // key does not reliably name the work.
+        var expressions = states.Select(static state => state.ExpressionIri)
+            .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+        var titles = _reader!.ResolveWorkTitles(expressions)
+            .Where(title => requestedLanguage is null ||
+                            string.Equals(title.Language, requestedLanguage, StringComparison.Ordinal))
+            .GroupBy(static title => (title.Language, title.ExpressionIri))
+            .Select(static group => new
+            {
+                language = group.Key.Language,
+                expression_iri = group.Key.ExpressionIri,
+                titles = group.Where(static title => title.TitleKind == "title")
+                    .Select(static title => new { title = title.Title, evidence_sha256 = title.EvidenceSha256 })
+                    .ToArray(),
+                short_titles = group.Where(static title => title.TitleKind == "title_short")
+                    .Select(static title => new { title = title.Title, evidence_sha256 = title.EvidenceSha256 })
+                    .ToArray(),
+            })
+            .ToArray();
+        var rows = scope.Select(state => DossierStateRow(state, NextDateInLanguage(scope, state))).ToArray();
+
+        using var result = JsonSerializer.SerializeToDocument(new
+        {
+            scope = DossierScope,
+            requested_identifier = identifier,
+            requested_language = requestedLanguage,
+            publisher = "lu-legilux",
+            work_key = states[0].WorkKey,
+            publisher_work_iri = states[0].PublisherWorkIri,
+            available_languages = availableLanguages,
+            titles,
+            state_count = rows.Length,
+            history_begins = scope[0].ApplicabilityDate,
+            latest_applicability_date = scope[^1].ApplicabilityDate,
+            states = rows,
+            not_held = DossierNotHeld.Select(static row => new { item = row[0], reason = row[1] }).ToArray(),
+            corpus_sha256 = _corpus.ArtifactRef.Sha256,
+            index_sha256 = _reader.IndexRef.Sha256,
+        });
+        return V3PlatformOperationOutcome.Success(
+            Context("success", observedAt),
+            new V3PlatformOperationResult(request, "work_record", result.RootElement));
+    }
+
+    internal const string DossierScope =
+        "The titles and the publisher-dated states the mounted index holds for this work. It is a record of what this corpus holds and not of what the publisher holds: " +
+        "a title or a state absent here may exist at the publisher, and absence from this corpus is neither absence from the publisher's record nor absence of law.";
+
+    /// <summary>What the mounted index does not hold about a work, in fixed words; not computed from what is present.</summary>
+    internal static readonly string[][] DossierNotHeld =
+    [
+        ["document_type", "no publisher document type is held, so nothing here says whether this work is a law, a grand-ducal regulation or an order"],
+        ["current_state_flag", "no current-state flag is held, so nothing here says whether the publisher treats this work as in force, and a flag about now would not be a statement about any date listed here"],
+        ["publication_date", "no publication date is held; the document date the index stores beside a title falls back to an article's applicability date, so it is not served as one"],
+        ["entry_into_force", "no entry-into-force date is held; a state's applicability date is the date that state applies from, which is a different fact"],
+        ["application", "no application date is held; a state's applicability date is the date that state applies from, which is a different fact"],
+        ["historical_identifiers", "no historical identifier is held, so no earlier or later identifier of this work is mapped to it"],
+        ["responsible_ministry", "no responsible ministry is held"],
+        ["first_observed", "no observation time or first-sighting event is held, so nothing here says when this work was first seen"],
+        ["coverage_gaps", "each state carries the date it applies from and no end date, so no gap between states can be stated, and this answer never says there is none"],
+    ];
+
+    /// <summary>
+    /// One state as <c>dossier</c> lists it: <c>timeline</c>'s row without the article list, with the count.
+    /// The fields both operations carry are the same fields with the same values, and a test holds it.
+    /// </summary>
+    private static object DossierStateRow(LuxembourgIndexResolvedState state, string? nextDate) => new
+    {
+        language = state.Language,
+        applicability_date = state.ApplicabilityDate,
+        next_applicability_date = nextDate,
+        state_sha256 = state.StateSha256,
+        expression_iri = state.ExpressionIri,
+        publisher_work_iri = state.PublisherWorkIri,
+        publisher_legal_resource_iri = state.PublisherLegalResourceIri,
+        article_count = state.ArticleIdentities.Count,
+        stable_coordinate = StableCoordinate(state),
+        permalink = StateUrl(state),
+    };
+
+    /// <summary>
     /// R6 <c>article_history</c> for Luxembourg: the lineage of one publisher-minted article id
     /// through the publisher-dated states of one work, per language. One row per state that carries
     /// the anchor, in the reader's order; the states that do not carry it are listed as absent, so a

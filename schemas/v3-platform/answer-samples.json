@@ -400,7 +400,7 @@
         "verified_by": {
           "corpus_sha256": "\u003Cvaries-per-run\u003E",
           "index_sha256": "\u003Cvaries-per-run\u003E",
-          "registry_sha256": "13ac5f0c992ad71ad0524698966395873dabf4b5de6dcbb91a05bea0d559b0f1"
+          "registry_sha256": "36414644ba7318f8751e0e09e2a5a57e795c48a93f82db7f7aa9fdb73f8f449c"
         },
         "work_key": "loi-1991-08-10-n3"
       }
@@ -421,6 +421,10 @@
     },
     {
       "operation": "diff",
+      "reason": "sampled when a reader is built against it"
+    },
+    {
+      "operation": "dossier",
       "reason": "sampled when a reader is built against it"
     },
     {

@@ -199,6 +199,11 @@ public sealed class V3RefusalPayloadSamplesTests
         await DriveAsync(observed, mount, "provenance", "an identifier no work has", new { identifier = unknown, date, language = "fra" }, "identifier_unknown");
         await DriveAsync(observed, mount, "provenance", "a European identifier on a Luxembourg-only mount", new { identifier = european, date, language = "fra" }, "retrieval_mode_unavailable");
 
+        // dossier
+        await DriveAsync(observed, mount, "dossier", "a language not held", new { identifier = work, language = "eng" }, "language_not_available");
+        await DriveAsync(observed, mount, "dossier", "an identifier no work has", new { identifier = unknown, language = "fra" }, "identifier_unknown");
+        await DriveAsync(observed, mount, "dossier", "a European identifier on a Luxembourg-only mount", new { identifier = european, language = "fra" }, "retrieval_mode_unavailable");
+
         // coverage
         await DriveAsync(observed, mount, "coverage", "a language not held", new { language = "eng" }, "language_not_available");
     }
@@ -227,6 +232,7 @@ public sealed class V3RefusalPayloadSamplesTests
         await DriveAsync(observed, mount, "search", "no Luxembourg index", new { query = "loyer", language = "fra" }, "no_corpus_mounted");
         await DriveAsync(observed, mount, "coverage", "no Luxembourg index", new { }, "no_corpus_mounted");
         await DriveAsync(observed, mount, "provenance", "no Luxembourg index", new { identifier = work, date = "2024-01-01" }, "no_corpus_mounted");
+        await DriveAsync(observed, mount, "dossier", "no Luxembourg index", new { identifier = work }, "no_corpus_mounted");
     }
 
     /// <summary>Drives one served operation through the real handler and records the refusal, which must be the one named.</summary>

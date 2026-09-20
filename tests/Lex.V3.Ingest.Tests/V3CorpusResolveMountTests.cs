@@ -1633,6 +1633,30 @@ public sealed class V3CorpusResolveMountTests
         }
 
         /// <summary>
+        /// Adds title rows to the index's title table under the given work identifiers (the fixture's
+        /// publisher work IRI by default), one per call argument, in the order given, and re-stamps the
+        /// index. The kind is <c>title</c> or <c>title_short</c>; nothing else about a row is chosen here.
+        /// </summary>
+        public Task AddTitleRowsAsync(params (string? WorkIdentifier, string Expression, string Language, string Kind, string Title, string Evidence)[] rows) =>
+            MutateArticlesAsync(connection =>
+            {
+                foreach (var row in rows)
+                {
+                    using var insert = connection.CreateCommand();
+                    insert.CommandText = "INSERT INTO work_titles VALUES($work,$expression,$language,$title,$normalized,$date,$kind,$evidence)";
+                    insert.Parameters.AddWithValue("$work", row.WorkIdentifier ?? PublisherWid);
+                    insert.Parameters.AddWithValue("$expression", row.Expression);
+                    insert.Parameters.AddWithValue("$language", row.Language);
+                    insert.Parameters.AddWithValue("$title", row.Title);
+                    insert.Parameters.AddWithValue("$normalized", LuxembourgIndexBuilder.NormalizeTitle(row.Title));
+                    insert.Parameters.AddWithValue("$date", "2024-02-01");
+                    insert.Parameters.AddWithValue("$kind", row.Kind);
+                    insert.Parameters.AddWithValue("$evidence", row.Evidence);
+                    Assert.AreEqual(1, insert.ExecuteNonQuery());
+                }
+            });
+
+        /// <summary>
         /// Sets the gap tokens the corpus recorded for the fixture's member(s), as the JSON array the index
         /// stores, and re-stamps the index. The tokens are the corpus's own words and are never read back
         /// as anything but a string.
