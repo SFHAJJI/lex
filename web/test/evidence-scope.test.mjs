@@ -210,6 +210,14 @@ test("the pages noted beside a catch are sorted, and a name quoted mid-sentence 
   ]);
 });
 
+test("a finished sweep says how many it swept, over what, and how many it selected", async () => {
+  const { sweepSummary } = await import("../scripts/evidence-mutations.mjs");
+  assert.equal(sweepSummary(45, 45, false), "all 45 induced mutations were caught over the pages each declares.");
+  assert.equal(sweepSummary(45, 45, true), "all 45 induced mutations were caught over every page.");
+  // A selection says so, with both counts, so a one-mutation run cannot read as the whole sweep.
+  assert.equal(sweepSummary(1, 45, true), "all 1 induced mutations were caught over every page (1 of 45 selected).");
+});
+
 test("every page the build emits is one the matcher can read", async (t) => {
   const { pageOf } = await import("../scripts/evidence-mutations.mjs");
   const { readFile } = await import("node:fs/promises");

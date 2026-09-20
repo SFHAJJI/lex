@@ -883,6 +883,17 @@ export async function sweepWith({ mutations, prepare, run, full = FULL, log = co
   return failures;
 }
 
+/**
+ * What a finished sweep says it did: how many mutations, over what, and how many of the whole set
+ * were selected. Exported so the count a sweep reports is the count it swept, held by a test: the
+ * selection was dropped once between the filter and this line and nothing failed.
+ */
+export function sweepSummary(swept, total, full) {
+  const over = full ? "over every page" : "over the pages each declares";
+  const selection = swept === total ? "" : ` (${swept} of ${total} selected)`;
+  return `all ${swept} induced mutations were caught ${over}${selection}.`;
+}
+
 async function sweep() {
   // One private copy of dist, taken before the first mutation. Every mutation starts from it
   // rather than from the live dist: a build in the same checkout during the sweep (`npm run
@@ -891,8 +902,9 @@ async function sweep() {
   const base = await mkdtemp(join(tmpdir(), "lex-evidence-base-"));
   await cp(join(process.cwd(), "dist"), base, { recursive: true });
 
+  const swept = mutationsToSweep(MUTATIONS, process.env.LEX_EVIDENCE_ONLY);
   const failures = await sweepWith({
-    mutations: MUTATIONS,
+    mutations: swept,
     prepare: async () => {
       const root = await mkdtemp(join(tmpdir(), "lex-evidence-"));
       await cp(base, root, { recursive: true });
@@ -907,9 +919,7 @@ async function sweep() {
     console.error(`\n${failures} induced mutation(s) were not caught.`);
     process.exit(1);
   }
-  const over = FULL ? "over every page" : "over the pages each declares";
-  const selection = swept.length === MUTATIONS.length ? "" : ` (${swept.length} of ${MUTATIONS.length} selected)`;
-  console.log(`\nall ${swept.length} induced mutations were caught ${over}${selection}.`);
+  console.log(`\n${sweepSummary(swept.length, MUTATIONS.length, FULL)}`);
 }
 
 // Only when invoked directly, so the list can be imported and its declarations proven without
