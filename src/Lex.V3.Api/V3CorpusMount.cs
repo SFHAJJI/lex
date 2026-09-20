@@ -1,4 +1,6 @@
 using System.Globalization;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Lex.V3.Contracts;
@@ -422,7 +424,10 @@ internal sealed class V3CorpusMount : IDisposable
         "state_sha256 is a SHA-256 over the domain tag lex-v3-luxembourg-expression-state/1 and then, each as UTF-8 preceded by its " +
         "length as four bytes big-endian, the publisher, the work key, the applicability date, the expression, the publisher work IRI, " +
         "the publisher legal-resource IRI, the language, each rule-profile digest in sorted order and each article identity in sorted " +
-        "order; the reader recomputes it when the index is opened and refuses an index in which it does not match its row";
+        "order; the article identities are not carried here (they are article_identities in as_of's answer to the same request, and " +
+        "article_identities_sha256 is the SHA-256 of them in sorted order, each preceded by its length in the same way, so a caller can check " +
+        "the list it holds); this mount's own reader recomputes the state digest when the index is opened and refuses an index in which it " +
+        "does not match its row";
 
     internal const string ProvenanceSourcesNote =
         "object_ref_sha256 identifies the source object in the corpus; body_sha256 is the digest of the publisher bytes the corpus retained " +
@@ -510,6 +515,7 @@ internal sealed class V3CorpusMount : IDisposable
                 publisher_legal_resource_iri = state.PublisherLegalResourceIri,
                 rule_profile_sha256s = state.RuleProfileSha256s,
                 articles = state.ArticleIdentities.Count,
+                article_identities_sha256 = ArticleIdentitiesSha256(state.ArticleIdentities),
                 sources = _reader!.ResolveStateSources(state.StateSha256).Select(SourceRow).ToArray(),
             });
         }
@@ -547,6 +553,26 @@ internal sealed class V3CorpusMount : IDisposable
         return V3PlatformOperationOutcome.Success(
             Context("success", observedAt),
             new V3PlatformOperationResult(request, "provenance_chain", result.RootElement));
+    }
+
+    /// <summary>
+    /// The SHA-256 of a state's article identities in sorted order, each as UTF-8 preceded by its length as
+    /// four bytes big-endian, the encoding the state digest uses for the same identities, so a caller holding
+    /// the list (as_of carries it) can check it against this and finish the recomputation the derivation names.
+    /// </summary>
+    private static string ArticleIdentitiesSha256(IEnumerable<string> identities)
+    {
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        Span<byte> length = stackalloc byte[sizeof(int)];
+        foreach (var identity in identities.Order(StringComparer.Ordinal))
+        {
+            var bytes = Encoding.UTF8.GetBytes(identity);
+            System.Buffers.Binary.BinaryPrimitives.WriteInt32BigEndian(length, bytes.Length);
+            hash.AppendData(length);
+            hash.AppendData(bytes);
+        }
+
+        return Convert.ToHexStringLower(hash.GetHashAndReset());
     }
 
     /// <summary>

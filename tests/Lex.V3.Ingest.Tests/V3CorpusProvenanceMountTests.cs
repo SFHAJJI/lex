@@ -105,6 +105,22 @@ public sealed class V3CorpusProvenanceMountTests
         return Convert.ToHexStringLower(hash.GetHashAndReset());
     }
 
+    /// <summary>The list digest as the derivation sentence states it, written out here from that sentence alone.</summary>
+    private static string IdentitiesDigest(IEnumerable<string> identities)
+    {
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        foreach (var identity in identities.Order(StringComparer.Ordinal))
+        {
+            var bytes = Encoding.UTF8.GetBytes(identity);
+            var length = new byte[4];
+            System.Buffers.Binary.BinaryPrimitives.WriteInt32BigEndian(length, bytes.Length);
+            hash.AppendData(length);
+            hash.AppendData(bytes);
+        }
+
+        return Convert.ToHexStringLower(hash.GetHashAndReset());
+    }
+
     [TestMethod]
     public void TheProvenanceRouteIsTheServedBinding()
     {
@@ -197,6 +213,16 @@ public sealed class V3CorpusProvenanceMountTests
 
         // The same request to as_of names the same state: a caller moves from one to the other.
         var asOf = (await AsOfAsync(mount, identifier, fixture.ApplicabilityDate, "fra")).Result!.Value.GetProperty("states").EnumerateArray().Single();
+        // And a caller who holds nothing but as_of's list and this answer can finish the recomputation the
+        // derivation names: the list's digest is the one stated here, and the state digest follows from it.
+        var callersList = asOf.GetProperty("article_identities").EnumerateArray().Select(static i => i.GetString()!).ToArray();
+        Assert.AreEqual(state.GetProperty("article_identities_sha256").GetString(), IdentitiesDigest(callersList));
+        Assert.AreEqual(
+            state.GetProperty("state_sha256").GetString(),
+            RecomputeStateDigest(row.WorkKey, state.GetProperty("applicability_date").GetString()!,
+                state.GetProperty("expression_iri").GetString()!, state.GetProperty("publisher_work_iri").GetString()!,
+                state.GetProperty("publisher_legal_resource_iri").GetString()!, state.GetProperty("language").GetString()!,
+                state.GetProperty("rule_profile_sha256s").EnumerateArray().Select(static p => p.GetString()!).ToArray(), callersList));
         Assert.AreEqual(asOf.GetProperty("state_sha256").GetString(), state.GetProperty("state_sha256").GetString());
         Assert.AreEqual(asOf.GetProperty("permalink").GetString(), state.GetProperty("permalink").GetString());
         Assert.AreEqual(asOf.GetProperty("stable_coordinate").GetString(), state.GetProperty("stable_coordinate").GetString());
@@ -306,7 +332,7 @@ public sealed class V3CorpusProvenanceMountTests
             "not_held", "not_held[].item", "not_held[].reason",
             "publisher", "requested_date", "requested_identifier", "requested_language", "scope", "sources_note",
             "states", "states[].applicability_date", "states[].articles", "states[].expression_iri", "states[].language",
-            "states[].permalink", "states[].publisher_legal_resource_iri", "states[].publisher_work_iri",
+            "states[].article_identities_sha256", "states[].permalink", "states[].publisher_legal_resource_iri", "states[].publisher_work_iri",
             "states[].rule_profile_sha256s", "states[].sources", "states[].sources[].body_byte_length", "states[].sources[].body_receipt_sha256",
             "states[].sources[].body_sha256", "states[].sources[].gaps", "states[].sources[].object_ref_sha256", "states[].sources[].outcome",
             "states[].sources[].rights_disposition", "states[].stable_coordinate",
@@ -337,7 +363,10 @@ public sealed class V3CorpusProvenanceMountTests
             "state_sha256 is a SHA-256 over the domain tag lex-v3-luxembourg-expression-state/1 and then, each as UTF-8 preceded by its " +
             "length as four bytes big-endian, the publisher, the work key, the applicability date, the expression, the publisher work IRI, " +
             "the publisher legal-resource IRI, the language, each rule-profile digest in sorted order and each article identity in sorted " +
-            "order; the reader recomputes it when the index is opened and refuses an index in which it does not match its row",
+            "order; the article identities are not carried here (they are article_identities in as_of's answer to the same request, and " +
+            "article_identities_sha256 is the SHA-256 of them in sorted order, each preceded by its length in the same way, so a caller can check " +
+            "the list it holds); this mount's own reader recomputes the state digest when the index is opened and refuses an index in which it " +
+            "does not match its row",
             body.GetProperty("derivation").GetString());
         Assert.AreEqual(
             "object_ref_sha256 identifies the source object in the corpus; body_sha256 is the digest of the publisher bytes the corpus retained " +

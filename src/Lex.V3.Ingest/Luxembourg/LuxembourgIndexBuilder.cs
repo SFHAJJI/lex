@@ -600,7 +600,7 @@ public static class LuxembourgIndexBuilder
         string workKey,
         string applicabilityDate,
         string expressionIri,
-        string publisherWid,
+        string publisherWorkIri,
         string publisherLegalResourceIri,
         string language,
         IReadOnlyList<string> profiles,
@@ -621,7 +621,7 @@ public static class LuxembourgIndexBuilder
         Append(hash, workKey);
         Append(hash, applicabilityDate);
         Append(hash, expressionIri);
-        Append(hash, publisherWid);
+        Append(hash, publisherWorkIri);
         Append(hash, publisherLegalResourceIri);
         Append(hash, language);
         foreach (var profile in profiles) Append(hash, profile);
