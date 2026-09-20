@@ -269,6 +269,78 @@ public sealed class V3CorpusInForceOnMountTests
     }
 
     [TestMethod]
+    public async Task ANamedWorksTwinsAreJudgedInTheLanguageAskedForAndEveryAmbiguousLanguageIsNamed()
+    {
+        var fixture = await MountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        var german = await fixture.AddSecondLanguageStateAsync(fixture.ApplicabilityDate);
+        var twinDate = Shift(fixture.ApplicabilityDate, 400);
+        var asked = Shift(twinDate, 10);
+        var germanLater = await fixture.AddStateAsync(twinDate, "de-later", german.ExpressionIri);
+        var germanTwin = await fixture.AddStateAsync(twinDate, "de-twin", german.ExpressionIri);
+        var identifier = $"/lu-legilux/{fixture.WorkKey}";
+
+        async Task<V3Envelope> AsOfAsync(V3CorpusMount mount, string? language)
+        {
+            var parameters = new Dictionary<string, object> { ["identifier"] = identifier, ["date"] = asked };
+            if (language is not null)
+            {
+                parameters["language"] = language;
+            }
+
+            var context = await PostAsync(mount, AsOfRawTarget, JsonSerializer.Serialize(new { operation_id = "as_of", parameters }));
+            return V3EnvelopeJson.ParseAndVerify(ResponseBytes(context), V3OperationRegistry.Reviewed);
+        }
+
+        static string[] Candidates(V3Envelope refused) =>
+            refused.Refusal!.HelpfulPayload.GetProperty("candidates").EnumerateArray().Select(static v => v.GetString()!).ToArray();
+
+        // German has twins on the date and French has one state. The language asked for is the
+        // question: French answers, German refuses, and as_of agrees on both.
+        using (var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None))
+        {
+            Assert.IsNotNull(mount);
+            var french = await SelectionAsync(mount, asked, identifier: identifier, language: "fra");
+            Assert.AreEqual(V3Verdicts.Answer, french.Verdict, "Another language's twins do not refuse the language asked for.");
+            Assert.AreEqual(fixture.StateSha256,
+                french.Result!.Value.GetProperty("states").EnumerateArray().Single().GetProperty("state").GetProperty("state_sha256").GetString());
+            Assert.AreEqual(V3Verdicts.Answer, (await AsOfAsync(mount, "fra")).Verdict);
+
+            var germanOnly = await SelectionAsync(mount, asked, identifier: identifier, language: "deu");
+            Assert.AreEqual("ambiguous_version", germanOnly.Refusal!.Code);
+            var asOfGerman = await AsOfAsync(mount, "deu");
+            Assert.AreEqual(asOfGerman.Refusal!.HelpfulPayload.GetRawText(), germanOnly.Refusal.HelpfulPayload.GetRawText());
+            Assert.AreEqual(2, Candidates(germanOnly).Length);
+            Assert.IsTrue(Candidates(germanOnly).All(candidate =>
+                candidate.EndsWith(germanLater.StateSha256, StringComparison.Ordinal) ||
+                candidate.EndsWith(germanTwin.StateSha256, StringComparison.Ordinal)));
+        }
+
+        // Now French has twins too. With no language asked for, every ambiguous language's candidates
+        // are named, all four in ordinal order, as as_of names them.
+        var frenchLater = await fixture.AddStateAsync(twinDate, "later");
+        var frenchTwin = await fixture.AddStateAsync(twinDate, "twin");
+        using (var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None))
+        {
+            Assert.IsNotNull(mount);
+            var both = await SelectionAsync(mount, asked, identifier: identifier);
+            Assert.AreEqual("ambiguous_version", both.Refusal!.Code);
+            var candidates = Candidates(both);
+            Assert.AreEqual(4, candidates.Length);
+            CollectionAssert.AreEqual(candidates.Order(StringComparer.Ordinal).ToArray(), candidates);
+            foreach (var state in new[] { germanLater, germanTwin, frenchLater, frenchTwin })
+            {
+                Assert.AreEqual(1, candidates.Count(candidate => candidate.EndsWith(state.StateSha256, StringComparison.Ordinal)));
+            }
+
+            var asOfBoth = await AsOfAsync(mount, null);
+            Assert.AreEqual("ambiguous_version", asOfBoth.Refusal!.Code);
+            Assert.AreEqual(asOfBoth.Refusal.HelpfulPayload.GetRawText(), both.Refusal.HelpfulPayload.GetRawText(),
+                "The two operations give the same refusal payload for the same work and date.");
+        }
+    }
+
+    [TestMethod]
     public async Task WithAWorkNamedTheCursorThatNamesThatWorkServesNothingMore()
     {
         var fixture = await MountedFixture.CreateAsync();
