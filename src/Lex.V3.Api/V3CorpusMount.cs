@@ -1577,6 +1577,7 @@ internal sealed class V3CorpusMount : IDisposable
         ["publisher_universe", "how many acts the publisher holds, or how many of them this mount lacks: the mount records only what was admitted"],
         ["never_consolidated_acts", "the count of as-published acts never consolidated is a corpus-level statement this mount does not carry"],
         ["first_sighting_and_observation_times", "no observation time or first-sighting event is held, so nothing here says when anything was first seen"],
+        ["build_time_and_currency", "no build time of the corpus or index is held, so nothing here says how current these counts are; the corpus and index digests name exactly which artifacts are mounted"],
         ["legal_status", "no status, repeal or commencement fact is held; nothing here speaks of legal status"],
     ];
 
