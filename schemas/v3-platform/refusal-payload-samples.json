@@ -1,0 +1,212 @@
+{
+  "not_produced": [
+    "advice_boundary",
+    "derivation_refused",
+    "format_not_available",
+    "not_transposable",
+    "out_of_corpus_scope",
+    "rate_limited",
+    "snapshot_unknown",
+    "text_not_available",
+    "text_withheld",
+    "upstream_unreachable"
+  ],
+  "produced": [
+    {
+      "code": "ambiguous_identifier",
+      "optional_payload_keys": [],
+      "payload": {
+        "candidates": [
+          "fixture-work-identifier",
+          "fixture-work-identifier-two"
+        ],
+        "match_reason": "prefix",
+        "requested_identifier": "Reglement sur l\u0027epreuve"
+      },
+      "produced_by": [
+        "resolve"
+      ]
+    },
+    {
+      "code": "ambiguous_version",
+      "optional_payload_keys": [
+        "bound"
+      ],
+      "payload": {
+        "bound": "from",
+        "candidates": [
+          "/lu-legilux/loi-1991-08-10-n3/2026-04-11--6c164597ee18b9c4ca661f4732ceb947975d5a6e6f8b712ac6b333263e804f35",
+          "/lu-legilux/loi-1991-08-10-n3/2026-04-11--b1bf4908e5a8193a1bed3573c007566f58210a79312046f1b1556eb322616b38"
+        ],
+        "requested_date": "2026-04-11"
+      },
+      "produced_by": [
+        "as_of",
+        "diff",
+        "in_force_on",
+        "search"
+      ]
+    },
+    {
+      "code": "anchor_not_in_version",
+      "optional_payload_keys": [],
+      "payload": {
+        "do_not_fall_back_to_full_text_search": true,
+        "nearest_anchors": [
+          "art_10",
+          "art_11",
+          "art_12",
+          "art_13",
+          "art_14",
+          "art_15",
+          "art_16",
+          "art_17",
+          "art_18",
+          "art_19"
+        ],
+        "requested_anchor": "art_no_such_anchor"
+      },
+      "produced_by": [
+        "article_history"
+      ]
+    },
+    {
+      "code": "identifier_unknown",
+      "optional_payload_keys": [],
+      "payload": {
+        "official_search_actions": [
+          "search"
+        ],
+        "requested_identifier": "/lu-legilux/no-such-work",
+        "what_would_answer": "a Luxembourg work identifier present in the mounted index"
+      },
+      "produced_by": [
+        "article_history",
+        "as_of",
+        "changes_in_period",
+        "diff",
+        "in_force_on",
+        "resolve",
+        "search",
+        "timeline"
+      ]
+    },
+    {
+      "code": "language_not_available",
+      "optional_payload_keys": [],
+      "payload": {
+        "available_languages": [
+          "deu",
+          "fra"
+        ],
+        "requested_language": "eng"
+      },
+      "produced_by": [
+        "article_history",
+        "as_of",
+        "changes_in_period",
+        "coverage",
+        "diff",
+        "in_force_on",
+        "search",
+        "timeline"
+      ]
+    },
+    {
+      "code": "no_corpus_mounted",
+      "optional_payload_keys": [],
+      "payload": {
+        "required_corpus": "lu"
+      },
+      "produced_by": [
+        "article_history",
+        "as_of",
+        "changes_in_period",
+        "coverage",
+        "diff",
+        "in_force_on",
+        "search",
+        "timeline"
+      ]
+    },
+    {
+      "code": "no_version_for_date",
+      "optional_payload_keys": [
+        "bound"
+      ],
+      "payload": {
+        "bound": "from",
+        "history_begins": "2024-02-01",
+        "nearest_earlier": null,
+        "nearest_later": "2024-02-01",
+        "requested_date": "1900-01-01"
+      },
+      "produced_by": [
+        "as_of",
+        "diff",
+        "in_force_on",
+        "search"
+      ]
+    },
+    {
+      "code": "pinned_digest_mismatch",
+      "optional_payload_keys": [],
+      "payload": {
+        "current_digest": "5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a",
+        "current_hash_pinned_url": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a",
+        "requested_digest": "5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e30",
+        "rule_profile_sha256s": [
+          "70e926111b25a4d364e96b679de0baaa090a869175a82d42e0052572804cf42e",
+          "dd32d9a59ea33b8c9e9cd51b7b2657a6fa2b716ad00e35db075416ba4cd38a9b"
+        ],
+        "stable_coordinate": "/lu-legilux/loi-1991-08-10-n3/2024-02-01"
+      },
+      "produced_by": [
+        "resolve"
+      ]
+    },
+    {
+      "code": "profiles_differ",
+      "optional_payload_keys": [],
+      "payload": {
+        "language": "fra",
+        "left": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a",
+        "left_profile": [
+          "70e926111b25a4d364e96b679de0baaa090a869175a82d42e0052572804cf42e",
+          "dd32d9a59ea33b8c9e9cd51b7b2657a6fa2b716ad00e35db075416ba4cd38a9b"
+        ],
+        "right": "/lu-legilux/loi-1991-08-10-n3/2025-03-07--01c1c6f7bd7ebb3677993e3ee477ea6d36f0b6bc70bbfcb72c338e10c9b4791e",
+        "right_profile": [
+          "70e926111b25a4d364e96b679de0baaa090a869175a82d42e0052572804cf42e",
+          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "dd32d9a59ea33b8c9e9cd51b7b2657a6fa2b716ad00e35db075416ba4cd38a9b"
+        ]
+      },
+      "produced_by": [
+        "diff"
+      ]
+    },
+    {
+      "code": "retrieval_mode_unavailable",
+      "optional_payload_keys": [],
+      "payload": {
+        "available_modes": [
+          "r0_exact_coordinate"
+        ],
+        "requested_mode": "r6_article_history"
+      },
+      "produced_by": [
+        "article_history",
+        "as_of",
+        "changes_in_period",
+        "diff",
+        "in_force_on",
+        "resolve",
+        "search",
+        "timeline"
+      ]
+    }
+  ],
+  "publisher": "lu-legilux",
+  "schema": "lex-v3-refusal-payload-samples/1"
+}

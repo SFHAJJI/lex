@@ -1633,6 +1633,35 @@ public sealed class V3CorpusResolveMountTests
         }
 
         /// <summary>
+        /// Sets the gap tokens the corpus recorded for the fixture's member(s), as the JSON array the index
+        /// stores, and re-stamps the index. The tokens are the corpus's own words and are never read back
+        /// as anything but a string.
+        /// </summary>
+        public Task SetMemberGapsAsync(string gapsJson) =>
+            MutateArticlesAsync(connection =>
+            {
+                using var set = connection.CreateCommand();
+                set.CommandText = "UPDATE members SET gaps_json=$gaps";
+                set.Parameters.AddWithValue("$gaps", gapsJson);
+                Assert.IsGreaterThan(0, set.ExecuteNonQuery());
+            });
+
+        /// <summary>
+        /// Sets or clears (null) the publisher's article-level applicability date of one article of one
+        /// expression, and re-stamps the index and its capability manifest.
+        /// </summary>
+        public Task SetArticleDateAsync(string expressionIri, string publisherId, string? date) =>
+            MutateArticlesAsync(connection =>
+            {
+                using var set = connection.CreateCommand();
+                set.CommandText = "UPDATE articles SET applicability_date=$date WHERE expression_iri=$expression AND publisher_id=$id";
+                set.Parameters.AddWithValue("$date", (object?)date ?? DBNull.Value);
+                set.Parameters.AddWithValue("$expression", expressionIri);
+                set.Parameters.AddWithValue("$id", publisherId);
+                Assert.AreEqual(1, set.ExecuteNonQuery());
+            });
+
+        /// <summary>
         /// Adds one title of the fixture's work in <paramref name="language"/> to one expression, so the
         /// index measures a title cell for that language whatever its articles hold.
         /// </summary>
