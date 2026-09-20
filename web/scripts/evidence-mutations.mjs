@@ -319,7 +319,7 @@ export const MUTATIONS = [
     // S5-A10: translation is never the default view. The trust surface carries exactly one
     // unofficial rendering; opening it in the served markup is the defect in its plainest form.
     name: "an unofficial rendering served open, so it is the default view",
-    pages: ["reading.html", "trust-surface.html"],
+    pages: ["trust-surface.html"],
     expect: /unofficial rendering 1 of 1 is shown by default \(open true/i,
     async apply(root) {
       await replaceOnce(
@@ -332,7 +332,7 @@ export const MUTATIONS = [
   {
     // The shape this slice replaced: the rendering in a plain section, visible with no action.
     name: "an unofficial rendering taken out of its disclosure",
-    pages: ["reading.html", "trust-surface.html"],
+    pages: ["trust-surface.html"],
     expect: /unofficial rendering 1 of 1 is a <section>, not a closed disclosure/i,
     async apply(root) {
       await replaceOnce(
@@ -363,7 +363,7 @@ export const MUTATIONS = [
     // The control keeps its icon and heading and loses the word. A reader then opens a body that
     // is not the law without having been told so first.
     name: "the UNOFFICIAL label removed from the control that opens a rendering",
-    pages: ["reading.html", "trust-surface.html"],
+    pages: ["trust-surface.html"],
     expect: /the control that opens unofficial rendering 1 of 1 does not say UNOFFICIAL/i,
     async apply(root) {
       await replaceOnce(
@@ -377,7 +377,7 @@ export const MUTATIONS = [
     // Out of the Tab order. Focus by script still lands on it, which is why the probe also
     // requires a tab stop; without that this mutation would pass.
     name: "the control that opens a rendering taken out of the Tab order",
-    pages: ["reading.html", "trust-surface.html"],
+    pages: ["trust-surface.html"],
     expect: /the UNOFFICIAL control of unofficial rendering 1 of 1 cannot take keyboard focus/i,
     async apply(root) {
       await replaceOnce(
@@ -391,7 +391,7 @@ export const MUTATIONS = [
     // The second of two renderings out of the Tab order. The first version of the probe drove only
     // the first summary on a page, so this passed every gate while the load-time checks held.
     name: "the second rendering's control taken out of the Tab order",
-    pages: ["reading.html", "trust-surface.html"],
+    pages: ["reading.html"],
     expect: /the UNOFFICIAL control of unofficial rendering 2 of 2 cannot take keyboard focus/i,
     async apply(root) {
       await replaceOnce(
