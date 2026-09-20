@@ -129,3 +129,94 @@ test('the validator is the single source both renderers consult', () => {
   assert.equal(react(GOOD).includes(card.workIdentifier), true);
   assert.equal(renderDossier(GOOD).includes(card.workIdentifier), true);
 });
+
+test('an unstated flag is declared identically by both renderers, and as a chip by neither', () => {
+  // The rule that decides this used to live twice: once in the string renderer and once, written
+  // out by hand, in the React port, against that file's own header. It is decided once now, and
+  // this is what says so -- if the decision reached one surface and missed the other, the two
+  // assertions below could not both hold.
+  const props = {
+    ...GOOD,
+    status: { binding_status: null, awaiting: 'the publisher states it as inForceStatus' },
+  };
+  for (const [name, html] of [['react', react(props)], ['string', renderDossier(props)]]) {
+    assert.equal(html.includes(NOT_INGESTED), true, `${name} did not say the flag is unstated`);
+    assert.equal(
+      html.includes('the publisher states it as inForceStatus'),
+      true,
+      `${name} did not say what the flag is waiting for`,
+    );
+    // A caption qualifies a chip. With no chip it qualifies nothing, which is the exact phrase
+    // the old error used against the absence it was itself causing.
+    assert.equal(html.includes(STATUS_CAPTION), false, `${name} printed a caption with no chip`);
+    assert.equal(
+      html.includes('dossier-status-chip'),
+      false,
+      `${name} rendered an unstated flag as a chip`,
+    );
+  }
+
+  // And both refuse an absence that does not say what it awaits.
+  const silent = { ...GOOD, status: { binding_status: null } };
+  assert.throws(() => react(silent), /does not say what it is waiting for/);
+  assert.throws(() => renderDossier(silent), /does not say what it is waiting for/);
+});
+
+test('an unstated document type is declared by both renderers, and omission refused by both', () => {
+  const props = {
+    ...GOOD,
+    identity: {
+      ...IDENTITY,
+      document_type: null,
+      document_type_awaiting: 'the publisher states it as rdf:type on the work',
+    },
+  };
+  for (const [name, html] of [['react', react(props)], ['string', renderDossier(props)]]) {
+    assert.equal(html.includes('dossier-type-absent'), true, `${name} did not mark the type absent`);
+    assert.equal(
+      html.includes('the publisher states it as rdf:type on the work'),
+      true,
+      `${name} did not say where the publisher keeps the type`,
+    );
+  }
+
+  // Declared absence is not omission: a producer that forgot the field still fails, in both.
+  for (const bad of [undefined, '']) {
+    const broken = { ...GOOD, identity: { ...IDENTITY, document_type: bad } };
+    assert.throws(() => react(broken), /names the publisher document type it was given/);
+    assert.throws(() => renderDossier(broken), /names the publisher document type it was given/);
+  }
+});
+
+test('a forgotten field is refused by both renderers even when the awaiting string is there', () => {
+  // The writer seat's F1. Every other refused case in these files also lacks the awaiting string,
+  // so a rule that accepted a missing key whenever an awaiting string sat beside it passed all of
+  // them. The `=== null` that separates "forgotten" from "states none" was held by a comment.
+  const withAwaiting = { ...GOOD, status: { awaiting: 'the publisher states it as inForceStatus' } };
+  assert.throws(() => react(withAwaiting), /a strip with no flag is a caption about nothing/);
+  assert.throws(() => renderDossier(withAwaiting), /a strip with no flag is a caption about nothing/);
+
+  const { document_type: _absent, ...noType } = IDENTITY;
+  const typeMissing = {
+    ...GOOD,
+    identity: { ...noType, document_type_awaiting: 'the publisher states it as rdf:type' },
+  };
+  assert.throws(() => react(typeMissing), /names the publisher document type it was given/);
+  assert.throws(() => renderDossier(typeMissing), /names the publisher document type it was given/);
+});
+
+test('the two absence strings reach the page as text in both renderers', () => {
+  // The writer seat's F2: both new fields are values the platform sends, and a mutant printing
+  // either unescaped survived. React escapes by construction; the string renderer does not, and
+  // the point of asserting both is that the pair must not diverge on it.
+  const hostile = '<img src=x onerror=alert(1)> & more';
+  for (const props of [
+    { ...GOOD, status: { binding_status: null, awaiting: hostile } },
+    { ...GOOD, identity: { ...IDENTITY, document_type: null, document_type_awaiting: hostile } },
+  ]) {
+    for (const [name, html] of [['react', react(props)], ['string', renderDossier(props)]]) {
+      assert.equal(html.includes('<img'), false, `${name} let an absence string through as markup`);
+      assert.equal(html.includes('&lt;img'), true, `${name} did not render the text`);
+    }
+  }
+});

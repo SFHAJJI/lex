@@ -4,11 +4,15 @@
 // applied by `validateDossier`. This file decides how a validated dossier looks and re-derives
 // nothing.
 //
-// Two rules are visible in the markup rather than in the validator, and both are load-bearing.
-// The status chip cannot appear without its caption, because the caption is the only reason the
-// chip is allowed on the page at all: a held state applicable before entry into force carries
-// `in_force`, and without the caption that chip is simply false. And the title carries its own
+// One rule is visible in the markup rather than in the validator: the title carries its own
 // language, because the chrome around it is often another one and the title is not translated.
+//
+// The status chip's rules used to be a second one, re-derived here beside a copy in the string
+// renderer. That was this header being wrong about its own file, and it cost exactly what a
+// duplicated rule costs: a change could reach one surface and miss the other with nothing to say
+// so. `validateDossier` decides the strip now and both renderers lay out the decision. What stays
+// true either way is why the chip needs its caption -- a held state applicable before entry into
+// force carries `in_force`, and without the caption that chip is simply false.
 
 import {
   DATE_ROLES,
@@ -26,8 +30,6 @@ const ROLE_LABEL = new Map([
   ['application', 'application'],
   ['observed_from', 'first observed'],
 ]);
-
-const PUBLISHER_FLAG = /^[a-z][a-z0-9_]*$/;
 
 /** One date row. An absent date is declared, never omitted. */
 function DateRow({ row, index }) {
@@ -82,25 +84,27 @@ function DateRow({ row, index }) {
   );
 }
 
-/** The publisher's flag, and the sentence that makes it readable. */
-function StatusStrip({ status }) {
-  if (typeof status?.binding_status !== 'string' || status.binding_status.length === 0) {
-    throw new Error(
-      'the status strip carries the publisher flag verbatim; this is the one screen where it ' +
-        'belongs, and a strip with no flag is a caption about nothing',
-    );
-  }
-  if (!PUBLISHER_FLAG.test(status.binding_status)) {
-    throw new Error(
-      `${JSON.stringify(status.binding_status)} is not a bare publisher flag token; a value ` +
-        "this service derived, printed under a caption calling it the publisher's, is the " +
-        'assertion that caption exists to prevent',
+/**
+ * The publisher's flag, and the sentence that makes it readable -- or, where the publisher states
+ * no flag, the absence said out loud.
+ *
+ * This used to re-derive the flag's rules from `PUBLISHER_FLAG` beside a copy in the string
+ * renderer, against this file's own header. It reads the decision now, so a change to the rule
+ * cannot reach one surface and miss the other.
+ */
+function StatusStrip({ strip }) {
+  if (strip.unstated) {
+    return (
+      <section className="dossier-status dossier-status-absent">
+        <p className="dossier-status-unstated">current-state flag: {NOT_INGESTED}.</p>
+        <p className="dossier-status-awaiting">{strip.awaiting}</p>
+      </section>
     );
   }
   return (
     <section className="dossier-status">
       <p className="dossier-status-chip">
-        <code>{status.binding_status}</code>
+        <code>{strip.flag}</code>
       </p>
       <p className="dossier-status-caption">{STATUS_CAPTION}</p>
     </section>
@@ -184,12 +188,18 @@ export function Dossier({ identity, dates, status, coverage, slots = [] }) {
         <h2 className="dossier-title" lang={card.identity.title_language}>
           {card.identity.title}
         </h2>
-        <p className="dossier-type">{card.identity.document_type}</p>
+        {card.typeUnstated ? (
+          <p className="dossier-type dossier-type-absent">
+            document type: {NOT_INGESTED}. {card.identity.document_type_awaiting}
+          </p>
+        ) : (
+          <p className="dossier-type">{card.identity.document_type}</p>
+        )}
         <p className="dossier-identifier">
           <code>{card.workIdentifier}</code>
         </p>
       </header>
-      <StatusStrip status={card.status} />
+      <StatusStrip strip={card.statusStrip} />
       <h3>Dates</h3>
       <div className="dossier-scroll" role="region" tabIndex={0} aria-label="Date table, scrollable">
         <table className="dossier-dates">
