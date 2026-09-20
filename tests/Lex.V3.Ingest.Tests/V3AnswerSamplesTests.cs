@@ -159,10 +159,16 @@ public sealed class V3AnswerSamplesTests
         // did not. It does now: the paths are compared one at a time and the failure is the path.
         var firstByPath = Flatten(firstRaw);
         var secondByPath = Flatten(secondRaw);
-        CollectionAssert.AreEquivalent(
-            firstByPath.Keys.ToArray(),
-            secondByPath.Keys.ToArray(),
-            "Two observations of the same request carry different paths.");
+        // Named, not counted. `AreEquivalent` reports "Expected:<346>. Actual:<345>" and no path, which
+        // is the gap this commit exists to close, one class along.
+        var onlyFirst = firstByPath.Keys.Except(secondByPath.Keys, StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal).ToArray();
+        var onlySecond = secondByPath.Keys.Except(firstByPath.Keys, StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal).ToArray();
+        Assert.IsEmpty(
+            onlyFirst.Concat(onlySecond).ToArray(),
+            $"Two observations of the same request carry different paths. Only in the first: "
+                + $"{string.Join(", ", onlyFirst)}. Only in the second: {string.Join(", ", onlySecond)}.");
         var moved = firstByPath.Keys
             .Where(path => !string.Equals(firstByPath[path], secondByPath[path], StringComparison.Ordinal))
             .Where(path => !VariesPerRun.Contains(NormalisePath(path), StringComparer.Ordinal))
@@ -172,6 +178,24 @@ public sealed class V3AnswerSamplesTests
             moved,
             $"These paths differ between two observations and are not normalised: {string.Join(", ", moved)}. "
                 + "Add each to VariesPerRun with its reason, or find why it moved.");
+
+        // AND THEN THE WHOLE DOCUMENT, which is the comparison the named one replaced and must not
+        // replace. `Walk` records LEAVES: an empty array and an empty object have none, and a null is
+        // skipped, so a member that is `[]` in one observation and `null` in the other has the same
+        // (absent) path in both and no value to differ. The named comparison cannot see it; the string
+        // comparison renders both documents and can. The writer seat proved it with a mutant that their
+        // base killed and this head survived.
+        //
+        // So the two are kept in this order on purpose: the named one runs first because its message is
+        // the useful one, and this one runs after because its reach is the complete one. A repair that
+        // is better at explaining and worse at detecting is not a repair, and that is what this was
+        // until the mutant said so.
+        Assert.AreEqual(
+            BuildDocument(firstRaw),
+            BuildDocument(secondRaw),
+            "Two observations differ in a way the path comparison above cannot name -- an empty container "
+                + "or a null that changed shape. Render both documents and diff them; the paths above are "
+                + "equal, so it is a container and not a value.");
 
         // AND THE CONVERSE, which is the direction this list was weak in. Nothing made a listed field
         // EARN its place, so two entries that never move sat here hiding values the file could pin, and
