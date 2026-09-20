@@ -1323,7 +1323,11 @@ public sealed class LuxembourgIndexReader : IDisposable
         // The scan has its own read-only connection on the same immutable file and does not take the
         // reader's gate. A search reads every article of a language, and holding the one shared
         // connection for that long would stall every other operation on the mount behind it, which a
-        // one-character query would be the cheapest way to do.
+        // one-character query would be the cheapest way to do. The path is the reader's private copy,
+        // the file whose bytes were hashed and verified when the reader was opened (both open routes
+        // copy to a private temporary path and hash that copy), so this connection reads what the shared
+        // one reads; a local process able to rewrite that file could alter either, which is no wider
+        // than it was.
         {
             using var connection = LuxembourgIndexBuilder.Open(_path, SqliteOpenMode.ReadOnly);
             using var command = connection.CreateCommand();
@@ -1332,6 +1336,13 @@ public sealed class LuxembourgIndexReader : IDisposable
                 // The state of an article is found by exact element of the state's identity list, as the
                 // sibling queries do, and not by a substring of the JSON text: the join no longer rests on
                 // every value in the column being a 64-character digest (which OpenAndVerify does require).
+                // json_each yields one row per element, so this is one row per article only while no state
+                // lists an identity twice and no article sits in two states. The index cannot be opened
+                // otherwise: ValidateStates refuses a list that is not its own Distinct().Order(), a list
+                // that is not exactly the expression's articles (whose identity is the articles table's
+                // PRIMARY KEY), and an article claimed by two states. There is deliberately no DISTINCT
+                // here: it would turn a broken invariant into a plausible answer, and the refusal at open
+                // is the loud form. The refusals are pinned in LuxembourgIndexBuilderTests.
                 "FROM states s, json_each(s.article_identities_json) j " +
                 "JOIN articles a ON a.article_identity_sha256 = j.value AND a.language = s.language " +
                 "WHERE a.language=$language" +
