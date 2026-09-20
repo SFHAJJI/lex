@@ -65,7 +65,10 @@ test('the chrome locales are the four, and PT joins only the refusal templates',
 
 test('localization_unavailable is not slipped into the closed refusal registry', () => {
   assert.ok(!REFUSAL_CODES.includes(LOCALIZATION_UNAVAILABLE));
-  assert.equal(REFUSAL_CODES.length, 19);
+  // Twenty since `pinned_digest_mismatch` was added to match the platform's own registry. The
+  // count is a guard against the list growing quietly; which codes are in it is asserted against
+  // the C# registry in refusal-registry-parity.test.mjs.
+  assert.equal(REFUSAL_CODES.length, 20);
 });
 
 test('a source master is served as a source master, never as a human review', () => {

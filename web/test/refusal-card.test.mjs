@@ -65,9 +65,15 @@ const CANDIDATES = [
   candidate('2004-01-01', HASH_B, '2003-12-15'),
 ];
 
-test('the registry is closed at the nineteen product-spec codes', () => {
-  assert.equal(REFUSAL_CODES.length, 19);
-  assert.equal(new Set(REFUSAL_CODES).size, 19, 'a code is listed twice');
+test('the registry is closed at the twenty the platform declares', () => {
+  // Nineteen until the platform closed its own registry at twenty on 2026-09-17 and this list was
+  // left behind, so `pinned_digest_mismatch` -- which the mount produces -- reached a reader that
+  // refuses to render a code it cannot name. The count is asserted here and the membership is
+  // asserted against the C# registry itself in refusal-registry-parity.test.mjs, so the next code
+  // cannot drift in silently either.
+  assert.equal(REFUSAL_CODES.length, 20);
+  assert.equal(new Set(REFUSAL_CODES).size, 20, 'a code is listed twice');
+  assert.ok(REFUSAL_CODES.includes('pinned_digest_mismatch'));
   for (const code of ['identifier_unknown', 'no_version_for_date', 'advice_boundary']) {
     assert.ok(REFUSAL_CODES.includes(code));
   }
@@ -239,8 +245,7 @@ test('the ambiguous_version interstitial never defaults and never mislabels a ca
         code: 'ambiguous_version',
         sentence: 'Two states cover that date.',
         payload: {
-          publisher: 'preview-synthetic',
-          work: 'synthetic-preview-work',
+          requested_date: '2004-06-01',
           candidates: [CANDIDATES[0]],
         },
       }),
@@ -253,8 +258,7 @@ test('the ambiguous_version interstitial never defaults and never mislabels a ca
         code: 'ambiguous_version',
         sentence: 'Two states cover that date.',
         payload: {
-          publisher: 'preview-synthetic',
-          work: 'synthetic-preview-work',
+          requested_date: '2004-06-01',
           candidates: [{ ...CANDIDATES[0], selected: true }, CANDIDATES[1]],
         },
       }),
@@ -268,8 +272,7 @@ test('the ambiguous_version interstitial never defaults and never mislabels a ca
         code: 'ambiguous_version',
         sentence: 'Two states cover that date.',
         payload: {
-          publisher: 'preview-synthetic',
-          work: 'synthetic-preview-work',
+          requested_date: '2004-06-01',
           candidates: [{ ...CANDIDATES[0], href: CANDIDATES[1].href }, CANDIDATES[1]],
         },
       }),
@@ -283,8 +286,7 @@ test('the ambiguous_version interstitial never defaults and never mislabels a ca
         code: 'ambiguous_version',
         sentence: 'Two states cover that date.',
         payload: {
-          publisher: 'preview-synthetic',
-          work: 'synthetic-preview-work',
+          requested_date: '2004-06-01',
           candidates: [{ ...CANDIDATES[0], hash: HASH_A.slice(0, 8) }, CANDIDATES[1]],
         },
       }),
@@ -303,18 +305,18 @@ test('profiles_differ names both profiles and says it cannot be overridden', () 
       renderRefusalCard({
         code: 'profiles_differ',
         sentence: 'The profiles differ.',
-        payload: { profiles: ['pdf-lu/1'] },
+        payload: { left_profile: ['pdf-lu/1'] },
       }),
-    /names both profiles/,
+    /must carry right_profile/,
   );
   assert.throws(
     () =>
       renderRefusalCard({
         code: 'profiles_differ',
         sentence: 'The profiles differ.',
-        payload: { profiles: ['pdf-lu/1', 'pdf-lu/1'] },
+        payload: { left_profile: ['pdf-lu/1'], right_profile: ['pdf-lu/1'] },
       }),
-    /one profile named twice/,
+    /one set of profiles named on both sides/,
   );
 });
 
@@ -503,10 +505,15 @@ test('the payload contract covers the registry, with no code left undeclared', (
   for (const [code, requirement] of Object.entries(REQUIRED_PAYLOAD)) {
     assert.ok(requirement.basis.length > 20, `${code} declares no basis`);
     if (requirement.keys.length > 0) {
+      // A numbered architect document, or the reviewed operation registry itself. The rule is
+      // that a requirement traces to a source rather than to somebody's memory of one, and the
+      // registry is the stronger of the two sources: it is the contract the platform enforces,
+      // its bytes are digest-pinned, and `registry_sha256` travels in every envelope. A prose
+      // line can describe what a refusal ought to carry; the registry is what it does carry.
       assert.match(
         requirement.basis,
-        /^3[0-9]-[a-z0-9-]+/,
-        `${code} requires keys without citing a numbered architect document`,
+        /^(3[0-9]-[a-z0-9-]+|lex-v3-operation-registry\/1:)/,
+        `${code} requires keys without citing a numbered architect document or the registry`,
       );
       assert.ok(!requirement.unspecified, `${code} is both specified and unspecified`);
     } else {
@@ -541,8 +548,7 @@ test('a candidate link is bound to the whole coordinate, not to a date and a has
         code: 'ambiguous_version',
         sentence: 'Two states cover that date.',
         payload: {
-          publisher: 'preview-synthetic',
-          work: 'synthetic-preview-work',
+          requested_date: '2004-06-01',
           candidates: [{ ...CANDIDATES[0], href: elsewhere }, CANDIDATES[1]],
         },
       }),
@@ -562,14 +568,18 @@ test('a candidate link is bound to the whole coordinate, not to a date and a has
         code: 'ambiguous_version',
         sentence: 'Two states cover that date.',
         payload: {
-          publisher: 'preview-synthetic',
-          work: 'synthetic-preview-work',
+          requested_date: '2004-06-01',
           candidates: [{ ...CANDIDATES[0], href: otherPublisher }, CANDIDATES[1]],
         },
       }),
     /resolves to a different object than the state names/,
   );
 
+  // This asserted that omitting `publisher` and `work` is refused. No producer sends them --
+  // neither the platform's mount nor this surface -- so that requirement rejected every real
+  // refusal of this code, and the coordinate is now read from the candidates' own reading URLs.
+  // What the card still owes a reader is the date the ambiguity is about, which the producer does
+  // send and which a card saying "two states cover that date" cannot do without.
   assert.throws(
     () =>
       renderRefusalCard({
@@ -577,7 +587,7 @@ test('a candidate link is bound to the whole coordinate, not to a date and a has
         sentence: 'Two states cover that date.',
         payload: { candidates: CANDIDATES },
       }),
-    /must carry publisher, work/,
+    /must carry requested_date/,
   );
 });
 
@@ -648,8 +658,7 @@ test('a candidate date that is not a date is refused', () => {
           code: 'ambiguous_version',
           sentence: 'Two states cover that date.',
           payload: {
-            publisher: 'preview-synthetic',
-            work: 'synthetic-preview-work',
+            requested_date: '2004-06-01',
             candidates: [{ ...CANDIDATES[0], [field]: value }, CANDIDATES[1]],
           },
         }),
@@ -666,7 +675,7 @@ test('a profile identifier must be a value, not a shape', () => {
         renderRefusalCard({
           code: 'profiles_differ',
           sentence: 'The profiles differ.',
-          payload: { profiles },
+          payload: { left_profile: profiles, right_profile: ['akn/1'] },
         }),
       /must be a nonempty value|carries scalars or lists of scalars/,
       `${JSON.stringify(profiles)} was accepted`,
@@ -709,12 +718,15 @@ test('a withdrawn-superseded pair is not a live ambiguity', () => {
         code: 'ambiguous_version',
         sentence: 'Two states cover that date.',
         payload: {
-          publisher: 'preview-synthetic',
-          work: 'synthetic-preview-work',
+          requested_date: '2004-06-01',
           candidates: [CANDIDATES[0], superseded],
         },
       }),
-    /not the live ambiguity the interstitial is for/,
+    // Refused by the withdrawal rule, which now fires first and unconditionally: a state the
+    // producer says is withdrawn is never offered here, whatever else is in the list. It used to
+    // be caught one rule later, by the live count, and that ordering is what let a mixed list of
+    // one withdrawn object and one bare link turn both rules off.
+    /is withdrawn; the interstitial offers a choice/,
   );
 
   assert.throws(
@@ -723,8 +735,7 @@ test('a withdrawn-superseded pair is not a live ambiguity', () => {
         code: 'ambiguous_version',
         sentence: 'Two states cover that date.',
         payload: {
-          publisher: 'preview-synthetic',
-          work: 'synthetic-preview-work',
+          requested_date: '2004-06-01',
           // Two live states, so the live-count rule passes and only the declaration rule
           // can catch the third.
           // Two live and one whose withdrawal is undeclared, so the all-live rule passes
@@ -886,8 +897,7 @@ test('a candidate link carries no anchor, because the choice is between states',
         code: 'ambiguous_version',
         sentence: 'Two states cover that date.',
         payload: {
-          publisher: 'preview-synthetic',
-          work: 'synthetic-preview-work',
+          requested_date: '2004-06-01',
           candidates: [{ ...CANDIDATES[0], href: withAnchor }, CANDIDATES[1]],
         },
       }),
@@ -904,8 +914,7 @@ test('a declared payload contract is an allowlist, not a minimum', () => {
         code: 'ambiguous_version',
         sentence: 'Two states cover that date.',
         payload: {
-          publisher: 'preview-synthetic',
-          work: 'synthetic-preview-work',
+          requested_date: '2004-06-01',
           candidates: CANDIDATES,
           selected: true,
         },
@@ -944,8 +953,7 @@ test('every candidate in the interstitial is live, not merely two of them', () =
         code: 'ambiguous_version',
         sentence: 'Two states cover that date.',
         payload: {
-          publisher: 'preview-synthetic',
-          work: 'synthetic-preview-work',
+          requested_date: '2004-06-01',
           candidates: [CANDIDATES[0], CANDIDATES[1], withdrawn],
         },
       }),
@@ -1129,4 +1137,38 @@ test('an ambiguity offers a choice, not one state listed twice', () => {
       }),
     /the same state more than once/,
   );
+});
+
+test('a withdrawn state is refused even when the list is part bare links', () => {
+  // The writer seat's reproduction, made a test rather than left as a paragraph. Both live-only
+  // rules were gated on every candidate having stated its withdrawal, so ONE bare link beside an
+  // object saying `withdrawn: true` turned them off and the withdrawn state was offered as a live
+  // choice — the defect those rules exist to prevent, reintroduced by the change that made bare
+  // links renderable. The refusal is unconditional now; this is what says so.
+  const bare =
+    '/lu-legilux/loi-1991-08-10-n3/2026-04-11--' +
+    '6c164597ee18b9c4ca661f4732ceb947975d5a6e6f8b712ac6b333263e804f35';
+  const withdrawnState = {
+    valid_from: '2026-04-12',
+    hash: 'a'.repeat(64),
+    publication_date: '2026-04-12',
+    withdrawn: true,
+    href: `/lu-legilux/loi-1991-08-10-n3/2026-04-12--${'a'.repeat(64)}`,
+  };
+
+  for (const candidates of [
+    [withdrawnState, bare],
+    [bare, withdrawnState],
+  ]) {
+    assert.throws(
+      () =>
+        renderRefusalCard({
+          code: 'ambiguous_version',
+          sentence: 'Two states cover that date.',
+          payload: { requested_date: '2026-05-01', candidates },
+        }),
+      /is withdrawn; the interstitial offers a choice/,
+      `a withdrawn state was offered beside a bare link (${typeof candidates[0]} first)`,
+    );
+  }
 });
