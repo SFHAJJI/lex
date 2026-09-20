@@ -400,6 +400,29 @@ test("each row shows its own field, in both renderers, and the two agree", async
     [...react.keys()].sort(),
     "the two renderers show different rows",
   );
+
+  // The captured answer records NO gaps, so "none recorded" is right for it -- and a page that said
+  // "none recorded" whatever the corpus recorded would be indistinguishable from a correct one. A
+  // mutant that hid every gap survived the whole suite for exactly that reason. The gap tokens are
+  // the corpus's own words about what it could not take, so a page that swallows them is the page
+  // most worth catching.
+  const withGaps = {
+    ...answer,
+    states: [{
+      ...state,
+      sources: [{ ...source, gaps: ["a_recorded_gap", "b_second_gap"] }],
+    }],
+  };
+  for (const [renderer, html] of [
+    ["string", renderProvenance(withGaps)],
+    ["react", renderToStaticMarkup(h(Provenance, { answer: withGaps }))],
+  ]) {
+    assert.equal(
+      rows(html).get("gaps recorded"),
+      "a_recorded_gap b_second_gap",
+      `${renderer} did not show the gaps the corpus recorded`,
+    );
+  }
 });
 
 test("every leaf the platform sends reaches the page", async () => {
