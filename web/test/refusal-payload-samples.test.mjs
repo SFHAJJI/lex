@@ -118,3 +118,86 @@ test("every payload the platform sends is one the reader can render", async (t) 
     "the refusals the reader cannot render are not the ones this test knows about",
   );
 });
+
+test("a worked example carries the fields its real payload carries", async (t) => {
+  // The catalog is the page that teaches a reader what each refusal looks like, and its examples
+  // were written by hand from the specification. One of them taught a URL grammar no producer
+  // speaks -- `publisher:work` for a stable coordinate and a `/w/...` path for a hash-pinned URL,
+  // neither of which this surface's own parser accepts. A reader building against that page would
+  // have built against a language that does not exist.
+  //
+  // So an example for a code the platform produces must carry the same fields the producer sends.
+  // The VALUES stay synthetic on purpose: the page's banner promises that nothing on it is a real
+  // coordinate, and this check must not be a reason to put real ones there.
+  const { REFUSAL_EXAMPLES } = await import("../scripts/refusal-catalog.mjs");
+  const file = await samples();
+
+  for (const row of file.produced) {
+    // The three the card cannot render are exempt, and not by oversight: their examples show what
+    // the CARD requires, which is deliberately more than the producer sends -- the population
+    // disclosure, and the evidence that an absence of record is not an absence of law. Holding
+    // their examples to the producer's payload would mean deleting from the page exactly the
+    // fields this surface is refusing to give up. They rejoin this check the day the producer
+    // carries them, because KNOWN_BREAKS shrinks and this list is the same one.
+    if (KNOWN_BREAKS.includes(row.code)) {
+      t.diagnostic(`${row.code}: example exempt while the producer sends no absence evidence`);
+      continue;
+    }
+
+    const example = REFUSAL_EXAMPLES[row.code];
+    if (!example) {
+      t.diagnostic(`${row.code}: the platform produces it and the catalog has no worked example`);
+      continue;
+    }
+
+    const required = Object.keys(row.payload).filter(
+      (key) => !(row.optional_payload_keys ?? []).includes(key),
+    );
+    const missing = required.filter((key) => !Object.hasOwn(example.payload ?? {}, key));
+    assert.deepEqual(
+      missing,
+      [],
+      `${row.code}: the example omits ${missing.join(", ")}, which every producer of this refusal sends`,
+    );
+
+    // FIELD NAMES ARE NOT ENOUGH, and I only learned that by breaking this test on purpose: with
+    // the names checked and nothing else, putting back the `publisher:work` colon form and the
+    // `/w/...` path — the exact defect this whole check was written for — left it green. A name is
+    // right and a value can still be in a grammar no producer speaks.
+    //
+    // So the VALUES are compared by shape, coarsely and deliberately: a real value that is a list
+    // must be a list here; one that begins with `/` must begin with `/`; one that carries the `--`
+    // of a hash-pinned URL must carry it. Not a grammar validator — the examples are synthetic and
+    // must stay synthetic — but enough that a form nothing emits cannot sit on the page that
+    // teaches the form.
+    for (const [key, real] of Object.entries(row.payload)) {
+      const shown = example.payload?.[key];
+      if (shown === undefined) continue;
+      assert.equal(
+        Array.isArray(shown),
+        Array.isArray(real),
+        `${row.code}.${key}: the example is ${Array.isArray(shown) ? "a list" : "not a list"} and the producer sends ${Array.isArray(real) ? "one" : "none"}`,
+      );
+      if (typeof real !== "string" || typeof shown !== "string") continue;
+      assert.equal(
+        shown.startsWith("/"),
+        real.startsWith("/"),
+        `${row.code}.${key}: the producer sends ${real.startsWith("/") ? "a path" : "not a path"} and the example shows ${JSON.stringify(shown.slice(0, 40))}`,
+      );
+      assert.equal(
+        shown.includes("--"),
+        real.includes("--"),
+        `${row.code}.${key}: the producer ${real.includes("--") ? "pins a digest after --" : "pins no digest"} and the example shows ${JSON.stringify(shown.slice(0, 40))}`,
+      );
+    }
+
+    const invented = Object.keys(example.payload ?? {}).filter(
+      (key) => !Object.hasOwn(row.payload, key) && !["what_would_answer", "asserts_absence_of_law"].includes(key),
+    );
+    assert.deepEqual(
+      invented,
+      [],
+      `${row.code}: the example carries ${invented.join(", ")}, which no producer sends — the page would teach a field that does not exist`,
+    );
+  }
+});

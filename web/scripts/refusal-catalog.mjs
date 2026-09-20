@@ -75,7 +75,14 @@ export const REFUSAL_EXAMPLES = Object.freeze({
   },
   ambiguous_identifier: {
     sentence: 'That citation matches more than one instrument.',
-    payload: { candidates_named: 'synthetic-preview-work-a, synthetic-preview-work-b' },
+    // `candidates_named`, a single prose string, was what this example taught; `resolve` sends a
+    // LIST of candidates, the identifier asked for, and why they matched. A reader building a
+    // disambiguation screen from the old example would have written a parser for a sentence.
+    payload: {
+      requested_identifier: "Reglement sur l'epreuve",
+      candidates: [`${WORK}-a`, `${WORK}-b`],
+      match_reason: 'prefix',
+    },
   },
   out_of_corpus_scope: {
     sentence: 'That instrument is outside the reviewed corpus.',
@@ -106,11 +113,17 @@ export const REFUSAL_EXAMPLES = Object.freeze({
   },
   pinned_digest_mismatch: {
     sentence: 'That pinned state is not the one this work holds now.',
+    // The grammar the platform actually speaks, checked against the census: a stable coordinate is
+    // `/<publisher>/<work>/<date>` and a hash-pinned URL puts the digest after `--`. This example
+    // shipped with a `publisher:work` colon form and a `/w/...` path, neither of which any producer
+    // emits and neither of which this surface's own URL parser accepts -- so the page that teaches
+    // a reader what this refusal looks like was teaching a grammar that does not exist.
     payload: {
       requested_digest: CANDIDATE_A,
       current_digest: CANDIDATE_B,
-      stable_coordinate: `${PUBLISHER}:${WORK}`,
-      current_hash_pinned_url: `/w/${PUBLISHER}/${WORK}/2003-12-15/${CANDIDATE_B}`,
+      stable_coordinate: `/${PUBLISHER}/${WORK}/2003-12-15`,
+      current_hash_pinned_url: `/${PUBLISHER}/${WORK}/2003-12-15--${CANDIDATE_B}`,
+      rule_profile_sha256s: [CANDIDATE_A],
     },
   },
   anchor_not_in_version: {
@@ -125,7 +138,9 @@ export const REFUSAL_EXAMPLES = Object.freeze({
   },
   language_not_available: {
     sentence: 'This work is held in French only.',
-    payload: { languages_held: ['fr'] },
+    // What the mount sends: the language asked for and the ones it holds. `languages_held` was
+    // this example's own invention, and a reader building on it would have read the wrong member.
+    payload: { requested_language: 'eng', available_languages: ['deu', 'fra'] },
   },
   text_not_available: {
     sentence: 'The publisher records this state but serves no text for it.',
@@ -173,7 +188,9 @@ export const REFUSAL_EXAMPLES = Object.freeze({
   },
   no_corpus_mounted: {
     sentence: 'This build has no index mounted.',
-    payload: { mounted_indexes: '0' },
+    // The corpus the route needed, which is what the mount names. `mounted_indexes: '0'` gave a
+    // reader a count where the producer gives them the thing that is missing.
+    payload: { required_corpus: 'lu' },
   },
   snapshot_unknown: {
     sentence: 'That snapshot identity is not one this build holds.',
