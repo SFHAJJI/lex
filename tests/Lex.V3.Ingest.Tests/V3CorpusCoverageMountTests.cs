@@ -321,7 +321,7 @@ public sealed class V3CorpusCoverageMountTests
         // What the mount does not hold is a fixed list, in these words, and not something computed.
         var notHeld = body.GetProperty("not_held").EnumerateArray().ToArray();
         CollectionAssert.AreEqual(
-            new[] { "publisher_universe", "never_consolidated_acts", "first_sighting_and_observation_times", "legal_status" },
+            new[] { "publisher_universe", "never_consolidated_acts", "first_sighting_and_observation_times", "build_time_and_currency", "legal_status" },
             notHeld.Select(static row => row.GetProperty("item").GetString()).ToArray());
         // The reasons are what a reader reads, so they are pinned in these words and not by their length.
         CollectionAssert.AreEqual(
@@ -330,6 +330,7 @@ public sealed class V3CorpusCoverageMountTests
                 "how many acts the publisher holds, or how many of them this mount lacks: the mount records only what was admitted",
                 "the count of as-published acts never consolidated is a corpus-level statement this mount does not carry",
                 "no observation time or first-sighting event is held, so nothing here says when anything was first seen",
+                "no build time of the corpus or index is held, so nothing here says how current these counts are; the corpus and index digests name exactly which artifacts are mounted",
                 "no status, repeal or commencement fact is held; nothing here speaks of legal status",
             },
             notHeld.Select(static row => row.GetProperty("reason").GetString()).ToArray());
