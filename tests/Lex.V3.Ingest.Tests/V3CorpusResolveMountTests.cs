@@ -1190,9 +1190,11 @@ public sealed class V3CorpusResolveMountTests
         /// <summary>
         /// Adds a state copied from the fixture's own state, or from the state named by
         /// <paramref name="sourceExpressionIri"/> (a German state added earlier, for one), in the source's
-        /// language, with its own article identities.
+        /// language, with its own article identities. With <paramref name="workLeaf"/> the copy belongs to a
+        /// sibling work: the source's publisher work IRI with its last path segment replaced, which mints
+        /// its own work key, so a fixture can hold more than one work.
         /// </summary>
-        public async Task<LuxembourgIndexBuilder.StateRow> AddStateAsync(string applicabilityDate, string expressionSuffix, string? sourceExpressionIri = null)
+        public async Task<LuxembourgIndexBuilder.StateRow> AddStateAsync(string applicabilityDate, string expressionSuffix, string? sourceExpressionIri = null, string? workLeaf = null)
         {
             var indexPath = Path.Combine(Directory, V3CorpusMount.IndexFileName);
             LuxembourgIndexBuilder.MemberRow[] members;
@@ -1207,7 +1209,12 @@ public sealed class V3CorpusResolveMountTests
                 var sourceArticles = ReadArticles(connection)
                     .Where(article => sourceState.ArticleIdentitiesJson.Contains(
                         article.ArticleIdentitySha256, StringComparison.Ordinal)).ToArray();
-                var expression = sourceState.PublisherLegalResourceIri + "/" + expressionSuffix;
+                var workIri = workLeaf is null
+                    ? sourceState.PublisherWorkIri
+                    : sourceState.PublisherWorkIri[..(sourceState.PublisherWorkIri.LastIndexOf('/') + 1)] + workLeaf;
+                var resourceIri = workIri + sourceState.PublisherLegalResourceIri[sourceState.PublisherWorkIri.Length..];
+                var workKey = workLeaf is null ? sourceState.WorkKey : LuxembourgIndexBuilder.WorkKeyOf(workIri);
+                var expression = resourceIri + "/" + expressionSuffix;
                 var identities = new List<string>();
                 foreach (var source in sourceArticles)
                 {
@@ -1231,12 +1238,12 @@ public sealed class V3CorpusResolveMountTests
                 identities.Sort(StringComparer.Ordinal);
                 var profiles = System.Text.Json.JsonSerializer.Deserialize<string[]>(sourceState.RuleProfilesJson)!;
                 var digest = LuxembourgIndexBuilder.StateSha256(
-                    sourceState.WorkKey, applicabilityDate, expression,
-                    sourceState.PublisherWorkIri, sourceState.PublisherLegalResourceIri, sourceState.Language,
+                    workKey, applicabilityDate, expression,
+                    workIri, resourceIri, sourceState.Language,
                     profiles, identities);
                 later = new LuxembourgIndexBuilder.StateRow(
-                    sourceState.WorkKey, applicabilityDate, digest, expression,
-                    sourceState.PublisherWorkIri, sourceState.PublisherLegalResourceIri, sourceState.Language,
+                    workKey, applicabilityDate, digest, expression,
+                    workIri, resourceIri, sourceState.Language,
                     sourceState.RuleProfilesJson, System.Text.Json.JsonSerializer.Serialize(identities));
                 using (var insertState = connection.CreateCommand())
                 {

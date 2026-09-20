@@ -317,6 +317,8 @@ public sealed class V3CorpusChangesInPeriodMountTests
         var from = firstPage.GetProperty("continue_from").GetString();
         while (from is not null)
         {
+            // A continuation that does not advance would page forever; it must fail, not hang.
+            Assert.IsLessThanOrEqualTo(4, pages.Count, "The continuation repeated rows instead of advancing.");
             var page = (await RadarAsync(mount, from, lastDate, limit: 2)).Result!.Value;
             pages.AddRange(page.GetProperty("changes").EnumerateArray().Select(StateDigest));
             from = page.GetProperty("truncated").GetBoolean() ? page.GetProperty("continue_from").GetString() : null;
