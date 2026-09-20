@@ -1,4 +1,6 @@
 using System.Globalization;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Lex.V3.Contracts;
@@ -413,6 +415,187 @@ internal sealed class V3CorpusMount : IDisposable
         return V3PlatformOperationOutcome.Success(
             Context("success", observedAt),
             new V3PlatformOperationResult(request, "version_state", result.RootElement));
+    }
+
+    internal const string ProvenanceScope =
+        "the chain from the publisher's identifiers to the digests this mount verified; it holds no first-sighting event and no signature, so none is claimed";
+
+    internal const string ProvenanceDerivation =
+        "state_sha256 is a SHA-256 over the domain tag lex-v3-luxembourg-expression-state/1 and then, each as UTF-8 preceded by its " +
+        "length as four bytes big-endian, the publisher, the work key, the applicability date, the expression, the publisher work IRI, " +
+        "the publisher legal-resource IRI, the language, each rule-profile digest in sorted order and each article identity in sorted " +
+        "order; the article identities are not carried here (they are article_identities in as_of's answer to the same request, and " +
+        "article_identities_sha256 is the SHA-256 of them in sorted order, each preceded by its length in the same way, so a caller can check " +
+        "the list it holds); this mount's own reader recomputes the state digest when the index is opened and refuses an index in which it " +
+        "does not match its row";
+
+    internal const string ProvenanceSourcesNote =
+        "object_ref_sha256 identifies the source object in the corpus; body_sha256 is the digest of the publisher bytes the corpus retained " +
+        "for it, body_byte_length their length and body_receipt_sha256 the digest of the corpus receipt for that body, each null where the " +
+        "corpus holds none; outcome, rights_disposition and gaps are the corpus manifest's own tokens for the member, given verbatim, and this " +
+        "answer does not define them";
+
+    internal static readonly string[][] ProvenanceNotHeld =
+    [
+        ["first_sighting_event", "no observation time or first-sighting event is held, so nothing here says when the publisher's bytes were first seen"],
+        ["signature_stamp", "no signature or stamp is held or made: this states which digests this mount verified and signs nothing"],
+        ["publisher_revision_history", "no record of corrections or withdrawals of the publisher's document is held"],
+    ];
+
+    /// <summary>
+    /// <c>provenance</c>: how a served state is tied to the digests this mount verified. It takes
+    /// <c>as_of</c>'s request and selects states by <c>as_of</c>'s rule and refuses as <c>as_of</c>
+    /// refuses (shared builders), so the caller can move from an <c>as_of</c> answer to its provenance
+    /// with the same request. For each state it gives the hash-pinned permalink and coordinates, the
+    /// rule-profile digests, the number of articles, and the source documents the articles come from
+    /// with what the corpus recorded for each; beside them, the digests that verified the mount, the rule
+    /// that derives the state digest, and a fixed list of what is not held. Nothing is signed.
+    /// </summary>
+    public V3PlatformOperationOutcome Provenance(
+        V3PlatformOperationRequest request,
+        DateTimeOffset observedAt)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (!string.Equals(request.OperationId, "provenance", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("The mounted corpus provenance operation only accepts provenance/1.");
+        }
+
+        var identifier = RequiredString(request.Parameters, "identifier");
+        var requestedDate = RequiredString(request.Parameters, "date");
+        var requestedLanguage = OptionalLanguage(request.Parameters);
+        if (!DateOnly.TryParseExact(
+                requestedDate, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out _))
+        {
+            throw new V3TransportFailureException(
+                V3TransportFailureKind.RequestSchemaInvalid,
+                "The requested date is not a civil calendar date.");
+        }
+
+        if (RefuseUnlessWorkStates(request, identifier, observedAt, "r6_provenance", requestedLanguage,
+                out var states, out var availableLanguages) is { } refused)
+        {
+            return refused;
+        }
+
+        var scope = requestedLanguage is null
+            ? states
+            : states.Where(state => string.Equals(state.Language, requestedLanguage, StringComparison.Ordinal))
+                .ToArray();
+        var servedLanguages = requestedLanguage is null ? availableLanguages : new[] { requestedLanguage };
+
+        var served = new List<object>();
+        var ambiguous = new List<string>();
+        foreach (var language in servedLanguages)
+        {
+            var ofLanguage = scope
+                .Where(state => string.Equals(state.Language, language, StringComparison.Ordinal))
+                .ToArray();
+            var (selected, _) = SelectAtDate(ofLanguage, requestedDate);
+            if (selected.Length == 0)
+            {
+                continue;
+            }
+
+            if (selected.Length > 1)
+            {
+                ambiguous.AddRange(selected.Select(StateUrl));
+                continue;
+            }
+
+            var state = selected[0];
+            served.Add(new
+            {
+                language = state.Language,
+                applicability_date = state.ApplicabilityDate,
+                state_sha256 = state.StateSha256,
+                permalink = StateUrl(state),
+                stable_coordinate = StableCoordinate(state),
+                expression_iri = state.ExpressionIri,
+                publisher_work_iri = state.PublisherWorkIri,
+                publisher_legal_resource_iri = state.PublisherLegalResourceIri,
+                rule_profile_sha256s = state.RuleProfileSha256s,
+                articles = state.ArticleIdentities.Count,
+                article_identities_sha256 = ArticleIdentitiesSha256(state.ArticleIdentities),
+                sources = _reader!.ResolveStateSources(state.StateSha256).Select(SourceRow).ToArray(),
+            });
+        }
+
+        if (ambiguous.Count != 0)
+        {
+            return RefuseAmbiguousVersion(request, observedAt, requestedDate, ambiguous.Order(StringComparer.Ordinal).ToArray(), bound: null);
+        }
+
+        if (served.Count == 0)
+        {
+            return RefuseNoVersionForDate(request, observedAt, scope, requestedDate, bound: null);
+        }
+
+        using var result = JsonSerializer.SerializeToDocument(new
+        {
+            scope = ProvenanceScope,
+            requested_identifier = identifier,
+            requested_date = requestedDate,
+            requested_language = requestedLanguage,
+            publisher = "lu-legilux",
+            work_key = states[0].WorkKey,
+            states = served,
+            available_languages = availableLanguages,
+            verified_by = new
+            {
+                corpus_sha256 = _corpus.ArtifactRef.Sha256,
+                index_sha256 = _reader!.IndexRef.Sha256,
+                registry_sha256 = V3OperationRegistry.Reviewed.Sha256,
+            },
+            derivation = ProvenanceDerivation,
+            sources_note = ProvenanceSourcesNote,
+            not_held = ProvenanceNotHeld.Select(static row => new { item = row[0], reason = row[1] }).ToArray(),
+        });
+        return V3PlatformOperationOutcome.Success(
+            Context("success", observedAt),
+            new V3PlatformOperationResult(request, "provenance_chain", result.RootElement));
+    }
+
+    /// <summary>
+    /// The SHA-256 of a state's article identities in sorted order, each as UTF-8 preceded by its length as
+    /// four bytes big-endian, the encoding the state digest uses for the same identities, so a caller holding
+    /// the list (as_of carries it) can check it against this and finish the recomputation the derivation names.
+    /// </summary>
+    private static string ArticleIdentitiesSha256(IEnumerable<string> identities)
+    {
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        Span<byte> length = stackalloc byte[sizeof(int)];
+        foreach (var identity in identities.Order(StringComparer.Ordinal))
+        {
+            var bytes = Encoding.UTF8.GetBytes(identity);
+            System.Buffers.Binary.BinaryPrimitives.WriteInt32BigEndian(length, bytes.Length);
+            hash.AppendData(length);
+            hash.AppendData(bytes);
+        }
+
+        return Convert.ToHexStringLower(hash.GetHashAndReset());
+    }
+
+    /// <summary>
+    /// One source of a state: what the index recorded for the corpus member (outcome, rights, gaps) and,
+    /// from the verified corpus manifest, the digest and length of the publisher bytes it retained for it
+    /// and the digest of its receipt. Null where the corpus holds none; nothing is filled in.
+    /// </summary>
+    private object SourceRow(LuxembourgIndexStateSource source)
+    {
+        var member = _corpus.Set.Members.FirstOrDefault(candidate =>
+            candidate.Publisher == PublisherId.LuLegilux &&
+            string.Equals(candidate.ObjectRefSha256, source.ObjectRefSha256, StringComparison.Ordinal));
+        return new
+        {
+            object_ref_sha256 = source.ObjectRefSha256,
+            body_sha256 = member?.BodySha256,
+            body_byte_length = member?.BodyByteLength,
+            body_receipt_sha256 = member?.BodyReceiptSha256,
+            outcome = source.Outcome,
+            rights_disposition = source.RightsDisposition,
+            gaps = source.Gaps,
+        };
     }
 
     /// <summary>

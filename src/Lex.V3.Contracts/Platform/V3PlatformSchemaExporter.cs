@@ -221,6 +221,11 @@ public static class V3PlatformSchemaExporter
         "coverage" => Parameters(
             [],
             ("language", NonBlankString())),
+        "provenance" => Parameters(
+            ["identifier", "date"],
+            ("identifier", NonBlankString()),
+            ("date", CivilDate()),
+            ("language", NonBlankString())),
         _ => ClosedObject(),
     };
 

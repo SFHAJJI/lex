@@ -122,6 +122,17 @@ public sealed record LuxembourgIndexStateArticle(
     string PublisherId,
     string WordingSha256);
 
+/// <summary>
+/// One source document a state's articles were taken from, as the corpus recorded it: its digest (the
+/// corpus member's object reference), the outcome it was admitted with, the rights disposition when the
+/// corpus states one, and the gap tokens it recorded, verbatim.
+/// </summary>
+public sealed record LuxembourgIndexStateSource(
+    string ObjectRefSha256,
+    string Outcome,
+    string? RightsDisposition,
+    IReadOnlyList<string> Gaps);
+
 public sealed record LuxembourgIndexAnchorArticle(
     string StateSha256,
     string ArticleIdentitySha256,
@@ -589,7 +600,7 @@ public static class LuxembourgIndexBuilder
         string workKey,
         string applicabilityDate,
         string expressionIri,
-        string publisherWid,
+        string publisherWorkIri,
         string publisherLegalResourceIri,
         string language,
         IReadOnlyList<string> profiles,
@@ -610,7 +621,7 @@ public static class LuxembourgIndexBuilder
         Append(hash, workKey);
         Append(hash, applicabilityDate);
         Append(hash, expressionIri);
-        Append(hash, publisherWid);
+        Append(hash, publisherWorkIri);
         Append(hash, publisherLegalResourceIri);
         Append(hash, language);
         foreach (var profile in profiles) Append(hash, profile);
@@ -1465,6 +1476,40 @@ public sealed class LuxembourgIndexReader : IDisposable
             }
 
             return new LuxembourgIndexStatePopulation(works, first, last, languages);
+        }
+    }
+
+    /// <summary>
+    /// The source documents one state's articles come from: every corpus member that holds at least one
+    /// of the state's articles, in digest order, with what the corpus recorded for it. A state is one
+    /// expression's articles, so this is normally one document. Empty for a state the index does not hold.
+    /// </summary>
+    public IReadOnlyList<LuxembourgIndexStateSource> ResolveStateSources(string stateSha256)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(stateSha256);
+        lock (_gate)
+        {
+            using var command = _connection.CreateCommand();
+            // CROSS JOIN pins the plan whatever the statistics say: the state by digest, its identities, then each article and its member by primary key.
+            command.CommandText =
+                "SELECT DISTINCT m.object_ref_sha256,m.outcome,m.rights_disposition,m.gaps_json " +
+                "FROM states s CROSS JOIN json_each(s.article_identities_json) j " +
+                "CROSS JOIN articles a ON a.article_identity_sha256=j.value " +
+                "CROSS JOIN members m ON m.object_ref_sha256=a.object_ref_sha256 " +
+                "WHERE s.state_sha256=$state ORDER BY m.object_ref_sha256";
+            command.Parameters.AddWithValue("$state", stateSha256);
+            var sources = new List<LuxembourgIndexStateSource>();
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                sources.Add(new LuxembourgIndexStateSource(
+                    reader.GetString(0),
+                    reader.GetString(1),
+                    reader.IsDBNull(2) ? null : reader.GetString(2),
+                    JsonSerializer.Deserialize<string[]>(reader.GetString(3)) ?? []));
+            }
+
+            return sources;
         }
     }
 

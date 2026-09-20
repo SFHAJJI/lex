@@ -1647,6 +1647,44 @@ public sealed class V3CorpusResolveMountTests
             });
 
         /// <summary>
+        /// Gives the fixture's state a second source document and re-stamps the index: a copy of its member's row
+        /// under a reference that sorts after every real one, now holding the state's first article by identity, so
+        /// that the order the articles are listed in and the order of the sources' digests differ. The second member
+        /// is in the index only and not in the corpus artifact, which a real build never produces; it exists so the
+        /// order of a state's sources can be observed. Returns its reference.
+        /// </summary>
+        public async Task<string> GiveTheStateASecondSourceAsync()
+        {
+            var second = new string('f', 64);
+            await MutateArticlesAsync(connection =>
+            {
+                using var copy = connection.CreateCommand();
+                copy.CommandText = "INSERT INTO members SELECT $ref, source_ordinal + 1, outcome, rights_disposition, stage3_outcomes_json, gaps_json FROM members ORDER BY object_ref_sha256 LIMIT 1";
+                copy.Parameters.AddWithValue("$ref", second);
+                Assert.AreEqual(1, copy.ExecuteNonQuery());
+                using var move = connection.CreateCommand();
+                move.CommandText = "UPDATE articles SET object_ref_sha256=$ref WHERE article_identity_sha256=(SELECT min(article_identity_sha256) FROM articles WHERE expression_iri=$expression)";
+                move.Parameters.AddWithValue("$ref", second);
+                move.Parameters.AddWithValue("$expression", ExpressionIri);
+                Assert.AreEqual(1, move.ExecuteNonQuery());
+            });
+            return second;
+        }
+
+        /// <summary>
+        /// Sets the rights disposition the corpus recorded for the fixture's member(s), as the index stores
+        /// it, and re-stamps the index.
+        /// </summary>
+        public Task SetMemberRightsDispositionAsync(string disposition) =>
+            MutateArticlesAsync(connection =>
+            {
+                using var set = connection.CreateCommand();
+                set.CommandText = "UPDATE members SET rights_disposition=$rights";
+                set.Parameters.AddWithValue("$rights", disposition);
+                Assert.IsGreaterThan(0, set.ExecuteNonQuery());
+            });
+
+        /// <summary>
         /// Sets or clears (null) the publisher's article-level applicability date of one article of one
         /// expression, and re-stamps the index and its capability manifest.
         /// </summary>
