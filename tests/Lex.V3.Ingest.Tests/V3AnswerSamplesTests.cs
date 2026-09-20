@@ -153,10 +153,15 @@ public sealed class V3AnswerSamplesTests
         {
             var before = ValuesAt(firstRaw, path);
             var after = ValuesAt(secondRaw, path);
-            if (before.Count == 0)
-            {
-                continue;
-            }
+
+            // A path no answer carries was skipped here, which is the same hole one level along: a
+            // list that must earn every entry, with an exemption for the entry that earns nothing.
+            // A dead path could sit on the list and in the rendered file and pass, which the writer
+            // seat proved with a mutant. Every listed path must be one the answers actually have.
+            Assert.IsGreaterThan(
+                0,
+                before.Count,
+                $"{path} is normalised and no sampled answer carries it: take it off VariesPerRun, or sample an operation that has it.");
 
             CollectionAssert.AreNotEqual(
                 before,
