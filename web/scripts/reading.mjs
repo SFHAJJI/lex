@@ -552,7 +552,12 @@ export function validateReading(input) {
       code: 'anchor_not_in_version',
       sentence: ANCHOR_NOT_IN_VERSION_NOTE,
       payload: {
+        // The anchor asked for and the statement that this system will not answer a provision
+        // question with a text search: both are what the platform sends with this refusal, and
+        // this surface produces the same refusal, so it says the same things.
+        requested_anchor: anchor,
         nearest_anchors: anchors,
+        do_not_fall_back_to_full_text_search: true,
         what_would_answer: ANCHOR_ROUTES,
         asserts_absence_of_law: false,
       },

@@ -33,12 +33,12 @@ test('the page says which payloads are settled and which are not', () => {
   const unspecified = REFUSAL_CODES.filter((c) => payloadContractOf(c).state === 'unspecified');
   const elsewhere = REFUSAL_CODES.filter((c) => payloadContractOf(c).state === 'enforced elsewhere');
 
-  assert.equal(specified.length, 9);
+  assert.equal(specified.length, 10);
   assert.equal(unspecified.length, 9);
   assert.deepEqual(elsewhere, ['advice_boundary']);
 
   const html = renderRefusalCatalog();
-  assert.ok(html.includes('9 codes have payload keys fixed by the specification'));
+  assert.ok(html.includes('10 codes have payload keys fixed by the specification'));
   assert.ok(html.includes('9 do not yet, and say so below'));
   // The word appears once per unspecified entry, so the honesty is per code and not only
   // in the summary sentence a reader may skip.

@@ -345,7 +345,7 @@ export function renderCompare({ mode, left, right, result }) {
           `These states were extracted under different profiles (${left.profile}, ` +
           `${right.profile}). Comparing them would report parser differences as legislation. ` +
           'Not overridable. Read them side by side instead.',
-        payload: { profiles: [left.profile, right.profile] },
+        payload: { left_profile: [left.profile], right_profile: [right.profile] },
       }) +
       '</section>'
     );
