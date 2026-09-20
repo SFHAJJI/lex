@@ -338,6 +338,10 @@ public sealed class V3CorpusCoverageMountTests
         StringAssert.Contains(body.GetProperty("counts_note").GetString(), "a missing publisher date is counted as missing and never dropped");
         // The searchable count is drawn only from dated articles, so it and the undated count are not addends.
         StringAssert.Contains(body.GetProperty("counts_note").GetString(), "are not addends");
+        // What the language filter narrows is said in the note, and the language-filter test holds that it is true.
+        StringAssert.Contains(
+            body.GetProperty("counts_note").GetString(),
+            "when a language is requested, requested_language echoes it and only languages and capability_cells are narrowed to it, and every other member, totals included, is the whole mount's");
         // No count of the publisher's universe is written anywhere in the answer.
         Assert.IsFalse(body.GetRawText().Contains("24,579", StringComparison.Ordinal) || body.GetRawText().Contains("24579", StringComparison.Ordinal));
 
