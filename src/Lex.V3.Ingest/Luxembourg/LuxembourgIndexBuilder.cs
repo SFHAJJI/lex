@@ -48,6 +48,16 @@ public sealed record LuxembourgIndexResolvedState(
     IReadOnlyList<string> ArticleIdentities);
 
 /// <summary>
+/// What the index holds of dated states: the works that have one, the first and last publisher date
+/// held, and the languages held.
+/// </summary>
+public sealed record LuxembourgIndexStatePopulation(
+    long Works,
+    string? FirstDate,
+    string? LastDate,
+    IReadOnlyList<string> Languages);
+
+/// <summary>
 /// One article's publisher-stated applicability date, or <c>null</c> where the publisher stated none
 /// for that article. Read from the article-level <c>scl:dateApplicability</c> the inventory retained;
 /// never derived from the state.
@@ -1187,6 +1197,76 @@ public sealed class LuxembourgIndexReader : IDisposable
                 """;
             command.Parameters.AddWithValue("$identifier", workIdentifier);
             return ReadResolvedStates(command);
+        }
+    }
+
+    /// <summary>
+    /// Every state whose publisher date lies in the closed window, across works, in publisher date, work
+    /// key, language, expression and digest order. Dates are the publisher's <c>yyyy-MM-dd</c> strings,
+    /// which order as dates do. Nothing is compared here.
+    /// </summary>
+    public IReadOnlyList<LuxembourgIndexResolvedState> ResolveStatesInPeriod(string windowFrom, string windowTo)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(windowFrom);
+        ArgumentException.ThrowIfNullOrWhiteSpace(windowTo);
+        lock (_gate)
+        {
+            using var command = _connection.CreateCommand();
+            command.CommandText = """
+                SELECT work_key,applicability_date,state_sha256,expression_iri,publisher_work_iri,
+                       publisher_legal_resource_iri,language,rule_profiles_json,article_identities_json
+                FROM states
+                WHERE applicability_date>=$from AND applicability_date<=$to
+                ORDER BY applicability_date,work_key,language,expression_iri,state_sha256
+                """;
+            command.Parameters.AddWithValue("$from", windowFrom);
+            command.Parameters.AddWithValue("$to", windowTo);
+            return ReadResolvedStates(command);
+        }
+    }
+
+    /// <summary>
+    /// What the index holds, so a window can be read against it: how many works have a dated state, the
+    /// first and last publisher date held, and the languages held. With a language, the works and dates
+    /// are that language's; the languages listed are always every language held, since they are what
+    /// could be asked for. All null or empty where nothing is held.
+    /// </summary>
+    public LuxembourgIndexStatePopulation ResolveStatePopulation(string? language = null)
+    {
+        lock (_gate)
+        {
+            long works;
+            string? first;
+            string? last;
+            using (var command = _connection.CreateCommand())
+            {
+                command.CommandText = language is null
+                    ? "SELECT COUNT(DISTINCT work_key),MIN(applicability_date),MAX(applicability_date) FROM states"
+                    : "SELECT COUNT(DISTINCT work_key),MIN(applicability_date),MAX(applicability_date) FROM states WHERE language=$language";
+                if (language is not null)
+                {
+                    command.Parameters.AddWithValue("$language", language);
+                }
+
+                using var reader = command.ExecuteReader();
+                reader.Read();
+                works = reader.GetInt64(0);
+                first = reader.IsDBNull(1) ? null : reader.GetString(1);
+                last = reader.IsDBNull(2) ? null : reader.GetString(2);
+            }
+
+            var languages = new List<string>();
+            using (var command = _connection.CreateCommand())
+            {
+                command.CommandText = "SELECT DISTINCT language FROM states ORDER BY language";
+                using var reader = command.ExecuteReader();
+                while (reader.Read())
+                {
+                    languages.Add(reader.GetString(0));
+                }
+            }
+
+            return new LuxembourgIndexStatePopulation(works, first, last, languages);
         }
     }
 
