@@ -269,6 +269,32 @@ public sealed class V3CorpusInForceOnMountTests
     }
 
     [TestMethod]
+    public async Task WithAWorkNamedTheCursorThatNamesThatWorkServesNothingMore()
+    {
+        var fixture = await MountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+        var identifier = $"/lu-legilux/{fixture.WorkKey}";
+
+        // The cursor is the last work key served. A reader who pages a named work with the cursor
+        // they were given must not read its rows twice.
+        var after = await SelectionAsync(mount, fixture.ApplicabilityDate, identifier: identifier, afterWorkKey: fixture.WorkKey);
+        Assert.AreEqual(V3Verdicts.Answer, after.Verdict);
+        Assert.AreEqual(0, after.Result!.Value.GetProperty("states").GetArrayLength());
+        Assert.AreEqual(JsonValueKind.Null, after.Result.Value.GetProperty("continue_after").ValueKind);
+        Assert.AreEqual(1, after.Result.Value.GetProperty("population").GetProperty("works_with_a_state_on_date").GetInt64(),
+            "The population is the scope asked for, not the page.");
+
+        // A cursor that sorts before the work serves it; one that sorts after serves nothing.
+        var before = await SelectionAsync(mount, fixture.ApplicabilityDate, identifier: identifier, afterWorkKey: fixture.WorkKey[..^1]);
+        Assert.AreEqual(fixture.StateSha256,
+            before.Result!.Value.GetProperty("states").EnumerateArray().Single().GetProperty("state").GetProperty("state_sha256").GetString());
+        var beyond = await SelectionAsync(mount, fixture.ApplicabilityDate, identifier: identifier, afterWorkKey: fixture.WorkKey + "0");
+        Assert.AreEqual(0, beyond.Result!.Value.GetProperty("states").GetArrayLength());
+    }
+
+    [TestMethod]
     public async Task ThePopulationIsTheScopeAskedForAndALanguageSelectsItsOwnStates()
     {
         var fixture = await MountedFixture.CreateAsync();
