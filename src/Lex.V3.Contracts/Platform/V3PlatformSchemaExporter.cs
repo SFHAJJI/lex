@@ -218,6 +218,9 @@ public static class V3PlatformSchemaExporter
             ("mode", NonBlankString()),
             ("limit", RowLimit()),
             ("after", NonBlankString())),
+        "coverage" => Parameters(
+            [],
+            ("language", NonBlankString())),
         _ => ClosedObject(),
     };
 

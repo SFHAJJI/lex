@@ -67,6 +67,36 @@ public sealed record LuxembourgIndexStatePopulation(
     IReadOnlyList<string> Languages);
 
 /// <summary>
+/// What the index holds in one language: works and dated states (a state is one expression's articles
+/// on one publisher date, so there is no separate count of expressions) with the first and last
+/// publisher date, articles, and how many of those articles carry no publisher date. Counts of rows
+/// the index holds, never of what the publisher holds.
+/// </summary>
+public sealed record LuxembourgIndexLanguageCoverage(
+    string Language,
+    long Works,
+    long States,
+    string? FirstStateDate,
+    string? LastStateDate,
+    long Articles,
+    long ArticlesWithoutPublisherDate);
+
+/// <summary>
+/// What the index holds and what it recorded as missing: members by outcome, the gap tokens the
+/// corpus recorded per member counted by member (verbatim, in ordinal order), and every language's
+/// counts. The counts are grouped and bounded: no per-work and no per-article row.
+/// </summary>
+public sealed record LuxembourgIndexCoverage(
+    long Members,
+    long Works,
+    long States,
+    long Articles,
+    IReadOnlyList<KeyValuePair<string, long>> MemberOutcomes,
+    long MembersWithGaps,
+    IReadOnlyList<KeyValuePair<string, long>> Gaps,
+    IReadOnlyList<LuxembourgIndexLanguageCoverage> Languages);
+
+/// <summary>
 /// One article's publisher-stated applicability date, or <c>null</c> where the publisher stated none
 /// for that article. Read from the article-level <c>scl:dateApplicability</c> the inventory retained;
 /// never derived from the state.
@@ -1435,6 +1465,91 @@ public sealed class LuxembourgIndexReader : IDisposable
             }
 
             return new LuxembourgIndexStatePopulation(works, first, last, languages);
+        }
+    }
+
+    /// <summary>
+    /// The capability manifest's cells as the reader was verified against them: what the index
+    /// measured it can be asked, per operation, column, field, language and date span. Sorted as the
+    /// manifest sorts them.
+    /// </summary>
+    public IReadOnlyList<V3IndexCapabilityCell> CapabilityCells() =>
+        Array.AsReadOnly(_capabilityManifest.Cells.ToArray());
+
+    /// <summary>
+    /// What the index holds and what it recorded as missing, as grouped counts read from the small
+    /// tables and the covering indexes: members by outcome, the corpus's gap tokens counted by
+    /// member, and works, states and articles overall and per language. A missing
+    /// publisher date is counted and never dropped. Nothing here says what the publisher holds. It
+    /// reads through its own read-only connection on the reader's private verified copy and does not
+    /// take the reader's gate, so a caller who asks for it again and again cannot make every other
+    /// operation on the mount wait behind the counts.
+    /// </summary>
+    public LuxembourgIndexCoverage ResolveCoverage()
+    {
+        {
+            using var connection = LuxembourgIndexBuilder.Open(_path, SqliteOpenMode.ReadOnly);
+            List<KeyValuePair<string, long>> Grouped(string sql)
+            {
+                var rows = new List<KeyValuePair<string, long>>();
+                using var command = connection.CreateCommand();
+                command.CommandText = sql;
+                using var reader = command.ExecuteReader();
+                while (reader.Read())
+                {
+                    rows.Add(new KeyValuePair<string, long>(reader.GetString(0), reader.GetInt64(1)));
+                }
+
+                return rows;
+            }
+
+            var outcomes = Grouped("SELECT outcome,COUNT(*) FROM members GROUP BY outcome ORDER BY outcome");
+            var gaps = Grouped(
+                "SELECT j.value,COUNT(DISTINCT m.object_ref_sha256) FROM members m,json_each(m.gaps_json) j GROUP BY j.value ORDER BY j.value");
+            long Counted(string sql) => Convert.ToInt64(Scalar(connection, sql), CultureInfo.InvariantCulture);
+            var members = Counted("SELECT COUNT(*) FROM members");
+            var membersWithGaps = Counted("SELECT COUNT(*) FROM members WHERE gaps_json<>'[]'");
+            var works = Counted("SELECT COUNT(DISTINCT work_key) FROM states");
+            var states = Counted("SELECT COUNT(*) FROM states");
+            var articleCount = Counted("SELECT COUNT(*) FROM articles");
+
+            var articles = new Dictionary<string, (long All, long Undated)>(StringComparer.Ordinal);
+            using (var command = connection.CreateCommand())
+            {
+                command.CommandText =
+                    "SELECT language,COUNT(*),COUNT(*)-COUNT(applicability_date) FROM articles GROUP BY language";
+                using var reader = command.ExecuteReader();
+                while (reader.Read())
+                {
+                    articles[reader.GetString(0)] = (reader.GetInt64(1), reader.GetInt64(2));
+                }
+            }
+
+            var languages = new List<LuxembourgIndexLanguageCoverage>();
+            using (var command = connection.CreateCommand())
+            {
+                command.CommandText =
+                    "SELECT language,COUNT(DISTINCT work_key),COUNT(*)," +
+                    "MIN(applicability_date),MAX(applicability_date) FROM states GROUP BY language ORDER BY language";
+                using var reader = command.ExecuteReader();
+                while (reader.Read())
+                {
+                    var language = reader.GetString(0);
+                    var (all, undated) = articles.TryGetValue(language, out var counted) ? counted : (0L, 0L);
+                    languages.Add(new LuxembourgIndexLanguageCoverage(
+                        language,
+                        reader.GetInt64(1),
+                        reader.GetInt64(2),
+                        reader.IsDBNull(3) ? null : reader.GetString(3),
+                        reader.IsDBNull(4) ? null : reader.GetString(4),
+                        all,
+                        undated));
+                }
+            }
+
+            return new LuxembourgIndexCoverage(
+                members, works, states, articleCount,
+                outcomes, membersWithGaps, gaps, languages);
         }
     }
 

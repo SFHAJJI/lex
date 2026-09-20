@@ -1377,6 +1377,156 @@ internal sealed class V3CorpusMount : IDisposable
             new V3PlatformOperationResult(request, "quote", result.RootElement));
     }
 
+    internal const string CoverageScope =
+        "the mounted Luxembourg corpus and index: what this mount holds and recorded as missing, and nothing about what the publisher holds";
+
+    internal const string CoverageCountsNote =
+        "counts are of rows the index holds; a missing publisher date is counted as missing and never dropped; " +
+        "articles_with_searchable_text is counted where the article carries a publisher date, which is what the capability cells measure";
+
+    internal const string CoverageOperationsNote =
+        "served_operations are the routes this mount answers and not_served_operations are registered with no route on it; " +
+        "this states a fact about the mount and says nothing about what a request for an unserved operation returns";
+
+    internal static readonly string[][] CoverageNotHeld =
+    [
+        ["publisher_universe", "how many acts the publisher holds, or how many of them this mount lacks: the mount records only what was admitted"],
+        ["never_consolidated_acts", "the count of as-published acts never consolidated is a corpus-level statement this mount does not carry"],
+        ["first_sighting_and_observation_times", "no observation time or first-sighting event is held, so nothing here says when anything was first seen"],
+        ["legal_status", "no status, repeal or commencement fact is held; nothing here speaks of legal status"],
+    ];
+
+    /// <summary>
+    /// <c>coverage</c>: what the mounted Luxembourg corpus and index hold and what they recorded as
+    /// missing, and nothing about what the publisher holds. Read from the verified index and the
+    /// operation registry only; no publisher is contacted. The report is bounded: totals, per-language
+    /// counts, members by outcome, the gap tokens the corpus recorded (verbatim, counted by member),
+    /// the capability cells (what can be asked), which registered operations this mount serves, and a
+    /// fixed list of what it does not hold. With a language, only the per-language parts narrow; a
+    /// language the mount does not hold is <c>language_not_available</c>.
+    /// </summary>
+    public V3PlatformOperationOutcome Coverage(
+        V3PlatformOperationRequest request,
+        DateTimeOffset observedAt)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (!string.Equals(request.OperationId, "coverage", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("The mounted corpus coverage operation only accepts coverage/1.");
+        }
+
+        var language = request.Parameters.TryGetProperty("language", out var languageValue) &&
+                       languageValue.ValueKind == JsonValueKind.String
+            ? RequiredString(request.Parameters, "language")
+            : null;
+        if (_reader is null)
+        {
+            using var unmounted = JsonSerializer.SerializeToDocument(new { required_corpus = "lu" });
+            return V3PlatformOperationOutcome.Refused(
+                Context("refusal", observedAt, PublisherId.LuLegilux),
+                new V3PlatformOperationRefusal(request, "no_corpus_mounted", unmounted.RootElement));
+        }
+
+        var coverage = _reader.ResolveCoverage();
+        var languagesHeld = coverage.Languages.Select(static held => held.Language).ToArray();
+        if (language is not null && !languagesHeld.Contains(language, StringComparer.Ordinal))
+        {
+            using var unavailableLanguage = JsonSerializer.SerializeToDocument(new
+            {
+                requested_language = language,
+                available_languages = languagesHeld,
+            });
+            return V3PlatformOperationOutcome.Refused(
+                Context("refusal", observedAt),
+                new V3PlatformOperationRefusal(request, "language_not_available", unavailableLanguage.RootElement));
+        }
+
+        var cells = _reader.CapabilityCells();
+        var searchable = _reader.SearchableLanguages();
+        var registered = V3OperationRegistry.Reviewed.Operations
+            .Select(static operation => operation.OperationId)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        var served = V3RestRouteBinding.Served
+            .Select(static binding => binding.OperationId)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        var perLanguage = coverage.Languages
+            .Where(held => language is null || string.Equals(held.Language, language, StringComparison.Ordinal))
+            .Select(held => new
+            {
+                language = held.Language,
+                works = held.Works,
+                states = held.States,
+                first_state_date = held.FirstStateDate,
+                last_state_date = held.LastStateDate,
+                articles = held.Articles,
+                articles_without_publisher_date = held.ArticlesWithoutPublisherDate,
+                articles_with_searchable_text = cells
+                    .Where(cell =>
+                        string.Equals(cell.Operation, "search", StringComparison.Ordinal) &&
+                        string.Equals(cell.Column, "articles", StringComparison.Ordinal) &&
+                        string.Equals(cell.Field, "searchable_text", StringComparison.Ordinal) &&
+                        string.Equals(cell.Language, held.Language, StringComparison.Ordinal))
+                    .Sum(static cell => cell.Population),
+                searchable_text_held = searchable.Contains(held.Language, StringComparer.Ordinal),
+            })
+            .ToArray();
+        using var result = JsonSerializer.SerializeToDocument(new
+        {
+            scope = CoverageScope,
+            counts_note = CoverageCountsNote,
+            requested_language = language,
+            mounted = new
+            {
+                publisher = "lu-legilux",
+                corpus_sha256 = _corpus.ArtifactRef.Sha256,
+                index_sha256 = _reader.IndexRef.Sha256,
+                registry_sha256 = V3OperationRegistry.Reviewed.Sha256,
+            },
+            totals = new
+            {
+                members = coverage.Members,
+                works = coverage.Works,
+                states = coverage.States,
+                articles = coverage.Articles,
+            },
+            languages_held = languagesHeld,
+            languages = perLanguage,
+            members = new
+            {
+                by_outcome = coverage.MemberOutcomes.Select(static row => new { outcome = row.Key, members = row.Value }).ToArray(),
+                with_gaps = coverage.MembersWithGaps,
+                gaps = coverage.Gaps.Select(static row => new { gap = row.Key, members = row.Value }).ToArray(),
+                gaps_note = "the gap tokens the corpus recorded per member, verbatim, counted by member",
+            },
+            capability_cells = cells
+                .Where(cell => language is null || string.Equals(cell.Language, language, StringComparison.Ordinal))
+                .Select(static cell => new
+                {
+                    operation = cell.Operation,
+                    column = cell.Column,
+                    field = cell.Field,
+                    language = cell.Language,
+                    period_from = cell.PeriodFrom.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                    period_to = cell.PeriodTo.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                    population = cell.Population,
+                })
+                .ToArray(),
+            operations = new
+            {
+                registered = registered.Length,
+                served_operations = served,
+                not_served_operations = registered.Except(served, StringComparer.Ordinal).ToArray(),
+                note = CoverageOperationsNote,
+            },
+            not_held = CoverageNotHeld.Select(static row => new { item = row[0], reason = row[1] }).ToArray(),
+        });
+        return V3PlatformOperationOutcome.Success(
+            Context("success", observedAt),
+            new V3PlatformOperationResult(request, "coverage_report", result.RootElement));
+    }
+
     /// <summary>The ceiling on the rows one <c>changes_in_period</c> answer carries.</summary>
     public const int ChangesInPeriodMaxRows = 200;
 
