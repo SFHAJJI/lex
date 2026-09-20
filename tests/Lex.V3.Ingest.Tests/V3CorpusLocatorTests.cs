@@ -25,6 +25,7 @@ public sealed class V3CorpusLocatorTests
         ("/api/v3/diff", identifier => JsonSerializer.Serialize(new { operation_id = "diff", parameters = new { identifier, date_from = "2024-01-01", date_to = "2025-01-01" } })),
         ("/api/v3/changes_in_period", identifier => JsonSerializer.Serialize(new { operation_id = "changes_in_period", parameters = new { identifier, date_from = "2024-01-01", date_to = "2025-01-01" } })),
         ("/api/v3/in_force_on", identifier => JsonSerializer.Serialize(new { operation_id = "in_force_on", parameters = new { identifier, date = "2024-01-01" } })),
+        ("/api/v3/search", identifier => JsonSerializer.Serialize(new { operation_id = "search", parameters = new { identifier, query = "bail", language = "fra" } })),
     ];
 
     [TestMethod]

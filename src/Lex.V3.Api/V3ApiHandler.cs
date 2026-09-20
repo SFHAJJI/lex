@@ -80,6 +80,7 @@ internal sealed class V3ApiHandler
                     "diff" => DiffOutcome,
                     "changes_in_period" => ChangesInPeriodOutcome,
                     "in_force_on" => InForceOnOutcome,
+                    "search" => SearchOutcome,
                     _ => ResolveOutcome,
                 };
                 await V3ResolveRestRoute.HandleOutcomeAsync(
@@ -138,6 +139,9 @@ internal sealed class V3ApiHandler
 
     private V3PlatformOperationOutcome InForceOnOutcome(V3PlatformOperationRequest request) =>
         _corpusMount!.InForceOn(request, _utcNow());
+
+    private V3PlatformOperationOutcome SearchOutcome(V3PlatformOperationRequest request) =>
+        _corpusMount!.Search(request, _utcNow());
 
     private static V3PlatformOperationRefusal NoCorpusMounted(V3PlatformOperationRequest request)
     {

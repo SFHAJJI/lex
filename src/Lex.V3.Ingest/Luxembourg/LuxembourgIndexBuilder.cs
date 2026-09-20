@@ -26,6 +26,15 @@ public sealed record LuxembourgIndexBuildResult(
     ReadOnlyMemory<byte> CapabilityManifestBytes,
     V3IndexCapabilityManifest CapabilityManifest);
 
+/// <summary>One article of one held state whose searchable text matched, as the index holds it.</summary>
+public sealed record LuxembourgIndexSearchHit(
+    string WorkKey,
+    string ApplicabilityDate,
+    string StateSha256,
+    string ArticleIdentitySha256,
+    string PublisherId,
+    string? PublisherWId);
+
 public sealed record LuxembourgIndexSearchResult(
     V3IndexCapabilityLookupOutcome Outcome,
     IReadOnlyList<string> ArticleIdentities);
@@ -1264,6 +1273,68 @@ public sealed class LuxembourgIndexReader : IDisposable
             }
 
             return keys;
+        }
+    }
+
+    /// <summary>
+    /// The articles of held states, in one language, whose searchable text contains every one of
+    /// <paramref name="needles"/> as a byte-exact substring, each paired with every state that holds
+    /// it, in work key, publisher date, article identity and state digest order. With a work key, only
+    /// that work's states. Nothing is ranked, folded or selected here: which lane a hit belongs to and
+    /// which state applies on a date are the caller's rules. The result is null when the capability
+    /// manifest measured no searchable text in that language, which is the index saying it cannot
+    /// answer, as distinct from an empty list, which is no hit.
+    /// </summary>
+    public IReadOnlyList<LuxembourgIndexSearchHit>? SearchStateArticles(
+        string language, IReadOnlyList<string> needles, string? workKey)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(language);
+        ArgumentNullException.ThrowIfNull(needles);
+        if (needles.Count == 0 || needles.Any(static needle => string.IsNullOrEmpty(needle)))
+        {
+            throw new ArgumentException("A search needs at least one non-empty needle.", nameof(needles));
+        }
+
+        if (!_capabilityManifest.Cells.Any(cell =>
+                string.Equals(cell.Operation, "search", StringComparison.Ordinal) &&
+                string.Equals(cell.Column, "articles", StringComparison.Ordinal) &&
+                string.Equals(cell.Field, "searchable_text", StringComparison.Ordinal) &&
+                string.Equals(cell.Language, language, StringComparison.Ordinal)))
+        {
+            return null;
+        }
+
+        lock (_gate)
+        {
+            using var command = _connection.CreateCommand();
+            command.CommandText =
+                "SELECT s.work_key, s.applicability_date, s.state_sha256, a.article_identity_sha256, a.publisher_id, a.publisher_wid " +
+                "FROM articles a JOIN states s ON s.language=a.language AND instr(s.article_identities_json, a.article_identity_sha256)>0 " +
+                "WHERE a.language=$language" +
+                string.Concat(needles.Select(static (_, index) => $" AND instr(a.searchable_text,$needle{index})>0")) +
+                (workKey is null ? string.Empty : " AND s.work_key=$work") +
+                " ORDER BY s.work_key, s.applicability_date, a.article_identity_sha256, s.state_sha256";
+            command.Parameters.AddWithValue("$language", language);
+            for (var index = 0; index < needles.Count; index++)
+            {
+                command.Parameters.AddWithValue($"$needle{index}", needles[index]);
+            }
+
+            if (workKey is not null)
+            {
+                command.Parameters.AddWithValue("$work", workKey);
+            }
+
+            var hits = new List<LuxembourgIndexSearchHit>();
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                hits.Add(new LuxembourgIndexSearchHit(
+                    reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3),
+                    reader.GetString(4), reader.IsDBNull(5) ? null : reader.GetString(5)));
+            }
+
+            return hits;
         }
     }
 

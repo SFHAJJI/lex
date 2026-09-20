@@ -997,6 +997,333 @@ internal sealed class V3CorpusMount : IDisposable
             new V3PlatformOperationResult(request, "version_state", result.RootElement));
     }
 
+    /// <summary>The ceiling on the hits one <c>search</c> answer carries.</summary>
+    public const int SearchMaxHits = 200;
+
+    internal const string SearchRanking =
+        "none; strict lane before relaxed lane, then work key, publisher date, article identity and state digest. " +
+        "This index holds no BM25 ranker, so a page is the first hits in this order and not the best hits";
+
+    internal const string SearchMatching =
+        "byte-exact substring of the article's text; case and diacritics are significant; nothing is folded, stemmed or expanded";
+
+    internal const string SearchPageIs = "the first hits in the stated order, not the best hits";
+
+    internal const string SearchHitUnit =
+        "a hit is one article of one held state, not a provision: a provision whose wording never changed is a hit in every state that holds it";
+
+    private static readonly string[] SearchModes = ["strict", "relaxed"];
+
+    /// <summary>
+    /// <c>search</c> for Luxembourg, the two lexical lanes the mounted index can serve, resolver first.
+    /// The query first runs through the title resolver <c>resolve</c> uses (lane R1): one work is a
+    /// card ahead of every hit, several candidates are listed and none is picked. Then the strict lane,
+    /// the query as typed as a substring of an article's text, and the relaxed lane, every
+    /// whitespace-separated term as a substring in any order. An article matching both is a strict hit
+    /// and is never served again as relaxed, and every strict hit precedes every relaxed hit: relaxed
+    /// never outranks strict.
+    /// <para>
+    /// The index holds no FTS table and no ranker. What is served is an order and not a rank, no score
+    /// is served, and every answer says so, says that matching is byte-exact, and says that a page is
+    /// the first hits in the stated order and not the best ones. A requested <c>mode</c> other than the
+    /// two lanes is refused <c>retrieval_mode_unavailable</c> naming the modes held, never ignored. No
+    /// snippet is served: a hit names its article and its state with the hash-pinned permalink, and
+    /// the text is read there.
+    /// </para>
+    /// <para>
+    /// A hit is one article of one held state. Without a date every held state is searched and each
+    /// hit says its date, and the population counts distinct articles beside hits. With a date, only
+    /// the state <c>SelectAtDate</c> picks per work contributes. Across works, a work with several
+    /// states on the selected date contributes no hits and is listed as ambiguous, since one ambiguous
+    /// work must not hide the others. With a work named the question is <c>as_of</c>'s, and so are its
+    /// refusals, through the shared builders: <c>no_version_for_date</c> and <c>ambiguous_version</c>.
+    /// Zero hits is an answer. Hits are bounded and the bound is said; <c>continue_after</c> is the
+    /// last hit served and is the next request's <c>after</c>.
+    /// </para>
+    /// </summary>
+    public V3PlatformOperationOutcome Search(
+        V3PlatformOperationRequest request,
+        DateTimeOffset observedAt)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (!string.Equals(request.OperationId, "search", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("The mounted corpus search operation only accepts search/1.");
+        }
+
+        var query = RequiredString(request.Parameters, "query");
+        var language = RequiredString(request.Parameters, "language");
+        string? Optional(string name) =>
+            request.Parameters.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String
+                ? RequiredString(request.Parameters, name)
+                : null;
+        var requestedDate = Optional("date");
+        var identifier = Optional("identifier");
+        var mode = Optional("mode");
+        var after = Optional("after");
+        var limit = SearchMaxHits;
+        if (request.Parameters.TryGetProperty("limit", out var limitValue))
+        {
+            if (limitValue.ValueKind != JsonValueKind.Number || !limitValue.TryGetInt32(out limit) ||
+                limit < 1 || limit > SearchMaxHits)
+            {
+                throw new V3TransportFailureException(
+                    V3TransportFailureKind.RequestSchemaInvalid,
+                    "The operation request's 'limit' is not a whole number of hits within the ceiling.");
+            }
+        }
+
+        if (requestedDate is not null &&
+            !DateOnly.TryParseExact(requestedDate, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out _))
+        {
+            throw new V3TransportFailureException(
+                V3TransportFailureKind.RequestSchemaInvalid,
+                "The requested date is not a civil calendar date.");
+        }
+
+        var statesByWork = new Dictionary<string, IReadOnlyList<LuxembourgIndexResolvedState>>(StringComparer.Ordinal);
+        string? workKey = null;
+        if (identifier is not null)
+        {
+            if (RefuseUnlessWorkStates(request, identifier, observedAt, "r2_provision_discovery", language,
+                    out var states, out _) is { } refused)
+            {
+                return refused;
+            }
+
+            workKey = states[0].WorkKey;
+            statesByWork[workKey] = states;
+            if (requestedDate is not null)
+            {
+                // One work and one date is as_of's question, and these are as_of's refusals through
+                // the shared builders: the two must not disagree about whether it has an answer.
+                var scoped = states
+                    .Where(state => string.Equals(state.Language, language, StringComparison.Ordinal))
+                    .ToArray();
+                var selected = SelectAtDate(scoped, requestedDate).Selected;
+                if (selected.Length == 0)
+                {
+                    return RefuseNoVersionForDate(request, observedAt, scoped, requestedDate, bound: null);
+                }
+
+                if (selected.Length > 1)
+                {
+                    return RefuseAmbiguousVersion(request, observedAt, requestedDate,
+                        selected.Select(StateUrl).Order(StringComparer.Ordinal).ToArray(), bound: null);
+                }
+            }
+        }
+        else
+        {
+            if (_reader is null)
+            {
+                using var unmounted = JsonSerializer.SerializeToDocument(new { required_corpus = "lu" });
+                return V3PlatformOperationOutcome.Refused(
+                    Context("refusal", observedAt, PublisherId.LuLegilux),
+                    new V3PlatformOperationRefusal(request, "no_corpus_mounted", unmounted.RootElement));
+            }
+
+            var languagesHeld = _reader.ResolveStatePopulation().Languages.ToArray();
+            if (!languagesHeld.Contains(language, StringComparer.Ordinal))
+            {
+                using var unavailableLanguage = JsonSerializer.SerializeToDocument(new
+                {
+                    requested_language = language,
+                    available_languages = languagesHeld,
+                });
+                return V3PlatformOperationOutcome.Refused(
+                    Context("refusal", observedAt),
+                    new V3PlatformOperationRefusal(request, "language_not_available", unavailableLanguage.RootElement));
+            }
+        }
+
+        if (mode is not null && !SearchModes.Contains(mode, StringComparer.Ordinal))
+        {
+            // A mode this index cannot serve is refused, never ignored: serving the two lanes to a
+            // caller who asked for a ranked or semantic mode would be an order they take for another.
+            using var unavailableMode = JsonSerializer.SerializeToDocument(new
+            {
+                requested_mode = mode,
+                available_modes = SearchModes,
+            });
+            return V3PlatformOperationOutcome.Refused(
+                Context("refusal", observedAt, PublisherId.LuLegilux),
+                new V3PlatformOperationRefusal(request, "retrieval_mode_unavailable", unavailableMode.RootElement));
+        }
+
+        // Resolver first (lane R1): the title ladder resolve uses. A plural match lists its candidates
+        // and picks none.
+        var titles = _reader!.ResolveWorkTitle(query);
+        var titleOutcome = !titles.Available ? "no_titles_held"
+            : titles.Candidates.Count == 0 ? "no_title_match"
+            : titles.Candidates.Count == 1 ? "one_work"
+            : "several_candidates";
+        static object Card(LuxembourgIndexResolvedWork work) => new
+        {
+            work_identifier = work.WorkIdentifier,
+            expressions = work.ExpressionIris,
+            languages = work.Languages,
+            matched_title = work.MatchedTitle,
+            match_reason = work.MatchReason,
+        };
+
+        var terms = query.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)
+            .Distinct(StringComparer.Ordinal).ToArray();
+        var strictFound = _reader.SearchStateArticles(language, [query], workKey);
+        var measured = strictFound is not null;
+        IReadOnlyList<LuxembourgIndexSearchHit> strict = strictFound ?? [];
+        // An article matching the phrase and every term is a strict hit and nothing else.
+        var strictKeys = strict.Select(static hit => (hit.StateSha256, hit.ArticleIdentitySha256)).ToHashSet();
+        IReadOnlyList<LuxembourgIndexSearchHit> relaxed = terms.Length < 2
+            ? []
+            : (_reader.SearchStateArticles(language, terms, workKey) ?? [])
+                .Where(hit => !strictKeys.Contains((hit.StateSha256, hit.ArticleIdentitySha256)))
+                .ToArray();
+
+        var ambiguousWorks = new List<object>();
+        if (requestedDate is not null)
+        {
+            var selectedByWork = new Dictionary<string, string?>(StringComparer.Ordinal);
+            foreach (var key in strict.Concat(relaxed).Select(static hit => hit.WorkKey)
+                         .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal))
+            {
+                if (!statesByWork.TryGetValue(key, out var ofWork))
+                {
+                    ofWork = _reader.ResolveWorkStates(key);
+                    statesByWork[key] = ofWork;
+                }
+
+                var selected = SelectAtDate(
+                    ofWork.Where(state => string.Equals(state.Language, language, StringComparison.Ordinal)).ToArray(),
+                    requestedDate).Selected;
+                selectedByWork[key] = selected.Length == 1 ? selected[0].StateSha256 : null;
+                if (selected.Length > 1)
+                {
+                    // One ambiguous work must not hide every other work's hits: it contributes none,
+                    // names every candidate and picks none.
+                    ambiguousWorks.Add(new
+                    {
+                        work_key = key,
+                        reason = "ambiguous_version",
+                        candidates = selected.Select(StateUrl).Order(StringComparer.Ordinal).ToArray(),
+                    });
+                }
+            }
+
+            bool Applies(LuxembourgIndexSearchHit hit) =>
+                string.Equals(selectedByWork[hit.WorkKey], hit.StateSha256, StringComparison.Ordinal);
+            strict = strict.Where(Applies).ToArray();
+            relaxed = relaxed.Where(Applies).ToArray();
+        }
+
+        if (string.Equals(mode, "strict", StringComparison.Ordinal))
+        {
+            relaxed = [];
+        }
+        else if (string.Equals(mode, "relaxed", StringComparison.Ordinal))
+        {
+            strict = [];
+        }
+
+        // Relaxed never outranks strict: every strict hit, then every relaxed hit.
+        var all = strict.Select(static hit => (Lane: "strict", Hit: hit))
+            .Concat(relaxed.Select(static hit => (Lane: "relaxed", Hit: hit)))
+            .ToArray();
+        static string Cursor((string Lane, LuxembourgIndexSearchHit Hit) entry) =>
+            $"{entry.Lane}.{entry.Hit.StateSha256}.{entry.Hit.ArticleIdentitySha256}";
+        var start = 0;
+        if (after is not null)
+        {
+            var index = Array.FindIndex(all, entry => string.Equals(Cursor(entry), after, StringComparison.Ordinal));
+            if (index < 0)
+            {
+                throw new V3TransportFailureException(
+                    V3TransportFailureKind.RequestSchemaInvalid,
+                    "The operation request's 'after' names no hit of this query; a cursor is the continue_after of the same query, scope and index.");
+            }
+
+            start = index + 1;
+        }
+
+        var page = all.Skip(start).Take(limit).ToArray();
+        var truncated = start + page.Length < all.Length;
+        var hits = page.Select(entry =>
+        {
+            if (!statesByWork.TryGetValue(entry.Hit.WorkKey, out var ofWork))
+            {
+                ofWork = _reader.ResolveWorkStates(entry.Hit.WorkKey);
+                statesByWork[entry.Hit.WorkKey] = ofWork;
+            }
+
+            var state = ofWork.Single(candidate =>
+                string.Equals(candidate.StateSha256, entry.Hit.StateSha256, StringComparison.Ordinal));
+            return (object)new
+            {
+                lane = entry.Lane,
+                match_reasons = new[] { entry.Lane == "strict" ? "exact_phrase" : "all_terms" },
+                work_key = entry.Hit.WorkKey,
+                publisher_work_iri = state.PublisherWorkIri,
+                language,
+                applicability_date = entry.Hit.ApplicabilityDate,
+                article_identity_sha256 = entry.Hit.ArticleIdentitySha256,
+                publisher_id = entry.Hit.PublisherId,
+                publisher_wid = entry.Hit.PublisherWId,
+                state_sha256 = entry.Hit.StateSha256,
+                // The hash-pinned permalink names this state and no other; the text is read there.
+                resolve = new { identifier = StateUrl(state) },
+            };
+        }).ToArray();
+
+        using var result = JsonSerializer.SerializeToDocument(new
+        {
+            requested_query = query,
+            requested_language = language,
+            requested_date = requestedDate,
+            requested_identifier = identifier,
+            requested_mode = mode,
+            requested_after = after,
+            publisher = "lu-legilux",
+            ranking = SearchRanking,
+            matching = SearchMatching,
+            hit_unit = SearchHitUnit,
+            modes_held = SearchModes,
+            modes_not_held = new[] { "bm25", "semantic" },
+            work_resolution = new
+            {
+                retrieval_lane = "r1_work_discovery",
+                outcome = titleOutcome,
+                work = titles.Candidates.Count == 1 ? Card(titles.Candidates[0]) : null,
+                candidates = titles.Candidates.Count > 1 ? titles.Candidates.Select(Card).ToArray() : null,
+            },
+            terms,
+            population = new
+            {
+                // The population is the scope asked for, over every hit and not the page.
+                scope = new { identifier, language, date = requestedDate, mode },
+                searchable_text_measured = measured,
+                strict_hits = strict.Count,
+                relaxed_hits = relaxed.Count,
+                // An article identity is minted per expression, so it cannot say that two hits are one
+                // provision in two states. The publisher's own article id within one work can.
+                distinct_publisher_articles = all.Select(static entry => (entry.Hit.WorkKey, entry.Hit.PublisherId)).Distinct().Count(),
+                works_with_hits = all.Select(static entry => entry.Hit.WorkKey).Distinct(StringComparer.Ordinal).Count(),
+            },
+            ambiguous_works = ambiguousWorks,
+            limit,
+            truncated,
+            continue_after = truncated ? Cursor(page[^1]) : null,
+            // Said beside the bound, where a reader of a truncated page looks: there is no ranker, so
+            // ten of five hundred hits are the first ten in the stated order and not the ten best.
+            page_is = SearchPageIs,
+            hits,
+            corpus_sha256 = _corpus.ArtifactRef.Sha256,
+            index_sha256 = _reader.IndexRef.Sha256,
+        });
+        return V3PlatformOperationOutcome.Success(
+            Context("success", observedAt),
+            new V3PlatformOperationResult(request, "quote", result.RootElement));
+    }
+
     /// <summary>The ceiling on the rows one <c>changes_in_period</c> answer carries.</summary>
     public const int ChangesInPeriodMaxRows = 200;
 

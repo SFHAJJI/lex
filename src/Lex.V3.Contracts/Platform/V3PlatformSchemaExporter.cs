@@ -209,6 +209,15 @@ public static class V3PlatformSchemaExporter
             ("language", NonBlankString()),
             ("limit", RowLimit()),
             ("after_work_key", NonBlankString())),
+        "search" => Parameters(
+            ["query", "language"],
+            ("query", NonBlankString()),
+            ("language", NonBlankString()),
+            ("date", CivilDate()),
+            ("identifier", NonBlankString()),
+            ("mode", NonBlankString()),
+            ("limit", RowLimit()),
+            ("after", NonBlankString())),
         _ => ClosedObject(),
     };
 
