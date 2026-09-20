@@ -5,6 +5,7 @@ using System.Text.Json;
 using Lex.V3.Api;
 using Lex.V3.Contracts;
 using Lex.V3.Contracts.Platform;
+using Lex.V3.Ingest;
 using Lex.V3.Ingest.Luxembourg;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
@@ -158,10 +159,24 @@ public sealed class V3CorpusProvenanceMountTests
             .Select(identity => ground.Articles.Single(a => a.Identity == identity).ObjectRef)
             .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
         var sources = state.GetProperty("sources").EnumerateArray().ToArray();
-        CollectionAssert.AreEqual(expectedRefs, sources.Select(static s => s.GetProperty("source_sha256").GetString()).ToArray());
+        CollectionAssert.AreEqual(expectedRefs, sources.Select(static s => s.GetProperty("object_ref_sha256").GetString()).ToArray());
+        // The body facts are the corpus manifest's, read here from the corpus artifact itself and not through the mount.
+        var corpus = VerifiedLexCorpus6ManifestSet.ParseCanonicalAndVerify(
+            File.ReadAllBytes(Path.Combine(fixture.Directory, V3CorpusMount.CorpusFileName)));
         foreach (var source in sources)
         {
-            var member = ground.Members.Single(m => m.ObjectRef == source.GetProperty("source_sha256").GetString());
+            var reference = source.GetProperty("object_ref_sha256").GetString();
+            var held = corpus.Set.Members.Single(m => m.ObjectRefSha256 == reference);
+            Assert.AreEqual(held.BodySha256, source.GetProperty("body_sha256").ValueKind == JsonValueKind.Null ? null : source.GetProperty("body_sha256").GetString());
+            Assert.AreEqual(held.BodyByteLength, source.GetProperty("body_byte_length").ValueKind == JsonValueKind.Null ? null : source.GetProperty("body_byte_length").GetInt64());
+            Assert.AreEqual(held.BodyReceiptSha256, source.GetProperty("body_receipt_sha256").ValueKind == JsonValueKind.Null ? null : source.GetProperty("body_receipt_sha256").GetString());
+            // The body digest is not the object reference: naming one as the other is the overclaim this answer exists to avoid.
+            Assert.AreNotEqual(reference, source.GetProperty("body_sha256").GetString());
+        }
+
+        foreach (var source in sources)
+        {
+            var member = ground.Members.Single(m => m.ObjectRef == source.GetProperty("object_ref_sha256").GetString());
             Assert.AreEqual(member.Outcome, source.GetProperty("outcome").GetString());
             Assert.AreEqual(member.Rights, source.GetProperty("rights_disposition").ValueKind == JsonValueKind.Null ? null : source.GetProperty("rights_disposition").GetString());
             CollectionAssert.AreEqual(
@@ -289,11 +304,12 @@ public sealed class V3CorpusProvenanceMountTests
         {
             "available_languages", "derivation",
             "not_held", "not_held[].item", "not_held[].reason",
-            "publisher", "requested_date", "requested_identifier", "requested_language", "scope",
+            "publisher", "requested_date", "requested_identifier", "requested_language", "scope", "sources_note",
             "states", "states[].applicability_date", "states[].articles", "states[].expression_iri", "states[].language",
             "states[].permalink", "states[].publisher_legal_resource_iri", "states[].publisher_work_iri",
-            "states[].rule_profile_sha256s", "states[].sources", "states[].sources[].gaps", "states[].sources[].outcome",
-            "states[].sources[].rights_disposition", "states[].sources[].source_sha256", "states[].stable_coordinate",
+            "states[].rule_profile_sha256s", "states[].sources", "states[].sources[].body_byte_length", "states[].sources[].body_receipt_sha256",
+            "states[].sources[].body_sha256", "states[].sources[].gaps", "states[].sources[].object_ref_sha256", "states[].sources[].outcome",
+            "states[].sources[].rights_disposition", "states[].stable_coordinate",
             "states[].state_sha256",
             "verified_by", "verified_by.corpus_sha256", "verified_by.index_sha256", "verified_by.registry_sha256",
             "work_key",
@@ -323,6 +339,11 @@ public sealed class V3CorpusProvenanceMountTests
             "the publisher legal-resource IRI, the language, each rule-profile digest in sorted order and each article identity in sorted " +
             "order; the reader recomputes it when the index is opened and refuses an index in which it does not match its row",
             body.GetProperty("derivation").GetString());
+        Assert.AreEqual(
+            "object_ref_sha256 identifies the source object in the corpus; body_sha256 is the digest of the publisher bytes the corpus retained " +
+            "for it, body_byte_length their length and body_receipt_sha256 the digest of the corpus receipt for that body, each null where the " +
+            "corpus holds none",
+            body.GetProperty("sources_note").GetString());
         var notHeld = body.GetProperty("not_held").EnumerateArray().ToArray();
         CollectionAssert.AreEqual(
             new[] { "first_sighting_event", "signature_stamp", "publisher_revision_history" },

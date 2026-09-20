@@ -424,6 +424,11 @@ internal sealed class V3CorpusMount : IDisposable
         "the publisher legal-resource IRI, the language, each rule-profile digest in sorted order and each article identity in sorted " +
         "order; the reader recomputes it when the index is opened and refuses an index in which it does not match its row";
 
+    internal const string ProvenanceSourcesNote =
+        "object_ref_sha256 identifies the source object in the corpus; body_sha256 is the digest of the publisher bytes the corpus retained " +
+        "for it, body_byte_length their length and body_receipt_sha256 the digest of the corpus receipt for that body, each null where the " +
+        "corpus holds none";
+
     internal static readonly string[][] ProvenanceNotHeld =
     [
         ["first_sighting_event", "no observation time or first-sighting event is held, so nothing here says when the publisher's bytes were first seen"],
@@ -505,15 +510,7 @@ internal sealed class V3CorpusMount : IDisposable
                 publisher_legal_resource_iri = state.PublisherLegalResourceIri,
                 rule_profile_sha256s = state.RuleProfileSha256s,
                 articles = state.ArticleIdentities.Count,
-                sources = _reader!.ResolveStateSources(state.StateSha256)
-                    .Select(static source => new
-                    {
-                        source_sha256 = source.ObjectRefSha256,
-                        outcome = source.Outcome,
-                        rights_disposition = source.RightsDisposition,
-                        gaps = source.Gaps,
-                    })
-                    .ToArray(),
+                sources = _reader!.ResolveStateSources(state.StateSha256).Select(SourceRow).ToArray(),
             });
         }
 
@@ -544,11 +541,34 @@ internal sealed class V3CorpusMount : IDisposable
                 registry_sha256 = V3OperationRegistry.Reviewed.Sha256,
             },
             derivation = ProvenanceDerivation,
+            sources_note = ProvenanceSourcesNote,
             not_held = ProvenanceNotHeld.Select(static row => new { item = row[0], reason = row[1] }).ToArray(),
         });
         return V3PlatformOperationOutcome.Success(
             Context("success", observedAt),
             new V3PlatformOperationResult(request, "provenance_chain", result.RootElement));
+    }
+
+    /// <summary>
+    /// One source of a state: what the index recorded for the corpus member (outcome, rights, gaps) and,
+    /// from the verified corpus manifest, the digest and length of the publisher bytes it retained for it
+    /// and the digest of its receipt. Null where the corpus holds none; nothing is filled in.
+    /// </summary>
+    private object SourceRow(LuxembourgIndexStateSource source)
+    {
+        var member = _corpus.Set.Members.FirstOrDefault(candidate =>
+            candidate.Publisher == PublisherId.LuLegilux &&
+            string.Equals(candidate.ObjectRefSha256, source.ObjectRefSha256, StringComparison.Ordinal));
+        return new
+        {
+            object_ref_sha256 = source.ObjectRefSha256,
+            body_sha256 = member?.BodySha256,
+            body_byte_length = member?.BodyByteLength,
+            body_receipt_sha256 = member?.BodyReceiptSha256,
+            outcome = source.Outcome,
+            rights_disposition = source.RightsDisposition,
+            gaps = source.Gaps,
+        };
     }
 
     /// <summary>
