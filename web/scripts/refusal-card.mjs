@@ -62,6 +62,9 @@ export const REFUSAL_CODES = Object.freeze([
   'no_version_for_date',
   'ambiguous_version',
   'anchor_not_in_version',
+  // The state named by hash is not the one the work holds now. It sits with the identity refusals
+  // because that is what it is about: the caller pinned a digest and the work moved past it.
+  'pinned_digest_mismatch',
   'language_not_available',
   'text_not_available',
   'text_withheld',
@@ -256,14 +259,43 @@ export const REQUIRED_PAYLOAD = Object.freeze({
     basis:
       '31-v3-spec: "anchor_not_in_version (with nearest_anchors and the do-not-fall-back note)"',
   }),
+  pinned_digest_mismatch: Object.freeze({
+    // All four the platform mandates, because a card that drops any of them cannot do its job: the
+    // reader asked for one state by hash and must be told which hash they asked for, which one the
+    // work holds now, which provision this is about, and where the current state actually lives.
+    // Without the last, the card is a dead end for the one reader who was most careful.
+    keys: Object.freeze([
+      'requested_digest',
+      'current_digest',
+      'stable_coordinate',
+      'current_hash_pinned_url',
+    ]),
+    basis:
+      'lex-v3-operation-registry/1: pinned_digest_mismatch carries requested_digest, ' +
+      'current_digest, stable_coordinate, current_hash_pinned_url',
+  }),
   ambiguous_version: Object.freeze({
-    keys: Object.freeze(['publisher', 'work', 'candidates']),
+    // What `RefuseAmbiguousVersion` actually writes: the date asked about and the candidates,
+    // always; `bound` only when there is one. This required `publisher` and `work`, which no
+    // producer sends, so it threw on every refusal of this code the platform can make; the work
+    // is now read from the candidates themselves, in requireCandidates, which says why.
+    keys: Object.freeze(['requested_date', 'candidates']),
+    optional: Object.freeze(['bound']),
     basis:
       '35-ideal-ux: "listing each candidate as applicable from {date}, hash {8 hex}, ' +
       'published {date} ... there is no default selection"',
   }),
   profiles_differ: Object.freeze({
-    keys: Object.freeze(['profiles']),
+    // TWO producers reach this card and they send different amounts, which is what `optional` is
+    // for. The platform's `diff` sends both profile sets, both state URLs and the language it
+    // compared in; this surface's own compare view (`compare.mjs`) has the two profiles and is
+    // already showing the reader both states, so it sends the pair alone. Required is what both
+    // always send; the rest is honoured when it is there.
+    //
+    // It was `['profiles']`, a member NEITHER sends any more — so the card rejected the platform's
+    // refusal for lacking it, and would have rejected it again for carrying the five it does have.
+    keys: Object.freeze(['left_profile', 'right_profile']),
+    optional: Object.freeze(['left', 'right', 'language']),
     basis:
       '33-product-spec: "profiles_differ refusal across extraction profiles, never overridable"',
   }),
@@ -278,10 +310,34 @@ export const REQUIRED_PAYLOAD = Object.freeze({
     basis: '31-v3-spec: "text_not_available (metadata + official link + gazette chain)"',
   }),
   retrieval_mode_unavailable: Object.freeze({
-    keys: Object.freeze(['fallback_mode']),
-    basis: '31-v3-spec: "retrieval_mode_unavailable falls back visibly to keyword"',
+    // What the platform sends. The spec line this cited — "falls back visibly to keyword" — is a
+    // product decision the platform has since made the other way: `search` REFUSES a mode it
+    // cannot serve rather than quietly serving another one, naming the modes it holds, because
+    // serving a different order to a caller who asked for a ranked one is an answer they would
+    // take for something else. So `fallback_mode` is a field no producer sends, and requiring it
+    // threw on the refusal `search` actually produces. It stays renderable when a producer does
+    // disclose a fallback; it is no longer demanded from producers that correctly do not.
+    keys: Object.freeze(['requested_mode', 'available_modes']),
+    basis:
+      'lex-v3-operation-registry/1: retrieval_mode_unavailable carries requested_mode, ' +
+      'available_modes',
   }),
   identifier_unknown: Object.freeze({
+    // KEPT, DELIBERATELY, AGAINST THE PLATFORM'S MANDATE. The registry mandates
+    // requested_identifier, official_search_actions and what_would_answer for this code, and the
+    // mount sends exactly those and no population disclosure — so this requirement throws on the
+    // most ordinary refusal there is, and the parity test reports it as a live break.
+    //
+    // It is not fixed by deleting it. The disclosure is how a reader is told the SIZE of what was
+    // searched before being told it was not found ("1402 works and 4656 versions from Service
+    // central de législation", held by its own tests), which is this product's oldest invariant:
+    // absence of a record is never absence of law. A card that says "unknown identifier" without
+    // saying what was looked through invites exactly the inference the whole surface exists to
+    // prevent.
+    //
+    // So the disagreement stands until it is settled where it belongs — the producer carrying the
+    // disclosure, or the reader supplying it from its own census — and the parity test names it
+    // every run rather than letting it be forgotten.
     keys: Object.freeze(['population_disclosure']),
     basis:
       '35-ideal-ux: "the card offers the resolver ... and the out-of-corpus explanation ' +
@@ -443,16 +499,7 @@ function requireStateCoordinate(candidate, publisher, work, what) {
 }
 
 function requireCandidates(payload) {
-  const publisher = own(payload, 'publisher');
-  const work = own(payload, 'work');
   const candidates = own(payload, 'candidates');
-  if (typeof publisher !== 'string' || typeof work !== 'string') {
-    throw new Error(
-      'ambiguous_version must name the work being disambiguated; without the publisher and ' +
-        'work a candidate can only be checked on its date and hash, and two different ' +
-        'instruments can share both',
-    );
-  }
   if (!Array.isArray(candidates) || candidates.length < 2) {
     throw new Error(
       'ambiguous_version means two or more publisher states cover the date; a candidate ' +
@@ -508,6 +555,43 @@ function requireCandidates(payload) {
     );
   }
 
+  // WHERE THE WORK BEING DISAMBIGUATED COMES FROM, AND WHY IT IS NOT A PAYLOAD FIELD.
+  //
+  // This used to require `publisher` and `work` on the payload, for a reason that still holds:
+  // checked on date and hash alone, two different instruments can share both, so a candidate from
+  // another work could be offered inside this choice. But the platform does not send them. Its
+  // mandatory payload for `ambiguous_version` is `requested_date` and `candidates`
+  // (`V3OperationRegistry.cs`), and the mount sends exactly those plus an optional `bound`
+  // (`V3CorpusMount.cs`), so requiring them threw on every refusal the platform can actually
+  // produce — for the one refusal that says two versions of a law were in force on the date asked
+  // for and the system will not choose between them.
+  //
+  // So the coordinate is read from the candidates, which carry it in their own reading URLs, and
+  // every candidate must agree. That catches the mixing the original check was written against: a
+  // candidate from another work disagrees with the first one and fails here. What it cannot catch
+  // is a list that agrees on the WRONG work, because nothing else in the payload says which work
+  // was asked about. Only the producer naming it could, and whether it should is on the owner's
+  // decision sheet as its own item (it moves `registry_sha256`), not a thing to assume here.
+  //
+  // A payload that DOES state them is honoured and cross-checked, so the day that decision lands
+  // this keeps working and gets stronger rather than needing to be rewritten.
+  const first = parseObjectUrl(candidates[0]?.href ?? '');
+  if (first?.kind !== 'reading') {
+    throw new Error(
+      'the first candidate needs a reading URL: the work being disambiguated is read from the ' +
+        `candidates, and ${JSON.stringify(candidates[0]?.href)} names none`,
+    );
+  }
+
+  const publisher = own(payload, 'publisher') ?? first.publisher;
+  const work = own(payload, 'work') ?? first.work;
+  if (publisher !== first.publisher || work !== first.work) {
+    throw new Error(
+      `this ambiguity says it is about ${publisher}/${work} and its first candidate reads ` +
+        `${first.publisher}/${first.work}; a refusal and the choice it offers must be about one work`,
+    );
+  }
+
   for (const candidate of candidates) {
     for (const key of Object.keys(candidate ?? {})) {
       if (!CANDIDATE_KEYS.has(key)) {
@@ -521,22 +605,43 @@ function requireCandidates(payload) {
   }
 }
 
-function requireProfiles(profiles) {
-  if (!Array.isArray(profiles) || profiles.length !== 2) {
-    throw new Error(
-      'profiles_differ names both profiles; a refusal that does not say which two profiles ' +
-        'disagreed cannot be checked by the reader',
-    );
-  }
-  for (const profile of profiles) {
-    if (typeof profile !== 'string' || profile.trim().length === 0) {
+/**
+ * Both sides of a profile disagreement, as the producer names them.
+ *
+ * This asked for one `profiles` member holding exactly two identifiers. Nothing sends that. The
+ * only producer is `diff` (`V3CorpusMount.cs`), which sends `left_profile` and `right_profile`,
+ * each the set of rule-profile digests held by one side, beside `left`, `right` and `language`.
+ * So the card threw on every `profiles_differ` refusal the platform can actually produce, which is
+ * the same defect `ambiguous_version` had and for the same reason: a requirement written from a
+ * reading of the spec rather than from the payload the one producer sends.
+ *
+ * The rule it was protecting survives and is stated over what arrives: both sides are named, each
+ * side names at least one profile, every identifier is a digest, and the two sides differ —
+ * because a refusal that says two profiles disagreed and then names one set twice has not
+ * described a disagreement.
+ */
+function requireProfiles(payload) {
+  const sides = ['left_profile', 'right_profile'].map((key) => ({ key, value: own(payload, key) }));
+  for (const side of sides) {
+    const profiles = Array.isArray(side.value) ? side.value : [side.value];
+    if (side.value === undefined || side.value === null || profiles.length === 0) {
       throw new Error(
-        `a profile identifier must be a nonempty value: ${JSON.stringify(profile)}`,
+        `profiles_differ names both sides; without ${side.key} a reader cannot see which two ` +
+          'profiles disagreed, and a refusal that does not say has not described the disagreement',
       );
     }
+    for (const profile of profiles) {
+      if (typeof profile !== 'string' || profile.trim().length === 0) {
+        throw new Error(`a profile identifier must be a nonempty value: ${JSON.stringify(profile)}`);
+      }
+    }
   }
-  if (profiles[0] === profiles[1]) {
-    throw new Error('profiles_differ was raised with one profile named twice');
+
+  const [left, right] = sides.map((side) =>
+    (Array.isArray(side.value) ? side.value : [side.value]).join(','),
+  );
+  if (left === right) {
+    throw new Error('profiles_differ was raised with one set of profiles named on both sides');
   }
 }
 
@@ -658,8 +763,15 @@ function requirePayload(code, payload) {
   // the default this refusal exists to refuse. The nine variants Decision 63 defers stay
   // open, because closing a set nobody has specified would be inventing the contract.
   if (requirement.keys.length > 0) {
+    // Required and merely allowed are two different things, and until now the card had only one.
+    // `keys` must be present; `optional` may be. A producer that sends a field only when it has
+    // one -- `ambiguous_version`'s `bound` is written into the payload solely when it is not null
+    // -- cannot be expressed by a single list: declaring it makes it mandatory and the refusal is
+    // rejected when it is absent, and omitting it makes it undeclared and the refusal is rejected
+    // when it is there. Both rejections turn a real refusal into an exception.
     const allowed = new Set([
       ...requirement.keys,
+      ...(requirement.optional ?? []),
       ...(ABSENCES.has(code) ? ['what_would_answer', 'asserts_absence_of_law'] : []),
     ]);
     const undeclared = Object.keys(payload ?? {}).filter((key) => !allowed.has(key));
@@ -672,7 +784,7 @@ function requirePayload(code, payload) {
   }
 
   if (code === 'ambiguous_version') requireCandidates(payload);
-  if (code === 'profiles_differ') requireProfiles(own(payload, 'profiles'));
+  if (code === 'profiles_differ') requireProfiles(payload);
 }
 
 function renderCandidates(candidates) {

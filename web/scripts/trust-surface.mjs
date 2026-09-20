@@ -177,8 +177,7 @@ export function renderTrustSurface() {
         code: 'ambiguous_version',
         sentence: 'Two publisher states cover 2004-06-01.',
         payload: {
-          publisher: PUBLISHER,
-          work: WORK,
+          requested_date: '2004-06-01',
           candidates: [candidate(CANDIDATE_A, '2003-12-01'), candidate(CANDIDATE_B, '2003-12-15')],
         },
       },

@@ -97,10 +97,20 @@ export const REFUSAL_EXAMPLES = Object.freeze({
   },
   ambiguous_version: {
     sentence: 'Two publisher states cover 2004-06-01.',
+    // What `RefuseAmbiguousVersion` writes. `publisher` and `work` were here and no producer
+    // sends them; the work is read from the candidates' own reading URLs instead.
     payload: {
-      publisher: PUBLISHER,
-      work: WORK,
+      requested_date: '2004-06-01',
       candidates: [candidate(CANDIDATE_A, '2003-12-01'), candidate(CANDIDATE_B, '2003-12-15')],
+    },
+  },
+  pinned_digest_mismatch: {
+    sentence: 'That pinned state is not the one this work holds now.',
+    payload: {
+      requested_digest: CANDIDATE_A,
+      current_digest: CANDIDATE_B,
+      stable_coordinate: `${PUBLISHER}:${WORK}`,
+      current_hash_pinned_url: `/w/${PUBLISHER}/${WORK}/2003-12-15/${CANDIDATE_B}`,
     },
   },
   anchor_not_in_version: {
@@ -134,7 +144,15 @@ export const REFUSAL_EXAMPLES = Object.freeze({
   },
   profiles_differ: {
     sentence: 'These two states came from different extraction profiles.',
-    payload: { profiles: ['synthetic-pdf/1', 'synthetic-akn/1'] },
+    // Both sides named separately, as `diff` sends them. This was one `profiles` member, which no
+    // producer emits, so the card threw on every real refusal of this code.
+    payload: {
+      left_profile: ['synthetic-pdf/1'],
+      right_profile: ['synthetic-akn/1'],
+      left: readingUrl({ publisher: PUBLISHER, work: WORK, validFrom: '2004-01-01', hash: CANDIDATE_A }),
+      right: readingUrl({ publisher: PUBLISHER, work: WORK, validFrom: '2004-01-01', hash: CANDIDATE_B }),
+      language: 'fr',
+    },
   },
   not_transposable: {
     sentence: 'A regulation is not transposed.',
@@ -145,8 +163,11 @@ export const REFUSAL_EXAMPLES = Object.freeze({
     payload: { reason: 'no official source models transitional provisions as data' },
   },
   retrieval_mode_unavailable: {
-    sentence: 'Semantic retrieval is not serving; this search ran on keywords.',
-    payload: { fallback_mode: 'keyword' },
+    // `search` refuses a mode it cannot serve rather than quietly serving another, so the example
+    // says what was asked for and what is held, and no longer claims a fallback that does not
+    // happen.
+    sentence: 'Semantic retrieval is not held by this index; these are the modes it serves.',
+    payload: { requested_mode: 'semantic', available_modes: ['strict', 'relaxed'] },
   },
   no_corpus_mounted: {
     sentence: 'This build has no index mounted.',
@@ -249,7 +270,8 @@ export function renderRefusalCatalog({ locale = 'en' } = {}) {
       'each. A refusal is an answer: it carries a helpful payload, or the governing text, or ' +
       'a route to a human, and never nothing.</p>\n' +
       `      <p class="catalog-honesty">${specified.length} codes have payload keys fixed by ` +
-      `the specification. ${unspecified.length} do not yet, and say so below rather than ` +
+      `the specification or the platform's operation registry. ${unspecified.length} do not yet, ` +
+      `and say so below rather than ` +
       'appearing settled. Build against an unspecified payload and it may gain required ' +
       'fields; the code itself is versioned and will not.</p>\n' +
       '      <p>Every value on this page is synthetic and none of it is law.</p>\n' +
