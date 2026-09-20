@@ -604,6 +604,22 @@ function requireCandidates(payload) {
     );
   }
 
+  // THE SAFETY RULE IS NOT CONDITIONAL. A state the producer says is withdrawn is never offered
+  // here, whatever the rest of the list looks like. Gating this on `ranked` -- true only when EVERY
+  // candidate states its withdrawal -- meant one bare link beside a `withdrawn: true` object turned
+  // the rule off and offered the withdrawn state as a live choice, which is the exact defect the
+  // rule was written against, reintroduced by the change that made bare links renderable.
+  const withdrawn = candidates.filter((candidate) => candidate.withdrawn === true);
+  if (withdrawn.length > 0) {
+    throw new Error(
+      `${withdrawn.length} of these candidates is withdrawn; the interstitial ` +
+        'offers a choice, so every state in it must be one the publisher still holds, and a ' +
+        'withdrawn sibling is disclosed by renderSupersededState rather than offered here',
+    );
+  }
+
+  // Counting the live ones, on the other hand, needs every candidate to have said: with a bare
+  // link the producer states nothing, so there is nothing to count and the count is not attempted.
   const live = ranked ? candidates.filter((candidate) => candidate.withdrawn === false) : candidates;
   if (ranked && live.length < 2) {
     throw new Error(
@@ -623,14 +639,6 @@ function requireCandidates(payload) {
     throw new Error(
       'this ambiguity offers the same state more than once; two entries with one identity are ' +
         'not a choice, and the interstitial exists to make a reader choose',
-    );
-  }
-
-  if (ranked && live.length !== candidates.length) {
-    throw new Error(
-      `${candidates.length - live.length} of these candidates is withdrawn; the interstitial ` +
-        'offers a choice, so every state in it must be one the publisher still holds, and a ' +
-        'withdrawn sibling is disclosed by renderSupersededState rather than offered here',
     );
   }
 
