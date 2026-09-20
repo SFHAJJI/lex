@@ -235,7 +235,13 @@ test('an absent nearest state must be stated, not omitted', () => {
 
 test('the ambiguous_version interstitial never defaults and never mislabels a candidate', () => {
   const card = renderRefusalCard({ code: 'ambiguous_version', ...EXAMPLES.ambiguous_version });
-  assert.ok(card.includes('applicable from 2004-01-01, hash <code>dedbcbe0</code>, published'));
+  // The catalogue's example is now the form the platform sends: each candidate is one hash-pinned
+  // URL. So the coordinate is read from the URL, and the two facts it does not carry are rendered
+  // as not stated rather than guessed -- which is the whole point of the example.
+  assert.ok(card.includes('applicable from 2004-01-01, hash <code>dedbcbe0</code>'));
+  assert.ok(card.includes('publication date not stated by the platform'));
+  assert.ok(card.includes('withdrawal not stated by the platform'));
+  assert.ok(!card.includes('published 2003-12-01'), 'a date the producer never sent was rendered');
   assert.ok(card.includes('cfc9fe90'));
   assert.ok(card.includes('The publisher ranks neither state'));
 
@@ -1127,13 +1133,25 @@ test('a nearest state lies on the side its name claims', () => {
 test('an ambiguity offers a choice, not one state listed twice', () => {
   // Two entries with one identity satisfy a count of two and give a reader nothing to choose
   // between, which is the one thing this interstitial exists to make them do.
-  const one = EXAMPLES.ambiguous_version.payload.candidates[0];
+  // Probed in both forms the platform can send, because the identity is read from different places
+  // in each: from the string's own coordinate, and from the object's fields.
+  const link = EXAMPLES.ambiguous_version.payload.candidates[0];
   assert.throws(
     () =>
       renderRefusalCard({
         code: 'ambiguous_version',
         sentence: 'Two states cover that date.',
-        payload: { ...EXAMPLES.ambiguous_version.payload, candidates: [one, { ...one }] },
+        payload: { ...EXAMPLES.ambiguous_version.payload, candidates: [link, link] },
+      }),
+    /the same state more than once/,
+  );
+  const object = { valid_from: '2004-01-01', hash: 'dedbcbe0', href: link, withdrawn: false };
+  assert.throws(
+    () =>
+      renderRefusalCard({
+        code: 'ambiguous_version',
+        sentence: 'Two states cover that date.',
+        payload: { ...EXAMPLES.ambiguous_version.payload, candidates: [object, { ...object }] },
       }),
     /the same state more than once/,
   );
