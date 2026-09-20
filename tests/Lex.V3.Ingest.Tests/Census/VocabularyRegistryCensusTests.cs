@@ -75,7 +75,7 @@ public sealed class VocabularyRegistryCensusTests
                 "Lex.V3.Ingest.LexCorpus6Builder: Domain=13, const Schema",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgIndexBuilder: const Ddl, const Schema",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgIndexQueries: const AnchorArticles, "
-                    + "const ArticleIds, const StateArticles, const StateSources",
+                    + "const ArticleIds, const StateArticles, const StateSources, const WorkTitles",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgPublisherPdfActScopeProducer: const "
                     + "AdministrativeMemorialPrefix, const ExpectedResourceHost, const "
                     + "LegislativeMemorialPrefix, const RuleProfile, static property "

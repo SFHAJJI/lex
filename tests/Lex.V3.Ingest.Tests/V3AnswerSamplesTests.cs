@@ -86,6 +86,7 @@ public sealed class V3AnswerSamplesTests
         ["in_force_on"] = "sampled when a reader is built against it",
         ["search"] = "sampled when a reader is built against it",
         ["coverage"] = "sampled when a reader is built against it",
+        ["dossier"] = "sampled when a reader is built against it",
     };
 
     private sealed record Answer(string Operation, string Scenario, string ObjectType, JsonNode Body);

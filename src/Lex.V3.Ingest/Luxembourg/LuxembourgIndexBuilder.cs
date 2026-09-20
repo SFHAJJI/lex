@@ -153,6 +153,19 @@ public sealed record LuxembourgIndexWorkResolution(
     IReadOnlyList<LuxembourgIndexResolvedWork> Candidates);
 
 /// <summary>
+/// One title the publisher stated for one expression of a work, as the index holds it: the language, the
+/// expression, whether it is the title or the short title, the words, and the digest of the evidence they
+/// were read from. The document date the index stores beside a title is not carried: it falls back to an
+/// article's applicability date, so it is not the publisher's document date.
+/// </summary>
+public sealed record LuxembourgIndexWorkTitle(
+    string ExpressionIri,
+    string Language,
+    string TitleKind,
+    string Title,
+    string EvidenceSha256);
+
+/// <summary>
 /// Builds the immutable Luxembourg index from the same proof-complete envelope that builds
 /// lex-corpus/6. Callers cannot provide index rows or capability counts.
 /// </summary>
@@ -1828,6 +1841,36 @@ public sealed class LuxembourgIndexReader : IDisposable
                     reason))
                 .ToArray();
             return new LuxembourgIndexWorkResolution(true, Array.AsReadOnly(candidates));
+        }
+    }
+
+    /// <summary>
+    /// The titles held for the given expressions (one work's), each once, in language, expression, kind,
+    /// words and evidence order. It scans the title table: see <see cref="LuxembourgIndexQueries.WorkTitles"/>.
+    /// </summary>
+    public IReadOnlyList<LuxembourgIndexWorkTitle> ResolveWorkTitles(IReadOnlyList<string> expressionIris)
+    {
+        ArgumentNullException.ThrowIfNull(expressionIris);
+        if (expressionIris.Count == 0)
+        {
+            return Array.Empty<LuxembourgIndexWorkTitle>();
+        }
+
+        lock (_gate)
+        {
+            using var command = _connection.CreateCommand();
+            command.CommandText = LuxembourgIndexQueries.WorkTitles;
+            command.Parameters.AddWithValue("$expressions", JsonSerializer.Serialize(expressionIris));
+            using var reader = command.ExecuteReader();
+            var values = new List<LuxembourgIndexWorkTitle>();
+            while (reader.Read())
+            {
+                values.Add(new LuxembourgIndexWorkTitle(
+                    reader.GetString(0), reader.GetString(1), reader.GetString(2),
+                    reader.GetString(3), reader.GetString(4)));
+            }
+
+            return Array.AsReadOnly(values.ToArray());
         }
     }
 

@@ -83,6 +83,7 @@ internal sealed class V3ApiHandler
                     "search" => SearchOutcome,
                     "coverage" => CoverageOutcome,
                     "provenance" => ProvenanceOutcome,
+                    "dossier" => DossierOutcome,
                     _ => ResolveOutcome,
                 };
                 await V3ResolveRestRoute.HandleOutcomeAsync(
@@ -150,6 +151,9 @@ internal sealed class V3ApiHandler
 
     private V3PlatformOperationOutcome ProvenanceOutcome(V3PlatformOperationRequest request) =>
         _corpusMount!.Provenance(request, _utcNow());
+
+    private V3PlatformOperationOutcome DossierOutcome(V3PlatformOperationRequest request) =>
+        _corpusMount!.Dossier(request, _utcNow());
 
     private static V3PlatformOperationRefusal NoCorpusMounted(V3PlatformOperationRequest request)
     {

@@ -8,7 +8,8 @@ namespace Lex.V3.Ingest.Luxembourg;
 /// in the index file. Under the ones a fixture build leaves it scanned every article first for
 /// <see cref="AnchorArticles"/> and scanned <c>members</c> first for <see cref="StateSources"/>, so those two
 /// are written as <c>CROSS JOIN</c>, which it does not reorder; the other two plan as intended under
-/// every statistics the plan test tries and are left as SQLite plans them.
+/// every statistics the plan test tries and are left as SQLite plans them. <see cref="WorkTitles"/> is the
+/// one per-work query, and it is not bounded by the work: it scans the title table once (see its remarks).
 /// </summary>
 internal static class LuxembourgIndexQueries
 {
@@ -36,6 +37,23 @@ internal static class LuxembourgIndexQueries
         WHERE s.state_sha256 = $digest
         ORDER BY a.publisher_id
         """;
+
+    /// <summary>
+    /// The titles of the expressions of one work. Not a per-state query, and <b>not bounded by the work</b>:
+    /// it scans <c>work_titles</c> once and keeps the rows whose expression is one of the work's. The
+    /// table's key starts with <c>work_identifier</c>, which is the article's publisher <c>wId</c> or the
+    /// expression's IRI (<c>LuxembourgIndexBuilder</c> keys a title by whichever the article carries) and so
+    /// does not reliably name a state's work, while the expression IRI is on both a state and a title row.
+    /// There is no index on <c>expression_iri</c>, and adding one is a change to the index schema that this
+    /// query does not make. Measured on a synthetic 48,000-row table in memory (Python's SQLite 3.50.4, not
+    /// the shipped engine and not a real index): 3.7 ms, against 0.006 ms for a lookup by key. DISTINCT drops
+    /// the copies a title gets for each article it was matched to, which differ only in that key.
+    /// </summary>
+    internal const string WorkTitles =
+        "SELECT DISTINCT t.expression_iri,t.language,t.title_kind,t.title,t.evidence_sha256 " +
+        "FROM work_titles t " +
+        "WHERE t.expression_iri IN (SELECT value FROM json_each($expressions)) " +
+        "ORDER BY t.language,t.expression_iri,t.title_kind,t.title,t.evidence_sha256";
 
     internal const string StateSources =
         "SELECT DISTINCT m.object_ref_sha256,m.outcome,m.rights_disposition,m.gaps_json " +
