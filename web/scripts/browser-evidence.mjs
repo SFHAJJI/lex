@@ -20,7 +20,7 @@ import { decodePng, inkMeasure } from "./png-ink.mjs";
 import { mkdtemp, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { pathToFileURL } from "node:url";
+import { invokedDirectly } from "./invoked-directly.mjs";
 
 import { SHELLS, parseObjectUrl } from "./urls.mjs";
 
@@ -135,6 +135,58 @@ export async function pagesFrom(root) {
     );
   }
   return found;
+}
+
+/**
+ * Which of the built pages this run measures.
+ *
+ * A filter on what is **measured**, never on what is **checked to exist**: `pagesFrom` above still
+ * reads the whole directory against the whole manifest, so a page that vanished fails a scoped run
+ * as loudly as a full one. Scoping exists for the mutation sweep, where a mutation of one page was
+ * measured on the thirty-two it cannot touch, at two minutes a mutation.
+ *
+ * `asked` is null or empty for the ordinary run, which measures everything. A page asked for that
+ * the build did not emit is refused rather than skipped: a sweep whose scope names a page that is
+ * not there would report a mutation caught on a page nobody measured.
+ *
+ * @param {string[]} built  every page the build emitted
+ * @param {string|null|undefined} asked  the comma-separated list, or null
+ */
+export function pagesInScope(built, asked) {
+  const wanted = (asked ?? "")
+    .split(",")
+    .map((name) => name.trim())
+    .filter((name) => name !== "");
+  if (wanted.length === 0) return built;
+  const absent = wanted.filter((name) => !built.includes(name));
+  if (absent.length > 0) {
+    throw new Error(
+      `the run was scoped to page(s) this build did not emit: ${absent.join(", ")}; ` +
+        "a scope naming a page that is not there measures nothing and would report it clean",
+    );
+  }
+  return built.filter((name) => wanted.includes(name));
+}
+
+/**
+ * What a run says about its own scope: nothing when it measured the whole build, how much of it
+ * otherwise.
+ *
+ * Said on a failing run as well as a clean one. A failing scoped run that did not say so reads as
+ * a full one, and its silence about the pages it never opened reads as a verdict on them.
+ */
+export function scopeNote(measuredPages, builtPages) {
+  return measuredPages === builtPages ? "" : ` (${measuredPages} of ${builtPages} pages measured)`;
+}
+
+/** What a run says when it fails: how many failures, and over how much of the build. */
+export function failureHeadline(failures, measuredPages, builtPages) {
+  return `${failures} failure(s)${scopeNote(measuredPages, builtPages)}:`;
+}
+
+/** What a run says when nothing failed: how many combinations, and over how much of the build. */
+export function cleanHeadline(combinations, measuredPages, builtPages) {
+  return `all ${combinations} page/viewport combinations clean${scopeNote(measuredPages, builtPages)}`;
 }
 
 /**
@@ -1702,6 +1754,10 @@ async function sweepStaleProfiles() {
 }
 
 async function main() {
+  // What the build emitted, and what this run measured of it: the closing line says both when
+  // they differ, so a scoped run can never be read as a full one.
+  let builtPages = 0;
+  let measuredPages = 0;
   await sweepStaleProfiles();
   const browser = await findBrowser();
   const port = allocateDebuggerPort(9222, 500);
@@ -1774,7 +1830,12 @@ async function main() {
       }
     });
 
-    for (const page of await pagesFrom(root)) {
+    const built = await pagesFrom(root);
+    // A filter on what is measured; `pagesFrom` has already checked the whole build.
+    const measured = pagesInScope(built, process.env.LEX_EVIDENCE_PAGES);
+    builtPages = built.length;
+    measuredPages = measured.length;
+    for (const page of measured) {
       const url = `${site.origin}/${page}`;
       for (const viewport of WIDTHS) {
        // Forced colours is the third scheme rather than a fourth dimension, because it is a
@@ -2330,16 +2391,17 @@ async function main() {
   }
 
   if (failures.length > 0) {
-    console.error(`\n${failures.length} failure(s):`);
+    console.error(`\n${failureHeadline(failures.length, measuredPages, builtPages)}`);
     for (const failure of failures) console.error(`  ${failure}`);
     process.exitCode = 1;
     return;
   }
-  console.log(`\nall ${rows.length} page/viewport combinations clean`);
+  console.log(`\n${cleanHeadline(rows.length, measuredPages, builtPages)}`);
 }
 
 // Only run when invoked directly, so the keyboard walk can be imported and proven by
-// the self-test without launching the whole evidence run.
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+// the self-test without launching the whole evidence run. Real paths on both sides: a checkout
+// reached through a junction would otherwise print nothing and exit 0, which reads as a clean run.
+if (invokedDirectly(import.meta.url, process.argv[1])) {
   await main();
 }
