@@ -700,6 +700,7 @@ export async function drivenBehaviour(session, sessionId, rows = null, compareAt
       compare = { rows, drift };
     } else {
       opening.exposed = compareAtLoad ?? (await comparePresence(session, sessionId));
+      opening.ink = await compareInk(session, sessionId);
       const steps = [opening];
       for (const step of COMPARE_STEPS.slice(1)) {
         await read(`(() => {
@@ -716,7 +717,10 @@ export async function drivenBehaviour(session, sessionId, rows = null, compareAt
         })()`);
         await press(" ");
         const seen = await read(compareSnapshot(rows));
-        if (seen) seen.exposed = await comparePresence(session, sessionId);
+        if (seen) {
+          seen.exposed = await comparePresence(session, sessionId);
+          seen.ink = await compareInk(session, sessionId);
+        }
         steps.push(seen);
       }
       compare = { rows, steps };
@@ -845,6 +849,50 @@ const NOT_ARMED_BECAUSE = Object.freeze({
  * description is what `aria-describedby` resolves to in the tree, which is the sentence a reader
  * hears, so it is compared with the sentence on the page.
  */
+/**
+ * The ink the compare sentence leaves, measured from a photograph of its box.
+ *
+ * Rendering is not being seen. A sentence clipped to one pixel, or drawn in transparent text, is
+ * rendered, visible to `checkVisibility` and returned by `innerText`, and no reader will ever read
+ * it. This is the S5-A10 label measurement applied to the sentence: the element is scrolled into
+ * view, photographed, and its pixels counted against the background of its own box. One page
+ * carries the control, so this is about a hundred photographs in a run.
+ */
+async function compareInk(session, sessionId) {
+  const { result } = await session.send(
+    "Runtime.evaluate",
+    {
+      expression: `(() => {
+        const box = document.querySelector('[role=listbox]');
+        const section = box ? box.closest('section.results') : null;
+        const control = (section ?? document).querySelector('.compare-arming');
+        const button = control ? control.querySelector('button') : null;
+        const described = button ? document.getElementById(button.getAttribute('aria-describedby')) : null;
+        if (!described) return null;
+        described.scrollIntoView({ block: 'center', inline: 'nearest' });
+        const r = described.getBoundingClientRect();
+        return { x: r.left + window.scrollX, y: r.top + window.scrollY, width: r.width, height: r.height };
+      })()`,
+      returnByValue: true,
+    },
+    sessionId,
+  );
+  const box = result.value;
+  if (!box || box.width < 1 || box.height < 1) {
+    return { pixels: 0, share: 0, width: Math.round(box?.width ?? 0), height: Math.round(box?.height ?? 0) };
+  }
+  const { data } = await session.send(
+    "Page.captureScreenshot",
+    { format: "png", clip: { ...box, scale: 1 }, captureBeyondViewport: false },
+    sessionId,
+  );
+  return {
+    ...inkMeasure(decodePng(Buffer.from(data, "base64"))),
+    width: Math.round(box.width),
+    height: Math.round(box.height),
+  };
+}
+
 async function comparePresence(session, sessionId) {
   const { result } = await session.send(
     "Runtime.evaluate",
@@ -1008,6 +1056,15 @@ export function compareFailures(where, compare) {
           `(${shown.hiddenAttr ? "the hidden attribute" : `display ${shown.display}, visibility ${shown.visibility}`}, ` +
           `${shown.width}x${shown.height} box, the words "${shown.text}" in the document only); ` +
           "a reason a reader cannot see is not a reason",
+      );
+    } else if (seen.ink != null && (seen.ink.pixels < LABEL_INK.pixels || seen.ink.share < LABEL_INK.share)) {
+      // Rendered is not seen. A sentence clipped to a pixel, or drawn in transparent text, is
+      // rendered, passes every property check, and no reader will ever read it. This is the
+      // S5-A10 label measurement: the pixels decide.
+      failures.push(
+        `${where}: ${step.label}, the compare control's sentence is not painted: ${seen.ink.pixels} ` +
+          `ink pixel(s), ${Math.round(seen.ink.share * 1000) / 10}% of its ${seen.ink.width}x` +
+          `${seen.ink.height} box, differ from the background; a reason nobody can read is not a reason`,
       );
     } else if (shown !== null && shown.text !== s) {
       failures.push(

@@ -222,6 +222,54 @@ const MUTATIONS = [
     },
   },
   {
+    // The screen-reader-only pattern turned on the sentence: rendered, visible to every property
+    // check, one pixel of it on screen. The reviewer's variant on #683 in its own place.
+    name: "the compare sentence clipped to one pixel by the stylesheet",
+    expect: /the compare control's sentence is not painted: \d+ ink pixel\(s\), [\d.]+% of its 1x1 box, differ from the background; a reason nobody can read is not a reason/,
+    async apply(root) {
+      const file = join(root, "styles.css");
+      const css = await readFile(file, "utf8");
+      await writeFile(
+        file,
+        `${css}
+.compare-arming-state { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+`,
+        "utf8",
+      );
+    },
+  },
+  {
+    // The words drawn in nothing. innerText returns them, the box is full size, checkVisibility
+    // is true, and the reader sees an empty line under a button that will not press.
+    name: "the compare sentence drawn in transparent text",
+    expect: /the compare control's sentence is not painted: \d+ ink pixel\(s\)/,
+    async apply(root) {
+      const file = join(root, "styles.css");
+      const css = await readFile(file, "utf8");
+      await writeFile(
+        file,
+        `${css}
+.compare-arming-state, .compare-arming-state * { color: transparent; }
+@media (prefers-color-scheme: dark) { .compare-arming-state, .compare-arming-state * { color: transparent; } }
+`,
+        "utf8",
+      );
+    },
+  },
+  {
+    // Zero opacity: caught by the as-shown check before the pixels are counted, and kept because
+    // a sweep that only proves the newest check has stopped proving the older one.
+    name: "the compare sentence given zero opacity",
+    expect: /the compare control's sentence is in the page and not shown \(display block, visibility visible/,
+    async apply(root) {
+      const file = join(root, "styles.css");
+      const css = await readFile(file, "utf8");
+      await writeFile(file, `${css}
+.compare-arming-state { opacity: 0; }
+`, "utf8");
+    },
+  },
+  {
     // The control kept out of the accessibility tree, with the DOM untouched. A screen reader is
     // given neither the button nor its sentence; every attribute check still passes.
     name: "the compare control hidden from assistive technology",

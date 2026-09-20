@@ -47,6 +47,8 @@ async function cleanSteps() {
       display: "block",
       visibility: "visible",
     },
+    // Ink a reader can see: the same floor the S5-A10 label is held to.
+    ink: { pixels: 140, share: 0.14, width: 320, height: 19 },
     exposed: {
       inTree: true,
       role: "button",
@@ -256,6 +258,37 @@ test("a sentence the page holds and never shows fails, whatever the DOM says", a
     `${WHERE}: with two states of one work selected, the compare control shows "Compare these" and ` +
       `its sentence is "${COMPARE_SENTENCES.armed}"; what a reader sees and what the control says must be one sentence`,
   ]);
+});
+
+test("a sentence that is rendered and leaves no ink fails: rendered is not seen", async () => {
+  const { compareFailures, LABEL_INK } = await gate();
+  // The screen-reader-only clip: a full-size box is not the test, the pixels are.
+  const clipped = compareFailures(
+    WHERE,
+    await withStep(0, () => ({ ink: { pixels: 0, share: 0, width: 1, height: 1 } })),
+  );
+  assert.deepEqual(clipped, [
+    `${WHERE}: at load, the compare control's sentence is not painted: 0 ink pixel(s), 0% of its ` +
+      "1x1 box, differ from the background; a reason nobody can read is not a reason",
+  ]);
+  // Transparent text: the box is whole, and nothing in it differs from its background.
+  const transparent = compareFailures(
+    WHERE,
+    await withStep(2, () => ({ ink: { pixels: 0, share: 0, width: 320, height: 19 } })),
+  );
+  assert.equal(transparent.length, 1, JSON.stringify(transparent));
+  assert.match(transparent[0], /0 ink pixel\(s\), 0% of its 320x19 box/);
+  // Just under the floor fails; at the floor passes.
+  const under = compareFailures(
+    WHERE,
+    await withStep(1, () => ({ ink: { pixels: LABEL_INK.pixels - 1, share: LABEL_INK.share, width: 320, height: 19 } })),
+  );
+  assert.equal(under.length, 1, JSON.stringify(under));
+  const at = compareFailures(
+    WHERE,
+    await withStep(1, () => ({ ink: { pixels: LABEL_INK.pixels, share: LABEL_INK.share, width: 320, height: 19 } })),
+  );
+  assert.deepEqual(at, []);
 });
 
 test("a control assistive technology is never given fails, and so does one described otherwise", async () => {
