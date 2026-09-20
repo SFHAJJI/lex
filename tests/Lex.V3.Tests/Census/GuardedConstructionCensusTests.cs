@@ -71,6 +71,7 @@ public sealed class GuardedConstructionCensusTests
                     + "method public static Lex.V3.Api.SyntheticIndexResolver::Open",
                 "Lex.V3.Api.V3CorpusMount: constructor private instance "
                     + "Lex.V3.Api.V3CorpusMount::.ctor, "
+                    + "constructor private static Lex.V3.Api.V3CorpusMount::.cctor, "
                     + "method public static Lex.V3.Api.V3CorpusMount::OpenAsync",
                 "Lex.V3.Api.V3PlatformOperationOutcome: constructor private instance "
                     + "Lex.V3.Api.V3PlatformOperationOutcome::.ctor, "
@@ -80,6 +81,7 @@ public sealed class GuardedConstructionCensusTests
                     + "method private instance Lex.V3.Api.V3ApiHandler::DiffOutcome, "
                     + "method private instance Lex.V3.Api.V3ApiHandler::InForceOnOutcome, "
                     + "method private instance Lex.V3.Api.V3ApiHandler::ResolveOutcome, "
+                    + "method private instance Lex.V3.Api.V3ApiHandler::SearchOutcome, "
                     + "method private instance Lex.V3.Api.V3ApiHandler::TimelineOutcome, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::ModeUnavailable, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseAmbiguousVersion, "
@@ -92,6 +94,7 @@ public sealed class GuardedConstructionCensusTests
                     + "method public instance Lex.V3.Api.V3CorpusMount::Diff, "
                     + "method public instance Lex.V3.Api.V3CorpusMount::InForceOn, "
                     + "method public instance Lex.V3.Api.V3CorpusMount::Resolve, "
+                    + "method public instance Lex.V3.Api.V3CorpusMount::Search, "
                     + "method public instance Lex.V3.Api.V3CorpusMount::Timeline, "
                     + "method public static Lex.V3.Api.V3PlatformOperationOutcome::Refused, "
                     + "method public static Lex.V3.Api.V3PlatformOperationOutcome::Success",

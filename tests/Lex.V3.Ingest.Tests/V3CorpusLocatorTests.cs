@@ -25,7 +25,20 @@ public sealed class V3CorpusLocatorTests
         ("/api/v3/diff", identifier => JsonSerializer.Serialize(new { operation_id = "diff", parameters = new { identifier, date_from = "2024-01-01", date_to = "2025-01-01" } })),
         ("/api/v3/changes_in_period", identifier => JsonSerializer.Serialize(new { operation_id = "changes_in_period", parameters = new { identifier, date_from = "2024-01-01", date_to = "2025-01-01" } })),
         ("/api/v3/in_force_on", identifier => JsonSerializer.Serialize(new { operation_id = "in_force_on", parameters = new { identifier, date = "2024-01-01" } })),
+        ("/api/v3/search", identifier => JsonSerializer.Serialize(new { operation_id = "search", parameters = new { identifier, query = "bail", language = "fra" } })),
     ];
+
+    [TestMethod]
+    public void EveryServedRouteIsOneThisSuiteExercises()
+    {
+        // A binding added to the served list without a route in the list above is one no test drives, and
+        // the handler's dispatch has a default arm that runs resolve for it; the first request for it would
+        // be a server error. So the two lists are the same set (resolve is driven by the locator tests
+        // themselves, and is the default arm's live path).
+        var served = V3RestRouteBinding.Served.Select(static binding => binding.RawTarget).Order(StringComparer.Ordinal).ToArray();
+        var exercised = Operations.Select(static operation => operation.RawTarget).Append("/api/v3/resolve").Order(StringComparer.Ordinal).ToArray();
+        CollectionAssert.AreEqual(exercised, served);
+    }
 
     [TestMethod]
     public async Task TheLegiluxHostIsRecognisedOnADotBoundaryOnly()

@@ -371,6 +371,31 @@ public sealed class LuxembourgIndexBuilderTests
     }
 
     [TestMethod]
+    public async Task StrictReaderRejectsAStateWhoseIdentityListRepeatsAnArticle()
+    {
+        var (built, corpusRef) = await BuildStateIndexAsync();
+
+        // The search join reaches an article's state through json_each over this list and counts one
+        // row per element, so a repeated identity would serve an article twice and make its cursor
+        // ambiguous. The list is sorted here and its digest recomputed, so nothing but the repeat is wrong.
+        AssertRecomputedStateTamperRejected(built, corpusRef, connection =>
+        {
+            var state = ReadStates(connection).Single();
+            var profiles = System.Text.Json.JsonSerializer.Deserialize<string[]>(state.RuleProfilesJson)!;
+            var identities = System.Text.Json.JsonSerializer.Deserialize<string[]>(state.ArticleIdentitiesJson)!;
+            Assert.IsGreaterThan(1, identities.Length);
+            identities = identities.Append(identities[0]).Order(StringComparer.Ordinal).ToArray();
+            var identitiesJson = System.Text.Json.JsonSerializer.Serialize(identities);
+            var digest = LuxembourgIndexBuilder.StateSha256(
+                state.WorkKey, state.ApplicabilityDate, state.ExpressionIri, state.PublisherWorkIri,
+                state.PublisherLegalResourceIri, state.Language, profiles, identities);
+            Execute(connection,
+                "UPDATE states SET article_identities_json=$identities,state_sha256=$digest",
+                ("$identities", identitiesJson), ("$digest", digest));
+        }, "not canonical");
+    }
+
+    [TestMethod]
     public async Task StrictReaderRejectsALegalResourceOutsideItsWork()
     {
         var (built, corpusRef) = await BuildStateIndexAsync();

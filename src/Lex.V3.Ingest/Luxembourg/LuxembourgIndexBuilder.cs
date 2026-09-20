@@ -26,6 +26,15 @@ public sealed record LuxembourgIndexBuildResult(
     ReadOnlyMemory<byte> CapabilityManifestBytes,
     V3IndexCapabilityManifest CapabilityManifest);
 
+/// <summary>One article of one held state whose searchable text matched, as the index holds it.</summary>
+public sealed record LuxembourgIndexSearchHit(
+    string WorkKey,
+    string ApplicabilityDate,
+    string StateSha256,
+    string ArticleIdentitySha256,
+    string PublisherId,
+    string? PublisherWId);
+
 public sealed record LuxembourgIndexSearchResult(
     V3IndexCapabilityLookupOutcome Outcome,
     IReadOnlyList<string> ArticleIdentities);
@@ -1267,6 +1276,103 @@ public sealed class LuxembourgIndexReader : IDisposable
         }
     }
 
+    /// <summary>
+    /// The languages the capability manifest measured searchable article text for, in ordinal order:
+    /// the languages a search can be asked in, as distinct from the languages the index holds states
+    /// for. Empty when none was measured.
+    /// </summary>
+    public IReadOnlyList<string> SearchableLanguages() =>
+        Array.AsReadOnly(_capabilityManifest.Cells
+            .Where(static cell =>
+                string.Equals(cell.Operation, "search", StringComparison.Ordinal) &&
+                string.Equals(cell.Column, "articles", StringComparison.Ordinal) &&
+                string.Equals(cell.Field, "searchable_text", StringComparison.Ordinal))
+            .Select(static cell => cell.Language)
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToArray());
+
+    /// <summary>
+    /// The articles of held states, in one language, whose searchable text contains every one of
+    /// <paramref name="needles"/> as a byte-exact substring, each paired with every state that holds
+    /// it, in work key, publisher date, article identity and state digest order. With a work key, only
+    /// that work's states. Nothing is ranked, folded or selected here: which lane a hit belongs to and
+    /// which state applies on a date are the caller's rules. The result is null when the capability
+    /// manifest measured no searchable text in that language, which is the index saying it cannot
+    /// answer, as distinct from an empty list, which is no hit.
+    /// </summary>
+    public IReadOnlyList<LuxembourgIndexSearchHit>? SearchStateArticles(
+        string language, IReadOnlyList<string> needles, string? workKey)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(language);
+        ArgumentNullException.ThrowIfNull(needles);
+        if (needles.Count == 0 || needles.Any(static needle => string.IsNullOrEmpty(needle)))
+        {
+            throw new ArgumentException("A search needs at least one non-empty needle.", nameof(needles));
+        }
+
+        if (!_capabilityManifest.Cells.Any(cell =>
+                string.Equals(cell.Operation, "search", StringComparison.Ordinal) &&
+                string.Equals(cell.Column, "articles", StringComparison.Ordinal) &&
+                string.Equals(cell.Field, "searchable_text", StringComparison.Ordinal) &&
+                string.Equals(cell.Language, language, StringComparison.Ordinal)))
+        {
+            return null;
+        }
+
+        // The scan has its own read-only connection on the same immutable file and does not take the
+        // reader's gate. A search reads every article of a language, and holding the one shared
+        // connection for that long would stall every other operation on the mount behind it, which a
+        // one-character query would be the cheapest way to do. The path is the reader's private copy,
+        // the file whose bytes were hashed and verified when the reader was opened (both open routes
+        // copy to a private temporary path and hash that copy), so this connection reads what the shared
+        // one reads; a local process able to rewrite that file could alter either, which is no wider
+        // than it was.
+        {
+            using var connection = LuxembourgIndexBuilder.Open(_path, SqliteOpenMode.ReadOnly);
+            using var command = connection.CreateCommand();
+            command.CommandText =
+                "SELECT s.work_key, s.applicability_date, s.state_sha256, a.article_identity_sha256, a.publisher_id, a.publisher_wid " +
+                // The state of an article is found by exact element of the state's identity list, as the
+                // sibling queries do, and not by a substring of the JSON text: the join no longer rests on
+                // every value in the column being a 64-character digest (which OpenAndVerify does require).
+                // json_each yields one row per element, so this is one row per article only while no state
+                // lists an identity twice and no article sits in two states. The index cannot be opened
+                // otherwise: ValidateStates refuses a list that is not its own Distinct().Order(), a list
+                // that is not exactly the expression's articles (whose identity is the articles table's
+                // PRIMARY KEY), and an article claimed by two states. There is deliberately no DISTINCT
+                // here: it would turn a broken invariant into a plausible answer, and the refusal at open
+                // is the loud form. The refusals are pinned in LuxembourgIndexBuilderTests.
+                "FROM states s, json_each(s.article_identities_json) j " +
+                "JOIN articles a ON a.article_identity_sha256 = j.value AND a.language = s.language " +
+                "WHERE a.language=$language" +
+                string.Concat(needles.Select(static (_, index) => $" AND instr(a.searchable_text,$needle{index})>0")) +
+                (workKey is null ? string.Empty : " AND s.work_key=$work") +
+                " ORDER BY s.work_key, s.applicability_date, a.article_identity_sha256, s.state_sha256";
+            command.Parameters.AddWithValue("$language", language);
+            for (var index = 0; index < needles.Count; index++)
+            {
+                command.Parameters.AddWithValue($"$needle{index}", needles[index]);
+            }
+
+            if (workKey is not null)
+            {
+                command.Parameters.AddWithValue("$work", workKey);
+            }
+
+            var hits = new List<LuxembourgIndexSearchHit>();
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                hits.Add(new LuxembourgIndexSearchHit(
+                    reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3),
+                    reader.GetString(4), reader.IsDBNull(5) ? null : reader.GetString(5)));
+            }
+
+            return hits;
+        }
+    }
+
     /// <summary>How many works have a state dated at or before the date, in the language when one is given.</summary>
     public long CountWorksWithStateOnOrBefore(string date, string? language)
     {
@@ -1590,6 +1696,13 @@ public sealed class LuxembourgIndexReader : IDisposable
         }
     }
 
+    /// <remarks>
+    /// <b>Not what the API serves.</b> This is the period-scoped lookup that gates on the capability
+    /// manifest per date range and returns article identities only; nothing in <c>src</c> calls it, and
+    /// it is kept for the capability-gate tests that pin <c>filter_not_supported_by_index</c>. The
+    /// <c>search</c> operation reads <see cref="SearchStateArticles"/>, which gates on the language
+    /// having any measured searchable text and returns each hit with the state that holds it.
+    /// </remarks>
     public LuxembourgIndexSearchResult Search(
         string language,
         DateOnly from,
