@@ -415,6 +415,142 @@ internal sealed class V3CorpusMount : IDisposable
             new V3PlatformOperationResult(request, "version_state", result.RootElement));
     }
 
+    internal const string ProvenanceScope =
+        "the chain from the publisher's identifiers to the digests this mount verified; it holds no first-sighting event and no signature, so none is claimed";
+
+    internal const string ProvenanceDerivation =
+        "state_sha256 is a SHA-256 over the domain tag lex-v3-luxembourg-expression-state/1 and then, each as UTF-8 preceded by its " +
+        "length as four bytes big-endian, the publisher, the work key, the applicability date, the expression, the publisher work IRI, " +
+        "the publisher legal-resource IRI, the language, each rule-profile digest in sorted order and each article identity in sorted " +
+        "order; the reader recomputes it when the index is opened and refuses an index in which it does not match its row";
+
+    internal static readonly string[][] ProvenanceNotHeld =
+    [
+        ["first_sighting_event", "no observation time or first-sighting event is held, so nothing here says when the publisher's bytes were first seen"],
+        ["signature_stamp", "no signature or stamp is held or made: this states which digests this mount verified and signs nothing"],
+        ["publisher_revision_history", "no record of corrections or withdrawals of the publisher's document is held"],
+    ];
+
+    /// <summary>
+    /// <c>provenance</c>: how a served state is tied to the digests this mount verified. It takes
+    /// <c>as_of</c>'s request and selects states by <c>as_of</c>'s rule and refuses as <c>as_of</c>
+    /// refuses (shared builders), so the caller can move from an <c>as_of</c> answer to its provenance
+    /// with the same request. For each state it gives the hash-pinned permalink and coordinates, the
+    /// rule-profile digests, the number of articles, and the source documents the articles come from
+    /// with what the corpus recorded for each; beside them, the digests that verified the mount, the rule
+    /// that derives the state digest, and a fixed list of what is not held. Nothing is signed.
+    /// </summary>
+    public V3PlatformOperationOutcome Provenance(
+        V3PlatformOperationRequest request,
+        DateTimeOffset observedAt)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (!string.Equals(request.OperationId, "provenance", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("The mounted corpus provenance operation only accepts provenance/1.");
+        }
+
+        var identifier = RequiredString(request.Parameters, "identifier");
+        var requestedDate = RequiredString(request.Parameters, "date");
+        var requestedLanguage = OptionalLanguage(request.Parameters);
+        if (!DateOnly.TryParseExact(
+                requestedDate, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out _))
+        {
+            throw new V3TransportFailureException(
+                V3TransportFailureKind.RequestSchemaInvalid,
+                "The requested date is not a civil calendar date.");
+        }
+
+        if (RefuseUnlessWorkStates(request, identifier, observedAt, "r6_provenance", requestedLanguage,
+                out var states, out var availableLanguages) is { } refused)
+        {
+            return refused;
+        }
+
+        var scope = requestedLanguage is null
+            ? states
+            : states.Where(state => string.Equals(state.Language, requestedLanguage, StringComparison.Ordinal))
+                .ToArray();
+        var servedLanguages = requestedLanguage is null ? availableLanguages : new[] { requestedLanguage };
+
+        var served = new List<object>();
+        var ambiguous = new List<string>();
+        foreach (var language in servedLanguages)
+        {
+            var ofLanguage = scope
+                .Where(state => string.Equals(state.Language, language, StringComparison.Ordinal))
+                .ToArray();
+            var (selected, _) = SelectAtDate(ofLanguage, requestedDate);
+            if (selected.Length == 0)
+            {
+                continue;
+            }
+
+            if (selected.Length > 1)
+            {
+                ambiguous.AddRange(selected.Select(StateUrl));
+                continue;
+            }
+
+            var state = selected[0];
+            served.Add(new
+            {
+                language = state.Language,
+                applicability_date = state.ApplicabilityDate,
+                state_sha256 = state.StateSha256,
+                permalink = StateUrl(state),
+                stable_coordinate = StableCoordinate(state),
+                expression_iri = state.ExpressionIri,
+                publisher_work_iri = state.PublisherWorkIri,
+                publisher_legal_resource_iri = state.PublisherLegalResourceIri,
+                rule_profile_sha256s = state.RuleProfileSha256s,
+                articles = state.ArticleIdentities.Count,
+                sources = _reader!.ResolveStateSources(state.StateSha256)
+                    .Select(static source => new
+                    {
+                        source_sha256 = source.ObjectRefSha256,
+                        outcome = source.Outcome,
+                        rights_disposition = source.RightsDisposition,
+                        gaps = source.Gaps,
+                    })
+                    .ToArray(),
+            });
+        }
+
+        if (ambiguous.Count != 0)
+        {
+            return RefuseAmbiguousVersion(request, observedAt, requestedDate, ambiguous.Order(StringComparer.Ordinal).ToArray(), bound: null);
+        }
+
+        if (served.Count == 0)
+        {
+            return RefuseNoVersionForDate(request, observedAt, scope, requestedDate, bound: null);
+        }
+
+        using var result = JsonSerializer.SerializeToDocument(new
+        {
+            scope = ProvenanceScope,
+            requested_identifier = identifier,
+            requested_date = requestedDate,
+            requested_language = requestedLanguage,
+            publisher = "lu-legilux",
+            work_key = states[0].WorkKey,
+            states = served,
+            available_languages = availableLanguages,
+            verified_by = new
+            {
+                corpus_sha256 = _corpus.ArtifactRef.Sha256,
+                index_sha256 = _reader!.IndexRef.Sha256,
+                registry_sha256 = V3OperationRegistry.Reviewed.Sha256,
+            },
+            derivation = ProvenanceDerivation,
+            not_held = ProvenanceNotHeld.Select(static row => new { item = row[0], reason = row[1] }).ToArray(),
+        });
+        return V3PlatformOperationOutcome.Success(
+            Context("success", observedAt),
+            new V3PlatformOperationResult(request, "provenance_chain", result.RootElement));
+    }
+
     /// <summary>
     /// The one <c>ambiguous_version</c> refusal for every operation that resolves a date to a state: the
     /// requested date, the bound it belongs to when the operation has more than one (<c>diff</c>), and the

@@ -1647,6 +1647,19 @@ public sealed class V3CorpusResolveMountTests
             });
 
         /// <summary>
+        /// Sets the rights disposition the corpus recorded for the fixture's member(s), as the index stores
+        /// it, and re-stamps the index.
+        /// </summary>
+        public Task SetMemberRightsDispositionAsync(string disposition) =>
+            MutateArticlesAsync(connection =>
+            {
+                using var set = connection.CreateCommand();
+                set.CommandText = "UPDATE members SET rights_disposition=$rights";
+                set.Parameters.AddWithValue("$rights", disposition);
+                Assert.IsGreaterThan(0, set.ExecuteNonQuery());
+            });
+
+        /// <summary>
         /// Sets or clears (null) the publisher's article-level applicability date of one article of one
         /// expression, and re-stamps the index and its capability manifest.
         /// </summary>

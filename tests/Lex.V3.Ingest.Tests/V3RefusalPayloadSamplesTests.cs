@@ -192,6 +192,13 @@ public sealed class V3RefusalPayloadSamplesTests
         await DriveAsync(observed, mount, "search", "a mode the index cannot serve", new { query = "loyer", language = "fra", mode = "bm25" }, "retrieval_mode_unavailable");
         await DriveAsync(observed, mount, "search", "a European identifier on a Luxembourg-only mount", new { query = "loyer", language = "fra", identifier = european }, "retrieval_mode_unavailable");
 
+        // provenance
+        await DriveAsync(observed, mount, "provenance", "two states on the date", new { identifier = work, date = twinDate, language = "fra" }, "ambiguous_version");
+        await DriveAsync(observed, mount, "provenance", "a date before the history", new { identifier = work, date = beforeHistory, language = "fra" }, "no_version_for_date");
+        await DriveAsync(observed, mount, "provenance", "a language not held", new { identifier = work, date, language = "eng" }, "language_not_available");
+        await DriveAsync(observed, mount, "provenance", "an identifier no work has", new { identifier = unknown, date, language = "fra" }, "identifier_unknown");
+        await DriveAsync(observed, mount, "provenance", "a European identifier on a Luxembourg-only mount", new { identifier = european, date, language = "fra" }, "retrieval_mode_unavailable");
+
         // coverage
         await DriveAsync(observed, mount, "coverage", "a language not held", new { language = "eng" }, "language_not_available");
     }
@@ -219,6 +226,7 @@ public sealed class V3RefusalPayloadSamplesTests
         await DriveAsync(observed, mount, "in_force_on", "no Luxembourg index", new { date = "2024-01-01" }, "no_corpus_mounted");
         await DriveAsync(observed, mount, "search", "no Luxembourg index", new { query = "loyer", language = "fra" }, "no_corpus_mounted");
         await DriveAsync(observed, mount, "coverage", "no Luxembourg index", new { }, "no_corpus_mounted");
+        await DriveAsync(observed, mount, "provenance", "no Luxembourg index", new { identifier = work, date = "2024-01-01" }, "no_corpus_mounted");
     }
 
     /// <summary>Drives one served operation through the real handler and records the refusal, which must be the one named.</summary>
@@ -249,7 +257,10 @@ public sealed class V3RefusalPayloadSamplesTests
     {
         var api = Path.Combine(RepositoryRoot(), "src", "Lex.V3.Api");
         var pattern = new Regex(@"V3PlatformOperationRefusal\(\s*[A-Za-z_.]+,\s*""([a-z_]+)""", RegexOptions.CultureInvariant);
-        return Directory.EnumerateFiles(api, "*.cs", SearchOption.TopDirectoryOnly)
+        // Recursive, with build output left out: a handler added in a subfolder must not be missed silently.
+        var separators = new[] { Path.DirectorySeparatorChar + "obj" + Path.DirectorySeparatorChar, Path.DirectorySeparatorChar + "bin" + Path.DirectorySeparatorChar };
+        return Directory.EnumerateFiles(api, "*.cs", SearchOption.AllDirectories)
+            .Where(file => !separators.Any(separator => file.Contains(separator, StringComparison.Ordinal)))
             .SelectMany(file => pattern.Matches(File.ReadAllText(file)).Select(static m => m.Groups[1].Value))
             .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
     }
@@ -265,6 +276,11 @@ public sealed class V3RefusalPayloadSamplesTests
             var everywhere = union.Where(key => keySets.All(keys => keys.Contains(key, StringComparer.Ordinal))).ToArray();
             // The richest payload seen is the sample: a reader held against it is held against every field any producer sends.
             var richest = members.OrderByDescending(static o => o.Payload.EnumerateObject().Count()).ThenBy(static o => o.Operation, StringComparer.Ordinal).First();
+            // "A reader held against the sample is held against every field any producer sends" is true only
+            // while one producer's payload holds every key another sends. Two producers with disjoint keys
+            // would put a key in optional_payload_keys and in no sample, where nothing could render it.
+            var missing = union.Except(richest.Payload.EnumerateObject().Select(static p => p.Name), StringComparer.Ordinal).ToArray();
+            Assert.IsEmpty(missing, $"{group.Key}: no single producer sends every key any producer sends ({string.Join(", ", missing)} is in no sample); the census needs a sample per key set for this code.");
             produced.Add(new JsonObject
             {
                 ["code"] = group.Key,

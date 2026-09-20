@@ -20,7 +20,8 @@ internal sealed record V3RestRouteBinding(string RawTarget, string OperationId)
     public static readonly V3RestRouteBinding InForceOn = new("/api/v3/in_force_on", "in_force_on");
     public static readonly V3RestRouteBinding Search = new("/api/v3/search", "search");
     public static readonly V3RestRouteBinding Coverage = new("/api/v3/coverage", "coverage");
-    public static readonly IReadOnlyList<V3RestRouteBinding> Served = [Resolve, AsOf, Timeline, ArticleHistory, Diff, ChangesInPeriod, InForceOn, Search, Coverage];
+    public static readonly V3RestRouteBinding Provenance = new("/api/v3/provenance", "provenance");
+    public static readonly IReadOnlyList<V3RestRouteBinding> Served = [Resolve, AsOf, Timeline, ArticleHistory, Diff, ChangesInPeriod, InForceOn, Search, Coverage, Provenance];
 
     public bool Claims(string rawTarget) =>
         string.Equals(rawTarget, RawTarget, StringComparison.Ordinal) ||
