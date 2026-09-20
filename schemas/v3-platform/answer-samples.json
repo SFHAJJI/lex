@@ -6,9 +6,7 @@
     "index_sha256",
     "verified_by.corpus_sha256",
     "verified_by.index_sha256",
-    "states[].sources[].object_ref_sha256",
-    "states[].sources[].body_sha256",
-    "states[].sources[].body_receipt_sha256"
+    "states[].sources[].object_ref_sha256"
   ],
   "sampled": [
     {
@@ -387,8 +385,8 @@
             "sources": [
               {
                 "body_byte_length": 231171,
-                "body_receipt_sha256": "\u003Cvaries-per-run\u003E",
-                "body_sha256": "\u003Cvaries-per-run\u003E",
+                "body_receipt_sha256": "fb59b9fd9372a286c80c90caae9b8676839c85c22f43fcfeec4444bbbf72addb",
+                "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
                 "gaps": [],
                 "object_ref_sha256": "\u003Cvaries-per-run\u003E",
                 "outcome": "acquired",

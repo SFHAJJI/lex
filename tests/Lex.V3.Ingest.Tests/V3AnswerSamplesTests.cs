@@ -63,9 +63,13 @@ public sealed class V3AnswerSamplesTests
         "index_sha256",
         "verified_by.corpus_sha256",
         "verified_by.index_sha256",
+        // The object reference moves because the fixture mints the URN it is computed over. The body
+        // digests beside it DO NOT: they hash deterministic bytes. They were on this list anyway, put
+        // there by me alongside the three I had actually measured, and the writer seat proved what that
+        // cost -- a wrong `body_sha256` or `body_receipt_sha256` reached a reader through an answer this
+        // census passed. Measuring three fields and listing five is the error this artifact exists to
+        // catch, committed in the artifact itself.
         "states[].sources[].object_ref_sha256",
-        "states[].sources[].body_sha256",
-        "states[].sources[].body_receipt_sha256",
     ];
 
     /// <summary>
@@ -134,12 +138,31 @@ public sealed class V3AnswerSamplesTests
         // The list of fields to ignore is a list of fields nothing checks, so it is measured rather than
         // maintained: the same request twice, in one run, on two fixtures. Everything outside the list
         // must be identical. A field that starts moving fails here and is not quietly absorbed.
-        var first = BuildDocument(await ObserveAsync());
-        var second = BuildDocument(await ObserveAsync());
+        var firstRaw = await ObserveAsync();
+        var secondRaw = await ObserveAsync();
         Assert.AreEqual(
-            first,
-            second,
+            BuildDocument(firstRaw),
+            BuildDocument(secondRaw),
             "Two observations of the same request differ outside the normalised fields: add the field to VariesPerRun with its reason, or find why it moved.");
+
+        // AND THE CONVERSE, which is the direction this list was weak in. Nothing made a listed field
+        // EARN its place, so two entries that never move sat here hiding values the file could pin, and
+        // a wrong digest in either reached a reader through an answer this census passed. Every listed
+        // path that the answers actually carry must differ between two raw observations.
+        foreach (var path in VariesPerRun)
+        {
+            var before = ValuesAt(firstRaw, path);
+            var after = ValuesAt(secondRaw, path);
+            if (before.Count == 0)
+            {
+                continue;
+            }
+
+            CollectionAssert.AreNotEqual(
+                before,
+                after,
+                $"{path} is normalised and did not move between two observations: take it off VariesPerRun so the file pins it, or show the run where it moves.");
+        }
     }
 
     [TestMethod]
@@ -231,6 +254,46 @@ public sealed class V3AnswerSamplesTests
         Assert.IsNotNull(envelope.Result, $"{operation} / {scenario} answered with no result.");
         var value = JsonNode.Parse(envelope.Result.Value.GetRawText())!;
         return new Answer(operation, scenario, envelope.Result.ObjectType, value);
+    }
+
+    /// <summary>Every value an answer carries at one normalise path, in a stable order, for comparing two runs.</summary>
+    private static List<string> ValuesAt(IReadOnlyList<Answer> answers, string path)
+    {
+        var found = new List<string>();
+        foreach (var answer in answers.OrderBy(static a => a.Operation, StringComparer.Ordinal))
+        {
+            Collect(answer.Body, string.Empty, path, found);
+        }
+
+        return found;
+    }
+
+    private static void Collect(JsonNode node, string path, string wanted, List<string> found)
+    {
+        switch (node)
+        {
+            case JsonArray array:
+                foreach (var item in array)
+                {
+                    if (item is not null) Collect(item, path + "[]", wanted, found);
+                }
+
+                break;
+            case JsonObject observed:
+                foreach (var property in observed)
+                {
+                    var childPath = path.Length == 0 ? property.Key : path + "." + property.Key;
+                    if (string.Equals(childPath, wanted, StringComparison.Ordinal))
+                    {
+                        found.Add(property.Value?.GetValue<string>() ?? "<null>");
+                        continue;
+                    }
+
+                    if (property.Value is not null) Collect(property.Value, childPath, wanted, found);
+                }
+
+                break;
+        }
     }
 
     /// <summary>
