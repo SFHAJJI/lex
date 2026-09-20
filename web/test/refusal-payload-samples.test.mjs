@@ -130,6 +130,7 @@ test("a worked example carries the fields its real payload carries", async (t) =
   // The VALUES stay synthetic on purpose: the page's banner promises that nothing on it is a real
   // coordinate, and this check must not be a reason to put real ones there.
   const { REFUSAL_EXAMPLES } = await import("../scripts/refusal-catalog.mjs");
+  const { ABSENCE_CODES } = await import("../scripts/refusal-card.mjs");
   const file = await samples();
 
   for (const row of file.produced) {
@@ -178,6 +179,17 @@ test("a worked example carries the fields its real payload carries", async (t) =
         Array.isArray(real),
         `${row.code}.${key}: the example is ${Array.isArray(shown) ? "a list" : "not a list"} and the producer sends ${Array.isArray(real) ? "one" : "none"}`,
       );
+      // Inside a list too. Both being lists is not enough: the producer sends `ambiguous_version`'s
+      // candidates as hash-pinned URL STRINGS and the example taught them as objects, and a check
+      // that stopped at `Array.isArray` called that agreement.
+      if (Array.isArray(real) && Array.isArray(shown) && real.length > 0 && shown.length > 0) {
+        assert.equal(
+          typeof shown[0],
+          typeof real[0],
+          `${row.code}.${key}: the producer sends a list of ${typeof real[0]}s and the example shows a list of ${typeof shown[0]}s`,
+        );
+      }
+
       if (typeof real !== "string" || typeof shown !== "string") continue;
       assert.equal(
         shown.startsWith("/"),
@@ -191,8 +203,14 @@ test("a worked example carries the fields its real payload carries", async (t) =
       );
     }
 
+    // The absence pair is allowed only where the card demands it. Exempting the two names for
+    // EVERY code let any example carry them unnoticed, which a surviving mutant proved: the
+    // exemption is for absence codes, and writing it as a blanket one made it a hole.
+    const absenceExtras = ABSENCE_CODES.includes(row.code)
+      ? ["what_would_answer", "asserts_absence_of_law"]
+      : [];
     const invented = Object.keys(example.payload ?? {}).filter(
-      (key) => !Object.hasOwn(row.payload, key) && !["what_would_answer", "asserts_absence_of_law"].includes(key),
+      (key) => !Object.hasOwn(row.payload, key) && !absenceExtras.includes(key),
     );
     assert.deepEqual(
       invented,

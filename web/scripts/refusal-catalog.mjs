@@ -106,9 +106,16 @@ export const REFUSAL_EXAMPLES = Object.freeze({
     sentence: 'Two publisher states cover 2004-06-01.',
     // What `RefuseAmbiguousVersion` writes. `publisher` and `work` were here and no producer
     // sends them; the work is read from the candidates' own reading URLs instead.
+    // Strings, because that is what the platform sends: each candidate is one hash-pinned reading
+    // URL and nothing else. The example taught the object form -- valid_from, hash, publication
+    // date and a declared withdrawal -- which is the shape this card was BUILT for and the shape no
+    // producer emits. I taught it here while fixing the card to stop demanding it.
     payload: {
       requested_date: '2004-06-01',
-      candidates: [candidate(CANDIDATE_A, '2003-12-01'), candidate(CANDIDATE_B, '2003-12-15')],
+      candidates: [
+        `/${PUBLISHER}/${WORK}/2004-01-01--${CANDIDATE_A}`,
+        `/${PUBLISHER}/${WORK}/2004-01-15--${CANDIDATE_B}`,
+      ],
     },
   },
   pinned_digest_mismatch: {
