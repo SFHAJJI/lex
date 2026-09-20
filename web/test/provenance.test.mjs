@@ -525,3 +525,179 @@ test("a language-narrowed answer says so, and an unnarrowed one does not", async
     );
   }
 });
+
+/** The headings a rendered page shows, so a swapped one fails. `rows()` reads pairs, not headings. */
+function headings(html) {
+  return [...html.matchAll(/<h([34])>(.*?)<\/h\1>/gs)]
+    .map(([, , inner]) => text(inner.replace(/<[^>]*>/g, " ")).replace(/\s+/g, " ").trim());
+}
+
+/** The wire tokens an enum declares, read from the C# source rather than copied beside it. */
+async function wireTokens(file) {
+  const source = await readFile(new URL(`../../${file}`, import.meta.url), "utf8");
+  return new Set(
+    [...source.matchAll(/JsonStringEnumMemberName\("([a-z0-9_]+)"\)/g)].map(([, token]) => token),
+  );
+}
+
+/** The captured answer with two of everything the platform sends lists of. */
+function withTwoOfEach(answer) {
+  const state = answer.states[0];
+  const source = state.sources[0];
+  const other = (digest) => digest.slice(0, 32) + [...digest.slice(32)].reverse().join("");
+  const twoSources = [
+    { ...source, gaps: ["a_recorded_gap", "b_second_gap"] },
+    { ...source, object_ref_sha256: other(source.object_ref_sha256) },
+  ];
+  const twoProfiles = [state.rule_profile_sha256s[0], other(state.rule_profile_sha256s[0])];
+  return {
+    ...answer,
+    requested_language: null,
+    available_languages: ["deu", "fra"],
+    states: [
+      { ...state, rule_profile_sha256s: twoProfiles, sources: twoSources },
+      {
+        ...state,
+        language: "deu",
+        state_sha256: other(state.state_sha256),
+        rule_profile_sha256s: twoProfiles,
+        sources: twoSources,
+      },
+    ],
+  };
+}
+
+test("a list with two things in it shows both, in both renderers", async () => {
+  // The writer seat's most serious class, and the one my own sixteenth mutant was an instance of:
+  // the captured answer has ONE language, ONE state, ONE source, ONE rule profile and NO gaps, so a
+  // page showing only the first of each passed every test. That HIDES data rather than misreporting
+  // it, which is worse. Repairing the examples would have left the class alive; this is the general
+  // test instead.
+  const answer = withTwoOfEach(withDigests(await capturedAnswer()));
+  const state = answer.states[0];
+
+  for (const [renderer, html] of [
+    ["string", renderProvenance(answer)],
+    ["react", renderToStaticMarkup(h(Provenance, { answer }))],
+  ]) {
+    const shown = rows(html);
+    assert.equal(shown.get("languages held"), "deu fra", `${renderer} dropped a held language`);
+    assert.equal(
+      shown.get("rule profiles").split(" | ")[0],
+      state.rule_profile_sha256s.join(" "),
+      `${renderer} dropped a rule profile`,
+    );
+    assert.equal(
+      shown.get("gaps recorded").split(" | ")[0],
+      "a_recorded_gap b_second_gap",
+      `${renderer} dropped a recorded gap`,
+    );
+
+    const seen = headings(html);
+    assert.ok(seen.some((heading) => heading.startsWith("fra,")), `${renderer} dropped the fra state`);
+    assert.ok(seen.some((heading) => heading.startsWith("deu,")), `${renderer} dropped the deu state`);
+    for (const source of state.sources) {
+      assert.ok(html.includes(source.object_ref_sha256), `${renderer} dropped a source of a state`);
+    }
+  }
+});
+
+test("a state's heading names its own language and date", async () => {
+  // `rows()` reads label/value pairs and the leaf check asks only that a value appear somewhere, so
+  // a heading with its language and date swapped passed both of them.
+  const answer = withDigests(await capturedAnswer());
+  const state = answer.states[0];
+  const expected = `${state.language}, applicable from ${state.applicability_date}`;
+  for (const [renderer, html] of [
+    ["string", renderProvenance(answer)],
+    ["react", renderToStaticMarkup(h(Provenance, { answer }))],
+  ]) {
+    assert.ok(headings(html).includes(expected), `${renderer}'s state heading is not "${expected}"`);
+  }
+});
+
+test("every free-text field the page prints is escaped, found rather than listed", async () => {
+  // The listed version of this test named six fields and missed three call sites. So the paths are
+  // WALKED: every string leaf the answer carries takes the hostile value in turn, and a path the
+  // page validates (a digest, a date) refuses it and is skipped. A free-text field this page gains
+  // later is covered the day it arrives, which a list can never be.
+  const answer = withDigests(await capturedAnswer());
+  const hostile = "<img src=x onerror=alert(1)> & more";
+  const leaves = [];
+  const walk = (node, path) => {
+    if (Array.isArray(node)) node.forEach((item, index) => walk(item, `${path}[${index}]`));
+    else if (node && typeof node === "object") {
+      for (const key of Object.keys(node)) walk(node[key], path.length === 0 ? key : `${path}.${key}`);
+    } else if (typeof node === "string") leaves.push(path);
+  };
+  walk(answer, "");
+  assert.ok(leaves.length > 10, "the walk found almost no string leaves; it is not walking");
+
+  let covered = 0;
+  for (const path of leaves) {
+    const clone = structuredClone(answer);
+    const keys = path.split(/[.[\]]+/).filter((key) => key.length > 0);
+    let cursor = clone;
+    for (const key of keys.slice(0, -1)) cursor = cursor[key];
+    cursor[keys.at(-1)] = hostile;
+
+    let string;
+    try {
+      string = renderProvenance(clone);
+    } catch {
+      continue; // the page validates this path, so it is not free text
+    }
+    covered += 1;
+    const react = renderToStaticMarkup(h(Provenance, { answer: clone }));
+    for (const [renderer, html] of [["string", string], ["react", react]]) {
+      assert.equal(html.includes("<img"), false, `${renderer} let ${path} through as markup`);
+      assert.equal(text(html).includes(hostile), true, `${renderer} did not print ${path} as text`);
+    }
+  }
+  assert.ok(covered > 5, `only ${covered} free-text paths were exercised; the walk is not reaching them`);
+});
+
+test("each digest rule has a fixture only it rejects", async () => {
+  // My own #706 lesson, which I applied to the census and not to this page: the only bad digest
+  // tried was "nope", which is neither 64 long nor hex, so deleting either rule alone still
+  // rejected it. One fixture breaking two rules tests neither of them.
+  const answer = withDigests(await capturedAnswer());
+  const state = answer.states[0];
+  for (const [value, why] of [
+    ["z".repeat(64), "64 characters and not hex"],
+    ["abcdef", "hex and not 64 characters"],
+  ]) {
+    assert.throws(
+      () => renderProvenance({ ...answer, states: [{ ...state, state_sha256: value }] }),
+      /is not a SHA-256 digest/,
+      `a digest that is ${why} was accepted`,
+    );
+  }
+});
+
+test("the preview's tokens are the publisher's vocabulary, read from the source that declares it", async () => {
+  // Writing the captured tokens into two constants put the preview right and held it nowhere: the
+  // next edit can bring `admitted` back. The vocabularies are read from the enums that declare them,
+  // so this is a second witness rather than a copy of one.
+  const outcomes = await wireTokens("src/Lex.V3.Ingest/LexCorpus6Builder.cs");
+  const rights = await wireTokens("src/Lex.V3.Contracts/Source/Luxembourg/LuxembourgRightsChannels.cs");
+  assert.ok(outcomes.has("acquired"), "the outcome vocabulary did not parse");
+  assert.ok(rights.size > 3, "the rights vocabulary did not parse");
+
+  for (const preview of PREVIEW_ANSWERS) {
+    for (const state of preview.answer.states) {
+      for (const source of state.sources) {
+        assert.ok(
+          outcomes.has(source.outcome),
+          `${preview.lexId}: outcome "${source.outcome}" is not a corpus outcome token`,
+        );
+        if (source.rights_disposition !== null) {
+          assert.ok(
+            rights.has(source.rights_disposition),
+            `${preview.lexId}: rights "${source.rights_disposition}" is not a rights token`,
+          );
+        }
+      }
+    }
+  }
+});
