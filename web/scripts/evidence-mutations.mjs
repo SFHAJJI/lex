@@ -719,6 +719,14 @@ async function replaceOnce(file, pattern, replacement) {
  * A selection that names nothing is refused rather than sweeping nothing and reporting it clean.
  */
 export function mutationsToSweep(mutations, only) {
+  // A sweep that judged nothing is not a sweep that found nothing, and the closing line cannot tell
+  // them apart: with no mutations at all it reads "all 0 induced mutations were caught" and ends 0.
+  // The selection below is already refused for naming nothing; an empty list is the same refusal
+  // one step earlier.
+  if (mutations.length === 0) {
+    throw new Error("this run was given no mutations; a sweep that judges nothing reports nothing");
+  }
+
   const wanted = (only ?? "").trim();
   if (wanted === "") return mutations;
   const chosen = mutations.filter((mutation) => mutation.name.includes(wanted));
@@ -784,27 +792,29 @@ export function scopeFor(pages, full) {
 /**
  * The environment the browser evidence run is given.
  *
- * Built here, and not spread at the call site, because the caller's own `LEX_EVIDENCE_PAGES` must
- * not survive into it. A caller who exports that variable and asks for a full sweep would otherwise
- * get runs scoped to their pages while the sweep says it measured every one — and on a full sweep
- * that is not merely a smaller run: `declarationVerdict` would judge every declaration against
- * output from a run that could not have seen the pages it is judging, and report the declarations
- * sound. Wrong in the direction that reads as right. The sweep's own scope is the only page scope
- * the child sees, and its absence means every page; everything else the caller exported is passed
- * through.
+ * **No `LEX_EVIDENCE_` variable of the caller's reaches the child. The sweep's own are the only
+ * ones it is given.** Everything else the caller exported is passed through.
+ *
+ * The rule is stated over the whole family because three separate defects here were the same
+ * defect, and each time I closed the instance rather than the class:
+ *
+ * - `LEX_EVIDENCE_PAGES` scoped a sweep that said it had measured every page, so
+ *   `declarationVerdict` judged every declaration against a run that could not have seen the pages
+ *   it was judging, and called them sound;
+ * - the same variable one spelling away, because Windows environment names are case-insensitive and
+ *   the removal was exact-case: `$env:lex_evidence_pages` walked straight through the fix;
+ * - `LEX_EVIDENCE_FAST`, which is not a page scope at all and is a scope all the same — it collapses
+ *   five viewport widths to one and three colour schemes to one, so a sweep judged every mutation
+ *   on a fifteenth of the matrix in 4 seconds instead of 20 and printed the same sentence.
+ *
+ * A variable this harness grows later cannot leak without someone deliberately letting it. The
+ * knobs still work where they are meant to: the clean `npm run evidence` reads them directly and is
+ * not built by this function.
  */
 export function childEnv(env, root, scope) {
-  // Removed in every case of the name, then the sweep's own set. Windows environment names are
-  // case-insensitive: `process.env` is a case-insensitive view, spreading it into a plain object
-  // keeps whatever case the caller typed, and the child reads the name case-insensitively. An
-  // exact-case delete therefore closed this for `LEX_EVIDENCE_PAGES` and left `lex_evidence_pages`
-  // — which is what `$env:lex_evidence_pages = "..."` produces — reaching the child untouched.
-  // Same mechanism, same defect, one spelling away. The root goes the same way: a caller's spelling
-  // of it must not outlive the sweep's, whichever order the keys happen to be in.
-  const ours = new Set(["LEX_EVIDENCE_PAGES", "LEX_EVIDENCE_ROOT"]);
   const given = {};
   for (const [name, value] of Object.entries(env)) {
-    if (!ours.has(name.toUpperCase())) given[name] = value;
+    if (!name.toUpperCase().startsWith("LEX_EVIDENCE_")) given[name] = value;
   }
 
   given.LEX_EVIDENCE_ROOT = root;
@@ -836,6 +846,27 @@ function run(root, env) {
 // rebuilds dist) leaked a hand-applied stylesheet into later mutations and reported them caught for
 // the wrong reason.
 /**
+ * A mutation's declaration, or the refusal that says it has none.
+ *
+ * Asked **before** the browser is started as well as when the verdict is given, because the scoped
+ * path reaches `scopeFor` first and a missing `pages` died there as a `TypeError` about `join`,
+ * while the sentence that explains what is wrong was only reachable on a full run.
+ *
+ * An empty array is not a declaration. It would otherwise pass every check here and make the
+ * judgement vacuous: `declarationVerdict` has no declared page to find missing, so a mutation
+ * declaring `[]` is reported caught wherever it is caught, and the sweep would look for its defect
+ * nowhere at all.
+ */
+export function requireDeclaration(mutation) {
+  const pages = mutation.pages;
+  if (pages === "all" || (Array.isArray(pages) && pages.length > 0)) return pages;
+  throw new Error(
+    `${mutation.name} declares no pages; every mutation says where its defect can be seen, ` +
+      'or "all" when it can be seen only across pages',
+  );
+}
+
+/**
  * What the sweep says about one mutation, and whether it counts against the head.
  *
  * Pure, so the node tests hold every line the sweep prints and every verdict it counts. The
@@ -849,12 +880,7 @@ function run(root, env) {
  */
 export function judgeMutation(mutation, result, full) {
   const { code, output } = result;
-  if (mutation.pages !== "all" && !Array.isArray(mutation.pages)) {
-    throw new Error(
-      `${mutation.name} declares no pages; every mutation says where its defect can be seen, ` +
-        'or "all" when it can be seen only across pages',
-    );
-  }
+  requireDeclaration(mutation);
   if (code === 0) {
     return { failed: true, kind: "uncaught", report: [`STILL GREEN  ${mutation.name}`] };
   }
@@ -922,6 +948,9 @@ export async function sweepWith({
     throw new Error("a sweep must be told whether it measures every page; `full` is not optional");
   }
   const counts = { uncaught: 0, misdeclared: 0, unjudged: 0 };
+  // Every declaration read before the first browser starts: a list with one undeclared mutation in
+  // it should cost nothing, not fail an hour in.
+  for (const mutation of mutations) requireDeclaration(mutation);
   for (const mutation of mutations) {
     const root = await prepare();
     try {

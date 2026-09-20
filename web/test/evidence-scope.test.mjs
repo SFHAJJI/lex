@@ -181,16 +181,42 @@ test("the sweep asks for the verdict and counts it: a dead or silent call site f
   assert.deepEqual(scoped, { uncaught: 0, misdeclared: 0, unjudged: 0 }, quiet.join("\n"));
   assert.ok(quiet.some((l) => l.startsWith("caught       ")), quiet.join("\n"));
 
-  // A mutation that declares nothing is refused before any browser is asked to run.
+  // A mutation that declares nothing is refused before anything is copied, served or run, in both
+  // modes. It used to be refused only on a full run, and only when the judgement was reached: the
+  // scoped path met `scopeFor` first and died there with a TypeError about `join`, so the sentence
+  // that says what is wrong was unreachable on the default path.
+  for (const full of [true, false]) {
+    let prepared = 0;
+    let ran = 0;
+    await assert.rejects(
+      () => sweepWith({
+        mutations: [
+          { name: "declared", pages: ["a.html"], expect: /x/, apply: async () => {} },
+          { name: "undeclared", expect: /x/, apply: async () => {} },
+        ],
+        prepare: async () => (prepared += 1, prepare()),
+        run: async () => (ran += 1, { code: 1, output: "  a.html: x" }),
+        full,
+        log: () => {},
+      }),
+      /undeclared declares no pages/,
+      `full: ${full}`,
+    );
+    assert.equal(prepared, 0, "a list with an undeclared mutation in it should cost nothing");
+    assert.equal(ran, 0);
+  }
+
+  // An empty declaration is not a declaration: it passes every check and judges nothing, so the
+  // sweep would look for that defect on no page at all.
   await assert.rejects(
     () => sweepWith({
-      mutations: [{ name: "undeclared", expect: /x/, apply: async () => {} }],
+      mutations: [{ name: "empty", pages: [], expect: /x/, apply: async () => {} }],
       prepare,
       run: async () => ({ code: 1, output: "x" }),
       full: true,
       log: () => {},
     }),
-    /declares no pages/,
+    /empty declares no pages/,
   );
 
   // And the verdict itself, for the two counting branches the sweep reports.
@@ -698,4 +724,58 @@ test("a scoped run says so whether it passed or failed", async () => {
   assert.equal(failureHeadline(4, 33, 33), "4 failure(s):");
   assert.equal(cleanHeadline(495, 33, 33), "all 495 page/viewport combinations clean");
   assert.equal(cleanHeadline(30, 2, 33), "all 30 page/viewport combinations clean (2 of 33 pages measured)");
+});
+
+test("no LEX_EVIDENCE_ variable of the caller's reaches the run", async () => {
+  // Three defects here were one defect: a caller's LEX_EVIDENCE_PAGES scoping a sweep that said it
+  // measured every page; the same one spelling away, because Windows names are case-insensitive;
+  // and LEX_EVIDENCE_FAST, which is not a page scope and is a scope all the same -- it collapses
+  // five widths to one and three colour schemes to one, so a sweep judged all 45 mutations on a
+  // fifteenth of the matrix, in 4 seconds against 20, and printed the same sentence. The rule is
+  // the family, not the names: the sweep's own are the only ones the child is given.
+  const { childEnv, scopeFor } = await import("../scripts/evidence-mutations.mjs");
+  const callers = {
+    PATH: "/usr/bin",
+    HOME: "/home/someone",
+    LEX_EVIDENCE_FAST: "1",
+    lex_evidence_fast: "1",
+    LEX_EVIDENCE_PAGES: "compare.html",
+    lex_evidence_pages: "compare.html",
+    LEX_EVIDENCE_ROOT: "C:/somewhere/else",
+    LEX_EVIDENCE_SCOPE: "full",
+    LEX_EVIDENCE_ONLY: "the Home key",
+    LEX_EVIDENCE_SOMETHING_ADDED_LATER: "1",
+  };
+
+  for (const scope of [null, "reading.html"]) {
+    const given = childEnv(callers, "/tmp/root", scope);
+    const ours = Object.keys(given).filter((key) => key.toUpperCase().startsWith("LEX_EVIDENCE_"));
+    assert.deepEqual(
+      ours.sort(),
+      scope === null ? ["LEX_EVIDENCE_ROOT"] : ["LEX_EVIDENCE_PAGES", "LEX_EVIDENCE_ROOT"],
+      `scope ${scope}`,
+    );
+    assert.equal(given.LEX_EVIDENCE_ROOT, "/tmp/root");
+    // Everything that is not ours is passed through untouched.
+    assert.equal(given.PATH, "/usr/bin");
+    assert.equal(given.HOME, "/home/someone");
+  }
+
+  assert.equal(childEnv(callers, "/tmp/root", scopeFor(["a.html"], false)).LEX_EVIDENCE_PAGES, "a.html");
+  // And the caller's environment is not edited under them.
+  assert.equal(callers.LEX_EVIDENCE_FAST, "1");
+});
+
+test("a sweep of no mutations is refused, not reported clean", async () => {
+  // `all 0 induced mutations were caught over the pages each declares.` and exit 0 is what a sweep
+  // that judged nothing would have said, and it reads exactly like a sweep that found nothing.
+  const { mutationsToSweep, sweepAll, MUTATIONS } = await import("../scripts/evidence-mutations.mjs");
+  assert.throws(() => mutationsToSweep([], ""), /given no mutations/);
+  assert.throws(() => mutationsToSweep([], "the Home key"), /given no mutations/);
+  await assert.rejects(
+    () => sweepAll({}, { mutations: [], prepare: async () => "", run: async () => ({ code: 1, output: "" }), log: () => {}, err: () => {} }),
+    /given no mutations/,
+  );
+  // The real list is not empty, which is what makes the guard a guard and not a tautology.
+  assert.ok(MUTATIONS.length > 0);
 });
