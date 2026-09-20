@@ -432,3 +432,119 @@ test("a failure of a kind the sweep does not count is refused, not counted as no
     /failed as "something new", which the sweep does not count/,
   );
 });
+
+test("a whole sweep, from an environment to an exit code", async () => {
+  // The five things that survived the writer seat's mutants on the previous head, all of them in
+  // the shell around the judgement rather than in it: the selection read but not passed on, the
+  // summary counting the whole list, the scope taken from a module constant no test could set, and
+  // a failing sweep still ending 0. They are now inside one function a test drives.
+  const { sweepAll } = await import("../scripts/evidence-mutations.mjs");
+  const { mkdtemp } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const prepare = () => mkdtemp(join(tmpdir(), "lex-sweepall-"));
+  // A list of three that touch nothing, so the sweep's own wiring is what is under test.
+  const mutations = [
+    { name: "the Home key made to stay put", pages: ["search-react.html"], expect: /the defect/, apply: async () => {} },
+    { name: "a second listbox made tabbable", pages: ["search-react.html"], expect: /the defect/, apply: async () => {} },
+    { name: "the shell densities flattened", pages: "all", expect: /the defect/, apply: async () => {} },
+  ];
+  const caught = { code: 1, output: "  search-react.html @narrow/light: the defect is here\n" };
+
+  // One of the three selected, scoped.
+  const said = [];
+  const seen = [];
+  const one = await sweepAll(
+    { LEX_EVIDENCE_ONLY: "Home key" },
+    { mutations, prepare, run: async (root, env) => (seen.push(env), caught), log: (l) => said.push(l), err: (l) => said.push(l) },
+  );
+  assert.equal(one.swept, 1);
+  assert.equal(one.exitCode, 0);
+  assert.equal(one.summary, "all 1 induced mutations were caught over the pages each declares (1 of 3 selected).");
+  // Said out loud, not merely returned: the count the sweep reports is the count it swept.
+  assert.ok(said.some((l) => l.includes("(1 of 3 selected)")), said.join("\n"));
+  // One selected is one run: a sweep that ran the whole list while saying it ran the selection
+  // would have the same summary and three times the cost.
+  assert.equal(seen.length, 1);
+  // Scoped, the child is given the pages the mutation declares, and a root to serve.
+  assert.equal(seen[0].LEX_EVIDENCE_PAGES, "search-react.html");
+  assert.ok(seen[0].LEX_EVIDENCE_ROOT);
+
+  // Full, with a caller's own page scope exported: the child must not see it, or every declaration
+  // would be judged against a run that could not have seen the pages it is judging.
+  const envs = [];
+  const full = await sweepAll(
+    { LEX_EVIDENCE_SCOPE: "full", LEX_EVIDENCE_PAGES: "compare.html" },
+    { mutations, prepare, run: async (root, env) => (envs.push(env), caught), log: () => {}, err: () => {} },
+  );
+  assert.equal(envs.length, 3);
+  for (const env of envs) assert.equal("LEX_EVIDENCE_PAGES" in env, false);
+  assert.equal(full.summary, "all 3 induced mutations were caught over every page.");
+
+  // The mutation declaring "all" is given every page even when the sweep is scoped.
+  const scopedEnvs = [];
+  await sweepAll(
+    { LEX_EVIDENCE_ONLY: "densities" },
+    { mutations, prepare, run: async (root, env) => (scopedEnvs.push(env), caught), log: () => {}, err: () => {} },
+  );
+  assert.equal("LEX_EVIDENCE_PAGES" in scopedEnvs[0], false);
+
+  // A sweep that failed ends 1, says which failure, and says it where failures are read.
+  const out = [];
+  const errs = [];
+  const failing = await sweepAll(
+    { LEX_EVIDENCE_ONLY: "Home key" },
+    {
+      mutations,
+      prepare,
+      run: async () => ({ code: 0, output: "all 495 page/viewport combinations clean\n" }),
+      log: (l) => out.push(l),
+      err: (l) => errs.push(l),
+    },
+  );
+  assert.equal(failing.exitCode, 1);
+  assert.equal(failing.summary, "1 induced mutation(s) were not caught.");
+  assert.ok(errs.some((l) => l.includes("were not caught")), errs.join("\n"));
+  assert.equal(out.some((l) => l.includes("were not caught")), false);
+
+  // And with no list given, the sweep is the real one: a selection naming nothing is refused
+  // against the 45, before a single copy of the build is made.
+  await assert.rejects(
+    () => sweepAll({ LEX_EVIDENCE_ONLY: "no such mutation" }, { prepare, run: async () => caught, log: () => {}, err: () => {} }),
+    /would sweep nothing/,
+  );
+});
+
+test("a sweep is never left to guess whether it measured every page", async () => {
+  // `full` had a default, so every test passed it and production never did: the judgement could
+  // have been off in production with the whole suite green.
+  const { sweepWith } = await import("../scripts/evidence-mutations.mjs");
+  await assert.rejects(
+    () => sweepWith({ mutations: [], prepare: async () => "", run: async () => ({ code: 1, output: "" }) }),
+    /`full` is not optional/,
+  );
+});
+
+test("a mutation is selected by any part of its name, and a page name is read whole", async () => {
+  const { mutationsToSweep, pageOf, MUTATIONS } = await import("../scripts/evidence-mutations.mjs");
+  // Not a prefix of the name: selecting by prefix would sweep nothing and say so.
+  const mid = mutationsToSweep(MUTATIONS, "made to stay put");
+  assert.equal(mid.length, 1);
+  assert.match(mid[0].name, /^the Home key/);
+  // The name ends where the sentence's punctuation begins; a viewport glued to it is not a page.
+  assert.equal(pageOf("  search-react.html@narrow: Home moved focus nowhere"), null);
+  assert.equal(pageOf("  search-react.htmlx @narrow: x"), null);
+  assert.equal(pageOf("  search-react.html @narrow: x"), "search-react.html");
+});
+
+test("a scoped run says so whether it passed or failed", async () => {
+  // The sentence was on the clean branch only, so a failing scoped run read as a failing full one
+  // and its silence about the pages it never opened read as a verdict on them.
+  const { failureHeadline, cleanHeadline, scopeNote } = await import("../scripts/browser-evidence.mjs");
+  assert.equal(scopeNote(33, 33), "");
+  assert.equal(scopeNote(2, 33), " (2 of 33 pages measured)");
+  assert.equal(failureHeadline(4, 2, 33), "4 failure(s) (2 of 33 pages measured):");
+  assert.equal(failureHeadline(4, 33, 33), "4 failure(s):");
+  assert.equal(cleanHeadline(495, 33, 33), "all 495 page/viewport combinations clean");
+  assert.equal(cleanHeadline(30, 2, 33), "all 30 page/viewport combinations clean (2 of 33 pages measured)");
+});

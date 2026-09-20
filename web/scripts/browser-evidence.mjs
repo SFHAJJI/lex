@@ -179,6 +179,16 @@ export function scopeNote(measuredPages, builtPages) {
   return measuredPages === builtPages ? "" : ` (${measuredPages} of ${builtPages} pages measured)`;
 }
 
+/** What a run says when it fails: how many failures, and over how much of the build. */
+export function failureHeadline(failures, measuredPages, builtPages) {
+  return `${failures} failure(s)${scopeNote(measuredPages, builtPages)}:`;
+}
+
+/** What a run says when nothing failed: how many combinations, and over how much of the build. */
+export function cleanHeadline(combinations, measuredPages, builtPages) {
+  return `all ${combinations} page/viewport combinations clean${scopeNote(measuredPages, builtPages)}`;
+}
+
 /**
  * The pages a declared route surface requires, that a measured page set does not contain.
  *
@@ -2381,12 +2391,12 @@ async function main() {
   }
 
   if (failures.length > 0) {
-    console.error(`\n${failures.length} failure(s)${scopeNote(measuredPages, builtPages)}:`);
+    console.error(`\n${failureHeadline(failures.length, measuredPages, builtPages)}`);
     for (const failure of failures) console.error(`  ${failure}`);
     process.exitCode = 1;
     return;
   }
-  console.log(`\nall ${rows.length} page/viewport combinations clean${scopeNote(measuredPages, builtPages)}`);
+  console.log(`\n${cleanHeadline(rows.length, measuredPages, builtPages)}`);
 }
 
 // Only run when invoked directly, so the keyboard walk can be imported and proven by

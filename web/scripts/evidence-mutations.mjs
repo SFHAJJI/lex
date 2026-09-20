@@ -712,17 +712,6 @@ async function replaceOnce(file, pattern, replacement) {
 }
 
 /**
- * Whether this sweep measures every page for every mutation.
- *
- * Scoped is the default: a mutation of one page was measured on the thirty-two it cannot touch,
- * at about two minutes a mutation and 45 mutations. `LEX_EVIDENCE_SCOPE=full` runs every mutation
- * over every page, which is what a declaration is checked against: run it when a mutation is
- * added, when a page is added, and whenever a declaration is in doubt. The clean
- * `npm run evidence` is unscoped always and is where the 495-combination claim comes from.
- */
-const FULL = process.env.LEX_EVIDENCE_SCOPE === "full";
-
-/**
  * The mutations this run sweeps: all of them, or the ones whose name contains `only`.
  *
  * A declaration is judged by a full run, and a full run of all 45 is a hundred minutes. One
@@ -810,11 +799,12 @@ export function childEnv(env, root, scope) {
   return given;
 }
 
-function run(root, pages) {
+/** The browser evidence run, in the environment the sweep built for it and no other. */
+function run(root, env) {
   return new Promise((resolveRun) => {
     const child = spawn(process.execPath, ["scripts/browser-evidence.mjs"], {
       cwd: process.cwd(),
-      env: childEnv(process.env, root, scopeFor(pages, FULL)),
+      env,
       stdio: ["ignore", "pipe", "pipe"],
     });
     let output = "";
@@ -897,10 +887,15 @@ export async function sweepWith({
   mutations,
   prepare,
   run,
-  full = FULL,
+  full,
   log = console.log,
   judge = judgeMutation,
 }) {
+  // No default for `full`. A default of `false` here would be invisible: every test passes it and
+  // production never did, so the judgement could have been off in production with the suite green.
+  if (typeof full !== "boolean") {
+    throw new Error("a sweep must be told whether it measures every page; `full` is not optional");
+  }
   const counts = { uncaught: 0, misdeclared: 0 };
   for (const mutation of mutations) {
     const root = await prepare();
@@ -951,19 +946,53 @@ export function sweepFailureSummary({ uncaught, misdeclared }) {
   return `${said.join("; ")}.`;
 }
 
+/**
+ * A whole sweep, from an environment to an exit code.
+ *
+ * Everything that used to sit in the script's last lines lives here, because that is where the
+ * mistakes were: the selection was read but not passed on, the summary counted the whole list
+ * rather than the selection, the scope was taken from a module constant the tests never set, and a
+ * failing sweep could still have ended 0. Each of those is a one-line change that no test could
+ * see while this reduced to a call site nobody drove. What is left outside is the exit code
+ * assignment, which cannot be moved further in.
+ *
+ * @param {Record<string, string|undefined>} env  the caller's environment: the scope, the selection
+ * @param {object} io  `prepare` (a fresh copy of the build), `run` (the browser, given its whole
+ *   environment), `log` and `err` (where the summary goes)
+ */
+export async function sweepAll(env, { prepare, run, log = console.log, err = console.error, mutations = MUTATIONS }) {
+  // Scoped is the default: a mutation of one page was measured on the thirty-two it cannot touch,
+  // at about two minutes a mutation and 45 mutations. `LEX_EVIDENCE_SCOPE=full` runs every mutation
+  // over every page, which is what a declaration is checked against: run it when a mutation is
+  // added, when a page is added, and whenever a declaration is in doubt. The clean `npm run
+  // evidence` is unscoped always and is where the 495-combination claim comes from. Read here, from
+  // the environment given, rather than from a module constant the tests could never set.
+  const full = env.LEX_EVIDENCE_SCOPE === "full";
+  // Before anything is copied: a selection that names nothing should cost nothing.
+  const swept = mutationsToSweep(mutations, env.LEX_EVIDENCE_ONLY);
+  const counts = await sweepWith({
+    mutations: swept,
+    prepare,
+    full,
+    log,
+    // The child is given the environment this function built, never the one the caller exported.
+    run: (root, pages, name) => run(root, childEnv(env, root, scopeFor(pages, full)), name),
+  });
+  const failed = counts.uncaught + counts.misdeclared;
+  const summary = failed > 0 ? sweepFailureSummary(counts) : sweepSummary(swept.length, mutations.length, full);
+  (failed > 0 ? err : log)(`\n${summary}`);
+  return { counts, swept: swept.length, summary, exitCode: failed > 0 ? 1 : 0 };
+}
+
 async function sweep() {
   // One private copy of dist, taken before the first mutation. Every mutation starts from it
   // rather than from the live dist: a build in the same checkout during the sweep (`npm run
   // evidence` rebuilds dist) leaked a hand-applied stylesheet into later mutations and reported
   // them caught for the wrong reason.
-  // Before the copy: a selection that names nothing should cost nothing.
-  const swept = mutationsToSweep(MUTATIONS, process.env.LEX_EVIDENCE_ONLY);
   const base = await mkdtemp(join(tmpdir(), "lex-evidence-base-"));
-  let counts;
   try {
     await cp(join(process.cwd(), "dist"), base, { recursive: true });
-    counts = await sweepWith({
-      mutations: swept,
+    return await sweepAll(process.env, {
       prepare: async () => {
         const root = await mkdtemp(join(tmpdir(), "lex-evidence-"));
         await cp(base, root, { recursive: true });
@@ -975,17 +1004,11 @@ async function sweep() {
     // A copy of the whole build, left behind on every throw between here and the end.
     await rm(base, { recursive: true, force: true });
   }
-
-  if (counts.uncaught + counts.misdeclared > 0) {
-    console.error(`\n${sweepFailureSummary(counts)}`);
-    process.exit(1);
-  }
-  console.log(`\n${sweepSummary(swept.length, MUTATIONS.length, FULL)}`);
 }
 
 // Only when invoked directly, so the list can be imported and its declarations proven without
 // running a single browser. Real paths on both sides: through a junction, comparing the spellings
 // makes this file a script that sweeps nothing, says nothing and exits 0.
 if (invokedDirectly(import.meta.url, process.argv[1])) {
-  await sweep();
+  process.exitCode = (await sweep()).exitCode;
 }
