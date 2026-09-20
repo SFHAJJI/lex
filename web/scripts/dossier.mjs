@@ -118,7 +118,39 @@ function renderDateRow(row, index) {
  */
 const PUBLISHER_FLAG = /^[a-z][a-z0-9_]*$/;
 
-function renderStatusStrip(status) {
+/**
+ * The status strip's rules, decided once and read by both renderers.
+ *
+ * The flag's rules used to live in the string renderer and again, by hand, in the React one, which
+ * is the drift this module's whole shape is meant to prevent. Returning a decision instead of
+ * markup is what lets a change to the rule reach both surfaces at once; it reached exactly one
+ * before, and nothing said so.
+ *
+ * Returns `{ unstated: true, awaiting }` or `{ unstated: false, flag }`.
+ */
+function statusStripOf(status) {
+  // An unstated flag is declared, exactly as an unstated date is: `null`, and what it is waiting
+  // for. It is NOT omission -- a missing key still fails below, because a producer that forgot the
+  // field and a publisher that states no flag must not reach a reader as the same thing.
+  //
+  // This used to be required outright, and that was pressure in the one direction this screen
+  // cannot afford. A work whose publisher states no flag would have had to be given one, and the
+  // only party available to give it is us: `PUBLISHER_FLAG` exists because "REPEALED (lex derived)"
+  // once rendered under a caption certifying it as the publisher's own. Refusing a derived value
+  // while requiring a value is asking for a derived value.
+  //
+  // So an unstated flag prints no chip, and the caption goes with it: a caption with no chip is a
+  // caption about nothing, which is what the old error said. It was right about the shape and wrong
+  // about the remedy.
+  if (status?.binding_status === null) {
+    if (typeof status.awaiting !== 'string' || status.awaiting.trim().length === 0) {
+      throw new Error(
+        'the status strip has no flag and does not say what it is waiting for; naming the exact ' +
+          'source is what separates a gap in this corpus from a publisher who states no flag',
+      );
+    }
+    return { unstated: true, awaiting: status.awaiting };
+  }
   if (typeof status?.binding_status !== 'string' || status.binding_status.length === 0) {
     throw new Error(
       'the status strip carries the publisher flag verbatim; this is the one screen where it ' +
@@ -132,9 +164,22 @@ function renderStatusStrip(status) {
         'assertion that caption exists to prevent',
     );
   }
+  return { unstated: false, flag: status.binding_status };
+}
+
+/** The string renderer's layout of that decision. No rule of its own. */
+function renderStatusStrip(strip) {
+  if (strip.unstated) {
+    return (
+      '<section class="dossier-status dossier-status-absent">' +
+      `<p class="dossier-status-unstated">current-state flag: ${escapeHtml(NOT_INGESTED)}.</p>` +
+      `<p class="dossier-status-awaiting">${escapeHtml(strip.awaiting)}</p>` +
+      '</section>'
+    );
+  }
   return (
     '<section class="dossier-status">' +
-    `<p class="dossier-status-chip"><code>${escapeHtml(status.binding_status)}</code></p>` +
+    `<p class="dossier-status-chip"><code>${escapeHtml(strip.flag)}</code></p>` +
     `<p class="dossier-status-caption">${escapeHtml(STATUS_CAPTION)}</p>` +
     '</section>'
   );
@@ -247,7 +292,23 @@ export function validateDossier({ identity, dates, status, coverage, slots = [] 
     publisher: identity.publisher,
     uri: identity.work_identifier,
   });
-  if (typeof identity.document_type !== 'string' || identity.document_type.length === 0) {
+  // The document type stays required, because a screen that shows a title, dates and text without
+  // saying whether the reader is looking at a loi, a reglement grand-ducal or an arrete is not a
+  // partial dossier but a mislabelled one. What changes is that "required" no longer means a bare
+  // missing key throws where the reader never sees it: an unstated type is declared the way an
+  // unstated date is, and then the slot says what it is and where the publisher keeps it.
+  const typeUnstated = identity.document_type === null;
+  if (typeUnstated) {
+    if (
+      typeof identity.document_type_awaiting !== 'string' ||
+      identity.document_type_awaiting.trim().length === 0
+    ) {
+      throw new Error(
+        'a dossier with no publisher document type does not say what it is waiting for; the ' +
+          'publisher states one, so an unstated type is this corpus reporting on itself',
+      );
+    }
+  } else if (typeof identity.document_type !== 'string' || identity.document_type.length === 0) {
     throw new Error('a dossier names the publisher document type it was given');
   }
 
@@ -275,14 +336,29 @@ export function validateDossier({ identity, dates, status, coverage, slots = [] 
     }
   });
 
-  return { identity, workIdentifier, dates, status, coverage, slots };
+  return {
+    identity,
+    workIdentifier,
+    typeUnstated,
+    statusStrip: statusStripOf(status),
+    dates,
+    status,
+    coverage,
+    slots,
+  };
 }
 
 export function renderDossier({ identity, dates, status, coverage, slots = [] }) {
   // Every rule lives in validateDossier and is applied once. This function decides only how
   // the validated result looks, which is what lets the React runtime share the rules rather
   // than reimplement them beside a copy that can drift.
-  const { workIdentifier } = validateDossier({ identity, dates, status, coverage, slots });
+  const { workIdentifier, typeUnstated, statusStrip } = validateDossier({
+    identity,
+    dates,
+    status,
+    coverage,
+    slots,
+  });
 
   // A slot the corpus cannot fill says so and says where the publisher keeps it. A blank one
   // reads as a fact about the law rather than a fact about this corpus.
@@ -309,10 +385,13 @@ export function renderDossier({ identity, dates, status, coverage, slots = [] })
     '<header class="dossier-identity">' +
     `<h2 class="dossier-title" lang="${escapeHtml(identity.title_language)}">` +
     `${escapeHtml(identity.title)}</h2>` +
-    `<p class="dossier-type">${escapeHtml(identity.document_type)}</p>` +
+    (typeUnstated
+      ? `<p class="dossier-type dossier-type-absent">document type: ${escapeHtml(NOT_INGESTED)}. ` +
+        `${escapeHtml(identity.document_type_awaiting)}</p>`
+      : `<p class="dossier-type">${escapeHtml(identity.document_type)}</p>`) +
     `<p class="dossier-identifier"><code>${escapeHtml(workIdentifier)}</code></p>` +
     '</header>' +
-    renderStatusStrip(status) +
+    renderStatusStrip(statusStrip) +
     '<h3>Dates</h3>' +
     '<div class="dossier-scroll" role="region" tabindex="0" aria-label="Date table, scrollable">' +
     '<table class="dossier-dates"><thead><tr><th scope="col">role</th>' +

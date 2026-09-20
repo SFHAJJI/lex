@@ -129,3 +129,61 @@ test('the validator is the single source both renderers consult', () => {
   assert.equal(react(GOOD).includes(card.workIdentifier), true);
   assert.equal(renderDossier(GOOD).includes(card.workIdentifier), true);
 });
+
+test('an unstated flag is declared identically by both renderers, and as a chip by neither', () => {
+  // The rule that decides this used to live twice: once in the string renderer and once, written
+  // out by hand, in the React port, against that file's own header. It is decided once now, and
+  // this is what says so -- if the decision reached one surface and missed the other, the two
+  // assertions below could not both hold.
+  const props = {
+    ...GOOD,
+    status: { binding_status: null, awaiting: 'the publisher states it as inForceStatus' },
+  };
+  for (const [name, html] of [['react', react(props)], ['string', renderDossier(props)]]) {
+    assert.equal(html.includes(NOT_INGESTED), true, `${name} did not say the flag is unstated`);
+    assert.equal(
+      html.includes('the publisher states it as inForceStatus'),
+      true,
+      `${name} did not say what the flag is waiting for`,
+    );
+    // A caption qualifies a chip. With no chip it qualifies nothing, which is the exact phrase
+    // the old error used against the absence it was itself causing.
+    assert.equal(html.includes(STATUS_CAPTION), false, `${name} printed a caption with no chip`);
+    assert.equal(
+      html.includes('dossier-status-chip'),
+      false,
+      `${name} rendered an unstated flag as a chip`,
+    );
+  }
+
+  // And both refuse an absence that does not say what it awaits.
+  const silent = { ...GOOD, status: { binding_status: null } };
+  assert.throws(() => react(silent), /does not say what it is waiting for/);
+  assert.throws(() => renderDossier(silent), /does not say what it is waiting for/);
+});
+
+test('an unstated document type is declared by both renderers, and omission refused by both', () => {
+  const props = {
+    ...GOOD,
+    identity: {
+      ...IDENTITY,
+      document_type: null,
+      document_type_awaiting: 'the publisher states it as rdf:type on the work',
+    },
+  };
+  for (const [name, html] of [['react', react(props)], ['string', renderDossier(props)]]) {
+    assert.equal(html.includes('dossier-type-absent'), true, `${name} did not mark the type absent`);
+    assert.equal(
+      html.includes('the publisher states it as rdf:type on the work'),
+      true,
+      `${name} did not say where the publisher keeps the type`,
+    );
+  }
+
+  // Declared absence is not omission: a producer that forgot the field still fails, in both.
+  for (const bad of [undefined, '']) {
+    const broken = { ...GOOD, identity: { ...IDENTITY, document_type: bad } };
+    assert.throws(() => react(broken), /names the publisher document type it was given/);
+    assert.throws(() => renderDossier(broken), /names the publisher document type it was given/);
+  }
+});

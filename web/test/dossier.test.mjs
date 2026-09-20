@@ -40,11 +40,71 @@ test('the publisher status flag appears here, and never without its caption', ()
   assert.ok(html.includes(STATUS_CAPTION));
   assert.equal(STATUS_CAPTION, 'current-state flag, not a historical statement');
 
-  for (const bad of [undefined, '', null, {}]) {
+  // Omission is still an error. `null` is no longer in this list because `null` now MEANS
+  // something -- the publisher states no flag -- and it is checked on its own below. A producer
+  // that forgot the field and a publisher that states no flag must not arrive as the same thing.
+  for (const bad of [undefined, '', {}]) {
     assert.throws(
       () => renderDossier({ ...GOOD, status: bad === undefined ? undefined : { binding_status: bad } }),
       /a strip with no flag is a caption about nothing/,
       `binding_status=${JSON.stringify(bad)} produced a strip`,
+    );
+  }
+});
+
+test('a publisher who states no flag is said out loud, and never as a chip', () => {
+  // The flag used to be required outright, and a required flag is pressure to derive one -- which
+  // is the single thing PUBLISHER_FLAG exists to refuse. So an unstated flag is declared the way
+  // an unstated date is, and what it produces is the opposite of a chip.
+  const html = renderDossier({
+    ...GOOD,
+    status: { binding_status: null, awaiting: 'the publisher states it as inForceStatus' },
+  });
+  assert.ok(html.includes(NOT_INGESTED));
+  assert.ok(html.includes('the publisher states it as inForceStatus'));
+  assert.ok(html.includes('dossier-status-absent'));
+
+  // The caption qualifies a chip. With no chip there is nothing for it to qualify, and printing
+  // it anyway is the "caption about nothing" the old error named.
+  assert.ok(!html.includes(STATUS_CAPTION), 'a caption was printed with no chip under it');
+  assert.ok(!html.includes('dossier-status-chip'), 'an unstated flag rendered as a chip');
+
+  // And it must say what it is waiting for, or it is this corpus's gap wearing the publisher's.
+  assert.throws(
+    () => renderDossier({ ...GOOD, status: { binding_status: null } }),
+    /does not say what it is waiting for/,
+  );
+  assert.throws(
+    () => renderDossier({ ...GOOD, status: { binding_status: null, awaiting: '   ' } }),
+    /does not say what it is waiting for/,
+  );
+});
+
+test('an unstated document type is declared, and a missing one is still an error', () => {
+  // The type stays required: a screen showing a title, dates and text without saying whether this
+  // is a loi, a reglement grand-ducal or an arrete is mislabelled, not partial. What changes is
+  // that "required" no longer means a bare missing key throws where no reader ever sees it.
+  const html = renderDossier({
+    ...GOOD,
+    identity: {
+      ...IDENTITY,
+      document_type: null,
+      document_type_awaiting: 'the publisher states it as rdf:type on the work',
+    },
+  });
+  assert.ok(html.includes('dossier-type-absent'));
+  assert.ok(html.includes(NOT_INGESTED));
+  assert.ok(html.includes('the publisher states it as rdf:type on the work'));
+
+  assert.throws(
+    () => renderDossier({ ...GOOD, identity: { ...IDENTITY, document_type: null } }),
+    /does not say what it is waiting for/,
+  );
+  for (const bad of [undefined, '', 7]) {
+    assert.throws(
+      () => renderDossier({ ...GOOD, identity: { ...IDENTITY, document_type: bad } }),
+      /names the publisher document type it was given/,
+      `document_type=${JSON.stringify(bad)} rendered`,
     );
   }
 });
