@@ -2075,6 +2075,14 @@ internal sealed class V3CorpusMount : IDisposable
     /// observation time, and any statement about gaps between states. Nothing is derived: the states are
     /// the ones <c>timeline</c> lists, refused as it refuses, and a title or a state absent here may exist
     /// at the publisher.
+    /// <para>
+    /// It does not say which states hold searchable text, and that is not because the count would be
+    /// vacuous: every state has at least one article, but an article's searchable text may be empty, and
+    /// the index knows the difference. It is held and not served, because counting it per state means
+    /// reading the text of every article of every state (not measured), which is the wrong cost for a
+    /// work record; <c>coverage</c> serves the corpus-level count. A future change may serve it, and it
+    /// belongs beside the states, not on the list of what is not held, because it is held.
+    /// </para>
     /// </summary>
     public V3PlatformOperationOutcome Dossier(
         V3PlatformOperationRequest request,
