@@ -487,6 +487,32 @@ test("a path that is not this module, and no path at all, are not a direct invoc
   assert.equal(invokedDirectly(here, fileURLToPath(new URL("./network-gate.test.mjs", import.meta.url))), false);
 });
 
+test("the spellings a caller can type still name this module", async (t) => {
+  // The doc comment claims `pathToFileURL` is what normalises the drive letter's case and the
+  // separators, so a caller who types a lower-case drive or forward slashes still matches. Nothing
+  // pinned that claim, and a guard that silently stops matching is a script that does nothing and
+  // exits 0.
+  const { invokedDirectly } = await import("../scripts/invoked-directly.mjs");
+  const { fileURLToPath } = await import("node:url");
+  const here = new URL("./evidence-scope.test.mjs", import.meta.url).href;
+  const path = fileURLToPath(here);
+
+  // `.` and `..` segments, and a doubled separator, which a shell or an npm script can produce.
+  const { dirname, basename, join } = await import("node:path");
+  assert.equal(invokedDirectly(here, join(dirname(path), ".", basename(path))), true);
+  assert.equal(invokedDirectly(here, join(dirname(path), "..", "test", basename(path))), true);
+
+  if (!/^[A-Za-z]:/.test(path)) {
+    t.diagnostic("INCONCLUSIVE: no drive letter on this host, so the drive-letter spellings were not walked");
+    return;
+  }
+
+  // The drive letter in the other case, and forward slashes, both of which Windows accepts.
+  assert.equal(invokedDirectly(here, path[0].toLowerCase() + path.slice(1)), true);
+  assert.equal(invokedDirectly(here, path[0].toUpperCase() + path.slice(1)), true);
+  assert.equal(invokedDirectly(here, path.replaceAll("\\", "/")), true);
+});
+
 test("a failure of a kind the sweep does not count is refused, not counted as nothing", async () => {
   // Counting into an object by a key it does not hold leaves the count NaN, and `NaN > 0` is
   // false: the sweep would print failures and end 0, which is a passing run to anything reading

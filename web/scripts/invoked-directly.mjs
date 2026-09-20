@@ -10,9 +10,13 @@ import { fileURLToPath, pathToFileURL } from "node:url";
  * ordinary shape of a second working copy on Windows — a script that runs nothing, prints nothing
  * and exits 0, which is exactly what a passing run looks like to a caller reading an exit code.
  *
- * Each real path is then put back through `pathToFileURL`, which is what normalises the drive
- * letter's case and the separators, so a caller who types a lower-case drive or backslashes still
- * matches.
+ * The resolution asks the operating system for the canonical name (`realpathSync.native`), which is
+ * what settles the drive letter's case. `pathToFileURL` does **not**: it preserves whatever case it
+ * is given, so `c:\…` and `C:\…` produce different hrefs, and comparing them made `node c:\…\x.mjs`
+ * a script that ran nothing and exited 0 — the defect this helper exists to prevent, through a
+ * second door. `pathToFileURL` is kept for the separators and the percent-encoding, after the
+ * canonical name has been obtained. Some hosts have no native resolver, so the plain one is the
+ * fallback and the comparison is then as good as the spelling the caller typed.
  *
  * A path that cannot be resolved is not this module: `realpathSync` throws for a path that is not
  * there, and a guard is the wrong place to raise it.
@@ -29,4 +33,15 @@ export function invokedDirectly(moduleUrl, argv1) {
   }
 }
 
-const real = (path) => pathToFileURL(realpathSync(path)).href;
+const real = (path) => pathToFileURL(canonical(path)).href;
+
+const canonical = (path) => {
+  try {
+    return realpathSync.native(path);
+  } catch (error) {
+    // A host without a native resolver, not a path that is not there: that one is the caller's
+    // answer and belongs to `invokedDirectly`'s own catch.
+    if (error?.code === "ENOENT" || error?.code === "ENOTDIR") throw error;
+    return realpathSync(path);
+  }
+};
