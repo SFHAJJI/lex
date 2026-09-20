@@ -77,7 +77,8 @@ public sealed class V3CorpusDossierMountTests
         // The scope sentence is what tells a reader whose record this is.
         Assert.AreEqual(
             "The titles and the publisher-dated states the mounted index holds for this work. It is a record of what this corpus holds and not of what the publisher holds: " +
-            "a title or a state absent here may exist at the publisher, and absence from this corpus is neither absence from the publisher's record nor absence of law.",
+            "a title or a state absent here may exist at the publisher, and absence from this corpus is neither absence from the publisher's record nor absence of law. " +
+            "When a language is requested, the titles, the states, the state count and the first and latest applicability dates are that language's alone, and available_languages still lists every language the work has.",
             value.GetProperty("scope").GetString());
     }
 
