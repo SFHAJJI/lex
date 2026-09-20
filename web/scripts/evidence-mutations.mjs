@@ -14,7 +14,7 @@ import { spawn } from "node:child_process";
 import { cp, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { pathToFileURL } from "node:url";
+import { invokedDirectly } from "./invoked-directly.mjs";
 
 export const MUTATIONS = [
   {
@@ -782,16 +782,39 @@ export function pageOf(line) {
 /** A run's output as lines, with carriage returns dropped so a page is read the same on any host. */
 const lineOf = (output) => output.split("\n").map((line) => line.replace(/\r$/, ""));
 
+/**
+ * The scope one mutation's run is given: the pages it declares, or null for every page.
+ *
+ * Null on a full sweep and for a mutation declaring `"all"`, which is a defect only a comparison
+ * across pages can show.
+ */
+export function scopeFor(pages, full) {
+  return full || pages === "all" ? null : pages.join(",");
+}
+
+/**
+ * The environment the browser evidence run is given.
+ *
+ * Built here, and not spread at the call site, because the caller's own `LEX_EVIDENCE_PAGES` must
+ * not survive into it. A caller who exports that variable and asks for a full sweep would otherwise
+ * get runs scoped to their pages while the sweep says it measured every one — and on a full sweep
+ * that is not merely a smaller run: `declarationVerdict` would judge every declaration against
+ * output from a run that could not have seen the pages it is judging, and report the declarations
+ * sound. Wrong in the direction that reads as right. The sweep's own scope is the only scope the
+ * child is given, and its absence means every page.
+ */
+export function childEnv(env, root, scope) {
+  const given = { ...env, LEX_EVIDENCE_ROOT: root };
+  delete given.LEX_EVIDENCE_PAGES;
+  if (scope !== null) given.LEX_EVIDENCE_PAGES = scope;
+  return given;
+}
+
 function run(root, pages) {
-  const scope = FULL || pages === "all" ? null : pages.join(",");
   return new Promise((resolveRun) => {
     const child = spawn(process.execPath, ["scripts/browser-evidence.mjs"], {
       cwd: process.cwd(),
-      env: {
-        ...process.env,
-        LEX_EVIDENCE_ROOT: root,
-        ...(scope === null ? {} : { LEX_EVIDENCE_PAGES: scope }),
-      },
+      env: childEnv(process.env, root, scopeFor(pages, FULL)),
       stdio: ["ignore", "pipe", "pipe"],
     });
     let output = "";
@@ -830,7 +853,7 @@ export function judgeMutation(mutation, result, full) {
     );
   }
   if (code === 0) {
-    return { failed: true, report: [`STILL GREEN  ${mutation.name}`] };
+    return { failed: true, kind: "uncaught", report: [`STILL GREEN  ${mutation.name}`] };
   }
   if (!mutation.expect.test(output)) {
     // Every failure line, not the first four, so a wrong reason can be told from a flake.
@@ -841,25 +864,28 @@ export function judgeMutation(mutation, result, full) {
       ? lines.join("\n")
       : `             it judged nothing and ended ${code}; its last output:\n` +
         lineOf(output).filter((l) => l.trim() !== "").slice(-12).map((l) => `             ${l}`).join("\n");
-    return { failed: true, report: [`WRONG REASON ${mutation.name}`, body] };
+    return { failed: true, kind: "uncaught", report: [`WRONG REASON ${mutation.name}`, body] };
   }
   const matching = lineOf(output).filter((l) => mutation.expect.test(l));
   const line = matching[0] ?? "";
   // Only a full run can judge a declaration, and only a full run has the evidence: a scoped run
-  // measures the declared pages and nothing else, so every sentence it sees comes from one of
-  // them by construction. A wrong declaration still fails there, as a mutation nobody caught.
+  // measures the declared pages and nothing else, so every sentence it sees comes from one of them
+  // by construction. A *wholly* wrong declaration still fails there, as a mutation nobody caught,
+  // which is how mine failed. A partly wrong one does not: a declaration of two pages where only
+  // the first catches the defect passes every scoped sweep, and only a full run names the second.
   if (full) {
     const verdict = declarationVerdict(mutation.pages, matching);
     const notes = verdict.notes.map((note) => `             also on ${note}`);
     if (verdict.failures.length > 0) {
       return {
         failed: true,
+        kind: "misdeclared",
         report: [...notes, `WRONG PAGE   ${mutation.name}`, ...verdict.failures.map((f) => `             ${f}`)],
       };
     }
-    return { failed: false, report: [...notes, `caught       ${mutation.name}`, `             ${line.trim().slice(0, 140)}`] };
+    return { failed: false, kind: "caught", report: [...notes, `caught       ${mutation.name}`, `             ${line.trim().slice(0, 140)}`] };
   }
-  return { failed: false, report: [`caught       ${mutation.name}`, `             ${line.trim().slice(0, 140)}`] };
+  return { failed: false, kind: "caught", report: [`caught       ${mutation.name}`, `             ${line.trim().slice(0, 140)}`] };
 }
 
 /**
@@ -867,20 +893,34 @@ export function judgeMutation(mutation, result, full) {
  * printing. Production passes the real three; the tests pass fakes and no browser starts, which is
  * how the counting and the reporting are held rather than asserted about a function nobody calls.
  */
-export async function sweepWith({ mutations, prepare, run, full = FULL, log = console.log }) {
-  let failures = 0;
+export async function sweepWith({
+  mutations,
+  prepare,
+  run,
+  full = FULL,
+  log = console.log,
+  judge = judgeMutation,
+}) {
+  const counts = { uncaught: 0, misdeclared: 0 };
   for (const mutation of mutations) {
     const root = await prepare();
     try {
       await mutation.apply(root);
-      const outcome = judgeMutation(mutation, await run(root, mutation.pages, mutation.name), full);
+      const outcome = judge(mutation, await run(root, mutation.pages, mutation.name), full);
       for (const line of outcome.report) log(line);
-      if (outcome.failed) failures += 1;
+      if (outcome.failed) {
+        // A failure of a kind nobody counts would leave the count `NaN`, and `NaN > 0` is false:
+        // the sweep would end 0 with failures printed above it. Refused rather than counted.
+        if (!(outcome.kind in counts)) {
+          throw new Error(`${mutation.name} failed as ${JSON.stringify(outcome.kind)}, which the sweep does not count`);
+        }
+        counts[outcome.kind] += 1;
+      }
     } finally {
       await rm(root, { recursive: true, force: true });
     }
   }
-  return failures;
+  return counts;
 }
 
 /**
@@ -894,36 +934,58 @@ export function sweepSummary(swept, total, full) {
   return `all ${swept} induced mutations were caught ${over}${selection}.`;
 }
 
+/**
+ * What a sweep that failed says it found, counting the two failures apart.
+ *
+ * A mutation nobody caught and a mutation caught on a page its declaration does not name are not
+ * the same defect and do not send the reader to the same place: the first says a gate stopped
+ * working, the second says the gate works and the map to it is wrong. Counting both as "not
+ * caught" tells a reader to go looking for a broken gate that is not broken.
+ */
+export function sweepFailureSummary({ uncaught, misdeclared }) {
+  const said = [];
+  if (uncaught > 0) said.push(`${uncaught} induced mutation(s) were not caught`);
+  if (misdeclared > 0) {
+    said.push(`${misdeclared} caught mutation(s) declare a page that caught nothing`);
+  }
+  return `${said.join("; ")}.`;
+}
+
 async function sweep() {
   // One private copy of dist, taken before the first mutation. Every mutation starts from it
   // rather than from the live dist: a build in the same checkout during the sweep (`npm run
   // evidence` rebuilds dist) leaked a hand-applied stylesheet into later mutations and reported
   // them caught for the wrong reason.
-  const base = await mkdtemp(join(tmpdir(), "lex-evidence-base-"));
-  await cp(join(process.cwd(), "dist"), base, { recursive: true });
-
+  // Before the copy: a selection that names nothing should cost nothing.
   const swept = mutationsToSweep(MUTATIONS, process.env.LEX_EVIDENCE_ONLY);
-  const failures = await sweepWith({
-    mutations: swept,
-    prepare: async () => {
-      const root = await mkdtemp(join(tmpdir(), "lex-evidence-"));
-      await cp(base, root, { recursive: true });
-      return root;
-    },
-    run,
-  });
+  const base = await mkdtemp(join(tmpdir(), "lex-evidence-base-"));
+  let counts;
+  try {
+    await cp(join(process.cwd(), "dist"), base, { recursive: true });
+    counts = await sweepWith({
+      mutations: swept,
+      prepare: async () => {
+        const root = await mkdtemp(join(tmpdir(), "lex-evidence-"));
+        await cp(base, root, { recursive: true });
+        return root;
+      },
+      run,
+    });
+  } finally {
+    // A copy of the whole build, left behind on every throw between here and the end.
+    await rm(base, { recursive: true, force: true });
+  }
 
-  await rm(base, { recursive: true, force: true });
-
-  if (failures > 0) {
-    console.error(`\n${failures} induced mutation(s) were not caught.`);
+  if (counts.uncaught + counts.misdeclared > 0) {
+    console.error(`\n${sweepFailureSummary(counts)}`);
     process.exit(1);
   }
   console.log(`\n${sweepSummary(swept.length, MUTATIONS.length, FULL)}`);
 }
 
 // Only when invoked directly, so the list can be imported and its declarations proven without
-// running a single browser.
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+// running a single browser. Real paths on both sides: through a junction, comparing the spellings
+// makes this file a script that sweeps nothing, says nothing and exits 0.
+if (invokedDirectly(import.meta.url, process.argv[1])) {
   await sweep();
 }

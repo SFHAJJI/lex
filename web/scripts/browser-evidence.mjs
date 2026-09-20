@@ -20,7 +20,7 @@ import { decodePng, inkMeasure } from "./png-ink.mjs";
 import { mkdtemp, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { pathToFileURL } from "node:url";
+import { invokedDirectly } from "./invoked-directly.mjs";
 
 import { SHELLS, parseObjectUrl } from "./urls.mjs";
 
@@ -166,6 +166,17 @@ export function pagesInScope(built, asked) {
     );
   }
   return built.filter((name) => wanted.includes(name));
+}
+
+/**
+ * What a run says about its own scope: nothing when it measured the whole build, how much of it
+ * otherwise.
+ *
+ * Said on a failing run as well as a clean one. A failing scoped run that did not say so reads as
+ * a full one, and its silence about the pages it never opened reads as a verdict on them.
+ */
+export function scopeNote(measuredPages, builtPages) {
+  return measuredPages === builtPages ? "" : ` (${measuredPages} of ${builtPages} pages measured)`;
 }
 
 /**
@@ -2370,20 +2381,17 @@ async function main() {
   }
 
   if (failures.length > 0) {
-    console.error(`\n${failures.length} failure(s):`);
+    console.error(`\n${failures.length} failure(s)${scopeNote(measuredPages, builtPages)}:`);
     for (const failure of failures) console.error(`  ${failure}`);
     process.exitCode = 1;
     return;
   }
-  // A scoped run says so, so it can never be read as a full one.
-  const scope = measuredPages === builtPages
-    ? ""
-    : ` (${measuredPages} of ${builtPages} pages measured)`;
-  console.log(`\nall ${rows.length} page/viewport combinations clean${scope}`);
+  console.log(`\nall ${rows.length} page/viewport combinations clean${scopeNote(measuredPages, builtPages)}`);
 }
 
 // Only run when invoked directly, so the keyboard walk can be imported and proven by
-// the self-test without launching the whole evidence run.
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+// the self-test without launching the whole evidence run. Real paths on both sides: a checkout
+// reached through a junction would otherwise print nothing and exit 0, which reads as a clean run.
+if (invokedDirectly(import.meta.url, process.argv[1])) {
   await main();
 }

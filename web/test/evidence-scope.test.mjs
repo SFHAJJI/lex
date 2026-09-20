@@ -49,6 +49,14 @@ test("a scope naming a page the build did not emit is refused, not silently skip
   );
   // Every page absent, not just one of them.
   assert.throws(() => pagesInScope(BUILT, "gone.html"), /did not emit: gone\.html/);
+  // The name asked for is the name the build emitted, whole and as spelled. A substring of one, a
+  // page whose name ends with one, and the same name in another case are all pages this build did
+  // not emit: admitting any of them measures a page nobody asked for and reports it as the one
+  // they did. The last is the one that bites on Windows, where the file system would open it.
+  assert.throws(() => pagesInScope(BUILT, "react.html"), /did not emit: react\.html/);
+  assert.throws(() => pagesInScope(BUILT, "Search-React.html"), /did not emit: Search-React\.html/);
+  assert.throws(() => pagesInScope(BUILT, "search-react.htm"), /did not emit: search-react\.htm/);
+  assert.throws(() => pagesInScope(BUILT, "my-reading.html"), /did not emit: my-reading\.html/);
 });
 
 test("every mutation declares where its defect can be seen", async () => {
@@ -141,7 +149,7 @@ test("the sweep asks for the verdict and counts it: a dead or silent call site f
     "another reason": { code: 1, output: "  search-react.html @narrow/light: something else entirely\n" },
   };
   const printed = [];
-  const failures = await sweepWith({
+  const counts = await sweepWith({
     mutations: [
       mutation("caught here", ["search-react.html"]),
       mutation("declared elsewhere", ["compare.html"]),
@@ -153,8 +161,9 @@ test("the sweep asks for the verdict and counts it: a dead or silent call site f
     full: true,
     log: (line) => printed.push(line),
   });
-  // Three of the four count: the wrong declaration, the one nobody caught, and the wrong reason.
-  assert.equal(failures, 3, printed.join("\n"));
+  // Three of the four count, and the two kinds are counted apart: a gate that stopped working and
+  // a map to a working gate that points at the wrong page send a reader to different places.
+  assert.deepEqual(counts, { uncaught: 2, misdeclared: 1 }, printed.join("\n"));
   assert.ok(printed.some((l) => l.startsWith("caught       caught here")), printed.join("\n"));
   assert.ok(printed.some((l) => l.startsWith("WRONG PAGE   declared elsewhere")), printed.join("\n"));
   assert.ok(printed.some((l) => l.startsWith("STILL GREEN  never caught")), printed.join("\n"));
@@ -169,7 +178,7 @@ test("the sweep asks for the verdict and counts it: a dead or silent call site f
     full: false,
     log: (line) => quiet.push(line),
   });
-  assert.equal(scoped, 0, quiet.join("\n"));
+  assert.deepEqual(scoped, { uncaught: 0, misdeclared: 0 }, quiet.join("\n"));
   assert.ok(quiet.some((l) => l.startsWith("caught       ")), quiet.join("\n"));
 
   // A mutation that declares nothing is refused before any browser is asked to run.
@@ -244,7 +253,7 @@ test("a run can sweep one named mutation, and a name that selects nothing is ref
   assert.throws(() => mutationsToSweep(MUTATIONS, "no such mutation"), /would sweep nothing/);
 });
 
-test("the one mutation whose defect is only visible across pages declares all", async () => {
+test("the one mutation whose defect is only visible across pages declares all, and it is the only one", async () => {
   const { MUTATIONS } = await import("../scripts/evidence-mutations.mjs");
   const densities = MUTATIONS.find((mutation) => mutation.name.includes("shell densities"));
   assert.ok(densities, "the shell-density mutation is in the sweep");
@@ -252,6 +261,13 @@ test("the one mutation whose defect is only visible across pages declares all", 
     densities.pages,
     "all",
     "its failure compares three shells, so a scope that measured fewer would skip the comparison",
+  );
+  // And nothing else may have it. `"all"` costs a full pass and leaves the declaration unjudged,
+  // so it is the one escape hatch in the sweep: held to the one mutation that has earned it, by
+  // name, rather than to a count that a second `"all"` would still satisfy.
+  assert.deepEqual(
+    MUTATIONS.filter((mutation) => mutation.pages === "all").map((mutation) => mutation.name),
+    [densities.name],
   );
 });
 
@@ -276,4 +292,143 @@ test("every page a mutation declares is one the build emits", async (t) => {
       assert.ok(declared.includes(page), `${mutation.name} declares ${page}, which the build does not emit`);
     }
   }
+});
+
+test("a caller's own page scope never reaches the run, and the sweep's does", async () => {
+  const { childEnv, scopeFor } = await import("../scripts/evidence-mutations.mjs");
+  // A caller who exported it: on a full sweep the child would measure their pages while the sweep
+  // said it measured every one, and every declaration would be judged against output from a run
+  // that could not have seen the pages it was judging. Wrong the way that reads as right.
+  const callers = { PATH: "/usr/bin", LEX_EVIDENCE_PAGES: "compare.html", LEX_EVIDENCE_SCOPE: "full" };
+
+  const full = childEnv(callers, "/tmp/root", scopeFor(["search-react.html"], true));
+  assert.equal("LEX_EVIDENCE_PAGES" in full, false);
+  assert.equal(full.LEX_EVIDENCE_ROOT, "/tmp/root");
+  assert.equal(full.PATH, "/usr/bin");
+
+  // A mutation only a comparison across pages can show: every page, whatever the caller asked for.
+  assert.equal(scopeFor("all", false), null);
+  assert.equal("LEX_EVIDENCE_PAGES" in childEnv(callers, "/tmp/root", scopeFor("all", false)), false);
+
+  // Scoped, the sweep's own scope is the one that is given, and it replaces theirs.
+  const scoped = childEnv(callers, "/tmp/root", scopeFor(["reading.html", "trust-surface.html"], false));
+  assert.equal(scoped.LEX_EVIDENCE_PAGES, "reading.html,trust-surface.html");
+
+  // And the caller's environment is not edited under them.
+  assert.equal(callers.LEX_EVIDENCE_PAGES, "compare.html");
+});
+
+test("a sweep that failed says which of the two failures it found", async () => {
+  const { sweepFailureSummary } = await import("../scripts/evidence-mutations.mjs");
+  assert.equal(sweepFailureSummary({ uncaught: 2, misdeclared: 0 }), "2 induced mutation(s) were not caught.");
+  // The one that used to be counted as a mutation nobody caught. It was caught; the map is wrong.
+  assert.equal(
+    sweepFailureSummary({ uncaught: 0, misdeclared: 1 }),
+    "1 caught mutation(s) declare a page that caught nothing.",
+  );
+  assert.equal(
+    sweepFailureSummary({ uncaught: 2, misdeclared: 1 }),
+    "2 induced mutation(s) were not caught; 1 caught mutation(s) declare a page that caught nothing.",
+  );
+});
+
+test("reached through a junction, a script still runs: the guard compares real paths", async (t) => {
+  // The hazard this holds: node resolves `import.meta.url` through a junction or symlink and keeps
+  // the caller's spelling in `process.argv[1]`, so a guard that compares the two spellings makes a
+  // checkout reached through a junction — an ordinary second working copy on Windows — a script
+  // that sweeps nothing, prints nothing and exits 0. To a caller reading an exit code, that is a
+  // passing run. The evidence here must never be an exit code alone.
+  const { mkdtemp, mkdir, writeFile, symlink, rm } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const { fileURLToPath, pathToFileURL } = await import("node:url");
+  const { execFile } = await import("node:child_process");
+  const { promisify } = await import("node:util");
+  const node = promisify(execFile);
+
+  const dir = await mkdtemp(join(tmpdir(), "lex-guard-"));
+  try {
+    const real = join(dir, "real");
+    await mkdir(real);
+    const helper = pathToFileURL(fileURLToPath(new URL("../scripts/invoked-directly.mjs", import.meta.url))).href;
+    // Two one-line scripts: the guard as it is, and the guard as it was.
+    await writeFile(
+      join(real, "now.mjs"),
+      `import { invokedDirectly } from ${JSON.stringify(helper)};\n` +
+        'console.log(invokedDirectly(import.meta.url, process.argv[1]) ? "RAN" : "NO-OP");\n',
+      "utf8",
+    );
+    await writeFile(
+      join(real, "before.mjs"),
+      'import { pathToFileURL } from "node:url";\n' +
+        'const ran = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;\n' +
+        'console.log(ran ? "RAN" : "NO-OP");\n',
+      "utf8",
+    );
+
+    // By its real path, both rules run it: the repair does not narrow the ordinary case.
+    assert.match((await node(process.execPath, [join(real, "now.mjs")])).stdout, /RAN/);
+    assert.match((await node(process.execPath, [join(real, "before.mjs")])).stdout, /RAN/);
+
+    const link = join(dir, "link");
+    try {
+      await symlink(real, link, "junction");
+    } catch (error) {
+      t.diagnostic(`INCONCLUSIVE: this host cannot create a junction (${error.code}), so the guard was not walked through one`);
+      return;
+    }
+
+    // The old rule, through the junction. If this host resolves the link so that the old rule runs
+    // too, the case is not live here and the test says so rather than claiming to have proven it.
+    const before = (await node(process.execPath, [join(link, "before.mjs")])).stdout;
+    if (/RAN/.test(before)) {
+      t.diagnostic("INCONCLUSIVE: this host's junction is transparent to the old rule, so it cannot show the difference");
+    } else {
+      assert.match(before, /NO-OP/);
+    }
+
+    // The rule that ships, through the same junction. This is the assertion.
+    assert.match(
+      (await node(process.execPath, [join(link, "now.mjs")])).stdout,
+      /RAN/,
+      "a script reached through a junction must run rather than exit 0 in silence",
+    );
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("a path that is not this module, and no path at all, are not a direct invocation", async () => {
+  const { invokedDirectly } = await import("../scripts/invoked-directly.mjs");
+  const here = new URL("./evidence-scope.test.mjs", import.meta.url).href;
+  const { fileURLToPath } = await import("node:url");
+  assert.equal(invokedDirectly(here, fileURLToPath(here)), true);
+  assert.equal(invokedDirectly(here, undefined), false);
+  assert.equal(invokedDirectly(here, ""), false);
+  // A path nothing can resolve is not this module, and a guard is the wrong place to raise it.
+  assert.equal(invokedDirectly(here, fileURLToPath(new URL("./no-such-file.mjs", import.meta.url))), false);
+  assert.equal(invokedDirectly(here, fileURLToPath(new URL("./network-gate.test.mjs", import.meta.url))), false);
+});
+
+test("a failure of a kind the sweep does not count is refused, not counted as nothing", async () => {
+  // Counting into an object by a key it does not hold leaves the count NaN, and `NaN > 0` is
+  // false: the sweep would print failures and end 0, which is a passing run to anything reading
+  // the exit code. A kind nobody counts is a mistake in the judgement, so it stops the sweep.
+  const { sweepWith } = await import("../scripts/evidence-mutations.mjs");
+  const { mkdtemp } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  await assert.rejects(
+    () => sweepWith({
+      mutations: [{ name: "a new kind of failure", pages: ["a.html"], expect: /x/, apply: async () => {} }],
+      prepare: () => mkdtemp(join(tmpdir(), "lex-sweep-kind-")),
+      run: async () => ({ code: 1, output: "  a.html: x\n" }),
+      full: true,
+      log: () => {},
+      // Standing for a future branch of the judgement that fails the head for a reason the sweep
+      // was never taught to count.
+      judge: () => ({ failed: true, kind: "something new", report: ["NEW KIND     a new kind of failure"] }),
+    }),
+    /failed as "something new", which the sweep does not count/,
+  );
 });
