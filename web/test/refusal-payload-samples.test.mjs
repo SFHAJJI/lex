@@ -119,6 +119,26 @@ test("every payload the platform sends is one the reader can render", async (t) 
   );
 });
 
+/**
+ * The coarse shape rules for one string value: a path stays a path, a hash-pinned URL keeps its
+ * `--`. Defined once because they are applied to a scalar and to every element of a list, and a
+ * second copy is how the two would come to disagree. A non-string on either side is not this
+ * function's business and passes.
+ */
+function assertStringShape(where, shown, real) {
+  if (typeof real !== "string" || typeof shown !== "string") return;
+  assert.equal(
+    shown.startsWith("/"),
+    real.startsWith("/"),
+    `${where}: the producer sends ${real.startsWith("/") ? "a path" : "not a path"} and the example shows ${JSON.stringify(shown.slice(0, 40))}`,
+  );
+  assert.equal(
+    shown.includes("--"),
+    real.includes("--"),
+    `${where}: the producer ${real.includes("--") ? "pins a digest after --" : "pins no digest"} and the example shows ${JSON.stringify(shown.slice(0, 40))}`,
+  );
+}
+
 test("a worked example carries the fields its real payload carries", async (t) => {
   // The catalog is the page that teaches a reader what each refusal looks like, and its examples
   // were written by hand from the specification. One of them taught a URL grammar no producer
@@ -182,25 +202,41 @@ test("a worked example carries the fields its real payload carries", async (t) =
       // Inside a list too. Both being lists is not enough: the producer sends `ambiguous_version`'s
       // candidates as hash-pinned URL STRINGS and the example taught them as objects, and a check
       // that stopped at `Array.isArray` called that agreement.
-      if (Array.isArray(real) && Array.isArray(shown) && real.length > 0 && shown.length > 0) {
-        assert.equal(
-          typeof shown[0],
-          typeof real[0],
-          `${row.code}.${key}: the producer sends a list of ${typeof real[0]}s and the example shows a list of ${typeof shown[0]}s`,
-        );
+      if (Array.isArray(real) && Array.isArray(shown)) {
+        // An empty example list declares nothing about its rows and passed everything below, which
+        // the writer seat proved with an `available_languages: []` example that no check touched.
+        // It is the same hole I praised THEM for closing on the coverage pin, left open here: an
+        // empty array hides its row shape, so a guard that skips it is green about nothing.
+        if (real.length > 0) {
+          assert.ok(
+            shown.length > 0,
+            `${row.code}.${key}: the producer sends a non-empty list and the example shows an empty one, which teaches a reader nothing about the rows`,
+          );
+        }
+
+        // EVERY element, not just the first. Checking `shown[0]` alone let a list that starts with
+        // the right shape and continues with the wrong one through, and the reference shape has to
+        // come from a producer list that agrees with itself -- so if it ever does not, this fails
+        // loudly rather than silently picking one of the shapes it sends.
+        if (real.length > 0) {
+          const kinds = new Set(real.map((element) => typeof element));
+          assert.equal(
+            kinds.size,
+            1,
+            `${row.code}.${key}: the producer sends a list of mixed kinds (${[...kinds].join(", ")}); this check cannot choose one of them for you`,
+          );
+          shown.forEach((element, index) => {
+            assert.equal(
+              typeof element,
+              typeof real[0],
+              `${row.code}.${key}[${index}]: the producer sends a list of ${typeof real[0]}s and the example shows a ${typeof element}`,
+            );
+            assertStringShape(`${row.code}.${key}[${index}]`, element, real[0]);
+          });
+        }
       }
 
-      if (typeof real !== "string" || typeof shown !== "string") continue;
-      assert.equal(
-        shown.startsWith("/"),
-        real.startsWith("/"),
-        `${row.code}.${key}: the producer sends ${real.startsWith("/") ? "a path" : "not a path"} and the example shows ${JSON.stringify(shown.slice(0, 40))}`,
-      );
-      assert.equal(
-        shown.includes("--"),
-        real.includes("--"),
-        `${row.code}.${key}: the producer ${real.includes("--") ? "pins a digest after --" : "pins no digest"} and the example shows ${JSON.stringify(shown.slice(0, 40))}`,
-      );
+      assertStringShape(`${row.code}.${key}`, shown, real);
     }
 
     // The absence pair is allowed only where the card demands it. Exempting the two names for
