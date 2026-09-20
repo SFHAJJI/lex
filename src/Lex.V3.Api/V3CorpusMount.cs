@@ -2153,7 +2153,8 @@ internal sealed class V3CorpusMount : IDisposable
 
     internal const string DossierScope =
         "The titles and the publisher-dated states the mounted index holds for this work. It is a record of what this corpus holds and not of what the publisher holds: " +
-        "a title or a state absent here may exist at the publisher, and absence from this corpus is neither absence from the publisher's record nor absence of law.";
+        "a title or a state absent here may exist at the publisher, and absence from this corpus is neither absence from the publisher's record nor absence of law. " +
+        "When a language is requested, the titles, the states, the state count and the first and latest applicability dates are that language's alone, and available_languages still lists every language the work has.";
 
     /// <summary>What the mounted index does not hold about a work, in fixed words; not computed from what is present.</summary>
     internal static readonly string[][] DossierNotHeld =
