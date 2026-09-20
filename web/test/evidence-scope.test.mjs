@@ -163,7 +163,7 @@ test("the sweep asks for the verdict and counts it: a dead or silent call site f
   });
   // Three of the four count, and the two kinds are counted apart: a gate that stopped working and
   // a map to a working gate that points at the wrong page send a reader to different places.
-  assert.deepEqual(counts, { uncaught: 2, misdeclared: 1 }, printed.join("\n"));
+  assert.deepEqual(counts, { uncaught: 2, misdeclared: 1, unjudged: 0 }, printed.join("\n"));
   assert.ok(printed.some((l) => l.startsWith("caught       caught here")), printed.join("\n"));
   assert.ok(printed.some((l) => l.startsWith("WRONG PAGE   declared elsewhere")), printed.join("\n"));
   assert.ok(printed.some((l) => l.startsWith("STILL GREEN  never caught")), printed.join("\n"));
@@ -178,7 +178,7 @@ test("the sweep asks for the verdict and counts it: a dead or silent call site f
     full: false,
     log: (line) => quiet.push(line),
   });
-  assert.deepEqual(scoped, { uncaught: 0, misdeclared: 0 }, quiet.join("\n"));
+  assert.deepEqual(scoped, { uncaught: 0, misdeclared: 0, unjudged: 0 }, quiet.join("\n"));
   assert.ok(quiet.some((l) => l.startsWith("caught       ")), quiet.join("\n"));
 
   // A mutation that declares nothing is refused before any browser is asked to run.
@@ -318,18 +318,95 @@ test("a caller's own page scope never reaches the run, and the sweep's does", as
   assert.equal(callers.LEX_EVIDENCE_PAGES, "compare.html");
 });
 
-test("a sweep that failed says which of the two failures it found", async () => {
+test("the caller's page scope is removed in every case of the name, and so is their root", async () => {
+  // Windows environment names are case-insensitive, so an exact-case delete closed this defect for
+  // one spelling and left `$env:lex_evidence_pages = "compare.html"` reaching the child untouched:
+  // the same STILL GREEN in the same 6.7 seconds, on the head that had just fixed it.
+  const { childEnv, scopeFor } = await import("../scripts/evidence-mutations.mjs");
+  for (const spelling of ["lex_evidence_pages", "Lex_Evidence_Pages", "LEX_EVIDENCE_PAGES"]) {
+    const callers = { PATH: "/usr/bin", [spelling]: "compare.html" };
+    const full = childEnv(callers, "/tmp/root", scopeFor(["search-react.html"], true));
+    assert.deepEqual(
+      Object.keys(full).filter((key) => key.toUpperCase() === "LEX_EVIDENCE_PAGES"),
+      [],
+      `${spelling} survived into the child`,
+    );
+    assert.equal(full.PATH, "/usr/bin");
+
+    // Scoped, exactly one page scope reaches the child, and it is the sweep's.
+    const scoped = childEnv(callers, "/tmp/root", scopeFor(["reading.html"], false));
+    const pageKeys = Object.keys(scoped).filter((key) => key.toUpperCase() === "LEX_EVIDENCE_PAGES");
+    assert.deepEqual(pageKeys, ["LEX_EVIDENCE_PAGES"], `${spelling} left a second key`);
+    assert.equal(scoped.LEX_EVIDENCE_PAGES, "reading.html");
+  }
+
+  // The root goes the same way. Two keys differing only in case would leave which one the child
+  // reads to the order they happen to be in, and the caller's could win.
+  for (const spelling of ["lex_evidence_root", "LEX_EVIDENCE_ROOT"]) {
+    const given = childEnv({ [spelling]: "C:/somewhere/else" }, "/tmp/root", null);
+    const rootKeys = Object.keys(given).filter((key) => key.toUpperCase() === "LEX_EVIDENCE_ROOT");
+    assert.deepEqual(rootKeys, ["LEX_EVIDENCE_ROOT"], `${spelling} left a second key`);
+    assert.equal(given.LEX_EVIDENCE_ROOT, "/tmp/root");
+  }
+});
+
+test("a scope the sweep cannot read is refused, not taken for the cheap sweep", async () => {
+  const { fullFrom } = await import("../scripts/evidence-mutations.mjs");
+  assert.equal(fullFrom({}), false);
+  assert.equal(fullFrom({ LEX_EVIDENCE_SCOPE: "" }), false);
+  assert.equal(fullFrom({ LEX_EVIDENCE_SCOPE: "full" }), true);
+  // Someone who meant every page and typed it another way must not be given the scoped sweep with
+  // a closing line that truthfully says "over the pages each declares" while they judge
+  // declarations on it.
+  for (const asked of ["FULL", "Full", "true", "1", "all", " full"]) {
+    assert.throws(() => fullFrom({ LEX_EVIDENCE_SCOPE: asked }), /it is "full" or it is unset/, asked);
+  }
+});
+
+test("a sweep that failed says which of the three failures it found", async () => {
   const { sweepFailureSummary } = await import("../scripts/evidence-mutations.mjs");
-  assert.equal(sweepFailureSummary({ uncaught: 2, misdeclared: 0 }), "2 induced mutation(s) were not caught.");
+  const none = { uncaught: 0, misdeclared: 0, unjudged: 0 };
+  assert.equal(sweepFailureSummary({ ...none, uncaught: 2 }), "2 induced mutation(s) were not caught.");
   // The one that used to be counted as a mutation nobody caught. It was caught; the map is wrong.
   assert.equal(
-    sweepFailureSummary({ uncaught: 0, misdeclared: 1 }),
+    sweepFailureSummary({ ...none, misdeclared: 1 }),
     "1 caught mutation(s) declare a page that caught nothing.",
   );
+  // And the one that used to be counted as a mutation nobody caught while nothing had looked at it.
   assert.equal(
-    sweepFailureSummary({ uncaught: 2, misdeclared: 1 }),
-    "2 induced mutation(s) were not caught; 1 caught mutation(s) declare a page that caught nothing.",
+    sweepFailureSummary({ ...none, unjudged: 1 }),
+    "1 run(s) ended without judging anything.",
   );
+  assert.equal(
+    sweepFailureSummary({ uncaught: 2, misdeclared: 1, unjudged: 3 }),
+    "2 induced mutation(s) were not caught; 1 caught mutation(s) declare a page that caught nothing; " +
+      "3 run(s) ended without judging anything.",
+  );
+});
+
+test("a run that judged nothing is not a mutation nobody caught", async () => {
+  // It happened: a sibling process killed this sweep's browser mid-mutation, and the run came back
+  // non-zero having judged nothing. Counting it among the mutations nobody caught sends a reader to
+  // look for a gate that stopped working, when what stopped was the run.
+  const { judgeMutation } = await import("../scripts/evidence-mutations.mjs");
+  const mutation = { name: "a mutation", pages: ["a.html"], expect: /the defect/, apply: async () => {} };
+
+  const crashed = judgeMutation(mutation, { code: 4294967295, output: "\nnode: a fatal error\n" }, false);
+  assert.equal(crashed.failed, true);
+  assert.equal(crashed.kind, "unjudged");
+  assert.ok(crashed.report[0].startsWith("NOT JUDGED   a mutation"), crashed.report.join("\n"));
+  assert.ok(crashed.report.some((l) => l.includes("it judged nothing and ended 4294967295")), crashed.report.join("\n"));
+  // Its last words, since it has no failure lines to show.
+  assert.ok(crashed.report.some((l) => l.includes("node: a fatal error")), crashed.report.join("\n"));
+
+  // A run that did judge, and failed for another reason, is still a mutation nobody caught.
+  const wrongReason = judgeMutation(
+    mutation,
+    { code: 1, output: "  a.html @narrow: something else entirely: 3 of them\n" },
+    false,
+  );
+  assert.equal(wrongReason.kind, "uncaught");
+  assert.ok(wrongReason.report[0].startsWith("WRONG REASON a mutation"), wrongReason.report.join("\n"));
 });
 
 test("reached through a junction, a script still runs: the guard compares real paths", async (t) => {
@@ -442,7 +519,12 @@ test("a whole sweep, from an environment to an exit code", async () => {
   const { mkdtemp } = await import("node:fs/promises");
   const { tmpdir } = await import("node:os");
   const { join } = await import("node:path");
-  const prepare = () => mkdtemp(join(tmpdir(), "lex-sweepall-"));
+  const prepared = [];
+  const prepare = async () => {
+    const root = await mkdtemp(join(tmpdir(), "lex-sweepall-"));
+    prepared.push(root);
+    return root;
+  };
   // A list of three that touch nothing, so the sweep's own wiring is what is under test.
   const mutations = [
     { name: "the Home key made to stay put", pages: ["search-react.html"], expect: /the defect/, apply: async () => {} },
@@ -468,7 +550,10 @@ test("a whole sweep, from an environment to an exit code", async () => {
   assert.equal(seen.length, 1);
   // Scoped, the child is given the pages the mutation declares, and a root to serve.
   assert.equal(seen[0].LEX_EVIDENCE_PAGES, "search-react.html");
-  assert.ok(seen[0].LEX_EVIDENCE_ROOT);
+  // The root the child is served is the root that was prepared for it. Asserting only that some
+  // root is set would pass on a sweep that served the caller's, or the previous mutation's.
+  assert.equal(seen[0].LEX_EVIDENCE_ROOT, prepared.at(-1));
+  assert.equal(prepared.length, 1);
 
   // Full, with a caller's own page scope exported: the child must not see it, or every declaration
   // would be judged against a run that could not have seen the pages it is judging.
@@ -506,6 +591,46 @@ test("a whole sweep, from an environment to an exit code", async () => {
   assert.equal(failing.summary, "1 induced mutation(s) were not caught.");
   assert.ok(errs.some((l) => l.includes("were not caught")), errs.join("\n"));
   assert.equal(out.some((l) => l.includes("were not caught")), false);
+  // Every report line goes to the sweep's log, and the summary alone goes to the failure stream.
+  assert.ok(out.some((l) => l.startsWith("STILL GREEN  the Home key")), out.join("\n"));
+  assert.equal(errs.length, 1);
+
+  // A sweep whose ONLY failure is a wrong declaration fails. It is the defect this slice exists to
+  // judge, and until this assertion nothing but a browser run said it ends 1: the sum could be
+  // made `counts.uncaught` and every test stayed green while a wrong declaration printed WRONG PAGE
+  // above `all 1 induced mutations were caught` and exit 0.
+  const wrongOut = [];
+  const wrongErr = [];
+  const misdeclared = await sweepAll(
+    { LEX_EVIDENCE_SCOPE: "full", LEX_EVIDENCE_ONLY: "Home key" },
+    {
+      mutations: [{ ...mutations[0], pages: ["compare.html"] }],
+      prepare,
+      run: async () => caught,
+      log: (l) => wrongOut.push(l),
+      err: (l) => wrongErr.push(l),
+    },
+  );
+  assert.equal(misdeclared.exitCode, 1);
+  assert.deepEqual(misdeclared.counts, { uncaught: 0, misdeclared: 1, unjudged: 0 });
+  assert.equal(misdeclared.summary, "1 caught mutation(s) declare a page that caught nothing.");
+  assert.equal(wrongOut.some((l) => l.includes("induced mutations were caught")), false, wrongOut.join("\n"));
+  assert.ok(wrongOut.some((l) => l.startsWith("WRONG PAGE")), wrongOut.join("\n"));
+
+  // And a run that judged nothing fails as its own kind, not as a mutation nobody caught.
+  const crashed = await sweepAll(
+    { LEX_EVIDENCE_ONLY: "Home key" },
+    {
+      mutations,
+      prepare,
+      run: async () => ({ code: 4294967295, output: "\nnode: a fatal error\n" }),
+      log: () => {},
+      err: () => {},
+    },
+  );
+  assert.equal(crashed.exitCode, 1);
+  assert.deepEqual(crashed.counts, { uncaught: 0, misdeclared: 0, unjudged: 1 });
+  assert.equal(crashed.summary, "1 run(s) ended without judging anything.");
 
   // And with no list given, the sweep is the real one: a selection naming nothing is refused
   // against the 45, before a single copy of the build is made.

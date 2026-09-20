@@ -789,12 +789,25 @@ export function scopeFor(pages, full) {
  * get runs scoped to their pages while the sweep says it measured every one — and on a full sweep
  * that is not merely a smaller run: `declarationVerdict` would judge every declaration against
  * output from a run that could not have seen the pages it is judging, and report the declarations
- * sound. Wrong in the direction that reads as right. The sweep's own scope is the only scope the
- * child is given, and its absence means every page.
+ * sound. Wrong in the direction that reads as right. The sweep's own scope is the only page scope
+ * the child sees, and its absence means every page; everything else the caller exported is passed
+ * through.
  */
 export function childEnv(env, root, scope) {
-  const given = { ...env, LEX_EVIDENCE_ROOT: root };
-  delete given.LEX_EVIDENCE_PAGES;
+  // Removed in every case of the name, then the sweep's own set. Windows environment names are
+  // case-insensitive: `process.env` is a case-insensitive view, spreading it into a plain object
+  // keeps whatever case the caller typed, and the child reads the name case-insensitively. An
+  // exact-case delete therefore closed this for `LEX_EVIDENCE_PAGES` and left `lex_evidence_pages`
+  // — which is what `$env:lex_evidence_pages = "..."` produces — reaching the child untouched.
+  // Same mechanism, same defect, one spelling away. The root goes the same way: a caller's spelling
+  // of it must not outlive the sweep's, whichever order the keys happen to be in.
+  const ours = new Set(["LEX_EVIDENCE_PAGES", "LEX_EVIDENCE_ROOT"]);
+  const given = {};
+  for (const [name, value] of Object.entries(env)) {
+    if (!ours.has(name.toUpperCase())) given[name] = value;
+  }
+
+  given.LEX_EVIDENCE_ROOT = root;
   if (scope !== null) given.LEX_EVIDENCE_PAGES = scope;
   return given;
 }
@@ -848,13 +861,25 @@ export function judgeMutation(mutation, result, full) {
   if (!mutation.expect.test(output)) {
     // Every failure line, not the first four, so a wrong reason can be told from a flake.
     const lines = lineOf(output).filter((l) => /^\s+\S.*: /.test(l));
-    // A run that ended without judging anything is not a wrong reason, and it has no failure
-    // lines to print: its last words are what names the crash.
-    const body = lines.length > 0
-      ? lines.join("\n")
-      : `             it judged nothing and ended ${code}; its last output:\n` +
-        lineOf(output).filter((l) => l.trim() !== "").slice(-12).map((l) => `             ${l}`).join("\n");
-    return { failed: true, kind: "uncaught", report: [`WRONG REASON ${mutation.name}`, body] };
+    if (lines.length > 0) {
+      return { failed: true, kind: "uncaught", report: [`WRONG REASON ${mutation.name}`, lines.join("\n")] };
+    }
+
+    // A run that ended without judging anything did not fail to catch the defect: it never looked.
+    // Counting it among the mutations nobody caught tells a reader a gate stopped working, when
+    // what stopped was the run — the same two-truths-in-one-count defect as a wrong declaration,
+    // and it happened for real when a sibling process killed this sweep's browser mid-mutation.
+    // Its last words are what names the crash, since it has no failure lines to show.
+    const tail = lineOf(output).filter((l) => l.trim() !== "").slice(-12).map((l) => `             ${l}`);
+    return {
+      failed: true,
+      kind: "unjudged",
+      report: [
+        `NOT JUDGED   ${mutation.name}`,
+        `             it judged nothing and ended ${code}; its last output:`,
+        ...tail,
+      ],
+    };
   }
   const matching = lineOf(output).filter((l) => mutation.expect.test(l));
   const line = matching[0] ?? "";
@@ -896,7 +921,7 @@ export async function sweepWith({
   if (typeof full !== "boolean") {
     throw new Error("a sweep must be told whether it measures every page; `full` is not optional");
   }
-  const counts = { uncaught: 0, misdeclared: 0 };
+  const counts = { uncaught: 0, misdeclared: 0, unjudged: 0 };
   for (const mutation of mutations) {
     const root = await prepare();
     try {
@@ -937,12 +962,13 @@ export function sweepSummary(swept, total, full) {
  * working, the second says the gate works and the map to it is wrong. Counting both as "not
  * caught" tells a reader to go looking for a broken gate that is not broken.
  */
-export function sweepFailureSummary({ uncaught, misdeclared }) {
+export function sweepFailureSummary({ uncaught, misdeclared, unjudged }) {
   const said = [];
   if (uncaught > 0) said.push(`${uncaught} induced mutation(s) were not caught`);
   if (misdeclared > 0) {
     said.push(`${misdeclared} caught mutation(s) declare a page that caught nothing`);
   }
+  if (unjudged > 0) said.push(`${unjudged} run(s) ended without judging anything`);
   return `${said.join("; ")}.`;
 }
 
@@ -960,14 +986,34 @@ export function sweepFailureSummary({ uncaught, misdeclared }) {
  * @param {object} io  `prepare` (a fresh copy of the build), `run` (the browser, given its whole
  *   environment), `log` and `err` (where the summary goes)
  */
+/**
+ * Whether the environment asks for every page.
+ *
+ * Scoped is the default: a mutation of one page was measured on the thirty-two it cannot touch, at
+ * about two minutes a mutation and 45 mutations. `LEX_EVIDENCE_SCOPE=full` runs every mutation over
+ * every page, which is what a declaration is checked against: run it when a mutation is added, when
+ * a page is added, and whenever a declaration is in doubt. The clean `npm run evidence` is unscoped
+ * always and is where the 495-combination claim comes from.
+ *
+ * A value that is neither absent nor `full` is **refused**, not read as scoped. `LEX_EVIDENCE_SCOPE=FULL`
+ * or `=true` from someone who meant a full sweep would otherwise get the cheap one, and the closing
+ * line would truthfully say "over the pages each declares" to a reader who believes they asked for
+ * every page and is about to judge declarations on it. Defaulting to the cheap mode on an
+ * unrecognised value is the same shape `sweepWith` refuses for `full`.
+ */
+export function fullFrom(env) {
+  const asked = env.LEX_EVIDENCE_SCOPE;
+  if (asked === undefined || asked === "") return false;
+  if (asked === "full") return true;
+  throw new Error(
+    `LEX_EVIDENCE_SCOPE is ${JSON.stringify(asked)}; it is "full" or it is unset, and an unread value ` +
+      "would silently give the scoped sweep",
+  );
+}
+
 export async function sweepAll(env, { prepare, run, log = console.log, err = console.error, mutations = MUTATIONS }) {
-  // Scoped is the default: a mutation of one page was measured on the thirty-two it cannot touch,
-  // at about two minutes a mutation and 45 mutations. `LEX_EVIDENCE_SCOPE=full` runs every mutation
-  // over every page, which is what a declaration is checked against: run it when a mutation is
-  // added, when a page is added, and whenever a declaration is in doubt. The clean `npm run
-  // evidence` is unscoped always and is where the 495-combination claim comes from. Read here, from
-  // the environment given, rather than from a module constant the tests could never set.
-  const full = env.LEX_EVIDENCE_SCOPE === "full";
+  // Read from the environment given, rather than from a module constant the tests could never set.
+  const full = fullFrom(env);
   // Before anything is copied: a selection that names nothing should cost nothing.
   const swept = mutationsToSweep(mutations, env.LEX_EVIDENCE_ONLY);
   const counts = await sweepWith({
@@ -975,10 +1021,11 @@ export async function sweepAll(env, { prepare, run, log = console.log, err = con
     prepare,
     full,
     log,
-    // The child is given the environment this function built, never the one the caller exported.
+    // The page scope the child sees is this function's, never the caller's.
     run: (root, pages, name) => run(root, childEnv(env, root, scopeFor(pages, full)), name),
   });
-  const failed = counts.uncaught + counts.misdeclared;
+  // Every kind of failure, by name rather than by a sum that a new kind would fall out of.
+  const failed = Object.values(counts).reduce((total, count) => total + count, 0);
   const summary = failed > 0 ? sweepFailureSummary(counts) : sweepSummary(swept.length, mutations.length, full);
   (failed > 0 ? err : log)(`\n${summary}`);
   return { counts, swept: swept.length, summary, exitCode: failed > 0 ? 1 : 0 };
@@ -995,7 +1042,15 @@ async function sweep() {
     return await sweepAll(process.env, {
       prepare: async () => {
         const root = await mkdtemp(join(tmpdir(), "lex-evidence-"));
-        await cp(base, root, { recursive: true });
+        try {
+          await cp(base, root, { recursive: true });
+        } catch (error) {
+          // The sweep's own `finally` removes a root it was handed; a copy that threw halfway was
+          // never handed over, and a half-copied build is the same size as a whole one.
+          await rm(root, { recursive: true, force: true });
+          throw error;
+        }
+
         return root;
       },
       run,
