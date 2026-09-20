@@ -116,7 +116,9 @@ export const REFUSAL_EXAMPLES = Object.freeze({
   anchor_not_in_version: {
     sentence: 'art_1 is not an anchor in this version.',
     payload: {
+      requested_anchor: 'art_1',
       nearest_anchors: ['art_1er', 'art_1er__2'],
+      do_not_fall_back_to_full_text_search: true,
       what_would_answer: ['corrected_identifier'],
       asserts_absence_of_law: false,
     },

@@ -249,13 +249,30 @@ export const CONTRACT_STATUS = Object.freeze({
 
 export const REQUIRED_PAYLOAD = Object.freeze({
   no_version_for_date: Object.freeze({
+    // `requested_date` is OPTIONAL here and required nowhere, which is a smaller answer than the
+    // one I was asked for, so the reason is written down. The platform always sends it, and the
+    // card should show the date a reader asked about rather than make them supply it from memory.
+    // But this refusal has SIX producers on this surface as well — the timeline, both previews,
+    // the trust surface and the React timeline — and requiring it would reject all of them until
+    // each is changed. That is a worthwhile change and it is not this one: this slice exists to
+    // make the reader render what the platform sends, not to rewrite the surface's own producers.
+    // Named as open work rather than done quietly or left unsaid.
     keys: Object.freeze(['history_begins', 'nearest_earlier', 'nearest_later']),
+    optional: Object.freeze(['requested_date', 'bound']),
     basis:
       '33-product-spec: "no_version_for_date carries history_begins, nearest_earlier, ' +
       'nearest_later"',
   }),
   anchor_not_in_version: Object.freeze({
-    keys: Object.freeze(['nearest_anchors']),
+    // All three the producer sends. `do_not_fall_back_to_full_text_search` is a SAFETY statement,
+    // not a flag: it tells a reader that the system will not answer a provision question with a
+    // text search, which is the failure this whole refusal exists to avoid. Declaring only
+    // `nearest_anchors` rejected the real refusal and would have hidden the statement anyway.
+    keys: Object.freeze([
+      'requested_anchor',
+      'nearest_anchors',
+      'do_not_fall_back_to_full_text_search',
+    ]),
     basis:
       '31-v3-spec: "anchor_not_in_version (with nearest_anchors and the do-not-fall-back note)"',
   }),
@@ -270,6 +287,9 @@ export const REQUIRED_PAYLOAD = Object.freeze({
       'stable_coordinate',
       'current_hash_pinned_url',
     ]),
+    // The registry mandates the four above; the mount sends a fifth. Optional, because the mandate
+    // is the floor and this producer happens to stand above it.
+    optional: Object.freeze(['rule_profile_sha256s']),
     basis:
       'lex-v3-operation-registry/1: pinned_digest_mismatch carries requested_digest, ' +
       'current_digest, stable_coordinate, current_hash_pinned_url',
@@ -471,7 +491,13 @@ const CANDIDATE_KEYS = new Set(['valid_from', 'hash', 'publication_date', 'href'
  */
 function requireStateCoordinate(candidate, publisher, work, what) {
   requireCalendarDate(candidate?.valid_from, `${what} valid_from`);
-  requireCalendarDate(candidate?.publication_date, `${what} publication_date`);
+  // The publication date is checked when there is one. A candidate sent as a bare hash-pinned
+  // link carries no publication date at all, and `null` here means NOT STATED, not "a date that
+  // is not a date": the renderer says so in words. Demanding one of a producer that does not hold
+  // it is how this card came to reject every real `ambiguous_version` refusal.
+  if (candidate?.publication_date !== null && candidate?.publication_date !== undefined) {
+    requireCalendarDate(candidate.publication_date, `${what} publication_date`);
+  }
   if (!SHA256.test(candidate?.hash ?? '')) {
     throw new Error(
       `${what} is identified by its 64 hex character hash; eight characters on screen are a ` +
@@ -498,14 +524,64 @@ function requireStateCoordinate(candidate, publisher, work, what) {
   }
 }
 
+/**
+ * One candidate, in either form the producers send, with what is not stated marked as not stated.
+ *
+ * The platform sends a candidate as ONE STRING: its hash-pinned reading URL. That is the whole
+ * fact it holds. This card was written for an object carrying `valid_from`, `hash`,
+ * `publication_date`, `href` and a declared `withdrawn`, and it required every one of them — so
+ * against a real `ambiguous_version` payload it threw before it reached any of its own rules.
+ *
+ * The URL carries the coordinate, so `valid_from`, `hash` and `href` are read from it rather than
+ * demanded. The other two are NOT in it, and the card does not invent them:
+ *
+ *   - `withdrawn` becomes null, meaning NOT STATED. It must never become `false`. `false` is a
+ *     claim the publisher still holds this state, which is exactly the claim the mount cannot
+ *     make — it holds no status facts and says so in `coverage`'s `not_held`. Writing `false`
+ *     here would manufacture a status out of a silence, in the one card whose whole job is to
+ *     refuse to choose between two states.
+ *   - `publication_date` becomes null, and renders as not stated rather than as a blank date.
+ *
+ * The object form is unchanged and keeps every rule it had, so a producer that sends more is
+ * honoured and checked more strictly than one that sends less.
+ */
+function normaliseCandidate(candidate) {
+  if (typeof candidate !== 'string') {
+    return { ...candidate, stated: true };
+  }
+
+  const target = parseObjectUrl(candidate);
+  if (target?.kind !== 'reading') {
+    throw new Error(
+      `a candidate given as a link must be a reading URL: ${JSON.stringify(candidate)} names none`,
+    );
+  }
+
+  return {
+    href: candidate,
+    valid_from: target.validFrom,
+    hash: target.hash,
+    publication_date: null,
+    withdrawn: null,
+    stated: false,
+  };
+}
+
 function requireCandidates(payload) {
-  const candidates = own(payload, 'candidates');
-  if (!Array.isArray(candidates) || candidates.length < 2) {
+  const given = own(payload, 'candidates');
+  if (!Array.isArray(given) || given.length < 2) {
     throw new Error(
       'ambiguous_version means two or more publisher states cover the date; a candidate ' +
         'list shorter than two does not describe the ambiguity it claims',
     );
   }
+
+  const candidates = given.map(normaliseCandidate);
+  // Whether the publisher's ranking is knowable at all. When every candidate states it, the rules
+  // below are the ones this card was built on. When the producer states none of it, those rules
+  // have nothing to read, and the card says the withdrawal is not stated rather than assuming
+  // either answer.
+  const ranked = candidates.every((candidate) => typeof candidate.withdrawn === 'boolean');
   // 30-FINAL-VERDICT splits this population per attack 4.4: a live ambiguity, where the
   // publisher ranks two states that both stand, gets the interstitial; a withdrawn-superseded
   // pair does not, because there the publisher has ranked them and the right answer is the
@@ -515,8 +591,11 @@ function requireCandidates(payload) {
   // Declared first, so an undeclared withdrawal is named as one rather than reported as a
   // withdrawal. Behind the live-count rules it was unreachable, and an unreachable guard is
   // a guard that will be deleted by somebody who notices it never fires.
+  // Only of a candidate sent as an object: there the producer chose to describe the state, and a
+  // description that omits the withdrawal is the defect this was written for. A candidate sent as
+  // a bare link describes nothing, which is a different thing and is handled by `ranked` below.
   const undeclared = candidates.filter(
-    (candidate) => typeof candidate?.withdrawn !== 'boolean',
+    (candidate) => candidate.stated && typeof candidate.withdrawn !== 'boolean',
   );
   if (undeclared.length > 0) {
     throw new Error(
@@ -525,8 +604,8 @@ function requireCandidates(payload) {
     );
   }
 
-  const live = candidates.filter((candidate) => candidate?.withdrawn === false);
-  if (live.length < 2) {
+  const live = ranked ? candidates.filter((candidate) => candidate.withdrawn === false) : candidates;
+  if (ranked && live.length < 2) {
     throw new Error(
       `${live.length} of these ${candidates.length} states is live, so this is not the live ` +
         'ambiguity the interstitial is for; a withdrawn-superseded pair is rendered by ' +
@@ -547,7 +626,7 @@ function requireCandidates(payload) {
     );
   }
 
-  if (live.length !== candidates.length) {
+  if (ranked && live.length !== candidates.length) {
     throw new Error(
       `${candidates.length - live.length} of these candidates is withdrawn; the interstitial ` +
         'offers a choice, so every state in it must be one the publisher still holds, and a ' +
@@ -575,7 +654,7 @@ function requireCandidates(payload) {
   //
   // A payload that DOES state them is honoured and cross-checked, so the day that decision lands
   // this keeps working and gets stronger rather than needing to be rewritten.
-  const first = parseObjectUrl(candidates[0]?.href ?? '');
+  const first = parseObjectUrl(candidates[0].href ?? '');
   if (first?.kind !== 'reading') {
     throw new Error(
       'the first candidate needs a reading URL: the work being disambiguated is read from the ' +
@@ -592,7 +671,12 @@ function requireCandidates(payload) {
     );
   }
 
-  for (const candidate of candidates) {
+  // The member check reads what the PRODUCER sent, not what normalising added. Reading the
+  // normalised form here rejected `stated`, a marker of this function's own making, and reported
+  // it as a field nobody typed — which is true, and the somebody who did not type it was me.
+  // A candidate sent as a bare link has no members to check; its one fact is its URL.
+  for (const candidate of given) {
+    if (typeof candidate === 'string') continue;
     for (const key of Object.keys(candidate ?? {})) {
       if (!CANDIDATE_KEYS.has(key)) {
         throw new Error(
@@ -601,6 +685,9 @@ function requireCandidates(payload) {
         );
       }
     }
+  }
+
+  for (const candidate of candidates) {
     requireStateCoordinate(candidate, publisher, work, 'a candidate');
   }
 }
@@ -789,14 +876,29 @@ function requirePayload(code, payload) {
 
 function renderCandidates(candidates) {
   const items = candidates
-    .map(
-      (candidate) =>
+    .map(normaliseCandidate)
+    .map((candidate) => {
+      // What the producer did not say is said as not said. A blank where a date belongs reads as
+      // a missing value in this interface; "not stated by the platform" reads as what it is, and
+      // neither of them is a date the publisher never gave us.
+      const published = candidate.publication_date
+        ? `published ${escapeHtml(candidate.publication_date)}`
+        : 'publication date not stated by the platform';
+      // And the ranking. Silence is not "still held": the mount holds no status facts, so a card
+      // that omitted this would let a reader take two states as both current when the system
+      // knows only that both cover the date.
+      const standing =
+        typeof candidate.withdrawn === 'boolean'
+          ? ''
+          : ', withdrawal not stated by the platform';
+      return (
         '<li class="refusal-candidate">' +
         `<a href="${escapeHtml(candidate.href)}">applicable from ` +
         `${escapeHtml(candidate.valid_from)}, hash ` +
-        `<code>${escapeHtml(candidate.hash.slice(0, 8))}</code>, published ` +
-        `${escapeHtml(candidate.publication_date)}</a></li>`,
-    )
+        `<code>${escapeHtml(candidate.hash.slice(0, 8))}</code>, ${published}` +
+        `${standing}</a></li>`
+      );
+    })
     .join('');
   return `<ul class="refusal-candidates">${items}</ul>`;
 }
