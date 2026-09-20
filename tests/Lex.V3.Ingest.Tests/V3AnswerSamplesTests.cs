@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 using Lex.V3.Api;
 using Lex.V3.Contracts;
 using Lex.V3.Contracts.Platform;
@@ -60,10 +61,12 @@ public sealed class V3AnswerSamplesTests
         // digest, and `coverage` groups them under `mounted` with the publisher. Each grouping is
         // reasonable on its own and a reader meeting two of them meets one fact in two places.
         //
-        // Every one of the three was found by the double-run test failing, never by reading: the nested
-        // pair when the list was written, the flat pair the first time it ran, and `mounted` the first
-        // time `coverage` was sampled. A list of paths maintained by hand would have been wrong three
-        // times; this one is wrong until a run says so, which is the whole point of it.
+        // How each arrived, accurately, because the sentence that stood here claimed more than the
+        // history: the NESTED pair was written from reading one answer and then confirmed by measuring
+        // four runs; the FLAT pair and `mounted` were found by the double-run test failing, the first
+        // when it first ran and the second the first time `coverage` was sampled. So reading found one
+        // of three and a run found two, which is still the argument for measuring -- but it is not
+        // "never by reading", and the comment this replaced said the opposite about the nested pair.
         "corpus_sha256",
         "index_sha256",
         "verified_by.corpus_sha256",
@@ -147,10 +150,28 @@ public sealed class V3AnswerSamplesTests
         // must be identical. A field that starts moving fails here and is not quietly absorbed.
         var firstRaw = await ObserveAsync();
         var secondRaw = await ObserveAsync();
-        Assert.AreEqual(
-            BuildDocument(firstRaw),
-            BuildDocument(secondRaw),
-            "Two observations of the same request differ outside the normalised fields: add the field to VariesPerRun with its reason, or find why it moved.");
+
+        // NAMED, not located. This compared the two rendered documents with one string assertion, so a
+        // field that moved reported "differ at 1 location(s). First difference at index 18522" -- a
+        // character offset into 29,000 characters, and then advice about what to do once you have found
+        // the path. I wrote a script to diff two of these documents by hand tonight to find
+        // `mounted.corpus_sha256`, and then wrote in the request that the test "tells you which". It
+        // did not. It does now: the paths are compared one at a time and the failure is the path.
+        var firstByPath = Flatten(firstRaw);
+        var secondByPath = Flatten(secondRaw);
+        CollectionAssert.AreEquivalent(
+            firstByPath.Keys.ToArray(),
+            secondByPath.Keys.ToArray(),
+            "Two observations of the same request carry different paths.");
+        var moved = firstByPath.Keys
+            .Where(path => !string.Equals(firstByPath[path], secondByPath[path], StringComparison.Ordinal))
+            .Where(path => !VariesPerRun.Contains(NormalisePath(path), StringComparer.Ordinal))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        Assert.IsEmpty(
+            moved,
+            $"These paths differ between two observations and are not normalised: {string.Join(", ", moved)}. "
+                + "Add each to VariesPerRun with its reason, or find why it moved.");
 
         // AND THE CONVERSE, which is the direction this list was weak in. Nothing made a listed field
         // EARN its place, so two entries that never move sat here hiding values the file could pin, and
@@ -250,8 +271,11 @@ public sealed class V3AnswerSamplesTests
             await DriveAsync(mount, "as_of", "the same request, so a caller can move from one to the other", parameters),
             // `coverage` asks about the mount rather than about a work, so it takes no identifier and no
             // date. It is sampled because its reader is the next one built against a captured answer, and
-            // because that reader today requires seventeen fields of which the platform sends one: the
-            // census is what makes that visible rather than something a person has to notice.
+            // because that reader today requires seventeen paths of which the platform's sample carries
+            // TWO -- `languages` and `languages[].works` -- and even those two coincide only in name: the
+            // platform's row is {language, states, works, ...} and the reader wants {code, versions,
+            // works}. ("one" was my count and it was off by one; the writer seat counted both lists.)
+            // The census is what makes a gap like that visible rather than something a person notices.
             await DriveAsync(mount, "coverage", "the whole mount, no language asked", new { }),
         ];
     }
@@ -271,6 +295,56 @@ public sealed class V3AnswerSamplesTests
         Assert.IsNotNull(envelope.Result, $"{operation} / {scenario} answered with no result.");
         var value = JsonNode.Parse(envelope.Result.Value.GetRawText())!;
         return new Answer(operation, scenario, envelope.Result.ObjectType, value);
+    }
+
+    /// <summary>
+    /// One flattened path in the form <see cref="VariesPerRun"/> uses: the operation prefix dropped and
+    /// every index replaced by <c>[]</c>, so <c>provenance.states[0].sources[0].object_ref_sha256</c> is
+    /// recognised as the listed <c>states[].sources[].object_ref_sha256</c>.
+    /// </summary>
+    private static string NormalisePath(string path)
+    {
+        var withoutOperation = path[(path.IndexOf('.', StringComparison.Ordinal) + 1)..];
+        return Regex.Replace(withoutOperation, @"\[\d+\]", "[]");
+    }
+
+    /// <summary>
+    /// Every leaf of every sampled answer as path -> value, so a difference between two observations can
+    /// be reported as the path it is at rather than as a character offset into the rendered file.
+    /// </summary>
+    private static Dictionary<string, string> Flatten(IReadOnlyList<Answer> answers)
+    {
+        var found = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var answer in answers.OrderBy(static a => a.Operation, StringComparer.Ordinal))
+        {
+            Walk(answer.Body, answer.Operation, found);
+        }
+
+        return found;
+    }
+
+    private static void Walk(JsonNode node, string path, Dictionary<string, string> found)
+    {
+        switch (node)
+        {
+            case JsonArray array:
+                for (var index = 0; index < array.Count; index += 1)
+                {
+                    if (array[index] is { } item) Walk(item, $"{path}[{index}]", found);
+                }
+
+                break;
+            case JsonObject observed:
+                foreach (var property in observed)
+                {
+                    if (property.Value is { } value) Walk(value, $"{path}.{property.Key}", found);
+                }
+
+                break;
+            default:
+                found[path] = node.ToJsonString();
+                break;
+        }
     }
 
     /// <summary>Every value an answer carries at one normalise path, in a stable order, for comparing two runs.</summary>
