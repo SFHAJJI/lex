@@ -134,6 +134,167 @@ const MUTATIONS = [
       );
     },
   },
+  // Compare arming. With nothing selected at load and no lex_id in the markup, the server HTML under
+  // each of these is the HTML a rebuild from the mutated source would serve, so mutating the bundle
+  // alone is not a hydration mismatch the page could be failed for instead.
+  {
+    // The defect this probe was written against: the preview's only second row of the work shared
+    // the first row's lex_id, so selecting it deselected the first and nothing could ever arm.
+    name: "the second synthetic state collapsed onto the first lex_id",
+    expect:
+      /with two states of one work selected \("[^"]+", "[^"]+"\), Compare stayed aria-disabled="true"/,
+    async apply(root) {
+      await replaceOnce(
+        join(root, "client.js"),
+        /(?<head>lex_id:`\$\{[A-Za-z_$][\w$]*\}:)1998-07-01`/,
+        "$<head>2001-01-01`",
+      );
+    },
+  },
+  {
+    // The work comparison removed from the rule, so any two rows arm. The sentence for two works
+    // survives in the bundle; only the condition that chooses it is gone.
+    name: "the arming rule made to ignore the work",
+    expect: /with rows of two different works selected, Compare was armed \(aria-disabled="false"\)/,
+    async apply(root) {
+      await replaceOnce(
+        join(root, "client.js"),
+        /[A-Za-z_$][\w$]*!==[A-Za-z_$][\w$]*\?"These are two different works/,
+        '!1?"These are two different works',
+      );
+    },
+  },
+  {
+    // Three rows still do not arm, because `armedBy` counts to two on its own; what goes is the
+    // sentence that tells the reader why. The control then says a pair is selected over three rows.
+    name: "the three-row refusal removed",
+    expect:
+      /with three rows selected, the compare control said "Two states of one work selected\.", not "A comparison is between two states/,
+    async apply(root) {
+      await replaceOnce(
+        join(root, "client.js"),
+        /if\([A-Za-z_$][\w$]*\.length>2\)return"A comparison is between two states/,
+        'if(!1)return"A comparison is between two states',
+      );
+    },
+  },
+  {
+    // Space still claims the key -- preventDefault stays -- and selects nothing, which is what a
+    // handler bug looks like. Every step after load then reads a list nobody could arm.
+    name: "Space made inert on a result row",
+    expect:
+      /after Space on one state, the compare control said "Select two states to compare them\.", not "One state selected/,
+    async apply(root) {
+      await replaceOnce(
+        join(root, "client.js"),
+        /(\.key==="Spacebar"\)\{[A-Za-z_$][\w$]*\.preventDefault\(\)),[A-Za-z_$][\w$]*\([A-Za-z_$][\w$]*\[[A-Za-z_$][\w$]*\]\);return\}/,
+        "$1;return}",
+      );
+    },
+  },
+  {
+    // The selection works and the control arms, and the list never says which rows are chosen. A
+    // screen reader hears "Two states of one work selected" and cannot find either of them.
+    name: "rows never say they are selected",
+    expect:
+      /after Space on one state, row "[^"]+" is aria-selected="false", not "true"; the list does not say which rows are armed/,
+    async apply(root) {
+      await replaceOnce(
+        join(root, "client.js"),
+        /"aria-selected":[A-Za-z_$][\w$]*\.has\([A-Za-z_$][\w$]*\.lex_id\)/,
+        '"aria-selected":!1',
+      );
+    },
+  },
+  {
+    // The sentence still in the page, resolved by aria-describedby, and shown to nobody. Every
+    // attribute the probe used to read survives this, so only reading what the page renders can
+    // see it. A sighted keyboard reader meets a button that does nothing and no reason.
+    name: "the compare control's sentence hidden from the page",
+    expect:
+      /the compare control's sentence is in the page and not shown \(the hidden attribute, 0x0 box, the words "[^"]*" in the document only\); a reason a reader cannot see is not a reason/,
+    async apply(root) {
+      await replaceOnce(
+        join(root, "search-react.html"),
+        /<p class="compare-arming-state"/,
+        '<p hidden class="compare-arming-state"',
+      );
+    },
+  },
+  {
+    // The screen-reader-only pattern turned on the sentence: rendered, visible to every property
+    // check, one pixel of it on screen. The reviewer's variant on #683 in its own place.
+    name: "the compare sentence clipped to one pixel by the stylesheet",
+    expect: /the compare control's sentence is not painted: \d+ ink pixel\(s\), [\d.]+% of its 1x1 box, differ from the background; a reason nobody can read is not a reason/,
+    async apply(root) {
+      const file = join(root, "styles.css");
+      const css = await readFile(file, "utf8");
+      await writeFile(
+        file,
+        `${css}
+.compare-arming-state { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+`,
+        "utf8",
+      );
+    },
+  },
+  {
+    // The words drawn in nothing. innerText returns them, the box is full size, checkVisibility
+    // is true, and the reader sees an empty line under a button that will not press.
+    name: "the compare sentence drawn in transparent text",
+    expect: /the compare control's sentence is not painted: \d+ ink pixel\(s\)/,
+    async apply(root) {
+      const file = join(root, "styles.css");
+      const css = await readFile(file, "utf8");
+      await writeFile(
+        file,
+        `${css}
+.compare-arming-state, .compare-arming-state * { color: transparent; }
+@media (prefers-color-scheme: dark) { .compare-arming-state, .compare-arming-state * { color: transparent; } }
+`,
+        "utf8",
+      );
+    },
+  },
+  {
+    // Zero opacity: caught by the as-shown check before the pixels are counted, and kept because
+    // a sweep that only proves the newest check has stopped proving the older one.
+    name: "the compare sentence given zero opacity",
+    expect: /the compare control's sentence is in the page and not shown \(display block, visibility visible/,
+    async apply(root) {
+      const file = join(root, "styles.css");
+      const css = await readFile(file, "utf8");
+      await writeFile(file, `${css}
+.compare-arming-state { opacity: 0; }
+`, "utf8");
+    },
+  },
+  {
+    // The control kept out of the accessibility tree, with the DOM untouched. A screen reader is
+    // given neither the button nor its sentence; every attribute check still passes.
+    name: "the compare control hidden from assistive technology",
+    expect:
+      /the Compare button is not in the accessibility tree; a control a screen reader is never given cannot tell anyone why states cannot be compared/,
+    async apply(root) {
+      await replaceOnce(
+        join(root, "search-react.html"),
+        /<div class="compare-arming">/,
+        '<div class="compare-arming" aria-hidden="true">',
+      );
+    },
+  },
+  {
+    // The whole control gone from the built page, with the list and its selection intact. The
+    // probe finds nothing to drive, and a page declared for it must not read that as clean. Both
+    // the served markup and the bundle change: a production hydrate keeps the server's attributes,
+    // so renaming the class in the bundle alone leaves the control on the page.
+    name: "the compare control no longer rendered",
+    expect: /the compare probe declares rows for this page and the page has no compare control/,
+    async apply(root) {
+      await replaceOnce(join(root, "search-react.html"), /class="compare-arming"/, 'class="compare-gone"');
+      await replaceOnce(join(root, "client.js"), /className:"compare-arming",/, 'className:"compare-gone",');
+    },
+  },
   {
     // S5-A10: translation is never the default view. The trust surface carries exactly one
     // unofficial rendering; opening it in the served markup is the defect in its plainest form.
@@ -542,7 +703,15 @@ for (const mutation of MUTATIONS) {
     } else if (!mutation.expect.test(output)) {
       console.log(`WRONG REASON ${mutation.name}`);
       // Every failure line, not the first four, so a wrong reason can be told from a flake.
-      console.log(output.split("\n").filter((l) => /^\s+\S.*: /.test(l)).join("\n"));
+      const lines = output.split("\n").filter((l) => /^\s+\S.*: /.test(l));
+      // A run that ended without judging anything is not a wrong reason, and it has no failure
+      // lines to print: its last words are what names the crash.
+      console.log(
+        lines.length > 0
+          ? lines.join("\n")
+          : `             it judged nothing and ended ${code}; its last output:\n` +
+            output.split("\n").filter((l) => l.trim() !== "").slice(-12).map((l) => `             ${l}`).join("\n"),
+      );
       failures += 1;
     } else {
       const line = output.split("\n").find((l) => mutation.expect.test(l)) ?? "";

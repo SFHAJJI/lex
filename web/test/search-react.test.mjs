@@ -889,10 +889,27 @@ test('the screen composes into a whole document, twice, without colliding with i
     'compare-arming',
     'date-field',
     'relaxation-fuzzy',
-    'Showing 3 of 47 matching passages.',
+    'Showing 4 of 47 matching passages.',
     'aria-multiselectable="true"',
   ]) {
     assert.ok(prose.includes(probe), `${probe} is missing from the composed page`);
+  }
+
+  // The page ships `/client.js` and hydrates, and its opening paragraph said for a long time that
+  // it carried no script and its controls were shown rather than operated. A page that describes
+  // itself falsely is the defect this preview exists to rule out, so the old words are refused and
+  // the true account of what works, and what needs a service it does not have, is required.
+  assert.equal(
+    /carries no script|shown rather than operated/.test(prose),
+    false,
+    'the page says it carries no script while shipping one',
+  );
+  for (const sentence of [
+    'The page hydrates, so the filter chips, the date field and row selection work.',
+    'Opening a row, submitting a date and running a comparison need a service this preview does ' +
+      'not have, so those three do nothing.',
+  ]) {
+    assert.ok(prose.includes(sentence), `the page no longer says what works on it: ${sentence}`);
   }
 
   // Two screens on one document, and every element id minted per instance. Written by hand, the

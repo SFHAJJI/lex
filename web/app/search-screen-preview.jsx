@@ -62,7 +62,10 @@ const POPULATION = Object.freeze({
   ],
 });
 
-// Two provisions of one state share its identifier, which is why a row is keyed by its position.
+// Rows 1 and 2 are two provisions of one state and share its identifier, which is why a row is
+// keyed by its position. Row 4 is a second state of the same work with its own identifier, and it
+// is what lets the page arm a comparison: selection is keyed by lex_id, so the only other row of
+// the work used to be the first row's twin, and selecting it deselected the first.
 const HITS = Object.freeze([
   {
     lex_id: `${WORK}:2001-01-01`,
@@ -90,7 +93,22 @@ const HITS = Object.freeze([
     // row badged this way inside an account that says the crosswalk never ran is refused.
     match_reasons: ['interpreted'],
   },
+  {
+    // An earlier state that ends where the 2001 state begins, so nothing overlaps and the resolved
+    // state below stays the only one covering the operative date. It does not cover that date
+    // itself, which is why the heading over these rows no longer narrows to it.
+    lex_id: `${WORK}:1998-07-01`,
+    title: 'Acte synthetique de demonstration, article 1, etat anterieur',
+    language: 'fr',
+    valid_from: '1998-07-01',
+    valid_to: '2001-01-01',
+    match_reasons: ['keyword'],
+  },
 ]);
+
+// The browser gate drives compare arming on rows it declares by title, and a node test checks
+// those titles against these rows, so the declaration cannot drift from the page unnoticed.
+export { HITS as SEARCH_PREVIEW_HITS };
 
 const FILTERS = Object.freeze([
   {
@@ -125,7 +143,8 @@ export function searchScreenTree() {
       <section className="results-case">
         <h2>A page of a larger result set, produced by a rewritten query</h2>
         <p className="results-case-note">
-          Three rows of forty-seven matching passages. The query was expanded and read as another
+          Four rows of forty-seven matching passages, from two states of one work and an annex.
+          The query was expanded and read as another
           term before it ran, and both disclosures carry their own way back to the exact words.
         </p>
         <SearchScreen
@@ -213,8 +232,9 @@ export function renderSearchScreenPage() {
       <h1>Search</h1>
       <p>
         The search screen, composed from the controls it is made of. Every value here is synthetic
-        and none of it is law. The page is server-rendered and carries no script, so the controls
-        are shown rather than operated.
+        and none of it is law. The page hydrates, so the filter chips, the date field and row
+        selection work. Opening a row, submitting a date and running a comparison need a service
+        this preview does not have, so those three do nothing.
       </p>
 
       <div id="search-root">{searchScreenTree()}</div>
