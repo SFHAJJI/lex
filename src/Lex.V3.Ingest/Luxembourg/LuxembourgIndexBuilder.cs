@@ -1490,11 +1490,12 @@ public sealed class LuxembourgIndexReader : IDisposable
         lock (_gate)
         {
             using var command = _connection.CreateCommand();
+            // CROSS JOIN pins the plan whatever the statistics say: the state by digest, its identities, then each article and its member by primary key.
             command.CommandText =
                 "SELECT DISTINCT m.object_ref_sha256,m.outcome,m.rights_disposition,m.gaps_json " +
-                "FROM states s,json_each(s.article_identities_json) j " +
-                "JOIN articles a ON a.article_identity_sha256=j.value " +
-                "JOIN members m ON m.object_ref_sha256=a.object_ref_sha256 " +
+                "FROM states s CROSS JOIN json_each(s.article_identities_json) j " +
+                "CROSS JOIN articles a ON a.article_identity_sha256=j.value " +
+                "CROSS JOIN members m ON m.object_ref_sha256=a.object_ref_sha256 " +
                 "WHERE s.state_sha256=$state ORDER BY m.object_ref_sha256";
             command.Parameters.AddWithValue("$state", stateSha256);
             var sources = new List<LuxembourgIndexStateSource>();
