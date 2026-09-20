@@ -122,6 +122,7 @@ public sealed class V3CorpusInForceOnMountTests
         var named = await SelectionAsync(mount, Shift(fixture.ApplicabilityDate, -1), identifier: $"/lu-legilux/{fixture.WorkKey}");
         Assert.AreEqual(V3Verdicts.Refuse, named.Verdict);
         Assert.AreEqual("no_version_for_date", named.Refusal!.Code);
+        AssertSaysNothingOfForce(named.Refusal.HelpfulPayload);
         Assert.AreEqual(PublisherId.LuLegilux, named.Context.Publisher);
         var asOf = await PostAsync(mount, AsOfRawTarget, JsonSerializer.Serialize(new
         {
@@ -165,6 +166,34 @@ public sealed class V3CorpusInForceOnMountTests
         var clean = rows.Single(row => row.GetProperty("work_key").GetString() == other.WorkKey);
         Assert.AreEqual(other.StateSha256, clean.GetProperty("state").GetProperty("state_sha256").GetString());
         Assert.AreEqual(JsonValueKind.Null, clean.GetProperty("reason").ValueKind);
+
+        // With the work named the question is as_of's, and so is the refusal, byte for byte: one work
+        // and one date must not refuse in one operation and answer in the other. The other work being
+        // held changes nothing, and neither does naming the clean work.
+        var identifier = $"/lu-legilux/{fixture.WorkKey}";
+        var named = await SelectionAsync(mount, Shift(twinDate, 10), identifier: identifier);
+        Assert.AreEqual(V3Verdicts.Refuse, named.Verdict);
+        Assert.AreEqual("ambiguous_version", named.Refusal!.Code);
+        AssertSaysNothingOfForce(named.Refusal.HelpfulPayload);
+        Assert.AreEqual(PublisherId.LuLegilux, named.Context.Publisher);
+        var asOf = await PostAsync(mount, AsOfRawTarget, JsonSerializer.Serialize(new
+        {
+            operation_id = "as_of",
+            parameters = new { identifier, date = Shift(twinDate, 10) },
+        }));
+        var asOfRefusal = V3EnvelopeJson.ParseAndVerify(ResponseBytes(asOf), V3OperationRegistry.Reviewed).Refusal!;
+        Assert.AreEqual("ambiguous_version", asOfRefusal.Code);
+        Assert.AreEqual(asOfRefusal.HelpfulPayload.GetRawText(), named.Refusal.HelpfulPayload.GetRawText(),
+            "The two operations give the same refusal payload for the same work and date.");
+        CollectionAssert.AreEqual(
+            new[] { coordinate + later.StateSha256, coordinate + twin.StateSha256 }.Order(StringComparer.Ordinal).ToArray(),
+            named.Refusal.HelpfulPayload.GetProperty("candidates").EnumerateArray().Select(static v => v.GetString()).ToArray());
+        var namedClean = await SelectionAsync(mount, Shift(twinDate, 10), identifier: $"/lu-legilux/{other.WorkKey}");
+        Assert.AreEqual(V3Verdicts.Answer, namedClean.Verdict);
+        var namedBefore = await SelectionAsync(mount, Shift(twinDate, -1), identifier: identifier);
+        Assert.AreEqual(V3Verdicts.Answer, namedBefore.Verdict, "Before the twins' date the named work is not ambiguous.");
+        Assert.AreEqual(fixture.StateSha256,
+            namedBefore.Result!.Value.GetProperty("states").EnumerateArray().Single().GetProperty("state").GetProperty("state_sha256").GetString());
 
         // Before the twins' date the first work is not ambiguous.
         var earlier = (await SelectionAsync(mount, Shift(twinDate, -1))).Result!.Value.GetProperty("states").EnumerateArray()
@@ -267,6 +296,16 @@ public sealed class V3CorpusInForceOnMountTests
             oneWork.GetProperty("states").EnumerateArray().Select(static row => row.GetProperty("language").GetString()).ToArray());
     }
 
+    /// <summary>
+    /// A refusal payload says nothing of legal force. The mode tag is the operation's own name, fixed
+    /// by the contract, and is set aside before looking; the identifier asked for is the reader's.
+    /// </summary>
+    private static void AssertSaysNothingOfForce(JsonElement payload)
+    {
+        var served = payload.GetRawText().Replace("\"r6_in_force_on\"", string.Empty, StringComparison.Ordinal);
+        Assert.IsFalse(served.Contains("force", StringComparison.OrdinalIgnoreCase), served);
+    }
+
     [TestMethod]
     public async Task TheIdentifierLanguageAndMountFamiliesRefuseAsTheOtherTemporalOperationsDo()
     {
@@ -278,12 +317,17 @@ public sealed class V3CorpusInForceOnMountTests
             var eu = await SelectionAsync(mount, "2020-04-15", identifier: "32016R0679");
             Assert.AreEqual("retrieval_mode_unavailable", eu.Refusal!.Code);
             Assert.AreEqual("r6_in_force_on", eu.Refusal.HelpfulPayload.GetProperty("requested_mode").GetString());
+            // The mode tag mirrors the operation id, as every R6 tag does; it is the one place a
+            // refusal payload says "force", and nothing else in any refusal here does.
+            AssertSaysNothingOfForce(eu.Refusal.HelpfulPayload);
             Assert.AreEqual(PublisherId.EuEurLex, eu.Context.Publisher);
             var unknown = await SelectionAsync(mount, "2020-04-15", identifier: "/lu-legilux/no-such-work");
             Assert.AreEqual("identifier_unknown", unknown.Refusal!.Code);
+            AssertSaysNothingOfForce(unknown.Refusal.HelpfulPayload);
 
             var english = await SelectionAsync(mount, "2020-04-15", language: "eng");
             Assert.AreEqual("language_not_available", english.Refusal!.Code);
+            AssertSaysNothingOfForce(english.Refusal.HelpfulPayload);
             Assert.AreEqual(PublisherId.LuLegilux, english.Context.Publisher);
             CollectionAssert.AreEqual(new[] { "fra" },
                 english.Refusal.HelpfulPayload.GetProperty("available_languages").EnumerateArray().Select(static v => v.GetString()).ToArray());

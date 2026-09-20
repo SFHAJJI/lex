@@ -743,8 +743,10 @@ internal sealed class V3CorpusMount : IDisposable
     /// The name says more than the index can. The mounted index holds publisher applicability dates
     /// and nothing about repeal, <c>dateNoLongerInForce</c> or entry into force, so a repealed work
     /// with no later consolidated state still has an applicable state on every later date. The
-    /// operation therefore serves no status and no served string speaks of legal force: every answer
-    /// carries the fixed caveat and a
+    /// operation therefore serves no status, and no served string speaks of legal force except the
+    /// operation's own name where the contract fixes it: the operation id, the route, and the mode
+    /// tag <c>r6_in_force_on</c> that a <c>retrieval_mode_unavailable</c> refusal echoes, which
+    /// mirrors the id as every R6 mode tag does. Every answer carries the fixed caveat and a
     /// <c>derivation</c> block naming the rule, the basis "versioned works only", what bounds a row's
     /// interval (the publisher's next dated state in that language, or nothing; no end is invented)
     /// and what was not consulted.
@@ -755,9 +757,11 @@ internal sealed class V3CorpusMount : IDisposable
     /// every other, as in <c>changes_in_period</c>; such a row offers no <c>resolve</c>, since there
     /// is no one state to point at. Without a work named, a date before everything held is an answer
     /// with no rows and a population that says so, because "nothing held" answers a question about the
-    /// whole index. With a work named, a date before that work's history is <c>as_of</c>'s refusal,
-    /// <c>no_version_for_date</c>: two operations asked what applied to one work on one date must not
-    /// disagree about whether that has an answer. Rows are bounded and the bound is said: they are cut only
+    /// whole index. With a work named the question is <c>as_of</c>'s, what applied to one work on
+    /// one date, and the two must not disagree about whether that has an answer: a date before the
+    /// work's history is <c>as_of</c>'s <c>no_version_for_date</c>, and several states on the
+    /// selected date in any served language is <c>as_of</c>'s <c>ambiguous_version</c>, both through
+    /// the shared builders. The per-row reason is for the question about many works only. Rows are bounded and the bound is said: they are cut only
     /// between works, <c>continue_after</c> is the last work key served and is the next request's
     /// <c>after_work_key</c>, and a work with more rows than the limit is served whole and said.
     /// </para>
@@ -834,6 +838,22 @@ internal sealed class V3CorpusMount : IDisposable
                 // that has an answer. Without a work named the question is about the whole index, and
                 // "nothing held" is its answer.
                 return RefuseNoVersionForDate(request, observedAt, scoped, requestedDate, bound: null);
+            }
+
+            // The same holds for twins. as_of refuses the whole question when any served language has
+            // several states on the selected date, with every candidate of every such language in
+            // ordinal order; a named work here is that question, so it is that refusal. The per-row
+            // reason below is for the question about many works, where one must not hide the others.
+            var twins = scoped
+                .GroupBy(static state => state.Language, StringComparer.Ordinal)
+                .Select(ofLanguage => SelectAtDate(ofLanguage.ToArray(), requestedDate).Selected)
+                .Where(static selected => selected.Length > 1)
+                .SelectMany(static selected => selected.Select(StateUrl))
+                .Order(StringComparer.Ordinal)
+                .ToArray();
+            if (twins.Length != 0)
+            {
+                return RefuseAmbiguousVersion(request, observedAt, requestedDate, twins, bound: null);
             }
 
             worksOnDate = 1;
