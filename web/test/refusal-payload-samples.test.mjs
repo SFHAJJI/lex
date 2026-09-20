@@ -229,7 +229,7 @@ test("a worked example carries the fields its real payload carries", async (t) =
             assert.equal(
               typeof element,
               typeof real[0],
-              `${row.code}.${key}[${index}]: the producer sends a list of ${typeof real[0]}s and the example shows a ${typeof element}`,
+              `${row.code}.${key}[${index}]: the producer sends a list of ${typeof real[0]}s and this element's kind is ${typeof element}`,
             );
             assertStringShape(`${row.code}.${key}[${index}]`, element, real[0]);
           });
