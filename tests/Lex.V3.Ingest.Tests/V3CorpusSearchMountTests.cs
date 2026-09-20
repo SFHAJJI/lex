@@ -12,10 +12,12 @@ namespace Lex.V3.Ingest.Tests;
 
 /// <summary>
 /// <c>search</c> driven through the real handler on a verified mount: the two lexical lanes the
-/// mounted index can serve, resolver first. Relaxed never outranks strict and an article matching
-/// both is served once, as strict; the answer says it is an order and not a rank, that matching is
-/// byte-exact, that a page is the first hits and not the best, and what a hit counts; a mode the
-/// index cannot serve is refused and never ignored; a named work on a date refuses as
+/// mounted index can serve, resolver first. The lanes are sets and the relaxed set contains the strict
+/// set: with no mode an article matching both is served once, as strict, and relaxed never outranks
+/// strict; with a mode the answer is that lane's whole set and the other lane is null, not zero. The
+/// answer says it is an order and not a rank, that matching is byte-exact, that a page is the first
+/// hits and not the best, and what a hit counts; a mode the index cannot serve is refused and never
+/// ignored; the query is bounded before any data is read; a named work on a date refuses as
 /// <c>as_of</c> refuses, and across works an ambiguous work is listed and hides nothing.
 /// </summary>
 [TestClass]
@@ -27,26 +29,35 @@ public sealed class V3CorpusSearchMountTests
     private const string Phrase = "garantie locative";
     private const string BothLanes = "La garantie locative ne peut exceder trois mois de loyer.";
     private const string TermsOnly = "Le bailleur restitue toute somme locative tenue en garantie.";
+    private const string OnlyGarantie = "La garantie est restituee au locataire sortant.";
+    private const string OnlyLocative = "Le loyer locative est du chaque mois.";
     private const string Neither = "Le present article ne dit rien du depot.";
 
     /// <summary>
-    /// Rewrites the first three articles of the fixture's own state: one matching the phrase (and so
-    /// every term), one matching every term and not the phrase, one matching neither.
+    /// Sets the text of the articles of one expression, in the order <see cref="MountedFixture.ArticlesOfOwnState"/>
+    /// lists them (the same publisher ids in every copy of the state); articles past the texts given hold
+    /// text that matches nothing. Returns the publisher ids in that order.
     /// </summary>
-    private static async Task<(string Both, string Terms, string None)> WriteTextsAsync(MountedFixture fixture)
+    private static async Task<string[]> SetTextsAsync(MountedFixture fixture, string expressionIri, params string[] texts)
     {
         var articles = fixture.ArticlesOfOwnState();
-        Assert.IsGreaterThanOrEqualTo(3, articles.Count, "The fixture's state holds too few articles for this test.");
-        await fixture.RewriteArticleTextAsync(fixture.ExpressionIri, articles[0].PublisherId, BothLanes);
-        await fixture.RewriteArticleTextAsync(fixture.ExpressionIri, articles[1].PublisherId, TermsOnly);
-        await fixture.RewriteArticleTextAsync(fixture.ExpressionIri, articles[2].PublisherId, Neither);
-        foreach (var other in articles.Skip(3))
+        Assert.IsGreaterThanOrEqualTo(texts.Length, articles.Count, "The fixture's state holds too few articles for this test.");
+        for (var index = 0; index < articles.Count; index++)
         {
-            await fixture.RewriteArticleTextAsync(fixture.ExpressionIri, other.PublisherId, Neither);
+            await fixture.RewriteArticleTextAsync(expressionIri, articles[index].PublisherId, index < texts.Length ? texts[index] : Neither);
         }
 
-        return (articles[0].PublisherId, articles[1].PublisherId, articles[2].PublisherId);
+        return articles.Select(static article => article.PublisherId).ToArray();
     }
+
+    private static async Task<(string Both, string Terms, string None)> WriteTextsAsync(MountedFixture fixture)
+    {
+        var ids = await SetTextsAsync(fixture, fixture.ExpressionIri, BothLanes, TermsOnly, Neither);
+        return (ids[0], ids[1], ids[2]);
+    }
+
+    private static string[] Strings(JsonElement array) =>
+        array.EnumerateArray().Select(static v => v.GetString()!).ToArray();
 
     [TestMethod]
     public async Task RelaxedNeverOutranksStrictAndAnArticleMatchingBothIsServedOnceAsStrict()
@@ -69,36 +80,47 @@ public sealed class V3CorpusSearchMountTests
         // The article matching the phrase matches every term too. It is a strict hit and nothing else.
         Assert.AreEqual(both, hits[0].GetProperty("publisher_id").GetString());
         Assert.AreEqual("strict", hits[0].GetProperty("lane").GetString());
-        CollectionAssert.AreEqual(new[] { "exact_phrase" },
-            hits[0].GetProperty("match_reasons").EnumerateArray().Select(static v => v.GetString()).ToArray());
+        CollectionAssert.AreEqual(new[] { "exact_phrase" }, Strings(hits[0].GetProperty("match_reasons")));
         Assert.AreEqual(termsOnly, hits[1].GetProperty("publisher_id").GetString());
         Assert.AreEqual("relaxed", hits[1].GetProperty("lane").GetString());
-        CollectionAssert.AreEqual(new[] { "all_terms" },
-            hits[1].GetProperty("match_reasons").EnumerateArray().Select(static v => v.GetString()).ToArray());
+        CollectionAssert.AreEqual(new[] { "all_terms" }, Strings(hits[1].GetProperty("match_reasons")));
         Assert.AreEqual(1, hits.Count(hit => hit.GetProperty("publisher_id").GetString() == both), "Served once, never again as relaxed.");
 
-        // What the answer says about itself: an order and not a rank, byte-exact, and what a hit is.
-        Assert.AreEqual(V3CorpusMount.SearchRanking, body.GetProperty("ranking").GetString());
-        StringAssert.Contains(body.GetProperty("ranking").GetString(), "not the best hits");
-        Assert.AreEqual(V3CorpusMount.SearchMatching, body.GetProperty("matching").GetString());
+        // What the answer says about itself, held against wording written here and not against the
+        // constants that produce it: an order and not a rank, byte-exact, what a hit is, what a lane is.
+        var ranking = body.GetProperty("ranking").GetString();
+        StringAssert.StartsWith(ranking, "none;");
+        StringAssert.Contains(ranking, "strict lane before relaxed lane");
+        StringAssert.Contains(ranking, "work key, publisher date, article identity");
+        StringAssert.Contains(ranking, "no BM25 ranker");
+        StringAssert.Contains(ranking, "not the best hits");
+        var matching = body.GetProperty("matching").GetString();
+        StringAssert.Contains(matching, "byte-exact substring");
+        StringAssert.Contains(matching, "the article's searchable text");
+        StringAssert.Contains(matching, "text and reference tokens");
+        StringAssert.Contains(matching, "modification markers and note references are not searched");
+        StringAssert.Contains(matching, "case and diacritics are significant");
+        StringAssert.Contains(matching, "nothing is folded, stemmed or expanded");
+        StringAssert.Contains(body.GetProperty("hit_unit").GetString(), "one article of one held state, not a provision");
+        var lanes = body.GetProperty("lanes").GetString();
+        StringAssert.Contains(lanes, "the relaxed set contains the strict set");
+        StringAssert.Contains(lanes, "each article once");
+        StringAssert.Contains(lanes, "null in the population, not zero");
         Assert.AreEqual("the first hits in the stated order, not the best hits", body.GetProperty("page_is").GetString());
-        Assert.AreEqual(V3CorpusMount.SearchHitUnit, body.GetProperty("hit_unit").GetString());
-        CollectionAssert.AreEqual(new[] { "strict", "relaxed" },
-            body.GetProperty("modes_held").EnumerateArray().Select(static v => v.GetString()).ToArray());
-        CollectionAssert.AreEqual(new[] { "bm25", "semantic" },
-            body.GetProperty("modes_not_held").EnumerateArray().Select(static v => v.GetString()).ToArray());
+        CollectionAssert.AreEqual(new[] { "strict", "relaxed" }, Strings(body.GetProperty("modes_held")));
+        CollectionAssert.AreEqual(new[] { "bm25", "semantic" }, Strings(body.GetProperty("modes_not_held")));
         Assert.IsFalse(body.GetRawText().Contains("\"score\"", StringComparison.Ordinal), "No score is served.");
         Assert.IsFalse(body.GetRawText().Contains("snippet", StringComparison.Ordinal), "No snippet is served.");
         Assert.IsFalse(body.GetRawText().Contains(BothLanes, StringComparison.Ordinal), "No article text is served.");
-        CollectionAssert.AreEqual(new[] { "garantie", "locative" },
-            body.GetProperty("terms").EnumerateArray().Select(static v => v.GetString()).ToArray());
+        CollectionAssert.AreEqual(new[] { "garantie", "locative" }, Strings(body.GetProperty("terms")));
 
         var population = body.GetProperty("population");
-        Assert.IsTrue(population.GetProperty("searchable_text_measured").GetBoolean());
+        Assert.IsTrue(body.GetProperty("searchable_text_held_for_language").GetBoolean());
         Assert.AreEqual(1, population.GetProperty("strict_hits").GetInt32());
         Assert.AreEqual(1, population.GetProperty("relaxed_hits").GetInt32());
         Assert.AreEqual(2, population.GetProperty("distinct_publisher_articles").GetInt32());
         Assert.AreEqual(1, population.GetProperty("works_with_hits").GetInt32());
+        Assert.AreEqual(200, body.GetProperty("limit").GetInt32(), "The default limit is the ceiling.");
         Assert.IsFalse(body.GetProperty("truncated").GetBoolean());
         Assert.AreEqual(JsonValueKind.Null, body.GetProperty("continue_after").ValueKind);
 
@@ -110,12 +132,23 @@ public sealed class V3CorpusSearchMountTests
         Assert.AreEqual(V3Verdicts.Answer, resolved.Verdict);
         StringAssert.Contains(resolved.Result!.Value.GetRawText(), fixture.StateSha256);
 
-        // Each lane can be asked for alone; the article matching both is strict and so is not relaxed.
+        // The lanes are sets. The strict lane alone is the phrase set; the relaxed lane alone is every
+        // article holding every term, which contains the phrase set, so the article matching both is in
+        // it too. The lane not asked for is not counted: null, never zero.
         var strictOnly = (await SearchAsync(mount, Phrase, mode: "strict")).Result!.Value;
         Assert.AreEqual(both, strictOnly.GetProperty("hits").EnumerateArray().Single().GetProperty("publisher_id").GetString());
+        Assert.AreEqual(1, strictOnly.GetProperty("population").GetProperty("strict_hits").GetInt32());
+        Assert.AreEqual(JsonValueKind.Null, strictOnly.GetProperty("population").GetProperty("relaxed_hits").ValueKind);
+
         var relaxedOnly = (await SearchAsync(mount, Phrase, mode: "relaxed")).Result!.Value;
-        Assert.AreEqual(termsOnly, relaxedOnly.GetProperty("hits").EnumerateArray().Single().GetProperty("publisher_id").GetString());
-        Assert.AreEqual(0, relaxedOnly.GetProperty("population").GetProperty("strict_hits").GetInt32());
+        var relaxedHits = relaxedOnly.GetProperty("hits").EnumerateArray().ToArray();
+        CollectionAssert.AreEquivalent(new[] { both, termsOnly }, relaxedHits.Select(static hit => hit.GetProperty("publisher_id").GetString()).ToArray());
+        Assert.IsTrue(relaxedHits.All(static hit => hit.GetProperty("lane").GetString() == "relaxed"));
+        Assert.IsTrue(relaxedHits.All(static hit => Strings(hit.GetProperty("match_reasons")).SequenceEqual(new[] { "all_terms" })));
+        Assert.AreEqual(2, relaxedOnly.GetProperty("population").GetProperty("relaxed_hits").GetInt32());
+        Assert.AreEqual(JsonValueKind.Null, relaxedOnly.GetProperty("population").GetProperty("strict_hits").ValueKind,
+            "A count of a lane that was never scanned is not zero.");
+        Assert.IsTrue(relaxedOnly.GetProperty("searchable_text_held_for_language").GetBoolean());
     }
 
     [TestMethod]
@@ -123,7 +156,7 @@ public sealed class V3CorpusSearchMountTests
     {
         var fixture = await MountedFixture.CreateAsync();
         await using var cleanup = fixture;
-        await WriteTextsAsync(fixture);
+        var (both, termsOnly, _) = await WriteTextsAsync(fixture);
         using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
         Assert.IsNotNull(mount);
 
@@ -137,17 +170,45 @@ public sealed class V3CorpusSearchMountTests
         // The fixture holds no work titles here, and the resolver says that rather than "no match".
         Assert.AreEqual("no_titles_held", body.GetProperty("work_resolution").GetProperty("outcome").GetString());
 
-        // One term has no relaxed lane to add: all of its hits are the phrase.
+        // A query that is one word has the strict set as its relaxed set: with no mode the second scan
+        // adds nothing, and with the relaxed mode the word is found, not hidden behind the strict lane.
         var oneTerm = (await SearchAsync(mount, "locative")).Result!.Value;
         Assert.AreEqual(2, oneTerm.GetProperty("population").GetProperty("strict_hits").GetInt32());
         Assert.AreEqual(0, oneTerm.GetProperty("population").GetProperty("relaxed_hits").GetInt32());
+        var oneTermRelaxed = (await SearchAsync(mount, "locative", mode: "relaxed")).Result!.Value;
+        CollectionAssert.AreEquivalent(new[] { both, termsOnly },
+            oneTermRelaxed.GetProperty("hits").EnumerateArray().Select(static hit => hit.GetProperty("publisher_id").GetString()).ToArray());
+
+        // One word with a space after it is not the word as typed. Strict finds the articles with the
+        // space; the relaxed lane still runs and adds the article that has the word and no space after it.
+        var trailingSpace = (await SearchAsync(mount, "garantie ")).Result!.Value.GetProperty("hits").EnumerateArray().ToArray();
+        CollectionAssert.AreEqual(new[] { both, termsOnly }, trailingSpace.Select(static hit => hit.GetProperty("publisher_id").GetString()).ToArray());
+        CollectionAssert.AreEqual(new[] { "strict", "relaxed" }, trailingSpace.Select(static hit => hit.GetProperty("lane").GetString()).ToArray());
 
         // A term repeated in the query is one term.
         var repeated = (await SearchAsync(mount, "locative  garantie locative")).Result!.Value;
-        CollectionAssert.AreEqual(new[] { "locative", "garantie" },
-            repeated.GetProperty("terms").EnumerateArray().Select(static v => v.GetString()).ToArray());
+        CollectionAssert.AreEqual(new[] { "locative", "garantie" }, Strings(repeated.GetProperty("terms")));
         Assert.AreEqual(0, repeated.GetProperty("population").GetProperty("strict_hits").GetInt32());
         Assert.AreEqual(2, repeated.GetProperty("population").GetProperty("relaxed_hits").GetInt32());
+    }
+
+    [TestMethod]
+    public async Task DiacriticsAreSignificantInBothDirections()
+    {
+        var fixture = await MountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        var ids = await SetTextsAsync(fixture, fixture.ExpressionIri, "Le montant égal est dû.", "Le montant egal est du.", Neither);
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+
+        static string[] PublisherIds(JsonElement body) =>
+            body.GetProperty("hits").EnumerateArray().Select(static hit => hit.GetProperty("publisher_id").GetString()!).ToArray();
+
+        // The accented spelling finds the accented text only, and the plain spelling the plain text only.
+        CollectionAssert.AreEqual(new[] { ids[0] }, PublisherIds((await SearchAsync(mount, "égal")).Result!.Value));
+        CollectionAssert.AreEqual(new[] { ids[1] }, PublisherIds((await SearchAsync(mount, "egal")).Result!.Value));
+        CollectionAssert.AreEqual(new[] { ids[0] }, PublisherIds((await SearchAsync(mount, "dû")).Result!.Value));
+        CollectionAssert.AreEqual(Array.Empty<string>(), PublisherIds((await SearchAsync(mount, "Égal")).Result!.Value));
     }
 
     [TestMethod]
@@ -203,15 +264,102 @@ public sealed class V3CorpusSearchMountTests
         Assert.IsTrue(hits.All(hit => hit.GetProperty("publisher_id").GetString() == both));
         Assert.AreEqual(2, everyState.GetProperty("population").GetProperty("strict_hits").GetInt32());
         Assert.AreEqual(1, everyState.GetProperty("population").GetProperty("distinct_publisher_articles").GetInt32());
+        // Each hit's pointer names its own state, on a fixture where two states hold the same article.
+        foreach (var hit in hits)
+        {
+            StringAssert.EndsWith(hit.GetProperty("resolve").GetProperty("identifier").GetString(), hit.GetProperty("state_sha256").GetString());
+        }
 
-        // With a date, only the state as_of selects contributes.
+        // With a date, only the state as_of selects contributes, and the population counts that, not the whole.
         var onFirst = (await SearchAsync(mount, Phrase, mode: "strict", date: Shift(laterDate, -1))).Result!.Value;
         Assert.AreEqual(fixture.StateSha256, onFirst.GetProperty("hits").EnumerateArray().Single().GetProperty("state_sha256").GetString());
+        Assert.AreEqual(1, onFirst.GetProperty("population").GetProperty("strict_hits").GetInt32());
         var onLater = (await SearchAsync(mount, Phrase, mode: "strict", date: laterDate)).Result!.Value;
         Assert.AreEqual(later.StateSha256, onLater.GetProperty("hits").EnumerateArray().Single().GetProperty("state_sha256").GetString());
         var before = (await SearchAsync(mount, Phrase, date: Shift(fixture.ApplicabilityDate, -1))).Result!.Value;
         Assert.AreEqual(0, before.GetProperty("hits").GetArrayLength(), "Across works, nothing applicable is an answer with no hits.");
         Assert.AreEqual(0, before.GetProperty("ambiguous_works").GetArrayLength());
+        Assert.AreEqual(0, before.GetProperty("population").GetProperty("strict_hits").GetInt32());
+    }
+
+    [TestMethod]
+    public async Task TheHitOrderIsLaneWorkKeyDateAndArticleAndTheAllTermsSetNeedsEveryTerm()
+    {
+        var fixture = await MountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        // Two works of two states each, their dates interleaved, so that ordering by date first, by work
+        // key descending, or by article before date each gives a different sequence from the stated one
+        // whichever of the two work keys sorts first.
+        var d1 = fixture.ApplicabilityDate;
+        var a2 = await fixture.AddStateAsync(Shift(d1, 400), "a-later");
+        var b1 = await fixture.AddStateAsync(d1, "b-first", workLeaf: "n4");
+        var b2 = await fixture.AddStateAsync(Shift(d1, 200), "b-later", b1.ExpressionIri);
+        // Each state's three articles: a phrase match, a match of both terms without the phrase, an
+        // article that holds one term only (which no lane may serve), and every other article matching nothing.
+        await SetTextsAsync(fixture, fixture.ExpressionIri, BothLanes, TermsOnly, OnlyGarantie);
+        await SetTextsAsync(fixture, a2.ExpressionIri, OnlyLocative, BothLanes, TermsOnly);
+        await SetTextsAsync(fixture, b1.ExpressionIri, BothLanes, OnlyLocative, TermsOnly);
+        await SetTextsAsync(fixture, b2.ExpressionIri, TermsOnly, OnlyGarantie, BothLanes);
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+
+        static (string Lane, string Work, string Date, string Article) OrderKey(JsonElement hit) => (
+            hit.GetProperty("lane").GetString()!,
+            hit.GetProperty("work_key").GetString()!,
+            hit.GetProperty("applicability_date").GetString()!,
+            hit.GetProperty("article_identity_sha256").GetString()!);
+
+        static IEnumerable<(string Lane, string Work, string Date, string Article)> InStatedOrder(
+            IEnumerable<(string Lane, string Work, string Date, string Article)> keys) =>
+            keys.OrderBy(static key => key.Lane == "strict" ? 0 : 1)
+                .ThenBy(static key => key.Work, StringComparer.Ordinal)
+                .ThenBy(static key => key.Date, StringComparer.Ordinal)
+                .ThenBy(static key => key.Article, StringComparer.Ordinal);
+
+        var whole = (await SearchAsync(mount, Phrase)).Result!.Value;
+        var served = whole.GetProperty("hits").EnumerateArray().ToArray();
+
+        // Four phrase matches then four both-terms matches; the one-term articles are in neither.
+        CollectionAssert.AreEqual(
+            new[] { "strict", "strict", "strict", "strict", "relaxed", "relaxed", "relaxed", "relaxed" },
+            served.Select(static hit => hit.GetProperty("lane").GetString()).ToArray());
+        var byState = served.ToLookup(static hit => hit.GetProperty("state_sha256").GetString()!);
+        Assert.AreEqual(4, byState.Count, "Every state has hits.");
+        Assert.IsTrue(byState.All(static group => group.Count() == 2), "Two hits in each state: one per lane, never the one-term article.");
+        Assert.AreEqual(2, served.Select(static hit => hit.GetProperty("work_key").GetString()).Distinct().Count());
+        // Three dates, not four: the two works both begin on the first date, which is what interleaves them.
+        Assert.AreEqual(3, served.Select(static hit => hit.GetProperty("applicability_date").GetString()).Distinct().Count());
+
+        // The order is the stated one: lane, work key, publisher date, article identity.
+        var keys = served.Select(OrderKey).ToArray();
+        CollectionAssert.AreEqual(InStatedOrder(keys).ToArray(), keys, "Served in the order the answer says.");
+        // The interleaving is real: the same hits by date first are a different sequence.
+        CollectionAssert.AreNotEqual(
+            keys.Where(static key => key.Lane == "strict").OrderBy(static key => key.Date, StringComparer.Ordinal).ThenBy(static key => key.Work, StringComparer.Ordinal).ToArray(),
+            keys.Where(static key => key.Lane == "strict").ToArray());
+
+        // Each hit's pointer names its own state, on a fixture with four states.
+        foreach (var hit in served)
+        {
+            StringAssert.EndsWith(hit.GetProperty("resolve").GetProperty("identifier").GetString(), hit.GetProperty("state_sha256").GetString());
+        }
+
+        // What a hit counts: eight article-state hits, five provisions (by work and the publisher's own
+        // article id: three in the first work, two in the second), never the eight article identities.
+        var population = whole.GetProperty("population");
+        Assert.AreEqual(4, population.GetProperty("strict_hits").GetInt32());
+        Assert.AreEqual(4, population.GetProperty("relaxed_hits").GetInt32());
+        Assert.AreEqual(5, population.GetProperty("distinct_publisher_articles").GetInt32());
+        Assert.AreEqual(2, population.GetProperty("works_with_hits").GetInt32());
+
+        // The lanes alone: the phrase set, and the whole all-terms set in the same stated order.
+        var strictKeys = (await SearchAsync(mount, Phrase, mode: "strict")).Result!.Value.GetProperty("hits").EnumerateArray().Select(OrderKey).ToArray();
+        Assert.AreEqual(4, strictKeys.Length);
+        CollectionAssert.AreEqual(InStatedOrder(strictKeys).ToArray(), strictKeys);
+        var relaxedKeys = (await SearchAsync(mount, Phrase, mode: "relaxed")).Result!.Value.GetProperty("hits").EnumerateArray().Select(OrderKey).ToArray();
+        Assert.AreEqual(8, relaxedKeys.Length, "Every article holding both terms, the phrase matches included, and no article holding one.");
+        Assert.IsTrue(relaxedKeys.All(static key => key.Lane == "relaxed"));
+        CollectionAssert.AreEqual(InStatedOrder(relaxedKeys).ToArray(), relaxedKeys);
     }
 
     [TestMethod]
@@ -237,10 +385,11 @@ public sealed class V3CorpusSearchMountTests
         var hit = body.GetProperty("hits").EnumerateArray().Single();
         Assert.AreEqual(other.WorkKey, hit.GetProperty("work_key").GetString());
         Assert.AreEqual(other.StateSha256, hit.GetProperty("state_sha256").GetString());
+        Assert.AreEqual(1, body.GetProperty("population").GetProperty("strict_hits").GetInt32(), "The population counts what applies on the date.");
         var ambiguous = body.GetProperty("ambiguous_works").EnumerateArray().Single();
         Assert.AreEqual(fixture.WorkKey, ambiguous.GetProperty("work_key").GetString());
         Assert.AreEqual("ambiguous_version", ambiguous.GetProperty("reason").GetString());
-        var candidates = ambiguous.GetProperty("candidates").EnumerateArray().Select(static v => v.GetString()!).ToArray();
+        var candidates = Strings(ambiguous.GetProperty("candidates"));
         Assert.AreEqual(2, candidates.Length);
         CollectionAssert.AreEqual(candidates.Order(StringComparer.Ordinal).ToArray(), candidates);
         Assert.AreEqual(1, candidates.Count(candidate => candidate.EndsWith(later.StateSha256, StringComparison.Ordinal)));
@@ -301,15 +450,59 @@ public sealed class V3CorpusSearchMountTests
 
         // German is held as states and its articles carry no text here, so the capability manifest
         // measured no searchable German text. That is an answer that says so, not zero hits passed off
-        // as a search that ran.
-        var unmeasured = (await SearchAsync(mount, Phrase, language: "deu")).Result!.Value;
-        Assert.IsFalse(unmeasured.GetProperty("population").GetProperty("searchable_text_measured").GetBoolean());
-        Assert.AreEqual(0, unmeasured.GetProperty("hits").GetArrayLength());
+        // as a search that ran, in either lane and whichever lane is scanned first.
+        foreach (var mode in new string?[] { null, "strict", "relaxed" })
+        {
+            var unmeasured = (await SearchAsync(mount, Phrase, language: "deu", mode: mode)).Result!.Value;
+            Assert.IsFalse(unmeasured.GetProperty("searchable_text_held_for_language").GetBoolean(), $"mode {mode}");
+            Assert.AreEqual(0, unmeasured.GetProperty("hits").GetArrayLength());
+        }
 
         var germanSearch = await SearchAsync(mount, Phrase, identifier: identifier, date: asked, language: "deu");
         Assert.AreEqual("ambiguous_version", germanSearch.Refusal!.Code);
         var asOfGerman = await AsOfAsync(mount, identifier, asked, "deu");
         Assert.AreEqual(asOfGerman.Refusal!.HelpfulPayload.GetRawText(), germanSearch.Refusal.HelpfulPayload.GetRawText());
+    }
+
+    [TestMethod]
+    public async Task TheSearchIsInTheLanguageAskedForAndAGermanArticleIsNeverAFrenchHit()
+    {
+        var fixture = await MountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        // The German state copies the French text while the index holds the one state alone.
+        var german = await fixture.AddSecondLanguageStateAsync(fixture.ApplicabilityDate);
+        await WriteTextsAsync(fixture);
+        // Each German article holds the French phrase too, so a search that forgot the language would
+        // return it, and a German word that no French article holds.
+        var germanTexts = new[]
+        {
+            "Die garantie locative ist die Mietkaution eins.",
+            "Die garantie locative ist die Mietkaution zwei.",
+            "Die garantie locative ist die Mietkaution drei.",
+        };
+        await SetTextsAsync(fixture, german.ExpressionIri, germanTexts);
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+
+        foreach (var mode in new string?[] { null, "strict", "relaxed" })
+        {
+            var french = (await SearchAsync(mount, Phrase, mode: mode)).Result!.Value;
+            Assert.IsTrue(french.GetProperty("hits").EnumerateArray().All(hit => hit.GetProperty("state_sha256").GetString() == fixture.StateSha256),
+                $"A French search serves French states only, mode {mode}.");
+            Assert.IsTrue(french.GetProperty("hits").GetArrayLength() > 0);
+        }
+
+        var germanWord = (await SearchAsync(mount, "Mietkaution", language: "deu")).Result!.Value;
+        var germanHits = germanWord.GetProperty("hits").EnumerateArray().ToArray();
+        Assert.AreEqual(3, germanHits.Length);
+        Assert.IsTrue(germanHits.All(hit => hit.GetProperty("state_sha256").GetString() == german.StateSha256));
+        Assert.IsTrue(germanHits.All(hit => hit.GetProperty("language").GetString() == "deu"));
+        Assert.IsTrue(germanWord.GetProperty("searchable_text_held_for_language").GetBoolean());
+
+        var frenchOfGerman = (await SearchAsync(mount, "Mietkaution")).Result!.Value;
+        Assert.AreEqual(0, frenchOfGerman.GetProperty("hits").GetArrayLength(), "A German word is in no French article.");
+        var germanOfFrench = (await SearchAsync(mount, "trois mois de loyer", language: "deu")).Result!.Value;
+        Assert.AreEqual(0, germanOfFrench.GetProperty("hits").GetArrayLength(), "A French phrase that only French articles hold is in no German hit.");
     }
 
     [TestMethod]
@@ -324,7 +517,7 @@ public sealed class V3CorpusSearchMountTests
         Assert.IsNotNull(mount);
 
         var whole = (await SearchAsync(mount, Phrase)).Result!.Value;
-        var all = whole.GetProperty("hits").EnumerateArray().Select(Key).ToArray();
+        var all = whole.GetProperty("hits").EnumerateArray().Select(CursorKey).ToArray();
         Assert.AreEqual(6, all.Length, "Three states, each with one strict and one relaxed hit.");
         CollectionAssert.AreEqual(new[] { "strict", "strict", "strict", "relaxed", "relaxed", "relaxed" },
             whole.GetProperty("hits").EnumerateArray().Select(static hit => hit.GetProperty("lane").GetString()).ToArray());
@@ -336,7 +529,7 @@ public sealed class V3CorpusSearchMountTests
             // The loop is bounded: a cursor that repeats a hit must fail here and not run forever.
             Assert.IsLessThanOrEqualTo(all.Length, pages.Count, "The cursor did not advance.");
             var page = (await SearchAsync(mount, Phrase, limit: 2, after: after)).Result!.Value;
-            var keys = page.GetProperty("hits").EnumerateArray().Select(Key).ToArray();
+            var keys = page.GetProperty("hits").EnumerateArray().Select(CursorKey).ToArray();
             Assert.IsLessThanOrEqualTo(2, keys.Length);
             pages.Add(keys);
             // The population is the scope asked for, not the page.
@@ -350,9 +543,15 @@ public sealed class V3CorpusSearchMountTests
         Assert.AreEqual(3, pages.Count);
         CollectionAssert.AreEqual(all, pages.SelectMany(static page => page).ToArray(), "Neither repeated nor skipped, in the same order.");
 
-        // A limit that exactly fills is not truncated, and a cursor naming no hit is a schema rejection.
+        // A limit that exactly fills is not truncated; the ceiling is accepted and echoed; one hit is a page.
         var exact = (await SearchAsync(mount, Phrase, limit: 6)).Result!.Value;
         Assert.IsFalse(exact.GetProperty("truncated").GetBoolean());
+        var ceiling = (await SearchAsync(mount, Phrase, limit: 200)).Result!.Value;
+        Assert.AreEqual(200, ceiling.GetProperty("limit").GetInt32());
+        var one = (await SearchAsync(mount, Phrase, limit: 1)).Result!.Value;
+        Assert.AreEqual(1, one.GetProperty("hits").GetArrayLength());
+        Assert.IsTrue(one.GetProperty("truncated").GetBoolean());
+        // A cursor naming no hit is a schema rejection.
         AssertTransportProblem(
             await PostAsync(mount, SearchRawTarget, JsonSerializer.Serialize(new
             {
@@ -360,6 +559,50 @@ public sealed class V3CorpusSearchMountTests
                 parameters = new { query = Phrase, language = "fra", after = "strict.nothing.nothing" },
             })),
             "request_schema_invalid", StatusCodes.Status400BadRequest);
+    }
+
+    [TestMethod]
+    public async Task TheQueryIsBoundedAsShapeBeforeAnyDataIsReadAndCountsCharactersAsCodePoints()
+    {
+        var fixture = await MountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        await WriteTextsAsync(fixture);
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+
+        async Task<DefaultHttpContext> Post(string query, string? identifier = null)
+        {
+            var parameters = new Dictionary<string, object> { ["query"] = query, ["language"] = "fra" };
+            if (identifier is not null)
+            {
+                parameters["identifier"] = identifier;
+            }
+
+            return await PostAsync(mount, SearchRawTarget, JsonSerializer.Serialize(new { operation_id = "search", parameters }));
+        }
+
+        // The ceiling on characters is 512 code points: 512 answer, 513 are the request document's rejection.
+        Assert.AreEqual(StatusCodes.Status200OK, (await Post(new string('a', 512))).Response.StatusCode);
+        AssertTransportProblem(await Post(new string('a', 513)), "request_schema_invalid", StatusCodes.Status400BadRequest);
+        // Characters outside the basic plane are two UTF-16 units and one code point: 512 of them is within the ceiling.
+        var astral = string.Concat(Enumerable.Repeat("\U0001F4DC", 512));
+        Assert.AreEqual(1024, astral.Length);
+        Assert.AreEqual(StatusCodes.Status200OK, (await Post(astral)).Response.StatusCode, "512 code points, 1,024 UTF-16 units.");
+        AssertTransportProblem(await Post(astral + "\U0001F4DC"), "request_schema_invalid", StatusCodes.Status400BadRequest);
+
+        // Each distinct term is one clause of an AND chain: 32 distinct terms answer and 33 are rejected,
+        // and a repeated term is not a new one.
+        static string Terms(int count) => string.Join(' ', Enumerable.Range(0, count).Select(index => "t" + index.ToString(CultureInfo.InvariantCulture)));
+        Assert.AreEqual(StatusCodes.Status200OK, (await Post(Terms(32))).Response.StatusCode);
+        Assert.AreEqual(StatusCodes.Status200OK, (await Post(Terms(32) + " " + Terms(32))).Response.StatusCode, "Sixty-four terms, thirty-two of them distinct.");
+        AssertTransportProblem(await Post(Terms(33)), "request_schema_invalid", StatusCodes.Status400BadRequest);
+
+        // It is a shape check: it is judged before the work is looked up, so an unknown work does not hide it.
+        AssertTransportProblem(await Post(Terms(33), "/lu-legilux/no-such-work"), "request_schema_invalid", StatusCodes.Status400BadRequest);
+
+        // A query of over a thousand distinct terms once reached SQLite's expression-depth limit and came
+        // back as a server error. It is a rejection now, and nothing reaches the index.
+        AssertTransportProblem(await Post(Terms(1200)), "request_schema_invalid", StatusCodes.Status400BadRequest);
     }
 
     [TestMethod]
@@ -376,15 +619,13 @@ public sealed class V3CorpusSearchMountTests
                 Assert.AreEqual(V3Verdicts.Refuse, refused.Verdict, mode);
                 Assert.AreEqual("retrieval_mode_unavailable", refused.Refusal!.Code);
                 Assert.AreEqual(mode, refused.Refusal.HelpfulPayload.GetProperty("requested_mode").GetString());
-                CollectionAssert.AreEqual(new[] { "strict", "relaxed" },
-                    refused.Refusal.HelpfulPayload.GetProperty("available_modes").EnumerateArray().Select(static v => v.GetString()).ToArray());
+                CollectionAssert.AreEqual(new[] { "strict", "relaxed" }, Strings(refused.Refusal.HelpfulPayload.GetProperty("available_modes")));
                 Assert.AreEqual(PublisherId.LuLegilux, refused.Context.Publisher);
             }
 
             var english = await SearchAsync(mount, Phrase, language: "eng");
             Assert.AreEqual("language_not_available", english.Refusal!.Code);
-            CollectionAssert.AreEqual(new[] { "fra" },
-                english.Refusal.HelpfulPayload.GetProperty("available_languages").EnumerateArray().Select(static v => v.GetString()).ToArray());
+            CollectionAssert.AreEqual(new[] { "fra" }, Strings(english.Refusal.HelpfulPayload.GetProperty("available_languages")));
             var englishOfOneWork = await SearchAsync(mount, Phrase, identifier: $"/lu-legilux/{fixture.WorkKey}", language: "eng");
             Assert.AreEqual("language_not_available", englishOfOneWork.Refusal!.Code);
             var unknown = await SearchAsync(mount, Phrase, identifier: "/lu-legilux/no-such-work");
@@ -440,7 +681,7 @@ public sealed class V3CorpusSearchMountTests
         AssertTransportProblem(await PostAsync(mount, SearchRawTarget + "?x=1", searchBody), "unknown_route", StatusCodes.Status404NotFound);
     }
 
-    private static string Key(JsonElement hit) =>
+    private static string CursorKey(JsonElement hit) =>
         $"{hit.GetProperty("lane").GetString()}.{hit.GetProperty("state_sha256").GetString()}.{hit.GetProperty("article_identity_sha256").GetString()}";
 
     private static string Shift(string date, int days) =>

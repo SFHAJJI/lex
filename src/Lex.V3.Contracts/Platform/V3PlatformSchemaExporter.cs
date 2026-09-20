@@ -211,7 +211,7 @@ public static class V3PlatformSchemaExporter
             ("after_work_key", NonBlankString())),
         "search" => Parameters(
             ["query", "language"],
-            ("query", NonBlankString()),
+            ("query", BoundedQuery()),
             ("language", NonBlankString()),
             ("date", CivilDate()),
             ("identifier", NonBlankString()),
@@ -244,6 +244,18 @@ public static class V3PlatformSchemaExporter
     {
         ["type"] = "string",
         ["minLength"] = 1,
+        ["pattern"] = "\\S",
+    };
+
+    /// <summary>
+    /// A search query: non-blank, and no longer than the operation's ceiling, which the mount holds
+    /// again for a caller that reaches it without this document.
+    /// </summary>
+    private static JsonObject BoundedQuery() => new()
+    {
+        ["type"] = "string",
+        ["minLength"] = 1,
+        ["maxLength"] = 512,
         ["pattern"] = "\\S",
     };
 

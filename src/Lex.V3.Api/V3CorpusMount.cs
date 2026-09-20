@@ -1004,8 +1004,25 @@ internal sealed class V3CorpusMount : IDisposable
         "none; strict lane before relaxed lane, then work key, publisher date, article identity and state digest. " +
         "This index holds no BM25 ranker, so a page is the first hits in this order and not the best hits";
 
+    /// <summary>The ceiling on the characters of a <c>search</c> query; the request document says the same.</summary>
+    public const int SearchMaxQueryCharacters = 512;
+
+    /// <summary>
+    /// The ceiling on the distinct terms of a <c>search</c> query. Each term is one <c>instr</c> clause
+    /// in an AND chain, and SQLite refuses an expression tree deeper than a thousand, so a query is
+    /// bounded here and answered as a request-schema rejection rather than reaching it.
+    /// </summary>
+    public const int SearchMaxTerms = 32;
+
     internal const string SearchMatching =
-        "byte-exact substring of the article's text; case and diacritics are significant; nothing is folded, stemmed or expanded";
+        "byte-exact substring of the article's searchable text, which is its text and reference tokens as the index holds them " +
+        "(modification markers and note references are not searched); case and diacritics are significant; " +
+        "nothing is folded, stemmed or expanded";
+
+    internal const string SearchLanes =
+        "strict: the query as typed is a substring; relaxed: every distinct whitespace-separated term is a substring, in any order, " +
+        "so the relaxed set contains the strict set. With no mode the answer is the strict hits and then only the relaxed hits strict did not serve, " +
+        "each article once; with a mode it is that lane's whole set. A lane not asked for is null in the population, not zero";
 
     internal const string SearchPageIs = "the first hits in the stated order, not the best hits";
 
@@ -1019,20 +1036,26 @@ internal sealed class V3CorpusMount : IDisposable
     /// The query first runs through the title resolver <c>resolve</c> uses (lane R1): one work is a
     /// card ahead of every hit, several candidates are listed and none is picked. Then the strict lane,
     /// the query as typed as a substring of an article's text, and the relaxed lane, every
-    /// whitespace-separated term as a substring in any order. An article matching both is a strict hit
-    /// and is never served again as relaxed, and every strict hit precedes every relaxed hit: relaxed
-    /// never outranks strict.
+    /// whitespace-separated term as a substring in any order. The lanes are sets and the relaxed set
+    /// contains the strict set. With no <c>mode</c> the answer is the strict hits and then only the
+    /// relaxed hits strict did not serve, so an article matching both is served once, as strict, and
+    /// every strict hit precedes every relaxed hit: relaxed never outranks strict. With a <c>mode</c>
+    /// the answer is that lane's whole set, and the lane not asked for is neither scanned nor counted:
+    /// it is null in the population.
     /// <para>
     /// The index holds no FTS table and no ranker. What is served is an order and not a rank, no score
     /// is served, and every answer says so, says that matching is byte-exact, and says that a page is
     /// the first hits in the stated order and not the best ones. A requested <c>mode</c> other than the
-    /// two lanes is refused <c>retrieval_mode_unavailable</c> naming the modes held, never ignored. No
+    /// two lanes is refused <c>retrieval_mode_unavailable</c> naming the modes held, never ignored. The
+    /// query is bounded (<see cref="SearchMaxQueryCharacters"/> characters, <see cref="SearchMaxTerms"/>
+    /// distinct terms) and a longer one is a request-schema rejection. No
     /// snippet is served: a hit names its article and its state with the hash-pinned permalink, and
     /// the text is read there.
     /// </para>
     /// <para>
     /// A hit is one article of one held state. Without a date every held state is searched and each
-    /// hit says its date, and the population counts distinct articles beside hits. With a date, only
+    /// hit says its date, and the population counts distinct publisher articles (by work key and the
+    /// publisher's own article id, since an article identity is minted per expression) beside hits. With a date, only
     /// the state <c>SelectAtDate</c> picks per work contributes. Across works, a work with several
     /// states on the selected date contributes no hits and is listed as ambiguous, since one ambiguous
     /// work must not hide the others. With a work named the question is <c>as_of</c>'s, and so are its
@@ -1057,6 +1080,24 @@ internal sealed class V3CorpusMount : IDisposable
             request.Parameters.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String
                 ? RequiredString(request.Parameters, name)
                 : null;
+        // The bounds are shape, judged before any data is read. The request document counts characters as
+        // code points, so this does too.
+        if (query.EnumerateRunes().Count() > SearchMaxQueryCharacters)
+        {
+            throw new V3TransportFailureException(
+                V3TransportFailureKind.RequestSchemaInvalid,
+                "The operation request's 'query' is longer than the ceiling.");
+        }
+
+        var terms = query.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)
+            .Distinct(StringComparer.Ordinal).ToArray();
+        if (terms.Length > SearchMaxTerms)
+        {
+            throw new V3TransportFailureException(
+                V3TransportFailureKind.RequestSchemaInvalid,
+                "The operation request's 'query' has more distinct terms than the ceiling.");
+        }
+
         var requestedDate = Optional("date");
         var identifier = Optional("identifier");
         var mode = Optional("mode");
@@ -1167,18 +1208,26 @@ internal sealed class V3CorpusMount : IDisposable
             match_reason = work.MatchReason,
         };
 
-        var terms = query.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)
-            .Distinct(StringComparer.Ordinal).ToArray();
-        var strictFound = _reader.SearchStateArticles(language, [query], workKey);
-        var measured = strictFound is not null;
-        IReadOnlyList<LuxembourgIndexSearchHit> strict = strictFound ?? [];
-        // An article matching the phrase and every term is a strict hit and nothing else.
+        // The lanes are sets and the relaxed set contains the strict set, so a lane is scanned only when
+        // it is asked for. With no mode the relaxed lane adds only what strict did not serve; when the
+        // query is one word exactly as typed that is nothing, and the second scan is not paid.
+        var wantStrict = mode is null || string.Equals(mode, "strict", StringComparison.Ordinal);
+        var wantRelaxed = mode is null || string.Equals(mode, "relaxed", StringComparison.Ordinal);
+        var relaxedIsStrict = terms.Length == 1 && string.Equals(terms[0], query, StringComparison.Ordinal);
+        var strictFound = wantStrict ? _reader.SearchStateArticles(language, [query], workKey) : null;
+        var relaxedFound = wantRelaxed && (mode is not null || !relaxedIsStrict)
+            ? _reader.SearchStateArticles(language, terms, workKey)
+            : null;
+        // The index either holds searchable text for the language or it does not; the lane scanned first says.
+        var measured = wantStrict ? strictFound is not null : relaxedFound is not null;
+        IReadOnlyList<LuxembourgIndexSearchHit> strict = wantStrict ? strictFound ?? [] : [];
         var strictKeys = strict.Select(static hit => (hit.StateSha256, hit.ArticleIdentitySha256)).ToHashSet();
-        IReadOnlyList<LuxembourgIndexSearchHit> relaxed = terms.Length < 2
+        IReadOnlyList<LuxembourgIndexSearchHit> relaxed = !wantRelaxed
             ? []
-            : (_reader.SearchStateArticles(language, terms, workKey) ?? [])
-                .Where(hit => !strictKeys.Contains((hit.StateSha256, hit.ArticleIdentitySha256)))
-                .ToArray();
+            : mode is null
+                // Every strict hit is also a relaxed match; it is served once, as strict.
+                ? (relaxedFound ?? []).Where(hit => !strictKeys.Contains((hit.StateSha256, hit.ArticleIdentitySha256))).ToArray()
+                : relaxedFound ?? [];
 
         var ambiguousWorks = new List<object>();
         if (requestedDate is not null)
@@ -1214,15 +1263,6 @@ internal sealed class V3CorpusMount : IDisposable
                 string.Equals(selectedByWork[hit.WorkKey], hit.StateSha256, StringComparison.Ordinal);
             strict = strict.Where(Applies).ToArray();
             relaxed = relaxed.Where(Applies).ToArray();
-        }
-
-        if (string.Equals(mode, "strict", StringComparison.Ordinal))
-        {
-            relaxed = [];
-        }
-        else if (string.Equals(mode, "relaxed", StringComparison.Ordinal))
-        {
-            strict = [];
         }
 
         // Relaxed never outranks strict: every strict hit, then every relaxed hit.
@@ -1286,6 +1326,8 @@ internal sealed class V3CorpusMount : IDisposable
             ranking = SearchRanking,
             matching = SearchMatching,
             hit_unit = SearchHitUnit,
+            lanes = SearchLanes,
+            searchable_text_held_for_language = measured,
             modes_held = SearchModes,
             modes_not_held = new[] { "bm25", "semantic" },
             work_resolution = new
@@ -1300,9 +1342,9 @@ internal sealed class V3CorpusMount : IDisposable
             {
                 // The population is the scope asked for, over every hit and not the page.
                 scope = new { identifier, language, date = requestedDate, mode },
-                searchable_text_measured = measured,
-                strict_hits = strict.Count,
-                relaxed_hits = relaxed.Count,
+                // A lane not asked for was not scanned: null says "not counted", never "counted and empty".
+                strict_hits = wantStrict ? (int?)strict.Count : null,
+                relaxed_hits = wantRelaxed ? (int?)relaxed.Count : null,
                 // An article identity is minted per expression, so it cannot say that two hits are one
                 // provision in two states. The publisher's own article id within one work can.
                 distinct_publisher_articles = all.Select(static entry => (entry.Hit.WorkKey, entry.Hit.PublisherId)).Distinct().Count(),
