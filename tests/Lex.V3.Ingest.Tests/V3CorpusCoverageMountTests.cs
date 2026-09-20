@@ -323,9 +323,20 @@ public sealed class V3CorpusCoverageMountTests
         CollectionAssert.AreEqual(
             new[] { "publisher_universe", "never_consolidated_acts", "first_sighting_and_observation_times", "legal_status" },
             notHeld.Select(static row => row.GetProperty("item").GetString()).ToArray());
-        Assert.IsTrue(notHeld.All(static row => row.GetProperty("reason").GetString()!.Length > 20));
+        // The reasons are what a reader reads, so they are pinned in these words and not by their length.
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "how many acts the publisher holds, or how many of them this mount lacks: the mount records only what was admitted",
+                "the count of as-published acts never consolidated is a corpus-level statement this mount does not carry",
+                "no observation time or first-sighting event is held, so nothing here says when anything was first seen",
+                "no status, repeal or commencement fact is held; nothing here speaks of legal status",
+            },
+            notHeld.Select(static row => row.GetProperty("reason").GetString()).ToArray());
         StringAssert.Contains(body.GetProperty("scope").GetString(), "nothing about what the publisher holds");
         StringAssert.Contains(body.GetProperty("counts_note").GetString(), "a missing publisher date is counted as missing and never dropped");
+        // The searchable count is drawn only from dated articles, so it and the undated count are not addends.
+        StringAssert.Contains(body.GetProperty("counts_note").GetString(), "are not addends");
         // No count of the publisher's universe is written anywhere in the answer.
         Assert.IsFalse(body.GetRawText().Contains("24,579", StringComparison.Ordinal) || body.GetRawText().Contains("24579", StringComparison.Ordinal));
 
@@ -340,6 +351,82 @@ public sealed class V3CorpusCoverageMountTests
         {
             Assert.IsLessThanOrEqualTo(0, string.CompareOrdinal(cell.GetProperty("period_from").GetString(), cell.GetProperty("period_to").GetString()));
         }
+    }
+
+    /// <summary>
+    /// Every property the answer carries, at every depth, as a path: an object member is its dotted path
+    /// and a member of an array's objects is written with <c>[]</c>. Array members that are strings add none.
+    /// </summary>
+    private static void CollectPaths(JsonElement element, string prefix, SortedSet<string> paths)
+    {
+        switch (element.ValueKind)
+        {
+            case JsonValueKind.Object:
+                foreach (var property in element.EnumerateObject())
+                {
+                    var path = prefix.Length == 0 ? property.Name : prefix + "." + property.Name;
+                    paths.Add(path);
+                    CollectPaths(property.Value, path, paths);
+                }
+
+                break;
+            case JsonValueKind.Array:
+                foreach (var item in element.EnumerateArray())
+                {
+                    CollectPaths(item, prefix + "[]", paths);
+                }
+
+                break;
+        }
+    }
+
+    [TestMethod]
+    public async Task TheAnswerHasExactlyTheseProperties_SoAFieldOfAnyNameFailsUntilItIsDeclared()
+    {
+        var fixture = await MountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        // Every array holds a row, so every object the answer can carry is walked: a second language, a
+        // recorded gap, the outcome rows, the capability cells and the fixed not-held rows.
+        await fixture.AddSecondLanguageStateAsync(fixture.ApplicabilityDate);
+        await fixture.SetMemberGapsAsync("[\"a_recorded_gap\"]");
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+
+        var body = (await CoverageAsync(mount)).Result!.Value;
+
+        var paths = new SortedSet<string>(StringComparer.Ordinal);
+        CollectPaths(body, string.Empty, paths);
+        // This is the guard for the answer's central promise, that it never says how much the publisher
+        // holds: a property of any name, numeric or not, at any depth, fails here until it is declared.
+        var declared = new[]
+        {
+            "capability_cells", "capability_cells[].column", "capability_cells[].field", "capability_cells[].language",
+            "capability_cells[].operation", "capability_cells[].period_from", "capability_cells[].period_to",
+            "capability_cells[].population",
+            "counts_note",
+            "languages", "languages[].articles", "languages[].articles_with_searchable_text",
+            "languages[].articles_without_publisher_date", "languages[].first_state_date", "languages[].language",
+            "languages[].last_state_date", "languages[].searchable_text_held", "languages[].states", "languages[].works",
+            "languages_held",
+            "members", "members.by_outcome", "members.by_outcome[].members", "members.by_outcome[].outcome",
+            "members.gaps", "members.gaps[].gap", "members.gaps[].members", "members.gaps_note", "members.with_gaps",
+            "mounted", "mounted.corpus_sha256", "mounted.index_sha256", "mounted.publisher", "mounted.registry_sha256",
+            "not_held", "not_held[].item", "not_held[].reason",
+            "operations", "operations.not_served_operations", "operations.note", "operations.registered",
+            "operations.served_operations",
+            "requested_language",
+            "scope",
+            "totals", "totals.articles", "totals.members", "totals.states", "totals.works",
+        }.Order(StringComparer.Ordinal).ToArray();
+        CollectionAssert.AreEqual(declared, paths.ToArray(), "The answer carries a property that is not declared, or lost one that is.");
+        // Every array the paths walked held a row, so a missing row-shape is not hiding behind an empty list.
+        foreach (var name in new[] { "capability_cells", "languages", "not_held" })
+        {
+            Assert.IsGreaterThan(0, body.GetProperty(name).GetArrayLength(), name);
+        }
+
+        Assert.IsGreaterThan(0, body.GetProperty("members").GetProperty("gaps").GetArrayLength());
+        Assert.IsGreaterThan(0, body.GetProperty("members").GetProperty("by_outcome").GetArrayLength());
     }
 
     [TestMethod]

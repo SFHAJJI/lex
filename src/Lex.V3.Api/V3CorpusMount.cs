@@ -1382,7 +1382,8 @@ internal sealed class V3CorpusMount : IDisposable
 
     internal const string CoverageCountsNote =
         "counts are of rows the index holds; a missing publisher date is counted as missing and never dropped; " +
-        "articles_with_searchable_text is counted where the article carries a publisher date, which is what the capability cells measure";
+        "articles_with_searchable_text is counted where the article carries a publisher date, which is what the capability cells measure, " +
+        "and so it and articles_without_publisher_date are not addends";
 
     internal const string CoverageOperationsNote =
         "served_operations are the routes this mount answers and not_served_operations are registered with no route on it; " +
