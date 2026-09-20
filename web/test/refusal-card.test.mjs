@@ -722,7 +722,11 @@ test('a withdrawn-superseded pair is not a live ambiguity', () => {
           candidates: [CANDIDATES[0], superseded],
         },
       }),
-    /not the live ambiguity the interstitial is for/,
+    // Refused by the withdrawal rule, which now fires first and unconditionally: a state the
+    // producer says is withdrawn is never offered here, whatever else is in the list. It used to
+    // be caught one rule later, by the live count, and that ordering is what let a mixed list of
+    // one withdrawn object and one bare link turn both rules off.
+    /is withdrawn; the interstitial offers a choice/,
   );
 
   assert.throws(
@@ -1133,4 +1137,38 @@ test('an ambiguity offers a choice, not one state listed twice', () => {
       }),
     /the same state more than once/,
   );
+});
+
+test('a withdrawn state is refused even when the list is part bare links', () => {
+  // The writer seat's reproduction, made a test rather than left as a paragraph. Both live-only
+  // rules were gated on every candidate having stated its withdrawal, so ONE bare link beside an
+  // object saying `withdrawn: true` turned them off and the withdrawn state was offered as a live
+  // choice — the defect those rules exist to prevent, reintroduced by the change that made bare
+  // links renderable. The refusal is unconditional now; this is what says so.
+  const bare =
+    '/lu-legilux/loi-1991-08-10-n3/2026-04-11--' +
+    '6c164597ee18b9c4ca661f4732ceb947975d5a6e6f8b712ac6b333263e804f35';
+  const withdrawnState = {
+    valid_from: '2026-04-12',
+    hash: 'a'.repeat(64),
+    publication_date: '2026-04-12',
+    withdrawn: true,
+    href: `/lu-legilux/loi-1991-08-10-n3/2026-04-12--${'a'.repeat(64)}`,
+  };
+
+  for (const candidates of [
+    [withdrawnState, bare],
+    [bare, withdrawnState],
+  ]) {
+    assert.throws(
+      () =>
+        renderRefusalCard({
+          code: 'ambiguous_version',
+          sentence: 'Two states cover that date.',
+          payload: { requested_date: '2026-05-01', candidates },
+        }),
+      /is withdrawn; the interstitial offers a choice/,
+      `a withdrawn state was offered beside a bare link (${typeof candidates[0]} first)`,
+    );
+  }
 });
