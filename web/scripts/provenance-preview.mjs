@@ -29,6 +29,14 @@ const INDEX = 'd1'.repeat(32);
 const REGISTRY = 'e2'.repeat(32);
 const PROFILE = 'f3'.repeat(32);
 
+// The two vocabulary fields are NOT free invention, and this preview invented both: `admitted` is
+// not a corpus outcome and `reproduction_permitted` is not a rights disposition. The values on this
+// page stay synthetic -- the banner promises it -- but a TOKEN is vocabulary, not a value, and a
+// page teaching one nothing emits is the defect the refusal catalogue was caught in. These are the
+// tokens the captured answer carries.
+const OUTCOME = 'acquired';
+const RIGHTS = 'agreed_same_run_cc_by';
+
 const SCOPE =
   'the chain from the publisher’s identifiers to the digests this mount verified; it holds no '
   + 'first-sighting event and no signature, so none is claimed';
@@ -74,7 +82,7 @@ function source({ ref, body, bytes, receipt, gaps = [], rights = null }) {
     body_sha256: body,
     body_byte_length: bytes,
     body_receipt_sha256: receipt,
-    outcome: 'admitted',
+    outcome: OUTCOME,
     rights_disposition: rights,
     gaps,
   };
@@ -93,7 +101,7 @@ function answer({ date, digest, identities, articles, sources }) {
         language: 'fra',
         applicability_date: date,
         state_sha256: digest,
-        permalink: `/${PUBLISHER}/${WORK}/${date}--${digest.slice(0, 8)}`,
+        permalink: `/${PUBLISHER}/${WORK}/${date}--${digest}`,
         stable_coordinate: `/${PUBLISHER}/${WORK}/${date}`,
         expression_iri: `https://preview.invalid/${WORK}/${date}/fra`,
         publisher_work_iri: `https://preview.invalid/${WORK}`,
@@ -135,7 +143,7 @@ const EVERY_BODY_FACT = {
       body: '12'.repeat(32),
       bytes: 48219,
       receipt: '13'.repeat(32),
-      rights: 'reproduction_permitted',
+      rights: RIGHTS,
     })],
   }),
 };

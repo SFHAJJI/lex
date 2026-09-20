@@ -27,6 +27,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import {
   NOT_STATED,
   PROFILE_NOTE,
+  narrowedNote,
   provenancePageName,
   readProvenance,
   renderProvenance,
@@ -90,6 +91,80 @@ function text(html) {
     .replaceAll("&lt;", "<")
     .replaceAll("&gt;", ">")
     .replaceAll("&amp;", "&");
+}
+
+/**
+ * The rows a rendered page shows, as {label: visible text}.
+ *
+ * Both renderers write their own layout, so this reads the markup rather than the view: the string
+ * renderer emits `<th scope="row">label</th><td>value</td>` and the React port `<dt>label</dt>
+ * <dd>value</dd>`. Comparing the two maps is the only thing that catches a row present in one and
+ * absent in the other, and comparing a map against the answer is the only thing that catches a row
+ * showing the RIGHT value in the WRONG place.
+ */
+function rows(html) {
+  const found = new Map();
+  const pattern = /<(?:th scope="row"|dt)>(.*?)<\/(?:th|dt)>\s*<(?:td|dd)>(.*?)<\/(?:td|dd)>/gs;
+  for (const [, label, value] of html.matchAll(pattern)) {
+    const key = text(label).trim();
+    const shown = text(value.replace(/<[^>]*>/g, " ")).replace(/\s+/g, " ").trim();
+    found.set(key, found.has(key) ? `${found.get(key)} | ${shown}` : shown);
+  }
+  return found;
+}
+
+/**
+ * The coarse FORM of a value, so a preview can hold its own synthetic values and still be caught
+ * teaching a grammar no producer speaks.
+ *
+ * This is #703's lesson applied to this page and it had to be applied twice, because the bridge
+ * below first compared field NAMES only and passed a preview whose permalink truncated the state
+ * digest to eight characters and whose outcome was a token the corpus has never emitted.
+ */
+function form(value) {
+  if (value === null) return "null";
+  if (typeof value === "number") return "number";
+  if (typeof value === "boolean") return "boolean";
+  if (typeof value !== "string") return typeof value;
+  if (/^[0-9a-f]{64}$/.test(value)) return "digest";
+  if (value.startsWith("/")) {
+    const [path, pinned] = value.split("--");
+    return `path:${path.split("/").length - 1}${pinned === undefined ? "" : `--${form(pinned)}`}`;
+  }
+  if (/^[a-z][a-z0-9_]*$/.test(value)) return "token";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return "date";
+  if (/^https?:\/\//.test(value)) return "url";
+  return "text";
+}
+
+/**
+ * The paths the platform's own contract says may arrive null, and nowhere else.
+ *
+ * `sources_note` states it for the three body fields: "each null where the corpus holds none".
+ * `rights_disposition` is null where the corpus records none, and `requested_language` is null when
+ * no language was asked for. A preview showing null at one of these is showing a real shape; one
+ * showing null anywhere else is showing a shape nothing sends.
+ */
+const NULLABLE = new Set([
+  "requested_language",
+  "states[].sources[].body_sha256",
+  "states[].sources[].body_byte_length",
+  "states[].sources[].body_receipt_sha256",
+  "states[].sources[].rights_disposition",
+]);
+
+/** Every leaf of an answer, as path -> form, so two answers can be compared by grammar. */
+function forms(node, prefix = "", found = new Map()) {
+  if (Array.isArray(node)) {
+    for (const item of node) forms(item, `${prefix}[]`, found);
+  } else if (node && typeof node === "object") {
+    for (const [key, value] of Object.entries(node)) {
+      const path = prefix.length === 0 ? key : `${prefix}.${key}`;
+      if (value !== null && typeof value === "object") forms(value, path, found);
+      else found.set(path, form(value));
+    }
+  }
+  return found;
 }
 
 /** Every field path an answer carries, so two answers can be compared by shape and not by value. */
@@ -272,4 +347,158 @@ test("readProvenance returns the decision and computes nothing twice", async () 
   assert.equal(view.notHeld.length, answer.not_held.length);
   assert.equal(view.verifiedBy.registry_sha256, answer.verified_by.registry_sha256);
   assert.equal(view.requestedLanguage, answer.requested_language);
+});
+
+test("each row shows its own field, in both renderers, and the two agree", async () => {
+  // The writer seat's F2, and the worst of the four because the comment above `withDigests` already
+  // CLAIMED this: a distinct digest per field "so a page printing one field's value in another
+  // field's row would be caught rather than looking right". Nothing read a row. Swapping the corpus
+  // and index digests between their rows passed all 766 tests, on a page whose whole subject is
+  // which digest is which.
+  const answer = withDigests(await capturedAnswer());
+  const state = answer.states[0];
+  const source = state.sources[0];
+  const expected = new Map([
+    ["publisher", answer.publisher],
+    ["work", answer.work_key],
+    ["identifier asked for", answer.requested_identifier],
+    ["date asked for", answer.requested_date],
+    ["languages held", answer.available_languages.join(" ")],
+    ["state digest", state.state_sha256],
+    ["permalink", state.permalink],
+    ["stable coordinate", state.stable_coordinate],
+    ["expression", state.expression_iri],
+    ["publisher work", state.publisher_work_iri],
+    ["publisher legal resource", state.publisher_legal_resource_iri],
+    ["articles", String(state.articles)],
+    ["article identities digest", state.article_identities_sha256],
+    ["rule profiles", state.rule_profile_sha256s.join(" ")],
+    ["object reference", source.object_ref_sha256],
+    ["body digest", source.body_sha256],
+    ["body bytes", String(source.body_byte_length)],
+    ["body receipt", source.body_receipt_sha256],
+    ["outcome", source.outcome],
+    ["rights disposition", source.rights_disposition],
+    ["gaps recorded", source.gaps.length === 0 ? "none recorded" : source.gaps.join(" ")],
+    ["corpus", answer.verified_by.corpus_sha256],
+    ["index", answer.verified_by.index_sha256],
+    ["operation registry", answer.verified_by.registry_sha256],
+  ]);
+
+  const string = rows(renderProvenance(answer));
+  const react = rows(renderToStaticMarkup(h(Provenance, { answer })));
+
+  for (const [label, value] of expected) {
+    assert.equal(string.get(label), value, `the string renderer's "${label}" row`);
+    assert.equal(react.get(label), value, `the React port's "${label}" row`);
+  }
+
+  // And the two layouts are written twice, so a row present in one and absent in the other is the
+  // drift only this comparison can see.
+  assert.deepEqual(
+    [...string.keys()].sort(),
+    [...react.keys()].sort(),
+    "the two renderers show different rows",
+  );
+});
+
+test("every leaf the platform sends reaches the page", async () => {
+  // The reader-side twin of the producer's property pin, and the writer seat's suggestion: the day
+  // the census gains a member this page does not render, this fails instead of the member being
+  // quietly dropped.
+  const answer = withDigests(await capturedAnswer());
+  const html = text(renderProvenance(answer));
+  const leaves = [];
+  const walk = (node) => {
+    if (Array.isArray(node)) node.forEach(walk);
+    else if (node && typeof node === "object") Object.values(node).forEach(walk);
+    else if (node !== null && String(node).length > 0) leaves.push(String(node));
+  };
+  walk(answer);
+  const missing = [...new Set(leaves)].filter((leaf) => !html.includes(leaf));
+  assert.deepEqual(missing, [], `the page does not show ${missing.join(", ")}`);
+});
+
+test("the preview teaches the forms the platform sends, not only its field names", async () => {
+  // The writer seat's F1. The bridge compared field NAMES and nothing else, so the preview passed
+  // while its permalink truncated the state digest to eight characters and its outcome was a token
+  // the corpus has never emitted. My own words on #703: a name is right and a value can still be in
+  // a grammar no producer speaks.
+  const captured = forms(await capturedAnswer());
+  for (const preview of PREVIEW_ANSWERS) {
+    const shown = forms(preview.answer);
+    for (const [path, expected] of captured) {
+      // The census normalises the per-run digests to a placeholder, which has no form of its own;
+      // those paths are held by the name comparison and by the fill, not here.
+      if (expected === "text" && path.endsWith("sha256")) continue;
+      // A preview may show null exactly where the platform's own sentence says null arrives -- the
+      // sources note: "each null where the corpus holds none" -- and one preview exists to show
+      // precisely that case. Anywhere else, null is a form the platform does not send there.
+      if (NULLABLE.has(path) && shown.get(path) === "null") continue;
+      assert.equal(
+        shown.get(path),
+        expected,
+        `${preview.lexId}: ${path} is ${shown.get(path)} and the platform sends ${expected}`,
+      );
+    }
+  }
+});
+
+test("the platform's free text is escaped, in both renderers", async () => {
+  // The writer seat's F3, and the same gap as the dossier's F2 three slices ago: values the platform
+  // sends, printed unescaped, with nothing to say so. Every free-text field the page prints.
+  const answer = withDigests(await capturedAnswer());
+  const hostile = "<img src=x onerror=alert(1)> & more";
+  const cases = [
+    ["scope", { ...answer, scope: hostile }],
+    ["derivation", { ...answer, derivation: hostile }],
+    ["sources_note", { ...answer, sources_note: hostile }],
+    ["not_held reason", { ...answer, not_held: [{ item: "first_sighting_event", reason: hostile }] }],
+    ["state language", {
+      ...answer,
+      states: [{ ...answer.states[0], language: hostile }],
+    }],
+    ["outcome", {
+      ...answer,
+      states: [{
+        ...answer.states[0],
+        sources: [{ ...answer.states[0].sources[0], outcome: hostile }],
+      }],
+    }],
+  ];
+
+  for (const [name, props] of cases) {
+    for (const [renderer, html] of [
+      ["string", renderProvenance(props)],
+      ["react", renderToStaticMarkup(h(Provenance, { answer: props }))],
+    ]) {
+      assert.equal(html.includes("<img"), false, `${renderer} let ${name} through as markup`);
+      assert.equal(text(html).includes(hostile), true, `${renderer} did not print ${name} as text`);
+    }
+  }
+});
+
+test("a language-narrowed answer says so, and an unnarrowed one does not", async () => {
+  // The writer seat's F4. `narrowedNote` was imported by the React port and asserted nowhere;
+  // deleting it from either renderer failed nothing. It is the sentence that stops a narrowed
+  // answer being read as the whole record.
+  const answer = withDigests(await capturedAnswer());
+  const narrowed = { ...answer, requested_language: "fra" };
+  const whole = { ...answer, requested_language: null };
+
+  for (const [renderer, render] of [
+    ["string", (props) => renderProvenance(props)],
+    ["react", (props) => renderToStaticMarkup(h(Provenance, { answer: props }))],
+  ]) {
+    assert.equal(
+      text(render(narrowed)).includes(narrowedNote("fra")),
+      true,
+      `${renderer} did not say the answer was narrowed`,
+    );
+    assert.equal(
+      text(render(whole)).includes("was narrowed to"),
+      false,
+      `${renderer} said an unnarrowed answer was narrowed`,
+    );
+  }
 });
