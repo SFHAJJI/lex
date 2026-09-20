@@ -532,38 +532,65 @@ function headings(html) {
     .map(([, , inner]) => text(inner.replace(/<[^>]*>/g, " ")).replace(/\s+/g, " ").trim());
 }
 
-/** The wire tokens an enum declares, read from the C# source rather than copied beside it. */
-async function wireTokens(file) {
+/**
+ * The wire tokens ONE named enum declares, read from the C# source rather than copied beside it.
+ *
+ * It read every `JsonStringEnumMemberName` in the file, and `LexCorpus6Builder.cs` declares four
+ * enums -- so a token of `LexCorpus6Stage3OutcomeDomain` passed as a corpus outcome. A vocabulary
+ * that is "every token in the file the vocabulary lives in" is not that vocabulary.
+ */
+async function wireTokens(file, enumName) {
   const source = await readFile(new URL(`../../${file}`, import.meta.url), "utf8");
-  return new Set(
-    [...source.matchAll(/JsonStringEnumMemberName\("([a-z0-9_]+)"\)/g)].map(([, token]) => token),
+  const start = source.indexOf(`enum ${enumName}`);
+  assert.notEqual(start, -1, `${file} declares no enum ${enumName}`);
+  const open = source.indexOf("{", start);
+  const close = source.indexOf(String.fromCharCode(10) + "}", open);
+  assert.ok(close > open, `enum ${enumName} has no closing brace`);
+  const block = source.slice(open, close);
+  const tokens = new Set(
+    [...block.matchAll(/JsonStringEnumMemberName\("([a-z0-9_]+)"\)/g)].map(([, token]) => token),
   );
+  assert.ok(tokens.size > 0, `enum ${enumName} declared no wire tokens`);
+  return tokens;
 }
 
-/** The captured answer with two of everything the platform sends lists of. */
+/**
+ * The captured answer with two of everything, and NO VALUE SHARED BETWEEN THE TWO.
+ *
+ * The first version of this gave both states the same sources list and the same profiles, and made
+ * the two sources differ only in their object reference. So a page that showed one element's value
+ * against another element -- every state showing the FIRST state's digest, every source the first
+ * source's gaps -- could not be told from a correct one. Dropping the second element died; mixing
+ * them up did not. Every field of every element differs here, which is what lets the assertions
+ * below read a whole row in order instead of asking whether a value appears somewhere.
+ */
 function withTwoOfEach(answer) {
   const state = answer.states[0];
   const source = state.sources[0];
-  const other = (digest) => digest.slice(0, 32) + [...digest.slice(32)].reverse().join("");
-  const twoSources = [
-    { ...source, gaps: ["a_recorded_gap", "b_second_gap"] },
-    { ...source, object_ref_sha256: other(source.object_ref_sha256) },
-  ];
-  const twoProfiles = [state.rule_profile_sha256s[0], other(state.rule_profile_sha256s[0])];
+  const nth = (digest, n) => digest.slice(0, 60) + String(n).padStart(4, "0");
+  const sourceAt = (n) => ({
+    ...source,
+    object_ref_sha256: nth(source.object_ref_sha256, n),
+    body_sha256: nth(source.body_sha256, n + 10),
+    body_receipt_sha256: nth(source.body_receipt_sha256, n + 20),
+    body_byte_length: source.body_byte_length + n,
+    gaps: [`gap_${n}_first`, `gap_${n}_second`],
+  });
+  const stateAt = (n, language) => ({
+    ...state,
+    language,
+    applicability_date: `200${n}-01-0${n}`,
+    state_sha256: nth(state.state_sha256, n),
+    article_identities_sha256: nth(state.article_identities_sha256, n + 30),
+    articles: state.articles + n,
+    rule_profile_sha256s: [nth(state.rule_profile_sha256s[0], n + 40), nth(state.rule_profile_sha256s[0], n + 50)],
+    sources: [sourceAt(n * 2 + 1), sourceAt(n * 2 + 2)],
+  });
   return {
     ...answer,
     requested_language: null,
     available_languages: ["deu", "fra"],
-    states: [
-      { ...state, rule_profile_sha256s: twoProfiles, sources: twoSources },
-      {
-        ...state,
-        language: "deu",
-        state_sha256: other(state.state_sha256),
-        rule_profile_sha256s: twoProfiles,
-        sources: twoSources,
-      },
-    ],
+    states: [stateAt(1, "fra"), stateAt(2, "deu")],
   };
 }
 
@@ -576,6 +603,11 @@ test("a list with two things in it shows both, in both renderers", async () => {
   const answer = withTwoOfEach(withDigests(await capturedAnswer()));
   const state = answer.states[0];
 
+  // Every repeated row is asserted WHOLE and IN ORDER, `a | b` across the two states. Reading the
+  // first element of a joined row is what let "every state shows the first state's digest" pass:
+  // the value was there, in the place the assertion looked, belonging to the wrong element.
+  const [first, second] = answer.states;
+  const joined = (pick) => `${pick(first)} | ${pick(second)}`;
   for (const [renderer, html] of [
     ["string", renderProvenance(answer)],
     ["react", renderToStaticMarkup(h(Provenance, { answer }))],
@@ -583,22 +615,48 @@ test("a list with two things in it shows both, in both renderers", async () => {
     const shown = rows(html);
     assert.equal(shown.get("languages held"), "deu fra", `${renderer} dropped a held language`);
     assert.equal(
-      shown.get("rule profiles").split(" | ")[0],
-      state.rule_profile_sha256s.join(" "),
-      `${renderer} dropped a rule profile`,
+      shown.get("state digest"),
+      joined((one) => one.state_sha256),
+      `${renderer}: the states' digests are not each state's own, in order`,
     );
     assert.equal(
-      shown.get("gaps recorded").split(" | ")[0],
-      "a_recorded_gap b_second_gap",
-      `${renderer} dropped a recorded gap`,
+      shown.get("article identities digest"),
+      joined((one) => one.article_identities_sha256),
+      `${renderer}: an identities digest belongs to the wrong state`,
+    );
+    assert.equal(
+      shown.get("articles"),
+      joined((one) => String(one.articles)),
+      `${renderer}: an article count belongs to the wrong state`,
+    );
+    assert.equal(
+      shown.get("rule profiles"),
+      joined((one) => one.rule_profile_sha256s.join(" ")),
+      `${renderer}: a rule profile belongs to the wrong state`,
     );
 
-    const seen = headings(html);
-    assert.ok(seen.some((heading) => heading.startsWith("fra,")), `${renderer} dropped the fra state`);
-    assert.ok(seen.some((heading) => heading.startsWith("deu,")), `${renderer} dropped the deu state`);
-    for (const source of state.sources) {
-      assert.ok(html.includes(source.object_ref_sha256), `${renderer} dropped a source of a state`);
+    // Four sources across the two states, each row in encounter order.
+    const sources = [...first.sources, ...second.sources];
+    for (const [label, pick] of [
+      ["object reference", (one) => one.object_ref_sha256],
+      ["body digest", (one) => one.body_sha256],
+      ["body receipt", (one) => one.body_receipt_sha256],
+      ["body bytes", (one) => String(one.body_byte_length)],
+      ["gaps recorded", (one) => one.gaps.join(" ")],
+    ]) {
+      assert.equal(
+        shown.get(label),
+        sources.map(pick).join(" | "),
+        `${renderer}: the "${label}" rows are not each source's own, in order`,
+      );
     }
+
+    // And the headings name each state's own language and date, in the order the answer gives.
+    assert.deepEqual(
+      headings(html).filter((heading) => heading.includes("applicable from")),
+      answer.states.map((one) => `${one.language}, applicable from ${one.applicability_date}`),
+      `${renderer}: the state headings are not each state's own, in order`,
+    );
   }
 });
 
@@ -657,6 +715,36 @@ test("every free-text field the page prints is escaped, found rather than listed
   assert.ok(covered > 5, `only ${covered} free-text paths were exercised; the walk is not reaching them`);
 });
 
+test("every digest the answer carries is refused when it is not one, found rather than named", async () => {
+  // The two-fixture test below fed bad digests to `state_sha256` alone. Every digest check shares
+  // `requireDigest`, so deleting a RULE dies there -- but deleting the CALL from one field passed,
+  // and three fields had no test of their own. So the fields are walked: every leaf that is a digest
+  // today must be refused when it stops being one.
+  const answer = withDigests(await capturedAnswer());
+  const paths = [];
+  const walk = (node, path) => {
+    if (Array.isArray(node)) node.forEach((item, index) => walk(item, `${path}[${index}]`));
+    else if (node && typeof node === "object") {
+      for (const key of Object.keys(node)) walk(node[key], path.length === 0 ? key : `${path}.${key}`);
+    } else if (typeof node === "string" && /^[0-9a-f]{64}$/.test(node)) paths.push(path);
+  };
+  walk(answer, "");
+  assert.ok(paths.length > 5, `only ${paths.length} digest leaves were found; the walk is not walking`);
+
+  for (const path of paths) {
+    const clone = structuredClone(answer);
+    const keys = path.split(/[.[\]]+/).filter((key) => key.length > 0);
+    let cursor = clone;
+    for (const key of keys.slice(0, -1)) cursor = cursor[key];
+    cursor[keys.at(-1)] = "z".repeat(64);
+    assert.throws(
+      () => renderProvenance(clone),
+      /is not a SHA-256 digest/,
+      `${path} accepted a value that is not a digest`,
+    );
+  }
+});
+
 test("each digest rule has a fixture only it rejects", async () => {
   // My own #706 lesson, which I applied to the census and not to this page: the only bad digest
   // tried was "nope", which is neither 64 long nor hex, so deleting either rule alone still
@@ -679,8 +767,18 @@ test("the preview's tokens are the publisher's vocabulary, read from the source 
   // Writing the captured tokens into two constants put the preview right and held it nowhere: the
   // next edit can bring `admitted` back. The vocabularies are read from the enums that declare them,
   // so this is a second witness rather than a copy of one.
-  const outcomes = await wireTokens("src/Lex.V3.Ingest/LexCorpus6Builder.cs");
-  const rights = await wireTokens("src/Lex.V3.Contracts/Source/Luxembourg/LuxembourgRightsChannels.cs");
+  const outcomes = await wireTokens("src/Lex.V3.Ingest/LexCorpus6Builder.cs", "LexCorpus6OutcomeKind");
+  const rights = await wireTokens(
+    "src/Lex.V3.Contracts/Source/Luxembourg/LuxembourgRightsChannels.cs",
+    "LuxembourgRightsChannelDisposition",
+  );
+  // The file that declares the outcomes declares three other enums beside it, so a token from
+  // one of those must NOT be a corpus outcome. This is the assertion that says the slice worked.
+  assert.equal(
+    outcomes.has("luxembourg_akn_legal_content"),
+    false,
+    "the outcome vocabulary is every enum in its file, not LexCorpus6OutcomeKind",
+  );
   assert.ok(outcomes.has("acquired"), "the outcome vocabulary did not parse");
   assert.ok(rights.size > 3, "the rights vocabulary did not parse");
 
