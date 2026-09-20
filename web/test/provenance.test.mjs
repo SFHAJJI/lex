@@ -286,6 +286,8 @@ test("the preview teaches the shape the platform sends, with values of its own",
   // has to be the captured one, or this page teaches a form no producer emits -- which is exactly
   // what the refusal catalogue did until a guard was written for it.
   const captured = paths(await capturedAnswer());
+  assert.ok(captured.size > 15, `the captured answer yielded ${captured.size} paths; it is not walking`);
+  assert.ok(PREVIEW_ANSWERS.length > 0, "there are no previews to hold");
   for (const preview of PREVIEW_ANSWERS) {
     const shown = paths(preview.answer);
     const missing = [...captured].filter((path) => !shown.has(path));
@@ -438,6 +440,11 @@ test("every leaf the platform sends reaches the page", async () => {
     else if (node !== null && String(node).length > 0) leaves.push(String(node));
   };
   walk(answer);
+  // The walk has to have walked. Without this the test passes when `leaves` is empty -- `missing`
+  // is [] and the assertion holds -- while its own name says "every leaf". Found by applying the
+  // writer seat's rule to my own comments: for every "every", "all", "no" and "never", enumerate
+  // what it quantifies over. The two preview bridges below had the same hole.
+  assert.ok(leaves.length > 15, `the walk found ${leaves.length} leaves; it is not walking`);
   const missing = [...new Set(leaves)].filter((leaf) => !html.includes(leaf));
   assert.deepEqual(missing, [], `the page does not show ${missing.join(", ")}`);
 });
@@ -448,6 +455,8 @@ test("the preview teaches the forms the platform sends, not only its field names
   // the corpus has never emitted. My own words on #703: a name is right and a value can still be in
   // a grammar no producer speaks.
   const captured = forms(await capturedAnswer());
+  assert.ok(captured.size > 15, `the captured answer yielded ${captured.size} forms; it is not walking`);
+  assert.ok(PREVIEW_ANSWERS.length > 0, "there are no previews to hold");
   for (const preview of PREVIEW_ANSWERS) {
     const shown = forms(preview.answer);
     for (const [path, expected] of captured) {
