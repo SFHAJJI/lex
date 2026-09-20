@@ -1632,6 +1632,25 @@ public sealed class V3CorpusResolveMountTests
                 stream.ToArray());
         }
 
+        /// <summary>
+        /// Adds one title of the fixture's work in <paramref name="language"/> to one expression, so the
+        /// index measures a title cell for that language whatever its articles hold.
+        /// </summary>
+        public Task AddWorkTitleInLanguageAsync(string expressionIri, string language, string title) =>
+            MutateArticlesAsync(connection =>
+            {
+                using var insert = connection.CreateCommand();
+                insert.CommandText = "INSERT INTO work_titles VALUES($wid,$expression,$language,$title,$normalized,$date,'title',$evidence)";
+                insert.Parameters.AddWithValue("$wid", PublisherWid);
+                insert.Parameters.AddWithValue("$expression", expressionIri);
+                insert.Parameters.AddWithValue("$language", language);
+                insert.Parameters.AddWithValue("$title", title);
+                insert.Parameters.AddWithValue("$normalized", LuxembourgIndexBuilder.NormalizeTitle(title));
+                insert.Parameters.AddWithValue("$date", "2024-02-01");
+                insert.Parameters.AddWithValue("$evidence", new string('e', 64));
+                Assert.AreEqual(1, insert.ExecuteNonQuery());
+            });
+
         public async Task<string> AddTwoWorkTitlesAsync(bool equalDates = true)
         {
             const string secondWork = "fixture-work-identifier-two";
