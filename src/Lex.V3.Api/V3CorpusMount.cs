@@ -432,7 +432,8 @@ internal sealed class V3CorpusMount : IDisposable
     internal const string ProvenanceSourcesNote =
         "object_ref_sha256 identifies the source object in the corpus; body_sha256 is the digest of the publisher bytes the corpus retained " +
         "for it, body_byte_length their length and body_receipt_sha256 the digest of the corpus receipt for that body, each null where the " +
-        "corpus holds none";
+        "corpus holds none; outcome, rights_disposition and gaps are the corpus manifest's own tokens for the member, given verbatim, and this " +
+        "answer does not define them";
 
     internal static readonly string[][] ProvenanceNotHeld =
     [

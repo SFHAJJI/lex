@@ -81,7 +81,7 @@ public sealed class V3CorpusProvenanceMountTests
 
     /// <summary>The digest derivation as the answer states it, written out here from that sentence alone.</summary>
     private static string RecomputeStateDigest(
-        string workKey, string date, string expression, string workIri, string resourceIri, string language,
+        string publisher, string workKey, string date, string expression, string workIri, string resourceIri, string language,
         IEnumerable<string> profiles, IEnumerable<string> identities)
     {
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
@@ -95,7 +95,7 @@ public sealed class V3CorpusProvenanceMountTests
         }
 
         Append("lex-v3-luxembourg-expression-state/1");
-        foreach (var value in new[] { "lu-legilux", workKey, date, expression, workIri, resourceIri, language })
+        foreach (var value in new[] { publisher, workKey, date, expression, workIri, resourceIri, language })
         {
             Append(value);
         }
@@ -151,6 +151,16 @@ public sealed class V3CorpusProvenanceMountTests
         var row = ground.States.Single(s => s.Expression == fixture.ExpressionIri);
         Assert.AreEqual(row.StateSha256, state.GetProperty("state_sha256").GetString());
         Assert.AreEqual(row.Language, state.GetProperty("language").GetString());
+        // The answer's top level is held by value and not only by name: the echoes, and the publisher and the work
+        // key, which are the first two inputs to the digest a caller recomputes.
+        Assert.AreEqual(identifier, body.GetProperty("requested_identifier").GetString());
+        Assert.AreEqual(fixture.ApplicabilityDate, body.GetProperty("requested_date").GetString());
+        Assert.AreEqual("fra", body.GetProperty("requested_language").GetString());
+        Assert.AreEqual("lu-legilux", body.GetProperty("publisher").GetString());
+        Assert.AreEqual(row.WorkKey, body.GetProperty("work_key").GetString());
+        CollectionAssert.AreEqual(
+            ground.States.Select(static s => s.Language).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray(),
+            body.GetProperty("available_languages").EnumerateArray().Select(static l => l.GetString()).ToArray());
         Assert.AreEqual(fixture.StateSha256, state.GetProperty("state_sha256").GetString());
         Assert.AreEqual(fixture.Permalink, state.GetProperty("permalink").GetString());
         Assert.AreEqual(fixture.StableCoordinate, state.GetProperty("stable_coordinate").GetString());
@@ -166,7 +176,7 @@ public sealed class V3CorpusProvenanceMountTests
         // sentence, it gives the digest the answer names, so a reader can check the chain outside this code.
         Assert.AreEqual(
             state.GetProperty("state_sha256").GetString(),
-            RecomputeStateDigest(row.WorkKey, row.Date, row.Expression, row.WorkIri, row.ResourceIri, row.Language,
+            RecomputeStateDigest("lu-legilux", row.WorkKey, row.Date, row.Expression, row.WorkIri, row.ResourceIri, row.Language,
                 JsonSerializer.Deserialize<string[]>(row.ProfilesJson)!, identities));
 
         // The sources are the corpus members that hold the state's articles, each once, in digest order,
@@ -219,7 +229,8 @@ public sealed class V3CorpusProvenanceMountTests
         Assert.AreEqual(state.GetProperty("article_identities_sha256").GetString(), IdentitiesDigest(callersList));
         Assert.AreEqual(
             state.GetProperty("state_sha256").GetString(),
-            RecomputeStateDigest(row.WorkKey, state.GetProperty("applicability_date").GetString()!,
+            RecomputeStateDigest(body.GetProperty("publisher").GetString()!, body.GetProperty("work_key").GetString()!,
+                state.GetProperty("applicability_date").GetString()!,
                 state.GetProperty("expression_iri").GetString()!, state.GetProperty("publisher_work_iri").GetString()!,
                 state.GetProperty("publisher_legal_resource_iri").GetString()!, state.GetProperty("language").GetString()!,
                 state.GetProperty("rule_profile_sha256s").EnumerateArray().Select(static p => p.GetString()!).ToArray(), callersList));
@@ -254,6 +265,25 @@ public sealed class V3CorpusProvenanceMountTests
         Assert.AreEqual(1, french.GetProperty("states").GetArrayLength());
         Assert.AreEqual("fra", french.GetProperty("states")[0].GetProperty("language").GetString());
 
+        // The top level, by value: what was asked is echoed (no language asked is null), and the languages the work
+        // has are all of them whichever one was asked for.
+        var ground = ReadGround(fixture);
+        var heldLanguages = ground.States.Select(static s => s.Language).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+        Assert.AreEqual(2, heldLanguages.Length);
+        var heldWorkKey = ground.States.Select(static s => s.WorkKey).Distinct(StringComparer.Ordinal).Single();
+        foreach (var (answer, asked) in new[] { (both, (string?)null), (french, "fra") })
+        {
+            Assert.AreEqual(work, answer.GetProperty("requested_identifier").GetString());
+            Assert.AreEqual(fixture.ApplicabilityDate, answer.GetProperty("requested_date").GetString());
+            var echoed = answer.GetProperty("requested_language");
+            Assert.AreEqual(asked, echoed.ValueKind == JsonValueKind.Null ? null : echoed.GetString());
+            Assert.AreEqual("lu-legilux", answer.GetProperty("publisher").GetString());
+            Assert.AreEqual(heldWorkKey, answer.GetProperty("work_key").GetString());
+            CollectionAssert.AreEqual(
+                heldLanguages,
+                answer.GetProperty("available_languages").EnumerateArray().Select(static l => l.GetString()).ToArray());
+        }
+
         // The date selects the state in force on it, not the one dated on it.
         var between = (await ProvenanceAsync(mount, work, Shift(fixture.ApplicabilityDate, 100), "fra")).Result!.Value;
         Assert.AreEqual(fixture.StateSha256, between.GetProperty("states")[0].GetProperty("state_sha256").GetString());
@@ -285,6 +315,38 @@ public sealed class V3CorpusProvenanceMountTests
 
         // A date only a later state answers, and nothing on it in another language: still one refusal each way.
         Assert.AreEqual("ambiguous_version", (await ProvenanceAsync(mount, work, twinDate, "fra")).Refusal!.Code);
+    }
+
+    [TestMethod]
+    public async Task ASourcesOrderIsByDigest_NotByTheOrderTheArticlesAreListedIn()
+    {
+        var fixture = await MountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        var second = await fixture.GiveTheStateASecondSourceAsync();
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+        var ground = ReadGround(fixture);
+        var row = ground.States.Single(s => s.Expression == fixture.ExpressionIri);
+        var identities = JsonSerializer.Deserialize<string[]>(row.IdentitiesJson)!;
+
+        // Read from the rows: the first article by identity is now held by the second member, so listing the sources in the
+        // order the articles come would name the later digest first, and only an order by digest names the earlier one first.
+        var firstListed = ground.Articles.Single(a => a.Identity == identities.Order(StringComparer.Ordinal).First()).ObjectRef;
+        Assert.AreEqual(second, firstListed);
+        var expected = identities.Select(identity => ground.Articles.Single(a => a.Identity == identity).ObjectRef)
+            .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+        Assert.AreEqual(2, expected.Length);
+        Assert.AreNotEqual(second, expected[0], "The fixture's own member must sort before the added one, or the order proves nothing.");
+
+        var body = (await ProvenanceAsync(mount, $"/lu-legilux/{fixture.WorkKey}", fixture.ApplicabilityDate, "fra")).Result!.Value;
+
+        var sources = body.GetProperty("states").EnumerateArray().Single().GetProperty("sources").EnumerateArray().ToArray();
+        CollectionAssert.AreEqual(expected, sources.Select(static s => s.GetProperty("object_ref_sha256").GetString()).ToArray());
+        // The added member is not in the corpus, so nothing is filled in for it; the fixture's own member keeps what the corpus holds.
+        Assert.AreEqual(JsonValueKind.String, sources[0].GetProperty("body_sha256").ValueKind);
+        Assert.AreEqual(JsonValueKind.Null, sources[1].GetProperty("body_sha256").ValueKind);
+        Assert.AreEqual(JsonValueKind.Null, sources[1].GetProperty("body_byte_length").ValueKind);
+        Assert.AreEqual(JsonValueKind.Null, sources[1].GetProperty("body_receipt_sha256").ValueKind);
     }
 
     private static void CollectPaths(JsonElement element, string prefix, SortedSet<string> paths)
@@ -371,7 +433,8 @@ public sealed class V3CorpusProvenanceMountTests
         Assert.AreEqual(
             "object_ref_sha256 identifies the source object in the corpus; body_sha256 is the digest of the publisher bytes the corpus retained " +
             "for it, body_byte_length their length and body_receipt_sha256 the digest of the corpus receipt for that body, each null where the " +
-            "corpus holds none",
+            "corpus holds none; outcome, rights_disposition and gaps are the corpus manifest's own tokens for the member, given verbatim, and this " +
+            "answer does not define them",
             body.GetProperty("sources_note").GetString());
         var notHeld = body.GetProperty("not_held").EnumerateArray().ToArray();
         CollectionAssert.AreEqual(
