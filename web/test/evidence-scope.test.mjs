@@ -63,6 +63,59 @@ test("every mutation declares where its defect can be seen", async () => {
   }
 });
 
+test("a declared page that caught nothing is a wrong declaration", async () => {
+  const { declarationVerdict } = await import("../scripts/evidence-mutations.mjs");
+  const caught = [
+    "  search-react.html @narrow/light: Home moved focus to option 2, expected 0",
+    "  search-react.html @tablet/dark: Home moved focus to option 2, expected 0",
+  ];
+  // Declared where it was caught: nothing to say.
+  assert.deepEqual(declarationVerdict(["search-react.html"], caught), { failures: [], notes: [] });
+  // Declared somewhere else entirely: the declaration is wrong, and says which page caught nothing.
+  const wrong = declarationVerdict(["compare.html"], caught);
+  assert.deepEqual(wrong.failures, ["declares compare.html and no failure naming compare.html caught it"]);
+  assert.deepEqual(wrong.notes, ["search-react.html"]);
+  // Two declared, one of them empty: the empty one fails on its own.
+  const half = declarationVerdict(["search-react.html", "reading.html"], caught);
+  assert.deepEqual(half.failures, ["declares reading.html and no failure naming reading.html caught it"]);
+  // A mutation caught nowhere at all fails for every page it declares.
+  assert.equal(declarationVerdict(["search-react.html"], []).failures.length, 1);
+});
+
+test("a page that caught it and was not declared is reported, not failed", async () => {
+  const { declarationVerdict } = await import("../scripts/evidence-mutations.mjs");
+  const caught = [
+    "  hydration.html @narrow/light: 1 request(s) after the page settled: /pages.json",
+    "  search-react.html @narrow/light: 1 request(s) after the page settled: /pages.json",
+  ];
+  const verdict = declarationVerdict(["hydration.html"], caught);
+  assert.deepEqual(verdict.failures, []);
+  assert.deepEqual(verdict.notes, ["search-react.html"]);
+  // Declaring both leaves nothing to report.
+  assert.deepEqual(declarationVerdict(["hydration.html", "search-react.html"], caught), {
+    failures: [],
+    notes: [],
+  });
+  // "all" is judged by nothing: its defect is only visible across pages.
+  assert.deepEqual(declarationVerdict("all", caught), { failures: [], notes: [] });
+  // A sentence that names no page is neither a failure nor a note.
+  assert.deepEqual(declarationVerdict("all", ["  @narrow: 3 shells but 1 distinct main line-height(s)"]), {
+    failures: [],
+    notes: [],
+  });
+});
+
+test("the one mutation whose defect is only visible across pages declares all", async () => {
+  const { MUTATIONS } = await import("../scripts/evidence-mutations.mjs");
+  const densities = MUTATIONS.find((mutation) => mutation.name.includes("shell densities"));
+  assert.ok(densities, "the shell-density mutation is in the sweep");
+  assert.equal(
+    densities.pages,
+    "all",
+    "its failure compares three shells, so a scope that measured fewer would skip the comparison",
+  );
+});
+
 test("every page a mutation declares is one the build emits", async (t) => {
   // Reads the built manifest, which this suite does not build: `npm test` runs without a `dist`
   // in CI. A missing build is named inconclusive rather than passed over, because silence here

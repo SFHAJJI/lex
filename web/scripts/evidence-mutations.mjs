@@ -722,6 +722,34 @@ async function replaceOnce(file, pattern, replacement) {
  */
 const FULL = process.env.LEX_EVIDENCE_SCOPE === "full";
 
+/**
+ * Whether a mutation's declaration matches where its defect was actually caught.
+ *
+ * Judged only on a full run, because only a full run has seen every page. A declared page that
+ * caught nothing is a wrong declaration and fails: every scoped sweep afterwards would look for
+ * this defect where it is not, and a mutation that catches nothing anywhere is a gate that stopped
+ * working. A page that caught it and was not declared is reported, not failed: the declaration
+ * says where the defect can be seen, and one page is enough for the sweep's question, so a defect
+ * that also shows elsewhere is news about coverage rather than a wrong declaration. Naming it
+ * keeps the choice visible: a reader of a full run can widen the declaration deliberately.
+ *
+ * @param {string[]|"all"} pages  what the mutation declares
+ * @param {string[]} matching  the output lines that matched the mutation's expectation
+ */
+export function declarationVerdict(pages, matching) {
+  if (pages === "all") return { failures: [], notes: [] };
+  const named = (page) => matching.filter((line) => line.includes(page));
+  const failures = pages
+    .filter((page) => named(page).length === 0)
+    .map((page) => `declares ${page} and no failure naming ${page} caught it`);
+  const seen = new Set();
+  for (const line of matching) {
+    const page = /^\s*([A-Za-z0-9._~%:-]+\.html)\b/.exec(line)?.[1];
+    if (page && !pages.includes(page)) seen.add(page);
+  }
+  return { failures, notes: [...seen].sort() };
+}
+
 function run(root, pages) {
   const scope = FULL || pages === "all" ? null : pages.join(",");
   return new Promise((resolveRun) => {
@@ -783,17 +811,21 @@ for (const mutation of MUTATIONS) {
       );
       failures += 1;
     } else {
-      const line = output.split("\n").find((l) => mutation.expect.test(l)) ?? "";
-      // The sentence that caught it has to come from a page this mutation declared. A wrong
-      // declaration would send every later sweep to look where the defect is not, so it fails
-      // here rather than passing quietly. A cross-page mutation declares "all" and is exempt.
-      if (!FULL && Array.isArray(mutation.pages) && !mutation.pages.some((page) => line.includes(page))) {
-        console.log(`WRONG PAGE   ${mutation.name}`);
-        console.log(
-          `             declared ${mutation.pages.join(", ")}, caught on: ${line.trim().slice(0, 150)}`,
-        );
-        failures += 1;
-        continue;
+      const matching = output.split("\n").filter((l) => mutation.expect.test(l));
+      const line = matching[0] ?? "";
+      // Only the full run can judge a declaration, and only the full run has the evidence: a
+      // scoped run measures the declared pages and nothing else, so every sentence it sees comes
+      // from one of them by construction. A wrong declaration is still caught there, as a
+      // mutation the scoped run does not catch at all.
+      if (FULL) {
+        const verdict = declarationVerdict(mutation.pages, matching);
+        for (const note of verdict.notes) console.log(`             also on ${note}`);
+        if (verdict.failures.length > 0) {
+          console.log(`WRONG PAGE   ${mutation.name}`);
+          for (const failure of verdict.failures) console.log(`             ${failure}`);
+          failures += 1;
+          continue;
+        }
       }
       console.log(`caught       ${mutation.name}`);
       console.log(`             ${line.trim().slice(0, 140)}`);
