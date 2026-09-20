@@ -6,6 +6,8 @@
     "index_sha256",
     "verified_by.corpus_sha256",
     "verified_by.index_sha256",
+    "mounted.corpus_sha256",
+    "mounted.index_sha256",
     "states[].sources[].object_ref_sha256"
   ],
   "sampled": [
@@ -340,6 +342,159 @@
       }
     },
     {
+      "operation": "coverage",
+      "object_type": "coverage_report",
+      "scenario": "the whole mount, no language asked",
+      "answer": {
+        "capability_cells": [
+          {
+            "column": "articles",
+            "field": "searchable_text",
+            "language": "fra",
+            "operation": "search",
+            "period_from": "2021-08-22",
+            "period_to": "2021-08-22",
+            "population": 36
+          },
+          {
+            "column": "articles",
+            "field": "searchable_text",
+            "language": "fra",
+            "operation": "search",
+            "period_from": "2023-01-01",
+            "period_to": "2023-01-01",
+            "population": 2
+          },
+          {
+            "column": "articles",
+            "field": "searchable_text",
+            "language": "fra",
+            "operation": "search",
+            "period_from": "2023-07-03",
+            "period_to": "2023-07-03",
+            "population": 10
+          },
+          {
+            "column": "articles",
+            "field": "searchable_text",
+            "language": "fra",
+            "operation": "search",
+            "period_from": "2023-09-16",
+            "period_to": "2023-09-16",
+            "population": 1
+          }
+        ],
+        "counts_note": "counts are of rows the index holds; a missing publisher date is counted as missing and never dropped; articles_with_searchable_text is counted where the article carries a publisher date, which is what the capability cells measure, and so it and articles_without_publisher_date are not addends",
+        "languages": [
+          {
+            "articles": 49,
+            "articles_with_searchable_text": 49,
+            "articles_without_publisher_date": 0,
+            "first_state_date": "2024-02-01",
+            "language": "fra",
+            "last_state_date": "2024-02-01",
+            "searchable_text_held": true,
+            "states": 1,
+            "works": 1
+          }
+        ],
+        "languages_held": [
+          "fra"
+        ],
+        "members": {
+          "by_outcome": [
+            {
+              "members": 1,
+              "outcome": "acquired"
+            },
+            {
+              "members": 2,
+              "outcome": "unavailable"
+            }
+          ],
+          "gaps": [
+            {
+              "gap": "point",
+              "members": 2
+            }
+          ],
+          "gaps_note": "the gap tokens the corpus recorded per member, verbatim, counted by member",
+          "with_gaps": 2
+        },
+        "mounted": {
+          "corpus_sha256": "\u003Cvaries-per-run\u003E",
+          "index_sha256": "\u003Cvaries-per-run\u003E",
+          "publisher": "lu-legilux",
+          "registry_sha256": "36414644ba7318f8751e0e09e2a5a57e795c48a93f82db7f7aa9fdb73f8f449c"
+        },
+        "not_held": [
+          {
+            "item": "publisher_universe",
+            "reason": "how many acts the publisher holds, or how many of them this mount lacks: the mount records only what was admitted"
+          },
+          {
+            "item": "never_consolidated_acts",
+            "reason": "the count of as-published acts never consolidated is a corpus-level statement this mount does not carry"
+          },
+          {
+            "item": "first_sighting_and_observation_times",
+            "reason": "no observation time or first-sighting event is held, so nothing here says when anything was first seen"
+          },
+          {
+            "item": "build_time_and_currency",
+            "reason": "no build time of the corpus or index is held, so nothing here says how current these counts are; the corpus and index digests name exactly which artifacts are mounted"
+          },
+          {
+            "item": "legal_status",
+            "reason": "no status, repeal or commencement fact is held; nothing here speaks of legal status"
+          }
+        ],
+        "operations": {
+          "not_served_operations": [
+            "answer_drift",
+            "as_observed",
+            "ask",
+            "browse",
+            "citation",
+            "cited_by",
+            "classification",
+            "concepts",
+            "events",
+            "evidence_bundle",
+            "knowable_on",
+            "manifestation",
+            "relations",
+            "status_on",
+            "transposition",
+            "verify"
+          ],
+          "note": "served_operations are the routes this mount answers and not_served_operations are registered with no route on it; this states a fact about the mount and says nothing about what a request for an unserved operation returns",
+          "registered": 27,
+          "served_operations": [
+            "article_history",
+            "as_of",
+            "changes_in_period",
+            "coverage",
+            "diff",
+            "dossier",
+            "in_force_on",
+            "provenance",
+            "resolve",
+            "search",
+            "timeline"
+          ]
+        },
+        "requested_language": null,
+        "scope": "the mounted Luxembourg corpus and index: what this mount holds and recorded as missing, and nothing about what the publisher holds",
+        "totals": {
+          "articles": 49,
+          "members": 3,
+          "states": 1,
+          "works": 1
+        }
+      }
+    },
+    {
       "operation": "provenance",
       "object_type": "provenance_chain",
       "scenario": "one work, one state, asked in the language it is held in",
@@ -413,10 +568,6 @@
     },
     {
       "operation": "changes_in_period",
-      "reason": "sampled when a reader is built against it"
-    },
-    {
-      "operation": "coverage",
       "reason": "sampled when a reader is built against it"
     },
     {
