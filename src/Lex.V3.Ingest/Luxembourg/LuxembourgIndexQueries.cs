@@ -1,0 +1,46 @@
+namespace Lex.V3.Ingest.Luxembourg;
+
+/// <summary>
+/// The text of the reader's per-state queries, in one place so a test can run <c>EXPLAIN QUERY PLAN</c>
+/// on exactly what the reader runs. Each takes one state's identity list and reads its articles, so its
+/// cost is bounded by that list only while SQLite keeps one join order: the state by digest, its
+/// identities, then each article and its member by primary key. SQLite chooses that by the statistics
+/// in the index file. Under the ones a fixture build leaves it scanned every article first for
+/// <see cref="AnchorArticles"/> and scanned <c>members</c> first for <see cref="StateSources"/>, so those two
+/// are written as <c>CROSS JOIN</c>, which it does not reorder; the other two plan as intended under
+/// every statistics the plan test tries and are left as SQLite plans them.
+/// </summary>
+internal static class LuxembourgIndexQueries
+{
+    internal const string AnchorArticles = """
+        SELECT s.state_sha256, a.article_identity_sha256, a.publisher_id, a.publisher_wid,
+               a.applicability_date, a.tokens_json
+        FROM states s CROSS JOIN json_each(s.article_identities_json) j
+        CROSS JOIN articles a ON a.article_identity_sha256 = j.value
+        WHERE s.state_sha256 IN (SELECT value FROM json_each($states)) AND a.publisher_id = $anchor
+        ORDER BY s.state_sha256, a.article_identity_sha256
+        """;
+
+    internal const string StateArticles = """
+        SELECT a.article_identity_sha256, a.publisher_id, a.tokens_json
+        FROM states s, json_each(s.article_identities_json) j
+        JOIN articles a ON a.article_identity_sha256 = j.value
+        WHERE s.state_sha256 = $digest
+        ORDER BY a.publisher_id, a.article_identity_sha256
+        """;
+
+    internal const string ArticleIds = """
+        SELECT DISTINCT a.publisher_id
+        FROM states s, json_each(s.article_identities_json) j
+        JOIN articles a ON a.article_identity_sha256 = j.value
+        WHERE s.state_sha256 = $digest
+        ORDER BY a.publisher_id
+        """;
+
+    internal const string StateSources =
+        "SELECT DISTINCT m.object_ref_sha256,m.outcome,m.rights_disposition,m.gaps_json " +
+        "FROM states s CROSS JOIN json_each(s.article_identities_json) j " +
+        "CROSS JOIN articles a ON a.article_identity_sha256=j.value " +
+        "CROSS JOIN members m ON m.object_ref_sha256=a.object_ref_sha256 " +
+        "WHERE s.state_sha256=$state ORDER BY m.object_ref_sha256";
+}
