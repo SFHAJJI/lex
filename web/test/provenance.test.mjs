@@ -38,6 +38,17 @@ import { Provenance } from "../.react-build/app.mjs";
 const SAMPLES = new URL("../../schemas/v3-platform/answer-samples.json", import.meta.url);
 const PLACEHOLDER = "<varies-per-run>";
 
+/**
+ * The paths a walk must have REACHED, not a count it must have exceeded.
+ *
+ * The first guards asserted a floor -- "more than 15" -- and a floor is not a reach. The captured
+ * answer yields 36 paths, so a walk that never descended into `states`, where the corpus's own
+ * facts are, still left 17 and cleared it. The writer seat proved that with a probe that skipped
+ * `states` and passed. A named path also does not move when the platform gains a field, which a
+ * number does.
+ */
+const MUST_REACH = ["verified_by.registry_sha256", "states[].sources[].outcome"];
+
 async function capturedAnswer() {
   let parsed;
   try {
@@ -286,7 +297,9 @@ test("the preview teaches the shape the platform sends, with values of its own",
   // has to be the captured one, or this page teaches a form no producer emits -- which is exactly
   // what the refusal catalogue did until a guard was written for it.
   const captured = paths(await capturedAnswer());
-  assert.ok(captured.size > 15, `the captured answer yielded ${captured.size} paths; it is not walking`);
+  for (const path of MUST_REACH) {
+    assert.ok(captured.has(path), `the path walk never reached ${path}; it stopped short`);
+  }
   assert.ok(PREVIEW_ANSWERS.length > 0, "there are no previews to hold");
   for (const preview of PREVIEW_ANSWERS) {
     const shown = paths(preview.answer);
@@ -443,8 +456,14 @@ test("every leaf the platform sends reaches the page", async () => {
   // The walk has to have walked. Without this the test passes when `leaves` is empty -- `missing`
   // is [] and the assertion holds -- while its own name says "every leaf". Found by applying the
   // writer seat's rule to my own comments: for every "every", "all", "no" and "never", enumerate
-  // what it quantifies over. The two preview bridges below had the same hole.
-  assert.ok(leaves.length > 15, `the walk found ${leaves.length} leaves; it is not walking`);
+  // what it quantifies over. The two preview bridges had the same hole -- the name bridge above
+  // this test and the form bridge below it. ("Below" was wrong about one of them, which is the
+  // rule applied to the sentence that describes the rule.)
+  // A value from the deepest place the answer goes, so a walk that stopped at the top fails here.
+  assert.ok(
+    leaves.includes(answer.states[0].sources[0].body_sha256),
+    "the leaf walk never reached a source's body digest; it stopped short",
+  );
   const missing = [...new Set(leaves)].filter((leaf) => !html.includes(leaf));
   assert.deepEqual(missing, [], `the page does not show ${missing.join(", ")}`);
 });
@@ -455,7 +474,9 @@ test("the preview teaches the forms the platform sends, not only its field names
   // the corpus has never emitted. My own words on #703: a name is right and a value can still be in
   // a grammar no producer speaks.
   const captured = forms(await capturedAnswer());
-  assert.ok(captured.size > 15, `the captured answer yielded ${captured.size} forms; it is not walking`);
+  for (const path of MUST_REACH) {
+    assert.ok(captured.has(path), `the form walk never reached ${path}; it stopped short`);
+  }
   assert.ok(PREVIEW_ANSWERS.length > 0, "there are no previews to hold");
   for (const preview of PREVIEW_ANSWERS) {
     const shown = forms(preview.answer);
@@ -842,9 +863,14 @@ test("the preview's tokens are the publisher's vocabulary, read from the source 
   assert.ok(outcomes.has("acquired"), "the outcome vocabulary did not parse");
   assert.ok(rights.size > 3, "the rights vocabulary did not parse");
 
+  // Three nested loops, so this checked every source of every state of every preview and would
+  // have passed having checked NONE if any inner list were empty. The fourth instance of the class
+  // in this file, found by the writer seat applying the rule to the loops rather than the comments.
+  let checked = 0;
   for (const preview of PREVIEW_ANSWERS) {
     for (const state of preview.answer.states) {
       for (const source of state.sources) {
+        checked += 1;
         assert.ok(
           outcomes.has(source.outcome),
           `${preview.lexId}: outcome "${source.outcome}" is not a corpus outcome token`,
@@ -858,4 +884,5 @@ test("the preview's tokens are the publisher's vocabulary, read from the source 
       }
     }
   }
+  assert.ok(checked > 0, "no preview source was checked; the vocabulary test held nothing");
 });
