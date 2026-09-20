@@ -567,6 +567,33 @@ public sealed class V3CorpusSearchMountTests
     }
 
     [TestMethod]
+    public async Task ALanguageThatHoldsATitleAndNoSearchableTextIsNotOneASearchCanBeAskedIn()
+    {
+        var fixture = await MountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        // German is held as a state and as a title, and its articles carry no text: the index measured
+        // a title cell for German and no search cell, so listing every language with any cell would
+        // send a caller to a language that answers nothing.
+        var german = await fixture.AddSecondLanguageStateAsync(fixture.ApplicabilityDate);
+        await WriteTextsAsync(fixture);
+        foreach (var article in fixture.ArticlesOfOwnState())
+        {
+            await fixture.RewriteArticleTextAsync(german.ExpressionIri, article.PublisherId, string.Empty);
+        }
+
+        await fixture.AddWorkTitleInLanguageAsync(german.ExpressionIri, "deu", "Gesetz ueber die Mietkaution");
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+
+        var inGerman = (await SearchAsync(mount, Phrase, language: "deu")).Result!.Value;
+        Assert.IsFalse(inGerman.GetProperty("searchable_text_held_for_language").GetBoolean());
+        CollectionAssert.AreEqual(new[] { "fra" }, Strings(inGerman.GetProperty("searchable_languages")));
+        var inFrench = (await SearchAsync(mount, Phrase)).Result!.Value;
+        Assert.IsTrue(inFrench.GetProperty("searchable_text_held_for_language").GetBoolean());
+        CollectionAssert.AreEqual(new[] { "fra" }, Strings(inFrench.GetProperty("searchable_languages")));
+    }
+
+    [TestMethod]
     public async Task ThePageIsBoundedAndTheCursorNeitherRepeatsNorSkipsAHitAcrossTheTwoLanes()
     {
         var fixture = await MountedFixture.CreateAsync();
