@@ -23,6 +23,10 @@ public sealed class V3PlatformSchemaTests
             {
                 File.WriteAllBytes(Path.Combine(root, document.FileName), document.Utf8.ToArray());
             }
+
+            // A render is not a check: comparing the files with what was just written passes whatever they
+            // held. So a regeneration writes and then fails, and only a run without the variable verifies.
+            Assert.Fail("V3_RENDER_PLATFORM_SCHEMAS rendered the tracked schema documents and did not verify them: run again without the variable, which is the only run that checks anything.");
         }
 
         foreach (var document in documents)
