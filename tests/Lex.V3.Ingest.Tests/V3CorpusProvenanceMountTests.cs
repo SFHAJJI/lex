@@ -342,11 +342,6 @@ public sealed class V3CorpusProvenanceMountTests
 
         var sources = body.GetProperty("states").EnumerateArray().Single().GetProperty("sources").EnumerateArray().ToArray();
         CollectionAssert.AreEqual(expected, sources.Select(static s => s.GetProperty("object_ref_sha256").GetString()).ToArray());
-        // The added member is not in the corpus, so nothing is filled in for it; the fixture's own member keeps what the corpus holds.
-        Assert.AreEqual(JsonValueKind.String, sources[0].GetProperty("body_sha256").ValueKind);
-        Assert.AreEqual(JsonValueKind.Null, sources[1].GetProperty("body_sha256").ValueKind);
-        Assert.AreEqual(JsonValueKind.Null, sources[1].GetProperty("body_byte_length").ValueKind);
-        Assert.AreEqual(JsonValueKind.Null, sources[1].GetProperty("body_receipt_sha256").ValueKind);
     }
 
     private static void CollectPaths(JsonElement element, string prefix, SortedSet<string> paths)

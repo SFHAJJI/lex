@@ -1490,13 +1490,7 @@ public sealed class LuxembourgIndexReader : IDisposable
         lock (_gate)
         {
             using var command = _connection.CreateCommand();
-            // CROSS JOIN pins the plan whatever the statistics say: the state by digest, its identities, then each article and its member by primary key.
-            command.CommandText =
-                "SELECT DISTINCT m.object_ref_sha256,m.outcome,m.rights_disposition,m.gaps_json " +
-                "FROM states s CROSS JOIN json_each(s.article_identities_json) j " +
-                "CROSS JOIN articles a ON a.article_identity_sha256=j.value " +
-                "CROSS JOIN members m ON m.object_ref_sha256=a.object_ref_sha256 " +
-                "WHERE s.state_sha256=$state ORDER BY m.object_ref_sha256";
+            command.CommandText = LuxembourgIndexQueries.StateSources;
             command.Parameters.AddWithValue("$state", stateSha256);
             var sources = new List<LuxembourgIndexStateSource>();
             using var reader = command.ExecuteReader();
@@ -1652,14 +1646,7 @@ public sealed class LuxembourgIndexReader : IDisposable
         lock (_gate)
         {
             using var command = _connection.CreateCommand();
-            command.CommandText = """
-                SELECT s.state_sha256, a.article_identity_sha256, a.publisher_id, a.publisher_wid,
-                       a.applicability_date, a.tokens_json
-                FROM states s, json_each(s.article_identities_json) j
-                JOIN articles a ON a.article_identity_sha256 = j.value
-                WHERE s.state_sha256 IN (SELECT value FROM json_each($states)) AND a.publisher_id = $anchor
-                ORDER BY s.state_sha256, a.article_identity_sha256
-                """;
+            command.CommandText = LuxembourgIndexQueries.AnchorArticles;
             command.Parameters.AddWithValue("$states", JsonSerializer.Serialize(stateDigests));
             command.Parameters.AddWithValue("$anchor", anchor);
             using var reader = command.ExecuteReader();
@@ -1741,13 +1728,7 @@ public sealed class LuxembourgIndexReader : IDisposable
         lock (_gate)
         {
             using var command = _connection.CreateCommand();
-            command.CommandText = """
-                SELECT a.article_identity_sha256, a.publisher_id, a.tokens_json
-                FROM states s, json_each(s.article_identities_json) j
-                JOIN articles a ON a.article_identity_sha256 = j.value
-                WHERE s.state_sha256 = $digest
-                ORDER BY a.publisher_id, a.article_identity_sha256
-                """;
+            command.CommandText = LuxembourgIndexQueries.StateArticles;
             command.Parameters.AddWithValue("$digest", stateSha256);
             using var reader = command.ExecuteReader();
             var values = new List<LuxembourgIndexStateArticle>();
@@ -1767,13 +1748,7 @@ public sealed class LuxembourgIndexReader : IDisposable
         lock (_gate)
         {
             using var command = _connection.CreateCommand();
-            command.CommandText = """
-                SELECT DISTINCT a.publisher_id
-                FROM states s, json_each(s.article_identities_json) j
-                JOIN articles a ON a.article_identity_sha256 = j.value
-                WHERE s.state_sha256 = $digest
-                ORDER BY a.publisher_id
-                """;
+            command.CommandText = LuxembourgIndexQueries.ArticleIds;
             command.Parameters.AddWithValue("$digest", stateSha256);
             using var reader = command.ExecuteReader();
             var values = new List<string>();
