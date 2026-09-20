@@ -23,6 +23,7 @@ public sealed class V3CorpusLocatorTests
         ("/api/v3/timeline", identifier => JsonSerializer.Serialize(new { operation_id = "timeline", parameters = new { identifier } })),
         ("/api/v3/article_history", identifier => JsonSerializer.Serialize(new { operation_id = "article_history", parameters = new { identifier, anchor = "art_1" } })),
         ("/api/v3/diff", identifier => JsonSerializer.Serialize(new { operation_id = "diff", parameters = new { identifier, date_from = "2024-01-01", date_to = "2025-01-01" } })),
+        ("/api/v3/changes_in_period", identifier => JsonSerializer.Serialize(new { operation_id = "changes_in_period", parameters = new { identifier, date_from = "2024-01-01", date_to = "2025-01-01" } })),
     ];
 
     [TestMethod]

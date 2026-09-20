@@ -195,6 +195,13 @@ public static class V3PlatformSchemaExporter
             ("date_from", CivilDate()),
             ("date_to", CivilDate()),
             ("language", NonBlankString())),
+        "changes_in_period" => Parameters(
+            ["date_from", "date_to"],
+            ("date_from", CivilDate()),
+            ("date_to", CivilDate()),
+            ("identifier", NonBlankString()),
+            ("language", NonBlankString()),
+            ("limit", RowLimit())),
         _ => ClosedObject(),
     };
 
@@ -232,6 +239,14 @@ public static class V3PlatformSchemaExporter
     {
         ["type"] = "string",
         ["pattern"] = "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+    };
+
+    /// <summary>How many rows a windowed answer may carry; the operation states its own ceiling.</summary>
+    private static JsonObject RowLimit() => new()
+    {
+        ["type"] = "integer",
+        ["minimum"] = 1,
+        ["maximum"] = 200,
     };
 
     private static JsonObject ClosedObject() => new()
