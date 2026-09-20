@@ -210,6 +210,22 @@ test("the pages noted beside a catch are sorted, and a name quoted mid-sentence 
   ]);
 });
 
+test("every page the build emits is one the matcher can read", async (t) => {
+  const { pageOf } = await import("../scripts/evidence-mutations.mjs");
+  const { readFile } = await import("node:fs/promises");
+  let declared;
+  try {
+    declared = JSON.parse(await readFile(new URL("../dist/pages.json", import.meta.url), "utf8")).pages;
+  } catch {
+    t.diagnostic("INCONCLUSIVE: no build in this checkout, so the page names were not read from one");
+    return;
+  }
+  for (const page of declared) {
+    assert.equal(pageOf(`  ${page} @narrow/light: the defect`), page, `as a measured combination: ${page}`);
+    assert.equal(pageOf(`  ${page}: a visible action answers 404`), page, `as a destination: ${page}`);
+  }
+});
+
 test("a run can sweep one named mutation, and a name that selects nothing is refused", async () => {
   const { mutationsToSweep, MUTATIONS } = await import("../scripts/evidence-mutations.mjs");
   assert.equal(mutationsToSweep(MUTATIONS, "").length, MUTATIONS.length);

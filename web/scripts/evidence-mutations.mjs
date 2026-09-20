@@ -768,9 +768,15 @@ export function declarationVerdict(pages, matching) {
   return { failures, notes };
 }
 
-/** The page a failure sentence is about: the one it opens with, or null when it names none. */
+/**
+ * The page a failure sentence is about: the one it opens with, or null when it names none.
+ *
+ * The character class is what the build can emit and no more: `provenance.mjs` admits
+ * `[A-Za-z0-9._:-]` in a lexId and writes `:` as `~`, so a page name holds letters, digits, dot,
+ * underscore, tilde and hyphen. A wider class would be defensive about names nothing produces.
+ */
 export function pageOf(line) {
-  return /^\s*([A-Za-z0-9._~%:@-]+\.html)(?=[\s:@])/.exec(line)?.[1] ?? null;
+  return /^\s*([A-Za-z0-9._~-]+\.html)(?=[\s:]|$)/.exec(line)?.[1] ?? null;
 }
 
 /** A run's output as lines, with carriage returns dropped so a page is read the same on any host. */
