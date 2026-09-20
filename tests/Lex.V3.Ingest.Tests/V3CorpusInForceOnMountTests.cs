@@ -134,6 +134,21 @@ public sealed class V3CorpusInForceOnMountTests
         Assert.AreEqual(asOfRefusal.HelpfulPayload.GetRawText(), named.Refusal.HelpfulPayload.GetRawText(),
             "The two operations give the same refusal payload for the same work and date.");
         Assert.AreEqual(fixture.ApplicabilityDate, named.Refusal.HelpfulPayload.GetProperty("history_begins").GetString());
+
+        // The boundary itself: on the first date the named work holds, the day the text began to
+        // apply, it answers with that state, as as_of does; only the day before refuses.
+        var namedOnFirst = await SelectionAsync(mount, fixture.ApplicabilityDate, identifier: $"/lu-legilux/{fixture.WorkKey}");
+        Assert.AreEqual(V3Verdicts.Answer, namedOnFirst.Verdict);
+        var firstRow = namedOnFirst.Result!.Value.GetProperty("states").EnumerateArray().Single();
+        Assert.AreEqual(fixture.StateSha256, firstRow.GetProperty("state").GetProperty("state_sha256").GetString());
+        Assert.AreEqual(fixture.ApplicabilityDate, firstRow.GetProperty("interval").GetProperty("from").GetString());
+        var asOfOnFirst = await PostAsync(mount, AsOfRawTarget, JsonSerializer.Serialize(new
+        {
+            operation_id = "as_of",
+            parameters = new { identifier = $"/lu-legilux/{fixture.WorkKey}", date = fixture.ApplicabilityDate },
+        }));
+        Assert.AreEqual(V3Verdicts.Answer,
+            V3EnvelopeJson.ParseAndVerify(ResponseBytes(asOfOnFirst), V3OperationRegistry.Reviewed).Verdict);
     }
 
     [TestMethod]
