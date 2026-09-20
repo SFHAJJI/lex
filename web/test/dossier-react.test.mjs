@@ -187,3 +187,36 @@ test('an unstated document type is declared by both renderers, and omission refu
     assert.throws(() => renderDossier(broken), /names the publisher document type it was given/);
   }
 });
+
+test('a forgotten field is refused by both renderers even when the awaiting string is there', () => {
+  // The writer seat's F1. Every other refused case in these files also lacks the awaiting string,
+  // so a rule that accepted a missing key whenever an awaiting string sat beside it passed all of
+  // them. The `=== null` that separates "forgotten" from "states none" was held by a comment.
+  const withAwaiting = { ...GOOD, status: { awaiting: 'the publisher states it as inForceStatus' } };
+  assert.throws(() => react(withAwaiting), /a strip with no flag is a caption about nothing/);
+  assert.throws(() => renderDossier(withAwaiting), /a strip with no flag is a caption about nothing/);
+
+  const { document_type: _absent, ...noType } = IDENTITY;
+  const typeMissing = {
+    ...GOOD,
+    identity: { ...noType, document_type_awaiting: 'the publisher states it as rdf:type' },
+  };
+  assert.throws(() => react(typeMissing), /names the publisher document type it was given/);
+  assert.throws(() => renderDossier(typeMissing), /names the publisher document type it was given/);
+});
+
+test('the two absence strings reach the page as text in both renderers', () => {
+  // The writer seat's F2: both new fields are values the platform sends, and a mutant printing
+  // either unescaped survived. React escapes by construction; the string renderer does not, and
+  // the point of asserting both is that the pair must not diverge on it.
+  const hostile = '<img src=x onerror=alert(1)> & more';
+  for (const props of [
+    { ...GOOD, status: { binding_status: null, awaiting: hostile } },
+    { ...GOOD, identity: { ...IDENTITY, document_type: null, document_type_awaiting: hostile } },
+  ]) {
+    for (const [name, html] of [['react', react(props)], ['string', renderDossier(props)]]) {
+      assert.equal(html.includes('<img'), false, `${name} let an absence string through as markup`);
+      assert.equal(html.includes('&lt;img'), true, `${name} did not render the text`);
+    }
+  }
+});

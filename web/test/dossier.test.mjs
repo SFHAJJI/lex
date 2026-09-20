@@ -353,4 +353,44 @@ test('values are escaped rather than trusted', () => {
   assert.ok(!html.includes('<img'));
   assert.ok(html.includes('&lt;img'));
   assert.ok(html.includes('&amp; more'));
+
+  // The two absence strings are values the platform sends like any other, and they were the two
+  // this test did not reach: a mutant printing either unescaped survived the whole file.
+  const hostile = '<img src=x onerror=alert(1)> & more';
+  for (const props of [
+    { ...GOOD, status: { binding_status: null, awaiting: hostile } },
+    {
+      ...GOOD,
+      identity: { ...IDENTITY, document_type: null, document_type_awaiting: hostile },
+    },
+  ]) {
+    const rendered = renderDossier(props);
+    assert.ok(!rendered.includes('<img'), 'an absence string reached the page as markup');
+    assert.ok(rendered.includes('&lt;img'));
+    assert.ok(rendered.includes('&amp; more'));
+  }
+});
+
+test('a forgotten field is refused even when the awaiting string is there', () => {
+  // The one input that separates "the producer forgot this" from "the publisher states none".
+  // Every other refused case in this file -- undefined, '', {}, 7 -- ALSO lacks the awaiting
+  // string, so a rule that accepted a missing key whenever an awaiting string was present passed
+  // the whole file. The writer seat proved that with two mutants that survived. The distinction
+  // was a sentence in a comment; this is the sentence held.
+  assert.throws(
+    () => renderDossier({ ...GOOD, status: { awaiting: 'the publisher states it as inForceStatus' } }),
+    /a strip with no flag is a caption about nothing/,
+    'a missing flag key passed because an awaiting string was beside it',
+  );
+
+  const { document_type: _absent, ...noType } = IDENTITY;
+  assert.throws(
+    () =>
+      renderDossier({
+        ...GOOD,
+        identity: { ...noType, document_type_awaiting: 'the publisher states it as rdf:type' },
+      }),
+    /names the publisher document type it was given/,
+    'a missing type key passed because an awaiting string was beside it',
+  );
 });

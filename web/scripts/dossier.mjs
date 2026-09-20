@@ -142,11 +142,18 @@ function statusStripOf(status) {
   // So an unstated flag prints no chip, and the caption goes with it: a caption with no chip is a
   // caption about nothing, which is what the old error said. It was right about the shape and wrong
   // about the remedy.
+  //
+  // What the page can say is narrower than what this comment is tempted to say, and the writer seat
+  // caught me at it. The strip prints "not yet ingested" whichever way the `null` came about: this
+  // surface cannot distinguish a publisher who states no flag from a corpus that has not taken one,
+  // and it must not appear to. The `awaiting` text is the only thing that tells a reader which,
+  // which is why it is required rather than optional.
   if (status?.binding_status === null) {
     if (typeof status.awaiting !== 'string' || status.awaiting.trim().length === 0) {
       throw new Error(
         'the status strip has no flag and does not say what it is waiting for; naming the exact ' +
-          'source is what separates a gap in this corpus from a publisher who states no flag',
+          'source is what tells a reader whether the publisher states none or this corpus has ' +
+          'not taken it; the strip cannot tell them apart and must not appear to',
       );
     }
     return { unstated: true, awaiting: status.awaiting };
