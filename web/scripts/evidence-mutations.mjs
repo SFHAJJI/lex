@@ -723,6 +723,23 @@ async function replaceOnce(file, pattern, replacement) {
 const FULL = process.env.LEX_EVIDENCE_SCOPE === "full";
 
 /**
+ * The mutations this run sweeps: all of them, or the ones whose name contains `only`.
+ *
+ * A declaration is judged by a full run, and a full run of all 45 is a hundred minutes. One
+ * mutation over every page is three, which is what a new mutation or a new page costs to prove.
+ * A selection that names nothing is refused rather than sweeping nothing and reporting it clean.
+ */
+export function mutationsToSweep(mutations, only) {
+  const wanted = (only ?? "").trim();
+  if (wanted === "") return mutations;
+  const chosen = mutations.filter((mutation) => mutation.name.includes(wanted));
+  if (chosen.length === 0) {
+    throw new Error(`no mutation's name contains ${JSON.stringify(wanted)}; this run would sweep nothing`);
+  }
+  return chosen;
+}
+
+/**
  * Whether a mutation's declaration matches where its defect was actually caught.
  *
  * Judged only on a full run, because only a full run has seen every page. A declared page that
@@ -738,17 +755,26 @@ const FULL = process.env.LEX_EVIDENCE_SCOPE === "full";
  */
 export function declarationVerdict(pages, matching) {
   if (pages === "all") return { failures: [], notes: [] };
-  const named = (page) => matching.filter((line) => line.includes(page));
+  // One rule, used for both halves. A failure sentence opens with the page it is about, so the
+  // page is read from the start of the line and nowhere else. Asking whether the name appears
+  // anywhere in the line is a different question with a different answer: a sentence about one
+  // page can quote another page's name in a path, and a declared page that caught nothing would
+  // pass on a sentence that was never about it.
+  const about = matching.map(pageOf).filter((page) => page !== null);
   const failures = pages
-    .filter((page) => named(page).length === 0)
+    .filter((page) => !about.includes(page))
     .map((page) => `declares ${page} and no failure naming ${page} caught it`);
-  const seen = new Set();
-  for (const line of matching) {
-    const page = /^\s*([A-Za-z0-9._~%:-]+\.html)\b/.exec(line)?.[1];
-    if (page && !pages.includes(page)) seen.add(page);
-  }
-  return { failures, notes: [...seen].sort() };
+  const notes = [...new Set(about.filter((page) => !pages.includes(page)))].sort();
+  return { failures, notes };
 }
+
+/** The page a failure sentence is about: the one it opens with, or null when it names none. */
+export function pageOf(line) {
+  return /^\s*([A-Za-z0-9._~%:@-]+\.html)(?=[\s:@])/.exec(line)?.[1] ?? null;
+}
+
+/** A run's output as lines, with carriage returns dropped so a page is read the same on any host. */
+const lineOf = (output) => output.split("\n").map((line) => line.replace(/\r$/, ""));
 
 function run(root, pages) {
   const scope = FULL || pages === "all" ? null : pages.join(",");
@@ -777,72 +803,107 @@ function run(root, pages) {
 // than from the live dist: a build in the same checkout during the sweep (`npm run evidence`
 // rebuilds dist) leaked a hand-applied stylesheet into later mutations and reported them caught for
 // the wrong reason.
-async function sweep() {
-const base = await mkdtemp(join(tmpdir(), "lex-evidence-base-"));
-await cp(join(process.cwd(), "dist"), base, { recursive: true });
-
-let failures = 0;
-for (const mutation of MUTATIONS) {
-  const root = await mkdtemp(join(tmpdir(), "lex-evidence-"));
-  try {
-    await cp(base, root, { recursive: true });
-    await mutation.apply(root);
-    if (mutation.pages !== "all" && !Array.isArray(mutation.pages)) {
-      throw new Error(
-        `${mutation.name} declares no pages; every mutation says where its defect can be seen, ` +
-          'or "all" when it can be seen only across pages',
-      );
-    }
-    const { code, output } = await run(root, mutation.pages);
-    if (code === 0) {
-      console.log(`STILL GREEN  ${mutation.name}`);
-      failures += 1;
-    } else if (!mutation.expect.test(output)) {
-      console.log(`WRONG REASON ${mutation.name}`);
-      // Every failure line, not the first four, so a wrong reason can be told from a flake.
-      const lines = output.split("\n").filter((l) => /^\s+\S.*: /.test(l));
-      // A run that ended without judging anything is not a wrong reason, and it has no failure
-      // lines to print: its last words are what names the crash.
-      console.log(
-        lines.length > 0
-          ? lines.join("\n")
-          : `             it judged nothing and ended ${code}; its last output:\n` +
-            output.split("\n").filter((l) => l.trim() !== "").slice(-12).map((l) => `             ${l}`).join("\n"),
-      );
-      failures += 1;
-    } else {
-      const matching = output.split("\n").filter((l) => mutation.expect.test(l));
-      const line = matching[0] ?? "";
-      // Only the full run can judge a declaration, and only the full run has the evidence: a
-      // scoped run measures the declared pages and nothing else, so every sentence it sees comes
-      // from one of them by construction. A wrong declaration is still caught there, as a
-      // mutation the scoped run does not catch at all.
-      if (FULL) {
-        const verdict = declarationVerdict(mutation.pages, matching);
-        for (const note of verdict.notes) console.log(`             also on ${note}`);
-        if (verdict.failures.length > 0) {
-          console.log(`WRONG PAGE   ${mutation.name}`);
-          for (const failure of verdict.failures) console.log(`             ${failure}`);
-          failures += 1;
-          continue;
-        }
-      }
-      console.log(`caught       ${mutation.name}`);
-      console.log(`             ${line.trim().slice(0, 140)}`);
-    }
-  } finally {
-    await rm(root, { recursive: true, force: true });
+/**
+ * What the sweep says about one mutation, and whether it counts against the head.
+ *
+ * Pure, so the node tests hold every line the sweep prints and every verdict it counts. The
+ * browser run's exit code and output go in; the report and the verdict come out. The sweep itself
+ * only prints what this returns and counts what it says, and `sweepWith` below is driven by the
+ * tests with a fake run, so a call site that stops asking, or stops counting, fails there.
+ *
+ * @param {object} mutation  the declared mutation
+ * @param {{code: number, output: string}} result  what the browser evidence run said
+ * @param {boolean} full  whether every page was measured, which is when a declaration can be judged
+ */
+export function judgeMutation(mutation, result, full) {
+  const { code, output } = result;
+  if (mutation.pages !== "all" && !Array.isArray(mutation.pages)) {
+    throw new Error(
+      `${mutation.name} declares no pages; every mutation says where its defect can be seen, ` +
+        'or "all" when it can be seen only across pages',
+    );
   }
+  if (code === 0) {
+    return { failed: true, report: [`STILL GREEN  ${mutation.name}`] };
+  }
+  if (!mutation.expect.test(output)) {
+    // Every failure line, not the first four, so a wrong reason can be told from a flake.
+    const lines = lineOf(output).filter((l) => /^\s+\S.*: /.test(l));
+    // A run that ended without judging anything is not a wrong reason, and it has no failure
+    // lines to print: its last words are what names the crash.
+    const body = lines.length > 0
+      ? lines.join("\n")
+      : `             it judged nothing and ended ${code}; its last output:\n` +
+        lineOf(output).filter((l) => l.trim() !== "").slice(-12).map((l) => `             ${l}`).join("\n");
+    return { failed: true, report: [`WRONG REASON ${mutation.name}`, body] };
+  }
+  const matching = lineOf(output).filter((l) => mutation.expect.test(l));
+  const line = matching[0] ?? "";
+  // Only a full run can judge a declaration, and only a full run has the evidence: a scoped run
+  // measures the declared pages and nothing else, so every sentence it sees comes from one of
+  // them by construction. A wrong declaration still fails there, as a mutation nobody caught.
+  if (full) {
+    const verdict = declarationVerdict(mutation.pages, matching);
+    const notes = verdict.notes.map((note) => `             also on ${note}`);
+    if (verdict.failures.length > 0) {
+      return {
+        failed: true,
+        report: [...notes, `WRONG PAGE   ${mutation.name}`, ...verdict.failures.map((f) => `             ${f}`)],
+      };
+    }
+    return { failed: false, report: [...notes, `caught       ${mutation.name}`, `             ${line.trim().slice(0, 140)}`] };
+  }
+  return { failed: false, report: [`caught       ${mutation.name}`, `             ${line.trim().slice(0, 140)}`] };
 }
 
-await rm(base, { recursive: true, force: true });
-
-if (failures > 0) {
-  console.error(`\n${failures} induced mutation(s) were not caught.`);
-  process.exit(1);
+/**
+ * The sweep itself, with what it talks to passed in: the copy it mutates, the browser run and the
+ * printing. Production passes the real three; the tests pass fakes and no browser starts, which is
+ * how the counting and the reporting are held rather than asserted about a function nobody calls.
+ */
+export async function sweepWith({ mutations, prepare, run, full = FULL, log = console.log }) {
+  let failures = 0;
+  for (const mutation of mutations) {
+    const root = await prepare();
+    try {
+      await mutation.apply(root);
+      const outcome = judgeMutation(mutation, await run(root, mutation.pages, mutation.name), full);
+      for (const line of outcome.report) log(line);
+      if (outcome.failed) failures += 1;
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  }
+  return failures;
 }
-const over = FULL ? "over every page" : "over the pages each declares";
-console.log(`\nall ${MUTATIONS.length} induced mutations were caught ${over}.`);
+
+async function sweep() {
+  // One private copy of dist, taken before the first mutation. Every mutation starts from it
+  // rather than from the live dist: a build in the same checkout during the sweep (`npm run
+  // evidence` rebuilds dist) leaked a hand-applied stylesheet into later mutations and reported
+  // them caught for the wrong reason.
+  const base = await mkdtemp(join(tmpdir(), "lex-evidence-base-"));
+  await cp(join(process.cwd(), "dist"), base, { recursive: true });
+
+  const failures = await sweepWith({
+    mutations: MUTATIONS,
+    prepare: async () => {
+      const root = await mkdtemp(join(tmpdir(), "lex-evidence-"));
+      await cp(base, root, { recursive: true });
+      return root;
+    },
+    run,
+  });
+
+  await rm(base, { recursive: true, force: true });
+
+  if (failures > 0) {
+    console.error(`\n${failures} induced mutation(s) were not caught.`);
+    process.exit(1);
+  }
+  const over = FULL ? "over every page" : "over the pages each declares";
+  const selection = swept.length === MUTATIONS.length ? "" : ` (${swept.length} of ${MUTATIONS.length} selected)`;
+  console.log(`\nall ${swept.length} induced mutations were caught ${over}${selection}.`);
 }
 
 // Only when invoked directly, so the list can be imported and its declarations proven without

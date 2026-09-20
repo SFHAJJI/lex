@@ -105,6 +105,121 @@ test("a page that caught it and was not declared is reported, not failed", async
   });
 });
 
+test("a page is read from the start of a sentence, not from anywhere in it", async () => {
+  const { pageOf, declarationVerdict } = await import("../scripts/evidence-mutations.mjs");
+  assert.equal(pageOf("  search-react.html @narrow/light: ArrowDown moved focus nowhere"), "search-react.html");
+  assert.equal(pageOf("  trust-surface.html: /no-such-screen/x answers 404"), "trust-surface.html");
+  assert.equal(
+    pageOf("  provenance-preview-synthetic~synthetic-preview-work~2001-01-01.html @tablet/dark: 0 h1 elements"),
+    "provenance-preview-synthetic~synthetic-preview-work~2001-01-01.html",
+  );
+  assert.equal(pageOf("  @narrow: 3 shells but 1 distinct main line-height(s)"), null);
+  assert.equal(pageOf("all 45 induced mutations were caught."), null);
+  // The hazard: a sentence about one page quoting another page's name in a path. Asking whether
+  // the name appears anywhere in the line would call this a catch for reading.html.
+  const crafted = ["  trust-surface.html: /no-such-screen/reading.html answers 404; a visible action"];
+  const verdict = declarationVerdict(["reading.html"], crafted);
+  assert.deepEqual(verdict.failures, ["declares reading.html and no failure naming reading.html caught it"]);
+  assert.deepEqual(verdict.notes, ["trust-surface.html"]);
+});
+
+test("the sweep asks for the verdict and counts it: a dead or silent call site fails here", async () => {
+  const { sweepWith, judgeMutation } = await import("../scripts/evidence-mutations.mjs");
+  const { mkdtemp, rm } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const prepare = () => mkdtemp(join(tmpdir(), "lex-sweep-test-"));
+  const mutation = (name, pages) => ({ name, pages, expect: /the defect/, apply: async () => {} });
+  const caughtOn = (page) => ({ code: 1, output: `  ${page} @narrow/light: the defect is here\n` });
+
+  // One caught, one caught on a page it did not declare, one green, one for another reason.
+  // What the browser said, per mutation, so each branch is driven on purpose and not by order.
+  const said = {
+    "caught here": caughtOn("search-react.html"),
+    "declared elsewhere": caughtOn("search-react.html"),
+    "never caught": { code: 0, output: "all 495 page/viewport combinations clean\n" },
+    "another reason": { code: 1, output: "  search-react.html @narrow/light: something else entirely\n" },
+  };
+  const printed = [];
+  const failures = await sweepWith({
+    mutations: [
+      mutation("caught here", ["search-react.html"]),
+      mutation("declared elsewhere", ["compare.html"]),
+      mutation("never caught", ["search-react.html"]),
+      mutation("another reason", ["search-react.html"]),
+    ],
+    prepare,
+    run: async (root, pages, name) => said[name],
+    full: true,
+    log: (line) => printed.push(line),
+  });
+  // Three of the four count: the wrong declaration, the one nobody caught, and the wrong reason.
+  assert.equal(failures, 3, printed.join("\n"));
+  assert.ok(printed.some((l) => l.startsWith("caught       caught here")), printed.join("\n"));
+  assert.ok(printed.some((l) => l.startsWith("WRONG PAGE   declared elsewhere")), printed.join("\n"));
+  assert.ok(printed.some((l) => l.startsWith("STILL GREEN  never caught")), printed.join("\n"));
+  assert.ok(printed.some((l) => l.startsWith("WRONG REASON another reason")), printed.join("\n"));
+
+  // Scoped, the same wrong declaration is not judged: a scoped run measures only declared pages.
+  const quiet = [];
+  const scoped = await sweepWith({
+    mutations: [mutation("declared elsewhere", ["compare.html"])],
+    prepare,
+    run: async () => caughtOn("search-react.html"),
+    full: false,
+    log: (line) => quiet.push(line),
+  });
+  assert.equal(scoped, 0, quiet.join("\n"));
+  assert.ok(quiet.some((l) => l.startsWith("caught       ")), quiet.join("\n"));
+
+  // A mutation that declares nothing is refused before any browser is asked to run.
+  await assert.rejects(
+    () => sweepWith({
+      mutations: [{ name: "undeclared", expect: /x/, apply: async () => {} }],
+      prepare,
+      run: async () => ({ code: 1, output: "x" }),
+      full: true,
+      log: () => {},
+    }),
+    /declares no pages/,
+  );
+
+  // And the verdict itself, for the two counting branches the sweep reports.
+  assert.equal(judgeMutation(mutation("m", ["a.html"]), { code: 0, output: "" }, true).failed, true);
+  assert.equal(
+    judgeMutation(mutation("m", ["a.html"]), { code: 1, output: "  a.html @narrow: the defect\n" }, true).failed,
+    false,
+  );
+});
+
+test("the pages noted beside a catch are sorted, and a name quoted mid-sentence is not one", async () => {
+  const { declarationVerdict, pageOf } = await import("../scripts/evidence-mutations.mjs");
+  // Two undeclared pages, met in reverse order: the note reads the same either way.
+  const caught = [
+    "  trust-surface.html @narrow/light: the defect",
+    "  reading.html @narrow/light: the defect",
+  ];
+  assert.deepEqual(declarationVerdict(["search-react.html"], caught).notes, [
+    "reading.html",
+    "trust-surface.html",
+  ]);
+  // The anchor itself: a sentence about no page that quotes one is about no page.
+  assert.equal(pageOf("  @narrow: three shells, and the link to reading.html is fine"), null);
+  assert.deepEqual(declarationVerdict(["reading.html"], ["  @narrow: ... reading.html ..."]).failures, [
+    "declares reading.html and no failure naming reading.html caught it",
+  ]);
+});
+
+test("a run can sweep one named mutation, and a name that selects nothing is refused", async () => {
+  const { mutationsToSweep, MUTATIONS } = await import("../scripts/evidence-mutations.mjs");
+  assert.equal(mutationsToSweep(MUTATIONS, "").length, MUTATIONS.length);
+  assert.equal(mutationsToSweep(MUTATIONS, undefined).length, MUTATIONS.length);
+  const home = mutationsToSweep(MUTATIONS, "the Home key");
+  assert.equal(home.length, 1);
+  assert.match(home[0].name, /^the Home key/);
+  assert.throws(() => mutationsToSweep(MUTATIONS, "no such mutation"), /would sweep nothing/);
+});
+
 test("the one mutation whose defect is only visible across pages declares all", async () => {
   const { MUTATIONS } = await import("../scripts/evidence-mutations.mjs");
   const densities = MUTATIONS.find((mutation) => mutation.name.includes("shell densities"));
