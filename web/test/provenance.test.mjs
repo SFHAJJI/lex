@@ -555,37 +555,64 @@ async function wireTokens(file, enumName) {
 }
 
 /**
- * The captured answer with two of everything, and NO VALUE SHARED BETWEEN THE TWO.
+ * The captured answer with two of everything, and no value shared between the two except the one
+ * that is legitimately shared.
  *
- * The first version of this gave both states the same sources list and the same profiles, and made
- * the two sources differ only in their object reference. So a page that showed one element's value
- * against another element -- every state showing the FIRST state's digest, every source the first
- * source's gaps -- could not be told from a correct one. Dropping the second element died; mixing
- * them up did not. Every field of every element differs here, which is what lets the assertions
- * below read a whole row in order instead of asking whether a value appears somewhere.
+ * The first version gave both states the same sources list and the same profiles, and the two
+ * sources differed only in their object reference, so a page showing one element's value against
+ * another could not be told from a correct one. The second version said "every field of every
+ * element differs here" AND LEFT FIVE FIELDS CLONED -- the permalink, the stable coordinate, the
+ * expression and legal-resource IRIs, and each source's outcome and rights token. A comment
+ * claiming more than its fixture is the error the answer census was written about, and this is the
+ * third time today I have written one.
+ *
+ * So: every field below differs per element, and the one exception is named. `publisher_work_iri`
+ * is the SAME in both states on purpose -- two states of one work share one work IRI, and making
+ * them differ would be teaching a shape the platform does not send.
+ *
+ * The permalink is the field that mattered most: it is the link a reader follows from this page to
+ * the state it describes, and a page showing state 1's permalink against state 2 sends them to the
+ * wrong text.
  */
 function withTwoOfEach(answer) {
   const state = answer.states[0];
   const source = state.sources[0];
   const nth = (digest, n) => digest.slice(0, 60) + String(n).padStart(4, "0");
+  // Real wire tokens, two of each, so the fixture differs per element without teaching a vocabulary
+  // the publisher does not use.
+  const OUTCOMES = ["acquired", "refused", "unavailable", "rights_withheld"];
+  const RIGHTS = ["agreed_same_run_cc_by", "non_admitting_licence_scl", "stale", "missing_value"];
   const sourceAt = (n) => ({
     ...source,
     object_ref_sha256: nth(source.object_ref_sha256, n),
     body_sha256: nth(source.body_sha256, n + 10),
     body_receipt_sha256: nth(source.body_receipt_sha256, n + 20),
     body_byte_length: source.body_byte_length + n,
+    outcome: OUTCOMES[n % OUTCOMES.length],
+    rights_disposition: RIGHTS[n % RIGHTS.length],
     gaps: [`gap_${n}_first`, `gap_${n}_second`],
   });
-  const stateAt = (n, language) => ({
-    ...state,
-    language,
-    applicability_date: `200${n}-01-0${n}`,
-    state_sha256: nth(state.state_sha256, n),
-    article_identities_sha256: nth(state.article_identities_sha256, n + 30),
-    articles: state.articles + n,
-    rule_profile_sha256s: [nth(state.rule_profile_sha256s[0], n + 40), nth(state.rule_profile_sha256s[0], n + 50)],
-    sources: [sourceAt(n * 2 + 1), sourceAt(n * 2 + 2)],
-  });
+  const stateAt = (n, language) => {
+    const date = `200${n}-01-0${n}`;
+    const digest = nth(state.state_sha256, n);
+    return {
+      ...state,
+      language,
+      applicability_date: date,
+      state_sha256: digest,
+      permalink: `/lu-legilux/a-work/${date}--${digest}`,
+      stable_coordinate: `/lu-legilux/a-work/${date}`,
+      expression_iri: `${state.expression_iri}/${date}/${language}`,
+      publisher_legal_resource_iri: `${state.publisher_work_iri}/${date}`,
+      article_identities_sha256: nth(state.article_identities_sha256, n + 30),
+      articles: state.articles + n,
+      rule_profile_sha256s: [
+        nth(state.rule_profile_sha256s[0], n + 40),
+        nth(state.rule_profile_sha256s[0], n + 50),
+      ],
+      sources: [sourceAt(n * 2 + 1), sourceAt(n * 2 + 2)],
+    };
+  };
   return {
     ...answer,
     requested_language: null,
@@ -634,6 +661,28 @@ test("a list with two things in it shows both, in both renderers", async () => {
       joined((one) => one.rule_profile_sha256s.join(" ")),
       `${renderer}: a rule profile belongs to the wrong state`,
     );
+    // The permalink above all: it is the link a reader follows from this page to the state it
+    // describes, and it was one of five fields the fixture left cloned between the two states, so
+    // showing one state's link against the other was indistinguishable from correct.
+    for (const [label, pick] of [
+      ["permalink", (one) => one.permalink],
+      ["stable coordinate", (one) => one.stable_coordinate],
+      ["expression", (one) => one.expression_iri],
+      ["publisher legal resource", (one) => one.publisher_legal_resource_iri],
+    ]) {
+      assert.equal(
+        shown.get(label),
+        joined(pick),
+        `${renderer}: the "${label}" rows are not each state's own, in order`,
+      );
+    }
+    // And the one field that is legitimately the same in both: two states of one work share one
+    // work IRI, so this asserts sameness rather than difference, and says which it is asserting.
+    assert.equal(
+      shown.get("publisher work"),
+      joined((one) => one.publisher_work_iri),
+      `${renderer}: the states of one work do not share its work IRI`,
+    );
 
     // Four sources across the two states, each row in encounter order.
     const sources = [...first.sources, ...second.sources];
@@ -642,6 +691,8 @@ test("a list with two things in it shows both, in both renderers", async () => {
       ["body digest", (one) => one.body_sha256],
       ["body receipt", (one) => one.body_receipt_sha256],
       ["body bytes", (one) => String(one.body_byte_length)],
+      ["outcome", (one) => one.outcome],
+      ["rights disposition", (one) => one.rights_disposition],
       ["gaps recorded", (one) => one.gaps.join(" ")],
     ]) {
       assert.equal(
