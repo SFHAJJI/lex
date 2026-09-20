@@ -1277,6 +1277,22 @@ public sealed class LuxembourgIndexReader : IDisposable
     }
 
     /// <summary>
+    /// The languages the capability manifest measured searchable article text for, in ordinal order:
+    /// the languages a search can be asked in, as distinct from the languages the index holds states
+    /// for. Empty when none was measured.
+    /// </summary>
+    public IReadOnlyList<string> SearchableLanguages() =>
+        Array.AsReadOnly(_capabilityManifest.Cells
+            .Where(static cell =>
+                string.Equals(cell.Operation, "search", StringComparison.Ordinal) &&
+                string.Equals(cell.Column, "articles", StringComparison.Ordinal) &&
+                string.Equals(cell.Field, "searchable_text", StringComparison.Ordinal))
+            .Select(static cell => cell.Language)
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToArray());
+
+    /// <summary>
     /// The articles of held states, in one language, whose searchable text contains every one of
     /// <paramref name="needles"/> as a byte-exact substring, each paired with every state that holds
     /// it, in work key, publisher date, article identity and state digest order. With a work key, only
@@ -1304,12 +1320,20 @@ public sealed class LuxembourgIndexReader : IDisposable
             return null;
         }
 
-        lock (_gate)
+        // The scan has its own read-only connection on the same immutable file and does not take the
+        // reader's gate. A search reads every article of a language, and holding the one shared
+        // connection for that long would stall every other operation on the mount behind it, which a
+        // one-character query would be the cheapest way to do.
         {
-            using var command = _connection.CreateCommand();
+            using var connection = LuxembourgIndexBuilder.Open(_path, SqliteOpenMode.ReadOnly);
+            using var command = connection.CreateCommand();
             command.CommandText =
                 "SELECT s.work_key, s.applicability_date, s.state_sha256, a.article_identity_sha256, a.publisher_id, a.publisher_wid " +
-                "FROM articles a JOIN states s ON s.language=a.language AND instr(s.article_identities_json, a.article_identity_sha256)>0 " +
+                // The state of an article is found by exact element of the state's identity list, as the
+                // sibling queries do, and not by a substring of the JSON text: the join no longer rests on
+                // every value in the column being a 64-character digest (which OpenAndVerify does require).
+                "FROM states s, json_each(s.article_identities_json) j " +
+                "JOIN articles a ON a.article_identity_sha256 = j.value AND a.language = s.language " +
                 "WHERE a.language=$language" +
                 string.Concat(needles.Select(static (_, index) => $" AND instr(a.searchable_text,$needle{index})>0")) +
                 (workKey is null ? string.Empty : " AND s.work_key=$work") +
@@ -1661,6 +1685,13 @@ public sealed class LuxembourgIndexReader : IDisposable
         }
     }
 
+    /// <remarks>
+    /// <b>Not what the API serves.</b> This is the period-scoped lookup that gates on the capability
+    /// manifest per date range and returns article identities only; nothing in <c>src</c> calls it, and
+    /// it is kept for the capability-gate tests that pin <c>filter_not_supported_by_index</c>. The
+    /// <c>search</c> operation reads <see cref="SearchStateArticles"/>, which gates on the language
+    /// having any measured searchable text and returns each hit with the state that holds it.
+    /// </remarks>
     public LuxembourgIndexSearchResult Search(
         string language,
         DateOnly from,

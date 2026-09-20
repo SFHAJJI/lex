@@ -1,11 +1,14 @@
 using System.Globalization;
+using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using Lex.V3.Api;
 using Lex.V3.Contracts;
 using Lex.V3.Contracts.Platform;
+using Lex.V3.Ingest.Luxembourg;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
+using Microsoft.Data.Sqlite;
 using static Lex.V3.Ingest.Tests.V3CorpusResolveMountTests;
 
 namespace Lex.V3.Ingest.Tests;
@@ -114,8 +117,14 @@ public sealed class V3CorpusSearchMountTests
         Assert.IsFalse(body.GetRawText().Contains(BothLanes, StringComparison.Ordinal), "No article text is served.");
         CollectionAssert.AreEqual(new[] { "garantie", "locative" }, Strings(body.GetProperty("terms")));
 
+        // The echoes a caller checks its own request against.
+        Assert.AreEqual(Phrase, body.GetProperty("requested_query").GetString());
+        Assert.AreEqual("fra", body.GetProperty("requested_language").GetString());
+        Assert.AreEqual(JsonValueKind.Null, body.GetProperty("requested_after").ValueKind);
+
         var population = body.GetProperty("population");
         Assert.IsTrue(body.GetProperty("searchable_text_held_for_language").GetBoolean());
+        CollectionAssert.AreEqual(new[] { "fra" }, Strings(body.GetProperty("searchable_languages")));
         Assert.AreEqual(1, population.GetProperty("strict_hits").GetInt32());
         Assert.AreEqual(1, population.GetProperty("relaxed_hits").GetInt32());
         Assert.AreEqual(2, population.GetProperty("distinct_publisher_articles").GetInt32());
@@ -243,6 +252,52 @@ public sealed class V3CorpusSearchMountTests
     }
 
     [TestMethod]
+    public async Task WithAWorkNamedTheTitleLadderIsNotRunAndNoOtherWorksCardSitsAboveItsHits()
+    {
+        var fixture = await MountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        await fixture.AddTwoWorkTitlesAsync();
+        // The second work's exact title, written into an article of the first: the ordinary search of a
+        // lawyer looking for where one law is cited inside another.
+        var otherTitle = fixture.WorkTitle + " alpha";
+        await SetTextsAsync(fixture, fixture.ExpressionIri, "Voir " + otherTitle + " a l'article 3.", Neither, Neither);
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+        var identifier = $"/lu-legilux/{fixture.WorkKey}";
+
+        // Without a work named the ladder resolves the title, and the card is the other work's.
+        var open = (await SearchAsync(mount, otherTitle)).Result!.Value.GetProperty("work_resolution");
+        Assert.AreEqual("one_work", open.GetProperty("outcome").GetString());
+        Assert.AreNotEqual(fixture.PublisherWid, open.GetProperty("work").GetProperty("work_identifier").GetString());
+
+        // With the first work named, the same query is a search inside it: the ladder is not run, no card
+        // for the other work sits above the hits, and the hits are the named work's.
+        var named = (await SearchAsync(mount, otherTitle, identifier: identifier)).Result!.Value;
+        var resolution = named.GetProperty("work_resolution");
+        Assert.AreEqual("r1_work_discovery", resolution.GetProperty("retrieval_lane").GetString());
+        Assert.AreEqual("not_run_identifier_given", resolution.GetProperty("outcome").GetString());
+        Assert.AreEqual(JsonValueKind.Null, resolution.GetProperty("work").ValueKind);
+        Assert.AreEqual(JsonValueKind.Null, resolution.GetProperty("candidates").ValueKind);
+        var hits = named.GetProperty("hits").EnumerateArray().ToArray();
+        Assert.IsTrue(hits.Length > 0);
+        Assert.IsTrue(hits.All(hit => hit.GetProperty("work_key").GetString() == fixture.WorkKey));
+        // How a reader leaves the platform for the official document: the publisher's work IRI of the
+        // hit's state, as the index holds it, and the publisher's own work id of the article.
+        foreach (var hit in hits)
+        {
+            var workIri = PublisherWorkIriOf(fixture, hit.GetProperty("state_sha256").GetString()!);
+            Assert.IsFalse(string.IsNullOrEmpty(workIri));
+            Assert.AreEqual(workIri, hit.GetProperty("publisher_work_iri").GetString());
+            Assert.AreEqual(fixture.PublisherWid, hit.GetProperty("publisher_wid").GetString());
+        }
+
+        // A title that would be several candidates is no way around it: no candidates are listed either.
+        var plural = (await SearchAsync(mount, "Reglement sur l'epreuve", identifier: identifier)).Result!.Value.GetProperty("work_resolution");
+        Assert.AreEqual("not_run_identifier_given", plural.GetProperty("outcome").GetString());
+        Assert.AreEqual(JsonValueKind.Null, plural.GetProperty("candidates").ValueKind);
+    }
+
+    [TestMethod]
     public async Task WithoutADateEveryHeldStateIsSearchedAndTheAnswerSaysWhatAHitCounts()
     {
         var fixture = await MountedFixture.CreateAsync();
@@ -264,6 +319,8 @@ public sealed class V3CorpusSearchMountTests
         Assert.IsTrue(hits.All(hit => hit.GetProperty("publisher_id").GetString() == both));
         Assert.AreEqual(2, everyState.GetProperty("population").GetProperty("strict_hits").GetInt32());
         Assert.AreEqual(1, everyState.GetProperty("population").GetProperty("distinct_publisher_articles").GetInt32());
+        // Two dated states, one language: the searchable languages are listed once each, not once per date.
+        CollectionAssert.AreEqual(new[] { "fra" }, Strings(everyState.GetProperty("searchable_languages")));
         // Each hit's pointer names its own state, on a fixture where two states hold the same article.
         foreach (var hit in hits)
         {
@@ -456,6 +513,9 @@ public sealed class V3CorpusSearchMountTests
             var unmeasured = (await SearchAsync(mount, Phrase, language: "deu", mode: mode)).Result!.Value;
             Assert.IsFalse(unmeasured.GetProperty("searchable_text_held_for_language").GetBoolean(), $"mode {mode}");
             Assert.AreEqual(0, unmeasured.GetProperty("hits").GetArrayLength());
+            // The way out: German is held as states and is not searchable, and the answer names the
+            // language that is, so a caller who asked in German learns that French is.
+            CollectionAssert.AreEqual(new[] { "fra" }, Strings(unmeasured.GetProperty("searchable_languages")), $"mode {mode}");
         }
 
         var germanSearch = await SearchAsync(mount, Phrase, identifier: identifier, date: asked, language: "deu");
@@ -498,6 +558,7 @@ public sealed class V3CorpusSearchMountTests
         Assert.IsTrue(germanHits.All(hit => hit.GetProperty("state_sha256").GetString() == german.StateSha256));
         Assert.IsTrue(germanHits.All(hit => hit.GetProperty("language").GetString() == "deu"));
         Assert.IsTrue(germanWord.GetProperty("searchable_text_held_for_language").GetBoolean());
+        CollectionAssert.AreEqual(new[] { "deu", "fra" }, Strings(germanWord.GetProperty("searchable_languages")));
 
         var frenchOfGerman = (await SearchAsync(mount, "Mietkaution")).Result!.Value;
         Assert.AreEqual(0, frenchOfGerman.GetProperty("hits").GetArrayLength(), "A German word is in no French article.");
@@ -535,6 +596,16 @@ public sealed class V3CorpusSearchMountTests
             // The population is the scope asked for, not the page.
             Assert.AreEqual(3, page.GetProperty("population").GetProperty("strict_hits").GetInt32());
             Assert.AreEqual(3, page.GetProperty("population").GetProperty("relaxed_hits").GetInt32());
+            // The page echoes the cursor it was asked from, which is how a paging client checks its own.
+            if (after is null)
+            {
+                Assert.AreEqual(JsonValueKind.Null, page.GetProperty("requested_after").ValueKind);
+            }
+            else
+            {
+                Assert.AreEqual(after, page.GetProperty("requested_after").GetString());
+            }
+
             after = page.GetProperty("truncated").GetBoolean() ? page.GetProperty("continue_after").GetString() : null;
             Assert.AreEqual(page.GetProperty("truncated").GetBoolean(), page.GetProperty("continue_after").ValueKind == JsonValueKind.String);
         }
@@ -669,6 +740,47 @@ public sealed class V3CorpusSearchMountTests
     }
 
     [TestMethod]
+    public void ThePublishedBoundsAreTheEnforcedBounds()
+    {
+        // The request document is rendered by the exporter and the mount holds the same numbers again for a
+        // caller that reaches it without the document. Nothing but this test says they are one number: the
+        // rendered-file check ties the file to the exporter, and the exporter and the mount are separate.
+        using var document = JsonDocument.Parse(V3PlatformSchemaExporter.ExportRequestUtf8("search"));
+        var properties = document.RootElement.GetProperty("properties").GetProperty("parameters").GetProperty("properties");
+        Assert.AreEqual(V3CorpusMount.SearchMaxQueryCharacters, properties.GetProperty("query").GetProperty("maxLength").GetInt32());
+        Assert.AreEqual(1, properties.GetProperty("limit").GetProperty("minimum").GetInt32());
+        Assert.AreEqual(V3CorpusMount.SearchMaxHits, properties.GetProperty("limit").GetProperty("maximum").GetInt32());
+    }
+
+    [TestMethod]
+    public async Task AScanDoesNotHoldTheReadersGateSoOneQueryCannotStallTheMount()
+    {
+        var fixture = await MountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        await WriteTextsAsync(fixture);
+        var manifest = await File.ReadAllBytesAsync(Path.Combine(fixture.Directory, V3CorpusMount.CapabilityManifestFileName));
+        using var reader = await LuxembourgIndexReader.OpenAndVerifyFileAsync(
+            Path.Combine(fixture.Directory, V3CorpusMount.IndexFileName), manifest, CancellationToken.None);
+        var gate = typeof(LuxembourgIndexReader).GetField("_gate", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(reader)!;
+
+        Task<IReadOnlyList<LuxembourgIndexResolvedState>> control;
+        Task<IReadOnlyList<LuxembourgIndexSearchHit>?> scan;
+        lock (gate)
+        {
+            // The control: an operation that needs the gate waits for it, so this test can see a scan that holds it.
+            control = Task.Run(() => reader.ResolveWorkStates(fixture.WorkKey));
+            Assert.IsFalse(control.Wait(TimeSpan.FromMilliseconds(500)), "the control operation was not held by the gate, so this test cannot see the scan holding it");
+
+            // The scan is not held by it.
+            scan = Task.Run(() => reader.SearchStateArticles("fra", ["garantie"], null));
+            Assert.IsTrue(scan.Wait(TimeSpan.FromSeconds(15)), "a search scan waited for the reader's gate: one query could stall every other operation on the mount");
+        }
+
+        Assert.IsTrue(scan.Result!.Count > 0);
+        Assert.IsTrue(control.Wait(TimeSpan.FromSeconds(15)), "the control never completed once the gate was released");
+    }
+
+    [TestMethod]
     public async Task ABodyNamingAnotherOperationFailsTheRouteBoundSchema()
     {
         var fixture = await MountedFixture.CreateAsync();
@@ -679,6 +791,16 @@ public sealed class V3CorpusSearchMountTests
 
         AssertTransportProblem(await PostAsync(mount, AsOfRawTarget, searchBody), "request_schema_invalid", StatusCodes.Status400BadRequest);
         AssertTransportProblem(await PostAsync(mount, SearchRawTarget + "?x=1", searchBody), "unknown_route", StatusCodes.Status404NotFound);
+    }
+
+    private static string PublisherWorkIriOf(MountedFixture fixture, string stateSha256)
+    {
+        using var connection = LuxembourgIndexBuilder.Open(
+            Path.Combine(fixture.Directory, V3CorpusMount.IndexFileName), SqliteOpenMode.ReadOnly);
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT publisher_work_iri FROM states WHERE state_sha256=$state";
+        command.Parameters.AddWithValue("$state", stateSha256);
+        return (string)command.ExecuteScalar()!;
     }
 
     private static string CursorKey(JsonElement hit) =>

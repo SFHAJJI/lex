@@ -1033,8 +1033,10 @@ internal sealed class V3CorpusMount : IDisposable
 
     /// <summary>
     /// <c>search</c> for Luxembourg, the two lexical lanes the mounted index can serve, resolver first.
-    /// The query first runs through the title resolver <c>resolve</c> uses (lane R1): one work is a
-    /// card ahead of every hit, several candidates are listed and none is picked. Then the strict lane,
+    /// Unless a work is named, the query first runs through the title resolver <c>resolve</c> uses
+    /// (lane R1): one work is a card ahead of every hit, several candidates are listed and none is
+    /// picked. With a work named the resolver is not run and the answer says so
+    /// (<c>not_run_identifier_given</c>). Then the strict lane,
     /// the query as typed as a substring of an article's text, and the relaxed lane, every
     /// whitespace-separated term as a substring in any order. The lanes are sets and the relaxed set
     /// contains the strict set. With no <c>mode</c> the answer is the strict hits and then only the
@@ -1193,9 +1195,15 @@ internal sealed class V3CorpusMount : IDisposable
         }
 
         // Resolver first (lane R1): the title ladder resolve uses. A plural match lists its candidates
-        // and picks none.
-        var titles = _reader!.ResolveWorkTitle(query);
-        var titleOutcome = !titles.Available ? "no_titles_held"
+        // and picks none. With a work named the ladder is not run: discovery answers "which work do you
+        // mean", the caller has said, and a card for whatever work the query happens to be the title of
+        // would sit above hits from the work they named and be read as the work in view.
+        // Both paths above have established that a Luxembourg index is mounted; this says so to the
+        // compiler, which the unconditional call it replaces used to.
+        ArgumentNullException.ThrowIfNull(_reader);
+        var titles = identifier is null ? _reader.ResolveWorkTitle(query) : null;
+        var titleOutcome = titles is null ? "not_run_identifier_given"
+            : !titles.Available ? "no_titles_held"
             : titles.Candidates.Count == 0 ? "no_title_match"
             : titles.Candidates.Count == 1 ? "one_work"
             : "several_candidates";
@@ -1328,14 +1336,17 @@ internal sealed class V3CorpusMount : IDisposable
             hit_unit = SearchHitUnit,
             lanes = SearchLanes,
             searchable_text_held_for_language = measured,
+            // The way out when the language asked for holds no searchable text: the languages that do,
+            // as the capability manifest measured them.
+            searchable_languages = _reader.SearchableLanguages(),
             modes_held = SearchModes,
             modes_not_held = new[] { "bm25", "semantic" },
             work_resolution = new
             {
                 retrieval_lane = "r1_work_discovery",
                 outcome = titleOutcome,
-                work = titles.Candidates.Count == 1 ? Card(titles.Candidates[0]) : null,
-                candidates = titles.Candidates.Count > 1 ? titles.Candidates.Select(Card).ToArray() : null,
+                work = titles is not null && titles.Candidates.Count == 1 ? Card(titles.Candidates[0]) : null,
+                candidates = titles is not null && titles.Candidates.Count > 1 ? titles.Candidates.Select(Card).ToArray() : null,
             },
             terms,
             population = new
