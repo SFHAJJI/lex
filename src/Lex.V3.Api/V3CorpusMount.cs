@@ -726,6 +726,277 @@ internal sealed class V3CorpusMount : IDisposable
         return (rows, new { unchanged, changed, added, removed }, changed + added + removed > 0);
     }
 
+    /// <summary>The ceiling on the rows one <c>in_force_on</c> answer carries.</summary>
+    public const int InForceOnMaxRows = 200;
+
+    internal const string InForceOnCaveat =
+        "a row is the text the publisher dates as applicable on the requested date; nothing is said about " +
+        "legal status, repeal or commencement";
+
+    /// <summary>
+    /// R6 <c>in_force_on</c> for Luxembourg: <c>as_of</c> across the mounted works. For every work
+    /// and language with a publisher-dated state at or before the requested date, the state on the
+    /// greatest such date, selected by <c>SelectAtDate</c>, the one rule <c>as_of</c>, <c>timeline</c>
+    /// and <c>diff</c> follow. Rows are in work key and language order and name their state compactly,
+    /// with <c>resolve</c> and its hash-pinned permalink for the state in full.
+    /// <para>
+    /// The name says more than the index can. The mounted index holds publisher applicability dates
+    /// and nothing about repeal, <c>dateNoLongerInForce</c> or entry into force, so a repealed work
+    /// with no later consolidated state still has an applicable state on every later date. The
+    /// operation therefore serves no status, and no served string speaks of legal force except the
+    /// operation's own name where the contract fixes it: the operation id, the route, and the mode
+    /// tag <c>r6_in_force_on</c> that a <c>retrieval_mode_unavailable</c> refusal echoes, which
+    /// mirrors the id as every R6 mode tag does. Every answer carries the fixed caveat and a
+    /// <c>derivation</c> block naming the rule, the basis "versioned works only", what bounds a row's
+    /// interval (the publisher's next dated state in that language, or nothing; no end is invented)
+    /// and what was not consulted.
+    /// </para>
+    /// <para>
+    /// A work and language with several states on the selected date is a row that says
+    /// <c>ambiguous_version</c> with every candidate and names none; one ambiguous work must not hide
+    /// every other, as in <c>changes_in_period</c>; such a row offers no <c>resolve</c>, since there
+    /// is no one state to point at. Without a work named, a date before everything held is an answer
+    /// with no rows and a population that says so, because "nothing held" answers a question about the
+    /// whole index. With a work named the question is <c>as_of</c>'s, what applied to one work on
+    /// one date, and the two must not disagree about whether that has an answer: a date before the
+    /// work's history is <c>as_of</c>'s <c>no_version_for_date</c>, and several states on the
+    /// selected date in any served language is <c>as_of</c>'s <c>ambiguous_version</c>, both through
+    /// the shared builders. The per-row reason is for the question about many works only. Rows are bounded and the bound is said: they are cut only
+    /// between works, <c>continue_after</c> is the last work key served and is the next request's
+    /// <c>after_work_key</c>, and a work with more rows than the limit is served whole and said.
+    /// </para>
+    /// </summary>
+    public V3PlatformOperationOutcome InForceOn(
+        V3PlatformOperationRequest request,
+        DateTimeOffset observedAt)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (!string.Equals(request.OperationId, "in_force_on", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("The mounted corpus selection operation only accepts in_force_on/1.");
+        }
+
+        var requestedDate = RequiredString(request.Parameters, "date");
+        var requestedLanguage = OptionalLanguage(request.Parameters);
+        var identifier = request.Parameters.TryGetProperty("identifier", out var identifierValue) &&
+            identifierValue.ValueKind == JsonValueKind.String
+                ? RequiredString(request.Parameters, "identifier")
+                : null;
+        var afterWorkKey = request.Parameters.TryGetProperty("after_work_key", out var afterValue) &&
+            afterValue.ValueKind == JsonValueKind.String
+                ? RequiredString(request.Parameters, "after_work_key")
+                : null;
+        var limit = InForceOnMaxRows;
+        if (request.Parameters.TryGetProperty("limit", out var limitValue))
+        {
+            if (limitValue.ValueKind != JsonValueKind.Number || !limitValue.TryGetInt32(out limit) ||
+                limit < 1 || limit > InForceOnMaxRows)
+            {
+                throw new V3TransportFailureException(
+                    V3TransportFailureKind.RequestSchemaInvalid,
+                    "The operation request's 'limit' is not a whole number of rows within the ceiling.");
+            }
+        }
+
+        if (!DateOnly.TryParseExact(requestedDate, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out _))
+        {
+            throw new V3TransportFailureException(
+                V3TransportFailureKind.RequestSchemaInvalid,
+                "The requested date is not a civil calendar date.");
+        }
+
+        var statesByWork = new Dictionary<string, IReadOnlyList<LuxembourgIndexResolvedState>>(StringComparer.Ordinal);
+        IReadOnlyList<string> workKeys;
+        string[] languagesHeld;
+        long worksHeld;
+        long worksInScope;
+        long worksOnDate;
+        string? firstHeld;
+        string? lastHeld;
+        if (identifier is not null)
+        {
+            if (RefuseUnlessWorkStates(request, identifier, observedAt, "r6_in_force_on", requestedLanguage,
+                    out var states, out var availableLanguages) is { } refused)
+            {
+                return refused;
+            }
+
+            var scoped = states
+                .Where(state => requestedLanguage is null || string.Equals(state.Language, requestedLanguage, StringComparison.Ordinal))
+                .ToArray();
+            var heldDates = scoped.Select(static state => state.ApplicabilityDate).Order(StringComparer.Ordinal).ToArray();
+            statesByWork[states[0].WorkKey] = states;
+            languagesHeld = availableLanguages;
+            worksHeld = 1;
+            firstHeld = heldDates[0];
+            lastHeld = heldDates[^1];
+            var applies = string.CompareOrdinal(firstHeld, requestedDate) <= 0;
+            if (!applies)
+            {
+                // One work, one date: as_of refuses this with no_version_for_date, and two operations
+                // that answer "what applied to this work on this date" must not disagree about whether
+                // that has an answer. Without a work named the question is about the whole index, and
+                // "nothing held" is its answer.
+                return RefuseNoVersionForDate(request, observedAt, scoped, requestedDate, bound: null);
+            }
+
+            // The same holds for twins. as_of refuses the whole question when any served language has
+            // several states on the selected date, with every candidate of every such language in
+            // ordinal order; a named work here is that question, so it is that refusal. The per-row
+            // reason below is for the question about many works, where one must not hide the others.
+            var twins = scoped
+                .GroupBy(static state => state.Language, StringComparer.Ordinal)
+                .Select(ofLanguage => SelectAtDate(ofLanguage.ToArray(), requestedDate).Selected)
+                .Where(static selected => selected.Length > 1)
+                .SelectMany(static selected => selected.Select(StateUrl))
+                .Order(StringComparer.Ordinal)
+                .ToArray();
+            if (twins.Length != 0)
+            {
+                return RefuseAmbiguousVersion(request, observedAt, requestedDate, twins, bound: null);
+            }
+
+            worksOnDate = 1;
+            workKeys = afterWorkKey is null || string.CompareOrdinal(states[0].WorkKey, afterWorkKey) > 0
+                ? [states[0].WorkKey]
+                : [];
+            worksInScope = 1;
+        }
+        else
+        {
+            if (_reader is null)
+            {
+                // The selection reads the Luxembourg index. Without it there is nothing to select from,
+                // whatever else is mounted; the refusal says which corpus is required.
+                using var unmounted = JsonSerializer.SerializeToDocument(new { required_corpus = "lu" });
+                return V3PlatformOperationOutcome.Refused(
+                    Context("refusal", observedAt, PublisherId.LuLegilux),
+                    new V3PlatformOperationRefusal(request, "no_corpus_mounted", unmounted.RootElement));
+            }
+
+            languagesHeld = _reader.ResolveStatePopulation().Languages.ToArray();
+            if (requestedLanguage is not null && !languagesHeld.Contains(requestedLanguage, StringComparer.Ordinal))
+            {
+                using var unavailableLanguage = JsonSerializer.SerializeToDocument(new
+                {
+                    requested_language = requestedLanguage,
+                    available_languages = languagesHeld,
+                });
+                return V3PlatformOperationOutcome.Refused(
+                    Context("refusal", observedAt),
+                    new V3PlatformOperationRefusal(request, "language_not_available", unavailableLanguage.RootElement));
+            }
+
+            var population = _reader.ResolveStatePopulation(requestedLanguage);
+            worksHeld = requestedLanguage is null ? population.Works : _reader.ResolveStatePopulation().Works;
+            worksInScope = population.Works;
+            firstHeld = population.FirstDate;
+            lastHeld = population.LastDate;
+            worksOnDate = _reader.CountWorksWithStateOnOrBefore(requestedDate, requestedLanguage);
+            // Every work contributes at least one row, so one work more than the limit is enough to
+            // know whether anything remains after the last work served.
+            workKeys = _reader.ResolveWorkKeysWithStateOnOrBefore(requestedDate, requestedLanguage, afterWorkKey, limit + 1);
+        }
+
+        var rows = new List<object>();
+        string? continueAfter = null;
+        string? lastServed = null;
+        foreach (var workKey in workKeys)
+        {
+            if (!statesByWork.TryGetValue(workKey, out var ofWork))
+            {
+                ofWork = _reader!.ResolveWorkStates(workKey);
+                statesByWork[workKey] = ofWork;
+            }
+
+            var ofThisWork = new List<object>();
+            var languages = ofWork.Select(static state => state.Language)
+                .Where(language => requestedLanguage is null || string.Equals(language, requestedLanguage, StringComparison.Ordinal))
+                .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal);
+            foreach (var language in languages)
+            {
+                var ofLanguage = ofWork
+                    .Where(state => string.Equals(state.Language, language, StringComparison.Ordinal))
+                    .ToArray();
+                var (selected, nextDate) = SelectAtDate(ofLanguage, requestedDate);
+                if (selected.Length == 0)
+                {
+                    continue;
+                }
+
+                var single = selected.Length == 1 ? selected[0] : null;
+                ofThisWork.Add(new
+                {
+                    work_key = workKey,
+                    publisher_work_iri = selected[0].PublisherWorkIri,
+                    language,
+                    interval = new { from = selected[0].ApplicabilityDate, until = nextDate },
+                    state = single is null ? null : StateReference(single, nextDate),
+                    reason = single is null ? "ambiguous_version" : null,
+                    candidates = single is null ? selected.Select(StateUrl).Order(StringComparer.Ordinal).ToArray() : null,
+                    // The hash-pinned permalink names this state and no other, so resolve serves it in full.
+                    resolve = single is null ? null : new { identifier = StateUrl(single) },
+                });
+            }
+
+            // Rows are cut only between works: a work's languages are served together or not at all.
+            if (rows.Count > 0 && rows.Count + ofThisWork.Count > limit)
+            {
+                continueAfter = lastServed;
+                break;
+            }
+
+            rows.AddRange(ofThisWork);
+            lastServed = workKey;
+        }
+
+        using var result = JsonSerializer.SerializeToDocument(new
+        {
+            requested_date = requestedDate,
+            requested_identifier = identifier,
+            requested_language = requestedLanguage,
+            requested_after_work_key = afterWorkKey,
+            publisher = "lu-legilux",
+            caveat = InForceOnCaveat,
+            derivation = new
+            {
+                rule = "per work and language, the state on the greatest publisher applicability date at or before the requested date",
+                basis = "versioned works only",
+                interval_until = "the publisher's next dated state in that language, or null; no end date is published or invented",
+                not_consulted = new[] { "repeal", "end of validity", "commencement" },
+            },
+            population = new
+            {
+                // The population is the scope asked for: the one work when an identifier is given, the
+                // one language when a language is given, the whole mounted index otherwise.
+                scope = new { identifier, language = requestedLanguage },
+                // Two kinds of absence are counted apart: a work that holds the language asked for and
+                // begins after the date, and a work that holds nothing in that language at all.
+                works_held = worksHeld,
+                works_holding_the_language = requestedLanguage is null ? (long?)null : worksInScope,
+                works_without_the_language = requestedLanguage is null ? (long?)null : worksHeld - worksInScope,
+                works_with_a_state_on_date = worksOnDate,
+                works_beginning_later = worksInScope - worksOnDate,
+                first_date_held = firstHeld,
+                last_date_held = lastHeld,
+                languages_held = languagesHeld,
+                date_is_before_everything_held = firstHeld is null || string.CompareOrdinal(requestedDate, firstHeld) < 0,
+            },
+            limit,
+            truncated = continueAfter is not null,
+            continue_after = continueAfter,
+            // A work is never cut: when one work alone holds more rows than the limit it is served
+            // whole, and this says the limit was exceeded for that reason.
+            whole_work_over_limit = rows.Count > limit,
+            states = rows,
+            corpus_sha256 = _corpus.ArtifactRef.Sha256,
+            index_sha256 = _reader!.IndexRef.Sha256,
+        });
+        return V3PlatformOperationOutcome.Success(
+            Context("success", observedAt),
+            new V3PlatformOperationResult(request, "version_state", result.RootElement));
+    }
+
     /// <summary>The ceiling on the rows one <c>changes_in_period</c> answer carries.</summary>
     public const int ChangesInPeriodMaxRows = 200;
 
