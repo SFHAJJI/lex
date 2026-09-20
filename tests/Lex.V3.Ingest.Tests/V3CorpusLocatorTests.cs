@@ -28,16 +28,31 @@ public sealed class V3CorpusLocatorTests
         ("/api/v3/search", identifier => JsonSerializer.Serialize(new { operation_id = "search", parameters = new { identifier, query = "bail", language = "fra" } })),
     ];
 
+    /// <summary>
+    /// Served routes that take no identifier, so this suite's identifier-shaped questions do not apply
+    /// to them, each with the suite that drives it. The suite is named with <c>nameof</c>, so a route
+    /// listed here whose suite does not exist does not compile.
+    /// </summary>
+    private static readonly (string RawTarget, string DrivenBy)[] RoutesDrivenByTheirOwnSuites =
+    [
+        ("/api/v3/coverage", nameof(V3CorpusCoverageMountTests)),
+    ];
+
     [TestMethod]
     public void EveryServedRouteIsOneThisSuiteExercises()
     {
-        // A binding added to the served list without a route in the list above is one no test drives, and
-        // the handler's dispatch has a default arm that runs resolve for it; the first request for it would
-        // be a server error. So the two lists are the same set (resolve is driven by the locator tests
-        // themselves, and is the default arm's live path).
+        // A binding added to the served list with no route in the list above and none driven by its own
+        // suite is one no test drives, and the handler's dispatch has a default arm that runs resolve for
+        // it; the first request for it would be a server error. So the lists together are the served set
+        // (resolve is driven by the locator tests themselves, and is the default arm's live path).
+        var ownSuites = RoutesDrivenByTheirOwnSuites.Select(static route => route.RawTarget).ToArray();
         var served = V3RestRouteBinding.Served.Select(static binding => binding.RawTarget).Order(StringComparer.Ordinal).ToArray();
-        var exercised = Operations.Select(static operation => operation.RawTarget).Append("/api/v3/resolve").Order(StringComparer.Ordinal).ToArray();
+        var exercised = Operations.Select(static operation => operation.RawTarget)
+            .Concat(ownSuites).Append("/api/v3/resolve").Order(StringComparer.Ordinal).ToArray();
         CollectionAssert.AreEqual(exercised, served);
+        Assert.AreEqual(ownSuites.Length, ownSuites.Distinct(StringComparer.Ordinal).Count());
+        Assert.IsFalse(ownSuites.Intersect(Operations.Select(static operation => operation.RawTarget), StringComparer.Ordinal).Any(),
+            "A route is either driven here or by its own suite, not both.");
     }
 
     [TestMethod]
