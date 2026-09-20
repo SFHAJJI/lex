@@ -55,14 +55,21 @@ public sealed class V3AnswerSamplesTests
     /// </summary>
     private static readonly string[] VariesPerRun =
     [
-        // The same two facts at two paths, because the two operations shape them differently: `as_of`
-        // serves the mount digests flat and `provenance` groups them under `verified_by` with the
-        // registry digest beside them. The first run of the double-run test below found this by failing;
-        // a list written from reading one answer had covered only the nested pair.
+        // The same two facts at THREE paths, because three operations shape them three ways: `as_of`
+        // serves the mount digests flat, `provenance` groups them under `verified_by` with the registry
+        // digest, and `coverage` groups them under `mounted` with the publisher. Each grouping is
+        // reasonable on its own and a reader meeting two of them meets one fact in two places.
+        //
+        // Every one of the three was found by the double-run test failing, never by reading: the nested
+        // pair when the list was written, the flat pair the first time it ran, and `mounted` the first
+        // time `coverage` was sampled. A list of paths maintained by hand would have been wrong three
+        // times; this one is wrong until a run says so, which is the whole point of it.
         "corpus_sha256",
         "index_sha256",
         "verified_by.corpus_sha256",
         "verified_by.index_sha256",
+        "mounted.corpus_sha256",
+        "mounted.index_sha256",
         // The object reference moves because the fixture mints the URN it is computed over. The body
         // digests beside it DO NOT: they hash deterministic bytes. They were on this list anyway, put
         // there by me alongside the three I had actually measured, and the writer seat proved what that
@@ -85,7 +92,6 @@ public sealed class V3AnswerSamplesTests
         ["changes_in_period"] = "sampled when a reader is built against it",
         ["in_force_on"] = "sampled when a reader is built against it",
         ["search"] = "sampled when a reader is built against it",
-        ["coverage"] = "sampled when a reader is built against it",
         ["dossier"] = "sampled when a reader is built against it",
     };
 
@@ -242,6 +248,11 @@ public sealed class V3AnswerSamplesTests
         [
             await DriveAsync(mount, "provenance", "one work, one state, asked in the language it is held in", parameters),
             await DriveAsync(mount, "as_of", "the same request, so a caller can move from one to the other", parameters),
+            // `coverage` asks about the mount rather than about a work, so it takes no identifier and no
+            // date. It is sampled because its reader is the next one built against a captured answer, and
+            // because that reader today requires seventeen fields of which the platform sends one: the
+            // census is what makes that visible rather than something a person has to notice.
+            await DriveAsync(mount, "coverage", "the whole mount, no language asked", new { }),
         ];
     }
 
