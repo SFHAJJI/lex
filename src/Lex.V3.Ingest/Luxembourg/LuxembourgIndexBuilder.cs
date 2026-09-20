@@ -1226,6 +1226,68 @@ public sealed class LuxembourgIndexReader : IDisposable
     }
 
     /// <summary>
+    /// The work keys that have a state dated at or before <paramref name="date"/>, in ordinal work-key
+    /// order, strictly after <paramref name="afterWorkKey"/> when one is given, at most
+    /// <paramref name="take"/> of them. With a language, only that language's states count. Nothing is
+    /// selected here: which state applies is the caller's rule.
+    /// </summary>
+    public IReadOnlyList<string> ResolveWorkKeysWithStateOnOrBefore(
+        string date, string? language, string? afterWorkKey, int take)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(date);
+        ArgumentOutOfRangeException.ThrowIfLessThan(take, 1);
+        lock (_gate)
+        {
+            using var command = _connection.CreateCommand();
+            command.CommandText =
+                "SELECT DISTINCT work_key FROM states WHERE applicability_date<=$date" +
+                (language is null ? string.Empty : " AND language=$language") +
+                (afterWorkKey is null ? string.Empty : " AND work_key>$after") +
+                " ORDER BY work_key LIMIT $take";
+            command.Parameters.AddWithValue("$date", date);
+            command.Parameters.AddWithValue("$take", take);
+            if (language is not null)
+            {
+                command.Parameters.AddWithValue("$language", language);
+            }
+
+            if (afterWorkKey is not null)
+            {
+                command.Parameters.AddWithValue("$after", afterWorkKey);
+            }
+
+            var keys = new List<string>();
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                keys.Add(reader.GetString(0));
+            }
+
+            return keys;
+        }
+    }
+
+    /// <summary>How many works have a state dated at or before the date, in the language when one is given.</summary>
+    public long CountWorksWithStateOnOrBefore(string date, string? language)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(date);
+        lock (_gate)
+        {
+            using var command = _connection.CreateCommand();
+            command.CommandText =
+                "SELECT COUNT(DISTINCT work_key) FROM states WHERE applicability_date<=$date" +
+                (language is null ? string.Empty : " AND language=$language");
+            command.Parameters.AddWithValue("$date", date);
+            if (language is not null)
+            {
+                command.Parameters.AddWithValue("$language", language);
+            }
+
+            return (long)(command.ExecuteScalar() ?? 0L);
+        }
+    }
+
+    /// <summary>
     /// What the index holds, so a window can be read against it: how many works have a dated state, the
     /// first and last publisher date held, and the languages held. With a language, the works and dates
     /// are that language's; the languages listed are always every language held, since they are what
