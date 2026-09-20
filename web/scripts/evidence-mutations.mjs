@@ -817,6 +817,10 @@ export function childEnv(env, root, scope) {
     if (!name.toUpperCase().startsWith("LEX_EVIDENCE_")) given[name] = value;
   }
 
+  // Unconditional, and it can be: the strip above removes every name of the family, so there is no
+  // caller's root left here to defer to. Writing it as `given.LEX_EVIDENCE_ROOT ?? root` would be
+  // the same function for every input — a mutant that cannot be killed, because a test that could
+  // kill it would have to break the strip first, and then the strip's own test is the one that fails.
   given.LEX_EVIDENCE_ROOT = root;
   if (scope !== null) given.LEX_EVIDENCE_PAGES = scope;
   return given;
@@ -947,11 +951,17 @@ export async function sweepWith({
   if (typeof full !== "boolean") {
     throw new Error("a sweep must be told whether it measures every page; `full` is not optional");
   }
+  // Read once into a list, because this function walks its mutations twice and the first walk would
+  // otherwise consume a lazy one: a generator arrived, every declaration was read, and the sweep
+  // then started nothing, printed nothing and returned every count zero — which the caller turns
+  // into "all N induced mutations were caught" and exit 0. No call site passes one today; that
+  // sentence is the one under every defect this file has fixed.
+  const list = [...mutations];
   const counts = { uncaught: 0, misdeclared: 0, unjudged: 0 };
   // Every declaration read before the first browser starts: a list with one undeclared mutation in
   // it should cost nothing, not fail an hour in.
-  for (const mutation of mutations) requireDeclaration(mutation);
-  for (const mutation of mutations) {
+  for (const mutation of list) requireDeclaration(mutation);
+  for (const mutation of list) {
     const root = await prepare();
     try {
       await mutation.apply(root);

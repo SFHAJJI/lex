@@ -434,7 +434,12 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - run: npm ci
         working-directory: web
-      - run: npm test
-        working-directory: web
+      # Build before test, because two tests compare the mutation declarations against what the
+      # build actually emitted and report INCONCLUSIVE when there is nothing to compare. With the
+      # build after them they said it on every run this job has ever made: the pages they exist to
+      # read were produced forty seconds too late. In this order they are real checks, and a failure
+      # in either is a finding about a declaration or about the page matcher, not a broken step.
       - run: npm run build
+        working-directory: web
+      - run: npm test
         working-directory: web

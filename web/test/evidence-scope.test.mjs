@@ -779,3 +779,55 @@ test("a sweep of no mutations is refused, not reported clean", async () => {
   // The real list is not empty, which is what makes the guard a guard and not a tautology.
   assert.ok(MUTATIONS.length > 0);
 });
+
+test("the verdict asks for the declaration too, not only the sweep around it", async () => {
+  // The sweep reads every declaration before the first browser starts, which is where an undeclared
+  // mutation is caught in production. That left judgeMutation's own check answering to nothing:
+  // removing it changed nothing any test could see, because no test drove the verdict directly with
+  // a mutation that declares nothing. It is exported and the tests use it, so it answers for itself.
+  const { judgeMutation } = await import("../scripts/evidence-mutations.mjs");
+  const caught = { code: 1, output: "  a.html @narrow: the defect is here\n" };
+  for (const pages of [undefined, [], null, "every"]) {
+    assert.throws(
+      () => judgeMutation({ name: "undeclared", pages, expect: /the defect/ }, caught, true),
+      /undeclared declares no pages/,
+      `pages: ${JSON.stringify(pages)}`,
+    );
+  }
+  // And the shapes it accepts still judge.
+  assert.equal(judgeMutation({ name: "fine", pages: ["a.html"], expect: /the defect/ }, caught, true).kind, "caught");
+  assert.equal(judgeMutation({ name: "all", pages: "all", expect: /the defect/ }, caught, true).kind, "caught");
+});
+
+test("a sweep reads its mutations once, so a lazy list is not consumed before it runs", async () => {
+  // sweepWith walks its mutations twice: once to read every declaration before the first browser
+  // starts, once to sweep. A generator was consumed by the first walk, so the sweep started nothing,
+  // printed nothing and returned every count zero -- which sweepAll turns into "all 2 induced
+  // mutations were caught" and exit 0. The house failure mode, introduced by the change that closed
+  // the house failure mode.
+  const { sweepWith } = await import("../scripts/evidence-mutations.mjs");
+  const { mkdtemp } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const one = { name: "the first", pages: ["a.html"], expect: /the defect/, apply: async () => {} };
+  const caught = { code: 1, output: "  a.html @narrow: the defect is here\n" };
+
+  function* lazily() {
+    yield one;
+    yield { ...one, name: "the second" };
+  }
+
+  const printed = [];
+  let ran = 0;
+  const counts = await sweepWith({
+    mutations: lazily(),
+    prepare: () => mkdtemp(join(tmpdir(), "lex-lazy-")),
+    run: async () => (ran += 1, caught),
+    full: false,
+    log: (line) => printed.push(line),
+  });
+  assert.equal(ran, 2, "both mutations must reach the browser");
+  assert.deepEqual(counts, { uncaught: 0, misdeclared: 0, unjudged: 0 });
+  assert.ok(printed.some((l) => l.startsWith("caught       the first")), printed.join("\n"));
+  assert.ok(printed.some((l) => l.startsWith("caught       the second")), printed.join("\n"));
+});
