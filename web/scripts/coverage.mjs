@@ -67,7 +67,7 @@
 // language's reads the mount as smaller than it is. The page says so where the totals are rather
 // than in a footnote, and renders `counts_note` verbatim as well.
 
-import { NOT_STATED, escapeHtml } from './render.mjs';
+import { NOT_STATED, escapeHtml, requireCountedByAtLeastOne } from './render.mjs';
 import { isCalendarDate } from './temporal.mjs';
 
 export { NOT_STATED };
@@ -199,41 +199,6 @@ function requireDistinct(keys, where) {
     seen.add(key);
   }
   return keys;
-}
-
-/**
- * A breakdown row counts at least one of the thing it breaks down.
- *
- * All THREE breakdowns under `members` are SQL `GROUP BY`s, and a group exists because at least one
- * row produced it, so none of them can honestly count nought. A row counting nothing is a token, an
- * outcome or a disposition nothing recorded, and on the page whose job is to be checked against, a
- * row that exists and accounts for nothing is worse than a missing row: it reads as a category this
- * corpus knows about.
- *
- * ONE RULE AND ONE SENTENCE, because it was two of each. `article_outcomes` arrived with its own
- * copy of this loop and its own wording of this message, and the two had already drifted apart --
- * "accounting for nobody" against "accounting for none" -- before anyone had edited either. That is
- * the arrangement the header of this file warns about, on the file that warns about it. The counted
- * noun and the count's own field differ between the three, so they are parameters rather than a
- * reason for a second copy.
- *
- * @param {Array}  rows    the breakdown's rows
- * @param {string} key     the member naming what each row is about, for the message
- * @param {string} count   the member holding the count, which is not the same on all three
- * @param {string} counted what is being counted, in the plural, for the message
- * @param {string} where   the path of the breakdown
- */
-function requireCountedByAtLeastOne(rows, { key, count, counted, where }) {
-  for (const [index, row] of rows.entries()) {
-    if (row[count] === 0) {
-      throw new Error(
-        `${where}[${index}] counts no ${counted} for ${JSON.stringify(row[key])}; these rows are a `
-          + `grouping of the ${counted}, and a group exists because one of them is in it, so a row `
-          + 'accounting for none is a category nothing recorded',
-      );
-    }
-  }
-  return rows;
 }
 
 function readTotals(totals) {

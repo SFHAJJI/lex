@@ -25,7 +25,7 @@
 // "not stated by the platform" and never as blank, because a blank cell reads as a fact about the
 // document rather than a fact about this corpus.
 
-import { NOT_STATED, escapeHtml } from './render.mjs';
+import { NOT_STATED, escapeHtml, requireCountedByAtLeastOne } from './render.mjs';
 
 /** Why the rule profiles are on a provenance page at all. */
 export const PROFILE_NOTE =
@@ -146,7 +146,7 @@ function readArticleOutcomes(outcomes, where) {
     throw new Error(`${where} is a list, even an empty one`);
   }
   const seen = new Set();
-  return outcomes.map((row, index) => {
+  const rows = outcomes.map((row, index) => {
     const rowWhere = `${where}[${index}]`;
     const disposition = requireText(row?.disposition, `${rowWhere}.disposition`);
     if (seen.has(disposition)) {
@@ -158,6 +158,14 @@ function readArticleOutcomes(outcomes, where) {
       throw new Error(`${rowWhere}.outcomes is a whole count of the corpus's outcomes`);
     }
     return { disposition, outcomes: count };
+  });
+  // A ZERO IS REFUSED HERE TOO, and this page used to print one. The count is a `GROUP BY` the
+  // producer builds with `+ 1` per outcome, so a key exists only because an outcome made it and no
+  // mount can send a token counting none. The coverage page has refused it since it was written;
+  // this one accepted it and had a test saying so, which left the two pages disagreeing about a row
+  // neither can be sent. The rule is `render.mjs`'s so that they cannot disagree again.
+  return requireCountedByAtLeastOne(rows, {
+    key: 'disposition', count: 'outcomes', counted: 'outcomes', where,
   });
 }
 

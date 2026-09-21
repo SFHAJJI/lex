@@ -24,6 +24,44 @@ import { tryPublisherSourceUri } from "./routes.mjs";
  */
 export const NOT_STATED = 'not stated by the platform';
 
+/**
+ * A breakdown row counts at least one of the thing it breaks down.
+ *
+ * FOUR breakdowns on two pages use this, and every one is an SQL `GROUP BY`: `coverage`'s members by
+ * outcome, its gap tokens by member and its article outcomes by disposition, and `provenance`'s
+ * article outcomes for one document. A group exists because at least one row produced it, so none of
+ * them can honestly count nought, and both producers build the counts with `+ 1` per row, so no
+ * mount -- fixture or real -- can send a zero.
+ *
+ * A row that exists and accounts for nothing is worse than a missing row: on pages whose job is to
+ * be checked against, it reads as a category the corpus knows about.
+ *
+ * ONE RULE AND ONE SENTENCE, and it lives here rather than on either page because that is the only
+ * arrangement in which it stays one. It was two copies inside `coverage.mjs` and they had drifted by
+ * a word -- "accounting for nobody" against "accounting for none" -- before anyone edited either;
+ * unifying them there left `provenance.mjs` accepting a zero the coverage page refused, so the two
+ * pages disagreed about an impossible row. The counted noun and the count's own field differ between
+ * the four, so they are parameters rather than a reason for another copy.
+ *
+ * @param {Array}  rows    the breakdown's rows
+ * @param {string} key     the member naming what each row is about, for the message
+ * @param {string} count   the member holding the count, which is not the same on all four
+ * @param {string} counted what is being counted, in the plural, for the message
+ * @param {string} where   the path of the breakdown
+ */
+export function requireCountedByAtLeastOne(rows, { key, count, counted, where }) {
+  for (const [index, row] of rows.entries()) {
+    if (row[count] === 0) {
+      throw new Error(
+        `${where}[${index}] counts no ${counted} for ${JSON.stringify(row[key])}; these rows are a `
+          + `grouping of the ${counted}, and a group exists because one of them is in it, so a row `
+          + 'accounting for none is a category nothing recorded',
+      );
+    }
+  }
+  return rows;
+}
+
 /** Escape for HTML text and quoted attribute contexts. */
 export function escapeHtml(value) {
   return String(value)

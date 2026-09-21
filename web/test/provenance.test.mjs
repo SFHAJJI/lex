@@ -1000,8 +1000,26 @@ test("a malformed article-outcomes member is refused by both renderers, and not 
     );
   }
 
-  // A zero is a whole count and is printed as one; a token the corpus has not been asked about before is
-  // printed as it came, because the page glosses no token.
-  const shown = renderProvenance(withOutcomes([{ disposition: "akn_a_token_from_a_later_corpus", outcomes: 0 }]));
-  assert.equal(rows(shown).get("article outcomes"), "akn_a_token_from_a_later_corpus : 0");
+  // A TOKEN COUNTING NO OUTCOME IS REFUSED, and this page used to print one. The producer builds the
+  // count with `+ 1` per outcome, so a key exists only because an outcome made it and no mount can
+  // send a zero; the coverage page has refused it since it was written, and the two pages disagreeing
+  // about a row neither can be sent is worse than either rule alone. The sentence is `render.mjs`'s
+  // and is written out here rather than read from it, because a test that asks the function what it
+  // says moves with the function and stops being a test of anything.
+  for (const render of [
+    (answer) => renderProvenance(answer),
+    (answer) => renderToStaticMarkup(h(Provenance, { answer })),
+  ]) {
+    assert.throws(
+      () => render(withOutcomes([{ disposition: "akn_a_token_from_a_later_corpus", outcomes: 0 }])),
+      /counts no outcomes for "akn_a_token_from_a_later_corpus"; these rows are a grouping of the outcomes, and a group exists because one of them is in it, so a row accounting for none is a category nothing recorded/,
+      "a disposition counting no outcome was rendered",
+    );
+  }
+
+  // A token the corpus has not been asked about before is still printed as it came, because the page
+  // glosses no token. That is the half of the old assertion worth keeping, with a count a mount can
+  // actually send.
+  const shown = renderProvenance(withOutcomes([{ disposition: "akn_a_token_from_a_later_corpus", outcomes: 1 }]));
+  assert.equal(rows(shown).get("article outcomes"), "akn_a_token_from_a_later_corpus : 1");
 });
