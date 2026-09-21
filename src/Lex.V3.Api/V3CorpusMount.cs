@@ -428,8 +428,8 @@ internal sealed class V3CorpusMount : IDisposable
     /// happens.
     /// </summary>
     internal const string ArticlesNotAdmittedNote =
-        "articles_not_admitted counts the articles of the publisher's document for this state that the corpus recorded and this state does not hold; " +
-        "the number of articles in this state plus articles_not_admitted is the number of articles in that document; " +
+        "articles_not_admitted counts the top-level articles of the publisher's document for this state that the corpus recorded and this state does not hold; " +
+        "the number of articles in this state plus articles_not_admitted is the number of top-level articles in that document, and an article nested inside another is not counted apart from it; " +
         "which articles they are is not held. " +
         "An article is not admitted whole when the reviewed profile cannot represent every element in it: " +
         "that can be an article the publisher struck out, and it can equally be an article whose text is complete " +
@@ -1596,9 +1596,9 @@ internal sealed class V3CorpusMount : IDisposable
         "when a language is requested, requested_language echoes it and only languages and capability_cells are narrowed to it, and every other member, totals included, is the whole mount's";
 
     internal const string ArticleOutcomesNote =
-        "the corpus's own record of what its legal-content stage did with the articles of its acquired Luxembourg documents, " +
+        "the corpus's own record of what its legal-content stage did with the top-level articles of its acquired Luxembourg documents, " +
         "counted by the corpus's disposition token and given verbatim, and this answer does not define the tokens; " +
-        "an outcome is one article's, except akn_upstream_not_inventoried, which is one document's because none of its articles was listed; " +
+        "an outcome is one top-level article's, except akn_upstream_not_inventoried, which is one document's because none of its articles was listed; " +
         "the articles the index holds, which totals.articles and languages[].articles count, are exactly the akn_admitted and " +
         "akn_marker_only_evidence outcomes, and an outcome under any other token is not held here; " +
         "which article an outcome belongs to is not held; " +

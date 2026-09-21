@@ -56,9 +56,10 @@ const COUNTS_NOTE =
 const GAPS_NOTE = 'the gap tokens the corpus recorded per member, verbatim, counted by member';
 
 const ARTICLE_OUTCOMES_NOTE =
-  "the corpus's own record of what its legal-content stage did with the articles of its "
-  + "acquired Luxembourg documents, counted by the corpus's disposition token and given verbatim, "
-  + "and this answer does not define the tokens; an outcome is one article's, except "
+  "the corpus's own record of what its legal-content stage did with the top-level articles of "
+  + "its acquired Luxembourg documents, counted by the corpus's disposition token and given "
+  + "verbatim, and this answer does not define the tokens; an outcome is one top-level "
+  + "article's, except "
   + "akn_upstream_not_inventoried, which is one document's because none of its articles was "
   + 'listed; the articles the index holds, which totals.articles and languages[].articles count, '
   + 'are exactly the akn_admitted and akn_marker_only_evidence outcomes, and an outcome under any '

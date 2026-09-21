@@ -80,8 +80,8 @@ public sealed class V3CorpusArticlesNotAdmittedTests
         JsonSerializer.Serialize(new { operation_id = operation, parameters });
 
     private const string PinnedNote =
-        "articles_not_admitted counts the articles of the publisher's document for this state that the corpus recorded and this state does not hold; " +
-        "the number of articles in this state plus articles_not_admitted is the number of articles in that document; " +
+        "articles_not_admitted counts the top-level articles of the publisher's document for this state that the corpus recorded and this state does not hold; " +
+        "the number of articles in this state plus articles_not_admitted is the number of top-level articles in that document, and an article nested inside another is not counted apart from it; " +
         "which articles they are is not held. " +
         "An article is not admitted whole when the reviewed profile cannot represent every element in it: " +
         "that can be an article the publisher struck out, and it can equally be an article whose text is complete " +

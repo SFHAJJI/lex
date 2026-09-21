@@ -225,6 +225,59 @@ public sealed class LuxembourgIndexBuilderTests
     }
 
     [TestMethod]
+    public async Task AnArticleNestedInsideAnotherIsNotCountedApartFromItsParentSoTheSentenceSaysTopLevel()
+    {
+        const string manifestation =
+            "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo/fr/xml";
+        const string item =
+            "http://data.legilux.public.lu/filestore/eli/etat/leg/loi/1991/08/10/n3/jo/fr/xml/eli-etat-leg-loi-1991-08-10-n3-jo-fr-xml.xml";
+        var real = await File.ReadAllBytesAsync(Path.Combine(
+            AppContext.BaseDirectory, "Fixtures", "LuAknLegalContent", Retained1991));
+        // A further article is nested inside art_3, in memory and byte-preserving. The profile's vocabulary does not
+        // contain `article`, so it is an element outside it and art_3 is not admitted whole; and the inventory and the
+        // profile both count top-level articles only, so the document has 55 article elements and 54 outcomes.
+        var text = Encoding.Latin1.GetString(real);
+        var pattern = new System.Text.RegularExpressions.Regex(
+            "(?<parent><article id=\"art_3\">.*?)</article>",
+            System.Text.RegularExpressions.RegexOptions.Singleline);
+        Assert.AreEqual(1, pattern.Matches(text).Count);
+        var changed = pattern.Replace(
+            text,
+            "${parent}<article id=\"art_3_nested\"><content><p>A nested article.</p></content></article></article>");
+        var elements = new System.Text.RegularExpressions.Regex("<article[ >]").Matches(changed).Count;
+        Assert.AreEqual(55, elements);
+        var xml = Encoding.Latin1.GetBytes(changed);
+        ICustodyStore store = new RoutedHttpAcquisitionSessionTests.MultiObjectCustodyStore();
+        var luxembourg = await LuxembourgGazetteAcquisitionTests
+            .CompleteXmlForStage3BodyCompositionAsync(xml, store, manifestation, item);
+        var envelope = await LexCorpus6BuilderTests.CompleteProfileEnvelopeAsync(
+            luxembourgOverride: luxembourg, luxembourgStore: store);
+        var corpus = LexCorpus6Builder.TryBuild(envelope, out var corpusRefusal, out var corpusDetail);
+        Assert.IsNotNull(corpus, $"{corpusRefusal}: {corpusDetail}");
+        var outcomes = envelope.BodyComposition.Envelope.LuxembourgAknLegalContentPopulation.Outcomes;
+        Assert.AreEqual(54, outcomes.Count);
+        Assert.AreEqual(48, outcomes.Count(static value => value.Disposition == LuxembourgAknLegalContentDisposition.Admitted));
+        Assert.AreEqual(6, outcomes.Count(static value => value.Disposition == LuxembourgAknLegalContentDisposition.UnsupportedContentShape));
+        Assert.IsTrue(outcomes.Any(static value =>
+            value.Coordinate?.PublisherId == "art_3" &&
+            value.Disposition == LuxembourgAknLegalContentDisposition.UnsupportedContentShape));
+
+        var built = LuxembourgIndexBuilder.TryBuild(envelope, out var refusal, out var detail);
+
+        Assert.IsNotNull(built, $"{refusal}: {detail}");
+        using var reader = LuxembourgIndexReader.OpenAndVerify(
+            built.IndexRef, built.IndexBytes.Span, corpus.ArtifactRef, built.CapabilityManifest);
+        var state = reader.ResolveState("loi-1991-08-10-n3", "2024-02-01").Single();
+        var notAdmitted = reader.ResolveArticlesNotAdmitted([state.StateSha256])[state.StateSha256];
+        Assert.HasCount(48, state.ArticleIdentities);
+        Assert.AreEqual(6, notAdmitted);
+        // 48 + 6 is the 54 top-level articles, and not the 55 article elements a reader who counts the document finds:
+        // which is why the sentence says "top-level".
+        Assert.AreEqual(54, state.ArticleIdentities.Count + notAdmitted);
+        Assert.AreNotEqual(elements, state.ArticleIdentities.Count + notAdmitted);
+    }
+
+    [TestMethod]
     public async Task AdmittedAknTextWithoutAdmittingRightsNeverBecomesSearchable()
     {
         const string manifestation =
