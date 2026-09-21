@@ -45,7 +45,7 @@ import { isCalendarDate, requireCalendarDate } from './temporal.mjs';
  * `eu-eurlex:32016R0679:2018-05-25` against production returns `{"status": "unknown_work"}`.
  * That is the word the old wire speaks, and the reason a translation exists at all.
  *
- * The registry stays closed at these nineteen, because the product spec is the versioned registry
+ * The registry stays closed at exactly the codes listed here, because the product spec is the versioned registry
  * and a wire status is not a product code. `unknown_work` is translated where it arrives, by a
  * closed table in `provenance.mjs`, and that translation deliberately does not let the sentence
  * claim more than the status supports: the service returns `unknown_work` both for an identifier

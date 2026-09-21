@@ -39,7 +39,7 @@ export const MASTER_LOCALES = Object.freeze(['en', 'fr']);
  * The code returned when a reviewed string does not exist.
  *
  * It is NOT a member of the closed refusal registry in `refusal-card.mjs`. The pack's
- * versioned registry lists nineteen codes and does not include this one; it comes from the
+ * versioned registry does not include this one; it comes from the
  * #349 acceptance list. Admitting it to the Gateway registry is a versioned API contract
  * change and belongs to #348, so it stays named here and is not quietly appended.
  */
