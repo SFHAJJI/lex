@@ -51,7 +51,7 @@ namespace Lex.V3.Tests.Contracts;
 /// the failure message tells the reader what to decide rather than pretending the answer is obvious.
 /// </para>
 /// <para>
-/// <b>Why nine tests, and why no test here walks anything of its own.</b> A pin that passes by
+/// <b>Why ten tests, and why no test here walks anything of its own.</b> A pin that passes by
 /// finding nothing says as much about the rule as about the product, and this file has proved
 /// that twice. First, four of seven mutants survived review: dropping a family from the list
 /// passed because the rule test asked each family about itself, and sweeping no assembly passed,
@@ -400,6 +400,39 @@ public sealed class NoModelDependencyCensusTests
     }
 
     [TestMethod]
+    public void TheLockReaderReadsEveryFrameworkSection()
+    {
+        const string lockFile = """
+            {
+              "version": 1,
+              "dependencies": {
+                "net10.0": { "InBoth": { "type": "Direct" }, "InBaseOnly": { "type": "Transitive" } },
+                "net10.0/linux-x64": { "InBoth": { "type": "Transitive" },
+                                       "InRuntimeOnly": { "type": "Transitive" } }
+              }
+            }
+            """;
+
+        using var document = JsonDocument.Parse(lockFile);
+        var read = ReadLockedPackages(document);
+
+        CollectionAssert.Contains(
+            read.Select(static entry => entry.Package).ToArray(),
+            "InRuntimeOnly",
+            "A package can be resolved for a runtime identifier only, in a later section of the same "
+            + "lock file, and a reader that stops at the first section never sees it.");
+        CollectionAssert.AreEqual(
+            Ordered(new[] { "InBaseOnly", "InBoth", "InBoth", "InRuntimeOnly" }),
+            Ordered(read.Select(static entry => entry.Package)),
+            "The reader must report a package once per section that resolves it, so the section can "
+            + "be named in a failure.");
+        CollectionAssert.AreEqual(
+            Array.Empty<(string, string)>(),
+            ReadLockedPackages(JsonDocument.Parse("{}")).Select(static e => (e.Framework, e.Package)).ToArray(),
+            "A lock file with no dependencies section reads as no packages rather than throwing.");
+    }
+
+    [TestMethod]
     public void TheDeclarationReaderReadsEverySpellingItClaimsTo()
     {
         foreach (var (declaration, package) in DeclarationSpellings)
@@ -612,6 +645,32 @@ public sealed class NoModelDependencyCensusTests
             .ToArray();
     }
 
+    /// <summary>
+    /// Every package a lock file resolves, in every framework section, with the section it came
+    /// from. A lock file has one section per target and one more per runtime identifier, and a
+    /// package can be resolved for a runtime only.
+    /// </summary>
+    /// <remarks>
+    /// Taken as a pure function of the document so a fixture can exercise it, for the same reason
+    /// <see cref="EnumerateDeclaringFiles"/> is: in this repository today <b>no</b> package appears
+    /// only in a runtime section — each of the six <c>net10.0/linux-x64</c> sections holds one id
+    /// that its <c>net10.0</c> section already holds — so on the real files a reader that stopped
+    /// after the first section would read identically to this one, and a mutant that stopped it
+    /// survived until the fixture existed.
+    /// </remarks>
+    private static (string Framework, string Package)[] ReadLockedPackages(JsonDocument document)
+    {
+        if (!document.RootElement.TryGetProperty("dependencies", out var frameworks))
+        {
+            return [];
+        }
+
+        return frameworks.EnumerateObject()
+            .SelectMany(static framework => framework.Value.EnumerateObject()
+                .Select(package => (framework.Name, package.Name)))
+            .ToArray();
+    }
+
     private sealed record ClosureWalk(string[] Offending, string[] Files, string[] Packages);
 
     /// <summary>
@@ -631,19 +690,15 @@ public sealed class NoModelDependencyCensusTests
 
         foreach (var file in locks)
         {
-            files.Add(RepositoryRelative(root, file));
+            var relative = RepositoryRelative(root, file);
+            files.Add(relative);
             using var document = JsonDocument.Parse(File.ReadAllText(file));
-            if (!document.RootElement.TryGetProperty("dependencies", out var frameworks)) continue;
-            foreach (var framework in frameworks.EnumerateObject())
+            foreach (var (framework, package) in ReadLockedPackages(document))
             {
-                foreach (var package in framework.Value.EnumerateObject())
+                packages.Add(package);
+                if (IsModelAssembly(package))
                 {
-                    packages.Add(package.Name);
-                    if (IsModelAssembly(package.Name))
-                    {
-                        offending.Add(
-                            $"{RepositoryRelative(root, file)} {framework.Name} -> {package.Name}");
-                    }
+                    offending.Add($"{relative} {framework} -> {package}");
                 }
             }
         }
