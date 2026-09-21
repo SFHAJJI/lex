@@ -19,15 +19,28 @@ using static Lex.V3.Ingest.Tests.V3CorpusResolveMountTests;
 namespace Lex.V3.Ingest.Tests;
 
 /// <summary>
-/// S4-A11: a request's query text, the caller's address and the caller's user agent are not recorded. The
-/// tests here hold that on the served handler, where it can be observed, and on the source of the public
-/// process, where a new place to record would have to appear.
+/// S4-A11: a request's query text, the caller's address and the caller's user agent are not recorded.
 /// </summary>
 /// <remarks>
-/// Not claimed: hosting and ingress logs (the platform sees the client address and the URL before this
-/// process does, and there is no deploy configuration for the Api in this repository), and what the libraries
-/// the Api calls do outside the request path these tests drive. The response may carry the caller's own query
-/// text back to the caller, and does: that is an answer, and it is not a record.
+/// <para>
+/// <b>The claim is the behavioural one.</b> The sentinel test drives the real handler with values planted in the
+/// query, the connection, the agent and every header an address or a credential might arrive in, and looks for them
+/// in standard output and error, in everything emitted through activities, diagnostic events, event sources, metrics
+/// and traces (which it listens to whatever the emitter is called and whichever assembly holds it), in response
+/// headers and body, and in files written where a log would land. A sink in a referenced assembly is caught there and
+/// nowhere else: a mutant in <c>Lex.V3.Contracts</c> that writes the answer to standard error is killed by that test
+/// alone.
+/// </para>
+/// <para>
+/// <b>The source census is a smaller claim and is named as one:</b> no sink or read of client identity appears in the
+/// source of <c>Lex.V3.Api</c>. It catches the careless case early and cheaply, it is blind to every other project,
+/// and a name it does not list passes it. Do not read it as "not recorded".
+/// </para>
+/// <para>
+/// Not claimed: hosting and ingress logs (the platform sees the client address and the URL before this process does,
+/// and there is no deploy configuration for the Api in this repository), and any path these tests do not drive. The
+/// response may carry the caller's own query text back to the caller, and does: that is an answer, not a record.
+/// </para>
 /// </remarks>
 [TestClass]
 [DoNotParallelize]
@@ -616,7 +629,8 @@ public sealed class PublicRequestRecordingTests
         ("the connection", new Regex(@"\.Connection\b")),
         ("the path or query of the request", new Regex(@"[Rr]equest\.(Query|QueryString|Path|PathBase|Host|Scheme|Protocol|Form|ContentType)\b")),
         ("a logger", new Regex(@"\b(ILogger\w*|LoggerFactory|LoggerMessage|LogInformation|LogWarning|LogError|LogDebug|LogTrace|LogCritical)\b")),
-        ("a logging or telemetry provider", new Regex(@"\b(AddConsole|AddSimpleConsole|AddJsonConsole|AddDebug|AddEventLog|AddEventSourceLogger|AddOpenTelemetry|UseHttpLogging|AddHttpLogging|W3CLogging\w*|ActivitySource|Meter|EventSource|TelemetryClient)\b")),
+        ("a logging or telemetry provider", new Regex(@"\b(AddConsole|AddSimpleConsole|AddJsonConsole|AddDebug|AddEventLog|AddEventSourceLogger|AddOpenTelemetry|UseHttpLogging|AddHttpLogging|W3CLogging\w*|ActivitySource|Activity|Meter|EventSource|DiagnosticListener|DiagnosticSource|TelemetryClient)\b")),
+        ("a network client", new Regex(@"\b(HttpClient|HttpWebRequest|WebRequest|Socket|TcpClient|UdpClient|SmtpClient)\b")),
         ("a trace or debug write", new Regex(@"\b(Trace|Debug)\.(Write\w*|Print\w*|Assert|Fail)\b")),
         ("a file or stream writer", new Regex(@"\b(StreamWriter|BinaryWriter)\b|\bFile\.(OpenWrite|Write\w*|Append\w*|Create\w*|Move|Copy|Replace)\b")),
         ("a database opened for writing", new Regex(@"\bSqliteOpenMode\.ReadWrite\w*")),
@@ -843,6 +857,9 @@ public sealed class PublicRequestRecordingTests
             ("private readonly ILogger<X> log;", "a logger"),
             ("var a = context.Request.QueryString;", "the path or query of the request"),
             ("Trace.WriteLine(x);", "a trace or debug write"),
+            ("new DiagnosticListener(\"x\").Write(\"e\", v);", "a logging or telemetry provider"),
+            ("using var a = source.StartActivity(\"x\"); Activity.Current?.SetTag(k, v);", "a logging or telemetry provider"),
+            ("await new HttpClient().PostAsync(u, c);", "a network client"),
             ("File.AppendAllText(p, x);", "a file or stream writer"),
             ("using var w = new StreamWriter(p);", "a file or stream writer"),
             ("Open(p, SqliteOpenMode.ReadWriteCreate);", "a database opened for writing"),
