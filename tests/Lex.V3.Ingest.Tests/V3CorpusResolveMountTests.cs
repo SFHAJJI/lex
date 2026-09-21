@@ -1134,7 +1134,7 @@ public sealed class V3CorpusResolveMountTests
                 using var stamp = connection.CreateCommand();
                 stamp.CommandText = "UPDATE stamp SET logical_rows_sha256=$digest WHERE stamp_id=1";
                 stamp.Parameters.AddWithValue(
-                    "$digest", LuxembourgIndexBuilder.HashLogicalRows(members, articles, states, titles));
+                    "$digest", LogicalRowsWithRelationsRefreshed(connection, members, articles, states, titles));
                 Assert.AreEqual(1, stamp.ExecuteNonQuery());
             }
 
@@ -1172,8 +1172,7 @@ public sealed class V3CorpusResolveMountTests
                 stamp.CommandText =
                     "UPDATE stamp SET logical_rows_sha256=$digest WHERE stamp_id=1";
                 stamp.Parameters.AddWithValue(
-                    "$digest", LuxembourgIndexBuilder.HashLogicalRows(
-                        members, articles, states, titles));
+                    "$digest", LogicalRowsWithRelationsRefreshed(connection, members, articles, states, titles));
                 Assert.AreEqual(1, stamp.ExecuteNonQuery());
             }
 
@@ -1266,7 +1265,7 @@ public sealed class V3CorpusResolveMountTests
                 using var stamp = connection.CreateCommand();
                 stamp.CommandText = "UPDATE stamp SET logical_rows_sha256=$digest WHERE stamp_id=1";
                 stamp.Parameters.AddWithValue(
-                    "$digest", LuxembourgIndexBuilder.HashLogicalRows(members, articles, states, titles));
+                    "$digest", LogicalRowsWithRelationsRefreshed(connection, members, articles, states, titles));
                 Assert.AreEqual(1, stamp.ExecuteNonQuery());
             }
 
@@ -1340,7 +1339,7 @@ public sealed class V3CorpusResolveMountTests
                 using var stamp = connection.CreateCommand();
                 stamp.CommandText = "UPDATE stamp SET logical_rows_sha256=$digest WHERE stamp_id=1";
                 stamp.Parameters.AddWithValue(
-                    "$digest", LuxembourgIndexBuilder.HashLogicalRows(members, articles, states, titles));
+                    "$digest", LogicalRowsWithRelationsRefreshed(connection, members, articles, states, titles));
                 Assert.AreEqual(1, stamp.ExecuteNonQuery());
             }
 
@@ -1468,7 +1467,7 @@ public sealed class V3CorpusResolveMountTests
                 using var stamp = connection.CreateCommand();
                 stamp.CommandText = "UPDATE stamp SET logical_rows_sha256=$digest WHERE stamp_id=1";
                 stamp.Parameters.AddWithValue(
-                    "$digest", LuxembourgIndexBuilder.HashLogicalRows(members, articles, states, titles));
+                    "$digest", LogicalRowsWithRelationsRefreshed(connection, members, articles, states, titles));
                 Assert.AreEqual(1, stamp.ExecuteNonQuery());
             }
 
@@ -1567,7 +1566,7 @@ public sealed class V3CorpusResolveMountTests
                 using var stamp = connection.CreateCommand();
                 stamp.CommandText = "UPDATE stamp SET logical_rows_sha256=$digest WHERE stamp_id=1";
                 stamp.Parameters.AddWithValue(
-                    "$digest", LuxembourgIndexBuilder.HashLogicalRows(members, articles, states, titles));
+                    "$digest", LogicalRowsWithRelationsRefreshed(connection, members, articles, states, titles));
                 Assert.AreEqual(1, stamp.ExecuteNonQuery());
             }
 
@@ -1618,7 +1617,7 @@ public sealed class V3CorpusResolveMountTests
                 using var stamp = connection.CreateCommand();
                 stamp.CommandText = "UPDATE stamp SET logical_rows_sha256=$digest WHERE stamp_id=1";
                 stamp.Parameters.AddWithValue(
-                    "$digest", LuxembourgIndexBuilder.HashLogicalRows(members, articles, states, titles));
+                    "$digest", LogicalRowsWithRelationsRefreshed(connection, members, articles, states, titles));
                 Assert.AreEqual(1, stamp.ExecuteNonQuery());
             }
 
@@ -1881,7 +1880,7 @@ public sealed class V3CorpusResolveMountTests
                 using var stamp = connection.CreateCommand();
                 stamp.CommandText = "UPDATE stamp SET logical_rows_sha256=$digest WHERE stamp_id=1";
                 stamp.Parameters.AddWithValue(
-                    "$digest", LuxembourgIndexBuilder.HashLogicalRows(members, articles, states, titles));
+                    "$digest", LogicalRowsWithRelationsRefreshed(connection, members, articles, states, titles));
                 Assert.AreEqual(1, stamp.ExecuteNonQuery());
             }
 
@@ -1894,6 +1893,43 @@ public sealed class V3CorpusResolveMountTests
                 Path.Combine(Directory, V3CorpusMount.CapabilityManifestFileName),
                 stream.ToArray());
             return secondWork;
+        }
+
+        /// <summary>
+        /// The relation rows are the references the articles carry, so a helper that edits an article by hand (adds one,
+        /// copies its tokens, changes its wording) reseals the table from the articles before it hashes the rows.
+        /// </summary>
+        private static string LogicalRowsWithRelationsRefreshed(
+            SqliteConnection connection,
+            LuxembourgIndexBuilder.MemberRow[] members,
+            LuxembourgIndexBuilder.ArticleRow[] articles,
+            LuxembourgIndexBuilder.StateRow[] states,
+            LuxembourgIndexBuilder.WorkTitleRow[] titles)
+        {
+            using (var clear = connection.CreateCommand())
+            {
+                clear.CommandText = "DELETE FROM relations";
+                clear.ExecuteNonQuery();
+            }
+
+            foreach (var relation in LuxembourgIndexBuilder.ProjectRelations(articles))
+            {
+                using var insert = connection.CreateCommand();
+                insert.CommandText = "INSERT INTO relations VALUES($from,$ordinal,$edge,$asserted,$predicate,$note,$label,$href,$kind,$target)";
+                insert.Parameters.AddWithValue("$from", relation.FromRef);
+                insert.Parameters.AddWithValue("$ordinal", relation.Ordinal);
+                insert.Parameters.AddWithValue("$edge", relation.EdgeType);
+                insert.Parameters.AddWithValue("$asserted", relation.AssertedBy);
+                insert.Parameters.AddWithValue("$predicate", relation.SourcePredicate);
+                insert.Parameters.AddWithValue("$note", relation.InNote ? 1 : 0);
+                insert.Parameters.AddWithValue("$label", (object?)relation.Label ?? DBNull.Value);
+                insert.Parameters.AddWithValue("$href", (object?)relation.Href ?? DBNull.Value);
+                insert.Parameters.AddWithValue("$kind", relation.ToKind);
+                insert.Parameters.AddWithValue("$target", (object?)relation.ToRef ?? DBNull.Value);
+                Assert.AreEqual(1, insert.ExecuteNonQuery());
+            }
+
+            return LuxembourgIndexBuilder.HashLogicalRows(members, articles, states, titles);
         }
 
         private static LuxembourgIndexBuilder.MemberRow[] ReadMembers(SqliteConnection connection)
