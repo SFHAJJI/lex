@@ -414,32 +414,50 @@ public sealed class ScopeLineQuestionTests
     }
 
     [TestMethod]
-    public void TheSweepForTheSelfExcusingEventFindsOneThatIsPlantedAndSkipsBuildOutput()
+    public void EverySpellingInTheSweepsListIsFoundWherePlantedAndTheListHoldsBothOfThem()
     {
-        // The test above passes by finding nothing, so on its own it cannot tell a sweep that works
-        // from a sweep that looks in the wrong place — which is precisely how its first version was
-        // wrong. This plants the token and requires the walk to come back with it.
+        // The real-tree sweep loops over SelfExcusingTokens, so the list is the pin. Two things are
+        // needed and only together: the fixture is DRIVEN BY the list, so a spelling added to it is
+        // proved findable; and the spellings are also written out INDEPENDENTLY of it, because a
+        // fixture driven only by the list shrinks when the list does and a trimmed pin stays green.
+        // That second half is the lesson of this file's neighbour: the A12 pin's rule test asked each
+        // family about itself, so removing a family removed its own assertion.
+        foreach (var spelling in RequiredSelfExcusingSpellings)
+        {
+            CollectionAssert.Contains(
+                SelfExcusingTokens, spelling,
+                $"{spelling} is no longer swept for. The pin just got narrower, and the sweep's own "
+                + "emptiness on the real tree cannot say so.");
+        }
+
         var container = Path.Combine(Path.GetTempPath(), "lex-v3-a13-" + Guid.NewGuid().ToString("N"));
         var root = Path.Combine(container, "checkout");
         try
         {
-            Write(root, "src/Widget/Emitter.cs", "internal enum Kind { coverage_changed }");
-            Write(root, "src/Widget/Deep/Wire.cs", "internal const string CoverageChanged = \"x\";");
-            Write(root, "src/Widget/Clean.cs", "internal sealed class Clean { }");
-            Write(root, "src/Widget/obj/Generated.cs", "enum G { coverage_changed }");
-            Write(root, "src/Widget/bin/Release/Copied.cs", "enum B { coverage_changed }");
-            Write(root, "tests/Other/Other.cs", "enum T { coverage_changed }");
+            // One production file per token the sweep looks for, at differing depths.
+            var planted = SelfExcusingTokens
+                .Select(static (token, index) => (Token: token, Relative: $"src/Widget/Depth{index}/Named{index}.cs"))
+                .ToArray();
+            foreach (var (token, relative) in planted)
+            {
+                Write(root, relative, "// " + token);
+            }
 
-            CollectionAssert.AreEqual(
-                new[] { "src/Widget/Emitter.cs" },
-                FilesNaming(root, "coverage_changed"),
-                "the sweep must find the snake_case token where a production file names it, and must "
-                + "not report build output under obj or bin, or anything outside src");
-            CollectionAssert.AreEqual(
-                new[] { "src/Widget/Deep/Wire.cs" },
-                FilesNaming(root, "CoverageChanged"),
-                "and must find the PascalCase spelling at any depth, which is how a wire constant "
-                + "rather than an enum member would arrive");
+            // Not production, and not to be reported, each holding the first spelling.
+            Write(root, "src/Widget/Clean.cs", "internal sealed class Clean { }");
+            Write(root, "src/Widget/obj/Generated.cs", "// " + RequiredSelfExcusingSpellings[0]);
+            Write(root, "src/Widget/bin/Release/Copied.cs", "// " + RequiredSelfExcusingSpellings[0]);
+            Write(root, "tests/Other/Other.cs", "// " + RequiredSelfExcusingSpellings[0]);
+
+            foreach (var (token, relative) in planted)
+            {
+                CollectionAssert.AreEqual(
+                    new[] { relative },
+                    FilesNaming(root, token),
+                    $"the sweep must find {token} in the one production file that names it, at any "
+                    + "depth, and must not report build output under obj or bin or anything outside src");
+            }
+
             CollectionAssert.AreEqual(
                 Array.Empty<string>(),
                 FilesNaming(root, "a-token-nothing-names"),
@@ -454,6 +472,14 @@ public sealed class ScopeLineQuestionTests
             }
         }
     }
+
+    /// <summary>
+    /// The spellings the sweep's list must contain, written out here and not derived from it. A
+    /// reviewer's mutants trimmed <see cref="SelfExcusingTokens"/> to one entry each way and every
+    /// test stayed green, because the fixture wrote the spellings out a second time instead of
+    /// driving from the list, and a fixture that only drives from the list would have shrunk with it.
+    /// </summary>
+    private static readonly string[] RequiredSelfExcusingSpellings = ["coverage_changed", "CoverageChanged"];
 
     /// <summary>Both spellings the name would arrive under: the wire token and the identifier.</summary>
     private static readonly string[] SelfExcusingTokens = ["coverage_changed", "CoverageChanged"];
