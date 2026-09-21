@@ -211,6 +211,54 @@ public sealed class ShuffledControlsTests
         StringAssert.Contains(result.Reason, "the harness reports no gate 'no_hit_accuracy'");
     }
 
+    [TestMethod]
+    public void TheQrelsShuffleMovesJudgmentsOnlyWithinACollection()
+    {
+        var original = new List<EvaluationCase>();
+        foreach (var collection in new[] { "alpha", "beta" })
+        {
+            for (var index = 1; index <= 3; index++)
+            {
+                var id = $"{collection}-r{index}";
+                original.Add(new EvaluationCase(id, collection, EvaluationCaseKind.Retrieval, new QueryJudgments(id,
+                    [new JudgedAnchor($"{collection}-work-{index}", "art-1", 3)])));
+            }
+
+            for (var index = 1; index <= 2; index++)
+            {
+                var id = $"{collection}-e{index}";
+                original.Add(new EvaluationCase(id, collection, EvaluationCaseKind.ExactIdentifier, new QueryJudgments(id,
+                    [new JudgedAnchor($"{collection}-exact-{index}", "art-9", 3)])));
+                var none = $"{collection}-n{index}";
+                original.Add(new EvaluationCase(none, collection, EvaluationCaseKind.Retrieval, new QueryJudgments(none, [])));
+            }
+        }
+
+        IReadOnlyList<EvaluationCase>? shuffled = null;
+        RetrievalReport Capture(IReadOnlyList<EvaluationCase> value, RetrievalArm arm)
+        {
+            if (!ReferenceEquals(value, original))
+            {
+                shuffled = value;
+            }
+
+            return RealRetrieval(value, arm);
+        }
+
+        var result = ShuffledControls.QrelsShuffle(original, Oracle(original), Capture, 5);
+
+        Assert.AreEqual(ControlVerdict.CaughtTheShuffle, result.Verdict, result.Reason);
+        Assert.IsNotNull(shuffled);
+        Assert.IsTrue(
+            shuffled.All(value => value.Judgments.Anchors.All(anchor => anchor.WorkKey.StartsWith(value.Collection + "-", StringComparison.Ordinal))),
+            "a judgment is never moved into another collection");
+        Assert.IsTrue(
+            shuffled.Zip(original).Any(pair => pair.First.Judgments.Anchors.Count != pair.Second.Judgments.Anchors.Count ||
+                pair.First.Judgments.Anchors.Any(anchor => pair.Second.Judgments.GradeOf(new RankedAnchor(anchor.WorkKey, anchor.AnchorId)) == 0)),
+            "and the judgments did move");
+        Assert.HasCount(original.Count, shuffled);
+    }
+
     // ---- control 2: the verdict shuffle ----
 
     private static readonly string[] Verdicts = ["answer", "awe", "point", "clarify", "refuse", "split"];
@@ -279,6 +327,22 @@ public sealed class ShuffledControlsTests
         Assert.IsTrue(result.BlocksTheHarness);
     }
 
+    [TestMethod]
+    public void AnExactMatchExactlyAtTheBaseRateCeilingIsCaughtAndOneStepAboveItIsMissed()
+    {
+        var cases = VerdictCases(Enumerable.Range(0, 24).Select(index => Verdicts[index % 6]).ToArray());
+        VerdictEvaluator After(double exact) => (value, arm) =>
+        {
+            var real = RealVerdicts(value, arm);
+            return ReferenceEquals(value, cases) ? real : real with { ExactMatch = MetricResult.Measured(exact) };
+        };
+
+        Assert.AreEqual(ControlVerdict.CaughtTheShuffle,
+            ShuffledControls.VerdictShuffle(cases, GoldOf(cases), After(4.0 / 24.0), 1).Verdict, "the ceiling is four of twenty-four");
+        Assert.AreEqual(ControlVerdict.MissedTheShuffle,
+            ShuffledControls.VerdictShuffle(cases, GoldOf(cases), After((4.0 / 24.0) + 0.001), 1).Verdict);
+    }
+
     // ---- control 3: the date shuffle ----
 
     private static readonly DateOnly First = new(2024, 1, 1);
@@ -317,6 +381,22 @@ public sealed class ShuffledControlsTests
 
         Assert.AreEqual(ControlVerdict.MissedTheShuffle, result.Verdict);
         StringAssert.Contains(result.Reason, "of the expectations still hold after the shift and every one must break");
+    }
+
+    [TestMethod]
+    public void OneExpectationThatStillHoldsMissesTheDateShuffleHoweverManyBroke()
+    {
+        var cases = TemporalCases();
+        TemporalEvaluator OneSurvives = (value, arm) =>
+        {
+            var real = RealDates(value, arm);
+            return ReferenceEquals(value, cases) ? real : real with { Exactness = MetricResult.Measured(1.0 / 12.0) };
+        };
+
+        var result = ShuffledControls.DateShuffle(cases, StateOn, OneSurvives, [30, 60, 90], 1);
+
+        Assert.AreEqual(ControlVerdict.MissedTheShuffle, result.Verdict);
+        StringAssert.Contains(result.Reason, "0.0833 of the expectations still hold");
     }
 
     [TestMethod]
