@@ -16,6 +16,7 @@
       "object_type": "version_state",
       "scenario": "the same request, so a caller can move from one to the other",
       "answer": {
+        "articles_not_admitted_note": "articles_not_admitted counts the articles of the publisher\u0027s document for this state that the corpus recorded and this state does not hold; the number of articles in this state plus articles_not_admitted is the number of articles in that document; which articles they are is not held. An article is not admitted whole when the reviewed profile cannot represent every element in it: that can be an article the publisher struck out, and it can equally be an article whose text is complete but which carries a mark the profile does not accept, such as an empty placeholder where a list item was removed",
         "available_languages": [
           "fra"
         ],
@@ -326,6 +327,7 @@
                 "validity_conflict": true
               }
             ],
+            "articles_not_admitted": 5,
             "expression_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo/fr",
             "language": "fra",
             "next_applicability_date": null,

@@ -487,7 +487,8 @@ public sealed class V3AnswerSamplesTests
                 + "FIXTURE'S. The article counts are none of those: they are this pipeline's count of that document "
                 + "rather than the document's own, which carries 54 top-level articles against the 49 this mount holds: "
                 + "the five are articles the corpus recorded under the token akn_unsupported_content_shape, which the "
-                + "answers count, coverage in members.article_outcomes and provenance in each source's article_outcomes. "
+                + "answers count, coverage in members.article_outcomes, provenance in each source's article_outcomes and as_of "
+                + "in the state's articles_not_admitted (which is the five). "
                 + "There is no sample from a real corpus, so a "
                 + "reader holding a surface against this file is held against the shape a producer sends and not "
                 + "against the scale or the completeness a real corpus has.",
