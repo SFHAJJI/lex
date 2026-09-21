@@ -240,6 +240,38 @@ public sealed class LuxembourgIndexRelationsTests
     }
 
     [TestMethod]
+    public async Task AnIriNamesAHeldWorkOnlyByExactEqualityWithAStatesLegalResourceOrWorkIri()
+    {
+        var (built, corpusRef) = await LuxembourgIndexBuilderTests.BuildStateIndexAsync();
+        using var reader = LuxembourgIndexReader.OpenAndVerify(
+            built.IndexRef, built.IndexBytes.Span, corpusRef, built.CapabilityManifest);
+        const string work = "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3";
+
+        var held = reader.ResolveHeldWorks(
+        [
+            work + "/jo",
+            work,
+            work + "/jo",
+            work + "/jo/",
+            work + "/fr",
+            work.Replace("http://", "https://", StringComparison.Ordinal) + "/jo",
+            work.ToUpperInvariant() + "/JO",
+            "/eli/etat/leg/loi/1991/08/10/n3/jo",
+            "eli/etat/leg/loi/1991/08/10/n3/jo",
+            "http://data.legilux.public.lu/eli/etat/leg/loi/2004/07/09/n3/jo",
+            string.Empty,
+        ]);
+
+        // Only the two strings a state carries, each with the work key: the legal-resource form the publisher writes in
+        // running text, and the work IRI. Every near miss (a trailing slash, another scheme, another case, a relative
+        // value, another act) is not held.
+        CollectionAssert.AreEqual(new[] { work, work + "/jo" }, held.Keys.ToArray());
+        Assert.IsTrue(held.Values.All(static key => key == "loi-1991-08-10-n3"));
+        Assert.IsEmpty(reader.ResolveHeldWorks([]));
+        Assert.IsEmpty(reader.ResolveHeldWorks(["http://data.legilux.public.lu/eli/etat/leg/loi/2004/07/09/n3/jo"]));
+    }
+
+    [TestMethod]
     public async Task TheStrictReaderRefusesAnIndexWhoseRelationsAreNotTheReferencesItsArticlesCarry()
     {
         var (built, corpusRef) = await LuxembourgIndexBuilderTests.BuildStateIndexAsync();
