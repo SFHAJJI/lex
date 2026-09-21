@@ -438,7 +438,7 @@
           "corpus_sha256": "\u003Cvaries-per-run\u003E",
           "index_sha256": "\u003Cvaries-per-run\u003E",
           "publisher": "lu-legilux",
-          "registry_sha256": "2107f86ec66e6a44855df627f7fef81332eb65d4f5b8c3dbb247756b88b5660d"
+          "registry_sha256": "63afb9b177fe09efa2cfbfecab2458a651e8d7bdf2c9deccac842156188de35f"
         },
         "not_held": [
           {
@@ -468,7 +468,6 @@
             "as_observed",
             "ask",
             "browse",
-            "cited_by",
             "classification",
             "concepts",
             "events",
@@ -487,6 +486,7 @@
             "as_of",
             "changes_in_period",
             "citation",
+            "cited_by",
             "coverage",
             "diff",
             "dossier",
@@ -578,7 +578,7 @@
         "verified_by": {
           "corpus_sha256": "\u003Cvaries-per-run\u003E",
           "index_sha256": "\u003Cvaries-per-run\u003E",
-          "registry_sha256": "2107f86ec66e6a44855df627f7fef81332eb65d4f5b8c3dbb247756b88b5660d"
+          "registry_sha256": "63afb9b177fe09efa2cfbfecab2458a651e8d7bdf2c9deccac842156188de35f"
         },
         "work_key": "loi-1991-08-10-n3"
       }
@@ -595,6 +595,10 @@
     },
     {
       "operation": "citation",
+      "reason": "sampled when a reader is built against it"
+    },
+    {
+      "operation": "cited_by",
       "reason": "sampled when a reader is built against it"
     },
     {
