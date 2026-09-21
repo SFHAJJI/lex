@@ -100,6 +100,34 @@ public sealed class LuxembourgIndexRelationsTests
         Assert.IsGreaterThan(0, total, "the act carries references, so the comparison above is not empty");
     }
 
+    /// <summary>
+    /// The sample behind the remark on <see cref="LuxembourgIndexBuilder.RelationRow"/>: in these two acts a Legilux
+    /// reference written with the host is always in a note and one written without it is always in running text. The
+    /// counts are the width of that observation; nothing in the index or the answers relies on it.
+    /// </summary>
+    [TestMethod]
+    [DataRow(LuxembourgAknLegalContentProfileProducerTests.Fixture1991, "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c", "loi-1991-08-10-n3", -1, -1, -1)]
+    [DataRow(LuxembourgAknLegalContentProfileProducerTests.Fixture1984, "5d513304238bbda30578f59f963b227d54ca1fbce9283c55b9c5aa7b4436e48f", "loi-1984-02-24-n1", -1, -1, -1)]
+    public async Task InTheTwoRetainedActsALegiluxReferenceIsInANoteExactlyWhenItIsWrittenWithTheHost(
+        string fixture, string sha256, string key, int expectedEdges, int expectedHostInNote, int expectedNoHostInText)
+    {
+        var bytes = await LuxembourgAknLegalContentProfileProducerTests.RetainedFixtureAsync(fixture, sha256);
+        var population = await LuxembourgAknLegalContentProfileProducerTests.RunAsync(bytes, key);
+        var rows = population.Outcomes
+            .Where(static outcome => outcome.Article is not null)
+            .SelectMany(static outcome => LuxembourgIndexBuilder.ProjectRelations([Row(outcome.Article!)]))
+            .ToArray();
+        var legilux = rows.Where(static row => string.Equals(row.ToKind, "legilux_eli", StringComparison.Ordinal)).ToArray();
+        var hostInNote = legilux.Count(static row => row.InNote && row.Href!.StartsWith(Root, StringComparison.Ordinal));
+        var noHostInText = legilux.Count(static row => !row.InNote && !row.Href!.StartsWith(Root, StringComparison.Ordinal));
+        var message = $"edges {rows.Length}, legilux {legilux.Length}, host in note {hostInNote}, no host in text {noHostInText}";
+
+        Assert.AreEqual(expectedEdges, rows.Length, message);
+        Assert.AreEqual(expectedHostInNote, hostInNote, message);
+        Assert.AreEqual(expectedNoHostInText, noHostInText, message);
+        Assert.AreEqual(legilux.Length, hostInNote + noHostInText, "no Legilux edge is in the other two cells: " + message);
+    }
+
     [TestMethod]
     public async Task AQuestionMarkPlaceholderTheRealActWritesIsUnparsedAndNeverNamesAWork()
     {
@@ -238,6 +266,24 @@ public sealed class LuxembourgIndexRelationsTests
                 "UPDATE relations SET in_note=1-in_note WHERE rowid=(SELECT min(rowid) FROM relations)"));
     }
 
+    [TestMethod]
+    [DataRow("not json", "text that is not JSON")]
+    [DataRow("""{"kind":"reference","target":"/eli/a"}""", "an object where a list of tokens belongs")]
+    [DataRow("""[5]""", "a token that is not an object")]
+    [DataRow("""[{"text":"x"}]""", "a token with no kind")]
+    [DataRow("""[{"kind":5}]""", "a kind that is not a string")]
+    [DataRow("""[{"kind":"note_reference","note_body":[{"text":"x"}]}]""", "a footnote body token with no kind")]
+    public async Task TheStrictReaderRefusesAnIndexWhoseStoredTokenStreamIsNotATokenList(string tokensJson, string what)
+    {
+        var (built, corpusRef) = await LuxembourgIndexBuilderTests.BuildStateIndexAsync();
+
+        AssertRejected(built, corpusRef, what, connection =>
+            LuxembourgIndexBuilderTests.Execute(connection,
+                "UPDATE articles SET tokens_json=$tokens WHERE rowid=(SELECT min(rowid) FROM articles)",
+                ("$tokens", tokensJson)),
+            "not a list of tokens the relation rows can be read from");
+    }
+
     /// <summary>
     /// What the publisher wrote, counted from the XML alone: each <c>ref</c> inside the article in document order, and
     /// at each <c>noteRef</c> the <c>ref</c>s inside the <c>note</c> it points at (the publisher keeps a note's body
@@ -324,7 +370,8 @@ public sealed class LuxembourgIndexRelationsTests
         LuxembourgIndexBuildResult built,
         SourceArtifactRef corpusRef,
         string what,
-        Action<SqliteConnection> tamper)
+        Action<SqliteConnection> tamper,
+        string expectedMessage = "relation rows are not the references its articles carry")
     {
         // The stamp is recomputed over the tampered table, so the digest agrees with the rows and only the
         // rule that the rows are the articles' own references can refuse the index.
@@ -347,7 +394,7 @@ public sealed class LuxembourgIndexRelationsTests
         var exception = Assert.ThrowsExactly<InvalidDataException>(
             () => LuxembourgIndexReader.OpenAndVerify(reference, bytes, corpusRef, manifest), what);
 
-        StringAssert.Contains(exception.Message, "relation rows are not the references its articles carry", what);
+        StringAssert.Contains(exception.Message, expectedMessage, what);
     }
 
     private static LuxembourgIndexBuilder.ArticleRow Row(LuxembourgAknLegalContentArticle article) =>
