@@ -6,7 +6,7 @@ using System.Reflection;
 using System.Text.Json;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
-namespace Lex.V3.Ingest.Tests.Census;
+namespace Lex.V3.Tests.Contracts;
 
 /// <summary>
 /// Every reference of every production assembly, and every package manifest, checked against the
