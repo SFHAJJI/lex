@@ -33,11 +33,13 @@ public sealed class LuxembourgLiveAdapterCanary
     /// The vocabulary partitions are opened over whole classes, so their sizes are the publisher's and no number can be
     /// read off the code alone. What the code does fix is the cost of a partition as a function of its count
     /// (<see cref="LuxembourgEnumerationBudget.RequestsForPartition"/>: robots, then a count and its pages for each of
-    /// two passes), and it checks that cost against the budget it has left as soon as the count is read, so a class
-    /// larger than declared is refused right after its count with the count in the refusal. This file therefore
-    /// DECLARES how large a partition may be, derives the ceiling from that, and writes the derivation into the
-    /// retained scope before the first request. A first run is a measurement of whether the declaration was right: it
-    /// either passes, or refuses at the first partition that is larger and says how large.
+    /// two passes), and it checks that cost against the budget the WHOLE canary has left as soon as a count is read, so
+    /// a class the remaining budget cannot pay for is refused right after its count with the count in the refusal. This
+    /// file therefore DECLARES how large a partition may be, derives the ceiling from that, and writes the derivation
+    /// into the retained scope before the first request. The declaration is not enforced one partition at a time: a class
+    /// larger than declared that the remaining budget can still pay for is delivered and spends what later legs were
+    /// counting on, so a first run either passes, or ends red with every count it learned recorded, because all four
+    /// vocabulary families are run and their outcomes asserted once.
     /// </para>
     /// <para>
     /// The ceiling is a refusal and never a truncation. <see cref="HardCap"/> is what no derivation may exceed, and a
@@ -95,6 +97,14 @@ public sealed class LuxembourgLiveAdapterCanary
         derivation.Total > HardCap
             ? $"the derived wire ceiling {derivation.Total} exceeds the hard cap {HardCap}; the declarations sum past what a canary may cost"
             : null;
+
+    /// <summary>
+    /// Whether a refusal carries the count it was refused on. Such a refusal is about that family's size and about
+    /// nothing else, so the other families are still worth a robots fetch and a count each; any other refusal is not.
+    /// </summary>
+    internal static bool NamesACount(LuxembourgEnumerationRefusalDetail? refusal) =>
+        refusal is { ObservedCount: not null } &&
+        refusal.Code is LuxembourgEnumerationRefusal.WireBudgetExhausted or LuxembourgEnumerationRefusal.PartitionRequired;
 
     private const int DeclaredDocumentsForAnAct = 8;
     private const int DeclaredDocumentsForPlainXml = 2;
@@ -166,6 +176,63 @@ public sealed class LuxembourgLiveAdapterCanary
         Assert.IsTrue(
             refusal < budget && budget < firstPartition && scope < firstPartition,
             "the refusal, the budget and the retained derivation all come before the first request is sent");
+    }
+
+    /// <summary>
+    /// Which refusals let the other vocabulary families run. Only one that carries a count and names the count's own
+    /// limits does: it is about that family's size and about nothing else. Anything else, a robots refusal, a publisher
+    /// failure, a custody failure, or a budget refusal with no count, ends the loop, so a publisher that has just
+    /// failed is not asked three more times.
+    /// </summary>
+    [TestMethod]
+    [DataRow(LuxembourgEnumerationRefusal.WireBudgetExhausted, 100L, true)]
+    [DataRow(LuxembourgEnumerationRefusal.PartitionRequired, 1_000_000L, true)]
+    [DataRow(LuxembourgEnumerationRefusal.WireBudgetExhausted, null, false)]
+    [DataRow(LuxembourgEnumerationRefusal.PartitionRequired, null, false)]
+    [DataRow(LuxembourgEnumerationRefusal.RobotsBootstrapRefused, 100L, false)]
+    [DataRow(LuxembourgEnumerationRefusal.CountNotOneNonNegativeInteger, 100L, false)]
+    [DataRow(LuxembourgEnumerationRefusal.CustodyMemberMissing, 100L, false)]
+    public void OnlyARefusalThatCarriesACountLetsTheOtherFamiliesRun(
+        LuxembourgEnumerationRefusal code, long? count, bool expected)
+    {
+        var refusal = new LuxembourgEnumerationRefusalDetail(code, null, null, null, null, null, count, [], null);
+
+        Assert.AreEqual(expected, NamesACount(refusal));
+    }
+
+    [TestMethod]
+    public void NoRefusalAtAllIsNotACountRefusal()
+    {
+        Assert.IsFalse(NamesACount(null));
+    }
+
+    /// <summary>
+    /// The gated run cannot be driven in a default build, so its order is read from its source: every vocabulary
+    /// outcome is recorded before one assertion covers them all, and that assertion comes before any rows are read.
+    /// A refusal asserted inside the loop would stop the run at the first family whose count the budget cannot pay for
+    /// and leave the other counts unlearned.
+    /// </summary>
+    [TestMethod]
+    public void EveryVocabularyOutcomeIsRecordedBeforeOneAssertionCoversThemAll()
+    {
+        var source = File.ReadAllText(SourcePath());
+        var recorded = "partitionOutcomes" + ".Add(";
+        var assertedOnce = "refused" + "Families,";
+        var firstRows = "AbsenceFamilyEnumerationProof." + "TryCreate(";
+        var receiptAssertedInLoop = "Assert.IsNotNull(outcome." + "Receipt,";
+        var stopsOnAnyOtherRefusal = "!" + "NamesACount(outcome.Refusal)";
+
+        Assert.AreEqual(1, CountOf(source, recorded), "each outcome is recorded once");
+        Assert.AreEqual(1, CountOf(source, assertedOnce), "one assertion covers every family");
+        Assert.AreEqual(0, CountOf(source, receiptAssertedInLoop), "no receipt is asserted inside the loop");
+        Assert.AreEqual(1, CountOf(source, stopsOnAnyOtherRefusal), "a refusal that names no count ends the loop");
+
+        var loop = source.IndexOf(recorded, StringComparison.Ordinal);
+        var assertion = source.IndexOf(assertedOnce, StringComparison.Ordinal);
+        var rows = source.IndexOf(firstRows, StringComparison.Ordinal);
+        Assert.IsTrue(
+            loop >= 0 && loop < assertion && assertion < rows,
+            "outcomes are recorded, then asserted once, then read");
     }
 
     private static int CountOf(string text, string needle)
@@ -287,19 +354,42 @@ public sealed class LuxembourgLiveAdapterCanary
             var documentRenderer = await RendererAsync(store, checkout, "src/Lex.V3.Contracts/Source/Luxembourg/LuxembourgDocumentFetchPlan.cs");
             var executor = new LuxembourgRepeatedEnumerationExecutor(store, TimeProvider.System);
 
+            // PHASE ONE, ALL FOUR FAMILIES: run each partition and record its outcome before anything is asserted.
+            // A family whose count the budget cannot pay for is refused right after its count, with the count in the
+            // refusal, and stopping there would leave the other families' counts unlearned, so that the next run would
+            // be the same run. A refusal that names a count says nothing about the other families and they are still
+            // run (a robots fetch and a count each); any other refusal (robots, a publisher failure, a custody failure)
+            // ends the loop, because more requests to a publisher that has just failed teach nothing.
+            var partitionOutcomes = new List<(string Family, LuxembourgQueryPartitionRange Range, LuxembourgEnumerationRunResult Outcome)>();
             foreach (var family in new[] { "P", "T", "C", "O" })
             {
                 var range = family == "O"
                     ? Range("vocabulary-" + family.ToLowerInvariant(), "http://creativecommons.org/licenses/by/4.0/", "http://creativecommons.org/licenses/by/4.1/")
-                    : Range("vocabulary-" + family.ToLowerInvariant(), "", "\uffff");
+                    : Range("vocabulary-" + family.ToLowerInvariant(), "", "￿");
                 var request = new LuxembourgPartitionRunRequest(plan, planId, family, range, queryRenderer);
                 var witness = plan.BindCount(planId, NewUrn(), NewUrn(), family, LuxembourgQueryPass.Pass1, range, queryRenderer);
                 var outcome = await executor.RunPartitionAsync(
                     request, witness.Request, budget, CancellationToken.None);
                 measured.Add(new { family, outcome.ProductRequestCount, outcome.Refusal, outcome.Receipt?.Delivery,
                     retention = outcome.Receipt?.RetainedFloor.ToString() });
-                Assert.IsNotNull(outcome.Receipt, $"Vocabulary {family} refused: {JsonSerializer.Serialize(outcome.Refusal)}");
-                var proof = AbsenceFamilyEnumerationProof.TryCreate(range.PartitionId, outcome.Receipt.Delivery,
+                partitionOutcomes.Add((family, range, outcome));
+                if (outcome.Receipt is null && !NamesACount(outcome.Refusal))
+                {
+                    break;
+                }
+            }
+
+            // ONE ASSERTION FOR ALL OF THEM, so a red run carries every count it learned.
+            var refusedFamilies = partitionOutcomes.Where(static entry => entry.Outcome.Receipt is null).ToArray();
+            Assert.IsEmpty(
+                refusedFamilies,
+                "Vocabulary partitions refused: " + string.Join(
+                    "; ", refusedFamilies.Select(static entry => $"{entry.Family} {JsonSerializer.Serialize(entry.Outcome.Refusal)}")));
+
+            // PHASE TWO: read the rows of what was delivered.
+            foreach (var (family, range, outcome) in partitionOutcomes)
+            {
+                var proof = AbsenceFamilyEnumerationProof.TryCreate(range.PartitionId, outcome.Receipt!.Delivery,
                     outcome.Receipt.RetainedFloor, out var proofRefusal);
                 Assert.IsNotNull(proof, $"Vocabulary {family} proof refused: {proofRefusal}");
                 var interpretation = plan.CreateDeliveryProfile(planId, family);
