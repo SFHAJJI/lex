@@ -37,6 +37,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import {
   HELD,
   NOT_STATED,
+  NO_ARTICLE_OUTCOMES,
   capabilityAbsence,
   narrowedNote,
   readCoverage,
@@ -64,6 +65,7 @@ const MUST_REACH = [
   "languages[].articles_without_publisher_date",
   "capability_cells[].population",
   "members.by_outcome[].outcome",
+  "members.article_outcomes[].disposition",
   "operations.not_served_operations[]",
   "not_held[].reason",
 ];
@@ -1208,10 +1210,156 @@ test("the preview reproduces the platform's sentences, to the character", async 
     assert.equal(answer.scope, captured.scope, `${preview.heading} paraphrases scope`);
     assert.equal(answer.counts_note, captured.counts_note, `${preview.heading} paraphrases counts_note`);
     assert.equal(answer.members.gaps_note, captured.members.gaps_note);
+    assert.equal(
+      answer.members.article_outcomes_note, captured.members.article_outcomes_note,
+      `${preview.heading} paraphrases article_outcomes_note`);
     assert.equal(answer.operations.note, captured.operations.note);
     assert.deepEqual(answer.not_held, captured.not_held, `${preview.heading} rewrote a not_held row`);
     assert.deepEqual(answer.operations.served_operations, captured.operations.served_operations);
     assert.deepEqual(
       answer.operations.not_served_operations, captured.operations.not_served_operations);
+  }
+});
+
+const OUTCOMES_CAPTION = "Legal-content outcomes the corpus recorded, by disposition";
+
+/**
+ * The disposition tokens the corpus declares, read from the enum that declares them and not copied
+ * beside it, so the preview cannot teach a token the corpus has never emitted. The file holds four
+ * enums and a token of another one is not a disposition of this one, so the block is cut at the
+ * enum's own closing brace.
+ */
+async function corpusDispositionTokens() {
+  const source = await readFile(
+    new URL("../../src/Lex.V3.Ingest/LexCorpus6Builder.cs", import.meta.url), "utf8");
+  const start = source.indexOf("enum LexCorpus6Stage3Disposition");
+  assert.notEqual(start, -1, "the corpus declares no enum LexCorpus6Stage3Disposition");
+  const open = source.indexOf("{", start);
+  const close = source.indexOf(String.fromCharCode(10) + "}", open);
+  assert.ok(close > open, "the disposition enum has no closing brace");
+  const tokens = new Set(
+    [...source.slice(open, close).matchAll(/JsonStringEnumMemberName\("([a-z0-9_]+)"\)/g)]
+      .map(([, token]) => token),
+  );
+  assert.ok(tokens.has("akn_admitted"), "the disposition vocabulary did not parse");
+  assert.equal(tokens.has("acquired"), false, "the disposition vocabulary is not the outcome one");
+  return tokens;
+}
+
+test("the corpus's legal-content outcomes are printed token by token, in the order sent, in both renderers", async () => {
+  const answer = withDigests(await capturedAnswer());
+  // The committed real document: 54 top-level articles, 49 admitted and five the reviewed profile
+  // could not represent. A page that printed only the held ones would hide the five.
+  assert.deepEqual(
+    answer.members.article_outcomes.map((row) => `${row.disposition}=${row.outcomes}`),
+    ["akn_admitted=49", "akn_unsupported_content_shape=5"],
+    "the captured answer no longer carries the outcomes this test is about",
+  );
+  // More rows than the capture has, and a token nobody has seen: printed as it came, in the order
+  // the platform sent, and none of them glossed.
+  const three = mutate(answer, (a) => {
+    a.members.article_outcomes = [
+      { disposition: "akn_admitted", outcomes: 3 },
+      { disposition: "akn_marker_only_evidence", outcomes: 2 },
+      { disposition: "akn_a_token_from_a_later_corpus", outcomes: 1 },
+    ];
+  });
+  for (const [name, given] of [["the capture", answer], ["three rows", three]]) {
+    for (const [renderer, html] of [["string", string(given)], ["react", react(given)]]) {
+      assert.deepEqual(
+        tableRows(html, OUTCOMES_CAPTION),
+        given.members.article_outcomes.map((row) => [row.disposition, String(row.outcomes)]),
+        `${renderer}: ${name}: the outcome rows are not each token's own, in order`,
+      );
+      assert.ok(
+        text(html).includes(given.members.article_outcomes_note),
+        `${renderer}: ${name}: the platform's note on the outcomes was not printed verbatim`,
+      );
+    }
+  }
+});
+
+test("a malformed article-outcomes member is refused by the one reader, and nothing is printed", async () => {
+  const answer = withDigests(await capturedAnswer());
+  const cases = [
+    ["absent", (a) => { delete a.members.article_outcomes; }, /members does not carry article_outcomes/],
+    ["null", (a) => { a.members.article_outcomes = null; }, /is a list, even an empty one/],
+    ["an object", (a) => { a.members.article_outcomes = { akn_admitted: 49 }; }, /is a list, even an empty one/],
+    ["a row that is not an object", (a) => { a.members.article_outcomes = [49]; }, /disposition is not a value this page can print/],
+    ["a row with no token", (a) => { a.members.article_outcomes = [{ outcomes: 1 }]; }, /disposition is not a value this page can print/],
+    ["a row with an empty token", (a) => { a.members.article_outcomes = [{ disposition: " ", outcomes: 1 }]; }, /disposition is not a value this page can print/],
+    ["a negative count", (a) => { a.members.article_outcomes[0].outcomes = -1; }, /rather than a count/],
+    ["a fractional count", (a) => { a.members.article_outcomes[0].outcomes = 1.5; }, /rather than a count/],
+    ["a count as text", (a) => { a.members.article_outcomes[0].outcomes = "49"; }, /rather than a count/],
+    ["a row with no count", (a) => { delete a.members.article_outcomes[0].outcomes; }, /does not carry outcomes/],
+    [
+      "one token twice",
+      (a) => { a.members.article_outcomes = [
+        { disposition: "akn_admitted", outcomes: 1 }, { disposition: "akn_admitted", outcomes: 2 }]; },
+      /the article outcome breakdown lists "akn_admitted" twice/,
+    ],
+    [
+      "a token counting no outcome",
+      (a) => { a.members.article_outcomes[1].outcomes = 0; },
+      /counts no outcomes for "akn_unsupported_content_shape".*a row accounting for none is a category nothing recorded/s,
+    ],
+    ["no note", (a) => { delete a.members.article_outcomes_note; }, /members does not carry article_outcomes_note/],
+    ["an empty note", (a) => { a.members.article_outcomes_note = " "; }, /article_outcomes_note is not a value this page can print/],
+  ];
+  for (const [name, change, pattern] of cases) {
+    assert.throws(() => readCoverage(mutate(answer, change)), pattern, `the reader accepted ${name}`);
+    assert.throws(() => string(mutate(answer, change)), pattern, `the string renderer accepted ${name}`);
+    assert.throws(() => react(mutate(answer, change)), pattern, `the React port accepted ${name}`);
+  }
+});
+
+test("a mount whose members recorded no legal-content outcome says so, and still prints the platform's note", async () => {
+  const answer = mutate(withDigests(await capturedAnswer()), (a) => { a.members.article_outcomes = []; });
+  for (const [renderer, html] of [["string", string(answer)], ["react", react(answer)]]) {
+    assert.ok(text(html).includes(NO_ARTICLE_OUTCOMES), `${renderer} left the empty list unexplained`);
+    assert.equal(
+      captions(html).includes(OUTCOMES_CAPTION), false, `${renderer} printed a table with no rows`);
+    assert.ok(text(html).includes(answer.members.article_outcomes_note), `${renderer} dropped the note`);
+  }
+});
+
+test("the preview's outcome tokens are the corpus's and its held outcomes are its articles", async () => {
+  const tokens = await corpusDispositionTokens();
+  let checked = 0;
+  for (const preview of PREVIEW_ANSWERS) {
+    const { article_outcomes: rows } = preview.answer.members;
+    assert.ok(rows.length > 0, `${preview.heading} shows no outcome`);
+    const held = new Map(rows.map((row) => [row.disposition, row.outcomes]));
+    for (const row of rows) {
+      checked += 1;
+      assert.ok(tokens.has(row.disposition), `${preview.heading}: "${row.disposition}" is not a corpus disposition token`);
+    }
+    // The platform's note says the articles the index holds are exactly its admitted and marker-only
+    // outcomes, so a preview whose two disagree with its own totals teaches a relation the platform
+    // does not keep. (The page itself does not do this sum: it is the platform's statement.)
+    assert.equal(
+      (held.get("akn_admitted") ?? 0) + (held.get("akn_marker_only_evidence") ?? 0),
+      preview.answer.totals.articles,
+      `${preview.heading}: the held outcomes are not the totals' articles`,
+    );
+    assert.deepEqual(
+      rows.map((row) => row.disposition),
+      rows.map((row) => row.disposition).toSorted(),
+      `${preview.heading}: the tokens are not in ordinal order`,
+    );
+  }
+  assert.ok(checked > 0, "no preview outcome was checked; the vocabulary held nothing");
+
+  // And the captured real answer keeps the relation the note states, which is the reason the
+  // preview may teach it.
+  const captured = await capturedAnswer();
+  const capturedHeld = Object.fromEntries(
+    captured.members.article_outcomes.map((row) => [row.disposition, row.outcomes]));
+  assert.equal(
+    (capturedHeld.akn_admitted ?? 0) + (capturedHeld.akn_marker_only_evidence ?? 0),
+    captured.totals.articles,
+  );
+  for (const row of captured.members.article_outcomes) {
+    assert.ok(tokens.has(row.disposition), `the capture carries "${row.disposition}", not a corpus token`);
   }
 });

@@ -428,6 +428,7 @@ function readLanguages(value, { totals, languagesHeld, requestedLanguage }) {
  */
 function readMembers(value, totals) {
   const where = 'members';
+  const articleOutcomes = readArticleOutcomes(value, where);
   const withGaps = requireCount(requireOwn(value, 'with_gaps', where), `${where}.with_gaps`);
   requireAtMost(withGaps, totals.members, `${where}.with_gaps`,
     'the members carrying a gap are counted among the members');
@@ -477,7 +478,44 @@ function readMembers(value, totals) {
     byOutcome,
     gaps,
     gapsNote: requireText(requireOwn(value, 'gaps_note', where), `${where}.gaps_note`),
+    articleOutcomes,
+    articleOutcomesNote: requireText(
+      requireOwn(value, 'article_outcomes_note', where), `${where}.article_outcomes_note`),
   };
+}
+
+/**
+ * The corpus's own record of what its legal-content stage did with the articles of its acquired
+ * documents, counted by the corpus's disposition token.
+ *
+ * Every token is printed verbatim and none is glossed here: the platform's `article_outcomes_note`
+ * says which of them are held and that it does not define them, and a gloss invented on this page
+ * would be this service's word wearing the corpus's authority. The rows are a `GROUP BY` of the
+ * outcomes, so a token is one row and counts at least one outcome, and they are never summed here:
+ * the platform's note says which of them are the articles the index holds, and that arithmetic is
+ * the platform's to state and not this page's to redo. An empty list is a fact (the corpus recorded
+ * none) and an absent member is another, so absence is refused.
+ */
+function readArticleOutcomes(value, where) {
+  const rows = requireList(
+    requireOwn(value, 'article_outcomes', where), `${where}.article_outcomes`)
+    .map((row, index) => ({
+      disposition: requireText(row?.disposition, `${where}.article_outcomes[${index}].disposition`),
+      outcomes: requireCount(
+        requireOwn(row, 'outcomes', `${where}.article_outcomes[${index}]`),
+        `${where}.article_outcomes[${index}].outcomes`),
+    }));
+  requireDistinct(rows.map((row) => row.disposition), 'the article outcome breakdown');
+  for (const [index, row] of rows.entries()) {
+    if (row.outcomes === 0) {
+      throw new Error(
+        `${where}.article_outcomes[${index}] counts no outcomes for ${JSON.stringify(row.disposition)}; `
+          + 'these rows are a grouping of the corpus’s outcomes, and a group exists because an '
+          + 'outcome is in it, so a row accounting for none is a category nothing recorded',
+      );
+    }
+  }
+  return rows;
 }
 
 /**
@@ -699,6 +737,11 @@ export const STATE_RANGE_NOTE =
   + 'anything was collected. The publisher dates states ahead, so the last of them may lie in the '
   + 'future; this mount holds no present date to compare them against and makes no such comparison.';
 
+/** No article outcome row at all, which a mount whose members recorded none reaches. */
+export const NO_ARTICLE_OUTCOMES =
+  'No legal-content outcome is counted here, so this page cannot say what the corpus recorded for '
+  + 'the articles of the documents it acquired.';
+
 /** Members recorded a gap and no token was counted, which `[ ]` in a gap list reaches. */
 export const NO_GAP_TOKENS =
   'No gap token is counted here, so where a member above recorded a gap this page cannot say which.';
@@ -872,6 +915,15 @@ export function renderCoverage(answer) {
           `<tr><td>${code(gap.gap)}</td><td>${gap.members}</td></tr>`)).join(''),
       }))
     + `<p class="coverage-note">${escapeHtml(view.members.gapsNote)}</p>`
+    + (view.members.articleOutcomes.length === 0
+      ? `<p class="coverage-note">${escapeHtml(NO_ARTICLE_OUTCOMES)}</p>`
+      : table({
+        caption: 'Legal-content outcomes the corpus recorded, by disposition',
+        head: ['disposition', 'outcomes'],
+        rows: view.members.articleOutcomes.map((outcome) => (
+          `<tr><td>${code(outcome.disposition)}</td><td>${outcome.outcomes}</td></tr>`)).join(''),
+      }))
+    + `<p class="coverage-note">${escapeHtml(view.members.articleOutcomesNote)}</p>`
     + '</section>'
     + '<section class="coverage-block"><h2>What can be asked of this mount</h2>'
     + `<p class="coverage-held">${escapeHtml(

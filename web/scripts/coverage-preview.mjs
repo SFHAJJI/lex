@@ -44,14 +44,36 @@ const SCOPE =
   + 'nothing about what the publisher holds';
 
 const COUNTS_NOTE =
-  'counts are of rows the index holds; a missing publisher date is counted as missing and never '
-  + 'dropped; articles_with_searchable_text is counted where the article carries a publisher date, '
-  + 'which is what the capability cells measure, and so it and articles_without_publisher_date are '
-  + 'not addends; when a language is requested, requested_language echoes it and only languages and '
-  + 'capability_cells are narrowed to it, and every other member, totals included, is the whole '
-  + "mount's";
+  'counts are of rows the index holds; totals.articles and languages[].articles count the '
+  + 'articles the index holds, and the corpus can have recorded more articles than the index '
+  + 'holds: members.article_outcomes counts what it recorded; a missing publisher date is counted '
+  + 'as missing and never dropped; articles_with_searchable_text is counted where the article '
+  + 'carries a publisher date, which is what the capability cells measure, and so it and '
+  + 'articles_without_publisher_date are not addends; when a language is requested, '
+  + 'requested_language echoes it and only languages and capability_cells are narrowed to it, and '
+  + "every other member, totals included, is the whole mount's";
 
 const GAPS_NOTE = 'the gap tokens the corpus recorded per member, verbatim, counted by member';
+
+const ARTICLE_OUTCOMES_NOTE =
+  "the corpus's own record of what its legal-content stage did with the articles of its "
+  + "acquired Luxembourg documents, counted by the corpus's disposition token and given verbatim, "
+  + "and this answer does not define the tokens; an outcome is one article's, except "
+  + "akn_upstream_not_inventoried, which is one document's because none of its articles was "
+  + 'listed; the articles the index holds, which totals.articles and languages[].articles count, '
+  + 'are exactly the akn_admitted and akn_marker_only_evidence outcomes, and an outcome under any '
+  + 'other token is not held here; which article an outcome belongs to is not held; the outcomes '
+  + 'of members that are not acquired are not counted';
+
+// The corpus's own disposition tokens, in ordinal order as the platform sends them, and not
+// invented here (the tests read the enum that declares them). The articles the index holds are
+// exactly the first two, which is why 236 and 4 are the 240 articles in the totals above; the third
+// is outcomes the corpus recorded and the index does not hold.
+const ARTICLE_OUTCOMES = Object.freeze([
+  Object.freeze({ disposition: 'akn_admitted', outcomes: 236 }),
+  Object.freeze({ disposition: 'akn_marker_only_evidence', outcomes: 4 }),
+  Object.freeze({ disposition: 'akn_unsupported_content_shape', outcomes: 9 }),
+]);
 
 const OPERATIONS_NOTE =
   'served_operations are the routes this mount answers and not_served_operations are registered '
@@ -168,6 +190,8 @@ function answer({ requestedLanguage, languages, capabilityCells }) {
     languages,
     languages_held: [...LANGUAGES_HELD],
     members: {
+      article_outcomes: ARTICLE_OUTCOMES.map((row) => ({ ...row })),
+      article_outcomes_note: ARTICLE_OUTCOMES_NOTE,
       by_outcome: [
         { members: 12, outcome: 'acquired' },
         { members: 3, outcome: 'unavailable' },
