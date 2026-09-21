@@ -1,4 +1,10 @@
+using System.Collections.Concurrent;
+using System.Diagnostics;
+using System.Diagnostics.Metrics;
+using System.Diagnostics.Tracing;
+using System.Globalization;
 using System.Net;
+using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -27,15 +33,46 @@ namespace Lex.V3.Ingest.Tests;
 [DoNotParallelize]
 public sealed class PublicRequestRecordingTests
 {
-    private sealed record Sentinels(string UserText, string Address, string Agent, string Forwarded, string Referer);
+    /// <summary>
+    /// What one caller sends: the text they ask about, the address the connection came from, the agent, and every
+    /// header a deployment might deliver an address or a credential in. Each identity value has a core that is
+    /// distinctive on its own, because a recorder that keeps only the address out of "for=..." or only the token out
+    /// of "Bearer ..." has still recorded it, and a check against the whole header would miss that.
+    /// </summary>
+    private sealed record Sentinels(string UserText, string Address, string Agent, IReadOnlyList<(string Header, string Value, string Core)> Headers)
+    {
+        public IEnumerable<(string Kind, string Core)> Identity =>
+            new[] { ("address", Address), ("agent", Agent.Split(' ')[^1]) }.Concat(Headers.Select(static header => (header.Header, header.Core)));
+    }
 
     private static readonly Sentinels First = new(
-        "zqx-user-text-7731", "203.0.113.77", "SentinelBrowser/9.9 zqx-agent-4419", "198.51.100.23", "https://referer.example/zqx-5521");
+        "zqx-user-text-7731", "203.0.113.77", "SentinelBrowser/9.9 zqx-agent-4419",
+        [
+            ("X-Forwarded-For", "198.51.100.23", "198.51.100.23"),
+            ("X-Real-IP", "198.51.100.41", "198.51.100.41"),
+            ("True-Client-IP", "198.51.100.58", "198.51.100.58"),
+            ("CF-Connecting-IP", "198.51.100.66", "198.51.100.66"),
+            ("Forwarded", "for=198.51.100.79;proto=https", "198.51.100.79"),
+            ("Cookie", "session=zqx-cookie-6612; theme=dark", "zqx-cookie-6612"),
+            ("Authorization", "Bearer zqx-token-9034", "zqx-token-9034"),
+            ("Referer", "https://referer.example/zqx-5521", "zqx-5521"),
+        ]);
 
     private static readonly Sentinels Second = new(
-        "wvk-other-text-2086", "203.0.113.190", "OtherBrowser/1.0 wvk-agent-9052", "198.51.100.201", "https://other.example/wvk-8814");
+        "wvk-other-text-2086", "203.0.113.190", "OtherBrowser/1.0 wvk-agent-9052",
+        [
+            ("X-Forwarded-For", "198.51.100.101", "198.51.100.101"),
+            ("X-Real-IP", "198.51.100.102", "198.51.100.102"),
+            ("True-Client-IP", "198.51.100.103", "198.51.100.103"),
+            ("CF-Connecting-IP", "198.51.100.104", "198.51.100.104"),
+            ("Forwarded", "for=198.51.100.105;proto=http", "198.51.100.105"),
+            ("Cookie", "session=wvk-cookie-3381; theme=light", "wvk-cookie-3381"),
+            ("Authorization", "Bearer wvk-token-7742", "wvk-token-7742"),
+            ("Referer", "https://other.example/wvk-8814", "wvk-8814"),
+        ]);
 
-    private sealed record Observation(int Status, string Headers, string Body, string StandardOut, string StandardError, string? RequestRef);
+    private sealed record Observation(
+        int Status, string Headers, string Body, string StandardOut, string StandardError, string Diagnostics, string? RequestRef);
 
     private sealed record Scenario(string Name, Func<Sentinels, (string Target, string Method, string Body)> Build, bool AnswersWithAnEnvelope);
 
@@ -64,8 +101,11 @@ public sealed class PublicRequestRecordingTests
         context.Request.Body = new MemoryStream(bytes);
         context.Request.ContentLength = bytes.Length;
         context.Request.Headers.UserAgent = who.Agent;
-        context.Request.Headers["X-Forwarded-For"] = who.Forwarded;
-        context.Request.Headers.Referer = who.Referer;
+        foreach (var (header, value, _) in who.Headers)
+        {
+            context.Request.Headers[header] = value;
+        }
+
         context.Connection.RemoteIpAddress = IPAddress.Parse(who.Address);
         context.Connection.RemotePort = 51234;
         context.Features.Get<IHttpRequestFeature>()!.RawTarget = target;
@@ -73,9 +113,11 @@ public sealed class PublicRequestRecordingTests
         return context;
     }
 
-    private static async Task<Observation> ObserveAsync(V3ApiHandler handler, Scenario scenario, Sentinels who, string traceIdentifier)
+    private static async Task<Observation> ObserveAsync(
+        V3ApiHandler handler, EmittedDiagnostics emitted, Scenario scenario, Sentinels who, string traceIdentifier)
     {
         var context = Context(scenario, who, traceIdentifier);
+        emitted.Drain();
         var previousOut = Console.Out;
         var previousError = Console.Error;
         using var standardOut = new StringWriter();
@@ -95,7 +137,185 @@ public sealed class PublicRequestRecordingTests
         var headers = string.Join("\n", context.Response.Headers.Select(static pair => pair.Key + ": " + pair.Value));
         var body = Encoding.UTF8.GetString(ResponseBytes(context));
         return new Observation(
-            context.Response.StatusCode, headers, body, standardOut.ToString(), standardError.ToString(), RequestRefOf(body));
+            context.Response.StatusCode, headers, body, standardOut.ToString(), standardError.ToString(), emitted.Drain(), RequestRefOf(body));
+    }
+
+    /// <summary>
+    /// Everything a request makes the process emit through the channels a handler can reach without naming a sink: an
+    /// activity and its tags, a diagnostic event and its payload, an event source's events, a metric and its tags, and a
+    /// trace write. It listens to all of them, so it does not matter what the emitter is called or which assembly it
+    /// lives in, which is what a search of one project's source cannot say.
+    /// </summary>
+    private sealed class EmittedDiagnostics : EventListener
+    {
+        private readonly ConcurrentQueue<string> _seen = new();
+        private readonly ActivityListener _activities;
+        private readonly MeterListener _meters;
+        private readonly TraceCollector _trace;
+        private readonly DiagnosticSubscriber _subscriber;
+        private readonly IDisposable _subscription;
+
+        public EmittedDiagnostics()
+        {
+            _activities = new ActivityListener
+            {
+                ShouldListenTo = static _ => true,
+                Sample = static (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
+                ActivityStopped = activity => Note(
+                    "activity " + activity.Source.Name + "/" + activity.DisplayName,
+                    activity.TagObjects.Select(static tag => tag.Key + "=" + tag.Value),
+                    activity.Baggage.Select(static item => item.Key + "=" + item.Value),
+                    activity.Events.SelectMany(static value => value.Tags.Select(static tag => tag.Key + "=" + tag.Value))),
+            };
+            ActivitySource.AddActivityListener(_activities);
+
+            _meters = new MeterListener { InstrumentPublished = static (instrument, listener) => listener.EnableMeasurementEvents(instrument) };
+            _meters.SetMeasurementEventCallback<long>((instrument, _, tags, _) => NoteMeasurement(instrument, tags));
+            _meters.SetMeasurementEventCallback<int>((instrument, _, tags, _) => NoteMeasurement(instrument, tags));
+            _meters.SetMeasurementEventCallback<double>((instrument, _, tags, _) => NoteMeasurement(instrument, tags));
+            _meters.Start();
+
+            _trace = new TraceCollector(this);
+            Trace.Listeners.Add(_trace);
+
+            _subscriber = new DiagnosticSubscriber(this);
+            _subscription = DiagnosticListener.AllListeners.Subscribe(_subscriber);
+        }
+
+        public string Drain()
+        {
+            var lines = new List<string>();
+            while (_seen.TryDequeue(out var line))
+            {
+                lines.Add(line);
+            }
+
+            return string.Join("\n", lines);
+        }
+
+        public override void Dispose()
+        {
+            _subscription.Dispose();
+            _subscriber.Dispose();
+            Trace.Listeners.Remove(_trace);
+            _meters.Dispose();
+            _activities.Dispose();
+            base.Dispose();
+        }
+
+        protected override void OnEventSourceCreated(EventSource source)
+        {
+            if (source.Name.StartsWith("Microsoft-Windows-DotNETRuntime", StringComparison.Ordinal)
+                || source.Name.StartsWith("System.Threading.Tasks", StringComparison.Ordinal)
+                || source.Name.StartsWith("Microsoft-DotNETCore", StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            EnableEvents(source, EventLevel.Verbose, EventKeywords.All);
+        }
+
+        protected override void OnEventWritten(EventWrittenEventArgs eventData) =>
+            Note("event " + eventData.EventSource.Name + "/" + eventData.EventName + " " + eventData.Message, eventData.Payload?.Select(static value => Text(value)) ?? []);
+
+        private void NoteMeasurement(Instrument instrument, ReadOnlySpan<KeyValuePair<string, object?>> tags)
+        {
+            var values = new List<string>();
+            foreach (var tag in tags)
+            {
+                values.Add(tag.Key + "=" + tag.Value);
+            }
+
+            Note("measurement " + instrument.Meter.Name + "/" + instrument.Name, values);
+        }
+
+        private void Note(string what, params IEnumerable<string>[] parts) =>
+            _seen.Enqueue(what + " " + string.Join(" ", parts.SelectMany(static part => part)));
+
+        private void Note(string what) => _seen.Enqueue(what);
+
+        // A payload is read as text and, for an object, as its public properties one level down. The request's own
+        // context, its streams and its connection are opaque: they hold what the caller sent, legitimately, and a
+        // diagnostic that carries the context is not one that carries the value out.
+        internal static string Text(object? value, int depth = 0)
+        {
+            switch (value)
+            {
+                case null:
+                    return string.Empty;
+                case string text:
+                    return text;
+                case HttpContext or HttpRequest or HttpResponse or Stream or ConnectionInfo or IFeatureCollection:
+                    return value.GetType().Name;
+                case IFormattable formattable:
+                    return formattable.ToString(null, CultureInfo.InvariantCulture);
+                case System.Collections.IEnumerable items when depth < 2:
+                    return string.Join(" ", items.Cast<object?>().Select(item => Text(item, depth + 1)));
+            }
+
+            var parts = new List<string> { value.ToString() ?? string.Empty };
+            if (depth < 2)
+            {
+                foreach (var property in value.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance).Where(static property => property.GetIndexParameters().Length == 0))
+                {
+                    try
+                    {
+                        parts.Add(property.Name + "=" + Text(property.GetValue(value), depth + 1));
+                    }
+                    catch (Exception exception) when (exception is TargetInvocationException or InvalidOperationException or NotSupportedException)
+                    {
+                        // A property that throws holds nothing this can read.
+                    }
+                }
+            }
+
+            return string.Join(" ", parts);
+        }
+
+        private sealed class TraceCollector(EmittedDiagnostics owner) : TraceListener
+        {
+            public override void Write(string? message) => owner.Note("trace " + message);
+
+            public override void WriteLine(string? message) => owner.Note("trace " + message);
+        }
+
+        private sealed class DiagnosticSubscriber(EmittedDiagnostics owner) : IObserver<DiagnosticListener>, IDisposable
+        {
+            private readonly ConcurrentBag<IDisposable> _subscriptions = [];
+
+            public void OnNext(DiagnosticListener listener) =>
+                _subscriptions.Add(listener.Subscribe(new DiagnosticEvents(owner, listener.Name)));
+
+            public void OnCompleted()
+            {
+            }
+
+            public void OnError(Exception error)
+            {
+            }
+
+            public void Dispose()
+            {
+                foreach (var subscription in _subscriptions)
+                {
+                    subscription.Dispose();
+                }
+            }
+        }
+
+        private sealed class DiagnosticEvents(EmittedDiagnostics owner, string source) : IObserver<KeyValuePair<string, object?>>
+        {
+            public void OnNext(KeyValuePair<string, object?> value) =>
+                owner.Note("diagnostic " + source + "/" + value.Key + " " + Text(value.Value));
+
+            public void OnCompleted()
+            {
+            }
+
+            public void OnError(Exception error)
+            {
+            }
+        }
     }
 
     private static string? RequestRefOf(string body)
@@ -143,9 +363,9 @@ public sealed class PublicRequestRecordingTests
     }
 
     /// <summary>
-    /// Where a sentinel turned up that it must not. The caller's address, agent, forwarded address and referrer
-    /// appear nowhere. The caller's own text may be echoed in the body, where the answer says what was asked, and
-    /// appears nowhere else.
+    /// Where a sentinel turned up that it must not. The caller's address, agent and every planted header appear
+    /// nowhere. The caller's own text may be echoed in the body, where the answer says what was asked, and appears
+    /// nowhere else.
     /// </summary>
     private static IReadOnlyList<string> Leaks(Observation seen, Sentinels who)
     {
@@ -154,13 +374,14 @@ public sealed class PublicRequestRecordingTests
         {
             ("standard output", seen.StandardOut),
             ("standard error", seen.StandardError),
+            ("emitted diagnostics", seen.Diagnostics),
             ("response headers", seen.Headers),
             ("response body", seen.Body),
         };
-        foreach (var (kind, value) in new[] { ("address", who.Address), ("agent", who.Agent), ("forwarded address", who.Forwarded), ("referrer", who.Referer) })
+        foreach (var (kind, core) in who.Identity)
         {
-            found.AddRange(places.Where(place => place.Item2.Contains(value, StringComparison.Ordinal))
-                .Select(place => $"{kind} in {place.Item1}"));
+            found.AddRange(places.Where(place => place.Item2.Contains(core, StringComparison.Ordinal))
+                .Select(place => $"{kind.ToLowerInvariant()} in {place.Item1}"));
         }
 
         found.AddRange(places.Where(place => place.Item1 != "response body" && place.Item2.Contains(who.UserText, StringComparison.Ordinal))
@@ -209,7 +430,7 @@ public sealed class PublicRequestRecordingTests
         return found;
     }
 
-    private static string[] Values(Sentinels who) => [who.UserText, who.Address, who.Agent, who.Forwarded, who.Referer];
+    private static string[] Values(Sentinels who) => [who.UserText, .. who.Identity.Select(static value => value.Core)];
 
     private static string[] WhereALogWouldLand(string mountDirectory) =>
         [Path.GetTempPath(), Environment.CurrentDirectory, AppContext.BaseDirectory, mountDirectory];
@@ -223,13 +444,14 @@ public sealed class PublicRequestRecordingTests
         Assert.IsNotNull(mount);
         var before = Snapshot(fixture.Directory);
         var started = DateTime.UtcNow.AddSeconds(-2);
+        using var emitted = new EmittedDiagnostics();
 
         foreach (var withCorpus in new[] { true, false })
         {
             var handler = HandlerOver(withCorpus ? mount : null);
             foreach (var scenario in Scenarios)
             {
-                var seen = await ObserveAsync(handler, scenario, First, "trace-" + scenario.Name.Length);
+                var seen = await ObserveAsync(handler, emitted, scenario, First, "trace-" + scenario.Name.Length);
                 var leaks = Leaks(seen, First);
                 Assert.IsEmpty(leaks, $"{scenario.Name} ({(withCorpus ? "corpus mounted" : "no corpus")}): {string.Join("; ", leaks)}");
             }
@@ -272,8 +494,9 @@ public sealed class PublicRequestRecordingTests
         using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
         Assert.IsNotNull(mount);
         var handler = HandlerOver(mount);
+        using var emitted = new EmittedDiagnostics();
 
-        var search = await ObserveAsync(handler, Scenarios[0], First, "trace-control");
+        var search = await ObserveAsync(handler, emitted, Scenarios[0], First, "trace-control");
         Assert.AreEqual(StatusCodes.Status200OK, search.Status, search.Body);
         Assert.Contains(First.UserText, search.Body, "The query text never reached the search, so a check that it is not recorded proves nothing.");
         Assert.IsNotNull(search.RequestRef);
@@ -281,7 +504,10 @@ public sealed class PublicRequestRecordingTests
         var context = Context(Scenarios[0], First, "trace-control");
         Assert.AreEqual(First.Agent, context.Request.Headers.UserAgent.ToString());
         Assert.AreEqual(First.Address, context.Connection.RemoteIpAddress!.ToString());
-        Assert.AreEqual(First.Forwarded, context.Request.Headers["X-Forwarded-For"].ToString());
+        foreach (var (header, value, _) in First.Headers)
+        {
+            Assert.AreEqual(value, context.Request.Headers[header].ToString(), header);
+        }
     }
 
     [TestMethod]
@@ -292,12 +518,13 @@ public sealed class PublicRequestRecordingTests
         using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
         Assert.IsNotNull(mount);
         var handler = HandlerOver(mount);
+        using var emitted = new EmittedDiagnostics();
 
         foreach (var scenario in Scenarios.Where(static value => value.AnswersWithAnEnvelope))
         {
-            var one = await ObserveAsync(handler, scenario, First, "trace-alpha");
-            var other = await ObserveAsync(handler, scenario, Second, "trace-alpha");
-            var elsewhere = await ObserveAsync(handler, scenario, First, "trace-beta");
+            var one = await ObserveAsync(handler, emitted, scenario, First, "trace-alpha");
+            var other = await ObserveAsync(handler, emitted, scenario, Second, "trace-alpha");
+            var elsewhere = await ObserveAsync(handler, emitted, scenario, First, "trace-beta");
 
             Assert.IsNotNull(one.RequestRef, scenario.Name);
             Assert.AreEqual(
@@ -310,15 +537,72 @@ public sealed class PublicRequestRecordingTests
     [TestMethod]
     public void TheLeakCheckSeesASentinelInEachPlaceItIsMeantToWatch()
     {
-        var clean = new Observation(200, "Cache-Control: no-store", "{\"requested_query\":\"" + First.UserText + "\"}", string.Empty, string.Empty, "http_a");
+        var clean = new Observation(200, "Cache-Control: no-store", "{\"requested_query\":\"" + First.UserText + "\"}", string.Empty, string.Empty, string.Empty, "http_a");
         Assert.IsEmpty(Leaks(clean, First), "The caller's text echoed in the body is an answer, not a leak.");
 
         CollectionAssert.AreEquivalent(new[] { "agent in standard error" }, Leaks(clean with { StandardError = "ua=" + First.Agent }, First).ToArray());
         CollectionAssert.AreEquivalent(new[] { "address in standard output" }, Leaks(clean with { StandardOut = First.Address }, First).ToArray());
-        CollectionAssert.AreEquivalent(new[] { "forwarded address in response headers" }, Leaks(clean with { Headers = "X-Echo: " + First.Forwarded }, First).ToArray());
-        CollectionAssert.AreEquivalent(new[] { "referrer in response body" }, Leaks(clean with { Body = First.Referer }, First).ToArray());
+        CollectionAssert.AreEquivalent(new[] { "x-forwarded-for in response headers" }, Leaks(clean with { Headers = "X-Echo: 198.51.100.23" }, First).ToArray());
+        CollectionAssert.AreEquivalent(new[] { "referer in response body" }, Leaks(clean with { Body = "https://referer.example/zqx-5521" }, First).ToArray());
         CollectionAssert.AreEquivalent(new[] { "query text in standard error" }, Leaks(clean with { StandardError = First.UserText }, First).ToArray());
         CollectionAssert.AreEquivalent(new[] { "query text in response headers" }, Leaks(clean with { Headers = "Location: /" + First.UserText }, First).ToArray());
+        CollectionAssert.AreEquivalent(new[] { "query text in emitted diagnostics" }, Leaks(clean with { Diagnostics = "activity x/y q=" + First.UserText }, First).ToArray());
+
+        // Each planted header has its own core, and a recorder that keeps only that core still records it.
+        foreach (var (header, _, core) in First.Headers)
+        {
+            CollectionAssert.AreEquivalent(
+                new[] { header.ToLowerInvariant() + " in emitted diagnostics" },
+                Leaks(clean with { Diagnostics = "kept " + core }, First).ToArray(),
+                header);
+        }
+    }
+
+    // One probe source of each kind, in this process, so the capture can be shown to see what it is meant to see.
+    private static readonly ProbeEvents Probe = new();
+
+    [EventSource(Name = "Lex-V3-Recording-Probe")]
+    private sealed class ProbeEvents : EventSource
+    {
+        [Event(1, Level = EventLevel.Informational)]
+        public void Seen(string value) => WriteEvent(1, value);
+    }
+
+    [TestMethod]
+    public void TheDiagnosticsCaptureSeesEachChannelItIsMeantToWatch()
+    {
+        const string value = "probe-value-5150";
+        using var emitted = new EmittedDiagnostics();
+
+        using (var source = new ActivitySource("Lex.V3.Probe"))
+        using (var activity = source.StartActivity("probe"))
+        {
+            activity?.SetTag("tag", value);
+        }
+
+        Assert.Contains(value, emitted.Drain(), "an activity's tag");
+
+        using (var diagnostic = new DiagnosticListener("Lex.V3.Probe"))
+        {
+            diagnostic.Write("probe", new { Field = value });
+        }
+
+        Assert.Contains(value, emitted.Drain(), "a diagnostic event's payload, read one level into an anonymous object");
+
+        Probe.Seen(value);
+        Assert.Contains(value, emitted.Drain(), "an event source's event");
+
+        using (var meter = new Meter("Lex.V3.Probe"))
+        {
+            meter.CreateCounter<long>("probe").Add(1, new KeyValuePair<string, object?>("tag", value));
+        }
+
+        Assert.Contains(value, emitted.Drain(), "a metric's tag");
+
+        Trace.WriteLine(value);
+        Assert.Contains(value, emitted.Drain(), "a trace write");
+
+        Assert.AreEqual(string.Empty, emitted.Drain(), "a drained capture is empty until something is emitted");
     }
 
     // The source of the public process. Comments and literals are blanked first, so a word in a comment or a
