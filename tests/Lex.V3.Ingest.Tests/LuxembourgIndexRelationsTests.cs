@@ -28,6 +28,8 @@ public sealed class LuxembourgIndexRelationsTests
     [DataRow("/eli/etat/leg/code/penal", "legilux_eli", Root + "/eli/etat/leg/code/penal")]
     [DataRow("/eli/etat/leg/code/penal/", "legilux_eli", Root + "/eli/etat/leg/code/penal/")]
     [DataRow("/eli/etat/leg/loi/2004/07/09/n3/jo#art_5", "legilux_eli", Root + "/eli/etat/leg/loi/2004/07/09/n3/jo#art_5")]
+    [DataRow(Root + "/eli/etat/leg/code/penal/", "legilux_eli", Root + "/eli/etat/leg/code/penal/")]
+    [DataRow(Root + "/eli/etat/leg/loi/2004/07/09/n3/jo#art_5", "legilux_eli", Root + "/eli/etat/leg/loi/2004/07/09/n3/jo#art_5")]
     [DataRow("http://data.europa.eu/eli/agree_internation/2021/689(1)/oj", "other_uri", "http://data.europa.eu/eli/agree_internation/2021/689(1)/oj")]
     [DataRow("https://data.legilux.public.lu/eli/etat/leg/loi/2004/07/09/n3/jo", "other_uri", "https://data.legilux.public.lu/eli/etat/leg/loi/2004/07/09/n3/jo")]
     [DataRow("HTTP://DATA.LEGILUX.PUBLIC.LU/eli/etat/leg/loi/2004/07/09/n3/jo", "other_uri", "HTTP://DATA.LEGILUX.PUBLIC.LU/eli/etat/leg/loi/2004/07/09/n3/jo")]
