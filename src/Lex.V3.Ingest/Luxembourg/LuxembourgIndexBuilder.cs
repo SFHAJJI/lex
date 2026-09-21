@@ -83,8 +83,10 @@ public sealed record LuxembourgIndexLanguageCoverage(
 
 /// <summary>
 /// What the index holds and what it recorded as missing: members by outcome, the gap tokens the
-/// corpus recorded per member counted by member (verbatim, in ordinal order), and every language's
-/// counts. The counts are grouped and bounded: no per-work and no per-article row.
+/// corpus recorded per member counted by member (verbatim, in ordinal order), the corpus's
+/// legal-content outcomes of its acquired members counted by disposition token (verbatim, in ordinal
+/// order), and every language's counts. The counts are grouped and bounded: no per-work and no
+/// per-article row.
 /// </summary>
 public sealed record LuxembourgIndexCoverage(
     long Members,
@@ -94,6 +96,7 @@ public sealed record LuxembourgIndexCoverage(
     IReadOnlyList<KeyValuePair<string, long>> MemberOutcomes,
     long MembersWithGaps,
     IReadOnlyList<KeyValuePair<string, long>> Gaps,
+    IReadOnlyList<KeyValuePair<string, long>> ArticleOutcomes,
     IReadOnlyList<LuxembourgIndexLanguageCoverage> Languages);
 
 /// <summary>
@@ -125,13 +128,15 @@ public sealed record LuxembourgIndexStateArticle(
 /// <summary>
 /// One source document a state's articles were taken from, as the corpus recorded it: its digest (the
 /// corpus member's object reference), the outcome it was admitted with, the rights disposition when the
-/// corpus states one, and the gap tokens it recorded, verbatim.
+/// corpus states one, the gap tokens it recorded, verbatim, and the legal-content outcomes the corpus
+/// recorded for it counted by disposition token (verbatim, in ordinal order).
 /// </summary>
 public sealed record LuxembourgIndexStateSource(
     string ObjectRefSha256,
     string Outcome,
     string? RightsDisposition,
-    IReadOnlyList<string> Gaps);
+    IReadOnlyList<string> Gaps,
+    IReadOnlyList<KeyValuePair<string, long>> ArticleOutcomes);
 
 public sealed record LuxembourgIndexAnchorArticle(
     string StateSha256,
@@ -988,6 +993,8 @@ public sealed class LuxembourgIndexReader : IDisposable
     private readonly V3IndexCapabilityManifest _capabilityManifest;
     private readonly bool _deleteOnDispose;
     private readonly object _gate = new();
+    private readonly object _articleOutcomesGate = new();
+    private IReadOnlyList<KeyValuePair<string, long>>? _articleOutcomes;
 
     private LuxembourgIndexReader(
         string path,
@@ -1505,15 +1512,29 @@ public sealed class LuxembourgIndexReader : IDisposable
             using var command = _connection.CreateCommand();
             command.CommandText = LuxembourgIndexQueries.StateSources;
             command.Parameters.AddWithValue("$state", stateSha256);
-            var sources = new List<LuxembourgIndexStateSource>();
-            using var reader = command.ExecuteReader();
-            while (reader.Read())
+            var rows = new List<(string ObjectRef, string Outcome, string? Rights, string[] Gaps)>();
+            using (var reader = command.ExecuteReader())
             {
+                while (reader.Read())
+                {
+                    rows.Add((
+                        reader.GetString(0),
+                        reader.GetString(1),
+                        reader.IsDBNull(2) ? null : reader.GetString(2),
+                        JsonSerializer.Deserialize<string[]>(reader.GetString(3)) ?? []));
+                }
+            }
+
+            var sources = new List<LuxembourgIndexStateSource>();
+            foreach (var row in rows)
+            {
+                using var outcomes = _connection.CreateCommand();
+                outcomes.CommandText = LuxembourgIndexQueries.MemberOutcomes;
+                outcomes.Parameters.AddWithValue("$member", row.ObjectRef);
+                var counts = new SortedDictionary<string, long>(StringComparer.Ordinal);
+                CountArticleOutcomes((string)outcomes.ExecuteScalar()!, counts);
                 sources.Add(new LuxembourgIndexStateSource(
-                    reader.GetString(0),
-                    reader.GetString(1),
-                    reader.IsDBNull(2) ? null : reader.GetString(2),
-                    JsonSerializer.Deserialize<string[]>(reader.GetString(3)) ?? []));
+                    row.ObjectRef, row.Outcome, row.Rights, row.Gaps, counts.ToArray()));
             }
 
             return sources;
@@ -1601,7 +1622,60 @@ public sealed class LuxembourgIndexReader : IDisposable
 
             return new LuxembourgIndexCoverage(
                 members, works, states, articleCount,
-                outcomes, membersWithGaps, gaps, languages);
+                outcomes, membersWithGaps, gaps, ArticleOutcomesOfAcquiredMembers(connection), languages);
+        }
+    }
+
+    /// <summary>
+    /// The corpus's legal-content outcomes for its acquired members, counted by the corpus's own
+    /// disposition token in ordinal order. Only acquired members are read, because the index holds an
+    /// article for an outcome only when its member is acquired. Unlike every other count in the report
+    /// this reads each acquired member's whole outcome list, so its cost grows with the outcomes the
+    /// corpus recorded (0.2 to 0.7 s for 540,000 outcomes in a scratch measurement, more on a cold
+    /// file). The index is immutable, so it is read once for the reader's life and a later report
+    /// reuses it.
+    /// </summary>
+    private IReadOnlyList<KeyValuePair<string, long>> ArticleOutcomesOfAcquiredMembers(SqliteConnection connection)
+    {
+        lock (_articleOutcomesGate)
+        {
+            if (_articleOutcomes is not null)
+            {
+                return _articleOutcomes;
+            }
+
+            var counts = new SortedDictionary<string, long>(StringComparer.Ordinal);
+            using var command = connection.CreateCommand();
+            command.CommandText = "SELECT stage3_outcomes_json FROM members WHERE outcome=$outcome";
+            command.Parameters.AddWithValue("$outcome", ContractWire.NameOf(LexCorpus6OutcomeKind.Acquired));
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                CountArticleOutcomes(reader.GetString(0), counts);
+            }
+
+            return _articleOutcomes = counts.ToArray();
+        }
+    }
+
+    /// <summary>
+    /// Adds one member's legal-content outcomes to <paramref name="counts"/> by the corpus's disposition
+    /// token, verbatim. An outcome of another domain (a PDF act scope, Europe's) is not one and is not
+    /// counted.
+    /// </summary>
+    private static void CountArticleOutcomes(string stage3OutcomesJson, SortedDictionary<string, long> counts)
+    {
+        var domain = ContractWire.NameOf(LexCorpus6Stage3OutcomeDomain.LuxembourgAknLegalContent);
+        using var document = JsonDocument.Parse(stage3OutcomesJson);
+        foreach (var outcome in document.RootElement.EnumerateArray())
+        {
+            if (!string.Equals(outcome.GetProperty("domain").GetString(), domain, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var disposition = outcome.GetProperty("disposition").GetString()!;
+            counts[disposition] = counts.GetValueOrDefault(disposition) + 1;
         }
     }
 

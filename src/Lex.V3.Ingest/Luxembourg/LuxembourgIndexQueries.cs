@@ -61,4 +61,13 @@ internal static class LuxembourgIndexQueries
         "CROSS JOIN articles a ON a.article_identity_sha256=j.value " +
         "CROSS JOIN members m ON m.object_ref_sha256=a.object_ref_sha256 " +
         "WHERE s.state_sha256=$state ORDER BY m.object_ref_sha256";
+
+    /// <summary>
+    /// The legal-content outcomes the corpus recorded for one source document, as the JSON list the index
+    /// stores, read by the member's primary key. Its own query and not a column of
+    /// <see cref="StateSources"/>, because that one is DISTINCT over a row per article of the state and a
+    /// list this long would be compared with itself once for each.
+    /// </summary>
+    internal const string MemberOutcomes =
+        "SELECT m.stage3_outcomes_json FROM members m WHERE m.object_ref_sha256=$member";
 }

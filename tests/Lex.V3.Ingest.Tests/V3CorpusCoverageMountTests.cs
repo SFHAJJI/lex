@@ -201,6 +201,9 @@ public sealed class V3CorpusCoverageMountTests
         Assert.AreEqual("fra", french.GetProperty("languages")[0].GetProperty("language").GetString());
         Assert.IsTrue(french.GetProperty("capability_cells").EnumerateArray().All(static cell => cell.GetProperty("language").GetString() == "fra"));
         Assert.IsGreaterThan(0, french.GetProperty("capability_cells").GetArrayLength());
+        // The corpus's outcomes are not held by language, so they are the whole mount's in either answer, and the raw
+        // comparison of members below holds them to it only while there are some.
+        Assert.IsGreaterThan(0, french.GetProperty("members").GetProperty("article_outcomes").GetArrayLength());
         // Everything that is not per language is the same, byte for byte, whichever language is asked for.
         foreach (var name in new[] { "scope", "counts_note", "mounted", "totals", "languages_held", "members", "operations", "not_held" })
         {
@@ -275,6 +278,140 @@ public sealed class V3CorpusCoverageMountTests
         StringAssert.Contains(members.GetProperty("gaps_note").GetString(), "verbatim");
     }
 
+    private const string AknDomain = "luxembourg_akn_legal_content";
+    private const string PdfDomain = "luxembourg_publisher_pdf_act_scope";
+
+    /// <summary>
+    /// The corpus's legal-content outcomes of its acquired members, counted by token, as SQLite's own JSON functions
+    /// count them from the rows: shares nothing with the reader's parsing or its grouping.
+    /// </summary>
+    private static string[] ReadOutcomeGround(MountedFixture fixture)
+    {
+        using var connection = LuxembourgIndexBuilder.Open(
+            Path.Combine(fixture.Directory, V3CorpusMount.IndexFileName), SqliteOpenMode.ReadOnly);
+        using var command = connection.CreateCommand();
+        command.CommandText =
+            "SELECT json_extract(j.value,'$.disposition'),COUNT(*) FROM members m,json_each(m.stage3_outcomes_json) j " +
+            "WHERE m.outcome='acquired' AND json_extract(j.value,'$.domain')='luxembourg_akn_legal_content' " +
+            "GROUP BY 1 ORDER BY 1";
+        using var reader = command.ExecuteReader();
+        var rows = new List<string>();
+        while (reader.Read())
+        {
+            rows.Add(reader.GetString(0) + "=" + reader.GetInt64(1));
+        }
+
+        return rows.ToArray();
+    }
+
+    private static string[] OutcomeRows(JsonElement members) =>
+        members.GetProperty("article_outcomes").EnumerateArray()
+            .Select(static row => row.GetProperty("disposition").GetString() + "=" + row.GetProperty("outcomes").GetInt64()).ToArray();
+
+    [TestMethod]
+    public async Task TheReportCountsTheCorpusesLegalContentOutcomesByItsOwnTokenAndTheHeldArticlesAreTheAdmittedOnes()
+    {
+        var fixture = await MountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+
+        var body = (await CoverageAsync(mount)).Result!.Value;
+
+        var members = body.GetProperty("members");
+        CollectionAssert.AreEqual(ReadOutcomeGround(fixture), OutcomeRows(members));
+        // The committed real document has 54 article elements: the profile admits 49 and cannot represent five (three
+        // that carry text the publisher marks as deleted, one that carries a span, one unpaired modification end).
+        CollectionAssert.AreEqual(new[] { "akn_admitted=49", "akn_unsupported_content_shape=5" }, OutcomeRows(members));
+        // The articles the index holds are exactly the admitted and marker-only outcomes: no reader subtracts.
+        var held = OutcomeRows(members)
+            .Where(static row => row.StartsWith("akn_admitted=", StringComparison.Ordinal) || row.StartsWith("akn_marker_only_evidence=", StringComparison.Ordinal))
+            .Sum(static row => long.Parse(row[(row.IndexOf('=') + 1)..], CultureInfo.InvariantCulture));
+        Assert.AreEqual(body.GetProperty("totals").GetProperty("articles").GetInt64(), held);
+        Assert.AreEqual(
+            "the corpus's own record of what its legal-content stage did with the articles of its acquired Luxembourg documents, " +
+            "counted by the corpus's disposition token and given verbatim; " +
+            "an outcome is one article's, except akn_upstream_not_inventoried, which is one document's because none of its articles was listed; " +
+            "the articles the index holds, which totals.articles and languages[].articles count, are exactly the akn_admitted and " +
+            "akn_marker_only_evidence outcomes, and an outcome under any other token is not held here; " +
+            "akn_unsupported_content_shape means the reviewed profile could not represent that article in full; " +
+            "which article an outcome belongs to is not held; " +
+            "the outcomes of members that are not acquired are not counted",
+            members.GetProperty("article_outcomes_note").GetString());
+    }
+
+    [TestMethod]
+    public async Task OutcomesAreSummedAcrossDocumentsInOrdinalOrderAnyTokenIsCountedAsTheCorpusWroteItAndOnlyAcquiredLegalContentIsCounted()
+    {
+        var fixture = await MountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        // The fixture's own document: three admitted, one unsupported, and one outcome of another domain that must not count.
+        await fixture.SetMemberOutcomesAsync(
+            MountedFixture.OutcomesJson(AknDomain, ("akn_admitted", 3), ("akn_unsupported_content_shape", 1)).TrimEnd(']') + "," +
+            MountedFixture.OutcomesJson(PdfDomain, ("akn_admitted", 1)).TrimStart('['));
+        await fixture.AddIndexOnlyMembersAsync(
+            // Acquired, counted: more admitted, a marker-only article, a token no answer has been asked to name, and one that
+            // sorts before every lower-case one only under an ordinal comparison.
+            (new string('1', 64), "acquired", MountedFixture.OutcomesJson(
+                AknDomain, ("akn_admitted", 2), ("akn_marker_only_evidence", 1), ("akn_a_token_no_answer_has_seen", 1), ("akn_Zed", 1))),
+            (new string('2', 64), "acquired", MountedFixture.OutcomesJson(AknDomain, ("akn_upstream_not_inventoried", 1))),
+            // Not counted: a document whose rights are withheld holds no article here, however its outcomes read.
+            (new string('3', 64), "rights_withheld", MountedFixture.OutcomesJson(AknDomain, ("akn_admitted", 5))),
+            // Not counted: an acquired document whose outcomes are all of another domain.
+            (new string('4', 64), "acquired", MountedFixture.OutcomesJson(PdfDomain, ("pdf_not_applicable", 2))));
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+
+        var members = (await CoverageAsync(mount)).Result!.Value.GetProperty("members");
+
+        var expected = new[]
+        {
+            "akn_Zed=1",
+            "akn_a_token_no_answer_has_seen=1",
+            "akn_admitted=5",
+            "akn_marker_only_evidence=1",
+            "akn_unsupported_content_shape=1",
+            "akn_upstream_not_inventoried=1",
+        };
+        CollectionAssert.AreEqual(expected, OutcomeRows(members));
+        CollectionAssert.AreEqual(ReadOutcomeGround(fixture), OutcomeRows(members));
+        Assert.IsFalse(members.GetProperty("article_outcomes").EnumerateArray().Any(static row => row.GetProperty("disposition").GetString()!.StartsWith("pdf_", StringComparison.Ordinal)));
+    }
+
+    [TestMethod]
+    public async Task AMountWhoseMembersRecordedNoLegalContentOutcomeReportsAnEmptyListAndStillSaysWhatItMeans()
+    {
+        var fixture = await MountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        await fixture.SetMemberOutcomesAsync("[]");
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+
+        var members = (await CoverageAsync(mount)).Result!.Value.GetProperty("members");
+
+        Assert.AreEqual(JsonValueKind.Array, members.GetProperty("article_outcomes").ValueKind);
+        Assert.AreEqual(0, members.GetProperty("article_outcomes").GetArrayLength());
+        Assert.AreEqual(V3CorpusMount.ArticleOutcomesNote, members.GetProperty("article_outcomes_note").GetString());
+    }
+
+    [TestMethod]
+    public async Task TheOutcomesAreReadOnceForTheReadersLifeAndTheIndexIsNotReadAgainForThem()
+    {
+        var fixture = await MountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        var manifest = await File.ReadAllBytesAsync(Path.Combine(fixture.Directory, V3CorpusMount.CapabilityManifestFileName));
+        using var reader = await LuxembourgIndexReader.OpenAndVerifyFileAsync(
+            Path.Combine(fixture.Directory, V3CorpusMount.IndexFileName), manifest, CancellationToken.None);
+
+        var first = reader.ResolveCoverage();
+        var second = reader.ResolveCoverage();
+
+        // The count reads every acquired member's whole outcome list, which is the one part of the report whose cost grows
+        // with the corpus, so a second report reuses the first's list and does not read the members again.
+        Assert.IsGreaterThan(0, first.ArticleOutcomes.Count);
+        Assert.AreSame(first.ArticleOutcomes, second.ArticleOutcomes);
+    }
+
     [TestMethod]
     public async Task TheReportNamesWhatThisMountServesFromTheBindingsAndRegistersTheRest()
     {
@@ -342,6 +479,10 @@ public sealed class V3CorpusCoverageMountTests
         StringAssert.Contains(
             body.GetProperty("counts_note").GetString(),
             "when a language is requested, requested_language echoes it and only languages and capability_cells are narrowed to it, and every other member, totals included, is the whole mount's");
+        // The articles the index holds are not said to be every article the corpus recorded, and where the rest is counted.
+        StringAssert.Contains(
+            body.GetProperty("counts_note").GetString(),
+            "totals.articles and languages[].articles count the articles the index holds, and the corpus can have recorded more articles than the index holds: members.article_outcomes counts what it recorded");
         // No count of the publisher's universe is written anywhere in the answer.
         Assert.IsFalse(body.GetRawText().Contains("24,579", StringComparison.Ordinal) || body.GetRawText().Contains("24579", StringComparison.Ordinal));
 
@@ -413,7 +554,9 @@ public sealed class V3CorpusCoverageMountTests
             "languages[].articles_without_publisher_date", "languages[].first_state_date", "languages[].language",
             "languages[].last_state_date", "languages[].searchable_text_held", "languages[].states", "languages[].works",
             "languages_held",
-            "members", "members.by_outcome", "members.by_outcome[].members", "members.by_outcome[].outcome",
+            "members", "members.article_outcomes", "members.article_outcomes[].disposition",
+            "members.article_outcomes[].outcomes", "members.article_outcomes_note",
+            "members.by_outcome", "members.by_outcome[].members", "members.by_outcome[].outcome",
             "members.gaps", "members.gaps[].gap", "members.gaps[].members", "members.gaps_note", "members.with_gaps",
             "mounted", "mounted.corpus_sha256", "mounted.index_sha256", "mounted.publisher", "mounted.registry_sha256",
             "not_held", "not_held[].item", "not_held[].reason",
@@ -432,6 +575,7 @@ public sealed class V3CorpusCoverageMountTests
 
         Assert.IsGreaterThan(0, body.GetProperty("members").GetProperty("gaps").GetArrayLength());
         Assert.IsGreaterThan(0, body.GetProperty("members").GetProperty("by_outcome").GetArrayLength());
+        Assert.IsGreaterThan(0, body.GetProperty("members").GetProperty("article_outcomes").GetArrayLength());
     }
 
     [TestMethod]

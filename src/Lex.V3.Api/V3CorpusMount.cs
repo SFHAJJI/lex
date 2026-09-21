@@ -433,7 +433,9 @@ internal sealed class V3CorpusMount : IDisposable
         "object_ref_sha256 identifies the source object in the corpus; body_sha256 is the digest of the publisher bytes the corpus retained " +
         "for it, body_byte_length their length and body_receipt_sha256 the digest of the corpus receipt for that body, each null where the " +
         "corpus holds none; outcome, rights_disposition and gaps are the corpus manifest's own tokens for the member, given verbatim, and this " +
-        "answer does not define them";
+        "answer does not define them; article_outcomes counts the corpus's legal-content outcomes for this document by disposition token, " +
+        "verbatim, and what they mean is coverage's article_outcomes_note: the articles this state holds are the document's akn_admitted and " +
+        "akn_marker_only_evidence outcomes, and an outcome under any other token is not held here";
 
     internal static readonly string[][] ProvenanceNotHeld =
     [
@@ -595,6 +597,9 @@ internal sealed class V3CorpusMount : IDisposable
             outcome = source.Outcome,
             rights_disposition = source.RightsDisposition,
             gaps = source.Gaps,
+            article_outcomes = source.ArticleOutcomes
+                .Select(static row => new { disposition = row.Key, outcomes = row.Value })
+                .ToArray(),
         };
     }
 
@@ -1564,10 +1569,22 @@ internal sealed class V3CorpusMount : IDisposable
         "the mounted Luxembourg corpus and index: what this mount holds and recorded as missing, and nothing about what the publisher holds";
 
     internal const string CoverageCountsNote =
-        "counts are of rows the index holds; a missing publisher date is counted as missing and never dropped; " +
+        "counts are of rows the index holds; totals.articles and languages[].articles count the articles the index holds, " +
+        "and the corpus can have recorded more articles than the index holds: members.article_outcomes counts what it recorded; " +
+        "a missing publisher date is counted as missing and never dropped; " +
         "articles_with_searchable_text is counted where the article carries a publisher date, which is what the capability cells measure, " +
         "and so it and articles_without_publisher_date are not addends; " +
         "when a language is requested, requested_language echoes it and only languages and capability_cells are narrowed to it, and every other member, totals included, is the whole mount's";
+
+    internal const string ArticleOutcomesNote =
+        "the corpus's own record of what its legal-content stage did with the articles of its acquired Luxembourg documents, " +
+        "counted by the corpus's disposition token and given verbatim; " +
+        "an outcome is one article's, except akn_upstream_not_inventoried, which is one document's because none of its articles was listed; " +
+        "the articles the index holds, which totals.articles and languages[].articles count, are exactly the akn_admitted and " +
+        "akn_marker_only_evidence outcomes, and an outcome under any other token is not held here; " +
+        "akn_unsupported_content_shape means the reviewed profile could not represent that article in full; " +
+        "which article an outcome belongs to is not held; " +
+        "the outcomes of members that are not acquired are not counted";
 
     internal const string CoverageOperationsNote =
         "served_operations are the routes this mount answers and not_served_operations are registered with no route on it; " +
@@ -1685,6 +1702,10 @@ internal sealed class V3CorpusMount : IDisposable
                 with_gaps = coverage.MembersWithGaps,
                 gaps = coverage.Gaps.Select(static row => new { gap = row.Key, members = row.Value }).ToArray(),
                 gaps_note = "the gap tokens the corpus recorded per member, verbatim, counted by member",
+                article_outcomes = coverage.ArticleOutcomes
+                    .Select(static row => new { disposition = row.Key, outcomes = row.Value })
+                    .ToArray(),
+                article_outcomes_note = ArticleOutcomesNote,
             },
             capability_cells = cells
                 .Where(cell => language is null || string.Equals(cell.Language, language, StringComparison.Ordinal))

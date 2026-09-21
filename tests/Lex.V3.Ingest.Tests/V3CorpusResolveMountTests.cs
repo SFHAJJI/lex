@@ -1709,6 +1709,71 @@ public sealed class V3CorpusResolveMountTests
             });
 
         /// <summary>
+        /// A JSON list of the legal-content outcomes the corpus records for a member, as the index stores it: one
+        /// entry per counted outcome, each with an identity of its own, in the domain and under the token given.
+        /// </summary>
+        public static string OutcomesJson(string domain, params (string Disposition, int Count)[] counts)
+        {
+            var entries = new List<string>();
+            foreach (var (disposition, count) in counts)
+            {
+                for (var index = 0; index < count; index++)
+                {
+                    var identity = Convert.ToHexStringLower(
+                        SHA256.HashData(System.Text.Encoding.UTF8.GetBytes($"{domain}/{disposition}/{index}")));
+                    entries.Add($"{{\"domain\":\"{domain}\",\"semantic_identity_sha256\":\"{identity}\",\"disposition\":\"{disposition}\"}}");
+                }
+            }
+
+            return "[" + string.Join(",", entries) + "]";
+        }
+
+        /// <summary>
+        /// Sets the legal-content outcomes the corpus recorded for every member of the index, as the JSON list the index
+        /// stores, and re-stamps the index.
+        /// </summary>
+        public Task SetMemberOutcomesAsync(string outcomesJson) =>
+            MutateArticlesAsync(connection =>
+            {
+                using var set = connection.CreateCommand();
+                set.CommandText = "UPDATE members SET stage3_outcomes_json=$outcomes";
+                set.Parameters.AddWithValue("$outcomes", outcomesJson);
+                Assert.IsGreaterThan(0, set.ExecuteNonQuery());
+            });
+
+        /// <summary>Sets the outcomes of the one member with this object reference, and re-stamps the index.</summary>
+        public Task SetOneMembersOutcomesAsync(string objectRef, string outcomesJson) =>
+            MutateArticlesAsync(connection =>
+            {
+                using var set = connection.CreateCommand();
+                set.CommandText = "UPDATE members SET stage3_outcomes_json=$outcomes WHERE object_ref_sha256=$ref";
+                set.Parameters.AddWithValue("$outcomes", outcomesJson);
+                set.Parameters.AddWithValue("$ref", objectRef);
+                Assert.AreEqual(1, set.ExecuteNonQuery());
+            });
+
+        /// <summary>
+        /// Adds members to the index only, each with the outcome and the legal-content outcome list given, and re-stamps
+        /// the index. They are not in the corpus artifact, which a real build never produces; they exist so that what is
+        /// counted across members, and what is left out of the count, can be observed.
+        /// </summary>
+        public Task AddIndexOnlyMembersAsync(params (string ObjectRef, string Outcome, string OutcomesJson)[] members) =>
+            MutateArticlesAsync(connection =>
+            {
+                var ordinal = 1000;
+                foreach (var member in members)
+                {
+                    using var insert = connection.CreateCommand();
+                    insert.CommandText = "INSERT INTO members VALUES($ref,$ordinal,$outcome,NULL,$outcomes,'[]')";
+                    insert.Parameters.AddWithValue("$ref", member.ObjectRef);
+                    insert.Parameters.AddWithValue("$ordinal", ordinal++);
+                    insert.Parameters.AddWithValue("$outcome", member.Outcome);
+                    insert.Parameters.AddWithValue("$outcomes", member.OutcomesJson);
+                    Assert.AreEqual(1, insert.ExecuteNonQuery());
+                }
+            });
+
+        /// <summary>
         /// Sets or clears (null) the publisher's article-level applicability date of one article of one
         /// expression, and re-stamps the index and its capability manifest.
         /// </summary>
