@@ -106,8 +106,8 @@ public sealed class LuxembourgIndexRelationsTests
     /// counts are the width of that observation; nothing in the index or the answers relies on it.
     /// </summary>
     [TestMethod]
-    [DataRow(LuxembourgAknLegalContentProfileProducerTests.Fixture1991, "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c", "loi-1991-08-10-n3", -1, -1, -1)]
-    [DataRow(LuxembourgAknLegalContentProfileProducerTests.Fixture1984, "5d513304238bbda30578f59f963b227d54ca1fbce9283c55b9c5aa7b4436e48f", "loi-1984-02-24-n1", -1, -1, -1)]
+    [DataRow(LuxembourgAknLegalContentProfileProducerTests.Fixture1991, "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c", "loi-1991-08-10-n3", 68, 16, 48)]
+    [DataRow(LuxembourgAknLegalContentProfileProducerTests.Fixture1984, "5d513304238bbda30578f59f963b227d54ca1fbce9283c55b9c5aa7b4436e48f", "loi-1984-02-24-n1", 6, 2, 3)]
     public async Task InTheTwoRetainedActsALegiluxReferenceIsInANoteExactlyWhenItIsWrittenWithTheHost(
         string fixture, string sha256, string key, int expectedEdges, int expectedHostInNote, int expectedNoHostInText)
     {

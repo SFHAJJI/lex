@@ -636,27 +636,37 @@ public static class LuxembourgIndexBuilder
         var rows = new List<RelationRow>();
         foreach (var article in articles.OrderBy(static row => row.ArticleIdentitySha256, StringComparer.Ordinal))
         {
-            using var document = JsonDocument.Parse(article.TokensJson);
-            var ordinal = 0;
-            foreach (var token in document.RootElement.EnumerateArray())
+            try
             {
-                var kind = token.GetProperty("kind").GetString();
-                if (string.Equals(kind, "reference", StringComparison.Ordinal))
+                using var document = JsonDocument.Parse(article.TokensJson);
+                var ordinal = 0;
+                foreach (var token in document.RootElement.EnumerateArray())
                 {
-                    rows.Add(RelationOf(article.ArticleIdentitySha256, ordinal++, inNote: false, token));
-                }
-                else if (string.Equals(kind, "note_reference", StringComparison.Ordinal) &&
-                         token.TryGetProperty("note_body", out var body) &&
-                         body.ValueKind == JsonValueKind.Array)
-                {
-                    foreach (var nested in body.EnumerateArray())
+                    var kind = token.GetProperty("kind").GetString();
+                    if (string.Equals(kind, "reference", StringComparison.Ordinal))
                     {
-                        if (string.Equals(nested.GetProperty("kind").GetString(), "reference", StringComparison.Ordinal))
+                        rows.Add(RelationOf(article.ArticleIdentitySha256, ordinal++, inNote: false, token));
+                    }
+                    else if (string.Equals(kind, "note_reference", StringComparison.Ordinal) &&
+                             token.TryGetProperty("note_body", out var body) &&
+                             body.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var nested in body.EnumerateArray())
                         {
-                            rows.Add(RelationOf(article.ArticleIdentitySha256, ordinal++, inNote: true, nested));
+                            if (string.Equals(nested.GetProperty("kind").GetString(), "reference", StringComparison.Ordinal))
+                            {
+                                rows.Add(RelationOf(article.ArticleIdentitySha256, ordinal++, inNote: true, nested));
+                            }
                         }
                     }
                 }
+            }
+            catch (Exception exception) when (
+                exception is JsonException or InvalidOperationException or KeyNotFoundException)
+            {
+                throw new InvalidDataException(
+                    "An article's stored token stream is not a list of tokens the relation rows can be read from.",
+                    exception);
             }
         }
 
@@ -1089,6 +1099,15 @@ public static class LuxembourgIndexBuilder
     /// <see cref="ClassifyTarget"/>. The row says the publisher wrote a reference there and asserts nothing about
     /// what it means: no relationship type, no legal effect.
     /// </summary>
+    /// <remarks>
+    /// <see cref="InNote"/> is a structural fact: the reference sat inside a note element. It is not a proxy for
+    /// anything else. In the two retained acts, over the 74 edges of their admitted articles (68 in the 1991 act, of
+    /// which 64 name a Legilux work, and 6 in the 1984 act, of which 5 do), every Legilux reference written with the
+    /// host (16 and 2) is inside a publisher modification note and every one written without it (48 and 3) is in
+    /// running text. That is a measurement of two acts, pinned by a test that names those counts, and not a property
+    /// of the format; nothing here relies on it. A reader who takes <c>in_note</c> for "absolute" or for "an
+    /// amendment" is relying on a sample of two.
+    /// </remarks>
     internal sealed record RelationRow(
         string FromRef,
         int Ordinal,
