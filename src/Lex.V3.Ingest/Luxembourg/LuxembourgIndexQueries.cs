@@ -30,6 +30,42 @@ internal static class LuxembourgIndexQueries
         ORDER BY a.publisher_id, a.article_identity_sha256
         """;
 
+    /// <summary>
+    /// The forward edges of lane R4's edge table for one state: the references written in the articles it binds, or
+    /// in the one carrying a publisher id. The state is looked up by its digest, then its identities, then each
+    /// article and its edges by primary key, so the cost is the state's articles and their references and not the
+    /// table. Written with <c>CROSS JOIN</c>, which SQLite does not reorder, and the state read
+    /// <c>INDEXED BY states_digest</c>, for the reason <see cref="StateDocumentOutcomes"/> gives: the join order is the
+    /// bound, and a missing index is a failure to prepare the statement and not a silent scan.
+    /// </summary>
+    internal const string StateCitations = """
+        SELECT a.article_identity_sha256, a.publisher_id, r.ordinal, r.in_note, r.label, r.href, r.to_kind, r.to_ref
+        FROM states s INDEXED BY states_digest CROSS JOIN json_each(s.article_identities_json) j
+        CROSS JOIN articles a ON a.article_identity_sha256 = j.value
+        CROSS JOIN relations r ON r.from_ref = a.article_identity_sha256
+        WHERE s.state_sha256 = $digest AND r.edge_type = 'cites' AND ($anchor IS NULL OR a.publisher_id = $anchor)
+        ORDER BY a.publisher_id, a.article_identity_sha256, r.ordinal
+        """;
+
+    /// <summary>
+    /// Which of a list of IRIs some state of the index carries as its publisher legal-resource IRI (the form the
+    /// publisher writes in running text, ending <c>/jo</c>) or as its publisher work IRI, each with the product work key
+    /// that state stores (derived from the work IRI and checked against it when the index is opened), exactly as stored.
+    /// Not bounded by a state: no index starts with either IRI (the states key starts with the work key), so it reads
+    /// <c>states</c> once for each of the two columns and keeps the rows whose IRI is on the list. That is the cost
+    /// <c>ResolveWorkStates</c> already pays for a work named by its IRI, paid for the whole list and not once per name.
+    /// </summary>
+    internal const string HeldWorks = """
+        SELECT s.publisher_legal_resource_iri, s.work_key
+        FROM states s
+        WHERE s.publisher_legal_resource_iri IN (SELECT value FROM json_each($iris))
+        UNION
+        SELECT s.publisher_work_iri, s.work_key
+        FROM states s
+        WHERE s.publisher_work_iri IN (SELECT value FROM json_each($iris))
+        ORDER BY 1, 2
+        """;
+
     internal const string ArticleIds = """
         SELECT DISTINCT a.publisher_id
         FROM states s, json_each(s.article_identities_json) j

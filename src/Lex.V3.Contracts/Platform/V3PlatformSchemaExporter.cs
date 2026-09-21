@@ -230,6 +230,14 @@ public static class V3PlatformSchemaExporter
             ("identifier", NonBlankString()),
             ("date", CivilDate()),
             ("language", NonBlankString())),
+        "citation" => Parameters(
+            ["identifier", "date"],
+            ("identifier", NonBlankString()),
+            ("date", CivilDate()),
+            ("language", NonBlankString()),
+            ("anchor", NonBlankString()),
+            ("limit", RowLimit()),
+            ("after", NonBlankString())),
         _ => ClosedObject(),
     };
 
