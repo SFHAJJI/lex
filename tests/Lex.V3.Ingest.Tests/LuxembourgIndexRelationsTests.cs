@@ -126,6 +126,10 @@ public sealed class LuxembourgIndexRelationsTests
         Assert.AreEqual(expectedHostInNote, hostInNote, message);
         Assert.AreEqual(expectedNoHostInText, noHostInText, message);
         Assert.AreEqual(legilux.Length, hostInNote + noHostInText, "no Legilux edge is in the other two cells: " + message);
+        Assert.IsFalse(
+            rows.Any(static row => row.Href is not null &&
+                                   row.Href.Any(static character => char.IsWhiteSpace(character) || char.IsControl(character))),
+            "no value of these acts has a whitespace or control character, so the grammar's rule for them changes none of these edges");
     }
 
     [TestMethod]

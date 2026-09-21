@@ -697,9 +697,9 @@ public static class LuxembourgIndexBuilder
     /// https value, and its target is the value as written. <c>unparsed</c> is everything else (an empty value,
     /// <c>???</c>, a relative path that is not an ELI) and **any value with a whitespace or control character in it,
     /// whatever it begins with**: it is not a URI, and calling it <c>legilux_eli</c> would say it names a work. Its
-    /// target is null, because nothing is ever named from a value the publisher did not give. The two retained acts
-    /// write 116 <c>ref</c> values (110 and 6, counted over the whole documents) and none of them has such a character,
-    /// so the rule changes no edge they carry.
+    /// target is null, because nothing is ever named from a value the publisher did not give. None of the 74 values
+    /// the two retained acts carry in their admitted articles has such a character (pinned by a test), so the rule
+    /// changes no edge they carry.
     /// </summary>
     internal static (string Kind, string? ToRef) ClassifyTarget(string? href)
     {
