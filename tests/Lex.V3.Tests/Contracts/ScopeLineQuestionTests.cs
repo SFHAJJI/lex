@@ -157,14 +157,15 @@ public sealed class ScopeLineQuestionTests
     /// failure here and not a number that quietly moves.
     /// </summary>
     /// <remarks>
-    /// It has moved once already, and that is the design working rather than friction: PR #727 added
-    /// <c>citation</c> as the twelfth, this list failed, and the twelfth was written in by the seat
-    /// that owns the list rather than by the seat that added the route.
+    /// It has moved twice already, and that is the design working rather than friction: PR #727 added
+    /// <c>citation</c> as the twelfth and PR #728 <c>cited_by</c> as the thirteenth, this list failed
+    /// each time, and each was written in by the seat that owns the list rather than by the seat that
+    /// added the route. A count would have gone from eleven to thirteen with nobody reading it.
     /// </remarks>
     private static readonly string[] ServedOperations =
     [
-        "article_history", "as_of", "changes_in_period", "citation", "coverage", "diff",
-        "dossier", "in_force_on", "provenance", "resolve", "search", "timeline",
+        "article_history", "as_of", "changes_in_period", "citation", "cited_by", "coverage",
+        "diff", "dossier", "in_force_on", "provenance", "resolve", "search", "timeline",
     ];
 
     [TestMethod]
