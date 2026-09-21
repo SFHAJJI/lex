@@ -404,7 +404,13 @@ public sealed class V3CorpusProvenanceMountTests
         await using var cleanup = fixture;
         var second = await fixture.GiveTheStateASecondSourceAsync();
         var ground = ReadGround(fixture);
-        var first = ground.Members.Single(m => m.ObjectRef != second).ObjectRef;
+        var row = ground.States.Single(s => s.Expression == fixture.ExpressionIri);
+        var sourcesOfTheState = JsonSerializer.Deserialize<string[]>(row.IdentitiesJson)!
+            .Select(identity => ground.Articles.Single(a => a.Identity == identity).ObjectRef)
+            .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+        Assert.AreEqual(2, sourcesOfTheState.Length);
+        Assert.AreEqual(second, sourcesOfTheState[1]);
+        var first = sourcesOfTheState[0];
         // Two documents whose lists differ, so a count taken from the wrong member or reused for both is seen; the second
         // also holds an outcome of another domain, which is not a legal-content outcome and is not counted.
         await fixture.SetOneMembersOutcomesAsync(first, MountedFixture.OutcomesJson(
