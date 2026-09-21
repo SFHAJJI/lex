@@ -14,6 +14,16 @@ import { cspValue } from './csp.mjs';
 import { CHROME_LOCALES } from "./localization.mjs";
 import { tryPublisherSourceUri } from "./routes.mjs";
 
+/**
+ * What a reader is told where the platform sends null rather than a value.
+ *
+ * It lives here rather than on one page because more than one page needs it and a blank cell is
+ * the same mistake everywhere: a blank reads as a fact about the record, and this reads as a fact
+ * about what the platform said. Two copies of one sentence is how two pages come to word the same
+ * absence differently.
+ */
+export const NOT_STATED = 'not stated by the platform';
+
 /** Escape for HTML text and quoted attribute contexts. */
 export function escapeHtml(value) {
   return String(value)
