@@ -1,6 +1,6 @@
 {
   "schema": "lex-v3-answer-samples/1",
-  "note": "What each served operation really sends when it answers, observed by driving the real handler. Values the fixture re-mints per run are replaced by \u003Cvaries-per-run\u003E; their shape is asserted before replacement and the relations between them are held by tests, not by this file. THE PRODUCER IS REAL AND THE MOUNT IS A FIXTURE, which is not the same as the data being invented. These answers are driven on a fixture mount holding one real Legilux act, the loi of 10 August 1991 n3, from publisher XML committed as a test fixture, plus two other members. Member by member: the act\u0027s coordinates, IRIs, applicability date and the per-article dates the capability cells are grouped by are THE PUBLISHER\u0027S; registry_sha256 is THE REVIEWED REGISTRY\u0027S, the value the product serves; every sentence here, this note included, is THE PLATFORM\u0027S; the mount-level counts of works, states and members, the members\u0027 outcomes and gap tokens, and the corpus and index digests are THE FIXTURE\u0027S. The article counts are none of those: they are this pipeline\u0027s count of that document rather than the document\u0027s own, which carries 54 top-level articles against the 49 this mount holds, a difference not traced when this note was written. There is no sample from a real corpus, so a reader holding a surface against this file is held against the shape a producer sends and not against the scale or the completeness a real corpus has.",
+  "note": "What each served operation really sends when it answers, observed by driving the real handler. Values the fixture re-mints per run are replaced by \u003Cvaries-per-run\u003E; their shape is asserted before replacement and the relations between them are held by tests, not by this file. THE PRODUCER IS REAL AND THE MOUNT IS A FIXTURE, which is not the same as the data being invented. These answers are driven on a fixture mount holding one real Legilux act, the loi of 10 August 1991 n3, from publisher XML committed as a test fixture, plus two other members. Member by member: the act\u0027s coordinates, IRIs, applicability date and the per-article dates the capability cells are grouped by are THE PUBLISHER\u0027S; registry_sha256 is THE REVIEWED REGISTRY\u0027S, the value the product serves; every sentence inside an answer is THE PLATFORM\u0027S and this note is the census\u0027s; the mount-level counts of works, states and members, the members\u0027 outcomes and gap tokens, and the corpus and index digests are THE FIXTURE\u0027S. The article counts are none of those: they are this pipeline\u0027s count of that document rather than the document\u0027s own, which carries 54 top-level articles against the 49 this mount holds: the five are articles the corpus recorded under the token akn_unsupported_content_shape, which the answers count, coverage in members.article_outcomes and provenance in each source\u0027s article_outcomes. There is no sample from a real corpus, so a reader holding a surface against this file is held against the shape a producer sends and not against the scale or the completeness a real corpus has.",
   "varies_per_run": [
     "corpus_sha256",
     "index_sha256",
@@ -384,7 +384,7 @@
             "population": 1
           }
         ],
-        "counts_note": "counts are of rows the index holds; a missing publisher date is counted as missing and never dropped; articles_with_searchable_text is counted where the article carries a publisher date, which is what the capability cells measure, and so it and articles_without_publisher_date are not addends; when a language is requested, requested_language echoes it and only languages and capability_cells are narrowed to it, and every other member, totals included, is the whole mount\u0027s",
+        "counts_note": "counts are of rows the index holds; totals.articles and languages[].articles count the articles the index holds, and the corpus can have recorded more articles than the index holds: members.article_outcomes counts what it recorded; a missing publisher date is counted as missing and never dropped; articles_with_searchable_text is counted where the article carries a publisher date, which is what the capability cells measure, and so it and articles_without_publisher_date are not addends; when a language is requested, requested_language echoes it and only languages and capability_cells are narrowed to it, and every other member, totals included, is the whole mount\u0027s",
         "languages": [
           {
             "articles": 49,
@@ -402,6 +402,17 @@
           "fra"
         ],
         "members": {
+          "article_outcomes": [
+            {
+              "disposition": "akn_admitted",
+              "outcomes": 49
+            },
+            {
+              "disposition": "akn_unsupported_content_shape",
+              "outcomes": 5
+            }
+          ],
+          "article_outcomes_note": "the corpus\u0027s own record of what its legal-content stage did with the articles of its acquired Luxembourg documents, counted by the corpus\u0027s disposition token and given verbatim; an outcome is one article\u0027s, except akn_upstream_not_inventoried, which is one document\u0027s because none of its articles was listed; the articles the index holds, which totals.articles and languages[].articles count, are exactly the akn_admitted and akn_marker_only_evidence outcomes, and an outcome under any other token is not held here; akn_unsupported_content_shape means the reviewed profile could not represent that article in full; which article an outcome belongs to is not held; the outcomes of members that are not acquired are not counted",
           "by_outcome": [
             {
               "members": 1,
@@ -522,7 +533,7 @@
         "requested_identifier": "/lu-legilux/loi-1991-08-10-n3",
         "requested_language": "fra",
         "scope": "the chain from the publisher\u0027s identifiers to the digests this mount verified; it holds no first-sighting event and no signature, so none is claimed",
-        "sources_note": "object_ref_sha256 identifies the source object in the corpus; body_sha256 is the digest of the publisher bytes the corpus retained for it, body_byte_length their length and body_receipt_sha256 the digest of the corpus receipt for that body, each null where the corpus holds none; outcome, rights_disposition and gaps are the corpus manifest\u0027s own tokens for the member, given verbatim, and this answer does not define them",
+        "sources_note": "object_ref_sha256 identifies the source object in the corpus; body_sha256 is the digest of the publisher bytes the corpus retained for it, body_byte_length their length and body_receipt_sha256 the digest of the corpus receipt for that body, each null where the corpus holds none; outcome, rights_disposition and gaps are the corpus manifest\u0027s own tokens for the member, given verbatim, and this answer does not define them; article_outcomes counts the corpus\u0027s legal-content outcomes for this document by disposition token, verbatim, and what they mean is coverage\u0027s article_outcomes_note: the articles this state holds are the document\u0027s akn_admitted and akn_marker_only_evidence outcomes, and an outcome under any other token is not held here",
         "states": [
           {
             "applicability_date": "2024-02-01",
@@ -539,6 +550,16 @@
             ],
             "sources": [
               {
+                "article_outcomes": [
+                  {
+                    "disposition": "akn_admitted",
+                    "outcomes": 49
+                  },
+                  {
+                    "disposition": "akn_unsupported_content_shape",
+                    "outcomes": 5
+                  }
+                ],
                 "body_byte_length": 231171,
                 "body_receipt_sha256": "fb59b9fd9372a286c80c90caae9b8676839c85c22f43fcfeec4444bbbf72addb",
                 "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
