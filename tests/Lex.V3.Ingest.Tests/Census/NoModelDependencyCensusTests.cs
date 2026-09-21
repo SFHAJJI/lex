@@ -130,7 +130,7 @@ public sealed class NoModelDependencyCensusTests
         "microsoft.ml.onnxruntime",
     ];
 
-    /// <summary>Dependencies this product really holds, which the rule must not reject.</summary>
+    /// <summary>.NET dependencies this product really holds, which the assembly rule must not reject.</summary>
     private static readonly string[] MustNotBeCaught =
     [
         "Azure.Core",
@@ -142,10 +142,23 @@ public sealed class NoModelDependencyCensusTests
         "PdfPig",
         "System.Linq",
         "System.Text.Json",
-        "esbuild",
-        "react",
-        "react-dom",
+        "System.Collections.Immutable",
+        "Microsoft.Extensions.Logging",
+        "netstandard",
     ];
+
+    /// <summary>JavaScript package ids that must be caught, and the three the web surface holds.</summary>
+    private static readonly string[] MustBeCaughtJs =
+    [
+        "openai",
+        "@anthropic-ai/sdk",
+        "onnxruntime-web",
+        "@xenova/transformers",
+        "langchain",
+        "@huggingface/inference",
+    ];
+
+    private static readonly string[] MustNotBeCaughtJs = ["esbuild", "react", "react-dom"];
 
     /// <summary>JavaScript package ids, which arrive under different names than the .NET families.</summary>
     private static readonly string[] ModelPackagesJs =
@@ -158,9 +171,15 @@ public sealed class NoModelDependencyCensusTests
         "@huggingface/",
     ];
 
-    private static bool IsModelDependency(string name) =>
-        ModelLibraries.Any(library => name.Contains(library, StringComparison.OrdinalIgnoreCase))
-        || ModelPackagesJs.Any(package => name.Contains(package, StringComparison.OrdinalIgnoreCase));
+    // TWO RULES, because the two namespaces are different and sharing one made a family untestable.
+    // With a single rule the JS id `openai` caught the .NET family `OpenAI` case-insensitively, so
+    // dropping `OpenAI` from ModelLibraries changed nothing and the mutant that removed it survived.
+    // A .NET assembly reference is not a JavaScript package id and should not be matched against one.
+    private static bool IsModelAssembly(string name) =>
+        ModelLibraries.Any(library => name.Contains(library, StringComparison.OrdinalIgnoreCase));
+
+    private static bool IsModelJsPackage(string name) =>
+        ModelPackagesJs.Any(package => name.Contains(package, StringComparison.OrdinalIgnoreCase));
 
     private const string WhatToDo =
         "S4-A12 (no manufactured law) was classified accepted on the evidence that no model exists in "
@@ -179,7 +198,7 @@ public sealed class NoModelDependencyCensusTests
         {
             foreach (var referenced in assembly.GetReferencedAssemblies())
             {
-                if (IsModelDependency(referenced.Name ?? string.Empty))
+                if (IsModelAssembly(referenced.Name ?? string.Empty))
                 {
                     offending.Add($"{name} -> {referenced.Name}");
                 }
@@ -232,7 +251,7 @@ public sealed class NoModelDependencyCensusTests
             foreach (var line in File.ReadLines(project))
             {
                 var reference = ReadPackageReference(line);
-                if (reference is not null && IsModelDependency(reference))
+                if (reference is not null && IsModelAssembly(reference))
                 {
                     offending.Add($"{Path.GetFileName(project)} -> {reference}");
                 }
@@ -247,7 +266,7 @@ public sealed class NoModelDependencyCensusTests
             if (!manifest.RootElement.TryGetProperty(section, out var map)) continue;
             foreach (var dependency in map.EnumerateObject())
             {
-                if (IsModelDependency(dependency.Name))
+                if (IsModelJsPackage(dependency.Name))
                 {
                     offending.Add($"web/package.json {section} -> {dependency.Name}");
                 }
@@ -265,14 +284,26 @@ public sealed class NoModelDependencyCensusTests
     {
         foreach (var package in MustBeCaught)
         {
-            Assert.IsTrue(IsModelDependency(package),
-                $"{package} is a model or embedding client and the rule does not catch it.");
+            Assert.IsTrue(IsModelAssembly(package),
+                $"{package} is a model or embedding client and the assembly rule does not catch it.");
         }
 
         foreach (var kept in MustNotBeCaught)
         {
-            Assert.IsFalse(IsModelDependency(kept),
-                $"{kept} is a dependency this product holds and the rule rejects it.");
+            Assert.IsFalse(IsModelAssembly(kept),
+                $"{kept} is a dependency this product holds and the assembly rule rejects it.");
+        }
+
+        foreach (var package in MustBeCaughtJs)
+        {
+            Assert.IsTrue(IsModelJsPackage(package),
+                $"{package} is a model or embedding client and the web rule does not catch it.");
+        }
+
+        foreach (var kept in MustNotBeCaughtJs)
+        {
+            Assert.IsFalse(IsModelJsPackage(kept),
+                $"{kept} is a web dependency this product holds and the web rule rejects it.");
         }
 
         Assert.IsGreaterThan(10, MustBeCaught.Length);
