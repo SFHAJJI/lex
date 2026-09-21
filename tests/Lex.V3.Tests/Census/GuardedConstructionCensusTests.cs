@@ -251,7 +251,8 @@ public sealed class GuardedConstructionCensusTests
                     + "method public static Lex.V3.Contracts.Evaluation.RetrievalMetrics::Mean, "
                     + "method public static Lex.V3.Contracts.Evaluation.RetrievalMetrics::NdcgAtK, "
                     + "method public static Lex.V3.Contracts.Evaluation.RetrievalMetrics::RecallAtK, "
-                    + "method public static Lex.V3.Contracts.Evaluation.RetrievalMetrics::ReciprocalRank",
+                    + "method public static Lex.V3.Contracts.Evaluation.RetrievalMetrics::ReciprocalRank, "
+                    + "5 compiler-generated",
                 "Lex.V3.Contracts.Index.V3IndexCapabilityManifest: by-ref-method public static "
                     + "Lex.V3.Contracts.Index.V3IndexCapabilityManifest::TryCreate, "
                     + "constructor private instance "

@@ -79,6 +79,11 @@ public sealed class VocabularyRegistryCensusTests
                     + "const PlainLiteralDriftProbeCelex, const PlainLiteralDriftProbeSparql, "
                     + "const SeedListSha256, static property PositiveControlCelex, "
                     + "static property XsdStringDatatypeIri",
+                "Lex.V3.Contracts.Evaluation.EvaluationGateNames: const AnchorNdcgAt10, "
+                    + "const NoHitAccuracy, const ResolverExactness, const TemporalExactness, "
+                    + "const VerdictExactMatch",
+                "Lex.V3.Contracts.Evaluation.ShuffledControlNames: const DateShuffle, "
+                    + "const QrelsShuffle, const VerdictShuffle",
                 "Lex.V3.Contracts.Facts.FactsSchemaExporter: CommonDefinitionTypes=4, SchemaFiles=8, "
                     + "SchemaTypes=7, AllSchemaIds=8",
                 "Lex.V3.Contracts.Facts.FactsSchemaHardener: ContractSignatures=4, EuOnlyFamilies=4, "
