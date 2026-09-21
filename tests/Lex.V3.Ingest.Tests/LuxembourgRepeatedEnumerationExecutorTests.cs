@@ -1839,6 +1839,87 @@ public sealed class LuxembourgRepeatedEnumerationExecutorTests
             "and the mirror must say so in its own vocabulary, not report a bootstrap failure.");
     }
 
+    /// <summary>
+    /// A partition's cost is an exact function of its count, so once the count is read the run knows whether the budget
+    /// it has left can pay for the pass and the pass after it. If it cannot, it refuses before it binds a page, having
+    /// spent the robots fetch and the count and nothing else, and the refusal carries the count and the figure needed.
+    /// </summary>
+    /// <remarks>
+    /// A count of 100 is two pages a pass (a short page, then the empty successor), so after pass 1's count the run
+    /// still needs 2 pages, pass 2's count and 2 pages: 5. Robots and the count are 2 already spent, so a budget of 7 is
+    /// exactly enough and a budget of 6 is one short.
+    /// </remarks>
+    [TestMethod]
+    public async Task ACountThatNeedsMoreRequestsThanTheBudgetHasLeftRefusesBeforeItsFirstPageAndCarriesTheCount()
+    {
+        var (request, witness) = BuildRequest();
+        var store = new RoutedHttpAcquisitionSessionAuditTests.RecordingCustodyStore { RefuseFallback = true };
+        var handler = LuxembourgAcquisitionTestFixture.AllowRobotsThenHandler((_, req) =>
+            JsonResponse(req, LuxembourgAcquisitionTestFixture.CountJson(100)));
+        var executor = new LuxembourgRepeatedEnumerationExecutor(
+            store, new LuxembourgAcquisitionTestFixture.FixedTimeProvider(), handler);
+        var budget = WireRequestBudget.OfWireRequests(6);
+
+        var result = await executor.RunPartitionAsync(request, witness, budget, CancellationToken.None);
+
+        Assert.IsNull(result.Receipt);
+        Assert.IsNotNull(result.Refusal);
+        Assert.AreEqual(LuxembourgEnumerationRefusal.WireBudgetExhausted, result.Refusal.Code);
+        Assert.AreEqual(2, handler.SendCount, "the robots fetch and the count, and no page");
+        Assert.AreEqual(100L, result.Refusal.ObservedCount, "the refusal carries the count it read");
+        StringAssert.Contains(result.Refusal.CoreRefusalDetail, "needs 5 more wire requests");
+        StringAssert.Contains(result.Refusal.CoreRefusalDetail, "4 remain");
+        Assert.AreEqual(2, budget.Spent);
+    }
+
+    [TestMethod]
+    public async Task ACountThatFitsTheBudgetExactlyIsNotRefused()
+    {
+        var (request, witness) = BuildRequest();
+        var store = new RoutedHttpAcquisitionSessionAuditTests.RecordingCustodyStore { RefuseFallback = true };
+        var handler = LuxembourgAcquisitionTestFixture.AllowRobotsThenHandler((ordinal, req) => ordinal switch
+        {
+            1 or 3 => JsonResponse(req, LuxembourgAcquisitionTestFixture.CountJson(100)),
+            _ => JsonResponse(req, LuxembourgAcquisitionTestFixture.EmptyRowsJson()),
+        });
+        var executor = new LuxembourgRepeatedEnumerationExecutor(
+            store, new LuxembourgAcquisitionTestFixture.FixedTimeProvider(), handler);
+
+        var result = await executor.RunPartitionAsync(
+            request, witness, WireRequestBudget.OfWireRequests(7), CancellationToken.None);
+
+        Assert.IsNull(result.Refusal, "a budget of exactly what the count needs is enough: " + result.Refusal?.Code);
+        Assert.IsNotNull(result.Receipt);
+        Assert.AreEqual(5, handler.SendCount, "robots, then a count and one empty page for each pass");
+    }
+
+    [TestMethod]
+    public async Task ThePassAfterTheFirstChecksItsOwnCountAgainstWhatIsLeft()
+    {
+        var (request, witness) = BuildRequest();
+        var store = new RoutedHttpAcquisitionSessionAuditTests.RecordingCustodyStore { RefuseFallback = true };
+        // Pass 1 says 100 rows (fits: 5 needed, 5 left of 7); pass 2 says 2,000 (5 pages at 613), and 3 are left.
+        var handler = LuxembourgAcquisitionTestFixture.AllowRobotsThenHandler((ordinal, req) => ordinal switch
+        {
+            1 => JsonResponse(req, LuxembourgAcquisitionTestFixture.CountJson(100)),
+            3 => JsonResponse(req, LuxembourgAcquisitionTestFixture.CountJson(2000)),
+            _ => JsonResponse(req, LuxembourgAcquisitionTestFixture.EmptyRowsJson()),
+        });
+        var executor = new LuxembourgRepeatedEnumerationExecutor(
+            store, new LuxembourgAcquisitionTestFixture.FixedTimeProvider(), handler);
+        var budget = WireRequestBudget.OfWireRequests(7);
+
+        var result = await executor.RunPartitionAsync(request, witness, budget, CancellationToken.None);
+
+        Assert.IsNull(result.Receipt);
+        Assert.IsNotNull(result.Refusal);
+        Assert.AreEqual(LuxembourgEnumerationRefusal.WireBudgetExhausted, result.Refusal.Code);
+        Assert.AreEqual(4, handler.SendCount, "robots, pass 1's count and page, pass 2's count, and no second-pass page");
+        Assert.AreEqual(2000L, result.Refusal.ObservedCount);
+        StringAssert.Contains(result.Refusal.CoreRefusalDetail, "needs 5 more wire requests");
+        StringAssert.Contains(result.Refusal.CoreRefusalDetail, "3 remain");
+    }
+
     private static ByteArrayContent RobotsContent()
     {
         var bytes = System.Text.Encoding.UTF8.GetBytes("User-agent: *\nAllow: /\n");
