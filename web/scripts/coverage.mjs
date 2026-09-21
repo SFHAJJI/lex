@@ -1,382 +1,913 @@
-// Coverage, which is the page whose job is to say what is missing.
+// Coverage: the page whose job is to say what is missing.
 //
-// Every other screen answers a question. This one exists to be checked against, so its
-// failure mode is not a wrong answer but a comfortable one: a number with no denominator, a
-// count with no date, a type row that says how many states are held and not how many have
-// text. Each of those reads as completeness and none of them says so out loud.
+// Every other screen answers a question. This one exists to be checked against, so its failure
+// mode is not a wrong answer but a comfortable one: a count presented as current, a breakdown that
+// reads as complete because nothing said it was not, two numbers in one row that cannot both be
+// true. It is written against what the V3 platform's `coverage` operation really sends, captured in
+// `schemas/v3-platform/answer-samples.json` by driving the real handler, and the tests render that
+// captured answer rather than a shape anyone imagined.
 //
-// Two rules do most of the work. Nothing here is a literal, because two hand-transcribed
-// counts of the same thing already disagreed on the same day, so every figure arrives from
-// the build that measured it and the renderer has no defaults to fall back to. And a versions
-// count cannot be rendered without its versions-with-text partner, because 752 held states of
-// which 72 have text is the honest number and 752 on its own is not.
+// THIS PAGE USED TO PRINT A BUILD DATE ON EVERY TABLE AND A RETENTION SENTENCE UNDER THE COUNTS.
+// It was written against a V2 payload carrying `envelope.freshness.built_at`, and it stamped
+// `Counts as of index build <instant>.` into the body and into both table captions, and printed
+// `Observation history begins August 2026; replay depth grows from here.` The V3 answer holds
+// neither fact and says so in its own words, in two of the five rows of its fixed `not_held` list:
 //
-// The publisher's own gap strings are reproduced byte for byte. They are the sentences this
-// service publishes about its own limits, and a renderer that tidied them would be editing the
-// disclosure rather than showing it. Where one of them is wrong, it is wrong at the source and
-// gets fixed there.
+//   build_time_and_currency -- "no build time of the corpus or index is held, so nothing here says
+//   how current these counts are; the corpus and index digests name exactly which artifacts are
+//   mounted"
+//
+//   first_sighting_and_observation_times -- "no observation time or first-sighting event is held,
+//   so nothing here says when anything was first seen"
+//
+// So there is no build instant on this page and no retention sentence. Not "no date": the page
+// does carry calendar dates, the ends of each language's state range and each measured
+// capability's period, and they are the publisher's facts about the law rather than anyone's claim
+// about when the counting happened. What is gone is a date OF THE COUNTS, and what stands in its
+// place is what the platform does hold: `mounted.corpus_sha256` and `mounted.index_sha256`, which
+// name exactly which artifacts these counts were taken from. The envelope's `context.freshness.observed_at` is
+// the nearest thing to a date anywhere near this answer, and it is when the answer was produced
+// rather than when the counts were measured; this reader is handed the result value and never the
+// envelope, and `refuseRetiredShapes` refuses an `envelope` member by name, so the substitution
+// cannot be made by accident. Recorded in advance on issue #348, comment 5752806528, reviewing
+// PR #711: "the rebuilt page renders your row, renders the two digests beside it, and does not
+// present `observed_at` as the counts' currency".
+//
+// The second rule is the one the old page attached to the wrong noun. It reconciled each facet
+// TABLE as a partition or as an overlap. The V3 language table is both, per COLUMN, and the SQL
+// behind it says which is which (`LuxembourgIndexBuilder.ResolveCoverage`):
+//
+//   states   -- COUNT(*) FROM states GROUP BY language, against COUNT(*) FROM states. Every state
+//               row carries one language, so the rows partition, and when nothing was narrowed
+//               away they sum to the total exactly.
+//   articles -- COUNT(*) FROM articles GROUP BY language, against COUNT(*) FROM articles. A
+//               partition too, except that a language present in `articles` and absent from
+//               `states` gets no row at all, so its articles are in the total and in no row. The
+//               sum is a bound here and not an identity.
+//   works    -- COUNT(DISTINCT work_key) FROM states GROUP BY language, against COUNT(DISTINCT
+//               work_key) FROM states. A work published in two languages is one work in two rows,
+//               so these rows overlap and are never summed; only the per-row bound holds.
+//
+// One rule for the table would either invent the identity for `works` -- which is how the V2 page
+// would have refused both live coverage pages, measured, 1,406 language works against 1,402 held
+// -- or drop it for `states`.
+//
+// The third rule is a sum this page must NOT do, and the platform says so itself in `counts_note`:
+// "articles_with_searchable_text is counted where the article carries a publisher date, which is
+// what the capability cells measure, and so it and articles_without_publisher_date are not
+// addends". An article can carry a date and hold no searchable text. The V2 page REQUIRED exactly
+// this sum of its own two text columns, so on that rule any answer holding one such article -- a
+// dated article whose text is not searchable -- would have had no page at all. Not every honest
+// answer: one where every dated article is searchable does add up, and would have rendered.
+//
+// The fourth is narrowing, which on this answer is narrower than it looks. `counts_note` says that
+// when a language is requested "only languages and capability_cells are narrowed to it, and every
+// other member, totals included, is the whole mount's". A narrowed answer therefore puts one
+// language's rows beside the whole mount's totals, and a reader who takes those totals for that
+// language's reads the mount as smaller than it is. The page says so where the totals are rather
+// than in a footnote, and renders `counts_note` verbatim as well.
 
-import { isCalendarDate, isUtcInstant } from './temporal.mjs';
+import { NOT_STATED, escapeHtml } from './render.mjs';
+import { isCalendarDate } from './temporal.mjs';
 
-/** The row a publisher code has when the publisher did not give one. */
-export const UNTYPED_LABEL = 'untyped (publisher code absent)';
+export { NOT_STATED };
+
+const DIGEST = /^[0-9a-f]{64}$/;
 
 /**
- * The same, for a language the publisher did not record.
+ * The members the retired page required, refused by name.
  *
- * A row is still a row. Without this the code was interpolated raw, so a payload carrying no
- * language code printed the word `undefined` into a table of counts, which a reader reads as a
- * language rather than as this service failing to say.
+ * Eleven top-level members were required by the V2 renderer: `envelope`, `publisher_name`, `works`,
+ * `versions`, `text`, `valid_from_earliest`, `valid_from_latest`, `known_gaps`, `document_types`,
+ * `document_types_total` and `languages`. Ten of them are absent from the V3 answer and are listed
+ * here. The eleventh, `languages`, IS sent under the same name with a different row shape -- V2
+ * rows are `{code, works, versions}` and V3 rows are keyed `language` and counted in `states` --
+ * so it is caught by the row reader rather than by name, and `readLanguageRow` says so where it
+ * refuses.
+ *
+ * Without this, feeding the V2 shape to this page produces a page missing its date rather than an
+ * error, and a reader cannot tell a platform that holds no build time from a page that forgot to
+ * print one.
  */
-export const UNCODED_LANGUAGE_LABEL = 'language not recorded by the publisher';
-
-/**
- * A facet table is a breakdown of a headline number, and it has to add up to one.
- *
- * The page rendered a document type claiming 99 held states beside a headline of 30, and a
- * language claiming 9,999 of the same 30. Every individual figure passed, because every check
- * here tested one field at a time and nothing tested the relationships between them. A set of
- * numbers that cannot all be true is worse on this page than anywhere else in the product: it is
- * the page whose entire job is to be the thing a reader checks the others against.
- *
- * There are two kinds of breakdown and they reconcile differently, which is why one rule would
- * not have worked:
- *
- * - A **partition** assigns each thing to exactly one row. The publisher gives a state at most
- *   one document type, and the untyped row catches the rest, so the rows account for every state
- *   exactly once and a complete table must sum to the headline exactly.
- * - An **overlapping** breakdown lets one thing appear in several rows. A dated state exists as
- *   an expression in each language it was published in, so 24 language rows over 30 states can
- *   legitimately sum far past 30. Summing them and demanding the headline would be inventing a
- *   constraint the record does not have. What still holds is that no single row can count more
- *   than the whole it is drawn from.
- *
- * Truncation weakens the partition rule and only that rule: a table showing some of its rows
- * cannot be expected to sum to the whole, but it still cannot exceed it.
- *
- * @param {object} input
- * @param {Array}   input.rows      the facet rows served
- * @param {string}  input.field     which count on each row is being reconciled
- * @param {number}  input.headline  the total this facet is a breakdown of
- * @param {string}  input.kind      'partition' or 'overlapping'
- * @param {boolean} input.truncated whether rows were left out
- * @param {string}  input.what      what to name in the error
- */
-function requireDistinctFacetKeys(rows, what) {
-  const seen = new Set();
-  for (const row of rows) {
-    // The untyped and uncoded rows are one row each, so a null code is a key like any other and
-    // two of them repeat just as a repeated code does.
-    const key = row.code === null || row.code === undefined ? '\u0000null' : String(row.code);
-    if (seen.has(key)) {
+function refuseRetiredShapes(answer) {
+  const retired = [
+    'envelope',
+    'publisher_name',
+    'works',
+    'versions',
+    'text',
+    'valid_from_earliest',
+    'valid_from_latest',
+    'known_gaps',
+    'document_types',
+    'document_types_total',
+  ];
+  for (const member of retired) {
+    if (Object.hasOwn(answer ?? {}, member)) {
       throw new Error(
-        `${what} has ${JSON.stringify(row.code)} listed twice; one facet key is one row, so a ` +
-          'reader cannot tell which of the two is the figure for it, and the totals reconciling ' +
-          'means only that the duplicate was counted consistently',
+        `this coverage answer carries ${member}, which belongs to the payload this page was `
+          + 'written against before V3. That payload carried a build instant and this one records '
+          + 'that no build time is held, so rendering the old shape here would put a date on counts '
+          + 'the platform refuses to date',
       );
     }
-    seen.add(key);
   }
 }
 
-function requireServedRowsWithinTotal(rows, total, what) {
-  if (rows.length > total) {
+function requireOwn(object, key, where) {
+  if (!Object.hasOwn(object ?? {}, key)) {
     throw new Error(
-      `${what} serves ${rows.length} rows against a total of ${total}; a truncated view shows ` +
-        'fewer rows than the whole, never more, so these two figures are not about one table',
+      `${where} does not carry ${key}; an absent member and a member with nothing in it are `
+        + 'different facts, and only one of them can be reported',
     );
   }
+  return object[key];
 }
 
-function reconcileFacets({ rows, field, headline, kind, truncated, what }) {
-  for (const [index, row] of rows.entries()) {
-    if (row[field] > headline) {
-      throw new Error(
-        `${what} row ${index + 1} counts ${row[field]} ${field} against a total of ${headline}; ` +
-          'a part cannot be larger than the whole it is drawn from, so one of those two figures ' +
-          'is wrong and this page must not choose which',
-      );
-    }
+function requireText(value, where) {
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    throw new Error(`${where} is not a value this page can print`);
   }
-  if (kind !== 'partition' || truncated) return;
-  const served = rows.reduce((sum, row) => sum + row[field], 0);
-  if (served !== headline) {
-    throw new Error(
-      `${what} accounts for ${served} ${field} against a total of ${headline}, and every row is ` +
-        'shown; a complete breakdown that does not add up to its own headline means one of the ' +
-        'two was measured against something else',
-    );
-  }
+  return value;
 }
 
-/**
- * Fixed by Decision 41, exactly these words.
- *
- * It is the sentence that stops a reader taking a short observation history for a short legal
- * history, and it is frozen because "we have been watching since August" and "the law begins
- * in August" are one careless paraphrase apart.
- */
-export const RETENTION_SENTENCE =
-  'Observation history begins August 2026; replay depth grows from here.';
-
-function escapeHtml(value) {
-  return String(value)
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;');
-}
-
-function requireCount(value, what) {
-  if (!Number.isInteger(value) || value < 0) {
-    throw new Error(
-      `${what} is ${JSON.stringify(value)} rather than a count; this page has no defaults, ` +
-        'because a figure the renderer supplies is a figure nobody measured',
-    );
+function requireDigest(value, where) {
+  if (typeof value !== 'string' || !DIGEST.test(value)) {
+    throw new Error(`${where} is not a SHA-256 digest: ${JSON.stringify(value)}`);
   }
   return value;
 }
 
 /**
- * A type row, and the pair that makes it honest.
+ * A count, which is a whole number that is not negative.
  *
- * The partner is not optional and not a second column somebody may add. 752 held states with
- * text for 72 of them is the fact; 752 alone is a different and untrue one, and it is the
- * shape a table naturally grows into when one column is easier to fill than the other.
+ * This page has no defaults and nothing here falls back to zero, because a figure the renderer
+ * supplies is a figure nobody measured.
  */
-function renderTypeRow(row, index) {
-  const where = `document type row ${index + 1}`;
-  requireCount(row?.versions, `${where} versions`);
-  if (!Object.hasOwn(row ?? {}, 'versions_with_text')) {
+function requireCount(value, where) {
+  if (!Number.isInteger(value) || value < 0) {
     throw new Error(
-      `${where} carries a versions count with no versions_with_text; the pair is the honest ` +
-        'figure, and the count on its own reads as text this corpus does not hold',
+      `${where} is ${JSON.stringify(value)} rather than a count; this page has no defaults, `
+        + 'because a figure the renderer supplies is a figure nobody measured',
     );
   }
-  requireCount(row.versions_with_text, `${where} versions_with_text`);
-  if (row.versions_with_text > row.versions) {
-    throw new Error(`${where} holds text for more states than it holds`);
+  return value;
+}
+
+function requireList(value, where) {
+  if (!Array.isArray(value)) {
+    throw new Error(`${where} is a list, even an empty one`);
+  }
+  return value;
+}
+
+/**
+ * A calendar date the platform holds.
+ *
+ * Not nullable, and that is read off the schema rather than assumed: `states.applicability_date` is
+ * `NOT NULL`, and a language row exists only because `states GROUP BY language` produced a group, so
+ * `MIN` and `MAX` over a non-null column of a non-empty group are values. An earlier draft accepted
+ * null here and printed "not stated by the platform" for it, and the preview taught that shape: a
+ * page for an answer no producer can send, which is the defect the captured sample exists to
+ * prevent. A date the publisher genuinely did not state lives on `articles.applicability_date`,
+ * which is a different column and is counted, never dated, by `articles_without_publisher_date`.
+ */
+function requireDate(value, where) {
+  if (!isCalendarDate(value)) {
+    throw new Error(`${where} is not a calendar date: ${JSON.stringify(value)}`);
+  }
+  return value;
+}
+
+function requireAtMost(value, bound, where, why) {
+  if (value > bound) {
+    throw new Error(`${where} is ${value} against ${bound}; ${why}`);
+  }
+  return value;
+}
+
+function requireDistinct(keys, where) {
+  const seen = new Set();
+  for (const key of keys) {
+    if (seen.has(key)) {
+      throw new Error(
+        `${where} lists ${JSON.stringify(key)} twice; one key is one row, so a reader cannot tell `
+          + 'which of the two is the figure for it, and any total that reconciles means only that '
+          + 'the duplicate was counted consistently',
+      );
+    }
+    seen.add(key);
+  }
+  return keys;
+}
+
+/**
+ * A breakdown row counts at least one of the thing it breaks down.
+ *
+ * Both breakdowns under `members` are SQL `GROUP BY`s, and a group exists because at least one row
+ * produced it, so neither can honestly count nought. A row counting nobody is a token or an outcome
+ * nothing recorded, and on the page whose job is to be checked against, a row that exists and
+ * accounts for nothing is worse than a missing row: it reads as a category this corpus knows about.
+ */
+function requireCountedByAtLeastOne(rows, key, where) {
+  for (const [index, row] of rows.entries()) {
+    if (row.members === 0) {
+      throw new Error(
+        `${where}[${index}] counts no members for ${JSON.stringify(row[key])}; these rows are a `
+          + 'grouping of the members, and a group exists because a member is in it, so a row '
+          + 'accounting for nobody is a category nothing recorded',
+      );
+    }
+  }
+  return rows;
+}
+
+function readTotals(totals) {
+  const where = 'totals';
+  const read = {
+    members: requireCount(requireOwn(totals, 'members', where), `${where}.members`),
+    works: requireCount(requireOwn(totals, 'works', where), `${where}.works`),
+    states: requireCount(requireOwn(totals, 'states', where), `${where}.states`),
+    articles: requireCount(requireOwn(totals, 'articles', where), `${where}.articles`),
+  };
+  // `works` is COUNT(DISTINCT work_key) over the same rows `states` is COUNT(*) over, so a mount
+  // cannot hold more works than the states they were counted from.
+  requireAtMost(
+    read.works, read.states, 'totals.works',
+    'works are the distinct works of the held states, so there cannot be more of them than there '
+      + 'are states',
+  );
+  return read;
+}
+
+/**
+ * One language's row.
+ *
+ * `searchable_text_held` and `articles_with_searchable_text` are checked against each other in both
+ * directions, which is airtight rather than merely plausible: the flag is true exactly when the
+ * capability manifest holds a search/articles/searchable_text cell for that language, the count is
+ * the sum of those cells' populations, and `V3IndexCapabilityCell` refuses a population of zero or
+ * less because "an advertised capability must have measured support". So the flag is true if and
+ * only if the count is above zero, and a row saying no searchable text is held beside a positive
+ * count of articles with searchable text is a contradiction rather than a nuance.
+ */
+function readLanguageRow(row, index, totals) {
+  const where = `languages[${index}]`;
+  if (!Object.hasOwn(row ?? {}, 'language') && Object.hasOwn(row ?? {}, 'code')) {
+    throw new Error(
+      `${where} is keyed by code rather than by language; that is the row shape of the payload this `
+        + 'page was written against before V3, whose columns counted versions rather than states',
+    );
   }
 
-  // A null code is a real row: the publisher gave no type for those states. Dropping it would
-  // remove exactly the states most likely to be missing their text.
-  const code = row.code === null || row.code === undefined ? UNTYPED_LABEL : row.code;
+  const read = {
+    language: requireText(row?.language, `${where}.language`),
+    works: requireCount(requireOwn(row, 'works', where), `${where}.works`),
+    states: requireCount(requireOwn(row, 'states', where), `${where}.states`),
+    articles: requireCount(requireOwn(row, 'articles', where), `${where}.articles`),
+    articles_with_searchable_text: requireCount(
+      requireOwn(row, 'articles_with_searchable_text', where),
+      `${where}.articles_with_searchable_text`),
+    articles_without_publisher_date: requireCount(
+      requireOwn(row, 'articles_without_publisher_date', where),
+      `${where}.articles_without_publisher_date`),
+    first_state_date: requireDate(
+      requireOwn(row, 'first_state_date', where), `${where}.first_state_date`),
+    last_state_date: requireDate(
+      requireOwn(row, 'last_state_date', where), `${where}.last_state_date`),
+    searchable_text_held: requireOwn(row, 'searchable_text_held', where),
+  };
+
+  if (typeof read.searchable_text_held !== 'boolean') {
+    throw new Error(
+      `${where}.searchable_text_held is whether a search can be asked in this language, which is `
+        + 'true or false and never absent',
+    );
+  }
+  if (read.searchable_text_held !== read.articles_with_searchable_text > 0) {
+    throw new Error(
+      `${where} says searchable text ${read.searchable_text_held ? 'is' : 'is not'} held and counts `
+        + `${read.articles_with_searchable_text} articles with searchable text; the flag is the `
+        + 'existence of a measured capability cell and the count is the sum of those cells, and a '
+        + 'cell with no measured support is refused where it is built, so these two cannot disagree',
+    );
+  }
+
+  // The per-row bound, which holds whether or not the answer was narrowed: narrowing drops rows and
+  // leaves the totals whole, so a subset's row is bounded by the whole mount's total just as the
+  // full set's row is.
+  requireAtMost(read.works, totals.works, `${where}.works`,
+    'a language cannot hold more works than the mount holds');
+  requireAtMost(read.states, totals.states, `${where}.states`,
+    'a language cannot hold more states than the mount holds');
+  requireAtMost(read.articles, totals.articles, `${where}.articles`,
+    'a language cannot hold more articles than the mount holds');
+
+  // BOTH article columns, and the comment here used to say "each of the two" while the code bounded
+  // one. The bound on the searchable count is as sound as the other: a capability cell counts dated
+  // articles of that language holding non-empty text, so it counts a subset of the articles the row
+  // counts. Neither column is added to the other or to anything else -- `counts_note` says they are
+  // not addends, because an article can carry a publisher date and hold no searchable text -- and
+  // being un-addable is not the same as being unbounded.
+  requireAtMost(
+    read.articles_without_publisher_date, read.articles,
+    `${where}.articles_without_publisher_date`,
+    'the articles missing a publisher date are counted among this language’s articles',
+  );
+  requireAtMost(
+    read.articles_with_searchable_text, read.articles,
+    `${where}.articles_with_searchable_text`,
+    'the articles holding searchable text are counted among this language’s articles',
+  );
+  // The same case one level up: a work of this language is one of the states of this language, so a
+  // row cannot hold more works than states any more than the mount can.
+  requireAtMost(read.works, read.states, `${where}.works`,
+    'a language’s works are the distinct works of its states, so it cannot hold more of them');
+
+  if (read.first_state_date > read.last_state_date) {
+    throw new Error(
+      `${where} reports states running from ${read.first_state_date} to ${read.last_state_date}, `
+        + 'which ends before it begins; these are the ends of one interval rather than two '
+        + 'independent dates, and an interval that runs backwards is not a smaller range but a '
+        + 'wrong one',
+    );
+  }
+  return read;
+}
+
+function readLanguages(value, { totals, languagesHeld, requestedLanguage }) {
+  const rows = requireList(value, 'languages').map(
+    (row, index) => readLanguageRow(row, index, totals));
+  requireDistinct(rows.map((row) => row.language), 'the language breakdown');
+
+  const held = new Set(languagesHeld);
+  for (const row of rows) {
+    if (!held.has(row.language)) {
+      throw new Error(
+        `the language breakdown counts ${JSON.stringify(row.language)}, which is not among the `
+          + 'languages this mount records holding; languages_held is taken from these same rows '
+          + 'before any narrowing, so a row outside it is a row from somewhere else',
+      );
+    }
+  }
+
+  if (requestedLanguage === null) {
+    // Nothing was narrowed away, so the rows and the held list are the same set. Both directions
+    // are needed: the loop above gives one, and the sizes give the other.
+    if (rows.length !== languagesHeld.length) {
+      throw new Error(
+        `no language was asked for and ${rows.length} of the ${languagesHeld.length} languages this `
+          + 'mount holds have a row; an unnarrowed answer breaks down every language it holds, and '
+          + 'a table that simply stops reads as a complete one',
+      );
+    }
+    // The partition: every state row carries exactly one language, so with nothing narrowed away
+    // the rows account for every state exactly once.
+    const states = rows.reduce((sum, row) => sum + row.states, 0);
+    if (states !== totals.states) {
+      throw new Error(
+        `the language breakdown accounts for ${states} states against a total of ${totals.states}, `
+          + 'and no language was asked for; every state carries exactly one language, so a complete '
+          + 'breakdown that does not add up to its own headline means one of the two was measured '
+          + 'against something else',
+      );
+    }
+  } else {
+    // A language the mount does not hold is refused one step earlier, by the producer, with
+    // `language_not_available` (`V3CorpusMount.cs:1618-1628`). So a coverage answer narrowed to an
+    // unheld language does not exist, and a reader that accepts one -- as this one did -- lets a
+    // preview and a test describe a page the platform can never serve. Both checks below are
+    // guaranteed by the producer, which is what makes adding them safe: neither can refuse an
+    // answer the real handler sends.
+    if (!held.has(requestedLanguage)) {
+      throw new Error(
+        `this answer was narrowed to ${JSON.stringify(requestedLanguage)}, which is not among the `
+          + 'languages this mount holds; that request is refused as language_not_available and '
+          + 'never answered, so an answer in this shape did not come from the platform',
+      );
+    }
+    if (rows.length !== 1) {
+      throw new Error(
+        `${JSON.stringify(requestedLanguage)} was asked for and ${rows.length} languages have a `
+          + 'row; the breakdown has one row per language and the request narrowed it to one, so a '
+          + 'narrowed answer carries exactly that row',
+      );
+    }
+    for (const row of rows) {
+      if (row.language !== requestedLanguage) {
+        throw new Error(
+          `${JSON.stringify(requestedLanguage)} was asked for and the breakdown counts `
+            + `${JSON.stringify(row.language)}; a narrowed answer holds the rows of the language it `
+            + 'was narrowed to and no others',
+        );
+      }
+    }
+  }
+
+  // A bound rather than an identity, narrowed or not. An article whose language no state is held in
+  // is counted in the total and has no row to be counted in, so the rows can fall short of the
+  // total honestly; they can never exceed it.
+  const articles = rows.reduce((sum, row) => sum + row.articles, 0);
+  requireAtMost(articles, totals.articles, 'the articles the language breakdown accounts for',
+    'the rows are taken from the articles the total counts, so together they cannot exceed it');
+
+  // `works` is never summed. A work published in two languages is one work in two rows, so the sum
+  // is expected to exceed the total and means nothing; only the per-row bound above holds.
+  return rows;
+}
+
+/**
+ * What the corpus recorded about the documents it went to get.
+ *
+ * The two breakdowns here reconcile differently and the SQL says which is which. `by_outcome` is
+ * `SELECT outcome,COUNT(*) FROM members GROUP BY outcome` against `SELECT COUNT(*) FROM members`,
+ * so every member is in exactly one row and the rows sum to the total exactly. `gaps` is
+ * `SELECT j.value,COUNT(DISTINCT m.object_ref_sha256) ... json_each(m.gaps_json)`, so a member
+ * carrying two gap tokens is counted in two rows and the rows must never be summed; each is
+ * bounded by the number of members carrying any gap at all.
+ */
+function readMembers(value, totals) {
+  const where = 'members';
+  const withGaps = requireCount(requireOwn(value, 'with_gaps', where), `${where}.with_gaps`);
+  requireAtMost(withGaps, totals.members, `${where}.with_gaps`,
+    'the members carrying a gap are counted among the members');
+
+  const byOutcome = requireList(requireOwn(value, 'by_outcome', where), `${where}.by_outcome`)
+    .map((row, index) => ({
+      outcome: requireText(row?.outcome, `${where}.by_outcome[${index}].outcome`),
+      members: requireCount(
+        requireOwn(row, 'members', `${where}.by_outcome[${index}]`),
+        `${where}.by_outcome[${index}].members`),
+    }));
+  requireDistinct(byOutcome.map((row) => row.outcome), 'the outcome breakdown');
+  requireCountedByAtLeastOne(byOutcome, 'outcome', `${where}.by_outcome`);
+  const counted = byOutcome.reduce((sum, row) => sum + row.members, 0);
+  if (counted !== totals.members) {
+    throw new Error(
+      `the outcome breakdown accounts for ${counted} members against a total of ${totals.members}; `
+        + 'every member has exactly one outcome and these rows are that grouping, so a breakdown '
+        + 'that does not add up to its own headline means one of the two was measured against '
+        + 'something else',
+    );
+  }
+
+  const gaps = requireList(requireOwn(value, 'gaps', where), `${where}.gaps`)
+    .map((row, index) => ({
+      gap: requireText(row?.gap, `${where}.gaps[${index}].gap`),
+      members: requireCount(
+        requireOwn(row, 'members', `${where}.gaps[${index}]`),
+        `${where}.gaps[${index}].members`),
+    }));
+  requireDistinct(gaps.map((row) => row.gap), 'the gap breakdown');
+  requireCountedByAtLeastOne(gaps, 'gap', `${where}.gaps`);
+  for (const [index, row] of gaps.entries()) {
+    requireAtMost(row.members, withGaps, `${where}.gaps[${index}].members`,
+      'a gap token cannot be recorded by more members than the number of members recording any gap');
+  }
+  // The bound above is also what refuses a `with_gaps` of zero beside any gap row, so there is no
+  // separate check for it: a token is counted only where a member recorded it, and a row counting
+  // one or more members against nought members with gaps fails the bound in its own terms. The
+  // converse -- members carrying gaps and no token counted -- is NOT refused, because a member
+  // whose gap list is written `[ ]` is counted in `with_gaps` and yields no row through
+  // `json_each`. That answer is rendered as the fact it is, with a sentence saying this page cannot
+  // say which gap.
+
+  return {
+    withGaps,
+    byOutcome,
+    gaps,
+    gapsNote: requireText(requireOwn(value, 'gaps_note', where), `${where}.gaps_note`),
+  };
+}
+
+/**
+ * What this mount answers, and what is registered with no route on it.
+ *
+ * The producer builds `not_served_operations` as `registered.Except(served)`, so the two lists add
+ * up to `registered` exactly when the served operations are a subset of the registered ones. When
+ * they do not add up, a route is served for an operation the reviewed registry does not register,
+ * which is the one thing this arithmetic can detect and is worth detecting.
+ */
+function readOperations(value) {
+  const where = 'operations';
+  const registered = requireCount(requireOwn(value, 'registered', where), `${where}.registered`);
+  const served = requireList(
+    requireOwn(value, 'served_operations', where), `${where}.served_operations`)
+    .map((operation, index) => requireText(operation, `${where}.served_operations[${index}]`));
+  const notServed = requireList(
+    requireOwn(value, 'not_served_operations', where), `${where}.not_served_operations`)
+    .map((operation, index) => requireText(operation, `${where}.not_served_operations[${index}]`));
+  requireDistinct(served, 'the served operations');
+  requireDistinct(notServed, 'the operations with no route');
+
+  // This answer exists, so the operation that produced it is one this mount answers. A served list
+  // that leaves it out is describing some other mount.
+  if (!served.includes('coverage')) {
+    throw new Error(
+      'the served operations do not include coverage, and this is a coverage answer; a list of what '
+        + 'a mount answers that omits the operation which just answered is a list about something '
+        + 'else',
+    );
+  }
+  const overlap = served.filter((operation) => notServed.includes(operation));
+  if (overlap.length > 0) {
+    throw new Error(
+      `${overlap.join(', ')} is listed both as served and as having no route; the two lists are what `
+        + 'this mount answers and what it does not, and an operation cannot be in both',
+    );
+  }
+  if (served.length + notServed.length !== registered) {
+    throw new Error(
+      `${served.length} served and ${notServed.length} unrouted operations are listed against `
+        + `${registered} registered; the unrouted list is the registered operations minus the served `
+        + 'ones, so these add up, and at the producer the one way they do not is a route served for '
+        + 'an operation the reviewed registry does not register',
+    );
+  }
+
+  return {
+    registered,
+    served,
+    notServed,
+    note: requireText(requireOwn(value, 'note', where), `${where}.note`),
+  };
+}
+
+/**
+ * What the index measured it can be asked.
+ *
+ * A cell's period is inclusive and its population is above zero, both refused at construction by
+ * `V3IndexCapabilityCell`; the manifest itself refuses duplicate cells and overlapping periods for
+ * one set of dimensions. Checked again here because this reader is handed JSON rather than the
+ * object, and a value that survived construction can still be altered between there and here.
+ */
+function readCells(value) {
+  const cells = requireList(value, 'capability_cells').map((measured, index) => {
+    const where = `capability_cells[${index}]`;
+    const read = {
+      operation: requireText(measured?.operation, `${where}.operation`),
+      column: requireText(measured?.column, `${where}.column`),
+      field: requireText(measured?.field, `${where}.field`),
+      language: requireText(measured?.language, `${where}.language`),
+      period_from: requireOwn(measured, 'period_from', where),
+      period_to: requireOwn(measured, 'period_to', where),
+      population: requireCount(requireOwn(measured, 'population', where), `${where}.population`),
+    };
+    for (const end of ['period_from', 'period_to']) {
+      if (!isCalendarDate(read[end])) {
+        throw new Error(`${where}.${end} is not a calendar date: ${JSON.stringify(read[end])}`);
+      }
+    }
+    if (read.period_from > read.period_to) {
+      throw new Error(
+        `${where} covers ${read.period_from} to ${read.period_to}, which ends before it begins; the `
+          + 'period is inclusive and its ends are not two independent dates',
+      );
+    }
+    if (read.population === 0) {
+      throw new Error(
+        `${where} advertises a capability with a population of zero; a measured capability has `
+          + 'measured support, and a cell with none is refused where cells are built',
+      );
+    }
+    return read;
+  });
+  requireDistinct(
+    cells.map((measured) => [measured.operation, measured.column, measured.field,
+      measured.language, measured.period_from, measured.period_to].join('\u0000')),
+    'the measured capabilities',
+  );
+  return cells;
+}
+
+/**
+ * Validates one `coverage_report` and returns what the renderers lay out.
+ *
+ * Every rule lives here and is applied once, so the React port can share them rather than
+ * reimplement them beside a copy that drifts. The two coverage renderers carried exactly that
+ * duplication until now, held together by a parity test that fed both the same inputs; the defect
+ * it was guarding against is the one the dossier's two renderers had, and the repair is the one
+ * `readProvenance` made -- one validator, two layouts.
+ */
+export function readCoverage(answer) {
+  refuseRetiredShapes(answer);
+
+  const where = 'this coverage answer';
+  const requestedLanguage = requireOwn(answer, 'requested_language', where);
+  if (requestedLanguage !== null
+    && (typeof requestedLanguage !== 'string' || requestedLanguage.trim().length === 0)) {
+    throw new Error('requested_language is the language asked for, or null when none was asked');
+  }
+
+  const languagesHeld = requireList(requireOwn(answer, 'languages_held', where), 'languages_held')
+    .map((language, index) => requireText(language, `languages_held[${index}]`));
+  requireDistinct(languagesHeld, 'the languages this mount holds');
+
+  const mountedValue = requireOwn(answer, 'mounted', where);
+  const mounted = {
+    publisher: requireText(mountedValue?.publisher, 'mounted.publisher'),
+    corpus_sha256: requireDigest(mountedValue?.corpus_sha256, 'mounted.corpus_sha256'),
+    index_sha256: requireDigest(mountedValue?.index_sha256, 'mounted.index_sha256'),
+    registry_sha256: requireDigest(mountedValue?.registry_sha256, 'mounted.registry_sha256'),
+  };
+
+  const totals = readTotals(requireOwn(answer, 'totals', where));
+  const languages = readLanguages(requireOwn(answer, 'languages', where), {
+    totals, languagesHeld, requestedLanguage,
+  });
+
+  // An empty breakdown is a fact and gets a sentence rather than an empty table -- but only where it
+  // can be true. With nothing narrowed away the rows and `languages_held` are the same set, so no
+  // rows beside a non-empty held list is a contradiction, and it is refused inside `readLanguages`
+  // by the size check, which names both numbers. There is no second guard for it here: a rule that
+  // cannot fire is not a rule, and the one this file used to carry for `with_gaps` was removed for
+  // exactly that reason once a test went looking for the failure and found a different one.
+
+  // Every row with its reason. This is the page's whole account of what it cannot tell a reader,
+  // and a row without a reason is worse than no row: it names a gap and explains nothing.
+  const notHeld = requireList(requireOwn(answer, 'not_held', where), 'not_held');
+  if (notHeld.length === 0) {
+    throw new Error(
+      'not_held is this answer’s account of what it does not hold; an empty list would read as '
+        + 'an answer that holds everything, on the page whose job is to say what is missing',
+    );
+  }
+
+  const notHeldRows = notHeld.map((row, index) => ({
+    item: requireText(row?.item, `not_held[${index}].item`),
+    reason: requireText(row?.reason, `not_held[${index}].reason`),
+  }));
+  // The one list that was left without this. A repeated item is two reasons for one absence, and on
+  // the page whose job is to say what is missing a reader cannot tell which of the two governs.
+  requireDistinct(notHeldRows.map((row) => row.item), 'the list of what is not held');
+
+  return {
+    scope: requireText(requireOwn(answer, 'scope', where), 'scope'),
+    countsNote: requireText(requireOwn(answer, 'counts_note', where), 'counts_note'),
+    requestedLanguage,
+    languagesHeld,
+    mounted,
+    totals,
+    languages,
+    members: readMembers(requireOwn(answer, 'members', where), totals),
+    operations: readOperations(requireOwn(answer, 'operations', where)),
+    capabilityCells: readCells(requireOwn(answer, 'capability_cells', where)),
+    notHeld: notHeldRows,
+  };
+}
+
+/**
+ * THE PAGE'S OWN SENTENCES, in one place, because they were written twice.
+ *
+ * Everything below is this page speaking rather than the platform, and each was previously spelled
+ * out separately in the string renderer and in the React port. Two copies held level by a parity
+ * test is exactly the arrangement `readCoverage` replaced for the rules, and leaving the prose in
+ * that state kept the defect where it is hardest to see: the parity test compares the two after
+ * tags are stripped, so it reports agreement on wording and cannot see a claim that is false.
+ *
+ * `capabilityAbsence` is the sentence that made this necessary. It used to read "No capability was
+ * measured, so nothing here says what this mount can be asked of any period" on every answer with
+ * no cells -- including a NARROWED one, where the mount did measure capabilities and the narrowing
+ * dropped them. The producer filters `capability_cells` by the requested language
+ * (`V3CorpusMount.cs:1690`), so a mount measuring `fra` answers a `deu` request with an empty list,
+ * and the page told the reader the mount had measured nothing. It is the page's own preview `deu`
+ * row, and the test asserted the sentence only on the case where it was true.
+ */
+export const COUNTS_PROVENANCE_NOTE =
+  'The counts of the corpus and the index below were taken from the artifacts named above. Nothing '
+  + 'here says when they were taken: no build time of either is held. The digests say exactly which '
+  + 'artifacts were counted, which a date does not. The calendar dates further down are the '
+  + 'publisher’s, about the law, and not about when this was counted.';
+
+/** No language row at all, which a mount holding no state reaches and nothing else does. */
+export const NO_LANGUAGE_ROWS =
+  'This mount holds no state in any language, so the totals above have no language breakdown.';
+
+/**
+ * What the ends of a language's state range are, and are not.
+ *
+ * RESTORED DELIBERATELY, in different words. The V2 page qualified the last date as
+ * "publisher-scheduled rather than current"; this page dropped the qualification and printed a bare
+ * date, and a reader meeting `2029-11-30` reads it either as a prediction or as the corpus being
+ * years stale. Neither is what it is: the publisher dates states ahead, and this mount holds no
+ * "today" against which anything could be called current. So the V2 wording cannot come back as it
+ * was -- "rather than current" asserts the comparison the platform cannot make -- and what is said
+ * instead is the fact without it.
+ */
+export const STATE_RANGE_NOTE =
+  'These are the first and last applicability dates the publisher gave, not a record of when '
+  + 'anything was collected. The publisher dates states ahead, so the last of them may lie in the '
+  + 'future; this mount holds no present date to compare them against and makes no such comparison.';
+
+/** Members recorded a gap and no token was counted, which `[ ]` in a gap list reaches. */
+export const NO_GAP_TOKENS =
+  'No gap token is counted here, so where a member above recorded a gap this page cannot say which.';
+
+/**
+ * No measured capability to show, which is two different facts.
+ *
+ * Narrowed, it is about the language and says nothing about the mount. Unnarrowed, it is about the
+ * mount. The old sentence said the second on both.
+ */
+export function capabilityAbsence(language) {
+  return language === null
+    ? 'This mount measured no capability, so nothing here says what it can be asked of any period.'
+    : `No capability is measured for ${language}. This says nothing about the other languages this `
+      + 'mount holds: a narrowed answer carries only the capabilities of the language asked for.';
+}
+
+/** How much of the corpus the members recorded a gap for. */
+export function gapsSentence(withGaps, members) {
+  return `${withGaps} of ${members} members recorded a gap.`;
+}
+
+/** How much of the registry this mount answers. */
+export function servedSentence(served, registered) {
+  return `${served} of ${registered} registered operations are answered here.`;
+}
+
+/**
+ * What a language-narrowed coverage answer is, said where the totals are.
+ *
+ * `counts_note` is rendered verbatim as well and says the same thing; this is the page's own
+ * sentence, placed beside the numbers it is about, because a note read after the totals is read
+ * after the totals are believed.
+ */
+export function narrowedNote(language) {
   return (
-    `<tr><td>${escapeHtml(code)}</td><td>${row.versions}</td>` +
-    `<td>${row.versions_with_text}</td></tr>`
+    `This answer was narrowed to ${language} when it was requested. Only the language rows and the `
+    + 'measured capabilities are that language’s. The totals here, the members below and '
+    + 'everything else on this page are the whole mount’s.'
   );
 }
 
-function renderTable({ caption, head, rows, builtAt }) {
+/** The mount measured a capability for an operation it does not serve. Said, never hidden. */
+export function unservedCapabilityNote(operations) {
   return (
-    '<div class="coverage-scroll" role="region" tabindex="0" ' +
-    `aria-label="${escapeHtml(caption)}, scrollable">` +
-    `<table class="coverage-table"><caption>${escapeHtml(caption)}. Counts as of index build ` +
-    `${escapeHtml(builtAt)}.</caption><thead><tr>` +
-    head.map((cell) => `<th scope="col">${escapeHtml(cell)}</th>`).join('') +
-    `</tr></thead><tbody>${rows}</tbody></table></div>`
+    `The index measured a capability for ${operations.join(', ')}, which this mount does not serve. `
+    + 'What the index measured and what the mount answers are two different facts, and here they '
+    + 'disagree.'
+  );
+}
+
+/** Which measured capabilities name an operation this mount does not serve. Often none. */
+export function unservedCapabilities(view) {
+  const served = new Set(view.operations.served);
+  return [...new Set(view.capabilityCells
+    .map((measured) => measured.operation)
+    .filter((operation) => !served.has(operation)))];
+}
+
+const code = (value) => `<code>${escapeHtml(String(value))}</code>`;
+
+/** A value the platform holds, or the sentence saying it does not. Never a blank cell. */
+function cell(value, render) {
+  return value === null
+    ? `<span class="coverage-not-stated">${escapeHtml(NOT_STATED)}</span>`
+    : render(value);
+}
+
+function row(label, value) {
+  return `<tr><th scope="row">${escapeHtml(label)}</th><td>${value}</td></tr>`;
+}
+
+/**
+ * A table in its own scroll box.
+ *
+ * The box is keyboard focusable whether or not it asks to be, because a scrollable region is, so it
+ * carries a role and an accessible name rather than becoming a tab stop that announces nothing. The
+ * caption says what the table counts. It does not say when, because nothing on this answer says
+ * when.
+ */
+function table({ caption, head, rows }) {
+  return (
+    '<div class="coverage-scroll" role="region" tabindex="0" '
+    + `aria-label="${escapeHtml(caption)}, scrollable">`
+    + `<table class="coverage-table"><caption>${escapeHtml(caption)}</caption><thead><tr>`
+    + head.map((heading) => `<th scope="col">${escapeHtml(heading)}</th>`).join('')
+    + `</tr></thead><tbody>${rows}</tbody></table></div>`
   );
 }
 
 /**
- * The coverage page for one publisher.
+ * Whether a search can be asked in this language, as the platform's own flag.
  *
- * @param {object} input
- * @param {object} input.coverage  the served coverage payload, verbatim
+ * It looks derived, because `readCoverage` proves it equals whether the count beside it is above
+ * zero. It is shown anyway, and that is the point: this is the page a reader checks the others
+ * against, so a reader who wants to check that equality should be able to see both sides of it
+ * rather than take this page's word that it held.
  */
-export function renderCoverage({ coverage }) {
-  const builtAt = coverage?.envelope?.freshness?.built_at;
-  if (!isUtcInstant(builtAt)) {
-    throw new Error(
-      'coverage carries the instant its counts were measured; a count with no date is a count ' +
-        'a reader will take as current however old it is',
-    );
-  }
-  if (typeof coverage.publisher_name !== 'string' || coverage.publisher_name.length === 0) {
-    throw new Error('coverage names the publisher it describes');
-  }
+export const HELD = Object.freeze({ true: 'yes', false: 'no' });
 
-  requireCount(coverage.works, 'works');
-  requireCount(coverage.versions, 'versions');
-  requireCount(coverage.text?.versions_with_text_served, 'versions_with_text_served');
-  requireCount(coverage.text?.versions_without_text, 'versions_without_text');
+function languageRows(languages) {
+  return languages.map((language) => (
+    '<tr>'
+    + `<td>${escapeHtml(language.language)}</td>`
+    + `<td>${language.works}</td>`
+    + `<td>${language.states}</td>`
+    + `<td>${language.articles}</td>`
+    + `<td>${HELD[language.searchable_text_held]}</td>`
+    + `<td>${language.articles_with_searchable_text}</td>`
+    + `<td>${language.articles_without_publisher_date}</td>`
+    + `<td>${cell(language.first_state_date, escapeHtml)}</td>`
+    + `<td>${cell(language.last_state_date, escapeHtml)}</td>`
+    + '</tr>'
+  )).join('');
+}
 
-  if (
-    coverage.text.versions_with_text_served + coverage.text.versions_without_text !==
-    coverage.versions
-  ) {
-    throw new Error(
-      'the text counts do not add up to the versions count; a total that disagrees with its ' +
-        'own parts is the shape two hand-transcribed figures take',
-    );
-  }
-
-  for (const field of ['valid_from_earliest', 'valid_from_latest']) {
-    if (!isCalendarDate(coverage[field])) {
-      throw new Error(`coverage ${field} is not a calendar date`);
-    }
-  }
-  // Ordered. Both fields only had to be calendar dates, so a payload could report states running
-  // from 2030 to 1849 and the page printed it as a range. Named earliest and latest, they are
-  // not two independent dates; they are the ends of one interval, and an interval that runs
-  // backwards is not a smaller range, it is a wrong one.
-  if (coverage.valid_from_earliest > coverage.valid_from_latest) {
-    throw new Error(
-      `coverage reports states running from ${coverage.valid_from_earliest} to ` +
-        `${coverage.valid_from_latest}, which ends before it begins; earliest and latest are the ` +
-        'ends of one interval rather than two independent dates',
-    );
-  }
-
-  // The gap strings are this service's own statement of its limits. Reproduced exactly.
-  const gaps = coverage.known_gaps;
-  if (!Array.isArray(gaps) || gaps.length === 0) {
-    throw new Error(
-      'coverage with no known gaps is a claim of completeness; the page whose job is to say ' +
-        'what is missing cannot say nothing is',
-    );
-  }
-  if (!gaps.every((gap) => typeof gap === 'string' && gap.trim().length > 0)) {
-    throw new Error('every known gap is a sentence');
-  }
-
-  const types = coverage.document_types;
-  if (!Array.isArray(types) || types.length === 0) {
-    throw new Error('coverage lists the document types it holds');
-  }
-  // A count, not merely an integer. Guarded on `Number.isInteger` alone, a total of -7 was a
-  // valid document-type count, and the only thing that caught it downstream was a truncation
-  // check that a payload declaring itself truncated turned off.
-  requireCount(coverage.document_types_total, 'document_types_total');
-  // Both of these hold whether or not the payload declares truncation. The check below is
-  // switched off by `facets_truncated: true`, which is correct for the rule it guards and is
-  // why two rows against a total of one once rendered as `Showing 2 of 1 types.`
-  requireServedRowsWithinTotal(
-    types, coverage.document_types_total, 'the document-type breakdown');
-  requireDistinctFacetKeys(types, 'the document-type breakdown');
-  const truncatedTypes =
-    coverage.facets_truncated === true || types.length !== coverage.document_types_total;
-  if (truncatedTypes && coverage.facets_truncated !== true) {
-    throw new Error(
-      `${types.length} type rows were served against a total of ${coverage.document_types_total} ` +
-        'and the payload does not say it was truncated; a table that simply stops reads as a ' +
-        'complete one',
-    );
-  }
-
-  // A build that did not finish is not a smaller corpus, it is an unknown one.
-  if (coverage.build_complete !== true) {
-    const issues = Array.isArray(coverage.build_issues) ? coverage.build_issues.length : 0;
-    return (
-      '<section class="coverage coverage-incomplete">' +
-      `<h2>${escapeHtml(coverage.publisher_name)}</h2>` +
-      '<p class="coverage-build">This index build did not complete, so the counts below would ' +
-      'describe an unknown fraction of what this corpus holds and are not shown. ' +
-      `Build status: ${escapeHtml(String(coverage.build_inventory_status ?? 'unknown'))}, ` +
-      `${issues} recorded issue${issues === 1 ? '' : 's'}, measured ` +
-      `${escapeHtml(builtAt)}.</p>` +
-      '</section>'
-    );
-  }
-  if (
-    Number.isInteger(coverage.scope_expected_works) &&
-    coverage.scope_expected_works !== coverage.works
-  ) {
-    throw new Error(
-      `the build expected ${coverage.scope_expected_works} works and holds ${coverage.works} ` +
-        'while reporting itself complete; one of those two numbers is wrong and this page ' +
-        'must not choose which',
-    );
-  }
-
-  const typeRows = types.map(renderTypeRow).join('');
-  // Required rather than defaulted. `?? []` rendered an empty table for a payload that named no
-  // languages at all, and an empty table reads as a corpus holding none rather than as a payload
-  // that did not say. It also left nothing for the reconciliation below to check.
-  if (!Array.isArray(coverage.languages) || coverage.languages.length === 0) {
-    throw new Error(
-      'coverage lists the languages it holds; an absent list renders as an empty table, which ' +
-        'reads as a corpus that holds no language rather than a payload that did not say',
-    );
-  }
-  requireDistinctFacetKeys(coverage.languages, 'the language breakdown');
-  const languageRows = coverage.languages
-    .map((row, index) => {
-      requireCount(row?.works, `language row ${index + 1} works`);
-      requireCount(row?.versions, `language row ${index + 1} versions`);
-      // Labelled, not interpolated. A missing code printed the literal word `undefined` into a
-      // column of language codes, where it reads as a language this corpus holds.
-      const code = row.code === null || row.code === undefined ? UNCODED_LANGUAGE_LABEL : row.code;
-      return `<tr><td>${escapeHtml(code)}</td><td>${row.works}</td><td>${row.versions}</td></tr>`;
-    })
-    .join('');
-
-  // Last, after every row has validated itself, so a malformed row reports itself in its own
-  // terms rather than as an arithmetic disagreement.
-  //
-  // The publisher gives a state at most one document type and the untyped row takes the rest, so
-  // that table is a partition and a complete one must sum exactly. A state exists as an
-  // expression in each language it was published in, so the language table overlaps and only the
-  // per-row bound holds.
-  reconcileFacets({
-    rows: types,
-    field: 'versions',
-    headline: coverage.versions,
-    kind: 'partition',
-    truncated: truncatedTypes,
-    what: 'the document type breakdown',
-  });
-  reconcileFacets({
-    rows: coverage.languages,
-    field: 'versions',
-    headline: coverage.versions,
-    kind: 'overlapping',
-    truncated: false,
-    what: 'the language breakdown',
-  });
-  reconcileFacets({
-    rows: coverage.languages,
-    field: 'works',
-    headline: coverage.works,
-    kind: 'overlapping',
-    truncated: false,
-    what: 'the language breakdown',
-  });
-
+/** The page. Every rule is in readCoverage; this decides only how the result looks. */
+export function renderCoverage(answer) {
+  const view = readCoverage(answer);
+  const unserved = unservedCapabilities(view);
   return (
-    '<section class="coverage">' +
-    `<h2>${escapeHtml(coverage.publisher_name)}</h2>` +
-    `<p class="coverage-held">${coverage.works} works, ${coverage.versions} dated states. ` +
-    `Text is held for ${coverage.text.versions_with_text_served} of them and not for ` +
-    `${coverage.text.versions_without_text}.</p>` +
-    `<p class="coverage-range">States run from ${escapeHtml(coverage.valid_from_earliest)} to ` +
-    `${escapeHtml(coverage.valid_from_latest)}, the later date being publisher-scheduled ` +
-    'rather than current.</p>' +
-    `<p class="coverage-as-of">Counts as of index build ${escapeHtml(builtAt)}.</p>` +
-    `<p class="coverage-retention">${escapeHtml(RETENTION_SENTENCE)}</p>` +
-    '<h3>What this corpus does not hold</h3>' +
-    '<ul class="coverage-gaps">' +
-    gaps.map((gap) => `<li>${escapeHtml(gap)}</li>`).join('') +
-    '</ul>' +
-    '<h3>By document type</h3>' +
-    renderTable({
-      caption: 'Held states by publisher document type',
-      head: ['type', 'states held', 'states with text'],
-      rows: typeRows,
-      builtAt,
-    }) +
-    (truncatedTypes
-      ? `<p class="coverage-truncated">Showing ${types.length} of ` +
-        `${coverage.document_types_total} types.</p>`
-      : '') +
-    '<h3>By language</h3>' +
-    renderTable({
-      caption: 'Held works and states by language',
-      head: ['language', 'works', 'states'],
-      rows: languageRows,
-      builtAt,
-    }) +
-    '</section>'
+    '<section class="coverage">'
+    + '<section class="coverage-block"><h2>What this page is about</h2>'
+    + `<p class="coverage-scope">${escapeHtml(view.scope)}</p>`
+    + '<table class="coverage-facts"><tbody>'
+    + row('publisher', code(view.mounted.publisher))
+    + row('corpus', code(view.mounted.corpus_sha256))
+    + row('index', code(view.mounted.index_sha256))
+    + row('operation registry', code(view.mounted.registry_sha256))
+    + '</tbody></table>'
+    + `<p class="coverage-note">${escapeHtml(COUNTS_PROVENANCE_NOTE)}</p>`
+    + '</section>'
+    + '<section class="coverage-block"><h2>How these counts are counted</h2>'
+    + `<p class="coverage-note">${escapeHtml(view.countsNote)}</p></section>`
+    + '<section class="coverage-block"><h2>What this mount holds</h2>'
+    + '<table class="coverage-facts"><tbody>'
+    + row('works', escapeHtml(String(view.totals.works)))
+    + row('states', escapeHtml(String(view.totals.states)))
+    + row('articles', escapeHtml(String(view.totals.articles)))
+    + row('members', escapeHtml(String(view.totals.members)))
+    + '</tbody></table>'
+    + (view.requestedLanguage === null
+      ? ''
+      : `<p class="coverage-note">${escapeHtml(narrowedNote(view.requestedLanguage))}</p>`)
+    + `<p class="coverage-held">Languages held: ${view.languagesHeld.map(code).join(' ')}</p>`
+    + (view.languages.length === 0
+      ? `<p class="coverage-note">${escapeHtml(NO_LANGUAGE_ROWS)}</p>`
+      : table({
+        caption: 'Held works, states and articles by language',
+        head: ['language', 'works', 'states', 'articles', 'searchable text held',
+          'articles with searchable text', 'articles with no publisher date', 'first state',
+          'last state'],
+        rows: languageRows(view.languages),
+      }) + `<p class="coverage-note">${escapeHtml(STATE_RANGE_NOTE)}</p>`)
+    + '</section>'
+    + '<section class="coverage-block"><h2>What the corpus recorded for its members</h2>'
+    + table({
+      caption: 'Members by the outcome the corpus recorded',
+      head: ['outcome', 'members'],
+      rows: view.members.byOutcome.map((outcome) => (
+        `<tr><td>${code(outcome.outcome)}</td><td>${outcome.members}</td></tr>`)).join(''),
+    })
+    + `<p class="coverage-held">${
+      escapeHtml(gapsSentence(view.members.withGaps, view.totals.members))}</p>`
+    + (view.members.gaps.length === 0
+      ? `<p class="coverage-note">${escapeHtml(NO_GAP_TOKENS)}</p>`
+      : table({
+        caption: 'Gap tokens the corpus recorded, counted by member',
+        head: ['gap', 'members'],
+        rows: view.members.gaps.map((gap) => (
+          `<tr><td>${code(gap.gap)}</td><td>${gap.members}</td></tr>`)).join(''),
+      }))
+    + `<p class="coverage-note">${escapeHtml(view.members.gapsNote)}</p>`
+    + '</section>'
+    + '<section class="coverage-block"><h2>What can be asked of this mount</h2>'
+    + `<p class="coverage-held">${escapeHtml(
+      servedSentence(view.operations.served.length, view.operations.registered))}</p>`
+    + '<table class="coverage-facts"><tbody>'
+    + row('answered', view.operations.served.map(code).join(' '))
+    + row('registered, with no route on this mount', view.operations.notServed.length === 0
+      ? 'none'
+      : view.operations.notServed.map(code).join(' '))
+    + '</tbody></table>'
+    + `<p class="coverage-note">${escapeHtml(view.operations.note)}</p></section>`
+    + '<section class="coverage-block"><h2>What this mount measured it can answer</h2>'
+    + (view.capabilityCells.length === 0
+      ? `<p class="coverage-note">${escapeHtml(capabilityAbsence(view.requestedLanguage))}</p>`
+      : table({
+        caption: 'Measured capabilities, by operation, column, field, language and period',
+        head: ['operation', 'column', 'field', 'language', 'from', 'to', 'population'],
+        rows: view.capabilityCells.map((measured) => (
+          '<tr>'
+          + `<td>${code(measured.operation)}</td>`
+          + `<td>${code(measured.column)}</td>`
+          + `<td>${code(measured.field)}</td>`
+          + `<td>${code(measured.language)}</td>`
+          + `<td>${escapeHtml(measured.period_from)}</td>`
+          + `<td>${escapeHtml(measured.period_to)}</td>`
+          + `<td>${measured.population}</td>`
+          + '</tr>')).join(''),
+      }))
+    + (unserved.length === 0
+      ? ''
+      : `<p class="coverage-note">${escapeHtml(unservedCapabilityNote(unserved))}</p>`)
+    + '</section>'
+    + '<section class="coverage-block"><h2>What this mount does not hold</h2>'
+    + `<ul class="coverage-not-held">${view.notHeld.map((held) =>
+      `<li>${code(held.item)}: ${escapeHtml(held.reason)}</li>`).join('')}</ul>`
+    + '</section>'
+    + '</section>'
   );
 }
