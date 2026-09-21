@@ -329,8 +329,15 @@ public sealed class NoModelDependencyCensusTests
     public void TheSweepReadsEveryProductionAssemblyAndItsReferences()
     {
         // The sweep passes by finding nothing, so on its own it cannot tell an empty walk from a
-        // clean one, and it asserts completeness itself for that reason. This names the same
-        // property separately, so removing that assertion from the sweep fails something.
+        // clean one, and it asserts completeness itself for that reason. This states the same
+        // property under its own name, over the same walk, so a failure of it says "the walk did
+        // not cover what it claims" rather than "a model appeared".
+        //
+        // The two are deliberately redundant and the redundancy is NOT a detector: a mutant that
+        // deleted the assertion from the sweep above survived, because this test still asserts it
+        // over the same value. An earlier version of this comment claimed that deletion "fails
+        // something", which was untrue. What the redundancy buys is that either test can be
+        // rewritten later without the property silently going unasserted.
         AssertTheAssemblyWalkWasComplete(WalkProductionReferences());
     }
 
