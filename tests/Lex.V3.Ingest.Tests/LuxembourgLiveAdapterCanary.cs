@@ -47,24 +47,35 @@ public sealed class LuxembourgLiveAdapterCanary
     /// </para>
     /// </remarks>
     internal sealed record WireCeilingDerivation(
-        long DeclaredRowsPerPartition,
-        int RequestsPerPartition,
-        int VocabularyPartitions,
+        IReadOnlyList<long> DeclaredVocabularyRows,
+        long DeclaredRowsPerAdapterPartition,
         int AdapterPartitions,
         int DeclaredDocuments,
         int RequestsPerDocument,
         int RetryAllowance)
     {
+        public int VocabularyRequests =>
+            checked(DeclaredVocabularyRows.Sum(static rows => LuxembourgEnumerationBudget.RequestsForPartition(rows)));
+
+        public int AdapterRequests =>
+            checked(AdapterPartitions * LuxembourgEnumerationBudget.RequestsForPartition(DeclaredRowsPerAdapterPartition));
+
         public int Total =>
-            checked(((VocabularyPartitions + AdapterPartitions) * RequestsPerPartition)
-                + (DeclaredDocuments * RequestsPerDocument) + RetryAllowance);
+            checked(VocabularyRequests + AdapterRequests + (DeclaredDocuments * RequestsPerDocument) + RetryAllowance);
     }
 
     /// <summary>The largest count a partition may declare, which costs 8 requests: 996 is 997 less one, the largest count of two pages in the first pass.</summary>
     internal const long DeclaredRowsPerPartition = 996;
 
-    /// <summary>Distinct vocabulary values (predicates, types, categories, licences) are the size of a vocabulary, not of the corpus.</summary>
-    internal const int VocabularyPartitionCount = 4;
+    /// <summary>
+    /// The first live run measured 7,826 categories, 7,742 of them the EU language authority, so categories declare their
+    /// own size, with headroom: 28 requests, where 996 would have declared 8 and been wrong by a factor of eight.
+    /// </summary>
+    internal const long DeclaredCategoryRows = 8_000;
+
+    /// <summary>Predicates, types, categories, licences: the size of a vocabulary and not of the corpus, declared family by family.</summary>
+    internal static readonly IReadOnlyList<long> DeclaredVocabularyRows =
+        [DeclaredRowsPerPartition, DeclaredRowsPerPartition, DeclaredCategoryRows, DeclaredRowsPerPartition];
 
     /// <summary>Subjects, assertions and graph rows: three families for each declared range.</summary>
     internal const int FamiliesPerDeclaredRange = 3;
@@ -84,9 +95,8 @@ public sealed class LuxembourgLiveAdapterCanary
 
     internal static WireCeilingDerivation DeriveWireCeiling(int declaredRanges, int declaredDocuments) =>
         new(
+            DeclaredVocabularyRows,
             DeclaredRowsPerPartition,
-            LuxembourgEnumerationBudget.RequestsForPartition(DeclaredRowsPerPartition),
-            VocabularyPartitionCount,
             FamiliesPerDeclaredRange * declaredRanges,
             declaredDocuments,
             RequestsPerDocument,
@@ -106,24 +116,29 @@ public sealed class LuxembourgLiveAdapterCanary
         refusal is { ObservedCount: not null } &&
         refusal.Code is LuxembourgEnumerationRefusal.WireBudgetExhausted or LuxembourgEnumerationRefusal.PartitionRequired;
 
-    private const int DeclaredDocumentsForAnAct = 8;
-    private const int DeclaredDocumentsForPlainXml = 2;
+    // A document is the manifest's selected body of an admitted object or an accepted Gazette listing of an as-published act.
+    // The first live run of an act fetched two: its XML body and its PDF listing.
+    private const int DeclaredDocumentsForAnAct = 4;
+
+    // The Code civil state's body, the original's body and up to two Gazette listings of the original.
+    private const int DeclaredDocumentsForPlainXml = 4;
 
     [TestMethod]
     public void TheDerivedCeilingIsTheSumOfWhatEachLegDeclaresAndIsUnderTheHardCap()
     {
-        // Eight requests a partition (a class of up to 996 rows: robots, a count and two pages, then a count and three
-        // pages), seven partitions for one declared range (four of vocabulary, three of the adapter), then eight
-        // documents at two requests each, then the retry allowance.
+        // A class of up to 996 rows costs 8 requests (robots, a count and two pages, then a count and three pages) and
+        // one of up to 8,000 costs 28. Vocabulary: predicates, types and licences at 8 and categories at 28. Then three
+        // adapter partitions for one declared range at 8 each, four documents at two requests each, and the retry allowance.
         var act = DeriveWireCeiling(declaredRanges: 1, DeclaredDocumentsForAnAct);
-        Assert.AreEqual(8, act.RequestsPerPartition);
-        Assert.AreEqual((7 * 8) + (8 * 2) + 8, act.Total);
-        Assert.AreEqual(80, act.Total);
+        Assert.AreEqual(8 + 8 + 28 + 8, act.VocabularyRequests);
+        Assert.AreEqual(3 * 8, act.AdapterRequests);
+        Assert.AreEqual((8 + 8 + 28 + 8) + (3 * 8) + (4 * 2) + 8, act.Total);
+        Assert.AreEqual(92, act.Total);
 
-        // The plain-XML run declares two ranges (the Code civil state and its original) and two documents.
+        // The plain-XML run declares two ranges (the Code civil state and its original) and four documents.
         var plain = DeriveWireCeiling(declaredRanges: 2, DeclaredDocumentsForPlainXml);
-        Assert.AreEqual((10 * 8) + (2 * 2) + 8, plain.Total);
-        Assert.AreEqual(92, plain.Total);
+        Assert.AreEqual((8 + 8 + 28 + 8) + (6 * 8) + (4 * 2) + 8, plain.Total);
+        Assert.AreEqual(116, plain.Total);
 
         Assert.IsNull(RefusalFor(act));
         Assert.IsNull(RefusalFor(plain));
@@ -138,10 +153,124 @@ public sealed class LuxembourgLiveAdapterCanary
         StringAssert.Contains(RefusalFor(large), "exceeds the hard cap 200");
 
         // Exactly at the cap is not past it, and one more is.
-        var exact = new WireCeilingDerivation(996, 8, 4, 3, 0, 2, HardCap - 56);
+        var exact = new WireCeilingDerivation([996, 996, 996, 996], 996, 3, 0, 2, HardCap - 56);
         Assert.AreEqual(HardCap, exact.Total);
         Assert.IsNull(RefusalFor(exact));
         Assert.IsNotNull(RefusalFor(exact with { RetryAllowance = exact.RetryAllowance + 1 }));
+    }
+
+    /// <summary>
+    /// What the first live run measured against the real publisher on 2026-09-21: each vocabulary family's row count and
+    /// the wire requests it cost, its own robots fetch included. The cost function the ceiling is derived from reproduces
+    /// every one, and each declaration covers the count it met, the categories' included.
+    /// </summary>
+    [TestMethod]
+    [DataRow(0, 357L, 7)]
+    [DataRow(1, 80L, 7)]
+    [DataRow(2, 7_826L, 26)]
+    [DataRow(3, 1L, 7)]
+    public void TheCostFunctionReproducesWhatTheFirstLiveRunMeasuredAndEachDeclarationCoversIt(int family, long rows, int requests)
+    {
+        Assert.AreEqual(requests, LuxembourgEnumerationBudget.RequestsForPartition(rows));
+        Assert.IsTrue(rows <= DeclaredVocabularyRows[family], $"family {family} met {rows} rows and declares {DeclaredVocabularyRows[family]}");
+        // The four families cost 7 + 7 + 26 + 7 = 47 requests together; the declared vocabulary must not undercut that.
+        Assert.IsTrue(47 <= DeriveWireCeiling(declaredRanges: 1, DeclaredDocumentsForAnAct).VocabularyRequests);
+    }
+
+    /// <summary>
+    /// What a run spent is the number the next derivation starts from, so the canary records it at three points, and the last
+    /// is recorded in the block that always runs, where a run that stopped early, was refused or failed an assertion still
+    /// reaches it. Read from the source, because the gated run cannot be driven in a default build.
+    /// </summary>
+    [TestMethod]
+    public void TheCanaryRecordsWhatItSpentAfterTheVocabularyAfterTheAdapterAndAtTheEndEvenWhenTheRunEndsRed()
+    {
+        var source = File.ReadAllText(SourcePath());
+        var afterVocabulary = "spentAfter" + "Vocabulary = budget.Spent;";
+        var afterAdapter = "spentAfter" + "Adapter = budget.Spent;";
+        var atEnd = "spentAt" + "End = budget.Spent";
+        var inEvidence = "wire" + "Budget = new";
+        var vocabularyAsserted = "refused" + "Families,";
+        var adapterReturned = "documentRenderer, budget," + " CancellationToken.None);";
+        var adapterAsserted = "Assert.IsNull(result." + "Refusal";
+        var alwaysRuns = "fin" + "ally";
+
+        foreach (var needle in new[] { afterVocabulary, afterAdapter, atEnd, inEvidence, alwaysRuns })
+            Assert.AreEqual(1, CountOf(source, needle), needle);
+
+        Assert.IsTrue(
+            source.IndexOf(afterVocabulary, StringComparison.Ordinal) < source.IndexOf(vocabularyAsserted, StringComparison.Ordinal),
+            "the vocabulary's spend is recorded before the assertion that can end the run");
+        Assert.IsTrue(
+            source.IndexOf(adapterReturned, StringComparison.Ordinal) < source.IndexOf(afterAdapter, StringComparison.Ordinal) &&
+            source.IndexOf(afterAdapter, StringComparison.Ordinal) < source.IndexOf(adapterAsserted, StringComparison.Ordinal),
+            "the adapter's spend is recorded after it returns and before any assertion about its result");
+
+        // A span and not a position: text after the word that opens the block is not text inside it, and a rethrow skips
+        // whatever follows the block.
+        var (open, close) = BlockAfter(source, alwaysRuns);
+        foreach (var (needle, what) in new[] { (atEnd, "the final spend is recorded"), (inEvidence, "and it is written into the retained evidence") })
+        {
+            var at = source.IndexOf(needle, StringComparison.Ordinal);
+            Assert.IsTrue(open < at && at < close, what + " inside the block that always runs, not merely after the word that opens it");
+        }
+    }
+
+    /// <summary>
+    /// The span guard is a statement about braces, so it is checked on its own: the block after a keyword is the braces
+    /// that follow it, closed by their own match, and text after that block, or in a second block beside it, is outside it.
+    /// </summary>
+    [TestMethod]
+    public void TheBlockAfterAKeywordIsItsOwnBracesAndNothingThatFollowsThem()
+    {
+        const string real = "try { a; } fin" + "ally { x; { y; } \"}\" // }\n z; } after;";
+        var (open, close) = BlockAfter(real, "fin" + "ally");
+        Assert.IsTrue(open < real.IndexOf("x;", StringComparison.Ordinal) && real.IndexOf("z;", StringComparison.Ordinal) < close);
+        Assert.IsTrue(real.IndexOf("after;", StringComparison.Ordinal) > close, "what follows the closing brace is outside");
+
+        // The shape that moves the export out from under the keyword: an empty block, then a bare one.
+        const string moved = "try { a; } fin" + "ally { } { x; } after;";
+        var (movedOpen, movedClose) = BlockAfter(moved, "fin" + "ally");
+        Assert.IsFalse(movedOpen < moved.IndexOf("x;", StringComparison.Ordinal) && moved.IndexOf("x;", StringComparison.Ordinal) < movedClose);
+    }
+
+    private static (int Open, int Close) BlockAfter(string source, string keyword)
+    {
+        var at = source.IndexOf(keyword, StringComparison.Ordinal);
+        Assert.IsGreaterThanOrEqualTo(0, at, keyword);
+        var open = source.IndexOf('{', at);
+        var depth = 0;
+        for (var index = open; index < source.Length; index++)
+        {
+            var character = source[index];
+            if (character == '"')
+            {
+                for (index++; index < source.Length && source[index] != '"'; index++)
+                {
+                    if (source[index] == '\\')
+                    {
+                        index++;
+                    }
+                }
+            }
+            else if (character == '/' && index + 1 < source.Length && source[index + 1] == '/')
+            {
+                while (index < source.Length && source[index] != '\n')
+                {
+                    index++;
+                }
+            }
+            else if (character == '{')
+            {
+                depth++;
+            }
+            else if (character == '}' && --depth == 0)
+            {
+                return (open, index);
+            }
+        }
+
+        throw new AssertFailedException("the block after " + keyword + " is not closed");
     }
 
     /// <summary>
@@ -309,6 +438,8 @@ public sealed class LuxembourgLiveAdapterCanary
         LuxembourgIriVocabularyValue[] missing = [];
         string status = "started";
         string? failure = null;
+        int? spentAfterVocabulary = null;
+        int? spentAfterAdapter = null;
         try
         {
             // Capture before the first publisher request; dirty source and loaded binaries are
@@ -333,15 +464,17 @@ public sealed class LuxembourgLiveAdapterCanary
                 schema = "lex-lu-declared-canary-scope/1",
                 ranges = declaredRanges.Select(range => new { range.Name, range.Start, range.End }).ToArray(),
                 vocabulary = "P/T/C whole range; O CC-BY range",
+                documents = "the manifest's selected body of each admitted object, and every accepted Gazette listing of each as-published act",
                 wireCeiling = new
                 {
                     derived = true,
                     total = derivation.Total,
                     hardCap = HardCap,
-                    declaredRowsPerPartition = derivation.DeclaredRowsPerPartition,
-                    requestsPerPartition = derivation.RequestsPerPartition,
-                    vocabularyPartitions = derivation.VocabularyPartitions,
+                    declaredVocabularyRows = derivation.DeclaredVocabularyRows,
+                    vocabularyRequests = derivation.VocabularyRequests,
+                    declaredRowsPerAdapterPartition = derivation.DeclaredRowsPerAdapterPartition,
                     adapterPartitions = derivation.AdapterPartitions,
+                    adapterRequests = derivation.AdapterRequests,
                     declaredDocuments = derivation.DeclaredDocuments,
                     requestsPerDocument = derivation.RequestsPerDocument,
                     retryAllowance = derivation.RetryAllowance,
@@ -378,6 +511,8 @@ public sealed class LuxembourgLiveAdapterCanary
                     break;
                 }
             }
+
+            spentAfterVocabulary = budget.Spent;
 
             // ONE ASSERTION FOR ALL OF THEM, so a red run carries every count it learned.
             var refusedFamilies = partitionOutcomes.Where(static entry => entry.Outcome.Receipt is null).ToArray();
@@ -441,6 +576,7 @@ public sealed class LuxembourgLiveAdapterCanary
                     documentRenderer, budget, CancellationToken.None)
                 : await adapter.RunAsync(families, "act-2017-g", "act-2017-s", "act-2017-a",
                     documentRenderer, budget, CancellationToken.None);
+            spentAfterAdapter = budget.Spent;
             finalResult = new { result.Refusal, result.Completion, result.FamilyOutcomes,
                 result.ResourceObservationSubjects, result.ResourceObservationExclusions,
                 result.ScopeManifestReceipt, result.ScopeManifestCanonicalSha256, result.CorpusRecordSetRef,
@@ -450,8 +586,9 @@ public sealed class LuxembourgLiveAdapterCanary
             Assert.IsNotNull(result.CorpusRecordSet);
             Assert.IsTrue(result.CorpusRecordSet.Set.Records.Any(record => record.Body.Kind == CorpusBodyRecordKind.Held),
                 "The bounded work must have an actually held corpus body.");
-            await ReplayRightsAndManifestAsync(store, profile, result,
-                declaredRanges.Select(range => range.Name + "-a").ToArray(), plainXml ? CivilState + "/fr/xml" : null);
+            await LuxembourgRetainedRunReplay.ReplayAsync(store, profile, result,
+                declaredRanges.Select(range => range.Name + "-a").ToArray(),
+                declaredRanges.Select(range => range.Name + "-g").ToArray(), plainXml ? CivilState + "/fr/xml" : null);
             status = "passed_bounded_adapter_canary";
         }
         catch (Exception exception)
@@ -480,6 +617,7 @@ public sealed class LuxembourgLiveAdapterCanary
             var index = JsonSerializer.SerializeToUtf8Bytes(new
             {
                 schema = "lex-lu-live-adapter-canary-evidence/1", status, failure, provenance, measured, observed, missing,
+                wireBudget = new { limit = budget.Limit, derivedTotal = derivation.Total, spentAfterVocabulary, spentAfterAdapter, spentAtEnd = budget.Spent },
                 finalResult, root, declaredRanges = declaredRanges.Select(range => new { range.Name, range.Start, range.End }).ToArray(),
                 completedUtc = DateTimeOffset.UtcNow, members,
                 limitations = "Bounded prerequisite only; not whole Luxembourg scope, Stage 1 acceptance, or production retention. FileSystemCustodyStore reports unenforced retention.",
@@ -519,91 +657,6 @@ public sealed class LuxembourgLiveAdapterCanary
         }
         return [new(family, category, value, category is { } kind && required.Any(item => item.Kind == kind && item.FullIri == value)
             ? "governed_value_observed" : "typed_quarantine_unruled_value")];
-    }
-
-    private static async Task ReplayRightsAndManifestAsync(ICustodyStore store,
-        VerifiedLuxembourgSourceProfile profile, LuxembourgQueryExecutionResult result,
-        IReadOnlyList<string> assertionFamilyKeys, string? expectedManifestation)
-    {
-        Assert.IsNotNull(result.ScopeManifestReceipt);
-        var finalBytes = await CustodyRestore.ReadByDigestCheckedAsync(store,
-            result.ScopeManifestReceipt.Reference.ContentSha256, CancellationToken.None);
-        using var manifest = JsonDocument.Parse(finalBytes);
-        var indexes = new Dictionary<string, (SourceArtifactRef Ref, JsonElement Json)>(StringComparer.Ordinal);
-        foreach (var artifact in manifest.RootElement.GetProperty("ordered_evidence_artifacts").EnumerateArray())
-        {
-            var reference = new SourceArtifactRef(artifact.GetProperty("resource_id").GetString()!, artifact.GetProperty("sha256").GetString()!);
-            var bytes = await CustodyRestore.ReadByDigestCheckedAsync(store, reference.Sha256, CancellationToken.None);
-            using var document = JsonDocument.Parse(bytes);
-            if (document.RootElement.TryGetProperty("schema", out var schema))
-                indexes[schema.GetString()!] = (reference, document.RootElement.Clone());
-        }
-        var sparql = indexes["lex-lu-sparql-rights-evidence/1"];
-        var inFile = indexes["lex-lu-in-file-rights-evidence/1"];
-        var acquisitionBytes = await CustodyRestore.ReadByDigestCheckedAsync(store,
-            inFile.Json.GetProperty("acquisitionManifestContentSha256").GetString()!, CancellationToken.None);
-        var acquisitionRef = JsonSerializer.Deserialize<SourceArtifactRef>(inFile.Json.GetProperty("acquisitionManifestRef"))!;
-        Assert.AreEqual(acquisitionRef.Sha256, ScopeManifestCanonicalWriter.ComputeManifestSha256(acquisitionBytes.Span));
-        var run = profile.Snapshot.ObservationRef;
-        Assert.AreEqual(run, JsonSerializer.Deserialize<SourceArtifactRef>(inFile.Json.GetProperty("runIdentity")),
-            "The retained in-file index must identify this exact observation run.");
-        var readings = inFile.Json.GetProperty("readings").EnumerateArray().ToArray();
-        Assert.IsTrue(readings.Length > 0);
-        var channelTwo = new List<LuxembourgRightsChannelObservation>();
-        foreach (var reading in readings)
-        {
-            var bodyRef = JsonSerializer.Deserialize<SourceArtifactRef>(reading.GetProperty("BodyRef"))!;
-            await CustodyRestore.ReadByDigestCheckedAsync(store, bodyRef.Sha256, CancellationToken.None);
-            Assert.AreEqual((int)LuxembourgInFileRightsReadStatus.Observed, reading.GetProperty("Status").GetInt32());
-            channelTwo.Add(new(reading.GetProperty("ManifestationIri").GetString()!, run, bodyRef,
-                reading.GetProperty("LicenceIris").EnumerateArray().Select(value => value.GetString()!).ToArray()));
-        }
-        foreach (var acquisition in result.DocumentAcquisitionOutcomesByOrdinal!.Values.Where(value => value.Receipt is not null))
-            Assert.IsTrue(channelTwo.Any(channel => channel.EvidenceRef.Sha256 == acquisition.Receipt!.Reference.ContentSha256),
-                "Every held body must have this run's retained in-file channel reading.");
-        var observations = sparql.Json.GetProperty("observations").EnumerateArray().Select(row =>
-        {
-            var objectRef = JsonSerializer.Deserialize<SourceObjectRef>(row.GetProperty("ObjectRef"))!;
-            var assertions = JsonSerializer.Deserialize<LuxembourgObservedAssertion[]>(row.GetProperty("Assertions"))!;
-            var channelOne = LuxembourgQueryExecutionAdapter.BuildSparqlRightsRows(assertions, run)
-                .Select(value => new LuxembourgRightsChannelObservation(value.ManifestationIri, run, sparql.Ref, value.LicenceIris)).ToArray();
-            return new LuxembourgResourceObservation(objectRef, run, assertions, [],
-                new LuxembourgSparqlRightsChannelObservations(run, sparql.Ref, channelOne),
-                new LuxembourgInFileRightsChannelObservations(run, inFile.Ref,
-                    channelTwo.Where(value => assertions.Any(assertion => assertion.SubjectIri == value.ManifestationIri)).ToArray(), true));
-        }).ToArray();
-        var proofs = assertionFamilyKeys.Select(key => result.FamilyOutcomes.Single(outcome => outcome.FamilyKey == key).Proof).ToArray();
-        Assert.IsTrue(proofs.All(proof => proof is not null));
-        var replay = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(profile.Resolve(
-            LuxembourgProvenResourceObservations.RequireAllProven(proofs.Select(proof => proof!).ToArray(), observations)));
-        if (expectedManifestation is not null)
-        {
-            Assert.IsTrue(channelTwo.Any(channel => channel.ManifestationIri == expectedManifestation),
-                "The selected plain XML manifestation must have an actually held body and same-run in-file reading.");
-            Assert.IsTrue(observations.SelectMany(observation => observation.Assertions).Any(assertion =>
-                assertion.SubjectIri == expectedManifestation &&
-                assertion.PredicateIri == "http://data.legilux.public.lu/resource/ontology/jolux#userFormat" &&
-                assertion.ObjectKind == LuxembourgAssertionObjectKind.Iri &&
-                assertion.ObjectIriOrLexical == "http://data.legilux.public.lu/resource/authority/user-format/xml"),
-                "Plain XML must come from this run's proven publisher assertions, not its URL suffix.");
-        }
-        foreach (var channel in channelTwo)
-        {
-            var rights = replay.Resources.SelectMany(resource => resource.BodyJoin.Candidates)
-                .Where(candidate => candidate.WemiCandidate.ManifestationIri == channel.ManifestationIri).ToArray();
-            Assert.IsTrue(rights.Length > 0, "Retained in-file declaration must resolve onto this run's proven WEMI graph.");
-            Assert.IsTrue(rights.All(candidate => candidate.RightsResolution.Disposition == LuxembourgRightsChannelDisposition.AgreedSameRunCcBy),
-                $"Same-run dual-channel agreement not established for {channel.ManifestationIri}");
-        }
-        var resolver = await LuxembourgProductionScopeReductionEvidenceResolver.CreateAsync(store,
-            profile.Snapshot.CompleteEnumerationRef, observations, replay.OrderedEvidenceArtifacts, CancellationToken.None);
-        var rebuilt = profile.ReduceScope(replay, resolver, LuxembourgQueryExecutionAdapter.MintDocumentFetchAddresses(replay)
-            .ToDictionary(pair => pair.Key, pair => pair.Value.ToScopeManifestFetchAddress()));
-        using var stream = new MemoryStream();
-        Assert.AreEqual(result.ScopeManifestCanonicalSha256, ScopeManifestCanonicalWriter.Write(stream, rebuilt));
-        CollectionAssert.AreEqual(finalBytes.ToArray(), stream.ToArray(), "Final manifest must replay byte-for-byte from retained channels.");
-        var finalRef = result.CorpusRecordSet!.Set.ManifestRef;
-        VerifiedScopeManifest.ParseAndVerify(finalRef, finalBytes.Span, resolver);
     }
 
     private sealed record ObservedVocabulary(string Family, LuxembourgVocabularyKind? Kind, string FullIri, string Disposition);

@@ -1627,14 +1627,17 @@ public sealed class LuxembourgQueryExecutionAdapter
 
             // Bind channel one's declarations to this run's actual delivery closure. The
             // vocabulary snapshot is profile evidence, not evidence of a SPARQL response.
+            // The manifest's relation selector is read from the relation rows, so they and the delivery they came from are
+            // retained with the assertions: a reader holding the cited evidence must be able to re-derive the selector.
             var assertionIndexBytes = JsonSerializer.SerializeToUtf8Bytes(new
             {
-                schema = "lex-lu-sparql-rights-evidence/1",
-                deliveries = assertionLegs.Select(static leg => leg.Receipt.Delivery),
+                schema = RightsEvidenceIndexSchema,
+                deliveries = assertionLegs.Concat(relationLegs).Select(static leg => leg.Receipt.Delivery),
                 observations = buildResult.Observations!.Select(static observation => new
                 {
                     observation.ObjectRef,
                     observation.Assertions,
+                    observation.Relations,
                 }),
             });
             var (assertionIndexReceipt, assertionIndexFailure) = await CustodyHold.TryHoldAsync(
@@ -1647,7 +1650,7 @@ public sealed class LuxembourgQueryExecutionAdapter
                         $"SPARQL rights evidence could not be retained: {assertionIndexFailure}"));
             }
             var assertionIndexRef = new SourceArtifactRef(
-                ContentDerivedIdentity.DeriveUuidUrn("lex-lu-sparql-rights-evidence/1", assertionIndexBytes),
+                ContentDerivedIdentity.DeriveUuidUrn(RightsEvidenceIndexSchema, assertionIndexBytes),
                 assertionIndexReceipt.Reference.ContentSha256);
             observations = buildResult.Observations!.Select(observation => new LuxembourgResourceObservation(
                 observation.ObjectRef, observation.ObservationRef, observation.Assertions, observation.Relations,
@@ -3303,6 +3306,8 @@ public sealed class LuxembourgQueryExecutionAdapter
     private const string AssertionObjectKindProjectionVariable = "object_kind";
     private const string AssertionDatatypeProjectionVariable = "datatype_iri";
     private const string AssertionLanguageProjectionVariable = "language_tag";
+
+    internal const string RightsEvidenceIndexSchema = "lex-lu-sparql-rights-evidence/2";
 
     private const string RelationSubjectProjectionVariable = "subject";
 
