@@ -193,9 +193,9 @@ public sealed class V3AnswerSamplesTests
         Assert.AreEqual(
             BuildDocument(firstRaw),
             BuildDocument(secondRaw),
-            "Two observations differ in a way the path comparison above cannot name -- an empty container "
-                + "or a null that changed shape. Render both documents and diff them; the paths above are "
-                + "equal, so it is a container and not a value.");
+            "Two observations differ in a way the path comparison above cannot name. The paths are equal "
+                + "and so is every value at them, so it is not a value: an empty container or a null that "
+                + "changed shape, or the order of an object's members. Render both documents and diff them.");
 
         // AND THE CONVERSE, which is the direction this list was weak in. Nothing made a listed field
         // EARN its place, so two entries that never move sat here hiding values the file could pin, and
@@ -476,7 +476,19 @@ public sealed class V3AnswerSamplesTests
             ["schema"] = SamplesSchema,
             ["note"] = "What each served operation really sends when it answers, observed by driving the real handler. "
                 + "Values the fixture re-mints per run are replaced by " + Placeholder + "; their shape is asserted before "
-                + "replacement and the relations between them are held by tests, not by this file.",
+                + "replacement and the relations between them are held by tests, not by this file. "
+                + "THE PRODUCER IS REAL AND THE MOUNT IS A FIXTURE, which is not the same as the data being invented. "
+                + "These answers are driven on a fixture mount holding one real Legilux act, the loi of 10 August 1991 "
+                + "n3, from publisher XML committed as a test fixture, plus two other members. Member by member: the "
+                + "act's coordinates, IRIs, applicability date and the per-article dates the capability cells are "
+                + "grouped by are THE PUBLISHER'S; registry_sha256 is THE REVIEWED REGISTRY'S, the value the product "
+                + "serves; every sentence here, this note included, is THE PLATFORM'S; the mount-level counts of works, "
+                + "states and members, the members' outcomes and gap tokens, and the corpus and index digests are THE "
+                + "FIXTURE'S. The article counts are none of those: they are this pipeline's count of that document "
+                + "rather than the document's own, which carries 54 top-level articles against the 49 this mount holds, "
+                + "a difference not traced when this note was written. There is no sample from a real corpus, so a "
+                + "reader holding a surface against this file is held against the shape a producer sends and not "
+                + "against the scale or the completeness a real corpus has.",
             ["varies_per_run"] = new JsonArray(VariesPerRun.Select(static p => JsonValue.Create(p)).ToArray<JsonNode?>()),
             ["sampled"] = operations,
             ["not_sampled"] = notSampled,
