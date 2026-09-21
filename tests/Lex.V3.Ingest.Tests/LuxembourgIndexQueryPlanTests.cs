@@ -102,7 +102,7 @@ public sealed class LuxembourgIndexQueryPlanTests
     private static IEnumerable<string> CitationProblems(string label, string[] plan)
     {
         var shown = $"{label}, StateCitations: {string.Join(" | ", plan)}";
-        if (plan.Any(static line => Regex.IsMatch(line, @"^SCAN r")))
+        if (plan.Any(static line => Regex.IsMatch(line, @"^SCAN r\b")))
         {
             yield return "relations are scanned. " + shown;
         }
@@ -113,8 +113,8 @@ public sealed class LuxembourgIndexQueryPlanTests
         }
 
         // The edges are reached from the article, never the article from the edges.
-        var articles = Array.FindIndex(plan, static line => Regex.IsMatch(line, @"^SEARCH a"));
-        var edges = Array.FindIndex(plan, static line => Regex.IsMatch(line, @"^SEARCH r"));
+        var articles = Array.FindIndex(plan, static line => Regex.IsMatch(line, @"^SEARCH a\b"));
+        var edges = Array.FindIndex(plan, static line => Regex.IsMatch(line, @"^SEARCH r\b"));
         if (!(articles >= 0 && articles < edges))
         {
             yield return "the join order is not the article and then its edges. " + shown;
