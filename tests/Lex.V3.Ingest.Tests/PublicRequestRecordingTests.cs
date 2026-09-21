@@ -177,6 +177,43 @@ public sealed class PublicRequestRecordingTests
             .Select(path => Path.GetRelativePath(directory, path) + ":" + Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path))))
             .ToArray();
 
+    // Files written since a moment that hold one of the values, in the places a log written by a handler that
+    // knows no better would land: the temp directory, the working directory and the directory the tests run
+    // from, and the mount. The values are unique to these tests, so a file that holds one was written from them.
+    private static IReadOnlyList<string> FilesHolding(DateTime sinceUtc, IReadOnlyList<string> needles, params string[] directories)
+    {
+        var found = new List<string>();
+        foreach (var directory in directories.Distinct(StringComparer.OrdinalIgnoreCase).Where(Directory.Exists))
+        {
+            foreach (var path in Directory.EnumerateFiles(directory))
+            {
+                try
+                {
+                    var info = new FileInfo(path);
+                    if (info.LastWriteTimeUtc < sinceUtc || info.Length > 4_000_000)
+                    {
+                        continue;
+                    }
+
+                    var text = File.ReadAllText(path);
+                    found.AddRange(needles.Where(needle => text.Contains(needle, StringComparison.Ordinal))
+                        .Select(needle => $"{Path.GetFileName(path)} holds {needle}"));
+                }
+                catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+                {
+                    // A file another process holds open is not one this handler wrote.
+                }
+            }
+        }
+
+        return found;
+    }
+
+    private static string[] Values(Sentinels who) => [who.UserText, who.Address, who.Agent, who.Forwarded, who.Referer];
+
+    private static string[] WhereALogWouldLand(string mountDirectory) =>
+        [Path.GetTempPath(), Environment.CurrentDirectory, AppContext.BaseDirectory, mountDirectory];
+
     [TestMethod]
     public async Task NothingARequestCarriesReachesAnyOutputOfTheRealHandlerOnAnyOfItsPaths()
     {
@@ -185,6 +222,7 @@ public sealed class PublicRequestRecordingTests
         using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
         Assert.IsNotNull(mount);
         var before = Snapshot(fixture.Directory);
+        var started = DateTime.UtcNow.AddSeconds(-2);
 
         foreach (var withCorpus in new[] { true, false })
         {
@@ -198,6 +236,32 @@ public sealed class PublicRequestRecordingTests
         }
 
         CollectionAssert.AreEqual(before, Snapshot(fixture.Directory), "The handler wrote to, or changed, a file in the mount directory.");
+        var written = FilesHolding(started, Values(First), WhereALogWouldLand(fixture.Directory));
+        Assert.IsEmpty(written, string.Join("; ", written));
+    }
+
+    [TestMethod]
+    public void TheFileCheckSeesAValueInAFileWrittenAfterTheStartAndNotInOneWrittenBefore()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "lex-v3-recording-probe-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        try
+        {
+            var old = Path.Combine(directory, "old.log");
+            File.WriteAllText(old, "agent " + First.Agent);
+            File.SetLastWriteTimeUtc(old, DateTime.UtcNow.AddHours(-1));
+            var current = Path.Combine(directory, "current.log");
+            File.WriteAllText(current, "at 12:00 from " + First.Address + " with " + First.UserText);
+            File.WriteAllText(Path.Combine(directory, "unrelated.log"), "nothing to see");
+
+            CollectionAssert.AreEquivalent(
+                new[] { "current.log holds " + First.UserText, "current.log holds " + First.Address },
+                FilesHolding(DateTime.UtcNow.AddMinutes(-5), Values(First), directory).ToArray());
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
     }
 
     [TestMethod]
