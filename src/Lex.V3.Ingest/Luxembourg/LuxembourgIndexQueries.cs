@@ -47,6 +47,25 @@ internal static class LuxembourgIndexQueries
         ORDER BY a.publisher_id, a.article_identity_sha256, r.ordinal
         """;
 
+    /// <summary>
+    /// Which of a list of IRIs some state of the index carries as its publisher legal-resource IRI (the form the
+    /// publisher writes in running text, ending <c>/jo</c>) or as its publisher work IRI, each with the product work key
+    /// that state stores (derived from the work IRI and checked against it when the index is opened), exactly as stored.
+    /// Not bounded by a state: no index starts with either IRI (the states key starts with the work key), so it reads
+    /// <c>states</c> once for each of the two columns and keeps the rows whose IRI is on the list. That is the cost
+    /// <c>ResolveWorkStates</c> already pays for a work named by its IRI, paid for the whole list and not once per name.
+    /// </summary>
+    internal const string HeldWorks = """
+        SELECT s.publisher_legal_resource_iri, s.work_key
+        FROM states s
+        WHERE s.publisher_legal_resource_iri IN (SELECT value FROM json_each($iris))
+        UNION
+        SELECT s.publisher_work_iri, s.work_key
+        FROM states s
+        WHERE s.publisher_work_iri IN (SELECT value FROM json_each($iris))
+        ORDER BY 1, 2
+        """;
+
     internal const string ArticleIds = """
         SELECT DISTINCT a.publisher_id
         FROM states s, json_each(s.article_identities_json) j

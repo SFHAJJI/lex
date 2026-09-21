@@ -40,6 +40,9 @@ public sealed class LuxembourgIndexQueryPlanTests
     private static readonly (string Sql, (string, object)[] Parameters) CitationQuery =
         (LuxembourgIndexQueries.StateCitations, [("$digest", Digest), ("$anchor", "art_1")]);
 
+    private static readonly (string Sql, (string, object)[] Parameters) HeldWorksQuery =
+        (LuxembourgIndexQueries.HeldWorks, [("$iris", "[\"http://example.invalid/eli/x\"]")]);
+
     private static readonly (string Sql, (string, object)[] Parameters) StateDocumentQuery =
         (LuxembourgIndexQueries.StateDocumentOutcomes, [("$states", "[\"" + Digest + "\"]")]);
 
@@ -118,6 +121,33 @@ public sealed class LuxembourgIndexQueryPlanTests
         if (!(articles >= 0 && articles < edges))
         {
             yield return "the join order is not the article and then its edges. " + shown;
+        }
+    }
+
+    /// <summary>
+    /// Which of a list of IRIs a state carries is not bounded by a state: no index starts with either IRI column, so it
+    /// reads <c>states</c> once for each of the two, compares each row with the list, and merges. This holds it to exactly
+    /// that: two passes over <c>states</c> and no more, never a nested one (a probe of the table per name in the list
+    /// would be a table pass each), and the list read as a list. If an index on an IRI column is ever added the plan
+    /// becomes a search and this fails, which is the moment to tighten it into the bound the per-state queries have.
+    /// </summary>
+    private static IEnumerable<string> HeldWorksProblems(string label, string[] plan)
+    {
+        var shown = $"{label}, HeldWorks: {string.Join(" | ", plan)}";
+        var scans = plan.Count(static line => Regex.IsMatch(line, @"^SCAN s\b"));
+        if (scans != 2)
+        {
+            yield return $"states is scanned {scans} times, not twice. " + shown;
+        }
+
+        if (plan.Any(static line => Regex.IsMatch(line, @"^SEARCH s\b")))
+        {
+            yield return "states is searched by an index, which is not the plan this test was written for: tighten it. " + shown;
+        }
+
+        if (plan.Count(static line => line.StartsWith("LIST SUBQUERY", StringComparison.Ordinal)) < 2)
+        {
+            yield return "the IRIs are not a list each pass is compared with. " + shown;
         }
     }
 
@@ -222,7 +252,8 @@ public sealed class LuxembourgIndexQueryPlanTests
             .Concat(TitleProblems("the index as built", Plan(connection, TitleQuery.Sql, TitleQuery.Parameters)))
             .Concat(MemberOutcomeProblems("the index as built", Plan(connection, MemberOutcomeQuery.Sql, MemberOutcomeQuery.Parameters)))
             .Concat(StateDocumentProblems("the index as built", Plan(connection, StateDocumentQuery.Sql, StateDocumentQuery.Parameters)))
-            .Concat(CitationProblems("the index as built", Plan(connection, CitationQuery.Sql, CitationQuery.Parameters))).ToArray();
+            .Concat(CitationProblems("the index as built", Plan(connection, CitationQuery.Sql, CitationQuery.Parameters)))
+            .Concat(HeldWorksProblems("the index as built", Plan(connection, HeldWorksQuery.Sql, HeldWorksQuery.Parameters))).ToArray();
         Assert.AreEqual(0, problems.Length, string.Join(Environment.NewLine, problems));
     }
 
@@ -277,6 +308,7 @@ public sealed class LuxembourgIndexQueryPlanTests
             problems.AddRange(MemberOutcomeProblems(label, Plan(connection, MemberOutcomeQuery.Sql, MemberOutcomeQuery.Parameters)));
             problems.AddRange(StateDocumentProblems(label, Plan(connection, StateDocumentQuery.Sql, StateDocumentQuery.Parameters)));
             problems.AddRange(CitationProblems(label, Plan(connection, CitationQuery.Sql, CitationQuery.Parameters)));
+            problems.AddRange(HeldWorksProblems(label, Plan(connection, HeldWorksQuery.Sql, HeldWorksQuery.Parameters)));
         }
 
         Assert.AreEqual(0, problems.Count, string.Join(Environment.NewLine, problems));

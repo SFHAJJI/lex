@@ -133,7 +133,7 @@ public sealed record LuxembourgIndexStateArticle(
 /// IRI, <c>other_uri</c> and the value as written, or <c>unparsed</c> and no target. It records that a reference
 /// was written and says nothing about its meaning or its legal effect.
 /// </summary>
-internal sealed record LuxembourgIndexCitation(
+public sealed record LuxembourgIndexCitation(
     string ArticleIdentitySha256,
     string PublisherId,
     int Ordinal,
@@ -665,7 +665,7 @@ public static class LuxembourgIndexBuilder
                 exception is JsonException or InvalidOperationException or KeyNotFoundException)
             {
                 throw new InvalidDataException(
-                    "An article's stored token stream is not a list of tokens the relation rows can be read from.",
+                    $"The stored token stream of article {article.ArticleIdentitySha256} is not a list of tokens the relation rows can be read from.",
                     exception);
             }
         }
@@ -2091,7 +2091,7 @@ public sealed class LuxembourgIndexReader : IDisposable
     /// is the state's articles and their references and never a scan; the rows were verified as the projection of
     /// the articles' tokens when the index was opened.
     /// </summary>
-    internal IReadOnlyList<LuxembourgIndexCitation> ResolveStateCitations(string stateSha256, string? anchor)
+    public IReadOnlyList<LuxembourgIndexCitation> ResolveStateCitations(string stateSha256, string? anchor)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(stateSha256);
         lock (_gate)
@@ -2113,6 +2113,36 @@ public sealed class LuxembourgIndexReader : IDisposable
             }
             return Array.AsReadOnly(values.ToArray());
         }
+    }
+
+    /// <summary>
+    /// The product work key of each of the given IRIs that some state of the index carries as its publisher legal-resource
+    /// IRI or as its publisher work IRI, and only those: an IRI names a held work when it is exactly one of those two
+    /// strings of some state, by string equality and by nothing else. One pass over <c>states</c> for each column, for
+    /// the whole list.
+    /// </summary>
+    public IReadOnlyDictionary<string, string> ResolveHeldWorks(IReadOnlyList<string> iris)
+    {
+        ArgumentNullException.ThrowIfNull(iris);
+        var held = new SortedDictionary<string, string>(StringComparer.Ordinal);
+        if (iris.Count == 0)
+        {
+            return held;
+        }
+
+        lock (_gate)
+        {
+            using var command = _connection.CreateCommand();
+            command.CommandText = LuxembourgIndexQueries.HeldWorks;
+            command.Parameters.AddWithValue("$iris", JsonSerializer.Serialize(iris.Distinct(StringComparer.Ordinal)));
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                held[reader.GetString(0)] = reader.GetString(1);
+            }
+        }
+
+        return held;
     }
 
     private static IReadOnlyList<LuxembourgIndexResolvedState> ReadResolvedStates(SqliteCommand command)
