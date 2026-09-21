@@ -665,7 +665,7 @@ public static class LuxembourgIndexBuilder
                 exception is JsonException or InvalidOperationException or KeyNotFoundException)
             {
                 throw new InvalidDataException(
-                    "An article's stored token stream is not a list of tokens the relation rows can be read from.",
+                    $"The stored token stream of article {article.ArticleIdentitySha256} is not a list of tokens the relation rows can be read from.",
                     exception);
             }
         }

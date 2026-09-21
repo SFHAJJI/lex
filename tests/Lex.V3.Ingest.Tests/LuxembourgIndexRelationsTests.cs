@@ -312,12 +312,15 @@ public sealed class LuxembourgIndexRelationsTests
     public async Task TheStrictReaderRefusesAnIndexWhoseStoredTokenStreamIsNotATokenList(string tokensJson, string what)
     {
         var (built, corpusRef) = await LuxembourgIndexBuilderTests.BuildStateIndexAsync();
+        var damaged = "";
+        LuxembourgIndexBuilderTests.MutateDatabase(built.IndexBytes.Span, connection =>
+            damaged = LuxembourgIndexBuilderTests.ReadArticles(connection).First().ArticleIdentitySha256);
 
         AssertRejected(built, corpusRef, what, connection =>
             LuxembourgIndexBuilderTests.Execute(connection,
-                "UPDATE articles SET tokens_json=$tokens WHERE rowid=(SELECT min(rowid) FROM articles)",
-                ("$tokens", tokensJson)),
-            "not a list of tokens the relation rows can be read from");
+                "UPDATE articles SET tokens_json=$tokens WHERE article_identity_sha256=$id",
+                ("$tokens", tokensJson), ("$id", damaged)),
+            $"The stored token stream of article {damaged} is not a list of tokens the relation rows can be read from.");
     }
 
     /// <summary>
