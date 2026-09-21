@@ -209,6 +209,7 @@ public sealed class V3CorpusCitedByMountTests
         var pages = 0;
         do
         {
+            Assert.IsLessThan(4, pages, "four edges are four pages of one, so a fifth page means the cursor does not advance");
             var request = cursor is null ? (object)new { identifier, limit = 1 } : new { identifier, limit = 1, after = cursor };
             var body = (await CitedByAsync(mount, request)).Result!.Value;
             var page = body.GetProperty("edges").EnumerateArray().ToArray();
