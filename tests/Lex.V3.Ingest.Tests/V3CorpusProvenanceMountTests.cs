@@ -416,7 +416,7 @@ public sealed class V3CorpusProvenanceMountTests
         await fixture.SetOneMembersOutcomesAsync(first, MountedFixture.OutcomesJson(
             "luxembourg_akn_legal_content", ("akn_admitted", 4), ("akn_xml_rejected", 2)));
         await fixture.SetOneMembersOutcomesAsync(second,
-            MountedFixture.OutcomesJson("luxembourg_akn_legal_content", ("akn_marker_only_evidence", 1), ("akn_admitted", 1)).TrimEnd(']') + "," +
+            MountedFixture.OutcomesJson("luxembourg_akn_legal_content", ("akn_marker_only_evidence", 1), ("akn_admitted", 1), ("akn_Zed", 1)).TrimEnd(']') + "," +
             MountedFixture.OutcomesJson("luxembourg_publisher_pdf_act_scope", ("pdf_not_applicable", 3)).TrimStart('['));
         using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
         Assert.IsNotNull(mount);
@@ -426,7 +426,8 @@ public sealed class V3CorpusProvenanceMountTests
         var sources = body.GetProperty("states").EnumerateArray().Single().GetProperty("sources").EnumerateArray().ToArray();
         CollectionAssert.AreEqual(new[] { first, second }, sources.Select(static s => s.GetProperty("object_ref_sha256").GetString()).ToArray());
         CollectionAssert.AreEqual(new[] { "akn_admitted=4", "akn_xml_rejected=2" }, OutcomeRows(sources[0]));
-        CollectionAssert.AreEqual(new[] { "akn_admitted=1", "akn_marker_only_evidence=1" }, OutcomeRows(sources[1]));
+        // Ordinal order: the upper-case token sorts before every lower-case one only under an ordinal comparison.
+        CollectionAssert.AreEqual(new[] { "akn_Zed=1", "akn_admitted=1", "akn_marker_only_evidence=1" }, OutcomeRows(sources[1]));
         CollectionAssert.AreEqual(ReadOutcomeGround(fixture, first), OutcomeRows(sources[0]));
         CollectionAssert.AreEqual(ReadOutcomeGround(fixture, second), OutcomeRows(sources[1]));
     }
