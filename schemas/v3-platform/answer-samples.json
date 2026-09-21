@@ -1,6 +1,6 @@
 {
   "schema": "lex-v3-answer-samples/1",
-  "note": "What each served operation really sends when it answers, observed by driving the real handler. Values the fixture re-mints per run are replaced by \u003Cvaries-per-run\u003E; their shape is asserted before replacement and the relations between them are held by tests, not by this file. THE PRODUCER IS REAL AND THE MOUNT IS A FIXTURE, which is not the same as the data being invented. These answers are driven on a fixture mount holding one real Legilux act, the loi of 10 August 1991 n3, from publisher XML committed as a test fixture, plus two other members. Member by member: the act\u0027s coordinates, IRIs, applicability date and the per-article dates the capability cells are grouped by are THE PUBLISHER\u0027S; registry_sha256 is THE REVIEWED REGISTRY\u0027S, the value the product serves; every sentence inside an answer is THE PLATFORM\u0027S and this note is the census\u0027s; the mount-level counts of works, states and members, the members\u0027 outcomes and gap tokens, and the corpus and index digests are THE FIXTURE\u0027S. The article counts are none of those: they are this pipeline\u0027s count of that document rather than the document\u0027s own, which carries 54 top-level articles against the 49 this mount holds: the five are articles the corpus recorded under the token akn_unsupported_content_shape, which the answers count, coverage in members.article_outcomes and provenance in each source\u0027s article_outcomes. There is no sample from a real corpus, so a reader holding a surface against this file is held against the shape a producer sends and not against the scale or the completeness a real corpus has.",
+  "note": "What each served operation really sends when it answers, observed by driving the real handler. Values the fixture re-mints per run are replaced by \u003Cvaries-per-run\u003E; their shape is asserted before replacement and the relations between them are held by tests, not by this file. THE PRODUCER IS REAL AND THE MOUNT IS A FIXTURE, which is not the same as the data being invented. These answers are driven on a fixture mount holding one real Legilux act, the loi of 10 August 1991 n3, from publisher XML committed as a test fixture, plus two other members. Member by member: the act\u0027s coordinates, IRIs, applicability date and the per-article dates the capability cells are grouped by are THE PUBLISHER\u0027S; registry_sha256 is THE REVIEWED REGISTRY\u0027S, the value the product serves; every sentence inside an answer is THE PLATFORM\u0027S and this note is the census\u0027s; the mount-level counts of works, states and members, the members\u0027 outcomes and gap tokens, and the corpus and index digests are THE FIXTURE\u0027S. The article counts are none of those: they are this pipeline\u0027s count of that document rather than the document\u0027s own, which carries 54 top-level articles against the 49 this mount holds: the five are articles the corpus recorded under the token akn_unsupported_content_shape, which the answers count, coverage in members.article_outcomes, provenance in each source\u0027s article_outcomes and as_of in the state\u0027s articles_not_admitted (which is the five). There is no sample from a real corpus, so a reader holding a surface against this file is held against the shape a producer sends and not against the scale or the completeness a real corpus has.",
   "varies_per_run": [
     "corpus_sha256",
     "index_sha256",
@@ -16,6 +16,7 @@
       "object_type": "version_state",
       "scenario": "the same request, so a caller can move from one to the other",
       "answer": {
+        "articles_not_admitted_note": "articles_not_admitted counts the articles the corpus recorded for the publisher\u0027s document for this state that this state does not hold; the number of articles in this state plus articles_not_admitted is the number of articles the corpus recorded for that document, which provenance counts by disposition token; which articles they are is not held. An article is not admitted whole when the reviewed profile cannot represent every element in it: that can be an article the publisher struck out, and it can equally be an article whose text is complete but which carries a mark the profile does not accept, such as an empty placeholder where a list item was removed",
         "available_languages": [
           "fra"
         ],
@@ -326,6 +327,7 @@
                 "validity_conflict": true
               }
             ],
+            "articles_not_admitted": 5,
             "expression_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo/fr",
             "language": "fra",
             "next_applicability_date": null,

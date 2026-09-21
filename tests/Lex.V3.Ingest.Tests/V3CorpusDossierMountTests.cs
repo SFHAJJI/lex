@@ -212,8 +212,9 @@ public sealed class V3CorpusDossierMountTests
                 }
             }
 
-            // The comparison is not empty: nine shared fields on every row.
-            Assert.AreEqual(9 * dossierRows.Length, shared, language);
+            // The comparison is not empty: ten shared fields on every row, the count of articles the document had
+            // and the state does not hold among them.
+            Assert.AreEqual(10 * dossierRows.Length, shared, language);
         }
 
         // Every state the fixture holds is in the unfiltered answer, in the reader's order.
@@ -266,6 +267,7 @@ public sealed class V3CorpusDossierMountTests
         CollectPaths(body, string.Empty, paths);
         var declared = new[]
         {
+            "articles_not_admitted_note",
             "available_languages",
             "corpus_sha256",
             "history_begins",
@@ -278,7 +280,8 @@ public sealed class V3CorpusDossierMountTests
             "requested_language",
             "scope",
             "state_count",
-            "states", "states[].applicability_date", "states[].article_count", "states[].expression_iri", "states[].language",
+            "states", "states[].applicability_date", "states[].article_count", "states[].articles_not_admitted",
+            "states[].expression_iri", "states[].language",
             "states[].next_applicability_date", "states[].permalink", "states[].publisher_legal_resource_iri",
             "states[].publisher_work_iri", "states[].stable_coordinate", "states[].state_sha256",
             "titles", "titles[].expression_iri", "titles[].language",

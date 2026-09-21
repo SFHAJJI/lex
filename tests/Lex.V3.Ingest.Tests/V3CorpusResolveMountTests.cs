@@ -1741,6 +1741,20 @@ public sealed class V3CorpusResolveMountTests
                 Assert.IsGreaterThan(0, set.ExecuteNonQuery());
             });
 
+        /// <summary>
+        /// Points every article of one expression at another member, and re-stamps the index: the state made of
+        /// those articles is then the other document's, so two states can be made of two documents.
+        /// </summary>
+        public Task PointExpressionAtMemberAsync(string expressionIri, string objectRef) =>
+            MutateArticlesAsync(connection =>
+            {
+                using var set = connection.CreateCommand();
+                set.CommandText = "UPDATE articles SET object_ref_sha256=$ref WHERE expression_iri=$expression";
+                set.Parameters.AddWithValue("$ref", objectRef);
+                set.Parameters.AddWithValue("$expression", expressionIri);
+                Assert.IsGreaterThan(0, set.ExecuteNonQuery());
+            });
+
         /// <summary>Sets the outcomes of the one member with this object reference, and re-stamps the index.</summary>
         public Task SetOneMembersOutcomesAsync(string objectRef, string outcomesJson) =>
             MutateArticlesAsync(connection =>

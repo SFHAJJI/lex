@@ -1542,6 +1542,49 @@ public sealed class LuxembourgIndexReader : IDisposable
     }
 
     /// <summary>
+    /// For each of the given states, how many articles of the state's document the corpus recorded that the state
+    /// does not hold: the document's legal-content outcomes under <c>akn_unsupported_content_shape</c>. A state is
+    /// one document's held articles, so a document that has a state loaded and matched its reviewed inventory and
+    /// has at least one admitted article, and an article it did not admit can only be that one token (an outcome
+    /// under any other non-held token exists only for a document that has no state). A state the index resolved
+    /// always has its article and member rows, so one that does not come back is a broken index and not a zero.
+    /// </summary>
+    public IReadOnlyDictionary<string, long> ResolveArticlesNotAdmitted(IReadOnlyList<string> stateSha256s)
+    {
+        ArgumentNullException.ThrowIfNull(stateSha256s);
+        var asked = stateSha256s.Distinct(StringComparer.Ordinal).ToArray();
+        var counts = new Dictionary<string, long>(StringComparer.Ordinal);
+        if (asked.Length == 0)
+        {
+            return counts;
+        }
+
+        var token = ContractWire.NameOf(LexCorpus6Stage3Disposition.AknUnsupportedContentShape);
+        lock (_gate)
+        {
+            using var command = _connection.CreateCommand();
+            command.CommandText = LuxembourgIndexQueries.StateDocumentOutcomes;
+            command.Parameters.AddWithValue("$states", JsonSerializer.Serialize(asked));
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                var byToken = new SortedDictionary<string, long>(StringComparer.Ordinal);
+                CountArticleOutcomes(reader.GetString(1), byToken);
+                counts[reader.GetString(0)] = byToken.GetValueOrDefault(token);
+            }
+        }
+
+        var missing = asked.Where(sha => !counts.ContainsKey(sha)).ToArray();
+        if (missing.Length != 0)
+        {
+            throw new InvalidDataException(
+                "The index resolved a state whose first article or source document it does not hold: " + missing[0]);
+        }
+
+        return counts;
+    }
+
+    /// <summary>
     /// The capability manifest's cells as the reader was verified against them: what the index
     /// measured it can be asked, per operation, column, field, language and date span. Sorted as the
     /// manifest sorts them.

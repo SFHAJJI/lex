@@ -180,6 +180,8 @@ internal sealed class V3CorpusMount : IDisposable
                 language = current.Language,
                 article_identities = current.ArticleIdentities,
                 articles = pinnedDates.Articles,
+                articles_not_admitted = NotAdmittedMap([current])[current.StateSha256],
+                articles_not_admitted_note = ArticlesNotAdmittedNote,
                 validity_conflict_count = pinnedDates.ConflictCount,
                 validity_conflict_rule = ValidityConflictRule,
                 stable_coordinate = stableCoordinate,
@@ -408,6 +410,7 @@ internal sealed class V3CorpusMount : IDisposable
             publisher = "lu-legilux",
             work_key = states[0].WorkKey,
             states = served,
+            articles_not_admitted_note = ArticlesNotAdmittedNote,
             available_languages = availableLanguages,
             corpus_sha256 = _corpus.ArtifactRef.Sha256,
             index_sha256 = _reader!.IndexRef.Sha256,
@@ -416,6 +419,21 @@ internal sealed class V3CorpusMount : IDisposable
             Context("success", observedAt),
             new V3PlatformOperationResult(request, "version_state", result.RootElement));
     }
+
+    /// <summary>
+    /// What <c>articles_not_admitted</c> says, once, for every answer that carries it. Numbers stay outside it.
+    /// It says the mechanism as the reviewed profile's behaviour and gives the range the reviewer measured on one
+    /// document (an article the publisher struck out, and an article whose text is complete but which carries a
+    /// mark the profile does not accept); it does not say which articles, and it does not say how often either
+    /// happens.
+    /// </summary>
+    internal const string ArticlesNotAdmittedNote =
+        "articles_not_admitted counts the articles the corpus recorded for the publisher's document for this state that this state does not hold; " +
+        "the number of articles in this state plus articles_not_admitted is the number of articles the corpus recorded for that document, which provenance counts by disposition token; " +
+        "which articles they are is not held. " +
+        "An article is not admitted whole when the reviewed profile cannot represent every element in it: " +
+        "that can be an article the publisher struck out, and it can equally be an article whose text is complete " +
+        "but which carries a mark the profile does not accept, such as an empty placeholder where a list item was removed";
 
     internal const string ProvenanceScope =
         "the chain from the publisher's identifiers to the digests this mount verified; it holds no first-sighting event and no signature, so none is claimed";
@@ -854,6 +872,7 @@ internal sealed class V3CorpusMount : IDisposable
             work_key = states[0].WorkKey,
             comparisons,
             languages_not_compared = notCompared,
+            articles_not_admitted_note = ArticlesNotAdmittedNote,
             available_languages = availableLanguages,
             wording_rule = WordingRule,
             validity_conflict_rule = ValidityConflictRule,
@@ -2063,9 +2082,10 @@ internal sealed class V3CorpusMount : IDisposable
                 .ToArray();
         var rows = new List<object>(scope.Count);
         var datesByIdentity = ArticleDateMap(scope);
+        var notAdmitted = NotAdmittedMap(scope);
         foreach (var state in scope)
         {
-            rows.Add(StateRow(state, NextDateInLanguage(scope, state), datesByIdentity));
+            rows.Add(StateRow(state, NextDateInLanguage(scope, state), datesByIdentity, notAdmitted));
         }
 
         using var result = JsonSerializer.SerializeToDocument(new
@@ -2077,6 +2097,7 @@ internal sealed class V3CorpusMount : IDisposable
             history_begins = scope[0].ApplicabilityDate,
             state_count = rows.Count,
             states = rows,
+            articles_not_admitted_note = ArticlesNotAdmittedNote,
             available_languages = availableLanguages,
             corpus_sha256 = _corpus.ArtifactRef.Sha256,
             index_sha256 = _reader!.IndexRef.Sha256,
@@ -2147,7 +2168,8 @@ internal sealed class V3CorpusMount : IDisposable
                     .ToArray(),
             })
             .ToArray();
-        var rows = scope.Select(state => DossierStateRow(state, NextDateInLanguage(scope, state))).ToArray();
+        var notAdmitted = NotAdmittedMap(scope);
+        var rows = scope.Select(state => DossierStateRow(state, NextDateInLanguage(scope, state), notAdmitted)).ToArray();
 
         using var result = JsonSerializer.SerializeToDocument(new
         {
@@ -2163,6 +2185,7 @@ internal sealed class V3CorpusMount : IDisposable
             history_begins = scope[0].ApplicabilityDate,
             latest_applicability_date = scope[^1].ApplicabilityDate,
             states = rows,
+            articles_not_admitted_note = ArticlesNotAdmittedNote,
             not_held = DossierNotHeld.Select(static row => new { item = row[0], reason = row[1] }).ToArray(),
             corpus_sha256 = _corpus.ArtifactRef.Sha256,
             index_sha256 = _reader.IndexRef.Sha256,
@@ -2195,7 +2218,8 @@ internal sealed class V3CorpusMount : IDisposable
     /// One state as <c>dossier</c> lists it: <c>timeline</c>'s row without the article list, with the count.
     /// The fields both operations carry are the same fields with the same values, and a test holds it.
     /// </summary>
-    private static object DossierStateRow(LuxembourgIndexResolvedState state, string? nextDate) => new
+    private static object DossierStateRow(
+        LuxembourgIndexResolvedState state, string? nextDate, IReadOnlyDictionary<string, long> notAdmittedByState) => new
     {
         language = state.Language,
         applicability_date = state.ApplicabilityDate,
@@ -2205,6 +2229,7 @@ internal sealed class V3CorpusMount : IDisposable
         publisher_work_iri = state.PublisherWorkIri,
         publisher_legal_resource_iri = state.PublisherLegalResourceIri,
         article_count = state.ArticleIdentities.Count,
+        articles_not_admitted = notAdmittedByState[state.StateSha256],
         stable_coordinate = StableCoordinate(state),
         permalink = StateUrl(state),
     };
@@ -2471,10 +2496,20 @@ internal sealed class V3CorpusMount : IDisposable
     /// publisher-dated state in the same language, or <c>null</c>: never an inferred end.
     /// </summary>
     private object StateRow(LuxembourgIndexResolvedState state, string? nextDate) =>
-        StateRow(state, nextDate, ArticleDateMap([state]));
+        StateRow(state, nextDate, ArticleDateMap([state]), NotAdmittedMap([state]));
+
+    /// <summary>
+    /// How many articles of each state's document the corpus recorded and the state does not hold, read in one
+    /// query for the states asked for.
+    /// </summary>
+    private IReadOnlyDictionary<string, long> NotAdmittedMap(IReadOnlyList<LuxembourgIndexResolvedState> states) =>
+        _reader!.ResolveArticlesNotAdmitted(states.Select(static state => state.StateSha256).ToArray());
 
     private static object StateRow(
-        LuxembourgIndexResolvedState state, string? nextDate, IReadOnlyDictionary<string, string?> datesByIdentity)
+        LuxembourgIndexResolvedState state,
+        string? nextDate,
+        IReadOnlyDictionary<string, string?> datesByIdentity,
+        IReadOnlyDictionary<string, long> notAdmittedByState)
     {
         var dates = ArticleDates(state, datesByIdentity);
         return new
@@ -2488,6 +2523,7 @@ internal sealed class V3CorpusMount : IDisposable
             publisher_legal_resource_iri = state.PublisherLegalResourceIri,
             article_identities = state.ArticleIdentities,
             articles = dates.Articles,
+            articles_not_admitted = notAdmittedByState[state.StateSha256],
             validity_conflict_count = dates.ConflictCount,
             validity_conflict_rule = ValidityConflictRule,
             stable_coordinate = StableCoordinate(state),
