@@ -281,6 +281,10 @@ public sealed class RetrievalMetricsTests
         Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => MetricResult.NotMeasured((NotMeasuredReason)0));
         Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => EvaluationGates.AtLeast("g", MetricResult.Measured(0.5), 1.5));
         Assert.ThrowsExactly<ArgumentException>(() => EvaluationGates.AtLeast("", MetricResult.Measured(0.5), 0.5));
+        Assert.ThrowsExactly<ArgumentException>(() => new GateResult("g", GateVerdict.Pass, NotMeasuredReason.NoMeasurableQuery));
+        Assert.ThrowsExactly<ArgumentException>(() => new GateResult("g", GateVerdict.Fail, NotMeasuredReason.NoMeasurableQuery));
+        Assert.ThrowsExactly<ArgumentException>(() => new GateResult("g", GateVerdict.NotMeasured, null));
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => new GateResult("g", (GateVerdict)0, null));
     }
 
     // ---- the closed vocabulary ----
