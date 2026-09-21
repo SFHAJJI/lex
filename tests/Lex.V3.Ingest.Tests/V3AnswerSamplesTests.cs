@@ -482,11 +482,13 @@ public sealed class V3AnswerSamplesTests
                 + "n3, from publisher XML committed as a test fixture, plus two other members. Member by member: the "
                 + "act's coordinates, IRIs, applicability date and the per-article dates the capability cells are "
                 + "grouped by are THE PUBLISHER'S; registry_sha256 is THE REVIEWED REGISTRY'S, the value the product "
-                + "serves; every sentence here, this note included, is THE PLATFORM'S; the mount-level counts of works, "
+                + "serves; every sentence inside an answer is THE PLATFORM'S and this note is the census's; the mount-level counts of works, "
                 + "states and members, the members' outcomes and gap tokens, and the corpus and index digests are THE "
                 + "FIXTURE'S. The article counts are none of those: they are this pipeline's count of that document "
-                + "rather than the document's own, which carries 54 top-level articles against the 49 this mount holds, "
-                + "a difference not traced when this note was written. There is no sample from a real corpus, so a "
+                + "rather than the document's own, which carries 54 top-level articles against the 49 this mount holds: "
+                + "the five are articles the corpus recorded under the token akn_unsupported_content_shape, which the "
+                + "answers count, coverage in members.article_outcomes and provenance in each source's article_outcomes. "
+                + "There is no sample from a real corpus, so a "
                 + "reader holding a surface against this file is held against the shape a producer sends and not "
                 + "against the scale or the completeness a real corpus has.",
             ["varies_per_run"] = new JsonArray(VariesPerRun.Select(static p => JsonValue.Create(p)).ToArray<JsonNode?>()),
