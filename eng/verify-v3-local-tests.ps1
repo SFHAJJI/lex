@@ -9,7 +9,7 @@ param(
     [Parameter()][ValidateRange(0, [int]::MaxValue)][int]$ExpectedContractsSkipped,
     [Parameter()][ValidateRange(0, 86400)][int]$MutexWaitSeconds = 0,
     [Parameter()][string]$OutputRoot,
-    [Parameter()][ValidateSet('FormexManifestationIriCanary')][string]$AuthorizedPublisherRun,
+    [Parameter()][ValidateSet('FormexManifestationIriCanary', 'LuxembourgAdapterCanary')][string]$AuthorizedPublisherRun,
     # Mutation mode only. Keeps bin/obj after the run so the next mutant of the same sweep builds
     # incrementally. The receipt records KeptBuildOutputs. Purging stays the default; omit the switch
     # on the last mutant of a sweep so no mutated build output outlives the sweep. Evidence is bound
@@ -223,15 +223,32 @@ else {
     }
 }
 
+# Each authorized publisher run names its own exact filter, test count and gate variable. The gate is set for the
+# test process only, around the one test run, and a run that names anything else is refused before it starts.
+$authorizedPublisherRuns = @{
+    FormexManifestationIriCanary = @{
+        Filter        = 'FullyQualifiedName~EuFormexManifestationCanary'
+        ExpectedTests = 2
+        Gate          = 'LEX_FORMEX_MANIFESTATION_CANARY_V2'
+        Scope         = 'the exact canary class filter'
+    }
+    LuxembourgAdapterCanary      = @{
+        Filter        = 'FullyQualifiedName~LuxembourgLiveAdapterCanary.AnActRunsThroughThePublicAdapterWithObservedVocabularyAndSameRunRights'
+        ExpectedTests = 1
+        Gate          = 'LEX_LU_ADAPTER_CANARY'
+        Scope         = 'the exact filter of the one act canary method'
+    }
+}
+
 if ($hasAuthorizedPublisherRun) {
     $expectedProject = 'tests/Lex.V3.Ingest.Tests/Lex.V3.Ingest.Tests.csproj'
-    $expectedFilter = 'FullyQualifiedName~EuFormexManifestationCanary'
+    $authorizedRun = $authorizedPublisherRuns[$AuthorizedPublisherRun]
     if ($Mode -cne 'Focused' -or
         $Project.Replace('\', '/') -cne $expectedProject -or
-        $Filter -cne $expectedFilter -or
+        $Filter -cne $authorizedRun.Filter -or
         -not $hasExpectedTests -or
-        $ExpectedTests -ne 2) {
-        throw 'FormexManifestationIriCanary requires Focused mode, the exact Ingest test project, the exact canary class filter and ExpectedTests 2.'
+        $ExpectedTests -ne $authorizedRun.ExpectedTests) {
+        throw "$AuthorizedPublisherRun requires Focused mode, the exact Ingest test project, $($authorizedRun.Scope) and ExpectedTests $($authorizedRun.ExpectedTests)."
     }
 }
 
@@ -387,7 +404,7 @@ try {
     )
 
     $publisherGate = if ($hasAuthorizedPublisherRun) {
-        'LEX_FORMEX_MANIFESTATION_CANARY_V2'
+        $authorizedPublisherRuns[$AuthorizedPublisherRun].Gate
     }
     else {
         $null
