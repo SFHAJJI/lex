@@ -48,13 +48,18 @@ namespace Lex.V3.Tests.Contracts;
 /// the failure message tells the reader what to decide rather than pretending the answer is obvious.
 /// </para>
 /// <para>
-/// <b>Why four tests.</b> A pin that passes by finding nothing says as much about the rule as about
-/// the product, and the first version of this file proved that the hard way: four of seven mutants
-/// survived review. Dropping a family from the list passed, because the rule test asked each family
-/// about itself. Sweeping no assembly passed, and reading no reference passed, because the only
-/// guard was that the directory listing was non-empty — the "a loop that would pass having checked
-/// none" failure, on a file written by the seat that had found that failure in someone else's work
-/// the same night. Each of those is now a named assertion.
+/// <b>Why five tests, and why no test here walks anything of its own.</b> A pin that passes by
+/// finding nothing says as much about the rule as about the product, and this file has proved
+/// that twice. First, four of seven mutants survived review: dropping a family from the list
+/// passed because the rule test asked each family about itself, and sweeping no assembly passed,
+/// and reading no reference passed, because the only guard was that the directory listing was
+/// non-empty. The repair added a second test that walked the assemblies again and asserted it
+/// had reached all eight, and three mutants survived that too, because <b>a second walk cannot
+/// guard the first one</b>: emptying the sweep's own loop left the guard's separate loop intact,
+/// so the sweep passed having checked nothing while the guard passed having checked everything.
+/// There is now exactly one walk of each kind, in <c>WalkProductionReferences</c> and
+/// <c>WalkPackageManifests</c>, and every test asserts over what that walk returned. No loop is
+/// left that can be emptied without a named assertion failing.
 /// </para>
 /// </remarks>
 [TestClass]
@@ -160,6 +165,24 @@ public sealed class NoModelDependencyCensusTests
 
     private static readonly string[] MustNotBeCaughtJs = ["esbuild", "react", "react-dom"];
 
+    /// <summary>
+    /// What these manifests really declare at this head. The offender list is empty when nothing was
+    /// read, so naming what is there is the only thing that separates a clean sweep from no sweep.
+    /// It makes this pin a dependency ledger as well as a prohibition, and that is the intent: on a
+    /// clause whose whole evidence is that the dependency set contains no model, a dependency
+    /// arriving unread is the failure mode, so an addition should stop here and be looked at.
+    /// </summary>
+    private static readonly string[] DeclaredProjectPackages =
+    [
+        "Azure.Identity",
+        "Azure.Storage.Blobs",
+        "JsonSchema.Net",
+        "Microsoft.Data.Sqlite",
+        "PdfPig",
+    ];
+
+    private static readonly string[] DeclaredWebPackages = ["esbuild", "react", "react-dom"];
+
     /// <summary>JavaScript package ids, which arrive under different names than the .NET families.</summary>
     private static readonly string[] ModelPackagesJs =
     [
@@ -193,90 +216,47 @@ public sealed class NoModelDependencyCensusTests
     [TestMethod]
     public void NoProductionAssemblyReferencesAModelLibrary()
     {
-        var offending = new List<string>();
-        foreach (var (assembly, name) in LoadSweptAssemblies())
-        {
-            foreach (var referenced in assembly.GetReferencedAssemblies())
-            {
-                if (IsModelAssembly(referenced.Name ?? string.Empty))
-                {
-                    offending.Add($"{name} -> {referenced.Name}");
-                }
-            }
-        }
+        var seen = WalkProductionReferences();
+        AssertTheAssemblyWalkWasComplete(seen);
+
+        var offending = seen
+            .SelectMany(static entry => entry.Value
+                .Where(IsModelAssembly)
+                .Select(reference => $"{entry.Key} -> {reference}"))
+            .OrderBy(static value => value, StringComparer.Ordinal)
+            .ToArray();
 
         CollectionAssert.AreEqual(
             Array.Empty<string>(),
-            offending.OrderBy(static value => value, StringComparer.Ordinal).ToArray(),
+            offending,
             "A production assembly references a model library. " + WhatToDo);
     }
 
     [TestMethod]
     public void TheSweepReadsEveryProductionAssemblyAndItsReferences()
     {
-        // The sweep above passes by finding nothing, so on its own it cannot tell an empty walk from
-        // a clean one. Two mutants proved that: sweeping no assembly passed, and reading no
-        // reference passed. This asserts the walk reached each assembly by name and read references
-        // that are really there.
-        var seen = new Dictionary<string, string[]>(StringComparer.Ordinal);
-        foreach (var (assembly, name) in LoadSweptAssemblies())
-        {
-            seen[name] = assembly.GetReferencedAssemblies()
-                .Select(static reference => reference.Name ?? string.Empty)
-                .ToArray();
-        }
-
-        CollectionAssert.AreEqual(
-            SweptAssemblies.Select(static item => item.AssemblyName).OrderBy(static n => n, StringComparer.Ordinal).ToArray(),
-            seen.Keys.OrderBy(static n => n, StringComparer.Ordinal).ToArray(),
-            "The walk did not reach every production assembly.");
-
-        // Known references of two different projects, so a walk that silently skips one fails. The
-        // second is in a project the earlier version of this sweep could not see at all.
-        CollectionAssert.Contains(seen["Lex.V3.Ingest"], "Microsoft.Data.Sqlite",
-            "Lex.V3.Ingest's references were not read.");
-        CollectionAssert.Contains(seen["Lex.V3.Custody.Azure"], "Azure.Storage.Blobs",
-            "Lex.V3.Custody.Azure's references were not read.");
-        Assert.IsGreaterThan(0, seen.Values.Sum(static references => references.Length));
+        // The sweep passes by finding nothing, so on its own it cannot tell an empty walk from a
+        // clean one, and it asserts completeness itself for that reason. This names the same
+        // property separately, so removing that assertion from the sweep fails something.
+        AssertTheAssemblyWalkWasComplete(WalkProductionReferences());
     }
 
     [TestMethod]
     public void NoPackageManifestDeclaresAModelDependency()
     {
-        var offending = new List<string>();
-        var root = FindRepositoryRoot();
-
-        foreach (var project in Directory.EnumerateFiles(Path.Combine(root, "src"), "*.csproj", SearchOption.AllDirectories))
-        {
-            foreach (var line in File.ReadLines(project))
-            {
-                var reference = ReadPackageReference(line);
-                if (reference is not null && IsModelAssembly(reference))
-                {
-                    offending.Add($"{Path.GetFileName(project)} -> {reference}");
-                }
-            }
-        }
-
-        var packageJson = Path.Combine(root, "web", "package.json");
-        Assert.IsTrue(File.Exists(packageJson), $"the web manifest must exist to be swept: {packageJson}");
-        using var manifest = JsonDocument.Parse(File.ReadAllText(packageJson));
-        foreach (var section in new[] { "dependencies", "devDependencies" })
-        {
-            if (!manifest.RootElement.TryGetProperty(section, out var map)) continue;
-            foreach (var dependency in map.EnumerateObject())
-            {
-                if (IsModelJsPackage(dependency.Name))
-                {
-                    offending.Add($"web/package.json {section} -> {dependency.Name}");
-                }
-            }
-        }
+        var walk = WalkPackageManifests();
+        AssertTheManifestWalkWasComplete(walk);
 
         CollectionAssert.AreEqual(
             Array.Empty<string>(),
-            offending.OrderBy(static value => value, StringComparer.Ordinal).ToArray(),
+            walk.Offending,
             "A package manifest declares a model dependency. " + WhatToDo);
+    }
+
+    [TestMethod]
+    public void TheManifestSweepReadsEveryManifestItClaimsTo()
+    {
+        AssertTheManifestWalkWasComplete(WalkPackageManifests());
     }
 
     [TestMethod]
@@ -308,6 +288,109 @@ public sealed class NoModelDependencyCensusTests
 
         Assert.IsGreaterThan(10, MustBeCaught.Length);
         Assert.IsGreaterThan(10, MustNotBeCaught.Length);
+    }
+
+    /// <summary>
+    /// The one walk of compiled references. Every assembly test asserts over what this returns, so
+    /// emptying this loop fails the sweep itself rather than being covered by a second walk.
+    /// </summary>
+    private static Dictionary<string, string[]> WalkProductionReferences()
+    {
+        var seen = new Dictionary<string, string[]>(StringComparer.Ordinal);
+        foreach (var (assembly, name) in LoadSweptAssemblies())
+        {
+            seen[name] = assembly.GetReferencedAssemblies()
+                .Select(static reference => reference.Name ?? string.Empty)
+                .ToArray();
+        }
+
+        return seen;
+    }
+
+    private static void AssertTheAssemblyWalkWasComplete(Dictionary<string, string[]> seen)
+    {
+        CollectionAssert.AreEqual(
+            SweptAssemblies.Select(static item => item.AssemblyName)
+                .OrderBy(static name => name, StringComparer.Ordinal).ToArray(),
+            seen.Keys.OrderBy(static name => name, StringComparer.Ordinal).ToArray(),
+            "The walk did not reach every production assembly.");
+
+        // Known references of two different projects, so a walk that silently skips one fails. The
+        // second is in a project the first version of this sweep could not see at all.
+        CollectionAssert.Contains(seen["Lex.V3.Ingest"], "Microsoft.Data.Sqlite",
+            "Lex.V3.Ingest's references were not read.");
+        CollectionAssert.Contains(seen["Lex.V3.Custody.Azure"], "Azure.Storage.Blobs",
+            "Lex.V3.Custody.Azure's references were not read.");
+
+        // Per assembly rather than a total, because a total over eight is satisfied by one of them.
+        foreach (var (name, references) in seen)
+        {
+            Assert.IsGreaterThan(0, references.Length, $"{name}'s references were not read.");
+        }
+    }
+
+    private sealed record ManifestWalk(string[] Offending, string[] ProjectPackages, string[] WebPackages);
+
+    /// <summary>
+    /// The one walk of declared packages, recording what it read as well as what it objects to.
+    /// </summary>
+    private static ManifestWalk WalkPackageManifests()
+    {
+        var offending = new List<string>();
+        var projectPackages = new List<string>();
+        var webPackages = new List<string>();
+        var root = FindRepositoryRoot();
+
+        foreach (var project in Directory.EnumerateFiles(Path.Combine(root, "src"), "*.csproj", SearchOption.AllDirectories))
+        {
+            foreach (var line in File.ReadLines(project))
+            {
+                var reference = ReadPackageReference(line);
+                if (reference is null) continue;
+                projectPackages.Add(reference);
+                if (IsModelAssembly(reference))
+                {
+                    offending.Add($"{Path.GetFileName(project)} -> {reference}");
+                }
+            }
+        }
+
+        var packageJson = Path.Combine(root, "web", "package.json");
+        Assert.IsTrue(File.Exists(packageJson), $"the web manifest must exist to be swept: {packageJson}");
+        using var manifest = JsonDocument.Parse(File.ReadAllText(packageJson));
+        foreach (var section in new[] { "dependencies", "devDependencies" })
+        {
+            if (!manifest.RootElement.TryGetProperty(section, out var map)) continue;
+            foreach (var dependency in map.EnumerateObject())
+            {
+                webPackages.Add(dependency.Name);
+                if (IsModelJsPackage(dependency.Name))
+                {
+                    offending.Add($"web/package.json {section} -> {dependency.Name}");
+                }
+            }
+        }
+
+        return new ManifestWalk(
+            offending.OrderBy(static value => value, StringComparer.Ordinal).ToArray(),
+            projectPackages.ToArray(),
+            webPackages.ToArray());
+    }
+
+    private static void AssertTheManifestWalkWasComplete(ManifestWalk walk)
+    {
+        CollectionAssert.AreEqual(
+            DeclaredProjectPackages,
+            walk.ProjectPackages.Distinct(StringComparer.Ordinal)
+                .OrderBy(static name => name, StringComparer.Ordinal).ToArray(),
+            "The .NET sweep did not read exactly the packages src declares. If a dependency was "
+            + "added, check it is not a model client and name it in DeclaredProjectPackages: the "
+            + "evidence for S4-A12 is that this set is known, so one arriving unread is the failure.");
+        CollectionAssert.AreEqual(
+            DeclaredWebPackages,
+            walk.WebPackages.OrderBy(static name => name, StringComparer.Ordinal).ToArray(),
+            "The web sweep did not read exactly the packages web/package.json declares. The same "
+            + "applies: name it in DeclaredWebPackages after checking what it is.");
     }
 
     private static (Assembly Assembly, string Name)[] LoadSweptAssemblies()
