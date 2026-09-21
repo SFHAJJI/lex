@@ -204,18 +204,32 @@ function requireDistinct(keys, where) {
 /**
  * A breakdown row counts at least one of the thing it breaks down.
  *
- * Both breakdowns under `members` are SQL `GROUP BY`s, and a group exists because at least one row
- * produced it, so neither can honestly count nought. A row counting nobody is a token or an outcome
- * nothing recorded, and on the page whose job is to be checked against, a row that exists and
- * accounts for nothing is worse than a missing row: it reads as a category this corpus knows about.
+ * All THREE breakdowns under `members` are SQL `GROUP BY`s, and a group exists because at least one
+ * row produced it, so none of them can honestly count nought. A row counting nothing is a token, an
+ * outcome or a disposition nothing recorded, and on the page whose job is to be checked against, a
+ * row that exists and accounts for nothing is worse than a missing row: it reads as a category this
+ * corpus knows about.
+ *
+ * ONE RULE AND ONE SENTENCE, because it was two of each. `article_outcomes` arrived with its own
+ * copy of this loop and its own wording of this message, and the two had already drifted apart --
+ * "accounting for nobody" against "accounting for none" -- before anyone had edited either. That is
+ * the arrangement the header of this file warns about, on the file that warns about it. The counted
+ * noun and the count's own field differ between the three, so they are parameters rather than a
+ * reason for a second copy.
+ *
+ * @param {Array}  rows    the breakdown's rows
+ * @param {string} key     the member naming what each row is about, for the message
+ * @param {string} count   the member holding the count, which is not the same on all three
+ * @param {string} counted what is being counted, in the plural, for the message
+ * @param {string} where   the path of the breakdown
  */
-function requireCountedByAtLeastOne(rows, key, where) {
+function requireCountedByAtLeastOne(rows, { key, count, counted, where }) {
   for (const [index, row] of rows.entries()) {
-    if (row.members === 0) {
+    if (row[count] === 0) {
       throw new Error(
-        `${where}[${index}] counts no members for ${JSON.stringify(row[key])}; these rows are a `
-          + 'grouping of the members, and a group exists because a member is in it, so a row '
-          + 'accounting for nobody is a category nothing recorded',
+        `${where}[${index}] counts no ${counted} for ${JSON.stringify(row[key])}; these rows are a `
+          + `grouping of the ${counted}, and a group exists because one of them is in it, so a row `
+          + 'accounting for none is a category nothing recorded',
       );
     }
   }
@@ -441,7 +455,8 @@ function readMembers(value, totals) {
         `${where}.by_outcome[${index}].members`),
     }));
   requireDistinct(byOutcome.map((row) => row.outcome), 'the outcome breakdown');
-  requireCountedByAtLeastOne(byOutcome, 'outcome', `${where}.by_outcome`);
+  requireCountedByAtLeastOne(byOutcome,
+    { key: 'outcome', count: 'members', counted: 'members', where: `${where}.by_outcome` });
   const counted = byOutcome.reduce((sum, row) => sum + row.members, 0);
   if (counted !== totals.members) {
     throw new Error(
@@ -460,7 +475,8 @@ function readMembers(value, totals) {
         `${where}.gaps[${index}].members`),
     }));
   requireDistinct(gaps.map((row) => row.gap), 'the gap breakdown');
-  requireCountedByAtLeastOne(gaps, 'gap', `${where}.gaps`);
+  requireCountedByAtLeastOne(gaps,
+    { key: 'gap', count: 'members', counted: 'members', where: `${where}.gaps` });
   for (const [index, row] of gaps.entries()) {
     requireAtMost(row.members, withGaps, `${where}.gaps[${index}].members`,
       'a gap token cannot be recorded by more members than the number of members recording any gap');
@@ -506,15 +522,8 @@ function readArticleOutcomes(value, where) {
         `${where}.article_outcomes[${index}].outcomes`),
     }));
   requireDistinct(rows.map((row) => row.disposition), 'the article outcome breakdown');
-  for (const [index, row] of rows.entries()) {
-    if (row.outcomes === 0) {
-      throw new Error(
-        `${where}.article_outcomes[${index}] counts no outcomes for ${JSON.stringify(row.disposition)}; `
-          + 'these rows are a grouping of the corpus’s outcomes, and a group exists because an '
-          + 'outcome is in it, so a row accounting for none is a category nothing recorded',
-      );
-    }
-  }
+  requireCountedByAtLeastOne(rows,
+    { key: 'disposition', count: 'outcomes', counted: 'outcomes', where: `${where}.article_outcomes` });
   return rows;
 }
 
