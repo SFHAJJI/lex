@@ -139,7 +139,7 @@ public sealed class LuxembourgProductionTopologyTests
             var bytes = await CustodyRestore.ReadByDigestCheckedAsync(store,
                 artifact.GetProperty("sha256").GetString()!, CancellationToken.None);
             var text = Encoding.UTF8.GetString(bytes.Span);
-            if (text.Contains("lex-lu-sparql-rights-evidence/1", StringComparison.Ordinal))
+            if (text.Contains("lex-lu-sparql-rights-evidence/2", StringComparison.Ordinal))
             {
                 using var source = JsonDocument.Parse(bytes);
                 sparqlIndex = source.RootElement.Clone();
@@ -199,7 +199,8 @@ public sealed class LuxembourgProductionTopologyTests
             var channelOne = LuxembourgQueryExecutionAdapter.BuildSparqlRightsRows(observed, profileEvidence)
                 .Select(channel => new LuxembourgRightsChannelObservation(channel.ManifestationIri,
                     profileEvidence, sparqlRef!, channel.LicenceIris)).ToArray();
-            return new LuxembourgResourceObservation(objectRef, profileEvidence, observed, [],
+            return new LuxembourgResourceObservation(objectRef, profileEvidence, observed,
+                JsonSerializer.Deserialize<LuxembourgObservedRelation[]>(row.GetProperty("Relations"))!,
                 new LuxembourgSparqlRightsChannelObservations(profileEvidence, sparqlRef!, channelOne),
                 new LuxembourgInFileRightsChannelObservations(profileEvidence, inFileRef!,
                     inFileRows.Where(channel => observed.Any(assertion => assertion.SubjectIri == channel.ManifestationIri)).ToArray(), true,
@@ -330,7 +331,7 @@ public sealed class LuxembourgProductionTopologyTests
         foreach (var artifact in finalManifest.RootElement.GetProperty("ordered_evidence_artifacts").EnumerateArray())
         {
             var bytes = await CustodyRestore.ReadByDigestCheckedAsync(store, artifact.GetProperty("sha256").GetString()!, CancellationToken.None);
-            if (!Encoding.UTF8.GetString(bytes.Span).Contains("lex-lu-sparql-rights-evidence/1", StringComparison.Ordinal)) continue;
+            if (!Encoding.UTF8.GetString(bytes.Span).Contains("lex-lu-sparql-rights-evidence/2", StringComparison.Ordinal)) continue;
             using var index = JsonDocument.Parse(bytes);
             var workGraph = index.RootElement.GetProperty("observations").EnumerateArray().Single(row =>
                 row.GetProperty("ObjectRef").GetProperty("PublisherUri").GetString() == Work);
@@ -341,6 +342,181 @@ public sealed class LuxembourgProductionTopologyTests
             checkedGraph = true;
         }
         Assert.IsTrue(checkedGraph, "The production graph must be openable in retained SPARQL evidence.");
+    }
+
+    private const string RightsIndexSchema = "lex-lu-sparql-rights-evidence/2";
+    private const string CitedAct = "http://data.legilux.public.lu/eli/etat/leg/loi/2017/03/14/a439/jo";
+
+    /// <summary>
+    /// The defect the first live run found: a run whose family of relation rows reached the manifest's relation axis
+    /// while the retained rights index carried neither those rows nor the delivery they came from, so a reader holding
+    /// the manifest's cited evidence could not re-derive the axis. The first assertions read the index itself, with
+    /// literals that do not come from the product, and the last replays the whole manifest from the index alone.
+    /// </summary>
+    [TestMethod]
+    public async Task ARunsRelationRowsAndTheDeliveriesTheyCameFromAreRetainedSoItsManifestReplaysFromItsIndex()
+    {
+        var (store, profile, result) = await RunFixtureAsync(withRelationFamily: true);
+        Assert.IsNull(result.Refusal, $"{result.Refusal?.Code}: {result.Refusal?.Detail}");
+
+        var (manifest, index) = await ManifestAndRightsIndexAsync(store, result);
+        Assert.AreEqual(RightsIndexSchema, index.GetProperty("schema").GetString());
+
+        var namedDeliveries = index.GetProperty("deliveries").EnumerateArray()
+            .Select(delivery => delivery.GetProperty("PartitionKey").GetString()!).ToArray();
+        CollectionAssert.AreEquivalent(new[] { "assertions", "relations" }, namedDeliveries,
+            "The index must name the delivery of the assertion family and of the relation family, by name.");
+
+        var relationsBySubject = index.GetProperty("observations").EnumerateArray().ToDictionary(
+            row => row.GetProperty("ObjectRef").GetProperty("PublisherUri").GetString()!,
+            row => row.GetProperty("Relations").EnumerateArray().ToArray());
+        CollectionAssert.AreEquivalent(new[] { Work, Expression, Manifestation }, relationsBySubject.Keys.ToArray());
+        var cited = relationsBySubject[Work].Single();
+        Assert.AreEqual(Work, cited.GetProperty("SubjectIri").GetString());
+        Assert.AreEqual(Jolux + "cites", cited.GetProperty("PredicateIri").GetString());
+        Assert.AreEqual(CitedAct, cited.GetProperty("ObjectIri").GetString());
+        Assert.IsEmpty(relationsBySubject[Expression]);
+        Assert.IsEmpty(relationsBySubject[Manifestation]);
+
+        // The fixture must reach the axis the retained relations feed, or the replay below proves nothing about them.
+        var acceptedRelations = manifest.GetProperty("accounting").EnumerateArray().Single(set =>
+            set.GetProperty("axis").GetString() == "relation" &&
+            set.GetProperty("disposition").GetString() == "accepted_selected").GetProperty("object_ordinals");
+        Assert.AreEqual(1, acceptedRelations.GetArrayLength(), "the cited act's relation row must be accepted on the relation axis");
+
+        await LuxembourgRetainedRunReplay.ReplayAsync(store, profile, result, ["assertions"], ["relations"], null);
+    }
+
+    [TestMethod]
+    public async Task ARunWithNoRelationFamilyRetainsNoRelationsAndNamesOnlyItsAssertionDeliveryAndStillReplays()
+    {
+        var (store, profile, result) = await RunFixtureAsync(withRelationFamily: false);
+        Assert.IsNull(result.Refusal, $"{result.Refusal?.Code}: {result.Refusal?.Detail}");
+
+        var (_, index) = await ManifestAndRightsIndexAsync(store, result);
+        CollectionAssert.AreEqual(new[] { "assertions" },
+            index.GetProperty("deliveries").EnumerateArray().Select(delivery => delivery.GetProperty("PartitionKey").GetString()!).ToArray());
+        Assert.IsTrue(index.GetProperty("observations").EnumerateArray()
+            .All(row => row.GetProperty("Relations").GetArrayLength() == 0));
+
+        await LuxembourgRetainedRunReplay.ReplayAsync(store, profile, result, ["assertions"], [], null);
+    }
+
+    private static async Task<(JsonElement Manifest, JsonElement RightsIndex)> ManifestAndRightsIndexAsync(
+        ICustodyStore store, LuxembourgQueryExecutionResult result)
+    {
+        Assert.IsNotNull(result.ScopeManifestReceipt);
+        var manifestBytes = await CustodyRestore.ReadByDigestCheckedAsync(
+            store, result.ScopeManifestReceipt.Reference.ContentSha256, CancellationToken.None);
+        using var manifestDocument = JsonDocument.Parse(manifestBytes);
+        var manifest = manifestDocument.RootElement.Clone();
+        JsonElement? index = null;
+        foreach (var artifact in manifest.GetProperty("ordered_evidence_artifacts").EnumerateArray())
+        {
+            var bytes = await CustodyRestore.ReadByDigestCheckedAsync(
+                store, artifact.GetProperty("sha256").GetString()!, CancellationToken.None);
+            if (bytes.Length == 0 || bytes.Span[0] != (byte)'{')
+                continue;
+            using var document = JsonDocument.Parse(bytes);
+            if (document.RootElement.TryGetProperty("schema", out var schema) &&
+                schema.ValueKind == JsonValueKind.String && schema.GetString()!.StartsWith("lex-lu-sparql-rights-evidence/", StringComparison.Ordinal))
+            {
+                index = document.RootElement.Clone();
+            }
+        }
+
+        Assert.IsNotNull(index, "The final manifest must cite a retained rights index.");
+        return (manifest, index.Value);
+    }
+
+    /// <summary>
+    /// One real run of the public adapter over the multi-subject fixture graph, with or without a third family of
+    /// relation rows, and only HTTP and storage doubled. The requests are numbered as the executor sends them: a
+    /// family is six numbered requests after the session's robots fetch, and a document is one more robots fetch and
+    /// its GET.
+    /// </summary>
+    private static async Task<(RoutedHttpAcquisitionSessionTests.MultiObjectCustodyStore Store,
+        VerifiedLuxembourgSourceProfile Profile, LuxembourgQueryExecutionResult Result)> RunFixtureAsync(bool withRelationFamily)
+    {
+        var store = new RoutedHttpAcquisitionSessionTests.MultiObjectCustodyStore();
+        var profileReceipt = await store.CreateAsync(
+            "synthetic vocabulary observation for the relation retention regression"u8.ToArray(),
+            CustodyClass.NightlyFloor90d, CancellationToken.None);
+        var profileEvidence = new SourceArtifactRef(NewUrn(), profileReceipt.Reference.ContentSha256);
+        var profile = LuxembourgProfiles.Opened(new LuxembourgVocabularySnapshot(
+            profileEvidence, profileEvidence, VerifiedLuxembourgSourceProfile.RequiredIriVocabulary, []));
+        (string Subject, string Predicate, string Value)[] assertions =
+        [
+            (Work, RdfType, Jolux + "Act"),
+            (Work, Jolux + "typeDocument", "http://data.legilux.public.lu/resource/authority/resource-type/TC"),
+            (Work, Jolux + "isRealizedBy", Expression),
+            (Expression, RdfType, Jolux + "Expression"),
+            (Expression, Jolux + "language", "http://publications.europa.eu/resource/authority/language/FRA"),
+            (Expression, Jolux + "isEmbodiedBy", Manifestation),
+            (Manifestation, RdfType, Jolux + "Manifestation"),
+            (Manifestation, Jolux + "userFormat", "http://data.legilux.public.lu/resource/authority/user-format/xml-akomantoso"),
+            (Manifestation, Jolux + "isExemplifiedBy", Item),
+            (Manifestation, Jolux + "license", "http://creativecommons.org/licenses/by/4.0/"),
+        ];
+        var assertionPage = AssertionRows(assertions);
+        var censusPage = LuxembourgAcquisitionTestFixture.RowsJson(Work, Expression, Manifestation);
+        var relationPage = RelationRows((Work, Jolux + "cites", CitedAct));
+        var xml = LuxembourgInFileRightsReaderTests.Document().Replace(
+            "http://data.legilux.public.lu/eli/etat/leg/code/civil/20251226/fr/xml", Manifestation, StringComparison.Ordinal);
+        var documentBytes = Encoding.UTF8.GetBytes(xml);
+        var firstDocumentRequest = withRelationFamily ? 22 : 15;
+        var handler = LuxembourgAcquisitionTestFixture.AllowRobotsThenHandler((ordinal, request) =>
+        {
+            if (ordinal is 1 or 4) return LuxembourgAcquisitionTestFixture.JsonResponse(request, LuxembourgAcquisitionTestFixture.CountJson(3));
+            if (ordinal is 2 or 5) return LuxembourgAcquisitionTestFixture.JsonResponse(request, censusPage);
+            if (ordinal is 3 or 6) return LuxembourgAcquisitionTestFixture.JsonResponse(request, LuxembourgAcquisitionTestFixture.EmptyRowsJson());
+            if (ordinal is 8 or 11) return LuxembourgAcquisitionTestFixture.JsonResponse(request, LuxembourgAcquisitionTestFixture.CountJson(assertions.Length));
+            if (ordinal is 9 or 12) return LuxembourgAcquisitionTestFixture.JsonResponse(request, assertionPage);
+            if (ordinal is 10 or 13) return LuxembourgAcquisitionTestFixture.JsonResponse(request, AssertionRows([]));
+            if (withRelationFamily && ordinal is 15 or 18) return LuxembourgAcquisitionTestFixture.JsonResponse(request, LuxembourgAcquisitionTestFixture.CountJson(1));
+            if (withRelationFamily && ordinal is 16 or 19) return LuxembourgAcquisitionTestFixture.JsonResponse(request, relationPage);
+            if (withRelationFamily && ordinal is 17 or 20) return LuxembourgAcquisitionTestFixture.JsonResponse(request, RelationRows());
+            if (ordinal == 7 || (withRelationFamily && ordinal == 14) || ordinal == firstDocumentRequest - 1)
+                return Response(request, "User-agent: *\nAllow: /\n"u8.ToArray(), "text/plain");
+            if (ordinal == firstDocumentRequest) return Response(request, documentBytes, "application/xml");
+            throw new AssertFailedException($"Unexpected HTTP request {ordinal}: {request.Method} {request.RequestUri}");
+        });
+        var executor = new LuxembourgRepeatedEnumerationExecutor(
+            store, new LuxembourgAcquisitionTestFixture.FixedTimeProvider(), handler);
+        var adapter = new LuxembourgQueryExecutionAdapter(store, executor, profile);
+        var (censusRequest, censusWitness) = Partition("S", "census");
+        var (assertionRequest, assertionWitness) = Partition("A", "assertions");
+        var families = new List<(LuxembourgPartitionRunRequest, BoundMachineRequest, LuxembourgPartitionChain?)>
+        {
+            (censusRequest, censusWitness, null), (assertionRequest, assertionWitness, null),
+        };
+        if (withRelationFamily)
+        {
+            var (relationRequest, relationWitness) = Partition("G", "relations");
+            families.Add((relationRequest, relationWitness, null));
+        }
+
+        var result = await adapter.RunAsync(
+            families, withRelationFamily ? "relations" : null, "census", "assertions",
+            LuxembourgAcquisitionTestFixture.DocumentFetchRendererSource(420),
+            LuxembourgAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
+        return (store, profile, result);
+    }
+
+    private static string RelationRows(params (string Subject, string Predicate, string Object)[] rows)
+    {
+        var variables = new[] { "subject", "predicate", "object", "key_1", "key_2", "key_3", "key_4", "key_5", "key_6" };
+        var bindings = rows.Select(row =>
+        {
+            var values = new[] { row.Subject, row.Predicate, row.Object, row.Subject, row.Predicate, row.Object, "", "", "" };
+            return variables.Select((name, index) => (name, term: new { type = index is < 3 ? "uri" : "literal", value = values[index] }))
+                .ToDictionary(field => field.name, field => field.term);
+        });
+        return JsonSerializer.Serialize(new
+        {
+            head = new { link = Array.Empty<string>(), vars = variables },
+            results = new { distinct = false, ordered = true, bindings },
+        });
     }
 
     private static (LuxembourgPartitionRunRequest, BoundMachineRequest) Partition(string setId, string family)
