@@ -2115,6 +2115,35 @@ public sealed class LuxembourgIndexReader : IDisposable
         }
     }
 
+    /// <summary>
+    /// The product work key of each of the given publisher work IRIs that some state of the index carries, and only
+    /// those: an IRI is held when it is exactly a state's publisher work IRI, by string equality and by nothing else.
+    /// One pass over <c>states</c> for the whole list.
+    /// </summary>
+    public IReadOnlyDictionary<string, string> ResolveHeldWorks(IReadOnlyList<string> publisherWorkIris)
+    {
+        ArgumentNullException.ThrowIfNull(publisherWorkIris);
+        var held = new SortedDictionary<string, string>(StringComparer.Ordinal);
+        if (publisherWorkIris.Count == 0)
+        {
+            return held;
+        }
+
+        lock (_gate)
+        {
+            using var command = _connection.CreateCommand();
+            command.CommandText = LuxembourgIndexQueries.HeldWorks;
+            command.Parameters.AddWithValue("$iris", JsonSerializer.Serialize(publisherWorkIris.Distinct(StringComparer.Ordinal)));
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                held[reader.GetString(0)] = reader.GetString(1);
+            }
+        }
+
+        return held;
+    }
+
     private static IReadOnlyList<LuxembourgIndexResolvedState> ReadResolvedStates(SqliteCommand command)
     {
         using var reader = command.ExecuteReader();

@@ -84,6 +84,7 @@ internal sealed class V3ApiHandler
                     "coverage" => CoverageOutcome,
                     "provenance" => ProvenanceOutcome,
                     "dossier" => DossierOutcome,
+                    "citation" => CitationOutcome,
                     _ => ResolveOutcome,
                 };
                 await V3ResolveRestRoute.HandleOutcomeAsync(
@@ -154,6 +155,9 @@ internal sealed class V3ApiHandler
 
     private V3PlatformOperationOutcome DossierOutcome(V3PlatformOperationRequest request) =>
         _corpusMount!.Dossier(request, _utcNow());
+
+    private V3PlatformOperationOutcome CitationOutcome(V3PlatformOperationRequest request) =>
+        _corpusMount!.Citation(request, _utcNow());
 
     private static V3PlatformOperationRefusal NoCorpusMounted(V3PlatformOperationRequest request)
     {

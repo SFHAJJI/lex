@@ -576,6 +576,247 @@ internal sealed class V3CorpusMount : IDisposable
             new V3PlatformOperationResult(request, "provenance_chain", result.RootElement));
     }
 
+    public const int CitationMaxEdges = 200;
+
+    internal const string CitationScope =
+        "the references the publisher wrote in the text of the selected state's articles, and in the footnote bodies its notes carry (in_note), " +
+        "read from the index's edge table of forward edges (lane R4); an edge records that a reference was written where it says, " +
+        "and this answer assesses neither what relationship the reference states nor whether it has any legal effect";
+
+    internal const string CitationTargetNote =
+        "href is the value the publisher wrote, verbatim; target_kind and target_iri come from a fixed reading of it that resolves nothing: " +
+        "legilux_eli is a value that begins /eli/ or http://data.legilux.public.lu/eli/ and its target_iri is the absolute form (the one change is putting the host " +
+        "in front of a relative value; no trailing slash is trimmed and no scheme or case is changed), other_uri is any other absolute http or https value and its " +
+        "target_iri is the value as written, unparsed is anything else and has no target_iri; resolution is held_work only when target_iri is exactly the publisher " +
+        "work IRI of a work this index holds, and then target_work_key names it, not_held when it is not (that says this index holds no work with exactly that " +
+        "IRI, not that no such work exists or that it is not held under another spelling), and unparsed when there is no target_iri; no edge is dropped or upgraded, " +
+        "and a note's reference is the publisher's own reference to the act named there, not a statement of how that act relates to the article";
+
+    internal const string CitationOrder =
+        "by the citing article's publisher id, then its identity, then the order the references occur in it (a footnote body's at its note reference), " +
+        "for each language in turn; the index holds no position of an article in its document, so that order is not one";
+
+    internal const string CitationPageIs =
+        "the edges are in the stated order and a truncated page is the first limit of them from the cursor, not the most relevant";
+
+    internal static readonly string[][] CitationNotHeld =
+    [
+        ["relationship_type", "no type of relationship is assessed or held for a reference: relationship_type_assessed is false"],
+        ["current_legal_effect", "no legal effect of a reference is assessed or held: current_legal_effect_assessed is false"],
+        ["structured_relations", "the publisher's structured relation records (modifies, repeals, based on, transposes) are not held by this index, so these edges are only the references written in the text"],
+        ["references_to_this_work", "which texts refer to this work is not answered here: it is the inverse of these edges and its own operation"],
+    ];
+
+    /// <summary>
+    /// <c>citation</c>: the references the publisher wrote in a state's articles, as the forward edges of lane R4's
+    /// edge table. It takes <c>as_of</c>'s request (an identifier and a date, and optionally a language) and selects
+    /// states by <c>as_of</c>'s rule and refuses as <c>as_of</c> refuses (shared builders), and it may name one article by its
+    /// publisher id. Each edge names the citing article and its place in it, the publisher's label and value verbatim,
+    /// and the target read from the value by a fixed grammar that resolves nothing; a target is a held work only by
+    /// exact string equality with a publisher work IRI the index holds. Nothing is assessed: no relationship type, no
+    /// legal effect.
+    /// </summary>
+    public V3PlatformOperationOutcome Citation(
+        V3PlatformOperationRequest request,
+        DateTimeOffset observedAt)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (!string.Equals(request.OperationId, "citation", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("The mounted corpus citation operation only accepts citation/1.");
+        }
+
+        var identifier = RequiredString(request.Parameters, "identifier");
+        var requestedDate = RequiredString(request.Parameters, "date");
+        var requestedLanguage = OptionalLanguage(request.Parameters);
+        string? Optional(string name) =>
+            request.Parameters.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String
+                ? RequiredString(request.Parameters, name)
+                : null;
+        var anchor = Optional("anchor");
+        var after = Optional("after");
+        var limit = CitationMaxEdges;
+        if (request.Parameters.TryGetProperty("limit", out var limitValue))
+        {
+            if (limitValue.ValueKind != JsonValueKind.Number || !limitValue.TryGetInt32(out limit) ||
+                limit < 1 || limit > CitationMaxEdges)
+            {
+                throw new V3TransportFailureException(
+                    V3TransportFailureKind.RequestSchemaInvalid,
+                    "The operation request's 'limit' is not a whole number of edges within the ceiling.");
+            }
+        }
+
+        if (!DateOnly.TryParseExact(
+                requestedDate, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out _))
+        {
+            throw new V3TransportFailureException(
+                V3TransportFailureKind.RequestSchemaInvalid,
+                "The requested date is not a civil calendar date.");
+        }
+
+        if (RefuseUnlessWorkStates(request, identifier, observedAt, "r4_citation", requestedLanguage,
+                out var states, out var availableLanguages) is { } refused)
+        {
+            return refused;
+        }
+
+        var scope = requestedLanguage is null
+            ? states
+            : states.Where(state => string.Equals(state.Language, requestedLanguage, StringComparison.Ordinal))
+                .ToArray();
+        var servedLanguages = requestedLanguage is null ? availableLanguages : new[] { requestedLanguage };
+
+        var selectedStates = new List<LuxembourgIndexResolvedState>();
+        var ambiguous = new List<string>();
+        foreach (var language in servedLanguages)
+        {
+            var ofLanguage = scope
+                .Where(state => string.Equals(state.Language, language, StringComparison.Ordinal))
+                .ToArray();
+            var (selected, _) = SelectAtDate(ofLanguage, requestedDate);
+            if (selected.Length == 0)
+            {
+                continue;
+            }
+
+            if (selected.Length > 1)
+            {
+                ambiguous.AddRange(selected.Select(StateUrl));
+                continue;
+            }
+
+            selectedStates.Add(selected[0]);
+        }
+
+        if (ambiguous.Count != 0)
+        {
+            return RefuseAmbiguousVersion(request, observedAt, requestedDate, ambiguous.Order(StringComparer.Ordinal).ToArray(), bound: null);
+        }
+
+        if (selectedStates.Count == 0)
+        {
+            return RefuseNoVersionForDate(request, observedAt, scope, requestedDate, bound: null);
+        }
+
+        var edges = new List<(LuxembourgIndexResolvedState State, LuxembourgIndexCitation Edge)>();
+        var absent = new List<object>();
+        foreach (var state in selectedStates)
+        {
+            if (anchor is not null &&
+                !_reader!.ResolveArticleIds(state.StateSha256).Contains(anchor, StringComparer.Ordinal))
+            {
+                absent.Add(new
+                {
+                    language = state.Language,
+                    applicability_date = state.ApplicabilityDate,
+                    state_sha256 = state.StateSha256,
+                    permalink = StateUrl(state),
+                });
+                continue;
+            }
+
+            edges.AddRange(_reader!.ResolveStateCitations(state.StateSha256, anchor)
+                .Select(edge => (state, edge)));
+        }
+
+        if (anchor is not null && absent.Count == selectedStates.Count)
+        {
+            using var notInVersion = JsonSerializer.SerializeToDocument(new
+            {
+                requested_anchor = anchor,
+                nearest_anchors = NearestAnchors(_reader!.ResolveArticleIds(selectedStates[^1].StateSha256), anchor),
+                do_not_fall_back_to_full_text_search = true,
+            });
+            return V3PlatformOperationOutcome.Refused(
+                Context("refusal", observedAt),
+                new V3PlatformOperationRefusal(request, "anchor_not_in_version", notInVersion.RootElement));
+        }
+
+        static string Cursor((LuxembourgIndexResolvedState State, LuxembourgIndexCitation Edge) entry) =>
+            $"{entry.State.StateSha256}.{entry.Edge.ArticleIdentitySha256}.{entry.Edge.Ordinal}";
+        var start = 0;
+        if (after is not null)
+        {
+            var index = edges.FindIndex(entry => string.Equals(Cursor(entry), after, StringComparison.Ordinal));
+            if (index < 0)
+            {
+                throw new V3TransportFailureException(
+                    V3TransportFailureKind.RequestSchemaInvalid,
+                    "The operation request's 'after' names no edge of this query; a cursor is the continue_after of the same query, scope and index.");
+            }
+
+            start = index + 1;
+        }
+
+        var page = edges.Skip(start).Take(limit).ToArray();
+        var truncated = start + page.Length < edges.Count;
+        var held = _reader!.ResolveHeldWorks(page
+            .Select(static entry => entry.Edge.ToRef)
+            .Where(static target => target is not null)
+            .Select(static target => target!)
+            .ToArray());
+        var rows = page.Select(entry =>
+        {
+            var target = entry.Edge.ToRef;
+            var isHeld = target is not null && held.ContainsKey(target);
+            return new
+            {
+                language = entry.State.Language,
+                state_sha256 = entry.State.StateSha256,
+                article_identity_sha256 = entry.Edge.ArticleIdentitySha256,
+                article_publisher_id = entry.Edge.PublisherId,
+                ordinal = entry.Edge.Ordinal,
+                in_note = entry.Edge.InNote,
+                label = entry.Edge.Label,
+                href = entry.Edge.Href,
+                target_kind = entry.Edge.ToKind,
+                target_iri = target,
+                resolution = target is null ? "unparsed" : isHeld ? "held_work" : "not_held",
+                target_work_key = isHeld ? held[target!] : null,
+            };
+        }).ToArray();
+
+        using var result = JsonSerializer.SerializeToDocument(new
+        {
+            scope = CitationScope,
+            requested_identifier = identifier,
+            requested_date = requestedDate,
+            requested_language = requestedLanguage,
+            requested_anchor = anchor,
+            requested_after = after,
+            publisher = "lu-legilux",
+            work_key = states[0].WorkKey,
+            relationship_type_assessed = false,
+            current_legal_effect_assessed = false,
+            states = selectedStates.Select(state => new
+            {
+                language = state.Language,
+                applicability_date = state.ApplicabilityDate,
+                state_sha256 = state.StateSha256,
+                permalink = StateUrl(state),
+                stable_coordinate = StableCoordinate(state),
+                edges_in_scope = edges.Count(entry => string.Equals(entry.State.StateSha256, state.StateSha256, StringComparison.Ordinal)),
+            }).ToArray(),
+            absent_in_states = absent,
+            edge_count = edges.Count,
+            edge_order = CitationOrder,
+            limit,
+            truncated,
+            continue_after = truncated ? Cursor(page[^1]) : null,
+            page_is = CitationPageIs,
+            edges = rows,
+            target_note = CitationTargetNote,
+            available_languages = availableLanguages,
+            not_held = CitationNotHeld.Select(static row => new { item = row[0], reason = row[1] }).ToArray(),
+            corpus_sha256 = _corpus.ArtifactRef.Sha256,
+            index_sha256 = _reader.IndexRef.Sha256,
+        });
+        return V3PlatformOperationOutcome.Success(
+            Context("success", observedAt),
+            new V3PlatformOperationResult(request, "relation_edge", result.RootElement));
+    }
+
     /// <summary>
     /// The SHA-256 of a state's article identities in sorted order, each as UTF-8 preceded by its length as
     /// four bytes big-endian, the encoding the state digest uses for the same identities, so a caller holding
