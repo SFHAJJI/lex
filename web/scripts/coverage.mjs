@@ -26,7 +26,9 @@
 // the nearest thing to a date anywhere near this answer, and it is when the answer was produced
 // rather than when the counts were measured; this reader is handed the result value and never the
 // envelope, and `refuseRetiredShapes` refuses an `envelope` member by name, so the substitution
-// cannot be made by accident. Recorded in advance on PR #711, comment 5752822407.
+// cannot be made by accident. Recorded in advance on issue #348, comment 5752806528, reviewing
+// PR #711: "the rebuilt page renders your row, renders the two digests beside it, and does not
+// present `observed_at` as the counts' currency".
 //
 // The second rule is the one the old page attached to the wrong noun. It reconciled each facet
 // TABLE as a partition or as an overlap. The V3 language table is both, per COLUMN, and the SQL
@@ -580,14 +582,10 @@ export function readCoverage(answer) {
 
   // An empty breakdown is a fact and gets a sentence rather than an empty table -- but only where it
   // can be true. With nothing narrowed away the rows and `languages_held` are the same set, so no
-  // rows beside a non-empty held list is a contradiction. `readLanguages` has already refused it on
-  // the sizes; this says it in its own terms and does not depend on that.
-  if (languages.length === 0 && requestedLanguage === null && languagesHeld.length > 0) {
-    throw new Error(
-      `no language was asked for, ${languagesHeld.length} languages are recorded as held and none `
-        + 'has a row; a mount that holds languages breaks them down',
-    );
-  }
+  // rows beside a non-empty held list is a contradiction, and it is refused inside `readLanguages`
+  // by the size check, which names both numbers. There is no second guard for it here: a rule that
+  // cannot fire is not a rule, and the one this file used to carry for `with_gaps` was removed for
+  // exactly that reason once a test went looking for the failure and found a different one.
 
   // Every row with its reason. This is the page's whole account of what it cannot tell a reader,
   // and a row without a reason is worse than no row: it names a gap and explains nothing.
