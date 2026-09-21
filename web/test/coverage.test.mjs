@@ -644,17 +644,26 @@ test("the members breakdowns reconcile differently, and the SQL behind them says
     /members\.gaps\[0\]\.members is 4 against 0/,
   );
 
-  // Both breakdowns are `GROUP BY`s, so a group exists because a member is in it and neither can
-  // honestly count nought. That case IS reachable, and is the one the unreachable rule was reaching
-  // for.
-  for (const [what, change] of [
-    ["an outcome", (a) => { a.members.by_outcome[1].members = 0; a.members.by_outcome[0].members = 15; }],
-    ["a gap token", (a) => { a.members.gaps[0].members = 0; }],
+  // ALL THREE breakdowns are `GROUP BY`s, so a group exists because something is in it and none of
+  // them can honestly count nought. That case IS reachable, and is the one the unreachable rule was
+  // reaching for.
+  //
+  // One sentence for all three, and it was two: `article_outcomes` arrived with its own copy of the
+  // rule and its own wording, already drifted by a word ("accounting for nobody" against
+  // "accounting for none"). The counted noun differs and is a parameter now, so what this asserts
+  // per row is the noun plus the one shared clause.
+  for (const [what, counted, change] of [
+    ["an outcome", "members",
+      (a) => { a.members.by_outcome[1].members = 0; a.members.by_outcome[0].members = 15; }],
+    ["a gap token", "members", (a) => { a.members.gaps[0].members = 0; }],
+    ["a disposition", "outcomes", (a) => { a.members.article_outcomes[0].outcomes = 0; }],
   ]) {
     assert.throws(
       () => readCoverage(mutate(whole, change)),
-      /counts no members for .*a row accounting for nobody is a category nothing recorded/s,
-      `${what} counted by nobody was rendered`,
+      new RegExp(`counts no ${counted} for [^;]*; these rows are a grouping of the ${counted}, `
+        + 'and a group exists because one of them is in it, so a row accounting for none is a '
+        + 'category nothing recorded'),
+      `${what} counted by nothing was rendered`,
     );
   }
 
