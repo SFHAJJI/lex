@@ -254,6 +254,48 @@ public sealed class LuxembourgIndexRelationsTests
         return written.ToArray();
     }
 
+    [TestMethod]
+    [DataRow("'cites','publisher_text','akn_ref',0,'x','/eli/a','guess','http://data.legilux.public.lu/eli/a'", "a kind outside the closed three")]
+    [DataRow("'cites','publisher_text','akn_ref',0,'x','???','unparsed','http://example.org/'", "an unparsed value that has a target")]
+    [DataRow("'cites','publisher_text','akn_ref',0,'x','/eli/a','legilux_eli',NULL", "an ELI with no target")]
+    [DataRow("'cites','publisher_text','akn_ref',0,'x','http://example.org/','other_uri',NULL", "another URI with no target")]
+    [DataRow("'amends','publisher_text','akn_ref',0,'x','/eli/a','legilux_eli','http://data.legilux.public.lu/eli/a'", "an edge type outside the closed one")]
+    [DataRow("'cites','publisher','akn_ref',0,'x','/eli/a','legilux_eli','http://data.legilux.public.lu/eli/a'", "an asserter outside the closed one")]
+    [DataRow("'cites','publisher_text','sparql',0,'x','/eli/a','legilux_eli','http://data.legilux.public.lu/eli/a'", "a source predicate outside the closed one")]
+    [DataRow("'cites','publisher_text','akn_ref',2,'x','/eli/a','legilux_eli','http://data.legilux.public.lu/eli/a'", "a note flag that is neither 0 nor 1")]
+    public async Task TheTableRefusesARowThatContradictsItsOwnClosedRules(string values, string what)
+    {
+        var (built, _) = await LuxembourgIndexBuilderTests.BuildStateIndexAsync();
+
+        LuxembourgIndexBuilderTests.MutateDatabase(built.IndexBytes.Span, connection =>
+        {
+            Assert.ThrowsExactly<SqliteException>(
+                () => LuxembourgIndexBuilderTests.Execute(
+                    connection, $"INSERT INTO relations VALUES('{new string('7', 64)}',0,{values})"),
+                what);
+        });
+    }
+
+    [TestMethod]
+    public async Task TheTableRefusesANegativeOrdinalAndAKeyThatIsAlreadyThere()
+    {
+        var (built, _) = await LuxembourgIndexBuilderTests.BuildStateIndexAsync();
+
+        LuxembourgIndexBuilderTests.MutateDatabase(built.IndexBytes.Span, connection =>
+        {
+            var existing = LuxembourgIndexBuilderTests.ReadRelations(connection).First();
+            const string rest = "'cites','publisher_text','akn_ref',0,'x','/eli/a','legilux_eli','http://data.legilux.public.lu/eli/a'";
+            Assert.ThrowsExactly<SqliteException>(
+                () => LuxembourgIndexBuilderTests.Execute(
+                    connection, $"INSERT INTO relations VALUES('{new string('7', 64)}',-1,{rest})"),
+                "an ordinal below zero");
+            Assert.ThrowsExactly<SqliteException>(
+                () => LuxembourgIndexBuilderTests.Execute(
+                    connection, $"INSERT INTO relations VALUES('{existing.FromRef}',{existing.Ordinal},{rest})"),
+                "a second row for the same reference of the same article");
+        });
+    }
+
     private static void AssertRejected(
         LuxembourgIndexBuildResult built,
         SourceArtifactRef corpusRef,
