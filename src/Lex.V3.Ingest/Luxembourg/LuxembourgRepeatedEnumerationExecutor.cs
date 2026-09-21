@@ -277,6 +277,23 @@ public sealed class LuxembourgEnumerationBudget
         var remainder = selectedRowCount % limit;
         return checked((int)(remainder == 0 ? quotient + 1 : quotient + 2));
     }
+
+    /// <summary>
+    /// Every wire request one partition run sends when the publisher delivers what its counts say: the robots fetch,
+    /// then for each of the two passes its count and its pages. An exact function of the count and of the plan's two
+    /// canonical page limits, so a run that declares how many rows its partitions may hold declares what they cost;
+    /// a publisher that answers with more is refused after its count (see the check in <c>RunPassAsync</c>), and one
+    /// that answers with fewer costs less. Retries are not in it: each is a further reserved request.
+    /// </summary>
+    public static int RequestsForPartition(long selectedRowCount)
+    {
+        var budget = new LuxembourgEnumerationBudget(
+            LuxembourgQueryPassPolicy.Pass1PageLimit, LuxembourgQueryPassPolicy.Pass2PageLimit);
+        return checked(
+            1
+            + 1 + budget.MaximumPagesFor(LuxembourgQueryPass.Pass1, selectedRowCount)
+            + 1 + budget.MaximumPagesFor(LuxembourgQueryPass.Pass2, selectedRowCount));
+    }
 }
 
 /// <summary>

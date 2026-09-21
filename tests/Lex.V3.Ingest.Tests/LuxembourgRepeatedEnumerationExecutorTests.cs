@@ -1920,6 +1920,74 @@ public sealed class LuxembourgRepeatedEnumerationExecutorTests
         StringAssert.Contains(result.Refusal.CoreRefusalDetail, "3 remain");
     }
 
+    /// <summary>
+    /// The cost of a partition as a function of its count, by hand: robots, then for each pass a count and
+    /// <c>rows / limit + 1</c> pages where the limit divides the count and <c>+ 2</c> where it does not (the short page,
+    /// then the empty successor), one page for an empty class. The limits are 997 and 613.
+    /// </summary>
+    [TestMethod]
+    [DataRow(0L, 5)]
+    [DataRow(1L, 7)]
+    [DataRow(100L, 7)]
+    [DataRow(612L, 7)]
+    [DataRow(613L, 7)]
+    [DataRow(614L, 8)]
+    [DataRow(996L, 8)]
+    [DataRow(997L, 8)]
+    [DataRow(998L, 9)]
+    [DataRow(1226L, 9)]
+    [DataRow(5000L, 20)]
+    [DataRow(999_999L, 2641)]
+    public void APartitionsRequestsAreAnExactFunctionOfItsCount(long rows, int expected)
+    {
+        Assert.AreEqual(expected, LuxembourgEnumerationBudget.RequestsForPartition(rows));
+    }
+
+    /// <summary>
+    /// The function above is only worth what it says about the executor, so it is held against it: a partition that the
+    /// publisher delivers honestly sends exactly as many requests as the function names for its count.
+    /// </summary>
+    [TestMethod]
+    public async Task AnHonestPartitionSendsExactlyWhatTheFunctionNamesForItsCount()
+    {
+        foreach (var rows in new[] { 0, 2 })
+        {
+            var root = Path.Combine(Path.GetTempPath(), "lex-lu-executor-cost-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(root);
+            try
+            {
+                var (request, witness) = BuildRequest();
+                var handler = LuxembourgAcquisitionTestFixture.AllowRobotsThenHandler((ordinal, req) =>
+                    rows == 0
+                        ? ordinal switch
+                        {
+                            1 or 3 => JsonResponse(req, LuxembourgAcquisitionTestFixture.CountJson(0)),
+                            2 or 4 => JsonResponse(req, LuxembourgAcquisitionTestFixture.EmptyRowsJson()),
+                            _ => throw new AssertFailedException("No further sends after both passes complete."),
+                        }
+                        : ordinal switch
+                        {
+                            1 or 4 => JsonResponse(req, LuxembourgAcquisitionTestFixture.CountJson(2)),
+                            2 or 5 => JsonResponse(req, LuxembourgAcquisitionTestFixture.RowsJson("a", "b")),
+                            3 or 6 => JsonResponse(req, LuxembourgAcquisitionTestFixture.EmptyRowsJson()),
+                            _ => throw new AssertFailedException("No further sends after both passes complete."),
+                        });
+
+                var result = await Run(new FileSystemCustodyStore(root), request, witness, handler);
+
+                Assert.IsNull(result.Refusal, $"{rows} rows: {result.Refusal?.Code} {result.Refusal?.CoreRefusalDetail}");
+                Assert.IsNotNull(result.Receipt);
+                Assert.AreEqual(
+                    LuxembourgEnumerationBudget.RequestsForPartition(rows), handler.SendCount,
+                    $"a class of {rows} rows, honestly delivered");
+            }
+            finally
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
     private static ByteArrayContent RobotsContent()
     {
         var bytes = System.Text.Encoding.UTF8.GetBytes("User-agent: *\nAllow: /\n");
