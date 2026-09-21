@@ -133,7 +133,7 @@ public sealed record LuxembourgIndexStateArticle(
 /// IRI, <c>other_uri</c> and the value as written, or <c>unparsed</c> and no target. It records that a reference
 /// was written and says nothing about its meaning or its legal effect.
 /// </summary>
-public sealed record LuxembourgIndexCitation(
+internal sealed record LuxembourgIndexCitation(
     string ArticleIdentitySha256,
     string PublisherId,
     int Ordinal,
@@ -684,13 +684,17 @@ public static class LuxembourgIndexBuilder
     /// target is the absolute form: the one change made is putting the host in front of a relative value. No trailing
     /// slash is trimmed, no scheme or case is changed and nothing after the path is dropped, so a target can only
     /// match a work by string equality with its publisher work IRI. <c>other_uri</c> is any other absolute http or
-    /// https value with no whitespace or control character in it, and its target is the value as written.
-    /// <c>unparsed</c> is everything else (an empty value, <c>???</c>, a relative path that is not an ELI): its
-    /// target is null, because nothing is ever named from a value the publisher did not give.
+    /// https value, and its target is the value as written. <c>unparsed</c> is everything else (an empty value,
+    /// <c>???</c>, a relative path that is not an ELI) and **any value with a whitespace or control character in it,
+    /// whatever it begins with**: it is not a URI, and calling it <c>legilux_eli</c> would say it names a work. Its
+    /// target is null, because nothing is ever named from a value the publisher did not give. The two retained acts
+    /// write 116 <c>ref</c> values (110 and 6, counted over the whole documents) and none of them has such a character,
+    /// so the rule changes no edge they carry.
     /// </summary>
     internal static (string Kind, string? ToRef) ClassifyTarget(string? href)
     {
-        if (string.IsNullOrEmpty(href))
+        if (string.IsNullOrEmpty(href) ||
+            href.Any(static character => char.IsWhiteSpace(character) || char.IsControl(character)))
         {
             return ("unparsed", null);
         }
@@ -706,8 +710,7 @@ public static class LuxembourgIndexBuilder
             return ("legilux_eli", href);
         }
 
-        if (!href.Any(static character => char.IsWhiteSpace(character) || char.IsControl(character)) &&
-            Uri.TryCreate(href, UriKind.Absolute, out var uri) &&
+        if (Uri.TryCreate(href, UriKind.Absolute, out var uri) &&
             (string.Equals(uri.Scheme, Uri.UriSchemeHttp, StringComparison.Ordinal) ||
              string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.Ordinal)))
         {
@@ -942,15 +945,11 @@ public static class LuxembourgIndexBuilder
         IReadOnlyList<MemberRow> members,
         IReadOnlyList<ArticleRow> articles,
         IReadOnlyList<StateRow> states,
-        IReadOnlyList<WorkTitleRow>? workTitles = null,
-        IReadOnlyList<RelationRow>? relations = null)
+        IReadOnlyList<WorkTitleRow> workTitles,
+        IReadOnlyList<RelationRow> relations)
     {
-        // A caller that names no relation rows gets the projection of the articles it names: the rows are a
-        // pure function of them, and the reader refuses an index whose table is not that function.
         var bytes = JsonSerializer.SerializeToUtf8Bytes(
-            new LogicalRows(
-                members, articles, states, workTitles ?? Array.Empty<WorkTitleRow>(),
-                relations ?? ProjectRelations(articles)));
+            new LogicalRows(members, articles, states, workTitles, relations));
         return Convert.ToHexStringLower(SHA256.HashData(bytes));
     }
 
@@ -2073,7 +2072,7 @@ public sealed class LuxembourgIndexReader : IDisposable
     /// is the state's articles and their references and never a scan; the rows were verified as the projection of
     /// the articles' tokens when the index was opened.
     /// </summary>
-    public IReadOnlyList<LuxembourgIndexCitation> ResolveStateCitations(string stateSha256, string? anchor)
+    internal IReadOnlyList<LuxembourgIndexCitation> ResolveStateCitations(string stateSha256, string? anchor)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(stateSha256);
         lock (_gate)

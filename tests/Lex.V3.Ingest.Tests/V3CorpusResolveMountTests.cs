@@ -1912,7 +1912,8 @@ public sealed class V3CorpusResolveMountTests
                 clear.ExecuteNonQuery();
             }
 
-            foreach (var relation in LuxembourgIndexBuilder.ProjectRelations(articles))
+            var relations = LuxembourgIndexBuilder.ProjectRelations(articles);
+            foreach (var relation in relations)
             {
                 using var insert = connection.CreateCommand();
                 insert.CommandText = "INSERT INTO relations VALUES($from,$ordinal,$edge,$asserted,$predicate,$note,$label,$href,$kind,$target)";
@@ -1929,7 +1930,7 @@ public sealed class V3CorpusResolveMountTests
                 Assert.AreEqual(1, insert.ExecuteNonQuery());
             }
 
-            return LuxembourgIndexBuilder.HashLogicalRows(members, articles, states, titles);
+            return LuxembourgIndexBuilder.HashLogicalRows(members, articles, states, titles, relations);
         }
 
         private static LuxembourgIndexBuilder.MemberRow[] ReadMembers(SqliteConnection connection)

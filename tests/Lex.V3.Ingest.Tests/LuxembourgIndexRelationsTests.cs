@@ -43,6 +43,17 @@ public sealed class LuxembourgIndexRelationsTests
     [DataRow(" /eli/etat/leg/loi/2004/07/09/n3/jo", "unparsed", null)]
     [DataRow("mailto:someone@example.org", "unparsed", null)]
     [DataRow("http://exa mple.org/x", "unparsed", null)]
+    [DataRow("/eli/etat/leg/loi/2004 07/09/n3/jo", "unparsed", null)]
+    [DataRow(Root + "/eli/a b", "unparsed", null)]
+    [DataRow("/eli/a\tb", "unparsed", null)]
+    [DataRow("/eli/etat/leg/loi/2004/07/09/n3/jo ", "unparsed", null)]
+    [DataRow(Root + "/eli/etat/leg/loi/2004/07/09/n3/jo\n", "unparsed", null)]
+    [DataRow("/eli/a\u0001b", "unparsed", null)]
+    [DataRow("/eli/a\u00a0b", "unparsed", null)]
+    [DataRow(Root + "/eli/a\u0001b", "unparsed", null)]
+    [DataRow(Root + "/eli/a\u00a0b", "unparsed", null)]
+    [DataRow("http://example.org/a\u0001b", "unparsed", null)]
+    [DataRow("http://example.org/a\u00a0b", "unparsed", null)]
     public void EachShapeTheRealActsUseIsReadByTheFixedGrammarAndNothingIsResolved(
         string? href, string expectedKind, string? expectedTarget)
     {

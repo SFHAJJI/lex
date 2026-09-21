@@ -706,7 +706,7 @@ public sealed class LuxembourgIndexBuilderTests
             tamper(connection);
             var logicalRows = LuxembourgIndexBuilder.HashLogicalRows(
                 ReadMembers(connection), ReadArticles(connection), ReadStates(connection),
-                ReadWorkTitles(connection));
+                ReadWorkTitles(connection), ReadRelations(connection));
             Execute(connection, "UPDATE stamp SET logical_rows_sha256=$digest WHERE stamp_id=1",
                 ("$digest", logicalRows));
         });
