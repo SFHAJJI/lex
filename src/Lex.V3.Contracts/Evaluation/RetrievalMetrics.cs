@@ -110,7 +110,9 @@ public static class RetrievalMetrics
 
     /// <summary>
     /// One over the rank of the first returned anchor judged at <paramref name="minimumGrade"/> or above (the supporting
-    /// grade unless said otherwise, the stricter reading that recall also uses); 0 where none is returned.
+    /// grade unless said otherwise, the stricter reading that recall also uses); 0 where none is returned. There is no
+    /// cutoff, following the source ("MRR per collection"): an anchor at rank 5,000 is a measured 0.0002. A cutoff
+    /// variant would be a different metric and would carry a different name.
     /// </summary>
     public static MetricResult ReciprocalRank(
         QueryJudgments judgments, IReadOnlyList<RankedAnchor> ranking, int minimumGrade = JudgedAnchor.SupportingGrade)
