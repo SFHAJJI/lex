@@ -18,10 +18,10 @@ public sealed class LuxembourgIndexBuilderTests
     {
         var digest = Convert.ToHexStringLower(SHA256.HashData(
             LuxembourgIndexBuilder.BuildFixedInputDeterminismEvidence()));
-        Assert.AreEqual("c47a1955716899133f2c418108ab820e023a9287b839644cf2dcd15eebefa48a", digest);
+        Assert.AreEqual("e8d3cffc6e62da45e03dce758cdb8b57c737fccdea41fd1d51090e8d9a910ecb", digest);
     }
 
-    private const string Retained1991 = "loi-1991-08-10-n3--2024-02-01--fr.bin";
+    internal const string Retained1991 = "loi-1991-08-10-n3--2024-02-01--fr.bin";
 
     [TestMethod]
     public void BuilderAndStrictReaderShipAsOneTerminalSlice()
@@ -29,7 +29,7 @@ public sealed class LuxembourgIndexBuilderTests
         var schema = (string)typeof(LuxembourgIndexBuilder)
             .GetField(nameof(LuxembourgIndexBuilder.Schema))!
             .GetRawConstantValue()!;
-        Assert.AreEqual("lex-v3-luxembourg-index/3", schema);
+        Assert.AreEqual("lex-v3-luxembourg-index/4", schema);
         Assert.IsNotNull(typeof(LuxembourgIndexBuilder).GetMethod(nameof(LuxembourgIndexBuilder.TryBuild)));
         Assert.IsNotNull(typeof(LuxembourgIndexReader).GetMethod(nameof(LuxembourgIndexReader.OpenAndVerify)));
     }
@@ -643,7 +643,7 @@ public sealed class LuxembourgIndexBuilderTests
         StringAssert.Contains(exception.InnerException.Message, "does not match its admitted articles");
     }
 
-    private static async Task<(LuxembourgIndexBuildResult Built, SourceArtifactRef CorpusRef)>
+    internal static async Task<(LuxembourgIndexBuildResult Built, SourceArtifactRef CorpusRef)>
         BuildStateIndexAsync()
     {
         const string manifestation =
@@ -664,7 +664,7 @@ public sealed class LuxembourgIndexBuilderTests
         return (built, corpus.ArtifactRef);
     }
 
-    private static V3IndexCapabilityManifest RebindManifest(
+    internal static V3IndexCapabilityManifest RebindManifest(
         V3IndexCapabilityManifest source,
         string indexSha256)
     {
@@ -706,7 +706,7 @@ public sealed class LuxembourgIndexBuilderTests
             tamper(connection);
             var logicalRows = LuxembourgIndexBuilder.HashLogicalRows(
                 ReadMembers(connection), ReadArticles(connection), ReadStates(connection),
-                ReadWorkTitles(connection));
+                ReadWorkTitles(connection), ReadRelations(connection));
             Execute(connection, "UPDATE stamp SET logical_rows_sha256=$digest WHERE stamp_id=1",
                 ("$digest", logicalRows));
         });
@@ -721,7 +721,7 @@ public sealed class LuxembourgIndexBuilderTests
     private static byte[] MutateDatabase(ReadOnlySpan<byte> source, string sql)
         => MutateDatabase(source, connection => Execute(connection, sql));
 
-    private static byte[] MutateDatabase(
+    internal static byte[] MutateDatabase(
         ReadOnlySpan<byte> source,
         Action<SqliteConnection> mutate)
     {
@@ -746,7 +746,7 @@ public sealed class LuxembourgIndexBuilderTests
         }
     }
 
-    private static void Execute(
+    internal static void Execute(
         SqliteConnection connection,
         string sql,
         params (string Name, object Value)[] parameters)
@@ -758,7 +758,7 @@ public sealed class LuxembourgIndexBuilderTests
         command.ExecuteNonQuery();
     }
 
-    private static LuxembourgIndexBuilder.MemberRow[] ReadMembers(SqliteConnection connection)
+    internal static LuxembourgIndexBuilder.MemberRow[] ReadMembers(SqliteConnection connection)
     {
         using var command = connection.CreateCommand();
         command.CommandText = "SELECT object_ref_sha256,source_ordinal,outcome,rights_disposition,stage3_outcomes_json,gaps_json FROM members ORDER BY object_ref_sha256";
@@ -770,7 +770,7 @@ public sealed class LuxembourgIndexBuilderTests
         return rows.ToArray();
     }
 
-    private static LuxembourgIndexBuilder.ArticleRow[] ReadArticles(SqliteConnection connection)
+    internal static LuxembourgIndexBuilder.ArticleRow[] ReadArticles(SqliteConnection connection)
     {
         using var command = connection.CreateCommand();
         command.CommandText = "SELECT article_identity_sha256,object_ref_sha256,expression_iri,publisher_id,publisher_wid,applicability_date,language,rule_profile_sha256,searchable_text,tokens_json FROM articles ORDER BY article_identity_sha256";
@@ -784,7 +784,7 @@ public sealed class LuxembourgIndexBuilderTests
         return rows.ToArray();
     }
 
-    private static LuxembourgIndexBuilder.StateRow[] ReadStates(SqliteConnection connection)
+    internal static LuxembourgIndexBuilder.StateRow[] ReadStates(SqliteConnection connection)
     {
         using var command = connection.CreateCommand();
         command.CommandText = "SELECT work_key,applicability_date,state_sha256,expression_iri,publisher_work_iri,publisher_legal_resource_iri,language,rule_profiles_json,article_identities_json FROM states ORDER BY work_key,applicability_date,expression_iri,language";
@@ -797,7 +797,7 @@ public sealed class LuxembourgIndexBuilderTests
         return rows.ToArray();
     }
 
-    private static LuxembourgIndexBuilder.WorkTitleRow[] ReadWorkTitles(SqliteConnection connection)
+    internal static LuxembourgIndexBuilder.WorkTitleRow[] ReadWorkTitles(SqliteConnection connection)
     {
         using var command = connection.CreateCommand();
         command.CommandText = "SELECT work_identifier,expression_iri,language,title,normalized_title,document_date,title_kind,evidence_sha256 FROM work_titles ORDER BY work_identifier,expression_iri,language,title,title_kind,evidence_sha256";
@@ -807,6 +807,20 @@ public sealed class LuxembourgIndexBuilderTests
             reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3),
             reader.GetString(4), reader.IsDBNull(5) ? null : reader.GetString(5), reader.GetString(6),
             reader.GetString(7)));
+        return rows.ToArray();
+    }
+    internal static LuxembourgIndexBuilder.RelationRow[] ReadRelations(SqliteConnection connection)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT from_ref,ordinal,edge_type,asserted_by,source_predicate,in_note,label,href,to_kind,to_ref FROM relations ORDER BY from_ref,ordinal";
+        using var reader = command.ExecuteReader();
+        var rows = new List<LuxembourgIndexBuilder.RelationRow>();
+        while (reader.Read()) rows.Add(new(
+            reader.GetString(0), reader.GetInt32(1), reader.GetString(2), reader.GetString(3),
+            reader.GetString(4), reader.GetInt32(5) == 1,
+            reader.IsDBNull(6) ? null : reader.GetString(6),
+            reader.IsDBNull(7) ? null : reader.GetString(7),
+            reader.GetString(8), reader.IsDBNull(9) ? null : reader.GetString(9)));
         return rows.ToArray();
     }
 }

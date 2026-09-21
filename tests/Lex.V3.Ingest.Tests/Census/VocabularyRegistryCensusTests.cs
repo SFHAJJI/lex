@@ -73,10 +73,10 @@ public sealed class VocabularyRegistryCensusTests
                     + "SetsOverPackRootsOnly=1",
                 "Lex.V3.Ingest.Europe.EuropeIndexBuilder: const Ddl, const Schema",
                 "Lex.V3.Ingest.LexCorpus6Builder: Domain=13, const Schema",
-                "Lex.V3.Ingest.Luxembourg.LuxembourgIndexBuilder: const Ddl, const Schema",
+                "Lex.V3.Ingest.Luxembourg.LuxembourgIndexBuilder: const Ddl, const LegiluxEliRoot, const Schema",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgIndexQueries: const AnchorArticles, "
                     + "const ArticleIds, const MemberOutcomes, const StateArticles, "
-                    + "const StateDocumentOutcomes, const StateSources, const WorkTitles",
+                    + "const StateCitations, const StateDocumentOutcomes, const StateSources, const WorkTitles",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgPublisherPdfActScopeProducer: const "
                     + "AdministrativeMemorialPrefix, const ExpectedResourceHost, const "
                     + "LegislativeMemorialPrefix, const RuleProfile, static property "

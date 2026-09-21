@@ -15,8 +15,8 @@ namespace Lex.V3.Ingest.Tests;
 public sealed class LuxembourgAknLegalContentProfileProducerTests
 {
     private const string FixtureDirectory = "LuAknLegalContent";
-    private const string Fixture1991 = "loi-1991-08-10-n3--2024-02-01--fr.bin";
-    private const string Fixture1984 = "loi-1984-02-24-n1--2020-09-01--fr.bin";
+    internal const string Fixture1991 = "loi-1991-08-10-n3--2024-02-01--fr.bin";
+    internal const string Fixture1984 = "loi-1984-02-24-n1--2020-09-01--fr.bin";
 
     [TestMethod]
     public async Task ExactRetained1991Article2PreservesWordsAroundReferencesAndModificationEvidence()
@@ -290,7 +290,7 @@ public sealed class LuxembourgAknLegalContentProfileProducerTests
         Assert.IsFalse(parameters.Any(type => type.IsGenericType));
     }
 
-    private static async Task<LuxembourgAknLegalContentPopulation> RunAsync(
+    internal static async Task<LuxembourgAknLegalContentPopulation> RunAsync(
         byte[] bytes,
         string key,
         char artifactSuffix = '1')
@@ -304,7 +304,7 @@ public sealed class LuxembourgAknLegalContentProfileProducerTests
             .RunAsync(inventory, CancellationToken.None);
     }
 
-    private static async Task<byte[]> RetainedFixtureAsync(string name, string expectedSha256)
+    internal static async Task<byte[]> RetainedFixtureAsync(string name, string expectedSha256)
     {
         var bytes = await File.ReadAllBytesAsync(Path.Combine(
             AppContext.BaseDirectory, "Fixtures", FixtureDirectory, name));

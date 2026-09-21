@@ -126,6 +126,24 @@ public sealed record LuxembourgIndexStateArticle(
     string WordingSha256);
 
 /// <summary>
+/// One reference the publisher wrote in an article of a state: which article and where in it (<c>Ordinal</c>
+/// counts the article's references in the order they occur, a footnote body's at its note reference and
+/// <c>InNote</c> set), the publisher's label and value (<c>Href</c>, verbatim, null where the mark carried none),
+/// and the target read from the value by a fixed grammar that resolves nothing: <c>legilux_eli</c> and its absolute
+/// IRI, <c>other_uri</c> and the value as written, or <c>unparsed</c> and no target. It records that a reference
+/// was written and says nothing about its meaning or its legal effect.
+/// </summary>
+internal sealed record LuxembourgIndexCitation(
+    string ArticleIdentitySha256,
+    string PublisherId,
+    int Ordinal,
+    bool InNote,
+    string? Label,
+    string? Href,
+    string ToKind,
+    string? ToRef);
+
+/// <summary>
 /// One source document a state's articles were taken from, as the corpus recorded it: its digest (the
 /// corpus member's object reference), the outcome it was admitted with, the rights disposition when the
 /// corpus states one, the gap tokens it recorded, verbatim, and the legal-content outcomes the corpus
@@ -176,7 +194,7 @@ public sealed record LuxembourgIndexWorkTitle(
 /// </summary>
 public static class LuxembourgIndexBuilder
 {
-    public const string Schema = "lex-v3-luxembourg-index/3";
+    public const string Schema = "lex-v3-luxembourg-index/4";
     private const int ApplicationId = 0x4c563306;
     private const string Ddl = """
         CREATE TABLE stamp (
@@ -235,6 +253,21 @@ public static class LuxembourgIndexBuilder
           PRIMARY KEY (work_identifier, expression_iri, language, title, title_kind, evidence_sha256)
         ) STRICT;
         CREATE INDEX work_titles_normalized ON work_titles(normalized_title, work_identifier);
+        CREATE TABLE relations (
+          from_ref TEXT COLLATE BINARY NOT NULL REFERENCES articles(article_identity_sha256),
+          ordinal INTEGER NOT NULL CHECK (ordinal >= 0),
+          edge_type TEXT COLLATE BINARY NOT NULL CHECK (edge_type IN ('cites')),
+          asserted_by TEXT COLLATE BINARY NOT NULL CHECK (asserted_by IN ('publisher_text')),
+          source_predicate TEXT COLLATE BINARY NOT NULL CHECK (source_predicate IN ('akn_ref')),
+          in_note INTEGER NOT NULL CHECK (in_note IN (0, 1)),
+          label TEXT COLLATE BINARY,
+          href TEXT COLLATE BINARY,
+          to_kind TEXT COLLATE BINARY NOT NULL CHECK (to_kind IN ('legilux_eli', 'other_uri', 'unparsed')),
+          to_ref TEXT COLLATE BINARY,
+          PRIMARY KEY (from_ref, ordinal),
+          CHECK ((to_kind = 'unparsed') = (to_ref IS NULL))
+        ) STRICT;
+        CREATE INDEX relations_to_ref ON relations(to_ref, edge_type);
         """;
 
     public static LuxembourgIndexBuildResult? TryBuild(
@@ -274,12 +307,13 @@ public static class LuxembourgIndexBuilder
             return null;
         }
 
-        var logicalRowsSha256 = HashLogicalRows(members, articles, states, workTitles);
+        var relations = ProjectRelations(articles);
+        var logicalRowsSha256 = HashLogicalRows(members, articles, states, workTitles, relations);
         var path = Path.Combine(Path.GetTempPath(), $"lex-v3-lu-index-{Guid.NewGuid():N}.sqlite");
         try
         {
             BuildDatabase(
-                path, corpus.ArtifactRef.Sha256, logicalRowsSha256, members, articles, states, workTitles);
+                path, corpus.ArtifactRef.Sha256, logicalRowsSha256, members, articles, states, workTitles, relations);
             var bytes = File.ReadAllBytes(path);
             var digest = Convert.ToHexStringLower(SHA256.HashData(bytes));
             var indexRef = new SourceArtifactRef(LexCorpus6Builder.ResourceIdOf(digest), digest);
@@ -590,6 +624,112 @@ public static class LuxembourgIndexBuilder
             .ToArray();
     }
 
+    /// <summary>
+    /// The forward edges of lane R4's edge table: every reference the publisher wrote in each article, in the
+    /// article's identity order and then the order the references occur in its stored token stream, a footnote
+    /// body's references at the note reference and flagged <see cref="RelationRow.InNote"/>. Read from
+    /// <see cref="ArticleRow.TokensJson"/> and from nothing else, so the reader can recompute exactly these rows
+    /// from the articles it holds and refuse an index whose table is not them.
+    /// </summary>
+    internal static RelationRow[] ProjectRelations(IReadOnlyList<ArticleRow> articles)
+    {
+        var rows = new List<RelationRow>();
+        foreach (var article in articles.OrderBy(static row => row.ArticleIdentitySha256, StringComparer.Ordinal))
+        {
+            try
+            {
+                using var document = JsonDocument.Parse(article.TokensJson);
+                var ordinal = 0;
+                foreach (var token in document.RootElement.EnumerateArray())
+                {
+                    var kind = token.GetProperty("kind").GetString();
+                    if (string.Equals(kind, "reference", StringComparison.Ordinal))
+                    {
+                        rows.Add(RelationOf(article.ArticleIdentitySha256, ordinal++, inNote: false, token));
+                    }
+                    else if (string.Equals(kind, "note_reference", StringComparison.Ordinal) &&
+                             token.TryGetProperty("note_body", out var body) &&
+                             body.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var nested in body.EnumerateArray())
+                        {
+                            if (string.Equals(nested.GetProperty("kind").GetString(), "reference", StringComparison.Ordinal))
+                            {
+                                rows.Add(RelationOf(article.ArticleIdentitySha256, ordinal++, inNote: true, nested));
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception exception) when (
+                exception is JsonException or InvalidOperationException or KeyNotFoundException)
+            {
+                throw new InvalidDataException(
+                    "An article's stored token stream is not a list of tokens the relation rows can be read from.",
+                    exception);
+            }
+        }
+
+        return rows.ToArray();
+    }
+
+    private static RelationRow RelationOf(string fromRef, int ordinal, bool inNote, JsonElement token)
+    {
+        static string? StringOf(JsonElement token, string name) =>
+            token.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String
+                ? value.GetString()
+                : null;
+
+        var href = StringOf(token, "target");
+        var (toKind, toRef) = ClassifyTarget(href);
+        return new RelationRow(
+            fromRef, ordinal, "cites", "publisher_text", "akn_ref", inNote, StringOf(token, "text"), href, toKind, toRef);
+    }
+
+    private const string LegiluxEliRoot = "http://data.legilux.public.lu";
+
+    /// <summary>
+    /// What a reference's value names, by a fixed grammar that resolves nothing. <c>legilux_eli</c> is a value that
+    /// begins <c>/eli/</c> or <c>http://data.legilux.public.lu/eli/</c>, exactly, with something after it, and its
+    /// target is the absolute form: the one change made is putting the host in front of a relative value. No trailing
+    /// slash is trimmed, no scheme or case is changed and nothing after the path is dropped, so a target can only
+    /// match a work by string equality with its publisher work IRI. <c>other_uri</c> is any other absolute http or
+    /// https value, and its target is the value as written. <c>unparsed</c> is everything else (an empty value,
+    /// <c>???</c>, a relative path that is not an ELI) and **any value with a whitespace or control character in it,
+    /// whatever it begins with**: it is not a URI, and calling it <c>legilux_eli</c> would say it names a work. Its
+    /// target is null, because nothing is ever named from a value the publisher did not give. None of the 74 values
+    /// the two retained acts carry in their admitted articles has such a character (pinned by a test), so the rule
+    /// changes no edge they carry.
+    /// </summary>
+    internal static (string Kind, string? ToRef) ClassifyTarget(string? href)
+    {
+        if (string.IsNullOrEmpty(href) ||
+            href.Any(static character => char.IsWhiteSpace(character) || char.IsControl(character)))
+        {
+            return ("unparsed", null);
+        }
+
+        if (href.StartsWith("/eli/", StringComparison.Ordinal) && href.Length > "/eli/".Length)
+        {
+            return ("legilux_eli", LegiluxEliRoot + href);
+        }
+
+        if (href.StartsWith(LegiluxEliRoot + "/eli/", StringComparison.Ordinal) &&
+            href.Length > LegiluxEliRoot.Length + "/eli/".Length)
+        {
+            return ("legilux_eli", href);
+        }
+
+        if (Uri.TryCreate(href, UriKind.Absolute, out var uri) &&
+            (string.Equals(uri.Scheme, Uri.UriSchemeHttp, StringComparison.Ordinal) ||
+             string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.Ordinal)))
+        {
+            return ("other_uri", href);
+        }
+
+        return ("unparsed", null);
+    }
+
     internal static string WorkKeyOf(string publisherWid)
     {
         if (!Uri.TryCreate(publisherWid, UriKind.Absolute, out var uri) ||
@@ -665,7 +805,8 @@ public static class LuxembourgIndexBuilder
         IReadOnlyList<MemberRow> members,
         IReadOnlyList<ArticleRow> articles,
         IReadOnlyList<StateRow> states,
-        IReadOnlyList<WorkTitleRow> workTitles)
+        IReadOnlyList<WorkTitleRow> workTitles,
+        IReadOnlyList<RelationRow> relations)
     {
         using var connection = Open(path, SqliteOpenMode.ReadWriteCreate);
         Execute(connection, "PRAGMA page_size=4096");
@@ -675,7 +816,7 @@ public static class LuxembourgIndexBuilder
         Execute(connection, "PRAGMA synchronous=FULL");
         Execute(connection, "PRAGMA foreign_keys=ON");
         Execute(connection, $"PRAGMA application_id={ApplicationId}");
-        Execute(connection, "PRAGMA user_version=3");
+        Execute(connection, "PRAGMA user_version=4");
         using var transaction = connection.BeginTransaction();
         Execute(connection, Ddl, transaction);
         foreach (var member in members)
@@ -692,6 +833,14 @@ public static class LuxembourgIndexBuilder
                 article.ArticleIdentitySha256, article.ObjectRefSha256, article.ExpressionIri,
                 article.PublisherId, article.PublisherWid, article.ApplicabilityDate,
                 article.Language, article.RuleProfileSha256, article.SearchableText, article.TokensJson);
+        }
+        foreach (var relation in relations)
+        {
+            Insert(connection, transaction,
+                "INSERT INTO relations VALUES($p0,$p1,$p2,$p3,$p4,$p5,$p6,$p7,$p8,$p9)",
+                relation.FromRef, relation.Ordinal, relation.EdgeType, relation.AssertedBy,
+                relation.SourcePredicate, relation.InNote ? 1 : 0, relation.Label, relation.Href,
+                relation.ToKind, relation.ToRef);
         }
         foreach (var state in states)
         {
@@ -724,7 +873,16 @@ public static class LuxembourgIndexBuilder
             new string('2', 64), member.ObjectRefSha256,
             "https://example.invalid/expression", "art_1",
             "http://data.legilux.public.lu/eli/etat/leg/loi/2024/01/01/n1", "2024-01-01",
-            "fra", new string('4', 64), "libellé fixe", "[]");
+            "fra", new string('4', 64), "libellé fixe",
+            TokensJson(
+            [
+                new LuxembourgAknLegalContentToken(LuxembourgAknLegalContentTokenKind.Text, "libellé fixe", null, null),
+                new LuxembourgAknLegalContentToken(
+                    LuxembourgAknLegalContentTokenKind.Reference, "loi fixe", "/eli/etat/leg/loi/2023/01/01/n1/jo", null),
+                new LuxembourgAknLegalContentToken(
+                    LuxembourgAknLegalContentTokenKind.NoteReference, null, null, "1",
+                    [new LuxembourgAknLegalContentToken(LuxembourgAknLegalContentTokenKind.Reference, "note fixe", "???", null)]),
+            ]));
         var members = new[] { member };
         var articles = new[] { article };
         var states = ProjectStates(articles, new Dictionary<string, StateSource>(StringComparer.Ordinal)
@@ -742,8 +900,9 @@ public static class LuxembourgIndexBuilder
         var path = Path.Combine(Path.GetTempPath(), $"lex-v3-lu-index-pin-{Guid.NewGuid():N}.sqlite");
         try
         {
-            BuildDatabase(path, new string('a', 64), HashLogicalRows(members, articles, states, titles),
-                members, articles, states, titles);
+            var relations = ProjectRelations(articles);
+            BuildDatabase(path, new string('a', 64), HashLogicalRows(members, articles, states, titles, relations),
+                members, articles, states, titles, relations);
             return File.ReadAllBytes(path);
         }
         finally
@@ -796,10 +955,11 @@ public static class LuxembourgIndexBuilder
         IReadOnlyList<MemberRow> members,
         IReadOnlyList<ArticleRow> articles,
         IReadOnlyList<StateRow> states,
-        IReadOnlyList<WorkTitleRow>? workTitles = null)
+        IReadOnlyList<WorkTitleRow> workTitles,
+        IReadOnlyList<RelationRow> relations)
     {
         var bytes = JsonSerializer.SerializeToUtf8Bytes(
-            new LogicalRows(members, articles, states, workTitles ?? Array.Empty<WorkTitleRow>()));
+            new LogicalRows(members, articles, states, workTitles, relations));
         return Convert.ToHexStringLower(SHA256.HashData(bytes));
     }
 
@@ -931,11 +1091,41 @@ public static class LuxembourgIndexBuilder
         string TitleKind,
         string EvidenceSha256);
 
+    /// <summary>
+    /// One reference the publisher wrote inside an article of the index, as a forward edge of lane R4's edge
+    /// table: the citing article (<see cref="FromRef"/>), the reference's place in that article's token stream
+    /// (<see cref="Ordinal"/>, with a footnote body's references at the note reference and <see cref="InNote"/> set),
+    /// the publisher's own label and value (<see cref="Href"/>, verbatim), and the target read from that value by
+    /// <see cref="ClassifyTarget"/>. The row says the publisher wrote a reference there and asserts nothing about
+    /// what it means: no relationship type, no legal effect.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="InNote"/> is a structural fact: the reference sat inside a note element. It is not a proxy for
+    /// anything else. In the two retained acts, over the 74 edges of their admitted articles (68 in the 1991 act, of
+    /// which 64 name a Legilux work, and 6 in the 1984 act, of which 5 do), every Legilux reference written with the
+    /// host (16 and 2) is inside a publisher modification note and every one written without it (48 and 3) is in
+    /// running text. That is a measurement of two acts, pinned by a test that names those counts, and not a property
+    /// of the format; nothing here relies on it. A reader who takes <c>in_note</c> for "absolute" or for "an
+    /// amendment" is relying on a sample of two.
+    /// </remarks>
+    internal sealed record RelationRow(
+        string FromRef,
+        int Ordinal,
+        string EdgeType,
+        string AssertedBy,
+        string SourcePredicate,
+        bool InNote,
+        string? Label,
+        string? Href,
+        string ToKind,
+        string? ToRef);
+
     private sealed record LogicalRows(
         IReadOnlyList<MemberRow> Members,
         IReadOnlyList<ArticleRow> Articles,
         IReadOnlyList<StateRow> States,
-        IReadOnlyList<WorkTitleRow> WorkTitles);
+        IReadOnlyList<WorkTitleRow> WorkTitles,
+        IReadOnlyList<RelationRow> Relations);
 
     internal static string NormalizeTitle(string value)
     {
@@ -1128,7 +1318,7 @@ public sealed class LuxembourgIndexReader : IDisposable
             LuxembourgIndexBuilder.EnsureExactSchema(connection);
             if (!string.Equals(Scalar(connection, "PRAGMA integrity_check"), "ok", StringComparison.Ordinal) ||
                 Convert.ToInt32(Scalar(connection, "PRAGMA application_id"), CultureInfo.InvariantCulture) != 0x4c563306 ||
-                Convert.ToInt32(Scalar(connection, "PRAGMA user_version"), CultureInfo.InvariantCulture) != 3)
+                Convert.ToInt32(Scalar(connection, "PRAGMA user_version"), CultureInfo.InvariantCulture) != 4)
             {
                 throw new InvalidDataException("The Luxembourg index failed SQLite integrity or schema identity checks.");
             }
@@ -1160,9 +1350,13 @@ public sealed class LuxembourgIndexReader : IDisposable
             var articles = ReadArticles(connection);
             var states = ReadStates(connection);
             var workTitles = ReadWorkTitles(connection);
+            var relations = ReadRelations(connection);
             ValidateStates(articles, states);
+            if (!LuxembourgIndexBuilder.ProjectRelations(articles).SequenceEqual(relations))
+                throw new InvalidDataException(
+                    "The Luxembourg index relation rows are not the references its articles carry.");
             if (!string.Equals(
-                    LuxembourgIndexBuilder.HashLogicalRows(members, articles, states, workTitles),
+                    LuxembourgIndexBuilder.HashLogicalRows(members, articles, states, workTitles, relations),
                     expectedLogical,
                     StringComparison.Ordinal))
                 throw new InvalidDataException("The Luxembourg index logical rows do not match their stamp.");
@@ -1890,6 +2084,37 @@ public sealed class LuxembourgIndexReader : IDisposable
         }
     }
 
+    /// <summary>
+    /// The references the publisher wrote in the articles one state binds, or in the one carrying a publisher id, as
+    /// the forward edges of lane R4's edge table: by the citing article's publisher id and identity, then the
+    /// order the references occur in it. Read from <c>relations</c> by the citing article's primary key, so the cost
+    /// is the state's articles and their references and never a scan; the rows were verified as the projection of
+    /// the articles' tokens when the index was opened.
+    /// </summary>
+    internal IReadOnlyList<LuxembourgIndexCitation> ResolveStateCitations(string stateSha256, string? anchor)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(stateSha256);
+        lock (_gate)
+        {
+            using var command = _connection.CreateCommand();
+            command.CommandText = LuxembourgIndexQueries.StateCitations;
+            command.Parameters.AddWithValue("$digest", stateSha256);
+            command.Parameters.AddWithValue("$anchor", (object?)anchor ?? DBNull.Value);
+            using var reader = command.ExecuteReader();
+            var values = new List<LuxembourgIndexCitation>();
+            while (reader.Read())
+            {
+                values.Add(new LuxembourgIndexCitation(
+                    reader.GetString(0), reader.GetString(1), reader.GetInt32(2), reader.GetInt32(3) == 1,
+                    reader.IsDBNull(4) ? null : reader.GetString(4),
+                    reader.IsDBNull(5) ? null : reader.GetString(5),
+                    reader.GetString(6),
+                    reader.IsDBNull(7) ? null : reader.GetString(7)));
+            }
+            return Array.AsReadOnly(values.ToArray());
+        }
+    }
+
     private static IReadOnlyList<LuxembourgIndexResolvedState> ReadResolvedStates(SqliteCommand command)
     {
         using var reader = command.ExecuteReader();
@@ -2195,6 +2420,21 @@ public sealed class LuxembourgIndexReader : IDisposable
             reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3),
             reader.GetString(4), reader.IsDBNull(5) ? null : reader.GetString(5), reader.GetString(6),
             reader.GetString(7)));
+        return values.ToArray();
+    }
+
+    private static LuxembourgIndexBuilder.RelationRow[] ReadRelations(SqliteConnection connection)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT from_ref,ordinal,edge_type,asserted_by,source_predicate,in_note,label,href,to_kind,to_ref FROM relations ORDER BY from_ref,ordinal";
+        using var reader = command.ExecuteReader();
+        var values = new List<LuxembourgIndexBuilder.RelationRow>();
+        while (reader.Read()) values.Add(new(
+            reader.GetString(0), reader.GetInt32(1), reader.GetString(2), reader.GetString(3),
+            reader.GetString(4), reader.GetInt32(5) == 1,
+            reader.IsDBNull(6) ? null : reader.GetString(6),
+            reader.IsDBNull(7) ? null : reader.GetString(7),
+            reader.GetString(8), reader.IsDBNull(9) ? null : reader.GetString(9)));
         return values.ToArray();
     }
 
