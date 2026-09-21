@@ -156,10 +156,15 @@ public sealed class ScopeLineQuestionTests
     /// What this mount serves today, named rather than counted, so a route added or removed is a
     /// failure here and not a number that quietly moves.
     /// </summary>
+    /// <remarks>
+    /// It has moved once already, and that is the design working rather than friction: PR #727 added
+    /// <c>citation</c> as the twelfth, this list failed, and the twelfth was written in by the seat
+    /// that owns the list rather than by the seat that added the route.
+    /// </remarks>
     private static readonly string[] ServedOperations =
     [
-        "article_history", "as_of", "changes_in_period", "coverage", "diff", "dossier",
-        "in_force_on", "provenance", "resolve", "search", "timeline",
+        "article_history", "as_of", "changes_in_period", "citation", "coverage", "diff",
+        "dossier", "in_force_on", "provenance", "resolve", "search", "timeline",
     ];
 
     [TestMethod]
