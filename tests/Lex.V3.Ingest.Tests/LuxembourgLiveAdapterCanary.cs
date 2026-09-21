@@ -205,12 +205,72 @@ public sealed class LuxembourgLiveAdapterCanary
             source.IndexOf(adapterReturned, StringComparison.Ordinal) < source.IndexOf(afterAdapter, StringComparison.Ordinal) &&
             source.IndexOf(afterAdapter, StringComparison.Ordinal) < source.IndexOf(adapterAsserted, StringComparison.Ordinal),
             "the adapter's spend is recorded after it returns and before any assertion about its result");
-        Assert.IsTrue(
-            source.IndexOf(alwaysRuns, StringComparison.Ordinal) < source.IndexOf(atEnd, StringComparison.Ordinal),
-            "the final spend is recorded in the block that always runs");
-        Assert.IsTrue(
-            source.IndexOf(alwaysRuns, StringComparison.Ordinal) < source.IndexOf(inEvidence, StringComparison.Ordinal),
-            "and it is written into the retained evidence there");
+
+        // A span and not a position: text after the word that opens the block is not text inside it, and a rethrow skips
+        // whatever follows the block.
+        var (open, close) = BlockAfter(source, alwaysRuns);
+        foreach (var (needle, what) in new[] { (atEnd, "the final spend is recorded"), (inEvidence, "and it is written into the retained evidence") })
+        {
+            var at = source.IndexOf(needle, StringComparison.Ordinal);
+            Assert.IsTrue(open < at && at < close, what + " inside the block that always runs, not merely after the word that opens it");
+        }
+    }
+
+    /// <summary>
+    /// The span guard is a statement about braces, so it is checked on its own: the block after a keyword is the braces
+    /// that follow it, closed by their own match, and text after that block, or in a second block beside it, is outside it.
+    /// </summary>
+    [TestMethod]
+    public void TheBlockAfterAKeywordIsItsOwnBracesAndNothingThatFollowsThem()
+    {
+        const string real = "try { a; } fin" + "ally { x; { y; } \"}\" // }\n z; } after;";
+        var (open, close) = BlockAfter(real, "fin" + "ally");
+        Assert.IsTrue(open < real.IndexOf("x;", StringComparison.Ordinal) && real.IndexOf("z;", StringComparison.Ordinal) < close);
+        Assert.IsTrue(real.IndexOf("after;", StringComparison.Ordinal) > close, "what follows the closing brace is outside");
+
+        // The shape that moves the export out from under the keyword: an empty block, then a bare one.
+        const string moved = "try { a; } fin" + "ally { } { x; } after;";
+        var (movedOpen, movedClose) = BlockAfter(moved, "fin" + "ally");
+        Assert.IsFalse(movedOpen < moved.IndexOf("x;", StringComparison.Ordinal) && moved.IndexOf("x;", StringComparison.Ordinal) < movedClose);
+    }
+
+    private static (int Open, int Close) BlockAfter(string source, string keyword)
+    {
+        var at = source.IndexOf(keyword, StringComparison.Ordinal);
+        Assert.IsGreaterThanOrEqualTo(0, at, keyword);
+        var open = source.IndexOf('{', at);
+        var depth = 0;
+        for (var index = open; index < source.Length; index++)
+        {
+            var character = source[index];
+            if (character == '"')
+            {
+                for (index++; index < source.Length && source[index] != '"'; index++)
+                {
+                    if (source[index] == '\\')
+                    {
+                        index++;
+                    }
+                }
+            }
+            else if (character == '/' && index + 1 < source.Length && source[index + 1] == '/')
+            {
+                while (index < source.Length && source[index] != '\n')
+                {
+                    index++;
+                }
+            }
+            else if (character == '{')
+            {
+                depth++;
+            }
+            else if (character == '}' && --depth == 0)
+            {
+                return (open, index);
+            }
+        }
+
+        throw new AssertFailedException("the block after " + keyword + " is not closed");
     }
 
     /// <summary>
