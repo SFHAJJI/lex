@@ -265,8 +265,13 @@ public sealed class LuxembourgIndexBuilderTests
             luxembourgOverride: luxembourg, luxembourgStore: store);
         var corpus = LexCorpus6Builder.TryBuild(envelope, out var corpusRefusal, out var corpusDetail);
         Assert.IsNotNull(corpus, $"{corpusRefusal}: {corpusDetail}");
-        Assert.IsTrue(corpus.VerifiedSet.Set.Members.Any(static value =>
-            value.Publisher == PublisherId.LuLegilux && value.Outcome == LexCorpus6OutcomeKind.Acquired));
+        Assert.IsTrue(
+            corpus.VerifiedSet.Set.Members.Any(static value =>
+                value.Publisher == PublisherId.LuLegilux && value.Outcome == LexCorpus6OutcomeKind.Acquired),
+            "no Luxembourg member is acquired: " + string.Join(
+                ", ",
+                corpus.VerifiedSet.Set.Members.Where(static value => value.Publisher == PublisherId.LuLegilux)
+                    .Select(static value => value.Outcome + "/" + value.LuxembourgRights?.Disposition)));
         // The stage's own dispositions, read from its population and not through the index.
         CollectionAssert.AreEquivalent(
             new[]
