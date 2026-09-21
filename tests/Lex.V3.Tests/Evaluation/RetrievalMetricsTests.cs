@@ -232,17 +232,48 @@ public sealed class RetrievalMetricsTests
     }
 
     [TestMethod]
-    public void AReleaseGateSetPassesOnlyWhenItIsNotEmptyAndEveryGatePasses()
+    public void AReleaseGateSetPassesOnlyWhenEveryRequiredGateIsReportedOnceAndEveryGatePasses()
     {
-        var pass = EvaluationGates.AtLeast("a", MetricResult.Measured(1.0), 0.5);
-        var fail = EvaluationGates.AtLeast("b", MetricResult.Measured(0.1), 0.5);
+        var a = EvaluationGates.AtLeast("a", MetricResult.Measured(1.0), 0.5);
+        var b = EvaluationGates.AtLeast("b", MetricResult.Measured(1.0), 0.5);
+        var failing = EvaluationGates.AtLeast("f", MetricResult.Measured(0.1), 0.5);
         var unmeasured = EvaluationGates.AtLeast("c", MetricResult.NotMeasured(NotMeasuredReason.NoMeasurableQuery), 0.5);
 
-        Assert.IsTrue(EvaluationGates.ReleasePasses([pass]));
-        Assert.IsTrue(EvaluationGates.ReleasePasses([pass, pass]));
-        Assert.IsFalse(EvaluationGates.ReleasePasses([]), "a gate set that would pass on nothing is a blind spot");
-        Assert.IsFalse(EvaluationGates.ReleasePasses([pass, fail]));
-        Assert.IsFalse(EvaluationGates.ReleasePasses([pass, unmeasured]), "a null the gate reads blocks like a failure");
+        Assert.IsTrue(EvaluationGates.ReleasePasses([a], ["a"]));
+        Assert.IsTrue(EvaluationGates.ReleasePasses([a, b], ["a", "b"]));
+        Assert.IsTrue(EvaluationGates.ReleasePasses([a, b], ["b", "a"]), "the order the names are required in does not matter");
+        Assert.IsTrue(EvaluationGates.ReleasePasses([a, b], ["a"]), "a passing gate beyond the required ones does no harm");
+
+        Assert.IsFalse(EvaluationGates.ReleasePasses([a], ["a", "b"]), "a required gate that was dropped is a smaller set that still passes, and must not release");
+        Assert.IsFalse(EvaluationGates.ReleasePasses([], ["a"]), "a set that would pass on nothing is a blind spot");
+        Assert.IsFalse(EvaluationGates.ReleasePasses([a, a], ["a"]), "a gate reported twice is ambiguous, not doubly passed");
+        Assert.IsFalse(EvaluationGates.ReleasePasses([a, failing], ["a"]), "a failing gate blocks even when it is not one that was required");
+        Assert.IsFalse(EvaluationGates.ReleasePasses([a, unmeasured], ["a", "c"]), "a null the gate reads blocks like a failure");
+        Assert.IsFalse(EvaluationGates.ReleasePasses([a, unmeasured], ["a"]), "a gate nobody measured blocks whether or not it was required");
+    }
+
+    [TestMethod]
+    public void TheRequiredGatesNotReportedExactlyOnceAreNamedInTheOrderRequired()
+    {
+        var a = EvaluationGates.AtLeast("a", MetricResult.Measured(1.0), 0.5);
+        var b = EvaluationGates.AtLeast("b", MetricResult.Measured(1.0), 0.5);
+
+        CollectionAssert.AreEqual(new[] { "c", "b" }, EvaluationGates.Unreported([a], ["c", "a", "b"]).ToArray());
+        CollectionAssert.AreEqual(new[] { "a" }, EvaluationGates.Unreported([a, a, b], ["b", "a"]).ToArray());
+        Assert.IsEmpty(EvaluationGates.Unreported([a, b], ["a", "b"]));
+    }
+
+    [TestMethod]
+    public void AReleaseThatRequiresNothingOrNamesAGateTwiceOrBlankIsRefused()
+    {
+        var a = EvaluationGates.AtLeast("a", MetricResult.Measured(1.0), 0.5);
+
+        Assert.Throws<ArgumentException>(() => EvaluationGates.ReleasePasses([a], []));
+        Assert.Throws<ArgumentException>(() => EvaluationGates.ReleasePasses([a], ["a", "a"]));
+        Assert.Throws<ArgumentException>(() => EvaluationGates.ReleasePasses([a], ["a", " "]));
+        Assert.Throws<ArgumentException>(() => EvaluationGates.Unreported([a], []));
+        Assert.Throws<ArgumentNullException>(() => EvaluationGates.ReleasePasses(null!, ["a"]));
+        Assert.Throws<ArgumentNullException>(() => EvaluationGates.ReleasePasses([a], null!));
     }
 
     // ---- what the types refuse ----
