@@ -23,20 +23,31 @@ namespace Lex.V3.Tests.Contracts;
 /// and <c>answer_dossier</c> slices are reviewed and integrated.
 /// </para>
 /// <para>
-/// <b>What was guarded before this, and what was not.</b> The web surface names
-/// <c>localization_unavailable</c> and tests that it is not slipped into its own registry. Nothing
-/// on the platform side guarded either token, and <b>nothing anywhere compared the two registries</b>
-/// — so the surfaces could disagree about which refusals exist and each would still pass its own
-/// tests. That is the defect class this repository keeps finding: a reader and a producer holding
-/// separate copies of one contract.
+/// <b>What was already guarded, corrected after review.</b> An earlier version of this file said
+/// nothing on the platform side guarded either token and that a size change would pass. <b>Both were
+/// wrong and a reviewer measured it.</b> <see cref="V3OperationRegistry"/>'s constructor requires the
+/// refusals to be exactly its required list in sequence, the registry digest is pinned in the
+/// envelope tests, and <c>Reviewed.RefusalCodes</c> is a public collection that answers how many
+/// members there are. On the web, <c>refusal-card.test.mjs</c> and <c>localization.test.mjs</c>
+/// already assert the list's length and one of them is titled for the platform's twenty. <b>Each
+/// surface was guarded. Neither read the other.</b>
 /// </para>
 /// <para>
-/// <b>Why the lists are read from source rather than asked of the registry.</b>
-/// <see cref="V3OperationRegistry"/> exposes <c>DeclaresRefusal</c>, which answers membership and
-/// cannot say how many members there are — so a twenty-first code could be added and every
-/// membership test would still pass. Reading the declarations makes the <b>size</b> assertable, and
-/// the twenty named literally below are what both files are compared against, so an extraction that
-/// silently returned nothing fails rather than passing vacuously.
+/// <b>What this adds, stated at the strength it holds.</b> The two surfaces hard-code their own
+/// twenty and neither reads the other, so <b>a deliberate one-sided change that also updates that
+/// side's own pins</b> — the digest and the list together on the platform, or the length constant
+/// and the per-code catalogue together on the web — <b>leaves every other test green and the two
+/// surfaces disagreeing.</b> That is the gap this closes, and it is a reading rather than a mutant:
+/// the one-sided consistent update needs the digest constants recomputed, which this file's sweep
+/// did not do.
+/// </para>
+/// <para>
+/// <b>Why the platform is asked and the web is read.</b> The registry answers its own membership and
+/// its own size, so it is asked. .NET cannot ask a JavaScript module, so the web list is read from
+/// source between its declaration's brackets, and the twenty named literally below are what both are
+/// compared against — an extraction that silently returned nothing fails rather than passing
+/// vacuously. Both are ordered before comparing, because the literal is in ordinal order and the web
+/// list is in the spec's order; the sets are the contract and the order is not.
 /// </para>
 /// <para>
 /// <b>This does not implement S4-A05.</b> It pins the containment the clause and the Decision
@@ -83,7 +94,6 @@ public sealed class AssistantContainmentTests
     private static readonly string[] PresentationResultsOfAsk =
         ["assistant_v3_unavailable", "localization_unavailable"];
 
-    private const string PlatformRegistry = "src/Lex.V3.Contracts/Platform/V3OperationRegistry.cs";
     private const string WebRegistry = "web/scripts/refusal-card.mjs";
 
     [TestMethod]
@@ -91,7 +101,7 @@ public sealed class AssistantContainmentTests
     {
         CollectionAssert.AreEqual(
             Ordered(ClosedRefusalRegistry),
-            Ordered(DeclaredCodes(PlatformRegistry, "RequiredRefusalCodes")),
+            Ordered(V3OperationRegistry.Reviewed.RefusalCodes),
             "The platform's closed refusal registry is not the twenty codes named here. Decision 91 "
             + "keeps it at twenty and says neither presentation result of ask is added to it by that "
             + "Decision or by implication, so a change here is a versioned API contract change and "
@@ -101,14 +111,14 @@ public sealed class AssistantContainmentTests
         {
             Assert.IsTrue(
                 V3OperationRegistry.Reviewed.DeclaresRefusal(code),
-                $"{code} is in the registry's source and the reviewed registry does not declare it.");
+                $"{code} is one of the twenty and the reviewed registry does not declare it.");
         }
     }
 
     [TestMethod]
     public void TheWebSurfaceHoldsTheSameTwentyAndNeitherSurfaceCanDriftAlone()
     {
-        var platform = Ordered(DeclaredCodes(PlatformRegistry, "RequiredRefusalCodes"));
+        var platform = Ordered(V3OperationRegistry.Reviewed.RefusalCodes);
         var web = Ordered(DeclaredCodes(WebRegistry, "REFUSAL_CODES"));
 
         CollectionAssert.AreEqual(
@@ -135,8 +145,8 @@ public sealed class AssistantContainmentTests
                 ClosedRefusalRegistry, name,
                 $"{name} has been written into this file's own registry list.");
             CollectionAssert.DoesNotContain(
-                DeclaredCodes(PlatformRegistry, "RequiredRefusalCodes"), name,
-                $"{name} is in the platform registry's source.");
+                V3OperationRegistry.Reviewed.RefusalCodes.ToArray(), name,
+                $"{name} is in the platform's reviewed registry.");
             CollectionAssert.DoesNotContain(
                 DeclaredCodes(WebRegistry, "REFUSAL_CODES"), name,
                 $"{name} is in the web surface's registry.");
@@ -164,9 +174,11 @@ public sealed class AssistantContainmentTests
     }
 
     /// <summary>
-    /// The quoted codes of one declaration, read from the file. The declaration is found by name and
-    /// the codes are taken to its closing bracket, so a list that moved or was renamed reads as empty
-    /// and fails against the literal twenty rather than passing on a shorter list it happened to find.
+    /// The quoted codes of one declaration, read from the file. Used for the web list only, because
+    /// .NET cannot ask a JavaScript module what it holds; the platform's registry is asked directly.
+    /// The declaration is found by name and the codes are taken to its closing bracket, so a list
+    /// that moved or was renamed reads as empty and fails against the literal twenty rather than
+    /// passing on a shorter list it happened to find.
     /// </summary>
     private static string[] DeclaredCodes(string relativePath, string declaration)
     {
