@@ -33,7 +33,9 @@ namespace Lex.V3.Tests.Contracts;
 /// called. The manifests catch it the moment it is declared, and they are the only place the web
 /// surface appears at all. The lock files catch what neither sees: a model library that arrives
 /// <b>under</b> an allowed package is in no declaration and in no compiled reference of ours, and is
-/// in the resolved closure. The first version of this file swept compiled references alone, and its
+/// in the resolved closure. Both sides have a closure and both are read: seven
+/// <c>packages.lock.json</c> and <c>web/package-lock.json</c>, which resolves thirty-two packages
+/// against the three the web manifest declares. The first version of this file swept compiled references alone, and its
 /// own remarks claimed "one package reference breaks it", which was not true until something called
 /// it.
 /// </para>
@@ -51,7 +53,7 @@ namespace Lex.V3.Tests.Contracts;
 /// the failure message tells the reader what to decide rather than pretending the answer is obvious.
 /// </para>
 /// <para>
-/// <b>Why ten tests, and why no test here walks anything of its own.</b> A pin that passes by
+/// <b>Why thirteen tests, and why no test here walks anything of its own.</b> A pin that passes by
 /// finding nothing says as much about the rule as about the product, and this file has proved
 /// that twice. First, four of seven mutants survived review: dropping a family from the list
 /// passed because the rule test asked each family about itself, and sweeping no assembly passed,
@@ -205,6 +207,21 @@ public sealed class NoModelDependencyCensusTests
     private static readonly string[] DeclaredWebPackages = ["esbuild", "react", "react-dom"];
 
     /// <summary>
+    /// Ids the web closure really resolves, named rather than counted, for the same reason
+    /// <see cref="ClosureAnchors"/> is: thirty-two ids that change with every install would be
+    /// churn. <c>scheduler</c> arrives under <c>react-dom</c> and <c>@esbuild/linux-x64</c> under
+    /// <c>esbuild</c>; <b>neither is declared anywhere</b>, so each is reachable only here.
+    /// </summary>
+    private static readonly string[] WebClosureAnchors =
+    [
+        "@esbuild/linux-x64",
+        "esbuild",
+        "react",
+        "react-dom",
+        "scheduler",
+    ];
+
+    /// <summary>
     /// Every file that can declare a package for this product, named. <c>Directory.Build.props</c>
     /// is in this list because it applies to every project including the production ones, so a
     /// <c>PackageReference</c> added there is a production dependency that no <c>.csproj</c>
@@ -285,8 +302,9 @@ public sealed class NoModelDependencyCensusTests
         + "absence. Then update this pin and say on issue #348 which of the three prohibitions is "
         + "defended by what. Three walks look: the eight production assemblies' compiled "
         + "references; the project files, .props and .targets under src, the .props and .targets at "
-        + "the repository root, and web/package.json; and the seven resolved closures in "
-        + "src/*/packages.lock.json. Build output under obj and bin is not read.";
+        + "the repository root, and web/package.json; and the resolved closures, which are the "
+        + "seven src/*/packages.lock.json and web/package-lock.json. Build output under obj and "
+        + "bin is not read.";
 
     [TestMethod]
     public void NoProductionAssemblyReferencesAModelLibrary()
@@ -355,7 +373,11 @@ public sealed class NoModelDependencyCensusTests
     [TestMethod]
     public void TheDeclarationSweepReachesImportsUnderSrcAndSkipsBuildOutput()
     {
-        var root = Path.Combine(Path.GetTempPath(), "lex-v3-a12-manifests-" + Guid.NewGuid().ToString("N"));
+        // The checkout sits under a directory called "obj" on purpose: the exclusion is computed
+        // on the repository-relative path, so a repository that happens to live under one must
+        // still read normally. Testing the absolute path made every file build output.
+        var container = Path.Combine(Path.GetTempPath(), "lex-v3-a12-" + Guid.NewGuid().ToString("N"));
+        var root = Path.Combine(container, "obj", "checkout");
         try
         {
             foreach (var relative in new[]
@@ -392,11 +414,64 @@ public sealed class NoModelDependencyCensusTests
         }
         finally
         {
-            if (Directory.Exists(root))
+            if (Directory.Exists(container))
             {
-                Directory.Delete(root, recursive: true);
+                Directory.Delete(container, recursive: true);
             }
         }
+    }
+
+    [TestMethod]
+    public void NoWebResolvedClosureContainsAModelPackage()
+    {
+        var packages = WalkWebClosure();
+        AssertTheWebClosureWalkWasComplete(packages);
+
+        var offending = packages
+            .Where(IsModelJsPackage)
+            .Select(static name => $"web/package-lock.json -> {name}")
+            .OrderBy(static value => value, StringComparer.Ordinal)
+            .ToArray();
+
+        CollectionAssert.AreEqual(
+            Array.Empty<string>(),
+            offending,
+            "The web dependency closure resolves a model package. " + WhatToDo);
+    }
+
+    [TestMethod]
+    public void TheWebClosureSweepReadsTheResolvedPackages()
+    {
+        AssertTheWebClosureWalkWasComplete(WalkWebClosure());
+    }
+
+    [TestMethod]
+    public void TheWebLockReaderReadsEveryResolvedPackage()
+    {
+        const string lockFile = """
+            {
+              "name": "fixture",
+              "lockfileVersion": 3,
+              "packages": {
+                "": { "name": "fixture" },
+                "node_modules/top": { "version": "1.0.0" },
+                "node_modules/@scope/scoped": { "version": "1.0.0" },
+                "node_modules/top/node_modules/nested": { "version": "1.0.0" }
+              }
+            }
+            """;
+
+        using var document = JsonDocument.Parse(lockFile);
+        CollectionAssert.AreEqual(
+            Ordered(new[] { "@scope/scoped", "nested", "top" }),
+            Ordered(ReadLockedWebPackages(document)),
+            "The reader takes the id after the last node_modules/, so a package installed under "
+            + "another is read under its own name; the root entry has an empty key and is the "
+            + "project rather than a package.");
+        CollectionAssert.AreEqual(
+            Array.Empty<string>(),
+            ReadLockedWebPackages(JsonDocument.Parse("{}")),
+            "A lock file with no packages map reads as no packages rather than throwing.");
     }
 
     [TestMethod]
@@ -640,8 +715,8 @@ public sealed class NoModelDependencyCensusTests
         return underSource
             .Concat(Directory.EnumerateFiles(root, "*.props", SearchOption.TopDirectoryOnly))
             .Concat(Directory.EnumerateFiles(root, "*.targets", SearchOption.TopDirectoryOnly))
-            .Where(static file => !IsBuildOutput(file))
             .Select(file => RepositoryRelative(root, file))
+            .Where(static relative => !IsBuildOutput(relative))
             .ToArray();
     }
 
@@ -671,6 +746,48 @@ public sealed class NoModelDependencyCensusTests
             .ToArray();
     }
 
+    /// <summary>
+    /// Every package an npm lock file resolves. The <c>packages</c> map is keyed by install path,
+    /// so the id is what follows the last <c>node_modules/</c>; the root project is the one entry
+    /// with an empty key and is not a package.
+    /// </summary>
+    /// <remarks>
+    /// A pure function of the document, like the other two readers, so a fixture can give it a
+    /// nested <c>node_modules</c> path that this repository's own lock file does not contain.
+    /// </remarks>
+    private static string[] ReadLockedWebPackages(JsonDocument document)
+    {
+        const string marker = "node_modules/";
+        if (!document.RootElement.TryGetProperty("packages", out var packages))
+        {
+            return [];
+        }
+
+        return packages.EnumerateObject()
+            .Select(static entry => entry.Name)
+            .Where(static name => name.Contains(marker, StringComparison.Ordinal))
+            .Select(static name => name[(name.LastIndexOf(marker, StringComparison.Ordinal) + marker.Length)..])
+            .Where(static name => name.Length > 0)
+            .ToArray();
+    }
+
+    private static string[] WalkWebClosure()
+    {
+        var path = Path.Combine(FindRepositoryRoot(), "web", "package-lock.json");
+        Assert.IsTrue(File.Exists(path), $"the web lock file must exist to be swept: {path}");
+        using var document = JsonDocument.Parse(File.ReadAllText(path));
+        return ReadLockedWebPackages(document);
+    }
+
+    private static void AssertTheWebClosureWalkWasComplete(string[] packages)
+    {
+        foreach (var anchor in WebClosureAnchors)
+        {
+            CollectionAssert.Contains(packages, anchor,
+                $"the web closure sweep did not read {anchor}, which web/package-lock.json resolves.");
+        }
+    }
+
     private sealed record ClosureWalk(string[] Offending, string[] Files, string[] Packages);
 
     /// <summary>
@@ -686,13 +803,14 @@ public sealed class NoModelDependencyCensusTests
 
         var locks = Directory
             .EnumerateFiles(Path.Combine(root, "src"), "packages.lock.json", SearchOption.AllDirectories)
-            .Where(static file => !IsBuildOutput(file));
+            .Select(file => RepositoryRelative(root, file))
+            .Where(static relative => !IsBuildOutput(relative));
 
-        foreach (var file in locks)
+        foreach (var relative in locks)
         {
-            var relative = RepositoryRelative(root, file);
             files.Add(relative);
-            using var document = JsonDocument.Parse(File.ReadAllText(file));
+            var absolute = Path.Combine(root, relative.Replace('/', Path.DirectorySeparatorChar));
+            using var document = JsonDocument.Parse(File.ReadAllText(absolute));
             foreach (var (framework, package) in ReadLockedPackages(document))
             {
                 packages.Add(package);
@@ -773,9 +891,16 @@ public sealed class NoModelDependencyCensusTests
     /// They are generated output rather than anything a person declares, there are sixteen of them
     /// under <c>src</c> after a build, and they are rewritten whenever a restore runs.
     /// </summary>
-    private static bool IsBuildOutput(string path) =>
-        path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
-        || path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal);
+    /// <param name="relativePath">
+    /// Repository-relative, with <c>/</c> separators, and that matters: an earlier version tested
+    /// the absolute path, so a checkout under any directory named <c>obj</c> or <c>bin</c> read
+    /// every file as build output. That failed closed rather than hiding a dependency — the walk
+    /// names the files it did not read — but it failed for a reason that has nothing to do with
+    /// this product. The fixture puts its tree under a directory called <c>obj</c> for that reason.
+    /// </param>
+    private static bool IsBuildOutput(string relativePath) =>
+        relativePath.Contains("/obj/", StringComparison.Ordinal)
+        || relativePath.Contains("/bin/", StringComparison.Ordinal);
 
     private static string FindRepositoryRoot()
     {
