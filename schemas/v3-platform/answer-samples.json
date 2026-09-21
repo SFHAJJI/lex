@@ -1,6 +1,6 @@
 {
   "schema": "lex-v3-answer-samples/1",
-  "note": "What each served operation really sends when it answers, observed by driving the real handler. Values the fixture re-mints per run are replaced by \u003Cvaries-per-run\u003E; their shape is asserted before replacement and the relations between them are held by tests, not by this file.",
+  "note": "What each served operation really sends when it answers, observed by driving the real handler. Values the fixture re-mints per run are replaced by \u003Cvaries-per-run\u003E; their shape is asserted before replacement and the relations between them are held by tests, not by this file. THE PRODUCER IS REAL AND THE DATA IS NOT: these answers are driven on a fixture mount, so every count and every coordinate here is a fixture\u0027s. There is no real-data sample yet, and a reader holding a surface against this file is held against the shape a producer sends and not against the scale a real corpus has.",
   "varies_per_run": [
     "corpus_sha256",
     "index_sha256",
