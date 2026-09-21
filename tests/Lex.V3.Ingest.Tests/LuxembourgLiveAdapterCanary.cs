@@ -134,6 +134,64 @@ public sealed class LuxembourgLiveAdapterCanary
         Assert.IsNotNull(RefusalFor(exact with { RetryAllowance = exact.RetryAllowance + 1 }));
     }
 
+    /// <summary>
+    /// The gated methods cannot run in a default build, so what they would do with the derivation is read from their
+    /// source: one budget, built from the derived total, and the derivation retained in the scope before the first
+    /// partition is run.
+    /// </summary>
+    [TestMethod]
+    public void TheCanaryBuildsOneBudgetFromTheDerivationAndRetainsItBeforeItSendsAnything()
+    {
+        var source = File.ReadAllText(SourcePath());
+
+        // The needles are built from two halves, so this file does not contain them whole and count itself.
+        var budgetFromDerivation = "WireRequestBudget.Of" + "WireRequests(derivation.Total)";
+        var anyBudget = "WireRequestBudget.Of" + "WireRequests(";
+        var retained = "wireCeiling" + " = new";
+        var refusalGate = "RefusalFor(derivation) is { } " + "refusal";
+        var firstPartitionRun = "executor.Run" + "PartitionAsync(";
+
+        Assert.AreEqual(
+            1, CountOf(source, budgetFromDerivation),
+            "one budget for the whole canary, built from the derived total and from nothing else");
+        Assert.AreEqual(1, CountOf(source, anyBudget), "and no other budget is built here");
+        Assert.AreEqual(1, CountOf(source, retained), "the derivation is retained in the scope");
+        Assert.AreEqual(1, CountOf(source, refusalGate), "a derivation past the cap is refused");
+
+        var refusal = source.IndexOf(refusalGate, StringComparison.Ordinal);
+        var budget = source.IndexOf(budgetFromDerivation, StringComparison.Ordinal);
+        var scope = source.IndexOf(retained, StringComparison.Ordinal);
+        var firstPartition = source.IndexOf(firstPartitionRun, StringComparison.Ordinal);
+        Assert.IsGreaterThan(0, firstPartition, "the canary runs its first partition");
+        Assert.IsTrue(
+            refusal < budget && budget < firstPartition && scope < firstPartition,
+            "the refusal, the budget and the retained derivation all come before the first request is sent");
+    }
+
+    private static int CountOf(string text, string needle)
+    {
+        var count = 0;
+        for (var at = text.IndexOf(needle, StringComparison.Ordinal); at >= 0;
+             at = text.IndexOf(needle, at + needle.Length, StringComparison.Ordinal))
+        {
+            count++;
+        }
+
+        return count;
+    }
+
+    private static string SourcePath()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "Lex.V3.slnx")))
+        {
+            directory = directory.Parent;
+        }
+
+        var root = directory?.FullName ?? throw new InvalidOperationException("Checkout root not found.");
+        return Path.Combine(root, "tests", "Lex.V3.Ingest.Tests", "LuxembourgLiveAdapterCanary.cs");
+    }
+
     [TestMethod]
     public async Task AnActRunsThroughThePublicAdapterWithObservedVocabularyAndSameRunRights()
     {
