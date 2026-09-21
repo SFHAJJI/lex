@@ -21,7 +21,9 @@
 // deliberate rather than pending. The answer's own `not_held` carries a row saying no build time is
 // held and another saying no observation time is, and both are rendered with the rest. The page
 // this replaced stamped `Counts as of index build <instant>.` into its body and both its captions,
-// and printed `Observation history begins August 2026`.
+// and printed `Observation history begins August 2026`. The calendar dates that remain -- each
+// language's state range and each measured capability's period -- are the publisher's facts about
+// the law, not a claim about when the counting happened, and the note above the counts says so.
 
 import {
   HELD,
@@ -112,9 +114,10 @@ export function Coverage({ answer }) {
           <Row label="operation registry"><Evidence value={view.mounted.registry_sha256} /></Row>
         </dl>
         <p className="coverage-note">
-          {'These counts were taken from the corpus and index named above. There is no date on this '
-            + 'page because no build time is held; the digests say exactly which artifacts were '
-            + 'counted, which a date does not.'}
+          {'These counts were taken from the corpus and index named above. Nothing here says when '
+            + 'they were taken: no build time of either is held. The digests say exactly which '
+            + 'artifacts were counted, which a date does not. The calendar dates further down are '
+            + 'the publisher’s, about the law, and not about when this was counted.'}
         </p>
       </section>
       <section className="coverage-block">

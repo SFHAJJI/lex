@@ -243,9 +243,10 @@ export function renderCoveragePreview({ locale = 'en' } = {}) {
       + 'a wrong answer but a comfortable one: a count presented as current, a breakdown that reads '
       + 'as complete because nothing said it was not, two numbers in one row that cannot both be '
       + 'true.</p>\n'
-      + '      <p>There is no date anywhere on it. This mount holds no build time and records that '
-      + 'it does not, so what names the artifacts these counts came from is a pair of digests '
-      + 'rather than an instant.</p>\n'
+      + '      <p>Nothing on it says when the counting happened. This mount holds no build time and '
+      + 'records that it does not, so what names the artifacts these counts came from is a pair of '
+      + 'digests rather than an instant. The calendar dates in the tables are the publisher’s facts '
+      + 'about the law and are a different kind of thing.</p>\n'
       + '      <p>Every value on this page is synthetic and none of it is law.</p>\n'
       + PREVIEW_ANSWERS.map((preview) => (
         `      <section class="coverage-case"><h2>${preview.heading}</h2>`

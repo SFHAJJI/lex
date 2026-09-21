@@ -367,6 +367,22 @@ test("the two claims the platform refuses to make are gone, and its reasons are 
       assert.ok(!/\bbuild\b/i.test(caption), `a caption still dates itself: ${caption}`);
     }
 
+    // AND THE CALENDAR DATES ARE STILL THERE, which is the other half of the claim and the half
+    // easier to get wrong. What went is a date OF THE COUNTS; the publisher's own dates -- each
+    // language's state range and each measured capability's period -- are facts about the law and
+    // stay. A page that dropped them to satisfy the rule above would have obeyed the words and
+    // lost the point.
+    for (const row of answer.languages) {
+      if (row.first_state_date !== null) assert.ok(body.includes(row.first_state_date));
+      if (row.last_state_date !== null) assert.ok(body.includes(row.last_state_date));
+    }
+    for (const measured of answer.capability_cells) {
+      assert.ok(body.includes(measured.period_from), "a measured period lost its start");
+      assert.ok(body.includes(measured.period_to), "a measured period lost its end");
+    }
+    assert.ok(answer.capability_cells.length > 0, "the captured answer measures no period, so this checked none");
+    assert.ok(/\d{4}-\d{2}-\d{2}/.test(body), "the page carries no calendar date at all");
+
     // And the platform's own two reasons, which are what stands in their place.
     assert.ok(body.includes("no build time of the corpus or index is held"));
     assert.ok(body.includes("no observation time or first-sighting event is held"));

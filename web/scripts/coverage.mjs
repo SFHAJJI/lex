@@ -20,9 +20,12 @@
 //   first_sighting_and_observation_times -- "no observation time or first-sighting event is held,
 //   so nothing here says when anything was first seen"
 //
-// So there is no date on this page and no retention sentence. What stands in their place is what
-// the platform does hold: `mounted.corpus_sha256` and `mounted.index_sha256`, which name exactly
-// which artifacts these counts were taken from. The envelope's `context.freshness.observed_at` is
+// So there is no build instant on this page and no retention sentence. Not "no date": the page
+// does carry calendar dates, the ends of each language's state range and each measured
+// capability's period, and they are the publisher's facts about the law rather than anyone's claim
+// about when the counting happened. What is gone is a date OF THE COUNTS, and what stands in its
+// place is what the platform does hold: `mounted.corpus_sha256` and `mounted.index_sha256`, which
+// name exactly which artifacts these counts were taken from. The envelope's `context.freshness.observed_at` is
 // the nearest thing to a date anywhere near this answer, and it is when the answer was produced
 // rather than when the counts were measured; this reader is handed the result value and never the
 // envelope, and `refuseRetiredShapes` refuses an `envelope` member by name, so the substitution
@@ -53,8 +56,9 @@
 // "articles_with_searchable_text is counted where the article carries a publisher date, which is
 // what the capability cells measure, and so it and articles_without_publisher_date are not
 // addends". An article can carry a date and hold no searchable text. The V2 page REQUIRED exactly
-// this sum of its own two text columns and would have refused every answer whose columns were
-// honest.
+// this sum of its own two text columns, so on that rule any answer holding one such article -- a
+// dated article whose text is not searchable -- would have had no page at all. Not every honest
+// answer: one where every dated article is searchable does add up, and would have rendered.
 //
 // The fourth is narrowing, which on this answer is narrower than it looks. `counts_note` says that
 // when a language is requested "only languages and capability_cells are narrowed to it, and every
@@ -719,8 +723,9 @@ export function renderCoverage(answer) {
     + row('operation registry', code(view.mounted.registry_sha256))
     + '</tbody></table>'
     + '<p class="coverage-note">These counts were taken from the corpus and index named above. '
-    + 'There is no date on this page because no build time is held; the digests say exactly which '
-    + 'artifacts were counted, which a date does not.</p>'
+    + 'Nothing here says when they were taken: no build time of either is held. The digests say '
+    + 'exactly which artifacts were counted, which a date does not. The calendar dates further down '
+    + 'are the publisher’s, about the law, and not about when this was counted.</p>'
     + '</section>'
     + '<section class="coverage-block"><h2>How these counts are counted</h2>'
     + `<p class="coverage-note">${escapeHtml(view.countsNote)}</p></section>`
