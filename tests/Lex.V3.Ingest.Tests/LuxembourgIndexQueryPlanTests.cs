@@ -36,6 +36,39 @@ public sealed class LuxembourgIndexQueryPlanTests
     private static readonly (string Sql, (string, object)[] Parameters) MemberOutcomeQuery =
         (LuxembourgIndexQueries.MemberOutcomes, [("$member", Digest)]);
 
+    private static readonly (string Sql, (string, object)[] Parameters) StateDocumentQuery =
+        (LuxembourgIndexQueries.StateDocumentOutcomes, [("$states", "[\"" + Digest + "\"]")]);
+
+    /// <summary>
+    /// The document behind each state asked for is reached from the list of states: each state by its digest, then its
+    /// first article and that article's member, each by primary key. So its cost is the number of states in the list and
+    /// not the articles in them, whatever the statistics say: no table is scanned but the list, and the order is the list,
+    /// the state, the article, the member.
+    /// </summary>
+    private static IEnumerable<string> StateDocumentProblems(string label, string[] plan)
+    {
+        var shown = $"{label}, StateDocumentOutcomes: {string.Join(" | ", plan)}";
+        foreach (var table in new[] { "s", "a", "m" })
+        {
+            if (plan.Any(line => Regex.IsMatch(line, $@"^SCAN {table}")))
+            {
+                yield return $"table {table} is scanned. " + shown;
+            }
+        }
+
+        var order = new[]
+        {
+            Array.FindIndex(plan, static line => Regex.IsMatch(line, @"^SCAN t")),
+            Array.FindIndex(plan, static line => line.StartsWith("SEARCH s USING INDEX states_digest (state_sha256=?)", StringComparison.Ordinal)),
+            Array.FindIndex(plan, static line => line.StartsWith("SEARCH a USING INDEX sqlite_autoindex_articles_1 (article_identity_sha256=?)", StringComparison.Ordinal)),
+            Array.FindIndex(plan, static line => line.StartsWith("SEARCH m USING INDEX sqlite_autoindex_members_1 (object_ref_sha256=?)", StringComparison.Ordinal)),
+        };
+        if (order.Any(static index => index < 0) || !order.SequenceEqual(order.Order()))
+        {
+            yield return "the order is not the list, the state by digest, the article by primary key, the member by primary key. " + shown;
+        }
+    }
+
     /// <summary>
     /// A source's outcome list is read by the member's primary key, once per source: one search of <c>members</c>, never a
     /// scan of it, whatever the statistics say.
@@ -161,7 +194,8 @@ public sealed class LuxembourgIndexQueryPlanTests
         var problems = Queries.SelectMany(query =>
             Problems("the index as built", query.Name, Plan(connection, query.Sql, query.Parameters), query.ReadsMembers, stateIsSearched: false))
             .Concat(TitleProblems("the index as built", Plan(connection, TitleQuery.Sql, TitleQuery.Parameters)))
-            .Concat(MemberOutcomeProblems("the index as built", Plan(connection, MemberOutcomeQuery.Sql, MemberOutcomeQuery.Parameters))).ToArray();
+            .Concat(MemberOutcomeProblems("the index as built", Plan(connection, MemberOutcomeQuery.Sql, MemberOutcomeQuery.Parameters)))
+            .Concat(StateDocumentProblems("the index as built", Plan(connection, StateDocumentQuery.Sql, StateDocumentQuery.Parameters))).ToArray();
         Assert.AreEqual(0, problems.Length, string.Join(Environment.NewLine, problems));
     }
 
@@ -214,6 +248,7 @@ public sealed class LuxembourgIndexQueryPlanTests
                 Problems(label, query.Name, Plan(connection, query.Sql, query.Parameters), query.ReadsMembers, stateIsSearched)));
             problems.AddRange(TitleProblems(label, Plan(connection, TitleQuery.Sql, TitleQuery.Parameters)));
             problems.AddRange(MemberOutcomeProblems(label, Plan(connection, MemberOutcomeQuery.Sql, MemberOutcomeQuery.Parameters)));
+            problems.AddRange(StateDocumentProblems(label, Plan(connection, StateDocumentQuery.Sql, StateDocumentQuery.Parameters)));
         }
 
         Assert.AreEqual(0, problems.Count, string.Join(Environment.NewLine, problems));
@@ -235,6 +270,10 @@ public sealed class LuxembourgIndexQueryPlanTests
             1,
             Occurrences(reader, "command.CommandText = LuxembourgIndexQueries.WorkTitles;"),
             "The reader does not run LuxembourgIndexQueries.WorkTitles exactly once, so the plan asked of it is not the plan it gets.");
+        Assert.AreEqual(
+            1,
+            Occurrences(reader, "command.CommandText = LuxembourgIndexQueries.StateDocumentOutcomes;"),
+            "The reader does not run LuxembourgIndexQueries.StateDocumentOutcomes exactly once, so the plan asked of it is not the plan it gets.");
         Assert.AreEqual(
             1,
             Occurrences(reader, "outcomes.CommandText = LuxembourgIndexQueries.MemberOutcomes;"),
