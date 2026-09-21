@@ -259,6 +259,21 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Contracts.Index.V3IndexCapabilityManifest::.ctor, "
                     + "method public static "
                     + "Lex.V3.Contracts.Index.V3IndexCapabilityManifestArtifact::ParseAndVerify",
+                "Lex.V3.Contracts.Platform.V3AuthoritativeClaim: constructor private instance "
+                    + "Lex.V3.Contracts.Platform.V3AuthoritativeClaim::.ctor, "
+                    + "constructor private instance "
+                    + "Lex.V3.Contracts.Platform.V3AuthoritativeClaim::.ctor, "
+                    + "method public instance "
+                    + "Lex.V3.Contracts.Platform.V3AuthoritativeClaim::<Clone>$, "
+                    + "method public static Lex.V3.Contracts.Platform.V3AuthoritativeClaim::Bind",
+                "Lex.V3.Contracts.Platform.V3ClaimTemplate: constructor private instance "
+                    + "Lex.V3.Contracts.Platform.V3ClaimTemplate::.ctor, "
+                    + "constructor private instance "
+                    + "Lex.V3.Contracts.Platform.V3ClaimTemplate::.ctor, "
+                    + "constructor private static Lex.V3.Contracts.Platform.V3ClaimTemplate::.cctor, "
+                    + "method internal static Lex.V3.Contracts.Platform.V3ClaimTemplate::Define, "
+                    + "method public instance Lex.V3.Contracts.Platform.V3ClaimTemplate::<Clone>$, "
+                    + "method public static Lex.V3.Contracts.Platform.V3ClaimTemplates::Get",
                 "Lex.V3.Contracts.Platform.V3Envelope: constructor internal instance "
                     + "Lex.V3.Contracts.Platform.V3Envelope::.ctor, "
                     + "method private instance Lex.V3.Contracts.Platform.V3EnvelopeBuilder::Create, "

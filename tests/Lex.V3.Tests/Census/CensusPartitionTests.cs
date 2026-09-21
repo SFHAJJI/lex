@@ -120,13 +120,21 @@ public sealed class CensusPartitionTests
     public void ThePartitionTotalsAreExactlyThese()
     {
         Assert.AreEqual(
+<<<<<<< HEAD
             599, ClosedSurfaceCensus.Candidates(CensusScope.SweptHere).Count, "candidates");
+=======
+            598, ClosedSurfaceCensus.Candidates(CensusScope.SweptHere).Count, "candidates");
+>>>>>>> origin/writer/eval-core
         Assert.AreEqual(
             267, ClosedSurfaceCensus.ClosedVocabularies(CensusScope.SweptHere).Count, "vocabularies");
         Assert.AreEqual(
-            207, ClosedSurfaceCensus.GuardedConstruction(CensusScope.SweptHere).Count, "guarded types");
+            209, ClosedSurfaceCensus.GuardedConstruction(CensusScope.SweptHere).Count, "guarded types");
         Assert.AreEqual(
+<<<<<<< HEAD
             73, ClosedSurfaceCensus.VocabularyRegistries(CensusScope.SweptHere).Count, "registries");
+=======
+            72, ClosedSurfaceCensus.VocabularyRegistries(CensusScope.SweptHere).Count, "registries");
+>>>>>>> origin/writer/eval-core
         Assert.AreEqual(52, Declined.Length, "declined");
     }
 
