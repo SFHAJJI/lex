@@ -66,6 +66,37 @@ internal static class LuxembourgIndexQueries
         ORDER BY 1, 2
         """;
 
+    /// <summary>
+    /// The forward edges of lane R4's edge table whose target is exactly one of a list of IRIs, with the citing article's
+    /// publisher id, expression and language: the same rows the per-state query reads, read by their target. The list is
+    /// walked and each IRI is looked up in the target index, then the citing article by primary key, so the cost is the
+    /// edges that name the work and not the table. Written with <c>CROSS JOIN</c>, which SQLite does not reorder, and the
+    /// edges read <c>INDEXED BY relations_to_ref</c>, so a missing index is a failure to prepare the statement and not a
+    /// silent scan of every reference the index holds.
+    /// </summary>
+    internal const string CitationsTo = """
+        SELECT r.from_ref, a.publisher_id, a.expression_iri, a.language, r.ordinal, r.in_note, r.label, r.href, r.to_ref
+        FROM json_each($iris) t
+        CROSS JOIN relations r INDEXED BY relations_to_ref ON r.to_ref = t.value
+        CROSS JOIN articles a ON a.article_identity_sha256 = r.from_ref
+        WHERE r.edge_type = 'cites'
+        ORDER BY a.expression_iri, a.publisher_id, r.from_ref, r.ordinal
+        """;
+
+    /// <summary>
+    /// The states of a list of expressions, in publisher date, work key, language, expression and digest order. Not bounded
+    /// by a state: no index starts with the expression IRI (the states key starts with the work key), so it reads
+    /// <c>states</c> once and keeps the rows whose expression is on the list, the cost <see cref="HeldWorks"/> pays for the
+    /// same reason.
+    /// </summary>
+    internal const string StatesOfExpressions = """
+        SELECT s.work_key, s.applicability_date, s.state_sha256, s.expression_iri, s.publisher_work_iri,
+               s.publisher_legal_resource_iri, s.language, s.rule_profiles_json, s.article_identities_json
+        FROM states s
+        WHERE s.expression_iri IN (SELECT value FROM json_each($expressions))
+        ORDER BY s.applicability_date, s.work_key, s.language, s.expression_iri, s.state_sha256
+        """;
+
     internal const string ArticleIds = """
         SELECT DISTINCT a.publisher_id
         FROM states s, json_each(s.article_identities_json) j

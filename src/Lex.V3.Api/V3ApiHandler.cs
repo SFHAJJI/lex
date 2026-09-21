@@ -85,6 +85,7 @@ internal sealed class V3ApiHandler
                     "provenance" => ProvenanceOutcome,
                     "dossier" => DossierOutcome,
                     "citation" => CitationOutcome,
+                    "cited_by" => CitedByOutcome,
                     _ => ResolveOutcome,
                 };
                 await V3ResolveRestRoute.HandleOutcomeAsync(
@@ -158,6 +159,9 @@ internal sealed class V3ApiHandler
 
     private V3PlatformOperationOutcome CitationOutcome(V3PlatformOperationRequest request) =>
         _corpusMount!.Citation(request, _utcNow());
+
+    private V3PlatformOperationOutcome CitedByOutcome(V3PlatformOperationRequest request) =>
+        _corpusMount!.CitedBy(request, _utcNow());
 
     private static V3PlatformOperationRefusal NoCorpusMounted(V3PlatformOperationRequest request)
     {
