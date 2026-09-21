@@ -676,9 +676,13 @@ test("the members breakdowns reconcile differently, and the SQL behind them says
 test("the operations census adds up, and says so where it does not", () => {
   const whole = PREVIEW_ANSWERS[0].answer;
 
+  // The two counts come from the lists themselves, so a new served operation does not make this
+  // test a second place to edit; a producer that counted them wrongly would still fail it.
+  const served = whole.operations.served_operations.length;
+  const unrouted = whole.operations.not_served_operations.length;
   assert.throws(
     () => readCoverage(mutate(whole, (a) => { a.operations.registered = 26; })),
-    /11 served and 16 unrouted operations are listed against 26 registered/,
+    new RegExp(`${served} served and ${unrouted} unrouted operations are listed against 26 registered`),
   );
   assert.throws(
     () => readCoverage(mutate(whole, (a) => { a.operations.served_operations.push("ask"); })),
