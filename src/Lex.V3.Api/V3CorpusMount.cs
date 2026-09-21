@@ -588,8 +588,9 @@ internal sealed class V3CorpusMount : IDisposable
         "legilux_eli is a value that begins /eli/ or http://data.legilux.public.lu/eli/ and its target_iri is the absolute form (the one change is putting the host " +
         "in front of a relative value; no trailing slash is trimmed and no scheme or case is changed), other_uri is any other absolute http or https value and its " +
         "target_iri is the value as written, unparsed is anything else and has no target_iri; resolution is held_work only when target_iri is exactly the publisher " +
-        "work IRI of a work this index holds, and then target_work_key names it, not_held when it is not (that says this index holds no work with exactly that " +
-        "IRI, not that no such work exists or that it is not held under another spelling), and unparsed when there is no target_iri; no edge is dropped or upgraded, " +
+        "legal-resource IRI (the form the publisher writes in running text, ending /jo) or the publisher work IRI of a work this index holds, and then target_work_key " +
+        "names it, not_held when it is not (that says this index holds no work with exactly that IRI, not that no such work exists or that it is not held under another " +
+        "spelling), and unparsed when there is no target_iri; no edge is dropped or upgraded, " +
         "and a note's reference is the publisher's own reference to the act named there, not a statement of how that act relates to the article";
 
     internal const string CitationOrder =

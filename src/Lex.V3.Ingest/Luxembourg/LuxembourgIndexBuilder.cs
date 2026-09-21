@@ -2116,15 +2116,16 @@ public sealed class LuxembourgIndexReader : IDisposable
     }
 
     /// <summary>
-    /// The product work key of each of the given publisher work IRIs that some state of the index carries, and only
-    /// those: an IRI is held when it is exactly a state's publisher work IRI, by string equality and by nothing else.
-    /// One pass over <c>states</c> for the whole list.
+    /// The product work key of each of the given IRIs that some state of the index carries as its publisher legal-resource
+    /// IRI or as its publisher work IRI, and only those: an IRI names a held work when it is exactly one of those two
+    /// strings of some state, by string equality and by nothing else. One pass over <c>states</c> for each column, for
+    /// the whole list.
     /// </summary>
-    public IReadOnlyDictionary<string, string> ResolveHeldWorks(IReadOnlyList<string> publisherWorkIris)
+    public IReadOnlyDictionary<string, string> ResolveHeldWorks(IReadOnlyList<string> iris)
     {
-        ArgumentNullException.ThrowIfNull(publisherWorkIris);
+        ArgumentNullException.ThrowIfNull(iris);
         var held = new SortedDictionary<string, string>(StringComparer.Ordinal);
-        if (publisherWorkIris.Count == 0)
+        if (iris.Count == 0)
         {
             return held;
         }
@@ -2133,7 +2134,7 @@ public sealed class LuxembourgIndexReader : IDisposable
         {
             using var command = _connection.CreateCommand();
             command.CommandText = LuxembourgIndexQueries.HeldWorks;
-            command.Parameters.AddWithValue("$iris", JsonSerializer.Serialize(publisherWorkIris.Distinct(StringComparer.Ordinal)));
+            command.Parameters.AddWithValue("$iris", JsonSerializer.Serialize(iris.Distinct(StringComparer.Ordinal)));
             using var reader = command.ExecuteReader();
             while (reader.Read())
             {
