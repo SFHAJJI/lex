@@ -308,6 +308,10 @@ public sealed class V3CorpusCitationMountTests
             seen.AddRange(page.Select(static edge =>
                 $"{edge.GetProperty("article_identity_sha256").GetString()}.{edge.GetProperty("ordinal").GetInt32()}"));
             Assert.AreEqual(10, body.GetProperty("limit").GetInt32());
+            // The count is the query's and not the page's: every page says how many edges there are in all, and how many
+            // of them the state holds.
+            Assert.AreEqual(68, body.GetProperty("edge_count").GetInt32());
+            Assert.AreEqual(68, body.GetProperty("states")[0].GetProperty("edges_in_scope").GetInt32());
             var truncated = body.GetProperty("truncated").GetBoolean();
             var next = body.GetProperty("continue_after");
             Assert.AreEqual(truncated, next.ValueKind == JsonValueKind.String);
