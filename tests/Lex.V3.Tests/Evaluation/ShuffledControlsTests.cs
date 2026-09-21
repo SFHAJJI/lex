@@ -224,7 +224,7 @@ public sealed class ShuffledControlsTests
     }
 
     [TestMethod]
-    public void AHarnessThatReportsNoInvariantGateMissesTheQrelsShuffleBecauseNothingCouldFire()
+    public void AHarnessThatNeverReportsAnInvariantGateIsStoppedAtTheUnshuffledCasesAndNamesBothGates()
     {
         var cases = RetrievalCases();
         RetrievalReport OnlyNdcg(IReadOnlyList<EvaluationCase> value, RetrievalArm arm)
@@ -234,6 +234,24 @@ public sealed class ShuffledControlsTests
         }
 
         var result = ShuffledControls.QrelsShuffle(cases, Oracle(cases), OnlyNdcg, 1);
+
+        Assert.AreEqual(ControlVerdict.NotApplicable, result.Verdict);
+        StringAssert.Contains(result.Reason, "no_hit_accuracy not reported exactly once");
+        StringAssert.Contains(result.Reason, "resolver_exactness not reported exactly once");
+        Assert.IsTrue(result.BlocksTheHarness, "a harness that reads no invariant gate does not release");
+    }
+
+    [TestMethod]
+    public void AHarnessThatReportsTheInvariantGatesOnlyOnTheUnshuffledCasesMissesTheQrelsShuffleBecauseNothingCouldFire()
+    {
+        var cases = RetrievalCases();
+        RetrievalReport OnlyNdcgAfterTheShuffle(IReadOnlyList<EvaluationCase> value, RetrievalArm arm)
+        {
+            var real = RealRetrieval(value, arm);
+            return ReferenceEquals(value, cases) ? real : real with { Gates = [real.Gates[0]] };
+        }
+
+        var result = ShuffledControls.QrelsShuffle(cases, Oracle(cases), OnlyNdcgAfterTheShuffle, 1);
 
         Assert.AreEqual(ControlVerdict.MissedTheShuffle, result.Verdict);
         StringAssert.Contains(result.Reason, "the harness reports no gate 'no_hit_accuracy'");
