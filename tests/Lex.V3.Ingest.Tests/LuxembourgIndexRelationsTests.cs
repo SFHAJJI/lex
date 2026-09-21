@@ -271,10 +271,17 @@ public sealed class LuxembourgIndexRelationsTests
 
         LuxembourgIndexBuilderTests.MutateDatabase(built.IndexBytes.Span, connection =>
         {
-            Assert.ThrowsExactly<SqliteException>(
+            // The rows name a real article and an ordinal it does not use, so the foreign key and the primary key
+            // are satisfied and only the rule under test can refuse them; a row that obeys every rule is accepted first.
+            var from = LuxembourgIndexBuilderTests.ReadArticles(connection).First().ArticleIdentitySha256;
+            LuxembourgIndexBuilderTests.Execute(
+                connection, $"INSERT INTO relations VALUES('{from}',900000,{InRule})");
+
+            var refused = Assert.ThrowsExactly<SqliteException>(
                 () => LuxembourgIndexBuilderTests.Execute(
-                    connection, $"INSERT INTO relations VALUES('{new string('7', 64)}',0,{values})"),
+                    connection, $"INSERT INTO relations VALUES('{from}',900001,{values})"),
                 what);
+            StringAssert.Contains(refused.Message, "CHECK constraint failed", what);
         });
     }
 
@@ -286,17 +293,21 @@ public sealed class LuxembourgIndexRelationsTests
         LuxembourgIndexBuilderTests.MutateDatabase(built.IndexBytes.Span, connection =>
         {
             var existing = LuxembourgIndexBuilderTests.ReadRelations(connection).First();
-            const string rest = "'cites','publisher_text','akn_ref',0,'x','/eli/a','legilux_eli','http://data.legilux.public.lu/eli/a'";
-            Assert.ThrowsExactly<SqliteException>(
+            var negative = Assert.ThrowsExactly<SqliteException>(
                 () => LuxembourgIndexBuilderTests.Execute(
-                    connection, $"INSERT INTO relations VALUES('{new string('7', 64)}',-1,{rest})"),
+                    connection, $"INSERT INTO relations VALUES('{existing.FromRef}',-1,{InRule})"),
                 "an ordinal below zero");
-            Assert.ThrowsExactly<SqliteException>(
+            StringAssert.Contains(negative.Message, "CHECK constraint failed");
+            var again = Assert.ThrowsExactly<SqliteException>(
                 () => LuxembourgIndexBuilderTests.Execute(
-                    connection, $"INSERT INTO relations VALUES('{existing.FromRef}',{existing.Ordinal},{rest})"),
+                    connection, $"INSERT INTO relations VALUES('{existing.FromRef}',{existing.Ordinal},{InRule})"),
                 "a second row for the same reference of the same article");
+            StringAssert.Contains(again.Message, "UNIQUE constraint failed");
         });
     }
+
+    private const string InRule =
+        "'cites','publisher_text','akn_ref',0,'x','/eli/a','legilux_eli','http://data.legilux.public.lu/eli/a'";
 
     private static void AssertRejected(
         LuxembourgIndexBuildResult built,
