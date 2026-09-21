@@ -50,7 +50,7 @@ public sealed class LuxembourgIndexQueryPlanTests
         var shown = $"{label}, StateDocumentOutcomes: {string.Join(" | ", plan)}";
         foreach (var table in new[] { "s", "a", "m" })
         {
-            if (plan.Any(line => Regex.IsMatch(line, $@"^SCAN {table}")))
+            if (plan.Any(line => Regex.IsMatch(line, $@"^SCAN {table}\b")))
             {
                 yield return $"table {table} is scanned. " + shown;
             }
@@ -58,7 +58,7 @@ public sealed class LuxembourgIndexQueryPlanTests
 
         var order = new[]
         {
-            Array.FindIndex(plan, static line => Regex.IsMatch(line, @"^SCAN t")),
+            Array.FindIndex(plan, static line => Regex.IsMatch(line, @"^SCAN t\b")),
             Array.FindIndex(plan, static line => line.StartsWith("SEARCH s USING INDEX states_digest (state_sha256=?)", StringComparison.Ordinal)),
             Array.FindIndex(plan, static line => line.StartsWith("SEARCH a USING INDEX sqlite_autoindex_articles_1 (article_identity_sha256=?)", StringComparison.Ordinal)),
             Array.FindIndex(plan, static line => line.StartsWith("SEARCH m USING INDEX sqlite_autoindex_members_1 (object_ref_sha256=?)", StringComparison.Ordinal)),

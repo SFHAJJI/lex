@@ -78,12 +78,14 @@ internal static class LuxembourgIndexQueries
     /// is read for it: the list of states, then each state by its digest, then that one article and its member by
     /// primary key, so the cost is the number of states asked for and not the articles in them. It is written
     /// with <c>CROSS JOIN</c>, which SQLite does not reorder, because the join order is the bound (the same reason
-    /// <see cref="StateSources"/> and <see cref="AnchorArticles"/> are).
+    /// <see cref="StateSources"/> and <see cref="AnchorArticles"/> are), and the state is read
+    /// <c>INDEXED BY states_digest</c> because, under the statistics a fixture build leaves, SQLite scanned <c>states</c>
+    /// once for every state in the list. A missing index is then a failure to prepare the statement and not a silent scan.
     /// </summary>
     internal const string StateDocumentOutcomes =
         "SELECT s.state_sha256,m.stage3_outcomes_json " +
         "FROM json_each($states) t " +
-        "CROSS JOIN states s ON s.state_sha256=t.value " +
+        "CROSS JOIN states s INDEXED BY states_digest ON s.state_sha256=t.value " +
         "CROSS JOIN articles a ON a.article_identity_sha256=json_extract(s.article_identities_json,'$[0]') " +
         "CROSS JOIN members m ON m.object_ref_sha256=a.object_ref_sha256";
 }
