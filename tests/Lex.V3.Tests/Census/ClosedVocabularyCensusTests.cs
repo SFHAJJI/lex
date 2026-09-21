@@ -129,6 +129,9 @@ public sealed class ClosedVocabularyCensusTests
                     + "ConsolidatedConsolidates, CaseLawInterpretes, "
                     + "CaseLawDeclaresVoidByPreliminaryRuling, SubmitsPreliminaryQuestion, "
                     + "CommunicationCaseRequestsAnnulment",
+                "Lex.V3.Contracts.Evaluation.GateVerdict: Pass, Fail, NotMeasured",
+                "Lex.V3.Contracts.Evaluation.NotMeasuredReason: NoRelevantJudgment, "
+                    + "NoMeasurableQuery, StratumBelowFloor",
                 "Lex.V3.Contracts.Facts.CelexProfile: BaseAct, ConsolidatedAct, Corrigendum, "
                     + "TreatyPart, NationalImplementingMeasure",
                 "Lex.V3.Contracts.Facts.DateOpenSentinel: NotOpen, OpenEnded",

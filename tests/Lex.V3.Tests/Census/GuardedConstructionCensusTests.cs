@@ -242,6 +242,16 @@ public sealed class GuardedConstructionCensusTests
                     + "constructor private instance Lex.V3.Contracts.EuSeedResolutionRow::.ctor, "
                     + "method public instance Lex.V3.Contracts.EuSeedResolutionRow::<Clone>$, "
                     + "1 compiler-generated",
+                "Lex.V3.Contracts.Evaluation.MetricResult: constructor private instance "
+                    + "Lex.V3.Contracts.Evaluation.MetricResult::.ctor, "
+                    + "constructor private instance Lex.V3.Contracts.Evaluation.MetricResult::.ctor, "
+                    + "method public instance Lex.V3.Contracts.Evaluation.MetricResult::<Clone>$, "
+                    + "method public static Lex.V3.Contracts.Evaluation.MetricResult::Measured, "
+                    + "method public static Lex.V3.Contracts.Evaluation.MetricResult::NotMeasured, "
+                    + "method public static Lex.V3.Contracts.Evaluation.RetrievalMetrics::Mean, "
+                    + "method public static Lex.V3.Contracts.Evaluation.RetrievalMetrics::NdcgAtK, "
+                    + "method public static Lex.V3.Contracts.Evaluation.RetrievalMetrics::RecallAtK, "
+                    + "method public static Lex.V3.Contracts.Evaluation.RetrievalMetrics::ReciprocalRank",
                 "Lex.V3.Contracts.Index.V3IndexCapabilityManifest: by-ref-method public static "
                     + "Lex.V3.Contracts.Index.V3IndexCapabilityManifest::TryCreate, "
                     + "constructor private instance "
