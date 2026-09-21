@@ -183,6 +183,27 @@ public sealed class NoModelDependencyCensusTests
 
     private static readonly string[] DeclaredWebPackages = ["esbuild", "react", "react-dom"];
 
+    /// <summary>
+    /// Every file that can declare a package for this product, named. <c>Directory.Build.props</c>
+    /// is in this list because it applies to every project including the production ones, so a
+    /// <c>PackageReference</c> added there is a production dependency that no <c>.csproj</c>
+    /// mentions. It declares none today, which is why naming the file rather than counting the
+    /// packages is what proves it was read at all.
+    /// </summary>
+    private static readonly string[] ExpectedManifestFiles =
+    [
+        "Directory.Build.props",
+        "src/Lex.V3.Api/Lex.V3.Api.csproj",
+        "src/Lex.V3.Artifacts/Lex.V3.Artifacts.csproj",
+        "src/Lex.V3.ContractTool/Lex.V3.ContractTool.csproj",
+        "src/Lex.V3.Contracts/Lex.V3.Contracts.csproj",
+        "src/Lex.V3.Custody.Azure/Lex.V3.Custody.Azure.csproj",
+        "src/Lex.V3.Custody.Probe/Lex.V3.Custody.Probe.csproj",
+        "src/Lex.V3.Ingest/Lex.V3.Ingest.csproj",
+        "src/Lex.V3.Preview/Lex.V3.Preview.csproj",
+        "web/package.json",
+    ];
+
     /// <summary>JavaScript package ids, which arrive under different names than the .NET families.</summary>
     private static readonly string[] ModelPackagesJs =
     [
@@ -211,7 +232,8 @@ public sealed class NoModelDependencyCensusTests
         + "authoritative entity extraction, S4-A12 has to be argued on behaviour rather than on "
         + "absence. Then update this pin and say on issue #348 which of the three prohibitions is "
         + "defended by what. This walk covers the eight production assemblies' compiled references "
-        + "and the .NET and web package manifests.";
+        + "and every file that can declare a package for them: each project file under src, the "
+        + "root .props and .targets, and web/package.json.";
 
     [TestMethod]
     public void NoProductionAssemblyReferencesAModelLibrary()
@@ -329,7 +351,8 @@ public sealed class NoModelDependencyCensusTests
         }
     }
 
-    private sealed record ManifestWalk(string[] Offending, string[] ProjectPackages, string[] WebPackages);
+    private sealed record ManifestWalk(
+        string[] Offending, string[] ManifestFiles, string[] ProjectPackages, string[] WebPackages);
 
     /// <summary>
     /// The one walk of declared packages, recording what it read as well as what it objects to.
@@ -337,26 +360,36 @@ public sealed class NoModelDependencyCensusTests
     private static ManifestWalk WalkPackageManifests()
     {
         var offending = new List<string>();
+        var manifestFiles = new List<string>();
         var projectPackages = new List<string>();
         var webPackages = new List<string>();
         var root = FindRepositoryRoot();
 
-        foreach (var project in Directory.EnumerateFiles(Path.Combine(root, "src"), "*.csproj", SearchOption.AllDirectories))
+        // The .props and .targets at the root as well as the project files: an import that applies
+        // to every project is a production dependency that no .csproj mentions.
+        var declaring = Directory
+            .EnumerateFiles(Path.Combine(root, "src"), "*.csproj", SearchOption.AllDirectories)
+            .Concat(Directory.EnumerateFiles(root, "*.props", SearchOption.TopDirectoryOnly))
+            .Concat(Directory.EnumerateFiles(root, "*.targets", SearchOption.TopDirectoryOnly));
+
+        foreach (var file in declaring)
         {
-            foreach (var line in File.ReadLines(project))
+            manifestFiles.Add(RepositoryRelative(root, file));
+            foreach (var line in File.ReadLines(file))
             {
                 var reference = ReadPackageReference(line);
                 if (reference is null) continue;
                 projectPackages.Add(reference);
                 if (IsModelAssembly(reference))
                 {
-                    offending.Add($"{Path.GetFileName(project)} -> {reference}");
+                    offending.Add($"{RepositoryRelative(root, file)} -> {reference}");
                 }
             }
         }
 
         var packageJson = Path.Combine(root, "web", "package.json");
         Assert.IsTrue(File.Exists(packageJson), $"the web manifest must exist to be swept: {packageJson}");
+        manifestFiles.Add(RepositoryRelative(root, packageJson));
         using var manifest = JsonDocument.Parse(File.ReadAllText(packageJson));
         foreach (var section in new[] { "dependencies", "devDependencies" })
         {
@@ -373,6 +406,7 @@ public sealed class NoModelDependencyCensusTests
 
         return new ManifestWalk(
             offending.OrderBy(static value => value, StringComparer.Ordinal).ToArray(),
+            manifestFiles.ToArray(),
             projectPackages.ToArray(),
             webPackages.ToArray());
     }
@@ -380,15 +414,21 @@ public sealed class NoModelDependencyCensusTests
     private static void AssertTheManifestWalkWasComplete(ManifestWalk walk)
     {
         CollectionAssert.AreEqual(
-            DeclaredProjectPackages,
-            walk.ProjectPackages.Distinct(StringComparer.Ordinal)
-                .OrderBy(static name => name, StringComparer.Ordinal).ToArray(),
+            Ordered(ExpectedManifestFiles),
+            Ordered(walk.ManifestFiles),
+            "The manifest sweep did not read exactly the files that can declare a package for this "
+            + "product. A project file, a root .props or .targets, or web/package.json was added, "
+            + "removed or skipped; name it in ExpectedManifestFiles so the sweep is known to cover "
+            + "it, because an offender list is empty whether the file was clean or unread.");
+        CollectionAssert.AreEqual(
+            Ordered(DeclaredProjectPackages),
+            Ordered(walk.ProjectPackages.Distinct(StringComparer.Ordinal)),
             "The .NET sweep did not read exactly the packages src declares. If a dependency was "
             + "added, check it is not a model client and name it in DeclaredProjectPackages: the "
             + "evidence for S4-A12 is that this set is known, so one arriving unread is the failure.");
         CollectionAssert.AreEqual(
-            DeclaredWebPackages,
-            walk.WebPackages.OrderBy(static name => name, StringComparer.Ordinal).ToArray(),
+            Ordered(DeclaredWebPackages),
+            Ordered(walk.WebPackages),
             "The web sweep did not read exactly the packages web/package.json declares. The same "
             + "applies: name it in DeclaredWebPackages after checking what it is.");
     }
@@ -415,6 +455,12 @@ public sealed class NoModelDependencyCensusTests
             return (Assembly.LoadFrom(path), item.AssemblyName);
         }).ToArray();
     }
+
+    private static string RepositoryRelative(string root, string path) =>
+        Path.GetRelativePath(root, path).Replace('\\', '/');
+
+    private static string[] Ordered(IEnumerable<string> values) =>
+        values.OrderBy(static value => value, StringComparer.Ordinal).ToArray();
 
     private static string? ReadPackageReference(string line)
     {
