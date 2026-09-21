@@ -311,6 +311,15 @@ test("the page renders the answer the platform really sends", async () => {
     ]),
   );
 
+  // The two counts that appear only inside prose, pinned in the sentence that carries them. The
+  // leaf walk below cannot hold these: both are small numbers, and asking whether "3" is anywhere
+  // on the page is a question the page answers whatever it says.
+  assert.ok(text(html).includes(
+    `${answer.members.with_gaps} of ${answer.totals.members} members recorded a gap.`));
+  assert.ok(text(html).includes(
+    `${answer.operations.served_operations.length} of ${answer.operations.registered} registered `
+      + "operations are answered here."));
+
   // The platform's four sentences, verbatim and unedited. They are this service's own account of
   // its limits, and a renderer that tidied one would be editing the disclosure rather than showing
   // it.
@@ -325,6 +334,25 @@ test("the page renders the answer the platform really sends", async () => {
   }
 });
 
+/**
+ * WHAT THIS WALK PROVES, AND WHAT IT ONLY LOOKS LIKE IT PROVES.
+ *
+ * It asks whether each leaf's value appears anywhere in the page, which is a strong question for a
+ * digest or a sentence and a weak one for a small number: on the captured answer, `body.includes
+ * ("1")` is true of almost any page. Measured rather than guessed -- 19 of the 96 leaves are
+ * booleans or numbers of at most two digits, so a fifth of what this walk "proves" it proves
+ * vacuously.
+ *
+ * Those 19 are not left to it. Seventeen are compared cell by cell or row by row in the first test
+ * above: thirteen through `tableRows` against the language, outcome, gap and capability tables, and
+ * the four `totals` through the `rows` map. The remaining two -- `members.with_gaps` and
+ * `operations.registered` -- appear only inside prose, and are pinned there in the first test by
+ * the sentence that carries them.
+ *
+ * So what this walk is for is the leaf nobody thought to check: it fails when the platform adds a
+ * member and the page does not grow a place for it. That is worth having and it is not the same
+ * claim as its name.
+ */
 test("every leaf the platform sends reaches the page, and the walk reaches the deep ones", async () => {
   const answer = withDigests(await capturedAnswer());
   const body = text(string(answer));
