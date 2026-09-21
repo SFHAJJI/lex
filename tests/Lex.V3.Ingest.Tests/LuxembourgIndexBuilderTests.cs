@@ -174,6 +174,57 @@ public sealed class LuxembourgIndexBuilderTests
     }
 
     [TestMethod]
+    public async Task AStatesArticlesPlusTheArticlesItsDocumentHadAndItDoesNotHoldAreTheDocumentsArticles()
+    {
+        const string manifestation =
+            "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo/fr/xml";
+        const string item =
+            "http://data.legilux.public.lu/filestore/eli/etat/leg/loi/1991/08/10/n3/jo/fr/xml/eli-etat-leg-loi-1991-08-10-n3-jo-fr-xml.xml";
+        var real = await File.ReadAllBytesAsync(Path.Combine(
+            AppContext.BaseDirectory, "Fixtures", "LuAknLegalContent", Retained1991));
+        // The real act has 49 admitted articles and five the reviewed profile cannot represent. One admitted article
+        // is made, in memory, an article of nothing but a modification start and end, so that the document has all
+        // three kinds of article and the state holds one that is marker-only. Bytes are kept as they are (Latin-1
+        // reads and writes any byte), and the replacement must happen exactly once.
+        var text = Encoding.Latin1.GetString(real);
+        var pattern = new System.Text.RegularExpressions.Regex(
+            "<article id=\"art_2\">(?<head>.*?</scl:JOLUXWork>).*?</article>",
+            System.Text.RegularExpressions.RegexOptions.Singleline);
+        Assert.AreEqual(1, pattern.Matches(text).Count);
+        var changed = pattern.Replace(
+            text,
+            "<article id=\"art_2\">${head}<content><p><mod class=\"mod-start\" for=\"#pm9\"/><mod class=\"mod-end\" for=\"#pm9\"/></p></content></article>");
+        Assert.AreNotEqual(text, changed);
+        var xml = Encoding.Latin1.GetBytes(changed);
+        ICustodyStore store = new RoutedHttpAcquisitionSessionTests.MultiObjectCustodyStore();
+        var luxembourg = await LuxembourgGazetteAcquisitionTests
+            .CompleteXmlForStage3BodyCompositionAsync(xml, store, manifestation, item);
+        var envelope = await LexCorpus6BuilderTests.CompleteProfileEnvelopeAsync(
+            luxembourgOverride: luxembourg, luxembourgStore: store);
+        var corpus = LexCorpus6Builder.TryBuild(envelope, out var corpusRefusal, out var corpusDetail);
+        Assert.IsNotNull(corpus, $"{corpusRefusal}: {corpusDetail}");
+        // The stage's own dispositions, read from its population and not through the index.
+        var outcomes = envelope.BodyComposition.Envelope.LuxembourgAknLegalContentPopulation.Outcomes;
+        Assert.AreEqual(54, outcomes.Count);
+        Assert.AreEqual(48, outcomes.Count(static value => value.Disposition == LuxembourgAknLegalContentDisposition.Admitted));
+        Assert.AreEqual(1, outcomes.Count(static value => value.Disposition == LuxembourgAknLegalContentDisposition.MarkerOnlyEvidence));
+        Assert.AreEqual(5, outcomes.Count(static value => value.Disposition == LuxembourgAknLegalContentDisposition.UnsupportedContentShape));
+
+        var built = LuxembourgIndexBuilder.TryBuild(envelope, out var refusal, out var detail);
+
+        Assert.IsNotNull(built, $"{refusal}: {detail}");
+        using var reader = LuxembourgIndexReader.OpenAndVerify(
+            built.IndexRef, built.IndexBytes.Span, corpus.ArtifactRef, built.CapabilityManifest);
+        var state = reader.ResolveState("loi-1991-08-10-n3", "2024-02-01").Single();
+        // 48 admitted and the marker-only one are held, and the five the profile could not represent are not.
+        Assert.HasCount(49, state.ArticleIdentities);
+        var notAdmitted = reader.ResolveArticlesNotAdmitted([state.StateSha256])[state.StateSha256];
+        Assert.AreEqual(5, notAdmitted);
+        // The sentence the answers carry: the state's articles plus articles_not_admitted are the document's.
+        Assert.AreEqual(outcomes.Count, state.ArticleIdentities.Count + notAdmitted);
+    }
+
+    [TestMethod]
     public async Task AdmittedAknTextWithoutAdmittingRightsNeverBecomesSearchable()
     {
         const string manifestation =
