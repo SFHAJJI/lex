@@ -277,6 +277,23 @@ public sealed class LuxembourgEnumerationBudget
         var remainder = selectedRowCount % limit;
         return checked((int)(remainder == 0 ? quotient + 1 : quotient + 2));
     }
+
+    /// <summary>
+    /// Every wire request one partition run sends when the publisher delivers what its counts say: the robots fetch,
+    /// then for each of the two passes its count and its pages. An exact function of the count and of the plan's two
+    /// canonical page limits, so a run that declares how many rows its partitions may hold declares what they cost;
+    /// a publisher that answers with more is refused after its count (see the check in <c>RunPassAsync</c>), and one
+    /// that answers with fewer costs less. Retries are not in it: each is a further reserved request.
+    /// </summary>
+    public static int RequestsForPartition(long selectedRowCount)
+    {
+        var budget = new LuxembourgEnumerationBudget(
+            LuxembourgQueryPassPolicy.Pass1PageLimit, LuxembourgQueryPassPolicy.Pass2PageLimit);
+        return checked(
+            1
+            + 1 + budget.MaximumPagesFor(LuxembourgQueryPass.Pass1, selectedRowCount)
+            + 1 + budget.MaximumPagesFor(LuxembourgQueryPass.Pass2, selectedRowCount));
+    }
 }
 
 /// <summary>
@@ -972,6 +989,28 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
                 new LuxembourgEnumerationRefusalDetail(
                     LuxembourgEnumerationRefusal.PartitionRequired,
                     countOutcome.RequestOrdinal, null, null, null, null, selected, [], null));
+        }
+
+        // THE COUNT IS KNOWN, SO WHAT THE PARTITION STILL COSTS IS KNOWN, and it is checked against what the wire budget
+        // has left before any page is bound: this pass's pages, and after the first pass the second pass's count and
+        // pages. A budget that cannot pay for them refuses here, having spent the robots fetch and the counts read so
+        // far, instead of at the send that exhausts it after the pages before it were paid for; and the refusal carries
+        // the count and the figure, so a run that is too small still says how big the class is.
+        var needed = budget.MaximumPagesFor(pass, selected);
+        if (pass == LuxembourgQueryPass.Pass1)
+        {
+            needed += 1 + budget.MaximumPagesFor(LuxembourgQueryPass.Pass2, selected);
+        }
+
+        var remaining = wireBudget.Limit - wireBudget.Spent;
+        if (needed > remaining)
+        {
+            return new PassOutcome(
+                null,
+                new LuxembourgEnumerationRefusalDetail(
+                    LuxembourgEnumerationRefusal.WireBudgetExhausted,
+                    countOutcome.RequestOrdinal, null, null, null, null, selected, [],
+                    $"a count of {selected} needs {needed} more wire requests after this count and {remaining} remain"));
         }
 
         var countObservation = LuxembourgDeliveryObservation.ForCount(
