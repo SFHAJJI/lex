@@ -16,7 +16,7 @@
       "object_type": "version_state",
       "scenario": "the same request, so a caller can move from one to the other",
       "answer": {
-        "articles_not_admitted_note": "articles_not_admitted counts the top-level articles of the publisher\u0027s document for this state that the corpus recorded and this state does not hold; the number of articles in this state plus articles_not_admitted is the number of top-level articles in that document, and an article nested inside another is not counted apart from it; which articles they are is not held. An article is not admitted whole when the reviewed profile cannot represent every element in it: that can be an article the publisher struck out, and it can equally be an article whose text is complete but which carries a mark the profile does not accept, such as an empty placeholder where a list item was removed",
+        "articles_not_admitted_note": "articles_not_admitted counts the articles the corpus recorded for the publisher\u0027s document for this state that this state does not hold; the number of articles in this state plus articles_not_admitted is the number of articles the corpus recorded for that document, which provenance counts by disposition token; which articles they are is not held. An article is not admitted whole when the reviewed profile cannot represent every element in it: that can be an article the publisher struck out, and it can equally be an article whose text is complete but which carries a mark the profile does not accept, such as an empty placeholder where a list item was removed",
         "available_languages": [
           "fra"
         ],
@@ -414,7 +414,7 @@
               "outcomes": 5
             }
           ],
-          "article_outcomes_note": "the corpus\u0027s own record of what its legal-content stage did with the top-level articles of its acquired Luxembourg documents, counted by the corpus\u0027s disposition token and given verbatim, and this answer does not define the tokens; an outcome is one top-level article\u0027s, except akn_upstream_not_inventoried, which is one document\u0027s because none of its articles was listed; the articles the index holds, which totals.articles and languages[].articles count, are exactly the akn_admitted and akn_marker_only_evidence outcomes, and an outcome under any other token is not held here; which article an outcome belongs to is not held; the outcomes of members that are not acquired are not counted",
+          "article_outcomes_note": "the corpus\u0027s own record of what its legal-content stage did with the articles of its acquired Luxembourg documents, counted by the corpus\u0027s disposition token and given verbatim, and this answer does not define the tokens; an outcome is one article\u0027s, except akn_upstream_not_inventoried, which is one document\u0027s because none of its articles was listed; the articles the index holds, which totals.articles and languages[].articles count, are exactly the akn_admitted and akn_marker_only_evidence outcomes, and an outcome under any other token is not held here; which article an outcome belongs to is not held; the outcomes of members that are not acquired are not counted",
           "by_outcome": [
             {
               "members": 1,
