@@ -40,6 +40,12 @@ public sealed class LuxembourgIndexQueryPlanTests
     private static readonly (string Sql, (string, object)[] Parameters) CitationQuery =
         (LuxembourgIndexQueries.StateCitations, [("$digest", Digest), ("$anchor", "art_1")]);
 
+    private static readonly (string Sql, (string, object)[] Parameters) CitationsToQuery =
+        (LuxembourgIndexQueries.CitationsTo, [("$iris", "[\"http://example.invalid/eli/x\"]")]);
+
+    private static readonly (string Sql, (string, object)[] Parameters) StatesOfExpressionsQuery =
+        (LuxembourgIndexQueries.StatesOfExpressions, [("$expressions", "[\"http://example.invalid/expression\"]")]);
+
     private static readonly (string Sql, (string, object)[] Parameters) HeldWorksQuery =
         (LuxembourgIndexQueries.HeldWorks, [("$iris", "[\"http://example.invalid/eli/x\"]")]);
 
@@ -151,6 +157,52 @@ public sealed class LuxembourgIndexQueryPlanTests
         }
     }
 
+    /// <summary>
+    /// The edges that name an IRI are reached from the list of IRIs, each by the target index and then the citing article by
+    /// primary key, so the cost is the edges that name the work and never a pass over every reference the index holds.
+    /// The edges are never scanned, whatever the statistics say.
+    /// </summary>
+    private static IEnumerable<string> CitationsToProblems(string label, string[] plan)
+    {
+        var shown = $"{label}, CitationsTo: {string.Join(" | ", plan)}";
+        if (plan.Any(static line => Regex.IsMatch(line, @"^SCAN r\b")))
+        {
+            yield return "relations are scanned. " + shown;
+        }
+
+        if (plan.Any(static line => Regex.IsMatch(line, @"^SCAN a\b")))
+        {
+            yield return "articles are scanned. " + shown;
+        }
+
+        var list = Array.FindIndex(plan, static line => Regex.IsMatch(line, @"^SCAN t\b"));
+        var edges = Array.FindIndex(plan, static line => line.StartsWith("SEARCH r USING INDEX relations_to_ref (to_ref=?", StringComparison.Ordinal));
+        var articles = Array.FindIndex(plan, static line => line.StartsWith("SEARCH a USING INDEX sqlite_autoindex_articles_1 (article_identity_sha256=?)", StringComparison.Ordinal));
+        if (!(list >= 0 && list < edges && edges < articles))
+        {
+            yield return "the order is not the list, the edges by the target index, the article by primary key. " + shown;
+        }
+    }
+
+    /// <summary>
+    /// The states of a list of expressions are not bounded by a state: no index starts with the expression IRI, so it reads
+    /// <c>states</c> once and compares each row with the list. Exactly one pass, and the list read as a list.
+    /// </summary>
+    private static IEnumerable<string> StatesOfExpressionsProblems(string label, string[] plan)
+    {
+        var shown = $"{label}, StatesOfExpressions: {string.Join(" | ", plan)}";
+        var scans = plan.Count(static line => Regex.IsMatch(line, @"^SCAN s\b"));
+        if (scans != 1)
+        {
+            yield return $"states is scanned {scans} times, not once. " + shown;
+        }
+
+        if (!plan.Any(static line => line.StartsWith("LIST SUBQUERY", StringComparison.Ordinal)))
+        {
+            yield return "the expressions are not a list the scan is compared with. " + shown;
+        }
+    }
+
     private static IEnumerable<string> TitleProblems(string label, string[] plan)
     {
         var shown = $"{label}, WorkTitles: {string.Join(" | ", plan)}";
@@ -253,7 +305,9 @@ public sealed class LuxembourgIndexQueryPlanTests
             .Concat(MemberOutcomeProblems("the index as built", Plan(connection, MemberOutcomeQuery.Sql, MemberOutcomeQuery.Parameters)))
             .Concat(StateDocumentProblems("the index as built", Plan(connection, StateDocumentQuery.Sql, StateDocumentQuery.Parameters)))
             .Concat(CitationProblems("the index as built", Plan(connection, CitationQuery.Sql, CitationQuery.Parameters)))
-            .Concat(HeldWorksProblems("the index as built", Plan(connection, HeldWorksQuery.Sql, HeldWorksQuery.Parameters))).ToArray();
+            .Concat(HeldWorksProblems("the index as built", Plan(connection, HeldWorksQuery.Sql, HeldWorksQuery.Parameters)))
+            .Concat(CitationsToProblems("the index as built", Plan(connection, CitationsToQuery.Sql, CitationsToQuery.Parameters)))
+            .Concat(StatesOfExpressionsProblems("the index as built", Plan(connection, StatesOfExpressionsQuery.Sql, StatesOfExpressionsQuery.Parameters))).ToArray();
         Assert.AreEqual(0, problems.Length, string.Join(Environment.NewLine, problems));
     }
 
@@ -309,6 +363,8 @@ public sealed class LuxembourgIndexQueryPlanTests
             problems.AddRange(StateDocumentProblems(label, Plan(connection, StateDocumentQuery.Sql, StateDocumentQuery.Parameters)));
             problems.AddRange(CitationProblems(label, Plan(connection, CitationQuery.Sql, CitationQuery.Parameters)));
             problems.AddRange(HeldWorksProblems(label, Plan(connection, HeldWorksQuery.Sql, HeldWorksQuery.Parameters)));
+            problems.AddRange(CitationsToProblems(label, Plan(connection, CitationsToQuery.Sql, CitationsToQuery.Parameters)));
+            problems.AddRange(StatesOfExpressionsProblems(label, Plan(connection, StatesOfExpressionsQuery.Sql, StatesOfExpressionsQuery.Parameters)));
         }
 
         Assert.AreEqual(0, problems.Count, string.Join(Environment.NewLine, problems));
