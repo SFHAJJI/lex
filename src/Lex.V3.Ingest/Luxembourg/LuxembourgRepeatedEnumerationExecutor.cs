@@ -974,6 +974,28 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
                     countOutcome.RequestOrdinal, null, null, null, null, selected, [], null));
         }
 
+        // THE COUNT IS KNOWN, SO WHAT THE PARTITION STILL COSTS IS KNOWN, and it is checked against what the wire budget
+        // has left before any page is bound: this pass's pages, and after the first pass the second pass's count and
+        // pages. A budget that cannot pay for them refuses here, having spent the robots fetch and the counts read so
+        // far, instead of at the send that exhausts it after the pages before it were paid for; and the refusal carries
+        // the count and the figure, so a run that is too small still says how big the class is.
+        var needed = budget.MaximumPagesFor(pass, selected);
+        if (pass == LuxembourgQueryPass.Pass1)
+        {
+            needed += 1 + budget.MaximumPagesFor(LuxembourgQueryPass.Pass2, selected);
+        }
+
+        var remaining = wireBudget.Limit - wireBudget.Spent;
+        if (needed > remaining)
+        {
+            return new PassOutcome(
+                null,
+                new LuxembourgEnumerationRefusalDetail(
+                    LuxembourgEnumerationRefusal.WireBudgetExhausted,
+                    countOutcome.RequestOrdinal, null, null, null, null, selected, [],
+                    $"a count of {selected} needs {needed} more wire requests after this count and {remaining} remain"));
+        }
+
         var countObservation = LuxembourgDeliveryObservation.ForCount(
             countBound, countIdentity, countOutcome.Transport, profile);
         var deliveryPass = LuxembourgDeliveryPass.BeginWithCount(countObservation, selected);
