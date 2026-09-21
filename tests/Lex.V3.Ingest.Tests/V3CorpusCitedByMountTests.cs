@@ -100,6 +100,8 @@ public sealed class V3CorpusCitedByMountTests
         Assert.AreEqual(4, body.GetProperty("edge_count").GetInt32());
         Assert.AreEqual(3, body.GetProperty("edge_counts").GetProperty("in_text").GetInt32());
         Assert.AreEqual(1, body.GetProperty("edge_counts").GetProperty("in_note").GetInt32());
+        // Three of the four edges are one citing work's and the fourth is the act's own later state: one work cites the act.
+        Assert.AreEqual(1, body.GetProperty("citing_works").GetInt32());
         var expected = new (string State, string Work, string Date, int Ordinal, bool InNote, string Href, string Target, bool Self)[]
         {
             (other.StateSha256, other.WorkKey, other.ApplicabilityDate, 1, false, "/eli/etat/leg/loi/1991/08/10/n3/jo", Work + "/jo", false),
@@ -132,6 +134,71 @@ public sealed class V3CorpusCitedByMountTests
 
         // A table of the same rows read by SQL that shares nothing with the reader.
         Assert.AreEqual(4, CountEdgesNaming(fixture, Work, Work + "/jo"));
+    }
+
+    [TestMethod]
+    public async Task AWorkCitedTwiceByOneCitingWorkInTwoOfItsStatesAnswersTwoEdgesAndOneCitingWork()
+    {
+        var fixture = await MountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        var first = await fixture.AddStateAsync(Shift(fixture.ApplicabilityDate, 400), "first", workLeaf: "n9");
+        var second = await fixture.AddStateAsync(Shift(fixture.ApplicabilityDate, 500), "second", workLeaf: "n9");
+        foreach (var state in new[] { first, second })
+        {
+            await fixture.SetArticleTokensAsync(state.ExpressionIri, "art_1er", "avant",
+                "[" + Reference("the act", Work + "/jo") + "]");
+        }
+
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+
+        var body = (await CitedByAsync(mount, new { identifier = $"/lu-legilux/{fixture.WorkKey}" })).Result!.Value;
+
+        Assert.AreEqual(2, body.GetProperty("edge_count").GetInt32(), "one reference in each of the citing work's two states");
+        Assert.AreEqual(1, body.GetProperty("citing_works").GetInt32(), "the two states are one citing work");
+        CollectionAssert.AreEqual(
+            new[] { first.StateSha256, second.StateSha256 },
+            body.GetProperty("edges").EnumerateArray()
+                .Select(static edge => edge.GetProperty("citing_state_sha256").GetString()!).ToArray());
+    }
+
+    [TestMethod]
+    public async Task CitingWorksCountsDistinctHeldWorksOverTheWholeQueryAndNeverTheCitedWorkItself()
+    {
+        var fixture = await MountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        var states = new[]
+        {
+            await fixture.AddStateAsync(Shift(fixture.ApplicabilityDate, 400), "first", workLeaf: "n9"),
+            await fixture.AddStateAsync(Shift(fixture.ApplicabilityDate, 500), "second", workLeaf: "n9"),
+            await fixture.AddStateAsync(Shift(fixture.ApplicabilityDate, 600), "third", workLeaf: "n8"),
+            await fixture.AddStateAsync(Shift(fixture.ApplicabilityDate, 800), "itself"),
+        };
+        foreach (var state in states)
+        {
+            await fixture.SetArticleTokensAsync(state.ExpressionIri, "art_1er", "avant",
+                "[" + Reference("the act", Work + "/jo") + "]");
+        }
+
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+
+        foreach (var (request, pageSize) in new (object Request, int PageSize)[]
+                 {
+                     (new { identifier = $"/lu-legilux/{fixture.WorkKey}" }, 4),
+                     (new { identifier = $"/lu-legilux/{fixture.WorkKey}", limit = 1 }, 1),
+                 })
+        {
+            var body = (await CitedByAsync(mount, request)).Result!.Value;
+            var edges = body.GetProperty("edges").EnumerateArray().ToArray();
+
+            Assert.HasCount(pageSize, edges);
+            Assert.AreEqual(4, body.GetProperty("edge_count").GetInt32(), "four states, one reference each, the act's own included");
+            Assert.AreEqual(
+                2, body.GetProperty("citing_works").GetInt32(),
+                "two other works cite the act (n9 in two states, n8 in one), counted over the query and not the page; " +
+                "the act's own later state is a self-reference and is not a citing work");
+        }
     }
 
     [TestMethod]
@@ -278,8 +345,8 @@ public sealed class V3CorpusCitedByMountTests
         CollectionAssert.AreEqual(
             new[]
             {
-                "continue_after", "corpus_sha256", "current_legal_effect_assessed", "derived", "edge_count", "edge_counts", "edge_order",
-                "edges", "index_sha256", "limit", "not_held", "page_is", "publisher", "relationship_type_assessed", "requested_after",
+                "citing_works", "continue_after", "corpus_sha256", "current_legal_effect_assessed", "derived", "edge_count", "edge_counts",
+                "edge_order", "edges", "index_sha256", "limit", "not_held", "page_is", "publisher", "relationship_type_assessed", "requested_after",
                 "requested_identifier", "scope", "target_iris", "truncated", "work_key",
             }.Order(StringComparer.Ordinal).ToArray(),
             body.EnumerateObject().Select(static property => property.Name).Order(StringComparer.Ordinal).ToArray());
@@ -310,7 +377,7 @@ public sealed class V3CorpusCitedByMountTests
             body.GetProperty("page_is").GetString());
         var notHeld = body.GetProperty("not_held").EnumerateArray().ToArray();
         CollectionAssert.AreEqual(
-            new[] { "relationship_type", "current_legal_effect", "citing_texts_not_held", "structured_relations" },
+            new[] { "relationship_type", "current_legal_effect", "citing_texts_not_held", "citing_works", "structured_relations" },
             notHeld.Select(static row => row.GetProperty("item").GetString()).ToArray());
         CollectionAssert.AreEqual(
             new[]
@@ -318,6 +385,7 @@ public sealed class V3CorpusCitedByMountTests
                 "no type of relationship is assessed or held for a reference: relationship_type_assessed is false",
                 "no legal effect of a reference is assessed or held: current_legal_effect_assessed is false",
                 "a text this index does not hold cannot be among the citing texts, so the count here is the references the held texts write and never a count of everything that cites this work",
+                "citing_works counts the distinct held works whose held texts write a reference to this work, grouped on the citing state's work key, so a work held as several states counts once and a work this index does not hold cannot be counted; a reference from a state of this work to itself is counted in edge_count and flagged by is_self_reference, and it is excluded from citing_works",
                 "the publisher's structured relation records (modifies, repeals, based on, transposes) are not held by this index, so these edges are only the references written in the text",
             },
             notHeld.Select(static row => row.GetProperty("reason").GetString()).ToArray());

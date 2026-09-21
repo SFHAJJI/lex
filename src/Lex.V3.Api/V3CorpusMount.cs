@@ -838,6 +838,7 @@ internal sealed class V3CorpusMount : IDisposable
         ["relationship_type", "no type of relationship is assessed or held for a reference: relationship_type_assessed is false"],
         ["current_legal_effect", "no legal effect of a reference is assessed or held: current_legal_effect_assessed is false"],
         ["citing_texts_not_held", "a text this index does not hold cannot be among the citing texts, so the count here is the references the held texts write and never a count of everything that cites this work"],
+        ["citing_works", "citing_works counts the distinct held works whose held texts write a reference to this work, grouped on the citing state's work key, so a work held as several states counts once and a work this index does not hold cannot be counted; a reference from a state of this work to itself is counted in edge_count and flagged by is_self_reference, and it is excluded from citing_works"],
         ["structured_relations", "the publisher's structured relation records (modifies, repeals, based on, transposes) are not held by this index, so these edges are only the references written in the text"],
     ];
 
@@ -958,6 +959,11 @@ internal sealed class V3CorpusMount : IDisposable
                 in_text = edges.Count(static entry => !entry.Edge.InNote),
                 in_note = edges.Count(static entry => entry.Edge.InNote),
             },
+            citing_works = edges
+                .Select(static entry => entry.State.WorkKey)
+                .Where(citing => !string.Equals(citing, workKey, StringComparison.Ordinal))
+                .Distinct(StringComparer.Ordinal)
+                .Count(),
             edge_order = CitedByOrder,
             limit,
             truncated,
