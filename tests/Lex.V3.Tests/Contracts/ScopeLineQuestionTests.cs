@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Collections.Generic;
 using System.Linq;
 using Lex.V3.Api;
@@ -43,8 +44,8 @@ namespace Lex.V3.Tests.Contracts;
 /// no route. What it proves is that the eighteen exist here as data, are well formed against the
 /// catalogue's closed verdict set, that the pack's own score is reproduced from the cases rather than
 /// copied from its prose, and — the load-bearing part —
-/// <see cref="NoneOfTheEighteenCanBeAskedOfThisProductYet"/> <b>fails the day <c>ask</c> gets a
-/// route</b>. That is deliberate: it makes it impossible to ship the operation these questions are
+/// <see cref="NoneOfTheEighteenHasARestRouteToBeAskedOfYet"/> <b>fails the day <c>ask</c> gets a
+/// REST route</b>. That is deliberate: it makes it impossible to ship the operation these questions are
 /// asked of without coming back here and asserting the verdicts. An acceptance suite whose cases can
 /// never run is a filing system; this one is wired to break when the product grows into it.
 /// </para>
@@ -115,12 +116,16 @@ public sealed class ScopeLineQuestionTests
             Standing.ProductContradictedTheRule,
             "ANSWER the wording plus AWE the force context. V2 flagged a pre-application state as in force."),
         new(11, "fr", "Le plafond de garantie locative de 2024 s'applique-t-il à mon bail de 2022?",
-            [Split, Answer, Refuse],
+            [Split, Refuse],
             Standing.RuleIsDefensible,
-            "Catalogue row 87 decomposes it: ANSWER both dated states of art. 5 and the transitional "
-            + "art. 33bis in full, REFUSE the mapping onto the asker's lease because the transitional "
-            + "article decides that kind of case and a professional applies it. Survives on paper; "
-            + "delivery depends on surfaces not yet built."),
+            "Two sources and they do not say the same thing, so both are recorded. 41 says \"rule: "
+            + "SPLIT per row 87\". Catalogue row 87's verdict cell says, verbatim, REFUSE the mapping "
+            + "(\"the transitional article decides that kind of case; a professional applies it\"); "
+            + "the two dated states of art. 5 and the transitional art. 33bis are in its Data column, "
+            + "and the catalogue's own rule is that a refusal always delivers the descriptive maximum. "
+            + "So the row states one verdict and 41 calls the whole thing SPLIT. Reading the delivered "
+            + "material as an ANSWER half reconciles them and may well be right; it is a reading and "
+            + "not the row, so it is not recorded as a verdict here."),
         new(12, "fr", "Quelles lois ont changé en 2015?", [Answer],
             Standing.RuleIsDefensible,
             "V2 returned ninety works all consolidation-dated the same day with no sparsity caveat: a delivery defect, not a defect of the rule."),
@@ -143,6 +148,22 @@ public sealed class ScopeLineQuestionTests
             Standing.RuleIsDefensible,
             "ANSWER by catalogue row 26. V2 had no March to replay: its observation history began the month it was measured."),
     ];
+
+    /// <summary>
+    /// The questions <c>41</c> calls SPLIT, named so a case cannot lose or gain the meta-verdict
+    /// without this failing. Recording question 11 as <c>[Refuse]</c> alone — the reading that takes
+    /// catalogue row 87's verdict cell and drops 41's SPLIT — passed every test before this existed.
+    /// </summary>
+    private static readonly int[] SplitQuestions = [3, 8, 11];
+
+    /// <summary>
+    /// The questions that carry more than one verdict <b>without</b> being SPLIT. Question 10 is the
+    /// only one: <c>41</c> says "ANSWER wording plus AWE force context" and does not call it a SPLIT,
+    /// so the two verdicts are a compound and not a decomposition. Named because the shape rule runs
+    /// one way — SPLIT implies two or more verdicts, and two or more verdicts does not imply SPLIT —
+    /// and reducing question 10 to <c>[Answer]</c> passed every test before this existed.
+    /// </summary>
+    private static readonly int[] CompoundQuestions = [10];
 
     /// <summary>The pack's own score line, which the cases must reproduce rather than restate.</summary>
     private const int Defensible = 10;
@@ -219,6 +240,36 @@ public sealed class ScopeLineQuestionTests
                     + "it decomposes into atomic verdicts and never stands alone, because the whole point is "
                     + "that the answerable part must not smuggle the refused part.");
             }
+        }
+    }
+
+    [TestMethod]
+    public void TheMetaVerdictIsCarriedByExactlyTheCasesThePackCallsSplit()
+    {
+        CollectionAssert.AreEqual(
+            SplitQuestions,
+            Questions.Where(static question => question.RuleVerdict.Contains(Split, StringComparer.Ordinal))
+                .Select(static question => question.Number).OrderBy(static number => number).ToArray(),
+            "41 calls exactly these questions SPLIT. A case that gained or lost the meta-verdict "
+            + "changed what the rule requires of it, and the rest of this file cannot tell: recording "
+            + "question 11 as REFUSE alone, which is catalogue row 87's verdict cell without 41's "
+            + "SPLIT, passes every other test here.");
+
+        CollectionAssert.AreEqual(
+            CompoundQuestions,
+            Questions.Where(static question => question.RuleVerdict.Length > 1
+                    && !question.RuleVerdict.Contains(Split, StringComparer.Ordinal))
+                .Select(static question => question.Number).OrderBy(static number => number).ToArray(),
+            "A case carries more than one verdict without SPLIT only where the pack states a compound "
+            + "rather than a decomposition. The shape rule runs one way, so without this a case could "
+            + "quietly become a decomposition the pack never called one, or stop being a compound.");
+
+        foreach (var number in CompoundQuestions)
+        {
+            Assert.IsGreaterThan(
+                1,
+                Questions.Single(question => question.Number == number).RuleVerdict.Length,
+                $"question {number} is recorded as a compound and carries fewer than two verdicts.");
         }
     }
 
@@ -301,7 +352,7 @@ public sealed class ScopeLineQuestionTests
     }
 
     [TestMethod]
-    public void NoneOfTheEighteenCanBeAskedOfThisProductYet()
+    public void NoneOfTheEighteenHasARestRouteToBeAskedOfYet()
     {
         var registered = V3OperationRegistry.Reviewed.Operations
             .Select(static operation => operation.OperationId)
@@ -323,7 +374,7 @@ public sealed class ScopeLineQuestionTests
 
         CollectionAssert.DoesNotContain(
             served, TheOperationTheyWouldBeAskedOf,
-            "`ask` now has a route, so these eighteen questions can be put to the product for the "
+            "`ask` now has a REST route, so these eighteen questions can be put to the product for the "
             + "first time. Every case above must now assert the verdict the scope line requires of it, "
             + "and the three the rule cannot decide must be disclosed as undecided rather than "
             + "answered. This assertion exists to fail on exactly this day: S4-A13 makes the eighteen "
@@ -338,26 +389,115 @@ public sealed class ScopeLineQuestionTests
     /// the gate excuses itself. The disposition is that the explanation needs an out-of-band check —
     /// a manifest diff signed by the build, not an event the ingest can mint.
     /// </summary>
+    /// <remarks>
+    /// <b>The first version of this could not go red on the day it named.</b> It asserted that no
+    /// refusal code and no operation was called <c>coverage_changed</c> — and an event is neither.
+    /// A reviewer put the name into an event enum and into a wire constant and all eight tests
+    /// stayed green. The test claimed to fail when such an event could be minted, and it would only
+    /// have failed if someone registered an <i>operation</i> by that name, which is not how an event
+    /// arrives. It is the exact defect this file's own subject is about, in this file.
+    /// </remarks>
     [TestMethod]
-    public void TheSelfExcusingCompletenessThresholdHasNoEventToExcuseItselfWith()
+    public void NoProductionSourceNamesTheSelfExcusingCoverageEvent()
     {
-        // This asserts an absence, and an absence is the weakest evidence there is, so it is worth
-        // being exact about what it buys. It does not prove the gate is sound: it proves the event
-        // the gate would excuse itself with cannot be minted here yet, and it fails the day one is.
-        // That is the same shape as the S4-A12 pin: the value is not in today's green, it is that
-        // the day it goes red is the day the finding has to be answered instead of scheduled.
-        Assert.IsFalse(
-            V3OperationRegistry.Reviewed.DeclaresRefusal(CoverageChangedEvent),
-            $"{CoverageChangedEvent} is now a declared code. If it can be emitted by the pipeline whose "
-            + "completeness it explains, the threshold is self-excusing and B42's finding has arrived: "
-            + "the explanation needs an out-of-band check, a manifest diff signed by the build, and not "
-            + "an event the ingest can mint for itself.");
-
-        CollectionAssert.DoesNotContain(
-            V3OperationRegistry.Reviewed.Operations.Select(static operation => operation.OperationId).ToArray(),
-            CoverageChangedEvent,
-            $"{CoverageChangedEvent} is now an operation, and the same finding applies to it.");
+        var root = FindRepositoryRoot();
+        foreach (var token in SelfExcusingTokens)
+        {
+            CollectionAssert.AreEqual(
+                Array.Empty<string>(),
+                FilesNaming(root, token),
+                $"{token} is now named in the product source. If it is an event the ingest can mint, "
+                + "B42's finding has arrived and the completeness gate excuses itself: the explanation "
+                + "needs an out-of-band check, a manifest diff signed by the build, and not an event "
+                + "the pipeline whose completeness it explains can emit for itself.");
+        }
     }
 
-    private const string CoverageChangedEvent = "coverage_changed";
+    [TestMethod]
+    public void TheSweepForTheSelfExcusingEventFindsOneThatIsPlantedAndSkipsBuildOutput()
+    {
+        // The test above passes by finding nothing, so on its own it cannot tell a sweep that works
+        // from a sweep that looks in the wrong place — which is precisely how its first version was
+        // wrong. This plants the token and requires the walk to come back with it.
+        var container = Path.Combine(Path.GetTempPath(), "lex-v3-a13-" + Guid.NewGuid().ToString("N"));
+        var root = Path.Combine(container, "checkout");
+        try
+        {
+            Write(root, "src/Widget/Emitter.cs", "internal enum Kind { coverage_changed }");
+            Write(root, "src/Widget/Deep/Wire.cs", "internal const string CoverageChanged = \"x\";");
+            Write(root, "src/Widget/Clean.cs", "internal sealed class Clean { }");
+            Write(root, "src/Widget/obj/Generated.cs", "enum G { coverage_changed }");
+            Write(root, "src/Widget/bin/Release/Copied.cs", "enum B { coverage_changed }");
+            Write(root, "tests/Other/Other.cs", "enum T { coverage_changed }");
+
+            CollectionAssert.AreEqual(
+                new[] { "src/Widget/Emitter.cs" },
+                FilesNaming(root, "coverage_changed"),
+                "the sweep must find the snake_case token where a production file names it, and must "
+                + "not report build output under obj or bin, or anything outside src");
+            CollectionAssert.AreEqual(
+                new[] { "src/Widget/Deep/Wire.cs" },
+                FilesNaming(root, "CoverageChanged"),
+                "and must find the PascalCase spelling at any depth, which is how a wire constant "
+                + "rather than an enum member would arrive");
+            CollectionAssert.AreEqual(
+                Array.Empty<string>(),
+                FilesNaming(root, "a-token-nothing-names"),
+                "and must report nothing for a token nothing names, or its emptiness above says "
+                + "nothing about the product");
+        }
+        finally
+        {
+            if (Directory.Exists(container))
+            {
+                Directory.Delete(container, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>Both spellings the name would arrive under: the wire token and the identifier.</summary>
+    private static readonly string[] SelfExcusingTokens = ["coverage_changed", "CoverageChanged"];
+
+    /// <summary>
+    /// The production source files that name <paramref name="token"/>, repository-relative with
+    /// <c>/</c> separators. A pure function of the root so the fixture above can plant one: on the
+    /// real tree this returns nothing, so nothing on the real tree can show the walk works.
+    /// </summary>
+    private static string[] FilesNaming(string root, string token)
+    {
+        var source = Path.Combine(root, "src");
+        if (!Directory.Exists(source))
+        {
+            return [];
+        }
+
+        return Directory.EnumerateFiles(source, "*.cs", SearchOption.AllDirectories)
+            .Select(file => Path.GetRelativePath(root, file).Replace('\\', '/'))
+            .Where(static relative => !relative.Contains("/obj/", StringComparison.Ordinal)
+                && !relative.Contains("/bin/", StringComparison.Ordinal))
+            .Where(relative => File.ReadAllText(Path.Combine(root, relative)).Contains(token, StringComparison.Ordinal))
+            .OrderBy(static relative => relative, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    private static void Write(string root, string relative, string content)
+    {
+        var path = Path.Combine(root, relative.Replace('/', Path.DirectorySeparatorChar));
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, content);
+    }
+
+    private static string FindRepositoryRoot()
+    {
+        for (var current = new DirectoryInfo(AppContext.BaseDirectory); current is not null; current = current.Parent)
+        {
+            if (File.Exists(Path.Combine(current.FullName, "Lex.V3.slnx")))
+            {
+                return current.FullName;
+            }
+        }
+
+        throw new DirectoryNotFoundException("Cannot locate the V3 repository root.");
+    }
+
 }
