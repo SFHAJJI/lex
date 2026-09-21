@@ -48,11 +48,33 @@ namespace Lex.V3.Ingest.Tests;
 /// <para>
 /// THE SAME DOORS AS THE CANARY, deliberately. Real <see cref="FileSystemCustodyStore"/>, real
 /// <see cref="EuRepeatedEnumerationExecutor"/>, real <see cref="EuQueryExecutionAdapter"/>, and the
-/// same <see cref="EuAcquisitionTestFixture"/> plans, renderer sources and bound witnesses. The
-/// evidence resolver is the same TEST DOUBLE the canary uses and carries the same boundary: it
-/// admits on SHA-256 shape alone, so THIS RUN DOES NOT PROVE THE REDUCTION STEP for any seed. That
-/// limitation is the canary's residue R0 and this class inherits it unchanged; it does not weaken
-/// it and it must not be read as having closed it.
+/// same <see cref="EuAcquisitionTestFixture"/> plans, renderer sources and bound witnesses.
+/// </para>
+/// <para>
+/// THE SCOPE-REDUCTION RESOLVER IS THE PRODUCTION ONE, corrected here after it was found stated
+/// otherwise. This class used to build its own permissive resolver and said so in its limitations,
+/// in this comment and in the retained report. <b>It has not done that for some time.</b>
+/// <see cref="EuQueryExecutionAdapter.RunAsync"/> takes no resolver parameter and builds
+/// <c>EuProductionScopeReductionEvidenceResolver</c> from the real custody store itself, and the
+/// double this class still declared was never constructed. The text outlived the code, which is the
+/// one failure a retained limitation must not have: a reader quoting it understated what the run
+/// established.
+/// </para>
+/// <para>
+/// WHAT THE PRODUCTION RESOLVER ACTUALLY SETTLES, stated at its own strength rather than at the
+/// strength of the sentence it replaces. An object binding is admitted only when its digest is one
+/// of the objects THIS RUN OBSERVED, not merely a well-formed digest; an interpretation profile is
+/// admitted only when every retained evidence artifact behind it REOPENED FROM CUSTODY; and the
+/// complete enumeration must match both the ref and the OBSERVED OBJECT COUNT. The permissive
+/// double checked none of those four.
+/// </para>
+/// <para>
+/// AND WHAT IT STILL DOES NOT, which is the residue and is narrower than "the reduction step is
+/// unproven". <c>SelectorEvidenceSha256</c>, <c>SelectorSetSha256</c> and
+/// <c>RuleEvaluationSha256</c> are each still admitted by a syntactic 64-hex-character check. Those
+/// three digests are never reopened from custody and never recomputed, so a binding naming evidence
+/// that does not exist is admitted on their account. That is the part of residue R0 this run still
+/// carries.
 /// </para>
 /// <para>
 /// THE POPULATION GATE IS PINNED FROM A MEASUREMENT, never guessed. <see cref="ExpectedReaching"/>
@@ -392,12 +414,6 @@ public sealed class EuStageOnePopulationRun
             EuAcquisitionTestFixture.BuildRendererSource(7200),
             EuAcquisitionTestFixture.SourceWitness());
 
-        var completeEnumerationRef = new SourceArtifactRef(
-            $"urn:uuid:{Guid.NewGuid():D}",
-            Convert.ToHexStringLower(
-                System.Security.Cryptography.SHA256.HashData(
-                    Encoding.UTF8.GetBytes("eu-population-complete-enumeration-" + celex))));
-
         return await adapter.RunAsync(
             censusRequests,
             objectFactsPolicy,
@@ -572,18 +588,27 @@ public sealed class EuStageOnePopulationRun
     /// What this population run does NOT establish, carried IN the report rather than only in this
     /// file, so the sentences travel with the numbers a reader is about to quote.
     /// </summary>
-    private static JsonArray PopulationLimitations() =>
+    internal static JsonArray PopulationLimitations() =>
         new()
         {
             new JsonObject
             {
-                ["limitation"] = "reductionStepNotProven",
-                ["why"] = "The scope-reduction evidence resolver is a TEST DOUBLE whose three "
-                    + "admission questions answer on SHA-256 SHAPE ALONE and whose fourth compares "
-                    + "against the ref this run handed its own constructor. No seed's reduction "
-                    + "step is proven here. That is the canary's residue R0, an EU production "
-                    + "resolver of the kind LuxembourgProductionScopeReductionEvidenceResolver "
-                    + "already is, and this run inherits the gap unchanged rather than closing it.",
+                ["limitation"] = "reductionStepPartlyProven",
+                ["why"] = "Corrected: an earlier version of this report said the scope-reduction "
+                    + "resolver was a TEST DOUBLE admitting on SHA-256 shape alone and that no "
+                    + "seed's reduction step was proven. That described a double this run declared "
+                    + "and never constructed. EuQueryExecutionAdapter.RunAsync takes no resolver "
+                    + "parameter and builds EuProductionScopeReductionEvidenceResolver from the "
+                    + "real custody store, so what is established is stronger than the sentence it "
+                    + "replaces: an object binding is admitted only when its digest is one of the "
+                    + "objects THIS RUN OBSERVED, an interpretation profile only when every "
+                    + "retained evidence artifact behind it REOPENED FROM CUSTODY, and the "
+                    + "complete enumeration must match both the ref and the OBSERVED OBJECT "
+                    + "COUNT. What remains unproven is narrower and is the residue of R0: "
+                    + "SelectorEvidenceSha256, SelectorSetSha256 and RuleEvaluationSha256 are "
+                    + "each still admitted by a syntactic 64-hex check, never reopened and never "
+                    + "recomputed, so a binding naming evidence that does not exist is admitted "
+                    + "on their account.",
             },
             new JsonObject
             {
@@ -895,35 +920,5 @@ public sealed class EuStageOnePopulationRun
         return new HashSet<string>(
             raw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
             StringComparer.Ordinal);
-    }
-
-    /// <summary>
-    /// The same permissive shape as the canary's own, declared here because that one is private to
-    /// its own test class. A TEST DOUBLE, and the reason this run cannot claim the reduction step
-    /// for any seed: the three admission questions answer on SHA-256 SHAPE ALONE and the fourth
-    /// compares against the ref this constructor was handed.
-    /// </summary>
-    private sealed class PopulationPermissiveEvidenceResolver(SourceArtifactRef completeEnumerationRef)
-        : IScopeReductionEvidenceResolver
-    {
-        public SourceArtifactRef CompleteEnumerationRef { get; } = completeEnumerationRef;
-
-        public bool IsSelectorObservationAdmitted(ScopeSelectorObservationBinding binding) =>
-            IsSha256(binding.ObjectRefSha256) && IsSha256(binding.SelectorEvidenceSha256);
-
-        public bool IsSelectorNotApplicableAdmitted(ScopeSelectorNotApplicableBinding binding) =>
-            IsSha256(binding.ObjectRefSha256);
-
-        public bool IsRuleEvaluationAdmitted(ScopeRuleEvaluationBinding binding) =>
-            IsSha256(binding.ObjectRefSha256) &&
-            IsSha256(binding.SelectorSetSha256) &&
-            IsSha256(binding.RuleEvaluationSha256);
-
-        public bool IsCompleteEnumerationAdmitted(ScopeCompleteEnumerationBinding binding) =>
-            binding.CompleteEnumerationRef == CompleteEnumerationRef;
-
-        private static bool IsSha256(string value) =>
-            value.Length == 64 &&
-            value.All(static character => character is (>= '0' and <= '9') or (>= 'a' and <= 'f'));
     }
 }
