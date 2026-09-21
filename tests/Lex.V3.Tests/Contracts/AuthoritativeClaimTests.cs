@@ -93,9 +93,13 @@ public sealed class AuthoritativeClaimTests
             + "2024-02-01, and that is what this index holds rather than what exists.",
             claim.Rendered);
 
-        // Substitution and nothing else: every placeholder is gone and every value is present.
-        Assert.IsFalse(Regex.IsMatch(claim.Rendered, @"\{[a-z][a-z0-9_]*\}"),
-            "a rendered claim still carries a placeholder");
+        // Substitution and nothing else: no brace at all, and every value is present. Asked as "no brace"
+        // rather than "no placeholder the product's pattern matches", because a test that re-runs the
+        // product's own regex cannot see a marker that regex is wrong about.
+        Assert.IsFalse(claim.Rendered.Contains('{', StringComparison.Ordinal),
+            "a rendered claim carries an opening brace");
+        Assert.IsFalse(claim.Rendered.Contains('}', StringComparison.Ordinal),
+            "a rendered claim carries a closing brace");
         foreach (var fact in claim.Facts)
         {
             StringAssert.Contains(claim.Rendered, fact.Value, $"{fact.Name}'s value is not in the text");
@@ -193,6 +197,37 @@ public sealed class AuthoritativeClaimTests
                 $"{property.Name} is settable, so a claim's {property.Name} can be replaced after it "
                 + "was bound, which is model gloss with an extra step.");
         }
+    }
+
+    [TestMethod]
+    public void EveryTemplateRendersWithNoBraceLeftWhenOnlyItsListedPlaceholdersAreBound()
+    {
+        // The sweep the single-template test cannot do: bind every template's own listed placeholders and
+        // require the rendered text to carry no brace. Counted on the output rather than matched against
+        // the product's pattern, so a marker the pattern is wrong about shows up here as text a reader
+        // would have seen.
+        foreach (var template in V3ClaimTemplates.All)
+        {
+            var claim = V3AuthoritativeClaim.Bind(template.TemplateId,
+                template.Placeholders.Select(static name => V3TypedFact.Of(name, "probe", "<" + name + ">")).ToArray());
+
+            Assert.IsFalse(claim.Rendered.Contains('{', StringComparison.Ordinal),
+                $"{template.TemplateId} renders with an opening brace nothing bound.");
+            Assert.IsFalse(claim.Rendered.Contains('}', StringComparison.Ordinal),
+                $"{template.TemplateId} renders with a closing brace nothing bound.");
+        }
+    }
+
+    [TestMethod]
+    public void ATemplateCarryingAMarkerThePlaceholderRuleCannotReadIsRefusedWhenItIsDefined()
+    {
+        // The set is closed, so the sweep above can only fail on a template somebody added. This is the
+        // other end of it: the moment of definition refuses, so the bad template never reaches the set.
+        var thrown = Assert.ThrowsExactly<ArgumentException>(() =>
+            V3ClaimTemplate.Define("marker_the_rule_cannot_read",
+                "On {date}, {Work} read as the text with content hash {text_sha256}."));
+
+        StringAssert.Contains(thrown.Message, "brace this rule cannot read");
     }
 
     [TestMethod]

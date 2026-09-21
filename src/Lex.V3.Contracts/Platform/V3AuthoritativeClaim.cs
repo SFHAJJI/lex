@@ -79,6 +79,15 @@ public sealed record V3ClaimTemplate
                 nameof(text));
         }
 
+        if (PlaceholderPattern.Replace(text, string.Empty).AsSpan().IndexOfAny('{', '}') >= 0)
+        {
+            throw new ArgumentException(
+                $"The claim template '{templateId}' carries a brace this rule cannot read, so nothing would "
+                + "bind it and it would reach a reader as literal text inside an authoritative sentence. A "
+                + "placeholder is lower case, starts with a letter, and holds letters, digits and underscores.",
+                nameof(text));
+        }
+
         return new V3ClaimTemplate(templateId, text, placeholders.AsReadOnly());
     }
 }
