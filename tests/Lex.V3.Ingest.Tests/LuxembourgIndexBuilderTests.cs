@@ -244,6 +244,7 @@ public sealed class LuxembourgIndexBuilderTests
                 <FRBRManifestation><FRBRthis value="{{manifestation}}"/></FRBRManifestation>
                 <scl:JOLUXManifestation>
                   <scl:jolux scl:name="uriThis">{{manifestation}}</scl:jolux>
+                  <scl:jolux scl:name="license">{{VerifiedLuxembourgSourceProfile.AdmittingLicence}}</scl:jolux>
                 </scl:JOLUXManifestation>
               </identification></meta><body>
                 <article id="art_1"><scl:JOLUXWork>
