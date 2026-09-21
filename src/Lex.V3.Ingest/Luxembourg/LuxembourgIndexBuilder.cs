@@ -133,7 +133,7 @@ public sealed record LuxembourgIndexStateArticle(
 /// IRI, <c>other_uri</c> and the value as written, or <c>unparsed</c> and no target. It records that a reference
 /// was written and says nothing about its meaning or its legal effect.
 /// </summary>
-internal sealed record LuxembourgIndexCitation(
+public sealed record LuxembourgIndexCitation(
     string ArticleIdentitySha256,
     string PublisherId,
     int Ordinal,
@@ -2091,7 +2091,7 @@ public sealed class LuxembourgIndexReader : IDisposable
     /// is the state's articles and their references and never a scan; the rows were verified as the projection of
     /// the articles' tokens when the index was opened.
     /// </summary>
-    internal IReadOnlyList<LuxembourgIndexCitation> ResolveStateCitations(string stateSha256, string? anchor)
+    public IReadOnlyList<LuxembourgIndexCitation> ResolveStateCitations(string stateSha256, string? anchor)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(stateSha256);
         lock (_gate)
