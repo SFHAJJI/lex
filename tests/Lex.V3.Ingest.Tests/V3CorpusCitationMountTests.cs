@@ -140,39 +140,30 @@ public sealed class V3CorpusCitationMountTests
     }
 
     [TestMethod]
-    public async Task OnlyATargetThatIsExactlyAHeldWorksIriIsHeldAndTheActsOwnJoFormIsOne()
+    public async Task EveryEdgeOfTheRealActNamesAWorkThisIndexDoesNotHoldAndTheActsOwnSelfReferencesAreNotAmongThem()
     {
         var fixture = await MountedFixture.CreateAsync();
         await using var cleanup = fixture;
         using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
         Assert.IsNotNull(mount);
-        const string legalResource = "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo";
 
         var body = (await CiteAsync(mount, new { identifier = $"/lu-legilux/{fixture.WorkKey}", date = fixture.ApplicabilityDate }))
             .Result!.Value;
 
         var edges = body.GetProperty("edges").EnumerateArray().ToArray();
-        // The real act cites itself, in the form the publisher writes in running text: its legal-resource IRI, which
-        // ends /jo and is not its work IRI. Held by exact equality with that string, and by nothing else.
-        var self = edges.Where(static edge => Text(edge.GetProperty("href")) == "/eli/etat/leg/loi/1991/08/10/n3/jo").ToArray();
-        Assert.IsGreaterThan(0, self.Length, "the act cites itself, so the held case is exercised on real data");
-        foreach (var edge in self)
-        {
-            Assert.AreEqual(legalResource, Text(edge.GetProperty("target_iri")));
-            Assert.AreEqual("held_work", edge.GetProperty("resolution").GetString());
-            Assert.AreEqual(fixture.WorkKey, Text(edge.GetProperty("target_work_key")));
-        }
-
-        // Every other edge names a work this index does not hold: other Luxembourg acts, codes, EU acts.
-        foreach (var edge in edges.Where(static edge => Text(edge.GetProperty("href")) != "/eli/etat/leg/loi/1991/08/10/n3/jo"))
-        {
-            var href = Text(edge.GetProperty("href"));
-            Assert.AreEqual("not_held", edge.GetProperty("resolution").GetString(), href);
-            Assert.AreEqual(JsonValueKind.Null, edge.GetProperty("target_work_key").ValueKind, href);
-        }
-
-        Assert.AreEqual(0, edges.Count(static edge => edge.GetProperty("resolution").GetString() == "unparsed"),
-            "the real 1991 act writes no reference the grammar cannot read");
+        // The mount holds one work, so every reference to another act, a code or an EU act is a work this index does not
+        // hold, and the answer says exactly that: not_held is "this index has no work with exactly that IRI".
+        Assert.IsTrue(edges.All(static edge => edge.GetProperty("resolution").GetString() == "not_held"));
+        Assert.IsTrue(edges.All(static edge => edge.GetProperty("target_work_key").ValueKind == JsonValueKind.Null));
+        // 52 references in running text (48 to Legilux ELIs and 4 to data.europa.eu) and 16 in notes (all Legilux ELIs),
+        // counted from the retained XML by code that shares nothing with the profile or the grammar.
+        Assert.AreEqual(64, edges.Count(static edge => edge.GetProperty("target_kind").GetString() == "legilux_eli"));
+        Assert.AreEqual(4, edges.Count(static edge => edge.GetProperty("target_kind").GetString() == "other_uri"));
+        Assert.AreEqual(0, edges.Count(static edge => edge.GetProperty("target_kind").GetString() == "unparsed"),
+            "the real 1991 act writes no reference the grammar cannot read (the 1984 act writes one, ???)");
+        // The act cites itself six times in its own text, in the form the publisher writes (/eli/.../n3/jo), and all six
+        // are in art_43, which the reviewed profile does not admit: they are not held here, so they are not edges here.
+        Assert.IsFalse(edges.Any(static edge => Text(edge.GetProperty("href")) == "/eli/etat/leg/loi/1991/08/10/n3/jo"));
     }
 
     [TestMethod]
