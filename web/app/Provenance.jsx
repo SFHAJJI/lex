@@ -68,6 +68,17 @@ function Source({ source }) {
             ? 'none recorded'
             : source.gaps.map((gap) => <Evidence key={gap} value={gap} />)}
         </Row>
+        <Row label="article outcomes">
+          {source.article_outcomes.length === 0 ? 'none recorded' : (
+            <ul className="provenance-outcomes">
+              {source.article_outcomes.map((outcome) => (
+                <li key={outcome.disposition}>
+                  <Evidence value={outcome.disposition} />: {String(outcome.outcomes)}
+                </li>
+              ))}
+            </ul>
+          )}
+        </Row>
       </dl>
     </li>
   );

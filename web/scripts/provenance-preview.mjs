@@ -37,6 +37,13 @@ const PROFILE = 'f3'.repeat(32);
 const OUTCOME = 'acquired';
 const RIGHTS = 'agreed_same_run_cc_by';
 
+// The two legal-content disposition tokens the previews use, from the corpus's vocabulary and not
+// invented here (the test reads the enum that declares them). The state's article count is the
+// document's `akn_admitted` outcomes, and the other token is an article the reviewed profile could
+// not represent, which is why the third preview's document holds five outcomes and its state three.
+const ADMITTED = 'akn_admitted';
+const NOT_REPRESENTED = 'akn_unsupported_content_shape';
+
 const SCOPE =
   'the chain from the publisher’s identifiers to the digests this mount verified; it holds no '
   + 'first-sighting event and no signature, so none is claimed';
@@ -57,7 +64,12 @@ const SOURCES_NOTE =
   + 'publisher bytes the corpus retained for it, body_byte_length their length and '
   + 'body_receipt_sha256 the digest of the corpus receipt for that body, each null where the '
   + 'corpus holds none; outcome, rights_disposition and gaps are the corpus manifest’s own '
-  + 'tokens for the member, given verbatim, and this answer does not define them';
+  + 'tokens for the member, given verbatim, and this answer does not define them; '
+  + 'article_outcomes counts the corpus’s legal-content outcomes for this document by disposition '
+  + 'token, verbatim: the articles this state holds are the document’s akn_admitted and '
+  + 'akn_marker_only_evidence outcomes, an outcome under any other token is not held here, '
+  + 'akn_unsupported_content_shape means the reviewed profile could not represent that article in '
+  + 'full, and which article an outcome belongs to is not held';
 
 const NOT_HELD = Object.freeze([
   Object.freeze({
@@ -76,7 +88,7 @@ const NOT_HELD = Object.freeze([
   }),
 ]);
 
-function source({ ref, body, bytes, receipt, gaps = [], rights = null }) {
+function source({ ref, body, bytes, receipt, gaps = [], rights = null, outcomes }) {
   return {
     object_ref_sha256: ref,
     body_sha256: body,
@@ -85,6 +97,7 @@ function source({ ref, body, bytes, receipt, gaps = [], rights = null }) {
     outcome: OUTCOME,
     rights_disposition: rights,
     gaps,
+    article_outcomes: outcomes.map((row) => ({ ...row })),
   };
 }
 
@@ -144,6 +157,7 @@ const EVERY_BODY_FACT = {
       bytes: 48219,
       receipt: '13'.repeat(32),
       rights: RIGHTS,
+      outcomes: [{ disposition: ADMITTED, outcomes: 42 }],
     })],
   }),
 };
@@ -160,17 +174,25 @@ const NO_BODY_HELD = {
     digest: 'b1'.repeat(32),
     identities: 'b2'.repeat(32),
     articles: 7,
-    sources: [source({ ref: '21'.repeat(32), body: null, bytes: null, receipt: null })],
+    sources: [source({
+      ref: '21'.repeat(32),
+      body: null,
+      bytes: null,
+      receipt: null,
+      outcomes: [{ disposition: ADMITTED, outcomes: 7 }],
+    })],
   }),
 };
 
 const GAPS_RECORDED = {
   lexId: `${PUBLISHER}:${WORK}:2030-09-15`,
-  heading: 'A state whose source carries recorded gaps',
+  heading: 'A state whose source carries recorded gaps and articles not admitted',
   note:
-    'The gaps, the outcome and the rights disposition are the corpus manifest’s own tokens, '
-    + 'printed verbatim. This page does not define them and does not translate them: a gloss '
-    + 'invented here would be this service’s word wearing the corpus’s authority.',
+    'The gaps, the outcome, the rights disposition and the article outcomes are the corpus’s own '
+    + 'tokens, printed verbatim. This page does not define them and does not translate them: a '
+    + 'gloss invented here would be this service’s word wearing the corpus’s authority. The '
+    + 'document here holds five article outcomes and this state holds three articles: the other '
+    + 'two were seen and not admitted, and the platform does not say which.',
   answer: answer({
     date: '2030-09-15',
     digest: 'c1'.repeat(32),
@@ -182,6 +204,10 @@ const GAPS_RECORDED = {
       bytes: 1204,
       receipt: '33'.repeat(32),
       gaps: ['a_recorded_gap', 'b_second_gap'],
+      outcomes: [
+        { disposition: ADMITTED, outcomes: 3 },
+        { disposition: NOT_REPRESENTED, outcomes: 2 },
+      ],
     })],
   }),
 };
