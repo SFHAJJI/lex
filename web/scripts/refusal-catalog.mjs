@@ -9,7 +9,7 @@
 // The page states, per code, whether its payload is fixed by the architect pack or not yet
 // settled. That second column is the honest part. Nine codes carry payload keys the pack
 // names; one carries its obligation as governing text plus a counter; nine carry nothing yet
-// and say so. A catalog that presented all nineteen as equally specified would be a nicer
+// and say so. A catalog that presented every code as equally specified would be a nicer
 // page and a false one, and a developer would discover the difference by shipping against it.
 
 import { page } from './render.mjs';
