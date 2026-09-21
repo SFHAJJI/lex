@@ -270,7 +270,7 @@ public sealed class PublicRequestRecordingTests
         ("a logger", new Regex(@"\b(ILogger\w*|LoggerFactory|LoggerMessage|LogInformation|LogWarning|LogError|LogDebug|LogTrace|LogCritical)\b")),
         ("a logging or telemetry provider", new Regex(@"\b(AddConsole|AddSimpleConsole|AddJsonConsole|AddDebug|AddEventLog|AddEventSourceLogger|AddOpenTelemetry|UseHttpLogging|AddHttpLogging|W3CLogging\w*|ActivitySource|Meter|EventSource|TelemetryClient)\b")),
         ("a trace or debug write", new Regex(@"\b(Trace|Debug)\.(Write\w*|Print\w*|Assert|Fail)\b")),
-        ("a file or stream writer", new Regex(@"\b(StreamWriter|BinaryWriter|FileStream)\b|\bFile\.(Write\w*|Append\w*|Create\w*|Open\w*|Move|Copy)\b")),
+        ("a file or stream writer", new Regex(@"\b(StreamWriter|BinaryWriter)\b|\bFile\.(OpenWrite|Write\w*|Append\w*|Create\w*|Move|Copy|Replace)\b")),
         ("a database opened for writing", new Regex(@"\bSqliteOpenMode\.ReadWrite\w*")),
         ("a feature other than the request's raw target", new Regex(@"Features\.(Get|Set)<(?!IHttpRequestFeature>)")),
     ];
@@ -396,6 +396,33 @@ public sealed class PublicRequestRecordingTests
         }
     }
 
+    private static IReadOnlyList<string> WriteCapableOpens(string code) =>
+        Regex.Matches(code, @"\bFileAccess\.(Write|ReadWrite)\b|\bFileMode\.(Create|CreateNew|OpenOrCreate|Append|Truncate)\b")
+            .Select(static match => match.Value)
+            .ToArray();
+
+    [TestMethod]
+    public void TheOnlyFilesTheApiProcessOpensForWritingAreTheStartupProbesThatItsGraphDirectoryCannotBeWrittenTo()
+    {
+        var opens = ApiSources()
+            .Select(static source => (source.File, Opens: WriteCapableOpens(source.Code)))
+            .Where(static value => value.Opens.Count > 0)
+            .ToArray();
+
+        // SyntheticImmutableCustody proves at startup that the runtime user cannot change the graph directory:
+        // it tries to open a member for write and to create a probe file that deletes itself on close, and
+        // refuses to start if either succeeds. Neither writes a byte, and neither is on a request's path.
+        Assert.HasCount(1, opens, string.Join("; ", opens.Select(static value => value.File)));
+        Assert.AreEqual("SyntheticImmutableCustody.cs", opens[0].File);
+        CollectionAssert.AreEqual(new[] { "FileAccess.Write", "FileMode.CreateNew", "FileAccess.Write" }.OrderBy(static value => value, StringComparer.Ordinal).ToArray(),
+            opens[0].Opens.OrderBy(static value => value, StringComparer.Ordinal).ToArray());
+
+        CollectionAssert.AreEqual(
+            new[] { "FileMode.Truncate", "FileAccess.Write" },
+            WriteCapableOpens(Blank("new FileStream(p, FileMode.Truncate, FileAccess.Write); var a = FileAccess.Read; var b = FileMode.Open;")).ToArray(),
+            "The scanner must see a write-capable open and must not see a read.");
+    }
+
     [TestMethod]
     public void TheOnlyOutputTheApiProcessWritesIsTwoStartupMessagesAndItsLoggingProvidersAreCleared()
     {
@@ -426,9 +453,11 @@ public sealed class PublicRequestRecordingTests
             "A package was added to or removed from the public process. A logging, telemetry or diagnostics package would be a place to record a request.");
 
         using var lockFile = JsonDocument.Parse(File.ReadAllText(Path.Combine(root, "src", "Lex.V3.Api", "packages.lock.json")));
-        var resolved = lockFile.RootElement.GetProperty("dependencies").EnumerateObject().Single().Value.EnumerateObject()
+        var resolved = lockFile.RootElement.GetProperty("dependencies").EnumerateObject()
+            .SelectMany(static target => target.Value.EnumerateObject())
             .Select(static package => package.Name)
             .Where(static name => !name.StartsWith("lex.v3.", StringComparison.Ordinal))
+            .Distinct(StringComparer.Ordinal)
             .OrderBy(static name => name, StringComparer.Ordinal)
             .ToArray();
         CollectionAssert.AreEqual(
