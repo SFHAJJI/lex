@@ -15,6 +15,7 @@ import { Coverage } from './Coverage.jsx';
 import { Document } from './Document.jsx';
 import { Timeline } from './Timeline.jsx';
 import { renderDocument } from './render-document.mjs';
+import { PREVIEW_ANSWERS as COVERAGE_PREVIEWS } from '../scripts/coverage-preview.mjs';
 import { skinFor } from '../scripts/shells.mjs';
 
 const WORK = 'preview-synthetic:synthetic-preview-work';
@@ -158,47 +159,15 @@ export function renderTimelineReactPage() {
   );
 }
 
-const COMPLETE = {
-  envelope: { freshness: { built_at: '2026-08-15T09:22:08Z', stamp_signature_valid: true } },
-  publisher_name: 'Synthetic preview publisher',
-  works: 40,
-  scope_expected_works: 40,
-  build_inventory_status: 'complete',
-  build_complete: true,
-  build_issues: [],
-  versions: 120,
-  valid_from_earliest: '1849-03-14',
-  valid_from_latest: '2030-09-15',
-  document_types: [
-    { code: 'LOI', versions: 52, versions_with_text: 51 },
-    { code: 'RGD', versions: 30, versions_with_text: 30 },
-    { code: 'RECUEIL', versions: 25, versions_with_text: 3 },
-    { code: null, versions: 13, versions_with_text: 0 },
-  ],
-  document_types_total: 4,
-  facets_truncated: false,
-  // Deliberately summing past the headline. A work published in two languages is one work in two
-  // rows, so 41 language works against 40 held is the correct shape and not an error.
-  languages: [
-    { code: 'fr', works: 40, versions: 120 },
-    { code: 'de', works: 1, versions: 1 },
-  ],
-  text: { versions_with_text_served: 84, versions_without_text: 36 },
-  known_gaps: [
-    'never-consolidated acts are not ingested; the reviewed corpus is dated consolidations only',
-    'coverage density follows the publisher own digitised consolidations: dense recently, ' +
-      'sparse before, isolated snapshots earlier, forward-dated to the publisher horizon',
-  ],
-};
-
-const INCOMPLETE = {
-  ...COMPLETE,
-  build_inventory_status: 'partial',
-  build_complete: false,
-  build_issues: ['one publisher endpoint did not respond', 'one manifest failed verification'],
-};
-
-/** The React coverage page, in a finished build and an unfinished one. */
+/**
+ * The React coverage page, in the three shapes the string preview shows.
+ *
+ * The answers come from `scripts/coverage-preview.mjs` rather than being written again here. Two
+ * sets of coverage fixtures is how this page came to carry a payload the platform stopped sending:
+ * the string preview and this one each held their own, and both were edited by hand whenever the
+ * page changed. One set means the browser run measures the same answers the string page does, and
+ * the shape bridge in `test/coverage.test.mjs` holds that one set against the captured answer.
+ */
 export function renderCoverageReactPage() {
   return renderDocument(
     <Document
@@ -211,23 +180,23 @@ export function renderCoverageReactPage() {
       <h1>Coverage (React)</h1>
       <p>
         This is the page whose job is to say what is missing, rendered by the React port, so its
-        failure mode is not a wrong answer but a comfortable one: a count with no date, a total
-        with no denominator, a type row saying how many states are held and not how many have
-        text.
+        failure mode is not a wrong answer but a comfortable one: a count presented as current, a
+        breakdown that reads as complete because nothing said it was not, two numbers in one row
+        that cannot both be true.
+      </p>
+      <p>
+        There is no date anywhere on it. This mount holds no build time and records that it does
+        not, so what names the artifacts these counts came from is a pair of digests rather than an
+        instant.
       </p>
       <p>Every value on this page is synthetic and none of it is law.</p>
-      <section className="coverage-case">
-        <h2>A build that finished</h2>
-        <Coverage coverage={COMPLETE} />
-      </section>
-      <section className="coverage-case">
-        <h2>A build that did not</h2>
-        <p className="coverage-case-note">
-          No counts at all. A build that did not finish is not a smaller corpus, it is an unknown
-          one, and its figures would read as measurements of what is held.
-        </p>
-        <Coverage coverage={INCOMPLETE} />
-      </section>
+      {COVERAGE_PREVIEWS.map((preview) => (
+        <section className="coverage-case" key={preview.heading}>
+          <h2>{preview.heading}</h2>
+          <p className="coverage-case-note">{preview.note}</p>
+          <Coverage answer={preview.answer} />
+        </section>
+      ))}
     </Document>,
   );
 }

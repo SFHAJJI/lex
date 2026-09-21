@@ -817,6 +817,14 @@ summary {
   margin-block: var(--space-6, 2rem);
 }
 
+/* The page is a run of blocks, each a heading over its own rows or table. The gap is what keeps
+   one block's counts from reading as part of the next block's. */
+.coverage-block {
+  display: grid;
+  gap: var(--space-3, 0.75rem);
+  min-inline-size: 0;
+}
+
 .coverage-scroll {
   overflow-x: auto;
   max-inline-size: 100%;
@@ -841,10 +849,13 @@ summary {
   text-align: start;
 }
 
-.coverage-as-of,
-.coverage-retention,
-.coverage-truncated,
-.coverage-build,
+/* Set off from the counts, because each of these is a sentence about how to read them. The four
+   selectors that used to be here -- `.coverage-as-of`, `.coverage-retention`, `.coverage-truncated`
+   and `.coverage-build` -- were for a build instant, a retention claim and a truncated facet table,
+   and the V3 answer holds none of those. */
+.coverage-scope,
+.coverage-note,
+.coverage-held,
 .coverage-case-note {
   border-inline-start: 3px solid var(--border, #8a8a8a);
   padding-inline-start: var(--space-3, 0.75rem);

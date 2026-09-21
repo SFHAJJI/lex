@@ -25,7 +25,7 @@
 // "not stated by the platform" and never as blank, because a blank cell reads as a fact about the
 // document rather than a fact about this corpus.
 
-import { escapeHtml } from './render.mjs';
+import { NOT_STATED, escapeHtml } from './render.mjs';
 
 /** Why the rule profiles are on a provenance page at all. */
 export const PROFILE_NOTE =
@@ -33,8 +33,14 @@ export const PROFILE_NOTE =
   + 'different profiles mint different article identities, so a difference between them would '
   + 'report parser disagreement as legislation.';
 
-/** What the reader is told where the platform sends null rather than a value. */
-export const NOT_STATED = 'not stated by the platform';
+/**
+ * What the reader is told where the platform sends null rather than a value.
+ *
+ * Re-exported rather than defined, because the coverage page needs the same sentence and two copies
+ * of one sentence is how two pages come to word the same absence differently. This is an alias for
+ * the one in `render.mjs` and holds no value of its own.
+ */
+export { NOT_STATED };
 
 /** What a language-narrowed answer is, said before a reader reads it as the whole record. */
 export function narrowedNote(language) {

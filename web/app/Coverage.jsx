@@ -1,201 +1,75 @@
-// Coverage, as React: the page whose job is to say what is missing.
+// The coverage page, as React.
 //
-// Every other screen answers a question. This one exists to be checked against, so its failure
-// mode is not a wrong answer but a comfortable one: a number with no denominator, a count with
-// no date, a type row saying how many states are held and not how many have text. Each of those
-// reads as completeness and none of them says so out loud.
+// Same split as the refusal card, the dossier and the provenance page: every rule stays in
+// `scripts/coverage.mjs` and is applied by `readCoverage`. This file decides how a read
+// `coverage_report` looks and re-derives nothing. It sums nothing, bounds nothing and decides no
+// absence; each arrives already decided, so a rule cannot be repaired in the string renderer while
+// this one keeps the defect.
 //
-// Nothing here is a literal. Two hand-transcribed counts of the same thing already disagreed on
-// the same day, so every figure arrives from the build that measured it and this component has
-// no default to fall back on. A versions count cannot be rendered without its versions-with-text
-// partner, because 752 held states of which 72 have text is the honest number and 752 alone is
-// not.
+// THAT IS THE DEFECT THIS FILE USED TO HAVE. Its header said so plainly -- "the guards below also
+// exist in `scripts/coverage.mjs`" -- and named the reason, which was that the module exported no
+// validator. It exports one now, so the two copies are gone rather than held level by a parity test
+// that fed both renderers the same inputs and asserted they refused the same way. A parity test can
+// only compare the rules that exist in both places; it cannot notice one that was added to neither.
 //
-// The publisher's own gap strings are reproduced verbatim. They are the sentences this service
-// publishes about its own limits, and a renderer that tidied them would be editing the
-// disclosure rather than showing it.
+// Two things live in the markup rather than in the validator, and both are load-bearing.
 //
-// The rule this port adds is `reconcileFacets`, and the reason it is two rules rather than one
-// is the whole point of it. A facet table is a breakdown of a headline number, and the two
-// tables on this page reconcile with their headline differently:
+// A date the platform does not hold is printed as the sentence saying so, never as a blank cell. A
+// blank reads as a fact about the corpus; the sentence is a fact about what the platform said.
 //
-//   - Document types PARTITION. The publisher gives a state at most one type and the untyped row
-//     takes the rest, so a complete table accounts for every state exactly once and must sum to
-//     the headline exactly.
-//   - Languages OVERLAP. A state exists as an expression in each language it was published in,
-//     so the rows may sum far past the headline and only the per-row bound holds: no row may
-//     count more than the whole it is drawn from.
-//
-// That distinction is measured, not theoretical. Luxembourg's live language rows sum to 1,406
-// works against 1,402 held, and the Union's to 4,652 versions against 2,366. Applying the
-// partition rule to languages would make both live coverage pages refuse to render, which is
-// how a rule invented for one table quietly deletes a page describing another.
-//
-// Why the guards below also exist in `scripts/coverage.mjs`: that module exports no validator,
-// unlike `dossier.mjs` and `refusal-card.mjs` whose React ports call `validateDossier` and
-// `validateRefusal` and re-derive nothing. Until one is extracted there, the two copies are held
-// together by `test/coverage-react.test.mjs`, which feeds every guard to both renderers and
-// asserts they refuse the same inputs.
+// There is no build instant anywhere on this page, and no retention sentence, and both are
+// deliberate rather than pending. The answer's own `not_held` carries a row saying no build time is
+// held and another saying no observation time is, and both are rendered with the rest. The page
+// this replaced stamped `Counts as of index build <instant>.` into its body and both its captions,
+// and printed `Observation history begins August 2026`.
 
-import { RETENTION_SENTENCE, UNTYPED_LABEL } from '../scripts/coverage.mjs';
-import { isCalendarDate, isUtcInstant } from '../scripts/temporal.mjs';
+import {
+  HELD,
+  NOT_STATED,
+  narrowedNote,
+  readCoverage,
+  unservedCapabilities,
+  unservedCapabilityNote,
+} from '../scripts/coverage.mjs';
 
-/**
- * The row a language has when the publisher recorded none.
- *
- * React renders `null` and `undefined` as nothing, so an unguarded cell would simply be blank,
- * and a blank cell in a column of language codes reads as a language this corpus holds rather
- * than as this service failing to say. Labelled for the same reason `UNTYPED_LABEL` exists: the
- * row is real and the states in it are exactly the ones most likely to be missing something.
- */
-export const UNCODED_LANGUAGE_LABEL = 'language not recorded by the publisher';
-
-function requireCount(value, what) {
-  if (!Number.isInteger(value) || value < 0) {
-    throw new Error(
-      `${what} is ${JSON.stringify(value)} rather than a count; this page has no defaults, ` +
-        'because a figure the renderer supplies is a figure nobody measured',
-    );
-  }
-  return value;
-}
-
-/**
- * Check a facet table against the headline it breaks down.
- *
- * Both kinds share the per-row bound and only a partition sums. Truncation weakens the sum and
- * only the sum: a table showing some of its rows cannot be expected to account for the whole,
- * but no row of it can exceed the whole either.
- *
- * `kind` is fixed at each call site rather than taken from the payload, because which kind a
- * table is follows from what the publisher assigns, not from what a caller believes. A payload
- * that could declare languages a partition could make a correct page refuse.
- *
- * @param {object}  input
- * @param {Array}   input.rows      the facet rows served
- * @param {string}  input.field     which count on each row is being reconciled
- * @param {number}  input.headline  the total this facet is a breakdown of
- * @param {'partition'|'overlapping'} input.kind
- * @param {boolean} input.truncated whether rows were left out
- * @param {string}  input.what      what to name in the error
- */
-function requireDistinctFacetKeys(rows, what) {
-  const seen = new Set();
-  for (const row of rows) {
-    // The untyped and uncoded rows are one row each, so a null code is a key like any other and
-    // two of them repeat just as a repeated code does.
-    const key = row.code === null || row.code === undefined ? '\u0000null' : String(row.code);
-    if (seen.has(key)) {
-      throw new Error(
-        `${what} has ${JSON.stringify(row.code)} listed twice; one facet key is one row, so a ` +
-          'reader cannot tell which of the two is the figure for it, and the totals reconciling ' +
-          'means only that the duplicate was counted consistently',
-      );
-    }
-    seen.add(key);
-  }
-}
-
-function requireServedRowsWithinTotal(rows, total, what) {
-  if (rows.length > total) {
-    throw new Error(
-      `${what} serves ${rows.length} rows against a total of ${total}; a truncated view shows ` +
-        'fewer rows than the whole, never more, so these two figures are not about one table',
-    );
-  }
-}
-
-function reconcileFacets({ rows, field, headline, kind, truncated, what }) {
-  for (const [index, row] of rows.entries()) {
-    if (row[field] > headline) {
-      throw new Error(
-        `${what} row ${index + 1} counts ${row[field]} ${field} against a total of ${headline}; ` +
-          'a part cannot be larger than the whole it is drawn from, so one of those two figures ' +
-          'is wrong and this page must not choose which',
-      );
-    }
-  }
-  if (kind !== 'partition' || truncated) return;
-  const served = rows.reduce((sum, row) => sum + row[field], 0);
-  if (served !== headline) {
-    throw new Error(
-      `${what} accounts for ${served} ${field} against a total of ${headline}, and every row is ` +
-        'shown; a complete breakdown that does not add up to its own headline means one of the ' +
-        'two was measured against something else',
-    );
-  }
-}
-
-/**
- * One document type row, and the pair that makes it honest.
- *
- * The partner is not optional and not a second column somebody may add. 752 held states with
- * text for 72 of them is the fact; 752 alone is a different and untrue one, and it is the shape
- * a table naturally grows into when one column is easier to fill than the other.
- */
-function TypeRow({ row, index }) {
-  const where = `document type row ${index + 1}`;
-  requireCount(row?.versions, `${where} versions`);
-  if (!Object.hasOwn(row ?? {}, 'versions_with_text')) {
-    throw new Error(
-      `${where} carries a versions count with no versions_with_text; the pair is the honest ` +
-        'figure, and the count on its own reads as text this corpus does not hold',
-    );
-  }
-  requireCount(row.versions_with_text, `${where} versions_with_text`);
-  if (row.versions_with_text > row.versions) {
-    throw new Error(`${where} holds text for more states than it holds`);
-  }
-
-  // A null code is a real row: the publisher gave no type for those states. Dropping it would
-  // remove exactly the states most likely to be missing their text.
-  const code = row.code === null || row.code === undefined ? UNTYPED_LABEL : row.code;
+/** One labelled row, in the same layout every strip on the site uses. */
+function Row({ label, children }) {
   return (
-    <tr>
-      <td>{code}</td>
-      <td>{row.versions}</td>
-      <td>{row.versions_with_text}</td>
-    </tr>
+    <div className="strip-row">
+      <dt>{label}</dt>
+      <dd>{children}</dd>
+    </div>
   );
 }
 
-/** One language row. Works and states, both counted, neither derived from the other. */
-function LanguageRow({ row, index }) {
-  requireCount(row?.works, `language row ${index + 1} works`);
-  requireCount(row?.versions, `language row ${index + 1} versions`);
-  const code = row.code === null || row.code === undefined ? UNCODED_LANGUAGE_LABEL : row.code;
-  return (
-    <tr>
-      <td>{code}</td>
-      <td>{row.works}</td>
-      <td>{row.versions}</td>
-    </tr>
-  );
+/** A value that is evidence: whole, selectable, never truncated for display. */
+function Evidence({ value }) {
+  return <code>{value}</code>;
+}
+
+/** What the platform does not state, said out loud in the cell where the value would be. */
+function NotStated() {
+  return <span className="coverage-not-stated">{NOT_STATED}</span>;
 }
 
 /**
- * A facet table, in its own scroll box.
+ * A table in its own scroll box.
  *
- * The box is keyboard focusable whether or not it asks to be, because a scrollable region is,
- * so it carries a role and an accessible name rather than becoming a tab stop that announces
- * nothing. The caption carries the build instant, so a table read on its own still says when it
- * was measured.
+ * The box is keyboard focusable whether or not it asks to be, because a scrollable region is, so it
+ * carries a role and an accessible name rather than becoming a tab stop that announces nothing. The
+ * caption says what the table counts and not when it was counted, because nothing on this answer
+ * says when.
  */
-function FacetTable({ caption, head, builtAt, children }) {
+function FacetTable({ caption, head, children }) {
   return (
-    <div
-      className="coverage-scroll"
-      role="region"
-      tabIndex={0}
-      aria-label={`${caption}, scrollable`}
-    >
+    <div className="coverage-scroll" role="region" tabIndex={0} aria-label={`${caption}, scrollable`}>
       <table className="coverage-table">
-        <caption>{`${caption}. Counts as of index build ${builtAt}.`}</caption>
+        <caption>{caption}</caption>
         <thead>
           <tr>
-            {head.map((cell) => (
-              <th scope="col" key={cell}>
-                {cell}
+            {head.map((heading) => (
+              <th scope="col" key={heading}>
+                {heading}
               </th>
             ))}
           </tr>
@@ -206,191 +80,178 @@ function FacetTable({ caption, head, builtAt, children }) {
   );
 }
 
-/**
- * The coverage page for one publisher.
- *
- * @param {object} props
- * @param {object} props.coverage the served coverage payload, verbatim
- */
-export function Coverage({ coverage }) {
-  const builtAt = coverage?.envelope?.freshness?.built_at;
-  if (!isUtcInstant(builtAt)) {
-    throw new Error(
-      'coverage carries the instant its counts were measured; a count with no date is a count ' +
-        'a reader will take as current however old it is',
-    );
-  }
-  if (typeof coverage.publisher_name !== 'string' || coverage.publisher_name.length === 0) {
-    throw new Error('coverage names the publisher it describes');
-  }
+function LanguageRow({ language }) {
+  return (
+    <tr>
+      <td>{language.language}</td>
+      <td>{language.works}</td>
+      <td>{language.states}</td>
+      <td>{language.articles}</td>
+      <td>{HELD[language.searchable_text_held]}</td>
+      <td>{language.articles_with_searchable_text}</td>
+      <td>{language.articles_without_publisher_date}</td>
+      <td>{language.first_state_date === null ? <NotStated /> : language.first_state_date}</td>
+      <td>{language.last_state_date === null ? <NotStated /> : language.last_state_date}</td>
+    </tr>
+  );
+}
 
-  requireCount(coverage.works, 'works');
-  requireCount(coverage.versions, 'versions');
-  requireCount(coverage.text?.versions_with_text_served, 'versions_with_text_served');
-  requireCount(coverage.text?.versions_without_text, 'versions_without_text');
-
-  if (
-    coverage.text.versions_with_text_served + coverage.text.versions_without_text !==
-    coverage.versions
-  ) {
-    throw new Error(
-      'the text counts do not add up to the versions count; a total that disagrees with its ' +
-        'own parts is the shape two hand-transcribed figures take',
-    );
-  }
-
-  for (const field of ['valid_from_earliest', 'valid_from_latest']) {
-    if (!isCalendarDate(coverage[field])) {
-      throw new Error(`coverage ${field} is not a calendar date`);
-    }
-  }
-
-  // The gap strings are this service's own statement of its limits. Reproduced exactly.
-  const gaps = coverage.known_gaps;
-  if (!Array.isArray(gaps) || gaps.length === 0) {
-    throw new Error(
-      'coverage with no known gaps is a claim of completeness; the page whose job is to say ' +
-        'what is missing cannot say nothing is',
-    );
-  }
-  if (!gaps.every((gap) => typeof gap === 'string' && gap.trim().length > 0)) {
-    throw new Error('every known gap is a sentence');
-  }
-
-  const types = coverage.document_types;
-  if (!Array.isArray(types) || types.length === 0) {
-    throw new Error('coverage lists the document types it holds');
-  }
-  if (!Number.isInteger(coverage.document_types_total) || coverage.document_types_total < 0) {
-    throw new Error(
-      `document_types_total is ${JSON.stringify(coverage.document_types_total)} rather than a ` +
-        'count; this page has no defaults, because a figure the renderer supplies is a figure ' +
-        'nobody measured',
-    );
-  }
-  // Both of these hold whether or not the payload declares truncation. The check below is
-  // switched off by `facets_truncated: true`, which is correct for the rule it guards and is why
-  // two rows against a total of one once rendered as `Showing 2 of 1 types.`
-  requireServedRowsWithinTotal(
-    types, coverage.document_types_total, 'the document-type breakdown');
-  requireDistinctFacetKeys(types, 'the document-type breakdown');
-  const truncatedTypes =
-    coverage.facets_truncated === true || types.length !== coverage.document_types_total;
-  if (truncatedTypes && coverage.facets_truncated !== true) {
-    throw new Error(
-      `${types.length} type rows were served against a total of ${coverage.document_types_total} ` +
-        'and the payload does not say it was truncated; a table that simply stops reads as a ' +
-        'complete one',
-    );
-  }
-
-  // A build that did not finish is not a smaller corpus, it is an unknown one.
-  if (coverage.build_complete !== true) {
-    const issues = Array.isArray(coverage.build_issues) ? coverage.build_issues.length : 0;
-    return (
-      <section className="coverage coverage-incomplete">
-        <h2>{coverage.publisher_name}</h2>
-        <p className="coverage-build">
-          {'This index build did not complete, so the counts below would describe an unknown ' +
-            'fraction of what this corpus holds and are not shown. Build status: ' +
-            `${String(coverage.build_inventory_status ?? 'unknown')}, ${issues} recorded ` +
-            `issue${issues === 1 ? '' : 's'}, measured ${builtAt}.`}
-        </p>
-      </section>
-    );
-  }
-  if (
-    Number.isInteger(coverage.scope_expected_works) &&
-    coverage.scope_expected_works !== coverage.works
-  ) {
-    throw new Error(
-      `the build expected ${coverage.scope_expected_works} works and holds ${coverage.works} ` +
-        'while reporting itself complete; one of those two numbers is wrong and this page ' +
-        'must not choose which',
-    );
-  }
-
-  const languages = coverage.languages ?? [];
-  // On the resolved list, because this renderer tolerates an absent one as an empty table and
-  // the raw field would be undefined here.
-  requireDistinctFacetKeys(languages, 'the language breakdown');
-  const typeRows = types.map((row, index) => (
-    <TypeRow key={`type:${row?.code ?? UNTYPED_LABEL}:${index}`} row={row} index={index} />
-  ));
-  const languageRows = languages.map((row, index) => (
-    <LanguageRow key={`language:${row?.code ?? UNCODED_LANGUAGE_LABEL}:${index}`} row={row} index={index} />
-  ));
-
-  // Last, after every row has proved itself a row, so a malformed row reports itself in its own
-  // terms rather than as an arithmetic disagreement. The two tables are checked under the two
-  // different rules named at the top of this file, and passing the wrong one to either would
-  // either invent a constraint the record does not have or drop the one it does.
-  reconcileFacets({
-    rows: types,
-    field: 'versions',
-    headline: coverage.versions,
-    kind: 'partition',
-    truncated: truncatedTypes,
-    what: 'the document type breakdown',
-  });
-  reconcileFacets({
-    rows: languages,
-    field: 'versions',
-    headline: coverage.versions,
-    kind: 'overlapping',
-    truncated: false,
-    what: 'the language breakdown',
-  });
-  reconcileFacets({
-    rows: languages,
-    field: 'works',
-    headline: coverage.works,
-    kind: 'overlapping',
-    truncated: false,
-    what: 'the language breakdown',
-  });
-
+/** The coverage page. */
+export function Coverage({ answer }) {
+  const view = readCoverage(answer);
+  const unserved = unservedCapabilities(view);
   return (
     <section className="coverage">
-      <h2>{coverage.publisher_name}</h2>
-      <p className="coverage-held">
-        {`${coverage.works} works, ${coverage.versions} dated states. Text is held for ` +
-          `${coverage.text.versions_with_text_served} of them and not for ` +
-          `${coverage.text.versions_without_text}.`}
-      </p>
-      <p className="coverage-range">
-        {`States run from ${coverage.valid_from_earliest} to ${coverage.valid_from_latest}, ` +
-          'the later date being publisher-scheduled rather than current.'}
-      </p>
-      <p className="coverage-as-of">{`Counts as of index build ${builtAt}.`}</p>
-      <p className="coverage-retention">{RETENTION_SENTENCE}</p>
-      <h3>What this corpus does not hold</h3>
-      <ul className="coverage-gaps">
-        {gaps.map((gap) => (
-          <li key={gap}>{gap}</li>
-        ))}
-      </ul>
-      <h3>By document type</h3>
-      <FacetTable
-        caption="Held states by publisher document type"
-        head={['type', 'states held', 'states with text']}
-        builtAt={builtAt}
-      >
-        {typeRows}
-      </FacetTable>
-      {truncatedTypes ? (
-        <p className="coverage-truncated">
-          {`Showing ${types.length} of ${coverage.document_types_total} types.`}
+      <section className="coverage-block">
+        <h2>What this page is about</h2>
+        <p className="coverage-scope">{view.scope}</p>
+        <dl className="coverage-facts">
+          <Row label="publisher"><Evidence value={view.mounted.publisher} /></Row>
+          <Row label="corpus"><Evidence value={view.mounted.corpus_sha256} /></Row>
+          <Row label="index"><Evidence value={view.mounted.index_sha256} /></Row>
+          <Row label="operation registry"><Evidence value={view.mounted.registry_sha256} /></Row>
+        </dl>
+        <p className="coverage-note">
+          {'These counts were taken from the corpus and index named above. There is no date on this '
+            + 'page because no build time is held; the digests say exactly which artifacts were '
+            + 'counted, which a date does not.'}
         </p>
-      ) : null}
-      <h3>By language</h3>
-      <FacetTable
-        caption="Held works and states by language"
-        head={['language', 'works', 'states']}
-        builtAt={builtAt}
-      >
-        {languageRows}
-      </FacetTable>
+      </section>
+      <section className="coverage-block">
+        <h2>How these counts are counted</h2>
+        <p className="coverage-note">{view.countsNote}</p>
+      </section>
+      <section className="coverage-block">
+        <h2>What this mount holds</h2>
+        <dl className="coverage-facts">
+          <Row label="works">{String(view.totals.works)}</Row>
+          <Row label="states">{String(view.totals.states)}</Row>
+          <Row label="articles">{String(view.totals.articles)}</Row>
+          <Row label="members">{String(view.totals.members)}</Row>
+        </dl>
+        {view.requestedLanguage === null ? null : (
+          <p className="coverage-note">{narrowedNote(view.requestedLanguage)}</p>
+        )}
+        <p className="coverage-held">
+          Languages held:{' '}
+          {view.languagesHeld.map((language) => (
+            <Evidence key={language} value={language} />
+          ))}
+        </p>
+        {view.languages.length === 0 ? (
+          <p className="coverage-note">
+            No language has a row here, so nothing below breaks these totals down.
+          </p>
+        ) : (
+          <FacetTable
+            caption="Held works, states and articles by language"
+            head={['language', 'works', 'states', 'articles', 'searchable text held',
+              'articles with searchable text', 'articles with no publisher date', 'first state',
+              'last state']}
+          >
+            {view.languages.map((language) => (
+              <LanguageRow key={language.language} language={language} />
+            ))}
+          </FacetTable>
+        )}
+      </section>
+      <section className="coverage-block">
+        <h2>What the corpus recorded for its members</h2>
+        <FacetTable caption="Members by the outcome the corpus recorded" head={['outcome', 'members']}>
+          {view.members.byOutcome.map((outcome) => (
+            <tr key={outcome.outcome}>
+              <td><Evidence value={outcome.outcome} /></td>
+              <td>{outcome.members}</td>
+            </tr>
+          ))}
+        </FacetTable>
+        <p className="coverage-held">
+          {`${view.members.withGaps} of ${view.totals.members} members recorded a gap.`}
+        </p>
+        {view.members.gaps.length === 0 ? (
+          <p className="coverage-note">
+            No gap token is counted here, so where a member above recorded a gap this page cannot
+            say which.
+          </p>
+        ) : (
+          <FacetTable
+            caption="Gap tokens the corpus recorded, counted by member"
+            head={['gap', 'members']}
+          >
+            {view.members.gaps.map((gap) => (
+              <tr key={gap.gap}>
+                <td><Evidence value={gap.gap} /></td>
+                <td>{gap.members}</td>
+              </tr>
+            ))}
+          </FacetTable>
+        )}
+        <p className="coverage-note">{view.members.gapsNote}</p>
+      </section>
+      <section className="coverage-block">
+        <h2>What can be asked of this mount</h2>
+        <p className="coverage-held">
+          {`${view.operations.served.length} of ${view.operations.registered} registered operations `
+            + 'are answered here.'}
+        </p>
+        <dl className="coverage-facts">
+          <Row label="answered">
+            {view.operations.served.map((operation) => (
+              <Evidence key={operation} value={operation} />
+            ))}
+          </Row>
+          <Row label="registered, with no route on this mount">
+            {view.operations.notServed.length === 0
+              ? 'none'
+              : view.operations.notServed.map((operation) => (
+                <Evidence key={operation} value={operation} />
+              ))}
+          </Row>
+        </dl>
+        <p className="coverage-note">{view.operations.note}</p>
+      </section>
+      <section className="coverage-block">
+        <h2>What this mount measured it can answer</h2>
+        {view.capabilityCells.length === 0 ? (
+          <p className="coverage-note">
+            No capability was measured, so nothing here says what this mount can be asked of any
+            period.
+          </p>
+        ) : (
+          <FacetTable
+            caption="Measured capabilities, by operation, column, field, language and period"
+            head={['operation', 'column', 'field', 'language', 'from', 'to', 'population']}
+          >
+            {view.capabilityCells.map((measured) => (
+              <tr
+                key={[measured.operation, measured.column, measured.field, measured.language,
+                  measured.period_from, measured.period_to].join('\u0000')}
+              >
+                <td><Evidence value={measured.operation} /></td>
+                <td><Evidence value={measured.column} /></td>
+                <td><Evidence value={measured.field} /></td>
+                <td><Evidence value={measured.language} /></td>
+                <td>{measured.period_from}</td>
+                <td>{measured.period_to}</td>
+                <td>{measured.population}</td>
+              </tr>
+            ))}
+          </FacetTable>
+        )}
+        {unserved.length === 0 ? null : (
+          <p className="coverage-note">{unservedCapabilityNote(unserved)}</p>
+        )}
+      </section>
+      <section className="coverage-block">
+        <h2>What this mount does not hold</h2>
+        <ul className="coverage-not-held">
+          {view.notHeld.map((held) => (
+            <li key={held.item}>
+              <Evidence value={held.item} />: {held.reason}
+            </li>
+          ))}
+        </ul>
+      </section>
     </section>
   );
 }
