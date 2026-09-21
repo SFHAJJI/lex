@@ -466,7 +466,7 @@ function readMembers(value, totals) {
 }
 
 /**
- * The corpus's own record of what its legal-content stage did with the top-level articles of its acquired
+ * The corpus's own record of what its legal-content stage did with the articles of its acquired
  * documents, counted by the corpus's disposition token.
  *
  * Every token is printed verbatim and none is glossed here: the platform's `article_outcomes_note`

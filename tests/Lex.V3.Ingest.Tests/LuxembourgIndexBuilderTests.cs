@@ -225,7 +225,7 @@ public sealed class LuxembourgIndexBuilderTests
     }
 
     [TestMethod]
-    public async Task AnArticleNestedInsideAnotherIsNotCountedApartFromItsParentSoTheSentenceSaysTopLevel()
+    public async Task AnArticleNestedInsideAnotherIsNotRecordedApartFromItsParentSoTheSumIsTheOutcomesAndNotTheElements()
     {
         const string manifestation =
             "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo/fr/xml";
@@ -271,8 +271,9 @@ public sealed class LuxembourgIndexBuilderTests
         var notAdmitted = reader.ResolveArticlesNotAdmitted([state.StateSha256])[state.StateSha256];
         Assert.HasCount(48, state.ArticleIdentities);
         Assert.AreEqual(6, notAdmitted);
-        // 48 + 6 is the 54 top-level articles, and not the 55 article elements a reader who counts the document finds:
-        // which is why the sentence says "top-level".
+        // 48 + 6 is the 54 articles the corpus recorded (what `provenance` counts by token), and not the 55 article
+        // elements a reader who counts the document finds: which is why the sentence says "recorded" and not "in the
+        // document".
         Assert.AreEqual(54, state.ArticleIdentities.Count + notAdmitted);
         Assert.AreNotEqual(elements, state.ArticleIdentities.Count + notAdmitted);
     }

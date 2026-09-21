@@ -80,12 +80,44 @@ public sealed class V3CorpusArticlesNotAdmittedTests
         JsonSerializer.Serialize(new { operation_id = operation, parameters });
 
     private const string PinnedNote =
-        "articles_not_admitted counts the top-level articles of the publisher's document for this state that the corpus recorded and this state does not hold; " +
-        "the number of articles in this state plus articles_not_admitted is the number of top-level articles in that document, and an article nested inside another is not counted apart from it; " +
+        "articles_not_admitted counts the articles the corpus recorded for the publisher's document for this state that this state does not hold; " +
+        "the number of articles in this state plus articles_not_admitted is the number of articles the corpus recorded for that document, which provenance counts by disposition token; " +
         "which articles they are is not held. " +
         "An article is not admitted whole when the reviewed profile cannot represent every element in it: " +
         "that can be an article the publisher struck out, and it can equally be an article whose text is complete " +
         "but which carries a mark the profile does not accept, such as an empty placeholder where a list item was removed";
+
+    [TestMethod]
+    public void TheCountAndTheSentenceRestOnUnsupportedContentShapeBeingTheOnlyNonHeldDispositionAStatesDocumentCarries()
+    {
+        // Each of the four others ends a document's run in the legal-content stage before its articles are read
+        // (RunAsync: the inventory check, then the retained bytes, the XML and the coordinates), so a document that
+        // produced one admitted article, which is what a state needs, never carries them. The three sets below
+        // partition the enum: the commit that adds a disposition fails here, in front of whoever adds it, naming the
+        // sentence whose arithmetic depends on the answer.
+        var held = new[]
+        {
+            LuxembourgAknLegalContentDisposition.Admitted,
+            LuxembourgAknLegalContentDisposition.MarkerOnlyEvidence,
+        };
+        var endsADocumentsRun = new[]
+        {
+            LuxembourgAknLegalContentDisposition.UpstreamNotInventoried,
+            LuxembourgAknLegalContentDisposition.RetainedBytesUnavailable,
+            LuxembourgAknLegalContentDisposition.XmlRejected,
+            LuxembourgAknLegalContentDisposition.ArticleCoordinatesMismatch,
+        };
+        var carriedByADocumentWithAState = new[] { LuxembourgAknLegalContentDisposition.UnsupportedContentShape };
+
+        CollectionAssert.AreEquivalent(
+            Enum.GetValues<LuxembourgAknLegalContentDisposition>(),
+            held.Concat(endsADocumentsRun).Concat(carriedByADocumentWithAState).ToArray(),
+            "A disposition was added to or removed from LuxembourgAknLegalContentDisposition. articles_not_admitted counts " +
+            "akn_unsupported_content_shape alone, and V3CorpusMount.ArticlesNotAdmittedNote says the articles in a state plus " +
+            "articles_not_admitted are the articles the corpus recorded for that document: that holds only while the one " +
+            "non-held disposition a document with a state can carry is UnsupportedContentShape. Decide where the new " +
+            "disposition belongs, then update this test, LuxembourgIndexReader.ResolveArticlesNotAdmitted and the note.");
+    }
 
     [TestMethod]
     public async Task EveryAnswerThatServesTheRealActsStateSaysFiveOfItsDocumentsArticlesWereNotAdmitted()
