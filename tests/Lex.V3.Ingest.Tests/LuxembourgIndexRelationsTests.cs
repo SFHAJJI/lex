@@ -77,7 +77,10 @@ public sealed class LuxembourgIndexRelationsTests
 
             var rows = LuxembourgIndexBuilder.ProjectRelations([Row(article)]);
 
-            CollectionAssert.AreEqual(written, rows.Select(static row => row.Href).ToArray(), publisherId);
+            var hrefs = rows.Select(static row => row.Href).ToArray();
+            CollectionAssert.AreEqual(
+                written, hrefs,
+                $"{publisherId}: the XML has [{string.Join(" | ", written)}] and the rows [{string.Join(" | ", hrefs)}]");
             CollectionAssert.AreEqual(
                 Enumerable.Range(0, rows.Length).ToArray(), rows.Select(static row => row.Ordinal).ToArray(), publisherId);
             Assert.IsTrue(rows.All(row => string.Equals(row.FromRef, article.IdentitySha256, StringComparison.Ordinal)));
