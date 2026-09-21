@@ -129,9 +129,43 @@ function refuseStampShapes(answer) {
   }
 }
 
+/**
+ * The corpus's own record of what its legal-content stage did with the articles of one document,
+ * counted by the corpus's disposition token. Each token is printed verbatim and none is glossed:
+ * the platform's `sources_note` says which of them are held and that it does not define them, and
+ * a gloss invented here would be this service's word wearing the corpus's authority.
+ *
+ * An empty list is a fact (the corpus recorded none for this document) and an absent member is a
+ * different one, so absence is refused. A token appears once, because the platform counts by
+ * grouping: two rows for one token would be two counts a reader might add. A count is a whole
+ * number, because a fraction or a negative of outcomes is a producer error and not something to
+ * round into a page.
+ */
+function readArticleOutcomes(outcomes, where) {
+  if (!Array.isArray(outcomes)) {
+    throw new Error(`${where} is a list, even an empty one`);
+  }
+  const seen = new Set();
+  return outcomes.map((row, index) => {
+    const rowWhere = `${where}[${index}]`;
+    const disposition = requireText(row?.disposition, `${rowWhere}.disposition`);
+    if (seen.has(disposition)) {
+      throw new Error(`${where} names ${disposition} twice; the platform counts each token once`);
+    }
+    seen.add(disposition);
+    const count = row.outcomes;
+    if (!Number.isInteger(count) || count < 0) {
+      throw new Error(`${rowWhere}.outcomes is a whole count of the corpus's outcomes`);
+    }
+    return { disposition, outcomes: count };
+  });
+}
+
 function readSource(source, where) {
   const gaps = requireOwn(source, 'gaps', where);
   if (!Array.isArray(gaps)) throw new Error(`${where}.gaps is a list, even an empty one`);
+  const articleOutcomes = readArticleOutcomes(
+    requireOwn(source, 'article_outcomes', where), `${where}.article_outcomes`);
   const byteLength = requireOwn(source, 'body_byte_length', where);
   if (byteLength !== null && !(Number.isInteger(byteLength) && byteLength >= 0)) {
     throw new Error(`${where}.body_byte_length is a whole count of bytes, or null`);
@@ -149,6 +183,7 @@ function readSource(source, where) {
     outcome: requireText(source.outcome, `${where}.outcome`),
     rights_disposition: rights,
     gaps: gaps.map((gap, index) => requireText(gap, `${where}.gaps[${index}]`)),
+    article_outcomes: articleOutcomes,
   };
 }
 
@@ -278,6 +313,12 @@ function renderSource(source) {
     + row('gaps recorded', source.gaps.length === 0
       ? 'none recorded'
       : source.gaps.map(code).join(' '))
+    + row('article outcomes', source.article_outcomes.length === 0
+      ? 'none recorded'
+      : '<ul class="provenance-outcomes">'
+        + source.article_outcomes.map((outcome) =>
+          `<li>${code(outcome.disposition)}: ${escapeHtml(String(outcome.outcomes))}</li>`).join('')
+        + '</ul>')
     + '</tbody></table></li>'
   );
 }

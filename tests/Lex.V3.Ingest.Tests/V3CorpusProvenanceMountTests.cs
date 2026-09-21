@@ -344,6 +344,110 @@ public sealed class V3CorpusProvenanceMountTests
         CollectionAssert.AreEqual(expected, sources.Select(static s => s.GetProperty("object_ref_sha256").GetString()).ToArray());
     }
 
+    private static string[] OutcomeRows(JsonElement source) =>
+        source.GetProperty("article_outcomes").EnumerateArray()
+            .Select(static row => row.GetProperty("disposition").GetString() + "=" + row.GetProperty("outcomes").GetInt64()).ToArray();
+
+    /// <summary>One member's legal-content outcomes counted by token from its row, by SQLite's own JSON functions.</summary>
+    private static string[] ReadOutcomeGround(MountedFixture fixture, string objectRef)
+    {
+        using var connection = LuxembourgIndexBuilder.Open(
+            Path.Combine(fixture.Directory, V3CorpusMount.IndexFileName), SqliteOpenMode.ReadOnly);
+        using var command = connection.CreateCommand();
+        command.CommandText =
+            "SELECT json_extract(j.value,'$.disposition'),COUNT(*) FROM members m,json_each(m.stage3_outcomes_json) j " +
+            "WHERE m.object_ref_sha256=$ref AND json_extract(j.value,'$.domain')='luxembourg_akn_legal_content' GROUP BY 1 ORDER BY 1";
+        command.Parameters.AddWithValue("$ref", objectRef);
+        using var reader = command.ExecuteReader();
+        var rows = new List<string>();
+        while (reader.Read())
+        {
+            rows.Add(reader.GetString(0) + "=" + reader.GetInt64(1));
+        }
+
+        return rows.ToArray();
+    }
+
+    [TestMethod]
+    public async Task ASourceCarriesTheCorpusesOutcomesForItsDocumentAndTheStatesArticlesAreTheAdmittedOnes()
+    {
+        var fixture = await MountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+        var ground = ReadGround(fixture);
+
+        var body = (await ProvenanceAsync(mount, $"/lu-legilux/{fixture.WorkKey}", fixture.ApplicabilityDate, "fra")).Result!.Value;
+
+        var state = body.GetProperty("states").EnumerateArray().Single();
+        var source = state.GetProperty("sources").EnumerateArray().Single();
+        var reference = source.GetProperty("object_ref_sha256").GetString()!;
+        CollectionAssert.AreEqual(ReadOutcomeGround(fixture, reference), OutcomeRows(source));
+        // The committed real document has 54 article elements: 49 admitted and five the reviewed profile cannot represent.
+        CollectionAssert.AreEqual(new[] { "akn_admitted=49", "akn_unsupported_content_shape=5" }, OutcomeRows(source));
+        // A state is one document's held articles, so its own count is the document's admitted and marker-only outcomes.
+        Assert.AreEqual(49, state.GetProperty("articles").GetInt32());
+        Assert.AreEqual(ground.Members.Single(m => m.ObjectRef == reference).Outcome, source.GetProperty("outcome").GetString());
+
+        // On a mount of one document, coverage counts the same outcomes in the same rows.
+        var coverage = await PostAsync(mount, V3RestRouteBinding.Coverage.RawTarget, "{\"operation_id\":\"coverage\",\"parameters\":{}}");
+        var coverageEnvelope = V3EnvelopeJson.ParseAndVerify(ResponseBytes(coverage), V3OperationRegistry.Reviewed);
+        Assert.AreEqual(
+            source.GetProperty("article_outcomes").GetRawText(),
+            coverageEnvelope.Result!.Value.GetProperty("members").GetProperty("article_outcomes").GetRawText());
+    }
+
+    [TestMethod]
+    public async Task EachOfAStatesSourcesCarriesItsOwnDocumentsOutcomesAndOnlyLegalContentIsCounted()
+    {
+        var fixture = await MountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        var second = await fixture.GiveTheStateASecondSourceAsync();
+        var ground = ReadGround(fixture);
+        var row = ground.States.Single(s => s.Expression == fixture.ExpressionIri);
+        var sourcesOfTheState = JsonSerializer.Deserialize<string[]>(row.IdentitiesJson)!
+            .Select(identity => ground.Articles.Single(a => a.Identity == identity).ObjectRef)
+            .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+        Assert.AreEqual(2, sourcesOfTheState.Length);
+        Assert.AreEqual(second, sourcesOfTheState[1]);
+        var first = sourcesOfTheState[0];
+        // Two documents whose lists differ, so a count taken from the wrong member or reused for both is seen; the second
+        // also holds an outcome of another domain, which is not a legal-content outcome and is not counted.
+        await fixture.SetOneMembersOutcomesAsync(first, MountedFixture.OutcomesJson(
+            "luxembourg_akn_legal_content", ("akn_admitted", 4), ("akn_xml_rejected", 2)));
+        await fixture.SetOneMembersOutcomesAsync(second,
+            MountedFixture.OutcomesJson("luxembourg_akn_legal_content", ("akn_marker_only_evidence", 1), ("akn_admitted", 1), ("akn_Zed", 1)).TrimEnd(']') + "," +
+            MountedFixture.OutcomesJson("luxembourg_publisher_pdf_act_scope", ("pdf_not_applicable", 3)).TrimStart('['));
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+
+        var body = (await ProvenanceAsync(mount, $"/lu-legilux/{fixture.WorkKey}", fixture.ApplicabilityDate, "fra")).Result!.Value;
+
+        var sources = body.GetProperty("states").EnumerateArray().Single().GetProperty("sources").EnumerateArray().ToArray();
+        CollectionAssert.AreEqual(new[] { first, second }, sources.Select(static s => s.GetProperty("object_ref_sha256").GetString()).ToArray());
+        CollectionAssert.AreEqual(new[] { "akn_admitted=4", "akn_xml_rejected=2" }, OutcomeRows(sources[0]));
+        // Ordinal order: the upper-case token sorts before every lower-case one only under an ordinal comparison.
+        CollectionAssert.AreEqual(new[] { "akn_Zed=1", "akn_admitted=1", "akn_marker_only_evidence=1" }, OutcomeRows(sources[1]));
+        CollectionAssert.AreEqual(ReadOutcomeGround(fixture, first), OutcomeRows(sources[0]));
+        CollectionAssert.AreEqual(ReadOutcomeGround(fixture, second), OutcomeRows(sources[1]));
+    }
+
+    [TestMethod]
+    public async Task ASourceWhoseDocumentHasNoLegalContentOutcomeCarriesAnEmptyListNotAMissingOne()
+    {
+        var fixture = await MountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        await fixture.SetMemberOutcomesAsync("[]");
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+
+        var body = (await ProvenanceAsync(mount, $"/lu-legilux/{fixture.WorkKey}", fixture.ApplicabilityDate, "fra")).Result!.Value;
+
+        var source = body.GetProperty("states").EnumerateArray().Single().GetProperty("sources").EnumerateArray().Single();
+        Assert.AreEqual(JsonValueKind.Array, source.GetProperty("article_outcomes").ValueKind);
+        Assert.AreEqual(0, source.GetProperty("article_outcomes").GetArrayLength());
+    }
+
     private static void CollectPaths(JsonElement element, string prefix, SortedSet<string> paths)
     {
         switch (element.ValueKind)
@@ -390,7 +494,9 @@ public sealed class V3CorpusProvenanceMountTests
             "publisher", "requested_date", "requested_identifier", "requested_language", "scope", "sources_note",
             "states", "states[].applicability_date", "states[].articles", "states[].expression_iri", "states[].language",
             "states[].article_identities_sha256", "states[].permalink", "states[].publisher_legal_resource_iri", "states[].publisher_work_iri",
-            "states[].rule_profile_sha256s", "states[].sources", "states[].sources[].body_byte_length", "states[].sources[].body_receipt_sha256",
+            "states[].rule_profile_sha256s", "states[].sources", "states[].sources[].article_outcomes",
+            "states[].sources[].article_outcomes[].disposition", "states[].sources[].article_outcomes[].outcomes",
+            "states[].sources[].body_byte_length", "states[].sources[].body_receipt_sha256",
             "states[].sources[].body_sha256", "states[].sources[].gaps", "states[].sources[].object_ref_sha256", "states[].sources[].outcome",
             "states[].sources[].rights_disposition", "states[].stable_coordinate",
             "states[].state_sha256",
@@ -401,6 +507,7 @@ public sealed class V3CorpusProvenanceMountTests
         Assert.AreEqual(2, body.GetProperty("states").GetArrayLength());
         Assert.IsTrue(body.GetProperty("states").EnumerateArray().All(static s => s.GetProperty("sources").GetArrayLength() > 0));
         Assert.IsTrue(body.GetProperty("states").EnumerateArray().Any(static s => s.GetProperty("sources")[0].GetProperty("gaps").GetArrayLength() > 0));
+        Assert.IsTrue(body.GetProperty("states").EnumerateArray().All(static s => s.GetProperty("sources")[0].GetProperty("article_outcomes").GetArrayLength() > 0));
     }
 
     [TestMethod]
@@ -429,7 +536,9 @@ public sealed class V3CorpusProvenanceMountTests
             "object_ref_sha256 identifies the source object in the corpus; body_sha256 is the digest of the publisher bytes the corpus retained " +
             "for it, body_byte_length their length and body_receipt_sha256 the digest of the corpus receipt for that body, each null where the " +
             "corpus holds none; outcome, rights_disposition and gaps are the corpus manifest's own tokens for the member, given verbatim, and this " +
-            "answer does not define them",
+            "answer does not define them; article_outcomes counts the corpus's legal-content outcomes for this document by disposition token, " +
+            "verbatim: the articles this state holds are the document's akn_admitted and akn_marker_only_evidence outcomes, an outcome under " +
+            "any other token is not held here, and which article an outcome belongs to is not held",
             body.GetProperty("sources_note").GetString());
         var notHeld = body.GetProperty("not_held").EnumerateArray().ToArray();
         CollectionAssert.AreEqual(

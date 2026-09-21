@@ -47,7 +47,11 @@ const PLACEHOLDER = "<varies-per-run>";
  * `states` and passed. A named path also does not move when the platform gains a field, which a
  * number does.
  */
-const MUST_REACH = ["verified_by.registry_sha256", "states[].sources[].outcome"];
+const MUST_REACH = [
+  "verified_by.registry_sha256",
+  "states[].sources[].outcome",
+  "states[].sources[].article_outcomes[].disposition",
+];
 
 async function capturedAnswer() {
   let parsed;
@@ -122,6 +126,17 @@ function rows(html) {
     found.set(key, found.has(key) ? `${found.get(key)} | ${shown}` : shown);
   }
   return found;
+}
+
+/**
+ * What a source's article-outcomes row reads as once `rows()` has taken the markup away: each outcome
+ * is its token, a colon and its count, so the tag boundary leaves a space either side of the colon.
+ * An empty list is the sentence "none recorded", never a blank cell.
+ */
+function outcomesText(source) {
+  return source.article_outcomes.length === 0
+    ? "none recorded"
+    : source.article_outcomes.map((outcome) => `${outcome.disposition} : ${outcome.outcomes}`).join(" ");
 }
 
 /**
@@ -395,6 +410,7 @@ test("each row shows its own field, in both renderers, and the two agree", async
     ["outcome", source.outcome],
     ["rights disposition", source.rights_disposition],
     ["gaps recorded", source.gaps.length === 0 ? "none recorded" : source.gaps.join(" ")],
+    ["article outcomes", outcomesText(source)],
     ["corpus", answer.verified_by.corpus_sha256],
     ["index", answer.verified_by.index_sha256],
     ["operation registry", answer.verified_by.registry_sha256],
@@ -621,6 +637,11 @@ function withTwoOfEach(answer) {
     outcome: OUTCOMES[n % OUTCOMES.length],
     rights_disposition: RIGHTS[n % RIGHTS.length],
     gaps: [`gap_${n}_first`, `gap_${n}_second`],
+    // Counts that differ per source, so one source's outcomes shown against another's are seen.
+    article_outcomes: [
+      { disposition: "akn_admitted", outcomes: 40 + n },
+      { disposition: "akn_unsupported_content_shape", outcomes: n },
+    ],
   });
   const stateAt = (n, language) => {
     const date = `200${n}-01-0${n}`;
@@ -724,6 +745,7 @@ test("a list with two things in it shows both, in both renderers", async () => {
       ["outcome", (one) => one.outcome],
       ["rights disposition", (one) => one.rights_disposition],
       ["gaps recorded", (one) => one.gaps.join(" ")],
+      ["article outcomes", outcomesText],
     ]) {
       assert.equal(
         shown.get(label),
@@ -853,6 +875,10 @@ test("the preview's tokens are the publisher's vocabulary, read from the source 
     "src/Lex.V3.Contracts/Source/Luxembourg/LuxembourgRightsChannels.cs",
     "LuxembourgRightsChannelDisposition",
   );
+  // The article outcomes' tokens are the corpus's Stage 3 dispositions, another enum in the same file.
+  const dispositions = await wireTokens("src/Lex.V3.Ingest/LexCorpus6Builder.cs", "LexCorpus6Stage3Disposition");
+  assert.ok(dispositions.has("akn_admitted"), "the disposition vocabulary did not parse");
+  assert.equal(dispositions.has("acquired"), false, "the disposition vocabulary is not the outcome one");
   // The file that declares the outcomes declares three other enums beside it, so a token from
   // one of those must NOT be a corpus outcome. This is the assertion that says the slice worked.
   assert.equal(
@@ -867,6 +893,7 @@ test("the preview's tokens are the publisher's vocabulary, read from the source 
   // have passed having checked NONE if any inner list were empty. The fourth instance of the class
   // in this file, found by the writer seat applying the rule to the loops rather than the comments.
   let checked = 0;
+  let checkedOutcomes = 0;
   for (const preview of PREVIEW_ANSWERS) {
     for (const state of preview.answer.states) {
       for (const source of state.sources) {
@@ -881,8 +908,100 @@ test("the preview's tokens are the publisher's vocabulary, read from the source 
             `${preview.lexId}: rights "${source.rights_disposition}" is not a rights token`,
           );
         }
+        assert.ok(source.article_outcomes.length > 0, `${preview.lexId}: a source shows no outcome`);
+        for (const outcome of source.article_outcomes) {
+          checkedOutcomes += 1;
+          assert.ok(
+            dispositions.has(outcome.disposition),
+            `${preview.lexId}: "${outcome.disposition}" is not a corpus disposition token`,
+          );
+        }
+      }
+      // The note the platform sends says the articles a state holds are its document's admitted and
+      // marker-only outcomes, so a preview with one source that says otherwise teaches a relation the
+      // platform does not keep.
+      if (state.sources.length === 1) {
+        const held = state.sources[0].article_outcomes
+          .filter((outcome) => ["akn_admitted", "akn_marker_only_evidence"].includes(outcome.disposition))
+          .reduce((sum, outcome) => sum + outcome.outcomes, 0);
+        assert.equal(state.articles, held, `${preview.lexId}: the state's articles are not its document's held outcomes`);
       }
     }
   }
   assert.ok(checked > 0, "no preview source was checked; the vocabulary test held nothing");
+  assert.ok(checkedOutcomes > 0, "no preview outcome was checked; the disposition vocabulary held nothing");
+});
+
+test("a document whose articles were not all admitted says so, in both renderers, and an empty list is a sentence", async () => {
+  // The captured answer's document holds 54 article outcomes and 49 are admitted; the reader who asks for the
+  // state must see the five the corpus recorded and did not admit, in the corpus's own token, beside the state.
+  const answer = withDigests(await capturedAnswer());
+  const state = answer.states[0];
+  const source = state.sources[0];
+  assert.deepEqual(
+    source.article_outcomes.map((outcome) => `${outcome.disposition}=${outcome.outcomes}`),
+    ["akn_admitted=49", "akn_unsupported_content_shape=5"],
+    "the captured answer no longer carries the outcomes this test is about",
+  );
+  for (const [renderer, html] of [
+    ["string", renderProvenance(answer)],
+    ["react", renderToStaticMarkup(h(Provenance, { answer }))],
+  ]) {
+    assert.equal(
+      rows(html).get("article outcomes"),
+      "akn_admitted : 49 akn_unsupported_content_shape : 5",
+      `${renderer} did not show the outcomes the corpus recorded`,
+    );
+  }
+
+  const none = { ...answer, states: [{ ...state, sources: [{ ...source, article_outcomes: [] }] }] };
+  for (const [renderer, html] of [
+    ["string", renderProvenance(none)],
+    ["react", renderToStaticMarkup(h(Provenance, { answer: none }))],
+  ]) {
+    assert.equal(rows(html).get("article outcomes"), "none recorded", `${renderer} left the empty list blank`);
+  }
+});
+
+test("a malformed article-outcomes member is refused by both renderers, and not printed", async () => {
+  const answer = withDigests(await capturedAnswer());
+  const state = answer.states[0];
+  const source = state.sources[0];
+  const withOutcomes = (article_outcomes) => ({
+    ...answer,
+    states: [{ ...state, sources: [{ ...source, article_outcomes }] }],
+  });
+  const absent = { ...source };
+  delete absent.article_outcomes;
+
+  const cases = [
+    ["absent", { ...answer, states: [{ ...state, sources: [absent] }] }, /does not carry article_outcomes/],
+    ["null", withOutcomes(null), /is a list, even an empty one/],
+    ["an object", withOutcomes({ akn_admitted: 49 }), /is a list, even an empty one/],
+    ["a row that is not an object", withOutcomes([49]), /disposition is not a value this page can print/],
+    ["no token", withOutcomes([{ outcomes: 1 }]), /disposition is not a value this page can print/],
+    ["an empty token", withOutcomes([{ disposition: " ", outcomes: 1 }]), /disposition is not a value this page can print/],
+    ["a negative count", withOutcomes([{ disposition: "akn_admitted", outcomes: -1 }]), /is a whole count/],
+    ["a fractional count", withOutcomes([{ disposition: "akn_admitted", outcomes: 1.5 }]), /is a whole count/],
+    ["a count as text", withOutcomes([{ disposition: "akn_admitted", outcomes: "49" }]), /is a whole count/],
+    ["no count", withOutcomes([{ disposition: "akn_admitted" }]), /is a whole count/],
+    [
+      "one token twice",
+      withOutcomes([{ disposition: "akn_admitted", outcomes: 1 }, { disposition: "akn_admitted", outcomes: 2 }]),
+      /names akn_admitted twice/,
+    ],
+  ];
+  for (const [name, props, pattern] of cases) {
+    assert.throws(() => renderProvenance(props), pattern, `the string renderer accepted ${name}`);
+    assert.throws(
+      () => renderToStaticMarkup(h(Provenance, { answer: props })),
+      pattern,
+      `the React port accepted ${name}`,
+    );
+  }
+
+  // A zero is a whole count and is printed as one; a token the corpus has not been asked about before is
+  // printed as it came, because the page glosses no token.
+  const shown = renderProvenance(withOutcomes([{ disposition: "akn_a_token_from_a_later_corpus", outcomes: 0 }]));
+  assert.equal(rows(shown).get("article outcomes"), "akn_a_token_from_a_later_corpus : 0");
 });

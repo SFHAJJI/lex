@@ -215,6 +215,88 @@ public sealed class LuxembourgIndexBuilderTests
             built.IndexRef, built.IndexBytes.Span, corpus.ArtifactRef, built.CapabilityManifest);
         Assert.AreEqual(0, reader.ArticleCount);
         Assert.IsEmpty(built.CapabilityManifest.Cells);
+
+        // The withheld member's own outcome list records the admitted outcome, and the coverage count of the
+        // corpus's outcomes leaves it out because the index holds no article for a member that is not acquired.
+        // This is the acquired filter on an index the builder made, not on one whose rows a test edited.
+        var withheld = corpus.VerifiedSet.Set.Members.Single(static value =>
+            value.Publisher == PublisherId.LuLegilux &&
+            value.Outcome == LexCorpus6OutcomeKind.RightsWithheld);
+        Assert.IsTrue(withheld.Stage3Outcomes.Any(static value =>
+            value.Domain == LexCorpus6Stage3OutcomeDomain.LuxembourgAknLegalContent &&
+            value.Disposition == LexCorpus6Stage3Disposition.AknAdmitted));
+        Assert.IsEmpty(reader.ResolveCoverage().ArticleOutcomes);
+    }
+
+    [TestMethod]
+    public async Task TheArticlesTheIndexHoldsAreExactlyTheAdmittedAndMarkerOnlyOutcomesOfAnAcquiredMember()
+    {
+        const string manifestation =
+            "http://data.legilux.public.lu/eli/etat/leg/loi/2026/01/01/a1/jo/fr/xml";
+        const string item =
+            "http://data.legilux.public.lu/filestore/eli/etat/leg/loi/2026/01/01/a1/jo/fr/xml/eli-etat-leg-loi-2026-01-01-a1-jo-fr-xml.xml";
+        // Three articles the reviewed profile treats three ways: publisher words (admitted), nothing but
+        // modification markers (marker-only evidence, which the index holds) and an element outside its
+        // vocabulary (not admitted, so not held).
+        var xml = Encoding.UTF8.GetBytes($$"""
+            <akomaNtoso xmlns="http://docs.oasis-open.org/legaldocml/ns/akn/3.0/CSD13" xmlns:scl="http://www.scl.lu">
+              <act><meta><identification>
+                <FRBRManifestation><FRBRthis value="{{manifestation}}"/></FRBRManifestation>
+                <scl:JOLUXManifestation>
+                  <scl:jolux scl:name="uriThis">{{manifestation}}</scl:jolux>
+                  <scl:jolux scl:name="license">{{VerifiedLuxembourgSourceProfile.AdmittingLicence}}</scl:jolux>
+                </scl:JOLUXManifestation>
+              </identification></meta><body>
+                <article id="art_1"><scl:JOLUXWork>
+                  <scl:jolux scl:name="dateApplicability">2026-02-03</scl:jolux>
+                </scl:JOLUXWork><content><p>Held publisher words.</p></content></article>
+                <article id="art_2"><scl:JOLUXWork>
+                  <scl:jolux scl:name="dateApplicability">2026-02-03</scl:jolux>
+                </scl:JOLUXWork><content><p><mod class="mod-start" for="#pm1"/><mod class="mod-end" for="#pm1"/></p></content></article>
+                <article id="art_3"><scl:JOLUXWork>
+                  <scl:jolux scl:name="dateApplicability">2026-02-03</scl:jolux>
+                </scl:JOLUXWork><content><p><del/></p></content></article>
+              </body></act>
+            </akomaNtoso>
+            """);
+        ICustodyStore store = new RoutedHttpAcquisitionSessionTests.MultiObjectCustodyStore();
+        var luxembourg = await LuxembourgGazetteAcquisitionTests
+            .CompleteXmlForStage3BodyCompositionAsync(xml, store, manifestation, item);
+        var envelope = await LexCorpus6BuilderTests.CompleteProfileEnvelopeAsync(
+            luxembourgOverride: luxembourg, luxembourgStore: store);
+        var corpus = LexCorpus6Builder.TryBuild(envelope, out var corpusRefusal, out var corpusDetail);
+        Assert.IsNotNull(corpus, $"{corpusRefusal}: {corpusDetail}");
+        Assert.IsTrue(
+            corpus.VerifiedSet.Set.Members.Any(static value =>
+                value.Publisher == PublisherId.LuLegilux && value.Outcome == LexCorpus6OutcomeKind.Acquired),
+            "no Luxembourg member is acquired: " + string.Join(
+                ", ",
+                corpus.VerifiedSet.Set.Members.Where(static value => value.Publisher == PublisherId.LuLegilux)
+                    .Select(static value => value.Outcome + "/" + value.LuxembourgRights?.Disposition)));
+        // The stage's own dispositions, read from its population and not through the index.
+        CollectionAssert.AreEquivalent(
+            new[]
+            {
+                LuxembourgAknLegalContentDisposition.Admitted,
+                LuxembourgAknLegalContentDisposition.MarkerOnlyEvidence,
+                LuxembourgAknLegalContentDisposition.UnsupportedContentShape,
+            },
+            envelope.BodyComposition.Envelope.LuxembourgAknLegalContentPopulation.Outcomes
+                .Select(static value => value.Disposition).ToArray());
+
+        var built = LuxembourgIndexBuilder.TryBuild(envelope, out var refusal, out var detail);
+
+        Assert.IsNotNull(built, $"{refusal}: {detail}");
+        using var reader = LuxembourgIndexReader.OpenAndVerify(
+            built.IndexRef, built.IndexBytes.Span, corpus.ArtifactRef, built.CapabilityManifest);
+        // Two articles: the admitted one and the marker-only one. Dropping either from the index's insert gate
+        // makes the corpus's count of outcomes say something the articles it holds do not.
+        Assert.AreEqual(2, reader.ArticleCount);
+        var coverage = reader.ResolveCoverage();
+        Assert.AreEqual(2, coverage.Articles);
+        CollectionAssert.AreEqual(
+            new[] { "akn_admitted=1", "akn_marker_only_evidence=1", "akn_unsupported_content_shape=1" },
+            coverage.ArticleOutcomes.Select(static row => row.Key + "=" + row.Value).ToArray());
     }
 
     [TestMethod]

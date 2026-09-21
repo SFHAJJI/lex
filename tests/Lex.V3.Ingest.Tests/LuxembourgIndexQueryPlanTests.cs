@@ -33,6 +33,27 @@ public sealed class LuxembourgIndexQueryPlanTests
     private static readonly (string Sql, (string, object)[] Parameters) TitleQuery =
         (LuxembourgIndexQueries.WorkTitles, [("$expressions", "[\"" + Digest + "\"]")]);
 
+    private static readonly (string Sql, (string, object)[] Parameters) MemberOutcomeQuery =
+        (LuxembourgIndexQueries.MemberOutcomes, [("$member", Digest)]);
+
+    /// <summary>
+    /// A source's outcome list is read by the member's primary key, once per source: one search of <c>members</c>, never a
+    /// scan of it, whatever the statistics say.
+    /// </summary>
+    private static IEnumerable<string> MemberOutcomeProblems(string label, string[] plan)
+    {
+        var shown = $"{label}, MemberOutcomes: {string.Join(" | ", plan)}";
+        if (plan.Any(static line => Regex.IsMatch(line, @"^SCAN m\b")))
+        {
+            yield return "members are scanned for one source's outcomes. " + shown;
+        }
+
+        if (plan.Count(static line => line.StartsWith("SEARCH m USING INDEX sqlite_autoindex_members_1 (object_ref_sha256=?)", StringComparison.Ordinal)) != 1)
+        {
+            yield return "members are not searched by primary key exactly once. " + shown;
+        }
+    }
+
     /// <summary>
     /// The title lookup is not bounded by the work: the title table's key starts with a column that does not
     /// reliably name a state's work, and there is no index on the expression IRI, so it reads the table once and
@@ -139,7 +160,8 @@ public sealed class LuxembourgIndexQueryPlanTests
 
         var problems = Queries.SelectMany(query =>
             Problems("the index as built", query.Name, Plan(connection, query.Sql, query.Parameters), query.ReadsMembers, stateIsSearched: false))
-            .Concat(TitleProblems("the index as built", Plan(connection, TitleQuery.Sql, TitleQuery.Parameters))).ToArray();
+            .Concat(TitleProblems("the index as built", Plan(connection, TitleQuery.Sql, TitleQuery.Parameters)))
+            .Concat(MemberOutcomeProblems("the index as built", Plan(connection, MemberOutcomeQuery.Sql, MemberOutcomeQuery.Parameters))).ToArray();
         Assert.AreEqual(0, problems.Length, string.Join(Environment.NewLine, problems));
     }
 
@@ -191,6 +213,7 @@ public sealed class LuxembourgIndexQueryPlanTests
             problems.AddRange(Queries.SelectMany(query =>
                 Problems(label, query.Name, Plan(connection, query.Sql, query.Parameters), query.ReadsMembers, stateIsSearched)));
             problems.AddRange(TitleProblems(label, Plan(connection, TitleQuery.Sql, TitleQuery.Parameters)));
+            problems.AddRange(MemberOutcomeProblems(label, Plan(connection, MemberOutcomeQuery.Sql, MemberOutcomeQuery.Parameters)));
         }
 
         Assert.AreEqual(0, problems.Count, string.Join(Environment.NewLine, problems));
@@ -212,6 +235,10 @@ public sealed class LuxembourgIndexQueryPlanTests
             1,
             Occurrences(reader, "command.CommandText = LuxembourgIndexQueries.WorkTitles;"),
             "The reader does not run LuxembourgIndexQueries.WorkTitles exactly once, so the plan asked of it is not the plan it gets.");
+        Assert.AreEqual(
+            1,
+            Occurrences(reader, "outcomes.CommandText = LuxembourgIndexQueries.MemberOutcomes;"),
+            "The reader does not run LuxembourgIndexQueries.MemberOutcomes exactly once, so the plan asked of it is not the plan it gets.");
 
         // The one per-state join left inline is search's, which scans a whole language on its own connection by design.
         Assert.AreEqual(

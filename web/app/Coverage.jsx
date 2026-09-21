@@ -39,6 +39,7 @@ import { Fragment } from 'react';
 import {
   COUNTS_PROVENANCE_NOTE,
   HELD,
+  NO_ARTICLE_OUTCOMES,
   NO_GAP_TOKENS,
   NO_LANGUAGE_ROWS,
   STATE_RANGE_NOTE,
@@ -210,6 +211,22 @@ export function Coverage({ answer }) {
           </FacetTable>
         )}
         <p className="coverage-note">{view.members.gapsNote}</p>
+        {view.members.articleOutcomes.length === 0 ? (
+          <p className="coverage-note">{NO_ARTICLE_OUTCOMES}</p>
+        ) : (
+          <FacetTable
+            caption="Legal-content outcomes the corpus recorded, by disposition"
+            head={['disposition', 'outcomes']}
+          >
+            {view.members.articleOutcomes.map((outcome) => (
+              <tr key={outcome.disposition}>
+                <td><Evidence value={outcome.disposition} /></td>
+                <td>{outcome.outcomes}</td>
+              </tr>
+            ))}
+          </FacetTable>
+        )}
+        <p className="coverage-note">{view.members.articleOutcomesNote}</p>
       </section>
       <section className="coverage-block">
         <h2>What can be asked of this mount</h2>
