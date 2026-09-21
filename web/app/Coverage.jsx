@@ -2,9 +2,17 @@
 //
 // Same split as the refusal card, the dossier and the provenance page: every rule stays in
 // `scripts/coverage.mjs` and is applied by `readCoverage`. This file decides how a read
-// `coverage_report` looks and re-derives nothing. It sums nothing, bounds nothing and decides no
-// absence; each arrives already decided, so a rule cannot be repaired in the string renderer while
-// this one keeps the defect.
+// `coverage_report` looks. It sums nothing and bounds nothing; each count and each relation arrives
+// already decided, so a rule cannot be repaired in the string renderer while this one keeps the
+// defect.
+//
+// It does decide FIVE absences -- no language row, no gap token, no measured capability, no
+// unrouted operation, no unserved capability -- and an earlier header claimed it decided none. Each
+// is a branch on a list being empty, and each branch's SENTENCE is imported rather than written
+// here, because the page's own prose was the last thing left in two copies. One of those sentences
+// was false on an answer the producer really sends, and the parity test that was supposed to hold
+// the copies level compares them after tags are stripped: it reports that two renderers agree and
+// cannot report that both are wrong.
 //
 // THAT IS THE DEFECT THIS FILE USED TO HAVE. Its header said so plainly -- "the guards below also
 // exist in `scripts/coverage.mjs`" -- and named the reason, which was that the module exported no
@@ -12,10 +20,9 @@
 // that fed both renderers the same inputs and asserted they refused the same way. A parity test can
 // only compare the rules that exist in both places; it cannot notice one that was added to neither.
 //
-// Two things live in the markup rather than in the validator, and both are load-bearing.
-//
-// A date the platform does not hold is printed as the sentence saying so, never as a blank cell. A
-// blank reads as a fact about the corpus; the sentence is a fact about what the platform said.
+// One thing lives in the markup rather than in the validator, and it is load-bearing: adjacent
+// evidence values carry a space between them. React puts none there, the string renderer joins with
+// one, and two identifiers run together are one identifier a reader cannot look up.
 //
 // There is no build instant anywhere on this page, and no retention sentence, and both are
 // deliberate rather than pending. The answer's own `not_held` carries a row saying no build time is
@@ -24,12 +31,22 @@
 // and printed `Observation history begins August 2026`. The calendar dates that remain -- each
 // language's state range and each measured capability's period -- are the publisher's facts about
 // the law, not a claim about when the counting happened, and the note above the counts says so.
+// The V2 page's qualification of the last state date is restored under the table, in words that do
+// not assume a present date this mount does not hold.
+
+import { Fragment } from 'react';
 
 import {
+  COUNTS_PROVENANCE_NOTE,
   HELD,
-  NOT_STATED,
+  NO_GAP_TOKENS,
+  NO_LANGUAGE_ROWS,
+  STATE_RANGE_NOTE,
+  capabilityAbsence,
+  gapsSentence,
   narrowedNote,
   readCoverage,
+  servedSentence,
   unservedCapabilities,
   unservedCapabilityNote,
 } from '../scripts/coverage.mjs';
@@ -49,9 +66,22 @@ function Evidence({ value }) {
   return <code>{value}</code>;
 }
 
-/** What the platform does not state, said out loud in the cell where the value would be. */
-function NotStated() {
-  return <span className="coverage-not-stated">{NOT_STATED}</span>;
+/**
+ * A run of evidence values with a space between them, which React does not put there.
+ *
+ * `{list.map(...)}` emits `<code>fra</code><code>deu</code>` with nothing between, and the string
+ * renderer joins the same list with a space. The parity test could not see the difference, because
+ * it replaced every tag with a space before comparing, so `fra deu` and `fradeu` read alike to it.
+ * `styles.css` already records this defect shipping once, on another surface: "Chrome rendered ...
+ * as one word". Two identifiers run together are one identifier a reader cannot look up.
+ */
+function Spaced({ values }) {
+  return values.map((value, index) => (
+    <Fragment key={value}>
+      {index === 0 ? null : ' '}
+      <Evidence value={value} />
+    </Fragment>
+  ));
 }
 
 /**
@@ -92,8 +122,8 @@ function LanguageRow({ language }) {
       <td>{HELD[language.searchable_text_held]}</td>
       <td>{language.articles_with_searchable_text}</td>
       <td>{language.articles_without_publisher_date}</td>
-      <td>{language.first_state_date === null ? <NotStated /> : language.first_state_date}</td>
-      <td>{language.last_state_date === null ? <NotStated /> : language.last_state_date}</td>
+      <td>{language.first_state_date}</td>
+      <td>{language.last_state_date}</td>
     </tr>
   );
 }
@@ -113,12 +143,7 @@ export function Coverage({ answer }) {
           <Row label="index"><Evidence value={view.mounted.index_sha256} /></Row>
           <Row label="operation registry"><Evidence value={view.mounted.registry_sha256} /></Row>
         </dl>
-        <p className="coverage-note">
-          {'These counts were taken from the corpus and index named above. Nothing here says when '
-            + 'they were taken: no build time of either is held. The digests say exactly which '
-            + 'artifacts were counted, which a date does not. The calendar dates further down are '
-            + 'the publisher’s, about the law, and not about when this was counted.'}
-        </p>
+        <p className="coverage-note">{COUNTS_PROVENANCE_NOTE}</p>
       </section>
       <section className="coverage-block">
         <h2>How these counts are counted</h2>
@@ -136,15 +161,10 @@ export function Coverage({ answer }) {
           <p className="coverage-note">{narrowedNote(view.requestedLanguage)}</p>
         )}
         <p className="coverage-held">
-          Languages held:{' '}
-          {view.languagesHeld.map((language) => (
-            <Evidence key={language} value={language} />
-          ))}
+          Languages held: <Spaced values={view.languagesHeld} />
         </p>
         {view.languages.length === 0 ? (
-          <p className="coverage-note">
-            No language has a row here, so nothing below breaks these totals down.
-          </p>
+          <p className="coverage-note">{NO_LANGUAGE_ROWS}</p>
         ) : (
           <FacetTable
             caption="Held works, states and articles by language"
@@ -156,6 +176,9 @@ export function Coverage({ answer }) {
               <LanguageRow key={language.language} language={language} />
             ))}
           </FacetTable>
+        )}
+        {view.languages.length === 0 ? null : (
+          <p className="coverage-note">{STATE_RANGE_NOTE}</p>
         )}
       </section>
       <section className="coverage-block">
@@ -169,13 +192,10 @@ export function Coverage({ answer }) {
           ))}
         </FacetTable>
         <p className="coverage-held">
-          {`${view.members.withGaps} of ${view.totals.members} members recorded a gap.`}
+          {gapsSentence(view.members.withGaps, view.totals.members)}
         </p>
         {view.members.gaps.length === 0 ? (
-          <p className="coverage-note">
-            No gap token is counted here, so where a member above recorded a gap this page cannot
-            say which.
-          </p>
+          <p className="coverage-note">{NO_GAP_TOKENS}</p>
         ) : (
           <FacetTable
             caption="Gap tokens the corpus recorded, counted by member"
@@ -194,21 +214,14 @@ export function Coverage({ answer }) {
       <section className="coverage-block">
         <h2>What can be asked of this mount</h2>
         <p className="coverage-held">
-          {`${view.operations.served.length} of ${view.operations.registered} registered operations `
-            + 'are answered here.'}
+          {servedSentence(view.operations.served.length, view.operations.registered)}
         </p>
         <dl className="coverage-facts">
-          <Row label="answered">
-            {view.operations.served.map((operation) => (
-              <Evidence key={operation} value={operation} />
-            ))}
-          </Row>
+          <Row label="answered"><Spaced values={view.operations.served} /></Row>
           <Row label="registered, with no route on this mount">
             {view.operations.notServed.length === 0
               ? 'none'
-              : view.operations.notServed.map((operation) => (
-                <Evidence key={operation} value={operation} />
-              ))}
+              : <Spaced values={view.operations.notServed} />}
           </Row>
         </dl>
         <p className="coverage-note">{view.operations.note}</p>
@@ -216,10 +229,7 @@ export function Coverage({ answer }) {
       <section className="coverage-block">
         <h2>What this mount measured it can answer</h2>
         {view.capabilityCells.length === 0 ? (
-          <p className="coverage-note">
-            No capability was measured, so nothing here says what this mount can be asked of any
-            period.
-          </p>
+          <p className="coverage-note">{capabilityAbsence(view.requestedLanguage)}</p>
         ) : (
           <FacetTable
             caption="Measured capabilities, by operation, column, field, language and period"

@@ -15,17 +15,19 @@
 // The three shapes:
 //
 //   * THE WHOLE MOUNT, nothing narrowed. Two language rows that disagree with each other on
-//     purpose: one holding searchable text and a date range, one holding neither, so its two date
-//     cells read "not stated by the platform" and its searchable count is zero. A preview whose
-//     every row was the first kind would be a comfortable preview of the page whose job is to be
-//     uncomfortable.
+//     purpose: one holding searchable text, one holding none at all because every one of its
+//     articles lacks a publisher date. A preview whose every row was the first kind would be a
+//     comfortable preview of the page whose job is to be uncomfortable.
 //   * NARROWED TO A LANGUAGE THE MOUNT HOLDS. One language's rows and cells beside the whole
 //     mount's totals, which is what the platform does and is the easiest thing on this answer to
 //     misread. The note sits with the totals rather than under them.
-//   * NARROWED TO A LANGUAGE THE MOUNT DOES NOT HOLD. No language rows and no measured
-//     capabilities, so the page says so in sentences instead of rendering two empty tables. The
-//     page this replaced could not express this case at all: it refused an empty language list,
-//     because on the old payload an empty list meant a payload that did not say.
+//   * NARROWED TO A LANGUAGE THAT MEASURES NOTHING. One row and no measured capability, because
+//     narrowing dropped the other language's cells. This case replaced a preview narrowed to a
+//     language the mount did NOT hold, which the producer refuses outright with
+//     `language_not_available` before any answer is built: a shape nothing emits, taught by the
+//     file whose header promises not to teach one, and asserted by a test. It is also the case
+//     that caught the page saying "No capability was measured" about a mount that had measured
+//     one.
 
 import { page } from './render.mjs';
 import { renderCoverage } from './coverage.mjs';
@@ -47,7 +49,7 @@ const COUNTS_NOTE =
   + 'which is what the capability cells measure, and so it and articles_without_publisher_date are '
   + 'not addends; when a language is requested, requested_language echoes it and only languages and '
   + 'capability_cells are narrowed to it, and every other member, totals included, is the whole '
-  + 'mount’s';
+  + "mount's";
 
 const GAPS_NOTE = 'the gap tokens the corpus recorded per member, verbatim, counted by member';
 
@@ -101,11 +103,16 @@ const LANGUAGES_HELD = Object.freeze(['fra', 'deu']);
 // The four cells' populations sum to fra's `articles_with_searchable_text`, because that is what
 // the producer does: the count is the sum of the search/articles/searchable_text cells for that
 // language. A preview where the two disagreed would teach a shape the handler cannot produce.
+//
+// Each period is a SINGLE DAY, for the same reason. `MeasureCapabilities` groups articles by
+// (language, wording date) and passes that one date as both ends of the cell, so a multi-day period
+// is a shape the builder cannot emit. This preview carried four multi-year ranges until that was
+// read off the producer.
 const FRA_CELLS = Object.freeze([
-  Object.freeze({ period_from: '1972-03-04', period_to: '1999-12-31', population: 5 }),
-  Object.freeze({ period_from: '2000-01-01', period_to: '2014-12-31', population: 15 }),
-  Object.freeze({ period_from: '2015-01-01', period_to: '2023-12-31', population: 120 }),
-  Object.freeze({ period_from: '2024-01-01', period_to: '2029-11-30', population: 40 }),
+  Object.freeze({ period_from: '1972-03-04', period_to: '1972-03-04', population: 5 }),
+  Object.freeze({ period_from: '2000-01-01', period_to: '2000-01-01', population: 15 }),
+  Object.freeze({ period_from: '2015-06-30', period_to: '2015-06-30', population: 120 }),
+  Object.freeze({ period_from: '2029-11-30', period_to: '2029-11-30', population: 40 }),
 ]);
 
 const FRA = Object.freeze({
@@ -120,10 +127,16 @@ const FRA = Object.freeze({
   searchable_text_held: true,
 });
 
-// The uncomfortable row. Its articles are all missing a publisher date, so nothing about it can be
-// searched and the index measured no capability for it, so the flag is false and the count is zero.
-// Its two date cells are null, because MIN and MAX over a column of nulls are null, and the page
-// prints the sentence rather than leaving them blank.
+// The uncomfortable row, and the one this preview exists for. Its articles all lack a publisher
+// date, so nothing about it can be searched: the index measured no capability for it, the flag is
+// false and the count is zero.
+//
+// Its state dates are VALUES and not nulls. `states.applicability_date` is `NOT NULL` and a
+// language row exists only because `states GROUP BY language` produced a group, so MIN and MAX over
+// it are always dates. This row carried nulls until that was read off the DDL, and the page grew a
+// "not stated by the platform" cell for a shape no producer can send. The column that can be
+// missing a publisher date is `articles.applicability_date`, which is counted by
+// `articles_without_publisher_date` and never dated.
 const DEU = Object.freeze({
   language: 'deu',
   works: 3,
@@ -131,8 +144,8 @@ const DEU = Object.freeze({
   articles: 40,
   articles_with_searchable_text: 0,
   articles_without_publisher_date: 40,
-  first_state_date: null,
-  last_state_date: null,
+  first_state_date: '1998-01-01',
+  last_state_date: '2016-04-12',
   searchable_text_held: false,
 });
 
@@ -211,21 +224,23 @@ const NARROWED_TO_HELD = {
   }),
 };
 
-const NARROWED_TO_ABSENT = {
-  heading: 'Narrowed to a language this mount does not hold',
+const NARROWED_TO_UNMEASURED = {
+  heading: 'Narrowed to a language that measures nothing',
   note:
-    'No language row and no measured capability, so the page says both in sentences instead of '
-    + 'rendering two empty tables. The languages this mount does hold are still listed, because '
-    + 'that list is not narrowed, and the totals are still the whole mount’s.',
+    'One row and no measured capability. What the page must not say here is that the mount '
+    + 'measured nothing: it measured four capabilities and every one of them is the other '
+    + 'language’s, which narrowing dropped. The sentence is about the language asked for and '
+    + 'says nothing about the mount, and it said the opposite until an answer in exactly this '
+    + 'shape was built and read.',
   answer: answer({
-    requestedLanguage: 'ltz',
-    languages: [],
+    requestedLanguage: 'deu',
+    languages: [{ ...DEU }],
     capabilityCells: [],
   }),
 };
 
 export const PREVIEW_ANSWERS = Object.freeze([
-  WHOLE_MOUNT, NARROWED_TO_HELD, NARROWED_TO_ABSENT,
+  WHOLE_MOUNT, NARROWED_TO_HELD, NARROWED_TO_UNMEASURED,
 ]);
 
 /** The coverage preview, in the Gateway shell, because its reader is checking the service. */

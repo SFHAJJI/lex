@@ -37,6 +37,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import {
   HELD,
   NOT_STATED,
+  capabilityAbsence,
   narrowedNote,
   readCoverage,
   renderCoverage,
@@ -67,12 +68,16 @@ const MUST_REACH = [
   "not_held[].reason",
 ];
 
-/** The only path on the captured answer the platform may send null. Nothing else may be. */
-const NULLABLE = new Set([
-  "requested_language",
-  "languages[].first_state_date",
-  "languages[].last_state_date",
-]);
+/**
+ * The ONLY path the platform may send null, and it was three.
+ *
+ * `languages[].first_state_date` and `languages[].last_state_date` were on this list because the
+ * reader accepted null there and the preview taught it. `states.applicability_date` is `NOT NULL`
+ * and a language row exists only because `states GROUP BY language` produced a group, so MIN and
+ * MAX over it are values. A nullable list is a claim about the producer, and two thirds of this one
+ * was wrong.
+ */
+const NULLABLE = new Set(["requested_language"]);
 
 async function capturedAnswer() {
   let parsed;
@@ -524,13 +529,30 @@ test("the two article columns are not added, because the platform says they are 
   );
   // Rendered, not refused. The V2 page REQUIRED this sum of its own two text columns, so on that
   // rule this answer -- and every honest answer -- would not have a page at all.
+  // NOT "every honest answer", which is what this said and what the module header now denies: an
+  // answer whose every dated article is searchable does add up and would have rendered. What the
+  // V2 rule would have refused is any answer holding one dated article whose text is not
+  // searchable.
   assert.equal(typeof string(whole), "string");
   assert.ok(text(string(whole)).includes("are not addends"));
 
-  // Each column is still bounded by the articles of its own row.
+  // BOTH columns are bounded by the articles of their own row, and this asserted one while the
+  // comment beside the code claimed two. Not addends is not the same as not bounded.
   assert.throws(
     () => readCoverage(mutate(whole, (a) => { a.languages[0].articles_without_publisher_date = 201; })),
     /articles_without_publisher_date is 201 against 200/,
+  );
+  assert.throws(
+    () => readCoverage(mutate(whole, (a) => { a.languages[0].articles_with_searchable_text = 5000; })),
+    /articles_with_searchable_text is 5000 against 200/,
+  );
+  // And a language cannot hold more works than the states they were counted from. Asserted on the
+  // SECOND row, because on the first the mount-level bound is tighter and fires first: 12 works
+  // against 12 held leaves no value that reaches the per-row rule. A rule a test cannot reach on
+  // the row it picked is a rule that test does not exercise.
+  assert.throws(
+    () => readCoverage(mutate(whole, (a) => { a.languages[1].works = 5; })),
+    /languages\[1\]\.works is 5 against 3; a language’s works are the distinct works of its states/,
   );
 });
 
@@ -552,25 +574,38 @@ test("the searchable-text flag and the count beside it cannot disagree, in eithe
   assert.equal(shown[1][4], HELD.false);
 });
 
-test("a date range that runs backwards, or holds one end only, is a wrong range and not a small one", () => {
+test("a date range that runs backwards is a wrong range, and a null end is a shape nothing sends", () => {
   const whole = PREVIEW_ANSWERS[0].answer;
   assert.throws(
     () => readCoverage(mutate(whole, (a) => { a.languages[0].first_state_date = "2030-01-01"; })),
     /reports states running from 2030-01-01 to 2029-11-30, which ends before it begins/,
   );
-  assert.throws(
-    () => readCoverage(mutate(whole, (a) => { a.languages[0].last_state_date = null; })),
-    /holds one end of its date range and not the other/,
-  );
-  assert.throws(
-    () => readCoverage(mutate(whole, (a) => { a.languages[1].first_state_date = "1900-01-01"; })),
-    /holds one end of its date range and not the other/,
-  );
-  // A language holding neither end prints the sentence in both cells rather than leaving them
-  // blank, because a blank reads as a fact about the corpus.
+
+  // NOT NULLABLE, read off the DDL rather than assumed. `states.applicability_date` is `NOT NULL`
+  // and a language row exists only because `states GROUP BY language` produced a group, so MIN and
+  // MAX over it are values. The reader used to accept null here and the page printed "not stated by
+  // the platform" for it, which is a cell for an answer no producer can send.
+  for (const end of ["first_state_date", "last_state_date"]) {
+    assert.throws(
+      () => readCoverage(mutate(whole, (a) => { a.languages[0][end] = null; })),
+      new RegExp(`${end} is not a calendar date: null`),
+      `a null ${end} was accepted, and the index cannot produce one`,
+    );
+  }
+
+  // A date that is well formed and does not exist, and a year that is not a date.
+  for (const [value, what] of [["1999-02-31", "a day that does not exist"], ["1800", "a bare year"]]) {
+    assert.throws(
+      () => readCoverage(mutate(whole, (a) => { a.languages[0].first_state_date = value; })),
+      /is not a calendar date/,
+      `${what} was accepted as a state date`,
+    );
+  }
+
+  // Both ends are rendered as themselves, in the cells the header names.
   const shown = tableRows(string(whole), "Held works, states and articles by language");
-  assert.equal(shown[1][7], NOT_STATED);
-  assert.equal(shown[1][8], NOT_STATED);
+  assert.equal(shown[1][7], PREVIEW_ANSWERS[0].answer.languages[1].first_state_date);
+  assert.equal(shown[1][8], PREVIEW_ANSWERS[0].answer.languages[1].last_state_date);
 });
 
 test("the members breakdowns reconcile differently, and the SQL behind them says which is which", () => {
@@ -669,13 +704,19 @@ test("a measured capability for an operation this mount does not serve is said, 
 
 test("a capability cell is a measured one: a real period, and support it actually measured", () => {
   const whole = PREVIEW_ANSWERS[0].answer;
+  // Every emitted period is a single day: `MeasureCapabilities` groups by (language, wording date)
+  // and passes that one date as both ends. The preview carried multi-year ranges until that was
+  // read off the producer, so this pins the shape rather than describing it.
+  for (const measured of whole.capability_cells) {
+    assert.equal(measured.period_from, measured.period_to, "a cell spans more than the day it measured");
+  }
   assert.throws(
     () => readCoverage(mutate(whole, (a) => { a.capability_cells[0].population = 0; })),
     /advertises a capability with a population of zero/,
   );
   assert.throws(
-    () => readCoverage(mutate(whole, (a) => { a.capability_cells[0].period_from = "2030-01-01"; })),
-    /covers 2030-01-01 to 1999-12-31, which ends before it begins/,
+    () => readCoverage(mutate(whole, (a) => { a.capability_cells[0].period_to = "1900-01-01"; })),
+    /covers 1972-03-04 to 1900-01-01, which ends before it begins/,
   );
   assert.throws(
     () => readCoverage(mutate(whole, (a) => {
@@ -687,43 +728,84 @@ test("a capability cell is a measured one: a real period, and support it actuall
 
 test("narrowing narrows the rows and not the totals, and the page says so where the totals are", () => {
   const narrowed = PREVIEW_ANSWERS[1].answer;
-  const absent = PREVIEW_ANSWERS[2].answer;
+  const unmeasured = PREVIEW_ANSWERS[2].answer;
   const whole = PREVIEW_ANSWERS[0].answer;
 
   for (const render of [string, react]) {
     const body = text(render(narrowed));
     assert.ok(body.includes(narrowedNote("fra")));
-    // The note sits with the totals, which is the number it is about: everything before the
-    // language table, and after the totals themselves.
-    const totals = body.indexOf("members");
-    assert.ok(body.indexOf(narrowedNote("fra")) > totals);
-    // And the whole-mount answer says nothing, because there is nothing to say.
+    // PLACEMENT, tested as placement. The note belongs with the totals it qualifies, which means
+    // after them and BEFORE the table whose rows are the narrowed ones. An earlier version of this
+    // test asserted only that it came after the first occurrence of "members", which moving it to
+    // the very end would also satisfy.
+    // All three offsets are measured in ONE string, because an index into the markup and an index
+    // into the stripped text are not comparable and the first version of this compared them.
+    const flat = strip(render(narrowed));
+    const note = flat.indexOf(narrowedNote("fra"));
+    const totals = flat.indexOf("What this mount holds");
+    const tableStart = flat.indexOf("Held works, states and articles by language");
+    assert.ok(note > 0 && totals > 0 && tableStart > 0, "one of the three landmarks is not on the page");
+    assert.ok(note > totals, "the narrowed note is above the totals it qualifies");
+    assert.ok(note < tableStart, "the narrowed note is below the table it should introduce");
     assert.ok(!text(render(whole)).includes("was narrowed to"));
   }
 
   // The rows are that language's and no others.
   assert.throws(
     () => readCoverage(mutate(narrowed, (a) => { a.languages.push({ ...whole.languages[1] }); })),
-    /"fra" was asked for and the breakdown counts "deu"/,
+    /"fra" was asked for and 2 languages have a row/,
   );
-  // A row outside the languages this mount records holding is a row from somewhere else.
   assert.throws(
     () => readCoverage(mutate(whole, (a) => { a.languages[1].language = "ltz"; })),
     /counts "ltz", which is not among the languages this mount records holding/,
   );
 
-  // Narrowed to a language the mount does not hold: sentences, not two empty tables. The page this
-  // replaced refused an empty language list outright, so it could not express this case at all.
+  // A LANGUAGE THE MOUNT DOES NOT HOLD IS NOT AN ANSWER AT ALL. The producer refuses that request
+  // with `language_not_available` before any answer is built (`V3CorpusMount.cs:1618-1628`), so the
+  // reader must not accept one. It did, and a preview and a test described the resulting page --
+  // a shape nothing emits, taught by the file whose header promises not to teach one.
+  assert.throws(
+    () => readCoverage(mutate(whole, (a) => {
+      a.requested_language = "ltz";
+      a.languages = [];
+      a.capability_cells = [];
+    })),
+    /narrowed to "ltz", which is not among the languages this mount holds/,
+  );
+
+  // NARROWED TO A LANGUAGE THAT MEASURES NOTHING, which is the case the page got wrong. The mount
+  // measured four capabilities and every one is the other language's; narrowing dropped them. The
+  // sentence must be about the language and must not say the mount measured nothing.
+  assert.equal(unmeasured.capability_cells.length, 0);
+  assert.ok(whole.capability_cells.length > 0, "the whole mount measures nothing, so this proves nothing");
+  // The two sentences as LITERALS, not as calls to the function under test. Asking the page and
+  // `capabilityAbsence` the same question compares a thing with itself: a mutant that made the
+  // function always return the narrowed form moved both sides and lived through this test.
+  const ABOUT_THE_MOUNT = "This mount measured no capability";
+  const ABOUT_THE_LANGUAGE = "No capability is measured for deu";
+  assert.ok(capabilityAbsence(null).startsWith(ABOUT_THE_MOUNT));
+  assert.ok(capabilityAbsence("deu").startsWith(ABOUT_THE_LANGUAGE));
+
   for (const render of [string, react]) {
-    const body = text(render(absent));
-    assert.ok(body.includes("No language has a row here"));
-    assert.ok(body.includes("No capability was measured"));
-    // The languages held are still listed, because that list is not narrowed.
-    for (const language of absent.languages_held) assert.ok(body.includes(language));
-    assert.ok(body.includes(String(absent.totals.works)));
+    const body = text(render(unmeasured));
+    assert.ok(body.includes(ABOUT_THE_LANGUAGE), "the narrowed absence sentence is missing");
+    assert.ok(
+      !body.includes(ABOUT_THE_MOUNT),
+      "the page told a reader the mount measured nothing, and it measured four",
+    );
+    // And the unnarrowed sentence is still used where it IS true, so this is not simply the one
+    // sentence renamed.
+    const empty = mutate(whole, (a) => {
+      a.capability_cells = [];
+      for (const row of a.languages) {
+        row.searchable_text_held = false;
+        row.articles_with_searchable_text = 0;
+      }
+    });
+    const unnarrowed = text(render(empty));
+    assert.ok(unnarrowed.includes(ABOUT_THE_MOUNT), "the unnarrowed absence sentence is missing");
+    assert.ok(!unnarrowed.includes(ABOUT_THE_LANGUAGE));
   }
-  assert.deepEqual(captions(string(absent)), ["Members by the outcome the corpus recorded",
-    "Gap tokens the corpus recorded, counted by member"]);
 
   // With nothing narrowed away, every language held has a row and a table that stops is refused.
   assert.throws(
@@ -811,12 +893,17 @@ test("the preview holds synthetic values in the shape the platform really sends"
     // Every path the platform sends, and no path it does not. A preview that grew a member is
     // teaching a shape nothing emits; one that lost a member is previewing a page that cannot be
     // reached.
+    // A list narrowed to nothing takes its element paths with it, and each list narrows on its own:
+    // the whole mount empties neither, a language that measures nothing empties only the cells, and
+    // the first version of this keyed both lists off `languages` being empty.
     const actual = paths(answer);
-    const narrowedAway = answer.languages.length === 0
-      ? [...expected].filter((path) => path.startsWith("languages[]") || path.startsWith("capability_cells[]"))
-      : [];
+    const narrowedAway = [
+      ...(answer.languages.length === 0 ? ["languages[]"] : []),
+      ...(answer.capability_cells.length === 0 ? ["capability_cells[]"] : []),
+    ];
+    const dropped = (path) => narrowedAway.some((prefix) => path.startsWith(prefix));
     assert.deepEqual(
-      [...expected].filter((path) => !narrowedAway.includes(path)).sort(),
+      [...expected].filter((path) => !dropped(path)).sort(),
       [...actual].sort(),
       `${preview.heading} does not carry the paths the platform sends`,
     );
@@ -850,5 +937,281 @@ test("the preview's capability cells sum to the count the platform derives from 
         `${preview.heading} disagrees with itself on ${row.language}`,
       );
     }
+  }
+});
+
+// ---------------------------------------------------------------------------------------------
+// The protections the rebuild dropped.
+//
+// The page this replaced had a hostile-string test, keyboard-region and header assertions, count
+// and calendar validity and a duplicate-row test per table. None of them survived the rewrite, and
+// the writer seat found it by running 32 mutants against the whole suite: 20 lived, 18 of them
+// here. Not one was a bug at the time -- the code escapes, refuses and separates correctly -- and
+// that is the point. Nothing would have noticed, on the page whose header says it exists to be
+// checked against.
+//
+// They are written as walks rather than as lists, because a list is what let them die: each named
+// the V2 members it covered, so the members went and the tests went with them. A walk over the
+// captured answer covers whatever the platform sends, including what it has not sent yet.
+// ---------------------------------------------------------------------------------------------
+
+/** What one path holds, so a walk can find every other path holding the same value. */
+function pathValue(answer, path) {
+  return stringLeavesValues(answer).get(path);
+}
+
+/** Every string leaf as path -> value. */
+function stringLeavesValues(node, path = "", found = new Map()) {
+  if (Array.isArray(node)) {
+    node.forEach((item, index) => {
+      if (item !== null && typeof item === "object") stringLeavesValues(item, `${path}[${index}]`, found);
+      else if (typeof item === "string") found.set(`${path}[${index}]`, item);
+    });
+  } else if (node && typeof node === "object") {
+    for (const [key, value] of Object.entries(node)) {
+      const here = path.length === 0 ? key : `${path}.${key}`;
+      if (value !== null && typeof value === "object") stringLeavesValues(value, here, found);
+      else if (typeof value === "string") found.set(here, value);
+    }
+  }
+  return found;
+}
+
+/** Every string leaf of an answer, as [path, setter], so a walk can make each one hostile. */
+function stringLeaves(node, path = "", found = []) {
+  if (Array.isArray(node)) {
+    node.forEach((item, index) => {
+      if (item !== null && typeof item === "object") stringLeaves(item, `${path}[${index}]`, found);
+      else if (typeof item === "string") {
+        found.push([`${path}[${index}]`, (value) => { node[index] = value; }]);
+      }
+    });
+  } else if (node && typeof node === "object") {
+    for (const [key, value] of Object.entries(node)) {
+      const here = path.length === 0 ? key : `${path}.${key}`;
+      if (value !== null && typeof value === "object") stringLeaves(value, here, found);
+      else if (typeof value === "string") {
+        found.push([here, (next) => { node[key] = next; }]);
+      }
+    }
+  }
+  return found;
+}
+
+test("every string the platform sends is escaped, wherever the page puts it", async () => {
+  const captured = withDigests(await capturedAnswer());
+  // A value that is a tag, an attribute break and a handler at once, so a leaf reaching text, an
+  // attribute or a `<code>` fails on whichever it reaches.
+  const HOSTILE = '<img src=x onerror="alert(1)">" \'';
+  let walked = 0;
+
+  for (const [path] of stringLeaves(structuredClone(captured))) {
+    // THE VALUE, EVERYWHERE IT APPEARS, not the leaf alone. A language code is the same string in
+    // `languages_held` and in its row, and the reader refuses an answer where those disagree, so
+    // poisoning one leaf made the answer invalid and the walk skipped it -- which left the language
+    // cell as the one string on the page with no escaping test. The writer seat's E6 mutant
+    // survived exactly there. Poisoning the value keeps the answer self-consistent and reaches it.
+    const held = pathValue(captured, path);
+    const poison = (answer, replacement) => {
+      const copy = structuredClone(answer);
+      for (const [candidate, set] of stringLeaves(copy)) {
+        if (candidate === path || pathValue(captured, candidate) === held) set(replacement);
+      }
+      return copy;
+    };
+
+    let rendered;
+    const mutant = poison(captured, HOSTILE);
+    try {
+      rendered = [string(mutant), react(mutant)];
+    } catch {
+      // A leaf the reader refuses with a hostile value is a leaf this page never prints.
+      continue;
+    }
+    walked += 1;
+    const benign = poison(captured, "harmless");
+    const clean = [string(benign), react(benign)];
+    for (const [index, html] of rendered.entries()) {
+      // THE STRUCTURAL QUESTION, because the textual one gives a false positive: correctly escaped
+      // output still contains the literal characters `onerror=`, harmlessly, as text, and a first
+      // version of this test failed the page for printing them. What matters is whether the value
+      // OPENED anything. A hostile leaf must leave the page with exactly the markup a harmless leaf
+      // leaves, so an injected tag or a broken-out attribute is a difference in the count of `<` or
+      // of `"`, and nothing that is merely text can be.
+      const angles = (markup) => (markup.match(/</g) ?? []).length;
+      const quotes = (markup) => (markup.match(/"/g) ?? []).length;
+      assert.equal(angles(html), angles(clean[index]), `${path} opened a tag`);
+      assert.equal(quotes(html), quotes(clean[index]), `${path} broke out of an attribute`);
+      assert.ok(html.includes("&lt;img"), `${path} was dropped rather than escaped`);
+    }
+  }
+  // A walk that refused everything would pass every assertion above having checked nothing.
+  assert.ok(walked > 20, `only ${walked} string leaves reached the page; the walk proved little`);
+});
+
+test("the scroll regions and the column headers are what a keyboard and a reader need", async () => {
+  const captured = withDigests(await capturedAnswer());
+  for (const render of [string, react]) {
+    const html = render(captured);
+    const boxes = [...html.matchAll(/<div class(?:Name)?="coverage-scroll"[^>]*>/g)].map(([tag]) => tag);
+    assert.equal(boxes.length, captions(html).length, "a table is not in a scroll box");
+    for (const box of boxes) {
+      // A scrollable region is a tab stop whether or not it asks to be, so it carries a role and a
+      // name rather than announcing nothing.
+      assert.match(box, /tabindex="0"/i, `a scroll box is not focusable: ${box}`);
+      assert.match(box, /role="region"/, `a scroll box has no role: ${box}`);
+      assert.match(box, /aria-label="[^"]+, scrollable"/, `a scroll box has no name: ${box}`);
+    }
+    // Every column header is a header with a scope, which is what makes a cell announce its column.
+    const headers = [...html.matchAll(/<th\b[^>]*>/g)].map(([tag]) => tag);
+    assert.ok(headers.length > 0);
+    for (const header of headers) {
+      assert.match(header, /scope="(col|row)"/, `a header declares no scope: ${header}`);
+    }
+  }
+
+  // ONE MUTANT IS NOT KILLED HERE AND THIS SAYS WHY. Removing `escapeHtml` from the caption
+  // survives the whole suite, because every caption is a literal written in this file: no answer
+  // value reaches one, so there is nothing for the escaping to do and no input that tells the two
+  // versions apart. Manufacturing a kill would mean asserting that a constant is a constant.
+  //
+  // What is worth guarding is the assumption rather than the mutant: if a caption ever grew an
+  // answer value, the escaping would start mattering and nothing would say so. So two answers with
+  // different contents must produce the SAME captions, and this fails the day one stops being a
+  // literal.
+  const first = withDigests(await capturedAnswer());
+  const second = PREVIEW_ANSWERS[0].answer;
+  assert.deepEqual(
+    captions(string(second)).filter((caption) => captions(string(first)).includes(caption)).length,
+    captions(string(first)).length,
+    "a caption changed with the answer, so it carries a value and must be escaped",
+  );
+});
+
+test("a count is a count and a date is a date, on every member that is one", () => {
+  const whole = PREVIEW_ANSWERS[0].answer;
+  const counts = [
+    ["totals.articles", (a, v) => { a.totals.articles = v; }],
+    ["languages[0].articles", (a, v) => { a.languages[0].articles = v; }],
+    ["languages[0].works", (a, v) => { a.languages[0].works = v; }],
+    ["members.with_gaps", (a, v) => { a.members.with_gaps = v; }],
+    ["members.gaps[0].members", (a, v) => { a.members.gaps[0].members = v; }],
+    ["members.by_outcome[0].members", (a, v) => { a.members.by_outcome[0].members = v; }],
+    ["operations.registered", (a, v) => { a.operations.registered = v; }],
+    ["capability_cells[0].population", (a, v) => { a.capability_cells[0].population = v; }],
+  ];
+  for (const [path, set] of counts) {
+    for (const value of [-7, 1.5, "3", null]) {
+      assert.throws(
+        () => readCoverage(mutate(whole, (a) => set(a, value))),
+        /rather than a count/,
+        `${path} accepted ${JSON.stringify(value)}`,
+      );
+    }
+  }
+  // And every date, including one that is well formed and does not exist.
+  const dates = [
+    ["languages[0].first_state_date", (a, v) => { a.languages[0].first_state_date = v; }],
+    ["capability_cells[0].period_from", (a, v) => { a.capability_cells[0].period_from = v; }],
+    ["capability_cells[0].period_to", (a, v) => { a.capability_cells[0].period_to = v; }],
+  ];
+  for (const [path, set] of dates) {
+    for (const value of ["1999-02-31", "1800", "2024-13-01", "not a date", 20240201]) {
+      assert.throws(
+        () => readCoverage(mutate(whole, (a) => set(a, value))),
+        /is not a calendar date/,
+        `${path} accepted ${JSON.stringify(value)}`,
+      );
+    }
+  }
+});
+
+test("one key is one row, in every keyed list on the page", () => {
+  const whole = PREVIEW_ANSWERS[0].answer;
+  // A repeated key is two figures for one thing and a reader cannot tell which governs. Every keyed
+  // list the answer carries, not the two that happened to have a test.
+  const duplicated = [
+    ["the language breakdown", (a) => { a.languages.push({ ...a.languages[0] }); }],
+    ["the outcome breakdown", (a) => { a.members.by_outcome.push({ ...a.members.by_outcome[0] }); }],
+    ["the gap breakdown", (a) => { a.members.gaps.push({ ...a.members.gaps[0] }); }],
+    ["the served operations", (a) => { a.operations.served_operations.push("coverage"); }],
+    ["the operations with no route", (a) => { a.operations.not_served_operations.push("ask"); }],
+    ["the measured capabilities", (a) => { a.capability_cells.push({ ...a.capability_cells[0] }); }],
+    ["the languages this mount holds", (a) => { a.languages_held.push("fra"); }],
+    ["the list of what is not held", (a) => { a.not_held.push({ ...a.not_held[0] }); }],
+  ];
+  for (const [what, change] of duplicated) {
+    assert.throws(
+      () => readCoverage(mutate(whole, change)),
+      new RegExp(`${what} lists`),
+      `${what} accepted a repeated key`,
+    );
+  }
+  assert.equal(duplicated.length, 8, "a keyed list was added and this walk was not extended");
+});
+
+test("a date on this page is a currency claim, and the guard is a reach rather than a list", async () => {
+  // THE ABSENCE GUARD THE FIRST VERSION SHOULD HAVE BEEN. It looked for the exact old strings --
+  // `Counts as of index build`, `Observation history begins`, a `T` instant -- so a new currency
+  // claim in other words passed. The writer seat proved it: both renderers printed "Counts as of
+  // 2026-09-01." and the whole suite stayed green.
+  //
+  // This asks the opposite question. Every calendar date the page prints must be one the ANSWER
+  // carries, so a date from anywhere else fails without this test knowing what words carry it.
+  const captured = withDigests(await capturedAnswer());
+  for (const answer of [captured, ...PREVIEW_ANSWERS.map((preview) => preview.answer)]) {
+    const held = new Set([
+      ...answer.languages.flatMap((row) => [row.first_state_date, row.last_state_date]),
+      ...answer.capability_cells.flatMap((cell) => [cell.period_from, cell.period_to]),
+    ]);
+    for (const render of [string, react]) {
+      const body = text(render(answer));
+      for (const [printed] of body.matchAll(/\d{4}-\d{2}-\d{2}/g)) {
+        assert.ok(held.has(printed), `${printed} is on the page and not in the answer`);
+      }
+      assert.ok(!/\d{2}:\d{2}:\d{2}/.test(body), "a time of day reached a page that holds none");
+      assert.ok(!/\d{4}-\d{2}-\d{2}T/.test(body), "an instant reached a page that holds none");
+    }
+  }
+  // And the guard reaches something: the captured answer does print dates, so a page that printed
+  // none would pass the loop above having checked nothing.
+  assert.ok(/\d{4}-\d{2}-\d{2}/.test(text(string(captured))), "the page prints no date at all");
+});
+
+test("the two renderers separate adjacent evidence values, which stripping tags hides", async () => {
+  const captured = withDigests(await capturedAnswer());
+  for (const answer of [captured, ...PREVIEW_ANSWERS.map((preview) => preview.answer)]) {
+    // Tags REMOVED, not replaced by a space. The parity test replaces them, so `fra deu` and
+    // `fradeu` read alike to it and React gluing two identifiers together was invisible. The CSS
+    // records this same defect shipping once: "Chrome rendered ... as one word".
+    const glue = (html) => text(html.replace(/<[^>]*>/g, "")).replace(/[^\S\n]+/g, " ").trim();
+    assert.equal(glue(react(answer)), glue(string(answer)), "the two renderers space values differently");
+    // And the separation is really there, rather than both renderers having lost it together.
+    if (answer.languages_held.length > 1) {
+      const [first, second] = answer.languages_held;
+      for (const render of [string, react]) {
+        assert.ok(
+          glue(render(answer)).includes(`${first} ${second}`),
+          "two adjacent evidence values are printed as one word",
+        );
+      }
+    }
+  }
+});
+
+test("the preview reproduces the platform's sentences, to the character", async () => {
+  // M5: the comment said "verbatim" and one apostrophe was curly where the platform's is straight.
+  // Nothing compared them, so "verbatim" was a promise the file made about itself.
+  const captured = await capturedAnswer();
+  for (const preview of PREVIEW_ANSWERS) {
+    const answer = preview.answer;
+    assert.equal(answer.scope, captured.scope, `${preview.heading} paraphrases scope`);
+    assert.equal(answer.counts_note, captured.counts_note, `${preview.heading} paraphrases counts_note`);
+    assert.equal(answer.members.gaps_note, captured.members.gaps_note);
+    assert.equal(answer.operations.note, captured.operations.note);
+    assert.deepEqual(answer.not_held, captured.not_held, `${preview.heading} rewrote a not_held row`);
+    assert.deepEqual(answer.operations.served_operations, captured.operations.served_operations);
+    assert.deepEqual(
+      answer.operations.not_served_operations, captured.operations.not_served_operations);
   }
 });
