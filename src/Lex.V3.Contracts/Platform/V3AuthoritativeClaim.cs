@@ -37,7 +37,7 @@ namespace Lex.V3.Contracts.Platform;
 /// </remarks>
 public sealed record V3ClaimTemplate
 {
-    private static readonly Regex PlaceholderPattern = new(@"\{([a-z][a-z0-9_]*)\}", RegexOptions.Compiled);
+    internal static readonly Regex PlaceholderPattern = new(@"\{([a-z][a-z0-9_]*)\}", RegexOptions.Compiled);
 
     private V3ClaimTemplate(string templateId, string text, ReadOnlyCollection<string> placeholders)
     {
@@ -155,7 +155,13 @@ public static class V3ClaimTemplates
         ByIdValue.Values.OrderBy(static template => template.TemplateId, StringComparer.Ordinal)
             .ToList().AsReadOnly();
 
-    public static bool IsDefined(string templateId) => ByIdValue.ContainsKey(templateId);
+    /// <summary>
+    /// Whether an id names a template. A predicate answers about the id it is handed, including one
+    /// that is null or blank: those are not templates, which is an answer and not a caller's error.
+    /// <see cref="Get"/> throws, because there is no template to return.
+    /// </summary>
+    public static bool IsDefined(string? templateId) =>
+        !string.IsNullOrWhiteSpace(templateId) && ByIdValue.ContainsKey(templateId);
 
     public static V3ClaimTemplate Get(string templateId)
     {
@@ -206,6 +212,29 @@ public sealed record V3AuthoritativeClaim
         foreach (var fact in facts)
         {
             ArgumentNullException.ThrowIfNull(fact);
+
+            // V3TypedFact.Of checks these, but Of is not the only way in: the record's primary
+            // constructor is public, so a fact can reach Bind without passing through Of. Bind is the
+            // door every claim comes through, so Bind is where the value has to hold up.
+            if (string.IsNullOrWhiteSpace(fact.Name) || string.IsNullOrWhiteSpace(fact.Kind))
+            {
+                throw new ArgumentException(
+                    $"The claim '{templateId}' carries a fact with no name or no kind. A fact whose "
+                    + "kind a reader cannot see is a bare string, which is what typed facts exist to "
+                    + "stop.",
+                    nameof(facts));
+            }
+
+            if (string.IsNullOrWhiteSpace(fact.Value))
+            {
+                throw new ArgumentException(
+                    $"The claim '{templateId}' binds '{fact.Name}' to an empty value. Rendering it "
+                    + "would put an authoritative sentence in front of a reader with a gap where the "
+                    + "evidence should be, which is the hole an unbound placeholder was refused for; "
+                    + "a value nobody supplied is not different because it arrived as blank text.",
+                    nameof(facts));
+            }
+
             if (!byName.TryAdd(fact.Name, fact))
             {
                 throw new ArgumentException(
@@ -242,11 +271,14 @@ public sealed record V3AuthoritativeClaim
                 nameof(facts));
         }
 
-        var rendered = template.Text;
-        foreach (var name in template.Placeholders)
-        {
-            rendered = rendered.Replace("{" + name + "}", byName[name].Value, StringComparison.Ordinal);
-        }
+        // ONE pass over the TEMPLATE, never over what a previous pass produced. Replacing each
+        // placeholder in turn on the running text re-reads the values already substituted, so a value
+        // holding another placeholder's marker was rewritten by a later pass - and whether it was
+        // depended on the order the placeholders happen to be listed in. A value is publisher text; a
+        // brace in one is data, not a caller's mistake. Here the match is taken from the template and
+        // the replacement is returned as-is, so a value is output and never input.
+        var rendered = V3ClaimTemplate.PlaceholderPattern.Replace(
+            template.Text, match => byName[match.Groups[1].Value].Value);
 
         return new V3AuthoritativeClaim(
             templateId,
