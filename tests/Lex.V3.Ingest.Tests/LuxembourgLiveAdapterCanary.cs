@@ -450,8 +450,9 @@ public sealed class LuxembourgLiveAdapterCanary
             Assert.IsNotNull(result.CorpusRecordSet);
             Assert.IsTrue(result.CorpusRecordSet.Set.Records.Any(record => record.Body.Kind == CorpusBodyRecordKind.Held),
                 "The bounded work must have an actually held corpus body.");
-            await ReplayRightsAndManifestAsync(store, profile, result,
-                declaredRanges.Select(range => range.Name + "-a").ToArray(), plainXml ? CivilState + "/fr/xml" : null);
+            await LuxembourgRetainedRunReplay.ReplayAsync(store, profile, result,
+                declaredRanges.Select(range => range.Name + "-a").ToArray(),
+                declaredRanges.Select(range => range.Name + "-g").ToArray(), plainXml ? CivilState + "/fr/xml" : null);
             status = "passed_bounded_adapter_canary";
         }
         catch (Exception exception)
@@ -519,91 +520,6 @@ public sealed class LuxembourgLiveAdapterCanary
         }
         return [new(family, category, value, category is { } kind && required.Any(item => item.Kind == kind && item.FullIri == value)
             ? "governed_value_observed" : "typed_quarantine_unruled_value")];
-    }
-
-    private static async Task ReplayRightsAndManifestAsync(ICustodyStore store,
-        VerifiedLuxembourgSourceProfile profile, LuxembourgQueryExecutionResult result,
-        IReadOnlyList<string> assertionFamilyKeys, string? expectedManifestation)
-    {
-        Assert.IsNotNull(result.ScopeManifestReceipt);
-        var finalBytes = await CustodyRestore.ReadByDigestCheckedAsync(store,
-            result.ScopeManifestReceipt.Reference.ContentSha256, CancellationToken.None);
-        using var manifest = JsonDocument.Parse(finalBytes);
-        var indexes = new Dictionary<string, (SourceArtifactRef Ref, JsonElement Json)>(StringComparer.Ordinal);
-        foreach (var artifact in manifest.RootElement.GetProperty("ordered_evidence_artifacts").EnumerateArray())
-        {
-            var reference = new SourceArtifactRef(artifact.GetProperty("resource_id").GetString()!, artifact.GetProperty("sha256").GetString()!);
-            var bytes = await CustodyRestore.ReadByDigestCheckedAsync(store, reference.Sha256, CancellationToken.None);
-            using var document = JsonDocument.Parse(bytes);
-            if (document.RootElement.TryGetProperty("schema", out var schema))
-                indexes[schema.GetString()!] = (reference, document.RootElement.Clone());
-        }
-        var sparql = indexes["lex-lu-sparql-rights-evidence/1"];
-        var inFile = indexes["lex-lu-in-file-rights-evidence/1"];
-        var acquisitionBytes = await CustodyRestore.ReadByDigestCheckedAsync(store,
-            inFile.Json.GetProperty("acquisitionManifestContentSha256").GetString()!, CancellationToken.None);
-        var acquisitionRef = JsonSerializer.Deserialize<SourceArtifactRef>(inFile.Json.GetProperty("acquisitionManifestRef"))!;
-        Assert.AreEqual(acquisitionRef.Sha256, ScopeManifestCanonicalWriter.ComputeManifestSha256(acquisitionBytes.Span));
-        var run = profile.Snapshot.ObservationRef;
-        Assert.AreEqual(run, JsonSerializer.Deserialize<SourceArtifactRef>(inFile.Json.GetProperty("runIdentity")),
-            "The retained in-file index must identify this exact observation run.");
-        var readings = inFile.Json.GetProperty("readings").EnumerateArray().ToArray();
-        Assert.IsTrue(readings.Length > 0);
-        var channelTwo = new List<LuxembourgRightsChannelObservation>();
-        foreach (var reading in readings)
-        {
-            var bodyRef = JsonSerializer.Deserialize<SourceArtifactRef>(reading.GetProperty("BodyRef"))!;
-            await CustodyRestore.ReadByDigestCheckedAsync(store, bodyRef.Sha256, CancellationToken.None);
-            Assert.AreEqual((int)LuxembourgInFileRightsReadStatus.Observed, reading.GetProperty("Status").GetInt32());
-            channelTwo.Add(new(reading.GetProperty("ManifestationIri").GetString()!, run, bodyRef,
-                reading.GetProperty("LicenceIris").EnumerateArray().Select(value => value.GetString()!).ToArray()));
-        }
-        foreach (var acquisition in result.DocumentAcquisitionOutcomesByOrdinal!.Values.Where(value => value.Receipt is not null))
-            Assert.IsTrue(channelTwo.Any(channel => channel.EvidenceRef.Sha256 == acquisition.Receipt!.Reference.ContentSha256),
-                "Every held body must have this run's retained in-file channel reading.");
-        var observations = sparql.Json.GetProperty("observations").EnumerateArray().Select(row =>
-        {
-            var objectRef = JsonSerializer.Deserialize<SourceObjectRef>(row.GetProperty("ObjectRef"))!;
-            var assertions = JsonSerializer.Deserialize<LuxembourgObservedAssertion[]>(row.GetProperty("Assertions"))!;
-            var channelOne = LuxembourgQueryExecutionAdapter.BuildSparqlRightsRows(assertions, run)
-                .Select(value => new LuxembourgRightsChannelObservation(value.ManifestationIri, run, sparql.Ref, value.LicenceIris)).ToArray();
-            return new LuxembourgResourceObservation(objectRef, run, assertions, [],
-                new LuxembourgSparqlRightsChannelObservations(run, sparql.Ref, channelOne),
-                new LuxembourgInFileRightsChannelObservations(run, inFile.Ref,
-                    channelTwo.Where(value => assertions.Any(assertion => assertion.SubjectIri == value.ManifestationIri)).ToArray(), true));
-        }).ToArray();
-        var proofs = assertionFamilyKeys.Select(key => result.FamilyOutcomes.Single(outcome => outcome.FamilyKey == key).Proof).ToArray();
-        Assert.IsTrue(proofs.All(proof => proof is not null));
-        var replay = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(profile.Resolve(
-            LuxembourgProvenResourceObservations.RequireAllProven(proofs.Select(proof => proof!).ToArray(), observations)));
-        if (expectedManifestation is not null)
-        {
-            Assert.IsTrue(channelTwo.Any(channel => channel.ManifestationIri == expectedManifestation),
-                "The selected plain XML manifestation must have an actually held body and same-run in-file reading.");
-            Assert.IsTrue(observations.SelectMany(observation => observation.Assertions).Any(assertion =>
-                assertion.SubjectIri == expectedManifestation &&
-                assertion.PredicateIri == "http://data.legilux.public.lu/resource/ontology/jolux#userFormat" &&
-                assertion.ObjectKind == LuxembourgAssertionObjectKind.Iri &&
-                assertion.ObjectIriOrLexical == "http://data.legilux.public.lu/resource/authority/user-format/xml"),
-                "Plain XML must come from this run's proven publisher assertions, not its URL suffix.");
-        }
-        foreach (var channel in channelTwo)
-        {
-            var rights = replay.Resources.SelectMany(resource => resource.BodyJoin.Candidates)
-                .Where(candidate => candidate.WemiCandidate.ManifestationIri == channel.ManifestationIri).ToArray();
-            Assert.IsTrue(rights.Length > 0, "Retained in-file declaration must resolve onto this run's proven WEMI graph.");
-            Assert.IsTrue(rights.All(candidate => candidate.RightsResolution.Disposition == LuxembourgRightsChannelDisposition.AgreedSameRunCcBy),
-                $"Same-run dual-channel agreement not established for {channel.ManifestationIri}");
-        }
-        var resolver = await LuxembourgProductionScopeReductionEvidenceResolver.CreateAsync(store,
-            profile.Snapshot.CompleteEnumerationRef, observations, replay.OrderedEvidenceArtifacts, CancellationToken.None);
-        var rebuilt = profile.ReduceScope(replay, resolver, LuxembourgQueryExecutionAdapter.MintDocumentFetchAddresses(replay)
-            .ToDictionary(pair => pair.Key, pair => pair.Value.ToScopeManifestFetchAddress()));
-        using var stream = new MemoryStream();
-        Assert.AreEqual(result.ScopeManifestCanonicalSha256, ScopeManifestCanonicalWriter.Write(stream, rebuilt));
-        CollectionAssert.AreEqual(finalBytes.ToArray(), stream.ToArray(), "Final manifest must replay byte-for-byte from retained channels.");
-        var finalRef = result.CorpusRecordSet!.Set.ManifestRef;
-        VerifiedScopeManifest.ParseAndVerify(finalRef, finalBytes.Span, resolver);
     }
 
     private sealed record ObservedVocabulary(string Family, LuxembourgVocabularyKind? Kind, string FullIri, string Disposition);
