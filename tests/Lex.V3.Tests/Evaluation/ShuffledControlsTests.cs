@@ -71,7 +71,35 @@ public sealed class ShuffledControlsTests
         Assert.AreEqual(MetricResult.Measured(1.0), report.AnchorNdcgAt10);
         Assert.AreEqual(MetricResult.Measured(1.0), report.NoHitAccuracy);
         Assert.AreEqual(MetricResult.Measured(1.0), report.ResolverExactness);
-        Assert.IsTrue(EvaluationGates.ReleasePasses(report.Gates));
+        Assert.IsTrue(report.Releases);
+    }
+
+    [TestMethod]
+    public void AHarnessThatStopsReportingAGateLeavesEachControlNotApplicableAndNamesTheGate()
+    {
+        RetrievalEvaluator dropsTheResolverGate = (cases, arm) =>
+        {
+            var real = RealRetrieval(cases, arm);
+            return real with { Gates = real.Gates.Where(static gate => gate.Name != EvaluationGateNames.ResolverExactness).ToArray() };
+        };
+        var retrieval = RetrievalCases();
+        var qrels = ShuffledControls.QrelsShuffle(retrieval, Oracle(retrieval), dropsTheResolverGate, 1);
+        Assert.AreEqual(ControlVerdict.NotApplicable, qrels.Verdict);
+        StringAssert.Contains(qrels.Reason, "resolver_exactness not reported exactly once");
+        Assert.IsTrue(qrels.BlocksTheHarness, "a harness that stopped reporting a gate must not release on the ones it kept");
+
+        VerdictEvaluator namesTheWrongGate = (cases, arm) =>
+            RealVerdicts(cases, arm) with { Gate = new GateResult("some_other_gate", GateVerdict.Pass, null) };
+        var verdicts = VerdictCases(Enumerable.Range(0, 24).Select(index => Verdicts[index % 6]).ToArray());
+        var verdict = ShuffledControls.VerdictShuffle(verdicts, GoldOf(verdicts), namesTheWrongGate, 1);
+        Assert.AreEqual(ControlVerdict.NotApplicable, verdict.Verdict);
+        StringAssert.Contains(verdict.Reason, "verdict_exact_match not reported exactly once");
+
+        TemporalEvaluator namesTheWrongGateToo = (cases, arm) =>
+            RealDates(cases, arm) with { Gate = new GateResult("some_other_gate", GateVerdict.Pass, null) };
+        var dates = ShuffledControls.DateShuffle(TemporalCases(), StateOn, namesTheWrongGateToo, [30, 60, 90], 1);
+        Assert.AreEqual(ControlVerdict.NotApplicable, dates.Verdict);
+        StringAssert.Contains(dates.Reason, "temporal_exactness not reported exactly once");
     }
 
     // ---- control 1: the qrels shuffle ----

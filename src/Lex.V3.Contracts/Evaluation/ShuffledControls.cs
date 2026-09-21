@@ -102,10 +102,10 @@ public static class ShuffledControls
         // Anchor nDCG@10 must fall below 0.15 after the qrels are permuted.
         const double collapseCeiling = 0.15;
         var baseline = evaluate(cases, arm);
-        if (!EvaluationGates.ReleasePasses(baseline.Gates))
+        if (!baseline.Releases)
         {
             return Result(ShuffledControlNames.QrelsShuffle, ControlVerdict.NotApplicable, seed,
-                "the reference arm does not pass the unshuffled cases: " + Describe(baseline.Gates));
+                "the reference arm does not pass the unshuffled cases: " + Describe(baseline.Gates, baseline.RequiredGates));
         }
 
         var shuffled = ShuffleJudgments(cases, seed, out var changed);
@@ -160,10 +160,10 @@ public static class ShuffledControls
         ArgumentNullException.ThrowIfNull(evaluate);
 
         var baseline = evaluate(cases, arm);
-        if (!EvaluationGates.ReleasePasses([baseline.Gate]))
+        if (!baseline.Releases)
         {
             return Result(ShuffledControlNames.VerdictShuffle, ControlVerdict.NotApplicable, seed,
-                "the reference arm does not pass the unshuffled cases: " + Describe([baseline.Gate]));
+                "the reference arm does not pass the unshuffled cases: " + Describe([baseline.Gate], baseline.RequiredGates));
         }
 
         var ordered = cases.OrderBy(static value => value.CaseId, StringComparer.Ordinal).ToArray();
@@ -212,10 +212,10 @@ public static class ShuffledControls
         }
 
         var baseline = evaluate(cases, arm);
-        if (!EvaluationGates.ReleasePasses([baseline.Gate]))
+        if (!baseline.Releases)
         {
             return Result(ShuffledControlNames.DateShuffle, ControlVerdict.NotApplicable, seed,
-                "the reference arm does not pass the unshifted cases: " + Describe([baseline.Gate]));
+                "the reference arm does not pass the unshifted cases: " + Describe([baseline.Gate], baseline.RequiredGates));
         }
 
         var random = new SplitMix64(seed);
@@ -270,10 +270,11 @@ public static class ShuffledControls
     private static ControlResult Result(string name, ControlVerdict verdict, ulong seed, string reason) =>
         new(name, verdict, reason, seed);
 
-    private static string Describe(IReadOnlyList<GateResult> gates) =>
-        gates.Count == 0
-            ? "no gate was reported"
-            : string.Join("; ", gates.Where(static gate => gate.Verdict != GateVerdict.Pass).Select(static gate => $"{gate.Name} {gate.Verdict}"));
+    private static string Describe(IReadOnlyList<GateResult> gates, IReadOnlyList<string> required) =>
+        string.Join(
+            "; ",
+            gates.Where(static gate => gate.Verdict != GateVerdict.Pass).Select(static gate => $"{gate.Name} {gate.Verdict}")
+                .Concat(EvaluationGates.Unreported(gates, required).Select(static name => $"{name} not reported exactly once")));
 
     private static string Format(double value) => value.ToString("0.####", CultureInfo.InvariantCulture);
 }

@@ -36,7 +36,43 @@ public sealed class HarnessEvaluationsTests
 
         Assert.AreEqual(MetricResult.NotMeasured(NotMeasuredReason.NoMeasurableQuery), report.NoHitAccuracy);
         Assert.AreEqual(GateVerdict.NotMeasured, Gate(report, EvaluationGateNames.NoHitAccuracy).Verdict);
-        Assert.IsFalse(EvaluationGates.ReleasePasses(report.Gates), "a stratum nobody measured must not read as a pass");
+        Assert.IsFalse(report.Releases, "a stratum nobody measured must not read as a pass");
+    }
+
+    [TestMethod]
+    public void AReleaseNeedsTheThreeRetrievalGatesTheVerdictGateAndTheTemporalGateAndNoOtherName()
+    {
+        CollectionAssert.AreEqual(
+            new[] { "anchor_ndcg_at_10", "no_hit_accuracy", "resolver_exactness" },
+            new RetrievalReport(MetricResult.Measured(1.0), MetricResult.Measured(1.0), MetricResult.Measured(1.0), []).RequiredGates.ToArray());
+        CollectionAssert.AreEqual(new[] { "verdict_exact_match" }, new VerdictReport(MetricResult.Measured(1.0), new GateResult("g", GateVerdict.Pass, null)).RequiredGates.ToArray());
+        CollectionAssert.AreEqual(new[] { "temporal_exactness" }, new TemporalReport(MetricResult.Measured(1.0), new GateResult("g", GateVerdict.Pass, null)).RequiredGates.ToArray());
+    }
+
+    [TestMethod]
+    public void AHarnessThatDropsOrRenamesAGateDoesNotReleaseHoweverWellTheRestPass()
+    {
+        var cases = new[] { Retrieval("q1", ("w1", "a1", 3)), Retrieval("n1"), Exact("e1", ("w2", "a1", 3)) };
+        var arm = Returns(("q1", [("w1", "a1")]), ("n1", []), ("e1", [("w2", "a1")]));
+        var whole = RetrievalEvaluation.Evaluate(cases, arm, floor: 1, ndcgThreshold: 0.9);
+        Assert.IsTrue(whole.Releases, "the control case: every gate reported and passing releases");
+
+        foreach (var dropped in new[] { EvaluationGateNames.AnchorNdcgAt10, EvaluationGateNames.NoHitAccuracy, EvaluationGateNames.ResolverExactness })
+        {
+            var smaller = whole with { Gates = whole.Gates.Where(gate => gate.Name != dropped).ToArray() };
+            Assert.IsTrue(smaller.Gates.All(static gate => gate.Verdict == GateVerdict.Pass), $"without {dropped} every gate left passes");
+            Assert.IsFalse(smaller.Releases, $"a report without {dropped} must not release");
+        }
+
+        var renamed = whole with { Gates = whole.Gates.Select(gate => gate.Name == EvaluationGateNames.ResolverExactness ? new GateResult("resolver", gate.Verdict, gate.Reason) : gate).ToArray() };
+        Assert.IsFalse(renamed.Releases, "a gate under another name is not the required one");
+
+        var verdict = new VerdictReport(MetricResult.Measured(1.0), new GateResult(EvaluationGateNames.VerdictExactMatch, GateVerdict.Pass, null));
+        Assert.IsTrue(verdict.Releases);
+        Assert.IsFalse((verdict with { Gate = new GateResult("some_other_gate", GateVerdict.Pass, null) }).Releases);
+        var temporal = new TemporalReport(MetricResult.Measured(1.0), new GateResult(EvaluationGateNames.TemporalExactness, GateVerdict.Pass, null));
+        Assert.IsTrue(temporal.Releases);
+        Assert.IsFalse((temporal with { Gate = new GateResult(EvaluationGateNames.VerdictExactMatch, GateVerdict.Pass, null) }).Releases, "the verdict gate is not the temporal one");
     }
 
     [TestMethod]

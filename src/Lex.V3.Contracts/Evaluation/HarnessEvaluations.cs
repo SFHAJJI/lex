@@ -19,6 +19,13 @@ public sealed record RetrievalReport
     public MetricResult ResolverExactness { get; init; }
 
     public IReadOnlyList<GateResult> Gates { get; init; }
+
+    /// <summary>The gates a retrieval release needs. This type's own declaration, so a harness that drops one is not read against what it kept.</summary>
+    public IReadOnlyList<string> RequiredGates =>
+        [EvaluationGateNames.AnchorNdcgAt10, EvaluationGateNames.NoHitAccuracy, EvaluationGateNames.ResolverExactness];
+
+    /// <summary>Whether the run releases: each required gate is reported once and every gate passes.</summary>
+    public bool Releases => EvaluationGates.ReleasePasses(Gates, RequiredGates);
 }
 
 /// <summary>What one run of the verdict harness measured, and the gate it read.</summary>
@@ -33,6 +40,10 @@ public sealed record VerdictReport
     public MetricResult ExactMatch { get; init; }
 
     public GateResult Gate { get; init; }
+
+    public IReadOnlyList<string> RequiredGates => [EvaluationGateNames.VerdictExactMatch];
+
+    public bool Releases => EvaluationGates.ReleasePasses([Gate], RequiredGates);
 }
 
 /// <summary>What one run of the temporal harness measured, and the gate it read.</summary>
@@ -47,6 +58,10 @@ public sealed record TemporalReport
     public MetricResult Exactness { get; init; }
 
     public GateResult Gate { get; init; }
+
+    public IReadOnlyList<string> RequiredGates => [EvaluationGateNames.TemporalExactness];
+
+    public bool Releases => EvaluationGates.ReleasePasses([Gate], RequiredGates);
 }
 
 /// <summary>
