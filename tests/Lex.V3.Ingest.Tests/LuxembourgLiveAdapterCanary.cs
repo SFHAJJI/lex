@@ -47,24 +47,35 @@ public sealed class LuxembourgLiveAdapterCanary
     /// </para>
     /// </remarks>
     internal sealed record WireCeilingDerivation(
-        long DeclaredRowsPerPartition,
-        int RequestsPerPartition,
-        int VocabularyPartitions,
+        IReadOnlyList<long> DeclaredVocabularyRows,
+        long DeclaredRowsPerAdapterPartition,
         int AdapterPartitions,
         int DeclaredDocuments,
         int RequestsPerDocument,
         int RetryAllowance)
     {
+        public int VocabularyRequests =>
+            checked(DeclaredVocabularyRows.Sum(static rows => LuxembourgEnumerationBudget.RequestsForPartition(rows)));
+
+        public int AdapterRequests =>
+            checked(AdapterPartitions * LuxembourgEnumerationBudget.RequestsForPartition(DeclaredRowsPerAdapterPartition));
+
         public int Total =>
-            checked(((VocabularyPartitions + AdapterPartitions) * RequestsPerPartition)
-                + (DeclaredDocuments * RequestsPerDocument) + RetryAllowance);
+            checked(VocabularyRequests + AdapterRequests + (DeclaredDocuments * RequestsPerDocument) + RetryAllowance);
     }
 
     /// <summary>The largest count a partition may declare, which costs 8 requests: 996 is 997 less one, the largest count of two pages in the first pass.</summary>
     internal const long DeclaredRowsPerPartition = 996;
 
-    /// <summary>Distinct vocabulary values (predicates, types, categories, licences) are the size of a vocabulary, not of the corpus.</summary>
-    internal const int VocabularyPartitionCount = 4;
+    /// <summary>
+    /// The first live run measured 7,826 categories, 7,742 of them the EU language authority, so categories declare their
+    /// own size, with headroom: 28 requests, where 996 would have declared 8 and been wrong by a factor of eight.
+    /// </summary>
+    internal const long DeclaredCategoryRows = 8_000;
+
+    /// <summary>Predicates, types, categories, licences: the size of a vocabulary and not of the corpus, declared family by family.</summary>
+    internal static readonly IReadOnlyList<long> DeclaredVocabularyRows =
+        [DeclaredRowsPerPartition, DeclaredRowsPerPartition, DeclaredCategoryRows, DeclaredRowsPerPartition];
 
     /// <summary>Subjects, assertions and graph rows: three families for each declared range.</summary>
     internal const int FamiliesPerDeclaredRange = 3;
@@ -84,9 +95,8 @@ public sealed class LuxembourgLiveAdapterCanary
 
     internal static WireCeilingDerivation DeriveWireCeiling(int declaredRanges, int declaredDocuments) =>
         new(
+            DeclaredVocabularyRows,
             DeclaredRowsPerPartition,
-            LuxembourgEnumerationBudget.RequestsForPartition(DeclaredRowsPerPartition),
-            VocabularyPartitionCount,
             FamiliesPerDeclaredRange * declaredRanges,
             declaredDocuments,
             RequestsPerDocument,
@@ -106,24 +116,29 @@ public sealed class LuxembourgLiveAdapterCanary
         refusal is { ObservedCount: not null } &&
         refusal.Code is LuxembourgEnumerationRefusal.WireBudgetExhausted or LuxembourgEnumerationRefusal.PartitionRequired;
 
-    private const int DeclaredDocumentsForAnAct = 8;
-    private const int DeclaredDocumentsForPlainXml = 2;
+    // A document is the manifest's selected body of an admitted object or an accepted Gazette listing of an as-published act.
+    // The first live run of an act fetched two: its XML body and its PDF listing.
+    private const int DeclaredDocumentsForAnAct = 4;
+
+    // The Code civil state's body, the original's body and up to two Gazette listings of the original.
+    private const int DeclaredDocumentsForPlainXml = 4;
 
     [TestMethod]
     public void TheDerivedCeilingIsTheSumOfWhatEachLegDeclaresAndIsUnderTheHardCap()
     {
-        // Eight requests a partition (a class of up to 996 rows: robots, a count and two pages, then a count and three
-        // pages), seven partitions for one declared range (four of vocabulary, three of the adapter), then eight
-        // documents at two requests each, then the retry allowance.
+        // A class of up to 996 rows costs 8 requests (robots, a count and two pages, then a count and three pages) and
+        // one of up to 8,000 costs 28. Vocabulary: predicates, types and licences at 8 and categories at 28. Then three
+        // adapter partitions for one declared range at 8 each, four documents at two requests each, and the retry allowance.
         var act = DeriveWireCeiling(declaredRanges: 1, DeclaredDocumentsForAnAct);
-        Assert.AreEqual(8, act.RequestsPerPartition);
-        Assert.AreEqual((7 * 8) + (8 * 2) + 8, act.Total);
-        Assert.AreEqual(80, act.Total);
+        Assert.AreEqual(8 + 8 + 28 + 8, act.VocabularyRequests);
+        Assert.AreEqual(3 * 8, act.AdapterRequests);
+        Assert.AreEqual((8 + 8 + 28 + 8) + (3 * 8) + (4 * 2) + 8, act.Total);
+        Assert.AreEqual(92, act.Total);
 
-        // The plain-XML run declares two ranges (the Code civil state and its original) and two documents.
+        // The plain-XML run declares two ranges (the Code civil state and its original) and four documents.
         var plain = DeriveWireCeiling(declaredRanges: 2, DeclaredDocumentsForPlainXml);
-        Assert.AreEqual((10 * 8) + (2 * 2) + 8, plain.Total);
-        Assert.AreEqual(92, plain.Total);
+        Assert.AreEqual((8 + 8 + 28 + 8) + (6 * 8) + (4 * 2) + 8, plain.Total);
+        Assert.AreEqual(116, plain.Total);
 
         Assert.IsNull(RefusalFor(act));
         Assert.IsNull(RefusalFor(plain));
@@ -138,10 +153,64 @@ public sealed class LuxembourgLiveAdapterCanary
         StringAssert.Contains(RefusalFor(large), "exceeds the hard cap 200");
 
         // Exactly at the cap is not past it, and one more is.
-        var exact = new WireCeilingDerivation(996, 8, 4, 3, 0, 2, HardCap - 56);
+        var exact = new WireCeilingDerivation([996, 996, 996, 996], 996, 3, 0, 2, HardCap - 56);
         Assert.AreEqual(HardCap, exact.Total);
         Assert.IsNull(RefusalFor(exact));
         Assert.IsNotNull(RefusalFor(exact with { RetryAllowance = exact.RetryAllowance + 1 }));
+    }
+
+    /// <summary>
+    /// What the first live run measured against the real publisher on 2026-09-21: each vocabulary family's row count and
+    /// the wire requests it cost, its own robots fetch included. The cost function the ceiling is derived from reproduces
+    /// every one, and each declaration covers the count it met, the categories' included.
+    /// </summary>
+    [TestMethod]
+    [DataRow(0, 357L, 7)]
+    [DataRow(1, 80L, 7)]
+    [DataRow(2, 7_826L, 26)]
+    [DataRow(3, 1L, 7)]
+    public void TheCostFunctionReproducesWhatTheFirstLiveRunMeasuredAndEachDeclarationCoversIt(int family, long rows, int requests)
+    {
+        Assert.AreEqual(requests, LuxembourgEnumerationBudget.RequestsForPartition(rows));
+        Assert.IsTrue(rows <= DeclaredVocabularyRows[family], $"family {family} met {rows} rows and declares {DeclaredVocabularyRows[family]}");
+        // The four families cost 7 + 7 + 26 + 7 = 47 requests together; the declared vocabulary must not undercut that.
+        Assert.IsTrue(47 <= DeriveWireCeiling(declaredRanges: 1, DeclaredDocumentsForAnAct).VocabularyRequests);
+    }
+
+    /// <summary>
+    /// What a run spent is the number the next derivation starts from, so the canary records it at three points, and the last
+    /// is recorded in the block that always runs, where a run that stopped early, was refused or failed an assertion still
+    /// reaches it. Read from the source, because the gated run cannot be driven in a default build.
+    /// </summary>
+    [TestMethod]
+    public void TheCanaryRecordsWhatItSpentAfterTheVocabularyAfterTheAdapterAndAtTheEndEvenWhenTheRunEndsRed()
+    {
+        var source = File.ReadAllText(SourcePath());
+        var afterVocabulary = "spentAfter" + "Vocabulary = budget.Spent;";
+        var afterAdapter = "spentAfter" + "Adapter = budget.Spent;";
+        var atEnd = "spentAt" + "End = budget.Spent";
+        var inEvidence = "wire" + "Budget = new";
+        var vocabularyAsserted = "refused" + "Families,";
+        var adapterReturned = "documentRenderer, budget," + " CancellationToken.None);";
+        var adapterAsserted = "Assert.IsNull(result." + "Refusal";
+        var alwaysRuns = "fin" + "ally";
+
+        foreach (var needle in new[] { afterVocabulary, afterAdapter, atEnd, inEvidence, alwaysRuns })
+            Assert.AreEqual(1, CountOf(source, needle), needle);
+
+        Assert.IsTrue(
+            source.IndexOf(afterVocabulary, StringComparison.Ordinal) < source.IndexOf(vocabularyAsserted, StringComparison.Ordinal),
+            "the vocabulary's spend is recorded before the assertion that can end the run");
+        Assert.IsTrue(
+            source.IndexOf(adapterReturned, StringComparison.Ordinal) < source.IndexOf(afterAdapter, StringComparison.Ordinal) &&
+            source.IndexOf(afterAdapter, StringComparison.Ordinal) < source.IndexOf(adapterAsserted, StringComparison.Ordinal),
+            "the adapter's spend is recorded after it returns and before any assertion about its result");
+        Assert.IsTrue(
+            source.IndexOf(alwaysRuns, StringComparison.Ordinal) < source.IndexOf(atEnd, StringComparison.Ordinal),
+            "the final spend is recorded in the block that always runs");
+        Assert.IsTrue(
+            source.IndexOf(alwaysRuns, StringComparison.Ordinal) < source.IndexOf(inEvidence, StringComparison.Ordinal),
+            "and it is written into the retained evidence there");
     }
 
     /// <summary>
@@ -309,6 +378,8 @@ public sealed class LuxembourgLiveAdapterCanary
         LuxembourgIriVocabularyValue[] missing = [];
         string status = "started";
         string? failure = null;
+        int? spentAfterVocabulary = null;
+        int? spentAfterAdapter = null;
         try
         {
             // Capture before the first publisher request; dirty source and loaded binaries are
@@ -333,15 +404,17 @@ public sealed class LuxembourgLiveAdapterCanary
                 schema = "lex-lu-declared-canary-scope/1",
                 ranges = declaredRanges.Select(range => new { range.Name, range.Start, range.End }).ToArray(),
                 vocabulary = "P/T/C whole range; O CC-BY range",
+                documents = "the manifest's selected body of each admitted object, and every accepted Gazette listing of each as-published act",
                 wireCeiling = new
                 {
                     derived = true,
                     total = derivation.Total,
                     hardCap = HardCap,
-                    declaredRowsPerPartition = derivation.DeclaredRowsPerPartition,
-                    requestsPerPartition = derivation.RequestsPerPartition,
-                    vocabularyPartitions = derivation.VocabularyPartitions,
+                    declaredVocabularyRows = derivation.DeclaredVocabularyRows,
+                    vocabularyRequests = derivation.VocabularyRequests,
+                    declaredRowsPerAdapterPartition = derivation.DeclaredRowsPerAdapterPartition,
                     adapterPartitions = derivation.AdapterPartitions,
+                    adapterRequests = derivation.AdapterRequests,
                     declaredDocuments = derivation.DeclaredDocuments,
                     requestsPerDocument = derivation.RequestsPerDocument,
                     retryAllowance = derivation.RetryAllowance,
@@ -378,6 +451,8 @@ public sealed class LuxembourgLiveAdapterCanary
                     break;
                 }
             }
+
+            spentAfterVocabulary = budget.Spent;
 
             // ONE ASSERTION FOR ALL OF THEM, so a red run carries every count it learned.
             var refusedFamilies = partitionOutcomes.Where(static entry => entry.Outcome.Receipt is null).ToArray();
@@ -441,6 +516,7 @@ public sealed class LuxembourgLiveAdapterCanary
                     documentRenderer, budget, CancellationToken.None)
                 : await adapter.RunAsync(families, "act-2017-g", "act-2017-s", "act-2017-a",
                     documentRenderer, budget, CancellationToken.None);
+            spentAfterAdapter = budget.Spent;
             finalResult = new { result.Refusal, result.Completion, result.FamilyOutcomes,
                 result.ResourceObservationSubjects, result.ResourceObservationExclusions,
                 result.ScopeManifestReceipt, result.ScopeManifestCanonicalSha256, result.CorpusRecordSetRef,
@@ -481,6 +557,7 @@ public sealed class LuxembourgLiveAdapterCanary
             var index = JsonSerializer.SerializeToUtf8Bytes(new
             {
                 schema = "lex-lu-live-adapter-canary-evidence/1", status, failure, provenance, measured, observed, missing,
+                wireBudget = new { limit = budget.Limit, derivedTotal = derivation.Total, spentAfterVocabulary, spentAfterAdapter, spentAtEnd = budget.Spent },
                 finalResult, root, declaredRanges = declaredRanges.Select(range => new { range.Name, range.Start, range.End }).ToArray(),
                 completedUtc = DateTimeOffset.UtcNow, members,
                 limitations = "Bounded prerequisite only; not whole Luxembourg scope, Stage 1 acceptance, or production retention. FileSystemCustodyStore reports unenforced retention.",
