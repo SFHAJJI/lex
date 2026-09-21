@@ -90,7 +90,7 @@ public sealed class EuPopulationReportClaimsTests
         var doors = adapter.GetMethods(All).Cast<MethodBase>()
             .Concat(adapter.GetConstructors(All))
             .Where(static door => door.GetParameters().Any(static parameter =>
-                typeof(IScopeReductionEvidenceResolver).IsAssignableFrom(parameter.ParameterType)))
+                CarriesAResolver(parameter.ParameterType)))
             .Select(static door => door.Name)
             .Distinct(StringComparer.Ordinal)
             .OrderBy(static name => name, StringComparer.Ordinal)
@@ -103,6 +103,20 @@ public sealed class EuPopulationReportClaimsTests
             + "builds from the real custody store; a parameter that accepts one makes that sentence "
             + "false for any caller that passes a double, and every other test here stays green.");
     }
+
+    /// <summary>
+    /// Whether a parameter type is, or carries, a scope-reduction resolver.
+    /// </summary>
+    /// <remarks>
+    /// Recursive because <c>IsAssignableFrom</c> alone does not see one inside a delegate, an array or
+    /// a collection: a reviewer showed a <c>Func&lt;IScopeReductionEvidenceResolver&gt;</c> parameter
+    /// walking past the guard. They did not ask for this - it takes a deliberate second door to use -
+    /// but the test was open in front of me and a door is a door however the resolver is wrapped.
+    /// </remarks>
+    private static bool CarriesAResolver(Type type) =>
+        typeof(IScopeReductionEvidenceResolver).IsAssignableFrom(type)
+        || (type.HasElementType && CarriesAResolver(type.GetElementType()!))
+        || (type.IsGenericType && type.GetGenericArguments().Any(CarriesAResolver));
 
     [TestMethod]
     public void TheReductionLimitationNamesTheResidueAndNoLongerClaimsATestDouble()
@@ -124,9 +138,41 @@ public sealed class EuPopulationReportClaimsTests
                 + "alone, so a report that stops naming it claims more than the resolver does.");
         }
 
-        Assert.DoesNotContain(
-            "test double", why, StringComparer.OrdinalIgnoreCase,
-            "The reduction limitation calls the resolver a test double. The run constructs none; "
-            + "saying so understates what every seed established.");
+        // NOT DoesNotContain. A reviewer proved the previous form could never fail: a StringComparer
+        // fits none of MSTest's substring overloads, so the call bound to
+        // DoesNotContain(object, IEnumerable, IEqualityComparer, ...), which asks whether any CHAR of
+        // `why` equals the STRING "test double". No char does, for any input. The tell was in the
+        // text it guarded: this very limitation quotes TEST DOUBLE when it says what it corrects, so
+        // a working check would have gone red here and it stayed green.
+        //
+        // The phrase is legitimately present exactly once, quoting the claim being corrected, so the
+        // property is not absence: it is that the only occurrence is the quoted one.
+        const string phrase = "test double";
+        const string quoting = "an earlier version of this report said";
+
+        var occurrences = 0;
+        for (var at = why.IndexOf(phrase, StringComparison.OrdinalIgnoreCase); at >= 0;
+             at = why.IndexOf(phrase, at + 1, StringComparison.OrdinalIgnoreCase))
+        {
+            occurrences++;
+        }
+
+        Assert.AreEqual(
+            1, occurrences,
+            $"The reduction limitation names a '{phrase}' {occurrences} times. It may say so exactly "
+            + "once, quoting the claim it corrects; a second mention is the report calling this run's "
+            + "resolver a double again, which understates what every seed established.");
+
+        var quoted = why.IndexOf(phrase, StringComparison.OrdinalIgnoreCase);
+        var said = why.IndexOf(quoting, StringComparison.Ordinal);
+        Assert.IsTrue(
+            said >= 0 && said < quoted,
+            "The limitation's one mention of a test double is not the quoted one. It is allowed only "
+            + $"after '{quoting}', where the report is stating what it no longer claims.");
+
+        StringAssert.Contains(
+            why, "EuProductionScopeReductionEvidenceResolver",
+            "The limitation must name the resolver the run actually uses. Pinning the absence of the "
+            + "wrong sentence without pinning the presence of the right one guards half the property.");
     }
 }
