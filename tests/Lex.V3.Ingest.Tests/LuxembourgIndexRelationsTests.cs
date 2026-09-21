@@ -70,17 +70,14 @@ public sealed class LuxembourgIndexRelationsTests
             var element = document.Descendants()
                 .Single(candidate => candidate.Name.LocalName == "article" &&
                                      (string?)candidate.Attribute("id") == publisherId);
-            var written = element.Descendants()
-                .Where(static candidate => candidate.Name.LocalName == "ref" && candidate.Attribute("href") is not null)
-                .Select(static candidate => (string)candidate.Attribute("href")!)
-                .ToArray();
+            var written = WrittenReferences(document, element);
 
             var rows = LuxembourgIndexBuilder.ProjectRelations([Row(article)]);
 
-            var hrefs = rows.Select(static row => row.Href).ToArray();
+            var seen = rows.Select(static row => $"{(row.InNote ? "note" : "text")} {row.Href}").ToArray();
             CollectionAssert.AreEqual(
-                written, hrefs,
-                $"{publisherId}: the XML has [{string.Join(" | ", written)}] and the rows [{string.Join(" | ", hrefs)}]");
+                written, seen,
+                $"{publisherId}: the XML has [{string.Join(" | ", written)}] and the rows [{string.Join(" | ", seen)}]");
             CollectionAssert.AreEqual(
                 Enumerable.Range(0, rows.Length).ToArray(), rows.Select(static row => row.Ordinal).ToArray(), publisherId);
             Assert.IsTrue(rows.All(row => string.Equals(row.FromRef, article.IdentitySha256, StringComparison.Ordinal)));
@@ -226,6 +223,35 @@ public sealed class LuxembourgIndexRelationsTests
         AssertRejected(built, corpusRef, "flips the flag that says an edge is in a footnote", connection =>
             LuxembourgIndexBuilderTests.Execute(connection,
                 "UPDATE relations SET in_note=1-in_note WHERE rowid=(SELECT min(rowid) FROM relations)"));
+    }
+
+    /// <summary>
+    /// What the publisher wrote, counted from the XML alone: each <c>ref</c> inside the article in document order, and
+    /// at each <c>noteRef</c> the <c>ref</c>s inside the <c>note</c> it points at (the publisher keeps a note's body
+    /// outside the article, and the profile brings it in at the note reference). Nothing here goes through the
+    /// profile's tokens or the target grammar.
+    /// </summary>
+    private static string[] WrittenReferences(XDocument document, XElement article)
+    {
+        var written = new List<string>();
+        foreach (var element in article.Descendants())
+        {
+            if (element.Name.LocalName == "ref" && element.Attribute("href") is { } href)
+            {
+                written.Add("text " + href.Value);
+            }
+            else if (element.Name.LocalName == "noteRef")
+            {
+                var id = ((string?)element.Attribute("href"))?.TrimStart('#');
+                var note = document.Descendants().Single(candidate =>
+                    candidate.Name.LocalName == "note" && (string?)candidate.Attribute("id") == id);
+                written.AddRange(note.Descendants()
+                    .Where(static candidate => candidate.Name.LocalName == "ref" && candidate.Attribute("href") is not null)
+                    .Select(static candidate => "note " + (string)candidate.Attribute("href")!));
+            }
+        }
+
+        return written.ToArray();
     }
 
     private static void AssertRejected(
