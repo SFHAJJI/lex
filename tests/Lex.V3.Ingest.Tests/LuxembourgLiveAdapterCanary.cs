@@ -24,16 +24,115 @@ public sealed class LuxembourgLiveAdapterCanary
     private const string CivilOriginal = "http://data.legilux.public.lu/eli/etat/leg/loi/1804/03/21/n1/jo";
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
 
-    /// <summary>The whole-canary charged-request ceiling. Null until the owner dispositions one.</summary>
+    /// <summary>
+    /// The whole-canary charged-request ceiling, DERIVED and not chosen: the sum of what each leg of the run declares it
+    /// will cost, from the executor's own exact cost function, plus a stated allowance for retries.
+    /// </summary>
     /// <remarks>
-    /// THE LARGEST ASK IN THIS FILE IS AN UNBOUNDED ONE. Three of the four vocabulary partitions
-    /// are opened over <c>Range(..., "", "\uffff")</c> — the whole class, not a range — so their
-    /// page counts are whatever the publisher holds, and no arithmetic here can bound them. The
-    /// adapter run that follows then enumerates every declared family again and fetches a document
-    /// per admitted object. A number for this canary is a decision about how much traffic one
-    /// acceptance run may cost, which is the owner's to make and not this file's to assume.
+    /// <para>
+    /// The vocabulary partitions are opened over whole classes, so their sizes are the publisher's and no number can be
+    /// read off the code alone. What the code does fix is the cost of a partition as a function of its count
+    /// (<see cref="LuxembourgEnumerationBudget.RequestsForPartition"/>: robots, then a count and its pages for each of
+    /// two passes), and it checks that cost against the budget it has left as soon as the count is read, so a class
+    /// larger than declared is refused right after its count with the count in the refusal. This file therefore
+    /// DECLARES how large a partition may be, derives the ceiling from that, and writes the derivation into the
+    /// retained scope before the first request. A first run is a measurement of whether the declaration was right: it
+    /// either passes, or refuses at the first partition that is larger and says how large.
+    /// </para>
+    /// <para>
+    /// The ceiling is a refusal and never a truncation. <see cref="HardCap"/> is what no derivation may exceed, and a
+    /// run whose declarations sum past it does not start.
+    /// </para>
     /// </remarks>
-    private static readonly int? SharedWireCeiling = null;
+    internal sealed record WireCeilingDerivation(
+        long DeclaredRowsPerPartition,
+        int RequestsPerPartition,
+        int VocabularyPartitions,
+        int AdapterPartitions,
+        int DeclaredDocuments,
+        int RequestsPerDocument,
+        int RetryAllowance)
+    {
+        public int Total =>
+            checked(((VocabularyPartitions + AdapterPartitions) * RequestsPerPartition)
+                + (DeclaredDocuments * RequestsPerDocument) + RetryAllowance);
+    }
+
+    /// <summary>The largest count a partition may declare, which costs 8 requests: 996 is 997 less one, the largest count of two pages in the first pass.</summary>
+    internal const long DeclaredRowsPerPartition = 996;
+
+    /// <summary>Distinct vocabulary values (predicates, types, categories, licences) are the size of a vocabulary, not of the corpus.</summary>
+    internal const int VocabularyPartitionCount = 4;
+
+    /// <summary>Subjects, assertions and graph rows: three families for each declared range.</summary>
+    internal const int FamiliesPerDeclaredRange = 3;
+
+    /// <summary>Each document fetch reserves its own robots fetch and then sends its GET.</summary>
+    internal const int RequestsPerDocument = 2;
+
+    /// <summary>Every retry is a further reserved request, and the source profile allows four attempts per request.</summary>
+    internal const int RetryAllowance = 8;
+
+    /// <summary>
+    /// What no derivation may exceed. A first measurement of a public body's endpoint should cost tens of requests, so
+    /// 200 is well above anything the declarations here sum to and still small; raising the declarations past it is a
+    /// decision to change this number in the open, not a side effect.
+    /// </summary>
+    internal const int HardCap = 200;
+
+    internal static WireCeilingDerivation DeriveWireCeiling(int declaredRanges, int declaredDocuments) =>
+        new(
+            DeclaredRowsPerPartition,
+            LuxembourgEnumerationBudget.RequestsForPartition(DeclaredRowsPerPartition),
+            VocabularyPartitionCount,
+            FamiliesPerDeclaredRange * declaredRanges,
+            declaredDocuments,
+            RequestsPerDocument,
+            RetryAllowance);
+
+    /// <summary>The refusal, or null: a derivation past the hard cap is not run.</summary>
+    internal static string? RefusalFor(WireCeilingDerivation derivation) =>
+        derivation.Total > HardCap
+            ? $"the derived wire ceiling {derivation.Total} exceeds the hard cap {HardCap}; the declarations sum past what a canary may cost"
+            : null;
+
+    private const int DeclaredDocumentsForAnAct = 8;
+    private const int DeclaredDocumentsForPlainXml = 2;
+
+    [TestMethod]
+    public void TheDerivedCeilingIsTheSumOfWhatEachLegDeclaresAndIsUnderTheHardCap()
+    {
+        // Eight requests a partition (a class of up to 996 rows: robots, a count and two pages, then a count and three
+        // pages), seven partitions for one declared range (four of vocabulary, three of the adapter), then eight
+        // documents at two requests each, then the retry allowance.
+        var act = DeriveWireCeiling(declaredRanges: 1, DeclaredDocumentsForAnAct);
+        Assert.AreEqual(8, act.RequestsPerPartition);
+        Assert.AreEqual((7 * 8) + (8 * 2) + 8, act.Total);
+        Assert.AreEqual(80, act.Total);
+
+        // The plain-XML run declares two ranges (the Code civil state and its original) and two documents.
+        var plain = DeriveWireCeiling(declaredRanges: 2, DeclaredDocumentsForPlainXml);
+        Assert.AreEqual((10 * 8) + (2 * 2) + 8, plain.Total);
+        Assert.AreEqual(92, plain.Total);
+
+        Assert.IsNull(RefusalFor(act));
+        Assert.IsNull(RefusalFor(plain));
+    }
+
+    [TestMethod]
+    public void ADerivationPastTheHardCapIsRefusedBeforeAnythingIsSent()
+    {
+        // Twenty-five declared ranges sum past 200 whatever else is declared.
+        var large = DeriveWireCeiling(declaredRanges: 25, DeclaredDocumentsForAnAct);
+        Assert.IsGreaterThan(HardCap, large.Total);
+        StringAssert.Contains(RefusalFor(large), "exceeds the hard cap 200");
+
+        // Exactly at the cap is not past it, and one more is.
+        var exact = new WireCeilingDerivation(996, 8, 4, 3, 0, 2, HardCap - 56);
+        Assert.AreEqual(HardCap, exact.Total);
+        Assert.IsNull(RefusalFor(exact));
+        Assert.IsNotNull(RefusalFor(exact with { RetryAllowance = exact.RetryAllowance + 1 }));
+    }
 
     [TestMethod]
     public async Task AnActRunsThroughThePublicAdapterWithObservedVocabularyAndSameRunRights()
@@ -55,23 +154,24 @@ public sealed class LuxembourgLiveAdapterCanary
 
     private static async Task RunCanaryAsync(bool plainXml)
     {
-        // FAIL CLOSED ON A MISSING CEILING, before a range, a store or an executor is built.
-        if (SharedWireCeiling is not { } ceiling)
+        var declaredRanges = plainXml
+            ? new[] { (Name: "civil-state", Start: CivilState, End: "http://data.legilux.public.lu/eli/etat/leg/code/civil/20251227"),
+                (Name: "civil-original", Start: CivilOriginal, End: CivilOriginal + "!") }
+            : [(Name: "act-2017", Start, End)];
+
+        // THE CEILING IS DERIVED FROM WHAT THIS RUN DECLARES, and a derivation past the hard cap is refused before a
+        // range, a store or an executor is built, so nothing is sent for a canary whose declarations grew unnoticed.
+        var derivation = DeriveWireCeiling(
+            declaredRanges.Length, plainXml ? DeclaredDocumentsForPlainXml : DeclaredDocumentsForAnAct);
+        if (RefusalFor(derivation) is { } refusal)
         {
-            Assert.Inconclusive(
-                "The whole-canary wire ceiling has not been dispositioned. This harness will not "
-                + "choose one: set SharedWireCeiling before running it.");
+            Assert.Fail(refusal);
             return;
         }
 
         // ONE INSTANCE FOR THE WHOLE CANARY: the four vocabulary partitions and the adapter run
         // that follows them all charge it, so the number bounds the run and not each of its legs.
-        var budget = WireRequestBudget.OfWireRequests(ceiling);
-
-        var declaredRanges = plainXml
-            ? new[] { (Name: "civil-state", Start: CivilState, End: "http://data.legilux.public.lu/eli/etat/leg/code/civil/20251227"),
-                (Name: "civil-original", Start: CivilOriginal, End: CivilOriginal + "!") }
-            : [(Name: "act-2017", Start, End)];
+        var budget = WireRequestBudget.OfWireRequests(derivation.Total);
 
         var checkout = CheckoutRoot();
         var root = Path.Combine(checkout, "artifacts", "lu-adapter-" + Guid.NewGuid().ToString("N"));
@@ -108,6 +208,19 @@ public sealed class LuxembourgLiveAdapterCanary
                 schema = "lex-lu-declared-canary-scope/1",
                 ranges = declaredRanges.Select(range => new { range.Name, range.Start, range.End }).ToArray(),
                 vocabulary = "P/T/C whole range; O CC-BY range",
+                wireCeiling = new
+                {
+                    derived = true,
+                    total = derivation.Total,
+                    hardCap = HardCap,
+                    declaredRowsPerPartition = derivation.DeclaredRowsPerPartition,
+                    requestsPerPartition = derivation.RequestsPerPartition,
+                    vocabularyPartitions = derivation.VocabularyPartitions,
+                    adapterPartitions = derivation.AdapterPartitions,
+                    declaredDocuments = derivation.DeclaredDocuments,
+                    requestsPerDocument = derivation.RequestsPerDocument,
+                    retryAllowance = derivation.RetryAllowance,
+                },
             }, JsonOptions));
             var plan = LuxembourgQueryPlan.CreateDefaultGraph(
                 OfficialMachineQuerySourceProfiles.Resolve(OfficialMachineQuerySourceProfileId.LuxembourgSparql).ArtifactRef, scope);
