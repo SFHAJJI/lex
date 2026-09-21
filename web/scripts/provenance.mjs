@@ -126,8 +126,8 @@ function refuseStampShapes(answer) {
 /**
  * The corpus's own record of what its legal-content stage did with the articles of one document,
  * counted by the corpus's disposition token. Each token is printed verbatim and none is glossed:
- * the platform's `sources_note` says what they mean, and a gloss invented here would be this
- * service's word wearing the corpus's authority.
+ * the platform's `sources_note` says which of them are held and that it does not define them, and
+ * a gloss invented here would be this service's word wearing the corpus's authority.
  *
  * An empty list is a fact (the corpus recorded none for this document) and an absent member is a
  * different one, so absence is refused. A token appears once, because the platform counts by

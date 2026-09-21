@@ -68,8 +68,7 @@ const SOURCES_NOTE =
   + 'article_outcomes counts the corpus’s legal-content outcomes for this document by disposition '
   + 'token, verbatim: the articles this state holds are the document’s akn_admitted and '
   + 'akn_marker_only_evidence outcomes, an outcome under any other token is not held here, '
-  + 'akn_unsupported_content_shape means the reviewed profile could not represent that article in '
-  + 'full, and which article an outcome belongs to is not held';
+  + 'and which article an outcome belongs to is not held';
 
 const NOT_HELD = Object.freeze([
   Object.freeze({
@@ -192,7 +191,8 @@ const GAPS_RECORDED = {
     + 'tokens, printed verbatim. This page does not define them and does not translate them: a '
     + 'gloss invented here would be this service’s word wearing the corpus’s authority. The '
     + 'document here holds five article outcomes and this state holds three articles: the other '
-    + 'two were seen and not admitted, and the platform does not say which.',
+    + 'two are outcomes the corpus recorded and this state does not hold, and the platform does '
+    + 'not say which articles they are.',
   answer: answer({
     date: '2030-09-15',
     digest: 'c1'.repeat(32),

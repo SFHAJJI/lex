@@ -435,8 +435,7 @@ internal sealed class V3CorpusMount : IDisposable
         "corpus holds none; outcome, rights_disposition and gaps are the corpus manifest's own tokens for the member, given verbatim, and this " +
         "answer does not define them; article_outcomes counts the corpus's legal-content outcomes for this document by disposition token, " +
         "verbatim: the articles this state holds are the document's akn_admitted and akn_marker_only_evidence outcomes, an outcome under " +
-        "any other token is not held here, akn_unsupported_content_shape means the reviewed profile could not represent that article in " +
-        "full, and which article an outcome belongs to is not held";
+        "any other token is not held here, and which article an outcome belongs to is not held";
 
     internal static readonly string[][] ProvenanceNotHeld =
     [
@@ -1579,11 +1578,10 @@ internal sealed class V3CorpusMount : IDisposable
 
     internal const string ArticleOutcomesNote =
         "the corpus's own record of what its legal-content stage did with the articles of its acquired Luxembourg documents, " +
-        "counted by the corpus's disposition token and given verbatim; " +
+        "counted by the corpus's disposition token and given verbatim, and this answer does not define the tokens; " +
         "an outcome is one article's, except akn_upstream_not_inventoried, which is one document's because none of its articles was listed; " +
         "the articles the index holds, which totals.articles and languages[].articles count, are exactly the akn_admitted and " +
         "akn_marker_only_evidence outcomes, and an outcome under any other token is not held here; " +
-        "akn_unsupported_content_shape means the reviewed profile could not represent that article in full; " +
         "which article an outcome belongs to is not held; " +
         "the outcomes of members that are not acquired are not counted";
 

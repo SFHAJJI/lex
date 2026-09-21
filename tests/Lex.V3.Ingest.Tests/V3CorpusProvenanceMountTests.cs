@@ -538,8 +538,7 @@ public sealed class V3CorpusProvenanceMountTests
             "corpus holds none; outcome, rights_disposition and gaps are the corpus manifest's own tokens for the member, given verbatim, and this " +
             "answer does not define them; article_outcomes counts the corpus's legal-content outcomes for this document by disposition token, " +
             "verbatim: the articles this state holds are the document's akn_admitted and akn_marker_only_evidence outcomes, an outcome under " +
-            "any other token is not held here, akn_unsupported_content_shape means the reviewed profile could not represent that article in " +
-            "full, and which article an outcome belongs to is not held",
+            "any other token is not held here, and which article an outcome belongs to is not held",
             body.GetProperty("sources_note").GetString());
         var notHeld = body.GetProperty("not_held").EnumerateArray().ToArray();
         CollectionAssert.AreEqual(

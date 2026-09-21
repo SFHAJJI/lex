@@ -330,11 +330,10 @@ public sealed class V3CorpusCoverageMountTests
         Assert.AreEqual(body.GetProperty("totals").GetProperty("articles").GetInt64(), held);
         Assert.AreEqual(
             "the corpus's own record of what its legal-content stage did with the articles of its acquired Luxembourg documents, " +
-            "counted by the corpus's disposition token and given verbatim; " +
+            "counted by the corpus's disposition token and given verbatim, and this answer does not define the tokens; " +
             "an outcome is one article's, except akn_upstream_not_inventoried, which is one document's because none of its articles was listed; " +
             "the articles the index holds, which totals.articles and languages[].articles count, are exactly the akn_admitted and " +
             "akn_marker_only_evidence outcomes, and an outcome under any other token is not held here; " +
-            "akn_unsupported_content_shape means the reviewed profile could not represent that article in full; " +
             "which article an outcome belongs to is not held; " +
             "the outcomes of members that are not acquired are not counted",
             members.GetProperty("article_outcomes_note").GetString());

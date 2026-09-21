@@ -1631,9 +1631,9 @@ public sealed class LuxembourgIndexReader : IDisposable
     /// disposition token in ordinal order. Only acquired members are read, because the index holds an
     /// article for an outcome only when its member is acquired. Unlike every other count in the report
     /// this reads each acquired member's whole outcome list, so its cost grows with the outcomes the
-    /// corpus recorded (0.2 to 0.7 s for 540,000 outcomes in a scratch measurement, more on a cold
-    /// file). The index is immutable, so it is read once for the reader's life and a later report
-    /// reuses it.
+    /// corpus recorded: 0.2 to 0.7 s for 10,000 synthetic members of 54 outcomes each on a warm file
+    /// (not a real index, and more on a cold file). The index is immutable, so it is read once for
+    /// the reader's life and a later report reuses it.
     /// </summary>
     private IReadOnlyList<KeyValuePair<string, long>> ArticleOutcomesOfAcquiredMembers(SqliteConnection connection)
     {
