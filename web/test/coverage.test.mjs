@@ -1363,3 +1363,25 @@ test("the preview's outcome tokens are the corpus's and its held outcomes are it
     assert.ok(tokens.has(row.disposition), `the capture carries "${row.disposition}", not a corpus token`);
   }
 });
+
+test("a mount that serves every registered operation says none where the unrouted ones would be listed", async () => {
+  // N3, found by mutation on #719: the string renderer printed `none` here and a blank would have passed
+  // all 764 tests. The branch is unreached while sixteen operations have no route, and it is reached the
+  // day the last one is served, on a page whose rule is that an absence is a sentence and never a blank
+  // cell. `Coverage.jsx` carries its own copy of the literal, so both renderers are held.
+  const captured = withDigests(await capturedAnswer());
+  const every = mutate(captured, (a) => {
+    a.operations.served_operations = [
+      ...a.operations.served_operations, ...a.operations.not_served_operations,
+    ].toSorted();
+    a.operations.not_served_operations = [];
+  });
+  assert.equal(
+    every.operations.served_operations.length, every.operations.registered,
+    "the fixture must serve every registered operation for this to mean anything");
+  for (const [renderer, html] of [["string", string(every)], ["react", react(every)]]) {
+    assert.equal(
+      rows(html).get("registered, with no route on this mount"), "none",
+      `${renderer} left the empty list blank`);
+  }
+});
