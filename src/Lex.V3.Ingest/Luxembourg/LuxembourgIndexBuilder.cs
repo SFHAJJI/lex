@@ -125,6 +125,17 @@ public sealed record LuxembourgIndexStateArticle(
     string PublisherId,
     string WordingSha256);
 
+public sealed record LuxembourgIndexInboundCitation(
+    string ArticleIdentitySha256,
+    string PublisherId,
+    string ExpressionIri,
+    string Language,
+    int Ordinal,
+    bool InNote,
+    string? Label,
+    string? Href,
+    string ToRef);
+
 /// <summary>
 /// One reference the publisher wrote in an article of a state: which article and where in it (<c>Ordinal</c>
 /// counts the article's references in the order they occur, a footnote body's at its note reference and
@@ -2143,6 +2154,59 @@ public sealed class LuxembourgIndexReader : IDisposable
         }
 
         return held;
+    }
+
+    /// <summary>
+    /// The forward edges whose target is exactly one of the given IRIs, each with the citing article's publisher id,
+    /// expression and language: lane R4's edges read by their target, from the table that
+    /// <see cref="ResolveStateCitations"/> reads by the citing article, so the two cannot disagree about a pair of texts.
+    /// By the citing expression, publisher id, identity and place in the article.
+    /// </summary>
+    public IReadOnlyList<LuxembourgIndexInboundCitation> ResolveCitationsTo(IReadOnlyList<string> targetIris)
+    {
+        ArgumentNullException.ThrowIfNull(targetIris);
+        if (targetIris.Count == 0)
+        {
+            return Array.Empty<LuxembourgIndexInboundCitation>();
+        }
+
+        lock (_gate)
+        {
+            using var command = _connection.CreateCommand();
+            command.CommandText = LuxembourgIndexQueries.CitationsTo;
+            command.Parameters.AddWithValue("$iris", JsonSerializer.Serialize(targetIris.Distinct(StringComparer.Ordinal)));
+            using var reader = command.ExecuteReader();
+            var values = new List<LuxembourgIndexInboundCitation>();
+            while (reader.Read())
+            {
+                values.Add(new LuxembourgIndexInboundCitation(
+                    reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3),
+                    reader.GetInt32(4), reader.GetInt32(5) == 1,
+                    reader.IsDBNull(6) ? null : reader.GetString(6),
+                    reader.IsDBNull(7) ? null : reader.GetString(7),
+                    reader.GetString(8)));
+            }
+
+            return Array.AsReadOnly(values.ToArray());
+        }
+    }
+
+    /// <summary>The states of the given expressions, by publisher date, work key, language, expression and digest.</summary>
+    public IReadOnlyList<LuxembourgIndexResolvedState> ResolveStatesOfExpressions(IReadOnlyList<string> expressionIris)
+    {
+        ArgumentNullException.ThrowIfNull(expressionIris);
+        if (expressionIris.Count == 0)
+        {
+            return Array.Empty<LuxembourgIndexResolvedState>();
+        }
+
+        lock (_gate)
+        {
+            using var command = _connection.CreateCommand();
+            command.CommandText = LuxembourgIndexQueries.StatesOfExpressions;
+            command.Parameters.AddWithValue("$expressions", JsonSerializer.Serialize(expressionIris.Distinct(StringComparer.Ordinal)));
+            return ReadResolvedStates(command);
+        }
     }
 
     private static IReadOnlyList<LuxembourgIndexResolvedState> ReadResolvedStates(SqliteCommand command)

@@ -818,6 +818,167 @@ internal sealed class V3CorpusMount : IDisposable
             new V3PlatformOperationResult(request, "relation_edge", result.RootElement));
     }
 
+    public const int CitedByMaxEdges = 200;
+
+    internal const string CitedByScope =
+        "the references, in the text of any state this index holds, whose target is exactly this work's publisher legal-resource IRI or its publisher work IRI: " +
+        "the forward edges that citation serves, read by their target from the same table (lane R4), so the two operations cannot disagree about a pair of texts; " +
+        "an edge records that a reference was written where it says, it is derived here (the publisher asserted the reference in the citing text, not an inbound " +
+        "relation on this work), and this answer assesses neither what relationship the reference states nor whether it has any legal effect";
+
+    internal const string CitedByOrder =
+        "by the citing state's publisher date, then its work key, language and expression, then the citing article's publisher id and identity, then the order the " +
+        "references occur in it";
+
+    internal const string CitedByPageIs =
+        "the edges are in the stated order and a truncated page is the first limit of them from the cursor, not the most relevant";
+
+    internal static readonly string[][] CitedByNotHeld =
+    [
+        ["relationship_type", "no type of relationship is assessed or held for a reference: relationship_type_assessed is false"],
+        ["current_legal_effect", "no legal effect of a reference is assessed or held: current_legal_effect_assessed is false"],
+        ["citing_texts_not_held", "a text this index does not hold cannot be among the citing texts, so the count here is the references the held texts write and never a count of everything that cites this work"],
+        ["citing_works", "citing_works counts the distinct held works whose held texts write a reference to this work, grouped on the citing state's work key, so a work held as several states counts once and a work this index does not hold cannot be counted; a reference from a state of this work to itself is counted in edge_count and flagged by is_self_reference, and it is excluded from citing_works"],
+        ["structured_relations", "the publisher's structured relation records (modifies, repeals, based on, transposes) are not held by this index, so these edges are only the references written in the text"],
+    ];
+
+    /// <summary>
+    /// <c>cited_by</c>: the references written in any state this index holds whose target is exactly a work's publisher
+    /// legal-resource IRI or publisher work IRI. It is <c>citation</c>'s forward edges read by their target from the same
+    /// table, by an index on the target, so the two answer one fact and cannot disagree; it is derived and says so. Each
+    /// edge names the citing state (its work, date, language and permalink), the citing article and the place in it, and the
+    /// publisher's label and value verbatim. Nothing is assessed: no relationship type, no legal effect.
+    /// </summary>
+    public V3PlatformOperationOutcome CitedBy(
+        V3PlatformOperationRequest request,
+        DateTimeOffset observedAt)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (!string.Equals(request.OperationId, "cited_by", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("The mounted corpus cited_by operation only accepts cited_by/1.");
+        }
+
+        var identifier = RequiredString(request.Parameters, "identifier");
+        var after = request.Parameters.TryGetProperty("after", out var afterValue) && afterValue.ValueKind == JsonValueKind.String
+            ? RequiredString(request.Parameters, "after")
+            : null;
+        var limit = CitedByMaxEdges;
+        if (request.Parameters.TryGetProperty("limit", out var limitValue))
+        {
+            if (limitValue.ValueKind != JsonValueKind.Number || !limitValue.TryGetInt32(out limit) ||
+                limit < 1 || limit > CitedByMaxEdges)
+            {
+                throw new V3TransportFailureException(
+                    V3TransportFailureKind.RequestSchemaInvalid,
+                    "The operation request's 'limit' is not a whole number of edges within the ceiling.");
+            }
+        }
+
+        if (RefuseUnlessWorkStates(request, identifier, observedAt, "r4_cited_by", null,
+                out var states, out _) is { } refused)
+        {
+            return refused;
+        }
+
+        // The two exact strings a state of this work carries and a reference can name it by.
+        var targets = states
+            .SelectMany(static state => new[] { state.PublisherLegalResourceIri, state.PublisherWorkIri })
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        var inbound = _reader!.ResolveCitationsTo(targets);
+        var citingStates = _reader.ResolveStatesOfExpressions(
+                inbound.Select(static edge => edge.ExpressionIri).Distinct(StringComparer.Ordinal).ToArray())
+            .ToDictionary(static state => state.ExpressionIri, StringComparer.Ordinal);
+        var workKey = states[0].WorkKey;
+        var edges = inbound
+            .Select(edge => (State: citingStates.TryGetValue(edge.ExpressionIri, out var state)
+                    ? state
+                    : throw new InvalidDataException("An article of the index belongs to no state."),
+                Edge: edge))
+            .OrderBy(static entry => entry.State.ApplicabilityDate, StringComparer.Ordinal)
+            .ThenBy(static entry => entry.State.WorkKey, StringComparer.Ordinal)
+            .ThenBy(static entry => entry.State.Language, StringComparer.Ordinal)
+            .ThenBy(static entry => entry.State.ExpressionIri, StringComparer.Ordinal)
+            .ThenBy(static entry => entry.Edge.PublisherId, StringComparer.Ordinal)
+            .ThenBy(static entry => entry.Edge.ArticleIdentitySha256, StringComparer.Ordinal)
+            .ThenBy(static entry => entry.Edge.Ordinal)
+            .ToArray();
+
+        static string Cursor((LuxembourgIndexResolvedState State, LuxembourgIndexInboundCitation Edge) entry) =>
+            $"{entry.State.StateSha256}.{entry.Edge.ArticleIdentitySha256}.{entry.Edge.Ordinal}";
+        var start = 0;
+        if (after is not null)
+        {
+            var index = Array.FindIndex(edges, entry => string.Equals(Cursor(entry), after, StringComparison.Ordinal));
+            if (index < 0)
+            {
+                throw new V3TransportFailureException(
+                    V3TransportFailureKind.RequestSchemaInvalid,
+                    "The operation request's 'after' names no edge of this query; a cursor is the continue_after of the same query, scope and index.");
+            }
+
+            start = index + 1;
+        }
+
+        var page = edges.Skip(start).Take(limit).ToArray();
+        var truncated = start + page.Length < edges.Length;
+        var rows = page.Select(entry => new
+        {
+            citing_work_key = entry.State.WorkKey,
+            citing_language = entry.State.Language,
+            citing_applicability_date = entry.State.ApplicabilityDate,
+            citing_state_sha256 = entry.State.StateSha256,
+            citing_permalink = StateUrl(entry.State),
+            citing_stable_coordinate = StableCoordinate(entry.State),
+            article_identity_sha256 = entry.Edge.ArticleIdentitySha256,
+            article_publisher_id = entry.Edge.PublisherId,
+            ordinal = entry.Edge.Ordinal,
+            in_note = entry.Edge.InNote,
+            label = entry.Edge.Label,
+            href = entry.Edge.Href,
+            target_iri = entry.Edge.ToRef,
+            is_self_reference = string.Equals(entry.State.WorkKey, workKey, StringComparison.Ordinal),
+        }).ToArray();
+
+        using var result = JsonSerializer.SerializeToDocument(new
+        {
+            scope = CitedByScope,
+            requested_identifier = identifier,
+            requested_after = after,
+            publisher = "lu-legilux",
+            work_key = workKey,
+            relationship_type_assessed = false,
+            current_legal_effect_assessed = false,
+            derived = true,
+            target_iris = targets,
+            edge_count = edges.Length,
+            edge_counts = new
+            {
+                in_text = edges.Count(static entry => !entry.Edge.InNote),
+                in_note = edges.Count(static entry => entry.Edge.InNote),
+            },
+            citing_works = edges
+                .Select(static entry => entry.State.WorkKey)
+                .Where(citing => !string.Equals(citing, workKey, StringComparison.Ordinal))
+                .Distinct(StringComparer.Ordinal)
+                .Count(),
+            edge_order = CitedByOrder,
+            limit,
+            truncated,
+            continue_after = truncated ? Cursor(page[^1]) : null,
+            page_is = CitedByPageIs,
+            edges = rows,
+            not_held = CitedByNotHeld.Select(static row => new { item = row[0], reason = row[1] }).ToArray(),
+            corpus_sha256 = _corpus.ArtifactRef.Sha256,
+            index_sha256 = _reader.IndexRef.Sha256,
+        });
+        return V3PlatformOperationOutcome.Success(
+            Context("success", observedAt),
+            new V3PlatformOperationResult(request, "relation_edge", result.RootElement));
+    }
+
     /// <summary>
     /// The SHA-256 of a state's article identities in sorted order, each as UTF-8 preceded by its length as
     /// four bytes big-endian, the encoding the state digest uses for the same identities, so a caller holding

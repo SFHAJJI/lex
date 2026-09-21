@@ -272,6 +272,53 @@ public sealed class LuxembourgIndexRelationsTests
     }
 
     [TestMethod]
+    public async Task TheInboundReaderFindsExactlyTheEdgesThatNameAnIriAndTheStatesOfTheirExpressions()
+    {
+        var (built, corpusRef) = await LuxembourgIndexBuilderTests.BuildStateIndexAsync();
+        using var reader = LuxembourgIndexReader.OpenAndVerify(
+            built.IndexRef, built.IndexBytes.Span, corpusRef, built.CapabilityManifest);
+        const string europe = "http://data.europa.eu/eli/agree_internation/2021/689(1)/oj";
+        const string act = "http://data.legilux.public.lu/eli/etat/leg/loi/2004/07/09/n3/jo";
+
+        var inbound = reader.ResolveCitationsTo([europe, act, europe, "http://example.invalid/never-cited"]);
+
+        // The rows of the table that name either IRI, by SQL that shares nothing with the reader.
+        var bytes = built.IndexBytes.ToArray();
+        var path = Path.Combine(Path.GetTempPath(), $"lex-v3-inbound-{Guid.NewGuid():N}.sqlite");
+        File.WriteAllBytes(path, bytes);
+        try
+        {
+            using var connection = LuxembourgIndexBuilder.Open(path, Microsoft.Data.Sqlite.SqliteOpenMode.ReadOnly);
+            var expected = LuxembourgIndexBuilderTests.ReadRelations(connection)
+                .Where(row => row.ToRef == europe || row.ToRef == act)
+                .Select(static row => (row.FromRef, row.Ordinal, row.InNote, row.Href))
+                .Order()
+                .ToArray();
+            Assert.IsNotEmpty(expected, "the real act writes references to both of these, so the comparison is not empty");
+            CollectionAssert.AreEqual(
+                expected,
+                inbound.Select(static edge => (edge.ArticleIdentitySha256, edge.Ordinal, edge.InNote, edge.Href)).Order().ToArray());
+            Assert.IsTrue(inbound.All(static edge => edge.ToRef is europe or act));
+
+            // Each edge's expression is its article's, and the state of that expression is the one state that holds the article.
+            var articles = LuxembourgIndexBuilderTests.ReadArticles(connection).ToDictionary(static article => article.ArticleIdentitySha256);
+            Assert.IsTrue(inbound.All(edge => articles[edge.ArticleIdentitySha256].ExpressionIri == edge.ExpressionIri));
+            var states = reader.ResolveStatesOfExpressions(inbound.Select(static edge => edge.ExpressionIri).Distinct().ToArray());
+            Assert.HasCount(1, states);
+            Assert.AreEqual(inbound[0].ExpressionIri, states[0].ExpressionIri);
+        }
+        finally
+        {
+            LuxembourgIndexBuilder.DeleteDatabase(path);
+        }
+
+        Assert.IsEmpty(reader.ResolveCitationsTo([]));
+        Assert.IsEmpty(reader.ResolveCitationsTo(["http://example.invalid/never-cited"]));
+        Assert.IsEmpty(reader.ResolveStatesOfExpressions([]));
+        Assert.IsEmpty(reader.ResolveStatesOfExpressions(["http://example.invalid/no-such-expression"]));
+    }
+
+    [TestMethod]
     public async Task TheStrictReaderRefusesAnIndexWhoseRelationsAreNotTheReferencesItsArticlesCarry()
     {
         var (built, corpusRef) = await LuxembourgIndexBuilderTests.BuildStateIndexAsync();
