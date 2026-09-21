@@ -65,8 +65,11 @@ namespace Lex.V3.Ingest.Tests;
 /// strength of the sentence it replaces. An object binding is admitted only when its digest is one
 /// of the objects THIS RUN OBSERVED, not merely a well-formed digest; an interpretation profile is
 /// admitted only when every retained evidence artifact behind it REOPENED FROM CUSTODY; and the
-/// complete enumeration must match both the ref and the OBSERVED OBJECT COUNT. The permissive
-/// double checked none of those four.
+/// complete enumeration must match both the ref and the OBSERVED OBJECT COUNT. <b>The permissive
+/// double checked one of those four and not the other three</b>: it compared the complete
+/// enumeration ref, against a ref this run had made for itself, so the comparison was real and what
+/// it compared against was not. Stated at that width because a correction to a sentence that
+/// understated a run must not overstate it in the other direction.
 /// </para>
 /// <para>
 /// AND WHAT IT STILL DOES NOT, which is the residue and is narrower than "the reduction step is
@@ -604,7 +607,9 @@ public sealed class EuStageOnePopulationRun
                     + "objects THIS RUN OBSERVED, an interpretation profile only when every "
                     + "retained evidence artifact behind it REOPENED FROM CUSTODY, and the "
                     + "complete enumeration must match both the ref and the OBSERVED OBJECT "
-                    + "COUNT. What remains unproven is narrower and is the residue of R0: "
+                    + "COUNT. The double checked one of those four, the enumeration ref, against a "
+                    + "ref this run handed its own constructor, and none of the other three. What "
+                    + "remains unproven is narrower and is the residue of R0: "
                     + "SelectorEvidenceSha256, SelectorSetSha256 and RuleEvaluationSha256 are "
                     + "each still admitted by a syntactic 64-hex check, never reopened and never "
                     + "recomputed, so a binding naming evidence that does not exist is admitted "
