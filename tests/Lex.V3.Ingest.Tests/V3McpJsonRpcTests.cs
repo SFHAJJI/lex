@@ -24,8 +24,13 @@ public sealed class V3McpJsonRpcTests
     {
         var bytes = await V3McpJsonRpc.HandleAsync(
             Request(payload), new V3PlatformHost(), mount, static () => ObservedAt, requestReference, CancellationToken.None);
+        Assert.IsNotNull(bytes, "A request carrying an id must always be answered.");
         return JsonDocument.Parse(bytes);
     }
+
+    private static Task<byte[]?> RawHandleAsync(object payload) =>
+        V3McpJsonRpc.HandleAsync(
+            Request(payload), new V3PlatformHost(), null, static () => ObservedAt, "mcp_test_ref", CancellationToken.None);
 
     private static JsonElement RestOutcomeBytesAsJson(V3CorpusMount? mount, string identifier, string requestReference)
     {
@@ -210,19 +215,43 @@ public sealed class V3McpJsonRpcTests
     [TestMethod]
     public async Task MalformedJsonIsAParseError()
     {
+        // A document that does not parse as JSON at all: an id (if any) cannot be read either, so
+        // JSON-RPC 2.0 §5's carve-out applies and a reply with id: null is correct here.
         var bytes = await V3McpJsonRpc.HandleAsync(
             "{not json"u8.ToArray(), new V3PlatformHost(), null, static () => ObservedAt, "ref", CancellationToken.None);
+        Assert.IsNotNull(bytes, "A document that fails to parse at all is the one case that always gets a reply.");
         using var response = JsonDocument.Parse(bytes);
 
         Assert.AreEqual(-32700, response.RootElement.GetProperty("error").GetProperty("code").GetInt32());
         Assert.AreEqual(JsonValueKind.Null, response.RootElement.GetProperty("id").ValueKind);
     }
 
+    /// <summary>
+    /// JSON-RPC 2.0 §4.1: a Request object with no <c>id</c> member is a Notification, and the server
+    /// MUST NOT reply to one -- not with a result, not with an error, not even with <c>id: null</c>.
+    /// MCP's own lifecycle depends on this: <c>notifications/initialized</c>, sent right after a
+    /// successful <c>initialize</c>, carries no id.
+    /// </summary>
     [TestMethod]
-    public async Task ARequestWithNoIdIsAnsweredWithANullId()
+    public async Task ARequestWithNoIdIsANotificationAndReceivesNoResponseAtAll()
     {
-        using var response = await HandleAsync(new { jsonrpc = "2.0", method = "tools/list" });
-        Assert.AreEqual(JsonValueKind.Null, response.RootElement.GetProperty("id").ValueKind);
+        var response = await RawHandleAsync(new { jsonrpc = "2.0", method = "tools/list" });
+        Assert.IsNull(response, "A Notification (no id member) must not be answered, per JSON-RPC 2.0 §4.1.");
+    }
+
+    [TestMethod]
+    public async Task ANotificationWithAnUnknownMethodOrInvalidParamsStillReceivesNoResponse()
+    {
+        Assert.IsNull(await RawHandleAsync(new { jsonrpc = "2.0", method = "notifications/initialized" }), "the exact MCP lifecycle notification");
+        Assert.IsNull(await RawHandleAsync(new { jsonrpc = "2.0", method = "tools/call", @params = new { name = "search" } }), "a notification cannot report an invalid tool call either -- the client has no request to match the error to");
+        Assert.IsNull(await RawHandleAsync(new { jsonrpc = "1.0", method = "tools/list" }), "a notification-shaped object with the wrong jsonrpc version is still a notification -- it lacks an id, and MUST NOT is not conditioned on the rest of the object being valid");
+    }
+
+    [TestMethod]
+    public async Task AWellFormedRequestWithAnIdStillReceivesAResponseWhoseIdMatches()
+    {
+        using var response = await HandleAsync(new { jsonrpc = "2.0", id = 42, method = "tools/list" });
+        Assert.AreEqual(42, response.RootElement.GetProperty("id").GetInt32());
     }
 
     private static string RepositoryRoot()

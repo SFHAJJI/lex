@@ -60,11 +60,22 @@ internal static class V3McpJsonRpc
         """;
 
     /// <summary>
-    /// One JSON-RPC request in, one JSON-RPC response out. Never throws for a malformed or
+    /// One JSON-RPC request in, at most one JSON-RPC response out. Never throws for a malformed or
     /// unsupported request; every failure this function can identify is a JSON-RPC error object in
     /// the response, per the JSON-RPC 2.0 and MCP specifications.
     /// </summary>
-    public static async Task<byte[]> HandleAsync(
+    /// <returns>
+    /// The response bytes, or <see langword="null"/> when nothing must be written. JSON-RPC 2.0 §4.1
+    /// defines a Notification as a Request object with no <c>id</c> member and says the server
+    /// <c>MUST NOT</c> reply to one, including one whose method is unknown or whose params are
+    /// invalid — the client has no outstanding request to match a reply to and, by the same section,
+    /// is not informed of errors on a notification by design. MCP's own lifecycle relies on this: the
+    /// client's <c>notifications/initialized</c> after a successful <c>initialize</c> carries no
+    /// <c>id</c>. <c>id: null</c> is reserved for the one case §5 names — the id could not be read at
+    /// all, because the document did not parse as JSON — which still gets a reply, since a client that
+    /// sent a genuine request cannot otherwise learn it failed.
+    /// </returns>
+    public static async Task<byte[]?> HandleAsync(
         byte[] requestUtf8,
         V3PlatformHost host,
         V3CorpusMount? corpusMount,
@@ -77,13 +88,21 @@ internal static class V3McpJsonRpc
         ArgumentNullException.ThrowIfNull(utcNow);
         ArgumentNullException.ThrowIfNull(requestReference);
 
-        JsonElement? id;
-        string method;
+        JsonElement id;
+        string? method;
         JsonElement parameters;
         try
         {
             using var document = JsonDocument.Parse(requestUtf8);
             var root = document.RootElement;
+            if (!root.TryGetProperty("id", out var idElement))
+            {
+                // No id member at all: a Notification by definition, whatever else is wrong with it.
+                // MUST NOT reply, per §4.1 — not even to report that its method or params are invalid.
+                return null;
+            }
+
+            id = Clone(idElement);
             if (root.ValueKind != JsonValueKind.Object ||
                 !root.TryGetProperty("jsonrpc", out var version) ||
                 version.ValueKind != JsonValueKind.String ||
@@ -91,17 +110,18 @@ internal static class V3McpJsonRpc
                 !root.TryGetProperty("method", out var methodElement) ||
                 methodElement.ValueKind != JsonValueKind.String)
             {
-                return Error(NullId, -32600, "Invalid Request");
+                return Error(id, -32600, "Invalid Request");
             }
 
-            id = root.TryGetProperty("id", out var idElement) ? Clone(idElement) : null;
-            method = methodElement.GetString()!;
+            method = methodElement.GetString();
             parameters = root.TryGetProperty("params", out var paramsElement)
                 ? Clone(paramsElement)
                 : Empty();
         }
         catch (JsonException)
         {
+            // The document itself did not parse, so an id (if any) could not be read either. This is
+            // the one case JSON-RPC 2.0 §5 reserves id: null for, and it always gets a reply.
             return Error(NullId, -32700, "Parse error");
         }
 
@@ -124,7 +144,7 @@ internal static class V3McpJsonRpc
     }
 
     private static async Task<byte[]> ToolsCallAsync(
-        JsonElement? id,
+        JsonElement id,
         JsonElement parameters,
         V3PlatformHost host,
         V3CorpusMount? corpusMount,
