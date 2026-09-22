@@ -217,6 +217,63 @@ public sealed class ScopeDigestSensitivityTests
         Assert.AreNotEqual(SelectorSet(), Rule(NotMatched()));
     }
 
+    /// <summary>
+    /// A selector's evidence reaches the digest as the artifact it names, not as the position that
+    /// artifact happens to occupy. So a manifest that retains one more artifact than before, while
+    /// every selector still cites the same one it always did, produces the same selector-set digest.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>This is a property about whether the evidence table can grow, and it was not testable from
+    /// the manifest.</b> <see cref="ScopeReducer"/> requires the table to hold exactly the referenced
+    /// set, so no manifest it will accept can carry an artifact nothing cites — the case simply
+    /// cannot be built from real data, and the function under test takes the table directly, which is
+    /// the only way to plant it.
+    /// </para>
+    /// <para>
+    /// <b>The second assertion is what makes the first one mean anything.</b> A writer that ignored
+    /// the table entirely would satisfy invariance for free, so the same selector is also pointed at
+    /// a genuinely different artifact and required to hash differently. <b>Invariance alone would be
+    /// indistinguishable from the field never reaching the digest at all</b> — which is the exact
+    /// fault the rest of this file exists to catch.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void GrowingTheEvidenceTableDoesNotMoveADigestWhoseSelectorsStillCiteTheSameArtifacts()
+    {
+        // Sorts ahead of FirstEvidence, so inserting it shifts every existing ordinal by one. An
+        // artifact appended after both would leave the ordinals alone and prove nothing.
+        var inserted = new SourceArtifactRef(
+            "urn:uuid:00000000-0000-4000-8000-000000000000", new string('0', 64));
+
+        var before = ScopeManifestCanonicalWriter.ComputeSelectorSetSha256(
+            Profile(), [FirstEvidence, SecondEvidence], [Present(["fr"]), Absent(1)]);
+
+        // Same two selectors, same two artifacts cited: ordinal 0 was First and is now 1, ordinal 1
+        // was Second and is now 2.
+        var afterGrowth = ScopeManifestCanonicalWriter.ComputeSelectorSetSha256(
+            Profile(), [inserted, FirstEvidence, SecondEvidence], [Present(["fr"], 1), Absent(2)]);
+
+        Assert.AreEqual(
+            before,
+            afterGrowth,
+            "A selector set whose selectors cite the same artifacts as before must hash the same, "
+            + "however many further artifacts the run retained. If this moved, the digest is over "
+            + "the table's shape rather than over the evidence each selector actually names, and no "
+            + "run could ever retain an extra artifact without invalidating every earlier manifest.");
+
+        // Vacuity guard: the cited artifact must be in there somewhere.
+        var afterSubstitution = ScopeManifestCanonicalWriter.ComputeSelectorSetSha256(
+            Profile(), [inserted, SecondEvidence], [Present(["fr"], 0), Absent(1)]);
+
+        Assert.AreNotEqual(
+            before,
+            afterSubstitution,
+            "Pointing the first selector at a different artifact must change the digest. If it does "
+            + "not, the assertion above holds for the wrong reason: the evidence never reaches the "
+            + "digest at all, and a manifest could cite any artifact for any selector.");
+    }
+
     private static void AssertAllDistinct(string what, Dictionary<string, string> digests)
     {
         foreach (var (name, digest) in digests)
