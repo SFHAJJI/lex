@@ -334,22 +334,35 @@ public sealed record ScopeCompleteEnumerationBinding(
 /// <summary>
 /// Admits or refuses one scope-reduction binding at a time, so <see cref="ScopeReducer"/> and
 /// <see cref="VerifiedScopeManifest.ParseAndVerify"/> never have to trust an admission decision they
-/// cannot re-derive. No production implementation of this interface exists anywhere in this
-/// codebase as of the D1-04 refreeze (lex-event-20260903T221036088Z-963c186c93cc4c898eec91ee9f2b91e9,
-/// fold-in two): every implementation today is a test fixture (for example
-/// <c>LuxembourgQueryExecutionAdapterTests.PermissiveEvidenceResolver</c>, which admits anything
-/// structurally well-formed, and its sibling <c>FixedAdmittedSetEvidenceResolver</c>, which admits a
-/// fixed, hand-transcribed set). The real resolver -- one that checks a binding's evidence against
-/// what a run's own custody actually holds, the way
-/// <see cref="Lex.V3.Contracts.Source.Absence.AbsenceFamilyEnumerationProof"/> and this file's own
-/// <c>VerifiedScopeManifest.ParseAndVerify</c> do for the artifacts they cover -- is
-/// expected to come from whichever slice wires a live acquisition run's held evidence into
-/// <see cref="VerifiedLuxembourgSourceProfile.ReduceScope"/> for the first time. This is not for
-/// want of a caller: <c>LuxembourgQueryExecutionAdapter.RunAsync</c> already calls
-/// <c>ReduceScope</c> for every run (<c>src</c>, not only a test), and since D1-04b it derives its
-/// own resource observations from held evidence too, through item 17's reader door. What is still
-/// missing is a production implementation of this interface itself over that same held evidence --
-/// every implementation in this codebase today remains a test fixture.
+/// cannot re-derive. This paragraph said, from the D1-04 refreeze
+/// (lex-event-20260903T221036088Z-963c186c93cc4c898eec91ee9f2b91e9, fold-in two) until this edit, that
+/// "no production implementation of this interface exists anywhere in this codebase" and that the real
+/// resolver was "expected to come from whichever slice wires a live acquisition run's held evidence"
+/// into reduction. Both slices landed and neither came back to say so. Two production implementations
+/// live in <c>src</c> today: <c>Lex.V3.Ingest.Luxembourg.LuxembourgProductionScopeReductionEvidenceResolver</c>,
+/// whose own summary quotes the sentence above and names itself as that slice, and
+/// <c>Lex.V3.Ingest.Europe.EuProductionScopeReductionEvidenceResolver</c>. Both build their admission
+/// set before the manifest they will be asked about exists, so neither derives an admission from the
+/// artifact under verification.
+///
+/// The limitation a reader should take from this interface is therefore no longer "there is no real
+/// implementation" but a narrower and more durable one. Both production resolvers answer exactly two
+/// questions independently: an object identity, by requiring a binding's <c>ObjectRefSha256</c> to equal
+/// <see cref="ScopeManifestCanonicalWriter.ComputeObjectRefSha256"/> of an object that run actually
+/// observed, and an evidence digest, by requiring it to have been reopened from that run's own custody
+/// through <see cref="Lex.V3.Contracts.Custody.CustodyRestore"/>'s checked read. Neither can recompute
+/// <see cref="ScopeSelectorObservationBinding.SelectorEvidenceSha256"/> or
+/// <see cref="ScopeRuleEvaluationBinding.RuleEvaluationSha256"/>, because
+/// <see cref="ScopeManifestCanonicalWriter"/>'s methods for those two digests are <c>internal</c> to
+/// this assembly and the resolvers live in <c>Lex.V3.Ingest</c> (Decision 80). Those admissions remain
+/// syntactic: a binding carrying a digest no one can re-derive is admitted on its shape alone.
+///
+/// A resolver that could recompute them would face a further question this interface cannot settle for
+/// its caller. <see cref="ScopeReducer"/> computes those digests and then asks this interface whether
+/// they are admitted, so an implementation reached through the same code would agree with itself by
+/// construction. Verifying them means an independently written computation, not a second call into the
+/// one under test -- which is why this is recorded here as a limitation rather than as work someone can
+/// close by moving a method's accessibility.
 /// </summary>
 public interface IScopeReductionEvidenceResolver
 {
