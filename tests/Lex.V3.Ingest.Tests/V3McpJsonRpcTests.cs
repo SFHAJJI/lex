@@ -212,6 +212,23 @@ public sealed class V3McpJsonRpcTests
         Assert.AreEqual(-32600, noMethod.RootElement.GetProperty("error").GetProperty("code").GetInt32());
     }
 
+    /// <summary>
+    /// A JSON array is not a Request object, so it cannot be a Notification either -- §4.1 defines a
+    /// Notification only for a Request object with no id member. It is simply Invalid Request, and it
+    /// must be answered, with id: null since there is no object to read an id from. This is also the
+    /// one branch TryGetProperty is not legal to call without checking ValueKind first; a reordering
+    /// of the checks that puts the id probe ahead of the object check throws here instead of refusing.
+    /// </summary>
+    [TestMethod]
+    public async Task AValidJsonDocumentThatIsNotAnObjectIsInvalidRequestNotACrashAndNotASuppressedNotification()
+    {
+        var response = await RawHandleAsync(new[] { 1, 2, 3 });
+        Assert.IsNotNull(response, "not a Request object, so not a Notification -- it must be answered");
+        using var document = JsonDocument.Parse(response);
+        Assert.AreEqual(-32600, document.RootElement.GetProperty("error").GetProperty("code").GetInt32());
+        Assert.AreEqual(JsonValueKind.Null, document.RootElement.GetProperty("id").ValueKind);
+    }
+
     [TestMethod]
     public async Task MalformedJsonIsAParseError()
     {
