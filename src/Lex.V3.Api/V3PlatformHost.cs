@@ -241,6 +241,29 @@ internal sealed class V3PlatformHost
             cancellationToken).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// The MCP counterpart of <see cref="WriteRestOutcomeAsync(HttpResponse,ReadOnlyMemory{byte},string,Func{V3PlatformOperationRequest,V3PlatformOperationOutcome},CancellationToken)"/>:
+    /// same request parsing, same envelope construction, same registry, projected as MCP bytes
+    /// instead of written to an HTTP response. An operation whose outcome may be a success or a
+    /// reviewed refusal (every operation this host serves) has exactly one of these to call, on
+    /// either transport.
+    /// </summary>
+    public Task<V3McpToolResult> CreateMcpOutcomeAsync(
+        ReadOnlyMemory<byte> requestUtf8,
+        string requestReference,
+        Func<V3PlatformOperationRequest, V3PlatformOperationOutcome> execute,
+        CancellationToken cancellationToken)
+    {
+        var bytes = ExecuteOutcome(
+            requestUtf8,
+            requestReference,
+            null,
+            execute,
+            V3EnvelopeProjectionKind.Mcp,
+            cancellationToken);
+        return Task.FromResult(new V3McpToolResult(bytes));
+    }
+
     public Task<V3McpToolResult> CreateMcpSuccessAsync(
         ReadOnlyMemory<byte> requestUtf8,
         string requestReference,
