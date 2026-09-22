@@ -2,9 +2,60 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 
 namespace Lex.V3.Contracts.Platform;
+
+/// <summary>
+/// What a typed fact is. Closed, because a kind that can be any string is a bare string with an
+/// extra step, and the whole point of a typed fact is that a reader can tell a date from a digest
+/// without parsing the sentence back apart.
+/// </summary>
+/// <remarks>
+/// <b>A kind is what a placeholder accepts, not a description of a value.</b> S4-A05 forbids the
+/// assistant relabelling derived facts and quoting without a hash-carrying citation; both become
+/// things the type refuses once a quoting placeholder declares <see cref="ContentHash"/> and a
+/// publisher-stated placeholder declares its own kind, rather than rules somebody has to remember.
+/// </remarks>
+public enum V3FactKind
+{
+    /// <summary>A calendar date as the publisher states it.</summary>
+    [JsonStringEnumMemberName("calendar_date")]
+    CalendarDate = 1,
+
+    /// <summary>A work's key in this index.</summary>
+    [JsonStringEnumMemberName("work_key")]
+    WorkKey = 2,
+
+    /// <summary>An anchor inside a work: the provision a claim is about.</summary>
+    [JsonStringEnumMemberName("anchor_id")]
+    AnchorId = 3,
+
+    /// <summary>A SHA-256 of retained bytes. The kind a quotation must cite.</summary>
+    [JsonStringEnumMemberName("content_hash")]
+    ContentHash = 4,
+
+    /// <summary>The publisher that stated the thing being claimed.</summary>
+    [JsonStringEnumMemberName("publisher_name")]
+    PublisherName = 5,
+
+    /// <summary>The address the publisher served it from.</summary>
+    [JsonStringEnumMemberName("source_uri")]
+    SourceUri = 6,
+
+    /// <summary>Which interval semantics a held state's dates are read under.</summary>
+    [JsonStringEnumMemberName("interval_semantics")]
+    IntervalSemantics = 7,
+
+    /// <summary>The label a publisher gave a reference it wrote.</summary>
+    [JsonStringEnumMemberName("reference_label")]
+    ReferenceLabel = 8,
+
+    /// <summary>What a publisher-written reference points at.</summary>
+    [JsonStringEnumMemberName("target_iri")]
+    TargetIri = 9,
+}
 
 /// <summary>
 /// S4-A04's binding rule as a type: an authoritative claim is a <b>fixed template</b> from a closed
@@ -39,11 +90,28 @@ public sealed record V3ClaimTemplate
 {
     internal static readonly Regex PlaceholderPattern = new(@"\{([a-z][a-z0-9_]*)\}", RegexOptions.Compiled);
 
-    private V3ClaimTemplate(string templateId, string text, ReadOnlyCollection<string> placeholders)
+    private readonly IReadOnlyDictionary<string, V3FactKind> _kinds;
+
+    private V3ClaimTemplate(
+        string templateId,
+        string text,
+        ReadOnlyCollection<string> placeholders,
+        IReadOnlyDictionary<string, V3FactKind> kinds)
     {
         TemplateId = templateId;
         Text = text;
         Placeholders = placeholders;
+        _kinds = kinds;
+    }
+
+    /// <summary>The kind of fact a placeholder accepts. Throws for a name this template does not name.</summary>
+    public V3FactKind KindOf(string placeholder)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(placeholder);
+        return _kinds.TryGetValue(placeholder, out var kind)
+            ? kind
+            : throw new ArgumentException(
+                $"'{TemplateId}' names no placeholder '{placeholder}'.", nameof(placeholder));
     }
 
     /// <summary>The template's identity, which a claim names instead of carrying prose.</summary>
@@ -55,10 +123,12 @@ public sealed record V3ClaimTemplate
     /// <summary>The placeholders this template names, in first-occurrence order, each one distinct.</summary>
     public ReadOnlyCollection<string> Placeholders { get; }
 
-    internal static V3ClaimTemplate Define(string templateId, string text)
+    internal static V3ClaimTemplate Define(
+        string templateId, string text, params (string Name, V3FactKind Kind)[] declared)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(templateId);
         ArgumentException.ThrowIfNullOrWhiteSpace(text);
+        ArgumentNullException.ThrowIfNull(declared);
 
         var placeholders = new List<string>();
         foreach (Match match in PlaceholderPattern.Matches(text))
@@ -88,7 +158,47 @@ public sealed record V3ClaimTemplate
                 nameof(text));
         }
 
-        return new V3ClaimTemplate(templateId, text, placeholders.AsReadOnly());
+        var kinds = new Dictionary<string, V3FactKind>(StringComparer.Ordinal);
+        foreach (var (name, kind) in declared)
+        {
+            if (!Enum.IsDefined(kind))
+            {
+                throw new ArgumentException(
+                    $"'{templateId}' declares '{name}' with a kind outside the closed set.", nameof(declared));
+            }
+
+            if (!kinds.TryAdd(name, kind))
+            {
+                throw new ArgumentException(
+                    $"'{templateId}' declares '{name}' twice.", nameof(declared));
+            }
+        }
+
+        // Both directions, as Bind refuses both directions: a placeholder with no declared kind
+        // would accept anything, and a declared kind for a placeholder the wording does not name is
+        // a rule about a sentence that is not there.
+        var undeclared = placeholders.Where(name => !kinds.ContainsKey(name))
+            .OrderBy(static name => name, StringComparer.Ordinal).ToArray();
+        if (undeclared.Length > 0)
+        {
+            throw new ArgumentException(
+                $"The claim template '{templateId}' leaves {string.Join(", ", undeclared)} with no "
+                + "declared kind, so the placeholder would accept a fact of any kind and the "
+                + "wording could cite a digest where it meant a date.",
+                nameof(declared));
+        }
+
+        var unwritten = kinds.Keys.Where(name => !placeholders.Contains(name, StringComparer.Ordinal))
+            .OrderBy(static name => name, StringComparer.Ordinal).ToArray();
+        if (unwritten.Length > 0)
+        {
+            throw new ArgumentException(
+                $"The claim template '{templateId}' declares a kind for {string.Join(", ", unwritten)}, "
+                + "which its wording never names.",
+                nameof(declared));
+        }
+
+        return new V3ClaimTemplate(templateId, text, placeholders.AsReadOnly(), kinds);
     }
 }
 
@@ -97,16 +207,27 @@ public sealed record V3ClaimTemplate
 /// </summary>
 /// <remarks>
 /// The kind is carried so a reader can tell a date from an identifier from a hash without parsing
-/// the rendered sentence back apart, and so a later reviewer can require a template's placeholder to
-/// be bound to the kind it was written for. <b>It is not validated against the value here</b>, and
-/// that is stated rather than implied: this type records what the producer says a value is.
+/// the rendered sentence back apart, and <b>so that binding checks it against the kind the
+/// placeholder declares</b> — which is what makes "never relabel a derived fact" and "never quote
+/// without a hash-carrying citation" refusals rather than rules.
+/// <para>
+/// <b>The kind is still not validated against the value.</b> Nothing here confirms that a
+/// <see cref="V3FactKind.ContentHash"/> is sixty-four hex characters or that a
+/// <see cref="V3FactKind.CalendarDate"/> is a date; this type records what the producer says a
+/// value is, and the binding requires the producer to say the thing the sentence needs. Checking
+/// the value against its kind is a further slice and is stated here rather than implied.
+/// </para>
 /// </remarks>
-public sealed record V3TypedFact(string Name, string Kind, string Value)
+public sealed record V3TypedFact(string Name, V3FactKind Kind, string Value)
 {
-    public static V3TypedFact Of(string name, string kind, string value)
+    public static V3TypedFact Of(string name, V3FactKind kind, string value)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
-        ArgumentException.ThrowIfNullOrWhiteSpace(kind);
+        if (!Enum.IsDefined(kind))
+        {
+            throw new ArgumentOutOfRangeException(nameof(kind), kind, "The kind is not in the closed set.");
+        }
+
         ArgumentNullException.ThrowIfNull(value);
         return new V3TypedFact(name, kind, value);
     }
@@ -135,19 +256,39 @@ public static class V3ClaimTemplates
         V3ClaimTemplate.Define(
             TextOnDate,
             "On {date}, {work} article {anchor} read as the text with content hash {text_sha256}, "
-            + "as published by {publisher} at {source_uri}."),
+            + "as published by {publisher} at {source_uri}.",
+            ("date", V3FactKind.CalendarDate),
+            ("work", V3FactKind.WorkKey),
+            ("anchor", V3FactKind.AnchorId),
+            ("text_sha256", V3FactKind.ContentHash),
+            ("publisher", V3FactKind.PublisherName),
+            ("source_uri", V3FactKind.SourceUri)),
         V3ClaimTemplate.Define(
             StateInterval,
             "{work} has a held state {state_sha256} that {publisher} records as applying "
-            + "from {applicable_from} to {applicable_to}, under {interval_semantics}."),
+            + "from {applicable_from} to {applicable_to}, under {interval_semantics}.",
+            ("work", V3FactKind.WorkKey),
+            ("state_sha256", V3FactKind.ContentHash),
+            ("publisher", V3FactKind.PublisherName),
+            ("applicable_from", V3FactKind.CalendarDate),
+            ("applicable_to", V3FactKind.CalendarDate),
+            ("interval_semantics", V3FactKind.IntervalSemantics)),
         V3ClaimTemplate.Define(
             NoStateForDate,
             "This index holds no state of {work} for {date}; the nearest it holds is {nearest_date}, "
-            + "and that is what this index holds rather than what exists."),
+            + "and that is what this index holds rather than what exists.",
+            ("work", V3FactKind.WorkKey),
+            ("date", V3FactKind.CalendarDate),
+            ("nearest_date", V3FactKind.CalendarDate)),
         V3ClaimTemplate.Define(
             PublisherReference,
             "In {work} article {anchor}, {publisher} wrote a reference labelled {label} to {target}; "
-            + "this records that the reference was written and not what it means."),
+            + "this records that the reference was written and not what it means.",
+            ("work", V3FactKind.WorkKey),
+            ("anchor", V3FactKind.AnchorId),
+            ("publisher", V3FactKind.PublisherName),
+            ("label", V3FactKind.ReferenceLabel),
+            ("target", V3FactKind.TargetIri)),
     }.ToDictionary(static template => template.TemplateId, StringComparer.Ordinal);
 
     /// <summary>Every template, by id, in ordinal order of the id.</summary>
@@ -216,12 +357,12 @@ public sealed record V3AuthoritativeClaim
             // V3TypedFact.Of checks these, but Of is not the only way in: the record's primary
             // constructor is public, so a fact can reach Bind without passing through Of. Bind is the
             // door every claim comes through, so Bind is where the value has to hold up.
-            if (string.IsNullOrWhiteSpace(fact.Name) || string.IsNullOrWhiteSpace(fact.Kind))
+            if (string.IsNullOrWhiteSpace(fact.Name) || !Enum.IsDefined(fact.Kind))
             {
                 throw new ArgumentException(
-                    $"The claim '{templateId}' carries a fact with no name or no kind. A fact whose "
-                    + "kind a reader cannot see is a bare string, which is what typed facts exist to "
-                    + "stop.",
+                    $"The claim '{templateId}' carries a fact with no name, or a kind outside the "
+                    + "closed set. A fact whose kind a reader cannot see is a bare string, which is "
+                    + "what typed facts exist to stop.",
                     nameof(facts));
             }
 
@@ -277,6 +418,23 @@ public sealed record V3AuthoritativeClaim
         // depended on the order the placeholders happen to be listed in. A value is publisher text; a
         // brace in one is data, not a caller's mistake. Here the match is taken from the template and
         // the replacement is returned as-is, so a value is output and never input.
+        // The kind the wording needs, against the kind the producer says it has. This is where
+        // "never quote without a hash-carrying citation" and "never relabel a derived fact" stop
+        // being rules: a quoting placeholder declares ContentHash, and a fact that is not one
+        // cannot reach the sentence.
+        foreach (var name in template.Placeholders)
+        {
+            var wanted = template.KindOf(name);
+            if (byName[name].Kind != wanted)
+            {
+                throw new ArgumentException(
+                    $"The claim '{templateId}' binds '{name}' to a {byName[name].Kind} where its "
+                    + $"wording states a {wanted}. A sentence that cites one kind of evidence and "
+                    + "is given another says something its evidence does not support.",
+                    nameof(facts));
+            }
+        }
+
         var rendered = V3ClaimTemplate.PlaceholderPattern.Replace(
             template.Text, match => byName[match.Groups[1].Value].Value);
 
