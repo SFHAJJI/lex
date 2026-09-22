@@ -170,6 +170,25 @@ public sealed class V3McpJsonRpcTests
     }
 
     [TestMethod]
+    public async Task AToolNameIsMatchedExactlyAndACaseVariantIsUnknown()
+    {
+        using var response = await HandleAsync(new { jsonrpc = "2.0", id = 4, method = "tools/call", @params = new { name = "Resolve", arguments = new { identifier = "x" } } });
+
+        Assert.IsFalse(response.RootElement.TryGetProperty("result", out _), "The tool name is not matched case-insensitively.");
+        Assert.AreEqual(-32602, response.RootElement.GetProperty("error").GetProperty("code").GetInt32());
+    }
+
+    [TestMethod]
+    public async Task AToolsCallForResolveWithNoArgumentsPropertyAtAllIsAnInvalidParamsErrorNotACrashOrAFalseSuccess()
+    {
+        using var response = await HandleAsync(new { jsonrpc = "2.0", id = 5, method = "tools/call", @params = new { name = "resolve" } });
+
+        Assert.IsFalse(response.RootElement.TryGetProperty("result", out _));
+        var error = response.RootElement.GetProperty("error");
+        Assert.AreEqual(-32602, error.GetProperty("code").GetInt32());
+    }
+
+    [TestMethod]
     public async Task AnUnknownMethodIsMethodNotFound()
     {
         using var response = await HandleAsync(new { jsonrpc = "2.0", id = 9, method = "resources/list" });
