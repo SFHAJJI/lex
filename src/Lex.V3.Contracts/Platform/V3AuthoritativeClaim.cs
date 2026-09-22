@@ -207,15 +207,31 @@ public sealed record V3ClaimTemplate
 /// </summary>
 /// <remarks>
 /// The kind is carried so a reader can tell a date from an identifier from a hash without parsing
-/// the rendered sentence back apart, and <b>so that binding checks it against the kind the
-/// placeholder declares</b> — which is what makes "never relabel a derived fact" and "never quote
-/// without a hash-carrying citation" refusals rather than rules.
+/// the rendered sentence back apart, and so that binding checks it against the kind the placeholder
+/// declares.
 /// <para>
-/// <b>The kind is still not validated against the value.</b> Nothing here confirms that a
+/// <b>This paragraph used to say that check makes "never relabel a derived fact" and "never quote
+/// without a hash-carrying citation" refusals rather than rules. That was wrong, and the next
+/// paragraph — written at the same time — says why.</b> The kind is <i>declared by the producer</i>
+/// alongside the value, so a producer who fabricates a digest and labels it
+/// <see cref="V3FactKind.ContentHash"/> binds exactly as one who retrieved it does, and a derived
+/// value labelled as a publisher's own is indistinguishable here from the publisher's.
+/// </para>
+/// <para>
+/// <b>What the check is actually worth, stated at its real strength: it defends against error, not
+/// against fabrication.</b> A template declaring <see cref="V3FactKind.ContentHash"/> where it means
+/// a digest catches an honest producer wiring the wrong fact into the wrong slot, which is a real
+/// and likely mistake. It does not stop a producer, or a model, that supplies a plausible value and
+/// labels it correctly.
+/// </para>
+/// <para>
+/// <b>The kind is not validated against the value either.</b> Nothing here confirms that a
 /// <see cref="V3FactKind.ContentHash"/> is sixty-four hex characters or that a
 /// <see cref="V3FactKind.CalendarDate"/> is a date; this type records what the producer says a
-/// value is, and the binding requires the producer to say the thing the sentence needs. Checking
-/// the value against its kind is a further slice and is stated here rather than implied.
+/// value is. <b>Validating the shape would not close the gap above</b>, because sixty-four
+/// well-formed hex characters can be invented as easily as labelled. What would close it is a fact
+/// that cannot be constructed from a string at all — only from retrieved evidence — which is a
+/// different slice and is named here rather than implied.
 /// </para>
 /// </remarks>
 public sealed record V3TypedFact(string Name, V3FactKind Kind, string Value)
