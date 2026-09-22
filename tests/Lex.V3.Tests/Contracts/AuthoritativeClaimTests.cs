@@ -84,9 +84,9 @@ public sealed class AuthoritativeClaimTests
     {
         var claim = V3AuthoritativeClaim.Bind(V3ClaimTemplates.NoStateForDate,
         [
-            V3TypedFact.Of("work", "work_key", "loi-1991-08-10-n3"),
-            V3TypedFact.Of("date", "calendar_date", "2021-03-15"),
-            V3TypedFact.Of("nearest_date", "calendar_date", "2024-02-01"),
+            V3TypedFact.Of("work", V3FactKind.WorkKey, "loi-1991-08-10-n3"),
+            V3TypedFact.Of("date", V3FactKind.CalendarDate, "2021-03-15"),
+            V3TypedFact.Of("nearest_date", V3FactKind.CalendarDate, "2024-02-01"),
         ]);
 
         Assert.AreEqual(
@@ -118,8 +118,8 @@ public sealed class AuthoritativeClaimTests
         var thrown = Assert.ThrowsExactly<ArgumentException>(() =>
             V3AuthoritativeClaim.Bind(V3ClaimTemplates.NoStateForDate,
             [
-                V3TypedFact.Of("work", "work_key", "loi-1991-08-10-n3"),
-                V3TypedFact.Of("date", "calendar_date", "2021-03-15"),
+                V3TypedFact.Of("work", V3FactKind.WorkKey, "loi-1991-08-10-n3"),
+                V3TypedFact.Of("date", V3FactKind.CalendarDate, "2021-03-15"),
             ]));
 
         StringAssert.Contains(thrown.Message, "nearest_date");
@@ -132,10 +132,10 @@ public sealed class AuthoritativeClaimTests
         var thrown = Assert.ThrowsExactly<ArgumentException>(() =>
             V3AuthoritativeClaim.Bind(V3ClaimTemplates.NoStateForDate,
             [
-                V3TypedFact.Of("work", "work_key", "loi-1991-08-10-n3"),
-                V3TypedFact.Of("date", "calendar_date", "2021-03-15"),
-                V3TypedFact.Of("nearest_date", "calendar_date", "2024-02-01"),
-                V3TypedFact.Of("court_opinion", "prose", "the court would likely find"),
+                V3TypedFact.Of("work", V3FactKind.WorkKey, "loi-1991-08-10-n3"),
+                V3TypedFact.Of("date", V3FactKind.CalendarDate, "2021-03-15"),
+                V3TypedFact.Of("nearest_date", V3FactKind.CalendarDate, "2024-02-01"),
+                V3TypedFact.Of("court_opinion", V3FactKind.PublisherName, "the court would likely find"),
             ]));
 
         StringAssert.Contains(thrown.Message, "court_opinion");
@@ -148,10 +148,10 @@ public sealed class AuthoritativeClaimTests
         var thrown = Assert.ThrowsExactly<ArgumentException>(() =>
             V3AuthoritativeClaim.Bind(V3ClaimTemplates.NoStateForDate,
             [
-                V3TypedFact.Of("work", "work_key", "loi-1991-08-10-n3"),
-                V3TypedFact.Of("work", "work_key", "loi-1984-02-24-n1"),
-                V3TypedFact.Of("date", "calendar_date", "2021-03-15"),
-                V3TypedFact.Of("nearest_date", "calendar_date", "2024-02-01"),
+                V3TypedFact.Of("work", V3FactKind.WorkKey, "loi-1991-08-10-n3"),
+                V3TypedFact.Of("work", V3FactKind.WorkKey, "loi-1984-02-24-n1"),
+                V3TypedFact.Of("date", V3FactKind.CalendarDate, "2021-03-15"),
+                V3TypedFact.Of("nearest_date", V3FactKind.CalendarDate, "2024-02-01"),
             ]));
 
         StringAssert.Contains(thrown.Message, "twice");
@@ -162,7 +162,7 @@ public sealed class AuthoritativeClaimTests
     {
         var thrown = Assert.ThrowsExactly<ArgumentException>(() =>
             V3AuthoritativeClaim.Bind("the_court_would_likely_find",
-                [V3TypedFact.Of("x", "prose", "y")]));
+                [V3TypedFact.Of("x", V3FactKind.WorkKey, "y")]));
 
         StringAssert.Contains(thrown.Message, "closed set");
         StringAssert.Contains(thrown.Message, "never a sentence written at a call site");
@@ -218,7 +218,7 @@ public sealed class AuthoritativeClaimTests
         foreach (var template in V3ClaimTemplates.All)
         {
             var claim = V3AuthoritativeClaim.Bind(template.TemplateId,
-                template.Placeholders.Select(static name => V3TypedFact.Of(name, "probe", "<" + name + ">")).ToArray());
+                template.Placeholders.Select(name => V3TypedFact.Of(name, template.KindOf(name), "<" + name + ">")).ToArray());
 
             Assert.IsFalse(claim.Rendered.Contains('{', StringComparison.Ordinal),
                 $"{template.TemplateId} renders with an opening brace nothing bound.");
@@ -234,7 +234,9 @@ public sealed class AuthoritativeClaimTests
         // other end of it: the moment of definition refuses, so the bad template never reaches the set.
         var thrown = Assert.ThrowsExactly<ArgumentException>(() =>
             V3ClaimTemplate.Define("marker_the_rule_cannot_read",
-                "On {date}, {Work} read as the text with content hash {text_sha256}."));
+                "On {date}, {Work} read as the text with content hash {text_sha256}.",
+                ("date", V3FactKind.CalendarDate),
+                ("text_sha256", V3FactKind.ContentHash)));
 
         StringAssert.Contains(thrown.Message, "brace this rule cannot read");
     }
@@ -270,7 +272,7 @@ public sealed class AuthoritativeClaimTests
         // Supplied in reverse of the template's order, so binding cannot depend on arrival order.
         var claim = V3AuthoritativeClaim.Bind(V3ClaimTemplates.NoStateForDate,
             template.Placeholders.Reverse()
-                .Select(name => V3TypedFact.Of(name, "probe", values[name])).ToArray());
+                .Select(name => V3TypedFact.Of(name, template.KindOf(name), values[name])).ToArray());
 
         Assert.AreEqual(Expected(template.Text, values), claim.Rendered);
     }
@@ -309,9 +311,9 @@ public sealed class AuthoritativeClaimTests
         var template = V3ClaimTemplates.Get(V3ClaimTemplates.NoStateForDate);
         var supplied = new[]
         {
-            V3TypedFact.Of("nearest_date", "calendar_date", "2024-02-01"),
-            V3TypedFact.Of("date", "calendar_date", "2021-03-15"),
-            V3TypedFact.Of("work", "work_key", "loi-1991-08-10-n3"),
+            V3TypedFact.Of("nearest_date", V3FactKind.CalendarDate, "2024-02-01"),
+            V3TypedFact.Of("date", V3FactKind.CalendarDate, "2021-03-15"),
+            V3TypedFact.Of("work", V3FactKind.WorkKey, "loi-1991-08-10-n3"),
         };
 
         var claim = V3AuthoritativeClaim.Bind(V3ClaimTemplates.NoStateForDate, supplied);
@@ -337,13 +339,81 @@ public sealed class AuthoritativeClaimTests
         var thrown = Assert.ThrowsExactly<ArgumentException>(() =>
             V3AuthoritativeClaim.Bind(V3ClaimTemplates.NoStateForDate,
             [
-                new V3TypedFact("work", "work_key", "loi-1991-08-10-n3"),
-                new V3TypedFact("date", "calendar_date", value),
-                new V3TypedFact("nearest_date", "calendar_date", "2024-02-01"),
+                new V3TypedFact("work", V3FactKind.WorkKey, "loi-1991-08-10-n3"),
+                new V3TypedFact("date", V3FactKind.CalendarDate, value),
+                new V3TypedFact("nearest_date", V3FactKind.CalendarDate, "2024-02-01"),
             ]));
 
         StringAssert.Contains(thrown.Message, "date");
         StringAssert.Contains(thrown.Message, "empty value");
+    }
+
+    /// <summary>
+    /// The kind the wording needs against the kind the producer says it has. This is S4-A05's
+    /// "never quote without a hash-carrying citation" and "never relabel a derived fact" as a
+    /// refusal rather than a rule: the quoting placeholder declares a content hash, and a fact that
+    /// is not one cannot reach the sentence however plausible its value looks.
+    /// </summary>
+    [TestMethod]
+    public void AFactOfTheWrongKindForItsPlaceholderRefusesEvenWhenItsValueWouldRead()
+    {
+        var thrown = Assert.ThrowsExactly<ArgumentException>(() =>
+            V3AuthoritativeClaim.Bind(V3ClaimTemplates.TextOnDate,
+            [
+                V3TypedFact.Of("date", V3FactKind.CalendarDate, "2021-03-15"),
+                V3TypedFact.Of("work", V3FactKind.WorkKey, "loi-1991-08-10-n3"),
+                V3TypedFact.Of("anchor", V3FactKind.AnchorId, "art-1"),
+                // A digest-shaped value, declared as something else. The sentence says "content
+                // hash"; the producer says this is a work key.
+                V3TypedFact.Of("text_sha256", V3FactKind.WorkKey, new string('a', 64)),
+                V3TypedFact.Of("publisher", V3FactKind.PublisherName, "Legilux"),
+                V3TypedFact.Of("source_uri", V3FactKind.SourceUri, "https://example.test/x"),
+            ]));
+
+        StringAssert.Contains(thrown.Message, "text_sha256");
+        StringAssert.Contains(thrown.Message, "ContentHash");
+    }
+
+    [TestMethod]
+    public void EveryPlaceholderOfEveryTemplateDeclaresAKindAndTheSetIsClosed()
+    {
+        foreach (var template in V3ClaimTemplates.All)
+        {
+            foreach (var name in template.Placeholders)
+            {
+                Assert.IsTrue(
+                    Enum.IsDefined(template.KindOf(name)),
+                    $"{template.TemplateId}'s '{name}' declares a kind outside the closed set.");
+            }
+
+            Assert.ThrowsExactly<ArgumentException>(
+                () => template.KindOf("not_a_placeholder_of_this_template"),
+                $"{template.TemplateId} answers for a placeholder it does not name.");
+        }
+    }
+
+    [TestMethod]
+    public void ATemplateThatLeavesAPlaceholderWithNoDeclaredKindIsRefused()
+    {
+        var thrown = Assert.ThrowsExactly<ArgumentException>(() =>
+            V3ClaimTemplate.Define("undeclared_placeholder",
+                "On {date}, {work} was held.", ("date", V3FactKind.CalendarDate)));
+
+        StringAssert.Contains(thrown.Message, "work");
+        StringAssert.Contains(thrown.Message, "no ");
+    }
+
+    [TestMethod]
+    public void ATemplateThatDeclaresAKindItsWordingNeverNamesIsRefused()
+    {
+        var thrown = Assert.ThrowsExactly<ArgumentException>(() =>
+            V3ClaimTemplate.Define("declared_but_unwritten",
+                "On {date}, it was held.",
+                ("date", V3FactKind.CalendarDate),
+                ("work", V3FactKind.WorkKey)));
+
+        StringAssert.Contains(thrown.Message, "work");
+        StringAssert.Contains(thrown.Message, "never names");
     }
 
     [TestMethod]
@@ -352,12 +422,12 @@ public sealed class AuthoritativeClaimTests
         var thrown = Assert.ThrowsExactly<ArgumentException>(() =>
             V3AuthoritativeClaim.Bind(V3ClaimTemplates.NoStateForDate,
             [
-                new V3TypedFact("work", "", "loi-1991-08-10-n3"),
-                new V3TypedFact("date", "calendar_date", "2021-03-15"),
-                new V3TypedFact("nearest_date", "calendar_date", "2024-02-01"),
+                new V3TypedFact("work", (V3FactKind)99, "loi-1991-08-10-n3"),
+                new V3TypedFact("date", V3FactKind.CalendarDate, "2021-03-15"),
+                new V3TypedFact("nearest_date", V3FactKind.CalendarDate, "2024-02-01"),
             ]));
 
-        StringAssert.Contains(thrown.Message, "no name or no kind");
+        StringAssert.Contains(thrown.Message, "outside the ");
     }
 
     [TestMethod]
