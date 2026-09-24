@@ -349,10 +349,22 @@ public sealed class AuthoritativeClaimTests
     }
 
     /// <summary>
-    /// The kind the wording needs against the kind the producer says it has. This is S4-A05's
-    /// "never quote without a hash-carrying citation" and "never relabel a derived fact" as a
-    /// refusal rather than a rule: the quoting placeholder declares a content hash, and a fact that
-    /// is not one cannot reach the sentence however plausible its value looks.
+    /// The kind the wording needs against the kind the producer says it has: the quoting placeholder
+    /// declares a content hash, and a fact declared as something else cannot reach the sentence
+    /// however digest-shaped its value looks.
+    /// <para>
+    /// <b>This remark used to call that S4-A05's "never quote without a hash-carrying citation" and
+    /// "never relabel a derived fact" as a refusal rather than a rule. It is not, and #741 withdrew
+    /// the same sentence from <c>V3TypedFact</c> without withdrawing it here</b> — on the test named
+    /// for the behaviour, which is where a reader checking the claim would land.
+    /// </para>
+    /// <para>
+    /// What this test actually pins is narrower and still worth pinning: <b>a value that looks right
+    /// is not evidence that it is right</b>, so the binding reads the declared kind rather than the
+    /// value's shape. It says nothing about a producer who declares the kind the sentence wants and
+    /// supplies an invented value under it — <b>that binds, and no test here catches it</b>, because
+    /// the kind is the producer's own word either way.
+    /// </para>
     /// </summary>
     [TestMethod]
     public void AFactOfTheWrongKindForItsPlaceholderRefusesEvenWhenItsValueWouldRead()
