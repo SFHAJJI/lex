@@ -274,13 +274,18 @@ public sealed class V3McpJsonRpcTests
     [TestMethod]
     public async Task AnObjectWithoutIdMustStillBeAValidRequestBeforeItIsSuppressedAsANotification()
     {
-        using var wrongVersion = await HandleJsonAsync("""{"jsonrpc":"1.0","method":"tools/list"}""");
-        Assert.AreEqual(-32600, wrongVersion.RootElement.GetProperty("error").GetProperty("code").GetInt32());
-        Assert.AreEqual(JsonValueKind.Null, wrongVersion.RootElement.GetProperty("id").ValueKind);
-
-        using var nonStringMethod = await HandleJsonAsync("""{"jsonrpc":"2.0","method":1,"params":"bar"}""");
-        Assert.AreEqual(-32600, nonStringMethod.RootElement.GetProperty("error").GetProperty("code").GetInt32());
-        Assert.AreEqual(JsonValueKind.Null, nonStringMethod.RootElement.GetProperty("id").ValueKind);
+        foreach (var invalidRequest in new[]
+                 {
+                     """{"jsonrpc":"1.0","method":"tools/list"}""",
+                     """{"jsonrpc":"2.0","method":1,"params":"bar"}""",
+                     """{"jsonrpc":"2.0"}""",
+                     """{"method":"tools/list"}""",
+                 })
+        {
+            using var response = await HandleJsonAsync(invalidRequest);
+            Assert.AreEqual(-32600, response.RootElement.GetProperty("error").GetProperty("code").GetInt32(), invalidRequest);
+            Assert.AreEqual(JsonValueKind.Null, response.RootElement.GetProperty("id").ValueKind, invalidRequest);
+        }
     }
 
     [TestMethod]
