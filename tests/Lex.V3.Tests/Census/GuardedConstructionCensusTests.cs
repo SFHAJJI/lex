@@ -107,7 +107,8 @@ public sealed class GuardedConstructionCensusTests
                     + "method public instance Lex.V3.Api.V3CorpusMount::Search, "
                     + "method public instance Lex.V3.Api.V3CorpusMount::Timeline, "
                     + "method public static Lex.V3.Api.V3PlatformOperationOutcome::Refused, "
-                    + "method public static Lex.V3.Api.V3PlatformOperationOutcome::Success",
+                    + "method public static Lex.V3.Api.V3PlatformOperationOutcome::Success, "
+                    + "1 compiler-generated",
                 "Lex.V3.Api.V3PlatformSchemaDocuments: constructor private instance "
                     + "Lex.V3.Api.V3PlatformSchemaDocuments::.ctor, "
                     + "constructor private static Lex.V3.Api.V3PlatformSchemaDocuments::.cctor, "

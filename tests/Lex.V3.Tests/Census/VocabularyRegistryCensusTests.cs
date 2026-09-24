@@ -59,6 +59,8 @@ public sealed class VocabularyRegistryCensusTests
             {
                 "Lex.V3.Api.SyntheticPreviewTrustConfiguration: const EnvironmentBinding, "
                     + "const IssuerId, const KeyId, const PublicKeySha256",
+                "Lex.V3.Api.V3McpJsonRpc: const ProtocolVersion, const ResolveInputSchemaJson, "
+                    + "const ServerName, const ToolName",
                 "Lex.V3.Artifacts.AdmissionHeaderReader: AttestationMembers=4, "
                     + "ContractReferenceMembers=3, ContractSetMembers=4, EnvironmentMembers=2, "
                     + "IssuerMembers=3, PayloadMembers=6, RootMembers=11",
