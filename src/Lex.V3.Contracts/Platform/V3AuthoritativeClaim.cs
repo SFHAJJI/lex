@@ -14,9 +14,12 @@ namespace Lex.V3.Contracts.Platform;
 /// </summary>
 /// <remarks>
 /// <b>A kind is what a placeholder accepts, not a description of a value.</b> S4-A05 forbids the
-/// assistant relabelling derived facts and quoting without a hash-carrying citation; both become
-/// things the type refuses once a quoting placeholder declares <see cref="ContentHash"/> and a
-/// publisher-stated placeholder declares its own kind, rather than rules somebody has to remember.
+/// assistant relabelling derived facts and quoting without a hash-carrying citation. This type
+/// narrows both to a declared-kind check: a quoting placeholder accepts only
+/// <see cref="ContentHash"/>, so a fact declaring another kind cannot reach the sentence. It does
+/// not make either prohibition structural. The producer supplies the value and its kind together,
+/// so a fabricated digest declared <see cref="ContentHash"/>, or a derived value declared
+/// publisher-stated, passes this door. Both stay rules the producer has to keep.
 /// </remarks>
 public enum V3FactKind
 {
@@ -434,10 +437,11 @@ public sealed record V3AuthoritativeClaim
         // depended on the order the placeholders happen to be listed in. A value is publisher text; a
         // brace in one is data, not a caller's mistake. Here the match is taken from the template and
         // the replacement is returned as-is, so a value is output and never input.
-        // The kind the wording needs, against the kind the producer says it has. This is where
-        // "never quote without a hash-carrying citation" and "never relabel a derived fact" stop
-        // being rules: a quoting placeholder declares ContentHash, and a fact that is not one
-        // cannot reach the sentence.
+        // The kind the wording needs, against the kind the producer says it has. This narrows
+        // "never quote without a hash-carrying citation" and "never relabel a derived fact": a
+        // quoting placeholder accepts only ContentHash, so a fact declaring another kind cannot
+        // reach the sentence. It does not settle either rule. The producer declares the kind of the
+        // value it supplies, so a fabricated digest labelled ContentHash still passes here.
         foreach (var name in template.Placeholders)
         {
             var wanted = template.KindOf(name);
