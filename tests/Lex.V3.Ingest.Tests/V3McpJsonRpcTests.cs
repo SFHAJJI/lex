@@ -305,6 +305,10 @@ public sealed class V3McpJsonRpcTests
     {
         using var response = await HandleAsync(new { jsonrpc = "2.0", id = 42, method = "tools/list" });
         Assert.AreEqual(42, response.RootElement.GetProperty("id").GetInt32());
+
+        using var nullId = await HandleJsonAsync("""{"jsonrpc":"2.0","id":null,"method":"tools/list"}""");
+        Assert.AreEqual(JsonValueKind.Null, nullId.RootElement.GetProperty("id").ValueKind);
+        Assert.IsTrue(nullId.RootElement.TryGetProperty("result", out _));
     }
 
     private static string RepositoryRoot()
