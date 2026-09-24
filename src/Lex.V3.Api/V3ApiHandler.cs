@@ -51,7 +51,10 @@ internal sealed class V3ApiHandler
         return context => api.HandleAsync(context, context.RequestAborted);
     }
 
-    private V3EnvelopeContext UnmountedLuxembourgContext() =>
+    private V3EnvelopeContext UnmountedLuxembourgContext() => UnmountedLuxembourgContext(_utcNow);
+
+    /// <summary>Shared with <see cref="V3McpJsonRpc"/> so the MCP transport refuses a call with no corpus mounted the same way REST does.</summary>
+    internal static V3EnvelopeContext UnmountedLuxembourgContext(Func<DateTimeOffset> utcNow) =>
         new(
             PublisherId.LuLegilux,
             "refusal",
@@ -59,7 +62,7 @@ internal sealed class V3ApiHandler
             new V3SnapshotReference("no-corpus-mounted", EmptySha256),
             "lu",
             false,
-            new V3Freshness(_utcNow(), "unreachable"));
+            new V3Freshness(utcNow(), "unreachable"));
 
     public async Task HandleAsync(HttpContext context, CancellationToken cancellationToken)
     {
@@ -163,7 +166,8 @@ internal sealed class V3ApiHandler
     private V3PlatformOperationOutcome CitedByOutcome(V3PlatformOperationRequest request) =>
         _corpusMount!.CitedBy(request, _utcNow());
 
-    private static V3PlatformOperationRefusal NoCorpusMounted(V3PlatformOperationRequest request)
+    /// <summary>Shared with <see cref="V3McpJsonRpc"/>.</summary>
+    internal static V3PlatformOperationRefusal NoCorpusMounted(V3PlatformOperationRequest request)
     {
         using var helpful = JsonDocument.Parse("{\"required_corpus\":\"lu\"}");
         return new V3PlatformOperationRefusal(
