@@ -32,6 +32,14 @@ public sealed class V3McpJsonRpcTests
         V3McpJsonRpc.HandleAsync(
             Request(payload), new V3PlatformHost(), null, static () => ObservedAt, "mcp_test_ref", CancellationToken.None);
 
+    private static async Task<JsonDocument> HandleJsonAsync(string payload)
+    {
+        var bytes = await V3McpJsonRpc.HandleAsync(
+            Encoding.UTF8.GetBytes(payload), new V3PlatformHost(), null, static () => ObservedAt, "mcp_test_ref", CancellationToken.None);
+        Assert.IsNotNull(bytes, "An invalid Request must receive an error response.");
+        return JsonDocument.Parse(bytes);
+    }
+
     private static JsonElement RestOutcomeBytesAsJson(V3CorpusMount? mount, string identifier, string requestReference)
     {
         var host = new V3PlatformHost();
@@ -261,7 +269,30 @@ public sealed class V3McpJsonRpcTests
     {
         Assert.IsNull(await RawHandleAsync(new { jsonrpc = "2.0", method = "notifications/initialized" }), "the exact MCP lifecycle notification");
         Assert.IsNull(await RawHandleAsync(new { jsonrpc = "2.0", method = "tools/call", @params = new { name = "search" } }), "a notification cannot report an invalid tool call either -- the client has no request to match the error to");
-        Assert.IsNull(await RawHandleAsync(new { jsonrpc = "1.0", method = "tools/list" }), "a notification-shaped object with the wrong jsonrpc version is still a notification -- it lacks an id, and MUST NOT is not conditioned on the rest of the object being valid");
+    }
+
+    [TestMethod]
+    public async Task AnObjectWithoutIdMustStillBeAValidRequestBeforeItIsSuppressedAsANotification()
+    {
+        using var wrongVersion = await HandleJsonAsync("""{"jsonrpc":"1.0","method":"tools/list"}""");
+        Assert.AreEqual(-32600, wrongVersion.RootElement.GetProperty("error").GetProperty("code").GetInt32());
+        Assert.AreEqual(JsonValueKind.Null, wrongVersion.RootElement.GetProperty("id").ValueKind);
+
+        using var nonStringMethod = await HandleJsonAsync("""{"jsonrpc":"2.0","method":1,"params":"bar"}""");
+        Assert.AreEqual(-32600, nonStringMethod.RootElement.GetProperty("error").GetProperty("code").GetInt32());
+        Assert.AreEqual(JsonValueKind.Null, nonStringMethod.RootElement.GetProperty("id").ValueKind);
+    }
+
+    [TestMethod]
+    public async Task ForbiddenIdKindsAreInvalidRequestsAndAreNeverEchoed()
+    {
+        foreach (var forbiddenId in new[] { "{}", "[]", "true", "false" })
+        {
+            using var response = await HandleJsonAsync($$"""{"jsonrpc":"2.0","id":{{forbiddenId}},"method":"tools/list"}""");
+            Assert.AreEqual(-32600, response.RootElement.GetProperty("error").GetProperty("code").GetInt32(), forbiddenId);
+            Assert.AreEqual(JsonValueKind.Null, response.RootElement.GetProperty("id").ValueKind, forbiddenId);
+            Assert.IsFalse(response.RootElement.TryGetProperty("result", out _), forbiddenId);
+        }
     }
 
     [TestMethod]
