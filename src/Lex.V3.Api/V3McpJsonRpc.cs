@@ -72,7 +72,9 @@ internal static class V3McpJsonRpc
     /// validated before absence of <c>id</c> suppresses a response. MCP's own lifecycle relies on
     /// valid notifications: the client's <c>notifications/initialized</c> after a successful
     /// <c>initialize</c> carries no <c>id</c>. Invalid requests receive <c>id: null</c> when no valid
-    /// String, Number or Null id can be read.
+    /// String, Number or Null id can be read. When such an id is readable, it is echoed even if a
+    /// different required member makes the Request invalid; this reads JSON-RPC 2.0 section 5's
+    /// null-id requirement as applying when the id itself cannot be detected.
     /// </returns>
     public static async Task<byte[]?> HandleAsync(
         byte[] requestUtf8,

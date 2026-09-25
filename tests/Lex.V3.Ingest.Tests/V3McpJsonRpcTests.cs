@@ -215,6 +215,7 @@ public sealed class V3McpJsonRpcTests
     {
         using var noVersion = await HandleAsync(new { jsonrpc = "1.0", id = 1, method = "initialize" });
         Assert.AreEqual(-32600, noVersion.RootElement.GetProperty("error").GetProperty("code").GetInt32());
+        Assert.AreEqual(1, noVersion.RootElement.GetProperty("id").GetInt32());
 
         using var noMethod = await HandleAsync(new { jsonrpc = "2.0", id = 1 });
         Assert.AreEqual(-32600, noMethod.RootElement.GetProperty("error").GetProperty("code").GetInt32());
