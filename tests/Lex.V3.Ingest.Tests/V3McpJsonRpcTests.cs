@@ -32,6 +32,14 @@ public sealed class V3McpJsonRpcTests
         V3McpJsonRpc.HandleAsync(
             Request(payload), new V3PlatformHost(), null, static () => ObservedAt, "mcp_test_ref", CancellationToken.None);
 
+    private static async Task<JsonDocument> HandleJsonAsync(string payload)
+    {
+        var bytes = await V3McpJsonRpc.HandleAsync(
+            Encoding.UTF8.GetBytes(payload), new V3PlatformHost(), null, static () => ObservedAt, "mcp_test_ref", CancellationToken.None);
+        Assert.IsNotNull(bytes, "An invalid Request must receive an error response.");
+        return JsonDocument.Parse(bytes);
+    }
+
     private static JsonElement RestOutcomeBytesAsJson(V3CorpusMount? mount, string identifier, string requestReference)
     {
         var host = new V3PlatformHost();
@@ -207,6 +215,7 @@ public sealed class V3McpJsonRpcTests
     {
         using var noVersion = await HandleAsync(new { jsonrpc = "1.0", id = 1, method = "initialize" });
         Assert.AreEqual(-32600, noVersion.RootElement.GetProperty("error").GetProperty("code").GetInt32());
+        Assert.AreEqual(1, noVersion.RootElement.GetProperty("id").GetInt32());
 
         using var noMethod = await HandleAsync(new { jsonrpc = "2.0", id = 1 });
         Assert.AreEqual(-32600, noMethod.RootElement.GetProperty("error").GetProperty("code").GetInt32());
@@ -261,7 +270,35 @@ public sealed class V3McpJsonRpcTests
     {
         Assert.IsNull(await RawHandleAsync(new { jsonrpc = "2.0", method = "notifications/initialized" }), "the exact MCP lifecycle notification");
         Assert.IsNull(await RawHandleAsync(new { jsonrpc = "2.0", method = "tools/call", @params = new { name = "search" } }), "a notification cannot report an invalid tool call either -- the client has no request to match the error to");
-        Assert.IsNull(await RawHandleAsync(new { jsonrpc = "1.0", method = "tools/list" }), "a notification-shaped object with the wrong jsonrpc version is still a notification -- it lacks an id, and MUST NOT is not conditioned on the rest of the object being valid");
+    }
+
+    [TestMethod]
+    public async Task AnObjectWithoutIdMustStillBeAValidRequestBeforeItIsSuppressedAsANotification()
+    {
+        foreach (var invalidRequest in new[]
+                 {
+                     """{"jsonrpc":"1.0","method":"tools/list"}""",
+                     """{"jsonrpc":"2.0","method":1,"params":"bar"}""",
+                     """{"jsonrpc":"2.0"}""",
+                     """{"method":"tools/list"}""",
+                 })
+        {
+            using var response = await HandleJsonAsync(invalidRequest);
+            Assert.AreEqual(-32600, response.RootElement.GetProperty("error").GetProperty("code").GetInt32(), invalidRequest);
+            Assert.AreEqual(JsonValueKind.Null, response.RootElement.GetProperty("id").ValueKind, invalidRequest);
+        }
+    }
+
+    [TestMethod]
+    public async Task ForbiddenIdKindsAreInvalidRequestsAndAreNeverEchoed()
+    {
+        foreach (var forbiddenId in new[] { "{}", "[]", "true", "false" })
+        {
+            using var response = await HandleJsonAsync($$"""{"jsonrpc":"2.0","id":{{forbiddenId}},"method":"tools/list"}""");
+            Assert.AreEqual(-32600, response.RootElement.GetProperty("error").GetProperty("code").GetInt32(), forbiddenId);
+            Assert.AreEqual(JsonValueKind.Null, response.RootElement.GetProperty("id").ValueKind, forbiddenId);
+            Assert.IsFalse(response.RootElement.TryGetProperty("result", out _), forbiddenId);
+        }
     }
 
     [TestMethod]
@@ -269,6 +306,10 @@ public sealed class V3McpJsonRpcTests
     {
         using var response = await HandleAsync(new { jsonrpc = "2.0", id = 42, method = "tools/list" });
         Assert.AreEqual(42, response.RootElement.GetProperty("id").GetInt32());
+
+        using var nullId = await HandleJsonAsync("""{"jsonrpc":"2.0","id":null,"method":"tools/list"}""");
+        Assert.AreEqual(JsonValueKind.Null, nullId.RootElement.GetProperty("id").ValueKind);
+        Assert.IsTrue(nullId.RootElement.TryGetProperty("result", out _));
     }
 
     private static string RepositoryRoot()

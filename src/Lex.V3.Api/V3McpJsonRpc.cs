@@ -66,15 +66,15 @@ internal static class V3McpJsonRpc
     /// </summary>
     /// <returns>
     /// The response bytes, or <see langword="null"/> when nothing must be written. JSON-RPC 2.0 §4.1
-    /// defines a Notification as a Request <b>object</b> with no <c>id</c> member and says the server
-    /// <c>MUST NOT</c> reply to one, including one whose method is unknown or whose params are
-    /// invalid — the client has no outstanding request to match a reply to and, by the same section,
-    /// is not informed of errors on a notification by design. MCP's own lifecycle relies on this: the
-    /// client's <c>notifications/initialized</c> after a successful <c>initialize</c> carries no
-    /// <c>id</c>. <c>id: null</c> is used for every other failure this function can identify before it
-    /// has read an id: a document that is not JSON at all (§5's own example), and a document that is
-    /// valid JSON but not an object — a JSON array, string, number or literal cannot be a Notification,
-    /// only a malformed Request, and a malformed Request still gets a reply.
+    /// defines a Notification as a valid Request object with no <c>id</c> member and says the server
+    /// <c>MUST NOT</c> reply to one, including one whose method is unknown or whose method-specific
+    /// params are invalid. The required <c>jsonrpc</c> and <c>method</c> members are therefore
+    /// validated before absence of <c>id</c> suppresses a response. MCP's own lifecycle relies on
+    /// valid notifications: the client's <c>notifications/initialized</c> after a successful
+    /// <c>initialize</c> carries no <c>id</c>. Invalid requests receive <c>id: null</c> when no valid
+    /// String, Number or Null id can be read. When such an id is readable, it is echoed even if a
+    /// different required member makes the Request invalid; this reads JSON-RPC 2.0 section 5's
+    /// null-id requirement as applying when the id itself cannot be detected.
     /// </returns>
     public static async Task<byte[]?> HandleAsync(
         byte[] requestUtf8,
@@ -105,23 +105,30 @@ internal static class V3McpJsonRpc
                 return Error(NullId, -32600, "Invalid Request");
             }
 
-            if (!root.TryGetProperty("id", out var idElement))
-            {
-                // An object with no id member at all: a Notification, whatever else is wrong with it.
-                // MUST NOT reply, per §4.1 — not even to report that its method or params are invalid.
-                return null;
-            }
+            var hasId = root.TryGetProperty("id", out var idElement);
+            var idKindIsValid = !hasId || idElement.ValueKind is
+                JsonValueKind.String or JsonValueKind.Number or JsonValueKind.Null;
+            JsonElement? responseId = hasId && idKindIsValid ? Clone(idElement) : NullId;
 
-            id = Clone(idElement);
             if (!root.TryGetProperty("jsonrpc", out var version) ||
                 version.ValueKind != JsonValueKind.String ||
                 version.GetString() != "2.0" ||
                 !root.TryGetProperty("method", out var methodElement) ||
-                methodElement.ValueKind != JsonValueKind.String)
+                methodElement.ValueKind != JsonValueKind.String ||
+                !idKindIsValid)
             {
-                return Error(id, -32600, "Invalid Request");
+                return Error(responseId, -32600, "Invalid Request");
             }
 
+            if (!hasId)
+            {
+                // Only a valid Request object can be a Notification. Method lookup and
+                // method-specific parameter validation happen after this point and remain silent
+                // for notifications, because the client has no outstanding request to match.
+                return null;
+            }
+
+            id = responseId!.Value;
             method = methodElement.GetString();
             parameters = root.TryGetProperty("params", out var paramsElement)
                 ? Clone(paramsElement)
