@@ -289,7 +289,7 @@ public sealed class EuFormexPackagePopulationProducerTests
             },
             handler.PdfRequests.ToArray());
         Assert.AreEqual(12, result.ProductRequestCount, "enumerations, the package's two hops and the PDF's two hops.");
-        Assert.AreEqual(8, handler.RobotsSends, "three sessions per acquired annex-bearing expression plus one per enumeration.");
+        Assert.AreEqual(8, handler.RobotsSends, "four sessions (two enumerations, the package, the PDF) at two robots hops each.");
 
         var envelope = await LexCorpus6BuilderTests.CompleteProfileEnvelopeAsync(
             europeOverride: result.Reconciliation.Run,
@@ -326,6 +326,69 @@ public sealed class EuFormexPackagePopulationProducerTests
         Assert.AreEqual(1, handler.PdfRequests.Count);
         Assert.AreEqual(11, result.ProductRequestCount);
         Assert.AreEqual(0, result.AnnexClassifications.Count);
+    }
+
+    /// <summary>
+    /// The office's 303 may hand back another expression's PDF (content negotiation at work level);
+    /// the manifestation read from the terminal must descend from this expression, or the PDF binds
+    /// to nothing here: <c>annex_evidence_not_bound</c>, the ZIP retained.
+    /// </summary>
+    [TestMethod]
+    public async Task APdfServedFromAnotherExpressionDoesNotBindAndThePackageIsNotAcquired()
+    {
+        var annexPackage = await FixtureAsync("new-fmx4-200-body.bin");
+        var (result, handler, english, _) = await AcquireEnglishAsync(request =>
+            {
+                if (request.RequestUri!.AbsolutePath.EndsWith("/zip", StringComparison.Ordinal))
+                {
+                    return EuAcquisitionTestFixture.BinaryResponse(request, HttpStatusCode.OK, annexPackage, "application/zip");
+                }
+
+                if (request.Headers.Accept.ToString().Contains("application/pdf", StringComparison.Ordinal)
+                    && !request.RequestUri.AbsolutePath.EndsWith("/DOC_1", StringComparison.Ordinal))
+                {
+                    var workKey = request.RequestUri.AbsolutePath[(request.RequestUri.AbsolutePath.LastIndexOf('/') + 1)..];
+                    return EuAcquisitionTestFixture.BinaryResponse(
+                        request, HttpStatusCode.SeeOther, [],
+                        location: "http://publications.europa.eu/resource/cellar/" + workKey + ".0002.03/DOC_1");
+                }
+
+                return null;
+            },
+            heldXhtml: await FixtureAsync("new-xhtml-200-body.bin"),
+            englishTypes: ["fmx4", "pdfa2a"]);
+
+        var outcome = result.Reconciliation!.Outcomes.Single(outcome => outcome.ExpressionIdentity == english.Identity);
+        Assert.AreEqual(EuFormexPackageOutcomeKind.NotAcquired, outcome.Kind, outcome.Detail);
+        Assert.AreEqual(EuFormexPackageNotAcquiredReason.AnnexEvidenceNotBound, outcome.NotAcquiredReason);
+        StringAssert.Contains(outcome.Detail, "not a manifestation of this expression");
+        Assert.AreEqual(2, handler.PdfRequests.Count);
+        Assert.AreEqual(0, result.AnnexClassifications.Count);
+    }
+
+    /// <summary>
+    /// The classifier's widened content-type check still refuses a PDF labelled with a different
+    /// <c>type</c> than the accept that was sent (only <c>charset</c> is tolerated): the bound annexes
+    /// are not classified and the package is not acquired.
+    /// </summary>
+    [TestMethod]
+    public async Task APdfLabelledWithAnotherTypeIsNotClassifiedAndThePackageIsNotAcquired()
+    {
+        var annexPackage = await FixtureAsync("new-fmx4-200-body.bin");
+        var pdf = await FixtureAsync("new-pdfa2a-200-body.bin");
+        var (result, _, english, _) = await AcquireEnglishAsync(request =>
+                request.RequestUri!.AbsolutePath.EndsWith("/zip", StringComparison.Ordinal)
+                    ? EuAcquisitionTestFixture.BinaryResponse(request, HttpStatusCode.OK, annexPackage, "application/zip")
+                    : request.RequestUri.AbsolutePath.EndsWith("/DOC_1", StringComparison.Ordinal)
+                        ? EuAcquisitionTestFixture.BinaryResponse(request, HttpStatusCode.OK, pdf, "application/pdf;type=pdfa1a;charset=UTF-8")
+                        : null,
+            heldXhtml: await FixtureAsync("new-xhtml-200-body.bin"),
+            englishTypes: ["fmx4", "pdfa2a"]);
+
+        var outcome = result.Reconciliation!.Outcomes.Single(outcome => outcome.ExpressionIdentity == english.Identity);
+        Assert.AreEqual(EuFormexPackageOutcomeKind.NotAcquired, outcome.Kind, outcome.Detail);
+        Assert.AreEqual(EuFormexPackageNotAcquiredReason.AnnexBodyNotClassified, outcome.NotAcquiredReason);
+        StringAssert.Contains(outcome.Detail, "SourceEvidenceMismatch");
     }
 
     [TestMethod]
