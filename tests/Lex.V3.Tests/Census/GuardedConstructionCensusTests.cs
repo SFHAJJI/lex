@@ -1534,6 +1534,8 @@ public sealed class GuardedConstructionCensusTests
                     + "method public static "
                     + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgQueryPlan::CreateDefaultGraph, "
                     + "method public static "
+                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgQueryPlan::CreateDefaultGraph, "
+                    + "method public static "
                     + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgQueryPlan::ParseAndVerify",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgReferralDateStep: constructor "
                     + "private instance "
