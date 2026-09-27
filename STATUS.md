@@ -5,8 +5,8 @@ every pull request that changes what is served, what is next or what is blocked.
 
 ## Heads
 
-- `v3/integration`: `347665a9` (2026-09-27, PR #747 merged). Build 45 s. Fast lane
-  (`eng/test-fast.ps1`): 3,025 tests pass, 1 skipped, 48 s. Ingest suite: green on CI for PR #747
+- `v3/integration`: `87a2b0ba` (2026-09-27, PR #748 merged). Build 45 s. Fast lane
+  (`eng/test-fast.ps1`): 3,025 tests pass, 1 skipped, 48 s. Ingest suite: green on CI for PR #748
   (the CI `dotnet` job runs the whole solution on every pull request, about 6 min on the runner);
   locally about 15 min. 771 web tests pass.
 - Plan: `C:\lex-v3\V3-FINISH-PLAN-2026-09-27.md` (owner's copy). Decision 94 (one driver, one queue,
@@ -102,15 +102,26 @@ Web: 28 React components, 771 tests; no call to `/api/v3` yet. Screens render fi
   program over them.
 - Carried: a deployed build without a checkout needs the renderer bytes from another carrier (an
   embedded resource); the release pipeline slice decides.
+- **Luxembourg side of the first mount: composed (this pull request), fixtures only.**
+  `LuxembourgFirstMountAcquisition` (Ingest) is the Luxembourg composition root the code base never
+  had in production (the live adapter canary built it inline; `TestSupport/LuxembourgProfiles`
+  records "the LU composition root is Stage 6"). For one act selected by an ELI key range it holds
+  the declared scope as the plan's scope document, enumerates the P, T, C and O vocabulary
+  partitions with proofs, reopens and classifies them into the publisher's own values, opens the
+  `VerifiedLuxembourgSourceProfile` from that observation (required values are expectations, never
+  a source), runs the S, A and G families through the adapter and its Gazette loop, then the Akoma
+  Ntoso inventory and legal-content producers. Renderer sources come from the checkout's two
+  Luxembourg renderer files. `LuxembourgQueryPlan.CreateDefaultGraph(scope)` is the one new
+  Contracts door: until now only tests could name the Luxembourg SPARQL profile, so no production
+  code could create the plan. Proven offline on a transport that answers by what each query asks
+  (each set's SPARQL shape is distinct), then built into a corpus through the envelope helper and
+  `LexCorpus6Builder`.
 
 ## Next, in order
 
-1. The Luxembourg side of the first mount, composed in Ingest: the vocabulary snapshot and verified
-   source profile built live (today only `LuxembourgLiveAdapterCanary` does it), the S/A/G families
-   for one act's ELI range, the adapter run with its Gazette loop, the AKN inventory and legal
-   content producers. Then the envelope, the three builders (each built twice and compared), the
-   five mount files, a mount self-check, and the `src/Lex.V3.Tool` `build` program over both
-   compositions. Fixtures first.
+1. The build itself, composed in Ingest over the two acquisitions: the Stage 3 envelope, the three
+   builders (each built twice and compared byte for byte), the five mount files under `v3-corpus`,
+   a mount self-check, and the `src/Lex.V3.Tool` `build` program over it. Fixtures first.
 2. One bounded live run (authorised by the owner on 2026-09-27): one EU work in EN and FR, the
    legal-notice GET, the manifestation enumerations, plus one Luxembourg act. Produces the first
    real mount. Then decide whether the one-process design carries the full population or needs a
