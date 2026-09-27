@@ -123,6 +123,32 @@ public sealed class LuxembourgFirstMountAcquisitionTests
         Assert.AreEqual(0, handler.DocumentRequests.Count);
     }
 
+    /// <summary>
+    /// Review finding on this slice: the executor's refusal for a class the ceiling cannot pay for
+    /// carries the count it learned, so that a run that was too small still says how big the class
+    /// is. The composition root keeps that count in its detail; the next run is sized from it.
+    /// </summary>
+    [TestMethod]
+    public async Task AVocabularyPartitionTheCeilingCannotPayForNamesItsCountInTheRefusal()
+    {
+        var store = new RoutedHttpAcquisitionSessionTests.MultiObjectCustodyStore();
+        var handler = new LuxembourgFamilyHandler(PdfBytes());
+        var renderers = await LuxembourgRendererSources.FromCheckoutAsync(store, CheckoutRoot(), CancellationToken.None);
+
+        var result = await Acquisition(store, handler).RunAsync(
+            ActRange, renderers, WireRequestBudget.OfWireRequests(3), CancellationToken.None);
+
+        Assert.AreEqual(LuxembourgFirstMountAcquisitionRefusal.VocabularyRefused, result.Refusal);
+        StringAssert.Contains(result.Detail, "vocabulary family P");
+        StringAssert.Contains(result.Detail, nameof(LuxembourgEnumerationRefusal.WireBudgetExhausted));
+        var predicates = VerifiedLuxembourgSourceProfile.RequiredIriVocabulary
+            .Where(static value => value.Kind is LuxembourgVocabularyKind.AssertionPredicate or LuxembourgVocabularyKind.RelationPredicate)
+            .Select(static value => value.FullIri).Distinct(StringComparer.Ordinal).Count();
+        StringAssert.Contains(result.Detail, $"count={predicates}");
+        CollectionAssert.AreEquivalent(new[] { "P" }, handler.FamiliesSeen.ToArray());
+        Assert.IsNull(result.Run);
+    }
+
     [TestMethod]
     public async Task AVocabularyMissingARequiredValueRefusesTheProfileAndNamesTheValue()
     {
@@ -279,7 +305,6 @@ public sealed class LuxembourgFirstMountAcquisitionTests
             if (body.Contains("isIRI(?subject) && isIRI(?object)", StringComparison.Ordinal)) return "G";
             if (body.Contains("AS ?object_kind", StringComparison.Ordinal)) return "A";
             if (body.Contains("BIND(STR(?concept) AS ?key_1)", StringComparison.Ordinal)) return "C";
-            if (body.Contains("?endpoint ?predicate ?other", StringComparison.Ordinal)) return "O";
             if (body.Contains("BIND(STR(?object) AS ?key_1)", StringComparison.Ordinal)) return "O";
             if (body.Contains("BIND(STR(?predicate) AS ?key_1)", StringComparison.Ordinal)) return "P";
             if (body.Contains("BIND(STR(?subject) AS ?key_1)", StringComparison.Ordinal)) return "S";

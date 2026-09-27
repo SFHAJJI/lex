@@ -278,12 +278,15 @@ public sealed class LuxembourgFirstMountAcquisition
             var witness = plan.BindCount(planId, NewUrn(), NewUrn(), family, LuxembourgQueryPass.Pass1, range, rendererSources.Query);
             var outcome = await executor.RunPartitionAsync(request, witness.Request, wireBudget, cancellationToken)
                 .ConfigureAwait(false);
-            measured.Add(new { family, outcome.ProductRequestCount, refusal = outcome.Refusal?.Code.ToString() });
+            measured.Add(new { family, outcome.ProductRequestCount, refusal = Describe(outcome.Refusal) });
             if (outcome.Receipt is not { } receipt)
             {
+                // The executor's refusal carries the count it learned and the requests the class
+                // needs, precisely so a run that was too small still says how big the class is; the
+                // detail keeps all of it, since the next run is sized from this one.
                 return LuxembourgFirstMountAcquisitionResult.Refused(
                     LuxembourgFirstMountAcquisitionRefusal.VocabularyRefused,
-                    $"vocabulary family {family}: {outcome.Refusal?.Code.ToString() ?? "no receipt and no refusal"}");
+                    $"vocabulary family {family}: {Describe(outcome.Refusal)}");
             }
 
             var proof = AbsenceFamilyEnumerationProof.TryCreate(
@@ -445,6 +448,13 @@ public sealed class LuxembourgFirstMountAcquisition
     }
 
     internal sealed record ObservedVocabulary(string Family, LuxembourgVocabularyKind? Kind, string Iri, string Disposition);
+
+    /// <summary>Everything the executor's refusal says, in one line: code, count, status and its own detail.</summary>
+    private static string? Describe(LuxembourgEnumerationRefusalDetail? refusal) => refusal is null
+        ? null
+        : $"{refusal.Code}; count={refusal.ObservedCount?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "none"}; "
+          + $"status={refusal.TerminalStatus?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "none"}; "
+          + (refusal.CoreRefusalDetail ?? "no further detail");
 
     private static LuxembourgQueryPartitionRange Range(string partitionId, string start, string end) => new(
         partitionId,
