@@ -495,7 +495,8 @@ public sealed class ClosedVocabularyCensusTests
                 "Lex.V3.Contracts.Source.Http.OfficialMachineQueryRetryCondition: RequestTimeout, "
                     + "TransportFailure, Http408, Http429, Http500, Http502, Http503, Http504",
                 "Lex.V3.Contracts.Source.Http.OfficialMachineQuerySourceProfileId: LuxembourgSparql, "
-                    + "EuropeanUnionSparql, EuropeanUnionDocumentFetch, LuxembourgDocumentFetch",
+                    + "EuropeanUnionSparql, EuropeanUnionDocumentFetch, LuxembourgDocumentFetch, "
+                    + "EuropeanUnionLegalNotice",
                 "Lex.V3.Contracts.Source.Http.RepresentationChainAppendDisposition: "
                     + "BaselineEstablished, BaselineConfirmedUnchanged, ReplacementRecorded, "
                     + "AppendedAsEvidenceOnly",

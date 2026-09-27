@@ -1039,9 +1039,13 @@ public enum EuDocumentFetchAttemptRefusal
 public sealed class EuDocumentFetchAttemptResult
 {
     private EuDocumentFetchAttemptResult(
-        RoutedHttpEvidence? evidence, EuDocumentFetchAttemptRefusal? refusal, string? detail)
+        RoutedHttpEvidence? evidence,
+        IReadOnlyDictionary<string, DurableBlobWriteReceipt>? hopWriteReceiptsByObservationId,
+        EuDocumentFetchAttemptRefusal? refusal,
+        string? detail)
     {
         Evidence = evidence;
+        HopWriteReceiptsByObservationId = hopWriteReceiptsByObservationId;
         Refusal = refusal;
         Detail = detail;
     }
@@ -1054,14 +1058,36 @@ public sealed class EuDocumentFetchAttemptResult
     /// </summary>
     public RoutedHttpEvidence? Evidence { get; }
 
+    /// <summary>
+    /// Present exactly when <see cref="Evidence"/> is: the custody write receipt of every hop in
+    /// that evidence, keyed by the hop's own observation id, as the session held them when it
+    /// sealed the route (<c>RoutedHttpAcquisitionSession.AttemptResult.HopWriteReceiptsByObservationId</c>).
+    /// Two consumers need them and have no other honest source: re-presenting this route under
+    /// the corpus run's own identity through <see cref="RoutedHttpEvidence.Create"/> (the EU
+    /// legal-notice evidence, whose run identity <c>Stage3EvidenceEnvelope</c> checks against the
+    /// corpus records), and binding a retained Formex ZIP to the exact receipt whose digest its
+    /// terminal hop names (<c>EuFormexAnnexTransportBinding</c>).
+    /// </summary>
+    public IReadOnlyDictionary<string, DurableBlobWriteReceipt>? HopWriteReceiptsByObservationId { get; }
+
     public EuDocumentFetchAttemptRefusal? Refusal { get; }
 
     public string? Detail { get; }
 
-    public static EuDocumentFetchAttemptResult Executed(RoutedHttpEvidence evidence)
+    public static EuDocumentFetchAttemptResult Executed(
+        RoutedHttpEvidence evidence,
+        IReadOnlyDictionary<string, DurableBlobWriteReceipt> hopWriteReceiptsByObservationId)
     {
         ArgumentNullException.ThrowIfNull(evidence);
-        return new(evidence, null, null);
+        ArgumentNullException.ThrowIfNull(hopWriteReceiptsByObservationId);
+        if (evidence.Hops.Any(hop => !hopWriteReceiptsByObservationId.ContainsKey(hop.ObservationId)))
+        {
+            throw new ArgumentException(
+                "An executed document fetch must carry the write receipt of every hop it sealed.",
+                nameof(hopWriteReceiptsByObservationId));
+        }
+
+        return new(evidence, hopWriteReceiptsByObservationId, null, null);
     }
 
     public static EuDocumentFetchAttemptResult Refused(EuDocumentFetchAttemptRefusal refusal, string? detail)
@@ -1071,7 +1097,7 @@ public sealed class EuDocumentFetchAttemptResult
             throw new ArgumentOutOfRangeException(nameof(refusal));
         }
 
-        return new(null, refusal, detail);
+        return new(null, null, refusal, detail);
     }
 }
 
@@ -2376,7 +2402,13 @@ public sealed class EuRepeatedEnumerationExecutor
                 .ConfigureAwait(false);
             var reopenedEvidence = RoutedHttpEvidence.ParseAndVerify(reopenedEvidenceBytes.Span);
 
-            return EuDocumentFetchAttemptResult.Executed(reopenedEvidence);
+            // The receipts travel with the reopened document, not with the in-memory one: the hops
+            // are the same observations under the same observation ids, and a reader of the
+            // reopened evidence is exactly who needs to present them to RoutedHttpEvidence.Create.
+            return EuDocumentFetchAttemptResult.Executed(
+                reopenedEvidence,
+                attempt.HopWriteReceiptsByObservationId
+                    ?? throw new InvalidOperationException("An executed attempt lost its hop write receipts."));
         }
         catch (Exception exception) when (exception is CustodyIntegrityException or CustodyRequiredException)
         {

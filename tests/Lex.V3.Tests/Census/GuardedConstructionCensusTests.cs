@@ -734,6 +734,8 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Contracts.Source.Europe.EuLegalNoticeEvidence::FromRoute, "
                     + "method public static "
                     + "Lex.V3.Contracts.Source.Europe.EuLegalNoticeEvidence::ParseAndVerify",
+                "Lex.V3.Contracts.Source.Europe.EuLegalNoticeRenderer: constructor internal "
+                    + "instance Lex.V3.Contracts.Source.Europe.EuLegalNoticeRenderer::.ctor",
                 "Lex.V3.Contracts.Source.Europe.EuLegislationSummary: constructor private instance "
                     + "Lex.V3.Contracts.Source.Europe.EuLegislationSummary::.ctor, "
                     + "method public static "
@@ -949,6 +951,9 @@ public sealed class GuardedConstructionCensusTests
                     + "method internal static "
                     + "Lex.V3.Contracts.Source.Http.OfficialMachineQuerySourceProfile::EuropeanUnio"
                     + "nDocumentFetch, "
+                    + "method internal static "
+                    + "Lex.V3.Contracts.Source.Http.OfficialMachineQuerySourceProfile::EuropeanUnio"
+                    + "nLegalNotice, "
                     + "method internal static "
                     + "Lex.V3.Contracts.Source.Http.OfficialMachineQuerySourceProfile::EuropeanUnio"
                     + "nSparql, "

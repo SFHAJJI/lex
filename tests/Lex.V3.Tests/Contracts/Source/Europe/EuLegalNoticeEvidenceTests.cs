@@ -905,6 +905,40 @@ public sealed class EuLegalNoticeEvidenceTests
     }
 
     /// <summary>
+    /// The trap the representation chain already names (R3.4): a 200 with an incomplete transfer is
+    /// still a 200 with a text/html media type, so status and media type cannot see a truncation.
+    /// The session seals such a route as incomplete with the bytes that did arrive; those are held
+    /// and their digest is real, but they are not the notice. FromRoute refuses the route rather
+    /// than minting evidence whose byte count is however much of the page arrived.
+    /// </summary>
+    [TestMethod]
+    public void FromRouteRefusesARouteWhoseBodyTheSessionSealedAsIncomplete()
+    {
+        var request = LogicalRequestFor(EuLegalNoticeEvidence.RequestedUri);
+        var partial = RoutedHttpHop.Create(
+            0, Uuid("partial"), null, RequestDigest(request), EuLegalNoticeEvidence.RequestedUri, 200,
+            Headers(
+                contentType: RealMediaType,
+                contentLength: RealByteLength.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                date: RealDateHeader),
+            RealCapturedAt, RealCapturedAt,
+            new IncompleteHttpCompletion(
+                HttpAcquisitionReasonRegistry.Member(HttpPartialBodyReason.DeclaredLengthShortRead)),
+            40, Digest('a'), WriteReceiptDigest(Digest('a'), 40), 40, Digest('a'));
+        var evidence = RoutedHttpEvidence.Create(
+            new SourceArtifactRef(Uuid("run-identity-partial"), Digest('1')),
+            1,
+            0,
+            [partial],
+            new IncompleteHttpRouteOutcome(HttpRouteIncompleteReason.HopIncomplete),
+            ReceiptsFor([partial]));
+
+        var refused = Assert.ThrowsExactly<ArgumentException>(
+            () => EuLegalNoticeEvidence.FromRoute(evidence, request));
+        StringAssert.Contains(refused.Message, "complete route");
+    }
+
+    /// <summary>
     /// The real 2026-09-03 capture, routed: zero redirects, a Date header, text/html, 135,428 bytes,
     /// backed by a genuine receipt-checked <see cref="RoutedHttpEvidence"/>. See the companion
     /// measurement file for the full curl transcript this reproduces.

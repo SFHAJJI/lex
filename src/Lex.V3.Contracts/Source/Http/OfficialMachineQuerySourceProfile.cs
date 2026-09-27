@@ -39,6 +39,16 @@ public enum OfficialMachineQuerySourceProfileId
     /// </remarks>
     [JsonStringEnumMemberName("luxembourg_document_fetch")]
     LuxembourgDocumentFetch = 4,
+
+    /// <summary>
+    /// The one bounded GET of the EUR-Lex legal notice that R8 and Decision 88 name as rights
+    /// evidence (<see cref="Lex.V3.Contracts.Source.Europe.EuLegalNoticeEvidence.RequestedUri"/>).
+    /// EUR-Lex is never a body source (Decision 23); this channel admits exactly one URI, resolved
+    /// by exact string in <see cref="OfficialMachineQuerySourceProfiles.ResolveFor(BoundMachineRequestIdentity)"/>,
+    /// and nothing else on that host.
+    /// </summary>
+    [JsonStringEnumMemberName("european_union_legal_notice")]
+    EuropeanUnionLegalNotice = 5,
 }
 
 public enum RobotsPolicyFreshness
@@ -306,9 +316,28 @@ public sealed class OfficialMachineQuerySourceProfile
     /// to "same origin as this route's own initial hop" and needs no separate host allow-list.
     /// The LU document-fetch route is deliberately not included: its own robots bootstrap and the
     /// filestore-to-www host mapping decide its admissibility, and no LU redirect has been observed.
+    /// The EU legal-notice route is included for the same reason as the Cellar route: its terminal
+    /// is server-computed (EUR-Lex may redirect a page request within its own host), and
+    /// <see cref="Lex.V3.Contracts.Source.Europe.EuLegalNoticeEvidence.FromRoute"/> pins the
+    /// terminal hop to the pinned URI's own host and port a second time, so a same-origin redirect
+    /// is followed and an off-origin one is a typed refusal at both layers.
     /// </summary>
     public bool AllowsRedirectWithinInitialAuthority =>
-        Id == OfficialMachineQuerySourceProfileId.EuropeanUnionDocumentFetch;
+        Id is OfficialMachineQuerySourceProfileId.EuropeanUnionDocumentFetch
+            or OfficialMachineQuerySourceProfileId.EuropeanUnionLegalNotice;
+
+    /// <summary>
+    /// True only for the EU legal-notice profile. The session admits a robots policy only when the
+    /// publisher labels it <c>text/plain</c>; on 2026-09-27 <c>https://eur-lex.europa.eu/robots.txt</c>
+    /// answered 200 with <c>Content-Length: 2475</c> and no <c>Content-Type</c> header at all, so the
+    /// general rule would refuse this publisher's policy unread and the channel could never start.
+    /// This flag admits exactly that observed shape (absent <c>Content-Type</c>, still no
+    /// <c>Content-Encoding</c>, still strict UTF-8) for this one profile; every other profile keeps
+    /// the <c>text/plain</c> requirement unchanged. Like <see cref="AllowsRedirectWithinInitialAuthority"/>
+    /// it is derived from <see cref="Id"/>, which the canonical bytes already carry.
+    /// </summary>
+    public bool AdmitsRobotsWithoutContentType =>
+        Id == OfficialMachineQuerySourceProfileId.EuropeanUnionLegalNotice;
 
     public string CrawlerUserAgent => OutboundCrawlerIdentity.Token;
 
@@ -318,7 +347,18 @@ public sealed class OfficialMachineQuerySourceProfile
 
     public RobotsPolicyRoute RobotsRoute { get; }
 
-    public TimeSpan MinimumRequestInterval => TimeSpan.FromMilliseconds(1_500);
+    /// <summary>
+    /// The pacing floor between two sends to one origin. 1.5 s for every profile except the EU
+    /// legal-notice route, whose publisher's robots policy declares <c>Crawl-delay: 10</c> under
+    /// <c>User-agent: *</c> (observed live 2026-09-27). The robots parser reads only allow and
+    /// disallow rules, so the profile carries the publisher's stated delay as its own floor rather
+    /// than leaving it unhonoured. This value is part of the canonical bytes, so it moves only this
+    /// profile's digest.
+    /// </summary>
+    public TimeSpan MinimumRequestInterval =>
+        Id == OfficialMachineQuerySourceProfileId.EuropeanUnionLegalNotice
+            ? TimeSpan.FromSeconds(10)
+            : TimeSpan.FromMilliseconds(1_500);
 
     /// <summary>
     /// Every run's private acquisition plan reserves item zero for the robots policy request.
@@ -467,6 +507,30 @@ public sealed class OfficialMachineQuerySourceProfile
                 200,
                 null)));
 
+    /// <summary>
+    /// The EUR-Lex legal-notice route: one fixed GET of
+    /// <see cref="Lex.V3.Contracts.Source.Europe.EuLegalNoticeEvidence.RequestedUri"/>, no request
+    /// entity, no fixed <c>Accept</c> (the page is served as <c>text/html</c> without negotiation, and
+    /// <c>EuLegalNoticeEvidence.FromRoute</c> refuses any other terminal media type). The robots route
+    /// is the direct one observed live on 2026-09-27: <c>GET https://eur-lex.europa.eu/robots.txt</c>
+    /// answered 200 with no redirect. <see cref="RequestTarget"/> is the exact pinned URI because this
+    /// channel has exactly one admitted request.
+    /// </summary>
+    internal static OfficialMachineQuerySourceProfile EuropeanUnionLegalNotice() => new(
+        OfficialMachineQuerySourceProfileId.EuropeanUnionLegalNotice,
+        "urn:uuid:ca95c7c5-8db0-452e-b29e-426ed2dd4cd5",
+        Lex.V3.Contracts.Source.Europe.EuLegalNoticeEvidence.RequestedUri,
+        HttpRequestMethod.Get,
+        null,
+        null,
+        null,
+        new RobotsPolicyRoute(
+            RoutedHttpNetworkOrigin.FromUri("https://eur-lex.europa.eu/robots.txt"),
+            new RobotsPolicyRouteStep(
+                "https://eur-lex.europa.eu/robots.txt",
+                200,
+                null)));
+
     private byte[] BuildCanonicalBytes()
     {
         var lines = new List<string>
@@ -538,6 +602,7 @@ public sealed class OfficialMachineQuerySourceProfile
         OfficialMachineQuerySourceProfileId.EuropeanUnionSparql => "european_union_sparql",
         OfficialMachineQuerySourceProfileId.EuropeanUnionDocumentFetch => "european_union_document_fetch",
         OfficialMachineQuerySourceProfileId.LuxembourgDocumentFetch => "luxembourg_document_fetch",
+        OfficialMachineQuerySourceProfileId.EuropeanUnionLegalNotice => "european_union_legal_notice",
         _ => throw new ArgumentOutOfRangeException(nameof(id)),
     };
 
@@ -569,6 +634,8 @@ public static class OfficialMachineQuerySourceProfiles
                 OfficialMachineQuerySourceProfile.EuropeanUnionDocumentFetch(),
             OfficialMachineQuerySourceProfileId.LuxembourgDocumentFetch =>
                 OfficialMachineQuerySourceProfile.LuxembourgDocumentFetch(),
+            OfficialMachineQuerySourceProfileId.EuropeanUnionLegalNotice =>
+                OfficialMachineQuerySourceProfile.EuropeanUnionLegalNotice(),
             _ => throw new ArgumentOutOfRangeException(nameof(id)),
         };
 
@@ -601,6 +668,11 @@ public static class OfficialMachineQuerySourceProfiles
                 Resolve(OfficialMachineQuerySourceProfileId.LuxembourgSparql),
             "https://publications.europa.eu/webapi/rdf/sparql" =>
                 Resolve(OfficialMachineQuerySourceProfileId.EuropeanUnionSparql),
+            // The EUR-Lex legal notice: an exact-string case like the two SPARQL endpoints, never a
+            // host or shape check. Decision 23 forbids EUR-Lex as a body source, so no other URI on
+            // that host resolves to any profile; every other eur-lex.europa.eu input still throws.
+            Lex.V3.Contracts.Source.Europe.EuLegalNoticeEvidence.RequestedUri =>
+                Resolve(OfficialMachineQuerySourceProfileId.EuropeanUnionLegalNotice),
             // D1-06c-EU: the switch's one new member. It gains a shape check, not an exact-string
             // case, because unlike the two fixed SPARQL endpoints the document-fetch channel's real
             // per-document target genuinely varies; every other input still throws exactly as

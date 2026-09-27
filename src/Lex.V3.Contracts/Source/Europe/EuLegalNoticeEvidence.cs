@@ -330,6 +330,21 @@ public sealed class EuLegalNoticeEvidence
                 nameof(evidence));
         }
 
+        // The session seals a route whose body it could not read to the end (a short read against
+        // the declared length, a body deadline, a mid-body transport failure) as an incomplete
+        // route carrying the bytes it did retain. Those bytes are held and their digest is real,
+        // but they are not the notice: R8's byte count and SHA-256 are of the captured page, not
+        // of however much of it arrived. A 200 status and a text/html media type both survive a
+        // truncation, so neither check below can see it. Refuse unless the route is complete,
+        // exactly as EuDocumentFetchOutcome.Classify does for the Cellar route.
+        if (evidence.Outcome is not CompleteHttpRouteOutcome)
+        {
+            throw new ArgumentException(
+                "Legal-notice evidence requires a complete route; a route the session sealed as " +
+                "incomplete or unobserved retains at most part of the page and is not the notice.",
+                nameof(evidence));
+        }
+
         if (terminalHop.Status != 200)
         {
             throw new ArgumentException(

@@ -354,7 +354,7 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
                 terminal.StatusDisposition != HttpStatusDisposition.DerivableStatus ||
                 terminal.Completion is not (DeclaredContentLengthHttpCompletion or
                     PinnedHandlerChunkedEofHttpCompletion) ||
-                !IsAdmittedRobotsRepresentation(terminal.Headers))
+                !IsAdmittedRobotsRepresentation(terminal.Headers, _profile.AdmitsRobotsWithoutContentType))
             {
                 Dispose();
                 return StartResult.Refused(
@@ -657,10 +657,29 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
 
     private void ThrowIfDisposed() => ObjectDisposedException.ThrowIf(_disposed, this);
 
-    private static bool IsAdmittedRobotsRepresentation(RoutedHttpResponseHeaders headers)
+    /// <summary>
+    /// A robots policy is read only when the publisher sent it uncompressed as <c>text/plain</c>
+    /// (optionally UTF-8). <paramref name="admitsAbsentContentType"/> is the one profile-declared
+    /// widening (<see cref="OfficialMachineQuerySourceProfile.AdmitsRobotsWithoutContentType"/>):
+    /// a policy sent with no <c>Content-Type</c> header at all is admitted for that profile only,
+    /// still uncompressed. A present header naming any other media type is refused for every
+    /// profile, as before.
+    /// </summary>
+    private static bool IsAdmittedRobotsRepresentation(
+        RoutedHttpResponseHeaders headers,
+        bool admitsAbsentContentType)
     {
-        if (headers.ContentEncoding is not RoutedHttpAbsentHeader ||
-            headers.ContentType is not RoutedHttpSingleHeader contentType ||
+        if (headers.ContentEncoding is not RoutedHttpAbsentHeader)
+        {
+            return false;
+        }
+
+        if (headers.ContentType is RoutedHttpAbsentHeader)
+        {
+            return admitsAbsentContentType;
+        }
+
+        if (headers.ContentType is not RoutedHttpSingleHeader contentType ||
             !System.Net.Http.Headers.MediaTypeHeaderValue.TryParse(contentType.Value, out var parsed) ||
             !string.Equals(parsed.MediaType, "text/plain", StringComparison.OrdinalIgnoreCase))
         {
@@ -2053,7 +2072,9 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
                         attempt,
                         cancellationToken).ConfigureAwait(false);
                     var result = route.Evidence is not null
-                        ? AttemptResult.Executed(route.Evidence)
+                        ? AttemptResult.Executed(
+                            route.Evidence,
+                            _session.BuildHopWriteReceipts(RequestOrdinal, attempt, route.Evidence.Hops))
                         : route.PreHeaderFailure is not null
                             ? AttemptResult.Operational(
                                 OfficialHttpOperationalFailureReason.NetworkFailure,
@@ -2145,6 +2166,7 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
         private AttemptResult(
             OfficialHttpAcquisitionOutcomeKind kind,
             RoutedHttpEvidence? evidence,
+            IReadOnlyDictionary<string, DurableBlobWriteReceipt>? hopWriteReceiptsByObservationId,
             OfficialHttpOperationalFailureReason? operationalReason,
             HttpPreHeaderFailureClass? preHeaderFailureClass,
             PostHeaderRejection? postHeaderRejection)
@@ -2152,6 +2174,7 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
             RequireExactlyOneOperationalReasonShape(kind, operationalReason, postHeaderRejection);
             Kind = kind;
             Evidence = evidence;
+            HopWriteReceiptsByObservationId = hopWriteReceiptsByObservationId;
             OperationalReason = operationalReason;
             PreHeaderFailureClass = preHeaderFailureClass;
             PostHeaderRejection = postHeaderRejection;
@@ -2159,6 +2182,18 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
 
         internal OfficialHttpAcquisitionOutcomeKind Kind { get; }
         internal RoutedHttpEvidence? Evidence { get; }
+
+        /// <summary>
+        /// Present exactly when <see cref="Evidence"/> is: the custody write receipt of every hop
+        /// in that evidence, keyed by the hop's own observation id, exactly as the session presented
+        /// them to <see cref="RoutedHttpEvidence.Create"/> when it sealed the route. A same-assembly
+        /// step that must re-present this route under another run identity (the corpus run's
+        /// legal-notice evidence, Stage3EvidenceEnvelope's run-identity check) or bind a retained
+        /// body to its receipt (a Formex package) needs these and has no other honest source: the
+        /// receipts are minted by custody at hold time and the session is the only holder.
+        /// </summary>
+        internal IReadOnlyDictionary<string, DurableBlobWriteReceipt>? HopWriteReceiptsByObservationId { get; }
+
         internal OfficialHttpOperationalFailureReason? OperationalReason { get; }
         internal HttpPreHeaderFailureClass? PreHeaderFailureClass { get; }
 
@@ -2169,17 +2204,32 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
         /// </summary>
         internal PostHeaderRejection? PostHeaderRejection { get; }
 
-        internal static AttemptResult Executed(RoutedHttpEvidence evidence) => new(
-            OfficialHttpAcquisitionOutcomeKind.ExecutedObservation,
-            evidence,
-            null,
-            null,
-            null);
+        internal static AttemptResult Executed(
+            RoutedHttpEvidence evidence,
+            IReadOnlyDictionary<string, DurableBlobWriteReceipt> hopWriteReceiptsByObservationId)
+        {
+            ArgumentNullException.ThrowIfNull(evidence);
+            ArgumentNullException.ThrowIfNull(hopWriteReceiptsByObservationId);
+            if (evidence.Hops.Any(hop => !hopWriteReceiptsByObservationId.ContainsKey(hop.ObservationId)))
+            {
+                throw new ArgumentException(
+                    "An executed attempt must carry the write receipt of every hop it sealed.",
+                    nameof(hopWriteReceiptsByObservationId));
+            }
+
+            return new(
+                OfficialHttpAcquisitionOutcomeKind.ExecutedObservation,
+                evidence,
+                hopWriteReceiptsByObservationId,
+                null,
+                null,
+                null);
+        }
 
         internal static AttemptResult Operational(
             OfficialHttpOperationalFailureReason reason,
             HttpPreHeaderFailureClass? preHeaderFailureClass = null) =>
-            new(OfficialHttpAcquisitionOutcomeKind.OperationalFailure, null, reason, preHeaderFailureClass, null);
+            new(OfficialHttpAcquisitionOutcomeKind.OperationalFailure, null, null, reason, preHeaderFailureClass, null);
 
         internal static AttemptResult PostHeaderRejected(PostHeaderRejection rejection) => new(
             rejection.FailureClass == PostHeaderFailureClass.AdapterIdentityRejected
@@ -2188,10 +2238,12 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
             null,
             null,
             null,
+            null,
             rejection);
 
         internal static AttemptResult IntegrityFailure() => new(
             OfficialHttpAcquisitionOutcomeKind.IntegrityFailure,
+            null,
             null,
             null,
             null,

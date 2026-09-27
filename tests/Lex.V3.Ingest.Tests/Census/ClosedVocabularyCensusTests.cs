@@ -135,6 +135,9 @@ public sealed class ClosedVocabularyCensusTests
                     + "ObjectFactsEnumerationRefused, EnumerationProofRefused, DerivationRefused, "
                     + "DerivationNotRetained, ObjectFactsBatchDoesNotCoverTheExpressionBatch, "
                     + "FamiliesCarryDifferentWireBudgets",
+                "Lex.V3.Ingest.Europe.EuLegalNoticeRouteRefusal: None, RobotsBootstrapRefused, "
+                    + "ObservationNotExecuted, WireBudgetExhausted, NoticeRouteInvalid, "
+                    + "RouteNotRetained",
                 "Lex.V3.Ingest.Europe.EuLocatedAmendmentAxiomDecodeRefusal: None, "
                     + "RowShapeContradictsItsProjectedKind, DeliveryCarriesNoRows, "
                     + "ParentMissingOrNotAnIri, AxiomNodeNotAnIri, PredicateNotAnIri, "
