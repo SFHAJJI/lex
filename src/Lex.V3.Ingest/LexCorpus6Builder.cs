@@ -110,7 +110,9 @@ public sealed record LexCorpus6Stage3Outcome(
                 LexCorpus6Stage3Disposition.AnnexMappedPageOutsideDocument,
             LexCorpus6Stage3OutcomeDomain.EuropeFormexMainBody => disposition is >=
                 LexCorpus6Stage3Disposition.FormexMainBodyAdmitted and <=
-                LexCorpus6Stage3Disposition.FormexMainBodyUnsupportedContentShape,
+                LexCorpus6Stage3Disposition.FormexMainBodyUnsupportedContentShape
+                or (>= LexCorpus6Stage3Disposition.FormexMainBodyPackageNotAcquired and <=
+                    LexCorpus6Stage3Disposition.FormexMainBodyPackageRejected),
             _ => false,
         };
 }

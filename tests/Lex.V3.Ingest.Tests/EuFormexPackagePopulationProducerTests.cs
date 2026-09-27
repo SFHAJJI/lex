@@ -149,7 +149,7 @@ public sealed class EuFormexPackagePopulationProducerTests
     public async Task ARedirectThatLeavesTheManifestationIsARefusedRouteEvenWhenItEndsInATwoHundred()
     {
         const string elsewhere = "http://publications.europa.eu/resource/cellar/00000000-0000-0000-0000-000000000000.0006.01/zip";
-        var (result, handler, english) = await AcquireEnglishAsync(request =>
+        var (result, handler, english, _) = await AcquireEnglishAsync(request =>
             request.RequestUri!.AbsolutePath.EndsWith("/zip", StringComparison.Ordinal)
                 ? null
                 : EuAcquisitionTestFixture.BinaryResponse(request, HttpStatusCode.SeeOther, [], location: elsewhere));
@@ -165,7 +165,7 @@ public sealed class EuFormexPackagePopulationProducerTests
     [TestMethod]
     public async Task AManifestationTheOfficeDoesNotServeAsAPackageIsUnavailable()
     {
-        var (result, handler, english) = await AcquireEnglishAsync(request =>
+        var (result, handler, english, _) = await AcquireEnglishAsync(request =>
             request.RequestUri!.AbsolutePath.EndsWith("/zip", StringComparison.Ordinal)
                 ? null
                 : EuAcquisitionTestFixture.BinaryResponse(request, HttpStatusCode.NotFound, []));
@@ -180,7 +180,7 @@ public sealed class EuFormexPackagePopulationProducerTests
     [TestMethod]
     public async Task AnOfficeAnswerThatIsNeitherAPackageNorAbsentIsARefusedRouteWithItsStatus()
     {
-        var (result, _, english) = await AcquireEnglishAsync(request =>
+        var (result, _, english, _) = await AcquireEnglishAsync(request =>
             request.RequestUri!.AbsolutePath.EndsWith("/zip", StringComparison.Ordinal)
                 ? EuAcquisitionTestFixture.BinaryResponse(request, HttpStatusCode.InternalServerError, "busy"u8.ToArray(), "text/plain")
                 : null);
@@ -194,7 +194,7 @@ public sealed class EuFormexPackagePopulationProducerTests
     [TestMethod]
     public async Task ATwoHundredThatIsNotAFormexPackageIsRejectedWithTheInventoryRefusal()
     {
-        var (result, _, english) = await AcquireEnglishAsync(request =>
+        var (result, _, english, _) = await AcquireEnglishAsync(request =>
             request.RequestUri!.AbsolutePath.EndsWith("/zip", StringComparison.Ordinal)
                 ? EuAcquisitionTestFixture.BinaryResponse(request, HttpStatusCode.OK, "<html>not a package</html>"u8.ToArray(), "text/html")
                 : null);
@@ -216,7 +216,7 @@ public sealed class EuFormexPackagePopulationProducerTests
     {
         var annexPackage = await File.ReadAllBytesAsync(Path.Combine(
             AppContext.BaseDirectory, "Fixtures", "EuDocumentFetch", "new-fmx4-200-body.bin"));
-        var (result, _, english) = await AcquireEnglishAsync(request =>
+        var (result, _, english, store) = await AcquireEnglishAsync(request =>
             request.RequestUri!.AbsolutePath.EndsWith("/zip", StringComparison.Ordinal)
                 ? EuAcquisitionTestFixture.BinaryResponse(request, HttpStatusCode.OK, annexPackage, "application/zip")
                 : null);
@@ -225,6 +225,22 @@ public sealed class EuFormexPackagePopulationProducerTests
         Assert.AreEqual(EuFormexPackageOutcomeKind.NotAcquired, outcome.Kind, outcome.Detail);
         Assert.AreEqual(EuFormexPackageNotAcquiredReason.AnnexClassificationNotBuilt, outcome.NotAcquiredReason);
         StringAssert.Contains(outcome.Detail, "1 annex member");
+
+        // The held member reaches the corpus with the typed disposition, so the corpus states a
+        // package that was fetched and not acquired, not a transport refusal; the builder's domain
+        // compatibility check admits the three new members (found by the annex survey on this PR:
+        // the check ranged 16 to 24 and Validate() would have thrown inside TryBuild).
+        var envelope = await LexCorpus6BuilderTests.CompleteProfileEnvelopeAsync(
+            europeOverride: result.Reconciliation.Run,
+            formexOverride: result.Reconciliation,
+            formexStore: store);
+        var built = LexCorpus6Builder.TryBuild(envelope, out var refusal, out var detail);
+        Assert.IsNotNull(built, $"{refusal}: {detail}");
+        var disposition = built.VerifiedSet.Set.Members
+            .SelectMany(static member => member.Stage3Outcomes)
+            .Single(static outcome => outcome.Domain == LexCorpus6Stage3OutcomeDomain.EuropeFormexMainBody)
+            .Disposition;
+        Assert.AreEqual(LexCorpus6Stage3Disposition.FormexMainBodyPackageNotAcquired, disposition);
     }
 
     private const string GdprFmx4Sha256 = "4cbf7280014b0bd3d20fc8c1d6a7c08cdcd8aaacab5ee356c07ed7d840994541";
@@ -233,7 +249,7 @@ public sealed class EuFormexPackagePopulationProducerTests
         expression.Identity.PublisherExpressionId[(expression.Identity.PublisherExpressionId.LastIndexOf("/cellar/", StringComparison.Ordinal) + "/cellar/".Length)..];
 
     /// <summary>One English eligible expression through the whole producer, with the package route answered by <paramref name="packageResponse"/> (null for the default 303 and GDPR bytes).</summary>
-    private static async Task<(EuFormexPackagePopulationResult Result, FormexEnumerationHandler Handler, LanguageScopedExpression English)> AcquireEnglishAsync(
+    private static async Task<(EuFormexPackagePopulationResult Result, FormexEnumerationHandler Handler, LanguageScopedExpression English, EuAcquisitionTestFixture.EuInMemoryCustodyStore Store)> AcquireEnglishAsync(
         Func<HttpRequestMessage, HttpResponseMessage?> packageResponse)
     {
         var (run, english, french) = await RunWithTwoExpressionsAsync();
@@ -242,11 +258,12 @@ public sealed class EuFormexPackagePopulationProducerTests
             [english.Identity.PublisherExpressionId] = ["fmx4"],
             [french.Identity.PublisherExpressionId] = ["xhtml"],
         }, [english, french], packageResponse);
-        var result = await Producer(new EuAcquisitionTestFixture.EuInMemoryCustodyStore(), handler).RunAsync(
+        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
+        var result = await Producer(store, handler).RunAsync(
             run, RendererSource(), RendererSource(), EuAcquisitionTestFixture.SourceWitness(),
             EuAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
         Assert.IsTrue(result.Delivered, $"{result.Refusal}: {result.Detail}");
-        return (result, handler, english);
+        return (result, handler, english, store);
     }
 
     /// <summary>

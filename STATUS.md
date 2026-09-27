@@ -87,7 +87,10 @@ Web: 28 React components, 771 tests; no call to `/api/v3` yet. Screens render fi
   `unavailable` for 404. Three corpus
   stage 3 dispositions were added for them (`formex_main_body_package_not_acquired`,
   `_route_refused`, `_package_rejected`), so the corpus file now tells a deferred or rejected
-  package from a transport refusal.
+  package from a transport refusal (the builder's domain compatibility check admits them; a
+  read-only survey of the annex chain on this pull request found it ranged over the old members
+  only, which would have thrown inside `TryBuild` for a held member with a package not acquired;
+  fixed and pinned by a corpus built from the annex-bearing package).
 - Decision taken by the driver, reversible: an acquired package whose inventory names annexes is
   `not_acquired/annex_classification_not_built` rather than acquired, because the classification
   reconciliation refuses a build carrying an acquired inventory with unclassified annexes and no
