@@ -31,6 +31,13 @@ public sealed class V3FirstMountBuildTests
         Assert.AreEqual(5, build.Files.Count);
         var members = build.Corpus!.VerifiedSet.Set.Members;
         Assert.IsTrue(members.Count >= 2, "one Luxembourg member and one EU member at least.");
+        var formexOutcomes = members
+            .SelectMany(static member => member.Stage3Outcomes)
+            .Where(static outcome => outcome.Domain == LexCorpus6Stage3OutcomeDomain.EuropeFormexMainBody)
+            .ToArray();
+        Assert.AreEqual(1, formexOutcomes.Length);
+        Assert.AreEqual(LexCorpus6Stage3Disposition.FormexMainBodyAdmitted, formexOutcomes[0].Disposition,
+            "the EU member's Formex package was acquired and its main body admitted.");
 
         // A second build from the same acquisitions reproduces every artefact byte for byte.
         var again = await new V3FirstMountBuild(store).RunAsync(europe, luxembourg, CancellationToken.None);

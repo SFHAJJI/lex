@@ -72,6 +72,9 @@ public enum LexCorpus6Stage3Disposition
     [JsonStringEnumMemberName("formex_main_body_xml_rejected")] FormexMainBodyXmlRejected = 22,
     [JsonStringEnumMemberName("formex_main_body_missing")] FormexMainBodyMissing = 23,
     [JsonStringEnumMemberName("formex_main_body_unsupported_content_shape")] FormexMainBodyUnsupportedContentShape = 24,
+    [JsonStringEnumMemberName("formex_main_body_package_not_acquired")] FormexMainBodyPackageNotAcquired = 26,
+    [JsonStringEnumMemberName("formex_main_body_route_refused")] FormexMainBodyRouteRefused = 27,
+    [JsonStringEnumMemberName("formex_main_body_package_rejected")] FormexMainBodyPackageRejected = 28,
     [JsonStringEnumMemberName("akn_marker_only_evidence")] AknMarkerOnlyEvidence = 25,
 }
 
@@ -107,7 +110,9 @@ public sealed record LexCorpus6Stage3Outcome(
                 LexCorpus6Stage3Disposition.AnnexMappedPageOutsideDocument,
             LexCorpus6Stage3OutcomeDomain.EuropeFormexMainBody => disposition is >=
                 LexCorpus6Stage3Disposition.FormexMainBodyAdmitted and <=
-                LexCorpus6Stage3Disposition.FormexMainBodyUnsupportedContentShape,
+                LexCorpus6Stage3Disposition.FormexMainBodyUnsupportedContentShape
+                or (>= LexCorpus6Stage3Disposition.FormexMainBodyPackageNotAcquired and <=
+                    LexCorpus6Stage3Disposition.FormexMainBodyPackageRejected),
             _ => false,
         };
 }
@@ -1441,6 +1446,9 @@ public static class LexCorpus6Builder
             Europe.EuFormexMainBodyLegalContentDisposition.XmlRejected => LexCorpus6Stage3Disposition.FormexMainBodyXmlRejected,
             Europe.EuFormexMainBodyLegalContentDisposition.MainBodyMissing => LexCorpus6Stage3Disposition.FormexMainBodyMissing,
             Europe.EuFormexMainBodyLegalContentDisposition.UnsupportedContentShape => LexCorpus6Stage3Disposition.FormexMainBodyUnsupportedContentShape,
+            Europe.EuFormexMainBodyLegalContentDisposition.PackageNotAcquired => LexCorpus6Stage3Disposition.FormexMainBodyPackageNotAcquired,
+            Europe.EuFormexMainBodyLegalContentDisposition.RouteRefused => LexCorpus6Stage3Disposition.FormexMainBodyRouteRefused,
+            Europe.EuFormexMainBodyLegalContentDisposition.PackageRejected => LexCorpus6Stage3Disposition.FormexMainBodyPackageRejected,
             _ => throw new InvalidOperationException("Unknown EU Formex main-body disposition."),
         };
 

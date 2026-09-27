@@ -5,8 +5,8 @@ every pull request that changes what is served, what is next or what is blocked.
 
 ## Heads
 
-- `v3/integration`: `acf1c5ce` (2026-09-27, PR #749 merged). Build 45 s. Fast lane
-  (`eng/test-fast.ps1`): 3,025 tests pass, 1 skipped, 50 s. Ingest suite: green on CI for PR #749
+- `v3/integration`: `37e3729a` (2026-09-27, PR #750 merged). Build 45 s. Fast lane
+  (`eng/test-fast.ps1`): 3,032 tests pass, 1 skipped, 55 s. Ingest suite: green on CI for PR #750
   (the CI `dotnet` job runs the whole solution on every pull request, about 6 min on the runner);
   locally about 15 min. 771 web tests pass.
 - Plan: `C:\lex-v3\V3-FINISH-PLAN-2026-09-27.md` (owner's copy). Decision 94 (one driver, one queue,
@@ -61,27 +61,46 @@ Web: 28 React components, 771 tests; no call to `/api/v3` yet. Screens render fi
   refuses redirects instead.
 - The session now exposes the custody write receipt of every hop an executed attempt sealed
   (`HopWriteReceiptsByObservationId`), which the Formex ZIP binding needs as well.
-- **Formex package population: producer built (this pull request), acquisition deferred.**
-  `EuFormexPackagePopulationProducer` runs the real manifestation enumeration for every expression
-  of a complete run (all languages, one robots session and four requests each), closes eligibility,
-  emits one typed outcome per expression (`not_eligible` where the office lists no `fmx4`;
-  `refused/observation_not_executed` where it does, with a fixed deferral detail on the in-process
-  outcome) and reconciles against the run. Proven on the harness run through the envelope and
-  `LexCorpus6Builder`: a corpus builds from it, with EU records and no EU articles, which is what
-  is served today. Stated exactly: in `lex-corpus-6.json` the held EU member's stage 3 outcome is
-  `europe_formex_main_body` / `formex_main_body_package_refused` with no detail text, so a deferred
-  acquisition is not distinguishable there from a real transport refusal. The first mount serves no
-  stage 3 outcome; a typed deferred outcome member comes before any public claim rests on that
-  field (next item 2). The builder test pins today's shape.
-  Why no `acquired` yet (investigated 2026-09-27): a package needs the manifestation's Cellar
-  items observed with their stream names, and no item enumeration exists; the transport binding
-  pins a single-hop Item URI while the live `fmx4` route is a manifestation URI redirected to
-  `{manifestation}/zip`; only ENG and FRA are addressable while every language needs an outcome;
-  no outcome member names a deferred or scope-excluded acquisition. Each is a contract change.
-- Decision taken by the driver, reversible: build and mount the first corpus with Formex deferred,
-  then build Formex acquisition as its own slices (item enumeration, binding change, a typed
-  deferred outcome). The plan's largest risk is the real build, and it does not need EU articles to
-  be retired.
+- **Formex package population: enumeration (PR #747) and acquisition (this pull request), fixtures
+  only.** `EuFormexPackagePopulationProducer` runs the real manifestation enumeration for every
+  expression of a complete run (all languages, one robots session and four requests each), closes
+  eligibility, then acquires every eligible package the corpus can serve
+  (`EuFormexPackageAcquisitionProducer`): one GET of the exact `fmx4` manifestation the enumeration
+  delivered, on the route the office serves (manifestation URI, 303 to `{manifestation}/zip`,
+  200 ZIP; observed 2026-09-04 on GDPR, pinned by the reachability tests), through the acquisition
+  session with its own robots bootstrap and the run's one ceiling; the retained route is bound as a
+  package transport to WEMI references rebuilt from the run's own expression identities
+  (`EuFormexAnnexTransportBinding`'s new manifestation-level constructor: no Cellar Item is named,
+  because the office serves the package by manifestation and no item enumeration is needed), read
+  into the annex inventory under one fixed interpretation profile, and `acquired`. Proven offline
+  on the real GDPR package through the real session: the corpus states
+  `formex_main_body_admitted` for the held EU member and the main-body producer parses its 99
+  articles. What is not acquired is stated as its own outcome, never as a transport refusal:
+  `not_acquired` with a reason (`body_not_held`: the run holds no body for the expression, today
+  every language but English, Decision 89, and the corpus binds every Formex outcome to one held
+  body; `annex_classification_not_built`: the package names annexes and no annex classification
+  chain is composed in production, so the ZIP stays in custody and the expression waits for the
+  annex slice; `language_not_addressable`, `manifestation_not_singular`, `identity_not_admitted`),
+  `route_refused` with the status for any answer but 200 or 404 and for a 200 reached on a route
+  that does not bind (a hop off the manifestation's path; review repair on this pull request),
+  `package_rejected` with the inventory refusal for a 200 that is not a Formex package,
+  `unavailable` for 404. Three corpus
+  stage 3 dispositions were added for them (`formex_main_body_package_not_acquired`,
+  `_route_refused`, `_package_rejected`), so the corpus file now tells a deferred or rejected
+  package from a transport refusal (the builder's domain compatibility check admits them; a
+  read-only survey of the annex chain on this pull request found it ranged over the old members
+  only, which would have thrown inside `TryBuild` for a held member with a package not acquired;
+  fixed and pinned by a corpus built from the annex-bearing package).
+- Decision taken by the driver, reversible: an acquired package whose inventory names annexes is
+  `not_acquired/annex_classification_not_built` rather than acquired, because the classification
+  reconciliation refuses a build carrying an acquired inventory with unclassified annexes and no
+  annex chain runs in production. Its main body waits for the annex slice. Say the word and the
+  reconciliation admits an unclassified inventory as a typed gap instead.
+- Decision taken by the driver, reversible: the package request goes to the manifestation, not the
+  work, so content negotiation cannot pick another expression; the terminal must stay on that
+  manifestation's own path. The item-level package types (`EuFormexPackage`, `EuFormexItemSet`,
+  `EuFormexStreamName`) remain for the test-composed annex binder and are not on the production
+  path; both real packages on disk use original-act stream naming that those types refuse.
 
 - **EU side of the first mount: composed (this pull request), fixtures only.**
   `EuFirstMountAcquisition` (Ingest) acquires one Appendix A work end to end under one wire ceiling:
@@ -136,6 +155,19 @@ Web: 28 React components, 771 tests; no call to `/api/v3` yet. Screens render fi
   exits 1 with its message, and process tests in the fast lane pin the exit codes without traffic
   (the refused case names a CELEX that is not a seed, refused before any request). The first real
   mount now needs only the bounded live run.
+- **The bounded live run: started 2026-09-27 21:26 UTC, stopped by the session harness, not
+  restarted.** With the tool at `8ec1fdb8` (GDPR `32016R0679`; the Luxembourg act
+  `loi/2017/03/14/a439`, range `.../a439/jo` to `.../a439/jp`; custody
+  `C:\lex-v3\first-mount-run-1\custody`; ceiling 800). It held the eight renderer sources and was
+  inside the EU adapter run when the Claude Code harness killed the process at 21:27:47 UTC because
+  the machine was critically low on memory (1.1 GB free of 15.7 GB, held by other applications);
+  473 custody files (5.1 MB) in 94 s, no milestone line reached, no wire count, refusal or digest
+  to record. The harness asks that a process it stopped for memory pressure is not restarted
+  unprompted, so the driver did not. To run it: free memory (or start the CLI with
+  `CLAUDE_CODE_DISABLE_BG_SHELL_PRESSURE_REAP=1`), then from `C:\lex-v3\first-mount-run-1` run the
+  command recorded on PR #750, logging to `build.log`; with this pull request merged the run also
+  acquires the GDPR Formex package (about three more requests per held expression). The run
+  record (wire counts, refusals, five digests, `resolve` from the mount) is still item 1.
 
 ## Next, in order
 
@@ -145,9 +177,10 @@ Web: 28 React components, 771 tests; no call to `/api/v3` yet. Screens render fi
    the five digests in STATUS.md; mount the directory under the API and answer `resolve` from it.
    Then decide whether the one-process design carries the full population or needs a
    serialisation boundary between acquisition and build.
-2. Formex acquisition (EU parity): the Cellar item enumeration per manifestation, the transport
-   binding for the manifestation-level `fmx4` route, the ZIP GET with the receipts door, a typed
-   deferred outcome; then `acquired` outcomes feed the main-body producer and the EU index.
+2. Formex, the rest: the annex classification chain in production (today an acquired package
+   with annexes is `not_acquired/annex_classification_not_built`); French bodies (Decision 89) so
+   French packages are held and acquired; then every acquired main body feeds the EU index for
+   the temporal and search operations (item 5).
 3. Define and run the Luxembourg population and the complete EU population (owner authorisation per
    run).
 4. Serve the fourteen unserved operations for Luxembourg; wire MCP to a streamable HTTP endpoint.

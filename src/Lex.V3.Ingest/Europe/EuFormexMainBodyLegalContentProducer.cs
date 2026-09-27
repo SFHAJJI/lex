@@ -21,6 +21,9 @@ public enum EuFormexMainBodyLegalContentDisposition
     [JsonStringEnumMemberName("xml_rejected")] XmlRejected = 7,
     [JsonStringEnumMemberName("main_body_missing")] MainBodyMissing = 8,
     [JsonStringEnumMemberName("unsupported_content_shape")] UnsupportedContentShape = 9,
+    [JsonStringEnumMemberName("package_not_acquired")] PackageNotAcquired = 10,
+    [JsonStringEnumMemberName("route_refused")] RouteRefused = 11,
+    [JsonStringEnumMemberName("package_rejected")] PackageRejected = 12,
 }
 
 public enum EuFormexMainBodyTokenKind
@@ -211,6 +214,9 @@ public sealed class EuFormexMainBodyLegalContentProducer
         EuFormexPackageOutcomeKind.NotEligible => EuFormexMainBodyLegalContentDisposition.NotEligible,
         EuFormexPackageOutcomeKind.Unavailable => EuFormexMainBodyLegalContentDisposition.PackageUnavailable,
         EuFormexPackageOutcomeKind.Refused => EuFormexMainBodyLegalContentDisposition.PackageRefused,
+        EuFormexPackageOutcomeKind.NotAcquired => EuFormexMainBodyLegalContentDisposition.PackageNotAcquired,
+        EuFormexPackageOutcomeKind.RouteRefused => EuFormexMainBodyLegalContentDisposition.RouteRefused,
+        EuFormexPackageOutcomeKind.PackageRejected => EuFormexMainBodyLegalContentDisposition.PackageRejected,
         _ => throw new ArgumentOutOfRangeException(nameof(kind)),
     };
 

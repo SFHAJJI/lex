@@ -83,10 +83,53 @@ public sealed class EuFormexAnnexTransportBinding
         HttpLogicalRequest requestEvidence,
         RoutedHttpEvidence responseEvidence,
         DurableBlobWriteReceipt retainedZipReceipt)
+        : this(
+            (package ?? throw new ArgumentNullException(nameof(package))).ExpressionRef,
+            package.BodyRef,
+            requestEvidence,
+            responseEvidence,
+            retainedZipReceipt,
+            singleHop: true)
     {
-        ArgumentNullException.ThrowIfNull(package);
-        Expression = package.ExpressionRef;
-        FormexBody = package.BodyRef;
+    }
+
+    /// <summary>
+    /// The manifestation-level route the office serves (observed 2026-09-04 on GDPR, pinned by
+    /// <c>EuDocumentFetchReachabilityTests</c>): <c>GET /resource/cellar/{manifestation}</c> with
+    /// <c>Accept: application/zip;mtype=fmx4</c>, a 303 to <c>{manifestation}/zip</c> on the same
+    /// host, then the 200 ZIP. <paramref name="expression"/> and <paramref name="formexManifestation"/>
+    /// are admitted through <paramref name="boundary"/> as Cellar WEMI references and the manifestation
+    /// must descend from the expression. No Cellar Item is named: the office serves the package by
+    /// manifestation and this build observes no items, so <see cref="FormexBody"/> is the manifestation.
+    /// Every hop of the route stays on that manifestation's own path.
+    /// </summary>
+    public EuFormexAnnexTransportBinding(
+        EuWemiIdentityBoundary boundary,
+        SourceObjectRef expression,
+        SourceObjectRef formexManifestation,
+        HttpLogicalRequest requestEvidence,
+        RoutedHttpEvidence responseEvidence,
+        DurableBlobWriteReceipt retainedZipReceipt)
+        : this(
+            RequireDescent(boundary, expression, formexManifestation),
+            formexManifestation,
+            requestEvidence,
+            responseEvidence,
+            retainedZipReceipt,
+            singleHop: false)
+    {
+    }
+
+    private EuFormexAnnexTransportBinding(
+        SourceObjectRef expression,
+        SourceObjectRef formexBody,
+        HttpLogicalRequest requestEvidence,
+        RoutedHttpEvidence responseEvidence,
+        DurableBlobWriteReceipt retainedZipReceipt,
+        bool singleHop)
+    {
+        Expression = expression;
+        FormexBody = formexBody;
         RequestEvidence = requestEvidence ?? throw new ArgumentNullException(nameof(requestEvidence));
         ResponseEvidence = responseEvidence ?? throw new ArgumentNullException(nameof(responseEvidence));
         RetainedZipReceipt = retainedZipReceipt
@@ -113,11 +156,19 @@ public sealed class EuFormexAnnexTransportBinding
                 nameof(responseEvidence));
         }
 
+        // The first hop is the request that was sent; on the manifestation route the office
+        // redirects once within the manifestation's own path and the terminal is the ZIP.
+        var first = responseEvidence.Hops[0];
         var terminal = responseEvidence.Hops[^1];
         var requestSha256 = Convert.ToHexStringLower(
             SHA256.HashData(requestEvidence.CopyCanonicalBytes()));
-        if (!string.Equals(terminal.LogicalRequestSha256, requestSha256, StringComparison.Ordinal)
-            || !string.Equals(terminal.RequestUri, requestEvidence.Uri, StringComparison.Ordinal))
+        if (!string.Equals(first.LogicalRequestSha256, requestSha256, StringComparison.Ordinal)
+            || !string.Equals(first.RequestUri, requestEvidence.Uri, StringComparison.Ordinal)
+            || (singleHop
+                ? responseEvidence.Hops.Count != 1
+                : responseEvidence.Hops.Any(hop =>
+                    !string.Equals(hop.RequestUri, expectedRequestUri, StringComparison.Ordinal)
+                    && !hop.RequestUri.StartsWith(expectedRequestUri + "/", StringComparison.Ordinal))))
         {
             throw new ArgumentException(
                 "The response route does not answer the supplied Formex request evidence.",
@@ -134,6 +185,28 @@ public sealed class EuFormexAnnexTransportBinding
                 "The completed Formex response does not name the supplied retained ZIP receipt.",
                 nameof(retainedZipReceipt));
         }
+    }
+
+    private static SourceObjectRef RequireDescent(
+        EuWemiIdentityBoundary boundary,
+        SourceObjectRef expression,
+        SourceObjectRef formexManifestation)
+    {
+        ArgumentNullException.ThrowIfNull(boundary);
+        var admittedExpression = boundary.Require(expression, EuWemiRole.Expression, nameof(expression));
+        var admittedManifestation = boundary.Require(
+            formexManifestation, EuWemiRole.Manifestation, nameof(formexManifestation));
+        if (!string.Equals(
+                admittedManifestation.ParentKeyRef!.CanonicalKey,
+                admittedExpression.CanonicalKey,
+                StringComparison.Ordinal))
+        {
+            throw new ArgumentException(
+                "The Formex manifestation does not descend from the expression.",
+                nameof(formexManifestation));
+        }
+
+        return admittedExpression;
     }
 
     public SourceObjectRef Expression { get; }
