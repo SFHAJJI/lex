@@ -92,6 +92,13 @@ public sealed class DurableBlobReceiptFamilyIngestSurfaceTests
                 // property is the internal Success factory, fed by CustodyHold.TryHoldAsync.
                 "field private instance Lex.V3.Ingest.Europe.EuCorrigendumTripwireProductionResult::<RetainedTripwire>k__BackingField -> " + Receipt + "?",
                 "field private instance Lex.V3.Ingest.Europe.EuCorrigendumTripwireProductionResult::<RetainedTripwireLineage>k__BackingField -> " + Receipt + "?",
+                // The receipts door (legal-notice slice): an executed document fetch carries the
+                // custody write receipt of every hop it sealed, keyed by observation id, as the
+                // session presented them to RoutedHttpEvidence.Create. It HOLDS them and constructs
+                // none: the only path onto the property is Executed, fed from the session's own
+                // AttemptResult, whose receipts come from the held bodies custody wrote.
+                "field private instance Lex.V3.Ingest.Europe.EuDocumentFetchAttemptResult::<HopWriteReceiptsByObservationId>k__BackingField -> "
+                    + "System.Collections.Generic.IReadOnlyDictionary<System.String, " + Receipt + ">?",
                 // S3-A02's Formex transport binding retains the exact package receipt beside its
                 // request and response evidence. Its public constructor validates that already-real
                 // receipt against the terminal response and constructs no custody value.
@@ -149,6 +156,11 @@ public sealed class DurableBlobReceiptFamilyIngestSurfaceTests
                 "field private instance " + QueryExecutionResult
                     + "::<ObservedObjectIdentitySetReceipt>k__BackingField -> " + Receipt + "?",
                 "field private instance " + QueryExecutionResult + "::<ScopeManifestReceipt>k__BackingField -> " + Receipt + "?",
+                // The session's own side of the receipts door: the per-hop receipts an executed
+                // attempt sealed with, rebuilt from the held bodies (BuildHopWriteReceipts) and
+                // carried out to the caller. Held, never constructed.
+                "field private instance " + Session + "+AttemptResult::<HopWriteReceiptsByObservationId>k__BackingField -> "
+                    + "System.Collections.Generic.IReadOnlyDictionary<System.String, " + Receipt + ">?",
                 "field private instance " + Session + "+HeldBodyReceipt::<Receipt>k__BackingField -> " + Receipt,
                 "field private instance " + Session + "+ResolvedHeldBody::<Receipt>k__BackingField -> " + Receipt,
                 "field private instance Lex.V3.Ingest.Stage3EuropeBodyComposition::<FormexCustody>k__BackingField -> " + Receipt,
@@ -191,6 +203,8 @@ public sealed class DurableBlobReceiptFamilyIngestSurfaceTests
                 "method private instance " + Session + "::BuildHopWriteReceipts(System.UInt64, System.UInt64, "
                 + "System.Collections.Generic.IReadOnlyList<Lex.V3.Contracts.Source.Http.RoutedHttpHop>) "
                 + "-> System.Collections.Generic.Dictionary<System.String, " + Receipt + ">",
+                "property internal instance " + Session + "+AttemptResult::HopWriteReceiptsByObservationId() -> "
+                    + "System.Collections.Generic.IReadOnlyDictionary<System.String, " + Receipt + ">?",
                 "property public instance " + CorpusAcquisitionOutcome + "::Receipt() -> " + Receipt + "?",
                 "property public instance Lex.V3.Ingest.CorpusRecordSetWriteResult::"
                     + "RetainedSetReceipt() -> " + Receipt + "?",
@@ -200,6 +214,8 @@ public sealed class DurableBlobReceiptFamilyIngestSurfaceTests
                 "property public instance Lex.V3.Ingest.Europe.EuBoundAnnexBodyClassification::PdfReceipt() -> " + Receipt,
                 "property public instance Lex.V3.Ingest.Europe.EuCorrigendumTripwireProductionResult::RetainedTripwire() -> " + Receipt + "?",
                 "property public instance Lex.V3.Ingest.Europe.EuCorrigendumTripwireProductionResult::RetainedTripwireLineage() -> " + Receipt + "?",
+                "property public instance Lex.V3.Ingest.Europe.EuDocumentFetchAttemptResult::HopWriteReceiptsByObservationId() -> "
+                    + "System.Collections.Generic.IReadOnlyDictionary<System.String, " + Receipt + ">?",
                 "property public instance Lex.V3.Ingest.Europe.EuFormexAnnexInventory::SourceReceipt() -> " + Receipt,
                 "property public instance Lex.V3.Ingest.Europe.EuFormexAnnexTransportBinding::RetainedZipReceipt() -> " + Receipt,
                 "property public instance " + ExpressionProductionResult + "::RetainedDerivation() -> " + Receipt + "?",
