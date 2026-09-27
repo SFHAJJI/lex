@@ -44,6 +44,17 @@ public sealed class DocumentFetchRouteContractTests
         Assert.IsNull(
             lu.Parameters[0].HeaderName,
             "the Luxembourg route sends no negotiation header at all.");
+
+        // The EUR-Lex legal-notice route: one parameter retaining the language selection the
+        // pinned URI already states, filling no header, because that route negotiates nothing.
+        var notice = DocumentFetchParameterContract.For(
+            OfficialMachineQuerySourceProfileId.EuropeanUnionLegalNotice);
+        Assert.IsNotNull(notice);
+        CollectionAssert.AreEqual(
+            new[] { "eu_legal_notice_language_selection" },
+            notice!.Parameters.Select(static parameter => parameter.ParameterName).ToArray());
+        Assert.IsNull(notice.Parameters[0].HeaderName, "the legal-notice route sends no negotiation header.");
+        Assert.AreSame(notice, EuLegalNoticePlan.ParameterContract);
     }
 
     /// <summary>
@@ -51,7 +62,7 @@ public sealed class DocumentFetchRouteContractTests
     /// one as a GET route by accident, and an unknown profile id is refused rather than defaulted.
     /// </summary>
     [TestMethod]
-    public void OnlyTheTwoDocumentFetchRoutesDeclareAContract()
+    public void OnlyTheThreeGetRoutesDeclareAContract()
     {
         Assert.IsNull(DocumentFetchParameterContract.For(
             OfficialMachineQuerySourceProfileId.LuxembourgSparql));

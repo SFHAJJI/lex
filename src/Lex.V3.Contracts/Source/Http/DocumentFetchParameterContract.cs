@@ -71,6 +71,18 @@ public sealed class DocumentFetchParameterContract
     ]);
 
     /// <summary>
+    /// The EUR-Lex legal-notice route: no negotiation header. The page is requested exactly as
+    /// R8 pins it, and the one carried parameter retains the language selection the pinned URI's
+    /// own <c>locale=en</c> already states, as provenance on the bound input rather than as a
+    /// header. It fills no header for the same reason the Luxembourg parameter fills none: this
+    /// route negotiates nothing.
+    /// </summary>
+    public static DocumentFetchParameterContract EuropeanUnionLegalNotice { get; } = new(
+    [
+        new DocumentFetchParameter("eu_legal_notice_language_selection", HeaderName: null),
+    ]);
+
+    /// <summary>
     /// The declaration for one document-fetch profile, or null for a profile that is not a
     /// document-fetch route at all (both SPARQL POST channels).
     /// </summary>
@@ -78,6 +90,7 @@ public sealed class DocumentFetchParameterContract
     {
         OfficialMachineQuerySourceProfileId.EuropeanUnionDocumentFetch => EuropeanUnionDocumentFetch,
         OfficialMachineQuerySourceProfileId.LuxembourgDocumentFetch => LuxembourgDocumentFetch,
+        OfficialMachineQuerySourceProfileId.EuropeanUnionLegalNotice => EuropeanUnionLegalNotice,
         OfficialMachineQuerySourceProfileId.LuxembourgSparql => null,
         OfficialMachineQuerySourceProfileId.EuropeanUnionSparql => null,
         _ => throw new ArgumentOutOfRangeException(nameof(id)),

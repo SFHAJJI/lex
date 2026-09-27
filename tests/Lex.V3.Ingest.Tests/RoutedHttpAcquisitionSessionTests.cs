@@ -55,6 +55,15 @@ public sealed class RoutedHttpAcquisitionSessionTests
         CollectionAssert.AreEqual(
             new[]
             {
+                // The receipts door. An executed attempt now carries the exact custody write
+                // receipt of every hop it sealed, keyed by observation id, because two same-assembly
+                // steps must re-present a route through the public RoutedHttpEvidence.Create door
+                // (the corpus run's legal-notice route under the corpus identity) or bind a retained
+                // body to the receipt its hop names (a Formex ZIP), and the session is the only
+                // holder of those receipts. The factory still takes the evidence the session
+                // produced; the receipts are the session's own, built from its held bodies, and
+                // Executed refuses a set missing any hop.
+                "AttemptResult::Executed(IReadOnlyDictionary`2 hopWriteReceiptsByObservationId)",
                 "AttemptResult::Executed(RoutedHttpEvidence evidence)",
                 "PostHeaderRejection::.ctor(String durableWriteReceiptSha256)",
                 // The one internal door that takes a transport and a clock, added deliberately.

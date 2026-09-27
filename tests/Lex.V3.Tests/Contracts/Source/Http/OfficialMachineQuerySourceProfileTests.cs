@@ -25,6 +25,7 @@ public sealed class OfficialMachineQuerySourceProfileTests
                 OfficialMachineQuerySourceProfileId.EuropeanUnionSparql,
                 OfficialMachineQuerySourceProfileId.EuropeanUnionDocumentFetch,
                 OfficialMachineQuerySourceProfileId.LuxembourgDocumentFetch,
+                OfficialMachineQuerySourceProfileId.EuropeanUnionLegalNotice,
             },
             Enum.GetValues<OfficialMachineQuerySourceProfileId>());
 
@@ -127,6 +128,59 @@ public sealed class OfficialMachineQuerySourceProfileTests
         // before this member was added.
         Assert.ThrowsExactly<ArgumentOutOfRangeException>(() =>
             OfficialMachineQuerySourceProfiles.Resolve((OfficialMachineQuerySourceProfileId)int.MaxValue));
+    }
+
+    /// <summary>
+    /// The EUR-Lex legal-notice route (Decision 88, R8). One exact GET, no entity, no fixed Accept,
+    /// the direct robots route observed live on 2026-09-27, and the two policy facts that same
+    /// observation forced: the publisher's robots answer carries no Content-Type, and its policy
+    /// declares <c>Crawl-delay: 10</c>. Both are pinned per profile so that no other channel's
+    /// behaviour moves.
+    /// </summary>
+    [TestMethod]
+    public void EuropeanUnionLegalNoticeProfilePinsTheOneExactGetAndItsObservedPublisherShape()
+    {
+        var profile = OfficialMachineQuerySourceProfiles.Resolve(
+            OfficialMachineQuerySourceProfileId.EuropeanUnionLegalNotice);
+
+        Assert.AreEqual(OfficialMachineQuerySourceProfileId.EuropeanUnionLegalNotice, profile.Id);
+        Assert.AreEqual(HttpRequestMethod.Get, profile.Method);
+        Assert.IsNull(profile.RequestContentType);
+        Assert.IsNull(profile.RequestCharset);
+        Assert.IsNull(profile.Accept);
+        Assert.AreEqual(UserAgent, profile.CrawlerUserAgent);
+        Assert.AreEqual("Lex", profile.RobotsProductToken);
+        Assert.AreEqual(
+            "https://eur-lex.europa.eu/content/legal-notice/legal-notice.html?locale=en",
+            profile.RequestTarget);
+        Assert.AreEqual(Lex.V3.Contracts.Source.Europe.EuLegalNoticeEvidence.RequestedUri, profile.RequestTarget);
+        Assert.AreEqual("eur-lex.europa.eu", profile.RobotsRoute.InitialAuthority.Host);
+        Assert.AreEqual(443, profile.RobotsRoute.InitialAuthority.EffectivePort);
+        AssertRoute(
+            profile,
+            new RobotsPolicyRouteStep(
+                "https://eur-lex.europa.eu/robots.txt",
+                200,
+                null));
+
+        Assert.IsTrue(profile.AllowsRedirectWithinInitialAuthority);
+        Assert.IsTrue(profile.AdmitsRobotsWithoutContentType);
+        Assert.AreEqual(TimeSpan.FromSeconds(10), profile.MinimumRequestInterval);
+        Assert.AreEqual(4, profile.MaximumAttempts);
+        Assert.AreEqual(CustodyBounds.MaxObjectBytes, profile.MaximumResponseBytes);
+
+        // The two widenings are this profile's alone.
+        foreach (var other in Enum.GetValues<OfficialMachineQuerySourceProfileId>()
+                     .Where(static id => id != OfficialMachineQuerySourceProfileId.EuropeanUnionLegalNotice))
+        {
+            var otherProfile = OfficialMachineQuerySourceProfiles.Resolve(other);
+            Assert.IsFalse(otherProfile.AdmitsRobotsWithoutContentType, other.ToString());
+            Assert.AreEqual(TimeSpan.FromMilliseconds(1500), otherProfile.MinimumRequestInterval, other.ToString());
+            Assert.AreEqual(
+                other == OfficialMachineQuerySourceProfileId.EuropeanUnionDocumentFetch,
+                otherProfile.AllowsRedirectWithinInitialAuthority,
+                other.ToString());
+        }
     }
 
     [TestMethod]
@@ -298,6 +352,21 @@ public sealed class OfficialMachineQuerySourceProfileTests
             OfficialMachineQuerySourceProfiles.ResolveFor(OpenedPost(
                 "https://legilux.public.lu/filestore/example.xml",
                 "application/x-www-form-urlencoded")));
+
+        // The legal-notice route resolves by exact string only (the positive case is
+        // EuLegalNoticePlanTests). A POST to the pinned URI is a representation mismatch, and any
+        // other eur-lex.europa.eu URI, GET or POST, resolves to nothing: Decision 23 forbids EUR-Lex
+        // as a body source, so there is no host or shape rule for it to match.
+        Assert.ThrowsExactly<ArgumentException>(() =>
+            OfficialMachineQuerySourceProfiles.ResolveFor(OpenedPost(
+                "https://eur-lex.europa.eu/content/legal-notice/legal-notice.html?locale=en",
+                "application/x-www-form-urlencoded")));
+        Assert.ThrowsExactly<ArgumentException>(() =>
+            OfficialMachineQuerySourceProfiles.ResolveFor(MachineQueryBinder.OpenIdentity(
+                BoundGet("https://eur-lex.europa.eu/legal-content/EN/TXT/HTML/"))));
+        Assert.ThrowsExactly<ArgumentException>(() =>
+            OfficialMachineQuerySourceProfiles.ResolveFor(MachineQueryBinder.OpenIdentity(
+                BoundGet("https://eur-lex.europa.eu/content/legal-notice/legal-notice.html"))));
     }
 
     [TestMethod]
@@ -329,6 +398,7 @@ public sealed class OfficialMachineQuerySourceProfileTests
                 "method instance CopyCanonicalBytes(): Byte[]",
                 "method instance EvaluateRobotsPolicyFreshness(DateTimeOffset, DateTimeOffset): RobotsPolicyFreshness",
                 "property instance Accept: String",
+                "property instance AdmitsRobotsWithoutContentType: Boolean",
                 "property instance AllowsRedirectWithinInitialAuthority: Boolean",
                 "property instance ArtifactRef: SourceArtifactRef",
                 "property instance CrawlerUserAgent: String",
@@ -599,11 +669,17 @@ public sealed class OfficialMachineQuerySourceProfileTests
             "e688e815770911a88f0a47fb9adc22cc39c0d900f08cbee79f95449ea0880955",
         OfficialMachineQuerySourceProfileId.LuxembourgDocumentFetch =>
             "a448c0f9e61300ce917f07a930eaa6c5d77150452123bc4145ddda910844e11f",
+        // Recomputed independently from the canonical line list on 2026-09-27 (sha256sum over the
+        // 35 lines BuildCanonicalBytes emits for this profile) and equal to what the code produces.
+        OfficialMachineQuerySourceProfileId.EuropeanUnionLegalNotice =>
+            "9016fbecfdb307fa9110a5e46d24bc02a53e2bae12bc4673c3aeffefb408be19",
         _ => throw new ArgumentOutOfRangeException(nameof(id)),
     };
 
     private static string ExpectedResourceId(OfficialMachineQuerySourceProfileId id) => id switch
     {
+        OfficialMachineQuerySourceProfileId.EuropeanUnionLegalNotice =>
+            "urn:uuid:ca95c7c5-8db0-452e-b29e-426ed2dd4cd5",
         OfficialMachineQuerySourceProfileId.LuxembourgSparql =>
             "urn:uuid:911499a3-087c-42ec-9dca-5c9131ccec47",
         OfficialMachineQuerySourceProfileId.EuropeanUnionSparql =>

@@ -341,6 +341,13 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Ingest.Europe.EuLanguageScopedExpressionProducer::RefuseBeforeTraffic, "
                     + "method public instance "
                     + "Lex.V3.Ingest.Europe.EuLanguageScopedExpressionProducer::RunAsync",
+                "Lex.V3.Ingest.Europe.EuLegalNoticeRouteResult: constructor private instance "
+                    + "Lex.V3.Ingest.Europe.EuLegalNoticeRouteResult::.ctor, "
+                    + "method public instance "
+                    + "Lex.V3.Ingest.Europe.EuLegalNoticeRouteProducer::RunAsync, "
+                    + "method public static "
+                    + "Lex.V3.Ingest.Europe.EuLegalNoticeRouteResult::Delivered, "
+                    + "method public static Lex.V3.Ingest.Europe.EuLegalNoticeRouteResult::Refused",
                 "Lex.V3.Ingest.Europe.EuLocatedAmendmentAmbiguity: constructor internal instance "
                     + "Lex.V3.Ingest.Europe.EuLocatedAmendmentAmbiguity::.ctor",
                 "Lex.V3.Ingest.Europe.EuLocatedAmendmentAxiomObservation: constructor internal "
