@@ -89,7 +89,9 @@ public sealed class GuardedConstructionCensusTests
                 "Lex.V3.Ingest.Europe.EuAnnexBodyProduction: constructor internal instance "
                     + "Lex.V3.Ingest.Europe.EuAnnexBodyProduction::.ctor",
                 "Lex.V3.Ingest.Europe.EuAnnexEvidenceBinding: constructor internal instance "
-                    + "Lex.V3.Ingest.Europe.EuAnnexEvidenceBinding::.ctor",
+                    + "Lex.V3.Ingest.Europe.EuAnnexEvidenceBinding::.ctor, "
+                    + "constructor internal instance "
+                    + "Lex.V3.Ingest.Europe.EuAnnexEvidenceBinding::.ctor, 2 compiler-generated",
                 "Lex.V3.Ingest.Europe.EuAnnexEvidenceBindingResult: constructor private instance "
                     + "Lex.V3.Ingest.Europe.EuAnnexEvidenceBindingResult::.ctor, "
                     + "method internal instance "
@@ -98,7 +100,11 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Ingest.Europe.EuAnnexEvidenceBindingResult::Refused, "
                     + "method internal static "
                     + "Lex.V3.Ingest.Europe.EuAnnexEvidenceBindingResult::Success, "
+                    + "method private instance "
+                    + "Lex.V3.Ingest.Europe.EuAnnexEvidenceBinder::ReconcileAsync, "
                     + "method private static Lex.V3.Ingest.Europe.EuAnnexEvidenceBinder::Refused, "
+                    + "method public instance "
+                    + "Lex.V3.Ingest.Europe.EuAnnexEvidenceBinder::BindTransportAsync, "
                     + "method public instance Lex.V3.Ingest.Europe.EuAnnexEvidenceBinder::RunAsync",
                 "Lex.V3.Ingest.Europe.EuBoundAnnexBodyClassification: constructor internal "
                     + "instance Lex.V3.Ingest.Europe.EuBoundAnnexBodyClassification::.ctor",
@@ -171,6 +177,8 @@ public sealed class GuardedConstructionCensusTests
                     + "method private static Lex.V3.Ingest.Europe.EuAnnexEvidenceBinder::Map",
                 "Lex.V3.Ingest.Europe.EuDocumentFetchAttemptResult: constructor private instance "
                     + "Lex.V3.Ingest.Europe.EuDocumentFetchAttemptResult::.ctor, "
+                    + "method private instance "
+                    + "Lex.V3.Ingest.Europe.EuFormexPackageAcquisitionProducer::FetchAsync, "
                     + "method public instance "
                     + "Lex.V3.Ingest.Europe.EuRepeatedEnumerationExecutor::RunDocumentFetchAsync, "
                     + "method public static "

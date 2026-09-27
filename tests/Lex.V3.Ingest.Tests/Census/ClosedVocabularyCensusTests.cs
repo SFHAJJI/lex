@@ -118,7 +118,8 @@ public sealed class ClosedVocabularyCensusTests
                     + "ManifestationBindingDeliveredTwice",
                 "Lex.V3.Ingest.Europe.EuFormexPackageNotAcquiredReason: None, BodyNotHeld, "
                     + "LanguageNotAddressable, ManifestationNotSingular, IdentityNotAdmitted, "
-                    + "AnnexClassificationNotBuilt",
+                    + "AnnexXhtmlNotInventoried, AnnexPdfNotServed, AnnexEvidenceNotBound, "
+                    + "AnnexBodyNotClassified",
                 "Lex.V3.Ingest.Europe.EuFormexPackageOutcomeKind: NotEligible, Acquired, "
                     + "Unavailable, Refused, NotAcquired, RouteRefused, PackageRejected",
                 "Lex.V3.Ingest.Europe.EuFormexPackageOutcomePopulationRefusal: None, "

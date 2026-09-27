@@ -105,14 +105,40 @@ public sealed class EuAnnexEvidenceBinding
         DurableBlobWriteReceipt pdfReceipt,
         SourceArtifactRef reconciliationProfileRef,
         IReadOnlyList<EuBoundAnnexEvidence> members)
+        : this(
+            workSource, publisherWork, package.ExpressionRef, package.ManifestationRef, package.BodyRef,
+            package.WorkCelex, package.Language, pdfManifestation, formexInventory, xhtmlInventory,
+            pdfReceipt, reconciliationProfileRef, members)
+    {
+    }
+
+    /// <summary>
+    /// The lineage stated directly: the manifestation-level transport names no Cellar Item, so the
+    /// Formex body is the manifestation itself and the work CELEX and language come from the run
+    /// that acquired the package rather than from item stream names.
+    /// </summary>
+    internal EuAnnexEvidenceBinding(
+        CorpusRecord workSource,
+        SourceObjectRef publisherWork,
+        SourceObjectRef expression,
+        SourceObjectRef formexManifestation,
+        SourceObjectRef formexBody,
+        string workCelex,
+        string language,
+        SourceObjectRef pdfManifestation,
+        EuFormexAnnexInventory formexInventory,
+        EuXhtmlAnnexInventory xhtmlInventory,
+        DurableBlobWriteReceipt pdfReceipt,
+        SourceArtifactRef reconciliationProfileRef,
+        IReadOnlyList<EuBoundAnnexEvidence> members)
     {
         WorkSource = workSource;
         Work = publisherWork;
-        Expression = package.ExpressionRef;
-        FormexManifestation = package.ManifestationRef;
-        FormexBody = package.BodyRef;
-        WorkCelex = package.WorkCelex;
-        Language = package.Language;
+        Expression = expression;
+        FormexManifestation = formexManifestation;
+        FormexBody = formexBody;
+        WorkCelex = workCelex;
+        Language = language;
         PdfManifestation = pdfManifestation;
         FormexSourceReceipt = formexInventory.SourceReceipt;
         FormexProfileRef = formexInventory.ProfileRef;
@@ -321,6 +347,127 @@ public sealed class EuAnnexEvidenceBinder
                 "the held work body, retained Formex package and PDF manifestation do not share the admitted work and expression lineage");
         }
 
+        return await ReconcileAsync(
+                formexInventory, xhtmlInventory, retainedPdfBytes,
+                bound => new EuAnnexEvidenceBinding(
+                    workSource, publisherWork, package, expectedPdfManifestation, formexInventory,
+                    xhtmlInventory, retainedPdfBytes, reconciliationProfileRef, bound),
+                cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// The manifestation-level form: the Formex inventory's transport is the one
+    /// <see cref="EuFormexAnnexTransportBinding"/> the acquisition bound to the manifestation the
+    /// office serves the package by (no Cellar Item), and the work CELEX and language are the run's.
+    /// Every other check is the same: the profile names the three pieces of evidence, the XHTML
+    /// inventory is exactly one held work body, the expression, Formex manifestation and PDF
+    /// manifestation share the work's admitted lineage, the two annex populations agree, and the
+    /// PDF page labels map the Formex page extents.
+    /// </summary>
+    public async Task<EuAnnexEvidenceBindingResult> BindTransportAsync(
+        EuWemiIdentityBoundary identityBoundary,
+        EuFormexAnnexTransportBinding transport,
+        string workCelex,
+        string language,
+        SourceObjectRef expectedPdfManifestation,
+        VerifiedCorpusRecordSet corpusRecordSet,
+        EuFormexAnnexInventory formexInventory,
+        EuXhtmlAnnexInventory xhtmlInventory,
+        DurableBlobWriteReceipt retainedPdfBytes,
+        ReadOnlyMemory<byte> reconciliationProfileBytes,
+        SourceArtifactRef reconciliationProfileRef,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(identityBoundary);
+        ArgumentNullException.ThrowIfNull(transport);
+        ArgumentException.ThrowIfNullOrWhiteSpace(workCelex);
+        ArgumentException.ThrowIfNullOrWhiteSpace(language);
+        ArgumentNullException.ThrowIfNull(expectedPdfManifestation);
+        ArgumentNullException.ThrowIfNull(corpusRecordSet);
+        ArgumentNullException.ThrowIfNull(formexInventory);
+        ArgumentNullException.ThrowIfNull(xhtmlInventory);
+        ArgumentNullException.ThrowIfNull(retainedPdfBytes);
+        ArgumentNullException.ThrowIfNull(reconciliationProfileRef);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (!string.Equals(CustodyDigest.Of(reconciliationProfileBytes.Span, cancellationToken),
+                reconciliationProfileRef.Sha256, StringComparison.Ordinal))
+        {
+            return Refused(EuAnnexEvidenceBindingRefusal.ProfileDigestMismatch,
+                "the reconciliation profile bytes do not carry the digest their reference names");
+        }
+
+        if (!TryReadProfile(reconciliationProfileBytes.Span, out var profile, out var failure))
+        {
+            return Refused(EuAnnexEvidenceBindingRefusal.ProfileInvalid, failure!);
+        }
+
+        if (!string.Equals(profile.FormexInventorySha256, formexInventory.IdentitySha256, StringComparison.Ordinal)
+            || !string.Equals(profile.XhtmlInventorySha256, xhtmlInventory.IdentitySha256, StringComparison.Ordinal)
+            || !string.Equals(profile.PdfTransportSha256,
+                retainedPdfBytes.Reference.ContentSha256, StringComparison.Ordinal))
+        {
+            return Refused(EuAnnexEvidenceBindingRefusal.ProfileEvidenceMismatch,
+                "the reconciliation profile names different inventory or PDF evidence");
+        }
+
+        // Reference identity on the transport: the inventory was read from exactly this retained
+        // package, and the transport already proved the manifestation descends from the expression.
+        if (!ReferenceEquals(formexInventory.TransportBinding, transport))
+        {
+            return Refused(EuAnnexEvidenceBindingRefusal.SourceLineageMismatch,
+                "the Formex inventory was not read from the supplied package transport");
+        }
+
+        var expression = transport.Expression;
+        var formexManifestation = transport.FormexBody;
+        var heldSources = corpusRecordSet.Set.Records.Where(record =>
+                record.Body.Kind == CorpusBodyRecordKind.Held
+                && record.Body.Receipt == xhtmlInventory.SourceReceipt)
+            .Take(2)
+            .ToArray();
+        if (heldSources.Length != 1)
+        {
+            return Refused(EuAnnexEvidenceBindingRefusal.SourceEvidenceMissingOrAmbiguous,
+                "the retained XHTML inventory must be exactly one selected held work body");
+        }
+
+        var workSource = heldSources[0];
+        var publisherWork = TryGetPublisherWork(identityBoundary, expression);
+        if (!IsAdmitted(identityBoundary, formexManifestation, EuWemiRole.Manifestation)
+            || !IsAdmitted(identityBoundary, expression, EuWemiRole.Expression)
+            || publisherWork is null
+            || !string.Equals(
+                workSource.ObjectRef.PublisherUri,
+                publisherWork.PublisherUri,
+                StringComparison.Ordinal)
+            || !IsAdmitted(identityBoundary, expectedPdfManifestation, EuWemiRole.Manifestation)
+            || !HasParent(formexManifestation, expression)
+            || !HasParent(expectedPdfManifestation, expression))
+        {
+            return Refused(EuAnnexEvidenceBindingRefusal.SourceLineageMismatch,
+                "the held work body, retained Formex package and PDF manifestation do not share the admitted work and expression lineage");
+        }
+
+        return await ReconcileAsync(
+                formexInventory, xhtmlInventory, retainedPdfBytes,
+                bound => new EuAnnexEvidenceBinding(
+                    workSource, publisherWork, expression, formexManifestation, formexManifestation,
+                    workCelex, language, expectedPdfManifestation, formexInventory, xhtmlInventory,
+                    retainedPdfBytes, reconciliationProfileRef, bound),
+                cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>The population agreement, the PDF page labels and the member pairing, shared by both forms.</summary>
+    private async Task<EuAnnexEvidenceBindingResult> ReconcileAsync(
+        EuFormexAnnexInventory formexInventory,
+        EuXhtmlAnnexInventory xhtmlInventory,
+        DurableBlobWriteReceipt retainedPdfBytes,
+        Func<IReadOnlyList<EuBoundAnnexEvidence>, EuAnnexEvidenceBinding> mint,
+        CancellationToken cancellationToken)
+    {
         var xhtmlByEntry = xhtmlInventory.Members
             .GroupBy(static member => member.FormexPackageEntry, StringComparer.Ordinal)
             .ToDictionary(static group => group.Key, static group => group.ToArray(), StringComparer.Ordinal);
@@ -392,9 +539,7 @@ public sealed class EuAnnexEvidenceBinder
                 : member).ToList();
         }
 
-        return EuAnnexEvidenceBindingResult.Success(new EuAnnexEvidenceBinding(
-            workSource, publisherWork, package, expectedPdfManifestation, formexInventory,
-            xhtmlInventory, retainedPdfBytes, reconciliationProfileRef, bound));
+        return EuAnnexEvidenceBindingResult.Success(mint(bound));
     }
 
     private static SourceObjectRef? TryGetPublisherWork(
