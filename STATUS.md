@@ -5,8 +5,8 @@ every pull request that changes what is served, what is next or what is blocked.
 
 ## Heads
 
-- `v3/integration`: `87a2b0ba` (2026-09-27, PR #748 merged). Build 45 s. Fast lane
-  (`eng/test-fast.ps1`): 3,025 tests pass, 1 skipped, 48 s. Ingest suite: green on CI for PR #748
+- `v3/integration`: `acf1c5ce` (2026-09-27, PR #749 merged). Build 45 s. Fast lane
+  (`eng/test-fast.ps1`): 3,025 tests pass, 1 skipped, 50 s. Ingest suite: green on CI for PR #749
   (the CI `dotnet` job runs the whole solution on every pull request, about 6 min on the runner);
   locally about 15 min. 771 web tests pass.
 - Plan: `C:\lex-v3\V3-FINISH-PLAN-2026-09-27.md` (owner's copy). Decision 94 (one driver, one queue,
@@ -72,7 +72,7 @@ Web: 28 React components, 771 tests; no call to `/api/v3` yet. Screens render fi
   `europe_formex_main_body` / `formex_main_body_package_refused` with no detail text, so a deferred
   acquisition is not distinguishable there from a real transport refusal. The first mount serves no
   stage 3 outcome; a typed deferred outcome member comes before any public claim rests on that
-  field (next item 3). The builder test pins today's shape.
+  field (next item 2). The builder test pins today's shape.
   Why no `acquired` yet (investigated 2026-09-27): a package needs the manifestation's Cellar
   items observed with their stream names, and no item enumeration exists; the transport binding
   pins a single-hop Item URI while the live `fmx4` route is a manifestation URI redirected to
@@ -117,24 +117,43 @@ Web: 28 React components, 771 tests; no call to `/api/v3` yet. Screens render fi
   (each set's SPARQL shape is distinct), then built into a corpus through the envelope helper and
   `LexCorpus6Builder`.
 
+- **The build and the tool: composed (this pull request), fixtures only.** `V3FirstMountBuild`
+  (Ingest) takes the two acquisitions and runs the chain the corpus builder's reference test
+  composes: the Stage 3 evidence envelope with the real notice route, the body composition, the
+  Luxembourg publisher-PDF derivation chain, the derivation profile envelope, then the corpus, the
+  Luxembourg index and the Europe index, each built twice and refused as `not_byte_stable` if the
+  pair differs. `V3CorpusMountWriter` writes the five files `Lex.V3.Api` mounts (temporary name,
+  then move) plus `build-report.json`, and reads a directory back through the public verifiers.
+  `src/Lex.V3.Tool` is the `build` program over it: one custody root, one wire ceiling, renderer
+  sources from the checkout, the system clock; exit codes 0 built and verified, 2 usage, 3 typed
+  refusal, 4 written directory did not verify. Proven offline end to end: the two scripted
+  acquisitions into one store, the build twice with equal bytes, the five files verified, and the
+  directory opened by the API's own `V3CorpusMount`. Review repair on this pull request: the tool
+  crashed on every exit after start-up (a process-exit hook cancelled an already disposed token
+  source, so no run could have returned 0, 3 or 4) and checked the Luxembourg act range only
+  after the EU side had spent the budget. Now every argument is checked before the first request
+  (`LuxembourgActRange` binds its three family ranges at construction), an unexpected failure
+  exits 1 with its message, and process tests in the fast lane pin the exit codes without traffic
+  (the refused case names a CELEX that is not a seed, refused before any request). The first real
+  mount now needs only the bounded live run.
+
 ## Next, in order
 
-1. The build itself, composed in Ingest over the two acquisitions: the Stage 3 envelope, the three
-   builders (each built twice and compared byte for byte), the five mount files under `v3-corpus`,
-   a mount self-check, and the `src/Lex.V3.Tool` `build` program over it. Fixtures first.
-2. One bounded live run (authorised by the owner on 2026-09-27): one EU work in EN and FR, the
-   legal-notice GET, the manifestation enumerations, plus one Luxembourg act. Produces the first
-   real mount. Then decide whether the one-process design carries the full population or needs a
+1. The bounded live run (authorised by the owner on 2026-09-27) with the tool: one EU work in EN and
+   FR (the manifestation enumerations and the legal-notice GET; no Formex package request), one
+   Luxembourg act with a consolidated publisher PDF. Record the wire counts, the refusals met and
+   the five digests in STATUS.md; mount the directory under the API and answer `resolve` from it.
+   Then decide whether the one-process design carries the full population or needs a
    serialisation boundary between acquisition and build.
-3. Formex acquisition (EU parity): the Cellar item enumeration per manifestation, the transport
+2. Formex acquisition (EU parity): the Cellar item enumeration per manifestation, the transport
    binding for the manifestation-level `fmx4` route, the ZIP GET with the receipts door, a typed
    deferred outcome; then `acquired` outcomes feed the main-body producer and the EU index.
-4. Define and run the Luxembourg population and the complete EU population (owner authorisation per
+3. Define and run the Luxembourg population and the complete EU population (owner authorisation per
    run).
-5. Serve the fourteen unserved operations for Luxembourg; wire MCP to a streamable HTTP endpoint.
-6. EU parity: every temporal and search operation from the EU index; French expressions.
-7. Wire the eight launch screens to `/api/v3`; journeys J1 to J8 in a real browser.
-8. Release pipeline: build, sign, image, zero-traffic deploy, probes. Then acceptance and promotion.
+4. Serve the fourteen unserved operations for Luxembourg; wire MCP to a streamable HTTP endpoint.
+5. EU parity: every temporal and search operation from the EU index; French expressions.
+6. Wire the eight launch screens to `/api/v3`; journeys J1 to J8 in a real browser.
+7. Release pipeline: build, sign, image, zero-traffic deploy, probes. Then acceptance and promotion.
 
 ## Blocked or waiting on the owner
 

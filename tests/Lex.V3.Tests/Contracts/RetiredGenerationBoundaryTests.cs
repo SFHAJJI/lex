@@ -24,6 +24,7 @@ public sealed class RetiredGenerationBoundaryTests
         ("src/Lex.V3.Custody.Probe", "Lex.V3.Custody.Probe"),
         ("src/Lex.V3.Ingest", "Lex.V3.Ingest"),
         ("src/Lex.V3.Preview", "Lex.V3.Preview"),
+        ("src/Lex.V3.Tool", "Lex.V3.Tool"),
         ("tests/Lex.V3.Ingest.Tests", "Lex.V3.Ingest.Tests"),
         ("tests/Lex.V3.Tests", "Lex.V3.Tests"),
     ];
@@ -35,7 +36,7 @@ public sealed class RetiredGenerationBoundaryTests
         CollectionAssert.AreEqual(
             SweptAssemblies.Select(static item => item.AssemblyName).Order().ToArray(),
             assemblies.Select(static assembly => assembly.GetName().Name!).Order().ToArray(),
-            "the guard must inspect exactly all eight production and both test assemblies");
+            "the guard must inspect exactly all nine production and both test assemblies");
 
         var identifiers = assemblies
             .SelectMany(CollectRetiredIdentifiers)

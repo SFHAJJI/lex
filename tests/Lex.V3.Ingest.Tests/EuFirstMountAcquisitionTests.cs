@@ -190,7 +190,7 @@ public sealed class EuFirstMountAcquisitionTests
     /// manifestations is the Formex enumeration, answered count/page per expression; everything else
     /// is the adapter's own traffic and goes to the harness's classifying handler with its scripts.
     /// </summary>
-    private sealed class CompositeHandler : HttpMessageHandler
+    internal sealed class CompositeHandler : HttpMessageHandler
     {
         private readonly HttpMessageInvoker _adapter;
         private readonly IReadOnlyDictionary<string, string[]> _formexListedTypesByExpressionIri;

@@ -79,17 +79,41 @@ public sealed class LuxembourgRendererSources
 /// <see cref="Name"/> prefixes the three family keys (<c>{name}-s</c>, <c>-a</c>, <c>-g</c>) and
 /// must be a lowercase ASCII member key.
 /// </summary>
-public sealed record LuxembourgActRange(string Name, string StartInclusive, string EndExclusive)
+public sealed record LuxembourgActRange
 {
-    public string Name { get; } = string.IsNullOrWhiteSpace(Name)
-        ? throw new ArgumentException("An act range needs a name.", nameof(Name))
-        : Name;
+    /// <summary>The three act families the acquisition runs over the range, in run order.</summary>
+    public static readonly IReadOnlyList<string> Families = ["S", "A", "G"];
 
-    public string StartInclusive { get; } = StartInclusive ?? throw new ArgumentNullException(nameof(StartInclusive));
+    public LuxembourgActRange(string name, string startInclusive, string endExclusive)
+    {
+        Name = string.IsNullOrWhiteSpace(name)
+            ? throw new ArgumentException("An act range needs a name.", nameof(name))
+            : name;
+        StartInclusive = startInclusive ?? throw new ArgumentNullException(nameof(startInclusive));
+        EndExclusive = string.CompareOrdinal(startInclusive, endExclusive) < 0
+            ? endExclusive
+            : throw new ArgumentException("An act range must be finite and increasing.", nameof(endExclusive));
 
-    public string EndExclusive { get; } = string.CompareOrdinal(StartInclusive, EndExclusive) < 0
-        ? EndExclusive
-        : throw new ArgumentException("An act range must be finite and increasing.", nameof(EndExclusive));
+        // Every family range the acquisition will send is bound here, so an act the plan cannot
+        // name (a name outside the member-key alphabet, a key part the cursor refuses) throws at
+        // construction, before the caller has spent a request on anything.
+        foreach (var family in Families)
+        {
+            _ = FamilyRange(family);
+        }
+    }
+
+    public string Name { get; }
+
+    public string StartInclusive { get; }
+
+    public string EndExclusive { get; }
+
+    /// <summary>The partition range of one family (<c>{name}-{family}</c>) over the act's ELI keys.</summary>
+    public LuxembourgQueryPartitionRange FamilyRange(string family) => new(
+        Name + "-" + family.ToLowerInvariant(),
+        new LuxembourgQueryCursor(StartInclusive, "", "", "", "", ""),
+        new LuxembourgQueryCursor(EndExclusive, "", "", "", "", ""));
 }
 
 /// <summary>Which step of the Luxembourg acquisition refused. Closed; the detail carries that step's own reason.</summary>
@@ -221,7 +245,6 @@ public sealed class LuxembourgFirstMountAcquisition
     private const string CreativeCommonsRangeStart = "http://creativecommons.org/licenses/by/4.0/";
     private const string CreativeCommonsRangeEnd = "http://creativecommons.org/licenses/by/4.1/";
     private static readonly string[] VocabularyFamilies = ["P", "T", "C", "O"];
-    private static readonly string[] ActFamilies = ["S", "A", "G"];
     private static readonly JsonSerializerOptions EvidenceJson = new() { WriteIndented = false };
 
     private readonly ICustodyStore _custodyStore;
@@ -367,10 +390,10 @@ public sealed class LuxembourgFirstMountAcquisition
         }
 
         // ---- The act: S, A and G over its range, through the adapter and its Gazette loop. ----
-        var families = new List<(LuxembourgPartitionRunRequest, BoundMachineRequest, LuxembourgPartitionChain?)>(ActFamilies.Length);
-        foreach (var family in ActFamilies)
+        var families = new List<(LuxembourgPartitionRunRequest, BoundMachineRequest, LuxembourgPartitionChain?)>(LuxembourgActRange.Families.Count);
+        foreach (var family in LuxembourgActRange.Families)
         {
-            var range = Range(act.Name + "-" + family.ToLowerInvariant(), act.StartInclusive, act.EndExclusive);
+            var range = act.FamilyRange(family);
             var request = new LuxembourgPartitionRunRequest(plan, planId, family, range, rendererSources.Query);
             var witness = plan.BindCount(planId, NewUrn(), NewUrn(), family, LuxembourgQueryPass.Pass1, range, rendererSources.Query);
             families.Add((request, witness.Request, null));
