@@ -73,8 +73,9 @@ public sealed class NoModelDependencyCensusTests
     /// <summary>
     /// Every production assembly, pinned literally rather than read from the test's own output
     /// directory. <c>ClosedSurfaceCensus.LexAssembliesBeside</c> returns what is deployed beside
-    /// these tests, which is four of the eight; <c>Lex.V3.Custody.Azure</c>,
-    /// <c>Lex.V3.Custody.Probe</c>, <c>Lex.V3.Preview</c> and <c>Lex.V3.ContractTool</c> are not,
+    /// these tests, which is four of the nine; <c>Lex.V3.Custody.Azure</c>,
+    /// <c>Lex.V3.Custody.Probe</c>, <c>Lex.V3.Preview</c>, <c>Lex.V3.ContractTool</c> and
+    /// <c>Lex.V3.Tool</c> are not,
     /// and the first two are the projects that already carry the Azure SDKs — which is exactly where
     /// an <c>Azure.AI.*</c> reference would most naturally arrive. The shape is the one
     /// <c>RetiredGenerationBoundaryTests</c> uses for the same reason.
@@ -89,6 +90,9 @@ public sealed class NoModelDependencyCensusTests
         ("src/Lex.V3.Custody.Probe", "Lex.V3.Custody.Probe"),
         ("src/Lex.V3.Ingest", "Lex.V3.Ingest"),
         ("src/Lex.V3.Preview", "Lex.V3.Preview"),
+        // The build tool: a program over Ingest's composition roots, deployed beside no test
+        // project, with a lock file because it carries Ingest's closure (SQLite, PdfPig).
+        ("src/Lex.V3.Tool", "Lex.V3.Tool"),
     ];
 
     /// <summary>The families an inference or embedding capability arrives under.</summary>
@@ -239,12 +243,13 @@ public sealed class NoModelDependencyCensusTests
         "src/Lex.V3.Custody.Probe/Lex.V3.Custody.Probe.csproj",
         "src/Lex.V3.Ingest/Lex.V3.Ingest.csproj",
         "src/Lex.V3.Preview/Lex.V3.Preview.csproj",
+        "src/Lex.V3.Tool/Lex.V3.Tool.csproj",
         "web/package.json",
     ];
 
     /// <summary>
     /// The resolved closure of each project that has one. <c>Lex.V3.ContractTool</c> declares no
-    /// package and has no lock file, which is why this list is seven and the assembly list is eight.
+    /// package and has no lock file, which is why this list is eight and the assembly list is nine.
     /// </summary>
     private static readonly string[] ExpectedLockFiles =
     [
@@ -255,6 +260,7 @@ public sealed class NoModelDependencyCensusTests
         "src/Lex.V3.Custody.Probe/packages.lock.json",
         "src/Lex.V3.Ingest/packages.lock.json",
         "src/Lex.V3.Preview/packages.lock.json",
+        "src/Lex.V3.Tool/packages.lock.json",
     ];
 
     /// <summary>
@@ -300,7 +306,7 @@ public sealed class NoModelDependencyCensusTests
         + "what the model is for, and if it is anywhere near consolidation, legal identity or "
         + "authoritative entity extraction, S4-A12 has to be argued on behaviour rather than on "
         + "absence. Then update this pin and say on issue #348 which of the three prohibitions is "
-        + "defended by what. Three walks look: the eight production assemblies' compiled "
+        + "defended by what. Three walks look: the nine production assemblies' compiled "
         + "references; the project files, .props and .targets under src, the .props and .targets at "
         + "the repository root, and web/package.json; and the resolved closures, which are the "
         + "seven src/*/packages.lock.json and web/package-lock.json. Build output under obj and "

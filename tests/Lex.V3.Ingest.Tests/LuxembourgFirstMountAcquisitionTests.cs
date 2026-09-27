@@ -53,7 +53,7 @@ public sealed class LuxembourgFirstMountAcquisitionTests
         (Act, Jolux + "isMemberOf", Parent),
     ];
 
-    private static readonly LuxembourgActRange ActRange = new("act-2026", Parent, Parent + "0");
+    internal static readonly LuxembourgActRange ActRange = new("act-2026", Parent, Parent + "0");
 
     [TestMethod]
     public async Task OneActIsAcquiredEndToEndFromAnObservedVocabularyAndBuildsACorpus()
@@ -189,7 +189,7 @@ public sealed class LuxembourgFirstMountAcquisitionTests
     private static LuxembourgFirstMountAcquisition Acquisition(ICustodyStore store, HttpMessageHandler handler) =>
         new(store, new LuxembourgAcquisitionTestFixture.FixedTimeProvider(), handler);
 
-    private static byte[] PdfBytes() => File.ReadAllBytes(Path.Combine(
+    internal static byte[] PdfBytes() => File.ReadAllBytes(Path.Combine(
         AppContext.BaseDirectory, "Fixtures", "LuDocumentFetch", "lu-pdf-consolidated-2020-04-08-a265.bin"));
 
     private static string CheckoutRoot()
@@ -213,7 +213,7 @@ public sealed class LuxembourgFirstMountAcquisitionTests
     /// rows and a continuation page (its cursor VALUES bind <c>has_cursor</c> true) gets the empty
     /// page that ends the pass; a filestore GET gets the PDF. Nothing depends on call order.
     /// </summary>
-    private sealed class LuxembourgFamilyHandler(
+    internal sealed class LuxembourgFamilyHandler(
         byte[] pdfBytes,
         string? sparqlRobots = null,
         string? omitRequiredPredicate = null) : HttpMessageHandler

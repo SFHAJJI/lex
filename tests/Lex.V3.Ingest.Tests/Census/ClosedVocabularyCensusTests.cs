@@ -381,6 +381,11 @@ public sealed class ClosedVocabularyCensusTests
                     + "FootnotePreservationUnproven, CitationPreservationUnproven",
                 "Lex.V3.Ingest.Stage3FidelityPreservationReconciliationRefusal: None, "
                     + "EuropeNotComplete, LuxembourgNotComplete",
+                "Lex.V3.Ingest.V3FirstMountBuildRefusal: None, EuropeNotDelivered, "
+                    + "LuxembourgNotDelivered, AnnexClassificationRefused, FidelityRefused, "
+                    + "EnvelopeRefused, BodyCompositionRefused, PdfLayoutRefused, "
+                    + "PdfTextLayerRefused, ProfileEnvelopeRefused, CorpusRefused, "
+                    + "LuxembourgIndexRefused, EuropeIndexRefused, NotByteStable",
             },
             ClosedSurfaceCensus.ClosedVocabularies(CensusScope.SweptHere).ToArray());
     }

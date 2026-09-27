@@ -1096,6 +1096,11 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Ingest.Stage3FidelityPreservationReconciliation::TryCreate",
                 "Lex.V3.Ingest.Stage3LuxembourgBodyComposition: constructor internal instance "
                     + "Lex.V3.Ingest.Stage3LuxembourgBodyComposition::.ctor",
+                "Lex.V3.Ingest.V3FirstMountBuildResult: constructor private instance "
+                    + "Lex.V3.Ingest.V3FirstMountBuildResult::.ctor, "
+                    + "method public instance Lex.V3.Ingest.V3FirstMountBuild::RunAsync, "
+                    + "method public static Lex.V3.Ingest.V3FirstMountBuildResult::Refused, "
+                    + "method public static Lex.V3.Ingest.V3FirstMountBuildResult::Success",
                 "Lex.V3.Ingest.VerifiedLexCorpus6ManifestSet: by-ref-method public instance "
                     + "Lex.V3.Ingest.LexCorpus6BuildResult::Deconstruct, "
                     + "constructor private instance "

@@ -8,6 +8,7 @@
     <Project Path="src/Lex.V3.Custody.Probe/Lex.V3.Custody.Probe.csproj" />
     <Project Path="src/Lex.V3.Ingest/Lex.V3.Ingest.csproj" />
     <Project Path="src/Lex.V3.Preview/Lex.V3.Preview.csproj" />
+    <Project Path="src/Lex.V3.Tool/Lex.V3.Tool.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Lex.V3.Ingest.Tests/Lex.V3.Ingest.Tests.csproj" />
