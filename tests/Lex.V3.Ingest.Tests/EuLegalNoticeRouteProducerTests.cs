@@ -169,6 +169,33 @@ public sealed class EuLegalNoticeRouteProducerTests
         Assert.AreEqual(2, handler.Sends.Count);
     }
 
+    /// <summary>
+    /// Review finding on this slice: a 200 text/html answer whose body fails part-way is sealed by
+    /// the session as an incomplete route carrying the bytes that did arrive, and the executor
+    /// reports it executed. Status and media type both survive the truncation, so before
+    /// <see cref="EuLegalNoticeEvidence.FromRoute"/> required a complete route this was delivered
+    /// as notice evidence with the partial length as its byte count. It is a typed refusal.
+    /// </summary>
+    [TestMethod]
+    public async Task ATruncatedNoticeBodyIsNoticeRouteInvalidNotDeliveredEvidence()
+    {
+        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
+        var handler = new ScriptedHandler((ordinal, request) => ordinal switch
+        {
+            0 => Robots(request),
+            1 => TruncatedNotice(request),
+            _ => throw new InvalidOperationException($"Unexpected request {ordinal}: {request.RequestUri}"),
+        });
+
+        var result = await Producer(store, handler).RunAsync(
+            CorpusRunIdentity(), RendererSource(), EuAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
+
+        Assert.IsNull(result.Route, "a body the session sealed as incomplete must not become notice evidence.");
+        Assert.AreEqual(EuLegalNoticeRouteRefusal.NoticeRouteInvalid, result.Refusal);
+        StringAssert.Contains(result.Detail, "complete route");
+        Assert.AreEqual(2, handler.Sends.Count);
+    }
+
     [TestMethod]
     public async Task AnOffOriginRedirectIsNoticeRouteInvalidAndItsTargetIsNeverRequested()
     {
@@ -315,6 +342,28 @@ public sealed class EuLegalNoticeRouteProducerTests
             corpusRunIdentity, evidence.RequestOrdinal, evidence.AttemptOrdinal, evidence.Hops, evidence.Outcome, forged));
         StringAssert.Contains(refused.Message, "names other bytes");
 
+        // And a receipt that names the right bytes but is not the receipt custody issued (one
+        // second later on the policy clock) fails the second check: its own canonical digest does
+        // not reproduce the digest the hop claims.
+        var policy = receipt.PolicyEvidence;
+        var replayed = new Dictionary<string, DurableBlobWriteReceipt>(receipts, StringComparer.Ordinal)
+        {
+            [hop.ObservationId] = new DurableBlobWriteReceipt(
+                CustodySchemaIds.DurableBlobWriteReceipt,
+                receipt.Reference,
+                new CustodyPolicyEvidence(
+                    CustodySchemaIds.CustodyPolicyEvidence,
+                    receipt.Reference,
+                    policy.VerificationProfile,
+                    policy.PolicyKey,
+                    policy.Protection,
+                    policy.ObservedAt.AddSeconds(1),
+                    policy.ProtectedUntil?.AddSeconds(1))),
+        };
+        var notReproduced = Assert.ThrowsExactly<ArgumentException>(() => RoutedHttpEvidence.Create(
+            corpusRunIdentity, evidence.RequestOrdinal, evidence.AttemptOrdinal, evidence.Hops, evidence.Outcome, replayed));
+        StringAssert.Contains(notReproduced.Message, "does not reproduce");
+
         // And a set missing a hop never becomes a result at all.
         Assert.ThrowsExactly<ArgumentException>(() => EuDocumentFetchAttemptResult.Executed(
             evidence, new Dictionary<string, DurableBlobWriteReceipt>(StringComparer.Ordinal)));
@@ -336,6 +385,67 @@ public sealed class EuLegalNoticeRouteProducerTests
     /// <summary>The real 2026-09-27 robots answer: 200, Content-Length, and no Content-Type header.</summary>
     private static HttpResponseMessage Robots(HttpRequestMessage request) =>
         EuAcquisitionTestFixture.BinaryResponse(request, HttpStatusCode.OK, RobotsFixtureBytes());
+
+    /// <summary>
+    /// A 200 text/html notice whose declared length is the whole page but whose stream fails after
+    /// the first 40 bytes: the shape the session seals as an incomplete route (body read failure).
+    /// </summary>
+    private static HttpResponseMessage TruncatedNotice(HttpRequestMessage request)
+    {
+        var content = new StreamContent(new FailAfterPrefixStream(NoticeBody.AsSpan(0, 40).ToArray()));
+        Assert.IsTrue(content.Headers.TryAddWithoutValidation(
+            "Content-Length", NoticeBody.Length.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+        Assert.IsTrue(content.Headers.TryAddWithoutValidation("Content-Type", NoticeMediaType));
+        return new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Version = HttpVersion.Version11, RequestMessage = request, Content = content,
+        };
+    }
+
+    private sealed class FailAfterPrefixStream(byte[] prefix) : Stream
+    {
+        private int _position;
+
+        public override bool CanRead => true;
+
+        public override bool CanSeek => false;
+
+        public override bool CanWrite => false;
+
+        public override long Length => throw new NotSupportedException();
+
+        public override long Position
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
+        }
+
+        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            if (_position >= prefix.Length)
+            {
+                return ValueTask.FromException<int>(new IOException("Injected mid-body failure."));
+            }
+
+            var count = Math.Min(buffer.Length, prefix.Length - _position);
+            prefix.AsMemory(_position, count).CopyTo(buffer);
+            _position += count;
+            return ValueTask.FromResult(count);
+        }
+
+        public override int Read(byte[] buffer, int offset, int count) =>
+            ReadAsync(buffer.AsMemory(offset, count)).AsTask().GetAwaiter().GetResult();
+
+        public override void Flush()
+        {
+        }
+
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+
+        public override void SetLength(long value) => throw new NotSupportedException();
+
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+    }
 
     private static byte[] RobotsFixtureBytes()
     {

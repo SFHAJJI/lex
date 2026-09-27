@@ -31,7 +31,9 @@ public enum EuLegalNoticeRouteRefusal
     /// <summary>
     /// The publisher answered, the bytes are retained, and the route is not legal-notice evidence:
     /// a non-200 terminal (a challenge page, a block, a redirect the route could not follow), a
-    /// terminal that is not <c>text/html</c>, or a terminal off the pinned origin.
+    /// terminal that is not <c>text/html</c>, a terminal off the pinned origin, or a route the
+    /// session sealed as incomplete (a body it could not read to the end). The detail is
+    /// <see cref="EuLegalNoticeEvidence.FromRoute"/>'s own reason.
     /// </summary>
     [JsonStringEnumMemberName("notice_route_invalid")]
     NoticeRouteInvalid = 4,
