@@ -72,7 +72,7 @@ Web: 28 React components, 771 tests; no call to `/api/v3` yet. Screens render fi
   `europe_formex_main_body` / `formex_main_body_package_refused` with no detail text, so a deferred
   acquisition is not distinguishable there from a real transport refusal. The first mount serves no
   stage 3 outcome; a typed deferred outcome member comes before any public claim rests on that
-  field (next item 3). The builder test pins today's shape.
+  field (next item 2). The builder test pins today's shape.
   Why no `acquired` yet (investigated 2026-09-27): a package needs the manifestation's Cellar
   items observed with their stream names, and no item enumeration exists; the transport binding
   pins a single-hop Item URI while the live `fmx4` route is a manifestation URI redirected to
@@ -128,8 +128,14 @@ Web: 28 React components, 771 tests; no call to `/api/v3` yet. Screens render fi
   sources from the checkout, the system clock; exit codes 0 built and verified, 2 usage, 3 typed
   refusal, 4 written directory did not verify. Proven offline end to end: the two scripted
   acquisitions into one store, the build twice with equal bytes, the five files verified, and the
-  directory opened by the API's own `V3CorpusMount`. The first real mount now needs only the
-  bounded live run.
+  directory opened by the API's own `V3CorpusMount`. Review repair on this pull request: the tool
+  crashed on every exit after start-up (a process-exit hook cancelled an already disposed token
+  source, so no run could have returned 0, 3 or 4) and checked the Luxembourg act range only
+  after the EU side had spent the budget. Now every argument is checked before the first request
+  (`LuxembourgActRange` binds its three family ranges at construction), an unexpected failure
+  exits 1 with its message, and process tests in the fast lane pin the exit codes without traffic
+  (the refused case names a CELEX that is not a seed, refused before any request). The first real
+  mount now needs only the bounded live run.
 
 ## Next, in order
 
@@ -142,12 +148,12 @@ Web: 28 React components, 771 tests; no call to `/api/v3` yet. Screens render fi
 2. Formex acquisition (EU parity): the Cellar item enumeration per manifestation, the transport
    binding for the manifestation-level `fmx4` route, the ZIP GET with the receipts door, a typed
    deferred outcome; then `acquired` outcomes feed the main-body producer and the EU index.
-4. Define and run the Luxembourg population and the complete EU population (owner authorisation per
+3. Define and run the Luxembourg population and the complete EU population (owner authorisation per
    run).
-5. Serve the fourteen unserved operations for Luxembourg; wire MCP to a streamable HTTP endpoint.
-6. EU parity: every temporal and search operation from the EU index; French expressions.
-7. Wire the eight launch screens to `/api/v3`; journeys J1 to J8 in a real browser.
-8. Release pipeline: build, sign, image, zero-traffic deploy, probes. Then acceptance and promotion.
+4. Serve the fourteen unserved operations for Luxembourg; wire MCP to a streamable HTTP endpoint.
+5. EU parity: every temporal and search operation from the EU index; French expressions.
+6. Wire the eight launch screens to `/api/v3`; journeys J1 to J8 in a real browser.
+7. Release pipeline: build, sign, image, zero-traffic deploy, probes. Then acceptance and promotion.
 
 ## Blocked or waiting on the owner
 

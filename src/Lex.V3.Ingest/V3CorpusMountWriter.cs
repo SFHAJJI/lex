@@ -28,10 +28,12 @@ public sealed record V3CorpusMountVerification(bool Verified, string? Detail, So
 /// </summary>
 /// <remarks>
 /// Each file is written to a temporary name beside its final one and moved into place, so a
-/// reader never sees a half-written file; the report is written last. The report is evidence
-/// for the run record, not an input to the mount: the API opens the five files by name and
-/// verifies them itself, and <see cref="VerifyAsync"/> repeats exactly that verification here so a
-/// build can be checked where it was written before it is shipped anywhere.
+/// reader never sees a half-written file; the report is written last, and a write that fails
+/// removes the temporary files it left. The report is evidence for the run record, not an input
+/// to the mount: the API opens the five files by name and verifies them itself, and
+/// <see cref="VerifyAsync"/> runs the same public verifiers here so a build can be checked where
+/// it was written before it is shipped anywhere. The API additionally caps each capability
+/// manifest at 4 MiB when it mounts; this reader does not repeat that cap.
 /// </remarks>
 public static class V3CorpusMountWriter
 {
@@ -50,16 +52,38 @@ public static class V3CorpusMountWriter
         var target = Path.GetFullPath(directory);
         Directory.CreateDirectory(target);
         var written = new List<V3CorpusMountWrittenFile>(build.Files.Count);
-        foreach (var file in build.Files)
+        var reportPath = Path.Combine(target, "build-report.json");
+        var reportTemporary = reportPath + ".writing";
+        try
         {
-            var finalPath = Path.Combine(target, file.Name);
-            var temporaryPath = finalPath + ".writing";
-            await File.WriteAllBytesAsync(temporaryPath, file.Bytes.ToArray(), cancellationToken).ConfigureAwait(false);
-            File.Move(temporaryPath, finalPath, overwrite: true);
-            written.Add(new V3CorpusMountWrittenFile(file.Name, file.Bytes.Length, Sha256(file.Bytes.Span)));
-        }
+            foreach (var file in build.Files)
+            {
+                var finalPath = Path.Combine(target, file.Name);
+                var temporaryPath = finalPath + ".writing";
+                await File.WriteAllBytesAsync(temporaryPath, file.Bytes.ToArray(), cancellationToken).ConfigureAwait(false);
+                File.Move(temporaryPath, finalPath, overwrite: true);
+                written.Add(new V3CorpusMountWrittenFile(file.Name, file.Bytes.Length, Sha256(file.Bytes.Span)));
+            }
 
-        var report = JsonSerializer.SerializeToUtf8Bytes(new
+            var report = RenderReport(build, written);
+            await File.WriteAllBytesAsync(reportTemporary, report, cancellationToken).ConfigureAwait(false);
+            File.Move(reportTemporary, reportPath, overwrite: true);
+            return new V3CorpusMountWrite(target, written, reportPath, Sha256(report));
+        }
+        catch
+        {
+            foreach (var file in build.Files)
+            {
+                File.Delete(Path.Combine(target, file.Name) + ".writing");
+            }
+
+            File.Delete(reportTemporary);
+            throw;
+        }
+    }
+
+    private static byte[] RenderReport(V3FirstMountBuildResult build, IReadOnlyList<V3CorpusMountWrittenFile> written) =>
+        JsonSerializer.SerializeToUtf8Bytes(new
         {
             schema = "lex-v3-first-mount-report/1",
             writtenUtc = DateTimeOffset.UtcNow,
@@ -72,12 +96,6 @@ public static class V3CorpusMountWriter
             builtTwiceAndEqual = true,
             files = written,
         }, new JsonSerializerOptions { WriteIndented = true });
-        var reportPath = Path.Combine(target, "build-report.json");
-        var reportTemporary = reportPath + ".writing";
-        await File.WriteAllBytesAsync(reportTemporary, report, cancellationToken).ConfigureAwait(false);
-        File.Move(reportTemporary, reportPath, overwrite: true);
-        return new V3CorpusMountWrite(target, written, reportPath, Sha256(report));
-    }
 
     public static async Task<V3CorpusMountVerification> VerifyAsync(string directory, CancellationToken cancellationToken)
     {

@@ -184,6 +184,21 @@ public sealed class LuxembourgFirstMountAcquisitionTests
         }
     }
 
+    [TestMethod]
+    public void AnActRangeBindsItsThreeFamilyRangesAtConstructionSoABadActIsRefusedBeforeAnyTraffic()
+    {
+        var ranges = LuxembourgActRange.Families.Select(ActRange.FamilyRange).ToArray();
+        CollectionAssert.AreEqual(new[] { "act-2026-s", "act-2026-a", "act-2026-g" }, ranges.Select(static range => range.PartitionId).ToArray());
+        Assert.IsTrue(ranges.All(range => range.StartInclusive.Key1 == Parent && range.EndExclusive.Key1 == Parent + "0"));
+
+        // The name is the family key prefix, so it must be a member key the plan can name.
+        Assert.ThrowsExactly<ArgumentException>(() => new LuxembourgActRange("a b", Parent, Parent + "0"));
+        Assert.ThrowsExactly<ArgumentException>(() => new LuxembourgActRange(" ", Parent, Parent + "0"));
+        // The range is finite and increasing on the publisher's key order.
+        Assert.ThrowsExactly<ArgumentException>(() => new LuxembourgActRange("act", Parent + "0", Parent));
+        Assert.ThrowsExactly<ArgumentException>(() => new LuxembourgActRange("act", Parent, Parent));
+    }
+
     // ---- Shared plumbing. ----
 
     private static LuxembourgFirstMountAcquisition Acquisition(ICustodyStore store, HttpMessageHandler handler) =>

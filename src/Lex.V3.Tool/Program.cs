@@ -5,11 +5,14 @@
 // The composition lives in Lex.V3.Ingest (EuFirstMountAcquisition, LuxembourgFirstMountAcquisition,
 // V3FirstMountBuild, V3CorpusMountWriter), where its offline tests can drive the acquisition
 // sessions on a scripted transport; this program only parses arguments, opens the custody store
-// and the system clock, and reports. It has no test seam of its own and needs none.
+// and the system clock, and reports. Every argument is checked before the first request: the
+// Luxembourg act range binds its three family ranges at construction, so an act the plan cannot
+// name is a usage error, not a refusal after the EU side has spent the budget.
 //
-// Exit codes: 0 built and verified; 2 usage; 3 a typed refusal (printed); 4 the written directory
-// did not verify; 130 cancelled.
+// Exit codes: 0 built and verified; 1 an unexpected failure (printed); 2 usage; 3 a typed refusal
+// (printed with the wire spend); 4 the written directory did not verify; 130 cancelled.
 
+using System.Runtime.InteropServices;
 using Lex.V3.Artifacts;
 using Lex.V3.Ingest;
 using Lex.V3.Ingest.Europe;
@@ -24,9 +27,12 @@ const string Usage =
     + "  --custody      the run's custody root (FileSystemCustodyStore); everything the run holds goes here\n"
     + "  --out          the v3-corpus directory to write\n"
     + "  --checkout     the repository root holding the renderer source files\n"
-    + "  --wire-ceiling the one ceiling on publisher requests for the whole run, robots included";
+    + "  --wire-ceiling the one ceiling on publisher requests for the whole run, robots included\n"
+    + "Exit codes: 0 built and verified, 1 unexpected failure, 2 usage, 3 typed refusal, 4 written directory did not verify, 130 cancelled";
 
-if (args.Length == 0 || !string.Equals(args[0], "build", StringComparison.Ordinal))
+string[] required = ["--celex", "--lu-name", "--lu-start", "--lu-end", "--custody", "--out", "--checkout", "--wire-ceiling"];
+
+if (args.Length == 0 || !string.Equals(args[0], "build", StringComparison.Ordinal) || (args.Length - 1) % 2 != 0)
 {
     Console.Error.WriteLine(Usage);
     return 2;
@@ -35,18 +41,24 @@ if (args.Length == 0 || !string.Equals(args[0], "build", StringComparison.Ordina
 var options = new Dictionary<string, string>(StringComparer.Ordinal);
 for (var index = 1; index + 1 < args.Length; index += 2)
 {
-    if (!args[index].StartsWith("--", StringComparison.Ordinal))
+    var name = args[index];
+    if (!required.Contains(name, StringComparer.Ordinal))
     {
+        Console.Error.WriteLine($"Unknown option: {name}");
         Console.Error.WriteLine(Usage);
         return 2;
     }
 
-    options[args[index]] = args[index + 1];
+    if (!options.TryAdd(name, args[index + 1]))
+    {
+        Console.Error.WriteLine($"Repeated option: {name}");
+        Console.Error.WriteLine(Usage);
+        return 2;
+    }
 }
 
-string[] required = ["--celex", "--lu-name", "--lu-start", "--lu-end", "--custody", "--out", "--checkout", "--wire-ceiling"];
 var missing = required.Where(name => !options.ContainsKey(name)).ToArray();
-if (missing.Length != 0 || (args.Length - 1) % 2 != 0)
+if (missing.Length != 0)
 {
     Console.Error.WriteLine("Missing: " + string.Join(", ", missing));
     Console.Error.WriteLine(Usage);
@@ -59,13 +71,35 @@ if (!int.TryParse(options["--wire-ceiling"], out var ceiling) || ceiling < 2)
     return 2;
 }
 
+var checkout = Path.GetFullPath(options["--checkout"]);
+if (!Directory.Exists(checkout))
+{
+    Console.Error.WriteLine($"--checkout is not a directory: {checkout}");
+    return 2;
+}
+
+LuxembourgActRange act;
+try
+{
+    act = new LuxembourgActRange(options["--lu-name"], options["--lu-start"], options["--lu-end"]);
+}
+catch (ArgumentException exception)
+{
+    Console.Error.WriteLine($"The Luxembourg act range is not one the plan can name: {exception.Message}");
+    return 2;
+}
+
 using var cancellation = new CancellationTokenSource();
 Console.CancelKeyPress += (_, eventArgs) =>
 {
     eventArgs.Cancel = true;
     cancellation.Cancel();
 };
-AppDomain.CurrentDomain.ProcessExit += (_, _) => cancellation.Cancel();
+using var termination = PosixSignalRegistration.Create(PosixSignal.SIGTERM, context =>
+{
+    context.Cancel = true;
+    cancellation.Cancel();
+});
 var token = cancellation.Token;
 
 try
@@ -73,7 +107,6 @@ try
     var custodyRoot = Path.GetFullPath(options["--custody"]);
     Directory.CreateDirectory(custodyRoot);
     var store = new FileSystemCustodyStore(custodyRoot);
-    var checkout = Path.GetFullPath(options["--checkout"]);
     var budget = WireRequestBudget.OfWireRequests(ceiling);
     var startedAt = DateTimeOffset.UtcNow;
     Console.WriteLine($"lex-v3 build: custody={custodyRoot} ceiling={ceiling} started={startedAt:O}");
@@ -95,7 +128,6 @@ try
         + $"formex eligible {europe.Formex!.EligibleExpressionCount}, notice route {europe.LegalNotice!.Route!.Hops.Count} hop(s); "
         + $"spent {budget.Spent} of {budget.Limit}");
 
-    var act = new LuxembourgActRange(options["--lu-name"], options["--lu-start"], options["--lu-end"]);
     var luxembourg = await new LuxembourgFirstMountAcquisition(store, TimeProvider.System)
         .RunAsync(act, luxembourgRenderers, budget, token);
     if (!luxembourg.Delivered)
@@ -111,7 +143,7 @@ try
     var build = await new V3FirstMountBuild(store).RunAsync(europe, luxembourg, token);
     if (!build.Delivered)
     {
-        Console.Error.WriteLine($"refused: build: {build.Refusal}: {build.Detail}");
+        Console.Error.WriteLine($"refused: build: {build.Refusal}: {build.Detail} (spent {budget.Spent} of {budget.Limit})");
         return 3;
     }
 
@@ -142,4 +174,9 @@ catch (OperationCanceledException) when (token.IsCancellationRequested)
 {
     Console.Error.WriteLine("cancelled");
     return 130;
+}
+catch (Exception exception)
+{
+    Console.Error.WriteLine($"failed: {exception.GetType().Name}: {exception.Message}");
+    return 1;
 }
