@@ -53,7 +53,7 @@ Web: 28 React components, 771 tests; no call to `/api/v3` yet. Screens render fi
   whether the notice page itself answers 200 `text/html` to the `Lex/0.1` user agent behind the
   EUR-Lex WAF (Decision 23). A challenge page, a block, an off-origin redirect and a truncated body
   are all the typed refusal `notice_route_invalid` (`EuLegalNoticeEvidence.FromRoute` now requires
-  a complete route; review finding on PR #746).
+  a complete route; review finding on this pull request).
 - Decision taken by the driver, reversible: the legal-notice route follows same-origin redirects
   (as `FromRoute` already admitted and as the Cellar route does); the terminal is pinned to the
   host and port and robots is evaluated for the redirected path. Decision 88's "one GET" is read
