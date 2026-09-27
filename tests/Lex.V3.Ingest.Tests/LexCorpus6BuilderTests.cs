@@ -727,7 +727,9 @@ public sealed class LexCorpus6BuilderTests
         Func<Europe.EuFormexMainBodyLegalContentPopulation,
             Europe.EuFormexMainBodyLegalContentPopulation>? formexMainBodyTransform = null,
         Func<Luxembourg.LuxembourgAknLegalContentPopulation,
-            Luxembourg.LuxembourgAknLegalContentPopulation>? aknLegalContentTransform = null)
+            Luxembourg.LuxembourgAknLegalContentPopulation>? aknLegalContentTransform = null,
+        (Lex.V3.Contracts.Source.Http.RoutedHttpEvidence Route,
+            Lex.V3.Contracts.Source.Http.HttpLogicalRequest Request)? legalNoticeOverride = null)
     {
         var europe = europeOverride ?? await EuAxiomWiringHarness.RunAsync(
             static root => EuAcquisitionTestFixture.AxiomAbsenceScriptFor(root));
@@ -758,7 +760,7 @@ public sealed class LexCorpus6BuilderTests
         string? evidenceDetail;
         if (includeLegalNotice)
         {
-            var (route, request) = CompleteLegalNoticeRoute(
+            var (route, request) = legalNoticeOverride ?? CompleteLegalNoticeRoute(
                 europe.CorpusRecordSet!.Set.Records[0].RunIdentity);
             evidence = includeFormexMainBody
                 ? Stage3EvidenceEnvelope.TryCreateWithEuropeLegalNoticeRouteAndFormexMainBody(

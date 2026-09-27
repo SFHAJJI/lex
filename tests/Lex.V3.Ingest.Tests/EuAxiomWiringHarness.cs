@@ -44,13 +44,63 @@ internal static class EuAxiomWiringHarness
         // limit bound that many requests each and neither bounds the run.
         var runWireBudget = EuAcquisitionTestFixture.TestWireBudget();
 
-        var seed = seedCelex is null
-            ? EuAppendixASeedMap.SeedsInCelexOrder[0]
-            : EuAppendixASeedMap.SeedsInCelexOrder.Single(candidate =>
-                string.Equals(candidate.Celex, seedCelex, StringComparison.Ordinal));
-        var rootIri = EuPackRootCanonicalForm.TryCanonicalize(seed.WorkRoot, out _)
-            ?? throw new AssertFailedException("Appendix A's own seed root failed to canonicalize.");
+        var seed = Seed(seedCelex);
+        var rootIri = SeedRoot(seedCelex);
+        var scripts = Scripts(
+            rootIri, axiomScript, locatedAmendmentScript, expressionIri, expressionLanguageAuthority,
+            additionalExpressionIri, additionalExpressionLanguageAuthority);
 
+        var handler = new EuAcquisitionTestFixture.ClassifyingHandler(scripts, documentFetchResponse);
+        var store = custodyStore ?? new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
+        var executor = new EuRepeatedEnumerationExecutor(
+            store, new EuAcquisitionTestFixture.FixedTimeProvider(), handler);
+        var adapter = new EuQueryExecutionAdapter(store, executor);
+
+        var (censusPlan, censusPlanId) = EuAcquisitionTestFixture.BuildCensusPlan();
+        var censusRequest = new EuCensusPartitionRunRequest(
+            censusPlan, censusPlanId, seed.Celex, EuAcquisitionTestFixture.BuildRendererSource(1),
+            runWireBudget);
+
+        var (pPlan, pPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
+
+        return await adapter.RunAsync(
+            [(censusRequest, EuAcquisitionTestFixture.SourceWitness())],
+            new EuObjectFactsBatchPolicy(
+                pPlan, pPlanId, EuAcquisitionTestFixture.BuildRendererSource(2),
+                EuAcquisitionTestFixture.SourceWitness()),
+            EuAcquisitionTestFixture.BuildRendererSource(9),
+            EuAcquisitionTestFixture.SourceWitness(),
+            EuAcquisitionTestFixture.BuildRendererSource(1009),
+            EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
+            runWireBudget,
+            CancellationToken.None);
+    }
+
+    /// <summary>Appendix A's seed for <paramref name="seedCelex"/>, or the first seed when null.</summary>
+    internal static (string Celex, string WorkRoot) Seed(string? seedCelex) => seedCelex is null
+        ? EuAppendixASeedMap.SeedsInCelexOrder[0]
+        : EuAppendixASeedMap.SeedsInCelexOrder.Single(candidate =>
+            string.Equals(candidate.Celex, seedCelex, StringComparison.Ordinal));
+
+    /// <summary>The canonical Cellar root IRI of that seed's work.</summary>
+    internal static string SeedRoot(string? seedCelex) =>
+        EuPackRootCanonicalForm.TryCanonicalize(Seed(seedCelex).WorkRoot, out _)
+        ?? throw new AssertFailedException("Appendix A's own seed root failed to canonicalize.");
+
+    /// <summary>
+    /// The scripted answers for every family the adapter asks over one seed, keyed by the family
+    /// tag <see cref="EuAcquisitionTestFixture.ClassifyingHandler"/> classifies a request into.
+    /// Extracted so a composition test can hand the same scripts to its own transport.
+    /// </summary>
+    internal static Dictionary<string, EuAcquisitionTestFixture.FamilyScript> Scripts(
+        string rootIri,
+        Func<string, EuAcquisitionTestFixture.FamilyScript?> axiomScript,
+        Func<string, EuAcquisitionTestFixture.FamilyScript>? locatedAmendmentScript = null,
+        string? expressionIri = null,
+        string? expressionLanguageAuthority = null,
+        string? additionalExpressionIri = null,
+        string? additionalExpressionLanguageAuthority = null)
+    {
         var pOutcomes = EuAcquisitionTestFixture.ObjectAuthorityPredicates
             .Select(predicate => (
                 predicate,
@@ -103,31 +153,7 @@ internal static class EuAxiomWiringHarness
         scripts["L"] = locatedAmendmentScript is null
             ? EuAcquisitionTestFixture.LocatedAmendmentAbsenceScriptFor(rootIri)
             : locatedAmendmentScript(rootIri);
-
-        var handler = new EuAcquisitionTestFixture.ClassifyingHandler(scripts, documentFetchResponse);
-        var store = custodyStore ?? new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
-        var executor = new EuRepeatedEnumerationExecutor(
-            store, new EuAcquisitionTestFixture.FixedTimeProvider(), handler);
-        var adapter = new EuQueryExecutionAdapter(store, executor);
-
-        var (censusPlan, censusPlanId) = EuAcquisitionTestFixture.BuildCensusPlan();
-        var censusRequest = new EuCensusPartitionRunRequest(
-            censusPlan, censusPlanId, seed.Celex, EuAcquisitionTestFixture.BuildRendererSource(1),
-            runWireBudget);
-
-        var (pPlan, pPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
-
-        return await adapter.RunAsync(
-            [(censusRequest, EuAcquisitionTestFixture.SourceWitness())],
-            new EuObjectFactsBatchPolicy(
-                pPlan, pPlanId, EuAcquisitionTestFixture.BuildRendererSource(2),
-                EuAcquisitionTestFixture.SourceWitness()),
-            EuAcquisitionTestFixture.BuildRendererSource(9),
-            EuAcquisitionTestFixture.SourceWitness(),
-            EuAcquisitionTestFixture.BuildRendererSource(1009),
-            EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
-            runWireBudget,
-            CancellationToken.None);
+        return scripts;
     }
 
     /// <summary>
