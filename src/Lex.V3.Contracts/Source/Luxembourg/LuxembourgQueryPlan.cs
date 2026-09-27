@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json.Serialization;
 using Lex.V3.Contracts.Source.Core;
+using Lex.V3.Contracts.Source.Http;
 
 namespace Lex.V3.Contracts.Source.Luxembourg;
 
@@ -915,6 +916,17 @@ public sealed record LuxembourgQueryPlan
         LuxembourgQueryPass.Pass2 => Pass2PageLimit,
         _ => throw new ArgumentOutOfRangeException(nameof(pass)),
     };
+
+    /// <summary>
+    /// The default-graph plan over the official Luxembourg SPARQL channel, for a production caller
+    /// that holds only its declared scope. The channel's profile is the closed catalogue's own
+    /// (<see cref="OfficialMachineQuerySourceProfileId.LuxembourgSparql"/>); until this overload,
+    /// only same-assembly tests could name it, so no production code could create the plan.
+    /// </summary>
+    public static LuxembourgQueryPlan CreateDefaultGraph(SourceArtifactRef scopeDefinitionRef) =>
+        CreateDefaultGraph(
+            OfficialMachineQuerySourceProfiles.Resolve(OfficialMachineQuerySourceProfileId.LuxembourgSparql).ArtifactRef,
+            scopeDefinitionRef);
 
     public static LuxembourgQueryPlan CreateDefaultGraph(
         SourceArtifactRef sourceProfileRef,
