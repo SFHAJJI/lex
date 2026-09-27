@@ -1,16 +1,20 @@
-# Claude boot
+# Lex V3 boot
 
-Lex V3 authority and execution state live in the private repository
-`https://github.com/SFHAJJI/lex-governance`.
+This repository is the Lex V3 product code. Work starts from `v3/integration`; `main` is the legacy line.
 
-Before changing this repository:
+Read, in this order, and nothing else before working:
 
-1. fetch `lex-governance/main` and read its `BOOT.md` completely;
-2. follow its reading order and report the exact governance and product heads;
-3. start product work from this repository's `v3/integration` branch;
-4. reconcile the assigned issue as keep, verify, repair or missing before writing code.
+1. `STATUS.md`: what is served, what is next, what is blocked, which owner decisions are pending.
+2. `LAUNCH-CONTRACT.md`: the acceptance checklist for the V3 launch.
 
-The governance head that introduced this router was
-`6c216fa5a435f35696279e370910ce825d011e09`. If `main` moved, use the current reviewed successor and
-report the delta. Do not load the old out-of-repository clean-room bundle, local inbox, handbook or
-quiz as authority.
+Working rules:
+
+- Day-sized vertical slices on a branch from `v3/integration`; one pull request per slice.
+- Evidence in the pull request description: the commands run, the counts, the scope.
+- One fresh-context review per pull request. Findings must be material and reproduced. One repair
+  round, then merge.
+- Update `STATUS.md` in the same pull request.
+- Owner decisions (product scope, legal or public claims, publisher traffic, credentials, money) are
+  asked in the pull request or at the weekly checkpoint, never assumed.
+- `https://github.com/SFHAJJI/lex-governance` holds the immutable specification pack and Decisions
+  82 to 93, which still describe product scope. Its working model and stage protocol are retired.

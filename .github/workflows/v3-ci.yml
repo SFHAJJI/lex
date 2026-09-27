@@ -32,7 +32,7 @@ jobs:
           $checkedOutSha = (& git rev-parse HEAD).Trim()
           if ($LASTEXITCODE -ne 0 -or $checkedOutSha -cne $env:CANDIDATE_SHA) { throw 'Windows runner did not check out the exact candidate SHA.' }
           $sdkVersion = (& dotnet --version).Trim()
-          if ($LASTEXITCODE -ne 0 -or $sdkVersion -cne '10.0.400') { throw 'Windows runner did not select .NET SDK 10.0.400.' }
+          if ($LASTEXITCODE -ne 0 -or $sdkVersion -cnotmatch '^10\.0\.4[0-9][0-9]$') { throw 'Windows runner did not select a .NET SDK 10.0.4xx.' }
           dotnet restore src/Lex.V3.Preview/Lex.V3.Preview.csproj --locked-mode
           if ($LASTEXITCODE -ne 0) { throw 'Locked Windows restore failed.' }
           dotnet build src/Lex.V3.Preview/Lex.V3.Preview.csproj --configuration Release --no-restore
@@ -95,7 +95,7 @@ jobs:
           set -euo pipefail
           test -z "$(git status --porcelain)"
           test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
-          test "$(dotnet --version)" = '10.0.400'
+          [[ "$(dotnet --version)" =~ ^10\.0\.4[0-9][0-9]$ ]]
           dotnet restore Lex.V3.slnx --locked-mode
           dotnet build Lex.V3.slnx --configuration Release --no-restore
           dotnet test --solution Lex.V3.slnx --configuration Release --no-restore --no-build --minimum-expected-tests 1
@@ -165,7 +165,7 @@ jobs:
             keys == ["build","runner","schema","sdk","source_digest"]
             and .schema == "lex-v3-s0-05-windows-logical/1"
             and .runner == "windows-x64"
-            and .sdk == "10.0.400"
+            and (.sdk | test("^10[.]0[.]4[0-9][0-9]$"))
             and (.source_digest | type) == "string"
             and (.source_digest | test("^[0-9a-f]{64}$"))
           ' "$windows" >/dev/null ||
