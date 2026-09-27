@@ -470,7 +470,7 @@ public sealed class EuFormexManifestationEnumerationProducerTests
         return new RepeatedEnumerationRow(terms, terms, terms);
     }
 
-    private static string JsonRow(LanguageScopedExpression expression, string type, int? manifestationOrdinal = null)
+    internal static string JsonRow(LanguageScopedExpression expression, string type, int? manifestationOrdinal = null)
     {
         static string Term(string kind, string value, string? datatype = null) =>
             "{\"type\":" + JsonSerializer.Serialize(kind) + ",\"value\":"

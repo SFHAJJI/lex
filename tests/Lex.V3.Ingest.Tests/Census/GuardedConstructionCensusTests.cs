@@ -303,6 +303,14 @@ public sealed class GuardedConstructionCensusTests
                     + "method public static "
                     + "Lex.V3.Ingest.Europe.EuFormexPackageOutcomePopulation::TryClose, "
                     + "1 compiler-generated",
+                "Lex.V3.Ingest.Europe.EuFormexPackagePopulationResult: constructor private "
+                    + "instance Lex.V3.Ingest.Europe.EuFormexPackagePopulationResult::.ctor, "
+                    + "method public instance "
+                    + "Lex.V3.Ingest.Europe.EuFormexPackagePopulationProducer::RunAsync, "
+                    + "method public static "
+                    + "Lex.V3.Ingest.Europe.EuFormexPackagePopulationResult::Refused, "
+                    + "method public static "
+                    + "Lex.V3.Ingest.Europe.EuFormexPackagePopulationResult::Success",
                 "Lex.V3.Ingest.Europe.EuFormexRunOutcomeReconciliation: constructor private "
                     + "instance Lex.V3.Ingest.Europe.EuFormexRunOutcomeReconciliation::.ctor, "
                     + "method public static "
