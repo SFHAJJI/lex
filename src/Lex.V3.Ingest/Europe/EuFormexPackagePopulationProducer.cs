@@ -1,6 +1,7 @@
 using System.Text.Json.Serialization;
 using Lex.V3.Contracts.Custody;
 using Lex.V3.Contracts.Source.Core;
+using Lex.V3.Contracts.Source.Corpus;
 using Lex.V3.Contracts.Source.Europe;
 
 namespace Lex.V3.Ingest.Europe;
@@ -72,8 +73,12 @@ public sealed class EuFormexPackagePopulationResult
     /// <summary>How many enumerated expressions list a Formex manifestation.</summary>
     public int EligibleExpressionCount { get; }
 
-    /// <summary>Publisher requests the enumerations spent, robots excluded.</summary>
+    /// <summary>Publisher requests the enumerations and the package fetches spent, robots excluded.</summary>
     public int ProductRequestCount { get; }
+
+    /// <summary>Expressions whose package was acquired, bound and inventoried.</summary>
+    public int AcquiredExpressionCount => Reconciliation?.Outcomes.Count(static outcome =>
+        outcome.Kind == EuFormexPackageOutcomeKind.Acquired) ?? 0;
 
     public EuFormexPackagePopulationRefusal? Refusal { get; }
 
@@ -130,43 +135,24 @@ public sealed class EuFormexPackagePopulationResult
 /// own expression count is what the reconciliation checks against.
 /// </para>
 /// <para>
-/// What it does not do yet, stated as the outcome itself states it: it sends no package request.
-/// An <c>Acquired</c> outcome needs an <see cref="EuFormexPackage"/>, and a package needs the
-/// manifestation's Cellar items observed with their stream names, through an item enumeration this
-/// build does not have; the transport binding also pins a request shape (one Item URI, one hop)
-/// that the live fmx4 route (manifestation URI, 303 to <c>{manifestation}/zip</c>) does not take.
-/// Until both exist, an eligible expression is <c>Refused(observation_not_executed)</c> with
-/// <see cref="DeferredAcquisitionDetail"/> as its detail, which is exactly the idiom the reference
-/// composition (<c>EuFormexRunOutcomeReconciliationTests.CompleteForEnvelope</c>) uses and which
-/// the corpus builder already accepts. The corpus built from it carries EU records without Formex
-/// articles, as the served product does today.
-/// </para>
-/// <para>
-/// What the corpus says about it, stated exactly: the main-body producer maps this outcome to
-/// <c>PackageRefused</c>, and <c>LexCorpus6Builder</c> writes the held EU member's stage 3 outcome
-/// as <c>europe_formex_main_body</c> / <c>formex_main_body_package_refused</c>, with no detail text
-/// (the record has none; the detail enters only the outcome's semantic identity hash). In the
-/// corpus file a deferred acquisition is therefore indistinguishable from a package the transport
-/// really refused. That is acceptable for the first mount, which serves no stage 3 outcome, and it
-/// is why a typed deferred outcome member is the first Formex slice after the mount, before any
-/// public claim rests on this field (STATUS.md). The builder test pins today's shape so the change
-/// is a visible test edit.
+/// Then, for every eligible expression, it acquires the package
+/// (<see cref="EuFormexPackageAcquisitionProducer"/>): the one GET of the exact <c>fmx4</c>
+/// manifestation the enumeration delivered, through the acquisition session, bound as a package
+/// transport and read into an annex inventory. What is not acquired is stated as its own outcome
+/// kind with its reason (<c>not_acquired</c>: the run holds no body for the expression, which today
+/// means every language but English, Decision 89; a package whose inventory names annexes, since the
+/// annex classification chain is not composed in production; an identity or manifestation the
+/// grammar refuses), and a publisher answer that is not a package is <c>route_refused</c> or
+/// <c>package_rejected</c>, never a transport refusal it was not. The corpus builder binds every
+/// outcome to exactly one held EU body and writes the main-body disposition per member, so an
+/// acquired English package reaches the corpus as <c>formex_main_body_admitted</c> with its
+/// articles in the Europe index.
 /// </para>
 /// </remarks>
 public sealed class EuFormexPackagePopulationProducer
 {
-    /// <summary>
-    /// The detail carried by every eligible expression's in-process outcome while package
-    /// acquisition is not built. One fixed string, so the outcome objects a run produces can be
-    /// told apart from real transport refusals and a later slice can find every such outcome. It
-    /// does not reach the corpus file; see the type remarks.
-    /// </summary>
-    public const string DeferredAcquisitionDetail =
-        "formex package acquisition deferred: no package request was sent; the package needs the "
-        + "manifestation's Cellar items observed with their stream names (item enumeration not built) "
-        + "and a transport binding that admits the manifestation-level fmx4 route";
-
     private readonly EuFormexManifestationEnumerationProducer _enumerations;
+    private readonly EuFormexPackageAcquisitionProducer _acquisitions;
 
     public EuFormexPackagePopulationProducer(ICustodyStore custodyStore, TimeProvider timeProvider)
         : this(custodyStore, timeProvider, testHandlerOverride: null)
@@ -182,21 +168,25 @@ public sealed class EuFormexPackagePopulationProducer
         ArgumentNullException.ThrowIfNull(custodyStore);
         ArgumentNullException.ThrowIfNull(timeProvider);
         _enumerations = new EuFormexManifestationEnumerationProducer(custodyStore, timeProvider, testHandlerOverride);
+        _acquisitions = new EuFormexPackageAcquisitionProducer(custodyStore, timeProvider, testHandlerOverride);
     }
 
     /// <param name="run">The complete EU run whose expressions are populated; the reconciliation binds to it by reference.</param>
     /// <param name="manifestationRendererSource">The renderer-source artifact for the manifestation enumeration.</param>
+    /// <param name="documentFetchRendererSource">The renderer-source artifact for the package GET (the document-fetch plan).</param>
     /// <param name="sourceWitness">The bound SPARQL witness each enumeration session starts from.</param>
-    /// <param name="wireBudget">One ceiling for every enumeration of this run, robots included.</param>
+    /// <param name="wireBudget">One ceiling for every enumeration and package request of this run, robots included.</param>
     public async Task<EuFormexPackagePopulationResult> RunAsync(
         EuQueryExecutionResult run,
         MachineQueryRendererSource manifestationRendererSource,
+        MachineQueryRendererSource documentFetchRendererSource,
         BoundMachineRequest sourceWitness,
         WireRequestBudget wireBudget,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(run);
         ArgumentNullException.ThrowIfNull(manifestationRendererSource);
+        ArgumentNullException.ThrowIfNull(documentFetchRendererSource);
         ArgumentNullException.ThrowIfNull(sourceWitness);
         ArgumentNullException.ThrowIfNull(wireBudget);
 
@@ -259,6 +249,12 @@ public sealed class EuFormexPackagePopulationProducer
             families.Add((familyKey, expressions, requests));
         }
 
+        // The bodies the run holds: the corpus binds every Formex outcome to exactly one of them, so
+        // an expression bound to none is not acquired and costs no request.
+        var heldObjects = (run.CorpusRecordSet?.Set.Records ?? [])
+            .Where(static record => record.Body.Kind == CorpusBodyRecordKind.Held)
+            .Select(static record => record.ObjectRef)
+            .ToArray();
         var populations = new List<EuFormexPackageOutcomePopulation>(families.Count);
         var eligible = 0;
         foreach (var (familyKey, expressions, requests) in families)
@@ -294,10 +290,11 @@ public sealed class EuFormexPackagePopulationProducer
                 }
 
                 eligible++;
-                outcomes.Add(EuFormexPackageOutcome.Refused(
-                    enumeration.Expression,
-                    EuDocumentFetchAttemptRefusal.ObservationNotExecuted,
-                    DeferredAcquisitionDetail));
+                var acquisition = await _acquisitions.RunAsync(
+                        enumeration, heldObjects, documentFetchRendererSource, wireBudget, cancellationToken)
+                    .ConfigureAwait(false);
+                productRequests += acquisition.ProductRequestCount;
+                outcomes.Add(acquisition.Outcome);
             }
 
             var population = EuFormexPackageOutcomePopulation.TryClose(

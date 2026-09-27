@@ -53,11 +53,15 @@ public sealed class EuFirstMountAcquisitionTests
         Assert.AreEqual(EuQueryExecutionCompletion.AllFamiliesProven, run.Completion);
         Assert.AreEqual(1, run.ObservedExpressionCount);
 
-        // The Formex population is the run's own, and its one expression is eligible and deferred.
+        // The Formex population is the run's own; its one expression is eligible, held in English,
+        // and acquired on the manifestation route.
         var formex = result.Formex!;
         Assert.AreSame(run, formex.Reconciliation!.Run);
         Assert.AreEqual(1, formex.EligibleExpressionCount);
-        Assert.AreEqual(EuFormexPackageOutcomeKind.Refused, formex.Reconciliation.Outcomes.Single().Kind);
+        Assert.AreEqual(1, formex.AcquiredExpressionCount);
+        var outcome = formex.Reconciliation.Outcomes.Single();
+        Assert.AreEqual(EuFormexPackageOutcomeKind.Acquired, outcome.Kind, outcome.Detail);
+        Assert.AreEqual(0, outcome.AcquiredInventory!.Members.Count);
 
         // The notice route names the run's corpus identity, and FromRoute accepts the pair.
         var notice = result.LegalNotice!;
@@ -82,8 +86,10 @@ public sealed class EuFirstMountAcquisitionTests
         }
 
         // The publisher saw exactly the traffic the composition describes: adapter families, the
-        // Formex enumeration (one expression, two passes), and the eur-lex robots and notice GETs.
+        // Formex enumeration (one expression, two passes), the package route (303, then the ZIP),
+        // and the eur-lex robots and notice GETs.
         Assert.AreEqual(4, handler.FormexEnumerationRequests);
+        Assert.AreEqual(2, handler.FormexPackageRequests);
         CollectionAssert.AreEqual(
             new[] { "https://eur-lex.europa.eu/robots.txt", NoticeUri },
             handler.EurLexRequests.ToArray());
@@ -197,8 +203,12 @@ public sealed class EuFirstMountAcquisitionTests
         private readonly byte[] _eurLexRobots;
         private readonly Dictionary<string, int> _formexCallsByExpression = new(StringComparer.Ordinal);
         private readonly List<string> _eurLex = [];
+        private static readonly Lazy<byte[]> GdprPackage = new(() => File.ReadAllBytes(
+            Path.Combine(AppContext.BaseDirectory, "Fixtures", "EuDocumentFetch", "gdpr-fmx4-200-body.bin")));
+
         private int _adapterRequests;
         private int _formexEnumerationRequests;
+        private int _formexPackageRequests;
 
         internal CompositeHandler(
             IReadOnlyDictionary<string, EuAcquisitionTestFixture.FamilyScript> scripts,
@@ -216,6 +226,8 @@ public sealed class EuFirstMountAcquisitionTests
         internal int AdapterRequests => Volatile.Read(ref _adapterRequests);
 
         internal int FormexEnumerationRequests => Volatile.Read(ref _formexEnumerationRequests);
+
+        internal int FormexPackageRequests => Volatile.Read(ref _formexPackageRequests);
 
         internal IReadOnlyList<string> EurLexRequests
         {
@@ -242,6 +254,17 @@ public sealed class EuFirstMountAcquisitionTests
                 return uri.AbsolutePath == "/robots.txt"
                     ? EuAcquisitionTestFixture.BinaryResponse(request, HttpStatusCode.OK, _eurLexRobots)
                     : EuAcquisitionTestFixture.BinaryResponse(request, HttpStatusCode.OK, NoticeBody, NoticeMediaType);
+            }
+
+            // The package route: 303 from the manifestation to its /zip, then the real GDPR package.
+            if (request.Method == HttpMethod.Get && uri.Host == "publications.europa.eu"
+                && request.Headers.Accept.ToString().Contains("application/zip;mtype=fmx4", StringComparison.Ordinal))
+            {
+                Interlocked.Increment(ref _formexPackageRequests);
+                return uri.AbsolutePath.EndsWith("/zip", StringComparison.Ordinal)
+                    ? EuAcquisitionTestFixture.BinaryResponse(request, HttpStatusCode.OK, GdprPackage.Value, "application/zip")
+                    : EuAcquisitionTestFixture.BinaryResponse(
+                        request, HttpStatusCode.SeeOther, [], location: "http://publications.europa.eu" + uri.AbsolutePath + "/zip");
             }
 
             if (request.Method == HttpMethod.Post && request.Content is not null)

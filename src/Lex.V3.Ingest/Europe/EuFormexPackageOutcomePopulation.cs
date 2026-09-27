@@ -22,6 +22,22 @@ public enum EuFormexPackageOutcomeKind
 
     [JsonStringEnumMemberName("refused")]
     Refused = 4,
+
+    /// <summary>
+    /// Eligible, and not acquired for a stated reason that is not the transport's
+    /// (<see cref="EuFormexPackageNotAcquiredReason"/>): no request was sent, or the package was
+    /// fetched and admitted but names annexes this build cannot classify yet.
+    /// </summary>
+    [JsonStringEnumMemberName("not_acquired")]
+    NotAcquired = 5,
+
+    /// <summary>The office answered the package request with a status other than 200 or 404, or the retained route does not bind as a package transport.</summary>
+    [JsonStringEnumMemberName("route_refused")]
+    RouteRefused = 6,
+
+    /// <summary>The office answered 200 and the retained bytes are not an admissible Formex package (<see cref="EuFormexAnnexInventoryRefusal"/>).</summary>
+    [JsonStringEnumMemberName("package_rejected")]
+    PackageRejected = 7,
 }
 
 /// <summary>
@@ -38,7 +54,9 @@ public sealed class EuFormexPackageOutcome
         EuDocumentFetchRefusal? unavailableReason,
         int? observedStatus,
         EuDocumentFetchAttemptRefusal? acquisitionRefusal,
-        string? detail)
+        string? detail,
+        EuFormexPackageNotAcquiredReason notAcquiredReason = EuFormexPackageNotAcquiredReason.None,
+        EuFormexAnnexInventoryRefusal packageRefusal = EuFormexAnnexInventoryRefusal.None)
     {
         Expression = expression;
         Kind = kind;
@@ -47,6 +65,8 @@ public sealed class EuFormexPackageOutcome
         ObservedStatus = observedStatus;
         AcquisitionRefusal = acquisitionRefusal;
         Detail = detail;
+        NotAcquiredReason = notAcquiredReason;
+        PackageRefusal = packageRefusal;
     }
 
     public LanguageScopedExpression Expression { get; }
@@ -64,6 +84,12 @@ public sealed class EuFormexPackageOutcome
     public EuDocumentFetchAttemptRefusal? AcquisitionRefusal { get; }
 
     public string? Detail { get; }
+
+    /// <summary>Why a <see cref="EuFormexPackageOutcomeKind.NotAcquired"/> outcome was not acquired; <c>None</c> otherwise.</summary>
+    public EuFormexPackageNotAcquiredReason NotAcquiredReason { get; }
+
+    /// <summary>The inventory producer's refusal of a <see cref="EuFormexPackageOutcomeKind.PackageRejected"/> outcome; <c>None</c> otherwise.</summary>
+    public EuFormexAnnexInventoryRefusal PackageRefusal { get; }
 
     public static EuFormexPackageOutcome NotEligible(LanguageScopedExpression expression)
     {
@@ -130,6 +156,59 @@ public sealed class EuFormexPackageOutcome
             expression, EuFormexPackageOutcomeKind.Refused, null,
             null, null, refusal, detail);
     }
+
+    public static EuFormexPackageOutcome NotAcquired(
+        LanguageScopedExpression expression,
+        EuFormexPackageNotAcquiredReason reason,
+        string detail)
+    {
+        ArgumentNullException.ThrowIfNull(expression);
+        if (!Enum.IsDefined(reason) || reason == EuFormexPackageNotAcquiredReason.None)
+        {
+            throw new ArgumentOutOfRangeException(nameof(reason));
+        }
+
+        ArgumentException.ThrowIfNullOrWhiteSpace(detail);
+        return new EuFormexPackageOutcome(
+            expression, EuFormexPackageOutcomeKind.NotAcquired, null,
+            null, null, null, detail, notAcquiredReason: reason);
+    }
+
+    public static EuFormexPackageOutcome RouteRefused(
+        LanguageScopedExpression expression,
+        int? observedStatus,
+        string detail)
+    {
+        ArgumentNullException.ThrowIfNull(expression);
+        if (observedStatus is 200 or 404)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(observedStatus), observedStatus,
+                "A 200 is bound or rejected as a package and a 404 is unavailable; neither is a refused route.");
+        }
+
+        ArgumentException.ThrowIfNullOrWhiteSpace(detail);
+        return new EuFormexPackageOutcome(
+            expression, EuFormexPackageOutcomeKind.RouteRefused, null,
+            null, observedStatus, null, detail);
+    }
+
+    public static EuFormexPackageOutcome PackageRejected(
+        LanguageScopedExpression expression,
+        EuFormexAnnexInventoryRefusal refusal,
+        string detail)
+    {
+        ArgumentNullException.ThrowIfNull(expression);
+        if (!Enum.IsDefined(refusal) || refusal == EuFormexAnnexInventoryRefusal.None)
+        {
+            throw new ArgumentOutOfRangeException(nameof(refusal));
+        }
+
+        ArgumentException.ThrowIfNullOrWhiteSpace(detail);
+        return new EuFormexPackageOutcome(
+            expression, EuFormexPackageOutcomeKind.PackageRejected, null,
+            null, 200, null, detail, packageRefusal: refusal);
+    }
 }
 
 /// <summary>Why the proven Formex expression population could not be totally disposed.</summary>
@@ -188,6 +267,15 @@ public sealed class EuFormexPackageOutcomePopulation
 
     public int RefusedCount => Outcomes.Count(static outcome =>
         outcome.Kind == EuFormexPackageOutcomeKind.Refused);
+
+    public int NotAcquiredCount => Outcomes.Count(static outcome =>
+        outcome.Kind == EuFormexPackageOutcomeKind.NotAcquired);
+
+    public int RouteRefusedCount => Outcomes.Count(static outcome =>
+        outcome.Kind == EuFormexPackageOutcomeKind.RouteRefused);
+
+    public int PackageRejectedCount => Outcomes.Count(static outcome =>
+        outcome.Kind == EuFormexPackageOutcomeKind.PackageRejected);
 
     public static EuFormexPackageOutcomePopulation? TryClose(
         EuFormexEligibilityPopulation eligibility,

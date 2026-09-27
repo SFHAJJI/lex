@@ -301,8 +301,14 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Ingest.Europe.EuFormexPackageOutcome::.ctor, "
                     + "method public static Lex.V3.Ingest.Europe.EuFormexPackageOutcome::Acquired, "
                     + "method public static "
+                    + "Lex.V3.Ingest.Europe.EuFormexPackageOutcome::NotAcquired, "
+                    + "method public static "
                     + "Lex.V3.Ingest.Europe.EuFormexPackageOutcome::NotEligible, "
+                    + "method public static "
+                    + "Lex.V3.Ingest.Europe.EuFormexPackageOutcome::PackageRejected, "
                     + "method public static Lex.V3.Ingest.Europe.EuFormexPackageOutcome::Refused, "
+                    + "method public static "
+                    + "Lex.V3.Ingest.Europe.EuFormexPackageOutcome::RouteRefused, "
                     + "method public static "
                     + "Lex.V3.Ingest.Europe.EuFormexPackageOutcome::Unavailable, "
                     + "2 compiler-generated",
@@ -491,7 +497,8 @@ public sealed class GuardedConstructionCensusTests
                 "Lex.V3.Ingest.Europe.EuropeIndexReader: constructor private instance "
                     + "Lex.V3.Ingest.Europe.EuropeIndexReader::.ctor, "
                     + "method public static Lex.V3.Ingest.Europe.EuropeIndexReader::OpenAndVerify, "
-                    + "method public static Lex.V3.Ingest.Europe.EuropeIndexReader::OpenAndVerifyFileAsync",
+                    + "method public static "
+                    + "Lex.V3.Ingest.Europe.EuropeIndexReader::OpenAndVerifyFileAsync",
                 "Lex.V3.Ingest.Europe.LuxembourgDraftGraphRunRequest: constructor private instance "
                     + "Lex.V3.Ingest.Europe.LuxembourgDraftGraphRunRequest::.ctor, "
                     + "constructor private instance "
