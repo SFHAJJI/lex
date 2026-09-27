@@ -1,7 +1,6 @@
 using System.Text.Json.Serialization;
 using Lex.V3.Contracts.Custody;
 using Lex.V3.Contracts.Source.Core;
-using Lex.V3.Contracts.Source.Corpus;
 using Lex.V3.Contracts.Source.Europe;
 
 namespace Lex.V3.Ingest.Europe;
@@ -45,6 +44,7 @@ public sealed class EuFormexPackagePopulationResult
     private EuFormexPackagePopulationResult(
         EuFormexRunOutcomeReconciliation? reconciliation,
         IReadOnlyList<EuFormexManifestationEnumerationResult> enumerations,
+        IReadOnlyList<EuBoundAnnexBodyClassification> annexClassifications,
         int eligibleExpressionCount,
         int productRequestCount,
         EuFormexPackagePopulationRefusal? refusal,
@@ -52,6 +52,7 @@ public sealed class EuFormexPackagePopulationResult
     {
         Reconciliation = reconciliation;
         Enumerations = enumerations;
+        AnnexClassifications = annexClassifications;
         EligibleExpressionCount = eligibleExpressionCount;
         ProductRequestCount = productRequestCount;
         Refusal = refusal;
@@ -69,6 +70,12 @@ public sealed class EuFormexPackagePopulationResult
     /// facts behind each outcome and the wire accounting, kept whether or not the run closed.
     /// </summary>
     public IReadOnlyList<EuFormexManifestationEnumerationResult> Enumerations { get; }
+
+    /// <summary>
+    /// One classification per acquired package that names annexes, in outcome order: what the
+    /// classification reconciliation closes over (<see cref="EuFormexAnnexClassificationReconciliation.TryClose"/>).
+    /// </summary>
+    public IReadOnlyList<EuBoundAnnexBodyClassification> AnnexClassifications { get; }
 
     /// <summary>How many enumerated expressions list a Formex manifestation.</summary>
     public int EligibleExpressionCount { get; }
@@ -89,16 +96,18 @@ public sealed class EuFormexPackagePopulationResult
     public static EuFormexPackagePopulationResult Success(
         EuFormexRunOutcomeReconciliation reconciliation,
         IReadOnlyList<EuFormexManifestationEnumerationResult> enumerations,
+        IReadOnlyList<EuBoundAnnexBodyClassification> annexClassifications,
         int eligibleExpressionCount,
         int productRequestCount)
     {
         ArgumentNullException.ThrowIfNull(reconciliation);
         ArgumentNullException.ThrowIfNull(enumerations);
+        ArgumentNullException.ThrowIfNull(annexClassifications);
         ArgumentOutOfRangeException.ThrowIfNegative(eligibleExpressionCount);
         ArgumentOutOfRangeException.ThrowIfNegative(productRequestCount);
         return new(
-            reconciliation, Array.AsReadOnly(enumerations.ToArray()), eligibleExpressionCount,
-            productRequestCount, null, null);
+            reconciliation, Array.AsReadOnly(enumerations.ToArray()), Array.AsReadOnly(annexClassifications.ToArray()),
+            eligibleExpressionCount, productRequestCount, null, null);
     }
 
     public static EuFormexPackagePopulationResult Refused(
@@ -115,7 +124,7 @@ public sealed class EuFormexPackagePopulationResult
         ArgumentException.ThrowIfNullOrWhiteSpace(detail);
         ArgumentNullException.ThrowIfNull(enumerations);
         ArgumentOutOfRangeException.ThrowIfNegative(productRequestCount);
-        return new(null, Array.AsReadOnly(enumerations.ToArray()), 0, productRequestCount, refusal, detail);
+        return new(null, Array.AsReadOnly(enumerations.ToArray()), [], 0, productRequestCount, refusal, detail);
     }
 }
 
@@ -140,13 +149,14 @@ public sealed class EuFormexPackagePopulationResult
 /// manifestation the enumeration delivered, through the acquisition session, bound as a package
 /// transport and read into an annex inventory. What is not acquired is stated as its own outcome
 /// kind with its reason (<c>not_acquired</c>: the run holds no body for the expression, which today
-/// means every language but English, Decision 89; a package whose inventory names annexes, since the
-/// annex classification chain is not composed in production; an identity or manifestation the
-/// grammar refuses), and a publisher answer that is not a package is <c>route_refused</c> or
-/// <c>package_rejected</c>, never a transport refusal it was not. The corpus builder binds every
-/// outcome to exactly one held EU body and writes the main-body disposition per member, so an
-/// acquired English package reaches the corpus as <c>formex_main_body_admitted</c> with its
-/// articles in the Europe index.
+/// means every language but English, Decision 89; an identity or manifestation the grammar refuses;
+/// an annex-bearing package whose annex chain does not close), and a publisher answer that is not
+/// a package is <c>route_refused</c> or <c>package_rejected</c>, never a transport refusal it was
+/// not. A package that names annexes is acquired together with the classification of those annexes
+/// against the held XHTML body and the work's PDF (one more GET), which travels on the result to
+/// the classification reconciliation. The corpus builder binds every outcome to exactly one held
+/// EU body and writes the main-body disposition per member, so an acquired English package reaches
+/// the corpus as <c>formex_main_body_admitted</c> with its articles in the Europe index.
 /// </para>
 /// </remarks>
 public sealed class EuFormexPackagePopulationProducer
@@ -173,13 +183,15 @@ public sealed class EuFormexPackagePopulationProducer
 
     /// <param name="run">The complete EU run whose expressions are populated; the reconciliation binds to it by reference.</param>
     /// <param name="manifestationRendererSource">The renderer-source artifact for the manifestation enumeration.</param>
-    /// <param name="documentFetchRendererSource">The renderer-source artifact for the package GET (the document-fetch plan).</param>
+    /// <param name="documentFetchRendererSource">The renderer-source artifact for the package and PDF GETs (the document-fetch plan).</param>
+    /// <param name="workCelex">The CELEX of the work the run acquired, carried on every annex binding.</param>
     /// <param name="sourceWitness">The bound SPARQL witness each enumeration session starts from.</param>
-    /// <param name="wireBudget">One ceiling for every enumeration and package request of this run, robots included.</param>
+    /// <param name="wireBudget">One ceiling for every enumeration, package and PDF request of this run, robots included.</param>
     public async Task<EuFormexPackagePopulationResult> RunAsync(
         EuQueryExecutionResult run,
         MachineQueryRendererSource manifestationRendererSource,
         MachineQueryRendererSource documentFetchRendererSource,
+        string workCelex,
         BoundMachineRequest sourceWitness,
         WireRequestBudget wireBudget,
         CancellationToken cancellationToken)
@@ -187,6 +199,7 @@ public sealed class EuFormexPackagePopulationProducer
         ArgumentNullException.ThrowIfNull(run);
         ArgumentNullException.ThrowIfNull(manifestationRendererSource);
         ArgumentNullException.ThrowIfNull(documentFetchRendererSource);
+        ArgumentException.ThrowIfNullOrWhiteSpace(workCelex);
         ArgumentNullException.ThrowIfNull(sourceWitness);
         ArgumentNullException.ThrowIfNull(wireBudget);
 
@@ -249,13 +262,8 @@ public sealed class EuFormexPackagePopulationProducer
             families.Add((familyKey, expressions, requests));
         }
 
-        // The bodies the run holds: the corpus binds every Formex outcome to exactly one of them, so
-        // an expression bound to none is not acquired and costs no request.
-        var heldObjects = (run.CorpusRecordSet?.Set.Records ?? [])
-            .Where(static record => record.Body.Kind == CorpusBodyRecordKind.Held)
-            .Select(static record => record.ObjectRef)
-            .ToArray();
         var populations = new List<EuFormexPackageOutcomePopulation>(families.Count);
+        var classifications = new List<EuBoundAnnexBodyClassification>();
         var eligible = 0;
         foreach (var (familyKey, expressions, requests) in families)
         {
@@ -291,10 +299,14 @@ public sealed class EuFormexPackagePopulationProducer
 
                 eligible++;
                 var acquisition = await _acquisitions.RunAsync(
-                        enumeration, heldObjects, documentFetchRendererSource, wireBudget, cancellationToken)
+                        enumeration, run.CorpusRecordSet, workCelex, documentFetchRendererSource, wireBudget, cancellationToken)
                     .ConfigureAwait(false);
                 productRequests += acquisition.ProductRequestCount;
                 outcomes.Add(acquisition.Outcome);
+                if (acquisition.AnnexClassification is { } classification)
+                {
+                    classifications.Add(classification);
+                }
             }
 
             var population = EuFormexPackageOutcomePopulation.TryClose(
@@ -322,7 +334,7 @@ public sealed class EuFormexPackagePopulationProducer
                 productRequests);
         }
 
-        return EuFormexPackagePopulationResult.Success(reconciliation, enumerations, eligible, productRequests);
+        return EuFormexPackagePopulationResult.Success(reconciliation, enumerations, classifications, eligible, productRequests);
     }
 
     private static string NewUrn() => $"urn:uuid:{Guid.NewGuid():D}";

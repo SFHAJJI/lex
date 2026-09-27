@@ -336,7 +336,7 @@ public sealed class EuFirstMountAcquisition
         }
 
         var formex = await new EuFormexPackagePopulationProducer(_custodyStore, _timeProvider, _testHandlerOverride)
-            .RunAsync(run, rendererSources.FormexManifestation, rendererSources.DocumentFetch, sparqlWitness, wireBudget, cancellationToken)
+            .RunAsync(run, rendererSources.FormexManifestation, rendererSources.DocumentFetch, celex, sparqlWitness, wireBudget, cancellationToken)
             .ConfigureAwait(false);
         if (!formex.Delivered)
         {

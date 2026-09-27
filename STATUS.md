@@ -5,8 +5,8 @@ every pull request that changes what is served, what is next or what is blocked.
 
 ## Heads
 
-- `v3/integration`: `37e3729a` (2026-09-27, PR #750 merged). Build 45 s. Fast lane
-  (`eng/test-fast.ps1`): 3,032 tests pass, 1 skipped, 55 s. Ingest suite: green on CI for PR #750
+- `v3/integration`: `2d8dddb7` (2026-09-28, PR #751 merged). Build 45 s. Fast lane
+  (`eng/test-fast.ps1`): 3,032 tests pass, 1 skipped, 55 s. Ingest suite: green on CI for PR #751
   (the CI `dotnet` job runs the whole solution on every pull request, about 6 min on the runner);
   locally about 15 min. 771 web tests pass.
 - Plan: `C:\lex-v3\V3-FINISH-PLAN-2026-09-27.md` (owner's copy). Decision 94 (one driver, one queue,
@@ -78,9 +78,8 @@ Web: 28 React components, 771 tests; no call to `/api/v3` yet. Screens render fi
   articles. What is not acquired is stated as its own outcome, never as a transport refusal:
   `not_acquired` with a reason (`body_not_held`: the run holds no body for the expression, today
   every language but English, Decision 89, and the corpus binds every Formex outcome to one held
-  body; `annex_classification_not_built`: the package names annexes and no annex classification
-  chain is composed in production, so the ZIP stays in custody and the expression waits for the
-  annex slice; `language_not_addressable`, `manifestation_not_singular`, `identity_not_admitted`),
+  body; `language_not_addressable`, `manifestation_not_singular`, `identity_not_admitted`; and the
+  four annex reasons below),
   `route_refused` with the status for any answer but 200 or 404 and for a 200 reached on a route
   that does not bind (a hop off the manifestation's path; review repair on this pull request),
   `package_rejected` with the inventory refusal for a 200 that is not a Formex package,
@@ -91,11 +90,31 @@ Web: 28 React components, 771 tests; no call to `/api/v3` yet. Screens render fi
   read-only survey of the annex chain on this pull request found it ranged over the old members
   only, which would have thrown inside `TryBuild` for a held member with a package not acquired;
   fixed and pinned by a corpus built from the annex-bearing package).
-- Decision taken by the driver, reversible: an acquired package whose inventory names annexes is
-  `not_acquired/annex_classification_not_built` rather than acquired, because the classification
-  reconciliation refuses a build carrying an acquired inventory with unclassified annexes and no
-  annex chain runs in production. Its main body waits for the annex slice. Say the word and the
-  reconciliation admits an unclassified inventory as a typed gap instead.
+- **The annex chain in production (this pull request), fixtures only.** A package whose inventory
+  names annexes goes on through the chain the reference tests composed and production never ran:
+  the held work body is read as the publisher's XHTML annex inventory, the work's PDF is fetched on
+  the document-fetch route (`GET cellar/{work}` with the `pdfa2a` or `pdf` accept the expression's
+  enumeration lists; the office's 303 to the PDF item, then the 200), the three are bound as one
+  annex population with the PDF page labels (`EuAnnexEvidenceBinder.BindTransportAsync`, the
+  manifestation-level form: no Cellar Item, the work CELEX and language from the run), the bound
+  members are classified against the PDF route, and the classification travels with the run into
+  `EuFormexAnnexClassificationReconciliation`. Proven offline on the three real 2026 specimens
+  (XHTML held by the run, Formex package, PDF/A) through the real session: acquired, the corpus
+  states `formex_main_body_admitted` and the annex outcome for the held member. One extra GET per
+  annex-bearing expression, in its own robots session. Two source checks written against
+  synthetic test requests were widened to the session's real shape and say so in the code: the
+  classifier admits the profile's `user-agent` beside the address's two headers, and the office's
+  `;charset=UTF-8` on the PDF content type. What does not close is `not_acquired` with a reason and
+  the ZIP retained: `annex_xhtml_not_inventoried` (the held body carries no publisher annex
+  convention; no PDF request is sent), `annex_pdf_not_served`, `annex_evidence_not_bound`,
+  `annex_body_not_classified`.
+- Decision taken by the driver, reversible: the annex chain reads the held work body, so an
+  annex-bearing package whose held body is not XHTML with the publisher's `*.fmx` unit wrappers is
+  `not_acquired` rather than acquired without its annexes (the corpus would otherwise carry a main
+  body whose annexes it cannot state). The PDF accept is the one the enumeration proves listed,
+  `pdfa2a` before `pdf`, and the PDF is requested at work level with the expression's language, as
+  the reference chain pinned it; the manifestation is read from the office's 303 and must descend
+  from the expression.
 - Decision taken by the driver, reversible: the package request goes to the manifestation, not the
   work, so content negotiation cannot pick another expression; the terminal must stay on that
   manifestation's own path. The item-level package types (`EuFormexPackage`, `EuFormexItemSet`,
@@ -177,10 +196,8 @@ Web: 28 React components, 771 tests; no call to `/api/v3` yet. Screens render fi
    the five digests in STATUS.md; mount the directory under the API and answer `resolve` from it.
    Then decide whether the one-process design carries the full population or needs a
    serialisation boundary between acquisition and build.
-2. Formex, the rest: the annex classification chain in production (today an acquired package
-   with annexes is `not_acquired/annex_classification_not_built`); French bodies (Decision 89) so
-   French packages are held and acquired; then every acquired main body feeds the EU index for
-   the temporal and search operations (item 5).
+2. Formex, the rest: French bodies (Decision 89) so French packages are held and acquired; then
+   every acquired main body feeds the EU index for the temporal and search operations (item 5).
 3. Define and run the Luxembourg population and the complete EU population (owner authorisation per
    run).
 4. Serve the fourteen unserved operations for Luxembourg; wire MCP to a streamable HTTP endpoint.

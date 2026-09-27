@@ -35,7 +35,7 @@ public sealed class EuFormexPackagePopulationProducerTests
         var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
 
         var result = await Producer(store, handler).RunAsync(
-            run, RendererSource(), RendererSource(), EuAcquisitionTestFixture.SourceWitness(),
+            run, RendererSource(), RendererSource(), WorkCelex, EuAcquisitionTestFixture.SourceWitness(),
             EuAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
 
         Assert.IsTrue(result.Delivered, $"{result.Refusal}: {result.Detail}");
@@ -103,7 +103,7 @@ public sealed class EuFormexPackagePopulationProducerTests
         }, [english, french]);
         var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
         var result = await Producer(store, handler).RunAsync(
-            run, RendererSource(), RendererSource(), EuAcquisitionTestFixture.SourceWitness(),
+            run, RendererSource(), RendererSource(), WorkCelex, EuAcquisitionTestFixture.SourceWitness(),
             EuAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
         Assert.IsTrue(result.Delivered, $"{result.Refusal}: {result.Detail}");
         Assert.AreEqual(2, result.EligibleExpressionCount);
@@ -206,29 +206,31 @@ public sealed class EuFormexPackagePopulationProducerTests
     }
 
     /// <summary>
-    /// The real 2026 package (act, annex, descriptor, table of contents): fetched, bound and
-    /// inventoried with its one annex member, then not acquired, because no annex classification
-    /// chain is composed in production and the classification reconciliation would refuse the
-    /// corpus for an acquired inventory with unclassified annexes. The ZIP stays in custody.
+    /// An annex-bearing package (the real 2026 package: act, annex, descriptor, table of contents)
+    /// whose held work body is the GDPR XHTML, which carries no publisher annex convention: fetched,
+    /// bound and inventoried with its one annex member, then not acquired with the XHTML reason. No
+    /// PDF request is sent; the ZIP stays in custody; the corpus states the typed disposition.
     /// </summary>
     [TestMethod]
-    public async Task APackageWithAnnexesIsRetainedButNotAcquiredUntilTheAnnexChainExists()
+    public async Task AnAnnexPackageWhoseHeldBodyHasNoAnnexConventionIsRetainedButNotAcquired()
     {
-        var annexPackage = await File.ReadAllBytesAsync(Path.Combine(
-            AppContext.BaseDirectory, "Fixtures", "EuDocumentFetch", "new-fmx4-200-body.bin"));
-        var (result, _, english, store) = await AcquireEnglishAsync(request =>
+        var annexPackage = await FixtureAsync("new-fmx4-200-body.bin");
+        var (result, handler, english, store) = await AcquireEnglishAsync(request =>
             request.RequestUri!.AbsolutePath.EndsWith("/zip", StringComparison.Ordinal)
                 ? EuAcquisitionTestFixture.BinaryResponse(request, HttpStatusCode.OK, annexPackage, "application/zip")
                 : null);
 
         var outcome = result.Reconciliation!.Outcomes.Single(outcome => outcome.ExpressionIdentity == english.Identity);
         Assert.AreEqual(EuFormexPackageOutcomeKind.NotAcquired, outcome.Kind, outcome.Detail);
-        Assert.AreEqual(EuFormexPackageNotAcquiredReason.AnnexClassificationNotBuilt, outcome.NotAcquiredReason);
+        Assert.AreEqual(EuFormexPackageNotAcquiredReason.AnnexXhtmlNotInventoried, outcome.NotAcquiredReason);
         StringAssert.Contains(outcome.Detail, "1 annex member");
+        StringAssert.Contains(outcome.Detail, "PublisherAnnexConventionAbsent");
+        Assert.AreEqual(0, handler.PdfRequests.Count, "no PDF is fetched for a body that cannot be inventoried.");
+        Assert.AreEqual(0, result.AnnexClassifications.Count);
 
         // The held member reaches the corpus with the typed disposition, so the corpus states a
         // package that was fetched and not acquired, not a transport refusal; the builder's domain
-        // compatibility check admits the three new members (found by the annex survey on this PR:
+        // compatibility check admits the three new members (found by the annex survey on PR #751:
         // the check ranged 16 to 24 and Validate() would have thrown inside TryBuild).
         var envelope = await LexCorpus6BuilderTests.CompleteProfileEnvelopeAsync(
             europeOverride: result.Reconciliation.Run,
@@ -243,28 +245,199 @@ public sealed class EuFormexPackagePopulationProducerTests
         Assert.AreEqual(LexCorpus6Stage3Disposition.FormexMainBodyPackageNotAcquired, disposition);
     }
 
+    /// <summary>
+    /// The production shape of an annex-bearing act, on the three real 2026 specimens through the
+    /// real session: the held work body is the XHTML the adapter fetched, the package is fetched on
+    /// the manifestation route, the work's PDF/A is fetched on the document-fetch route (the office's
+    /// 303 to the PDF item, then the 200 labelled with its charset), the three bind as one annex
+    /// population and the annex is classified; the expression is acquired with its classification,
+    /// and the corpus carries the main body and the annex outcome for the held member.
+    /// </summary>
+    [TestMethod]
+    public async Task AnAnnexPackageIsAcquiredWithItsAnnexesClassifiedAgainstTheHeldXhtmlAndTheWorkPdf()
+    {
+        var annexPackage = await FixtureAsync("new-fmx4-200-body.bin");
+        var (result, handler, english, store) = await AcquireEnglishAsync(request =>
+                request.RequestUri!.AbsolutePath.EndsWith("/zip", StringComparison.Ordinal)
+                    ? EuAcquisitionTestFixture.BinaryResponse(request, HttpStatusCode.OK, annexPackage, "application/zip")
+                    : null,
+            heldXhtml: await FixtureAsync("new-xhtml-200-body.bin"),
+            englishTypes: ["fmx4", "pdfa2a"]);
+
+        var outcome = result.Reconciliation!.Outcomes.Single(outcome => outcome.ExpressionIdentity == english.Identity);
+        Assert.AreEqual(EuFormexPackageOutcomeKind.Acquired, outcome.Kind, $"{outcome.NotAcquiredReason}: {outcome.Detail}");
+        Assert.AreEqual(1, result.AcquiredExpressionCount);
+        Assert.AreEqual(1, outcome.AcquiredInventory!.Members.Count);
+        Assert.AreEqual("ANNEX", outcome.AcquiredInventory.Members[0].Title);
+
+        var classification = result.AnnexClassifications.Single();
+        Assert.AreEqual(outcome.AcquiredInventory.IdentitySha256, classification.Binding.FormexInventoryIdentitySha256);
+        Assert.AreEqual(1, classification.Members.Count);
+        Assert.AreEqual(WorkCelex, classification.Binding.WorkCelex);
+        Assert.AreEqual("EN", classification.Binding.Language);
+        Assert.AreEqual(english.Identity.PublisherExpressionId + ".01", classification.Binding.FormexBody.PublisherUri);
+        Assert.AreEqual(english.Identity.PublisherExpressionId + ".03", classification.Binding.PdfManifestation.PublisherUri);
+        Assert.AreEqual("http://data.europa.eu/eli/reg_impl/2026/1965/oj", classification.Binding.PublisherWorkEli);
+        _ = await CustodyRestore.ReadCheckedAsync(store, classification.Binding.PdfReceipt.Reference, CancellationToken.None);
+
+        // The PDF route: the work-level GET with the pdfa2a accept, the 303 to the PDF item, the 200.
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "https://publications.europa.eu/resource/cellar/" + english.Identity.PublisherWorkId[(english.Identity.PublisherWorkId.LastIndexOf('/') + 1)..],
+                "https://publications.europa.eu/resource/cellar/" + Key(english) + ".03/DOC_1",
+            },
+            handler.PdfRequests.ToArray());
+        Assert.AreEqual(12, result.ProductRequestCount, "enumerations, the package's two hops and the PDF's two hops.");
+        Assert.AreEqual(8, handler.RobotsSends, "four sessions (two enumerations, the package, the PDF) at two robots hops each.");
+
+        var envelope = await LexCorpus6BuilderTests.CompleteProfileEnvelopeAsync(
+            europeOverride: result.Reconciliation.Run,
+            formexOverride: result.Reconciliation,
+            formexStore: store,
+            formexClassifications: Stage3EvidenceEnvelopeTests.CompleteClassifications(result.Reconciliation, result.AnnexClassifications));
+        var built = LexCorpus6Builder.TryBuild(envelope, out var refusal, out var detail);
+        Assert.IsNotNull(built, $"{refusal}: {detail}");
+        var outcomes = built.VerifiedSet.Set.Members.SelectMany(static member => member.Stage3Outcomes).ToArray();
+        Assert.AreEqual(LexCorpus6Stage3Disposition.FormexMainBodyAdmitted,
+            outcomes.Single(static outcome => outcome.Domain == LexCorpus6Stage3OutcomeDomain.EuropeFormexMainBody).Disposition);
+        Assert.Contains(
+            LexCorpus6Builder.Stage3Outcome(classification.Members.Single()),
+            outcomes.Where(static outcome => outcome.Domain == LexCorpus6Stage3OutcomeDomain.EuropeAnnexBody).ToArray());
+    }
+
+    [TestMethod]
+    public async Task AnAnnexPackageWhosePdfTheOfficeDoesNotServeIsRetainedButNotAcquired()
+    {
+        var annexPackage = await FixtureAsync("new-fmx4-200-body.bin");
+        var (result, handler, english, _) = await AcquireEnglishAsync(request =>
+                request.RequestUri!.AbsolutePath.EndsWith("/zip", StringComparison.Ordinal)
+                    ? EuAcquisitionTestFixture.BinaryResponse(request, HttpStatusCode.OK, annexPackage, "application/zip")
+                    : request.Headers.Accept.ToString().Contains("application/pdf", StringComparison.Ordinal)
+                        ? EuAcquisitionTestFixture.BinaryResponse(request, HttpStatusCode.NotFound, [])
+                        : null,
+            heldXhtml: await FixtureAsync("new-xhtml-200-body.bin"),
+            englishTypes: ["fmx4", "pdfa2a"]);
+
+        var outcome = result.Reconciliation!.Outcomes.Single(outcome => outcome.ExpressionIdentity == english.Identity);
+        Assert.AreEqual(EuFormexPackageOutcomeKind.NotAcquired, outcome.Kind, outcome.Detail);
+        Assert.AreEqual(EuFormexPackageNotAcquiredReason.AnnexPdfNotServed, outcome.NotAcquiredReason);
+        StringAssert.Contains(outcome.Detail, "404");
+        Assert.AreEqual(1, handler.PdfRequests.Count);
+        Assert.AreEqual(11, result.ProductRequestCount);
+        Assert.AreEqual(0, result.AnnexClassifications.Count);
+    }
+
+    /// <summary>
+    /// The office's 303 may hand back another expression's PDF (content negotiation at work level);
+    /// the manifestation read from the terminal must descend from this expression, or the PDF binds
+    /// to nothing here: <c>annex_evidence_not_bound</c>, the ZIP retained.
+    /// </summary>
+    [TestMethod]
+    public async Task APdfServedFromAnotherExpressionDoesNotBindAndThePackageIsNotAcquired()
+    {
+        var annexPackage = await FixtureAsync("new-fmx4-200-body.bin");
+        var (result, handler, english, _) = await AcquireEnglishAsync(request =>
+            {
+                if (request.RequestUri!.AbsolutePath.EndsWith("/zip", StringComparison.Ordinal))
+                {
+                    return EuAcquisitionTestFixture.BinaryResponse(request, HttpStatusCode.OK, annexPackage, "application/zip");
+                }
+
+                if (request.Headers.Accept.ToString().Contains("application/pdf", StringComparison.Ordinal)
+                    && !request.RequestUri.AbsolutePath.EndsWith("/DOC_1", StringComparison.Ordinal))
+                {
+                    var workKey = request.RequestUri.AbsolutePath[(request.RequestUri.AbsolutePath.LastIndexOf('/') + 1)..];
+                    return EuAcquisitionTestFixture.BinaryResponse(
+                        request, HttpStatusCode.SeeOther, [],
+                        location: "http://publications.europa.eu/resource/cellar/" + workKey + ".0002.03/DOC_1");
+                }
+
+                return null;
+            },
+            heldXhtml: await FixtureAsync("new-xhtml-200-body.bin"),
+            englishTypes: ["fmx4", "pdfa2a"]);
+
+        var outcome = result.Reconciliation!.Outcomes.Single(outcome => outcome.ExpressionIdentity == english.Identity);
+        Assert.AreEqual(EuFormexPackageOutcomeKind.NotAcquired, outcome.Kind, outcome.Detail);
+        Assert.AreEqual(EuFormexPackageNotAcquiredReason.AnnexEvidenceNotBound, outcome.NotAcquiredReason);
+        StringAssert.Contains(outcome.Detail, "not a manifestation of this expression");
+        Assert.AreEqual(2, handler.PdfRequests.Count);
+        Assert.AreEqual(0, result.AnnexClassifications.Count);
+    }
+
+    /// <summary>
+    /// The classifier's widened content-type check still refuses a PDF labelled with a different
+    /// <c>type</c> than the accept that was sent (only <c>charset</c> is tolerated): the bound annexes
+    /// are not classified and the package is not acquired.
+    /// </summary>
+    [TestMethod]
+    public async Task APdfLabelledWithAnotherTypeIsNotClassifiedAndThePackageIsNotAcquired()
+    {
+        var annexPackage = await FixtureAsync("new-fmx4-200-body.bin");
+        var pdf = await FixtureAsync("new-pdfa2a-200-body.bin");
+        var (result, _, english, _) = await AcquireEnglishAsync(request =>
+                request.RequestUri!.AbsolutePath.EndsWith("/zip", StringComparison.Ordinal)
+                    ? EuAcquisitionTestFixture.BinaryResponse(request, HttpStatusCode.OK, annexPackage, "application/zip")
+                    : request.RequestUri.AbsolutePath.EndsWith("/DOC_1", StringComparison.Ordinal)
+                        ? EuAcquisitionTestFixture.BinaryResponse(request, HttpStatusCode.OK, pdf, "application/pdf;type=pdfa1a;charset=UTF-8")
+                        : null,
+            heldXhtml: await FixtureAsync("new-xhtml-200-body.bin"),
+            englishTypes: ["fmx4", "pdfa2a"]);
+
+        var outcome = result.Reconciliation!.Outcomes.Single(outcome => outcome.ExpressionIdentity == english.Identity);
+        Assert.AreEqual(EuFormexPackageOutcomeKind.NotAcquired, outcome.Kind, outcome.Detail);
+        Assert.AreEqual(EuFormexPackageNotAcquiredReason.AnnexBodyNotClassified, outcome.NotAcquiredReason);
+        StringAssert.Contains(outcome.Detail, "SourceEvidenceMismatch");
+    }
+
+    [TestMethod]
+    public async Task AnAnnexPackageWhoseEnumerationListsNoPdfIsRetainedButNotAcquiredWithoutARequest()
+    {
+        var annexPackage = await FixtureAsync("new-fmx4-200-body.bin");
+        var (result, handler, english, _) = await AcquireEnglishAsync(request =>
+                request.RequestUri!.AbsolutePath.EndsWith("/zip", StringComparison.Ordinal)
+                    ? EuAcquisitionTestFixture.BinaryResponse(request, HttpStatusCode.OK, annexPackage, "application/zip")
+                    : null,
+            heldXhtml: await FixtureAsync("new-xhtml-200-body.bin"));
+
+        var outcome = result.Reconciliation!.Outcomes.Single(outcome => outcome.ExpressionIdentity == english.Identity);
+        Assert.AreEqual(EuFormexPackageOutcomeKind.NotAcquired, outcome.Kind, outcome.Detail);
+        Assert.AreEqual(EuFormexPackageNotAcquiredReason.AnnexPdfNotServed, outcome.NotAcquiredReason);
+        StringAssert.Contains(outcome.Detail, "lists no pdf");
+        Assert.AreEqual(0, handler.PdfRequests.Count);
+    }
+
     private const string GdprFmx4Sha256 = "4cbf7280014b0bd3d20fc8c1d6a7c08cdcd8aaacab5ee356c07ed7d840994541";
+    private static readonly string WorkCelex = EuAxiomWiringHarness.Seed(null).Celex;
 
     private static string Key(LanguageScopedExpression expression) =>
         expression.Identity.PublisherExpressionId[(expression.Identity.PublisherExpressionId.LastIndexOf("/cellar/", StringComparison.Ordinal) + "/cellar/".Length)..];
 
     /// <summary>One English eligible expression through the whole producer, with the package route answered by <paramref name="packageResponse"/> (null for the default 303 and GDPR bytes).</summary>
     private static async Task<(EuFormexPackagePopulationResult Result, FormexEnumerationHandler Handler, LanguageScopedExpression English, EuAcquisitionTestFixture.EuInMemoryCustodyStore Store)> AcquireEnglishAsync(
-        Func<HttpRequestMessage, HttpResponseMessage?> packageResponse)
+        Func<HttpRequestMessage, HttpResponseMessage?> packageResponse,
+        byte[]? heldXhtml = null,
+        string[]? englishTypes = null)
     {
-        var (run, english, french) = await RunWithTwoExpressionsAsync();
+        // One store for the run and the acquisition, as in production: the annex chain reads the
+        // held work body the run retained.
+        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
+        var (run, english, french) = await RunWithTwoExpressionsAsync(heldXhtml, store);
         var handler = new FormexEnumerationHandler(new Dictionary<string, string[]>(StringComparer.Ordinal)
         {
-            [english.Identity.PublisherExpressionId] = ["fmx4"],
+            [english.Identity.PublisherExpressionId] = englishTypes ?? ["fmx4"],
             [french.Identity.PublisherExpressionId] = ["xhtml"],
         }, [english, french], packageResponse);
-        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
         var result = await Producer(store, handler).RunAsync(
-            run, RendererSource(), RendererSource(), EuAcquisitionTestFixture.SourceWitness(),
+            run, RendererSource(), RendererSource(), WorkCelex, EuAcquisitionTestFixture.SourceWitness(),
             EuAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
         Assert.IsTrue(result.Delivered, $"{result.Refusal}: {result.Detail}");
         return (result, handler, english, store);
     }
+
+    private static Task<byte[]> FixtureAsync(string name) => File.ReadAllBytesAsync(Path.Combine(
+        AppContext.BaseDirectory, "Fixtures", "EuDocumentFetch", name));
 
     /// <summary>
     /// The harness's default run names its expression by an item-shaped IRI, not the numeric child
@@ -280,7 +453,7 @@ public sealed class EuFormexPackagePopulationProducerTests
         var handler = new FormexEnumerationHandler(new Dictionary<string, string[]>(StringComparer.Ordinal), []);
 
         var result = await Producer(new EuAcquisitionTestFixture.EuInMemoryCustodyStore(), handler).RunAsync(
-            run, RendererSource(), RendererSource(), EuAcquisitionTestFixture.SourceWitness(),
+            run, RendererSource(), RendererSource(), WorkCelex, EuAcquisitionTestFixture.SourceWitness(),
             EuAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
 
         Assert.IsFalse(result.Delivered);
@@ -302,7 +475,7 @@ public sealed class EuFormexPackagePopulationProducerTests
         var handler = new FormexEnumerationHandler(new Dictionary<string, string[]>(StringComparer.Ordinal), []);
 
         var result = await Producer(new EuAcquisitionTestFixture.EuInMemoryCustodyStore(), handler).RunAsync(
-            refusedRun, RendererSource(), RendererSource(), EuAcquisitionTestFixture.SourceWitness(),
+            refusedRun, RendererSource(), RendererSource(), WorkCelex, EuAcquisitionTestFixture.SourceWitness(),
             EuAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
 
         Assert.IsFalse(result.Delivered);
@@ -330,7 +503,7 @@ public sealed class EuFormexPackagePopulationProducerTests
         // Two requests: the first session's robots bootstrap takes both (301, then 200), so the
         // first count query is the one the ceiling stops.
         var result = await Producer(new EuAcquisitionTestFixture.EuInMemoryCustodyStore(), handler).RunAsync(
-            run, RendererSource(), RendererSource(), EuAcquisitionTestFixture.SourceWitness(),
+            run, RendererSource(), RendererSource(), WorkCelex, EuAcquisitionTestFixture.SourceWitness(),
             WireRequestBudget.OfWireRequests(2), CancellationToken.None);
 
         Assert.IsFalse(result.Delivered);
@@ -350,7 +523,7 @@ public sealed class EuFormexPackagePopulationProducerTests
     /// children of the work (the shape the manifestation enumeration binds): one English, one French.
     /// </summary>
     private static async Task<(EuQueryExecutionResult Run, LanguageScopedExpression English, LanguageScopedExpression French)>
-        RunWithTwoExpressionsAsync()
+        RunWithTwoExpressionsAsync(byte[]? heldXhtml = null, EuAcquisitionTestFixture.EuInMemoryCustodyStore? store = null)
     {
         var root = EuPackRootCanonicalForm.TryCanonicalize(EuAppendixASeedMap.SeedsInCelexOrder[0].WorkRoot, out _)
             ?? throw new AssertFailedException("Appendix A's own seed root failed to canonicalize.");
@@ -358,6 +531,11 @@ public sealed class EuFormexPackagePopulationProducerTests
         var frenchIri = root + ".0002";
         var run = await EuAxiomWiringHarness.RunAsync(
             static seedRoot => EuAcquisitionTestFixture.AxiomAbsenceScriptFor(seedRoot),
+            custodyStore: store,
+            documentFetchResponse: heldXhtml is null
+                ? null
+                : request => EuAcquisitionTestFixture.BinaryResponse(
+                    request, HttpStatusCode.OK, heldXhtml, "application/xhtml+xml;charset=UTF-8"),
             expressionIri: englishIri,
             additionalExpressionIri: frenchIri,
             additionalExpressionLanguageAuthority: FrenchAuthority);
@@ -394,11 +572,27 @@ public sealed class EuFormexPackagePopulationProducerTests
         private static readonly Lazy<byte[]> GdprPackage = new(() => File.ReadAllBytes(
             Path.Combine(AppContext.BaseDirectory, "Fixtures", "EuDocumentFetch", "gdpr-fmx4-200-body.bin")));
 
+        private static readonly Lazy<byte[]> Pdf = new(() => File.ReadAllBytes(
+            Path.Combine(AppContext.BaseDirectory, "Fixtures", "EuDocumentFetch", "new-pdfa2a-200-body.bin")));
+
         private readonly Dictionary<string, int> _callsByExpression = new(StringComparer.Ordinal);
         private readonly List<string> _enumerations = [];
         private readonly List<string> _packages = [];
+        private readonly List<string> _pdfs = [];
         private readonly List<string> _other = [];
         private int _robots;
+
+        /// <summary>The PDF route's requests in order: the work GET, then the PDF item GET the 303 named.</summary>
+        internal IReadOnlyList<string> PdfRequests
+        {
+            get
+            {
+                lock (_pdfs)
+                {
+                    return _pdfs.ToArray();
+                }
+            }
+        }
 
         /// <summary>The package route's requests in order: the manifestation GET, then the ZIP GET the 303 named.</summary>
         internal IReadOnlyList<string> PackageRequests
@@ -474,6 +668,37 @@ public sealed class EuFormexPackagePopulationProducerTests
                     ? EuAcquisitionTestFixture.BinaryResponse(request, HttpStatusCode.OK, GdprPackage.Value, "application/zip")
                     : EuAcquisitionTestFixture.BinaryResponse(
                         request, HttpStatusCode.SeeOther, [], location: "http://publications.europa.eu" + uri.AbsolutePath + "/zip");
+            }
+
+            // The PDF route: the work GET with a pdf accept answers 303 to the English expression's
+            // PDF item (the office's real shape: {manifestation}/DOC_1), and the item GET answers the
+            // real 2026 PDF/A labelled as the office labels it, charset included.
+            if (request.Method == HttpMethod.Get && uri.Host == "publications.europa.eu"
+                && request.Headers.Accept.ToString().Contains("application/pdf", StringComparison.Ordinal))
+            {
+                lock (_pdfs)
+                {
+                    _pdfs.Add(uri.AbsoluteUri);
+                }
+
+                if (packageResponse?.Invoke(request) is { } supplied)
+                {
+                    return supplied;
+                }
+
+                if (uri.AbsolutePath.EndsWith("/DOC_1", StringComparison.Ordinal))
+                {
+                    return EuAcquisitionTestFixture.BinaryResponse(
+                        request, HttpStatusCode.OK, Pdf.Value, "application/pdf;type=pdfa2a;charset=UTF-8");
+                }
+
+                var english = expressions.Single(static candidate =>
+                    candidate.OfficialLanguage == "http://publications.europa.eu/resource/authority/language/ENG");
+                var englishKey = english.Identity.PublisherExpressionId[
+                    (english.Identity.PublisherExpressionId.LastIndexOf("/cellar/", StringComparison.Ordinal) + "/cellar/".Length)..];
+                return EuAcquisitionTestFixture.BinaryResponse(
+                    request, HttpStatusCode.SeeOther, [],
+                    location: "http://publications.europa.eu/resource/cellar/" + englishKey + ".03/DOC_1");
             }
 
             if (request.Method != HttpMethod.Post || request.Content is null)

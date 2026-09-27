@@ -174,7 +174,7 @@ public sealed class V3FirstMountBuild
         var formexMainBody = await new EuFormexMainBodyLegalContentProducer(_custodyStore)
             .RunAsync(formex, cancellationToken).ConfigureAwait(false);
         var classifications = EuFormexAnnexClassificationReconciliation.TryClose(
-            formex, [], out var classificationRefusal, out var classificationDetail);
+            formex, europe.Formex.AnnexClassifications, out var classificationRefusal, out var classificationDetail);
         if (classifications is null)
         {
             return V3FirstMountBuildResult.Refused(

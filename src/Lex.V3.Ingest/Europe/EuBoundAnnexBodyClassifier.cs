@@ -333,8 +333,8 @@ public sealed class EuBoundAnnexBodyClassifier
             && address.MediaType is EuManifestationMediaType.ApplicationPdf
                 or EuManifestationMediaType.PdfTypePdfa2a
             && officialRequest.Method == HttpRequestMethod.Get
-            && officialRequest.Headers.Count == 2
-            && terminalRequest.Headers.Count == 2
+            && CarriesOnlyTheAddressHeaders(officialRequest)
+            && CarriesOnlyTheAddressHeaders(terminalRequest)
             && string.Equals(officialRequest.Uri, address.ResourceUri, StringComparison.Ordinal)
             && string.Equals(terminalRequest.Uri, observation.EffectiveUri, StringComparison.Ordinal)
             && string.Equals(requestDigest, evidence.Hops[0].LogicalRequestSha256,
@@ -346,9 +346,33 @@ public sealed class EuBoundAnnexBodyClassifier
             && HasExactHeader(terminalRequest, "accept-language", address.AcceptLanguage)
             && observation.QualifiesAsTrustedBaselineCandidate()
             && evidence.Hops[^1].Headers.ContentType is RoutedHttpSingleHeader contentType
-            && string.Equals(contentType.Value, address.Accept, StringComparison.Ordinal)
+            && MediaTypeMatches(contentType.Value, address.Accept)
             && string.Equals(evidence.Hops[^1].DurableWriteReceiptSha256,
                 DurableBlobWriteReceiptDigest.Of(binding.PdfReceipt), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The request the acquisition session sends carries the address's two headers and the
+    /// profile's crawler identity (<c>user-agent</c>, added by the session to every request it
+    /// sends) and nothing else; the reference tests' synthetic requests carry the two alone. Both
+    /// are one source. Any other header names a request this route did not send.
+    /// </summary>
+    private static bool CarriesOnlyTheAddressHeaders(HttpLogicalRequest request) =>
+        request.Headers.All(static header =>
+            header.Name is "accept" or "accept-language" or "user-agent")
+        && request.Headers.Count(static header => string.Equals(header.Name, "user-agent", StringComparison.Ordinal)) <= 1;
+
+    /// <summary>
+    /// The office labels the PDF it serves with the accepted media type and its own charset
+    /// parameter (<c>application/pdf;type=pdfa2a;charset=UTF-8</c>, observed 2026-09-04); the
+    /// media type and every parameter but <c>charset</c> must equal the accept that was sent.
+    /// </summary>
+    private static bool MediaTypeMatches(string contentType, string accept)
+    {
+        static IEnumerable<string> Parts(string value) => value
+            .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(static part => !part.StartsWith("charset=", StringComparison.OrdinalIgnoreCase));
+        return Parts(contentType).SequenceEqual(Parts(accept), StringComparer.Ordinal);
     }
 
     private static bool HasExactHeader(HttpLogicalRequest request, string name, string value) =>
