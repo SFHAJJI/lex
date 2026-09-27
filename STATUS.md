@@ -5,8 +5,8 @@ every pull request that changes what is served, what is next or what is blocked.
 
 ## Heads
 
-- `v3/integration`: `a9b013f3` (2026-09-27, PR #746 merged). Build 45 s. Fast lane
-  (`eng/test-fast.ps1`): 3,025 tests pass, 1 skipped, 48 s. Ingest suite: green on CI for PR #746
+- `v3/integration`: `347665a9` (2026-09-27, PR #747 merged). Build 45 s. Fast lane
+  (`eng/test-fast.ps1`): 3,025 tests pass, 1 skipped, 48 s. Ingest suite: green on CI for PR #747
   (the CI `dotnet` job runs the whole solution on every pull request, about 6 min on the runner);
   locally about 15 min. 771 web tests pass.
 - Plan: `C:\lex-v3\V3-FINISH-PLAN-2026-09-27.md` (owner's copy). Decision 94 (one driver, one queue,
@@ -83,11 +83,31 @@ Web: 28 React components, 771 tests; no call to `/api/v3` yet. Screens render fi
   deferred outcome). The plan's largest risk is the real build, and it does not need EU articles to
   be retired.
 
+- **EU side of the first mount: composed (this pull request), fixtures only.**
+  `EuFirstMountAcquisition` (Ingest) acquires one Appendix A work end to end under one wire ceiling:
+  the adapter run with production plans and publicly bound witnesses (the census count query of the
+  work itself; a document-fetch GET of the work's Cellar root, because a CELEX such as `12012E/TXT`
+  is not an admitted resource path), the Formex population, and the legal-notice route under the
+  run's corpus identity. Renderer sources come from the checkout's six Europe renderer files, held
+  in the run's custody (`EuRendererSources.FromCheckoutAsync`); until now every renderer source in
+  the repository was a test placeholder and every witness an internal fixture. Proven on the
+  scripted transport through the envelope helper and `LexCorpus6Builder`: the built corpus's rights
+  matrix names the real notice route. What the survey of 2026-09-27 found and this slice worked
+  around: production code had no renderer sources, no SPARQL witnesses and no Luxembourg
+  vocabulary snapshot (all live only in tests and canaries); `Lex.V3.Tool` would have no access to
+  the internal transport seams, so the composition roots live in Ingest and the tool will be a thin
+  program over them.
+- Carried: a deployed build without a checkout needs the renderer bytes from another carrier (an
+  embedded resource); the release pipeline slice decides.
+
 ## Next, in order
 
-1. `src/Lex.V3.Tool` `build` verb composing the envelope from a live EU run, a live Luxembourg run,
-   the legal-notice route and the Formex population, and writing `lex-corpus-6.json`, the indexes
-   and the capability manifests; mounted by `Lex.V3.Api`. Fixtures first.
+1. The Luxembourg side of the first mount, composed in Ingest: the vocabulary snapshot and verified
+   source profile built live (today only `LuxembourgLiveAdapterCanary` does it), the S/A/G families
+   for one act's ELI range, the adapter run with its Gazette loop, the AKN inventory and legal
+   content producers. Then the envelope, the three builders (each built twice and compared), the
+   five mount files, a mount self-check, and the `src/Lex.V3.Tool` `build` program over both
+   compositions. Fixtures first.
 2. One bounded live run (authorised by the owner on 2026-09-27): one EU work in EN and FR, the
    legal-notice GET, the manifestation enumerations, plus one Luxembourg act. Produces the first
    real mount. Then decide whether the one-process design carries the full population or needs a
