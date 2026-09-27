@@ -5,10 +5,10 @@ every pull request that changes what is served, what is next or what is blocked.
 
 ## Heads
 
-- `v3/integration`: `159a3979` (2026-09-27, PR #745 merged). Build 45 s. Fast lane
-  (`eng/test-fast.ps1`): 3,025 tests pass, 1 skipped, 55 s. Ingest suite: the CI `dotnet` job runs
-  it on every pull request (about 15 min); the local full run on 2026-09-27 was stopped by the
-  harness when the disk reached 0.2 GB free, before the cleanup below. 771 web tests pass.
+- `v3/integration`: `a9b013f3` (2026-09-27, PR #746 merged). Build 45 s. Fast lane
+  (`eng/test-fast.ps1`): 3,025 tests pass, 1 skipped, 48 s. Ingest suite: green on CI for PR #746
+  (the CI `dotnet` job runs the whole solution on every pull request, about 6 min on the runner);
+  locally about 15 min. 771 web tests pass.
 - Plan: `C:\lex-v3\V3-FINISH-PLAN-2026-09-27.md` (owner's copy). Decision 94 (one driver, one queue,
   one review per pull request) merged in lex-governance on 2026-09-27. Launch target 2026-11-07.
 
@@ -44,7 +44,7 @@ Web: 28 React components, 771 tests; no call to `/api/v3` yet. Screens render fi
   never acquired: Formex packages (the only source of EU articles for the index) and the EUR-Lex
   legal-notice evidence. A Luxembourg delivered run is mandatory in every envelope. Building the
   corpus therefore means a fresh, live, one-process acquisition run.
-- **EUR-Lex legal notice (Decision 88): producer built, fixtures only.** `EuLegalNoticeRouteProducer`
+- **EUR-Lex legal notice (Decision 88): producer built (PR #746), fixtures only.** `EuLegalNoticeRouteProducer`
   issues the one GET through the acquisition session under a new source profile
   (`european_union_legal_notice`) and hands back the route under the corpus run identity, which is
   what the Stage 3 envelope checks. Live facts observed 2026-09-27 and pinned in the profile:
@@ -61,23 +61,41 @@ Web: 28 React components, 771 tests; no call to `/api/v3` yet. Screens render fi
   refuses redirects instead.
 - The session now exposes the custody write receipt of every hop an executed attempt sealed
   (`HopWriteReceiptsByObservationId`), which the Formex ZIP binding needs as well.
+- **Formex package population: producer built (this pull request), acquisition deferred.**
+  `EuFormexPackagePopulationProducer` runs the real manifestation enumeration for every expression
+  of a complete run (all languages, one robots session and four requests each), closes eligibility,
+  emits one typed outcome per expression (`not_eligible` where the office lists no `fmx4`;
+  `refused/observation_not_executed` with a fixed deferral detail where it does) and reconciles
+  against the run. Proven on the harness run through the envelope and `LexCorpus6Builder`: a
+  corpus builds from it, with EU records and no EU articles, which is what is served today.
+  Why no `acquired` yet (investigated 2026-09-27): a package needs the manifestation's Cellar
+  items observed with their stream names, and no item enumeration exists; the transport binding
+  pins a single-hop Item URI while the live `fmx4` route is a manifestation URI redirected to
+  `{manifestation}/zip`; only ENG and FRA are addressable while every language needs an outcome;
+  no outcome member names a deferred or scope-excluded acquisition. Each is a contract change.
+- Decision taken by the driver, reversible: build and mount the first corpus with Formex deferred,
+  then build Formex acquisition as its own slices (item enumeration, binding change, a typed
+  deferred outcome). The plan's largest risk is the real build, and it does not need EU articles to
+  be retired.
 
 ## Next, in order
 
-1. The remaining corpus-build pieces, tested on fixtures first: the Formex package population per
-   expression (enumeration, ZIP acquisition, annex inventory, one outcome per expression,
-   reconciliation), then the `src/Lex.V3.Tool` `build` verb composing the envelope and writing
-   `lex-corpus-6.json`, the indexes and the capability manifests.
-2. One bounded live run (authorised by the owner on 2026-09-27): one EU work in EN and FR with its
-   Formex packages and the legal-notice GET, plus one Luxembourg act. Produces the first real mount.
-   Then decide whether the one-process design carries the full population or needs a
+1. `src/Lex.V3.Tool` `build` verb composing the envelope from a live EU run, a live Luxembourg run,
+   the legal-notice route and the Formex population, and writing `lex-corpus-6.json`, the indexes
+   and the capability manifests; mounted by `Lex.V3.Api`. Fixtures first.
+2. One bounded live run (authorised by the owner on 2026-09-27): one EU work in EN and FR, the
+   legal-notice GET, the manifestation enumerations, plus one Luxembourg act. Produces the first
+   real mount. Then decide whether the one-process design carries the full population or needs a
    serialisation boundary between acquisition and build.
-3. Define and run the Luxembourg population and the complete EU population (owner authorisation per
+3. Formex acquisition (EU parity): the Cellar item enumeration per manifestation, the transport
+   binding for the manifestation-level `fmx4` route, the ZIP GET with the receipts door, a typed
+   deferred outcome; then `acquired` outcomes feed the main-body producer and the EU index.
+4. Define and run the Luxembourg population and the complete EU population (owner authorisation per
    run).
-4. Serve the fourteen unserved operations for Luxembourg; wire MCP to a streamable HTTP endpoint.
-5. EU parity: every temporal and search operation from the EU index; French expressions.
-6. Wire the eight launch screens to `/api/v3`; journeys J1 to J8 in a real browser.
-7. Release pipeline: build, sign, image, zero-traffic deploy, probes. Then acceptance and promotion.
+5. Serve the fourteen unserved operations for Luxembourg; wire MCP to a streamable HTTP endpoint.
+6. EU parity: every temporal and search operation from the EU index; French expressions.
+7. Wire the eight launch screens to `/api/v3`; journeys J1 to J8 in a real browser.
+8. Release pipeline: build, sign, image, zero-traffic deploy, probes. Then acceptance and promotion.
 
 ## Blocked or waiting on the owner
 
@@ -95,7 +113,8 @@ Web: 28 React components, 771 tests; no call to `/api/v3` yet. Screens render fi
   files from 2026-08-28 to 2026-09) and the retired seat-protocol droppings under `C:\lex-v3`
   deleted. Free space went from 0.2 GB to 10.0 GB. Kept: the main checkout, this worktree, and 18
   worktrees with uncommitted changes outside scratch (`git -C C:\lex worktree list`). Not touched:
-  `C:\lex-v3\eu-population-run-1..9` and the other run and evidence directories under `C:\lex-v3`.
+  `C:\lex-v3\eu-population-run-1..9` (6.0 GB; runs 1 to 8 are 5.3 GB of partial runs superseded
+  by run 9) and the other run and evidence directories under `C:\lex-v3`.
 
 ## Known defects carried
 
