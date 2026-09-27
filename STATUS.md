@@ -65,9 +65,14 @@ Web: 28 React components, 771 tests; no call to `/api/v3` yet. Screens render fi
   `EuFormexPackagePopulationProducer` runs the real manifestation enumeration for every expression
   of a complete run (all languages, one robots session and four requests each), closes eligibility,
   emits one typed outcome per expression (`not_eligible` where the office lists no `fmx4`;
-  `refused/observation_not_executed` with a fixed deferral detail where it does) and reconciles
-  against the run. Proven on the harness run through the envelope and `LexCorpus6Builder`: a
-  corpus builds from it, with EU records and no EU articles, which is what is served today.
+  `refused/observation_not_executed` where it does, with a fixed deferral detail on the in-process
+  outcome) and reconciles against the run. Proven on the harness run through the envelope and
+  `LexCorpus6Builder`: a corpus builds from it, with EU records and no EU articles, which is what
+  is served today. Stated exactly: in `lex-corpus-6.json` the held EU member's stage 3 outcome is
+  `europe_formex_main_body` / `formex_main_body_package_refused` with no detail text, so a deferred
+  acquisition is not distinguishable there from a real transport refusal. The first mount serves no
+  stage 3 outcome; a typed deferred outcome member comes before any public claim rests on that
+  field (next item 3). The builder test pins today's shape.
   Why no `acquired` yet (investigated 2026-09-27): a package needs the manifestation's Cellar
   items observed with their stream names, and no item enumeration exists; the transport binding
   pins a single-hop Item URI while the live `fmx4` route is a manifestation URI redirected to

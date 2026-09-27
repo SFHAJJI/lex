@@ -139,16 +139,27 @@ public sealed class EuFormexPackagePopulationResult
 /// <see cref="DeferredAcquisitionDetail"/> as its detail, which is exactly the idiom the reference
 /// composition (<c>EuFormexRunOutcomeReconciliationTests.CompleteForEnvelope</c>) uses and which
 /// the corpus builder already accepts. The corpus built from it carries EU records without Formex
-/// articles, as the served product does today. Typing a distinct deferred outcome and building the
-/// acquisition are the next Formex slices (STATUS.md).
+/// articles, as the served product does today.
+/// </para>
+/// <para>
+/// What the corpus says about it, stated exactly: the main-body producer maps this outcome to
+/// <c>PackageRefused</c>, and <c>LexCorpus6Builder</c> writes the held EU member's stage 3 outcome
+/// as <c>europe_formex_main_body</c> / <c>formex_main_body_package_refused</c>, with no detail text
+/// (the record has none; the detail enters only the outcome's semantic identity hash). In the
+/// corpus file a deferred acquisition is therefore indistinguishable from a package the transport
+/// really refused. That is acceptable for the first mount, which serves no stage 3 outcome, and it
+/// is why a typed deferred outcome member is the first Formex slice after the mount, before any
+/// public claim rests on this field (STATUS.md). The builder test pins today's shape so the change
+/// is a visible test edit.
 /// </para>
 /// </remarks>
 public sealed class EuFormexPackagePopulationProducer
 {
     /// <summary>
-    /// The detail carried by every eligible expression's outcome while package acquisition is not
-    /// built. One fixed string, so a reader of the corpus can tell this deferral from a real
-    /// transport refusal by its text and a later slice can find every such outcome.
+    /// The detail carried by every eligible expression's in-process outcome while package
+    /// acquisition is not built. One fixed string, so the outcome objects a run produces can be
+    /// told apart from real transport refusals and a later slice can find every such outcome. It
+    /// does not reach the corpus file; see the type remarks.
     /// </summary>
     public const string DeferredAcquisitionDetail =
         "formex package acquisition deferred: no package request was sent; the package needs the "
@@ -208,9 +219,12 @@ public sealed class EuFormexPackagePopulationProducer
                 productRequests);
         }
 
+        // Every request is bound before the first one is sent. Binding is pure (it canonicalizes
+        // the expression's selection and nothing else), so an expression that cannot be enumerated
+        // refuses the run before any family's traffic is spent on a result that is refused anyway.
         var plan = EuFormexManifestationDiscoveryPlan.Create();
-        var populations = new List<EuFormexPackageOutcomePopulation>();
-        var eligible = 0;
+        var families = new List<(string FamilyKey, EuLanguageScopedExpressionProductionResult Production,
+            IReadOnlyList<EuFormexManifestationRunRequest> Requests)>();
         foreach (var (familyKey, production) in run.CorrigendumTripwires.ProductionsByFamilyKey
                      .OrderBy(static pair => pair.Key, StringComparer.Ordinal))
         {
@@ -224,24 +238,34 @@ public sealed class EuFormexPackagePopulationProducer
                     productRequests);
             }
 
-            var batch = new List<EuFormexManifestationEnumerationResult>(expressions.Derivation.Expressions.Count);
+            var requests = new List<EuFormexManifestationRunRequest>(expressions.Derivation.Expressions.Count);
             foreach (var expression in expressions.Derivation.Expressions)
             {
-                EuFormexManifestationRunRequest request;
                 try
                 {
-                    request = new EuFormexManifestationRunRequest(
-                        plan, expression, NewUrn(), manifestationRendererSource, wireBudget);
+                    requests.Add(new EuFormexManifestationRunRequest(
+                        plan, expression, NewUrn(), manifestationRendererSource, wireBudget));
                 }
                 catch (ArgumentException exception)
                 {
                     return EuFormexPackagePopulationResult.Refused(
                         EuFormexPackagePopulationRefusal.ExpressionSelectionInvalid,
-                        $"{expression.Identity.PublisherExpressionId}: {exception.Message}",
+                        $"family {familyKey}: {expression.Identity.PublisherExpressionId}: {exception.Message}",
                         enumerations,
                         productRequests);
                 }
+            }
 
+            families.Add((familyKey, expressions, requests));
+        }
+
+        var populations = new List<EuFormexPackageOutcomePopulation>(families.Count);
+        var eligible = 0;
+        foreach (var (familyKey, expressions, requests) in families)
+        {
+            var batch = new List<EuFormexManifestationEnumerationResult>(requests.Count);
+            foreach (var request in requests)
+            {
                 var enumeration = await _enumerations.RunAsync(request, sourceWitness, cancellationToken)
                     .ConfigureAwait(false);
                 productRequests += enumeration.ProductRequestCount;

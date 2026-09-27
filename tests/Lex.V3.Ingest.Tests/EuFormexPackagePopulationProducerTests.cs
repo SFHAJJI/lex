@@ -94,7 +94,42 @@ public sealed class EuFormexPackagePopulationProducerTests
         var built = LexCorpus6Builder.TryBuild(envelope, out var refusal, out var detail);
 
         Assert.IsNotNull(built, $"{refusal}: {detail}");
-        Assert.IsTrue(built.VerifiedSet.Set.Members.Count > 0);
+
+        // What the corpus says today, pinned so the typed deferred outcome is a visible test edit:
+        // the held EU member carries exactly one Formex main-body outcome, package_refused, and no
+        // deferral text (the stage 3 outcome record has no detail field).
+        var formexOutcomes = built.VerifiedSet.Set.Members
+            .SelectMany(static member => member.Stage3Outcomes)
+            .Where(static outcome => outcome.Domain == LexCorpus6Stage3OutcomeDomain.EuropeFormexMainBody)
+            .ToArray();
+        Assert.AreEqual(1, formexOutcomes.Length, "the produced reconciliation reaches the one held EU member.");
+        Assert.AreEqual(LexCorpus6Stage3Disposition.FormexMainBodyPackageRefused, formexOutcomes[0].Disposition,
+            "while acquisition is deferred, the corpus states package_refused and carries no deferral text; "
+            + "the typed deferred outcome slice must change this assertion.");
+    }
+
+    /// <summary>
+    /// The harness's default run names its expression by an item-shaped IRI, not the numeric child
+    /// of its work, so no manifestation enumeration can be bound for it. Every request is bound
+    /// before the first is sent, so the run is refused with the offending expression named and the
+    /// publisher sees no request at all.
+    /// </summary>
+    [TestMethod]
+    public async Task AnExpressionThatIsNotTheNumericChildOfItsWorkIsRefusedBeforeAnyTraffic()
+    {
+        var run = await EuAxiomWiringHarness.RunAsync(
+            static seedRoot => EuAcquisitionTestFixture.AxiomAbsenceScriptFor(seedRoot));
+        var handler = new FormexEnumerationHandler(new Dictionary<string, string[]>(StringComparer.Ordinal), []);
+
+        var result = await Producer(new EuAcquisitionTestFixture.EuInMemoryCustodyStore(), handler).RunAsync(
+            run, RendererSource(), EuAcquisitionTestFixture.SourceWitness(),
+            EuAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
+
+        Assert.IsFalse(result.Delivered);
+        Assert.AreEqual(EuFormexPackagePopulationRefusal.ExpressionSelectionInvalid, result.Refusal);
+        StringAssert.Contains(result.Detail, "/DOC_1");
+        Assert.AreEqual(0, handler.RobotsSends + handler.Enumerations.Count + handler.OtherRequests.Count);
+        Assert.AreEqual(0, result.Enumerations.Count);
     }
 
     [TestMethod]
