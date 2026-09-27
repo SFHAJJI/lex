@@ -81,8 +81,10 @@ Web: 28 React components, 771 tests; no call to `/api/v3` yet. Screens render fi
   body; `annex_classification_not_built`: the package names annexes and no annex classification
   chain is composed in production, so the ZIP stays in custody and the expression waits for the
   annex slice; `language_not_addressable`, `manifestation_not_singular`, `identity_not_admitted`),
-  `route_refused` with the status for any answer but 200 or 404, `package_rejected` with the
-  inventory refusal for a 200 that is not a Formex package, `unavailable` for 404. Three corpus
+  `route_refused` with the status for any answer but 200 or 404 and for a 200 reached on a route
+  that does not bind (a hop off the manifestation's path; review repair on this pull request),
+  `package_rejected` with the inventory refusal for a 200 that is not a Formex package,
+  `unavailable` for 404. Three corpus
   stage 3 dispositions were added for them (`formex_main_body_package_not_acquired`,
   `_route_refused`, `_package_rejected`), so the corpus file now tells a deferred or rejected
   package from a transport refusal.

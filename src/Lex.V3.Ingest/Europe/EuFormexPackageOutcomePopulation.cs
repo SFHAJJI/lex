@@ -31,7 +31,11 @@ public enum EuFormexPackageOutcomeKind
     [JsonStringEnumMemberName("not_acquired")]
     NotAcquired = 5,
 
-    /// <summary>The office answered the package request with a status other than 200 or 404, or the retained route does not bind as a package transport.</summary>
+    /// <summary>
+    /// The office answered the package request with a status other than 200 or 404, or it answered
+    /// 200 on a route that does not bind as a package transport (a hop off the manifestation's path,
+    /// a request or receipt the session did not retain). The observed status travels with it.
+    /// </summary>
     [JsonStringEnumMemberName("route_refused")]
     RouteRefused = 6,
 
@@ -180,11 +184,11 @@ public sealed class EuFormexPackageOutcome
         string detail)
     {
         ArgumentNullException.ThrowIfNull(expression);
-        if (observedStatus is 200 or 404)
+        if (observedStatus is 404)
         {
             throw new ArgumentOutOfRangeException(
                 nameof(observedStatus), observedStatus,
-                "A 200 is bound or rejected as a package and a 404 is unavailable; neither is a refused route.");
+                "A 404 is an unavailable package, not a refused route.");
         }
 
         ArgumentException.ThrowIfNullOrWhiteSpace(detail);

@@ -136,7 +136,30 @@ public sealed class EuFormexPackagePopulationProducerTests
         var mainBody = await new EuFormexMainBodyLegalContentProducer(store).RunAsync(result.Reconciliation, CancellationToken.None);
         var admitted = mainBody.Outcomes.Single(outcome => outcome.Source.ExpressionIdentity == english.Identity);
         Assert.AreEqual(EuFormexMainBodyLegalContentDisposition.Admitted, admitted.Disposition, admitted.Detail);
-        Assert.IsTrue(admitted.Articles.Count > 90, $"GDPR has 99 articles; parsed {admitted.Articles.Count}.");
+        Assert.AreEqual(99, admitted.Articles.Count, "GDPR has 99 articles.");
+    }
+
+    /// <summary>
+    /// The office's 303 may point anywhere on its host; the binding admits only the manifestation's
+    /// own path. A 200 reached through a hop off that path is a refused route with its status, a
+    /// typed outcome the population closes over, never an exception out of the run (review finding
+    /// on this pull request: the factory used to reject a 200 and the producer threw).
+    /// </summary>
+    [TestMethod]
+    public async Task ARedirectThatLeavesTheManifestationIsARefusedRouteEvenWhenItEndsInATwoHundred()
+    {
+        const string elsewhere = "http://publications.europa.eu/resource/cellar/00000000-0000-0000-0000-000000000000.0006.01/zip";
+        var (result, handler, english) = await AcquireEnglishAsync(request =>
+            request.RequestUri!.AbsolutePath.EndsWith("/zip", StringComparison.Ordinal)
+                ? null
+                : EuAcquisitionTestFixture.BinaryResponse(request, HttpStatusCode.SeeOther, [], location: elsewhere));
+
+        var outcome = result.Reconciliation!.Outcomes.Single(outcome => outcome.ExpressionIdentity == english.Identity);
+        Assert.AreEqual(EuFormexPackageOutcomeKind.RouteRefused, outcome.Kind, outcome.Detail);
+        Assert.AreEqual(200, outcome.ObservedStatus);
+        StringAssert.Contains(outcome.Detail, "does not bind");
+        Assert.AreEqual(2, handler.PackageRequests.Count, "the 303 was followed once, to the other manifestation.");
+        Assert.AreEqual(10, result.ProductRequestCount);
     }
 
     [TestMethod]
