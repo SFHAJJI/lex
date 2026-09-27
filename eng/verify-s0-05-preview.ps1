@@ -868,7 +868,9 @@ try {
             'org.opencontainers.image.version' = '1.0.0'
             'org.opencontainers.image.base.name' = "mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled@$ExpectedBaseImageDigest"
             'net.dot.runtime.majorminor' = '10.0'
-            'net.dot.sdk.version' = '10.0.400'
+            # The SDK floats on the 10.0.4xx patch line (global.json rolls forward on patch), so this
+            # label is matched as a pattern; every other label is the exact reviewed value.
+            'net.dot.sdk.version' = '^10[.]0[.]4[0-9][0-9]$'
             'org.opencontainers.image.base.digest' = $trustedBase.ManifestDigest
         }
         $actualLabelCount = @($labels.EnumerateObject()).Count
@@ -877,7 +879,12 @@ try {
             Assert-True (Test-JsonProperty -Object $labels -Name $expectedLabel.Key) "OCI config is missing label '$($expectedLabel.Key)'."
             $actualLabel = $labels.GetProperty($expectedLabel.Key)
             Assert-True ($actualLabel.ValueKind -eq [Text.Json.JsonValueKind]::String) "OCI label '$($expectedLabel.Key)' is not a string."
-            Assert-True ($actualLabel.GetString() -ceq $expectedLabel.Value) "OCI label '$($expectedLabel.Key)' does not match the reviewed value."
+            $labelMatches = if ($expectedLabel.Key -ceq 'net.dot.sdk.version') {
+                $actualLabel.GetString() -cmatch $expectedLabel.Value
+            } else {
+                $actualLabel.GetString() -ceq $expectedLabel.Value
+            }
+            Assert-True $labelMatches "OCI label '$($expectedLabel.Key)' does not match the reviewed value."
         }
 
         $rootFileSystem = Get-RequiredJsonProperty -Object $configRoot -Name 'rootfs' -Kind Object
