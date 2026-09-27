@@ -16,10 +16,12 @@ function Test-V3TrackedPath {
         'CLAUDE.md',
         'Directory.Build.props',
         'global.json',
+        'LAUNCH-CONTRACT.md',
         'Lex.V3.slnx',
         'LICENSE',
         'README.md',
         'SECURITY.md',
+        'STATUS.md',
         'V3-INSTRUCTIONS.md'
     )
 
@@ -33,6 +35,7 @@ function Test-V3TrackedPath {
         $normalized -ceq '.github/scripts/dual_review.py' -or
         $normalized -ceq '.github/scripts/test_dual_review.py' -or
         $normalized -cmatch '^eng/verify-v3-[a-z0-9-]+\.ps1$' -or
+        $normalized -ceq 'eng/test-fast.ps1' -or
         $normalized -ceq 'eng/verify-s0-05-preview.ps1' -or
         $normalized -cmatch '^schemas/v3-[a-z0-9-]+/[a-z0-9-]+\.schema\.json$' -or
         # The two censuses: real payloads and real answers the platform sends, not schemas, so each is
@@ -54,25 +57,21 @@ function Test-V3TrackedPath {
     )
 }
 
-function Test-InstructionPointer {
-    param(
-        [Parameter(Mandatory)][AllowEmptyString()][string]$Text,
-        [Parameter(Mandatory)][string]$ExpectedGovernanceHead,
-        [Parameter(Mandatory)][ValidateSet('Codex', 'Claude')][string]$Agent
-    )
+function Test-BootDocument {
+    param([Parameter(Mandatory)][AllowEmptyString()][string]$Text)
 
+    # The boot names the two files a session reads first and the baseline branch, and carries no
+    # pointer to the retired out-of-repository bundles or the retired seat protocol.
+    $required = @('STATUS.md', 'LAUNCH-CONTRACT.md', 'v3/integration')
     $forbidden = @(
         '12C302017CE9B48750115FB638A217B4D562581216AB0E3B5557A6E659C4EF0F',
         'out-of-repository authority bundle',
-        'pass its quiz'
+        'pass its quiz',
+        'REVIEW REQUEST'
     )
 
     return (
-        $Text.Contains('https://github.com/SFHAJJI/lex-governance', [StringComparison]::Ordinal) -and
-        $Text.Contains('BOOT.md', [StringComparison]::Ordinal) -and
-        $Text.Contains('v3/integration', [StringComparison]::Ordinal) -and
-        $Text.Contains($ExpectedGovernanceHead, [StringComparison]::OrdinalIgnoreCase) -and
-        $Text.Contains($Agent, [StringComparison]::Ordinal) -and
+        -not $required.Where({ -not $Text.Contains($_, [StringComparison]::Ordinal) }) -and
         -not $forbidden.Where({ $Text.Contains($_, [StringComparison]::OrdinalIgnoreCase) })
     )
 }
@@ -81,14 +80,14 @@ function Test-CanonicalInstruction {
     param([Parameter(Mandatory)][string]$Text)
 
     $required = @(
-        'SFHAJJI/lex-governance/BOOT.md',
+        'STATUS.md',
+        'LAUNCH-CONTRACT.md',
         'v3/integration',
-        'legacy/operations line',
+        'legacy line',
         'implemented and accepted',
         'implemented but unaccepted',
         'incorrect',
-        'missing',
-        'REVIEW REQUEST'
+        'missing'
     )
     $forbidden = @(
         '12C302017CE9B48750115FB638A217B4D562581216AB0E3B5557A6E659C4EF0F',
@@ -187,27 +186,31 @@ $instructionPath = Join-Path $repositoryRoot 'V3-INSTRUCTIONS.md'
 $instructionText = Get-Content -LiteralPath $instructionPath -Raw
 $agentsText = Get-Content -LiteralPath (Join-Path $repositoryRoot 'AGENTS.md') -Raw
 $claudeText = Get-Content -LiteralPath (Join-Path $repositoryRoot 'CLAUDE.md') -Raw
-$governanceHead = '6c216fa5a435f35696279e370910ce825d011e09'
+foreach ($name in @('STATUS.md', 'LAUNCH-CONTRACT.md')) {
+    if (-not (Test-Path -LiteralPath (Join-Path $repositoryRoot $name) -PathType Leaf)) {
+        throw "$name is missing; the boot points a session at it."
+    }
+}
 
 if (-not (Test-CanonicalInstruction -Text $instructionText)) {
-    throw 'The canonical V3 instruction is missing an authority binding or contains a stale authority.'
+    throw 'V3-INSTRUCTIONS.md is missing a required pointer or contains a stale authority.'
 }
-if (-not (Test-InstructionPointer -Text $agentsText -ExpectedGovernanceHead $governanceHead -Agent Codex)) {
-    throw 'AGENTS.md does not bind the governance boot router and Codex boot action.'
+if (-not (Test-BootDocument -Text $agentsText)) {
+    throw 'AGENTS.md does not point at STATUS.md and LAUNCH-CONTRACT.md, or carries a retired pointer.'
 }
-if (-not (Test-InstructionPointer -Text $claudeText -ExpectedGovernanceHead $governanceHead -Agent Claude)) {
-    throw 'CLAUDE.md does not bind the governance boot router and Claude boot action.'
+if (-not (Test-BootDocument -Text $claudeText)) {
+    throw 'CLAUDE.md does not point at STATUS.md and LAUNCH-CONTRACT.md, or carries a retired pointer.'
 }
 
-$wrongDigest = '0' * 64
-if (Test-InstructionPointer -Text $agentsText -ExpectedGovernanceHead $wrongDigest -Agent Codex) {
-    throw 'The wrong-governance-head mutation did not fail.'
+# The checks above can fail: each mutation below must be rejected.
+if (Test-BootDocument -Text '') {
+    throw 'The empty-boot mutation did not fail.'
 }
-if (Test-InstructionPointer -Text '' -ExpectedGovernanceHead $governanceHead -Agent Codex) {
-    throw 'The missing-pointer mutation did not fail.'
-}
-if (Test-InstructionPointer -Text ($agentsText + "`n12C302017CE9B48750115FB638A217B4D562581216AB0E3B5557A6E659C4EF0F") -ExpectedGovernanceHead $governanceHead -Agent Codex) {
+if (Test-BootDocument -Text ($agentsText + "`n12C302017CE9B48750115FB638A217B4D562581216AB0E3B5557A6E659C4EF0F")) {
     throw 'The stale-authority-pointer mutation did not fail.'
+}
+if (Test-BootDocument -Text ($agentsText + "`nPost a REVIEW REQUEST on the issue.")) {
+    throw 'The retired-protocol mutation did not fail.'
 }
 if (Test-CanonicalInstruction -Text ($instructionText + "`ndeploy/indexes")) {
     throw 'The stale-path mutation did not fail.'
@@ -216,4 +219,4 @@ if (Test-CanonicalInstruction -Text ($instructionText + "`nSchema authority: lex
     throw 'The old-schema mutation did not fail.'
 }
 
-Write-Host "V3 tree and instruction boundary verified across $($trackedPaths.Count) tracked paths."
+Write-Host "V3 tree and boot documents verified across $($trackedPaths.Count) tracked paths."
