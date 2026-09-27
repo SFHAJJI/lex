@@ -91,6 +91,8 @@ public sealed class ClosedVocabularyCensusTests
                     + "WireBudgetExhausted",
                 "Lex.V3.Ingest.Europe.EuFamilyEnumerationOutcomeKind: Proven, ExecutorRefused, "
                     + "ProofRefused",
+                "Lex.V3.Ingest.Europe.EuFirstMountAcquisitionRefusal: None, RunRefused, "
+                    + "FormexRefused, LegalNoticeRefused",
                 "Lex.V3.Ingest.Europe.EuFormexAnnexClassificationReconciliationRefusal: None, "
                     + "AcquiredInventoryClaimedTwice, ClassificationOutsideAcquiredPopulation, "
                     + "ClassificationInventoryDisagrees, ClassificationSuppliedTwice, "
