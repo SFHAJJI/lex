@@ -35,17 +35,27 @@ Web: 28 React components, 771 tests; no call to `/api/v3` yet. Screens render fi
   found on disk or in the repository.** The Luxembourg population scope and its run are an open item.
 - No corpus, index or capability manifest has ever been built outside tests. The three builders take a
   Stage 3 envelope that only tests compose.
+- **Run 9 cannot feed the builders** (investigated 2026-09-27). The envelope is an in-memory object
+  graph with reference-identity checks, built in one process from one run identity; nothing in it was
+  serialised and no reader exists. Run 9 is 82 runs with 82 identities. Two mandatory EU inputs were
+  never acquired: Formex packages (the only source of EU articles for the index) and the EUR-Lex
+  legal-notice evidence. Their producers are unbuilt. A Luxembourg delivered run is mandatory in every
+  envelope. Building the corpus therefore means a fresh, live, one-process acquisition run.
 
 ## Next, in order
 
-1. `lex-v3 build` command: load a population run directory into the Stage 3 envelope, build
-   `lex-corpus-6.json`, both indexes and both capability manifests into a mount directory, and mount
-   them in the API. Prove it on the EU run-9 data first.
-2. Define and run the Luxembourg population (needs the owner's run authorisation).
-3. Serve the fourteen unserved operations for Luxembourg; wire MCP to a streamable HTTP endpoint.
-4. EU parity: every temporal and search operation from the EU index; French expressions.
-5. Wire the eight launch screens to `/api/v3`; journeys J1 to J8 in a real browser.
-6. Release pipeline: build, sign, image, zero-traffic deploy, probes. Then acceptance and promotion.
+1. `src/Lex.V3.Tool` `build` verb, plus two Ingest producers: the EUR-Lex legal-notice route bound to
+   the corpus run identity, and the Formex package population per expression (enumeration, ZIP
+   acquisition, annex inventory, outcomes). Tested on fixtures first.
+2. One bounded live run (needs the owner's authorisation): one EU work in EN and FR with its Formex
+   packages and the legal-notice GET, plus one Luxembourg act. Produces the first real mount.
+   Then decide whether the one-process design carries the full population or needs a
+   serialisation boundary between acquisition and build.
+3. Define and run the Luxembourg population and the complete EU population (owner authorisation).
+4. Serve the fourteen unserved operations for Luxembourg; wire MCP to a streamable HTTP endpoint.
+5. EU parity: every temporal and search operation from the EU index; French expressions.
+6. Wire the eight launch screens to `/api/v3`; journeys J1 to J8 in a real browser.
+7. Release pipeline: build, sign, image, zero-traffic deploy, probes. Then acceptance and promotion.
 
 ## Blocked or waiting on the owner
 
