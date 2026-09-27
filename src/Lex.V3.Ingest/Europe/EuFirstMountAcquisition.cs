@@ -141,7 +141,11 @@ public sealed class EuFirstMountAcquisitionResult
         Detail = detail;
     }
 
-    /// <summary>The complete adapter run over the one work. Present on success and after a later step refused.</summary>
+    /// <summary>
+    /// The adapter run over the one work: complete on success and when a later step refused, the
+    /// refused run itself when <see cref="Refusal"/> is <see cref="EuFirstMountAcquisitionRefusal.RunRefused"/>
+    /// after the adapter ran. Absent when the CELEX was refused before traffic.
+    /// </summary>
     public EuQueryExecutionResult? Run { get; }
 
     /// <summary>The Formex population bound to <see cref="Run"/>. Present on success and after the notice refused.</summary>
@@ -196,9 +200,12 @@ public sealed class EuFirstMountAcquisitionResult
 /// <remarks>
 /// <para>
 /// Order: the census and object-facts run through <see cref="EuQueryExecutionAdapter"/> (the same
-/// call the Stage 1 population run made, with the fixture placeholders replaced: the robots
-/// witness is a real bound count query of this work's own census family, the document-fetch
-/// witness a real bound GET of this work's XHTML), then <see cref="EuFormexPackagePopulationProducer"/>
+/// call the Stage 1 population run made, with the fixture placeholders replaced: the SPARQL
+/// witness, which selects the source profile and the path robots is checked against, is a real
+/// bound count query of this work's own census family; the document-fetch witness the adapter's
+/// signature requires is a real bound GET of this work's Cellar root, although every document-fetch
+/// session starts from the request it is about to send, so that witness selects nothing),
+/// then <see cref="EuFormexPackagePopulationProducer"/>
 /// over that run, then <see cref="EuLegalNoticeRouteProducer"/> under the run's corpus identity.
 /// The three results are the arguments of
 /// <c>Stage3EvidenceEnvelope.TryCreateWithEuropeLegalNoticeRouteAndFormexMainBody</c>, held in the
@@ -276,8 +283,10 @@ public sealed class EuFirstMountAcquisition
                 $"Appendix A's root for '{celex}' does not canonicalize to a Cellar key");
         }
 
-        // Witnesses are real bound requests of this work, so robots is evaluated against a URL the
-        // run actually sends (Decision 83), never a placeholder path.
+        // Both witnesses are real bound requests of this work. The SPARQL witness is what the
+        // session resolves its source profile from and the path it evaluates robots against
+        // (Decision 83); the document-fetch witness only has to be a valid bound GET of the
+        // admitted channel, because each document-fetch session starts from the request it sends.
         BoundMachineRequest sparqlWitness;
         BoundMachineRequest documentFetchWitness;
         var censusPlan = EuConsolidationDiscoveryPlan.Create();

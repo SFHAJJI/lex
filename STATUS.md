@@ -85,12 +85,15 @@ Web: 28 React components, 771 tests; no call to `/api/v3` yet. Screens render fi
 
 - **EU side of the first mount: composed (this pull request), fixtures only.**
   `EuFirstMountAcquisition` (Ingest) acquires one Appendix A work end to end under one wire ceiling:
-  the adapter run with production plans and publicly bound witnesses (the census count query of the
-  work itself; a document-fetch GET of the work's Cellar root, because a CELEX such as `12012E/TXT`
-  is not an admitted resource path), the Formex population, and the legal-notice route under the
-  run's corpus identity. Renderer sources come from the checkout's six Europe renderer files, held
-  in the run's custody (`EuRendererSources.FromCheckoutAsync`); until now every renderer source in
-  the repository was a test placeholder and every witness an internal fixture. Proven on the
+  the adapter run with production plans and publicly bound witnesses (the SPARQL witness is the
+  census count query of the work itself, which selects the source profile and the path robots is
+  checked against; the document-fetch witness the adapter's signature requires is a GET of the
+  work's Cellar root, because a CELEX such as `12012E/TXT` is not an admitted resource path, and
+  document-fetch sessions start from the request they send anyway), the Formex population, and the
+  legal-notice route under the run's corpus identity. Renderer sources come from the checkout's six
+  Europe renderer files, held in the run's custody (`EuRendererSources.FromCheckoutAsync`); until
+  now every renderer source in the repository was a test placeholder and every SPARQL witness an
+  internal fixture. Proven on the
   scripted transport through the envelope helper and `LexCorpus6Builder`: the built corpus's rights
   matrix names the real notice route. What the survey of 2026-09-27 found and this slice worked
   around: production code had no renderer sources, no SPARQL witnesses and no Luxembourg
