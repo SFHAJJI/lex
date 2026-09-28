@@ -18,7 +18,7 @@ REST at `/api/v3/`, from a mounted `v3-corpus` directory, **Luxembourg only**: `
 `timeline`, `article_history`, `diff`, `changes_in_period`, `in_force_on`, `search` (strict and relaxed
 lanes), `coverage`, `provenance`, `dossier`, `citation`, `cited_by`, and since this pull request
 `verify` (a hash-pinned permalink verified against the state digest the index holds; a work
-identifier answers the current digests) and `relations` (the one edge table in both directions,
+identifier or a stable coordinate answers the current digests) and `relations` (the one edge table in both directions,
 `cites` edges only, what `citation` and `cited_by` serve as one ordered, paged list). Without a
 mounted corpus every route answers `no_corpus_mounted`. EU serves `resolve` only.
 

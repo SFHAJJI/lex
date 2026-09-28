@@ -98,14 +98,22 @@ public sealed class V3CorpusVerifyMountTests
     }
 
     [TestMethod]
-    public async Task AWorkIdentifierAnswersTheCurrentDigestsSoACallerCanPinThem()
+    public async Task AWorkIdentifierOrAStableCoordinateAnswersTheCurrentDigestsSoACallerCanPinThem()
     {
         var fixture = await MountedFixture.CreateAsync();
         await using var cleanup = fixture;
         using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
         Assert.IsNotNull(mount);
 
-        foreach (var identifier in new[] { $"/lu-legilux/{fixture.WorkKey}", fixture.StableCoordinate[..fixture.StableCoordinate.LastIndexOf('/')] })
+        // The work coordinate, the publisher's work IRI, the dated stable coordinate this mount
+        // writes into its own answers and refusals, and the same under the origin.
+        foreach (var identifier in new[]
+                 {
+                     $"/lu-legilux/{fixture.WorkKey}",
+                     "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3",
+                     fixture.StableCoordinate,
+                     "https://law.soufien.lu" + fixture.StableCoordinate,
+                 })
         {
             var envelope = await VerifyAsync(mount, new { identifier });
             Assert.AreEqual(V3Verdicts.Answer, envelope.Verdict, identifier);
@@ -114,9 +122,14 @@ public sealed class V3CorpusVerifyMountTests
             Assert.AreEqual(JsonValueKind.Null, body.GetProperty("requested_digest").ValueKind);
             var states = body.GetProperty("states").EnumerateArray().ToArray();
             Assert.AreEqual(1, states.Length);
-            Assert.AreEqual(fixture.Permalink, states[0].GetProperty("permalink").GetString());
-            Assert.AreEqual(fixture.StateSha256, states[0].GetProperty("state_sha256").GetString());
+            Assert.AreEqual(fixture.Permalink, states[0].GetProperty("permalink").GetString(), identifier);
+            Assert.AreEqual(fixture.StateSha256, states[0].GetProperty("state_sha256").GetString(), identifier);
         }
+
+        // A dated coordinate at which nothing is held is unknown, not the work's digests.
+        var elsewhere = await VerifyAsync(mount, new { identifier = $"/lu-legilux/{fixture.WorkKey}/1900-01-01" });
+        Assert.AreEqual("identifier_unknown", elsewhere.Refusal!.Code);
+        StringAssert.Contains(elsewhere.Refusal.HelpfulPayload.GetProperty("what_would_answer").GetString(), "stable coordinate");
     }
 
     [TestMethod]

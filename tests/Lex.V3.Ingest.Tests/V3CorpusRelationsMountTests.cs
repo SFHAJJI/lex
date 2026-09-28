@@ -123,6 +123,7 @@ public sealed class V3CorpusRelationsMountTests
         var states = body.GetProperty("states").EnumerateArray().ToArray();
         Assert.AreEqual(1, states.Length);
         Assert.AreEqual(later.StateSha256, states[0].GetProperty("state_sha256").GetString());
+        Assert.AreEqual(outbound.Length, states[0].GetProperty("outbound_edges").GetInt32(), "the state's count is the outbound edges served for it.");
         Assert.AreEqual(4, body.GetProperty("not_held").GetArrayLength());
     }
 
@@ -148,8 +149,8 @@ public sealed class V3CorpusRelationsMountTests
         Assert.AreEqual(citedBy.Result!.Value.GetProperty("edge_count").GetInt32(), inboundOnly.GetProperty("edge_counts").GetProperty("inbound").GetInt32(),
             "inbound only is cited_by.");
         Assert.IsTrue(inboundOnly.GetProperty("edges").EnumerateArray().All(static edge => edge.GetProperty("direction").GetString() == "inbound"));
-        Assert.AreEqual(later.StateSha256, inboundOnly.GetProperty("states")[0].GetProperty("state_sha256").GetString(),
-            "the selected state is still named even when no outbound edge is asked for.");
+        Assert.AreEqual(0, inboundOnly.GetProperty("states").GetArrayLength(),
+            "inbound alone selects no outbound state, so none is named and no count is stated for it (review finding on this pull request).");
 
         var beforeAny = await RelationsAsync(mount, new { identifier, date = "1900-01-01" });
         Assert.AreEqual("no_version_for_date", beforeAny.Refusal!.Code);

@@ -823,8 +823,8 @@ internal sealed class V3CorpusMount : IDisposable
     internal const string VerifyScope =
         "whether a hash-pinned permalink of this publisher still names the state this index holds at its stable coordinate, by the state digest the index " +
         "computed from the retained publisher bytes under its rule profiles (a matching digest is verified as digest_matches; a digest the coordinate no longer " +
-        "carries is the pinned_digest_mismatch refusal naming the current one); for a work identifier or a stable coordinate, the current digests of every state " +
-        "held, so a caller can pin them; nothing about the text or its legal effect is assessed";
+        "carries is the pinned_digest_mismatch refusal naming the current one); for a work identifier or work coordinate, the current digests of every state " +
+        "held, and for a dated stable coordinate those held exactly there, so a caller can pin them; nothing about the text or its legal effect is assessed";
 
     internal static readonly string[][] VerifyNotHeld =
     [
@@ -970,8 +970,43 @@ internal sealed class V3CorpusMount : IDisposable
                 new V3PlatformOperationResult(request, "verification", verification.RootElement));
         }
 
-        if (RefuseUnlessWorkStates(request, identifier, observedAt, "r6_verify", requestedLanguage,
-                out var states, out var availableLanguages) is { } refused)
+        IReadOnlyList<LuxembourgIndexResolvedState> states;
+        string[] availableLanguages;
+        if (TryParseStableStateCoordinate(identifier, out var coordinateWorkKey, out var coordinateDate))
+        {
+            // The dated stable coordinate this mount writes into every answer and refusal: the
+            // current digests of the states held exactly there.
+            if (_reader is null)
+            {
+                using var unmounted = JsonSerializer.SerializeToDocument(new { required_corpus = "lu" });
+                return V3PlatformOperationOutcome.Refused(
+                    Context("refusal", observedAt, PublisherId.LuLegilux),
+                    new V3PlatformOperationRefusal(request, "no_corpus_mounted", unmounted.RootElement));
+            }
+
+            states = _reader.ResolveState(coordinateWorkKey, coordinateDate);
+            if (states.Count == 0)
+            {
+                return Unknown(request, identifier, observedAt, PublisherId.LuLegilux,
+                    "a stable coordinate at which this index holds a state");
+            }
+
+            availableLanguages = states.Select(static state => state.Language)
+                .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+            if (requestedLanguage is not null && !availableLanguages.Contains(requestedLanguage, StringComparer.Ordinal))
+            {
+                using var unavailableLanguage = JsonSerializer.SerializeToDocument(new
+                {
+                    requested_language = requestedLanguage,
+                    available_languages = availableLanguages,
+                });
+                return V3PlatformOperationOutcome.Refused(
+                    Context("refusal", observedAt),
+                    new V3PlatformOperationRefusal(request, "language_not_available", unavailableLanguage.RootElement));
+            }
+        }
+        else if (RefuseUnlessWorkStates(request, identifier, observedAt, "r6_verify", requestedLanguage,
+                     out states, out availableLanguages) is { } refused)
         {
             return refused;
         }
@@ -1077,10 +1112,12 @@ internal sealed class V3CorpusMount : IDisposable
             : states.Where(state => string.Equals(state.Language, requestedLanguage, StringComparison.Ordinal)).ToArray();
         var servedLanguages = requestedLanguage is null ? availableLanguages : new[] { requestedLanguage };
 
-        // Outbound: the state at the date per language, or the latest state per language.
+        // Outbound: the state at the date per language, or the latest state per language. Inbound
+        // alone selects no state: those edges are references to the work from any held state.
         var selectedStates = new List<LuxembourgIndexResolvedState>();
         var ambiguous = new List<string>();
-        foreach (var language in servedLanguages)
+        string? ambiguousDate = null;
+        foreach (var language in direction is "inbound" ? [] : servedLanguages)
         {
             var ofLanguage = scope
                 .Where(state => string.Equals(state.Language, language, StringComparison.Ordinal))
@@ -1104,6 +1141,7 @@ internal sealed class V3CorpusMount : IDisposable
             if (selected.Length > 1)
             {
                 ambiguous.AddRange(selected.Select(StateUrl));
+                ambiguousDate ??= selected[0].ApplicabilityDate;
                 continue;
             }
 
@@ -1112,7 +1150,7 @@ internal sealed class V3CorpusMount : IDisposable
 
         if (ambiguous.Count != 0)
         {
-            return RefuseAmbiguousVersion(request, observedAt, requestedDate ?? "latest", ambiguous.Order(StringComparer.Ordinal).ToArray(), bound: null);
+            return RefuseAmbiguousVersion(request, observedAt, requestedDate ?? ambiguousDate!, ambiguous.Order(StringComparer.Ordinal).ToArray(), bound: null);
         }
 
         if (requestedDate is not null && selectedStates.Count == 0 && direction is not "inbound")
@@ -3550,6 +3588,50 @@ internal sealed class V3CorpusMount : IDisposable
 
     private static string StateUrl(LuxembourgIndexResolvedState state) =>
         StableCoordinate(state) + "--" + state.StateSha256;
+
+    /// <summary>
+    /// The dated stable coordinate this mount writes (<c>/lu-legilux/{work}/{date}</c>, also under the
+    /// origin), as distinct from the work coordinate (two segments) and the pinned permalink (the
+    /// date followed by <c>--</c> and the digest).
+    /// </summary>
+    private static bool TryParseStableStateCoordinate(string value, out string workKey, out string applicabilityDate)
+    {
+        workKey = string.Empty;
+        applicabilityDate = string.Empty;
+        string path;
+        if (value.StartsWith("/", StringComparison.Ordinal))
+        {
+            path = value;
+        }
+        else if (Uri.TryCreate(value, UriKind.Absolute, out var uri) &&
+                 string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.Ordinal) &&
+                 string.Equals(uri.Host, "law.soufien.lu", StringComparison.Ordinal) &&
+                 uri.IsDefaultPort && uri.UserInfo.Length == 0 && uri.Query.Length == 0 &&
+                 uri.Fragment.Length == 0)
+        {
+            path = uri.AbsolutePath;
+        }
+        else
+        {
+            return false;
+        }
+
+        var segments = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (path.EndsWith("/", StringComparison.Ordinal) || path.Contains("//", StringComparison.Ordinal) ||
+            segments.Length != 3 ||
+            !string.Equals(segments[0], "lu-legilux", StringComparison.Ordinal) ||
+            !IsWorkKey(segments[1]) || segments[2].Length != 10 ||
+            !DateOnly.TryParseExact(
+                segments[2], "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.None, out _))
+        {
+            return false;
+        }
+
+        workKey = segments[1];
+        applicabilityDate = segments[2];
+        return true;
+    }
 
     private static bool TryParsePinnedPermalink(
         string value,
