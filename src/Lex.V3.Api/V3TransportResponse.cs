@@ -47,6 +47,18 @@ internal static class V3TransportResponse
     public static Task WriteAsync(
         HttpResponse response,
         V3TransportFailureKind kind,
+        CancellationToken cancellationToken) =>
+        WriteAsync(response, kind, null, cancellationToken);
+
+    /// <summary>
+    /// The same problem document, with <paramref name="afterClear"/> run once the response has been
+    /// reset and before it is written, for a transport that owes a header on every answer (the MCP
+    /// endpoint's protocol version); <see cref="HttpResponse.Clear"/> would otherwise drop it.
+    /// </summary>
+    public static Task WriteAsync(
+        HttpResponse response,
+        V3TransportFailureKind kind,
+        Action<HttpResponse>? afterClear,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(response);
@@ -68,6 +80,7 @@ internal static class V3TransportResponse
             response.Headers.Allow = HttpMethods.Post;
         }
 
+        afterClear?.Invoke(response);
         return BufferedHttpResponse.WriteJsonAsync(
             response,
             status,

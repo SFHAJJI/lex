@@ -73,32 +73,12 @@ internal sealed class V3ApiHandler
         {
             if (_corpusMount is not null)
             {
-                // The host has already validated the body against the bound operation's request
-                // document, so the request that reaches the mount is that operation's.
-                Func<V3PlatformOperationRequest, V3PlatformOperationOutcome> execute = binding.OperationId switch
-                {
-                    "as_of" => AsOfOutcome,
-                    "timeline" => TimelineOutcome,
-                    "article_history" => ArticleHistoryOutcome,
-                    "diff" => DiffOutcome,
-                    "changes_in_period" => ChangesInPeriodOutcome,
-                    "in_force_on" => InForceOnOutcome,
-                    "search" => SearchOutcome,
-                    "coverage" => CoverageOutcome,
-                    "provenance" => ProvenanceOutcome,
-                    "dossier" => DossierOutcome,
-                    "citation" => CitationOutcome,
-                    "cited_by" => CitedByOutcome,
-                    "verify" => VerifyOutcome,
-                    "relations" => RelationsOutcome,
-                    _ => ResolveOutcome,
-                };
                 await V3ResolveRestRoute.HandleOutcomeAsync(
                         binding,
                         context,
                         _host,
                         RequestReference(context.TraceIdentifier),
-                        execute,
+                        ExecuteFor(_corpusMount, _utcNow, binding.OperationId),
                         cancellationToken)
                     .ConfigureAwait(false);
                 return;
@@ -116,6 +96,11 @@ internal sealed class V3ApiHandler
             return;
         }
 
+        if (string.Equals(rawTarget, McpRawTarget, StringComparison.Ordinal))
+        {
+            await HandleMcpAsync(context, cancellationToken).ConfigureAwait(false);
+            return;
+        }
         if (rawTarget.StartsWith("/api/v3/", StringComparison.Ordinal))
         {
             await V3TransportResponse.WriteAsync(
@@ -129,52 +114,108 @@ internal sealed class V3ApiHandler
         await SyntheticApiHandler.HandleAsync(context, _syntheticState, cancellationToken).ConfigureAwait(false);
     }
 
-    private V3PlatformOperationOutcome ResolveOutcome(V3PlatformOperationRequest request) =>
-        _corpusMount!.Resolve(request, _utcNow());
+    /// <summary>The MCP streamable HTTP endpoint: one POST, one JSON-RPC message, one JSON answer (or 202 for a notification).</summary>
+    internal const string McpRawTarget = "/mcp";
 
-    private V3PlatformOperationOutcome AsOfOutcome(V3PlatformOperationRequest request) =>
-        _corpusMount!.AsOf(request, _utcNow());
+    /// <summary>
+    /// The one dispatch from a served operation id to the mount's method, used by the REST routes and
+    /// by every MCP tool call, so the two transports cannot run different code for one operation
+    /// (LAUNCH-CONTRACT: REST and MCP derive identical envelopes). Only ids in
+    /// <see cref="V3RestRouteBinding.Served"/> are dispatched; any other id is a programming error
+    /// here, never a fall-through to resolve.
+    /// </summary>
+    internal static Func<V3PlatformOperationRequest, V3PlatformOperationOutcome> ExecuteFor(
+        V3CorpusMount corpusMount,
+        Func<DateTimeOffset> utcNow,
+        string operationId)
+    {
+        ArgumentNullException.ThrowIfNull(corpusMount);
+        ArgumentNullException.ThrowIfNull(utcNow);
+        return operationId switch
+        {
+            "resolve" => request => corpusMount.Resolve(request, utcNow()),
+            "as_of" => request => corpusMount.AsOf(request, utcNow()),
+            "timeline" => request => corpusMount.Timeline(request, utcNow()),
+            "article_history" => request => corpusMount.ArticleHistory(request, utcNow()),
+            "diff" => request => corpusMount.Diff(request, utcNow()),
+            "changes_in_period" => request => corpusMount.ChangesInPeriod(request, utcNow()),
+            "in_force_on" => request => corpusMount.InForceOn(request, utcNow()),
+            "search" => request => corpusMount.Search(request, utcNow()),
+            "coverage" => request => corpusMount.Coverage(request, utcNow()),
+            "provenance" => request => corpusMount.Provenance(request, utcNow()),
+            "dossier" => request => corpusMount.Dossier(request, utcNow()),
+            "citation" => request => corpusMount.Citation(request, utcNow()),
+            "cited_by" => request => corpusMount.CitedBy(request, utcNow()),
+            "verify" => request => corpusMount.Verify(request, utcNow()),
+            "relations" => request => corpusMount.Relations(request, utcNow()),
+            _ => throw new ArgumentOutOfRangeException(nameof(operationId), operationId, "Not a served operation."),
+        };
+    }
 
-    private V3PlatformOperationOutcome TimelineOutcome(V3PlatformOperationRequest request) =>
-        _corpusMount!.Timeline(request, _utcNow());
+    /// <summary>
+    /// Streamable HTTP, the request half only: a POST carrying one JSON-RPC message answers one JSON
+    /// document with the same status semantics as the dispatcher (a JSON-RPC error is still an HTTP
+    /// 200), a notification answers 202 with no body, and no server-initiated stream is offered (a
+    /// GET is 405). The body ceiling is the platform's; a larger request is 413 before parsing. No
+    /// request header is read (S4-A11).
+    /// </summary>
+    private async Task HandleMcpAsync(HttpContext context, CancellationToken cancellationToken)
+    {
+        // Every answer of the endpoint, transport failures included, names the one protocol version served.
+        static void NameProtocolVersion(Microsoft.AspNetCore.Http.HttpResponse response) =>
+            response.Headers["MCP-Protocol-Version"] = V3McpJsonRpc.ProtocolVersion;
+        NameProtocolVersion(context.Response);
+        if (!string.Equals(context.Request.Method, Microsoft.AspNetCore.Http.HttpMethods.Post, StringComparison.Ordinal))
+        {
+            await V3TransportResponse.WriteAsync(context.Response, V3TransportFailureKind.MethodNotAllowed, NameProtocolVersion, cancellationToken)
+                .ConfigureAwait(false);
+            return;
+        }
 
-    private V3PlatformOperationOutcome ArticleHistoryOutcome(V3PlatformOperationRequest request) =>
-        _corpusMount!.ArticleHistory(request, _utcNow());
+        // The client's own MCP-Protocol-Version header is not read: the API reads nothing about the
+        // caller (S4-A11, PublicRequestRecordingTests), so the specification's optional 400 for an
+        // unsupported version is not answered; every answer names the one version served instead.
+        byte[] body;
+        try
+        {
+            body = await V3ResolveRestRoute.ReadBoundedBodyAsync(context.Request, cancellationToken).ConfigureAwait(false);
+        }
+        catch (V3TransportFailureException exception)
+        {
+            await V3TransportResponse.WriteAsync(context.Response, exception.Kind, NameProtocolVersion, cancellationToken).ConfigureAwait(false);
+            return;
+        }
 
-    private V3PlatformOperationOutcome DiffOutcome(V3PlatformOperationRequest request) =>
-        _corpusMount!.Diff(request, _utcNow());
+        byte[]? answer;
+        try
+        {
+            answer = await V3McpJsonRpc.HandleAsync(
+                    body, _host, _corpusMount, _utcNow, RequestReference(context.TraceIdentifier), cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception)
+        {
+            await V3TransportResponse.WriteAsync(context.Response, V3TransportFailureKind.InternalFailure, NameProtocolVersion, cancellationToken)
+                .ConfigureAwait(false);
+            return;
+        }
 
-    private V3PlatformOperationOutcome ChangesInPeriodOutcome(V3PlatformOperationRequest request) =>
-        _corpusMount!.ChangesInPeriod(request, _utcNow());
+        if (answer is null)
+        {
+            context.Response.StatusCode = Microsoft.AspNetCore.Http.StatusCodes.Status202Accepted;
+            return;
+        }
 
-    private V3PlatformOperationOutcome InForceOnOutcome(V3PlatformOperationRequest request) =>
-        _corpusMount!.InForceOn(request, _utcNow());
+        context.Response.StatusCode = Microsoft.AspNetCore.Http.StatusCodes.Status200OK;
+        context.Response.ContentType = "application/json; charset=utf-8";
+        context.Response.ContentLength = answer.Length;
+        await context.Response.Body.WriteAsync(answer, cancellationToken).ConfigureAwait(false);
+    }
 
-    private V3PlatformOperationOutcome SearchOutcome(V3PlatformOperationRequest request) =>
-        _corpusMount!.Search(request, _utcNow());
-
-    private V3PlatformOperationOutcome CoverageOutcome(V3PlatformOperationRequest request) =>
-        _corpusMount!.Coverage(request, _utcNow());
-
-    private V3PlatformOperationOutcome ProvenanceOutcome(V3PlatformOperationRequest request) =>
-        _corpusMount!.Provenance(request, _utcNow());
-
-    private V3PlatformOperationOutcome DossierOutcome(V3PlatformOperationRequest request) =>
-        _corpusMount!.Dossier(request, _utcNow());
-
-    private V3PlatformOperationOutcome CitationOutcome(V3PlatformOperationRequest request) =>
-        _corpusMount!.Citation(request, _utcNow());
-
-    private V3PlatformOperationOutcome CitedByOutcome(V3PlatformOperationRequest request) =>
-        _corpusMount!.CitedBy(request, _utcNow());
-
-    private V3PlatformOperationOutcome VerifyOutcome(V3PlatformOperationRequest request) =>
-        _corpusMount!.Verify(request, _utcNow());
-
-    private V3PlatformOperationOutcome RelationsOutcome(V3PlatformOperationRequest request) =>
-        _corpusMount!.Relations(request, _utcNow());
-
-    /// <summary>Shared with <see cref="V3McpJsonRpc"/>.</summary>
     internal static V3PlatformOperationRefusal NoCorpusMounted(V3PlatformOperationRequest request)
     {
         using var helpful = JsonDocument.Parse("{\"required_corpus\":\"lu\"}");

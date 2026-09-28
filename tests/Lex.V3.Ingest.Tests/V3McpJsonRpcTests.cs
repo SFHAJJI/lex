@@ -71,15 +71,17 @@ public sealed class V3McpJsonRpcTests
     }
 
     [TestMethod]
-    public async Task ToolsListListsExactlyOneToolNamedResolve()
+    public async Task ToolsListListsOneToolPerServedOperationInTheServedOrder()
     {
         using var response = await HandleAsync(new { jsonrpc = "2.0", id = "a", method = "tools/list" });
-
         var tools = response.RootElement.GetProperty("result").GetProperty("tools").EnumerateArray().ToArray();
-        Assert.HasCount(1, tools);
-        Assert.AreEqual("resolve", tools[0].GetProperty("name").GetString());
-        Assert.IsTrue(tools[0].TryGetProperty("description", out _));
-        var inputSchema = tools[0].GetProperty("inputSchema");
+        CollectionAssert.AreEqual(
+            V3RestRouteBinding.Served.Select(static binding => binding.OperationId).ToArray(),
+            tools.Select(static tool => tool.GetProperty("name").GetString()).ToArray(),
+            "the tools are the served REST operations, one each, in the served order.");
+        Assert.IsTrue(tools.All(static tool => tool.GetProperty("description").GetString()!.Length > 20));
+        var resolve = tools.Single(static tool => tool.GetProperty("name").GetString() == "resolve");
+        var inputSchema = resolve.GetProperty("inputSchema");
         Assert.AreEqual("object", inputSchema.GetProperty("type").GetString());
         CollectionAssert.AreEqual(
             new[] { "identifier" },
@@ -88,19 +90,19 @@ public sealed class V3McpJsonRpcTests
 
     /// <summary>The tool's declared input schema is exactly the reviewed request schema's own "parameters" shape, not a hand-drifted copy.</summary>
     [TestMethod]
-    public async Task TheResolveToolsInputSchemaIsExactlyTheReviewedRequestSchemasParametersShape()
+    public async Task EveryToolsInputSchemaIsExactlyItsReviewedRequestSchemasParametersShape()
     {
-        var reviewed = JsonDocument.Parse(File.ReadAllText(
-            Path.Combine(RepositoryRoot(), "schemas", "v3-platform", "resolve-request.schema.json")));
-        var expectedParameters = reviewed.RootElement.GetProperty("properties").GetProperty("parameters");
-
         using var response = await HandleAsync(new { jsonrpc = "2.0", id = 1, method = "tools/list" });
-        var inputSchema = response.RootElement.GetProperty("result").GetProperty("tools")[0].GetProperty("inputSchema");
-
-        Assert.AreEqual(
-            JsonSerializer.Serialize(expectedParameters),
-            JsonSerializer.Serialize(inputSchema),
-            "The tool's inputSchema literal in V3McpJsonRpc.cs no longer matches resolve-request.schema.json's own parameters shape.");
+        foreach (var tool in response.RootElement.GetProperty("result").GetProperty("tools").EnumerateArray())
+        {
+            var name = tool.GetProperty("name").GetString()!;
+            var reviewed = JsonDocument.Parse(File.ReadAllText(Path.Combine(
+                RepositoryRoot(), "schemas", "v3-platform", V3PlatformSchemaExporter.FileNameFor($"lex-v3-{name.Replace('_', '-')}-request/1"))));
+            Assert.AreEqual(
+                JsonSerializer.Serialize(reviewed.RootElement.GetProperty("properties").GetProperty("parameters")),
+                JsonSerializer.Serialize(tool.GetProperty("inputSchema")),
+                $"The {name} tool's inputSchema is not its tracked request schema's parameters shape.");
+        }
     }
 
     [TestMethod]
@@ -172,14 +174,15 @@ public sealed class V3McpJsonRpcTests
     }
 
     [TestMethod]
-    public async Task AToolsCallForAnyOtherNameIsAJsonRpcInvalidParamsErrorAndNothingRuns()
+    public async Task AToolsCallForAnUnservedOperationIsAJsonRpcInvalidParamsErrorAndNothingRuns()
     {
-        using var response = await HandleAsync(new { jsonrpc = "2.0", id = 3, method = "tools/call", @params = new { name = "search", arguments = new { } } });
+        // browse is registered and not served, so it is not a tool; a served operation would run.
+        using var response = await HandleAsync(new { jsonrpc = "2.0", id = 3, method = "tools/call", @params = new { name = "browse", arguments = new { } } });
 
         Assert.IsFalse(response.RootElement.TryGetProperty("result", out _));
         var error = response.RootElement.GetProperty("error");
         Assert.AreEqual(-32602, error.GetProperty("code").GetInt32());
-        StringAssert.Contains(error.GetProperty("message").GetString(), "search");
+        StringAssert.Contains(error.GetProperty("message").GetString(), "browse");
     }
 
     [TestMethod]
@@ -199,6 +202,19 @@ public sealed class V3McpJsonRpcTests
         Assert.IsFalse(response.RootElement.TryGetProperty("result", out _));
         var error = response.RootElement.GetProperty("error");
         Assert.AreEqual(-32602, error.GetProperty("code").GetInt32());
+    }
+
+    [TestMethod]
+    public async Task AToolsCallWhoseArgumentsAreNotAnObjectIsAnInvalidParamsErrorAndNothingRuns()
+    {
+        // REST refuses a non-object parameters member below the envelope; over MCP the same request is
+        // invalid params, never an empty parameter set that coverage would happily answer.
+        using var response = await HandleAsync(new { jsonrpc = "2.0", id = 8, method = "tools/call", @params = new { name = "coverage", arguments = "zzz" } });
+
+        Assert.IsFalse(response.RootElement.TryGetProperty("result", out _));
+        var error = response.RootElement.GetProperty("error");
+        Assert.AreEqual(-32602, error.GetProperty("code").GetInt32());
+        StringAssert.Contains(error.GetProperty("message").GetString(), "arguments");
     }
 
     [TestMethod]

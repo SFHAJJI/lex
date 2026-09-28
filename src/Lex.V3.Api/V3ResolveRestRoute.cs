@@ -286,7 +286,7 @@ internal static class V3ResolveRestRoute
         }
     }
 
-    private static async Task<byte[]> ReadBoundedBodyAsync(
+    internal static async Task<byte[]> ReadBoundedBodyAsync(
         HttpRequest request,
         CancellationToken cancellationToken)
     {

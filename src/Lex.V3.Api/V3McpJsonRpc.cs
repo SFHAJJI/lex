@@ -38,44 +38,32 @@ internal static class V3McpJsonRpc
     public const string ProtocolVersion = "2025-06-18";
     public const string ServerName = "lex-v3";
 
-    private const string ToolName = "resolve";
-
-    // The tool-call argument shape, transcribed from schemas/v3-platform/resolve-request.schema.json's
-    // "parameters" sub-schema. V3McpJsonRpcTests.TheResolveToolInputSchemaMatchesTheReviewedRequestSchema
-    // reads that file directly and fails if this literal drifts from it.
-    private const string ResolveInputSchemaJson =
-        """
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "identifier": {
-              "type": "string",
-              "minLength": 1,
-              "pattern": "\\S"
-            }
-          },
-          "required": ["identifier"]
-        }
-        """;
-
     /// <summary>
-    /// One JSON-RPC request in, at most one JSON-RPC response out. Never throws for a malformed or
-    /// unsupported request; every failure this function can identify is a JSON-RPC error object in
-    /// the response, per the JSON-RPC 2.0 and MCP specifications.
+    /// One tool per served REST operation, named by its operation id, described here, and taking as
+    /// <c>inputSchema</c> exactly the <c>parameters</c> sub-schema of the operation's reviewed request
+    /// schema (<see cref="V3PlatformSchemaExporter.ExportRequestUtf8"/>), so a tool call is the same
+    /// request the REST route reads and the same envelope comes back.
     /// </summary>
-    /// <returns>
-    /// The response bytes, or <see langword="null"/> when nothing must be written. JSON-RPC 2.0 §4.1
-    /// defines a Notification as a valid Request object with no <c>id</c> member and says the server
-    /// <c>MUST NOT</c> reply to one, including one whose method is unknown or whose method-specific
-    /// params are invalid. The required <c>jsonrpc</c> and <c>method</c> members are therefore
-    /// validated before absence of <c>id</c> suppresses a response. MCP's own lifecycle relies on
-    /// valid notifications: the client's <c>notifications/initialized</c> after a successful
-    /// <c>initialize</c> carries no <c>id</c>. Invalid requests receive <c>id: null</c> when no valid
-    /// String, Number or Null id can be read. When such an id is readable, it is echoed even if a
-    /// different required member makes the Request invalid; this reads JSON-RPC 2.0 section 5's
-    /// null-id requirement as applying when the id itself cannot be detected.
-    /// </returns>
+    private static string DescriptionOf(string operationId) => operationId switch
+    {
+        "resolve" => "Resolve a Luxembourg legal-act identifier or a hash-pinned permalink to the work and expression it names.",
+        "as_of" => "The state of a Luxembourg act as the publisher applied it on a date, with its articles.",
+        "timeline" => "Every state of a Luxembourg act the index holds, in publisher applicability order.",
+        "article_history" => "The history of one article of a Luxembourg act across its states.",
+        "diff" => "The article-level difference between the states of a Luxembourg act on two dates.",
+        "changes_in_period" => "The Luxembourg states that began in a period, for a work or across the index.",
+        "in_force_on" => "The Luxembourg works with a state applicable on a date.",
+        "search" => "Search the held Luxembourg article text, strict or relaxed, with the quotes that answer.",
+        "coverage" => "What this mount holds and serves, named, and what it does not.",
+        "provenance" => "The retained sources, rule profiles and digests behind a Luxembourg state.",
+        "dossier" => "The work record of a Luxembourg act as the index holds it.",
+        "citation" => "The references the publisher wrote in the text of a Luxembourg state's articles.",
+        "cited_by" => "The references, in any held Luxembourg state, whose target is exactly this work.",
+        "verify" => "Verify a hash-pinned permalink against the state digest the index holds, or read the current digests to pin.",
+        "relations" => "The reference edges of a Luxembourg work in both directions, as one ordered, paged list.",
+        _ => throw new InvalidOperationException($"The served operation {operationId} has no MCP tool description."),
+    };
+
     public static async Task<byte[]?> HandleAsync(
         byte[] requestUtf8,
         V3PlatformHost host,
@@ -176,16 +164,24 @@ internal static class V3McpJsonRpc
         }
 
         var name = nameElement.GetString();
-        if (!string.Equals(name, ToolName, StringComparison.Ordinal))
+        var binding = name is null
+            ? null
+            : V3RestRouteBinding.Served.FirstOrDefault(served => string.Equals(served.OperationId, name, StringComparison.Ordinal));
+        if (binding is null)
         {
             return Error(id, -32602, $"Unknown tool: {name}");
         }
 
-        var arguments = parameters.TryGetProperty("arguments", out var argumentsElement) &&
-                         argumentsElement.ValueKind == JsonValueKind.Object
-            ? argumentsElement
-            : Empty();
-        var operationRequestUtf8 = BuildOperationRequest(arguments);
+        var hasArguments = parameters.TryGetProperty("arguments", out var argumentsElement);
+        if (hasArguments && argumentsElement.ValueKind != JsonValueKind.Object)
+        {
+            // REST refuses parameters that are not an object below the envelope (parameters_not_object);
+            // the same request over MCP is an invalid-params error, never an empty parameter set.
+            return Error(id, -32602, "Invalid params: 'arguments' must be an object");
+        }
+
+        var arguments = hasArguments ? argumentsElement : Empty();
+        var operationRequestUtf8 = BuildOperationRequest(binding.OperationId, arguments);
 
         try
         {
@@ -203,7 +199,7 @@ internal static class V3McpJsonRpc
                 : await host.CreateMcpOutcomeAsync(
                         operationRequestUtf8,
                         requestReference,
-                        request => corpusMount.Resolve(request, utcNow()),
+                        V3ApiHandler.ExecuteFor(corpusMount, utcNow, binding.OperationId),
                         cancellationToken)
                     .ConfigureAwait(false);
             using var envelope = JsonDocument.Parse(toolResult.JsonUtf8);
@@ -219,13 +215,13 @@ internal static class V3McpJsonRpc
         }
     }
 
-    private static byte[] BuildOperationRequest(JsonElement arguments)
+    private static byte[] BuildOperationRequest(string operationId, JsonElement arguments)
     {
         using var stream = new MemoryStream();
         using (var writer = new Utf8JsonWriter(stream))
         {
             writer.WriteStartObject();
-            writer.WriteString("operation_id", ToolName);
+            writer.WriteString("operation_id", operationId);
             writer.WritePropertyName("parameters");
             arguments.WriteTo(writer);
             writer.WriteEndObject();
@@ -249,34 +245,28 @@ internal static class V3McpJsonRpc
 
     private static JsonElement ToolsList()
     {
-        using var inputSchema = JsonDocument.Parse(ResolveInputSchemaJson);
         var writer = new ArrayBufferWriter<byte>();
         using (var jsonWriter = new Utf8JsonWriter(writer))
         {
             jsonWriter.WriteStartObject();
             jsonWriter.WritePropertyName("tools");
             jsonWriter.WriteStartArray();
-            jsonWriter.WriteStartObject();
-            jsonWriter.WriteString("name", ToolName);
-            jsonWriter.WriteString(
-                "description",
-                "Resolve a Luxembourg legal-act identifier or a hash-pinned permalink to the work and expression it names.");
-            jsonWriter.WritePropertyName("inputSchema");
-            inputSchema.RootElement.WriteTo(jsonWriter);
-            jsonWriter.WriteEndObject();
+            foreach (var binding in V3RestRouteBinding.Served)
+            {
+                using var requestSchema = JsonDocument.Parse(V3PlatformSchemaExporter.ExportRequestUtf8(binding.OperationId));
+                jsonWriter.WriteStartObject();
+                jsonWriter.WriteString("name", binding.OperationId);
+                jsonWriter.WriteString("description", DescriptionOf(binding.OperationId));
+                jsonWriter.WritePropertyName("inputSchema");
+                requestSchema.RootElement.GetProperty("properties").GetProperty("parameters").WriteTo(jsonWriter);
+                jsonWriter.WriteEndObject();
+            }
             jsonWriter.WriteEndArray();
             jsonWriter.WriteEndObject();
         }
-
         using var document = JsonDocument.Parse(writer.WrittenMemory);
         return Clone(document.RootElement);
     }
-
-    /// <summary>
-    /// The MCP tool-result wrapping (spec 2025-06-18): unstructured text (required, for backward
-    /// compatibility) and structured content, both carrying the same envelope. <paramref name="isError"/>
-    /// marks a tool execution failure, never a reviewed refusal — see the class remarks.
-    /// </summary>
     private static JsonElement ToolResult(bool isError, JsonElement envelope)
     {
         var writer = new ArrayBufferWriter<byte>();
