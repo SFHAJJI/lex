@@ -326,9 +326,9 @@ public sealed class V3CorpusDossierMountTests
                 new[]
                 {
                     "the publisher's document type is not part of this record; classification serves the typeDocument facts the publisher asserted, verbatim",
-                    "no current-state flag is held, so nothing here says whether the publisher treats this work as in force, and a flag about now would not be a statement about any date listed here",
+                    "no current-state flag is part of this record; status_on serves the publisher's force assertions for a date, and a flag about now would not be a statement about any date listed here",
                     "no publication date is held; the document date the index stores beside a title falls back to an article's applicability date, so it is not served as one",
-                    "no entry-into-force date is held; a state's applicability date is the date that state applies from, which is a different fact",
+                    "no entry-into-force date is part of this record; status_on serves the publisher's dateEntryInForce when asserted; a state's applicability date is the date that state applies from, which is a different fact",
                     "no application date is held; a state's applicability date is the date that state applies from, which is a different fact",
                     "no historical identifier is held, so no earlier or later identifier of this work is mapped to it",
                     "no responsible ministry is held",

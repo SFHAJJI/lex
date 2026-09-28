@@ -64,6 +64,8 @@ internal static class V3McpJsonRpc
         "evidence_bundle" => "What a quote of a Luxembourg state needs: every article's text with its digests, the state's permalink, digests, sources and official identities, composed under the rights rule.",
         "classification" => "The publisher's typed facts about a Luxembourg work, verbatim: document type, RDF types, legal value, responsible body, historical identifiers, publication and document dates.",
         "manifestation" => "The publisher's manifestations of a Luxembourg work's expressions with their formats and items, the retained one marked with its body digest.",
+        "status_on" => "The publisher's force assertions about a Luxembourg work (in-force status, entry into force, no longer in force), verbatim, beside the state applicable on a date, with one fixed reading of the dates.",
+        "browse" => "The Luxembourg works this mount holds, one ordered and paged list with their identifiers, languages, state dates and the publisher's document types; filter by type or language.",
         _ => throw new InvalidOperationException($"The served operation {operationId} has no MCP tool description."),
     };
 

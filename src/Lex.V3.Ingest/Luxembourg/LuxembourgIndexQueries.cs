@@ -133,6 +133,29 @@ internal static class LuxembourgIndexQueries
         "WHERE f.subject_iri IN (SELECT value FROM json_each($subjects)) " +
         "ORDER BY f.subject_iri,f.predicate,f.object_kind,f.object_value,f.datatype_iri,f.language_tag,f.evidence_sha256";
 
+    /// <summary>
+    /// The held works as one page in work-key order: per work key, the distinct publisher identifiers and
+    /// languages its states carry (as JSON arrays, sorted by the caller), the first and latest state dates and
+    /// the state count, over every state of the work whatever the filters. The three filters are optional and
+    /// bound as parameters; a null parameter disables its clause. The language filter is an EXISTS over the
+    /// work's own states (a primary-key search by work key), so a work selected by one language still lists
+    /// them all. The type filter is an EXISTS over the fact table by the work's own IRIs (a primary-key search
+    /// per work, never a scan of the facts) for a typeDocument that is the value or ends in "/" and the value;
+    /// the caller admits only a bare token or an absolute IRI, so the LIKE pattern carries no wildcard of the
+    /// caller's. The states are read in primary-key order and cut by LIMIT, so a deep page costs the rows before
+    /// it; the listing is a browse and not a lookup.
+    /// </summary>
+    internal const string WorkRecords =
+        "SELECT s.work_key," +
+        "json_group_array(DISTINCT s.publisher_work_iri),json_group_array(DISTINCT s.publisher_legal_resource_iri)," +
+        "json_group_array(DISTINCT s.language),MIN(s.applicability_date),MAX(s.applicability_date),COUNT(*) " +
+        "FROM states s " +
+        "WHERE ($after IS NULL OR s.work_key>$after) " +
+        "AND ($language IS NULL OR EXISTS (SELECT 1 FROM states l WHERE l.work_key=s.work_key AND l.language=$language)) " +
+        "AND ($type IS NULL OR EXISTS (SELECT 1 FROM work_facts f WHERE f.subject_iri IN (s.publisher_work_iri,s.publisher_legal_resource_iri) " +
+        "AND f.predicate='typeDocument' AND (f.object_value=$type OR f.object_value LIKE '%/' || $type))) " +
+        "GROUP BY s.work_key ORDER BY s.work_key LIMIT $take";
+
     internal const string StateSources =
         "SELECT DISTINCT m.object_ref_sha256,m.outcome,m.rights_disposition,m.gaps_json " +
         "FROM states s CROSS JOIN json_each(s.article_identities_json) j " +

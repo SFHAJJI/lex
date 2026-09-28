@@ -185,9 +185,9 @@ public sealed class ScopeLineQuestionTests
     /// </remarks>
     private static readonly string[] ServedOperations =
     [
-        "article_history", "as_of", "changes_in_period", "citation", "cited_by", "classification",
+        "article_history", "as_of", "browse", "changes_in_period", "citation", "cited_by", "classification",
         "coverage", "diff", "dossier", "evidence_bundle", "in_force_on", "manifestation", "provenance",
-        "relations", "resolve", "search", "timeline", "verify",
+        "relations", "resolve", "search", "status_on", "timeline", "verify",
     ];
 
     [TestMethod]

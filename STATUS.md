@@ -5,8 +5,8 @@ every pull request that changes what is served, what is next or what is blocked.
 
 ## Heads
 
-- `v3/integration`: `b15e40f4` (2026-09-28, PR #755 merged). Build 45 s. Fast lane
-  (`eng/test-fast.ps1`): 3,032 tests pass, 1 skipped, 45 s. Ingest suite: green on CI for PR #755
+- `v3/integration`: `d1849df0` (2026-09-28, PR #756 merged). Build 45 s. Fast lane
+  (`eng/test-fast.ps1`): 3,032 tests pass, 1 skipped, 45 s. Ingest suite: green on CI for PR #756
   (the CI `dotnet` job runs the whole solution on every pull request, about 6 min on the runner);
   locally about 15 min. 771 web tests pass.
 - Plan: `C:\lex-v3\V3-FINISH-PLAN-2026-09-27.md` (owner's copy). Decision 94 (one driver, one queue,
@@ -20,10 +20,33 @@ lanes), `coverage`, `provenance`, `dossier`, `citation`, `cited_by`, `verify` (P
 hash-pinned permalink verified against the state digest the index holds; a work identifier or a
 stable coordinate answers the current digests), `relations` (PR #753: the one edge table in both
 directions, `cites` edges only, what `citation` and `cited_by` serve as one ordered, paged list),
-`evidence_bundle` (PR #755), and since this pull request `classification` and `manifestation`.
-Without a mounted corpus every route answers `no_corpus_mounted`. EU serves `resolve` only.
+`evidence_bundle` (PR #755), `classification` and `manifestation` (PR #756), and since this pull
+request `status_on` and `browse`. Without a mounted corpus every route answers `no_corpus_mounted`.
+EU serves `resolve` only.
 
-`classification` and `manifestation` (this pull request) read a new index table, `work_facts`: the
+`status_on` and `browse` (this pull request) read the `work_facts` table too. `status_on` takes
+`as_of`'s request (`identifier`, `date`, optional `language`), selects the state as `as_of` does and
+refuses as `as_of` refuses, and beside that state serves the publisher's force assertions about the
+work verbatim (`in_force_status` = jolux:inForceStatus tokens, `entry_into_force` =
+jolux:dateEntryInForce, `no_longer_in_force` = jolux:dateNoLongerInForce, each with subject, value,
+datatype and evidence digest) plus one fixed reading of the dates, `asserted_in_force_on_date`
+(true when an entry date is on or before the requested date and no end date is; false when an end
+date is on or before it or every entry date is after it; null when no dated fact is asserted or a
+lexical value is not a civil date), with the rule and the basis in the answer; when the publisher
+asserted no force fact the absence is typed (`force_facts_held: false`, `what_would_answer`,
+`asserts_absence_of_law: false`) and is never read as "not in force". The real 1991 act's envelope
+asserts no force fact, so the test fixture asserts them through a new helper and holds the reading
+on every side of the dates. `browse` lists the held works in work-key order, paged (`limit` up to
+200, `after` = work key), each with its publisher identifiers, languages, first and latest state
+dates, state count and the publisher's typeDocument and rdf:type facts; `type` filters by the
+typeDocument IRI or its last segment (a token no LIKE pattern can reach; anything else is a
+request-schema failure), `language` by the states' language (a work selected by one language still
+lists them all); the listing scans the states in key order and cuts by limit, so a deep page costs
+the rows before it. Decisions taken by the driver, reversible: the force reading is a civil-date
+comparison and nothing more (an inForceStatus token is served, not read); `browse` answers
+`work_record` rows rather than a `classification` tree; no capability cells for the fact table.
+
+`classification` and `manifestation` (PR #756) read a new index table, `work_facts`: the
 publisher's typed assertions from the Stage 3 envelope (`TypedAssertions`, all 26 admitted
 predicates), verbatim, one row per assertion with the subject, the predicate and fact kind as the
 closed vocabulary names them, the object as an IRI or a literal with its datatype and language tag,
@@ -43,7 +66,7 @@ expressions carries it, refuses `format_not_available` naming the formats held. 
 `dossier` refuses. Decisions taken by the driver, reversible: every admitted predicate is stored (the
 table is the envelope's assertion list, not a selection); `status_on` and `browse` follow in the next
 slice over the same table (the real act's envelope carries no in-force facts, so `status_on` needs a
-fixture that does).
+fixture that does; done in this pull request).
 
 `evidence_bundle` (PR #755) is the first operation that serves article text. It takes
 `as_of`'s request (`identifier`, `date`, optional `language`), selects the state as `as_of` does and
@@ -77,13 +100,11 @@ profession" runs together; the token stream the composer could render from is in
 the reading view's own provision-level one (two producers, two declared key sets) and the catalog's
 two text examples show the producer's fields.
 
-Registered and not served: `ask`, `answer_drift`, `as_observed`, `browse`, `concepts`, `events`,
-`knowable_on`, `status_on`, `transposition`. A request for one of them is the transport failure
-`unknown_route` (HTTP 404, no envelope); `coverage` names them. `ask` answers the typed
-`assistant_v3_unavailable` result by design until after launch. Survey of 2026-09-28 (read-only):
-`status_on` and `browse` read the `work_facts` table this pull request adds (in-force status and
-dates, document types across works); the rest of the original note stands: the four needed a new
-index table over Stage 3 inputs the ingest already holds (`TypedAssertions`: in-force status and dates, `typeDocument`, `isEmbodiedBy`,
+Registered and not served: `ask`, `answer_drift`, `as_observed`, `concepts`, `events`,
+`knowable_on`, `transposition`. A request for one of them is the transport failure `unknown_route`
+(HTTP 404, no envelope); `coverage` names them. `ask` answers the typed `assistant_v3_unavailable`
+result by design until after launch. Survey of 2026-09-28 (read-only): the index-table group of four
+needed a new index table over Stage 3 inputs the ingest already holds (`TypedAssertions`: in-force status and dates, `typeDocument`, `isEmbodiedBy`,
 `userFormat`), which bumps the index schema; `concepts`, `transposition`, `as_observed`,
 `knowable_on`, `events` and `answer_drift` need data the ingest does not produce.
 
@@ -94,7 +115,7 @@ the platform's 1 MiB ceiling is 413 before parsing; no server-initiated stream i
 per served REST operation, named by its operation id, whose `inputSchema` is the reviewed request
 schema's `parameters` shape, and whose call runs the same dispatch the REST route runs
 (`V3ApiHandler.ExecuteFor`), so the two transports answer one envelope for one request; the
-endpoint test proves it for all eighteen. The launch-contract line "REST and MCP derive identical
+endpoint test proves it for all twenty. The launch-contract line "REST and MCP derive identical
 envelopes from the registry" is the owner's to tick.
 
 Web: 28 React components, 771 tests; no call to `/api/v3` yet. Screens render fixtures.
@@ -285,10 +306,9 @@ Web: 28 React components, 771 tests; no call to `/api/v3` yet. Screens render fi
    run).
 4. Serve the unserved operations for Luxembourg (`verify` and `relations` served by PR #753, MCP
    over streamable HTTP by PR #754, `evidence_bundle` by PR #755, `classification` and
-   `manifestation` by this pull request; nine remain, see Served today): next `status_on` and
-   `browse` over the `work_facts` table (`status_on` needs a fixture with in-force facts); then a
-   typed answer for a request to an unserved operation (today the transport failure
-   `unknown_route`).
+   `manifestation` by PR #756, `status_on` and `browse` by this pull request; seven remain, all
+   needing data the ingest does not produce or, for `ask`, deferred by design): next a typed answer
+   for a request to an unserved operation (today the transport failure `unknown_route`).
 5. EU parity: every temporal and search operation from the EU index; French expressions.
 6. Wire the eight launch screens to `/api/v3`; journeys J1 to J8 in a real browser.
 7. Release pipeline: build, sign, image, zero-traffic deploy, probes. Then acceptance and promotion.

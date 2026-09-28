@@ -47,7 +47,8 @@
         "evidence_bundle",
         "in_force_on",
         "provenance",
-        "search"
+        "search",
+        "status_on"
       ]
     },
     {
@@ -123,6 +124,7 @@
         "relations",
         "resolve",
         "search",
+        "status_on",
         "timeline",
         "verify"
       ]
@@ -140,6 +142,7 @@
       "produced_by": [
         "article_history",
         "as_of",
+        "browse",
         "changes_in_period",
         "citation",
         "classification",
@@ -151,6 +154,7 @@
         "manifestation",
         "provenance",
         "search",
+        "status_on",
         "timeline",
         "verify"
       ]
@@ -164,6 +168,7 @@
       "produced_by": [
         "article_history",
         "as_of",
+        "browse",
         "changes_in_period",
         "citation",
         "cited_by",
@@ -177,6 +182,7 @@
         "provenance",
         "relations",
         "search",
+        "status_on",
         "timeline",
         "verify"
       ]
@@ -201,7 +207,8 @@
         "in_force_on",
         "provenance",
         "relations",
-        "search"
+        "search",
+        "status_on"
       ]
     },
     {
@@ -268,6 +275,7 @@
         "relations",
         "resolve",
         "search",
+        "status_on",
         "timeline",
         "verify"
       ]

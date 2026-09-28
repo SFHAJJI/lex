@@ -883,7 +883,7 @@ internal sealed class V3CorpusMount : IDisposable
     internal static readonly string[][] ClassificationNotHeld =
     [
         ["subject_classification", "no thesaurus, EuroVoc or subject term is held; the publisher's typeDocument is a document type, not a subject"],
-        ["legal_status", "no in-force status, repeal or commencement fact is served here; status_on is not served by this mount"],
+        ["legal_status", "no in-force status, repeal or commencement fact is served here; status_on serves the publisher's force assertions"],
         ["labels", "the values are the publisher's IRIs and lexical values, not read into labels; a document-type IRI is served as the publisher wrote it"],
     ];
 
@@ -1149,6 +1149,305 @@ internal sealed class V3CorpusMount : IDisposable
                 fact.EvidenceSha256))
             .ToArray();
     }
+
+    internal const string StatusOnScope =
+        "what the publisher asserted about this work's own force, read verbatim from the index's fact table (jolux:inForceStatus, jolux:dateEntryInForce, " +
+        "jolux:dateNoLongerInForce, each with its subject, value, datatype and evidence digest), beside the state as_of selects for the requested date; the answer " +
+        "adds one reading of the publisher's dates by a fixed rule and nothing else: it is not a legal opinion, and a state served here is the text the publisher " +
+        "dates as applicable, which is a different fact from force";
+
+    internal const string StatusOnReadingRule =
+        "asserted_in_force_on_date is true when the publisher's dateEntryInForce is on or before the requested date and no dateNoLongerInForce is on or before it, " +
+        "false when a dateNoLongerInForce is on or before it or the entry into force is after it, and null when the publisher asserted no dated force fact; " +
+        "inForceStatus is served as the publisher's token and is not read; a date fact whose lexical value is not a civil date leaves the reading null";
+
+    internal static readonly string[][] StatusOnNotHeld =
+    [
+        ["repeal_and_amendment_events", "no repeal, amendment or commencement event is held; the dates above are the publisher's own assertions about the work as a whole"],
+        ["article_level_force", "no article-level force fact is held; an article's applicability date is served by as_of and is a different fact"],
+        ["status_at_publication", "the facts are those the publisher asserted when observed; when they were asserted is not held, so a status is not dated to an observation"],
+    ];
+
+    internal const string BrowseScope =
+        "the works this index holds, one row per work key in ordinal order, with the publisher identifiers and languages their states carry, the first and latest " +
+        "state dates, the state count and the publisher's document and resource types read verbatim from the index's fact table; a type filters to works whose " +
+        "typeDocument is that IRI or ends in /{type}; a language filters to works with a state in it; paged by work key";
+
+    public const int BrowseMaxRows = 200;
+
+    internal static readonly string[][] BrowseNotHeld =
+    [
+        ["publisher_universe", "how many works the publisher holds, or which of them this index lacks: the rows are what was admitted"],
+        ["titles", "titles are served by dossier and resolve; a row here names the work by its identifiers"],
+        ["legal_status", "no in-force fact is read here; status_on serves the publisher's force assertions per work"],
+    ];
+
+    /// <summary>
+    /// <c>status_on</c>: the publisher's force assertions about a work, beside the state <c>as_of</c>
+    /// selects for the date. Takes <c>as_of</c>'s request and refuses as <c>as_of</c> refuses; the
+    /// facts are work-level, read for the work's own IRIs, and served verbatim with one fixed reading
+    /// of the publisher's dates. When no force fact is asserted the absence is typed, never read as
+    /// "not in force".
+    /// </summary>
+    public V3PlatformOperationOutcome StatusOn(
+        V3PlatformOperationRequest request,
+        DateTimeOffset observedAt)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (!string.Equals(request.OperationId, "status_on", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("The mounted corpus status_on operation only accepts status_on/1.");
+        }
+
+        var identifier = RequiredString(request.Parameters, "identifier");
+        var requestedDate = RequiredString(request.Parameters, "date");
+        var requestedLanguage = OptionalLanguage(request.Parameters);
+        if (!DateOnly.TryParseExact(
+                requestedDate, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out _))
+        {
+            throw new V3TransportFailureException(
+                V3TransportFailureKind.RequestSchemaInvalid,
+                "The requested date is not a civil calendar date.");
+        }
+
+        if (RefuseUnlessWorkStates(request, identifier, observedAt, "r6_status_on", requestedLanguage,
+                out var states, out var availableLanguages) is { } refused)
+        {
+            return refused;
+        }
+
+        var scope = requestedLanguage is null
+            ? states
+            : states.Where(state => string.Equals(state.Language, requestedLanguage, StringComparison.Ordinal)).ToArray();
+        var servedLanguages = requestedLanguage is null ? availableLanguages : new[] { requestedLanguage };
+        var selected = new List<object>();
+        var ambiguous = new List<string>();
+        foreach (var language in servedLanguages)
+        {
+            var ofLanguage = scope
+                .Where(state => string.Equals(state.Language, language, StringComparison.Ordinal))
+                .ToArray();
+            var (candidates, nextDate) = SelectAtDate(ofLanguage, requestedDate);
+            if (candidates.Length == 0)
+            {
+                continue;
+            }
+
+            if (candidates.Length > 1)
+            {
+                ambiguous.AddRange(candidates.Select(StateUrl));
+                continue;
+            }
+
+            selected.Add(StateReference(candidates[0], nextDate));
+        }
+
+        if (ambiguous.Count != 0)
+        {
+            return RefuseAmbiguousVersion(request, observedAt, requestedDate, ambiguous.Order(StringComparer.Ordinal).ToArray(), bound: null);
+        }
+
+        if (selected.Count == 0)
+        {
+            return RefuseNoVersionForDate(request, observedAt, scope, requestedDate, bound: null);
+        }
+
+        // The force facts are the work's, not a state's: read for the work's own IRIs only.
+        var workIris = states.SelectMany(static state => new[] { state.PublisherWorkIri, state.PublisherLegalResourceIri })
+            .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+        var facts = _reader!.ResolveFacts(workIris);
+        var statusFacts = FactsOf(facts, LuxembourgAssertionPredicate.InForceStatus);
+        var entryFacts = FactsOf(facts, LuxembourgAssertionPredicate.DateEntryInForce);
+        var endFacts = FactsOf(facts, LuxembourgAssertionPredicate.DateNoLongerInForce);
+        var reading = ReadForce(entryFacts, endFacts, requestedDate);
+
+        using var result = JsonSerializer.SerializeToDocument(new
+        {
+            scope = StatusOnScope,
+            requested_identifier = identifier,
+            requested_date = requestedDate,
+            requested_language = requestedLanguage,
+            publisher = "lu-legilux",
+            work_key = states[0].WorkKey,
+            publisher_work_iri = states[0].PublisherWorkIri,
+            publisher_legal_resource_iri = states[0].PublisherLegalResourceIri,
+            subjects = workIris,
+            available_languages = availableLanguages,
+            states = selected,
+            force_facts_held = statusFacts.Length + entryFacts.Length + endFacts.Length > 0,
+            in_force_status = statusFacts,
+            entry_into_force = entryFacts,
+            no_longer_in_force = endFacts,
+            asserted_in_force_on_date = reading.Value,
+            reading_basis = reading.Basis,
+            reading_rule = StatusOnReadingRule,
+            what_would_answer = statusFacts.Length + entryFacts.Length + endFacts.Length > 0 ? null : new[] { "new_official_observation" },
+            asserts_absence_of_law = false,
+            verified_by = new
+            {
+                corpus_sha256 = _corpus.ArtifactRef.Sha256,
+                index_sha256 = _reader.IndexRef.Sha256,
+                registry_sha256 = V3OperationRegistry.Reviewed.Sha256,
+            },
+            not_held = StatusOnNotHeld.Select(static row => new { item = row[0], reason = row[1] }).ToArray(),
+        });
+        return V3PlatformOperationOutcome.Success(
+            Context("success", observedAt),
+            new V3PlatformOperationResult(request, "version_state", result.RootElement));
+    }
+
+    /// <summary>
+    /// The one reading <c>status_on</c> makes of the publisher's dated force facts, by
+    /// <see cref="StatusOnReadingRule"/>: a civil-date comparison and nothing else. Any lexical value
+    /// that is not a civil date, or no dated fact at all, leaves the reading null and says why.
+    /// </summary>
+    private static (bool? Value, string Basis) ReadForce(FactView[] entryFacts, FactView[] endFacts, string requestedDate)
+    {
+        if (entryFacts.Length == 0 && endFacts.Length == 0)
+        {
+            return (null, "no dated force fact asserted");
+        }
+
+        static string? CivilDate(string value) =>
+            DateOnly.TryParseExact(value.Length >= 10 ? value[..10] : value, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out _)
+                ? value[..10]
+                : null;
+
+        var entries = entryFacts.Select(static fact => CivilDate(fact.value)).ToArray();
+        var ends = endFacts.Select(static fact => CivilDate(fact.value)).ToArray();
+        if (entries.Any(static value => value is null) || ends.Any(static value => value is null))
+        {
+            return (null, "a dated force fact is not a civil date; served verbatim, not read");
+        }
+
+        if (ends.Any(end => string.CompareOrdinal(end, requestedDate) <= 0))
+        {
+            return (false, "a dateNoLongerInForce is on or before the requested date");
+        }
+
+        if (entries.Length == 0)
+        {
+            return (null, "no dateEntryInForce asserted; a later dateNoLongerInForce alone does not say the work was in force");
+        }
+
+        return entries.Any(entry => string.CompareOrdinal(entry, requestedDate) <= 0)
+            ? (true, "a dateEntryInForce is on or before the requested date and no dateNoLongerInForce is")
+            : (false, "every dateEntryInForce is after the requested date");
+    }
+
+    /// <summary>
+    /// <c>browse</c>: the held works as one ordered, paged list with the publisher's document types.
+    /// Takes an optional <c>type</c> (a typeDocument IRI or its last segment), an optional
+    /// <c>language</c>, a <c>limit</c> up to <see cref="BrowseMaxRows"/> and an <c>after</c> work key.
+    /// </summary>
+    public V3PlatformOperationOutcome Browse(
+        V3PlatformOperationRequest request,
+        DateTimeOffset observedAt)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (!string.Equals(request.OperationId, "browse", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("The mounted corpus browse operation only accepts browse/1.");
+        }
+
+        var requestedLanguage = OptionalLanguage(request.Parameters);
+        var requestedType = request.Parameters.TryGetProperty("type", out var typeValue) && typeValue.ValueKind == JsonValueKind.String
+            ? typeValue.GetString()
+            : null;
+        var after = request.Parameters.TryGetProperty("after", out var afterValue) && afterValue.ValueKind == JsonValueKind.String
+            ? RequiredString(request.Parameters, "after")
+            : null;
+        var limit = BrowseMaxRows;
+        if (request.Parameters.TryGetProperty("limit", out var limitValue))
+        {
+            if (limitValue.ValueKind != JsonValueKind.Number || !limitValue.TryGetInt32(out limit) ||
+                limit < 1 || limit > BrowseMaxRows)
+            {
+                throw new V3TransportFailureException(
+                    V3TransportFailureKind.RequestSchemaInvalid,
+                    "The operation request's 'limit' is not a whole number of rows within the ceiling.");
+            }
+        }
+
+        if (requestedType is not null && !IsTypeFilter(requestedType))
+        {
+            throw new V3TransportFailureException(
+                V3TransportFailureKind.RequestSchemaInvalid,
+                "The operation request's 'type' is neither an absolute IRI nor a bare type token.");
+        }
+
+        if (_reader is null)
+        {
+            using var unmounted = JsonSerializer.SerializeToDocument(new { required_corpus = "lu" });
+            return V3PlatformOperationOutcome.Refused(
+                Context("refusal", observedAt, PublisherId.LuLegilux),
+                new V3PlatformOperationRefusal(request, "no_corpus_mounted", unmounted.RootElement));
+        }
+
+        var languagesHeld = _reader.ResolveStatePopulation().Languages.ToArray();
+        if (requestedLanguage is not null && !languagesHeld.Contains(requestedLanguage, StringComparer.Ordinal))
+        {
+            using var unavailableLanguage = JsonSerializer.SerializeToDocument(new
+            {
+                requested_language = requestedLanguage,
+                available_languages = languagesHeld,
+            });
+            return V3PlatformOperationOutcome.Refused(
+                Context("refusal", observedAt),
+                new V3PlatformOperationRefusal(request, "language_not_available", unavailableLanguage.RootElement));
+        }
+
+        var page = _reader.ResolveWorkRecords(requestedLanguage, requestedType, after, limit + 1);
+        var served = page.Take(limit).ToArray();
+        var subjects = served.SelectMany(static record => record.PublisherWorkIris.Concat(record.PublisherLegalResourceIris))
+            .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+        var facts = _reader.ResolveFacts(subjects);
+        var rows = served.Select(record =>
+        {
+            var own = new HashSet<string>(record.PublisherWorkIris.Concat(record.PublisherLegalResourceIris), StringComparer.Ordinal);
+            return new
+            {
+                work_key = record.WorkKey,
+                identifier = $"/lu-legilux/{record.WorkKey}",
+                publisher_work_iris = record.PublisherWorkIris,
+                publisher_legal_resource_iris = record.PublisherLegalResourceIris,
+                languages = record.Languages,
+                history_begins = record.FirstDate,
+                latest_applicability_date = record.LastDate,
+                state_count = record.StateCount,
+                document_types = FactsOf(facts, LuxembourgAssertionPredicate.TypeDocument).Where(fact => own.Contains(fact.subject_iri)).ToArray(),
+                resource_types = FactsOf(facts, LuxembourgAssertionPredicate.RdfType).Where(fact => own.Contains(fact.subject_iri)).ToArray(),
+            };
+        }).ToArray();
+
+        using var result = JsonSerializer.SerializeToDocument(new
+        {
+            scope = BrowseScope,
+            requested_type = requestedType,
+            requested_language = requestedLanguage,
+            requested_after = after,
+            limit,
+            publisher = "lu-legilux",
+            languages_held = languagesHeld,
+            works = rows,
+            next_after = page.Count > limit ? served[^1].WorkKey : null,
+            verified_by = new
+            {
+                corpus_sha256 = _corpus.ArtifactRef.Sha256,
+                index_sha256 = _reader.IndexRef.Sha256,
+                registry_sha256 = V3OperationRegistry.Reviewed.Sha256,
+            },
+            not_held = BrowseNotHeld.Select(static row => new { item = row[0], reason = row[1] }).ToArray(),
+        });
+        return V3PlatformOperationOutcome.Success(
+            Context("success", observedAt),
+            new V3PlatformOperationResult(request, "work_record", result.RootElement));
+    }
+
+    /// <summary>A type filter is an absolute IRI or a bare token of the characters a type segment carries; nothing a LIKE pattern could read.</summary>
+    private static bool IsTypeFilter(string value) =>
+        Uri.TryCreate(value, UriKind.Absolute, out var iri) && (iri.Scheme == Uri.UriSchemeHttp || iri.Scheme == Uri.UriSchemeHttps)
+        || (value.Length > 0 && value.All(static character => char.IsAsciiLetterOrDigit(character) || character is '_' or '-' or '.'));
 
     public const int CitationMaxEdges = 200;
 
@@ -3109,7 +3408,7 @@ internal sealed class V3CorpusMount : IDisposable
         ["never_consolidated_acts", "the count of as-published acts never consolidated is a corpus-level statement this mount does not carry"],
         ["first_sighting_and_observation_times", "no observation time or first-sighting event is held, so nothing here says when anything was first seen"],
         ["build_time_and_currency", "no build time of the corpus or index is held, so nothing here says how current these counts are; the corpus and index digests name exactly which artifacts are mounted"],
-        ["legal_status", "no status, repeal or commencement fact is held; nothing here speaks of legal status"],
+        ["legal_status", "no status, repeal or commencement fact is counted here; status_on serves the publisher's force assertions per work, verbatim"],
     ];
 
     /// <summary>
@@ -3699,9 +3998,9 @@ internal sealed class V3CorpusMount : IDisposable
     internal static readonly string[][] DossierNotHeld =
     [
         ["document_type", "the publisher's document type is not part of this record; classification serves the typeDocument facts the publisher asserted, verbatim"],
-        ["current_state_flag", "no current-state flag is held, so nothing here says whether the publisher treats this work as in force, and a flag about now would not be a statement about any date listed here"],
+        ["current_state_flag", "no current-state flag is part of this record; status_on serves the publisher's force assertions for a date, and a flag about now would not be a statement about any date listed here"],
         ["publication_date", "no publication date is held; the document date the index stores beside a title falls back to an article's applicability date, so it is not served as one"],
-        ["entry_into_force", "no entry-into-force date is held; a state's applicability date is the date that state applies from, which is a different fact"],
+        ["entry_into_force", "no entry-into-force date is part of this record; status_on serves the publisher's dateEntryInForce when asserted; a state's applicability date is the date that state applies from, which is a different fact"],
         ["application", "no application date is held; a state's applicability date is the date that state applies from, which is a different fact"],
         ["historical_identifiers", "no historical identifier is held, so no earlier or later identifier of this work is mapped to it"],
         ["responsible_ministry", "no responsible ministry is held"],

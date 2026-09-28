@@ -75,6 +75,8 @@ public sealed class V3McpHttpEndpointTests
             ("evidence_bundle", new { identifier = work, date = fixture.ApplicabilityDate, language = "fra" }),
             ("classification", new { identifier = work, language = "fra" }),
             ("manifestation", new { identifier = work, language = "fra" }),
+            ("status_on", new { identifier = work, date = fixture.ApplicabilityDate, language = "fra" }),
+            ("browse", new { language = "fra" }),
         };
         CollectionAssert.AreEquivalent(
             V3RestRouteBinding.Served.Select(static binding => binding.OperationId).ToArray(),

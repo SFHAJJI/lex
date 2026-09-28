@@ -214,6 +214,19 @@ public sealed record LuxembourgIndexWorkTitle(
 /// datatype IRI and language tag, empty when the publisher gave none), and the digest of the observation
 /// it was read from. Verbatim; nothing is interpreted here.
 /// </summary>
+/// <summary>
+/// One held work as <c>browse</c> lists it: the work key, the distinct publisher work and legal-resource
+/// IRIs and languages its states carry (ordinal order), the first and latest state dates and the state count.
+/// </summary>
+public sealed record LuxembourgIndexWorkRecord(
+    string WorkKey,
+    IReadOnlyList<string> PublisherWorkIris,
+    IReadOnlyList<string> PublisherLegalResourceIris,
+    IReadOnlyList<string> Languages,
+    string FirstDate,
+    string LastDate,
+    long StateCount);
+
 public sealed record LuxembourgIndexWorkFact(
     string SubjectIri,
     string Predicate,
@@ -2448,6 +2461,44 @@ public sealed class LuxembourgIndexReader : IDisposable
 
             return Array.AsReadOnly(values.ToArray());
         }
+    }
+
+    /// <summary>
+    /// One page of the held works in work-key order (<see cref="LuxembourgIndexQueries.WorkRecords"/>),
+    /// optionally those with a state in a language, those whose publisher typeDocument is the given IRI or
+    /// ends in the given token, and those after a work key. <paramref name="take"/> rows at most.
+    /// </summary>
+    public IReadOnlyList<LuxembourgIndexWorkRecord> ResolveWorkRecords(string? language, string? type, string? afterWorkKey, int take)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(take, 1);
+        lock (_gate)
+        {
+            using var command = _connection.CreateCommand();
+            command.CommandText = LuxembourgIndexQueries.WorkRecords;
+            command.Parameters.AddWithValue("$after", (object?)afterWorkKey ?? DBNull.Value);
+            command.Parameters.AddWithValue("$language", (object?)language ?? DBNull.Value);
+            command.Parameters.AddWithValue("$type", (object?)type ?? DBNull.Value);
+            command.Parameters.AddWithValue("$take", take);
+            using var reader = command.ExecuteReader();
+            var values = new List<LuxembourgIndexWorkRecord>();
+            while (reader.Read())
+            {
+                values.Add(new LuxembourgIndexWorkRecord(
+                    reader.GetString(0),
+                    SortedStrings(reader.GetString(1)),
+                    SortedStrings(reader.GetString(2)),
+                    SortedStrings(reader.GetString(3)),
+                    reader.GetString(4),
+                    reader.GetString(5),
+                    reader.GetInt64(6)));
+            }
+
+            return Array.AsReadOnly(values.ToArray());
+        }
+
+        static IReadOnlyList<string> SortedStrings(string json) =>
+            Array.AsReadOnly((JsonSerializer.Deserialize<string[]>(json) ?? [])
+                .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray());
     }
 
     /// <remarks>
