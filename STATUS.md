@@ -31,17 +31,18 @@ work verbatim (`in_force_status` = jolux:inForceStatus tokens, `entry_into_force
 jolux:dateEntryInForce, `no_longer_in_force` = jolux:dateNoLongerInForce, each with subject, value,
 datatype and evidence digest) plus one fixed reading of the dates, `asserted_in_force_on_date`
 (true when an entry date is on or before the requested date and no end date is; false when an end
-date is on or before it or every entry date is after it; null when no dated fact is asserted or a
-lexical value is not a civil date), with the rule and the basis in the answer; when the publisher
+date is on or before it or every entry date is after it; null when no dated fact is asserted, when
+only an end date after the requested date is asserted, or when a lexical value is not exactly a
+civil date `yyyy-MM-dd`), with the rule and the basis in the answer; when the publisher
 asserted no force fact the absence is typed (`force_facts_held: false`, `what_would_answer`,
 `asserts_absence_of_law: false`) and is never read as "not in force". The real 1991 act's envelope
 asserts no force fact, so the test fixture asserts them through a new helper and holds the reading
 on every side of the dates. `browse` lists the held works in work-key order, paged (`limit` up to
 200, `after` = work key), each with its publisher identifiers, languages, first and latest state
 dates, state count and the publisher's typeDocument and rdf:type facts; `type` filters by the
-typeDocument IRI or its last segment (a token no LIKE pattern can reach; anything else is a
-request-schema failure), `language` by the states' language (a work selected by one language still
-lists them all); the listing scans the states in key order and cuts by limit, so a deep page costs
+typeDocument IRI or its last segment, compared exactly and case-sensitively (a substring test, no
+LIKE; a value that is neither an absolute IRI nor a bare token is a request-schema failure),
+`language` by the states' language (a work selected by one language still lists them all); the listing scans the states in key order and cuts by limit, so a deep page costs
 the rows before it. Decisions taken by the driver, reversible: the force reading is a civil-date
 comparison and nothing more (an inForceStatus token is served, not read); `browse` answers
 `work_record` rows rather than a `classification` tree; no capability cells for the fact table.

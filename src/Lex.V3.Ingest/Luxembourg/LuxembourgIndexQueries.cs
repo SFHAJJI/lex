@@ -140,10 +140,11 @@ internal static class LuxembourgIndexQueries
     /// bound as parameters; a null parameter disables its clause. The language filter is an EXISTS over the
     /// work's own states (a primary-key search by work key), so a work selected by one language still lists
     /// them all. The type filter is an EXISTS over the fact table by the work's own IRIs (a primary-key search
-    /// per work, never a scan of the facts) for a typeDocument that is the value or ends in "/" and the value;
-    /// the caller admits only a bare token or an absolute IRI, so the LIKE pattern carries no wildcard of the
-    /// caller's. The states are read in primary-key order and cut by LIMIT, so a deep page costs the rows before
-    /// it; the listing is a browse and not a lookup.
+    /// per work, never a scan of the facts) for a typeDocument that is the value exactly, or whose own tail is
+    /// "/" followed by the value exactly (a substring comparison, case-sensitive, so no LIKE wildcard or case fold
+    /// can widen it; the review of PR #757 found the LIKE this replaced matching "loi" and "L_I" to LOI). The
+    /// states are read in primary-key order and cut by LIMIT, so a deep page costs the rows before it; the listing
+    /// is a browse and not a lookup.
     /// </summary>
     internal const string WorkRecords =
         "SELECT s.work_key," +
@@ -153,7 +154,7 @@ internal static class LuxembourgIndexQueries
         "WHERE ($after IS NULL OR s.work_key>$after) " +
         "AND ($language IS NULL OR EXISTS (SELECT 1 FROM states l WHERE l.work_key=s.work_key AND l.language=$language)) " +
         "AND ($type IS NULL OR EXISTS (SELECT 1 FROM work_facts f WHERE f.subject_iri IN (s.publisher_work_iri,s.publisher_legal_resource_iri) " +
-        "AND f.predicate='typeDocument' AND (f.object_value=$type OR f.object_value LIKE '%/' || $type))) " +
+        "AND f.predicate='typeDocument' AND (f.object_value=$type OR substr(f.object_value,-(length($type)+1))='/'||$type))) " +
         "GROUP BY s.work_key ORDER BY s.work_key LIMIT $take";
 
     internal const string StateSources =

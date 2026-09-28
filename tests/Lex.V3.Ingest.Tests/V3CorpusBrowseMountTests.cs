@@ -93,6 +93,13 @@ public sealed class V3CorpusBrowseMountTests
         CollectionAssert.AreEqual(new[] { fixture.WorkKey }, byIri.GetProperty("works").EnumerateArray().Select(static work => work.GetProperty("work_key").GetString()).ToArray());
         var none = (await EnvelopeAsync(mount, RawTarget, "browse", new { type = "RGD" })).Result!.Value;
         Assert.AreEqual(0, none.GetProperty("works").GetArrayLength(), "a type no work carries lists nothing and refuses nothing.");
+        // Exactly the token: neither a case fold nor a one-character wildcard reaches the publisher's LOI
+        // (the review of PR #757 found the LIKE this replaced matching both).
+        foreach (var near in new[] { token.ToLowerInvariant(), token[..^1] + "_", "O" + token[1..], token[1..] })
+        {
+            var matched = (await EnvelopeAsync(mount, RawTarget, "browse", new { type = near })).Result!.Value;
+            Assert.AreEqual(0, matched.GetProperty("works").GetArrayLength(), near + ": a type that is not exactly the segment selects nothing.");
+        }
 
         // Pages of one walk the whole list once, in key order.
         var walked = new List<string>();

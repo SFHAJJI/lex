@@ -105,30 +105,55 @@ public sealed class V3CorpusStatusOnMountTests
         Assert.IsFalse(onEnd.GetProperty("asserted_in_force_on_date").GetBoolean());
         StringAssert.Contains(onEnd.GetProperty("reading_basis").GetString(), "dateNoLongerInForce");
 
-        // Before the entry into force but on a date the state history covers: false, with the basis saying why.
-        // (The fixture's state begins on its applicability date, so a date before entry needs a state that early.)
-        var later = await fixture.AddStateAsync(Shift(fixture.ApplicabilityDate, 400), "later");
-        _ = later;
-        using var remounted = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
-        Assert.IsNotNull(remounted);
-        var beforeEntry = await EnvelopeAsync(remounted, RawTarget, "status_on", new { identifier, date = Shift(entry, -1), language = "fra" });
-        Assert.AreEqual("no_version_for_date", beforeEntry.Refusal?.Code, "a date before the first state is as_of's refusal, whatever the force facts say.");
     }
 
     [TestMethod]
-    public async Task ADatedFactThatIsNotACivilDateIsServedVerbatimAndNotRead()
+    public async Task AnEntryIntoForceAfterTheDateReadsFalseAndAnEndAloneReadsNull()
     {
+        // The two sides the first fixture cannot reach: the publisher's entry date after the requested date, and an
+        // end date alone (after the requested date), which says nothing about the work having been in force.
         var fixture = await MountedFixture.CreateAsync();
         await using var cleanup = fixture;
         var work = fixture.ExpressionIri[..fixture.ExpressionIri.LastIndexOf('/')];
-        await fixture.AddWorkFactAsync(work, "dateEntryInForce", "act_force", "literal", "1991-08", "http://www.w3.org/2001/XMLSchema#gYearMonth");
+        var identifier = $"/lu-legilux/{fixture.WorkKey}";
+        await fixture.AddWorkFactAsync(work, "dateNoLongerInForce", "act_force", "literal", Shift(fixture.ApplicabilityDate, 365), XsdDate, evidenceSha256: new string('3', 64));
+        using (var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None))
+        {
+            Assert.IsNotNull(mount);
+            var endAlone = (await EnvelopeAsync(mount, RawTarget, "status_on", new { identifier, date = fixture.ApplicabilityDate, language = "fra" })).Result!.Value;
+            Assert.IsTrue(endAlone.GetProperty("force_facts_held").GetBoolean());
+            Assert.AreEqual(JsonValueKind.Null, endAlone.GetProperty("asserted_in_force_on_date").ValueKind);
+            StringAssert.Contains(endAlone.GetProperty("reading_basis").GetString(), "no dateEntryInForce asserted");
+        }
+
+        await fixture.AddWorkFactAsync(work, "dateEntryInForce", "act_force", "literal", Shift(fixture.ApplicabilityDate, 10), XsdDate, evidenceSha256: new string('2', 64));
+        using var remounted = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(remounted);
+        var entryAfter = (await EnvelopeAsync(remounted, RawTarget, "status_on", new { identifier, date = fixture.ApplicabilityDate, language = "fra" })).Result!.Value;
+        Assert.IsFalse(entryAfter.GetProperty("asserted_in_force_on_date").GetBoolean(), "the only entry date is after the requested date.");
+        Assert.AreEqual("every dateEntryInForce is after the requested date", entryAfter.GetProperty("reading_basis").GetString());
+    }
+
+    [TestMethod]
+    [DataRow("1991-08", "http://www.w3.org/2001/XMLSchema#gYearMonth")]
+    [DataRow("2024-01-22garbage", "http://www.w3.org/2001/XMLSchema#date")]
+    [DataRow("2024-01-22T00:00:00", "http://www.w3.org/2001/XMLSchema#dateTime")]
+    [DataRow("2024-01-22+02:00", "http://www.w3.org/2001/XMLSchema#date")]
+    public async Task ADatedFactThatIsNotExactlyACivilDateIsServedVerbatimAndNotRead(string lexical, string datatype)
+    {
+        // A value that merely begins with a date is not a date: the whole lexical value is parsed, so a dateTime,
+        // a timezone-bearing date or a suffix leaves the reading null and the value on the wire as written.
+        var fixture = await MountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        var work = fixture.ExpressionIri[..fixture.ExpressionIri.LastIndexOf('/')];
+        await fixture.AddWorkFactAsync(work, "dateEntryInForce", "act_force", "literal", lexical, datatype);
         using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
         Assert.IsNotNull(mount);
 
         var body = (await EnvelopeAsync(mount, RawTarget, "status_on", new { identifier = $"/lu-legilux/{fixture.WorkKey}", date = fixture.ApplicabilityDate, language = "fra" })).Result!.Value;
 
-        Assert.AreEqual("1991-08", body.GetProperty("entry_into_force").EnumerateArray().Single().GetProperty("value").GetString());
-        Assert.AreEqual(JsonValueKind.Null, body.GetProperty("asserted_in_force_on_date").ValueKind);
+        Assert.AreEqual(lexical, body.GetProperty("entry_into_force").EnumerateArray().Single().GetProperty("value").GetString());
+        Assert.AreEqual(JsonValueKind.Null, body.GetProperty("asserted_in_force_on_date").ValueKind, lexical);
         StringAssert.Contains(body.GetProperty("reading_basis").GetString(), "not a civil date");
     }
 

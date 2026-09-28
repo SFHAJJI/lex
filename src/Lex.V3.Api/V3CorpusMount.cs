@@ -1158,8 +1158,10 @@ internal sealed class V3CorpusMount : IDisposable
 
     internal const string StatusOnReadingRule =
         "asserted_in_force_on_date is true when the publisher's dateEntryInForce is on or before the requested date and no dateNoLongerInForce is on or before it, " +
-        "false when a dateNoLongerInForce is on or before it or the entry into force is after it, and null when the publisher asserted no dated force fact; " +
-        "inForceStatus is served as the publisher's token and is not read; a date fact whose lexical value is not a civil date leaves the reading null";
+        "false when a dateNoLongerInForce is on or before it or every dateEntryInForce is after it, and null when the publisher asserted no dated force fact, " +
+        "when only a dateNoLongerInForce after the requested date is asserted (an end alone does not say the work was in force), or when a dated fact's " +
+        "lexical value is not exactly a civil date yyyy-MM-dd (a dateTime, a timezone-bearing date or any other form is served verbatim and not read); " +
+        "inForceStatus is served as the publisher's token and is not read; reading_basis names which case applied";
 
     internal static readonly string[][] StatusOnNotHeld =
     [
@@ -1171,7 +1173,7 @@ internal sealed class V3CorpusMount : IDisposable
     internal const string BrowseScope =
         "the works this index holds, one row per work key in ordinal order, with the publisher identifiers and languages their states carry, the first and latest " +
         "state dates, the state count and the publisher's document and resource types read verbatim from the index's fact table; a type filters to works whose " +
-        "typeDocument is that IRI or ends in /{type}; a language filters to works with a state in it; paged by work key";
+        "typeDocument is exactly that IRI or ends exactly in /{type} (case-sensitive, no pattern); a language filters to works with a state in it; paged by work key";
 
     public const int BrowseMaxRows = 200;
 
@@ -1308,9 +1310,11 @@ internal sealed class V3CorpusMount : IDisposable
             return (null, "no dated force fact asserted");
         }
 
+        // The whole lexical value, exactly yyyy-MM-dd: a dateTime, a timezone-bearing date or any other form is
+        // served verbatim and not read (the review of PR #757 found a prefix parse reading "2024-01-22garbage").
         static string? CivilDate(string value) =>
-            DateOnly.TryParseExact(value.Length >= 10 ? value[..10] : value, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out _)
-                ? value[..10]
+            DateOnly.TryParseExact(value, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out _)
+                ? value
                 : null;
 
         var entries = entryFacts.Select(static fact => CivilDate(fact.value)).ToArray();
