@@ -66,6 +66,23 @@ public sealed class V3CorpusEvidenceBundleMountTests
         return notes;
     }
 
+    /// <summary>The corpus member each article was read from, by article identity, from the rows.</summary>
+    private static Dictionary<string, string> ReadObjectRefs(MountedFixture fixture)
+    {
+        using var connection = LuxembourgIndexBuilder.Open(
+            Path.Combine(fixture.Directory, V3CorpusMount.IndexFileName), SqliteOpenMode.ReadOnly);
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT article_identity_sha256, object_ref_sha256 FROM articles";
+        using var reader = command.ExecuteReader();
+        var refs = new Dictionary<string, string>(StringComparer.Ordinal);
+        while (reader.Read())
+        {
+            refs[reader.GetString(0)] = reader.GetString(1);
+        }
+
+        return refs;
+    }
+
     private static VerifiedLexCorpus6ManifestSet ReadCorpus(MountedFixture fixture) =>
         VerifiedLexCorpus6ManifestSet.ParseCanonicalAndVerify(
             File.ReadAllBytes(Path.Combine(fixture.Directory, V3CorpusMount.CorpusFileName)));
@@ -89,6 +106,8 @@ public sealed class V3CorpusEvidenceBundleMountTests
         var parameters = new { identifier, date = fixture.ApplicabilityDate, language = "fra" };
         var ground = fixture.ArticlesOfOwnState();
         var groundNotes = ReadNotes(fixture);
+        var groundRefs = ReadObjectRefs(fixture);
+        var corpus = ReadCorpus(fixture);
         Assert.IsGreaterThan(1, ground.Count, "The fixture's state must hold several articles for the list to mean something.");
 
         var envelope = await BundleAsync(mount, parameters);
@@ -134,6 +153,11 @@ public sealed class V3CorpusEvidenceBundleMountTests
             Assert.AreEqual(64, article.GetProperty("wording_sha256").GetString()!.Length, identity);
             Assert.AreEqual(fixture.Permalink + "#" + expected.PublisherId, article.GetProperty("article_permalink").GetString(), identity);
             Assert.AreEqual(officialSource, article.GetProperty("official_source").GetString(), identity);
+            Assert.AreEqual("fra", article.GetProperty("language").GetString(), identity);
+            // The quote names the body it was read from: the corpus manifest's digest for the article's own member.
+            var member = corpus.Set.Members.Single(candidate => candidate.ObjectRefSha256 == groundRefs[identity]);
+            Assert.IsNotNull(member.BodySha256, identity);
+            Assert.AreEqual(member.BodySha256, article.GetProperty("body_sha256").GetString(), identity);
             CollectionAssert.AreEqual(
                 groundNotes[identity].Select(static note => note.Marker + "|" + note.Text).ToArray(),
                 article.GetProperty("notes").EnumerateArray().Select(static note => note.GetProperty("marker").GetString() + "|" + note.GetProperty("text").GetString()).ToArray(),
@@ -152,6 +176,8 @@ public sealed class V3CorpusEvidenceBundleMountTests
             asOfState.GetProperty("article_identities").EnumerateArray().Select(static value => value.GetString()).ToArray(),
             articles.Select(static article => article.GetProperty("article_identity_sha256").GetString()).ToArray());
 
+        Assert.AreEqual(0, state.GetProperty("articles_without_text").GetArrayLength(), "every article of the real act carries text.");
+
         // The sources provenance names for the same request, and the body digests are the corpus manifest's.
         var provenance = await OtherAsync(mount, "/api/v3/provenance", "provenance", parameters);
         var provenanceState = provenance.Result!.Value.GetProperty("states").EnumerateArray().Single();
@@ -161,7 +187,6 @@ public sealed class V3CorpusEvidenceBundleMountTests
         Assert.AreEqual(
             JsonSerializer.Serialize(provenance.Result.Value.GetProperty("verified_by")),
             JsonSerializer.Serialize(body.GetProperty("verified_by")));
-        var corpus = ReadCorpus(fixture);
         var expectedBodies = state.GetProperty("sources").EnumerateArray()
             .Select(source => corpus.Set.Members.Single(member => member.ObjectRefSha256 == source.GetProperty("object_ref_sha256").GetString()).BodySha256)
             .Where(static digest => digest is not null)
@@ -175,6 +200,76 @@ public sealed class V3CorpusEvidenceBundleMountTests
             Assert.AreEqual("acquired", source.GetProperty("outcome").GetString());
             Assert.AreEqual("agreed_same_run_cc_by", source.GetProperty("rights_disposition").GetString());
         }
+    }
+
+    [TestMethod]
+    public async Task EveryArticlePermalinkTheBundleEmitsVerifiesAndAnArticleTheStateDoesNotHoldDoesNot()
+    {
+        // Launch contract line 9: verify resolves every citation the product emitted. The article permalink
+        // is the state permalink and the article id after #; verify answers digest_matches naming the article,
+        // and a fragment naming an article the pinned state does not hold is the refusal article_history makes.
+        var fixture = await MountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+        var parameters = new { identifier = $"/lu-legilux/{fixture.WorkKey}", date = fixture.ApplicabilityDate, language = "fra" };
+
+        var bundle = await BundleAsync(mount, parameters);
+        Assert.AreEqual(V3Verdicts.Answer, bundle.Verdict);
+        var articles = bundle.Result!.Value.GetProperty("states").EnumerateArray().Single().GetProperty("articles").EnumerateArray().ToArray();
+        Assert.IsGreaterThan(1, articles.Length);
+        foreach (var article in articles)
+        {
+            var permalink = article.GetProperty("article_permalink").GetString()!;
+            var verified = await EnvelopeAsync(mount, "/api/v3/verify", "verify", new { identifier = permalink });
+            Assert.AreEqual(V3Verdicts.Answer, verified.Verdict, permalink + ": " + verified.Refusal?.Code);
+            var body = verified.Result!.Value;
+            Assert.AreEqual("digest_matches", body.GetProperty("verdict").GetString(), permalink);
+            Assert.AreEqual(fixture.StateSha256, body.GetProperty("state_sha256").GetString(), permalink);
+            Assert.AreEqual(article.GetProperty("publisher_id").GetString(), body.GetProperty("requested_anchor").GetString(), permalink);
+            Assert.AreEqual(permalink, body.GetProperty("article_permalink").GetString(), permalink);
+        }
+
+        var foreign = await EnvelopeAsync(mount, "/api/v3/verify", "verify", new { identifier = fixture.Permalink + "#art_no_such_anchor" });
+        Assert.AreEqual("anchor_not_in_version", foreign.Refusal?.Code);
+        Assert.AreEqual("art_no_such_anchor", foreign.Refusal!.HelpfulPayload.GetProperty("requested_anchor").GetString());
+        Assert.IsTrue(foreign.Refusal.HelpfulPayload.GetProperty("do_not_fall_back_to_full_text_search").GetBoolean());
+
+        var empty = await PostAsync(mount, "/api/v3/verify", JsonSerializer.Serialize(new { operation_id = "verify", parameters = new { identifier = fixture.Permalink + "#" } }));
+        Assert.AreEqual(StatusCodes.Status200OK, empty.Response.StatusCode);
+        var emptyEnvelope = V3EnvelopeJson.ParseAndVerify(ResponseBytes(empty), V3OperationRegistry.Reviewed);
+        Assert.AreEqual("identifier_unknown", emptyEnvelope.Refusal?.Code, "an empty fragment is not a permalink.");
+    }
+
+    [TestMethod]
+    public async Task AnArticleWhoseTokensCarryNoTextIsNamedBesideTheQuotesAndNotServedAsOne()
+    {
+        // The index admits a marker-only article as evidence; its searchable text is empty. Served as a
+        // quote it would be an untyped absence with the digest of zero bytes, so it is named and not quoted.
+        var fixture = await MountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        var ground = fixture.ArticlesOfOwnState();
+        var (identity, publisherId, _) = ground[0];
+        await fixture.SetArticleTokensAsync(fixture.ExpressionIri, publisherId, string.Empty,
+            JsonSerializer.Serialize(new[] { new { kind = "modification_start", text = (string?)null, target = (string?)null, marker = "(1)", note_body = (object?)null } }));
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+        var parameters = new { identifier = $"/lu-legilux/{fixture.WorkKey}", date = fixture.ApplicabilityDate, language = "fra" };
+
+        var bundle = await BundleAsync(mount, parameters);
+
+        Assert.AreEqual(V3Verdicts.Answer, bundle.Verdict, bundle.Refusal?.Code);
+        var state = bundle.Result!.Value.GetProperty("states").EnumerateArray().Single();
+        var quoted = state.GetProperty("articles").EnumerateArray().Select(static article => article.GetProperty("article_identity_sha256").GetString()).ToArray();
+        Assert.AreEqual(ground.Count - 1, quoted.Length);
+        CollectionAssert.DoesNotContain(quoted, identity);
+        var named = state.GetProperty("articles_without_text").EnumerateArray().Single();
+        Assert.AreEqual(identity, named.GetProperty("article_identity_sha256").GetString());
+        Assert.AreEqual(publisherId, named.GetProperty("publisher_id").GetString());
+        Assert.AreEqual("no_text_tokens", named.GetProperty("reason").GetString());
+        Assert.IsFalse(
+            state.GetProperty("articles").EnumerateArray().Any(static article => article.GetProperty("text").GetString()!.Length == 0),
+            "no quote is empty.");
     }
 
     [TestMethod]

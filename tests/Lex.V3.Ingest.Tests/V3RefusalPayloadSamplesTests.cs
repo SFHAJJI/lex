@@ -225,6 +225,8 @@ public sealed class V3RefusalPayloadSamplesTests
         await DriveAsync(observed, mount, "verify", "a pinned permalink at a coordinate two languages share, with a digest neither carries",
             new { identifier = $"/lu-legilux/{fixture.WorkKey}/{fixture.ApplicabilityDate}--{new string('0', 64)}" }, "ambiguous_identifier");
         await DriveAsync(observed, mount, "verify", "a language not held", new { identifier = $"/lu-legilux/{fixture.WorkKey}", language = "eng" }, "language_not_available");
+        await DriveAsync(observed, mount, "verify", "an article permalink naming an article the pinned state does not hold",
+            new { identifier = $"{fixture.Permalink}#art_no_such_anchor", language = "fra" }, "anchor_not_in_version");
 
         // relations
         await DriveAsync(observed, mount, "relations", "an identifier no work has", new { identifier = unknown }, "identifier_unknown");

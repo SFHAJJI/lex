@@ -587,14 +587,16 @@ internal sealed class V3CorpusMount : IDisposable
         "the evidence a reader needs to quote a Luxembourg state: for the state selected as as_of selects it, the hash-pinned permalink and stable " +
         "coordinate, the state digest and its rule profiles, the source documents with their retained body digests (as provenance names them), and every " +
         "article this state holds with its identity, its wording as the publisher wrote it (text), the digest of that text, the digest of its wording " +
-        "structure, its notes, its official source and an article permalink; the text is the concatenation of the article's text and reference tokens " +
-        "in publisher order, the same bytes the index searches";
+        "structure, its notes, its official source, the digest of the publisher body it was read from and an article permalink (the state permalink " +
+        "and the article id after #, which verify accepts); the text is the concatenation of the article's text and reference tokens in publisher order, " +
+        "the same bytes the index searches; an article whose tokens carry no text (the index admits a marker-only article as evidence) is named under " +
+        "articles_without_text and is not served as a quote";
 
     internal const string EvidenceBundleRightsRule =
         "rights are enforced when the bundle is composed, before any text is read: every corpus member the state's articles come from must have " +
         "been acquired with its two rights channels agreeing CC BY in the same run (rights_disposition agreed_same_run_cc_by); under any other outcome or " +
         "rights disposition the bundle refuses text_withheld and names the official identity, the official link and the retained body digest, so a " +
-        "derived, unofficial or non-redistributable body never enters a bundle as authoritative text; a state whose articles hold no text refuses " +
+        "derived, unofficial or non-redistributable body never enters a bundle as authoritative text; a state none of whose articles holds text refuses " +
         "text_not_available";
 
     internal static readonly string[][] EvidenceBundleNotHeld =
@@ -718,7 +720,9 @@ internal sealed class V3CorpusMount : IDisposable
                 .OrderBy(article => rank.GetValueOrDefault(article.ArticleIdentitySha256, int.MaxValue))
                 .ThenBy(static article => article.ArticleIdentitySha256, StringComparer.Ordinal)
                 .ToArray();
-            if (articles.Length == 0 || articles.All(static article => article.Text.Length == 0))
+            var quoted = articles.Where(static article => article.Text.Length > 0).ToArray();
+            var withoutText = articles.Where(static article => article.Text.Length == 0).ToArray();
+            if (quoted.Length == 0)
             {
                 var member = sourcesByState[state.StateSha256].Select(source => MemberOf(source.ObjectRefSha256)).FirstOrDefault(static value => value is not null);
                 using var unavailable = JsonSerializer.SerializeToDocument(new
@@ -740,8 +744,8 @@ internal sealed class V3CorpusMount : IDisposable
             }
 
             var conflicts = 0;
-            var rows = new List<object>(articles.Length);
-            foreach (var article in articles)
+            var rows = new List<object>(quoted.Length);
+            foreach (var article in quoted)
             {
                 var date = datesByIdentity.GetValueOrDefault(article.ArticleIdentitySha256);
                 var conflict = ValidityConflict(date, state.ApplicabilityDate);
@@ -756,9 +760,11 @@ internal sealed class V3CorpusMount : IDisposable
                     article_identity_sha256 = article.ArticleIdentitySha256,
                     publisher_id = article.PublisherId,
                     publisher_wid = article.PublisherWid,
+                    language = state.Language,
                     article_valid_from = date,
                     validity_conflict = conflict,
                     wording_sha256 = article.WordingSha256,
+                    body_sha256 = MemberOf(article.ObjectRefSha256)?.BodySha256,
                     text = article.Text,
                     text_sha256 = Convert.ToHexStringLower(SHA256.HashData(textBytes)),
                     text_byte_length = textBytes.Length,
@@ -789,6 +795,12 @@ internal sealed class V3CorpusMount : IDisposable
                     .Order(StringComparer.Ordinal)
                     .ToArray(),
                 articles = rows,
+                articles_without_text = withoutText.Select(static article => new
+                {
+                    article_identity_sha256 = article.ArticleIdentitySha256,
+                    publisher_id = article.PublisherId,
+                    reason = "no_text_tokens",
+                }).ToArray(),
                 articles_not_admitted = notAdmitted.GetValueOrDefault(state.StateSha256),
                 validity_conflict_count = conflicts,
                 validity_conflict_rule = ValidityConflictRule,
@@ -1109,7 +1121,9 @@ internal sealed class V3CorpusMount : IDisposable
         "whether a hash-pinned permalink of this publisher still names the state this index holds at its stable coordinate, by the state digest the index " +
         "computed from the retained publisher bytes under its rule profiles (a matching digest is verified as digest_matches; a digest the coordinate no longer " +
         "carries is the pinned_digest_mismatch refusal naming the current one); for a work identifier or work coordinate, the current digests of every state " +
-        "held, and for a dated stable coordinate those held exactly there, so a caller can pin them; nothing about the text or its legal effect is assessed";
+        "held, and for a dated stable coordinate those held exactly there, so a caller can pin them; a pinned permalink may carry an article id after # " +
+        "(the article permalink evidence_bundle writes), and then the article must be one the pinned state holds or the answer is anchor_not_in_version; " +
+        "nothing about the text or its legal effect is assessed";
 
     internal static readonly string[][] VerifyNotHeld =
     [
@@ -1155,7 +1169,7 @@ internal sealed class V3CorpusMount : IDisposable
 
         var identifier = RequiredString(request.Parameters, "identifier");
         var requestedLanguage = OptionalLanguage(request.Parameters);
-        if (TryParsePinnedPermalink(identifier, out var workKey, out var applicabilityDate, out var requestedDigest))
+        if (TryParsePinnedPermalink(identifier, out var workKey, out var applicabilityDate, out var requestedDigest, out var anchor))
         {
             if (_reader is null)
             {
@@ -1220,12 +1234,33 @@ internal sealed class V3CorpusMount : IDisposable
             }
 
             var verified = matching[0];
+            if (anchor is not null)
+            {
+                // The article permalink evidence_bundle writes: the digest verified above, and the
+                // article id must be one this state holds, else the refusal article_history makes.
+                var articleIds = _reader.ResolveArticleIds(verified.StateSha256);
+                if (!articleIds.Contains(anchor, StringComparer.Ordinal))
+                {
+                    using var notInVersion = JsonSerializer.SerializeToDocument(new
+                    {
+                        requested_anchor = anchor,
+                        nearest_anchors = NearestAnchors(articleIds, anchor),
+                        do_not_fall_back_to_full_text_search = true,
+                    });
+                    return V3PlatformOperationOutcome.Refused(
+                        Context("refusal", observedAt),
+                        new V3PlatformOperationRefusal(request, "anchor_not_in_version", notInVersion.RootElement));
+                }
+            }
+
             using var verification = JsonSerializer.SerializeToDocument(new
             {
                 scope = VerifyScope,
                 requested_identifier = identifier,
                 requested_digest = requestedDigest,
                 requested_language = requestedLanguage,
+                requested_anchor = anchor,
+                article_permalink = anchor is null ? null : StateUrl(verified) + "#" + anchor,
                 verdict = "digest_matches",
                 publisher = "lu-legilux",
                 work_key = verified.WorkKey,
@@ -3761,7 +3796,7 @@ internal sealed class V3CorpusMount : IDisposable
     /// <summary>The identifier forms this product and Legilux mint for Luxembourg law.</summary>
     private static bool IsLuxembourgShaped(string identifier) =>
         OfficialIdentifier.EliMintedBy(identifier) == PublisherId.LuLegilux ||
-        TryParsePinnedPermalink(identifier, out _, out _, out _) ||
+        TryParsePinnedPermalink(identifier, out _, out _, out _, out _) ||
         (Uri.TryCreate(identifier, UriKind.Absolute, out var uri) && IsLegiluxHost(uri.Host));
 
     /// <summary>
@@ -3915,6 +3950,40 @@ internal sealed class V3CorpusMount : IDisposable
 
         workKey = segments[1];
         applicabilityDate = segments[2];
+        return true;
+    }
+
+    /// <summary>
+    /// The pinned permalink with an optional article fragment (<c>permalink#publisher_id</c>), the
+    /// article permalink <c>evidence_bundle</c> writes. The fragment is the publisher's article id,
+    /// verbatim; an empty fragment is not a permalink. Only <c>verify</c> reads this form: the
+    /// other operations take the state permalink and no fragment.
+    /// </summary>
+    private static bool TryParsePinnedPermalink(
+        string value,
+        out string workKey,
+        out string applicabilityDate,
+        out string requestedDigest,
+        out string? anchor)
+    {
+        anchor = null;
+        var hash = value.IndexOf('#', StringComparison.Ordinal);
+        if (hash < 0)
+        {
+            return TryParsePinnedPermalink(value, out workKey, out applicabilityDate, out requestedDigest);
+        }
+
+        var fragment = value[(hash + 1)..];
+        if (fragment.Length == 0 || fragment.Any(static character => char.IsWhiteSpace(character) || character == '#') ||
+            !TryParsePinnedPermalink(value[..hash], out workKey, out applicabilityDate, out requestedDigest))
+        {
+            workKey = string.Empty;
+            applicabilityDate = string.Empty;
+            requestedDigest = string.Empty;
+            return false;
+        }
+
+        anchor = fragment;
         return true;
     }
 

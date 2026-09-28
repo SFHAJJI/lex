@@ -120,8 +120,9 @@ public sealed record LuxembourgIndexArticleDate(
 /// One article of one state: its identity, the publisher-minted article id, the wording digest
 /// (<see cref="LuxembourgIndexReader.WordingSha256"/>), the publisher's wId and article-level
 /// applicability date where it wrote them, the searchable text (the text and reference tokens'
-/// texts concatenated in publisher order, the bytes <c>search</c> matches) and the stored token
-/// stream, verbatim. Nothing is compared here.
+/// texts concatenated in publisher order, the bytes <c>search</c> matches), the stored token
+/// stream, verbatim, and the object reference of the corpus member it was read from. Nothing is
+/// compared here.
 /// </summary>
 public sealed record LuxembourgIndexStateArticle(
     string ArticleIdentitySha256,
@@ -130,7 +131,8 @@ public sealed record LuxembourgIndexStateArticle(
     string? PublisherWid,
     string? ApplicabilityDate,
     string Text,
-    string TokensJson);
+    string TokensJson,
+    string ObjectRefSha256);
 
 public sealed record LuxembourgIndexInboundCitation(
     string ArticleIdentitySha256,
@@ -2081,7 +2083,7 @@ public sealed class LuxembourgIndexReader : IDisposable
                     reader.GetString(0), reader.GetString(1), WordingSha256(tokensJson),
                     reader.IsDBNull(3) ? null : reader.GetString(3),
                     reader.IsDBNull(4) ? null : reader.GetString(4),
-                    reader.GetString(5), tokensJson));
+                    reader.GetString(5), tokensJson, reader.GetString(6)));
             }
             return Array.AsReadOnly(values.ToArray());
         }

@@ -37,11 +37,21 @@ digests; per article, the identity, publisher id and wId, the article-level date
 publisher's wording: the text and reference tokens concatenated in publisher order, the same bytes
 `search` matches), `text_sha256` over exactly those UTF-8 bytes, the `wording_sha256` the index
 keeps, the notes (marker and body text, beside the text and outside the wording digest), the
-official source and an article permalink (`permalink#publisher_id`). Articles are in the state's
-own order. Decisions taken by the driver, reversible: the text is the searchable wording rather than
-a re-rendering of the token stream; rights are enforced per request and not per article (one
-withholding source withholds the bundle); signature, observation time and export formats are named
-as not held. The web refusal card now accepts the registry's `text_not_available` payload beside
+language, the `body_sha256` of the corpus member the article was read from, the official source
+and an article permalink (`permalink#publisher_id`; `verify` accepts that form and answers
+`digest_matches` naming the article, or `anchor_not_in_version` when the pinned state does not hold
+it; the language is pinned through the state digest, which is over the expression IRI and
+language, and named beside the permalink). Articles are in the state's own order. An article whose
+tokens carry no text (the index admits a marker-only article as evidence) is named under
+`articles_without_text` with its reason and is not served as a quote; a state none of whose articles
+holds text refuses `text_not_available`. Decisions taken by the driver, reversible: the text is the
+searchable wording rather than a re-rendering of the token stream; rights are enforced per request
+and not per article (one withholding source withholds the bundle); signature, observation time and
+export formats are named as not held. Known limit, for the owner to rule on if it matters for
+quotes: the text is the publisher's text and reference tokens joined with no separator, because
+paragraph structure and whitespace-only nodes are not retained at ingest, so "Art. 1er.La
+profession" runs together; the token stream the composer could render from is in the index
+(`tokens_json`), the paragraph boundaries are not. The web refusal card now accepts the registry's `text_not_available` payload beside
 the reading view's own provision-level one (two producers, two declared key sets) and the catalog's
 two text examples show the producer's fields.
 
