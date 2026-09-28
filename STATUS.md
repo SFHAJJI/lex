@@ -5,8 +5,8 @@ every pull request that changes what is served, what is next or what is blocked.
 
 ## Heads
 
-- `v3/integration`: `148231b5` (2026-09-28, PR #752 merged). Build 45 s. Fast lane
-  (`eng/test-fast.ps1`): 3,032 tests pass, 1 skipped, 55 s. Ingest suite: green on CI for PR #752
+- `v3/integration`: `35385a58` (2026-09-28, PR #753 merged). Build 45 s. Fast lane
+  (`eng/test-fast.ps1`): 3,032 tests pass, 1 skipped, 55 s. Ingest suite: green on CI for PR #753
   (the CI `dotnet` job runs the whole solution on every pull request, about 6 min on the runner);
   locally about 15 min. 771 web tests pass.
 - Plan: `C:\lex-v3\V3-FINISH-PLAN-2026-09-27.md` (owner's copy). Decision 94 (one driver, one queue,
@@ -33,8 +33,15 @@ ingest already holds (`TypedAssertions`: in-force status and dates, `typeDocumen
 `userFormat`), which bumps the index schema; `concepts`, `transposition`, `as_observed`,
 `knowable_on`, `events` and `answer_drift` need data the ingest does not produce.
 
-MCP: JSON-RPC dispatcher (`initialize`, `tools/list`, `tools/call` for `resolve`) exists as a pure
-function; wired to no transport.
+MCP: served over streamable HTTP at `POST /mcp` (this pull request), the request half of the
+transport: one JSON-RPC message in, one JSON document out (`initialize`, `tools/list`, `tools/call`;
+a notification answers 202 with no body; a JSON-RPC error is an HTTP 200; a GET is 405; a body over
+the platform's 1 MiB ceiling is 413 before parsing; no server-initiated stream is offered). One tool
+per served REST operation, named by its operation id, whose `inputSchema` is the reviewed request
+schema's `parameters` shape, and whose call runs the same dispatch the REST route runs
+(`V3ApiHandler.ExecuteFor`), so the two transports answer one envelope for one request; the
+endpoint test proves it for all fifteen. The launch-contract line "REST and MCP derive identical
+envelopes from the registry" is the owner's to tick.
 
 Web: 28 React components, 771 tests; no call to `/api/v3` yet. Screens render fixtures.
 
@@ -222,10 +229,11 @@ Web: 28 React components, 771 tests; no call to `/api/v3` yet. Screens render fi
    either). The driver proceeds with item 4 meanwhile.
 3. Define and run the Luxembourg population and the complete EU population (owner authorisation per
    run).
-4. Serve the unserved operations for Luxembourg (`verify` and `relations` served by this pull
-   request; twelve remain, see Served today) and wire MCP to a streamable HTTP endpoint: next
+4. Serve the unserved operations for Luxembourg (`verify` and `relations` served by PR #753;
+   twelve remain, see Served today; MCP over streamable HTTP served by this pull request): next
    `evidence_bundle` once its shape is decided, then the index-table group (`status_on`,
-   `classification`, `browse`, `manifestation`) as one index schema bump.
+   `classification`, `browse`, `manifestation`) as one index schema bump; a typed answer for a
+   request to an unserved operation (today the transport failure `unknown_route`).
 5. EU parity: every temporal and search operation from the EU index; French expressions.
 6. Wire the eight launch screens to `/api/v3`; journeys J1 to J8 in a real browser.
 7. Release pipeline: build, sign, image, zero-traffic deploy, probes. Then acceptance and promotion.
