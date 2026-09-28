@@ -243,6 +243,18 @@ public static class V3PlatformSchemaExporter
             ("anchor", NonBlankString()),
             ("limit", RowLimit()),
             ("after", NonBlankString())),
+        "verify" => Parameters(
+            ["identifier"],
+            ("identifier", NonBlankString()),
+            ("language", NonBlankString())),
+        "relations" => Parameters(
+            ["identifier"],
+            ("identifier", NonBlankString()),
+            ("date", CivilDate()),
+            ("language", NonBlankString()),
+            ("direction", NonBlankString()),
+            ("limit", RowLimit()),
+            ("after", NonBlankString())),
         _ => ClosedObject(),
     };
 

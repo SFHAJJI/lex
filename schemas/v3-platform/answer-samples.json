@@ -438,7 +438,7 @@
           "corpus_sha256": "\u003Cvaries-per-run\u003E",
           "index_sha256": "\u003Cvaries-per-run\u003E",
           "publisher": "lu-legilux",
-          "registry_sha256": "63afb9b177fe09efa2cfbfecab2458a651e8d7bdf2c9deccac842156188de35f"
+          "registry_sha256": "10eba54711537e9aa7d0d1b684613cd667dbf71d3e41feee9cd3b194530e0b8b"
         },
         "not_held": [
           {
@@ -474,10 +474,8 @@
             "evidence_bundle",
             "knowable_on",
             "manifestation",
-            "relations",
             "status_on",
-            "transposition",
-            "verify"
+            "transposition"
           ],
           "note": "served_operations are the routes this mount answers and not_served_operations are registered with no route on it; this states a fact about the mount and says nothing about what a request for an unserved operation returns",
           "registered": 27,
@@ -492,9 +490,11 @@
             "dossier",
             "in_force_on",
             "provenance",
+            "relations",
             "resolve",
             "search",
-            "timeline"
+            "timeline",
+            "verify"
           ]
         },
         "requested_language": null,
@@ -578,7 +578,7 @@
         "verified_by": {
           "corpus_sha256": "\u003Cvaries-per-run\u003E",
           "index_sha256": "\u003Cvaries-per-run\u003E",
-          "registry_sha256": "63afb9b177fe09efa2cfbfecab2458a651e8d7bdf2c9deccac842156188de35f"
+          "registry_sha256": "10eba54711537e9aa7d0d1b684613cd667dbf71d3e41feee9cd3b194530e0b8b"
         },
         "work_key": "loi-1991-08-10-n3"
       }
@@ -614,6 +614,10 @@
       "reason": "sampled when a reader is built against it"
     },
     {
+      "operation": "relations",
+      "reason": "sampled when a reader is built against it"
+    },
+    {
       "operation": "resolve",
       "reason": "sampled when a reader is built against it"
     },
@@ -623,6 +627,10 @@
     },
     {
       "operation": "timeline",
+      "reason": "sampled when a reader is built against it"
+    },
+    {
+      "operation": "verify",
       "reason": "sampled when a reader is built against it"
     }
   ]

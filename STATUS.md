@@ -5,8 +5,8 @@ every pull request that changes what is served, what is next or what is blocked.
 
 ## Heads
 
-- `v3/integration`: `2d8dddb7` (2026-09-28, PR #751 merged). Build 45 s. Fast lane
-  (`eng/test-fast.ps1`): 3,032 tests pass, 1 skipped, 55 s. Ingest suite: green on CI for PR #751
+- `v3/integration`: `148231b5` (2026-09-28, PR #752 merged). Build 45 s. Fast lane
+  (`eng/test-fast.ps1`): 3,032 tests pass, 1 skipped, 55 s. Ingest suite: green on CI for PR #752
   (the CI `dotnet` job runs the whole solution on every pull request, about 6 min on the runner);
   locally about 15 min. 771 web tests pass.
 - Plan: `C:\lex-v3\V3-FINISH-PLAN-2026-09-27.md` (owner's copy). Decision 94 (one driver, one queue,
@@ -16,13 +16,22 @@ every pull request that changes what is served, what is next or what is blocked.
 
 REST at `/api/v3/`, from a mounted `v3-corpus` directory, **Luxembourg only**: `resolve`, `as_of`,
 `timeline`, `article_history`, `diff`, `changes_in_period`, `in_force_on`, `search` (strict and relaxed
-lanes), `coverage`, `provenance`, `dossier`, `citation`, `cited_by`. Without a mounted corpus every route
-answers `no_corpus_mounted`. EU serves `resolve` only.
+lanes), `coverage`, `provenance`, `dossier`, `citation`, `cited_by`, and since this pull request
+`verify` (a hash-pinned permalink verified against the state digest the index holds; a work
+identifier answers the current digests) and `relations` (the one edge table in both directions,
+`cites` edges only, what `citation` and `cited_by` serve as one ordered, paged list). Without a
+mounted corpus every route answers `no_corpus_mounted`. EU serves `resolve` only.
 
 Registered and not served: `ask`, `answer_drift`, `as_observed`, `browse`, `classification`,
-`concepts`, `events`, `evidence_bundle`, `knowable_on`, `manifestation`, `relations`, `status_on`,
-`transposition`, `verify`. `ask` answers the typed `assistant_v3_unavailable` result by design until
-after launch.
+`concepts`, `events`, `evidence_bundle`, `knowable_on`, `manifestation`, `status_on`,
+`transposition`. A request for one of them is the transport failure `unknown_route` (HTTP 404, no
+envelope); `coverage` names them. `ask` answers the typed `assistant_v3_unavailable` result by
+design until after launch. Survey of 2026-09-28 (read-only): `evidence_bundle` is answerable from
+the index once its shape and the launch contract's rights rule are decided; `status_on`,
+`classification`, `browse` and `manifestation` need a new index table over Stage 3 inputs the
+ingest already holds (`TypedAssertions`: in-force status and dates, `typeDocument`, `isEmbodiedBy`,
+`userFormat`), which bumps the index schema; `concepts`, `transposition`, `as_observed`,
+`knowable_on`, `events` and `answer_drift` need data the ingest does not produce.
 
 MCP: JSON-RPC dispatcher (`initialize`, `tools/list`, `tools/call` for `resolve`) exists as a pure
 function; wired to no transport.
@@ -198,9 +207,25 @@ Web: 28 React components, 771 tests; no call to `/api/v3` yet. Screens render fi
    serialisation boundary between acquisition and build.
 2. Formex, the rest: French bodies (Decision 89) so French packages are held and acquired; then
    every acquired main body feeds the EU index for the temporal and search operations (item 5).
+   Designed on 2026-09-28 (read-only survey, recorded in the driver's notes): the adapter mints one
+   English fetch ladder per work and the corpus record set holds exactly one body per observed
+   object (the work), so a held French body means a second fetch pass with `Accept-Language: fra`
+   and a second held record per work keyed by the French expression, which touches the record set
+   and its completion checks, the content-class binding, the annex binder's lineage, the builder,
+   the index and `resolve` (a work identifier or CELEX then matches two equally authentic
+   expressions and today's `ambiguous_identifier` needs the language rule Decision 89 lists for
+   Stage 4). Two questions for the owner before the driver starts it: (a) the frozen corpus record
+   schema `lex-v3-source-corpus-record/6` holds one body per object; may it change (a body per
+   language, or an expression-keyed record) or must the French body travel beside it; (b) the
+   `resolve` language rule for a work identifier (the driver would default to the English
+   expression with the French one named as an alternate, and a `language` parameter selecting
+   either). The driver proceeds with item 4 meanwhile.
 3. Define and run the Luxembourg population and the complete EU population (owner authorisation per
    run).
-4. Serve the fourteen unserved operations for Luxembourg; wire MCP to a streamable HTTP endpoint.
+4. Serve the unserved operations for Luxembourg (`verify` and `relations` served by this pull
+   request; twelve remain, see Served today) and wire MCP to a streamable HTTP endpoint: next
+   `evidence_bundle` once its shape is decided, then the index-table group (`status_on`,
+   `classification`, `browse`, `manifestation`) as one index schema bump.
 5. EU parity: every temporal and search operation from the EU index; French expressions.
 6. Wire the eight launch screens to `/api/v3`; journeys J1 to J8 in a real browser.
 7. Release pipeline: build, sign, image, zero-traffic deploy, probes. Then acceptance and promotion.
