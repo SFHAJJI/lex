@@ -14,7 +14,9 @@
   "produced": [
     {
       "code": "ambiguous_identifier",
-      "optional_payload_keys": [],
+      "optional_payload_keys": [
+        "match_reason"
+      ],
       "payload": {
         "candidates": [
           "fixture-work-identifier",
@@ -24,7 +26,8 @@
         "requested_identifier": "Reglement sur l\u0027epreuve"
       },
       "produced_by": [
-        "resolve"
+        "resolve",
+        "verify"
       ]
     },
     {
@@ -93,9 +96,11 @@
         "dossier",
         "in_force_on",
         "provenance",
+        "relations",
         "resolve",
         "search",
-        "timeline"
+        "timeline",
+        "verify"
       ]
     },
     {
@@ -119,7 +124,8 @@
         "in_force_on",
         "provenance",
         "search",
-        "timeline"
+        "timeline",
+        "verify"
       ]
     },
     {
@@ -139,8 +145,10 @@
         "dossier",
         "in_force_on",
         "provenance",
+        "relations",
         "search",
-        "timeline"
+        "timeline",
+        "verify"
       ]
     },
     {
@@ -161,6 +169,7 @@
         "diff",
         "in_force_on",
         "provenance",
+        "relations",
         "search"
       ]
     },
@@ -178,7 +187,8 @@
         "stable_coordinate": "/lu-legilux/loi-1991-08-10-n3/2024-02-01"
       },
       "produced_by": [
-        "resolve"
+        "resolve",
+        "verify"
       ]
     },
     {
@@ -221,9 +231,11 @@
         "dossier",
         "in_force_on",
         "provenance",
+        "relations",
         "resolve",
         "search",
-        "timeline"
+        "timeline",
+        "verify"
       ]
     }
   ],

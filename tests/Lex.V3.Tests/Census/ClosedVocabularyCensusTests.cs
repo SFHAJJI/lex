@@ -56,9 +56,9 @@ public sealed class ClosedVocabularyCensusTests
             {
                 "Lex.V3.Api.SyntheticResolutionDisposition: Held, CandidateOnly",
                 "Lex.V3.Api.V3TransportFailureKind: MalformedJson, DuplicateJsonMember, "
-                    + "TrailingJsonContent, RequestTooLarge, RequestTooDeep, "
-                    + "ParametersNotObject, RequestSchemaInvalid, UnknownOperation, "
-                    + "MethodNotAllowed, UnknownRoute, InternalResponseInvalid, InternalFailure",
+                    + "TrailingJsonContent, RequestTooLarge, RequestTooDeep, ParametersNotObject, "
+                    + "RequestSchemaInvalid, UnknownOperation, MethodNotAllowed, UnknownRoute, "
+                    + "InternalResponseInvalid, InternalFailure",
                 "Lex.V3.Artifacts.ArtifactAdmissionFailureCode: HeaderTooLarge, MalformedHeader, "
                     + "DuplicateMember, UnknownMember, PreviewSchemaForbidden, "
                     + "SyntheticFlagForbidden, SyntheticEvidenceForbidden, SyntheticSourceForbidden, "
@@ -163,9 +163,8 @@ public sealed class ClosedVocabularyCensusTests
                 "Lex.V3.Contracts.LuScopeTerminalState: AcceptedMetadata, AcceptedCandidate, Point, "
                     + "NeverIngest, TypedQuarantine, MissingPublisherValue, NotApplicable",
                 "Lex.V3.Contracts.Platform.V3EnvelopeProjectionKind: Rest, Mcp",
-                "Lex.V3.Contracts.Platform.V3FactKind: CalendarDate, WorkKey, AnchorId, "
-                    + "ContentHash, PublisherName, SourceUri, IntervalSemantics, ReferenceLabel, "
-                    + "TargetIri",
+                "Lex.V3.Contracts.Platform.V3FactKind: CalendarDate, WorkKey, AnchorId, ContentHash, "
+                    + "PublisherName, SourceUri, IntervalSemantics, ReferenceLabel, TargetIri",
                 "Lex.V3.Contracts.PreviewBodyDispositionReason: SyntheticFixture, "
                     + "SyntheticFixtureWithheld, UnknownPendingEvidence",
                 "Lex.V3.Contracts.PreviewCapabilityState: MechanicsOnly",

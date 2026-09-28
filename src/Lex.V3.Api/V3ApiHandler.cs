@@ -89,6 +89,8 @@ internal sealed class V3ApiHandler
                     "dossier" => DossierOutcome,
                     "citation" => CitationOutcome,
                     "cited_by" => CitedByOutcome,
+                    "verify" => VerifyOutcome,
+                    "relations" => RelationsOutcome,
                     _ => ResolveOutcome,
                 };
                 await V3ResolveRestRoute.HandleOutcomeAsync(
@@ -165,6 +167,12 @@ internal sealed class V3ApiHandler
 
     private V3PlatformOperationOutcome CitedByOutcome(V3PlatformOperationRequest request) =>
         _corpusMount!.CitedBy(request, _utcNow());
+
+    private V3PlatformOperationOutcome VerifyOutcome(V3PlatformOperationRequest request) =>
+        _corpusMount!.Verify(request, _utcNow());
+
+    private V3PlatformOperationOutcome RelationsOutcome(V3PlatformOperationRequest request) =>
+        _corpusMount!.Relations(request, _utcNow());
 
     /// <summary>Shared with <see cref="V3McpJsonRpc"/>.</summary>
     internal static V3PlatformOperationRefusal NoCorpusMounted(V3PlatformOperationRequest request)

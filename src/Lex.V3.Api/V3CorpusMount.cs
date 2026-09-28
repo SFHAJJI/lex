@@ -818,6 +818,501 @@ internal sealed class V3CorpusMount : IDisposable
             new V3PlatformOperationResult(request, "relation_edge", result.RootElement));
     }
 
+    public const int RelationsMaxEdges = 200;
+
+    internal const string VerifyScope =
+        "whether a hash-pinned permalink of this publisher still names the state this index holds at its stable coordinate, by the state digest the index " +
+        "computed from the retained publisher bytes under its rule profiles (a matching digest is verified as digest_matches; a digest the coordinate no longer " +
+        "carries is the pinned_digest_mismatch refusal naming the current one); for a work identifier or work coordinate, the current digests of every state " +
+        "held, and for a dated stable coordinate those held exactly there, so a caller can pin them; nothing about the text or its legal effect is assessed";
+
+    internal static readonly string[][] VerifyNotHeld =
+    [
+        ["publisher_signature", "no signature or attestation of the publisher is held; the digest is this index's own reading of the retained bytes under the named rule profiles"],
+        ["observation_time", "when the publisher served the retained bytes is not held in this index, so no observation time is stated"],
+        ["text_verification", "the text itself is not compared here: as_of and article_history serve it, and provenance names its sources"],
+    ];
+
+    internal const string RelationsScope =
+        "the reference edges this index holds for a work, in both directions, from one edge table (lane R4): outbound, the references the publisher wrote in " +
+        "the text of the selected state's articles and their notes (what citation serves); inbound, the references in the text of any state this index holds whose " +
+        "target is exactly this work's publisher legal-resource IRI or its publisher work IRI (what cited_by serves); every edge is edge_type cites, " +
+        "asserted_by publisher_text, source_predicate akn_ref; an edge records that a reference was written where it says, it is derived here, and this answer " +
+        "assesses neither what relationship the reference states nor whether it has any legal effect";
+
+    internal const string RelationsOrder =
+        "outbound edges first, in citation's order (by the citing article's publisher id, then its identity, then the order the references occur in it, for " +
+        "each language in turn), then inbound edges in cited_by's order (by the citing state's publisher date, then its work key, language and expression, " +
+        "then the citing article's publisher id and identity, then the order the references occur in it)";
+
+    internal static readonly string[][] RelationsNotHeld =
+    [
+        ["relationship_type", "no type of relationship is assessed or held for a reference: relationship_type_assessed is false"],
+        ["current_legal_effect", "no legal effect of a reference is assessed or held: current_legal_effect_assessed is false"],
+        ["structured_relations", "the publisher's structured relation records (modifies, repeals, based on, transposes, is part of, is realized by) are not in this index's edge table, so no such edge is served; the one edge type held is cites"],
+        ["transposition", "transposition edges are their own operation and are not served by this mount"],
+    ];
+
+    /// <summary>
+    /// <c>verify</c>: a hash-pinned permalink is verified against the state digest this index holds at
+    /// its stable coordinate, the same reading <c>resolve</c> makes of a pinned identifier; a work
+    /// identifier or stable coordinate answers the current digests so a caller can pin them.
+    /// </summary>
+    public V3PlatformOperationOutcome Verify(
+        V3PlatformOperationRequest request,
+        DateTimeOffset observedAt)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (!string.Equals(request.OperationId, "verify", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("The mounted corpus verify operation only accepts verify/1.");
+        }
+
+        var identifier = RequiredString(request.Parameters, "identifier");
+        var requestedLanguage = OptionalLanguage(request.Parameters);
+        if (TryParsePinnedPermalink(identifier, out var workKey, out var applicabilityDate, out var requestedDigest))
+        {
+            if (_reader is null)
+            {
+                using var unmounted = JsonSerializer.SerializeToDocument(new { required_corpus = "lu" });
+                return V3PlatformOperationOutcome.Refused(
+                    Context("refusal", observedAt, PublisherId.LuLegilux),
+                    new V3PlatformOperationRefusal(request, "no_corpus_mounted", unmounted.RootElement));
+            }
+
+            var pinnedStates = _reader.ResolveState(workKey, applicabilityDate);
+            if (pinnedStates.Count == 0)
+            {
+                return Unknown(request, identifier, observedAt, PublisherId.LuLegilux,
+                    "a hash-pinned permalink of a state this index holds at that stable coordinate");
+            }
+
+            var pinnedLanguages = pinnedStates.Select(static state => state.Language)
+                .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+            if (requestedLanguage is not null && !pinnedLanguages.Contains(requestedLanguage, StringComparer.Ordinal))
+            {
+                using var unavailableLanguage = JsonSerializer.SerializeToDocument(new
+                {
+                    requested_language = requestedLanguage,
+                    available_languages = pinnedLanguages,
+                });
+                return V3PlatformOperationOutcome.Refused(
+                    Context("refusal", observedAt),
+                    new V3PlatformOperationRefusal(request, "language_not_available", unavailableLanguage.RootElement));
+            }
+
+            var pinnedScope = requestedLanguage is null
+                ? pinnedStates
+                : pinnedStates.Where(state => string.Equals(state.Language, requestedLanguage, StringComparison.Ordinal)).ToArray();
+            var matching = pinnedScope.Where(state => string.Equals(
+                requestedDigest, state.StateSha256, StringComparison.Ordinal)).ToArray();
+            if (matching.Length == 0)
+            {
+                if (pinnedScope.Count > 1)
+                {
+                    using var ambiguous = JsonSerializer.SerializeToDocument(new
+                    {
+                        requested_identifier = identifier,
+                        candidates = pinnedScope.Select(StateUrl).ToArray(),
+                    });
+                    return V3PlatformOperationOutcome.Refused(
+                        Context("refusal", observedAt),
+                        new V3PlatformOperationRefusal(request, "ambiguous_identifier", ambiguous.RootElement));
+                }
+
+                var current = pinnedScope[0];
+                using var mismatch = JsonSerializer.SerializeToDocument(new
+                {
+                    requested_digest = requestedDigest,
+                    current_digest = current.StateSha256,
+                    stable_coordinate = StableCoordinate(current),
+                    current_hash_pinned_url = StateUrl(current),
+                    rule_profile_sha256s = current.RuleProfileSha256s,
+                });
+                return V3PlatformOperationOutcome.Refused(
+                    Context("refusal", observedAt),
+                    new V3PlatformOperationRefusal(request, "pinned_digest_mismatch", mismatch.RootElement));
+            }
+
+            var verified = matching[0];
+            using var verification = JsonSerializer.SerializeToDocument(new
+            {
+                scope = VerifyScope,
+                requested_identifier = identifier,
+                requested_digest = requestedDigest,
+                requested_language = requestedLanguage,
+                verdict = "digest_matches",
+                publisher = "lu-legilux",
+                work_key = verified.WorkKey,
+                applicability_date = verified.ApplicabilityDate,
+                language = verified.Language,
+                state_sha256 = verified.StateSha256,
+                stable_coordinate = StableCoordinate(verified),
+                permalink = StateUrl(verified),
+                expression_iri = verified.ExpressionIri,
+                publisher_work_iri = verified.PublisherWorkIri,
+                publisher_legal_resource_iri = verified.PublisherLegalResourceIri,
+                rule_profile_sha256s = verified.RuleProfileSha256s,
+                articles = verified.ArticleIdentities.Count,
+                article_identities_sha256 = ArticleIdentitiesSha256(verified.ArticleIdentities),
+                sources = _reader.ResolveStateSources(verified.StateSha256).Select(SourceRow).ToArray(),
+                available_languages = pinnedLanguages,
+                verified_by = new
+                {
+                    corpus_sha256 = _corpus.ArtifactRef.Sha256,
+                    index_sha256 = _reader.IndexRef.Sha256,
+                    registry_sha256 = V3OperationRegistry.Reviewed.Sha256,
+                },
+                not_held = VerifyNotHeld.Select(static row => new { item = row[0], reason = row[1] }).ToArray(),
+            });
+            return V3PlatformOperationOutcome.Success(
+                Context("success", observedAt),
+                new V3PlatformOperationResult(request, "verification", verification.RootElement));
+        }
+
+        IReadOnlyList<LuxembourgIndexResolvedState> states;
+        string[] availableLanguages;
+        if (TryParseStableStateCoordinate(identifier, out var coordinateWorkKey, out var coordinateDate))
+        {
+            // The dated stable coordinate this mount writes into every answer and refusal: the
+            // current digests of the states held exactly there.
+            if (_reader is null)
+            {
+                using var unmounted = JsonSerializer.SerializeToDocument(new { required_corpus = "lu" });
+                return V3PlatformOperationOutcome.Refused(
+                    Context("refusal", observedAt, PublisherId.LuLegilux),
+                    new V3PlatformOperationRefusal(request, "no_corpus_mounted", unmounted.RootElement));
+            }
+
+            states = _reader.ResolveState(coordinateWorkKey, coordinateDate);
+            if (states.Count == 0)
+            {
+                return Unknown(request, identifier, observedAt, PublisherId.LuLegilux,
+                    "a stable coordinate at which this index holds a state");
+            }
+
+            availableLanguages = states.Select(static state => state.Language)
+                .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+            if (requestedLanguage is not null && !availableLanguages.Contains(requestedLanguage, StringComparer.Ordinal))
+            {
+                using var unavailableLanguage = JsonSerializer.SerializeToDocument(new
+                {
+                    requested_language = requestedLanguage,
+                    available_languages = availableLanguages,
+                });
+                return V3PlatformOperationOutcome.Refused(
+                    Context("refusal", observedAt),
+                    new V3PlatformOperationRefusal(request, "language_not_available", unavailableLanguage.RootElement));
+            }
+        }
+        else if (RefuseUnlessWorkStates(request, identifier, observedAt, "r6_verify", requestedLanguage,
+                     out states, out availableLanguages) is { } refused)
+        {
+            return refused;
+        }
+
+        var scope = requestedLanguage is null
+            ? states
+            : states.Where(state => string.Equals(state.Language, requestedLanguage, StringComparison.Ordinal)).ToArray();
+        using var digests = JsonSerializer.SerializeToDocument(new
+        {
+            scope = VerifyScope,
+            requested_identifier = identifier,
+            requested_digest = (string?)null,
+            requested_language = requestedLanguage,
+            verdict = "current_digests",
+            publisher = "lu-legilux",
+            work_key = states[0].WorkKey,
+            states = scope.Select(state => new
+            {
+                language = state.Language,
+                applicability_date = state.ApplicabilityDate,
+                state_sha256 = state.StateSha256,
+                stable_coordinate = StableCoordinate(state),
+                permalink = StateUrl(state),
+                rule_profile_sha256s = state.RuleProfileSha256s,
+                articles = state.ArticleIdentities.Count,
+                article_identities_sha256 = ArticleIdentitiesSha256(state.ArticleIdentities),
+            }).ToArray(),
+            available_languages = availableLanguages,
+            verified_by = new
+            {
+                corpus_sha256 = _corpus.ArtifactRef.Sha256,
+                index_sha256 = _reader!.IndexRef.Sha256,
+                registry_sha256 = V3OperationRegistry.Reviewed.Sha256,
+            },
+            not_held = VerifyNotHeld.Select(static row => new { item = row[0], reason = row[1] }).ToArray(),
+        });
+        return V3PlatformOperationOutcome.Success(
+            Context("success", observedAt),
+            new V3PlatformOperationResult(request, "verification", digests.RootElement));
+    }
+
+    /// <summary>
+    /// <c>relations</c>: the edges of lane R4's one edge table for a work, outbound (what
+    /// <c>citation</c> serves for the state at the date, or the latest state per language when no
+    /// date is given) and inbound (what <c>cited_by</c> serves), as one ordered, paged list; every
+    /// edge is <c>cites</c>, asserted by the publisher's text, derived from an <c>akn_ref</c>.
+    /// </summary>
+    public V3PlatformOperationOutcome Relations(
+        V3PlatformOperationRequest request,
+        DateTimeOffset observedAt)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (!string.Equals(request.OperationId, "relations", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("The mounted corpus relations operation only accepts relations/1.");
+        }
+
+        var identifier = RequiredString(request.Parameters, "identifier");
+        var requestedLanguage = OptionalLanguage(request.Parameters);
+        string? Optional(string name) =>
+            request.Parameters.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String
+                ? RequiredString(request.Parameters, name)
+                : null;
+        var requestedDate = Optional("date");
+        var after = Optional("after");
+        var direction = Optional("direction") ?? "both";
+        if (direction is not ("both" or "outbound" or "inbound"))
+        {
+            throw new V3TransportFailureException(
+                V3TransportFailureKind.RequestSchemaInvalid,
+                "The operation request's 'direction' is not one of both, outbound, inbound.");
+        }
+
+        var limit = RelationsMaxEdges;
+        if (request.Parameters.TryGetProperty("limit", out var limitValue))
+        {
+            if (limitValue.ValueKind != JsonValueKind.Number || !limitValue.TryGetInt32(out limit) ||
+                limit < 1 || limit > RelationsMaxEdges)
+            {
+                throw new V3TransportFailureException(
+                    V3TransportFailureKind.RequestSchemaInvalid,
+                    "The operation request's 'limit' is not a whole number of edges within the ceiling.");
+            }
+        }
+
+        if (requestedDate is not null && !DateOnly.TryParseExact(
+                requestedDate, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out _))
+        {
+            throw new V3TransportFailureException(
+                V3TransportFailureKind.RequestSchemaInvalid,
+                "The requested date is not a civil calendar date.");
+        }
+
+        if (RefuseUnlessWorkStates(request, identifier, observedAt, "r4_relations", requestedLanguage,
+                out var states, out var availableLanguages) is { } refused)
+        {
+            return refused;
+        }
+
+        var workKey = states[0].WorkKey;
+        var scope = requestedLanguage is null
+            ? states
+            : states.Where(state => string.Equals(state.Language, requestedLanguage, StringComparison.Ordinal)).ToArray();
+        var servedLanguages = requestedLanguage is null ? availableLanguages : new[] { requestedLanguage };
+
+        // Outbound: the state at the date per language, or the latest state per language. Inbound
+        // alone selects no state: those edges are references to the work from any held state.
+        var selectedStates = new List<LuxembourgIndexResolvedState>();
+        var ambiguous = new List<string>();
+        string? ambiguousDate = null;
+        foreach (var language in direction is "inbound" ? [] : servedLanguages)
+        {
+            var ofLanguage = scope
+                .Where(state => string.Equals(state.Language, language, StringComparison.Ordinal))
+                .ToArray();
+            LuxembourgIndexResolvedState[] selected;
+            if (requestedDate is null)
+            {
+                var latest = ofLanguage.Select(static state => state.ApplicabilityDate).Max(StringComparer.Ordinal);
+                selected = ofLanguage.Where(state => string.Equals(state.ApplicabilityDate, latest, StringComparison.Ordinal)).ToArray();
+            }
+            else
+            {
+                (selected, _) = SelectAtDate(ofLanguage, requestedDate);
+            }
+
+            if (selected.Length == 0)
+            {
+                continue;
+            }
+
+            if (selected.Length > 1)
+            {
+                ambiguous.AddRange(selected.Select(StateUrl));
+                ambiguousDate ??= selected[0].ApplicabilityDate;
+                continue;
+            }
+
+            selectedStates.Add(selected[0]);
+        }
+
+        if (ambiguous.Count != 0)
+        {
+            return RefuseAmbiguousVersion(request, observedAt, requestedDate ?? ambiguousDate!, ambiguous.Order(StringComparer.Ordinal).ToArray(), bound: null);
+        }
+
+        if (requestedDate is not null && selectedStates.Count == 0 && direction is not "inbound")
+        {
+            return RefuseNoVersionForDate(request, observedAt, scope, requestedDate, bound: null);
+        }
+
+        var outbound = new List<(LuxembourgIndexResolvedState State, LuxembourgIndexCitation Edge)>();
+        if (direction is not "inbound")
+        {
+            foreach (var state in selectedStates)
+            {
+                outbound.AddRange(_reader!.ResolveStateCitations(state.StateSha256, null).Select(edge => (state, edge)));
+            }
+        }
+
+        var targets = states
+            .SelectMany(static state => new[] { state.PublisherLegalResourceIri, state.PublisherWorkIri })
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        var inbound = new List<(LuxembourgIndexResolvedState State, LuxembourgIndexInboundCitation Edge)>();
+        if (direction is not "outbound")
+        {
+            var inboundEdges = _reader!.ResolveCitationsTo(targets);
+            var citingStates = _reader.ResolveStatesOfExpressions(
+                    inboundEdges.Select(static edge => edge.ExpressionIri).Distinct(StringComparer.Ordinal).ToArray())
+                .ToDictionary(static state => state.ExpressionIri, StringComparer.Ordinal);
+            inbound.AddRange(inboundEdges
+                .Select(edge => (State: citingStates.TryGetValue(edge.ExpressionIri, out var state)
+                        ? state
+                        : throw new InvalidDataException("An article of the index belongs to no state."),
+                    Edge: edge))
+                .OrderBy(static entry => entry.State.ApplicabilityDate, StringComparer.Ordinal)
+                .ThenBy(static entry => entry.State.WorkKey, StringComparer.Ordinal)
+                .ThenBy(static entry => entry.State.Language, StringComparer.Ordinal)
+                .ThenBy(static entry => entry.State.ExpressionIri, StringComparer.Ordinal)
+                .ThenBy(static entry => entry.Edge.PublisherId, StringComparer.Ordinal)
+                .ThenBy(static entry => entry.Edge.ArticleIdentitySha256, StringComparer.Ordinal)
+                .ThenBy(static entry => entry.Edge.Ordinal));
+        }
+
+        var heldTargets = _reader!.ResolveHeldWorks(outbound
+            .Select(static entry => entry.Edge.ToRef)
+            .Where(static target => target is not null)
+            .Select(static target => target!)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray());
+        var edges = new List<(string Cursor, object Row)>(outbound.Count + inbound.Count);
+        foreach (var (state, edge) in outbound)
+        {
+            var target = edge.ToRef;
+            var isHeld = target is not null && heldTargets.ContainsKey(target);
+            edges.Add(($"outbound.{state.StateSha256}.{edge.ArticleIdentitySha256}.{edge.Ordinal}", new
+            {
+                direction = "outbound",
+                edge_type = "cites",
+                citing_work_key = state.WorkKey,
+                citing_language = state.Language,
+                citing_applicability_date = state.ApplicabilityDate,
+                citing_state_sha256 = state.StateSha256,
+                citing_permalink = StateUrl(state),
+                article_identity_sha256 = edge.ArticleIdentitySha256,
+                article_publisher_id = edge.PublisherId,
+                ordinal = edge.Ordinal,
+                in_note = edge.InNote,
+                label = edge.Label,
+                href = edge.Href,
+                target_kind = edge.ToKind,
+                target_iri = target,
+                resolution = target is null ? "unparsed" : isHeld ? "held_work" : "not_held",
+                target_work_key = isHeld ? heldTargets[target!] : null,
+                is_self_reference = isHeld && string.Equals(heldTargets[target!], workKey, StringComparison.Ordinal),
+            }));
+        }
+
+        foreach (var (state, edge) in inbound)
+        {
+            edges.Add(($"inbound.{state.StateSha256}.{edge.ArticleIdentitySha256}.{edge.Ordinal}", new
+            {
+                direction = "inbound",
+                edge_type = "cites",
+                citing_work_key = state.WorkKey,
+                citing_language = state.Language,
+                citing_applicability_date = state.ApplicabilityDate,
+                citing_state_sha256 = state.StateSha256,
+                citing_permalink = StateUrl(state),
+                article_identity_sha256 = edge.ArticleIdentitySha256,
+                article_publisher_id = edge.PublisherId,
+                ordinal = edge.Ordinal,
+                in_note = edge.InNote,
+                label = edge.Label,
+                href = edge.Href,
+                target_kind = "legilux_eli",
+                target_iri = (string?)edge.ToRef,
+                resolution = "held_work",
+                target_work_key = (string?)workKey,
+                is_self_reference = string.Equals(state.WorkKey, workKey, StringComparison.Ordinal),
+            }));
+        }
+
+        var start = 0;
+        if (after is not null)
+        {
+            var index = edges.FindIndex(entry => string.Equals(entry.Cursor, after, StringComparison.Ordinal));
+            if (index < 0)
+            {
+                throw new V3TransportFailureException(
+                    V3TransportFailureKind.RequestSchemaInvalid,
+                    "The operation request's 'after' names no edge of this query; a cursor is the continue_after of the same query, scope and index.");
+            }
+
+            start = index + 1;
+        }
+
+        var page = edges.Skip(start).Take(limit).ToArray();
+        var truncated = start + page.Length < edges.Count;
+        using var result = JsonSerializer.SerializeToDocument(new
+        {
+            scope = RelationsScope,
+            requested_identifier = identifier,
+            requested_date = requestedDate,
+            requested_language = requestedLanguage,
+            requested_direction = direction,
+            requested_after = after,
+            publisher = "lu-legilux",
+            work_key = workKey,
+            relationship_type_assessed = false,
+            current_legal_effect_assessed = false,
+            derived = true,
+            edge_type = "cites",
+            asserted_by = "publisher_text",
+            source_predicate = "akn_ref",
+            states = selectedStates.Select(state => new
+            {
+                language = state.Language,
+                applicability_date = state.ApplicabilityDate,
+                state_sha256 = state.StateSha256,
+                permalink = StateUrl(state),
+                stable_coordinate = StableCoordinate(state),
+                outbound_edges = outbound.Count(entry => string.Equals(entry.State.StateSha256, state.StateSha256, StringComparison.Ordinal)),
+            }).ToArray(),
+            inbound_target_iris = targets,
+            edge_count = edges.Count,
+            edge_counts = new { outbound = outbound.Count, inbound = inbound.Count },
+            edge_order = RelationsOrder,
+            limit,
+            truncated,
+            continue_after = truncated ? page[^1].Cursor : null,
+            page_is = CitationPageIs,
+            edges = page.Select(static entry => entry.Row).ToArray(),
+            target_note = CitationTargetNote,
+            available_languages = availableLanguages,
+            not_held = RelationsNotHeld.Select(static row => new { item = row[0], reason = row[1] }).ToArray(),
+            corpus_sha256 = _corpus.ArtifactRef.Sha256,
+            index_sha256 = _reader.IndexRef.Sha256,
+        });
+        return V3PlatformOperationOutcome.Success(
+            Context("success", observedAt),
+            new V3PlatformOperationResult(request, "relation_edge", result.RootElement));
+    }
+
     public const int CitedByMaxEdges = 200;
 
     internal const string CitedByScope =
@@ -3093,6 +3588,50 @@ internal sealed class V3CorpusMount : IDisposable
 
     private static string StateUrl(LuxembourgIndexResolvedState state) =>
         StableCoordinate(state) + "--" + state.StateSha256;
+
+    /// <summary>
+    /// The dated stable coordinate this mount writes (<c>/lu-legilux/{work}/{date}</c>, also under the
+    /// origin), as distinct from the work coordinate (two segments) and the pinned permalink (the
+    /// date followed by <c>--</c> and the digest).
+    /// </summary>
+    private static bool TryParseStableStateCoordinate(string value, out string workKey, out string applicabilityDate)
+    {
+        workKey = string.Empty;
+        applicabilityDate = string.Empty;
+        string path;
+        if (value.StartsWith("/", StringComparison.Ordinal))
+        {
+            path = value;
+        }
+        else if (Uri.TryCreate(value, UriKind.Absolute, out var uri) &&
+                 string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.Ordinal) &&
+                 string.Equals(uri.Host, "law.soufien.lu", StringComparison.Ordinal) &&
+                 uri.IsDefaultPort && uri.UserInfo.Length == 0 && uri.Query.Length == 0 &&
+                 uri.Fragment.Length == 0)
+        {
+            path = uri.AbsolutePath;
+        }
+        else
+        {
+            return false;
+        }
+
+        var segments = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (path.EndsWith("/", StringComparison.Ordinal) || path.Contains("//", StringComparison.Ordinal) ||
+            segments.Length != 3 ||
+            !string.Equals(segments[0], "lu-legilux", StringComparison.Ordinal) ||
+            !IsWorkKey(segments[1]) || segments[2].Length != 10 ||
+            !DateOnly.TryParseExact(
+                segments[2], "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.None, out _))
+        {
+            return false;
+        }
+
+        workKey = segments[1];
+        applicabilityDate = segments[2];
+        return true;
+    }
 
     private static bool TryParsePinnedPermalink(
         string value,

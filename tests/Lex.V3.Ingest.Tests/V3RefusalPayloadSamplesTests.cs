@@ -216,6 +216,20 @@ public sealed class V3RefusalPayloadSamplesTests
         await DriveAsync(observed, mount, "cited_by", "an identifier no work has", new { identifier = unknown }, "identifier_unknown");
         await DriveAsync(observed, mount, "cited_by", "a European identifier on a Luxembourg-only mount", new { identifier = european }, "retrieval_mode_unavailable");
 
+        // verify
+        await DriveAsync(observed, mount, "verify", "an identifier no work has", new { identifier = unknown }, "identifier_unknown");
+        await DriveAsync(observed, mount, "verify", "a European identifier on a Luxembourg-only mount", new { identifier = european }, "retrieval_mode_unavailable");
+        await DriveAsync(observed, mount, "verify", "a pinned permalink whose digest the coordinate no longer carries",
+            new { identifier = $"/lu-legilux/{fixture.WorkKey}/{fixture.ApplicabilityDate}--{new string('0', 64)}", language = "fra" }, "pinned_digest_mismatch");
+        await DriveAsync(observed, mount, "verify", "a pinned permalink at a coordinate two languages share, with a digest neither carries",
+            new { identifier = $"/lu-legilux/{fixture.WorkKey}/{fixture.ApplicabilityDate}--{new string('0', 64)}" }, "ambiguous_identifier");
+        await DriveAsync(observed, mount, "verify", "a language not held", new { identifier = $"/lu-legilux/{fixture.WorkKey}", language = "eng" }, "language_not_available");
+
+        // relations
+        await DriveAsync(observed, mount, "relations", "an identifier no work has", new { identifier = unknown }, "identifier_unknown");
+        await DriveAsync(observed, mount, "relations", "a European identifier on a Luxembourg-only mount", new { identifier = european }, "retrieval_mode_unavailable");
+        await DriveAsync(observed, mount, "relations", "a date before the first state", new { identifier = $"/lu-legilux/{fixture.WorkKey}", date = "1900-01-01" }, "no_version_for_date");
+
         // coverage
         await DriveAsync(observed, mount, "coverage", "a language not held", new { language = "eng" }, "language_not_available");
     }
@@ -247,6 +261,8 @@ public sealed class V3RefusalPayloadSamplesTests
         await DriveAsync(observed, mount, "dossier", "no Luxembourg index", new { identifier = work }, "no_corpus_mounted");
         await DriveAsync(observed, mount, "citation", "no Luxembourg index", new { identifier = work, date = "2024-01-01" }, "no_corpus_mounted");
         await DriveAsync(observed, mount, "cited_by", "no Luxembourg index", new { identifier = work }, "no_corpus_mounted");
+        await DriveAsync(observed, mount, "verify", "no Luxembourg index", new { identifier = work }, "no_corpus_mounted");
+        await DriveAsync(observed, mount, "relations", "no Luxembourg index", new { identifier = work }, "no_corpus_mounted");
     }
 
     /// <summary>Drives one served operation through the real handler and records the refusal, which must be the one named.</summary>
