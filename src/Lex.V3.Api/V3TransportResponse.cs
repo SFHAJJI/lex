@@ -16,7 +16,6 @@ internal enum V3TransportFailureKind
     UnknownRoute,
     InternalResponseInvalid,
     InternalFailure,
-    UnsupportedProtocolVersion,
 }
 
 internal sealed class V3TransportFailureException : Exception
@@ -122,8 +121,6 @@ internal static class V3TransportResponse
             ("internal_response_invalid", "Internal response invalid", StatusCodes.Status500InternalServerError),
         V3TransportFailureKind.InternalFailure =>
             ("internal_failure", "Internal failure", StatusCodes.Status500InternalServerError),
-        V3TransportFailureKind.UnsupportedProtocolVersion =>
-            ("unsupported_protocol_version", "Unsupported MCP protocol version", StatusCodes.Status400BadRequest),
         _ => throw new ArgumentOutOfRangeException(nameof(kind)),
     };
 }

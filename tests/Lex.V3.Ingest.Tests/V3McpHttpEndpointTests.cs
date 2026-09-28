@@ -151,19 +151,17 @@ public sealed class V3McpHttpEndpointTests
     }
 
     [TestMethod]
-    public async Task AClientNamingAnotherProtocolVersionIsRefusedWithFourHundredAndTheServedOneOrNoneIsServed()
+    public async Task TheClientsOwnProtocolVersionHeaderIsNotReadAndEveryAnswerNamesTheServedOne()
     {
+        // S4-A11: the API reads nothing about the caller, so a client naming another version is
+        // served like any other and told the one version served, rather than refused on a header read.
         var body = JsonSerializer.Serialize(new { jsonrpc = "2.0", id = 1, method = "tools/list" });
-
-        var other = await SendAsync(null, HttpMethods.Post, Encoding.UTF8.GetBytes(body), protocolVersion: "1999-01-01");
-        Assert.AreEqual(StatusCodes.Status400BadRequest, other.Response.StatusCode);
-        StringAssert.Contains(Encoding.UTF8.GetString(ResponseBytes(other)), "unsupported_protocol_version");
-
-        var served = await SendAsync(null, HttpMethods.Post, Encoding.UTF8.GetBytes(body), protocolVersion: V3McpJsonRpc.ProtocolVersion);
-        Assert.AreEqual(StatusCodes.Status200OK, served.Response.StatusCode);
-
-        var none = await SendAsync(null, HttpMethods.Post, Encoding.UTF8.GetBytes(body));
-        Assert.AreEqual(StatusCodes.Status200OK, none.Response.StatusCode);
+        foreach (var version in new[] { "1999-01-01", V3McpJsonRpc.ProtocolVersion, null })
+        {
+            var context = await SendAsync(null, HttpMethods.Post, Encoding.UTF8.GetBytes(body), protocolVersion: version);
+            Assert.AreEqual(StatusCodes.Status200OK, context.Response.StatusCode, version ?? "(none)");
+            Assert.AreEqual(V3McpJsonRpc.ProtocolVersion, context.Response.Headers["MCP-Protocol-Version"].ToString(), version ?? "(none)");
+        }
     }
 
     [TestMethod]

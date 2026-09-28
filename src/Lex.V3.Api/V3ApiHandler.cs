@@ -156,7 +156,8 @@ internal sealed class V3ApiHandler
     /// Streamable HTTP, the request half only: a POST carrying one JSON-RPC message answers one JSON
     /// document with the same status semantics as the dispatcher (a JSON-RPC error is still an HTTP
     /// 200), a notification answers 202 with no body, and no server-initiated stream is offered (a
-    /// GET is 405). The body ceiling is the platform's; a larger request is 413 before parsing.
+    /// GET is 405). The body ceiling is the platform's; a larger request is 413 before parsing. No
+    /// request header is read (S4-A11).
     /// </summary>
     private async Task HandleMcpAsync(HttpContext context, CancellationToken cancellationToken)
     {
@@ -171,17 +172,9 @@ internal sealed class V3ApiHandler
             return;
         }
 
-        // A client that names a protocol version names the one this server speaks; an absent header
-        // is the initialization phase or an older client and is served (the specification's rule).
-        if (context.Request.Headers.TryGetValue("MCP-Protocol-Version", out var requestedVersions)
-            && requestedVersions.Count > 0
-            && !(requestedVersions.Count == 1 && string.Equals(requestedVersions[0], V3McpJsonRpc.ProtocolVersion, StringComparison.Ordinal)))
-        {
-            await V3TransportResponse.WriteAsync(context.Response, V3TransportFailureKind.UnsupportedProtocolVersion, NameProtocolVersion, cancellationToken)
-                .ConfigureAwait(false);
-            return;
-        }
-
+        // The client's own MCP-Protocol-Version header is not read: the API reads nothing about the
+        // caller (S4-A11, PublicRequestRecordingTests), so the specification's optional 400 for an
+        // unsupported version is not answered; every answer names the one version served instead.
         byte[] body;
         try
         {
