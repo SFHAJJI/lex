@@ -177,12 +177,12 @@ public sealed class V3McpJsonRpcTests
     public async Task AToolsCallForAnUnservedOperationIsAJsonRpcInvalidParamsErrorAndNothingRuns()
     {
         // browse is registered and not served, so it is not a tool; a served operation would run.
-        using var response = await HandleAsync(new { jsonrpc = "2.0", id = 3, method = "tools/call", @params = new { name = "browse", arguments = new { } } });
+        using var response = await HandleAsync(new { jsonrpc = "2.0", id = 3, method = "tools/call", @params = new { name = "concepts", arguments = new { } } });
 
         Assert.IsFalse(response.RootElement.TryGetProperty("result", out _));
         var error = response.RootElement.GetProperty("error");
         Assert.AreEqual(-32602, error.GetProperty("code").GetInt32());
-        StringAssert.Contains(error.GetProperty("message").GetString(), "browse");
+        StringAssert.Contains(error.GetProperty("message").GetString(), "concepts");
     }
 
     [TestMethod]

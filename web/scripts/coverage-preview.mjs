@@ -81,14 +81,13 @@ const OPERATIONS_NOTE =
   + 'for an unserved operation returns';
 
 const SERVED = Object.freeze([
-  'article_history', 'as_of', 'changes_in_period', 'citation', 'cited_by', 'classification',
+  'article_history', 'as_of', 'browse', 'changes_in_period', 'citation', 'cited_by', 'classification',
   'coverage', 'diff', 'dossier', 'evidence_bundle', 'in_force_on', 'manifestation', 'provenance',
-  'relations', 'resolve', 'search', 'timeline', 'verify',
+  'relations', 'resolve', 'search', 'status_on', 'timeline', 'verify',
 ]);
 
 const NOT_SERVED = Object.freeze([
-  'answer_drift', 'as_observed', 'ask', 'browse', 'concepts', 'events', 'knowable_on', 'status_on',
-  'transposition',
+  'answer_drift', 'as_observed', 'ask', 'concepts', 'events', 'knowable_on', 'transposition',
 ]);
 
 const NOT_HELD = Object.freeze([
@@ -114,7 +113,7 @@ const NOT_HELD = Object.freeze([
   }),
   Object.freeze({
     item: 'legal_status',
-    reason: 'no status, repeal or commencement fact is held; nothing here speaks of legal status',
+    reason: "no status, repeal or commencement fact is counted here; status_on serves the publisher's force assertions per work, verbatim",
   }),
 ]);
 

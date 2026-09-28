@@ -55,6 +55,9 @@ public sealed class LuxembourgIndexQueryPlanTests
     private static readonly (string Sql, (string, object)[] Parameters) SubjectFactsQuery =
         (LuxembourgIndexQueries.SubjectFacts, [("$subjects", "[\"http://example.invalid/eli/x\"]")]);
 
+    private static readonly (string Sql, (string, object)[] Parameters) WorkRecordsQuery =
+        (LuxembourgIndexQueries.WorkRecords, [("$after", "a"), ("$language", "fra"), ("$type", "LOI"), ("$take", 10)]);
+
     /// <summary>
     /// The document behind each state asked for is reached from the list of states: each state by its digest, then its
     /// first article and that article's member, each by primary key. So its cost is the number of states in the list and
@@ -158,6 +161,26 @@ public sealed class LuxembourgIndexQueryPlanTests
     /// would be a table pass each), and the list read as a list. If an index on an IRI column is ever added the plan
     /// becomes a search and this fails, which is the moment to tighten it into the bound the per-state queries have.
     /// </summary>
+    /// <summary>
+    /// The browse listing reads the states in their key order and cuts by LIMIT; its type filter reaches the fact
+    /// table by each work's own IRIs, a primary-key search, and never scans the facts, whatever the statistics say.
+    /// </summary>
+    private static IEnumerable<string> WorkRecordsProblems(string label, string[] plan)
+    {
+        var shown = $"{label}, WorkRecords: {string.Join(" | ", plan)}";
+        if (plan.Any(static line => Regex.IsMatch(line, @"^SCAN f\b")))
+        {
+            yield return "the fact table is scanned by the browse listing. " + shown;
+        }
+
+        // The planner may take the primary key as a covering index and add the predicate column to the search; both
+        // are a key search by the subject, which is what is pinned.
+        if (!plan.Any(static line => Regex.IsMatch(line, @"^SEARCH f USING (COVERING )?INDEX sqlite_autoindex_work_facts_1 \(subject_iri=\?")))
+        {
+            yield return "the type filter does not reach the facts by the table's primary key on the subject. " + shown;
+        }
+    }
+
     private static IEnumerable<string> HeldWorksProblems(string label, string[] plan)
     {
         var shown = $"{label}, HeldWorks: {string.Join(" | ", plan)}";
@@ -329,7 +352,8 @@ public sealed class LuxembourgIndexQueryPlanTests
             .Concat(HeldWorksProblems("the index as built", Plan(connection, HeldWorksQuery.Sql, HeldWorksQuery.Parameters)))
             .Concat(CitationsToProblems("the index as built", Plan(connection, CitationsToQuery.Sql, CitationsToQuery.Parameters)))
             .Concat(StatesOfExpressionsProblems("the index as built", Plan(connection, StatesOfExpressionsQuery.Sql, StatesOfExpressionsQuery.Parameters)))
-            .Concat(SubjectFactsProblems("the index as built", Plan(connection, SubjectFactsQuery.Sql, SubjectFactsQuery.Parameters))).ToArray();
+            .Concat(SubjectFactsProblems("the index as built", Plan(connection, SubjectFactsQuery.Sql, SubjectFactsQuery.Parameters)))
+            .Concat(WorkRecordsProblems("the index as built", Plan(connection, WorkRecordsQuery.Sql, WorkRecordsQuery.Parameters))).ToArray();
         Assert.AreEqual(0, problems.Length, string.Join(Environment.NewLine, problems));
     }
 
@@ -389,6 +413,7 @@ public sealed class LuxembourgIndexQueryPlanTests
             problems.AddRange(CitationsToProblems(label, Plan(connection, CitationsToQuery.Sql, CitationsToQuery.Parameters)));
             problems.AddRange(StatesOfExpressionsProblems(label, Plan(connection, StatesOfExpressionsQuery.Sql, StatesOfExpressionsQuery.Parameters)));
             problems.AddRange(SubjectFactsProblems(label, Plan(connection, SubjectFactsQuery.Sql, SubjectFactsQuery.Parameters)));
+            problems.AddRange(WorkRecordsProblems(label, Plan(connection, WorkRecordsQuery.Sql, WorkRecordsQuery.Parameters)));
         }
 
         Assert.AreEqual(0, problems.Count, string.Join(Environment.NewLine, problems));
@@ -418,6 +443,10 @@ public sealed class LuxembourgIndexQueryPlanTests
             1,
             Occurrences(reader, "command.CommandText = LuxembourgIndexQueries.SubjectFacts;"),
             "The reader does not run LuxembourgIndexQueries.SubjectFacts exactly once, so the plan asked of it is not the plan it gets.");
+        Assert.AreEqual(
+            1,
+            Occurrences(reader, "command.CommandText = LuxembourgIndexQueries.WorkRecords;"),
+            "The reader does not run LuxembourgIndexQueries.WorkRecords exactly once, so the plan asked of it is not the plan it gets.");
         Assert.AreEqual(
             1,
             Occurrences(reader, "outcomes.CommandText = LuxembourgIndexQueries.MemberOutcomes;"),

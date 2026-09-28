@@ -1695,6 +1695,30 @@ public sealed class V3CorpusResolveMountTests
         }
 
         /// <summary>
+        /// Adds one of the publisher's typed assertions to the fact table, as the builder would have written
+        /// it from the envelope (the predicate and fact kind by their wire names, empty datatype and language
+        /// tag when none), and re-stamps the index. The real act's envelope carries no force facts, so a test
+        /// of <c>status_on</c> asserts them here.
+        /// </summary>
+        public Task AddWorkFactAsync(
+            string subjectIri, string predicate, string factKind, string objectKind, string objectValue,
+            string datatypeIri = "", string languageTag = "", string? evidenceSha256 = null) =>
+            MutateArticlesAsync(connection =>
+            {
+                using var insert = connection.CreateCommand();
+                insert.CommandText = "INSERT INTO work_facts VALUES($subject,$predicate,$kind,$objectKind,$value,$datatype,$language,$evidence)";
+                insert.Parameters.AddWithValue("$subject", subjectIri);
+                insert.Parameters.AddWithValue("$predicate", predicate);
+                insert.Parameters.AddWithValue("$kind", factKind);
+                insert.Parameters.AddWithValue("$objectKind", objectKind);
+                insert.Parameters.AddWithValue("$value", objectValue);
+                insert.Parameters.AddWithValue("$datatype", datatypeIri);
+                insert.Parameters.AddWithValue("$language", languageTag);
+                insert.Parameters.AddWithValue("$evidence", evidenceSha256 ?? new string('e', 64));
+                Assert.AreEqual(1, insert.ExecuteNonQuery());
+            });
+
+        /// <summary>
         /// Sets the rights disposition the corpus recorded for the fixture's member(s), as the index stores
         /// it, and re-stamps the index.
         /// </summary>

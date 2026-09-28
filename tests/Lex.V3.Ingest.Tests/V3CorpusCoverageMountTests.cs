@@ -467,7 +467,7 @@ public sealed class V3CorpusCoverageMountTests
                 "the count of as-published acts never consolidated is a corpus-level statement this mount does not carry",
                 "no observation time or first-sighting event is held, so nothing here says when anything was first seen",
                 "no build time of the corpus or index is held, so nothing here says how current these counts are; the corpus and index digests name exactly which artifacts are mounted",
-                "no status, repeal or commencement fact is held; nothing here speaks of legal status",
+                "no status, repeal or commencement fact is counted here; status_on serves the publisher's force assertions per work, verbatim",
             },
             notHeld.Select(static row => row.GetProperty("reason").GetString()).ToArray());
         StringAssert.Contains(body.GetProperty("scope").GetString(), "nothing about what the publisher holds");

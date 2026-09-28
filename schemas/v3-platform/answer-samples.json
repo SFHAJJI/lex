@@ -345,6 +345,80 @@
       }
     },
     {
+      "operation": "browse",
+      "object_type": "work_record",
+      "scenario": "the whole mount, no filter: one page of the held works",
+      "answer": {
+        "languages_held": [
+          "fra"
+        ],
+        "limit": 200,
+        "next_after": null,
+        "not_held": [
+          {
+            "item": "publisher_universe",
+            "reason": "how many works the publisher holds, or which of them this index lacks: the rows are what was admitted"
+          },
+          {
+            "item": "titles",
+            "reason": "titles are served by dossier and resolve; a row here names the work by its identifiers"
+          },
+          {
+            "item": "legal_status",
+            "reason": "no in-force fact is read here; status_on serves the publisher\u0027s force assertions per work"
+          }
+        ],
+        "publisher": "lu-legilux",
+        "requested_after": null,
+        "requested_language": null,
+        "requested_type": null,
+        "scope": "the works this index holds, one row per work key in ordinal order, with the publisher identifiers and languages their states carry, the first and latest state dates, the state count and the publisher\u0027s document and resource types read verbatim from the index\u0027s fact table; a type filters to works whose typeDocument is exactly that IRI or ends exactly in /{type} (case-sensitive, no pattern); a language filters to works with a state in it; paged by work key",
+        "verified_by": {
+          "corpus_sha256": "\u003Cvaries-per-run\u003E",
+          "index_sha256": "\u003Cvaries-per-run\u003E",
+          "registry_sha256": "b1129c578dcc0d277311694feaa2829fbb4711bcb51243f281f070d9260717d8"
+        },
+        "works": [
+          {
+            "document_types": [
+              {
+                "datatype_iri": null,
+                "evidence_sha256": "5d371d76951033a2c4e68ffc78656c2f395f74c7ad1f58bdb37da154ec00c6a7",
+                "language_tag": null,
+                "object_kind": "iri",
+                "subject_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
+                "value": "http://data.legilux.public.lu/resource/authority/resource-type/LOI"
+              }
+            ],
+            "history_begins": "2024-02-01",
+            "identifier": "/lu-legilux/loi-1991-08-10-n3",
+            "languages": [
+              "fra"
+            ],
+            "latest_applicability_date": "2024-02-01",
+            "publisher_legal_resource_iris": [
+              "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo"
+            ],
+            "publisher_work_iris": [
+              "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3"
+            ],
+            "resource_types": [
+              {
+                "datatype_iri": null,
+                "evidence_sha256": "5d371d76951033a2c4e68ffc78656c2f395f74c7ad1f58bdb37da154ec00c6a7",
+                "language_tag": null,
+                "object_kind": "iri",
+                "subject_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
+                "value": "http://data.legilux.public.lu/resource/ontology/jolux#Act"
+              }
+            ],
+            "state_count": 1,
+            "work_key": "loi-1991-08-10-n3"
+          }
+        ]
+      }
+    },
+    {
       "operation": "classification",
       "object_type": "classification",
       "scenario": "the work, in the language it is held in: the publisher\u0027s typed facts",
@@ -373,7 +447,7 @@
           },
           {
             "item": "legal_status",
-            "reason": "no in-force status, repeal or commencement fact is served here; status_on is not served by this mount"
+            "reason": "no in-force status, repeal or commencement fact is served here; status_on serves the publisher\u0027s force assertions"
           },
           {
             "item": "labels",
@@ -420,7 +494,7 @@
         "verified_by": {
           "corpus_sha256": "\u003Cvaries-per-run\u003E",
           "index_sha256": "\u003Cvaries-per-run\u003E",
-          "registry_sha256": "fe5751e9cc9d1f6b41aabd7cfcc126230c559baaacd9d3a01d01c30725814d4c"
+          "registry_sha256": "b1129c578dcc0d277311694feaa2829fbb4711bcb51243f281f070d9260717d8"
         },
         "work_key": "loi-1991-08-10-n3"
       }
@@ -520,7 +594,7 @@
           "corpus_sha256": "\u003Cvaries-per-run\u003E",
           "index_sha256": "\u003Cvaries-per-run\u003E",
           "publisher": "lu-legilux",
-          "registry_sha256": "fe5751e9cc9d1f6b41aabd7cfcc126230c559baaacd9d3a01d01c30725814d4c"
+          "registry_sha256": "b1129c578dcc0d277311694feaa2829fbb4711bcb51243f281f070d9260717d8"
         },
         "not_held": [
           {
@@ -541,7 +615,7 @@
           },
           {
             "item": "legal_status",
-            "reason": "no status, repeal or commencement fact is held; nothing here speaks of legal status"
+            "reason": "no status, repeal or commencement fact is counted here; status_on serves the publisher\u0027s force assertions per work, verbatim"
           }
         ],
         "operations": {
@@ -549,11 +623,9 @@
             "answer_drift",
             "as_observed",
             "ask",
-            "browse",
             "concepts",
             "events",
             "knowable_on",
-            "status_on",
             "transposition"
           ],
           "note": "served_operations are the routes this mount answers and not_served_operations are registered with no route on it; this states a fact about the mount and says nothing about what a request for an unserved operation returns",
@@ -561,6 +633,7 @@
           "served_operations": [
             "article_history",
             "as_of",
+            "browse",
             "changes_in_period",
             "citation",
             "cited_by",
@@ -575,6 +648,7 @@
             "relations",
             "resolve",
             "search",
+            "status_on",
             "timeline",
             "verify"
           ]
@@ -1535,7 +1609,7 @@
         "verified_by": {
           "corpus_sha256": "\u003Cvaries-per-run\u003E",
           "index_sha256": "\u003Cvaries-per-run\u003E",
-          "registry_sha256": "fe5751e9cc9d1f6b41aabd7cfcc126230c559baaacd9d3a01d01c30725814d4c"
+          "registry_sha256": "b1129c578dcc0d277311694feaa2829fbb4711bcb51243f281f070d9260717d8"
         },
         "work_key": "loi-1991-08-10-n3"
       }
@@ -1618,7 +1692,7 @@
         "verified_by": {
           "corpus_sha256": "\u003Cvaries-per-run\u003E",
           "index_sha256": "\u003Cvaries-per-run\u003E",
-          "registry_sha256": "fe5751e9cc9d1f6b41aabd7cfcc126230c559baaacd9d3a01d01c30725814d4c"
+          "registry_sha256": "b1129c578dcc0d277311694feaa2829fbb4711bcb51243f281f070d9260717d8"
         },
         "work_key": "loi-1991-08-10-n3"
       }
@@ -1694,8 +1768,76 @@
         "verified_by": {
           "corpus_sha256": "\u003Cvaries-per-run\u003E",
           "index_sha256": "\u003Cvaries-per-run\u003E",
-          "registry_sha256": "fe5751e9cc9d1f6b41aabd7cfcc126230c559baaacd9d3a01d01c30725814d4c"
+          "registry_sha256": "b1129c578dcc0d277311694feaa2829fbb4711bcb51243f281f070d9260717d8"
         },
+        "work_key": "loi-1991-08-10-n3"
+      }
+    },
+    {
+      "operation": "status_on",
+      "object_type": "version_state",
+      "scenario": "the same request as as_of: the publisher\u0027s force assertions beside the state, none asserted for this act",
+      "answer": {
+        "asserted_in_force_on_date": null,
+        "asserts_absence_of_law": false,
+        "available_languages": [
+          "fra"
+        ],
+        "entry_into_force": [],
+        "force_facts_held": false,
+        "in_force_status": [],
+        "no_longer_in_force": [],
+        "not_held": [
+          {
+            "item": "repeal_and_amendment_events",
+            "reason": "no repeal, amendment or commencement event is held; the dates above are the publisher\u0027s own assertions about the work as a whole"
+          },
+          {
+            "item": "article_level_force",
+            "reason": "no article-level force fact is held; an article\u0027s applicability date is served by as_of and is a different fact"
+          },
+          {
+            "item": "status_at_publication",
+            "reason": "the facts are those the publisher asserted when observed; when they were asserted is not held, so a status is not dated to an observation"
+          }
+        ],
+        "publisher": "lu-legilux",
+        "publisher_legal_resource_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
+        "publisher_work_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3",
+        "reading_basis": "no dated force fact asserted",
+        "reading_rule": "asserted_in_force_on_date is true when the publisher\u0027s dateEntryInForce is on or before the requested date and no dateNoLongerInForce is on or before it, false when a dateNoLongerInForce is on or before it or every dateEntryInForce is after it, and null when the publisher asserted no dated force fact, when only a dateNoLongerInForce after the requested date is asserted (an end alone does not say the work was in force), or when a dated fact\u0027s lexical value is not exactly a civil date yyyy-MM-dd (a dateTime, a timezone-bearing date or any other form is served verbatim and not read); inForceStatus is served as the publisher\u0027s token and is not read; reading_basis names which case applied",
+        "requested_date": "2024-02-01",
+        "requested_identifier": "/lu-legilux/loi-1991-08-10-n3",
+        "requested_language": "fra",
+        "scope": "what the publisher asserted about this work\u0027s own force, read verbatim from the index\u0027s fact table (jolux:inForceStatus, jolux:dateEntryInForce, jolux:dateNoLongerInForce, each with its subject, value, datatype and evidence digest), beside the state as_of selects for the requested date; the answer adds one reading of the publisher\u0027s dates by a fixed rule and nothing else: it is not a legal opinion, and a state served here is the text the publisher dates as applicable, which is a different fact from force",
+        "states": [
+          {
+            "applicability_date": "2024-02-01",
+            "article_count": 49,
+            "expression_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo/fr",
+            "language": "fra",
+            "next_applicability_date": null,
+            "permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a",
+            "rule_profile_sha256s": [
+              "70e926111b25a4d364e96b679de0baaa090a869175a82d42e0052572804cf42e",
+              "dd32d9a59ea33b8c9e9cd51b7b2657a6fa2b716ad00e35db075416ba4cd38a9b"
+            ],
+            "stable_coordinate": "/lu-legilux/loi-1991-08-10-n3/2024-02-01",
+            "state_sha256": "5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a"
+          }
+        ],
+        "subjects": [
+          "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3",
+          "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo"
+        ],
+        "verified_by": {
+          "corpus_sha256": "\u003Cvaries-per-run\u003E",
+          "index_sha256": "\u003Cvaries-per-run\u003E",
+          "registry_sha256": "b1129c578dcc0d277311694feaa2829fbb4711bcb51243f281f070d9260717d8"
+        },
+        "what_would_answer": [
+          "new_official_observation"
+        ],
         "work_key": "loi-1991-08-10-n3"
       }
     }

@@ -83,6 +83,7 @@ public sealed class GuardedConstructionCensusTests
                     + "method private instance Lex.V3.Api.V3CorpusMount::Unknown, "
                     + "method public instance Lex.V3.Api.V3CorpusMount::ArticleHistory, "
                     + "method public instance Lex.V3.Api.V3CorpusMount::AsOf, "
+                    + "method public instance Lex.V3.Api.V3CorpusMount::Browse, "
                     + "method public instance Lex.V3.Api.V3CorpusMount::ChangesInPeriod, "
                     + "method public instance Lex.V3.Api.V3CorpusMount::Citation, "
                     + "method public instance Lex.V3.Api.V3CorpusMount::CitedBy, "
@@ -97,11 +98,12 @@ public sealed class GuardedConstructionCensusTests
                     + "method public instance Lex.V3.Api.V3CorpusMount::Relations, "
                     + "method public instance Lex.V3.Api.V3CorpusMount::Resolve, "
                     + "method public instance Lex.V3.Api.V3CorpusMount::Search, "
+                    + "method public instance Lex.V3.Api.V3CorpusMount::StatusOn, "
                     + "method public instance Lex.V3.Api.V3CorpusMount::Timeline, "
                     + "method public instance Lex.V3.Api.V3CorpusMount::Verify, "
                     + "method public static Lex.V3.Api.V3PlatformOperationOutcome::Refused, "
                     + "method public static Lex.V3.Api.V3PlatformOperationOutcome::Success, "
-                    + "18 compiler-generated",
+                    + "20 compiler-generated",
                 "Lex.V3.Api.V3PlatformSchemaDocuments: constructor private instance "
                     + "Lex.V3.Api.V3PlatformSchemaDocuments::.ctor, "
                     + "constructor private static Lex.V3.Api.V3PlatformSchemaDocuments::.cctor, "
