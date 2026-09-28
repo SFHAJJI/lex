@@ -8,7 +8,8 @@
     "verified_by.index_sha256",
     "mounted.corpus_sha256",
     "mounted.index_sha256",
-    "states[].sources[].object_ref_sha256"
+    "states[].sources[].object_ref_sha256",
+    "retained[].object_ref_sha256"
   ],
   "sampled": [
     {
@@ -344,6 +345,87 @@
       }
     },
     {
+      "operation": "classification",
+      "object_type": "classification",
+      "scenario": "the work, in the language it is held in: the publisher\u0027s typed facts",
+      "answer": {
+        "available_languages": [
+          "fra"
+        ],
+        "document_dates": [],
+        "document_types": [
+          {
+            "datatype_iri": null,
+            "evidence_sha256": "5d371d76951033a2c4e68ffc78656c2f395f74c7ad1f58bdb37da154ec00c6a7",
+            "language_tag": null,
+            "object_kind": "iri",
+            "subject_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
+            "value": "http://data.legilux.public.lu/resource/authority/resource-type/LOI"
+          }
+        ],
+        "fact_count": 7,
+        "historical_identifiers": [],
+        "legal_values": [],
+        "not_held": [
+          {
+            "item": "subject_classification",
+            "reason": "no thesaurus, EuroVoc or subject term is held; the publisher\u0027s typeDocument is a document type, not a subject"
+          },
+          {
+            "item": "legal_status",
+            "reason": "no in-force status, repeal or commencement fact is served here; status_on is not served by this mount"
+          },
+          {
+            "item": "labels",
+            "reason": "the values are the publisher\u0027s IRIs and lexical values, not read into labels; a document-type IRI is served as the publisher wrote it"
+          }
+        ],
+        "other_predicates_held": [
+          "isEmbodiedBy",
+          "isMemberOf",
+          "isRealizedBy",
+          "language"
+        ],
+        "publication_dates": [],
+        "publisher": "lu-legilux",
+        "publisher_legal_resource_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
+        "publisher_work_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3",
+        "requested_identifier": "/lu-legilux/loi-1991-08-10-n3",
+        "requested_language": "fra",
+        "resource_types": [
+          {
+            "datatype_iri": null,
+            "evidence_sha256": "5d371d76951033a2c4e68ffc78656c2f395f74c7ad1f58bdb37da154ec00c6a7",
+            "language_tag": null,
+            "object_kind": "iri",
+            "subject_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
+            "value": "http://data.legilux.public.lu/resource/ontology/jolux#Act"
+          },
+          {
+            "datatype_iri": null,
+            "evidence_sha256": "5d371d76951033a2c4e68ffc78656c2f395f74c7ad1f58bdb37da154ec00c6a7",
+            "language_tag": null,
+            "object_kind": "iri",
+            "subject_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo/fr",
+            "value": "http://data.legilux.public.lu/resource/ontology/jolux#Expression"
+          }
+        ],
+        "responsible_bodies": [],
+        "scope": "the typed facts the publisher asserted about this work\u0027s resources, read verbatim from the index\u0027s fact table (the Stage 3 assertion list): the document type (jolux:typeDocument) and the RDF types, the legal value, the responsible body, the historical identifiers, the publication and document dates, each with its subject, its object as an IRI or a literal with the datatype and language tag the publisher gave, and the digest of the observation it was read from; grouped by predicate, in the index\u0027s order, over the work\u0027s own IRIs and its expressions; nothing is inferred from them, no thesaurus or subject term is held, and in-force status is not served here",
+        "subjects": [
+          "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3",
+          "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
+          "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo/fr"
+        ],
+        "verified_by": {
+          "corpus_sha256": "\u003Cvaries-per-run\u003E",
+          "index_sha256": "\u003Cvaries-per-run\u003E",
+          "registry_sha256": "fe5751e9cc9d1f6b41aabd7cfcc126230c559baaacd9d3a01d01c30725814d4c"
+        },
+        "work_key": "loi-1991-08-10-n3"
+      }
+    },
+    {
       "operation": "coverage",
       "object_type": "coverage_report",
       "scenario": "the whole mount, no language asked",
@@ -438,7 +520,7 @@
           "corpus_sha256": "\u003Cvaries-per-run\u003E",
           "index_sha256": "\u003Cvaries-per-run\u003E",
           "publisher": "lu-legilux",
-          "registry_sha256": "1f1cb6cdc94479a136a69bab17a9531f295bb88c35367041fd70e6fb3c067c0a"
+          "registry_sha256": "fe5751e9cc9d1f6b41aabd7cfcc126230c559baaacd9d3a01d01c30725814d4c"
         },
         "not_held": [
           {
@@ -468,11 +550,9 @@
             "as_observed",
             "ask",
             "browse",
-            "classification",
             "concepts",
             "events",
             "knowable_on",
-            "manifestation",
             "status_on",
             "transposition"
           ],
@@ -484,11 +564,13 @@
             "changes_in_period",
             "citation",
             "cited_by",
+            "classification",
             "coverage",
             "diff",
             "dossier",
             "evidence_bundle",
             "in_force_on",
+            "manifestation",
             "provenance",
             "relations",
             "resolve",
@@ -1453,7 +1535,90 @@
         "verified_by": {
           "corpus_sha256": "\u003Cvaries-per-run\u003E",
           "index_sha256": "\u003Cvaries-per-run\u003E",
-          "registry_sha256": "1f1cb6cdc94479a136a69bab17a9531f295bb88c35367041fd70e6fb3c067c0a"
+          "registry_sha256": "fe5751e9cc9d1f6b41aabd7cfcc126230c559baaacd9d3a01d01c30725814d4c"
+        },
+        "work_key": "loi-1991-08-10-n3"
+      }
+    },
+    {
+      "operation": "manifestation",
+      "object_type": "manifestation",
+      "scenario": "the work, in the language it is held in: the publisher\u0027s manifestations, the retained one marked",
+      "answer": {
+        "available_formats": [
+          "xml"
+        ],
+        "available_languages": [
+          "fra"
+        ],
+        "expressions": [
+          {
+            "expression_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo/fr",
+            "languages": [
+              "fra"
+            ],
+            "manifestations": [
+              {
+                "formats": [
+                  {
+                    "evidence_sha256": "5d371d76951033a2c4e68ffc78656c2f395f74c7ad1f58bdb37da154ec00c6a7",
+                    "format": "xml",
+                    "format_iri": "http://data.legilux.public.lu/resource/authority/user-format/xml"
+                  }
+                ],
+                "items": [
+                  {
+                    "evidence_sha256": "5d371d76951033a2c4e68ffc78656c2f395f74c7ad1f58bdb37da154ec00c6a7",
+                    "item_iri": "http://data.legilux.public.lu/filestore/eli/etat/leg/loi/1991/08/10/n3/jo/fr/xml/eli-etat-leg-loi-1991-08-10-n3-jo-fr-xml.xml"
+                  }
+                ],
+                "manifestation_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo/fr/xml",
+                "resource_types": [
+                  "http://data.legilux.public.lu/resource/ontology/jolux#Manifestation"
+                ],
+                "retained": true,
+                "retained_body_sha256s": [
+                  "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c"
+                ]
+              }
+            ]
+          }
+        ],
+        "not_held": [
+          {
+            "item": "manifestation_bytes",
+            "reason": "only the retained manifestation\u0027s body digest is held; the other manifestations are named from the publisher\u0027s assertions, not held"
+          },
+          {
+            "item": "authenticity",
+            "reason": "which manifestation is the authentic one is not asserted here; the publisher\u0027s legalValue facts are served by classification"
+          },
+          {
+            "item": "format_semantics",
+            "reason": "a format IRI is served as written and its last segment is the token the format parameter matches; nothing about the bytes is inferred from it"
+          }
+        ],
+        "publisher": "lu-legilux",
+        "publisher_work_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3",
+        "requested_format": null,
+        "requested_identifier": "/lu-legilux/loi-1991-08-10-n3",
+        "requested_language": "fra",
+        "retained": [
+          {
+            "body_byte_length": 231171,
+            "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+            "expression_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo/fr",
+            "format_iri": "http://data.legilux.public.lu/resource/authority/user-format/xml",
+            "item_iri": "http://data.legilux.public.lu/filestore/eli/etat/leg/loi/1991/08/10/n3/jo/fr/xml/eli-etat-leg-loi-1991-08-10-n3-jo-fr-xml.xml",
+            "manifestation_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo/fr/xml",
+            "object_ref_sha256": "\u003Cvaries-per-run\u003E"
+          }
+        ],
+        "scope": "the manifestations the publisher asserted for this work\u0027s expressions (jolux:isEmbodiedBy), each with its formats (jolux:userFormat) and items (jolux:isExemplifiedBy) as the publisher wrote them, read verbatim from the index\u0027s fact table; the manifestation this corpus retained the body of is marked retained and carries the corpus member\u0027s body digest; a requested format is the last segment of the format IRI (xml, pdf, pdfa) and a format no manifestation of the selected expressions carries is refused format_not_available naming the ones held; nothing is fetched and nothing is said about which manifestation is authentic",
+        "verified_by": {
+          "corpus_sha256": "\u003Cvaries-per-run\u003E",
+          "index_sha256": "\u003Cvaries-per-run\u003E",
+          "registry_sha256": "fe5751e9cc9d1f6b41aabd7cfcc126230c559baaacd9d3a01d01c30725814d4c"
         },
         "work_key": "loi-1991-08-10-n3"
       }
@@ -1529,7 +1694,7 @@
         "verified_by": {
           "corpus_sha256": "\u003Cvaries-per-run\u003E",
           "index_sha256": "\u003Cvaries-per-run\u003E",
-          "registry_sha256": "1f1cb6cdc94479a136a69bab17a9531f295bb88c35367041fd70e6fb3c067c0a"
+          "registry_sha256": "fe5751e9cc9d1f6b41aabd7cfcc126230c559baaacd9d3a01d01c30725814d4c"
         },
         "work_key": "loi-1991-08-10-n3"
       }

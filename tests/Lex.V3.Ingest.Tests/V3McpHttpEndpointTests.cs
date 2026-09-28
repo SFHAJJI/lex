@@ -73,6 +73,8 @@ public sealed class V3McpHttpEndpointTests
             ("verify", new { identifier = fixture.Permalink }),
             ("relations", new { identifier = work }),
             ("evidence_bundle", new { identifier = work, date = fixture.ApplicabilityDate, language = "fra" }),
+            ("classification", new { identifier = work, language = "fra" }),
+            ("manifestation", new { identifier = work, language = "fra" }),
         };
         CollectionAssert.AreEquivalent(
             V3RestRouteBinding.Served.Select(static binding => binding.OperationId).ToArray(),

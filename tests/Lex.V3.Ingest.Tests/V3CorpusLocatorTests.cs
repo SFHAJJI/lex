@@ -33,6 +33,8 @@ public sealed class V3CorpusLocatorTests
         ("/api/v3/verify", identifier => JsonSerializer.Serialize(new { operation_id = "verify", parameters = new { identifier } })),
         ("/api/v3/relations", identifier => JsonSerializer.Serialize(new { operation_id = "relations", parameters = new { identifier } })),
         ("/api/v3/evidence_bundle", identifier => JsonSerializer.Serialize(new { operation_id = "evidence_bundle", parameters = new { identifier, date = "2024-01-01" } })),
+        ("/api/v3/classification", identifier => JsonSerializer.Serialize(new { operation_id = "classification", parameters = new { identifier } })),
+        ("/api/v3/manifestation", identifier => JsonSerializer.Serialize(new { operation_id = "manifestation", parameters = new { identifier } })),
     ];
 
     /// <summary>

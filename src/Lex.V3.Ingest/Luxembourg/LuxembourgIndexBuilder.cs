@@ -209,12 +209,28 @@ public sealed record LuxembourgIndexWorkTitle(
     string EvidenceSha256);
 
 /// <summary>
+/// One of the publisher's typed assertions as the index holds it: the subject, the predicate and its fact
+/// kind as the closed vocabulary names them on the wire, the object as an IRI or a literal (with its
+/// datatype IRI and language tag, empty when the publisher gave none), and the digest of the observation
+/// it was read from. Verbatim; nothing is interpreted here.
+/// </summary>
+public sealed record LuxembourgIndexWorkFact(
+    string SubjectIri,
+    string Predicate,
+    string FactKind,
+    string ObjectKind,
+    string ObjectValue,
+    string DatatypeIri,
+    string LanguageTag,
+    string EvidenceSha256);
+
+/// <summary>
 /// Builds the immutable Luxembourg index from the same proof-complete envelope that builds
 /// lex-corpus/6. Callers cannot provide index rows or capability counts.
 /// </summary>
 public static class LuxembourgIndexBuilder
 {
-    public const string Schema = "lex-v3-luxembourg-index/4";
+    public const string Schema = "lex-v3-luxembourg-index/5";
     private const int ApplicationId = 0x4c563306;
     private const string Ddl = """
         CREATE TABLE stamp (
@@ -288,6 +304,17 @@ public static class LuxembourgIndexBuilder
           CHECK ((to_kind = 'unparsed') = (to_ref IS NULL))
         ) STRICT;
         CREATE INDEX relations_to_ref ON relations(to_ref, edge_type);
+        CREATE TABLE work_facts (
+          subject_iri TEXT COLLATE BINARY NOT NULL,
+          predicate TEXT COLLATE BINARY NOT NULL,
+          fact_kind TEXT COLLATE BINARY NOT NULL,
+          object_kind TEXT COLLATE BINARY NOT NULL CHECK (object_kind IN ('iri', 'literal')),
+          object_value TEXT COLLATE BINARY NOT NULL,
+          datatype_iri TEXT COLLATE BINARY NOT NULL,
+          language_tag TEXT COLLATE BINARY NOT NULL,
+          evidence_sha256 TEXT COLLATE BINARY NOT NULL CHECK (length(evidence_sha256) = 64),
+          PRIMARY KEY (subject_iri, predicate, object_kind, object_value, datatype_iri, language_tag, evidence_sha256)
+        ) STRICT;
         """;
 
     public static LuxembourgIndexBuildResult? TryBuild(
@@ -311,10 +338,11 @@ public static class LuxembourgIndexBuilder
         ArticleRow[] articles;
         StateRow[] states;
         WorkTitleRow[] workTitles;
+        WorkFactRow[] workFacts;
         try
         {
             if (!TryProjectRows(
-                    envelope, corpus, out members, out articles, out states, out workTitles,
+                    envelope, corpus, out members, out articles, out states, out workTitles, out workFacts,
                     out refusal, out detail))
             {
                 return null;
@@ -328,12 +356,12 @@ public static class LuxembourgIndexBuilder
         }
 
         var relations = ProjectRelations(articles);
-        var logicalRowsSha256 = HashLogicalRows(members, articles, states, workTitles, relations);
+        var logicalRowsSha256 = HashLogicalRows(members, articles, states, workTitles, relations, workFacts);
         var path = Path.Combine(Path.GetTempPath(), $"lex-v3-lu-index-{Guid.NewGuid():N}.sqlite");
         try
         {
             BuildDatabase(
-                path, corpus.ArtifactRef.Sha256, logicalRowsSha256, members, articles, states, workTitles, relations);
+                path, corpus.ArtifactRef.Sha256, logicalRowsSha256, members, articles, states, workTitles, relations, workFacts);
             var bytes = File.ReadAllBytes(path);
             var digest = Convert.ToHexStringLower(SHA256.HashData(bytes));
             var indexRef = new SourceArtifactRef(LexCorpus6Builder.ResourceIdOf(digest), digest);
@@ -369,6 +397,7 @@ public static class LuxembourgIndexBuilder
         out ArticleRow[] articles,
         out StateRow[] states,
         out WorkTitleRow[] workTitles,
+        out WorkFactRow[] workFacts,
         out LuxembourgIndexBuildRefusal refusal,
         out string? detail)
     {
@@ -400,6 +429,7 @@ public static class LuxembourgIndexBuilder
             articles = [];
             states = [];
             workTitles = [];
+            workFacts = [];
             refusal = LuxembourgIndexBuildRefusal.PopulationMismatch;
             detail = "The Luxembourg corpus population is missing, duplicated or extra.";
             return false;
@@ -414,6 +444,7 @@ public static class LuxembourgIndexBuilder
                 articles = [];
                 states = [];
                 workTitles = [];
+                workFacts = [];
                 refusal = LuxembourgIndexBuildRefusal.PopulationMismatch;
                 detail = "The Luxembourg legal-content population contains a duplicate outcome.";
                 return false;
@@ -429,6 +460,7 @@ public static class LuxembourgIndexBuilder
                 articles = [];
                 states = [];
                 workTitles = [];
+                workFacts = [];
                 refusal = LuxembourgIndexBuildRefusal.DerivationMismatch;
                 detail = objectRefSha256;
                 return false;
@@ -447,6 +479,7 @@ public static class LuxembourgIndexBuilder
                 articles = [];
                 states = [];
                 workTitles = [];
+                workFacts = [];
                 refusal = LuxembourgIndexBuildRefusal.DerivationMismatch;
                 detail = "An admitted article lacks its article or rights-bound WEMI.";
                 return false;
@@ -537,10 +570,42 @@ public static class LuxembourgIndexBuilder
             .ThenBy(static row => row.Title, StringComparer.Ordinal)
             .ThenBy(static row => row.TitleKind, StringComparer.Ordinal)
             .ToArray();
+        workFacts = ProjectWorkFacts(assertions);
         refusal = LuxembourgIndexBuildRefusal.None;
         detail = null;
         return true;
     }
+
+    /// <summary>
+    /// The publisher's typed assertions, verbatim, one row each: the subject, the predicate and its pinned
+    /// fact kind as the closed vocabulary names them, the object as an IRI or a literal with its datatype and
+    /// language tag (empty when the publisher gave none), and the digest of the observation the assertion
+    /// was read from. Every admitted predicate is kept, so the table is the envelope's assertion list and
+    /// not a selection made here; the operations that read it select by predicate. Nothing is interpreted:
+    /// a status token or a date is the publisher's lexical value.
+    /// </summary>
+    internal static WorkFactRow[] ProjectWorkFacts(IReadOnlyList<LuxembourgTypedAssertion> assertions) =>
+        assertions
+            .Select(static value => new WorkFactRow(
+                value.Assertion.SubjectIri,
+                ContractWire.NameOf(value.FactDisposition.Predicate),
+                ContractWire.NameOf(value.FactDisposition.FactKind),
+                value.Assertion.ObjectKind == Lex.V3.Contracts.Source.Luxembourg.LuxembourgAssertionObjectKind.Iri
+                    ? "iri"
+                    : "literal",
+                value.Assertion.ObjectIriOrLexical,
+                value.Assertion.DatatypeIriOrEmpty,
+                value.Assertion.LanguageTagOrEmpty,
+                value.FactDisposition.EvidenceRef.Sha256))
+            .Distinct()
+            .OrderBy(static row => row.SubjectIri, StringComparer.Ordinal)
+            .ThenBy(static row => row.Predicate, StringComparer.Ordinal)
+            .ThenBy(static row => row.ObjectKind, StringComparer.Ordinal)
+            .ThenBy(static row => row.ObjectValue, StringComparer.Ordinal)
+            .ThenBy(static row => row.DatatypeIri, StringComparer.Ordinal)
+            .ThenBy(static row => row.LanguageTag, StringComparer.Ordinal)
+            .ThenBy(static row => row.EvidenceSha256, StringComparer.Ordinal)
+            .ToArray();
 
     private static string LanguageToken(string iri)
     {
@@ -826,7 +891,8 @@ public static class LuxembourgIndexBuilder
         IReadOnlyList<ArticleRow> articles,
         IReadOnlyList<StateRow> states,
         IReadOnlyList<WorkTitleRow> workTitles,
-        IReadOnlyList<RelationRow> relations)
+        IReadOnlyList<RelationRow> relations,
+        IReadOnlyList<WorkFactRow> workFacts)
     {
         using var connection = Open(path, SqliteOpenMode.ReadWriteCreate);
         Execute(connection, "PRAGMA page_size=4096");
@@ -836,7 +902,7 @@ public static class LuxembourgIndexBuilder
         Execute(connection, "PRAGMA synchronous=FULL");
         Execute(connection, "PRAGMA foreign_keys=ON");
         Execute(connection, $"PRAGMA application_id={ApplicationId}");
-        Execute(connection, "PRAGMA user_version=4");
+        Execute(connection, "PRAGMA user_version=5");
         using var transaction = connection.BeginTransaction();
         Execute(connection, Ddl, transaction);
         foreach (var member in members)
@@ -876,6 +942,13 @@ public static class LuxembourgIndexBuilder
                 "INSERT INTO work_titles VALUES($p0,$p1,$p2,$p3,$p4,$p5,$p6,$p7)",
                 title.WorkIdentifier, title.ExpressionIri, title.Language, title.Title,
                 title.NormalizedTitle, title.DocumentDate, title.TitleKind, title.EvidenceSha256);
+        }
+        foreach (var fact in workFacts)
+        {
+            Insert(connection, transaction,
+                "INSERT INTO work_facts VALUES($p0,$p1,$p2,$p3,$p4,$p5,$p6,$p7)",
+                fact.SubjectIri, fact.Predicate, fact.FactKind, fact.ObjectKind, fact.ObjectValue,
+                fact.DatatypeIri, fact.LanguageTag, fact.EvidenceSha256);
         }
         var provenance = SqliteProvenance.Read(connection);
         Insert(connection, transaction, "INSERT INTO stamp VALUES(1,$p0,$p1,$p2,$p3,$p4,$p5)",
@@ -917,12 +990,17 @@ public static class LuxembourgIndexBuilder
         var titles = new[] { new WorkTitleRow(
             article.PublisherWid!, article.ExpressionIri, "fra", "Titre fixe", "titre fixe",
             "2024-01-01", "title", new string('3', 64)) };
+        var facts = new[] { new WorkFactRow(
+            article.PublisherWid!,
+            ContractWire.NameOf(Lex.V3.Contracts.Source.Luxembourg.LuxembourgAssertionPredicate.TypeDocument),
+            ContractWire.NameOf(Lex.V3.Contracts.Source.Luxembourg.LuxembourgAssertionFactKind.ResourceType),
+            "iri", "http://data.legilux.public.lu/resource/authority/legal-type/LOI", "", "", new string('6', 64)) };
         var path = Path.Combine(Path.GetTempPath(), $"lex-v3-lu-index-pin-{Guid.NewGuid():N}.sqlite");
         try
         {
             var relations = ProjectRelations(articles);
-            BuildDatabase(path, new string('a', 64), HashLogicalRows(members, articles, states, titles, relations),
-                members, articles, states, titles, relations);
+            BuildDatabase(path, new string('a', 64), HashLogicalRows(members, articles, states, titles, relations, facts),
+                members, articles, states, titles, relations, facts);
             return File.ReadAllBytes(path);
         }
         finally
@@ -976,10 +1054,11 @@ public static class LuxembourgIndexBuilder
         IReadOnlyList<ArticleRow> articles,
         IReadOnlyList<StateRow> states,
         IReadOnlyList<WorkTitleRow> workTitles,
-        IReadOnlyList<RelationRow> relations)
+        IReadOnlyList<RelationRow> relations,
+        IReadOnlyList<WorkFactRow> workFacts)
     {
         var bytes = JsonSerializer.SerializeToUtf8Bytes(
-            new LogicalRows(members, articles, states, workTitles, relations));
+            new LogicalRows(members, articles, states, workTitles, relations, workFacts));
         return Convert.ToHexStringLower(SHA256.HashData(bytes));
     }
 
@@ -1140,12 +1219,28 @@ public static class LuxembourgIndexBuilder
         string ToKind,
         string? ToRef);
 
+    /// <summary>
+    /// One of the publisher's typed assertions as the fact table holds it (<see cref="ProjectWorkFacts"/>):
+    /// the predicate and fact kind are the closed vocabulary's wire names; the datatype and language tag
+    /// are empty strings when the publisher gave none, so the whole row is the primary key.
+    /// </summary>
+    internal sealed record WorkFactRow(
+        string SubjectIri,
+        string Predicate,
+        string FactKind,
+        string ObjectKind,
+        string ObjectValue,
+        string DatatypeIri,
+        string LanguageTag,
+        string EvidenceSha256);
+
     private sealed record LogicalRows(
         IReadOnlyList<MemberRow> Members,
         IReadOnlyList<ArticleRow> Articles,
         IReadOnlyList<StateRow> States,
         IReadOnlyList<WorkTitleRow> WorkTitles,
-        IReadOnlyList<RelationRow> Relations);
+        IReadOnlyList<RelationRow> Relations,
+        IReadOnlyList<WorkFactRow> WorkFacts);
 
     internal static string NormalizeTitle(string value)
     {
@@ -1338,7 +1433,7 @@ public sealed class LuxembourgIndexReader : IDisposable
             LuxembourgIndexBuilder.EnsureExactSchema(connection);
             if (!string.Equals(Scalar(connection, "PRAGMA integrity_check"), "ok", StringComparison.Ordinal) ||
                 Convert.ToInt32(Scalar(connection, "PRAGMA application_id"), CultureInfo.InvariantCulture) != 0x4c563306 ||
-                Convert.ToInt32(Scalar(connection, "PRAGMA user_version"), CultureInfo.InvariantCulture) != 4)
+                Convert.ToInt32(Scalar(connection, "PRAGMA user_version"), CultureInfo.InvariantCulture) != 5)
             {
                 throw new InvalidDataException("The Luxembourg index failed SQLite integrity or schema identity checks.");
             }
@@ -1371,12 +1466,13 @@ public sealed class LuxembourgIndexReader : IDisposable
             var states = ReadStates(connection);
             var workTitles = ReadWorkTitles(connection);
             var relations = ReadRelations(connection);
+            var workFacts = ReadWorkFacts(connection);
             ValidateStates(articles, states);
             if (!LuxembourgIndexBuilder.ProjectRelations(articles).SequenceEqual(relations))
                 throw new InvalidDataException(
                     "The Luxembourg index relation rows are not the references its articles carry.");
             if (!string.Equals(
-                    LuxembourgIndexBuilder.HashLogicalRows(members, articles, states, workTitles, relations),
+                    LuxembourgIndexBuilder.HashLogicalRows(members, articles, states, workTitles, relations, workFacts),
                     expectedLogical,
                     StringComparison.Ordinal))
                 throw new InvalidDataException("The Luxembourg index logical rows do not match their stamp.");
@@ -2323,6 +2419,37 @@ public sealed class LuxembourgIndexReader : IDisposable
         }
     }
 
+    /// <summary>
+    /// The publisher's typed assertions about the given subjects (work, expression or manifestation IRIs),
+    /// verbatim, in the fact table's order (<see cref="LuxembourgIndexQueries.SubjectFacts"/>). An
+    /// unknown subject simply has no rows.
+    /// </summary>
+    public IReadOnlyList<LuxembourgIndexWorkFact> ResolveFacts(IReadOnlyList<string> subjectIris)
+    {
+        ArgumentNullException.ThrowIfNull(subjectIris);
+        if (subjectIris.Count == 0)
+        {
+            return Array.Empty<LuxembourgIndexWorkFact>();
+        }
+
+        lock (_gate)
+        {
+            using var command = _connection.CreateCommand();
+            command.CommandText = LuxembourgIndexQueries.SubjectFacts;
+            command.Parameters.AddWithValue("$subjects", JsonSerializer.Serialize(subjectIris));
+            using var reader = command.ExecuteReader();
+            var values = new List<LuxembourgIndexWorkFact>();
+            while (reader.Read())
+            {
+                values.Add(new LuxembourgIndexWorkFact(
+                    reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3),
+                    reader.GetString(4), reader.GetString(5), reader.GetString(6), reader.GetString(7)));
+            }
+
+            return Array.AsReadOnly(values.ToArray());
+        }
+    }
+
     /// <remarks>
     /// <b>Not what the API serves.</b> This is the period-scoped lookup that gates on the capability
     /// manifest per date range and returns article identities only; nothing in <c>src</c> calls it, and
@@ -2542,6 +2669,18 @@ public sealed class LuxembourgIndexReader : IDisposable
             reader.IsDBNull(6) ? null : reader.GetString(6),
             reader.IsDBNull(7) ? null : reader.GetString(7),
             reader.GetString(8), reader.IsDBNull(9) ? null : reader.GetString(9)));
+        return values.ToArray();
+    }
+
+    private static LuxembourgIndexBuilder.WorkFactRow[] ReadWorkFacts(SqliteConnection connection)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT subject_iri,predicate,fact_kind,object_kind,object_value,datatype_iri,language_tag,evidence_sha256 FROM work_facts ORDER BY subject_iri,predicate,object_kind,object_value,datatype_iri,language_tag,evidence_sha256";
+        using var reader = command.ExecuteReader();
+        var values = new List<LuxembourgIndexBuilder.WorkFactRow>();
+        while (reader.Read()) values.Add(new(
+            reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3),
+            reader.GetString(4), reader.GetString(5), reader.GetString(6), reader.GetString(7)));
         return values.ToArray();
     }
 

@@ -81,14 +81,14 @@ const OPERATIONS_NOTE =
   + 'for an unserved operation returns';
 
 const SERVED = Object.freeze([
-  'article_history', 'as_of', 'changes_in_period', 'citation', 'cited_by', 'coverage', 'diff',
-  'dossier', 'evidence_bundle', 'in_force_on', 'provenance', 'relations', 'resolve', 'search',
-  'timeline', 'verify',
+  'article_history', 'as_of', 'changes_in_period', 'citation', 'cited_by', 'classification',
+  'coverage', 'diff', 'dossier', 'evidence_bundle', 'in_force_on', 'manifestation', 'provenance',
+  'relations', 'resolve', 'search', 'timeline', 'verify',
 ]);
 
 const NOT_SERVED = Object.freeze([
-  'answer_drift', 'as_observed', 'ask', 'browse', 'classification', 'concepts', 'events',
-  'knowable_on', 'manifestation', 'status_on', 'transposition',
+  'answer_drift', 'as_observed', 'ask', 'browse', 'concepts', 'events', 'knowable_on', 'status_on',
+  'transposition',
 ]);
 
 const NOT_HELD = Object.freeze([

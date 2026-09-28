@@ -27,7 +27,9 @@ internal sealed record V3RestRouteBinding(string RawTarget, string OperationId)
     public static readonly V3RestRouteBinding Verify = new("/api/v3/verify", "verify");
     public static readonly V3RestRouteBinding Relations = new("/api/v3/relations", "relations");
     public static readonly V3RestRouteBinding EvidenceBundle = new("/api/v3/evidence_bundle", "evidence_bundle");
-    public static readonly IReadOnlyList<V3RestRouteBinding> Served = [Resolve, AsOf, Timeline, ArticleHistory, Diff, ChangesInPeriod, InForceOn, Search, Coverage, Provenance, Dossier, Citation, CitedBy, Verify, Relations, EvidenceBundle];
+    public static readonly V3RestRouteBinding Classification = new("/api/v3/classification", "classification");
+    public static readonly V3RestRouteBinding Manifestation = new("/api/v3/manifestation", "manifestation");
+    public static readonly IReadOnlyList<V3RestRouteBinding> Served = [Resolve, AsOf, Timeline, ArticleHistory, Diff, ChangesInPeriod, InForceOn, Search, Coverage, Provenance, Dossier, Citation, CitedBy, Verify, Relations, EvidenceBundle, Classification, Manifestation];
 
     public bool Claims(string rawTarget) =>
         string.Equals(rawTarget, RawTarget, StringComparison.Ordinal) ||

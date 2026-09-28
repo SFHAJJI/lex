@@ -186,8 +186,18 @@ export const REFUSAL_EXAMPLES = Object.freeze({
     },
   },
   format_not_available: {
-    sentence: 'This state is held as PDF only.',
-    payload: { formats_held: ['pdf'] },
+    sentence: 'No manifestation of this work carries the requested format.',
+    // What `manifestation` sends: the format asked for, every format the selected expressions'
+    // manifestations carry, the request's own identifier and language, the expressions looked at and
+    // the matching rule. `formats_held` was this example's own invention.
+    payload: {
+      requested_format: 'docx',
+      available_formats: ['pdf', 'xml'],
+      requested_identifier: `/${PUBLISHER}/${WORK}`,
+      requested_language: 'fr',
+      expressions: [`https://preview.invalid/${WORK}/fr`],
+      rule: "a format is the last segment of the publisher's userFormat IRI, matched exactly",
+    },
   },
   profiles_differ: {
     sentence: 'These two states came from different extraction profiles.',

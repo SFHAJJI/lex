@@ -873,6 +873,283 @@ internal sealed class V3CorpusMount : IDisposable
         return notes.ToArray();
     }
 
+    internal const string ClassificationScope =
+        "the typed facts the publisher asserted about this work's resources, read verbatim from the index's fact table (the Stage 3 assertion list): the document " +
+        "type (jolux:typeDocument) and the RDF types, the legal value, the responsible body, the historical identifiers, the publication and document dates, each with " +
+        "its subject, its object as an IRI or a literal with the datatype and language tag the publisher gave, and the digest of the observation it was read from; grouped " +
+        "by predicate, in the index's order, over the work's own IRIs and its expressions; nothing is inferred from them, no thesaurus or subject term is held, and in-force " +
+        "status is not served here";
+
+    internal static readonly string[][] ClassificationNotHeld =
+    [
+        ["subject_classification", "no thesaurus, EuroVoc or subject term is held; the publisher's typeDocument is a document type, not a subject"],
+        ["legal_status", "no in-force status, repeal or commencement fact is served here; status_on is not served by this mount"],
+        ["labels", "the values are the publisher's IRIs and lexical values, not read into labels; a document-type IRI is served as the publisher wrote it"],
+    ];
+
+    internal const string ManifestationScope =
+        "the manifestations the publisher asserted for this work's expressions (jolux:isEmbodiedBy), each with its formats (jolux:userFormat) and items " +
+        "(jolux:isExemplifiedBy) as the publisher wrote them, read verbatim from the index's fact table; the manifestation this corpus retained the body of is marked " +
+        "retained and carries the corpus member's body digest; a requested format is the last segment of the format IRI (xml, pdf, pdfa) and a format no manifestation " +
+        "of the selected expressions carries is refused format_not_available naming the ones held; nothing is fetched and nothing is said about which manifestation is authentic";
+
+    internal static readonly string[][] ManifestationNotHeld =
+    [
+        ["manifestation_bytes", "only the retained manifestation's body digest is held; the other manifestations are named from the publisher's assertions, not held"],
+        ["authenticity", "which manifestation is the authentic one is not asserted here; the publisher's legalValue facts are served by classification"],
+        ["format_semantics", "a format IRI is served as written and its last segment is the token the format parameter matches; nothing about the bytes is inferred from it"],
+    ];
+
+    /// <summary>
+    /// <c>classification</c>: the publisher's typed facts about a work, grouped by predicate. Takes
+    /// <c>dossier</c>'s request (identifier, optional language) and refuses as <c>dossier</c> refuses;
+    /// the facts are read for the work's own IRIs and the expressions of the selected states, and served
+    /// verbatim.
+    /// </summary>
+    public V3PlatformOperationOutcome Classification(
+        V3PlatformOperationRequest request,
+        DateTimeOffset observedAt)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (!string.Equals(request.OperationId, "classification", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("The mounted corpus classification operation only accepts classification/1.");
+        }
+
+        var identifier = RequiredString(request.Parameters, "identifier");
+        var requestedLanguage = OptionalLanguage(request.Parameters);
+        if (RefuseUnlessWorkStates(request, identifier, observedAt, "r6_classification", requestedLanguage,
+                out var states, out var availableLanguages) is { } refused)
+        {
+            return refused;
+        }
+
+        var scope = requestedLanguage is null
+            ? states
+            : states.Where(state => string.Equals(state.Language, requestedLanguage, StringComparison.Ordinal)).ToArray();
+        var subjects = WorkSubjects(scope);
+        var facts = _reader!.ResolveFacts(subjects);
+        var served = new[]
+        {
+            LuxembourgAssertionPredicate.TypeDocument, LuxembourgAssertionPredicate.RdfType, LuxembourgAssertionPredicate.LegalValue,
+            LuxembourgAssertionPredicate.ResponsibilityOf, LuxembourgAssertionPredicate.HistoricalLegalId,
+            LuxembourgAssertionPredicate.PublicationDate, LuxembourgAssertionPredicate.DateDocument,
+        }.Select(ContractWire.NameOf).ToArray();
+
+        using var result = JsonSerializer.SerializeToDocument(new
+        {
+            scope = ClassificationScope,
+            requested_identifier = identifier,
+            requested_language = requestedLanguage,
+            publisher = "lu-legilux",
+            work_key = states[0].WorkKey,
+            publisher_work_iri = states[0].PublisherWorkIri,
+            publisher_legal_resource_iri = states[0].PublisherLegalResourceIri,
+            subjects,
+            available_languages = availableLanguages,
+            document_types = FactsOf(facts, LuxembourgAssertionPredicate.TypeDocument),
+            resource_types = FactsOf(facts, LuxembourgAssertionPredicate.RdfType),
+            legal_values = FactsOf(facts, LuxembourgAssertionPredicate.LegalValue),
+            responsible_bodies = FactsOf(facts, LuxembourgAssertionPredicate.ResponsibilityOf),
+            historical_identifiers = FactsOf(facts, LuxembourgAssertionPredicate.HistoricalLegalId),
+            publication_dates = FactsOf(facts, LuxembourgAssertionPredicate.PublicationDate),
+            document_dates = FactsOf(facts, LuxembourgAssertionPredicate.DateDocument),
+            fact_count = facts.Count,
+            other_predicates_held = facts.Select(static fact => fact.Predicate)
+                .Where(predicate => !served.Contains(predicate, StringComparer.Ordinal))
+                .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray(),
+            verified_by = new
+            {
+                corpus_sha256 = _corpus.ArtifactRef.Sha256,
+                index_sha256 = _reader.IndexRef.Sha256,
+                registry_sha256 = V3OperationRegistry.Reviewed.Sha256,
+            },
+            not_held = ClassificationNotHeld.Select(static row => new { item = row[0], reason = row[1] }).ToArray(),
+        });
+        return V3PlatformOperationOutcome.Success(
+            Context("success", observedAt),
+            new V3PlatformOperationResult(request, "classification", result.RootElement));
+    }
+
+    /// <summary>
+    /// <c>manifestation</c>: the publisher's manifestations of a work's expressions with their formats and
+    /// items, the retained one marked. Takes <c>dossier</c>'s request plus an optional <c>format</c>
+    /// (the last segment of the format IRI) and refuses as <c>dossier</c> refuses, plus
+    /// <c>format_not_available</c> when the selected expressions have no manifestation in that format.
+    /// </summary>
+    public V3PlatformOperationOutcome Manifestation(
+        V3PlatformOperationRequest request,
+        DateTimeOffset observedAt)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (!string.Equals(request.OperationId, "manifestation", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("The mounted corpus manifestation operation only accepts manifestation/1.");
+        }
+
+        var identifier = RequiredString(request.Parameters, "identifier");
+        var requestedLanguage = OptionalLanguage(request.Parameters);
+        var requestedFormat = request.Parameters.TryGetProperty("format", out var formatValue) && formatValue.ValueKind == JsonValueKind.String
+            ? formatValue.GetString()
+            : null;
+        if (RefuseUnlessWorkStates(request, identifier, observedAt, "r6_manifestation", requestedLanguage,
+                out var states, out var availableLanguages) is { } refused)
+        {
+            return refused;
+        }
+
+        var scope = requestedLanguage is null
+            ? states
+            : states.Where(state => string.Equals(state.Language, requestedLanguage, StringComparison.Ordinal)).ToArray();
+        var expressions = scope.Select(static state => state.ExpressionIri).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+        var expressionFacts = _reader!.ResolveFacts(expressions);
+        var embodiedBy = ContractWire.NameOf(LuxembourgAssertionPredicate.IsEmbodiedBy);
+        var manifestationIris = expressionFacts
+            .Where(fact => string.Equals(fact.Predicate, embodiedBy, StringComparison.Ordinal))
+            .Select(static fact => fact.ObjectValue)
+            .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+        var manifestationFacts = _reader.ResolveFacts(manifestationIris);
+
+        // What this corpus retained: the member behind each selected state names the one manifestation and
+        // format whose body it holds.
+        var retained = scope
+            .SelectMany(state => _reader.ResolveStateSources(state.StateSha256)
+                .Select(source => (State: state, Member: MemberOf(source.ObjectRefSha256))))
+            .Where(static entry => entry.Member?.LuxembourgRights is not null)
+            .Select(static entry => new
+            {
+                expression_iri = entry.Member!.LuxembourgRights!.SelectedWemi.ExpressionIri,
+                manifestation_iri = entry.Member.LuxembourgRights.SelectedWemi.ManifestationIri,
+                format_iri = entry.Member.LuxembourgRights.SelectedWemi.FormatIri,
+                item_iri = entry.Member.LuxembourgRights.SelectedWemi.ItemIri,
+                body_sha256 = entry.Member.BodySha256,
+                body_byte_length = entry.Member.BodyByteLength,
+                object_ref_sha256 = entry.Member.ObjectRefSha256,
+            })
+            .DistinctBy(static entry => entry.object_ref_sha256)
+            .OrderBy(static entry => entry.manifestation_iri, StringComparer.Ordinal)
+            .ThenBy(static entry => entry.object_ref_sha256, StringComparer.Ordinal)
+            .ToArray();
+        var retainedByManifestation = retained.ToLookup(static entry => entry.manifestation_iri, StringComparer.Ordinal);
+
+        var rows = expressions.Select(expression => new
+        {
+            expression_iri = expression,
+            languages = scope.Where(state => string.Equals(state.ExpressionIri, expression, StringComparison.Ordinal))
+                .Select(static state => state.Language).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray(),
+            manifestations = expressionFacts
+                .Where(fact => string.Equals(fact.SubjectIri, expression, StringComparison.Ordinal) &&
+                               string.Equals(fact.Predicate, embodiedBy, StringComparison.Ordinal))
+                .Select(fact => fact.ObjectValue)
+                .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal)
+                .Select(manifestation => new
+                {
+                    manifestation_iri = manifestation,
+                    formats = FactsOf(manifestationFacts, LuxembourgAssertionPredicate.UserFormat, manifestation)
+                        .Select(static fact => new { format_iri = fact.value, format = FormatToken(fact.value), evidence_sha256 = fact.evidence_sha256 })
+                        .ToArray(),
+                    items = FactsOf(manifestationFacts, LuxembourgAssertionPredicate.IsExemplifiedBy, manifestation)
+                        .Select(static fact => new { item_iri = fact.value, evidence_sha256 = fact.evidence_sha256 })
+                        .ToArray(),
+                    resource_types = FactsOf(manifestationFacts, LuxembourgAssertionPredicate.RdfType, manifestation)
+                        .Select(static fact => fact.value).ToArray(),
+                    retained = retainedByManifestation[manifestation].Any(),
+                    retained_body_sha256s = retainedByManifestation[manifestation]
+                        .Select(static entry => entry.body_sha256).Where(static value => value is not null)
+                        .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray(),
+                })
+                .ToArray(),
+        }).ToArray();
+
+        var availableFormats = rows.SelectMany(static row => row.manifestations)
+            .SelectMany(static manifestation => manifestation.formats)
+            .Select(static format => format.format)
+            .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+        if (requestedFormat is not null && !availableFormats.Contains(requestedFormat, StringComparer.Ordinal))
+        {
+            using var unavailable = JsonSerializer.SerializeToDocument(new
+            {
+                requested_format = requestedFormat,
+                available_formats = availableFormats,
+                requested_identifier = identifier,
+                requested_language = requestedLanguage,
+                expressions,
+                rule = "a format is the last segment of the publisher's userFormat IRI, matched exactly; the formats listed are every one the selected expressions' manifestations carry",
+            });
+            return V3PlatformOperationOutcome.Refused(
+                Context("refusal", observedAt),
+                new V3PlatformOperationRefusal(request, "format_not_available", unavailable.RootElement));
+        }
+
+        using var result = JsonSerializer.SerializeToDocument(new
+        {
+            scope = ManifestationScope,
+            requested_identifier = identifier,
+            requested_language = requestedLanguage,
+            requested_format = requestedFormat,
+            publisher = "lu-legilux",
+            work_key = states[0].WorkKey,
+            publisher_work_iri = states[0].PublisherWorkIri,
+            available_languages = availableLanguages,
+            available_formats = availableFormats,
+            expressions = requestedFormat is null
+                ? rows
+                : rows.Select(row => new
+                {
+                    row.expression_iri,
+                    row.languages,
+                    manifestations = row.manifestations
+                        .Where(manifestation => manifestation.formats.Any(format => string.Equals(format.format, requestedFormat, StringComparison.Ordinal)))
+                        .ToArray(),
+                }).ToArray(),
+            retained,
+            verified_by = new
+            {
+                corpus_sha256 = _corpus.ArtifactRef.Sha256,
+                index_sha256 = _reader.IndexRef.Sha256,
+                registry_sha256 = V3OperationRegistry.Reviewed.Sha256,
+            },
+            not_held = ManifestationNotHeld.Select(static row => new { item = row[0], reason = row[1] }).ToArray(),
+        });
+        return V3PlatformOperationOutcome.Success(
+            Context("success", observedAt),
+            new V3PlatformOperationResult(request, "manifestation", result.RootElement));
+    }
+
+    /// <summary>The IRIs the publisher's facts about a work are asserted on: its work and legal-resource IRIs and the expressions of the given states.</summary>
+    private static string[] WorkSubjects(IReadOnlyList<LuxembourgIndexResolvedState> states) =>
+        states.SelectMany(static state => new[] { state.PublisherWorkIri, state.PublisherLegalResourceIri, state.ExpressionIri })
+            .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+
+    /// <summary>The last path segment of a publisher format IRI, lower-cased: the token the <c>format</c> parameter matches.</summary>
+    private static string FormatToken(string formatIri)
+    {
+        var trimmed = formatIri.TrimEnd('/');
+        return trimmed[(trimmed.LastIndexOf('/') + 1)..].ToLowerInvariant();
+    }
+
+    /// <summary>One fact as the answers serve it: the property names are the wire names.</summary>
+    private sealed record FactView(
+        string subject_iri, string object_kind, string value, string? datatype_iri, string? language_tag, string evidence_sha256);
+
+    /// <summary>The facts of one predicate (optionally of one subject), each as the answer serves it, in the index's order.</summary>
+    private static FactView[] FactsOf(
+        IReadOnlyList<LuxembourgIndexWorkFact> facts, LuxembourgAssertionPredicate predicate, string? subject = null)
+    {
+        var name = ContractWire.NameOf(predicate);
+        return facts
+            .Where(fact => string.Equals(fact.Predicate, name, StringComparison.Ordinal) &&
+                           (subject is null || string.Equals(fact.SubjectIri, subject, StringComparison.Ordinal)))
+            .Select(static fact => new FactView(
+                fact.SubjectIri,
+                fact.ObjectKind,
+                fact.ObjectValue,
+                fact.DatatypeIri.Length == 0 ? null : fact.DatatypeIri,
+                fact.LanguageTag.Length == 0 ? null : fact.LanguageTag,
+                fact.EvidenceSha256))
+            .ToArray();
+    }
+
     public const int CitationMaxEdges = 200;
 
     internal const string CitationScope =
@@ -3421,7 +3698,7 @@ internal sealed class V3CorpusMount : IDisposable
     /// <summary>What the mounted index does not hold about a work, in fixed words; not computed from what is present.</summary>
     internal static readonly string[][] DossierNotHeld =
     [
-        ["document_type", "no publisher document type is held, so nothing here says whether this work is a law, a grand-ducal regulation or an order"],
+        ["document_type", "the publisher's document type is not part of this record; classification serves the typeDocument facts the publisher asserted, verbatim"],
         ["current_state_flag", "no current-state flag is held, so nothing here says whether the publisher treats this work as in force, and a flag about now would not be a statement about any date listed here"],
         ["publication_date", "no publication date is held; the document date the index stores beside a title falls back to an article's applicability date, so it is not served as one"],
         ["entry_into_force", "no entry-into-force date is held; a state's applicability date is the date that state applies from, which is a different fact"],

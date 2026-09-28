@@ -18,7 +18,7 @@ public sealed class LuxembourgIndexBuilderTests
     {
         var digest = Convert.ToHexStringLower(SHA256.HashData(
             LuxembourgIndexBuilder.BuildFixedInputDeterminismEvidence()));
-        Assert.AreEqual("e8d3cffc6e62da45e03dce758cdb8b57c737fccdea41fd1d51090e8d9a910ecb", digest);
+        Assert.AreEqual("f745dd92673dc3f3c84bb001316f34b84603678d8b997bf21fd143ecc69fd71e", digest);
     }
 
     internal const string Retained1991 = "loi-1991-08-10-n3--2024-02-01--fr.bin";
@@ -29,7 +29,7 @@ public sealed class LuxembourgIndexBuilderTests
         var schema = (string)typeof(LuxembourgIndexBuilder)
             .GetField(nameof(LuxembourgIndexBuilder.Schema))!
             .GetRawConstantValue()!;
-        Assert.AreEqual("lex-v3-luxembourg-index/4", schema);
+        Assert.AreEqual("lex-v3-luxembourg-index/5", schema);
         Assert.IsNotNull(typeof(LuxembourgIndexBuilder).GetMethod(nameof(LuxembourgIndexBuilder.TryBuild)));
         Assert.IsNotNull(typeof(LuxembourgIndexReader).GetMethod(nameof(LuxembourgIndexReader.OpenAndVerify)));
     }
@@ -706,7 +706,7 @@ public sealed class LuxembourgIndexBuilderTests
             tamper(connection);
             var logicalRows = LuxembourgIndexBuilder.HashLogicalRows(
                 ReadMembers(connection), ReadArticles(connection), ReadStates(connection),
-                ReadWorkTitles(connection), ReadRelations(connection));
+                ReadWorkTitles(connection), ReadRelations(connection), ReadWorkFacts(connection));
             Execute(connection, "UPDATE stamp SET logical_rows_sha256=$digest WHERE stamp_id=1",
                 ("$digest", logicalRows));
         });
@@ -809,6 +809,18 @@ public sealed class LuxembourgIndexBuilderTests
             reader.GetString(7)));
         return rows.ToArray();
     }
+    internal static LuxembourgIndexBuilder.WorkFactRow[] ReadWorkFacts(SqliteConnection connection)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT subject_iri,predicate,fact_kind,object_kind,object_value,datatype_iri,language_tag,evidence_sha256 FROM work_facts ORDER BY subject_iri,predicate,object_kind,object_value,datatype_iri,language_tag,evidence_sha256";
+        using var reader = command.ExecuteReader();
+        var rows = new List<LuxembourgIndexBuilder.WorkFactRow>();
+        while (reader.Read()) rows.Add(new(
+            reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3),
+            reader.GetString(4), reader.GetString(5), reader.GetString(6), reader.GetString(7)));
+        return rows.ToArray();
+    }
+
     internal static LuxembourgIndexBuilder.RelationRow[] ReadRelations(SqliteConnection connection)
     {
         using var command = connection.CreateCommand();
